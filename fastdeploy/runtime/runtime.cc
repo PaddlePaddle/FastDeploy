@@ -18,35 +18,35 @@
 #include "fastdeploy/utils/utils.h"
 
 #ifdef ENABLE_ORT_BACKEND
-#include "fastdeploy/backends/ort/ort_backend.h"
+#include "fastdeploy/runtime/backends/ort/ort_backend.h"
 #endif
 
 #ifdef ENABLE_TRT_BACKEND
-#include "fastdeploy/backends/tensorrt/trt_backend.h"
+#include "fastdeploy/runtime/backends/tensorrt/trt_backend.h"
 #endif
 
 #ifdef ENABLE_PADDLE_BACKEND
-#include "fastdeploy/backends/paddle/paddle_backend.h"
+#include "fastdeploy/runtime/backends/paddle/paddle_backend.h"
 #endif
 
 #ifdef ENABLE_POROS_BACKEND
-#include "fastdeploy/backends/poros/poros_backend.h"
+#include "fastdeploy/runtime/backends/poros/poros_backend.h"
 #endif
 
 #ifdef ENABLE_OPENVINO_BACKEND
-#include "fastdeploy/backends/openvino/ov_backend.h"
+#include "fastdeploy/runtime/backends/openvino/ov_backend.h"
 #endif
 
 #ifdef ENABLE_LITE_BACKEND
-#include "fastdeploy/backends/lite/lite_backend.h"
+#include "fastdeploy/runtime/backends/lite/lite_backend.h"
 #endif
 
 #ifdef ENABLE_RKNPU2_BACKEND
-#include "fastdeploy/backends/rknpu2/rknpu2_backend.h"
+#include "fastdeploy/runtime/backends/rknpu2/rknpu2_backend.h"
 #endif
 
 #ifdef ENABLE_SOPHGO_BACKEND
-#include "fastdeploy/backends/sophgo/sophgo_backend.h"
+#include "fastdeploy/runtime/backends/sophgo/sophgo_backend.h"
 #endif
 
 namespace fastdeploy {
@@ -472,9 +472,9 @@ void Runtime::CreateSophgoNPUBackend() {
 Runtime* Runtime::Clone(void* stream, int device_id) {
   Runtime* runtime = new Runtime();
   if (option.backend != Backend::OPENVINO &&
-      option.backend != Backend::PDINFER && option.backend != Backend::TRT) {
+      option.backend != Backend::PDINFER) {
     runtime->Init(option);
-    FDWARNING << "Only OpenVINO/Paddle Inference/TensorRT support \
+    FDWARNING << "Only OpenVINO/Paddle Inference support \
                   clone engine to  reduce CPU/GPU memory usage now. For "
               << option.backend
               << ", FastDeploy will create a new engine which \
