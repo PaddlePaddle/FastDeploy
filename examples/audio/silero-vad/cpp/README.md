@@ -2,7 +2,7 @@ English | [简体中文](README_CN.md)
 
 # Silero VAD Deployment Example
 
-This directory provides examples that `infer_onnx_silero_vad` fast finishes the deployment of VAD models on CPU/GPU. 
+This directory provides examples that `infer_onnx_silero_vad` fast finishes the deployment of VAD models on CPU/GPU.
 
 Before deployment, two steps require confirmation.
 
@@ -14,20 +14,21 @@ Taking VAD inference on Linux as an example, the compilation test can be complet
 ```bash
 mkdir build
 cd build
-# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above 
+# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
 # Download the VAD model file and test audio. After decompression, place the model and test audio in the infer_onnx_silero_vad.cc peer directory
-wget https://github.com/PaddlePaddle/FastDeploy/files/10392318/model_and_example.zip
+wget https://bj.bcebos.com/paddlehub/fastdeploy/silero_vad.tgz
+wget https://bj.bcebos.com/paddlehub/fastdeploy/silero_vad_sample.wav
 
 # inference
-./infer_onnx_silero_vad
+./infer_onnx_silero_vad ../silero_vad.onnx ../silero_vad_sample.wav
 ```
 
-- The above command works for Linux or MacOS. Refer to: 
+- The above command works for Linux or MacOS. Refer to:
   - [How to use FastDeploy C++ SDK in Windows](../../../../docs/en/faq/use_sdk_on_windows.md)  for SDK use-pattern in Windows
 
 ## VAD C++ Interface

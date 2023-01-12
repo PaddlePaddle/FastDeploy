@@ -20,10 +20,11 @@ cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
 # 下载 VAD 模型文件和测试音频，解压后将模型和测试音频放置在与 infer_onnx_silero_vad.cc 同级目录下
-wget https://github.com/PaddlePaddle/FastDeploy/files/10392318/model_and_example.zip
+wget https://bj.bcebos.com/paddlehub/fastdeploy/silero_vad.tgz
+wget https://bj.bcebos.com/paddlehub/fastdeploy/silero_vad_sample.wav
 
 # 推理
-./infer_onnx_silero_vad
+./infer_onnx_silero_vad ../silero_vad.onnx ../silero_vad_sample.wav
 ```
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:
