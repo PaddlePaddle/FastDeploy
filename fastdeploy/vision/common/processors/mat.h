@@ -35,7 +35,6 @@ struct FASTDEPLOY_DECL Mat {
     width = cpu_mat.cols;
     channels = cpu_mat.channels();
     mat_type = ProcLib::OPENCV;
-    ShareWithTensor(&fd_tensor);
   }
 
 #ifdef ENABLE_FLYCV
@@ -79,6 +78,19 @@ struct FASTDEPLOY_DECL Mat {
 #else
       FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
 #endif
+    } else if (mat_type == ProcLib::CUDA || mat_type == ProcLib::CVCUDA) {
+#ifdef WITH_GPU
+      FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
+             "[ERROR] Error occurs while sync cuda stream.");
+      cpu_mat = CreateZeroCopyOpenCVMatFromTensor(fd_tensor);
+      mat_type = ProcLib::OPENCV;
+      device = Device::CPU;
+      FDINFO << "get cv mat " << std::endl;
+      // cv::imwrite("test.jpg", cpu_mat);
+      return &cpu_mat;
+#else
+      FDASSERT(false, "FastDeploy didn't compiled with -DWITH_GPU=ON");
+#endif
     } else {
       FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
     }
@@ -109,6 +121,17 @@ struct FASTDEPLOY_DECL Mat {
   void* Data();
 
   FDTensor* Tensor() {
+    if (mat_type == ProcLib::OPENCV) {
+      ShareWithTensor(&fd_tensor);
+    } else if (mat_type == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+      cpu_mat = ConvertFlyCVMatToOpenCV(fcv_mat);
+      mat_type = ProcLib::OPENCV;
+      ShareWithTensor(&fd_tensor);
+#else
+      FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
+    }
     return &fd_tensor;
   }
 
@@ -160,10 +183,6 @@ struct FASTDEPLOY_DECL Mat {
   ProcLib mat_type = ProcLib::OPENCV;
   Layout layout = Layout::HWC;
   Device device = Device::CPU;
-
-  // Make sure mat buffer is on CPU
-  // If not on CPU, then copy the buffer from device to CPU
-  void MakeSureOnCpu();
 
   // Create FD Mat from FD Tensor. This method only create a
   // new FD Mat with zero copy and it's data pointer is reference

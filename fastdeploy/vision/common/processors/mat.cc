@@ -103,22 +103,6 @@ FDDataType Mat::Type() {
   return OpenCVDataTypeToFD(cpu_mat.type());
 }
 
-void Mat::MakeSureOnCpu() {
-  if (device == Device::CPU) return;
-  FDASSERT(device == Device::GPU,
-           "Preprocessor only support CPU and GPU for now");
-#ifdef WITH_GPU
-  if (stream) cudaStreamSynchronize(stream);
-  cv::Mat mat(height, width, cpu_mat.type());
-  int nbytes = height * width * channels * FDDataTypeSize(Type());
-  FDASSERT(
-      cudaMemcpy(mat.ptr(), cpu_mat.ptr(), nbytes, cudaMemcpyDeviceToHost) == 0,
-      "[ERROR] Error occurs while copy memory from GPU to CPU");
-  cpu_mat = mat;
-  device = Device::CPU;
-#endif
-}
-
 Mat Mat::Create(const FDTensor& tensor) {
   if (DefaultProcLib::default_lib == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV

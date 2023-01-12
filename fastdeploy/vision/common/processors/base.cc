@@ -33,28 +33,22 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
 #endif
   } else if (target == ProcLib::CUDA) {
 #ifdef WITH_GPU
+    FDASSERT(mat->Stream() != nullptr,
+             "CUDA processor requires cuda stream, please set stream for Mat");
     return ImplByCuda(mat);
 #else
     FDASSERT(false, "FastDeploy didn't compile with WITH_GPU.");
 #endif
   } else if (target == ProcLib::CVCUDA) {
 #ifdef ENABLE_CVCUDA
-    if (mat->Stream() == nullptr) {
-      FDWARNING
-          << "When using CV-CUDA, it's better to create mat->stream externally."
-          << std::endl;
-      cudaStream_t stream;
-      FDASSERT(cudaStreamCreate(&stream) == 0,
-               "[ERROR] Error occurs while calling cudaStreamCreate().");
-      mat->SetStream(stream);
-    }
+    FDASSERT(mat->Stream() != nullptr,
+             "CV-CUDA requires cuda stream, please set stream for Mat");
     return ImplByCvCuda(mat);
 #else
     FDASSERT(false, "FastDeploy didn't compile with CV-CUDA.");
 #endif
   }
   // DEFAULT & OPENCV
-  mat->MakeSureOnCpu();
   return ImplByOpenCV(mat);
 }
 
