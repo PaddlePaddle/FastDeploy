@@ -4,7 +4,7 @@ English | [简体中文](README_CN.md)
 
 Before serving deployment, you need to confirm:
 
-- 1. You can refer to [FastDeploy服务化部署](../../../../../serving/README_CN.md) for hardware and software environment requirements and image pull commands for serving images.
+- 1. You can refer to [FastDeploy serving deployment](../../../../serving/README.md) for hardware and software environment requirements and image pull commands for serving images.
 
 ## Prepare models
 
@@ -143,4 +143,4 @@ results:
 
 ## Configuration Modification
 
-The current configuration is by default to run the paddle engine on CPU. If you want to run on CPU/GPU or other inference engines, modifying the configuration is needed.Please refer to [配置文档](../../../../serving/docs/zh_CN/model_configuration.md)
+The current configuration is by default to run the paddle engine on CPU. If you want to run on CPU/GPU or other inference engines, modifying the configuration is needed.Please refer to [Configuration Document](../../../../serving/docs/EN/model_configuration-en.md).

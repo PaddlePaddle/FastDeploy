@@ -1,9 +1,10 @@
-# sr 模型部署
+English | [简体中文](README_CN.md)
+# SR Model Deployment
 
-FastDeploy目前支持如下超分模型部署
+Now FastDeploy supports the deployment of the following SR models
 
-| 模型                                       | 说明                    | 模型格式   | 版本                                                                                |
+| Model                                      | Description                    | Model Format   | Version                                                                                |
 |:-----------------------------------------|:----------------------|:-------|:----------------------------------------------------------------------------------|
-| [PaddleGAN/BasicVSR](./basicvsr)         | BasicVSR 系列模型         | paddle | [develop](https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md)                        |
-| [PaddleGAN/EDVR](./edvr)                 | EDVR 系列模型             | paddle | [develop](https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md) |
-| [PaddleGAN/PP-MSVSR](./ppmsvsr)          | PP-MSVSR 系列模型         | paddle | [develop](https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md) |
+| [PaddleGAN/BasicVSR](./basicvsr)         | BasicVSR models        | paddle | [develop](https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/en_US/tutorials/video_super_resolution.md)                        |
+| [PaddleGAN/EDVR](./edvr)                 | EDVR models             | paddle | [develop](https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/en_US/tutorials/video_super_resolution.md) |
+| [PaddleGAN/PP-MSVSR](./ppmsvsr)          | PP-MSVSR models         | paddle | [develop](https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/en_US/tutorials/video_super_resolution.md) |

@@ -4,8 +4,8 @@ English | [简体中文](README_CN.md)
 
 Before deployment, two steps need to be confirmed.
 
-- 1. The software and hardware environment meets the requirements. Please refer to [FastDeploy环境要求](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
-- 2. FastDeploy Python whl pacakage needs installation. Please refer to [FastDeploy Python安装](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. The software and hardware environment meets the requirements. Please refer to [Environment requirements for FastDeploy](../../../../docs/en/build_and_install/download_prebuilt_libraries.md).
+- 2. FastDeploy Python whl pacakage needs installation. Please refer to [FastDeploy Python Installation](../../../../docs/en/build_and_install/download_prebuilt_libraries.md).
 
 This directory provides an example that `infer.py` quickly complete CPU deployment conducted by the UIE model with OpenVINO acceleration on CPU/GPU and CPU.
 
@@ -67,7 +67,7 @@ The extraction schema: ['肿瘤的大小', '肿瘤的个数', '肝癌级别', '�
 
 ### Description of command line arguments
 
-`infer.py` 除了以上示例的命令行参数，还支持更多命令行参数的设置。以下为各命令行参数的说明。
+`infer.py` supports more command line parameters than the above example. The following is a description of each command line parameter.
 
 | Argument | Description |
 |----------|--------------|
@@ -95,7 +95,7 @@ vocab_path = os.path.join(model_dir, "vocab.txt")
 runtime_option = fastdeploy.RuntimeOption()
 schema = ["时间", "选手", "赛事名称"]
 
-# 初始化UIE模型
+# Initialise UIE model
 uie = UIEModel(
     model_path,
     param_path,
@@ -116,7 +116,7 @@ The initialization stage sets the schema```["time", "player", "event name"]``` t
         ["2月8日上午北京冬奥会自由式滑雪女子大跳台决赛中中国选手谷爱凌以188.25分获得金牌！"], return_dict=True)
 >>> pprint(results)
 
-# 示例输出
+# An output example
 # [{'时间': {'end': 6,
 #          'probability': 0.9857379794120789,
 #          'start': 0,
@@ -145,7 +145,7 @@ For example, if the target entity types are "肿瘤的大小", "肿瘤的个数"
     return_dict=True)
 >>> pprint(results)
 
-# 示例输出
+# An output example
 # [{'肝癌级别': {'end': 20,
 #            'probability': 0.9243271350860596,
 #            'start': 13,
@@ -181,7 +181,7 @@ For example, if we take "contest name" as the extracted entity, and the relation
     return_dict=True)
 >>> pprint(results)
 
-# 示例输出
+# An output example
 # [{'竞赛名称': {'end': 13,
 #            'probability': 0.7825401425361633,
 #            'relation': {'主办方': [{'end': 22,
@@ -229,7 +229,7 @@ For example, if the targets are"地震强度", "时间", "震中位置" and "引
     return_dict=True)
 >>> pprint(results)
 
-# 示例输出
+# An output example
 # [{'地震触发词': {'end': 58,
 #             'probability': 0.9977425932884216,
 #             'relation': {'地震强度': [{'end': 56,
@@ -265,7 +265,7 @@ For example, if the extraction target is the evaluation dimensions and their cor
     ["店面干净，很清静，服务员服务热情，性价比很高，发现收银台有排队"], return_dict=True)
 >>> pprint(results)
 
-# 示例输出
+# An output example
 # [{'评价维度': {'end': 20,
 #            'probability': 0.9817039966583252,
 #            'relation': {'情感倾向[正向，负向]': [{'end': 0,
@@ -290,7 +290,7 @@ Sentence-level sentiment classification, i.e., determining a sentence has a "pos
 >>> results = uie.predict(["这个产品用起来真的很流畅，我非常喜欢"], return_dict=True)
 >>> pprint(results)
 
-# 示例输出
+# An output example
 # [{'情感倾向[正向，负向]': {'end': 0,
 #                   'probability': 0.9990023970603943,
 #                   'start': 0,
@@ -311,7 +311,7 @@ For example, in a legal scenario where both entity extraction and relation extra
     ],
     return_dict=True)
 >>> pprint(results)
-# 示例输出
+# An output example
 # [{'原告': {'end': 37,
 #          'probability': 0.9949813485145569,
 #          'relation': {'委托代理人': [{'end': 46,
@@ -348,7 +348,7 @@ fd.text.uie.UIEModel(model_file,
                      schema_language=SchemaLanguage.ZH)
 ```
 
-UIEModel loading and initialization. Among them, `model_file`, `params_file` are Paddle inference documents exported by trained models. Please refer to [模型导出](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2).`vocab_file`refers to the vocabulary file. The vocabulary of the UIE model UIE can be downloaded in [UIE配置文件](https://github.com/PaddlePaddle/PaddleNLP/blob/5401f01af85f1c73d8017c6b3476242fce1e6d52/model_zoo/uie/utils.py)
+UIEModel loading and initialization. Among them, `model_file`, `params_file` are Paddle inference documents exported by trained models. Please refer to [Model export](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2). `vocab_file`refers to the vocabulary file. The vocabulary of the UIE model UIE can be downloaded in [UIE configuration file](https://github.com/PaddlePaddle/PaddleNLP/blob/5401f01af85f1c73d8017c6b3476242fce1e6d52/model_zoo/uie/utils.py).
 
 **Parameter**
 
@@ -393,8 +393,8 @@ UIEModel loading and initialization. Among them, `model_file`, `params_file` are
 
 ## Related Documents
 
-[UIE模型详细介绍](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md)
+[Details for UIE model](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md)
 
-[UIE模型导出方法](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2)
+[How to export a UIE model](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2)
 
-[UIE C++部署方法](../cpp/README.md)
+[UIE C++ deployment](../cpp/README.md)

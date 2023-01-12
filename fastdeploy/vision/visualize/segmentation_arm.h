@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifdef ENABLE_VISION_VISUALIZE
 #pragma once
 
 #include "fastdeploy/vision/common/result.h"
@@ -26,6 +25,3 @@ cv::Mat VisSegmentationNEON(const cv::Mat& im, const SegmentationResult& result,
 
 }  // namespace vision
 }  // namespace fastdeploy
-
-#endif
-

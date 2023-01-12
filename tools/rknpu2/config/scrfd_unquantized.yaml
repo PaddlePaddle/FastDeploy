@@ -1,0 +1,15 @@
+mean:
+  -
+    - 128.5
+    - 128.5
+    - 128.5
+std:
+  -
+    - 128.5
+    - 128.5
+    - 128.5
+model_path: ./scrfd_500m_bnkps_shape640x640.onnx
+outputs_nodes:
+do_quantization: False
+dataset: "./dataset.txt"
+output_folder: "./"
