@@ -153,19 +153,19 @@ bool PaddleDetPostprocessor::ProcessUnDecodeResults(
   FDASSERT(tensors[0].Shape()[0] == 1,
            "ProcessUnDecodeResults only support"
            " input batch = 1.")
-  results->resize(1);
-  auto& result = (*results)[0];
-  result.Resize(0);
+  results->resize(tensors[0].Shape()[0]);
 
   // do decode and nms
   ppdet_decoder_.DecodeAndNMS(tensors, results);
 
   // do scale
-  for (auto& box : result.boxes) {
-    box[0] /= GetScaleFactor()[1];
-    box[1] /= GetScaleFactor()[0];
-    box[2] /= GetScaleFactor()[1];
-    box[3] /= GetScaleFactor()[0];
+  for (auto& result : *results) {
+    for (auto& box : result.boxes) {
+      box[0] /= GetScaleFactor()[1];
+      box[1] /= GetScaleFactor()[0];
+      box[2] /= GetScaleFactor()[1];
+      box[3] /= GetScaleFactor()[0];
+    }
   }
   return true;
 }

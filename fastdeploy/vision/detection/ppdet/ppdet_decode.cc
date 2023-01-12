@@ -53,53 +53,60 @@ bool PPDetDecode::ReadPostprocessConfigFromYaml() {
 
 bool PPDetDecode::DecodeAndNMS(const std::vector<FDTensor>& tensors,
                                std::vector<DetectionResult>* results) {
+  batchs_ = tensors[0].shape[0];
   if (arch_ == "PicoDet") {
     for (int i = 0; i < tensors.size(); i++) {
       if (i == 0) {
         num_class_ = tensors[i].Shape()[2];
       }
       if (i == fpn_stride_.size()) {
-        reg_max_ = tensors[i].Shape()[2] / 4 - 1;
+        reg_max_ = tensors[i].Shape()[2] / 4;
       }
     }
-    PicoDetPostProcess(&((*results)[0]), tensors);
+    for (int i = 0; i < results->size(); ++i) {
+      PicoDetPostProcess(tensors, results);
+    }
   } else {
     FDERROR << "ProcessUnDecodeResults only supported when arch is PicoDet."
             << std::endl;
     return false;
   }
+  return true;
 }
 
-bool PPDetDecode::PicoDetPostProcess(
-    fastdeploy::vision::DetectionResult* results,
-    const std::vector<FDTensor>& outs) {
-  results->Clear();
-  for (int i = 0; i < fpn_stride_.size(); ++i) {
-    int feature_h = std::ceil(im_shape_[0] / fpn_stride_[i]);
-    int feature_w = std::ceil(im_shape_[1] / fpn_stride_[i]);
-    for (int idx = 0; idx < feature_h * feature_w; idx++) {
-      const auto* scores =
-          static_cast<const float*>(outs[i].Data()) + (idx * num_class_);
-      int row = idx / feature_w;
-      int col = idx % feature_w;
-      float score = 0;
-      int cur_label = 0;
-      for (int label = 0; label < num_class_; label++) {
-        if (scores[label] > score) {
-          score = scores[label];
-          cur_label = label;
+bool PPDetDecode::PicoDetPostProcess(const std::vector<FDTensor>& outs,
+                                     std::vector<DetectionResult>* results) {
+  for (int batch = 0; batch < batchs_; ++batch) {
+    auto& result = (*results)[batch];
+    result.Clear();
+    for (int i = batch * batchs_ * fpn_stride_.size();
+         i < fpn_stride_.size() * (batch + 1); ++i) {
+      int feature_h = std::ceil(im_shape_[0] / fpn_stride_[i]);
+      int feature_w = std::ceil(im_shape_[1] / fpn_stride_[i]);
+      for (int idx = 0; idx < feature_h * feature_w; idx++) {
+        const auto* scores =
+            static_cast<const float*>(outs[i].Data()) + (idx * num_class_);
+        int row = idx / feature_w;
+        int col = idx % feature_w;
+        float score = 0;
+        int cur_label = 0;
+        for (int label = 0; label < num_class_; label++) {
+          if (scores[label] > score) {
+            score = scores[label];
+            cur_label = label;
+          }
+        }
+        if (score > score_threshold_) {
+          const auto* bbox_pred =
+              static_cast<const float*>(outs[i + fpn_stride_.size()].Data()) +
+              (idx * 4 * (reg_max_));
+          DisPred2Bbox(bbox_pred, cur_label, score, col, row, fpn_stride_[i],
+                       &result);
         }
       }
-      if (score > score_threshold_) {
-        const auto* bbox_pred =
-            static_cast<const float*>(outs[i + fpn_stride_.size()].Data()) +
-            (idx * 4 * (reg_max_ + 1));
-        DisPred2Bbox(bbox_pred, cur_label, score, col, row, fpn_stride_[i],
-                     results);
-      }
     }
+    fastdeploy::vision::utils::NMS(&result, 0.5);
   }
-  fastdeploy::vision::utils::NMS(results, 0.5);
   return results;
 }
 
@@ -136,10 +143,9 @@ void PPDetDecode::DisPred2Bbox(const float*& dfl_det, int label, float score,
   std::vector<float> dis_pred{0, 0, 0, 0};
   for (int i = 0; i < 4; i++) {
     float dis = 0;
-    float* dis_after_sm = new float[reg_max_ + 1];
-    ActivationFunctionSoftmax(dfl_det + i * (reg_max_ + 1), dis_after_sm,
-                              reg_max_ + 1);
-    for (int j = 0; j < reg_max_ + 1; j++) {
+    float* dis_after_sm = new float[reg_max_];
+    ActivationFunctionSoftmax(dfl_det + i * (reg_max_), dis_after_sm, reg_max_);
+    for (int j = 0; j < reg_max_; j++) {
       dis += j * dis_after_sm[j];
     }
     dis *= stride;
