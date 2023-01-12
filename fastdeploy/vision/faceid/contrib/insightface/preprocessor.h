@@ -54,11 +54,6 @@ class FASTDEPLOY_DECL InsightFaceRecognitionPreprocessor {
   /// Set beta.
   void SetBeta(std::vector<float>& beta) { beta_ = beta; }
 
-  bool GetPermute() { return disable_permute_; }
-
-  /// Set permute.
-  void SetPermute(bool permute) { disable_permute_ = !permute; }
-
   /// This function will disable normalize and hwc2chw in preprocessing step.
   void DisableNormalize() { disable_normalize_ = true; }
 

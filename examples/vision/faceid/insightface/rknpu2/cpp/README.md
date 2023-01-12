@@ -18,6 +18,7 @@ FastDeploy支持在RKNPU上部署包括ArcFace\CosFace\VPL\Partial_FC在内的In
 ```bash
 mkdir build
 cd build
+# FastDeploy version need >=1.0.3
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
@@ -104,7 +105,7 @@ VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
 #### Predict函数
 
 > ```c++
-> ArcFace::Predict(cv::Mat* im, FaceRecognitionResult* result)
+> ArcFace::Predict(const cv::Mat& im, FaceRecognitionResult* result)
 > ```
 >
 > 模型预测接口，输入图像直接输出检测结果。

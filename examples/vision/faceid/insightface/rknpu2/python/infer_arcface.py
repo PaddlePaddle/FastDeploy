@@ -3,7 +3,6 @@ import cv2
 import numpy as np
 
 
-# 余弦相似度
 def cosine_similarity(a, b):
     a = np.array(a)
     b = np.array(b)

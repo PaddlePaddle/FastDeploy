@@ -18,15 +18,11 @@ void CpuInfer(const std::string& model_file,
               const std::vector<std::string>& image_file) {
   auto model = fastdeploy::vision::faceid::ArcFace(model_file, "");
 
-  fastdeploy::TimeCounter tc;
-  tc.Start();
   cv::Mat face0 = cv::imread(image_file[0]);
   fastdeploy::vision::FaceRecognitionResult res0;
   if (!model.Predict(face0, &res0)) {
     std::cerr << "Prediction Failed." << std::endl;
   }
-  tc.End();
-  tc.PrintInfo("Arcface in ONNX");
 
   cv::Mat face1 = cv::imread(image_file[1]);
   fastdeploy::vision::FaceRecognitionResult res1;
@@ -38,6 +34,7 @@ void CpuInfer(const std::string& model_file,
   fastdeploy::vision::FaceRecognitionResult res2;
   if (!model.Predict(face2, &res2)) {
     std::cerr << "Prediction Failed." << std::endl;
+    return;
   }
 
   std::cout << "Prediction Done!" << std::endl;
@@ -67,26 +64,25 @@ void RKNPUInfer(const std::string& model_file,
   model.GetPreprocessor().DisableNormalize();
   model.GetPreprocessor().DisablePermute();
 
-  fastdeploy::TimeCounter tc;
-  tc.Start();
   cv::Mat face0 = cv::imread(image_file[0]);
   fastdeploy::vision::FaceRecognitionResult res0;
   if (!model.Predict(face0, &res0)) {
     std::cerr << "Prediction Failed." << std::endl;
+    return;
   }
-  tc.End();
-  tc.PrintInfo("Arcface in RKNN");
 
   cv::Mat face1 = cv::imread(image_file[1]);
   fastdeploy::vision::FaceRecognitionResult res1;
   if (!model.Predict(face1, &res1)) {
     std::cerr << "Prediction Failed." << std::endl;
+    return;
   }
 
   cv::Mat face2 = cv::imread(image_file[2]);
   fastdeploy::vision::FaceRecognitionResult res2;
   if (!model.Predict(face2, &res2)) {
     std::cerr << "Prediction Failed." << std::endl;
+    return;
   }
 
   std::cout << "Prediction Done!" << std::endl;
