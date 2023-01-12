@@ -55,7 +55,7 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   // for UnDecodeResults
   std::string config_file_;
   std::string arch_;
-  std::vector<int> fpn_stride_{8, 16, 32, 64};
+  std::vector<float> fpn_stride_{8, 16, 32, 64};
   std::vector<float> scale_factor_{1.0, 1.0};
   std::vector<float> im_shape_{416, 416};
   float score_threshold_ = 0.5;

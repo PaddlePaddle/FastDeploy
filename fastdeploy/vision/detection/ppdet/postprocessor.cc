@@ -40,7 +40,6 @@ bool PaddleDetPostprocessor::ReadPostprocessConfigFromYaml() {
 
   if (config["arch"].IsDefined()) {
     arch_ = config["arch"].as<std::string>();
-    std::cout << "arch: " << arch_ << std::endl;
   } else {
     std::cerr << "Please set model arch,"
               << "support value : YOLO, SSD, RetinaNet, RCNN, Face."
@@ -51,10 +50,8 @@ bool PaddleDetPostprocessor::ReadPostprocessConfigFromYaml() {
   if (config["fpn_stride"].IsDefined()) {
     fpn_stride_.clear();
     for (auto item : config["fpn_stride"]) {
-      fpn_stride_.emplace_back(item.as<int>());
+      fpn_stride_.emplace_back(item.as<float>());
     }
-    printf("[%d,%d,%d,%d]\n", fpn_stride_[0], fpn_stride_[1], fpn_stride_[2],
-           fpn_stride_[3]);
   }
   return true;
 }
@@ -277,10 +274,9 @@ void PaddleDetPostprocessor::PicoDetPostProcess(
     fastdeploy::vision::DetectionResult* results,
     std::vector<const float*> outs, int reg_max, int num_class) {
   results->Clear();
-  int in_h = im_shape_[0], in_w = im_shape_[1];
   for (int i = 0; i < fpn_stride_.size(); ++i) {
-    int feature_h = std::ceil((float)in_h / fpn_stride_[i]);
-    int feature_w = std::ceil((float)in_w / fpn_stride_[i]);
+    int feature_h = std::ceil(im_shape_[0] / fpn_stride_[i]);
+    int feature_w = std::ceil(im_shape_[1] / fpn_stride_[i]);
     for (int idx = 0; idx < feature_h * feature_w; idx++) {
       const float* scores = outs[i] + (idx * num_class);
       int row = idx / feature_w;
