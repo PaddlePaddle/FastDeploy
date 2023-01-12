@@ -20,7 +20,7 @@ namespace fastdeploy {
 namespace vision {
 namespace utils {
 
-cv::Mat meanAxis0(const cv::Mat& src) {
+cv::Mat MeanAxis0(const cv::Mat& src) {
   int num = src.rows;
   int dim = src.cols;
   cv::Mat output(1, dim, CV_32F);
@@ -34,7 +34,7 @@ cv::Mat meanAxis0(const cv::Mat& src) {
   return output;
 }
 
-cv::Mat elementwiseMinus(const cv::Mat& A, const cv::Mat& B) {
+cv::Mat ElementwiseMinus(const cv::Mat& A, const cv::Mat& B) {
   cv::Mat output(A.rows, A.cols, A.type());
   assert(B.cols == A.cols);
   if (B.cols == A.cols) {
@@ -47,10 +47,10 @@ cv::Mat elementwiseMinus(const cv::Mat& A, const cv::Mat& B) {
   return output;
 }
 
-cv::Mat varAxis0(const cv::Mat& src) {
-  cv::Mat temp_ = elementwiseMinus(src, meanAxis0(src));
+cv::Mat VarAxis0(const cv::Mat& src) {
+  cv::Mat temp_ = ElementwiseMinus(src, MeanAxis0(src));
   cv::multiply(temp_, temp_, temp_);
-  return meanAxis0(temp_);
+  return MeanAxis0(temp_);
 }
 
 int MatrixRank(cv::Mat M) {
@@ -64,10 +64,10 @@ int MatrixRank(cv::Mat M) {
 cv::Mat SimilarTransform(cv::Mat& dst, cv::Mat& src) {
   int num = dst.rows;
   int dim = dst.cols;
-  cv::Mat src_mean = meanAxis0(dst);
-  cv::Mat dst_mean = meanAxis0(src);
-  cv::Mat src_demean = elementwiseMinus(dst, src_mean);
-  cv::Mat dst_demean = elementwiseMinus(src, dst_mean);
+  cv::Mat src_mean = MeanAxis0(dst);
+  cv::Mat dst_mean = MeanAxis0(src);
+  cv::Mat src_demean = ElementwiseMinus(dst, src_mean);
+  cv::Mat dst_demean = ElementwiseMinus(src, dst_mean);
   cv::Mat A = (dst_demean.t() * src_demean) / static_cast<float>(num);
   cv::Mat d(dim, 1, CV_32F);
   d.setTo(1.0f);
@@ -101,7 +101,7 @@ cv::Mat SimilarTransform(cv::Mat& dst, cv::Mat& src) {
     cv::Mat res = U * twp;        // U
     T.rowRange(0, dim).colRange(0, dim) = -U.t() * twp;
   }
-  cv::Mat var_ = varAxis0(src_demean);
+  cv::Mat var_ = VarAxis0(src_demean);
   float val = cv::sum(var_).val[0];
   cv::Mat res;
   cv::multiply(d, S, res);
