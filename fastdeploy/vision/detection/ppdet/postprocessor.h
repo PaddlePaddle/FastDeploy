@@ -15,7 +15,7 @@
 #pragma once
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
-
+#include "fastdeploy/vision/detection/ppdet/ppdet_decode.h"
 namespace fastdeploy {
 namespace vision {
 namespace detection {
@@ -29,7 +29,8 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
    *
    * \param[in] config_file Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
    */
-  explicit PaddleDetPostprocessor(const std::string& config_file);
+  explicit PaddleDetPostprocessor(const std::string& config_file)
+      : ppdet_decoder_(config_file) {}
 
   /** \brief Process the result of runtime and fill to ClassifyResult structure
    *
@@ -52,24 +53,11 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
  private:
   bool apply_decode_and_nms_ = false;
 
-  // for UnDecodeResults
-  std::string config_file_;
-  std::string arch_;
-  std::vector<float> fpn_stride_{8, 16, 32, 64};
+  PPDetDecode ppdet_decoder_;
   std::vector<float> scale_factor_{1.0, 1.0};
-  std::vector<float> im_shape_{416, 416};
-  float score_threshold_ = 0.5;
-  float nms_threshold_ = 0.5;
-  int reg_max_ = 7;
-  int num_class_ = 80;
-  std::vector<float> GetScaleFactor();
-  bool ReadPostprocessConfigFromYaml();
   bool ProcessUnDecodeResults(const std::vector<FDTensor>& tensors,
                               std::vector<DetectionResult>* results);
-  void DisPred2Bbox(const float*& dfl_det, int label, float score, int x, int y,
-                    int stride, fastdeploy::vision::DetectionResult* results);
-  void PicoDetPostProcess(DetectionResult* results,
-                          const std::vector<FDTensor>& outs);
+  std::vector<float> GetScaleFactor();
 
   // Process mask tensor for MaskRCNN
   bool ProcessMask(const FDTensor& tensor,
