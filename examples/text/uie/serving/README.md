@@ -1,4 +1,4 @@
-English | [简体中文](README_CN.md) 
+English | [简体中文](README_CN.md)
 
 # Example of UIE Serving Deployment
 
@@ -144,3 +144,18 @@ results:
 ## Configuration Modification
 
 The current configuration is by default to run the paddle engine on CPU. If you want to run on CPU/GPU or other inference engines, modifying the configuration is needed.Please refer to [Configuration Document](../../../../serving/docs/EN/model_configuration-en.md).
+
+## Use VisualDL for Fastdeploy Serving Deployment Management
+
+You can use [VisualDL for fastdeploy serving deployment management](../../../../serving/docs/EN/vdl_management-en.md) , the above model preparation, deployment, configuration modification and client request operations can all be performed based on VisualDL.
+
+The serving deployment of UIE by VisualDL only needs the following three steps:
+```text
+1. Load the model repository: ./text/uie/serving/models
+2. Download the model resource file: click the uie model, click the version number 1 to add the pre-training model, and select the text information extraction model uie-base to download.
+3. Start the service: Click the "launch server" button and input the launch parameters.
+```
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/22424850/211708353-507d6038-b754-4520-884b-1156703a44c6.gif" width="100%"/>
+</p>

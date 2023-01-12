@@ -175,3 +175,18 @@ entity: 华夏   label: LOC   pos: [14, 15]
 
 ## Configuration Modification
 The current classification task (ernie_seqcls_model/config.pbtxt) is by default configured to run the OpenVINO engine on CPU; the sequence labelling task is by default configured to run the Paddle engine on GPU. If you want to run on CPU/GPU or other inference engines, you should modify the configuration. please refer to the [configuration document.](../../../../serving/docs/EN/model_configuration-en.md)
+
+## Use VisualDL for Fastdeploy Serving Deployment Management
+
+You can use [VisualDL for fastdeploy serving deployment management](../../../../serving/docs/EN/vdl_management-en.md) , the above model preparation, deployment, configuration modification and client request operations can all be performed based on VisualDL.
+
+The serving deployment of ERNIE 3.0 by VisualDL only needs the following three steps:
+```text
+1. Load the model repository: ./text/ernie-3.0/serving/models
+2. Download the model resource file: click the ernie_seqcls_model model, click the version number 1 to add the pre-training model, and select the text classification model ernie_3.0_ernie_seqcls_model to download. Click the ernie_tokencls_model model, click the version number 1 to add the pre-training model, and select the text classification model ernie_tokencls_model to download.
+3. Start the service: Click the "launch server" button and input the launch parameters.
+```
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/22424850/211708353-507d6038-b754-4520-884b-1156703a44c6.gif" width="100%"/>
+</p>

@@ -56,3 +56,17 @@ output_name: detction_result
 
 
 The default is to run ONNXRuntime on CPU. If developers need to run it on GPU or other inference engines, please see the  [Configs File](../../../../../serving/docs/EN/model_configuration-en.md) to modify the configs in `models/runtime/config.pbtxt`.
+
+## Use VisualDL for Fastdeploy Serving Deployment Management
+
+You can use [VisualDL for fastdeploy serving deployment management](../../../../serving/docs/EN/vdl_management-en.md) , the above model preparation, deployment, configuration modification and client request operations can all be performed based on VisualDL.
+
+The serving deployment of yolov5 by VisualDL only needs the following three steps:
+```text
+1. Load the model repository: ./vision/detection/yolov5/serving/models
+2. Download the model resource file: click the runtime model, click the version number 1 to add the pre-training model, and select the detection model yolov5s to download.
+3. Start the service: Click the "launch server" button and input the launch parameters.
+```
+ <p align="center">
+  <img src="https://user-images.githubusercontent.com/22424850/211709339-023fef22-3ffc-4b3d-bce5-ea4202bb9c61.gif" width="100%"/>
+</p>

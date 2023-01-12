@@ -1,7 +1,7 @@
 English | [简体中文](README_CN.md)
 # PP-OCR Serving Deployment Example
 
-Before the serving deployment, please confirm 
+Before the serving deployment, please confirm
 
 - 1.  Refer to [FastDeploy Serving Deployment](../../../../../serving/README.md) for software and hardware environment requirements and image pull commands
 
@@ -73,7 +73,7 @@ fastdeployserver --model-repository=/ocr_serving/models
 
 Parameter:
   - `model-repository`(required): The storage path of the entire model streaming_pp_tts.
-  - `http-port`(optional): Port number for the HTTP service. Default: `8000`. This port is not used in this example. 
+  - `http-port`(optional): Port number for the HTTP service. Default: `8000`. This port is not used in this example.
   - `grpc-port`(optional): Port number for the GRPC service. Default: `8001`.
   - `metrics-port`(optional): Port number for the serer metric. Default: `8002`. This port is not used in this example.
 
@@ -92,3 +92,17 @@ python3 client.py
 ## Configuration Change
 
 The current default configuration runs on GPU. If you want to run it on CPU or other inference engines, please modify the configuration in `models/runtime/config.pbtxt`. Refer to [Configuration Document](../../../../../serving/docs/EN/model_configuration-en.md) for more information.
+
+## Use VisualDL for Fastdeploy Serving Deployment Management
+
+You can use [VisualDL for fastdeploy serving deployment management](../../../../serving/docs/EN/vdl_management-en.md) , the above model preparation, deployment, configuration modification and client request operations can all be performed based on VisualDL.
+
+The serving deployment of PP-OCR by VisualDL only needs the following three steps:
+```text
+1. Load the model repository: ./vision/ocr/PP-OCRv3/serving
+2. Download the model resource file: click the det_runtime model, click the version number 1 to add the pre-training model, and select the text recognition model ch_PP-OCRv3_det to download. click the cls_runtime model, click the version number 1 to add the pre-training model, and select the  text recognition model ch_ppocr_mobile_v2.0_cls to download. click the rec_runtime model, click the version number 1 to add the pre-training model, and select the text recognition model ch_PP-OCRv3_rec to download. click the rec_postprocess model, click the version number 1 to add the pre-training model, and select the  text recognition model ch_PP-OCRv3_rec to download.
+3. Start the service: Click the "launch server" button and input the launch parameters.
+```
+ <p align="center">
+  <img src="https://user-images.githubusercontent.com/22424850/211709324-b07bb303-ced2-4137-9df7-0d2574ba84c8.gif" width="100%"/>
+</p>

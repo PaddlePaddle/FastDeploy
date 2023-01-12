@@ -481,7 +481,7 @@ response_outputs = response.as_numpy('detction_result') # 根据输出变量名�
 
 ### 使用fastdeploy client进行可视化请求服务
 
-VisualDL提供客户端组件用于快速的访问fastdeployserver服务，帮助用户进行预测请求和结果的可视化，对部署的服务进行快速验证。该页面基于gradio组件进行开发。
+VisualDL提供客户端组件用于快速的访问fastdeployserver服务，帮助用户进行预测请求和结果的可视化，对部署的服务进行快速验证。该页面基于gradio进行开发。
  <p align="center">
   <img src="https://user-images.githubusercontent.com/22424850/211204267-8e044f32-1008-46a7-828a-d7c27ac5754a.gif" width="100%"/>
   </p>

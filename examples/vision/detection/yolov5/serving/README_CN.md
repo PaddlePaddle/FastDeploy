@@ -73,7 +73,7 @@ output_name: detction_result
 
 通过VisualDL的可视化界面对yolov5进行服务化部署只需要如下三步：
 ```text
-1. 载入模型库：/vision/detection/yolov5/serving/models
+1. 载入模型库：./vision/detection/yolov5/serving/models
 2. 下载模型资源文件：点击runtime模型，点击版本号1添加预训练模型，选择检测模型yolov5s进行下载。
 3. 启动服务：点击启动服务按钮，输入启动参数。
 ```
