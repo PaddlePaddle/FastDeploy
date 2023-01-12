@@ -129,7 +129,7 @@ After entering the component tab of FastDeploy Server, you can
    </p>
 
    d. Testing the service
-   Click the "open client" button to open the client for quickly testing the fastdeployserver service. The client is written based on gradio, and will automatically help users fill in basic information according to the launch parameters of the fastdeployserver service. Users can refer to [Use VisualDL as fastdeploy client for request visualization](./client-en.md#Use VisualDL as fastdeploy client for request visualization) to use.
+   Click the "open client" button to open the client for quickly testing the fastdeployserver service. The client is written based on gradio, and will automatically help users fill in basic information according to the launch parameters of the fastdeployserver service. Users can refer to [Use VisualDL as fastdeploy client for request visualization](./client-en.md#use-visualdl-as-fastdeploy-client-for-request-visualization) to use.
    <p align="center">
    <img src="https://user-images.githubusercontent.com/22424850/211198901-3e58fe9d-8667-4416-987a-200f9edeb05d.gif" width="100%"/>
    </p>
