@@ -16,10 +16,48 @@
 
 #include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 #include "fastdeploy/vision/utils/utils.h"
+#include "yaml-cpp/yaml.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace detection {
+
+PaddleDetPostprocessor::PaddleDetPostprocessor(const std::string& config_file) {
+  this->config_file_ = config_file;
+  FDASSERT(ReadPostprocessConfigFromYaml(),
+           "Failed to create PaddleDetPostprocessor.");
+}
+
+bool PaddleDetPostprocessor::ReadPostprocessConfigFromYaml() {
+  YAML::Node config;
+  try {
+    config = YAML::LoadFile(config_file_);
+  } catch (YAML::BadFile& e) {
+    FDERROR << "Failed to load yaml file " << config_file_
+            << ", maybe you should check this file." << std::endl;
+    return false;
+  }
+
+  if (config["arch"].IsDefined()) {
+    arch_ = config["arch"].as<std::string>();
+    std::cout << "arch: " << arch_ << std::endl;
+  } else {
+    std::cerr << "Please set model arch,"
+              << "support value : YOLO, SSD, RetinaNet, RCNN, Face."
+              << std::endl;
+    return false;
+  }
+
+  if (config["fpn_stride"].IsDefined()) {
+    fpn_stride_.clear();
+    for (auto item : config["fpn_stride"]) {
+      fpn_stride_.emplace_back(item.as<int>());
+    }
+    printf("[%d,%d,%d,%d]\n", fpn_stride_[0], fpn_stride_[1], fpn_stride_[2],
+           fpn_stride_[3]);
+  }
+  return true;
+}
 
 bool PaddleDetPostprocessor::ProcessMask(
     const FDTensor& tensor, std::vector<DetectionResult>* results) {
@@ -67,14 +105,6 @@ bool PaddleDetPostprocessor::ProcessMask(
 bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                  std::vector<DetectionResult>* results) {
   if (DecodeAndNMSApplied()) {
-    FDASSERT(tensors.size() == 2,
-             "While postprocessing with ApplyDecodeAndNMS, "
-             "there should be 2 outputs for this model, but now it's %zu.",
-             tensors.size());
-    FDASSERT(tensors[0].shape.size() == 3,
-             "While postprocessing with ApplyDecodeAndNMS, "
-             "the rank of the first outputs should be 3, but now it's %zu",
-             tensors[0].shape.size());
     return ProcessUnDecodeResults(tensors, results);
   }
   // Get number of boxes for each input image
@@ -159,55 +189,164 @@ void PaddleDetPostprocessor::ApplyDecodeAndNMS() {
 bool PaddleDetPostprocessor::ProcessUnDecodeResults(
     const std::vector<FDTensor>& tensors,
     std::vector<DetectionResult>* results) {
-  if (tensors.size() != 2) {
-    return false;
-  }
-
-  int boxes_index = 0;
-  int scores_index = 1;
-  if (tensors[0].shape[1] == tensors[1].shape[2]) {
-    boxes_index = 0;
-    scores_index = 1;
-  } else if (tensors[0].shape[2] == tensors[1].shape[1]) {
-    boxes_index = 1;
-    scores_index = 0;
+  FDASSERT(tensors[0].Shape()[0] == 1,
+           "ProcessUnDecodeResults only support"
+           " input batch = 1.")
+  results->resize(1);
+  (*results)[0].Resize(0);
+  int reg_max = 7;
+  int num_class = 80;
+  std::vector<const float*> output_data_list_;
+  if (arch_ == "PicoDet") {
+    for (int i = 0; i < tensors.size(); i++) {
+      if (i == 0) {
+        num_class = tensors[i].Shape()[2];
+      }
+      if (i == fpn_stride_.size()) {
+        reg_max = tensors[i].Shape()[2] / 4 - 1;
+      }
+      float* buffer = new float[tensors[i].Numel()];
+      memcpy(buffer, tensors[i].Data(), tensors[i].Nbytes());
+      output_data_list_.push_back(buffer);
+    }
+    PicoDetPostProcess(&((*results)[0]), output_data_list_, reg_max, num_class);
   } else {
-    FDERROR << "The shape of boxes and scores should be [batch, boxes_num, "
-               "4], [batch, classes_num, boxes_num]"
+    FDERROR << "ProcessUnDecodeResults only supported when arch is PicoDet."
             << std::endl;
     return false;
   }
-
-  PaddleMultiClassNMS nms;
-  nms.background_label = -1;
-  nms.keep_top_k = 100;
-  nms.nms_eta = 1.0;
-  nms.nms_threshold = 0.5;
-  nms.score_threshold = 0.3;
-  nms.nms_top_k = 1000;
-  nms.normalized = true;
-  nms.Compute(static_cast<const float*>(tensors[boxes_index].Data()),
-              static_cast<const float*>(tensors[scores_index].Data()),
-              tensors[boxes_index].shape, tensors[scores_index].shape);
-
-  auto num_boxes = nms.out_num_rois_data;
-  auto box_data = static_cast<const float*>(nms.out_box_data.data());
-  // Get boxes for each input image
-  results->resize(num_boxes.size());
-  int offset = 0;
-  for (size_t i = 0; i < num_boxes.size(); ++i) {
-    const float* ptr = box_data + offset;
-    (*results)[i].Reserve(num_boxes[i]);
-    for (size_t j = 0; j < num_boxes[i]; ++j) {
-      (*results)[i].label_ids.push_back(
-          static_cast<int32_t>(round(ptr[j * 6])));
-      (*results)[i].scores.push_back(ptr[j * 6 + 1]);
-      (*results)[i].boxes.emplace_back(std::array<float, 4>(
-          {ptr[j * 6 + 2], ptr[j * 6 + 3], ptr[j * 6 + 4], ptr[j * 6 + 5]}));
-    }
-    offset += (num_boxes[i] * 6);
-  }
   return true;
+}
+
+float FastExp(float x) {
+  union {
+    uint32_t i;
+    float f;
+  } v{};
+  v.i = (1 << 23) * (1.4426950409 * x + 126.93490512f);
+  return v.f;
+}
+
+int ActivationFunctionSoftmax(const float* src, float* dst, int length) {
+  const float alpha = *std::max_element(src, src + length);
+  float denominator{0};
+
+  for (int i = 0; i < length; ++i) {
+    dst[i] = FastExp(src[i] - alpha);
+    denominator += dst[i];
+  }
+
+  for (int i = 0; i < length; ++i) {
+    dst[i] /= denominator;
+  }
+
+  return 0;
+}
+
+ObjectResult PaddleDetPostprocessor::DisPred2Bbox(const float*& dfl_det,
+                                                  int label, float score, int x,
+                                                  int y, int stride,
+                                                  int reg_max) {
+  float ct_x = (x + 0.5) * stride;
+  float ct_y = (y + 0.5) * stride;
+  std::vector<float> dis_pred{0, 0, 0, 0};
+  for (int i = 0; i < 4; i++) {
+    float dis = 0;
+    float* dis_after_sm = new float[reg_max + 1];
+    ActivationFunctionSoftmax(dfl_det + i * (reg_max + 1), dis_after_sm,
+                              reg_max + 1);
+    for (int j = 0; j < reg_max + 1; j++) {
+      dis += j * dis_after_sm[j];
+    }
+    dis *= stride;
+    dis_pred[i] = dis;
+    delete[] dis_after_sm;
+  }
+  float xmin = (float)(std::max)(ct_x - dis_pred[0], .0f);
+  float ymin = (float)(std::max)(ct_y - dis_pred[1], .0f);
+  float xmax = (float)(std::min)(ct_x + dis_pred[2], (float)im_shape_[0]);
+  float ymax = (float)(std::min)(ct_y + dis_pred[3], (float)im_shape_[1]);
+
+  ObjectResult result_item;
+  result_item.rect = {xmin, ymin, xmax, ymax};
+  result_item.class_id = label;
+  result_item.confidence = score;
+  return result_item;
+}
+
+void NMS(std::vector<ObjectResult>& input_boxes, float nms_threshold) {
+  std::sort(input_boxes.begin(), input_boxes.end(),
+            [](ObjectResult a, ObjectResult b) {
+              return a.confidence > b.confidence;
+            });
+  std::vector<float> vArea(input_boxes.size());
+  for (int i = 0; i < int(input_boxes.size()); ++i) {
+    vArea[i] = (input_boxes.at(i).rect[2] - input_boxes.at(i).rect[0] + 1) *
+               (input_boxes.at(i).rect[3] - input_boxes.at(i).rect[1] + 1);
+  }
+  for (int i = 0; i < int(input_boxes.size()); ++i) {
+    for (int j = i + 1; j < int(input_boxes.size());) {
+      float xx1 = (std::max)(input_boxes[i].rect[0], input_boxes[j].rect[0]);
+      float yy1 = (std::max)(input_boxes[i].rect[1], input_boxes[j].rect[1]);
+      float xx2 = (std::min)(input_boxes[i].rect[2], input_boxes[j].rect[2]);
+      float yy2 = (std::min)(input_boxes[i].rect[3], input_boxes[j].rect[3]);
+      float w = (std::max)(float(0), xx2 - xx1 + 1);
+      float h = (std::max)(float(0), yy2 - yy1 + 1);
+      float inter = w * h;
+      float ovr = inter / (vArea[i] + vArea[j] - inter);
+      if (ovr >= nms_threshold) {
+        input_boxes.erase(input_boxes.begin() + j);
+        vArea.erase(vArea.begin() + j);
+      } else {
+        j++;
+      }
+    }
+  }
+}
+
+void PaddleDetPostprocessor::PicoDetPostProcess(
+    fastdeploy::vision::DetectionResult* results,
+    std::vector<const float*> outs, int reg_max, int num_class) {
+  std::vector<std::vector<ObjectResult>> bbox_results;
+  bbox_results.resize(num_class);
+  int in_h = im_shape_[0], in_w = im_shape_[1];
+  for (int i = 0; i < fpn_stride_.size(); ++i) {
+    int feature_h = std::ceil((float)in_h / fpn_stride_[i]);
+    int feature_w = std::ceil((float)in_w / fpn_stride_[i]);
+    for (int idx = 0; idx < feature_h * feature_w; idx++) {
+      const float* scores = outs[i] + (idx * num_class);
+      int row = idx / feature_w;
+      int col = idx % feature_w;
+      float score = 0;
+      int cur_label = 0;
+      for (int label = 0; label < num_class; label++) {
+        if (scores[label] > score) {
+          score = scores[label];
+          cur_label = label;
+        }
+      }
+      if (score > score_threshold_) {
+        const float* bbox_pred =
+            outs[i + fpn_stride_.size()] + (idx * 4 * (reg_max + 1));
+        bbox_results[cur_label].push_back(DisPred2Bbox(
+            bbox_pred, cur_label, score, col, row, fpn_stride_[i], reg_max));
+      }
+    }
+  }
+  for (int i = 0; i < (int)bbox_results.size(); i++) {
+    NMS(bbox_results[i], nms_threshold_);
+    results->Reserve(results->label_ids.size() + bbox_results.size());
+    for (auto box : bbox_results[i]) {
+      box.rect[0] = box.rect[0] / scale_factor_[1];
+      box.rect[2] = box.rect[2] / scale_factor_[1];
+      box.rect[1] = box.rect[1] / scale_factor_[0];
+      box.rect[3] = box.rect[3] / scale_factor_[0];
+      results->boxes.push_back(
+          {box.rect[0], box.rect[1], box.rect[2], box.rect[3]});
+      results->label_ids.push_back(box.class_id);
+      results->scores.push_back(box.confidence);
+    }
+  }
 }
 
 std::vector<float> PaddleDetPostprocessor::GetScaleFactor() {

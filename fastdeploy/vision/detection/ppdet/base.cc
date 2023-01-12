@@ -1,7 +1,8 @@
 #include "fastdeploy/vision/detection/ppdet/base.h"
+
+#include "fastdeploy/utils/unique_ptr.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
-#include "fastdeploy/utils/unique_ptr.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -12,15 +13,16 @@ PPDetBase::PPDetBase(const std::string& model_file,
                      const std::string& config_file,
                      const RuntimeOption& custom_option,
                      const ModelFormat& model_format)
-    : preprocessor_(config_file) {
+    : preprocessor_(config_file), postprocessor_(config_file) {
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
 }
 
-std::unique_ptr<PPDetBase>  PPDetBase::Clone() const {
-  std::unique_ptr<PPDetBase> clone_model = fastdeploy::utils::make_unique<PPDetBase>(PPDetBase(*this));
+std::unique_ptr<PPDetBase> PPDetBase::Clone() const {
+  std::unique_ptr<PPDetBase> clone_model =
+      fastdeploy::utils::make_unique<PPDetBase>(PPDetBase(*this));
   clone_model->SetRuntime(clone_model->CloneRuntime());
   return clone_model;
 }
@@ -57,8 +59,9 @@ bool PPDetBase::BatchPredict(const std::vector<cv::Mat>& imgs,
   reused_input_tensors_[1].name = "scale_factor";
   reused_input_tensors_[2].name = "im_shape";
 
-  if(postprocessor_.DecodeAndNMSApplied()){
-    postprocessor_.SetScaleFactor(static_cast<float*>(reused_input_tensors_[1].Data()));
+  if (postprocessor_.DecodeAndNMSApplied()) {
+    postprocessor_.SetScaleFactor(
+        static_cast<float*>(reused_input_tensors_[1].Data()));
   }
 
   // Some models don't need scale_factor and im_shape as input
@@ -79,6 +82,6 @@ bool PPDetBase::BatchPredict(const std::vector<cv::Mat>& imgs,
   return true;
 }
 
-} // namespace detection
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace detection
+}  // namespace vision
+}  // namespace fastdeploy

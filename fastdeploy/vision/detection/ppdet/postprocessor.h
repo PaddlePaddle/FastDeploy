@@ -18,13 +18,30 @@
 
 namespace fastdeploy {
 namespace vision {
-
 namespace detection {
+struct ObjectResult {
+  // Rectangle coordinates of detected object: left, right, top, down
+  std::vector<float> rect;
+  // Class id of detected object
+  int class_id;
+  // Confidence of detected object
+  float confidence;
+  // Mask of detected object
+  std::vector<int> mask;
+};
+
 /*! @brief Postprocessor object for PaddleDet serials model.
  */
 class FASTDEPLOY_DECL PaddleDetPostprocessor {
  public:
   PaddleDetPostprocessor() = default;
+
+  /** \brief Create a preprocessor instance for PaddleDet serials model
+   *
+   * \param[in] config_file Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+   */
+  explicit PaddleDetPostprocessor(const std::string& config_file);
+
   /** \brief Process the result of runtime and fill to ClassifyResult structure
    *
    * \param[in] tensors The inference result from runtime
@@ -39,21 +56,34 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   void ApplyDecodeAndNMS();
 
   bool DecodeAndNMSApplied();
-
-  /// Set scale_factor_ value.This is only available for those model exported
-  /// without box decoding and nms.
+  // Set scale_factor_ value.This is only available for those model exported
+  // without box decoding and nms.
   void SetScaleFactor(float* scale_factor_value);
 
  private:
+  bool apply_decode_and_nms_ = false;
+
+  // for UnDecodeResults
+  std::string config_file_;
+  std::string arch_;
+  std::vector<int> fpn_stride_{8, 16, 32, 64};
+  std::vector<float> scale_factor_{1.0, 1.0};
+  std::vector<float> im_shape_{416, 416};
+  float score_threshold_ = 0.5;
+  float nms_threshold_ = 0.5;
+  std::vector<float> GetScaleFactor();
+  bool ReadPostprocessConfigFromYaml();
+  bool ProcessUnDecodeResults(const std::vector<FDTensor>& tensors,
+                              std::vector<DetectionResult>* results);
+  ObjectResult DisPred2Bbox(const float*& dfl_det, int label, float score,
+                            int x, int y, int stride, int reg_max);
+  void PicoDetPostProcess(DetectionResult* results,
+                          std::vector<const float*> outs, int reg_max,
+                          int num_class);
+
   // Process mask tensor for MaskRCNN
   bool ProcessMask(const FDTensor& tensor,
                    std::vector<DetectionResult>* results);
-
-  bool apply_decode_and_nms_ = false;
-  std::vector<float> scale_factor_{1.0, 1.0};
-  std::vector<float> GetScaleFactor();
-  bool ProcessUnDecodeResults(const std::vector<FDTensor>& tensors,
-                              std::vector<DetectionResult>* results);
 };
 
 }  // namespace detection
