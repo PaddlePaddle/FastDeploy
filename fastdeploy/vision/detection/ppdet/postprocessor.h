@@ -68,7 +68,7 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
                     int stride, int reg_max,
                     fastdeploy::vision::DetectionResult* results);
   void PicoDetPostProcess(DetectionResult* results,
-                          std::vector<const float*> outs, int reg_max,
+                          const std::vector<FDTensor>& outs, int reg_max,
                           int num_class);
 
   // Process mask tensor for MaskRCNN

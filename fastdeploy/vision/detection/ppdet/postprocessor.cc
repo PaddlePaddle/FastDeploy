@@ -206,7 +206,7 @@ bool PaddleDetPostprocessor::ProcessUnDecodeResults(
       memcpy(buffer, tensors[i].Data(), tensors[i].Nbytes());
       output_data_list_.push_back(buffer);
     }
-    PicoDetPostProcess(&((*results)[0]), output_data_list_, reg_max, num_class);
+    PicoDetPostProcess(&((*results)[0]), tensors, reg_max, num_class);
   } else {
     FDERROR << "ProcessUnDecodeResults only supported when arch is PicoDet."
             << std::endl;
@@ -272,13 +272,14 @@ void PaddleDetPostprocessor::DisPred2Bbox(
 
 void PaddleDetPostprocessor::PicoDetPostProcess(
     fastdeploy::vision::DetectionResult* results,
-    std::vector<const float*> outs, int reg_max, int num_class) {
+    const std::vector<FDTensor>& outs, int reg_max, int num_class) {
   results->Clear();
   for (int i = 0; i < fpn_stride_.size(); ++i) {
     int feature_h = std::ceil(im_shape_[0] / fpn_stride_[i]);
     int feature_w = std::ceil(im_shape_[1] / fpn_stride_[i]);
     for (int idx = 0; idx < feature_h * feature_w; idx++) {
-      const float* scores = outs[i] + (idx * num_class);
+      const auto* scores =
+          static_cast<const float*>(outs[i].Data()) + (idx * num_class);
       int row = idx / feature_w;
       int col = idx % feature_w;
       float score = 0;
@@ -290,8 +291,9 @@ void PaddleDetPostprocessor::PicoDetPostProcess(
         }
       }
       if (score > score_threshold_) {
-        const float* bbox_pred =
-            outs[i + fpn_stride_.size()] + (idx * 4 * (reg_max + 1));
+        const auto* bbox_pred =
+            static_cast<const float*>(outs[i + fpn_stride_.size()].Data()) +
+            (idx * 4 * (reg_max + 1));
         DisPred2Bbox(bbox_pred, cur_label, score, col, row, fpn_stride_[i],
                      reg_max, results);
       }
