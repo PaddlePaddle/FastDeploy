@@ -2,6 +2,8 @@
 
 # Silero VAD 预训练的企业级语音活动检测器
 
+该部署模型来自于 [silero-vad](https://github.com/snakers4/silero-vad)
+
 ![](https://user-images.githubusercontent.com/36505480/198026365-8da383e0-5398-4a12-b7f8-22c2c0059512.png)
 
 ## 主要特征
@@ -22,6 +24,13 @@ Silero VAD 在包含100多种语言的庞大语料库上进行了训练，它在
 
 Silero VAD支持 8000 Hz和16000 Hz 采样率。
 
+## 下载预训练ONNX模型
+
+为了方便开发者的测试，下面提供了 VAD 导出模型，开发者可直接下载使用。
+| 模型                                                         | 大小  | 备注                                                         |
+| :----------------------------------------------------------- | :---- | :----------------------------------------------------------- |
+| [silero-vad](https://bj.bcebos.com/paddlehub/fastdeploy/silero_vad.tgz) | 1.8MB | 此模型文件来源于[snakers4/silero-vad](https://github.com/snakers4/silero-vad)，MIT License |
+
 ## 详细部署文档
 
 - [C++ 部署](cpp)
@@ -29,4 +38,3 @@ Silero VAD支持 8000 Hz和16000 Hz 采样率。
 ## 模型来源
 
 [https://github.com/snakers4/silero-vad](https://github.com/snakers4/silero-vad)
-
