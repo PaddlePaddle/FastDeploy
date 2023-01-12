@@ -19,17 +19,6 @@
 namespace fastdeploy {
 namespace vision {
 namespace detection {
-struct ObjectResult {
-  // Rectangle coordinates of detected object: left, right, top, down
-  std::vector<float> rect;
-  // Class id of detected object
-  int class_id;
-  // Confidence of detected object
-  float confidence;
-  // Mask of detected object
-  std::vector<int> mask;
-};
-
 /*! @brief Postprocessor object for PaddleDet serials model.
  */
 class FASTDEPLOY_DECL PaddleDetPostprocessor {
@@ -75,8 +64,9 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   bool ReadPostprocessConfigFromYaml();
   bool ProcessUnDecodeResults(const std::vector<FDTensor>& tensors,
                               std::vector<DetectionResult>* results);
-  ObjectResult DisPred2Bbox(const float*& dfl_det, int label, float score,
-                            int x, int y, int stride, int reg_max);
+  void DisPred2Bbox(const float*& dfl_det, int label, float score, int x, int y,
+                    int stride, int reg_max,
+                    fastdeploy::vision::DetectionResult* results);
   void PicoDetPostProcess(DetectionResult* results,
                           std::vector<const float*> outs, int reg_max,
                           int num_class);

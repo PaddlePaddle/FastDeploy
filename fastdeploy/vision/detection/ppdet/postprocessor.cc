@@ -243,10 +243,9 @@ int ActivationFunctionSoftmax(const float* src, float* dst, int length) {
   return 0;
 }
 
-ObjectResult PaddleDetPostprocessor::DisPred2Bbox(const float*& dfl_det,
-                                                  int label, float score, int x,
-                                                  int y, int stride,
-                                                  int reg_max) {
+void PaddleDetPostprocessor::DisPred2Bbox(
+    const float*& dfl_det, int label, float score, int x, int y, int stride,
+    int reg_max, fastdeploy::vision::DetectionResult* results) {
   float ct_x = (x + 0.5) * stride;
   float ct_y = (y + 0.5) * stride;
   std::vector<float> dis_pred{0, 0, 0, 0};
@@ -267,48 +266,17 @@ ObjectResult PaddleDetPostprocessor::DisPred2Bbox(const float*& dfl_det,
   float xmax = (float)(std::min)(ct_x + dis_pred[2], (float)im_shape_[0]);
   float ymax = (float)(std::min)(ct_y + dis_pred[3], (float)im_shape_[1]);
 
-  ObjectResult result_item;
-  result_item.rect = {xmin, ymin, xmax, ymax};
-  result_item.class_id = label;
-  result_item.confidence = score;
-  return result_item;
-}
-
-void NMS(std::vector<ObjectResult>& input_boxes, float nms_threshold) {
-  std::sort(input_boxes.begin(), input_boxes.end(),
-            [](ObjectResult a, ObjectResult b) {
-              return a.confidence > b.confidence;
-            });
-  std::vector<float> vArea(input_boxes.size());
-  for (int i = 0; i < int(input_boxes.size()); ++i) {
-    vArea[i] = (input_boxes.at(i).rect[2] - input_boxes.at(i).rect[0] + 1) *
-               (input_boxes.at(i).rect[3] - input_boxes.at(i).rect[1] + 1);
-  }
-  for (int i = 0; i < int(input_boxes.size()); ++i) {
-    for (int j = i + 1; j < int(input_boxes.size());) {
-      float xx1 = (std::max)(input_boxes[i].rect[0], input_boxes[j].rect[0]);
-      float yy1 = (std::max)(input_boxes[i].rect[1], input_boxes[j].rect[1]);
-      float xx2 = (std::min)(input_boxes[i].rect[2], input_boxes[j].rect[2]);
-      float yy2 = (std::min)(input_boxes[i].rect[3], input_boxes[j].rect[3]);
-      float w = (std::max)(float(0), xx2 - xx1 + 1);
-      float h = (std::max)(float(0), yy2 - yy1 + 1);
-      float inter = w * h;
-      float ovr = inter / (vArea[i] + vArea[j] - inter);
-      if (ovr >= nms_threshold) {
-        input_boxes.erase(input_boxes.begin() + j);
-        vArea.erase(vArea.begin() + j);
-      } else {
-        j++;
-      }
-    }
-  }
+  results->boxes.emplace_back(std::array<float, 4>{
+      xmin / GetScaleFactor()[1], ymin / GetScaleFactor()[0],
+      xmax / GetScaleFactor()[1], ymax / GetScaleFactor()[0]});
+  results->label_ids.emplace_back(label);
+  results->scores.emplace_back(score);
 }
 
 void PaddleDetPostprocessor::PicoDetPostProcess(
     fastdeploy::vision::DetectionResult* results,
     std::vector<const float*> outs, int reg_max, int num_class) {
-  std::vector<std::vector<ObjectResult>> bbox_results;
-  bbox_results.resize(num_class);
+  results->Clear();
   int in_h = im_shape_[0], in_w = im_shape_[1];
   for (int i = 0; i < fpn_stride_.size(); ++i) {
     int feature_h = std::ceil((float)in_h / fpn_stride_[i]);
@@ -328,25 +296,12 @@ void PaddleDetPostprocessor::PicoDetPostProcess(
       if (score > score_threshold_) {
         const float* bbox_pred =
             outs[i + fpn_stride_.size()] + (idx * 4 * (reg_max + 1));
-        bbox_results[cur_label].push_back(DisPred2Bbox(
-            bbox_pred, cur_label, score, col, row, fpn_stride_[i], reg_max));
+        DisPred2Bbox(bbox_pred, cur_label, score, col, row, fpn_stride_[i],
+                     reg_max, results);
       }
     }
   }
-  for (int i = 0; i < (int)bbox_results.size(); i++) {
-    NMS(bbox_results[i], nms_threshold_);
-    results->Reserve(results->label_ids.size() + bbox_results.size());
-    for (auto box : bbox_results[i]) {
-      box.rect[0] = box.rect[0] / scale_factor_[1];
-      box.rect[2] = box.rect[2] / scale_factor_[1];
-      box.rect[1] = box.rect[1] / scale_factor_[0];
-      box.rect[3] = box.rect[3] / scale_factor_[0];
-      results->boxes.push_back(
-          {box.rect[0], box.rect[1], box.rect[2], box.rect[3]});
-      results->label_ids.push_back(box.class_id);
-      results->scores.push_back(box.confidence);
-    }
-  }
+  fastdeploy::vision::utils::NMS(results, 0.5);
 }
 
 std::vector<float> PaddleDetPostprocessor::GetScaleFactor() {
