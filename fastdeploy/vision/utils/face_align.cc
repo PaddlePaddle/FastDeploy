@@ -117,7 +117,7 @@ cv::Mat SimilarTransform(cv::Mat& dst, cv::Mat& src) {
   return T;
 }
 
-FASTDEPLOY_DECL std::vector<cv::Mat> AlignFaceWithFivePoints(
+std::vector<cv::Mat> AlignFaceWithFivePoints(
     cv::Mat& image, FaceDetectionResult& result,
     std::vector<std::array<float, 2>> std_landmarks,
     std::array<int, 2> output_size) {
