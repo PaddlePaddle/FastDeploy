@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifdef ENABLE_VISION_VISUALIZE
-
 #include <algorithm>
 
 #include "fastdeploy/vision/visualize/visualize.h"
@@ -41,10 +39,10 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
     if (result.scores[i] < score_threshold) {
       continue;
     }
-    int x1 = static_cast<int>(result.boxes[i][0]);
-    int y1 = static_cast<int>(result.boxes[i][1]);
-    int x2 = static_cast<int>(result.boxes[i][2]);
-    int y2 = static_cast<int>(result.boxes[i][3]);
+    int x1 = static_cast<int>(round(result.boxes[i][0]));
+    int y1 = static_cast<int>(round(result.boxes[i][1]));
+    int x2 = static_cast<int>(round(result.boxes[i][2]));
+    int y2 = static_cast<int>(round(result.boxes[i][3]));
     int box_h = y2 - y1;
     int box_w = x2 - x1;
     int c0 = color_map[3 * result.label_ids[i] + 0];
@@ -56,7 +54,7 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
     if (score.size() > 4) {
       score = score.substr(0, 4);
     }
-    std::string text = id + "," + score;
+    std::string text = id + ", " + score;
     int font = cv::FONT_HERSHEY_SIMPLEX;
     cv::Size text_size = cv::getTextSize(text, font, font_size, 1, nullptr);
     cv::Point origin;
@@ -70,10 +68,10 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
       int mask_h = static_cast<int>(result.masks[i].shape[0]);
       int mask_w = static_cast<int>(result.masks[i].shape[1]);
       // non-const pointer for cv:Mat constructor
-      int32_t* mask_raw_data = const_cast<int32_t*>(
-          static_cast<const int32_t*>(result.masks[i].Data()));
+      uint8_t* mask_raw_data = const_cast<uint8_t*>(
+          static_cast<const uint8_t*>(result.masks[i].Data()));
       // only reference to mask data (zero copy)
-      cv::Mat mask(mask_h, mask_w, CV_32SC1, mask_raw_data);
+      cv::Mat mask(mask_h, mask_w, CV_8UC1, mask_raw_data);
       if ((mask_h != box_h) || (mask_w != box_w)) {
         cv::resize(mask, mask, cv::Size(box_w, box_h));
       }
@@ -81,7 +79,7 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
       int mc0 = 255 - c0 >= 127 ? 255 - c0 : 127;
       int mc1 = 255 - c1 >= 127 ? 255 - c1 : 127;
       int mc2 = 255 - c2 >= 127 ? 255 - c2 : 127;
-      int32_t* mask_data = reinterpret_cast<int32_t*>(mask.data);
+      uint8_t* mask_data = reinterpret_cast<uint8_t*>(mask.data);
       // inplace blending (zero copy)
       uchar* vis_im_data = static_cast<uchar*>(vis_im.data);
       for (size_t i = y1; i < y2; ++i) {
@@ -105,10 +103,9 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
 }
 
 // Visualize DetectionResult with custom labels.
-cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result, 
+cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
                      const std::vector<std::string>& labels,
-                     float score_threshold, int line_size,
-                     float font_size) {
+                     float score_threshold, int line_size, float font_size) {
   if (result.contain_masks) {
     FDASSERT(result.boxes.size() == result.masks.size(),
              "The size of masks must be equal to the size of boxes, but now "
@@ -145,8 +142,8 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
     if (labels.size() > result.label_ids[i]) {
       text = labels[result.label_ids[i]] + "," + text;
     } else {
-      FDWARNING << "The label_id: " << result.label_ids[i] 
-                << " in DetectionResult should be less than length of labels:" 
+      FDWARNING << "The label_id: " << result.label_ids[i]
+                << " in DetectionResult should be less than length of labels:"
                 << labels.size() << "." << std::endl;
     }
     if (text.size() > 16) {
@@ -287,4 +284,3 @@ cv::Mat Visualize::VisDetection(const cv::Mat& im,
 
 }  // namespace vision
 }  // namespace fastdeploy
-#endif

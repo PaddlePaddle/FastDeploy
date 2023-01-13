@@ -25,7 +25,7 @@ The comparison of the two methods is shown in the following table:
 
 ### Use FastDeploy one-click model automation compression tool to quantify models
 Based on PaddleSlim's Auto Compression Toolkit (ACT), FastDeploy provides users with a one-click model automation compression tool, please refer to the following document for one-click model automation compression.
-- [FastDeploy One-Click Model Automation Compression](../../tools/common_tools/auto_compression/)
+- [FastDeploy One-Click Model Automation Compression](../../tools/common_tools/auto_compression/README_EN.md)
 
 ## Benchmark
 Currently, FastDeploy supports automated compression, and the Runtime Benchmark and End-to-End Benchmark of the model that completes the deployment test are shown below.
