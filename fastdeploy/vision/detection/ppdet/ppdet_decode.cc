@@ -73,6 +73,8 @@ bool PPDetDecode::ReadPostprocessConfigFromYaml() {
 
 bool PPDetDecode::DecodeAndNMS(const std::vector<FDTensor>& tensors,
                                std::vector<DetectionResult>* results) {
+  FDASSERT(tensors.size() == fpn_stride_.size() * 2,
+           "The size of output must be fpn_stride * 2.")
   batchs_ = tensors[0].shape[0];
   if (arch_ == "PicoDet") {
     for (int i = 0; i < tensors.size(); i++) {
