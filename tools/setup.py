@@ -7,7 +7,7 @@ install_requires = ['uvicorn==0.16.0']
 
 setuptools.setup(
     name="fastdeploy-tools",  # name of package
-    version="0.0.2",  #version of package
+    version="0.0.3",  #version of package
     description="A toolkit for FastDeploy.",
     long_description=long_description,
     long_description_content_type="text/plain",
