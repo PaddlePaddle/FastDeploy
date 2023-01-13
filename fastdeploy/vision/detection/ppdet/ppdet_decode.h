@@ -20,7 +20,7 @@ namespace vision {
 namespace detection {
 class FASTDEPLOY_DECL PPDetDecode {
  public:
-  PPDetDecode() {}
+  PPDetDecode() = default;
   explicit PPDetDecode(const std::string& config_file);
   bool DecodeAndNMS(const std::vector<FDTensor>& tensors,
                     std::vector<DetectionResult>* results);
