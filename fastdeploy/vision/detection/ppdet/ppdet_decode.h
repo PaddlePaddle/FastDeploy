@@ -18,7 +18,7 @@
 namespace fastdeploy {
 namespace vision {
 namespace detection {
-class PPDetDecode {
+class FASTDEPLOY_DECL PPDetDecode {
  public:
   PPDetDecode() {}
   explicit PPDetDecode(const std::string& config_file);
