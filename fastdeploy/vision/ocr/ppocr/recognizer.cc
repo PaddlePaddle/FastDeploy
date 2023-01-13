@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/ocr/ppocr/recognizer.h"
+
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
@@ -26,17 +27,19 @@ Recognizer::Recognizer(const std::string& model_file,
                        const std::string& params_file,
                        const std::string& label_path,
                        const RuntimeOption& custom_option,
-                       const ModelFormat& model_format):postprocessor_(label_path) {
+                       const ModelFormat& model_format)
+    : postprocessor_(label_path) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::ORT,
-                          Backend::OPENVINO};  
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};  
+    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {
-    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO, Backend::LITE};
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO,
+                          Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
     valid_kunlunxin_backends = {Backend::LITE};
-    valid_ascend_backends = {Backend::LITE}; 
+    valid_ascend_backends = {Backend::LITE};
     valid_sophgonpu_backends = {Backend::SOPHGOTPU};
+    valid_rknpu_backends = {Backend::RKNPU2};
   }
 
   runtime_option = custom_option;
@@ -56,7 +59,8 @@ bool Recognizer::Initialize() {
   return true;
 }
 
-bool Recognizer::Predict(const cv::Mat& img, std::string* text, float* rec_score) {
+bool Recognizer::Predict(const cv::Mat& img, std::string* text,
+                         float* rec_score) {
   std::vector<std::string> texts(1);
   std::vector<float> rec_scores(1);
   bool success = BatchPredict({img}, &texts, &rec_scores);
@@ -69,20 +73,24 @@ bool Recognizer::Predict(const cv::Mat& img, std::string* text, float* rec_score
 }
 
 bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
-                              std::vector<std::string>* texts, std::vector<float>* rec_scores) {
+                              std::vector<std::string>* texts,
+                              std::vector<float>* rec_scores) {
   return BatchPredict(images, texts, rec_scores, 0, images.size(), {});
 }
 
 bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
-                              std::vector<std::string>* texts, std::vector<float>* rec_scores,
-                              size_t start_index, size_t end_index, const std::vector<int>& indices) {
+                              std::vector<std::string>* texts,
+                              std::vector<float>* rec_scores,
+                              size_t start_index, size_t end_index,
+                              const std::vector<int>& indices) {
   size_t total_size = images.size();
   if (indices.size() != 0 && indices.size() != total_size) {
     FDERROR << "indices.size() should be 0 or images.size()." << std::endl;
     return false;
   }
   std::vector<FDMat> fd_images = WrapMat(images);
-  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, start_index, end_index, indices)) {
+  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, start_index,
+                         end_index, indices)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
   }
@@ -93,13 +101,15 @@ bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
     return false;
   }
 
-  if (!postprocessor_.Run(reused_output_tensors_, texts, rec_scores, start_index, total_size, indices)) {
-    FDERROR << "Failed to postprocess the inference cls_results by runtime." << std::endl;
+  if (!postprocessor_.Run(reused_output_tensors_, texts, rec_scores,
+                          start_index, total_size, indices)) {
+    FDERROR << "Failed to postprocess the inference cls_results by runtime."
+            << std::endl;
     return false;
   }
   return true;
 }
 
-}  // namesapce ocr
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy
