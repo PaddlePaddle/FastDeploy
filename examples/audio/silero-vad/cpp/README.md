@@ -117,9 +117,5 @@ std::vector<std::map<std::string, float>> Vad::getResult(
 1. `The setAudioCofig`function must be called before the `init` function
 2. The sampling rate of the input audio file must be consistent with that set in the code
 
-
-
-
-
 - [Model Description](../)
 - [How to switch the model inference backend engine](../../../../docs/en/faq/how_to_change_backend.md)
