@@ -17,6 +17,10 @@
 #include "fastdeploy/core/fd_tensor.h"
 
 namespace fastdeploy {
+
+/** \brief All C++ FDTensor Operation APIs are defined inside this namespace
+ *
+ */
 namespace function {
 /** Excute the transpose operation for input FDTensor along given dims.
     @param x The input tensor.
