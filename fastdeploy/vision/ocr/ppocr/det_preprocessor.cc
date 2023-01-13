@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/ocr/ppocr/det_preprocessor.h"
+
+#include "fastdeploy/function/concat.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
-#include "fastdeploy/function/concat.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -39,28 +40,26 @@ std::array<int, 4> OcrDetectorGetInfo(FDMat* img, int max_size_len) {
   resize_h = std::max(int(std::round(float(resize_h) / 32) * 32), 32);
   resize_w = std::max(int(std::round(float(resize_w) / 32) * 32), 32);
 
-  return {w,h,resize_w,resize_h};
+  return {w, h, resize_w, resize_h};
   /*
-  *ratio_h = float(resize_h) / float(h);
-  *ratio_w = float(resize_w) / float(w);
-  */
+   *ratio_h = float(resize_h) / float(h);
+   *ratio_w = float(resize_w) / float(w);
+   */
 }
-bool OcrDetectorResizeImage(FDMat* img,
-                            int resize_w,
-                            int resize_h,
-                            int max_resize_w,
-                            int max_resize_h) {
+bool OcrDetectorResizeImage(FDMat* img, int resize_w, int resize_h,
+                            int max_resize_w, int max_resize_h) {
   Resize::Run(img, resize_w, resize_h);
   std::vector<float> value = {0, 0, 0};
-  Pad::Run(img, 0, max_resize_h-resize_h, 0, max_resize_w - resize_w, value);
+  Pad::Run(img, 0, max_resize_h - resize_h, 0, max_resize_w - resize_w, value);
   return true;
 }
 
-bool DBDetectorPreprocessor::Run(std::vector<FDMat>* images,
-                                 std::vector<FDTensor>* outputs,
-                                 std::vector<std::array<int, 4>>* batch_det_img_info_ptr) {
+bool DBDetectorPreprocessor::Run(
+    std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
+    std::vector<std::array<int, 4>>* batch_det_img_info_ptr) {
   if (images->size() == 0) {
-    FDERROR << "The size of input images should be greater than 0." << std::endl;
+    FDERROR << "The size of input images should be greater than 0."
+            << std::endl;
     return false;
   }
   int max_resize_w = 0;
@@ -70,24 +69,33 @@ bool DBDetectorPreprocessor::Run(std::vector<FDMat>* images,
   batch_det_img_info.resize(images->size());
   for (size_t i = 0; i < images->size(); ++i) {
     FDMat* mat = &(images->at(i));
-    batch_det_img_info[i] = OcrDetectorGetInfo(mat,max_side_len_);
-    max_resize_w = std::max(max_resize_w,batch_det_img_info[i][2]);
-    max_resize_h = std::max(max_resize_h,batch_det_img_info[i][3]);
+    batch_det_img_info[i] = OcrDetectorGetInfo(mat, max_side_len_);
+    max_resize_w = std::max(max_resize_w, batch_det_img_info[i][2]);
+    max_resize_h = std::max(max_resize_h, batch_det_img_info[i][3]);
   }
   for (size_t i = 0; i < images->size(); ++i) {
     FDMat* mat = &(images->at(i));
-    OcrDetectorResizeImage(mat, batch_det_img_info[i][2],batch_det_img_info[i][3],max_resize_w,max_resize_h);
-    NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
-    /*
-    Normalize::Run(mat, mean_, scale_, is_scale_);
-    HWC2CHW::Run(mat);
-    Cast::Run(mat, "float");
-    */
+    std::cout << "max_resize_w is " << max_resize_w << std::endl;
+    std::cout << "max_resize_h is " << max_resize_h << std::endl;
+    OcrDetectorResizeImage(mat, batch_det_img_info[i][2],
+                           batch_det_img_info[i][3], max_resize_w,
+                           max_resize_h);
+    if (!disable_normalize_ && !disable_permute_) {
+      NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
+    } else {
+      if (!disable_normalize_) {
+        Normalize::Run(mat, mean_, scale_, is_scale_);
+      }
+      if (!disable_permute_) {
+        HWC2CHW::Run(mat);
+        Cast::Run(mat, "float");
+      }
+    }
   }
   // Only have 1 output Tensor.
   outputs->resize(1);
   // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> tensors(images->size()); 
+  std::vector<FDTensor> tensors(images->size());
   for (size_t i = 0; i < images->size(); ++i) {
     (*images)[i].ShareWithTensor(&(tensors[i]));
     tensors[i].ExpandDim(0);
@@ -97,6 +105,9 @@ bool DBDetectorPreprocessor::Run(std::vector<FDMat>* images,
   } else {
     function::Concat(tensors, &((*outputs)[0]), 0);
   }
+  printf("outputs.shape is [%d %d %d %d]\n", (*outputs)[0].Shape()[0],
+         (*outputs)[0].Shape()[1], (*outputs)[0].Shape()[2],
+         (*outputs)[0].Shape()[3]);
   return true;
 }
 

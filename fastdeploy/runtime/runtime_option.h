@@ -67,7 +67,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void UseGpu(int gpu_id = 0);
 
   void UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name =
-                     fastdeploy::rknpu2::CpuName::RK3588,
+                     fastdeploy::rknpu2::CpuName::RK356X,
                  fastdeploy::rknpu2::CoreMask rknpu2_core =
                      fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0);
 

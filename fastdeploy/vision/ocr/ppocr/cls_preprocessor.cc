@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/ocr/ppocr/cls_preprocessor.h"
+
+#include "fastdeploy/function/concat.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
-#include "fastdeploy/function/concat.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -38,34 +39,42 @@ void OcrClassifierResizeImage(FDMat* mat,
   Resize::Run(mat, resize_w, img_h);
 }
 
-bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs) {
+bool ClassifierPreprocessor::Run(std::vector<FDMat>* images,
+                                 std::vector<FDTensor>* outputs) {
   return Run(images, outputs, 0, images->size());
 }
 
-bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
+bool ClassifierPreprocessor::Run(std::vector<FDMat>* images,
+                                 std::vector<FDTensor>* outputs,
                                  size_t start_index, size_t end_index) {
-
-  if (images->size() == 0 || start_index <0 || end_index <= start_index || end_index > images->size()) {
-    FDERROR << "images->size() or index error. Correct is: 0 <= start_index < end_index <= images->size()" << std::endl;
+  if (images->size() == 0 || start_index < 0 || end_index <= start_index ||
+      end_index > images->size()) {
+    FDERROR << "images->size() or index error. Correct is: 0 <= start_index < "
+               "end_index <= images->size()"
+            << std::endl;
     return false;
   }
 
   for (size_t i = start_index; i < end_index; ++i) {
     FDMat* mat = &(images->at(i));
     OcrClassifierResizeImage(mat, cls_image_shape_);
-    Normalize::Run(mat, mean_, scale_, is_scale_);
+    if (!disable_normalize_) {
+      Normalize::Run(mat, mean_, scale_, is_scale_);
+    }
     std::vector<float> value = {0, 0, 0};
     if (mat->Width() < cls_image_shape_[2]) {
       Pad::Run(mat, 0, 0, 0, cls_image_shape_[2] - mat->Width(), value);
     }
-    HWC2CHW::Run(mat);
-    Cast::Run(mat, "float");
+    if (!disable_permute_) {
+      HWC2CHW::Run(mat);
+      Cast::Run(mat, "float");
+    }
   }
   // Only have 1 output Tensor.
   outputs->resize(1);
   // Concat all the preprocessed data to a batch tensor
   size_t tensor_size = end_index - start_index;
-  std::vector<FDTensor> tensors(tensor_size); 
+  std::vector<FDTensor> tensors(tensor_size);
   for (size_t i = 0; i < tensor_size; ++i) {
     (*images)[i + start_index].ShareWithTensor(&(tensors[i]));
     tensors[i].ExpandDim(0);

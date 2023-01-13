@@ -55,6 +55,17 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
   /// Get is_scale of the image normalization in detection preprocess
   bool GetIsScale() const { return is_scale_; }
 
+  /// This function will disable normalize in preprocessing step.
+  void DisableNormalize() { disable_normalize_ = true; }
+
+  /// This function will disable hwc2chw in preprocessing step.
+  void DisablePermute() { disable_permute_ = true; }
+
+ private:
+  // for recording the switch of hwc2chw
+  bool disable_permute_ = false;
+  // for recording the switch of normalize
+  bool disable_normalize_ = false;
   int max_side_len_ = 960;
   std::vector<float> mean_ = {0.485f, 0.456f, 0.406f};
   std::vector<float> scale_ = {0.229f, 0.224f, 0.225f};
