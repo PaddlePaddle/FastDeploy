@@ -29,6 +29,7 @@ void CudaAdaptivePool(const std::vector<int64_t>& input_dims,
                       const std::vector<int64_t>& output_dims, void* output,
                       const void* input, void* compute_stream,
                       const std::string& pooling_type,
-                      const std::string& dtype = "float");
+                      const std::string& dtype = "float",
+                      const std::string& out_dtype = "float");
 
 }  // namespace fastdeploy

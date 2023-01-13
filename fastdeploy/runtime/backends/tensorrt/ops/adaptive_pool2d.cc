@@ -71,11 +71,16 @@ int AdaptivePool2d::enqueue(const nvinfer1::PluginTensorDesc* inputDesc,
     output_size.push_back(outputDesc[0].dims.d[i]);
   }
   if (inputDesc[0].type == nvinfer1::DataType::kHALF) {
-    CudaAdaptivePool(input_size, output_size, outputs[0], inputs[0], stream,
-                     pooling_type_, "half");
+    if (outputDesc[0].type == nvinfer1::DataType::kHALF) {
+      CudaAdaptivePool(input_size, output_size, outputs[0], inputs[0], stream,
+                       pooling_type_, "half", "half");
+    } else if (outputDesc[0].type == nvinfer1::DataType::kFLOAT) {
+      CudaAdaptivePool(input_size, output_size, outputs[0], inputs[0], stream,
+                       pooling_type_, "half", "float");
+    }
   } else if (inputDesc[0].type == nvinfer1::DataType::kFLOAT) {
     CudaAdaptivePool(input_size, output_size, outputs[0], inputs[0], stream,
-                     pooling_type_, "float");
+                     pooling_type_, "float", "float");
   }
   return cudaPeekAtLastError();
 }
