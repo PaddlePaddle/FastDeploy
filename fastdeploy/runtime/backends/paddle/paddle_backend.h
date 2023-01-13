@@ -25,7 +25,7 @@
 #include "paddle2onnx/converter.h"
 #endif
 #include "fastdeploy/utils/unique_ptr.h"
-#include "paddle_inference_api.h"  // NOLINT
+#include "paddle/include/paddle_inference_api.h"  // NOLINT
 
 namespace fastdeploy {
 

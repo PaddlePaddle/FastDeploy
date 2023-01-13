@@ -13,7 +13,12 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/detection/contrib/yolov5seg/postprocessor.h"
+#include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
+#ifdef ENABLE_PADDLE_BACKEND
+#include "paddle/include/experimental/phi/api/include/api.h"
+#include "paddle/include/experimental/phi/api/include/tensor.h"
+#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -55,12 +60,11 @@ bool YOLOv5SegPostprocessor::Run(
       int s = i * tensors[0].shape[2];
       float cls_conf = data[s + 4];
       float confidence = data[s + 4];
-      std::vector<float> mask_embedding(
-          data + s + tensors[0].shape[2] - mask_nums_,
-          data + s + tensors[0].shape[2]);
-      for (size_t k = 0; k < mask_embedding.size(); ++k) {
-        mask_embedding[k] *= cls_conf;
-      }
+      // std::vector<float> mask_embedding(data + s + tensors[0].shape[2] -
+      // mask_nums_, data + s + tensors[0].shape[2]);
+      // for (size_t k = 0; k < mask_embedding.size(); ++k) {
+      //   mask_embedding[k] *= cls_conf;
+      // }
       if (multi_label_) {
         for (size_t j = 5; j < tensors[0].shape[2] - mask_nums_; ++j) {
           confidence = data[s + 4];
@@ -71,7 +75,13 @@ bool YOLOv5SegPostprocessor::Run(
             continue;
           }
           int32_t label_id = std::distance(data + s + 5, class_score);
-
+          // for mask_embedding
+          std::vector<float> mask_embedding(
+              data + s + tensors[0].shape[2] - mask_nums_,
+              data + s + tensors[0].shape[2]);
+          for (size_t k = 0; k < mask_embedding.size(); ++k) {
+            mask_embedding[k] *= cls_conf;
+          }
           // convert from [x, y, w, h] to [x1, y1, x2, y2]
           (*results)[bs].boxes.emplace_back(std::array<float, 4>{
               data[s] - data[s + 2] / 2.0f + label_id * max_wh_,
@@ -80,7 +90,6 @@ bool YOLOv5SegPostprocessor::Run(
               data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh_});
           (*results)[bs].label_ids.push_back(label_id);
           (*results)[bs].scores.push_back(confidence);
-          // TODO(wangjunjie06): No zero copy
           mask_embeddings.push_back(mask_embedding);
         }
       } else {
@@ -92,6 +101,13 @@ bool YOLOv5SegPostprocessor::Run(
           continue;
         }
         int32_t label_id = std::distance(data + s + 5, max_class_score);
+        // for mask_embedding
+        std::vector<float> mask_embedding(
+            data + s + tensors[0].shape[2] - mask_nums_,
+            data + s + tensors[0].shape[2]);
+        for (size_t k = 0; k < mask_embedding.size(); ++k) {
+          mask_embedding[k] *= cls_conf;
+        }
         // convert from [x, y, w, h] to [x1, y1, x2, y2]
         (*results)[bs].boxes.emplace_back(std::array<float, 4>{
             data[s] - data[s + 2] / 2.0f + label_id * max_wh_,
@@ -108,36 +124,18 @@ bool YOLOv5SegPostprocessor::Run(
       return true;
     }
     // get box index after nms
+    // fastdeploy::TimeCounter tc;
+    // tc.Start();
     std::vector<int> index;
     utils::NMS(&((*results)[bs]), nms_threshold_, &index);
-
+    // tc.End();
+    // std::cout << "time NMS = " << tc.Duration() * 1000 << "ms" << std::endl;
     // deal with mask
-    // step1: MatMul, (box_nums * 32) x (32 * 160 * 160) = box_nums * 160 * 160
-    // step2: Sigmoid
-    // step3: Resize to original image size
-    // step4: Select pixels greater than threshold and crop
     (*results)[bs].contain_masks = true;
     (*results)[bs].masks.resize((*results)[bs].boxes.size());
     const float* data_mask =
         reinterpret_cast<const float*>(tensors[1].Data()) +
         bs * tensors[1].shape[1] * tensors[1].shape[2] * tensors[1].shape[3];
-    cv::Mat mask_proto =
-        cv::Mat(tensors[1].shape[1], tensors[1].shape[2] * tensors[1].shape[3],
-                CV_32FC(1), const_cast<float*>(data_mask));
-    // vector to cv::Mat for MatMul
-    // after push_back, Mat of m*n becomes (m + 1) * n
-    cv::Mat mask_proposals;
-    for (size_t i = 0; i < index.size(); ++i) {
-      mask_proposals.push_back(cv::Mat(mask_embeddings[index[i]]).t());
-    }
-    cv::Mat matmul_result = (mask_proposals * mask_proto).t();
-    cv::Mat masks = matmul_result.reshape(
-        (*results)[bs].boxes.size(), {static_cast<int>(tensors[1].shape[2]),
-                                      static_cast<int>(tensors[1].shape[3])});
-    // split for boxes nums
-    std::vector<cv::Mat> mask_channels;
-    cv::split(masks, mask_channels);
-
     // scale the boxes to the origin image shape
     auto iter_out = ims_info[bs].find("output_shape");
     auto iter_ipt = ims_info[bs].find("input_shape");
@@ -153,6 +151,106 @@ bool YOLOv5SegPostprocessor::Run(
     // for mask
     float pad_h_mask = (float)pad_h / out_h * tensors[1].shape[2];
     float pad_w_mask = (float)pad_w / out_w * tensors[1].shape[3];
+#ifdef ENABLE_PADDLE_BACKEND
+    // convert vector to paddle::Tensor for Matmul
+    std::vector<int64_t> tensor0_shape{
+        static_cast<int64_t>(index.size()),
+        static_cast<int64_t>(mask_embeddings[0].size())};
+    // tc.Start();
+    auto mask_proposals = paddle::experimental::empty(
+        tensor0_shape, paddle::experimental::DataType::FLOAT32,
+        phi::CPUPlace());
+    float* mask_proposals_data = mask_proposals.data<float>();
+    size_t numel0 = mask_embeddings[0].size();
+    for (size_t i = 0; i < index.size(); ++i) {
+      memcpy(mask_proposals_data + i * numel0,
+             static_cast<float*>(mask_embeddings[index[i]].data()),
+             numel0 * sizeof(float));
+    }
+    // tc.End();
+    // std::cout << "time tensor0 copy = " << tc.Duration() * 1000 << "ms" <<
+    // std::endl;
+    std::vector<int64_t> tensor1_shape{
+        tensors[1].shape[1], tensors[1].shape[2] * tensors[1].shape[3]};
+    // tc.Start();
+    auto mask_proto = paddle::experimental::empty(
+        tensor1_shape, paddle::experimental::DataType::FLOAT32,
+        phi::CPUPlace());
+    size_t numel1 =
+        tensors[1].shape[1] * tensors[1].shape[2] * tensors[1].shape[3];
+    float* mask_proto_data = mask_proto.data<float>();
+    memcpy(mask_proto_data, const_cast<float*>(data_mask),
+           numel1 * sizeof(float));
+    // tc.End();
+    // std::cout << "time tensor1 copy = " << tc.Duration() * 1000 << "ms" <<
+    // std::endl;
+    // tc.Start();
+    auto matmul_result =
+        paddle::experimental::matmul(mask_proposals, mask_proto);
+    // tc.End();
+    // std::cout << "time matmul = " << tc.Duration() * 1000 << "ms" <<
+    // std::endl;
+    // tc.Start();
+    // matmul_result = paddle::experimental::sigmoid(matmul_result);
+    // matmul_result.reshape({1, static_cast<int64_t>(index.size()),
+    // tensors[1].shape[2], tensors[1].shape[3]});
+    matmul_result = paddle::experimental::reshape(
+        matmul_result, {1, static_cast<int64_t>(index.size()),
+                        tensors[1].shape[2], tensors[1].shape[3]});
+    // tc.End();
+    // std::cout << "time reshape = " << tc.Duration() * 1000 << "ms" <<
+    // std::endl;
+    // crop mask for feature map
+    int x1 = static_cast<int>(pad_w_mask);
+    int y1 = static_cast<int>(pad_h_mask);
+    int x2 = static_cast<int>(tensors[1].shape[3] - pad_w_mask);
+    int y2 = static_cast<int>(tensors[1].shape[2] - pad_h_mask);
+    // tc.Start();
+    auto crop_result = paddle::experimental::crop(
+        matmul_result, {1, -1, y2 - y1, x2 - x1}, {0, 0, y1, x1});
+    crop_result = paddle::experimental::sigmoid(crop_result);
+    // tc.End();
+    // std::cout << "time crop + sigmoid = " << tc.Duration() * 1000 << "ms" <<
+    // std::endl;
+    // tc.Start();
+    auto resize_result = paddle::experimental::bilinear_interp(
+        crop_result, paddle::none, paddle::none, paddle::none, "NCHW", 0, ipt_h,
+        ipt_w, {}, "bilinear", false, 0);
+    resize_result = paddle::experimental::squeeze(resize_result, {0});
+// tc.End();
+// std::cout << "time resize = " << tc.Duration() * 1000 << "ms" << std::endl;
+// tc.Start();
+// auto mask_channels = paddle::experimental::split_with_num(resize_result,
+// index.size(), 0);
+// tc.End();
+// std::cout << "time split = " << tc.Duration() * 1000 << "ms" << std::endl;
+#else
+    fastdeploy::TimeCounter tc;
+    cv::Mat mask_proto =
+        cv::Mat(tensors[1].shape[1], tensors[1].shape[2] * tensors[1].shape[3],
+                CV_32FC(1), const_cast<float*>(data_mask));
+    // convert vector to cv::Mat for Matmul
+    cv::Mat mask_proposals;
+    for (size_t i = 0; i < index.size(); ++i) {
+      mask_proposals.push_back(cv::Mat(mask_embeddings[index[i]]).t());
+    }
+    tc.Start();
+    cv::Mat matmul_result = (mask_proposals * mask_proto).t();
+    tc.End();
+    std::cout << "time opencv matmul = " << tc.Duration() * 1000 << "ms"
+              << std::endl;
+
+    cv::Mat masks = matmul_result.reshape(
+        (*results)[bs].boxes.size(), {static_cast<int>(tensors[1].shape[2]),
+                                      static_cast<int>(tensors[1].shape[3])});
+    tc.Start();
+    // split for boxes nums
+    std::vector<cv::Mat> mask_channels;
+    cv::split(masks, mask_channels);
+    tc.End();
+    std::cout << "time opencv split = " << tc.Duration() * 1000 << "ms"
+              << std::endl;
+#endif
     for (size_t i = 0; i < (*results)[bs].boxes.size(); ++i) {
       int32_t label_id = ((*results)[bs].label_ids)[i];
       // clip box
@@ -176,6 +274,42 @@ bool YOLOv5SegPostprocessor::Run(
       (*results)[bs].boxes[i][1] = std::min((*results)[bs].boxes[i][1], ipt_h);
       (*results)[bs].boxes[i][2] = std::min((*results)[bs].boxes[i][2], ipt_w);
       (*results)[bs].boxes[i][3] = std::min((*results)[bs].boxes[i][3], ipt_h);
+#ifdef ENABLE_PADDLE_BACKEND
+      // auto mask = mask_channels[i];
+      // mask = paddle::experimental::squeeze(mask, {0});
+      // tc.Start();
+      // crop mask for source img
+      int x1_src = static_cast<int>(round((*results)[bs].boxes[i][0]));
+      int y1_src = static_cast<int>(round((*results)[bs].boxes[i][1]));
+      int x2_src = static_cast<int>(round((*results)[bs].boxes[i][2]));
+      int y2_src = static_cast<int>(round((*results)[bs].boxes[i][3]));
+      // tc.Start();
+      auto mask = paddle::experimental::crop(
+          resize_result, {1, y2_src - y1_src, x2_src - x1_src},
+          {static_cast<int>(i), y1_src, x1_src});
+      auto mask_threshold = paddle::experimental::full(
+          mask.shape(), mask_threshold_, mask.dtype(), mask.place());
+      auto mask_result =
+          paddle::experimental::greater_than(mask, mask_threshold);
+      // tc.End();
+      // std::cout << "time crop + greater_than = " << tc.Duration() * 1000 <<
+      // "ms" << std::endl;
+      // save mask in DetectionResult
+      int keep_mask_h = y2_src - y1_src;
+      int keep_mask_w = x2_src - x1_src;
+      int keep_mask_numel = keep_mask_h * keep_mask_w;
+      // tc.Start();
+      (*results)[bs].masks[i].Resize(keep_mask_numel);
+      (*results)[bs].masks[i].shape = {keep_mask_h, keep_mask_w};
+      uint8_t* keep_mask_ptr =
+          reinterpret_cast<uint8_t*>((*results)[bs].masks[i].Data());
+      std::memcpy(keep_mask_ptr,
+                  reinterpret_cast<uint8_t*>(mask_result.data<bool>()),
+                  keep_mask_numel * sizeof(uint8_t));
+// tc.End();
+// std::cout << "time copy to result = " << tc.Duration() * 1000 << "ms" <<
+// std::endl;
+#else
       // deal with mask
       cv::Mat dest, mask;
       // sigmoid
@@ -189,6 +323,7 @@ bool YOLOv5SegPostprocessor::Run(
       cv::Rect roi(x1, y1, x2 - x1, y2 - y1);
       dest = dest(roi);
       cv::resize(dest, mask, cv::Size(ipt_w, ipt_h), 0, 0, cv::INTER_LINEAR);
+      tc.Start();
       // crop mask for source img
       int x1_src = static_cast<int>(round((*results)[bs].boxes[i][0]));
       int y1_src = static_cast<int>(round((*results)[bs].boxes[i][1]));
@@ -197,6 +332,9 @@ bool YOLOv5SegPostprocessor::Run(
       cv::Rect roi_src(x1_src, y1_src, x2_src - x1_src, y2_src - y1_src);
       mask = mask(roi_src);
       mask = mask > mask_threshold_;
+      tc.End();
+      std::cout << "time opencv crop + greater_than = " << tc.Duration() * 1000
+                << "ms" << std::endl;
       // save mask in DetectionResult
       int keep_mask_h = y2_src - y1_src;
       int keep_mask_w = x2_src - x1_src;
@@ -207,6 +345,7 @@ bool YOLOv5SegPostprocessor::Run(
           reinterpret_cast<uint8_t*>((*results)[bs].masks[i].Data());
       std::memcpy(keep_mask_ptr, reinterpret_cast<uint8_t*>(mask.ptr()),
                   keep_mask_numel * sizeof(uint8_t));
+#endif
     }
   }
   return true;
