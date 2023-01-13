@@ -48,6 +48,26 @@ bool PPDetDecode::ReadPostprocessConfigFromYaml() {
       fpn_stride_.emplace_back(item.as<float>());
     }
   }
+
+  if (config["NMS"].IsDefined()) {
+    for (const auto& op : config["NMS"]) {
+      if (config["nms_threshold"].IsDefined()) {
+        nms_threshold_ = op["nms_threshold"].as<float>();
+      } else if (config["score_threshold"].IsDefined()) {
+        score_threshold_ = op["score_threshold"].as<float>();
+      }
+    }
+  }
+
+  if (config["Preprocess"].IsDefined()) {
+    for (const auto& op : config["Preprocess"]) {
+      std::string op_name = op["type"].as<std::string>();
+      if (op_name == "Resize") {
+        im_shape_ = op["target_size"].as<std::vector<float>>();
+      }
+    }
+  }
+
   return true;
 }
 

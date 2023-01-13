@@ -150,9 +150,6 @@ void PaddleDetPostprocessor::ApplyDecodeAndNMS() {
 bool PaddleDetPostprocessor::ProcessUnDecodeResults(
     const std::vector<FDTensor>& tensors,
     std::vector<DetectionResult>* results) {
-  FDASSERT(tensors[0].Shape()[0] == 1,
-           "ProcessUnDecodeResults only support"
-           " input batch = 1.")
   results->resize(tensors[0].Shape()[0]);
 
   // do decode and nms
