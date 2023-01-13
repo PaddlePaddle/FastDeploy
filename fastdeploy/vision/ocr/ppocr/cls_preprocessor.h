@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #pragma once
+#include <utility>
+
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
@@ -35,12 +37,12 @@ class FASTDEPLOY_DECL ClassifierPreprocessor {
            size_t start_index, size_t end_index);
 
   /// Set mean value for the image normalization in classification preprocess
-  void SetMean(std::vector<float> mean) { mean_ = mean; }
+  void SetMean(std::vector<float> mean) { mean_ = std::move(mean); }
   /// Get mean value of the image normalization in classification preprocess
   std::vector<float> GetMean() const { return mean_; }
 
   /// Set scale value for the image normalization in classification preprocess
-  void SetScale(std::vector<float> scale) { scale_ = scale; }
+  void SetScale(std::vector<float> scale) { scale_ = std::move(scale); }
   /// Get scale value of the image normalization in classification preprocess
   std::vector<float> GetScale() const { return scale_; }
 
@@ -51,7 +53,7 @@ class FASTDEPLOY_DECL ClassifierPreprocessor {
 
   /// Set cls_image_shape for the classification preprocess
   void SetClsImageShape(std::vector<int> cls_image_shape) {
-    cls_image_shape_ = cls_image_shape;
+    cls_image_shape_ = std::move(cls_image_shape);
   }
   /// Get cls_image_shape for the classification preprocess
   std::vector<int> GetClsImageShape() const { return cls_image_shape_; }

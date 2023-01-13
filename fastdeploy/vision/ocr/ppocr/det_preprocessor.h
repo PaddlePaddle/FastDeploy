@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #pragma once
+#include <utility>
+
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
@@ -41,12 +43,12 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
   int GetMaxSideLen() const { return max_side_len_; }
 
   /// Set mean value for the image normalization in detection preprocess
-  void SetMean(std::vector<float> mean) { mean_ = mean; }
+  void SetMean(std::vector<float> mean) { mean_ = std::move(mean); }
   /// Get mean value of the image normalization in detection preprocess
   std::vector<float> GetMean() const { return mean_; }
 
   /// Set scale value for the image normalization in detection preprocess
-  void SetScale(std::vector<float> scale) { scale_ = scale; }
+  void SetScale(std::vector<float> scale) { scale_ = std::move(scale); }
   /// Get scale value of the image normalization in detection preprocess
   std::vector<float> GetScale() const { return scale_; }
 
@@ -54,7 +56,10 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
   void SetIsScale(bool is_scale) { is_scale_ = is_scale; }
   /// Get is_scale of the image normalization in detection preprocess
   bool GetIsScale() const { return is_scale_; }
-
+  /// Set det_image_shape for the classification preprocess
+  void SetDetImageShape(std::vector<int> det_image_shape) {
+    det_image_shape_ = std::move(det_image_shape);
+  }
   /// This function will disable normalize in preprocessing step.
   void DisableNormalize() { disable_normalize_ = true; }
 
@@ -70,6 +75,8 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
   std::vector<float> mean_ = {0.485f, 0.456f, 0.406f};
   std::vector<float> scale_ = {0.229f, 0.224f, 0.225f};
   bool is_scale_ = true;
+  std::vector<int> det_image_shape_ = {0, 0, 0};
+  std::array<int, 4> OcrDetectorGetInfo(FDMat* img, int max_size_len);
 };
 
 }  // namespace ocr

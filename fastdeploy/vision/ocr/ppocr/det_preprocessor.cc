@@ -15,17 +15,20 @@
 #include "fastdeploy/vision/ocr/ppocr/det_preprocessor.h"
 
 #include "fastdeploy/function/concat.h"
-#include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-std::array<int, 4> OcrDetectorGetInfo(FDMat* img, int max_size_len) {
+std::array<int, 4> DBDetectorPreprocessor::OcrDetectorGetInfo(
+    FDMat* img, int max_size_len) {
   int w = img->Width();
   int h = img->Height();
-
+  if (det_image_shape_[0] != 0) {
+    // det_image_shape_ is [c,h,w]
+    return {w, h, det_image_shape_[2], det_image_shape_[1]};
+  }
   float ratio = 1.f;
   int max_wh = w >= h ? w : h;
   if (max_wh > max_size_len) {
@@ -41,11 +44,8 @@ std::array<int, 4> OcrDetectorGetInfo(FDMat* img, int max_size_len) {
   resize_w = std::max(int(std::round(float(resize_w) / 32) * 32), 32);
 
   return {w, h, resize_w, resize_h};
-  /*
-   *ratio_h = float(resize_h) / float(h);
-   *ratio_w = float(resize_w) / float(w);
-   */
 }
+
 bool OcrDetectorResizeImage(FDMat* img, int resize_w, int resize_h,
                             int max_resize_w, int max_resize_h) {
   Resize::Run(img, resize_w, resize_h);
@@ -57,7 +57,7 @@ bool OcrDetectorResizeImage(FDMat* img, int resize_w, int resize_h,
 bool DBDetectorPreprocessor::Run(
     std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
     std::vector<std::array<int, 4>>* batch_det_img_info_ptr) {
-  if (images->size() == 0) {
+  if (images->empty()) {
     FDERROR << "The size of input images should be greater than 0."
             << std::endl;
     return false;
@@ -72,11 +72,6 @@ bool DBDetectorPreprocessor::Run(
     batch_det_img_info[i] = OcrDetectorGetInfo(mat, max_side_len_);
     max_resize_w = std::max(max_resize_w, batch_det_img_info[i][2]);
     max_resize_h = std::max(max_resize_h, batch_det_img_info[i][3]);
-  }
-  for (size_t i = 0; i < images->size(); ++i) {
-    FDMat* mat = &(images->at(i));
-    std::cout << "max_resize_w is " << max_resize_w << std::endl;
-    std::cout << "max_resize_h is " << max_resize_h << std::endl;
     OcrDetectorResizeImage(mat, batch_det_img_info[i][2],
                            batch_det_img_info[i][3], max_resize_w,
                            max_resize_h);
