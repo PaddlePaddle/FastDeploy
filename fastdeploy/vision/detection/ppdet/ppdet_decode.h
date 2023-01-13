@@ -28,7 +28,7 @@ class PPDetDecode {
  private:
   std::string config_file_;
   std::string arch_;
-  std::vector<float> fpn_stride_{8, 16, 32, 64};
+  std::vector<int> fpn_stride_{8, 16, 32, 64};
   std::vector<float> im_shape_{416, 416};
   float score_threshold_ = 0.5;
   float nms_threshold_ = 0.5;
@@ -40,6 +40,7 @@ class PPDetDecode {
                     int stride, fastdeploy::vision::DetectionResult* results);
   bool PicoDetPostProcess(const std::vector<FDTensor>& outs,
                           std::vector<DetectionResult>* results);
+  int ActivationFunctionSoftmax(const float* src, float* dst);
 };
 }  // namespace detection
 }  // namespace vision

@@ -23,6 +23,15 @@ PPDetDecode::PPDetDecode(const std::string& config_file) {
   ReadPostprocessConfigFromYaml();
 }
 
+/***************************************************************
+ *  @name       ReadPostprocessConfigFromYaml
+ *  @brief      Read decode config from yaml.
+ *  @note       read arch
+ *              read fpn_stride
+ *              read nms_threshold on NMS
+ *              read score_threshold on NMS
+ *              read target_size
+ ***************************************************************/
 bool PPDetDecode::ReadPostprocessConfigFromYaml() {
   YAML::Node config;
   try {
@@ -43,10 +52,7 @@ bool PPDetDecode::ReadPostprocessConfigFromYaml() {
   }
 
   if (config["fpn_stride"].IsDefined()) {
-    fpn_stride_.clear();
-    for (auto item : config["fpn_stride"]) {
-      fpn_stride_.emplace_back(item.as<float>());
-    }
+    fpn_stride_ = config["fpn_stride"].as<std::vector<int>>();
   }
 
   if (config["NMS"].IsDefined()) {
@@ -71,18 +77,25 @@ bool PPDetDecode::ReadPostprocessConfigFromYaml() {
   return true;
 }
 
+/***************************************************************
+ *  @name       DecodeAndNMS
+ *  @brief      Read batch and call different decode functions.
+ *  @param      tensors: model output tensor
+ *              results: detection results
+ *  @note       Only support arch is Picodet.
+ ***************************************************************/
 bool PPDetDecode::DecodeAndNMS(const std::vector<FDTensor>& tensors,
                                std::vector<DetectionResult>* results) {
   FDASSERT(tensors.size() == fpn_stride_.size() * 2,
            "The size of output must be fpn_stride * 2.")
-  batchs_ = tensors[0].shape[0];
+  batchs_ = static_cast<int>(tensors[0].shape[0]);
   if (arch_ == "PicoDet") {
     for (int i = 0; i < tensors.size(); i++) {
       if (i == 0) {
-        num_class_ = tensors[i].Shape()[2];
+        num_class_ = static_cast<int>(tensors[i].Shape()[2]);
       }
       if (i == fpn_stride_.size()) {
-        reg_max_ = tensors[i].Shape()[2] / 4;
+        reg_max_ = static_cast<int>(tensors[i].Shape()[2] / 4);
       }
     }
     for (int i = 0; i < results->size(); ++i) {
@@ -96,6 +109,13 @@ bool PPDetDecode::DecodeAndNMS(const std::vector<FDTensor>& tensors,
   return true;
 }
 
+/***************************************************************
+ *  @name       PicoDetPostProcess
+ *  @brief      Do decode and NMS for Picodet.
+ *  @param      outs: model output tensor
+ *              results: detection results
+ *  @note       Only support PPYOLOE and Picodet.
+ ***************************************************************/
 bool PPDetDecode::PicoDetPostProcess(const std::vector<FDTensor>& outs,
                                      std::vector<DetectionResult>* results) {
   for (int batch = 0; batch < batchs_; ++batch) {
@@ -103,8 +123,10 @@ bool PPDetDecode::PicoDetPostProcess(const std::vector<FDTensor>& outs,
     result.Clear();
     for (int i = batch * batchs_ * fpn_stride_.size();
          i < fpn_stride_.size() * (batch + 1); ++i) {
-      int feature_h = std::ceil(im_shape_[0] / fpn_stride_[i]);
-      int feature_w = std::ceil(im_shape_[1] / fpn_stride_[i]);
+      int feature_h =
+          std::ceil(im_shape_[0] / static_cast<float>(fpn_stride_[i]));
+      int feature_w =
+          std::ceil(im_shape_[1] / static_cast<float>(fpn_stride_[i]));
       for (int idx = 0; idx < feature_h * feature_w; idx++) {
         const auto* scores =
             static_cast<const float*>(outs[i].Data()) + (idx * num_class_);
@@ -127,11 +149,17 @@ bool PPDetDecode::PicoDetPostProcess(const std::vector<FDTensor>& outs,
         }
       }
     }
-    fastdeploy::vision::utils::NMS(&result, 0.5);
+    fastdeploy::vision::utils::NMS(&result, nms_threshold_);
   }
   return results;
 }
 
+/***************************************************************
+ *  @name       FastExp
+ *  @brief      Do exp op
+ *  @param      x: input data
+ *  @return     float
+ ***************************************************************/
 float FastExp(float x) {
   union {
     uint32_t i;
@@ -141,36 +169,54 @@ float FastExp(float x) {
   return v.f;
 }
 
-int ActivationFunctionSoftmax(const float* src, float* dst, int length) {
-  const float alpha = *std::max_element(src, src + length);
+/***************************************************************
+ *  @name       ActivationFunctionSoftmax
+ *  @brief      Do Softmax with reg_max.
+ *  @param      src: input data
+ *              dst: output data
+ *  @return     float
+ ***************************************************************/
+int PPDetDecode::ActivationFunctionSoftmax(const float* src, float* dst) {
+  const float alpha = *std::max_element(src, src + reg_max_);
   float denominator{0};
 
-  for (int i = 0; i < length; ++i) {
+  for (int i = 0; i < reg_max_; ++i) {
     dst[i] = FastExp(src[i] - alpha);
     denominator += dst[i];
   }
 
-  for (int i = 0; i < length; ++i) {
+  for (int i = 0; i < reg_max_; ++i) {
     dst[i] /= denominator;
   }
 
   return 0;
 }
 
+/***************************************************************
+ *  @name       DisPred2Bbox
+ *  @brief      Do Decode.
+ *  @param      dfl_det: detection data
+ *              label: label id
+ *              score: confidence
+ *              x: col
+ *              y: row
+ *              stride: stride
+ *              results: detection results
+ ***************************************************************/
 void PPDetDecode::DisPred2Bbox(const float*& dfl_det, int label, float score,
                                int x, int y, int stride,
                                fastdeploy::vision::DetectionResult* results) {
-  float ct_x = (x + 0.5) * stride;
-  float ct_y = (y + 0.5) * stride;
+  float ct_x = static_cast<float>(x + 0.5) * static_cast<float>(stride);
+  float ct_y = static_cast<float>(y + 0.5) * static_cast<float>(stride);
   std::vector<float> dis_pred{0, 0, 0, 0};
   for (int i = 0; i < 4; i++) {
     float dis = 0;
-    float* dis_after_sm = new float[reg_max_];
-    ActivationFunctionSoftmax(dfl_det + i * (reg_max_), dis_after_sm, reg_max_);
+    auto* dis_after_sm = new float[reg_max_];
+    ActivationFunctionSoftmax(dfl_det + i * (reg_max_), dis_after_sm);
     for (int j = 0; j < reg_max_; j++) {
-      dis += j * dis_after_sm[j];
+      dis += static_cast<float>(j) * dis_after_sm[j];
     }
-    dis *= stride;
+    dis *= static_cast<float>(stride);
     dis_pred[i] = dis;
     delete[] dis_after_sm;
   }
