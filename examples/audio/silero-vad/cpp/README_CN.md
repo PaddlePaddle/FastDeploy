@@ -115,9 +115,5 @@ std::vector<std::map<std::string, float>> Vad::getResult(
 1. `setAudioCofig`函数必须在`init`函数前调用
 2. 输入的音频文件的采样率必须与代码中设置的保持一致
 
-
-
-
-
 - [模型介绍](../)
 - [如何切换模型推理后端引擎](../../../../docs/cn/faq/how_to_change_backend.md)
