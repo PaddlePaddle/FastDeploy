@@ -395,7 +395,7 @@ void Runtime::CreateLiteBackend() {
   backend_ = utils::make_unique<LiteBackend>();
   auto casted_backend = dynamic_cast<LiteBackend*>(backend_.get());
   FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
-                                          paddle_lite_option),
+                                          option.paddle_lite_option),
            "Load model from nb file failed while initializing LiteBackend.");
 #else
   FDASSERT(false,
