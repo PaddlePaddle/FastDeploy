@@ -3,7 +3,6 @@ import cv2
 import numpy as np
 
 
-# 余弦相似度
 def cosine_similarity(a, b):
     a = np.array(a)
     b = np.array(b)
@@ -56,21 +55,17 @@ def build_option(args):
 
 args = parse_arguments()
 
-# 配置runtime，加载模型
 runtime_option = build_option(args)
 model = fd.vision.faceid.ArcFace(args.model, runtime_option=runtime_option)
 
-# 加载图片
 face0 = cv2.imread(args.face)  # 0,1 同一个人
 face1 = cv2.imread(args.face_positive)
 face2 = cv2.imread(args.face_negative)  # 0,2 不同的人
 
-# 预测图片检测结果
 result0 = model.predict(face0)
 result1 = model.predict(face1)
 result2 = model.predict(face2)
 
-# 计算余弦相似度
 embedding0 = result0.embedding
 embedding1 = result1.embedding
 embedding2 = result2.embedding
@@ -78,7 +73,6 @@ embedding2 = result2.embedding
 cosine01 = cosine_similarity(embedding0, embedding1)
 cosine02 = cosine_similarity(embedding0, embedding2)
 
-# 打印结果
 print(result0, end="")
 print(result1, end="")
 print(result2, end="")
