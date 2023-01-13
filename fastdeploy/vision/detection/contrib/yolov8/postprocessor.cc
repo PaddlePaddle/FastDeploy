@@ -56,7 +56,7 @@ bool YOLOv8Postprocessor::Run(
       int s = i * tensor_transpose.shape[2];
       if (multi_label_) {
         for (size_t j = 4; j < tensor_transpose.shape[2]; ++j) {
-          float confidence = data + s + j;
+          float confidence = data[s + j];
           // filter boxes by conf_threshold
           if (confidence <= conf_threshold_) {
             continue;
