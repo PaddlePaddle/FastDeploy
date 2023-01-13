@@ -59,7 +59,9 @@ class FASTDEPLOY_DECL ProcessorManager {
   }
 
   void SetStream(Mat* mat) {
+#ifdef WITH_GPU
     mat->SetStream(stream_);
+#endif
   }
 
   void SyncStream() {
@@ -74,8 +76,8 @@ class FASTDEPLOY_DECL ProcessorManager {
  private:
 #ifdef WITH_GPU
   cudaStream_t stream_ = nullptr;
-  int device_id_ = -1;
 #endif
+  int device_id_ = -1;
 };
 
 }  // namespace vision
