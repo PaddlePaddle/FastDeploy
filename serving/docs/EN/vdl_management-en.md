@@ -40,9 +40,10 @@ visualdl --host 0.0.0.0 --port 8080
 ```
 After entering the component tab of FastDeploy Server, you can
 
-1. Model repository loading and editing
+1.Model repository loading and editing
 
    - **model repository Loading**
+
    Click the "load model repository" button to select the model repository path, and the "root path" is where visualdl starts. If the selected path is not a valid model repository path, you will be warned and please re-select. Open the model repository ./vision/detection/paddledetection/serving/models
    <p align="center">
    <img src="https://user-images.githubusercontent.com/22424850/211199367-18d36b58-cbe8-4d5f-994b-9d9317753f78.gif" width="100%"/>
@@ -50,6 +51,7 @@ After entering the component tab of FastDeploy Server, you can
 
 
    - **model configuration editor**
+
    In the model repository, models can be divided into basic models and ensemble models. The ensemble model is composed of basic models, and represents a pipeline formed by multiple basic models. For example, three basic models "preprocess", "runtime", and "postprocess" can form an ensemble model. What is displayed in the canvas is the composition of the ensemble model, and the current ensemble model and all basic models are listed on the right panel.
    <p align="center">
    <img src="https://user-images.githubusercontent.com/22424850/211194661-51ecb563-0095-48ce-8143-ed7123f5b03c.png" width="100%"/>
@@ -65,6 +67,7 @@ After entering the component tab of FastDeploy Server, you can
 
 
    a. Configuration modification update
+
    When the user selects a configuration file, the configuration editor will display the configuration information in the selected configuration file. Currently, the configuration editor mainly supports users to modify the configuration of three attributes: maxBatchSize, instanceGroup, and optimization. The meanings and values of these three attributes are described as follows.
    ```text
    maxBatchSize: The maximum batch size allowed in inference. Please enter a non-negative integer, such as 16
@@ -80,19 +83,22 @@ After entering the component tab of FastDeploy Server, you can
    For a complete definition of the configuration file of a model repository, please refer to [proto definition](https://github.com/triton-inference-server/common/blob/main/protobuf/model_config.proto), document [Model Configuration introduction](./model_configuration-en.md) gives some brief explanation of the definition.
 
    b. Download model resources
+
    The versions property in configuration editor will list the resource files that exist in different versions of the current model. When you need to add or replace a pre-trained model under a certain version, you can click the version number to pop up the download box, select the name of the pre-trained model you want to add or replace, and the pre-trained model can be automatically downloaded as the model resources under version. Besides, model resource files are allowed to rename and delete.
 <p align="center">
    <img src="https://user-images.githubusercontent.com/22424850/211198445-e276c9b2-78c3-4c35-82a6-4b85cd014e1e.gif" width="100%"/>
    </p>
 
    c. Set the startup configuration file of models
+
    When fastdeployserver serves a the model repository, the configuration file used is config.pbtxt in each model directory. When there are multiple configuration files in the model directory, you can select a configuration file to set as the startup configuration file, the content of the selected configuration file will overwrite config.pbtxt. Therefore, this operation is equivalent to configuration rollback, which can be used to load the data of a backup configuration file into config.pbtxt, or to just select a configuration file as the startup configuration file.
 <p align="center">
    <img src="https://user-images.githubusercontent.com/22424850/211198515-96932d01-de59-44e5-ac76-e90b146c1aa8.gif" width="100%"/>
    </p>
 
 
-2. fastdeployserver services management
+2.fastdeployserver services management
+
    VisualDL provides management and monitoring functions for fastdeployserver services. It mainly includes the functions of starting service, monitoring service, closing service and testing service.
 
    a. Start the service
@@ -113,6 +119,7 @@ After entering the component tab of FastDeploy Server, you can
    </p>
 
    b. Monitoring service
+
    At present, the monitoring of the started service is mainly realized by providing the user with the output information of the fastdeployserver service, the metrics information, and the information of the deployed model repository. By default, the front-end will automatically update the monitored information every 10s, and users can also click the "update" button to manually update.
    - Log (the output log of the fastdeployserver service, which can be used to obtain the startup and loading status of the service, exception information, etc.)
    - Metrics (obtain performance-related data by accessing the metric query service of fastdeployserver)
@@ -123,12 +130,14 @@ After entering the component tab of FastDeploy Server, you can
    </p>
 
    c. Shutting down the service
+
    Click the close tab on the left or the "shutdown" button to manually shut down a fastdeployserver service.
    <p align="center">
    <img src="https://user-images.githubusercontent.com/22424850/211198748-c0628ed9-505a-4f7d-ae17-ecadf060b562.gif" width="100%"/>
    </p>
 
    d. Testing the service
+
    Click the "open client" button to open the client for quickly testing the fastdeployserver service. The client is written based on gradio, and will automatically help users fill in basic information according to the launch parameters of the fastdeployserver service. Users can refer to [Use VisualDL as fastdeploy client for request visualization](./client-en.md#use-visualdl-as-fastdeploy-client-for-request-visualization) to use.
    <p align="center">
    <img src="https://user-images.githubusercontent.com/22424850/211198901-3e58fe9d-8667-4416-987a-200f9edeb05d.gif" width="100%"/>
