@@ -69,6 +69,7 @@ bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
   mat->SetTensor(dst);
   mat->device = Device::GPU;
   mat->layout = Layout::CHW;
+  mat->mat_type = ProcLib::CUDA;
   return true;
 }
 

@@ -114,6 +114,7 @@ bool ResizeByShort::ImplByCvCuda(Mat* mat) {
   mat->SetWidth(width);
   mat->SetHeight(height);
   mat->device = Device::GPU;
+  mat->mat_type = ProcLib::CVCUDA;
   return true;
 }
 #endif

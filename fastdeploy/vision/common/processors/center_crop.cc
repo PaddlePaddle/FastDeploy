@@ -88,6 +88,7 @@ bool CenterCrop::ImplByCvCuda(Mat* mat) {
   mat->SetWidth(width_);
   mat->SetHeight(height_);
   mat->device = Device::GPU;
+  mat->mat_type = ProcLib::CVCUDA;
   return true;
 }
 #endif

@@ -99,6 +99,8 @@ FDDataType Mat::Type() {
              "FastDeploy didn't compile with FlyCV, but met data type with "
              "fcv::Mat.");
 #endif
+  } else if (mat_type == ProcLib::CUDA || mat_type == ProcLib::CVCUDA) {
+    return fd_tensor.Dtype();
   }
   return OpenCVDataTypeToFD(cpu_mat.type());
 }

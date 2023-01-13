@@ -81,12 +81,10 @@ struct FASTDEPLOY_DECL Mat {
     } else if (mat_type == ProcLib::CUDA || mat_type == ProcLib::CVCUDA) {
 #ifdef WITH_GPU
       FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
-             "[ERROR] Error occurs while sync cuda stream.");
+               "[ERROR] Error occurs while sync cuda stream.");
       cpu_mat = CreateZeroCopyOpenCVMatFromTensor(fd_tensor);
       mat_type = ProcLib::OPENCV;
       device = Device::CPU;
-      FDINFO << "get cv mat " << std::endl;
-      // cv::imwrite("test.jpg", cpu_mat);
       return &cpu_mat;
 #else
       FDASSERT(false, "FastDeploy didn't compiled with -DWITH_GPU=ON");

@@ -35,12 +35,12 @@ class PaddleClasPreprocessor:
         """
         return self._preprocessor.run(input_ims)
 
-    def use_gpu(self, gpu_id=-1):
-        """Use CUDA preprocessors
+    def use_cvcuda(self, gpu_id=-1):
+        """Use CV-CUDA preprocessors
 
         :param: gpu_id: GPU device id
         """
-        return self._preprocessor.use_gpu(gpu_id)
+        return self._preprocessor.use_cvcuda(gpu_id)
 
     def disable_normalize(self):
         """
@@ -52,7 +52,7 @@ class PaddleClasPreprocessor:
         """
         This function will disable hwc2chw in preprocessing step.
         """
-        self._preprocessor.disable_permute()      
+        self._preprocessor.disable_permute()
 
 
 class PaddleClasPostprocessor:
