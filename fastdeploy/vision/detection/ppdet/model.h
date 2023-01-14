@@ -253,7 +253,7 @@ class FASTDEPLOY_DECL PaddleYOLOv8 : public PPDetBase {
                const ModelFormat& model_format = ModelFormat::PADDLE)
       : PPDetBase(model_file, params_file, config_file, custom_option,
                   model_format) {
-    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER};
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER, Backend::LITE};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_kunlunxin_backends = {Backend::LITE};
     initialized = Initialize();
