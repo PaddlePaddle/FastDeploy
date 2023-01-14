@@ -77,15 +77,13 @@ FASTDEPLOY_DECL float CosineSimilarity(const std::vector<float>& a,
                                        const std::vector<float>& b,
                                        bool normalized = true);
 
-/***************************************************************
- *  @name       AlignFaceWithFivePoints
- *  @brief      Do face align for model with five points.
- *  @param      image: The original image
- *  @param      result: FaceDetectionResult
- *  @param      std_landmarks: Standard face template
- *  @param      output_size: Output mat size
- *  @return     std::vector<cv::Mat>
- ***************************************************************/
+/** \brief Do face align for model with five points.
+   *
+   * \param[in] image The original image
+   * \param[in] result FaceDetectionResult
+   * \param[in] std_landmarks Standard face template
+   * \param[in] output_size The size of output mat
+   */
 FASTDEPLOY_DECL std::vector<cv::Mat> AlignFaceWithFivePoints(
     cv::Mat& image, FaceDetectionResult& result,
     std::vector<std::array<float, 2>> std_landmarks = {{38.2946f, 51.6963f},
