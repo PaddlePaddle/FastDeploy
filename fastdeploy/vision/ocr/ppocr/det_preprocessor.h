@@ -33,8 +33,7 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
    * \param[in] batch_det_img_info_ptr The output of preprocess
    * \return true if the preprocess successed, otherwise false
    */
-  bool Run(std::vector<FDMat>* images,
-           std::vector<FDTensor>* outputs,
+  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
            std::vector<std::array<int, 4>>* batch_det_img_info_ptr);
 
   /// Set max_side_len for the detection preprocess, default is 960
@@ -66,6 +65,9 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
   /// This function will disable hwc2chw in preprocessing step.
   void DisablePermute() { disable_permute_ = true; }
 
+  /// This function will set fixed shape to inference.
+  void SetFixedShape(bool fixed_shape) { fixed_shape_ = fixed_shape; }
+
  private:
   // for recording the switch of hwc2chw
   bool disable_permute_ = false;
@@ -75,8 +77,11 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
   std::vector<float> mean_ = {0.485f, 0.456f, 0.406f};
   std::vector<float> scale_ = {0.229f, 0.224f, 0.225f};
   bool is_scale_ = true;
-  std::vector<int> det_image_shape_ = {0, 0, 0};
+  bool fixed_shape_ = false;
+  std::vector<int> det_image_shape_ = {3, 640, 640};
   std::array<int, 4> OcrDetectorGetInfo(FDMat* img, int max_size_len);
+  bool OcrDetectorResizeImage(FDMat* img, int resize_w, int resize_h,
+                              int max_resize_w, int max_resize_h);
 };
 
 }  // namespace ocr

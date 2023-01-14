@@ -46,13 +46,15 @@ void RKNPUInfer(const std::string& det_model_file,
   assert(rec_model.Initialized());
 
   det_model.GetPreprocessor().DisableNormalize();
-  det_model.GetPreprocessor().SetDetImageShape({3, 960, 960});
+  det_model.GetPreprocessor().SetFixedShape(true);
   det_model.GetPreprocessor().DisablePermute();
 
   cls_model.GetPreprocessor().DisableNormalize();
+  cls_model.GetPreprocessor().SetFixedShape(true);
   cls_model.GetPreprocessor().DisablePermute();
 
   rec_model.GetPreprocessor().DisableNormalize();
+  rec_model.GetPreprocessor().SetFixedShape(true);
   rec_model.GetPreprocessor().DisablePermute();
 
   // The classification model is optional, so the PP-OCR can also be connected
@@ -121,16 +123,12 @@ void ONNXInfer(const std::string& det_model_file,
   assert(cls_model.Initialized());
   assert(rec_model.Initialized());
 
-  det_model.GetPreprocessor().DisableNormalize();
-  std::vector<int> image_shape = {3, 960, 960};
-  det_model.GetPreprocessor().SetDetImageShape(image_shape);
-  det_model.GetPreprocessor().DisablePermute();
-
-  cls_model.GetPreprocessor().DisableNormalize();
-  cls_model.GetPreprocessor().DisablePermute();
-
-  rec_model.GetPreprocessor().DisableNormalize();
-  rec_model.GetPreprocessor().DisablePermute();
+  det_model.GetPreprocessor().SetFixedShape(true);
+  det_model.GetPreprocessor().SetDetImageShape({3, 960, 960});
+  cls_model.GetPreprocessor().SetFixedShape(true);
+  cls_model.GetPreprocessor().SetClsImageShape({3, 48, 192});
+  rec_model.GetPreprocessor().SetFixedShape(true);
+  rec_model.GetPreprocessor().SetRecImageShape({3, 32, 320});
 
   // The classification model is optional, so the PP-OCR can also be connected
   // in series as follows auto ppocr_v3 =
@@ -173,11 +171,7 @@ int main(int argc, char* argv[]) {
                  "run_option, "
                  "e.g ./infer_demo ./ch_PP-OCRv3_det_infer "
                  "./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv3_rec_infer "
-                 "./ppocr_keys_v1.txt ./12.jpg 0"
-              << std::endl;
-    std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu; 2: run with gpu and use tensorrt backend; 3: run "
-                 "with gpu and use Paddle-TRT; 4: run with kunlunxin."
+                 "./ppocr_keys_v1.txt ./12.jpg"
               << std::endl;
     return -1;
   }

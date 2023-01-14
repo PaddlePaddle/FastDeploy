@@ -45,10 +45,11 @@ paddle2onnx --model_dir ch_ppocr_mobile_v2.0_cls_infer \
             --model_filename inference.pdmodel \
             --params_filename inference.pdiparams \
             --save_file ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
-            --enable_dev_version True
+            --enable_dev_version True \
+            --enable_onnx_checker True
 python -m paddle2onnx.optimize --input_model ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
                                 --output_model ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
-                                --input_shape_dict "{'x':[1,3,48,192]}"  
+                                --input_shape_dict "{'x':[1,3,48,192]}"
 
 paddle2onnx --model_dir ch_PP-OCRv2_rec_infer \
             --model_filename inference.pdmodel \
@@ -57,7 +58,7 @@ paddle2onnx --model_dir ch_PP-OCRv2_rec_infer \
             --enable_dev_version True
 python -m paddle2onnx.optimize --input_model ch_PP-OCRv2_rec_infer/ch_PP-OCRv2_rec_infer.onnx \
                                 --output_model ch_PP-OCRv2_rec_infer/ch_PP-OCRv2_rec_infer.onnx \
-                                --input_shape_dict "{'x':[1,3,48,320]}"  
+                                --input_shape_dict "{'x':[1,3,32,320]}"  
 
 # export  
 python  tools/rknpu2/export.py \

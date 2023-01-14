@@ -64,6 +64,9 @@ class FASTDEPLOY_DECL ClassifierPreprocessor {
   /// This function will disable hwc2chw in preprocessing step.
   void DisablePermute() { disable_permute_ = true; }
 
+  /// This function will set fixed shape to inference.
+  void SetFixedShape(bool fixed_shape) { fixed_shape_ = fixed_shape; }
+
  private:
   // for recording the switch of hwc2chw
   bool disable_permute_ = false;
@@ -72,7 +75,9 @@ class FASTDEPLOY_DECL ClassifierPreprocessor {
   std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
   std::vector<float> scale_ = {0.5f, 0.5f, 0.5f};
   bool is_scale_ = true;
+  bool fixed_shape_ = false;
   std::vector<int> cls_image_shape_ = {3, 48, 192};
+  void OcrClassifierResizeImage(FDMat* mat);
 };
 
 }  // namespace ocr

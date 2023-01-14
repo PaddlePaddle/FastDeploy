@@ -25,7 +25,7 @@ std::array<int, 4> DBDetectorPreprocessor::OcrDetectorGetInfo(
     FDMat* img, int max_size_len) {
   int w = img->Width();
   int h = img->Height();
-  if (det_image_shape_[0] != 0) {
+  if (fixed_shape_) {
     // det_image_shape_ is [c,h,w]
     return {w, h, det_image_shape_[2], det_image_shape_[1]};
   }
@@ -46,8 +46,10 @@ std::array<int, 4> DBDetectorPreprocessor::OcrDetectorGetInfo(
   return {w, h, resize_w, resize_h};
 }
 
-bool OcrDetectorResizeImage(FDMat* img, int resize_w, int resize_h,
-                            int max_resize_w, int max_resize_h) {
+bool DBDetectorPreprocessor::OcrDetectorResizeImage(FDMat* img, int resize_w,
+                                                    int resize_h,
+                                                    int max_resize_w,
+                                                    int max_resize_h) {
   Resize::Run(img, resize_w, resize_h);
   std::vector<float> value = {0, 0, 0};
   Pad::Run(img, 0, max_resize_h - resize_h, 0, max_resize_w - resize_w, value);

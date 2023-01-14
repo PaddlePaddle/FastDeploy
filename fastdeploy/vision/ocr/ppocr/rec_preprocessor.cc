@@ -22,14 +22,16 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
-                              const std::vector<int>& rec_image_shape,
-                              bool static_shape_infer) {
-  int img_h, img_w;
-  img_h = rec_image_shape[1];
-  img_w = rec_image_shape[2];
+void RecognizerPreprocessor::OcrRecognizerResizeImage(FDMat* mat,
+                                                      float max_wh_ratio) {
+  int img_h = rec_image_shape_[1];
+  int img_w = rec_image_shape_[2];
+  if (fixed_shape_) {
+    // det_image_shape_ is [c,h,w]
+    Resize::Run(mat, img_w, img_h);
+  }
 
-  if (!static_shape_infer) {
+  if (static_shape_infer_) {
     img_w = int(img_h * max_wh_ratio);
     float ratio = float(mat->Width()) / float(mat->Height());
 
@@ -41,7 +43,6 @@ void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
     }
     Resize::Run(mat, resize_w, img_h);
     Pad::Run(mat, 0, 0, 0, int(img_w - mat->Width()), {127, 127, 127});
-
   } else {
     if (mat->Width() >= img_w) {
       Resize::Run(mat, img_w, img_h);  // Reszie W to 320
@@ -62,7 +63,7 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images,
                                  std::vector<FDTensor>* outputs,
                                  size_t start_index, size_t end_index,
                                  const std::vector<int>& indices) {
-  if (images->size() == 0 || end_index <= start_index ||
+  if (images->empty() || end_index <= start_index ||
       end_index > images->size()) {
     FDERROR << "images->size() or index error. Correct is: 0 <= start_index < "
                "end_index <= images->size()"
@@ -77,17 +78,13 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images,
 
   for (size_t i = start_index; i < end_index; ++i) {
     size_t real_index = i;
-    if (indices.size() != 0) {
+    if (!indices.empty()) {
       real_index = indices[i];
     }
     FDMat* mat = &(images->at(real_index));
     ori_wh_ratio = mat->Width() * 1.0 / mat->Height();
     max_wh_ratio = std::max(max_wh_ratio, ori_wh_ratio);
-    OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_,
-                             static_shape_infer_);
-    std::string preprocess_file_name =
-        "preprocess_" + std::to_string(i) + ".jpg";
-    cv::imwrite(preprocess_file_name, *(mat->GetOpenCVMat()));
+    OcrRecognizerResizeImage(mat, max_wh_ratio);
     if (!disable_normalize_ && !disable_permute_) {
       NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
     } else {

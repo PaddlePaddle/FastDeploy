@@ -90,7 +90,6 @@ bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
     FDERROR << "Failed to inference by runtime." << std::endl;
     return false;
   }
-
   if (!postprocessor_.Run(reused_output_tensors_, cls_labels, cls_scores,
                           start_index, total_size)) {
     FDERROR << "Failed to postprocess the inference cls_results by runtime."

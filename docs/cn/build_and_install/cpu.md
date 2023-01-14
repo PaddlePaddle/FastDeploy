@@ -38,11 +38,12 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
 mkdir build && cd build
 cmake .. -DENABLE_ORT_BACKEND=ON \
-         -DENABLE_PADDLE_BACKEND=OFF \
-         -DENABLE_OPENVINO_BACKEND=OFF \
-         -DENABLE_RKNPU2_BACKEND=OFF \
+         -DENABLE_PADDLE_BACKEND=ON \
+         -DENABLE_OPENVINO_BACKEND=ON \
          -DCMAKE_INSTALL_PREFIX=${PWD}/compiled_fastdeploy_sdk \
-         -DENABLE_VISION=ON
+         -DENABLE_VISION=ON \
+         -DOPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \
+         -DENABLE_TEXT=ON
 make -j12
 make install
 ```
