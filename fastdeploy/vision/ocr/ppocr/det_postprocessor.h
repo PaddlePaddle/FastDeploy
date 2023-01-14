@@ -69,14 +69,13 @@ class FASTDEPLOY_DECL DBDetectorPostprocessor {
   /// Get use_dilation of the detection postprocess
   int GetUseDilation() const { return use_dilation_; }
 
+ private:
+  PostProcessor util_post_processor_;
   double det_db_thresh_ = 0.3;
   double det_db_box_thresh_ = 0.6;
   double det_db_unclip_ratio_ = 1.5;
   std::string det_db_score_mode_ = "slow";
   bool use_dilation_ = false;
-
- private:
-  PostProcessor util_post_processor_;
   bool SingleBatchPostprocessor(const float* out_data, int n2, int n3,
                                 const std::array<int, 4>& det_img_info,
                                 std::vector<std::array<int, 8>>* boxes_result);
