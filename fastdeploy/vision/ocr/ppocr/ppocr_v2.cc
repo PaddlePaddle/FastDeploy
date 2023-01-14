@@ -14,7 +14,6 @@
 
 #include "fastdeploy/vision/ocr/ppocr/ppocr_v2.h"
 
-#include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
 namespace fastdeploy {

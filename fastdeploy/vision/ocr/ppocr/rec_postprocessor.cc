@@ -115,7 +115,7 @@ bool RecognizerPostprocessor::Run(const std::vector<FDTensor>& tensors,
             << std::endl;
     return false;
   }
-  if (start_index < 0 || total_size <= 0) {
+  if (total_size <= 0) {
     FDERROR << "start_index or total_size error. Correct is: 0 <= start_index "
                "< total_size"
             << std::endl;

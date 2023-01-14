@@ -47,7 +47,7 @@ bool ClassifierPreprocessor::Run(std::vector<FDMat>* images,
 bool ClassifierPreprocessor::Run(std::vector<FDMat>* images,
                                  std::vector<FDTensor>* outputs,
                                  size_t start_index, size_t end_index) {
-  if (images->size() == 0 || start_index < 0 || end_index <= start_index ||
+  if (images->empty() || start_index < 0 || end_index <= start_index ||
       end_index > images->size()) {
     FDERROR << "images->size() or index error. Correct is: 0 <= start_index < "
                "end_index <= images->size()"

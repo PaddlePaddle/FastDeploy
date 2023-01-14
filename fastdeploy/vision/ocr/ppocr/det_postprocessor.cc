@@ -86,10 +86,9 @@ bool DBDetectorPostprocessor::Run(
 
   results->resize(batch);
   for (int i_batch = 0; i_batch < batch; ++i_batch) {
-    if (!SingleBatchPostprocessor(tensor_data, tensor.shape[2], tensor.shape[3],
-                                  batch_det_img_info[i_batch],
-                                  &results->at(i_batch)))
-      return false;
+    SingleBatchPostprocessor(tensor_data, tensor.shape[2], tensor.shape[3],
+                             batch_det_img_info[i_batch],
+                             &results->at(i_batch));
     tensor_data = tensor_data + length;
   }
   return true;
