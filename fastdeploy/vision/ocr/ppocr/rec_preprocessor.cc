@@ -83,16 +83,11 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images,
     FDMat* mat = &(images->at(real_index));
     ori_wh_ratio = mat->Width() * 1.0 / mat->Height();
     max_wh_ratio = std::max(max_wh_ratio, ori_wh_ratio);
-  }
-
-  for (size_t i = start_index; i < end_index; ++i) {
-    size_t real_index = i;
-    if (indices.size() != 0) {
-      real_index = indices[i];
-    }
-    FDMat* mat = &(images->at(real_index));
     OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_,
                              static_shape_infer_);
+    std::string preprocess_file_name =
+        "preprocess_" + std::to_string(i) + ".jpg";
+    cv::imwrite(preprocess_file_name, *(mat->GetOpenCVMat()));
     if (!disable_normalize_ && !disable_permute_) {
       NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
     } else {
@@ -112,7 +107,7 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images,
   std::vector<FDTensor> tensors(tensor_size);
   for (size_t i = 0; i < tensor_size; ++i) {
     size_t real_index = i + start_index;
-    if (indices.size() != 0) {
+    if (!indices.empty()) {
       real_index = indices[i + start_index];
     }
 

@@ -23,16 +23,16 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt
 
 # CPU推理
-./infer_demo ./model/ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer.onnx \
+./infer_demo ./model/ch_PP-OCRv2_det_infer/ch_PP-OCRv2_det_infer.onnx \
                 ./model/ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
-                ./model/ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer.onnx \
+                ./model/ch_PP-OCRv2_rec_infer/ch_PP-OCRv2_rec_infer.onnx \
                 ./ppocr_keys_v1.txt \
                 ./12.jpg \
                 0
 # RKNPU推理
-./infer_demo ./model/ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer_rk3568_unquantized.rknn \
+./infer_demo ./model/ch_PP-OCRv2_det_infer/ch_PP-OCRv2_det_infer_rk3568_unquantized.rknn \
                 ./model/ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2_rk3568_unquantized.rknn \
-                ./model/ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer_rk3568_unquantized.rknn \
+                ./model/ch_PP-OCRv2_rec_infer/ch_PP-OCRv2_rec_infer_rk3568_unquantized.rknn \
                 ./ppocr_keys_v1.txt \
                 ./12.jpg \
                 1

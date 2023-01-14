@@ -119,30 +119,30 @@ bool PPOCRv2::BatchPredict(
       }
     }
 
-    //    std::vector<int32_t>* cls_labels_ptr = &ocr_result.cls_labels;
-    //    std::vector<float>* cls_scores_ptr = &ocr_result.cls_scores;
-    //    if (nullptr != classifier_) {
-    //      for (size_t start_index = 0; start_index < image_list.size();
-    //           start_index += cls_batch_size_) {
-    //        size_t end_index =
-    //            std::min(start_index + cls_batch_size_, image_list.size());
-    //        if (!classifier_->BatchPredict(image_list, cls_labels_ptr,
-    //                                       cls_scores_ptr, start_index,
-    //                                       end_index)) {
-    //          FDERROR << "There's error while recognizing image in PPOCR."
-    //                  << std::endl;
-    //          return false;
-    //        } else {
-    //          for (size_t i_img = start_index; i_img < end_index; ++i_img) {
-    //            if (cls_labels_ptr->at(i_img) % 2 == 1 &&
-    //                cls_scores_ptr->at(i_img) >
-    //                    classifier_->GetPostprocessor().cls_thresh_) {
-    //              cv::rotate(image_list[i_img], image_list[i_img], 1);
-    //            }
-    //          }
-    //        }
-    //      }
-    //    }
+    std::vector<int32_t>* cls_labels_ptr = &ocr_result.cls_labels;
+    std::vector<float>* cls_scores_ptr = &ocr_result.cls_scores;
+    if (nullptr != classifier_) {
+      for (size_t start_index = 0; start_index < image_list.size();
+           start_index += cls_batch_size_) {
+        size_t end_index =
+            std::min(start_index + cls_batch_size_, image_list.size());
+        if (!classifier_->BatchPredict(image_list, cls_labels_ptr,
+                                       cls_scores_ptr, start_index,
+                                       end_index)) {
+          FDERROR << "There's error while recognizing image in PPOCR."
+                  << std::endl;
+          return false;
+        } else {
+          for (size_t i_img = start_index; i_img < end_index; ++i_img) {
+            if (cls_labels_ptr->at(i_img) % 2 == 1 &&
+                cls_scores_ptr->at(i_img) >
+                    classifier_->GetPostprocessor().cls_thresh_) {
+              cv::rotate(image_list[i_img], image_list[i_img], 1);
+            }
+          }
+        }
+      }
+    }
 
     std::vector<std::string>* text_ptr = &ocr_result.text;
     std::vector<float>* rec_scores_ptr = &ocr_result.rec_scores;

@@ -21,17 +21,25 @@
 
 ### 转换模型
 ```bash
-paddle2onnx --model_dir ch_PP-OCRv3_det_infer \
+# download
+wget https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_det_infer.tar
+tar -xvf ch_PP-OCRv2_det_infer.tar
+
+wget https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar
+tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar
+
+wget https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_rec_infer.tar
+tar -xvf ch_PP-OCRv2_rec_infer.tar
+
+# paddle2onnx
+paddle2onnx --model_dir ch_PP-OCRv2_det_infer \
             --model_filename inference.pdmodel \
             --params_filename inference.pdiparams \
-            --save_file ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer.onnx \
+            --save_file ch_PP-OCRv2_det_infer/ch_PP-OCRv2_det_infer.onnx \
             --enable_dev_version True
-python -m paddle2onnx.optimize --input_model ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer.onnx \
-                                --output_model ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer.onnx \
+python -m paddle2onnx.optimize --input_model ch_PP-OCRv2_det_infer/ch_PP-OCRv2_det_infer.onnx \
+                                --output_model ch_PP-OCRv2_det_infer/ch_PP-OCRv2_det_infer.onnx \
                                 --input_shape_dict "{'x':[1,3,960,960]}"
-python  tools/rknpu2/export.py \
-        --config_path tools/rknpu2/config/ch_PP-OCRv3_det_infer_unquantized.yaml \
-        --target_platform rk3588
 
 paddle2onnx --model_dir ch_ppocr_mobile_v2.0_cls_infer \
             --model_filename inference.pdmodel \
@@ -40,20 +48,27 @@ paddle2onnx --model_dir ch_ppocr_mobile_v2.0_cls_infer \
             --enable_dev_version True
 python -m paddle2onnx.optimize --input_model ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
                                 --output_model ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
-                                --input_shape_dict "{'x':[1,3,48,192]}"
-python  tools/rknpu2/export.py \
-        --config_path tools/rknpu2/config/ch_ppocr_mobile_v2.0_cls_infer_unquantized.yaml \
-        --target_platform rk3588
+                                --input_shape_dict "{'x':[1,3,48,192]}"  
 
-paddle2onnx --model_dir ch_PP-OCRv3_rec_infer \
+paddle2onnx --model_dir ch_PP-OCRv2_rec_infer \
             --model_filename inference.pdmodel \
             --params_filename inference.pdiparams \
-            --save_file ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer.onnx \
+            --save_file ch_PP-OCRv2_rec_infer/ch_PP-OCRv2_rec_infer.onnx \
             --enable_dev_version True
-python -m paddle2onnx.optimize --input_model ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer.onnx \
-                                --output_model ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer.onnx \
-                                --input_shape_dict "{'x':[1,3,48,320]}"
+python -m paddle2onnx.optimize --input_model ch_PP-OCRv2_rec_infer/ch_PP-OCRv2_rec_infer.onnx \
+                                --output_model ch_PP-OCRv2_rec_infer/ch_PP-OCRv2_rec_infer.onnx \
+                                --input_shape_dict "{'x':[1,3,48,320]}"  
+
+# export  
 python  tools/rknpu2/export.py \
-        --config_path tools/rknpu2/config/ch_PP-OCRv3_rec_infer_unquantized.yaml \
-        --target_platform rk3588
+        --config_path tools/rknpu2/config/ch_PP-OCRv2_det_infer_unquantized.yaml \
+        --target_platform rk3568
+
+python  tools/rknpu2/export.py \
+        --config_path tools/rknpu2/config/ch_ppocr_mobile_v2.0_cls_infer_unquantized.yaml \
+        --target_platform rk3568
+
+python  tools/rknpu2/export.py \
+        --config_path tools/rknpu2/config/ch_PP-OCRv2_rec_infer_unquantized.yaml \
+        --target_platform rk3568
 ```

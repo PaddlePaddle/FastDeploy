@@ -100,9 +100,6 @@ bool DBDetectorPreprocessor::Run(
   } else {
     function::Concat(tensors, &((*outputs)[0]), 0);
   }
-  printf("outputs.shape is [%d %d %d %d]\n", (*outputs)[0].Shape()[0],
-         (*outputs)[0].Shape()[1], (*outputs)[0].Shape()[2],
-         (*outputs)[0].Shape()[3]);
   return true;
 }
 
