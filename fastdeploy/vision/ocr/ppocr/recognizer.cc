@@ -30,11 +30,9 @@ Recognizer::Recognizer(const std::string& model_file,
                        const ModelFormat& model_format)
     : postprocessor_(label_path) {
   if (model_format == ModelFormat::ONNX) {
-    std::cout << "Recognizer ModelFormat::ONNX" << std::endl;
     valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
     valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {
-    std::cout << "Recognizer ModelFormat::RKNPU2" << std::endl;
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO,
                           Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};

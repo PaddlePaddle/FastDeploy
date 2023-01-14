@@ -92,68 +92,64 @@ bool PPOCRv2::BatchPredict(
   batch_result->resize(images.size());
   std::vector<std::vector<std::array<int, 8>>> batch_boxes(images.size());
 
-  std::cout << "detector_->BatchPredict" << std::endl;
   if (!detector_->BatchPredict(images, &batch_boxes)) {
     FDERROR << "There's error while detecting image in PPOCR." << std::endl;
     return false;
   }
 
-  std::cout << "SortBoxes \nbatch_boxes.size() = " << batch_boxes.size()
-            << std::endl;
   for (int i_batch = 0; i_batch < batch_boxes.size(); ++i_batch) {
     vision::ocr::SortBoxes(&(batch_boxes[i_batch]));
     (*batch_result)[i_batch].boxes = batch_boxes[i_batch];
   }
 
-  std::cout << "GetRotateCropImage" << std::endl;
   for (int i_batch = 0; i_batch < images.size(); ++i_batch) {
     fastdeploy::vision::OCRResult& ocr_result = (*batch_result)[i_batch];
     // Get croped images by detection result
     const std::vector<std::array<int, 8>>& boxes = ocr_result.boxes;
     const cv::Mat& img = images[i_batch];
     std::vector<cv::Mat> image_list;
-    if (boxes.size() == 0) {
+    if (boxes.empty()) {
       image_list.emplace_back(img);
     } else {
       image_list.resize(boxes.size());
       for (size_t i_box = 0; i_box < boxes.size(); ++i_box) {
         image_list[i_box] = vision::ocr::GetRotateCropImage(img, boxes[i_box]);
+        auto file_name = std::to_string(i_box);
+        cv::imwrite(file_name + ".jpg", image_list[i_box]);
       }
     }
-    std::vector<int32_t>* cls_labels_ptr = &ocr_result.cls_labels;
-    std::vector<float>* cls_scores_ptr = &ocr_result.cls_scores;
+
+    //    std::vector<int32_t>* cls_labels_ptr = &ocr_result.cls_labels;
+    //    std::vector<float>* cls_scores_ptr = &ocr_result.cls_scores;
+    //    if (nullptr != classifier_) {
+    //      for (size_t start_index = 0; start_index < image_list.size();
+    //           start_index += cls_batch_size_) {
+    //        size_t end_index =
+    //            std::min(start_index + cls_batch_size_, image_list.size());
+    //        if (!classifier_->BatchPredict(image_list, cls_labels_ptr,
+    //                                       cls_scores_ptr, start_index,
+    //                                       end_index)) {
+    //          FDERROR << "There's error while recognizing image in PPOCR."
+    //                  << std::endl;
+    //          return false;
+    //        } else {
+    //          for (size_t i_img = start_index; i_img < end_index; ++i_img) {
+    //            if (cls_labels_ptr->at(i_img) % 2 == 1 &&
+    //                cls_scores_ptr->at(i_img) >
+    //                    classifier_->GetPostprocessor().cls_thresh_) {
+    //              cv::rotate(image_list[i_img], image_list[i_img], 1);
+    //            }
+    //          }
+    //        }
+    //      }
+    //    }
 
     std::vector<std::string>* text_ptr = &ocr_result.text;
     std::vector<float>* rec_scores_ptr = &ocr_result.rec_scores;
-
-    std::cout << "classifier_" << std::endl;
-    if (nullptr != classifier_) {
-      for (size_t start_index = 0; start_index < image_list.size();
-           start_index += cls_batch_size_) {
-        size_t end_index =
-            std::min(start_index + cls_batch_size_, image_list.size());
-        if (!classifier_->BatchPredict(image_list, cls_labels_ptr,
-                                       cls_scores_ptr, start_index,
-                                       end_index)) {
-          FDERROR << "There's error while recognizing image in PPOCR."
-                  << std::endl;
-          return false;
-        } else {
-          for (size_t i_img = start_index; i_img < end_index; ++i_img) {
-            if (cls_labels_ptr->at(i_img) % 2 == 1 &&
-                cls_scores_ptr->at(i_img) >
-                    classifier_->GetPostprocessor().cls_thresh_) {
-              cv::rotate(image_list[i_img], image_list[i_img], 1);
-            }
-          }
-        }
-      }
-    }
-
-    std::cout << "recognizer_" << std::endl;
     std::vector<float> width_list;
-    for (int i = 0; i < image_list.size(); i++) {
-      width_list.push_back(float(image_list[i].cols) / image_list[i].rows);
+    for (auto& image : image_list) {
+      width_list.push_back(static_cast<float>(image.cols) /
+                           static_cast<float>(image.rows));
     }
     std::vector<int> indices = vision::ocr::ArgSort(width_list);
 
