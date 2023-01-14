@@ -17,7 +17,7 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of insightface onnx model.")
+        "--model", required=True, help="Path of insgihtface onnx model.")
     parser.add_argument(
         "--face", required=True, help="Path of test face image file.")
     parser.add_argument(
@@ -33,34 +33,29 @@ def parse_arguments():
         type=str,
         default='cpu',
         help="Type of inference device, support 'cpu' or 'gpu'.")
-    parser.add_argument(
-        "--use_trt",
-        type=ast.literal_eval,
-        default=False,
-        help="Wether to use tensorrt.")
     return parser.parse_args()
 
 
 def build_option(args):
     option = fd.RuntimeOption()
 
-    if args.device.lower() == "gpu":
-        option.use_gpu()
-
-    if args.use_trt:
-        option.use_trt_backend()
-        option.set_trt_input_shape("data", [1, 3, 112, 112])
+    if args.device.lower() == "npu":
+        option.use_rknpu2()
     return option
 
 
 args = parse_arguments()
 
-runtime_option = build_option(args)
-model = fd.vision.faceid.VPL(args.model, runtime_option=runtime_option)
+runtime_option = fd.RuntimeOption()
+model = fd.vision.faceid.ArcFace(args.model, runtime_option=runtime_option)
+if args.device.lower() == "npu":
+    runtime_option.use_rknpu2()
+    model.preprocessor.disable_normalize()
+    model.preprocessor.disable_permute()
 
-face0 = cv2.imread(args.face)  # 0,1 同一个人
+face0 = cv2.imread(args.face)
 face1 = cv2.imread(args.face_positive)
-face2 = cv2.imread(args.face_negative)  # 0,2 不同的人
+face2 = cv2.imread(args.face_negative)
 
 result0 = model.predict(face0)
 result1 = model.predict(face1)
