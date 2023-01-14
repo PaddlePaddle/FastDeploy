@@ -324,8 +324,7 @@ if __name__ == '__main__':
             print("cpu_rss_mb: {} \n".format(str(dump_result["cpu_rss_mb"])))
             print("gpu_rss_mb: {} \n".format(str(dump_result["gpu_rss_mb"])))
             print("gpu_util: {} \n".format(str(dump_result["gpu_util"])))
-    except Exception as e:
-        raise e
+    except:
         f.writelines("!!!!!Infer Failed\n")
 
     f.close()
