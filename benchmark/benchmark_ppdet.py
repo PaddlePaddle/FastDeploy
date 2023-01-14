@@ -17,7 +17,7 @@ import cv2
 import os
 import numpy as np
 import time
-
+from tqdm import tqdm
 
 def parse_arguments():
     import argparse
@@ -263,6 +263,9 @@ if __name__ == '__main__':
         elif "yolov3" in args.model:
             model = fd.vision.detection.YOLOv3(
                 model_file, params_file, config_file, runtime_option=option)
+        elif "yolov8" in args.model:
+            model = fd.vision.detection.PaddleYOLOv8(
+                model_file, params_file, config_file, runtime_option=option)
         elif "ppyolo_r50vd_dcn_1x_coco" in args.model or "ppyolov2_r101vd_dcn_365e_coco" in args.model:
             model = fd.vision.detection.PPYOLO(
                 model_file, params_file, config_file, runtime_option=option)
@@ -284,7 +287,7 @@ if __name__ == '__main__':
 
         model.enable_record_time_of_runtime()
         im_ori = cv2.imread(args.image)
-        for i in range(args.iter_num):
+        for i in tqdm(range(args.iter_num)):
             im = im_ori
             start = time.time()
             result = model.predict(im)
@@ -321,7 +324,8 @@ if __name__ == '__main__':
             print("cpu_rss_mb: {} \n".format(str(dump_result["cpu_rss_mb"])))
             print("gpu_rss_mb: {} \n".format(str(dump_result["gpu_rss_mb"])))
             print("gpu_util: {} \n".format(str(dump_result["gpu_util"])))
-    except:
+    except Exception as e:
+        raise e
         f.writelines("!!!!!Infer Failed\n")
 
     f.close()
