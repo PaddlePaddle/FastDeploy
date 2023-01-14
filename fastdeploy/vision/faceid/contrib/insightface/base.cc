@@ -22,7 +22,6 @@ InsightFaceRecognitionBase::InsightFaceRecognitionBase(
     const std::string& model_file, const std::string& params_file,
     const fastdeploy::RuntimeOption& custom_option,
     const fastdeploy::ModelFormat& model_format) {
-
   if (model_format == ModelFormat::ONNX) {
     valid_cpu_backends = {Backend::ORT};
     valid_gpu_backends = {Backend::ORT, Backend::TRT};
@@ -31,6 +30,7 @@ InsightFaceRecognitionBase::InsightFaceRecognitionBase(
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
     valid_kunlunxin_backends = {Backend::LITE};
   }
+  valid_rknpu_backends = {Backend::RKNPU2};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -55,8 +55,9 @@ bool InsightFaceRecognitionBase::Predict(const cv::Mat& im,
   return true;
 }
 
-bool InsightFaceRecognitionBase::BatchPredict(const std::vector<cv::Mat>& images,
-                                              std::vector<FaceRecognitionResult>* results){
+bool InsightFaceRecognitionBase::BatchPredict(
+    const std::vector<cv::Mat>& images,
+    std::vector<FaceRecognitionResult>* results) {
   std::vector<FDMat> fd_images = WrapMat(images);
   FDASSERT(images.size() == 1, "Only support batch = 1 now.");
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
@@ -70,8 +71,9 @@ bool InsightFaceRecognitionBase::BatchPredict(const std::vector<cv::Mat>& images
     return false;
   }
 
-  if (!postprocessor_.Run(reused_output_tensors_, results)){
-    FDERROR << "Failed to postprocess the inference results by runtime." << std::endl;
+  if (!postprocessor_.Run(reused_output_tensors_, results)) {
+    FDERROR << "Failed to postprocess the inference results by runtime."
+            << std::endl;
     return false;
   }
   return true;
