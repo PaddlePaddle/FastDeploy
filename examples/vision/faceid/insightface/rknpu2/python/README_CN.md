@@ -1,13 +1,14 @@
 [English](README.md) | 简体中文
 # InsightFace Python部署示例
-本目录下提供infer_xxx.py快速完成InsighFace模型包括ArcFace\CosFace\VPL\Partial_FC在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
-在部署前，需确认以下两个步骤
+FastDeploy支持在RKNPU上部署包括ArcFace\CosFace\VPL\Partial_FC在内的InsightFace系列模型。
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+本目录下提供`infer_arcface.py`快速完成InsighFace模型包括ArcFace在CPU/RKNPU加速部署的示例。
 
-以ArcFace为例子, 提供`infer_arcface.py`快速完成ArcFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+
+在部署前，需确认以下步骤:
+
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../../docs/cn/build_and_install/rknpu2.md)
 
 ```bash
 #下载部署示例代码
@@ -31,13 +32,6 @@ python infer_arcface.py --model ms1mv3_arcface_r100.onnx \
                         --face_positive face_1.jpg \
                         --face_negative face_2.jpg \
                         --device gpu
-# GPU上使用TensorRT推理
-python infer_arcface.py --model ms1mv3_arcface_r100.onnx \
-                        --face face_0.jpg \
-                        --face_positive face_1.jpg \
-                        --face_negative face_2.jpg \
-                        --device gpu \
-                        --use_trt True
 ```
 
 运行完成可视化结果如下图所示
