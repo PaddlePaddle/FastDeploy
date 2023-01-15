@@ -23,13 +23,21 @@ make -j
 wget https://bj.bcebos.com/paddlehub/fastdeploy/scrfd_500m_bnkps_shape640x640.onnx
 wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 
-
+# SCRFD
 # CPU推理
-./infer_demo scrfd_500m_bnkps_shape640x640.onnx test_lite_face_detector_3.jpg 0
+./infer_without_face_align_demo scrfd_500m_bnkps_shape640x640.onnx test_lite_face_detector_3.jpg 0
 # GPU推理
-./infer_demo scrfd_500m_bnkps_shape640x640.onnx test_lite_face_detector_3.jpg 1
+./infer_without_face_align_demo scrfd_500m_bnkps_shape640x640.onnx test_lite_face_detector_3.jpg 1
 # GPU上TensorRT推理
-./infer_demo scrfd_500m_bnkps_shape640x640.onnx test_lite_face_detector_3.jpg 2
+./infer_without_face_align_demo scrfd_500m_bnkps_shape640x640.onnx test_lite_face_detector_3.jpg 2
+
+# SCRFD + FaceAlign
+# CPU推理
+./infer_with_face_align_demo scrfd_500m_bnkps_shape640x640.onnx test_lite_face_detector_3.jpg 0
+# GPU推理
+./infer_with_face_align_demo scrfd_500m_bnkps_shape640x640.onnx test_lite_face_detector_3.jpg 1
+# GPU上TensorRT推理
+./infer_with_face_align_demo scrfd_500m_bnkps_shape640x640.onnx test_lite_face_detector_3.jpg 2
 ```
 
 运行完成可视化结果如下图所示

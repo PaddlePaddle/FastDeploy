@@ -71,6 +71,7 @@ class FASTDEPLOY_DECL PPYOLOE : public PPDetBase {
     valid_kunlunxin_backends = {Backend::LITE};
     valid_rknpu_backends = {Backend::RKNPU2};
     valid_ascend_backends = {Backend::LITE};
+    valid_sophgonpu_backends = {Backend::SOPHGOTPU};
     initialized = Initialize();
   }
 
@@ -244,6 +245,23 @@ class FASTDEPLOY_DECL PaddleYOLOv7 : public PPDetBase {
   virtual std::string ModelName() const { return "PaddleDetection/YOLOv7"; }
 };
 
+class FASTDEPLOY_DECL PaddleYOLOv8 : public PPDetBase {
+ public:
+  PaddleYOLOv8(const std::string& model_file, const std::string& params_file,
+               const std::string& config_file,
+               const RuntimeOption& custom_option = RuntimeOption(),
+               const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER, Backend::LITE};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_kunlunxin_backends = {Backend::LITE};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/YOLOv8"; }
+};
+
 class FASTDEPLOY_DECL RTMDet : public PPDetBase {
  public:
   RTMDet(const std::string& model_file, const std::string& params_file,
@@ -274,7 +292,8 @@ class FASTDEPLOY_DECL CascadeRCNN : public PPDetBase {
     initialized = Initialize();
   }
 
-  virtual std::string ModelName() const { return "PaddleDetection/CascadeRCNN"; }
+  virtual std::string ModelName() const {
+                         return "PaddleDetection/CascadeRCNN"; }
 };
 
 class FASTDEPLOY_DECL PSSDet : public PPDetBase {

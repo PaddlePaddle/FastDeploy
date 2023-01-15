@@ -1,42 +1,40 @@
-[English](README_en.md) | 简体中文
+English | [简体中文](README_CN.md)
 
-# 前端AI应用
+# Front-end AI application
 
-人工智能技术的快速发展带动了计算机视觉、自然语言处理领域的产业升级。另外，随着PC和移动设备上算力的稳步增强、模型压缩技术迭代更新以及各种创新需求的不断催生，在浏览器中部署AI模型实现前端智能已经具备了良好的基础条件。
-针对前端部署AI深度学习模型困难的问题，百度开源了Paddle.js前端深度学习模型部署框架，可以很容易的将深度学习模型部署到前端项目中。
+The development of artificial intelligence technology has led to industrial upgrading in the fields of computer vision(CV) and natural language processing(NLP). In addition, the deployment of AI models in browsers to achieve front-end intelligence has already provided good basic conditions with the steady increase in computing power on PCs and mobile devices, iterative updates of model compression technologies, and the continuous emergence of various innovative needs.
+In response to the difficulty of deploying AI deep learning models on the front-end, Baidu has open-sourced the Paddle.js front-end deep learning model deployment framework, which can easily deploy deep learning models into front-end projects.
 
-## Paddle.js简介
+# Introduction of Paddle.js
 
-[Paddle.js](https://github.com/PaddlePaddle/Paddle.js)是百度`PaddlePaddle`的web方向子项目，是一个运行在浏览器中的开源深度学习框架。`Paddle.js`可以加载`PaddlePaddle`动转静的模型，经过`Paddle.js`的模型转换工具`paddlejs-converter`转换成浏览器友好的模型，易于在线推理预测使用。`Paddle.js`支持`WebGL/WebGPU/WebAssembly`的浏览器中运行，也可以在百度小程序和微信小程序环境下运行。
+[Paddle.js](https://github.com/PaddlePaddle/Paddle.js) is a web sub-project of Baidu `PaddlePaddle`, an open source deep learning framework running in the browser. `Paddle.js` can load the deep learning model trained by `PaddlePaddle`, and convert it into a browser-friendly model through the model conversion tool `paddlejs-converter` of `Paddle.js`, which is easy to use for online reasoning and prediction. `Paddle.js` supports running in browsers of `WebGL/WebGPU/WebAssembly`, and can also run in the environment of Baidu applet and WeChat applet.
 
-简言之，利用Paddle.js，我们可以在浏览器、小程序等前端应用场景上线AI功能，包括但不限于目标检测，图像分割，OCR，物品分类等AI能力。
+Finally, we can launch AI functions in front-end application scenarios such as browsers and mini-program using `Paddle.js`, including but not limited to AI capabilities such as object detection, image segmentation, OCR, and item classification.
 
-## Web Demo使用
+## Web Demo
 
-在浏览器中直接运行官方demo参考[文档](./WebDemo.md)
+Refer to this [document](./WebDemo.md) for steps to run computer vision demo in the browser.
 
-|demo名称|web demo目录|可视化|
+|demo|web demo directory|visualization|
 |-|-|-|
-|目标检测|[ScrewDetection、FaceDetection](./web_demo/src/pages/cv/detection/)| <img src="https://user-images.githubusercontent.com/26592129/196874536-b7fa2c0a-d71f-4271-8c40-f9088bfad3c9.png" height="200px">|
-|人像分割背景替换|[HumanSeg](./web_demo/src/pages/cv/segmentation/HumanSeg)|<img src="https://user-images.githubusercontent.com/26592129/196874452-4ef2e770-fbb3-4a35-954b-f871716d6669.png" height="200px">|
-|物体识别|[GestureRecognition、ItemIdentification](./web_demo/src/pages/cv/recognition/)|<img src="https://user-images.githubusercontent.com/26592129/196874416-454e6bb0-4ebd-4b51-a88a-8c40614290ae.png" height="200px">|
+|object detection|[ScrewDetection、FaceDetection](./web_demo/src/pages/cv/detection/)| <img src="https://user-images.githubusercontent.com/26592129/196874536-b7fa2c0a-d71f-4271-8c40-f9088bfad3c9.png" height="200px">|
+|human segmentation|[HumanSeg](./web_demo/src/pages/cv/segmentation/HumanSeg)|<img src="https://user-images.githubusercontent.com/26592129/196874452-4ef2e770-fbb3-4a35-954b-f871716d6669.png" height="200px">|
+|classification|[GestureRecognition、ItemIdentification](./web_demo/src/pages/cv/recognition/)|<img src="https://user-images.githubusercontent.com/26592129/196874416-454e6bb0-4ebd-4b51-a88a-8c40614290ae.png" height="200px">|
 |OCR|[TextDetection、TextRecognition](./web_demo/src/pages/cv/ocr/)|<img src="https://user-images.githubusercontent.com/26592129/196874354-1b5eecb0-f273-403c-aa6c-4463bf6d78db.png" height="200px">|
 
 
-## 微信小程序Demo使用
+## Wechat Mini-program
 
-在微信小程序运行官方demo参考[文档](./mini_program/README.md)
+Run the official demo reference in the WeChat mini-program [document](./mini_program/README.md)
 
-|名称|目录|
+|Name|Directory|
 |-|-|
-|OCR文本检测| [ocrdetecXcx](./mini_program/ocrdetectXcx/) |
-|OCR文本识别| [ocrXcx](./mini_program/ocrXcx/) |
-|目标检测| coming soon |
-|图像分割| coming soon | 
-|物品分类| coming soon | 
-
+|OCR Text Detection| [ocrdetecXcx](./mini_program/ocrdetectXcx/) |
+|OCR Text Recognition| [ocrXcx](./mini_program/ocrXcx/) |
+|object detection| coming soon |
+|Image segmentation | coming soon |
+|Item Category| coming soon |
 
 ## Contributor
 
-感谢飞桨开发者专家(PPDE) 陈千鹤(github: [chenqianhe](https://github.com/chenqianhe))贡献的Web demo, 小程序。
-
+Thanks to Paddle Paddle Developer Expert (PPDE) Chen Qianhe (github: [chenqianhe](https://github.com/chenqianhe)) for the Web demo, mini-program.
