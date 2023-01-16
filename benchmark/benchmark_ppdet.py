@@ -43,17 +43,22 @@ def parse_arguments():
     parser.add_argument(
         "--device",
         default="cpu",
-        help="Type of inference device, support 'cpu' or 'gpu'.")
+        help="Type of inference device, support 'cpu', 'gpu', 'kunlunxin', 'ascend' etc.")
     parser.add_argument(
         "--backend",
         type=str,
         default="default",
-        help="inference backend, default, ort, ov, trt, paddle, paddle_trt.")
+        help="inference backend, default, ort, ov, trt, paddle, paddle_trt, lite.")
     parser.add_argument(
         "--enable_trt_fp16",
         type=ast.literal_eval,
         default=False,
         help="whether enable fp16 in trt backend")
+    parser.add_argument(
+        "--enable_lite_fp16",
+        type=ast.literal_eval,
+        default=False,
+        help="whether enable fp16 in lite backend")    
     parser.add_argument(
         "--enable_collect_memory_info",
         type=ast.literal_eval,
@@ -68,6 +73,7 @@ def build_option(args):
     device = args.device
     backend = args.backend
     enable_trt_fp16 = args.enable_trt_fp16
+    enable_lite_fp16 = args.enable_lite_fp16
     option.set_cpu_thread_num(args.cpu_num_thread)
     if device == "gpu":
         option.use_gpu()
@@ -111,9 +117,35 @@ def build_option(args):
             raise Exception(
                 "While inference with CPU, only support default/ort/ov/paddle now, {} is not supported.".
                 format(backend))
+    elif device == "kunlunxin":
+        option.use_kunlunxin()
+        if backend == "lite":
+            option.use_lite_backend()
+        elif backend == "ort":
+            option.use_ort_backend()
+        elif backend == "paddle":
+            option.use_paddle_backend()
+        elif backend == "default":
+            return option
+        else:
+            raise Exception(
+                "While inference with CPU, only support default/ort/lite/paddle now, {} is not supported.".
+                format(backend))    
+    elif device == "ascend":
+        option.use_ascend()
+        if backend == "lite":
+            option.use_lite_backend()
+            if enable_lite_fp16:
+                option.enable_lite_fp16()
+        elif backend == "default":
+            return option
+        else:
+            raise Exception(
+                "While inference with CPU, only support default/lite now, {} is not supported.".
+                format(backend))                
     else:
         raise Exception(
-            "Only support device CPU/GPU now, {} is not supported.".format(
+            "Only support device CPU/GPU/Kunlunxin/Ascend now, {} is not supported.".format(
                 device))
 
     return option
