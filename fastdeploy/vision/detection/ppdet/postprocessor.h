@@ -45,10 +45,6 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   /// only available for those model exported without box decoding and nms.
   void ApplyDecodeAndNMS() { apply_decode_and_nms_ = true; }
 
-  /// Apply box nms step for the outputs for the model.This is only available
-  /// for those model exported without box decoding and nms.
-  void ApplyNMS() { apply_nms_ = true; }
-
   // Set scale_factor_ value.This is only available for those model exported
   // without box decoding and nms.
   void SetScaleFactor(const std::vector<float>& scale_factor_value) {
