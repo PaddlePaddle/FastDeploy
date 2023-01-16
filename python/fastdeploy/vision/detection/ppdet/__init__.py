@@ -53,6 +53,10 @@ class NMSOption:
     def __init__(self):
         self.nms_option = C.vision.detection.NMSOption()
 
+    @property
+    def background_label(self):
+        return self.nms_option.background_label
+
 
 class PaddleDetPostprocessor:
     def __init__(self):
@@ -69,11 +73,12 @@ class PaddleDetPostprocessor:
         """
         return self._postprocessor.run(runtime_results)
 
-    def apply_decode_and_nms(self, nms_option=NMSOption()):
+    def apply_decode_and_nms(self, nms_option=None):
         """This function will enable decode and nms in postprocess step.
         """
-        print(type(nms_option))
-        return self._postprocessor.apply_decode_and_nms(nms_option.nms_option)
+        if nms_option is None:
+            nms_option = NMSOption()
+        self._postprocessor.ApplyDecodeAndNMS(self, nms_option.nms_option)
 
 
 class PPYOLOE(FastDeployModel):

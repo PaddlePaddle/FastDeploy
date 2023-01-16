@@ -44,7 +44,19 @@ void BindPPDet(pybind11::module& m) {
            [](vision::detection::PaddleDetPreprocessor& self) {
              self.DisablePermute();
            });
-  ;
+
+  pybind11::class_<vision::detection::NMSOption>(m, "NMSOption")
+      .def(pybind11::init())
+      .def_readwrite("background_label",
+                     &vision::detection::NMSOption::background_label)
+      .def_readwrite("keep_top_k", &vision::detection::NMSOption::keep_top_k)
+      .def_readwrite("nms_eta", &vision::detection::NMSOption::nms_eta)
+      .def_readwrite("nms_threshold",
+                     &vision::detection::NMSOption::nms_threshold)
+      .def_readwrite("nms_top_k", &vision::detection::NMSOption::nms_top_k)
+      .def_readwrite("normalized", &vision::detection::NMSOption::normalized)
+      .def_readwrite("score_threshold",
+                     &vision::detection::NMSOption::score_threshold);
 
   pybind11::class_<vision::detection::PaddleDetPostprocessor>(
       m, "PaddleDetPostprocessor")
@@ -61,12 +73,14 @@ void BindPPDet(pybind11::module& m) {
              }
              return results;
            })
-      .def("apply_decode_and_nms",
-           [](vision::detection::PaddleDetPostprocessor& self,
-              const vision::detection::NMSOption& option =
-                  vision::detection::NMSOption()) {
-             self.ApplyDecodeAndNMS(option);
-           })
+      .def(
+          "apply_decode_and_nms",
+          [](vision::detection::PaddleDetPostprocessor& self,
+             vision::detection::NMSOption option) {
+            self.ApplyDecodeAndNMS(option);
+          },
+          "A function which adds two numbers",
+          pybind11::arg("option") = vision::detection::NMSOption())
       .def("run", [](vision::detection::PaddleDetPostprocessor& self,
                      std::vector<pybind11::array>& input_array) {
         std::vector<vision::DetectionResult> results;
@@ -108,19 +122,6 @@ void BindPPDet(pybind11::module& m) {
                              &vision::detection::PPDetBase::GetPreprocessor)
       .def_property_readonly("postprocessor",
                              &vision::detection::PPDetBase::GetPostprocessor);
-
-  pybind11::class_<vision::detection::NMSOption>(m, "NMSOption")
-      .def(pybind11::init())
-      .def_readwrite("background_label",
-                     &vision::detection::NMSOption::background_label)
-      .def_readwrite("keep_top_k", &vision::detection::NMSOption::keep_top_k)
-      .def_readwrite("nms_eta", &vision::detection::NMSOption::nms_eta)
-      .def_readwrite("nms_threshold",
-                     &vision::detection::NMSOption::nms_threshold)
-      .def_readwrite("nms_top_k", &vision::detection::NMSOption::nms_top_k)
-      .def_readwrite("normalized", &vision::detection::NMSOption::normalized)
-      .def_readwrite("score_threshold",
-                     &vision::detection::NMSOption::score_threshold);
 
   pybind11::class_<vision::detection::PPDetDecode>(m, "PPDetDecode")
       .def(pybind11::init<std::string>());
