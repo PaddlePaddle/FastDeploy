@@ -62,12 +62,6 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   bool ProcessUnDecodeResults(const std::vector<FDTensor>& tensors,
                               std::vector<DetectionResult>* results);
 
-  // for model without nms.
-  bool apply_nms_ = false;
-  bool NMSApplied() const { return apply_nms_; }
-  bool ProcessUnNMSResults(const std::vector<FDTensor>& tensors,
-                           std::vector<DetectionResult>* results);
-
   PPDetDecode ppdet_decoder_;
   std::vector<float> scale_factor_{1.0, 1.0};
   std::vector<float> GetScaleFactor() { return scale_factor_; }

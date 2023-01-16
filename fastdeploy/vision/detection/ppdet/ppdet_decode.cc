@@ -13,6 +13,7 @@
 // limitations under the License.
 #include "ppdet_decode.h"
 
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
 namespace fastdeploy {
@@ -86,27 +87,75 @@ bool PPDetDecode::ReadPostprocessConfigFromYaml() {
  ***************************************************************/
 bool PPDetDecode::DecodeAndNMS(const std::vector<FDTensor>& tensors,
                                std::vector<DetectionResult>* results) {
-  FDASSERT(tensors.size() == fpn_stride_.size() * 2,
-           "The size of output must be fpn_stride * 2.")
-  batchs_ = static_cast<int>(tensors[0].shape[0]);
-  if (arch_ == "PicoDet") {
-    for (int i = 0; i < tensors.size(); i++) {
-      if (i == 0) {
-        num_class_ = static_cast<int>(tensors[i].Shape()[2]);
-      }
-      if (i == fpn_stride_.size()) {
-        reg_max_ = static_cast<int>(tensors[i].Shape()[2] / 4);
-      }
+  if (tensors.size() == 2) {
+    int boxes_index = 0;
+    int scores_index = 1;
+    if (tensors[0].shape[1] == tensors[1].shape[2]) {
+      boxes_index = 0;
+      scores_index = 1;
+    } else if (tensors[0].shape[2] == tensors[1].shape[1]) {
+      boxes_index = 1;
+      scores_index = 0;
+    } else {
+      FDERROR << "The shape of boxes and scores should be [batch, boxes_num, "
+                 "4], [batch, classes_num, boxes_num]"
+              << std::endl;
+      return false;
     }
-    for (int i = 0; i < results->size(); ++i) {
-      PicoDetPostProcess(tensors, results);
+
+    PaddleMultiClassNMS nms;
+    nms.background_label = -1;
+    nms.keep_top_k = 100;
+    nms.nms_eta = 1.0;
+    nms.nms_threshold = 0.5;
+    nms.score_threshold = 0.3;
+    nms.nms_top_k = 1000;
+    nms.normalized = true;
+    nms.Compute(static_cast<const float*>(tensors[boxes_index].Data()),
+                static_cast<const float*>(tensors[scores_index].Data()),
+                tensors[boxes_index].shape, tensors[scores_index].shape);
+
+    auto num_boxes = nms.out_num_rois_data;
+    auto box_data = static_cast<const float*>(nms.out_box_data.data());
+    // Get boxes for each input image
+    results->resize(num_boxes.size());
+    int offset = 0;
+    for (size_t i = 0; i < num_boxes.size(); ++i) {
+      const float* ptr = box_data + offset;
+      (*results)[i].Reserve(num_boxes[i]);
+      for (size_t j = 0; j < num_boxes[i]; ++j) {
+        (*results)[i].label_ids.push_back(
+            static_cast<int32_t>(round(ptr[j * 6])));
+        (*results)[i].scores.push_back(ptr[j * 6 + 1]);
+        (*results)[i].boxes.emplace_back(std::array<float, 4>(
+            {ptr[j * 6 + 2], ptr[j * 6 + 3], ptr[j * 6 + 4], ptr[j * 6 + 5]}));
+      }
+      offset += (num_boxes[i] * 6);
     }
+    return true;
   } else {
-    FDERROR << "ProcessUnDecodeResults only supported when arch is PicoDet."
-            << std::endl;
-    return false;
+    FDASSERT(tensors.size() == fpn_stride_.size() * 2,
+             "The size of output must be fpn_stride * 2.")
+    batchs_ = static_cast<int>(tensors[0].shape[0]);
+    if (arch_ == "PicoDet") {
+      for (int i = 0; i < tensors.size(); i++) {
+        if (i == 0) {
+          num_class_ = static_cast<int>(tensors[i].Shape()[2]);
+        }
+        if (i == fpn_stride_.size()) {
+          reg_max_ = static_cast<int>(tensors[i].Shape()[2] / 4);
+        }
+      }
+      for (int i = 0; i < results->size(); ++i) {
+        PicoDetPostProcess(tensors, results);
+      }
+    } else {
+      FDERROR << "ProcessUnDecodeResults only supported when arch is PicoDet."
+              << std::endl;
+      return false;
+    }
+    return true;
   }
-  return true;
 }
 
 /***************************************************************
