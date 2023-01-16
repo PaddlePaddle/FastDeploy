@@ -80,11 +80,11 @@
 | [retinanet_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/retinanet_r50_fpn_1x_coco.tgz) | 136M | Box AP 37.5%|  暂不支持TensorRT、ORT |
 | [tood_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/tood_r50_fpn_1x_coco.tgz) | 130M | Box AP 42.5%|  暂不支持TensorRT、ORT |
 | [ttfnet_darknet53_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ttfnet_darknet53_1x_coco.tgz) | 178M | Box AP 33.5%|  暂不支持TensorRT、ORT |  
-| [yolov8_x_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_x_500e_coco.tgz) | 265M | 
-| [yolov8_l_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_l_500e_coco.tgz) | 173M | 
-| [yolov8_m_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_m_500e_coco.tgz) | 99M | 
-| [yolov8_s_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_s_500e_coco.tgz) | 43M | 
-| [yolov8_n_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_n_500e_coco.tgz) | 13M | 
+| [yolov8_x_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_x_500e_coco.tgz) | 265M | Box AP 53.8%
+| [yolov8_l_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_l_500e_coco.tgz) | 173M | Box AP 52.8%
+| [yolov8_m_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_m_500e_coco.tgz) | 99M | Box AP 50.2%
+| [yolov8_s_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_s_500e_coco.tgz) | 43M | Box AP 44.9%
+| [yolov8_n_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_n_500e_coco.tgz) | 13M | Box AP 37.3%
 
 ## 详细部署文档
 
