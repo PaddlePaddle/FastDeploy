@@ -256,6 +256,7 @@ class FASTDEPLOY_DECL PaddleYOLOv8 : public PPDetBase {
     valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER, Backend::LITE};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_kunlunxin_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
     initialized = Initialize();
   }
 
