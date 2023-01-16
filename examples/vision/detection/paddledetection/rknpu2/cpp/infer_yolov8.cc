@@ -22,7 +22,7 @@ void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
   option.UseCpu();
   auto format = fastdeploy::ModelFormat::ONNX;
 
-  auto model = fastdeploy::vision::detection::PicoDet(
+  auto model = fastdeploy::vision::detection::PaddleYOLOv8(
       model_file, params_file, config_file, option, format);
 
   fastdeploy::TimeCounter tc;
@@ -37,6 +37,7 @@ void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
   tc.End();
   tc.PrintInfo("PPDet in ONNX");
 
+  std::cout << res.Str() << std::endl;
   cv::imwrite("infer_onnx.jpg", vis_im);
   std::cout << "Visualized result saved in ./infer_onnx.jpg" << std::endl;
 }
@@ -51,9 +52,11 @@ void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
 
   auto format = fastdeploy::ModelFormat::RKNN;
 
-  auto model = fastdeploy::vision::detection::PicoDet(
+  auto model = fastdeploy::vision::detection::PaddleYOLOv8(
       model_file, params_file, config_file, option, format);
 
+  model.GetPreprocessor().DisablePermute();
+  model.GetPreprocessor().DisableNormalize();
   model.GetPostprocessor().ApplyDecodeAndNMS();
 
   auto im = cv::imread(image_file);

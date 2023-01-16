@@ -56,6 +56,8 @@ void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
   auto model = fastdeploy::vision::detection::PicoDet(
       model_file, params_file, config_file, option, format);
 
+  model.GetPreprocessor().DisablePermute();
+  model.GetPreprocessor().DisableNormalize();
   model.GetPostprocessor().ApplyDecodeAndNMS();
 
   auto im = cv::imread(image_file);
