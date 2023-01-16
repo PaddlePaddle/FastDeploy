@@ -62,6 +62,7 @@ class FASTDEPLOY_DECL CenterFacePostprocessor{
   float nms_threshold_;
   bool multi_label_;
   float max_wh_;
+  int landmarks_per_face_;
 };
 
 }  // namespace facedet

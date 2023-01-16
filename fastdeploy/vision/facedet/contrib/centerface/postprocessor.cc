@@ -24,6 +24,7 @@ namespace facedet {
 CenterFacePostprocessor::CenterFacePostprocessor() {
   conf_threshold_ = 0.5;
   nms_threshold_ = 0.3;
+  landmarks_per_face_ = 5;
   max_wh_ = 7680.0;
 }
 
@@ -45,7 +46,7 @@ bool CenterFacePostprocessor::Run(const std::vector<FDTensor>& infer_result,
   landmarks.PrintInfo("landmarks");
   for (size_t bs = 0; bs < batch; ++bs) {
     (*results)[bs].Clear();
-    //(*results)[bs].landmarks_per_face = 5;
+    (*results)[bs].landmarks_per_face = landmarks_per_face_;
     (*results)[bs].Reserve(heatmap.shape[2]);
     if (infer_result[0].dtype != FDDataType::FP32) {
       FDERROR << "Only support post process with float32 data." << std::endl;
@@ -99,6 +100,17 @@ bool CenterFacePostprocessor::Run(const std::vector<FDTensor>& infer_result,
 
       (*results)[bs].boxes.emplace_back(std::array<float, 4>{x1, y1, x2, y2});
       (*results)[bs].scores.push_back(confidence);
+      // decode landmarks (default 5 landmarks)
+      if (landmarks_per_face_ > 0) {
+        // reference: utils/box_utils.py#L241
+        for (size_t j = 0; j < landmarks_per_face_; j++) {
+          float *xmap = (float*)landmarks.Data() + (2 * j + 1)*spacial_size;
+          float *ymap = (float*)landmarks.Data() + (2 * j)*spacial_size;
+          float lx = (x1 + xmap[index] * s1) * d_scale_w;
+          float ly = (y1 + ymap[index] *  s0) * d_scale_h;
+          (*results)[bs].landmarks.emplace_back(std::array<float, 2>{lx, ly});
+        }
+      }
     }
 
     if ((*results)[bs].boxes.size() == 0) {
