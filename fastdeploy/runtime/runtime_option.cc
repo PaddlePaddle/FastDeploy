@@ -18,127 +18,6 @@
 
 namespace fastdeploy {
 
-std::vector<Backend> GetAvailableBackends() {
-  std::vector<Backend> backends;
-#ifdef ENABLE_ORT_BACKEND
-  backends.push_back(Backend::ORT);
-#endif
-#ifdef ENABLE_TRT_BACKEND
-  backends.push_back(Backend::TRT);
-#endif
-#ifdef ENABLE_PADDLE_BACKEND
-  backends.push_back(Backend::PDINFER);
-#endif
-#ifdef ENABLE_POROS_BACKEND
-  backends.push_back(Backend::POROS);
-#endif
-#ifdef ENABLE_OPENVINO_BACKEND
-  backends.push_back(Backend::OPENVINO);
-#endif
-#ifdef ENABLE_LITE_BACKEND
-  backends.push_back(Backend::LITE);
-#endif
-#ifdef ENABLE_RKNPU2_BACKEND
-  backends.push_back(Backend::RKNPU2);
-#endif
-#ifdef ENABLE_SOPHGO_BACKEND
-  backends.push_back(Backend::SOPHGOTPU);
-#endif
-  return backends;
-}
-
-bool IsBackendAvailable(const Backend& backend) {
-  std::vector<Backend> backends = GetAvailableBackends();
-  for (size_t i = 0; i < backends.size(); ++i) {
-    if (backend == backends[i]) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool CheckModelFormat(const std::string& model_file,
-                      const ModelFormat& model_format) {
-  if (model_format == ModelFormat::PADDLE) {
-    if (model_file.size() < 8 ||
-        model_file.substr(model_file.size() - 8, 8) != ".pdmodel") {
-      FDERROR << "With model format of ModelFormat::PADDLE, the model file "
-                 "should ends with `.pdmodel`, but now it's "
-              << model_file << std::endl;
-      return false;
-    }
-  } else if (model_format == ModelFormat::ONNX) {
-    if (model_file.size() < 5 ||
-        model_file.substr(model_file.size() - 5, 5) != ".onnx") {
-      FDERROR << "With model format of ModelFormat::ONNX, the model file "
-                 "should ends with `.onnx`, but now it's "
-              << model_file << std::endl;
-      return false;
-    }
-  } else if (model_format == ModelFormat::RKNN) {
-    if (model_file.size() < 5 ||
-        model_file.substr(model_file.size() - 5, 5) != ".rknn") {
-      FDERROR << "With model format of ModelFormat::RKNN, the model file "
-                 "should ends with `.rknn`, but now it's "
-              << model_file << std::endl;
-      return false;
-    }
-  } else if (model_format == ModelFormat::TORCHSCRIPT) {
-    if (model_file.size() < 3 ||
-        model_file.substr(model_file.size() - 3, 3) != ".pt") {
-      FDERROR
-          << "With model format of ModelFormat::TORCHSCRIPT, the model file "
-             "should ends with `.pt`, but now it's "
-          << model_file << std::endl;
-      return false;
-    }
-  } else if (model_format == ModelFormat::SOPHGO) {
-    if (model_file.size() < 7 ||
-        model_file.substr(model_file.size() - 7, 7) != ".bmodel") {
-      FDERROR << "With model format of ModelFormat::SOPHGO, the model file "
-                 "should ends with `.bmodel`, but now it's "
-              << model_file << std::endl;
-      return false;
-    }
-  } else {
-    FDERROR
-        << "Only support model format with frontend ModelFormat::PADDLE / "
-           "ModelFormat::ONNX / ModelFormat::RKNN / ModelFormat::TORCHSCRIPT."
-        << std::endl;
-    return false;
-  }
-  return true;
-}
-
-ModelFormat GuessModelFormat(const std::string& model_file) {
-  if (model_file.size() > 8 &&
-      model_file.substr(model_file.size() - 8, 8) == ".pdmodel") {
-    FDINFO << "Model Format: PaddlePaddle." << std::endl;
-    return ModelFormat::PADDLE;
-  } else if (model_file.size() > 5 &&
-             model_file.substr(model_file.size() - 5, 5) == ".onnx") {
-    FDINFO << "Model Format: ONNX." << std::endl;
-    return ModelFormat::ONNX;
-  } else if (model_file.size() > 3 &&
-             model_file.substr(model_file.size() - 3, 3) == ".pt") {
-    FDINFO << "Model Format: Torchscript." << std::endl;
-    return ModelFormat::TORCHSCRIPT;
-  } else if (model_file.size() > 5 &&
-             model_file.substr(model_file.size() - 5, 5) == ".rknn") {
-    FDINFO << "Model Format: RKNN." << std::endl;
-    return ModelFormat::RKNN;
-  } else if (model_file.size() > 7 &&
-             model_file.substr(model_file.size() - 7, 7) == ".bmodel") {
-    FDINFO << "Model Format: SOPHGO." << std::endl;
-    return ModelFormat::SOPHGO;
-  }
-
-  FDERROR << "Cannot guess which model format you are using, please set "
-             "RuntimeOption::model_format manually."
-          << std::endl;
-  return ModelFormat::PADDLE;
-}
-
 void RuntimeOption::SetModelPath(const std::string& model_path,
                                  const std::string& params_path,
                                  const ModelFormat& format) {
@@ -206,8 +85,8 @@ void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
 }
 
 void RuntimeOption::UseTimVX() {
-  enable_timvx = true;
   device = Device::TIMVX;
+  paddle_lite_option.enable_timvx = true;
 }
 
 void RuntimeOption::UseKunlunXin(int kunlunxin_id, int l3_workspace_size,
@@ -216,21 +95,21 @@ void RuntimeOption::UseKunlunXin(int kunlunxin_id, int l3_workspace_size,
                                  const std::string& precision,
                                  bool adaptive_seqlen,
                                  bool enable_multi_stream) {
-  enable_kunlunxin = true;
-  device_id = kunlunxin_id;
-  kunlunxin_l3_workspace_size = l3_workspace_size;
-  kunlunxin_locked = locked;
-  kunlunxin_autotune = autotune;
-  kunlunxin_autotune_file = autotune_file;
-  kunlunxin_precision = precision;
-  kunlunxin_adaptive_seqlen = adaptive_seqlen;
-  kunlunxin_enable_multi_stream = enable_multi_stream;
   device = Device::KUNLUNXIN;
+  paddle_lite_option.enable_kunlunxin = true;
+  paddle_lite_option.device_id = kunlunxin_id;
+  paddle_lite_option.kunlunxin_l3_workspace_size = l3_workspace_size;
+  paddle_lite_option.kunlunxin_locked = locked;
+  paddle_lite_option.kunlunxin_autotune = autotune;
+  paddle_lite_option.kunlunxin_autotune_file = autotune_file;
+  paddle_lite_option.kunlunxin_precision = precision;
+  paddle_lite_option.kunlunxin_adaptive_seqlen = adaptive_seqlen;
+  paddle_lite_option.kunlunxin_enable_multi_stream = enable_multi_stream;
 }
 
 void RuntimeOption::UseAscend() {
-  enable_ascend = true;
   device = Device::ASCEND;
+  paddle_lite_option.enable_ascend = true;
 }
 
 void RuntimeOption::UseSophgo() {
@@ -245,6 +124,7 @@ void RuntimeOption::SetExternalStream(void* external_stream) {
 void RuntimeOption::SetCpuThreadNum(int thread_num) {
   FDASSERT(thread_num > 0, "The thread_num must be greater than 0.");
   cpu_thread_num = thread_num;
+  paddle_lite_option.threads = thread_num;
 }
 
 void RuntimeOption::SetOrtGraphOptLevel(int level) {
@@ -352,57 +232,65 @@ void RuntimeOption::SetOpenVINODevice(const std::string& name) {
   openvino_device = name;
 }
 
-void RuntimeOption::EnableLiteFP16() { lite_enable_fp16 = true; }
+void RuntimeOption::EnableLiteFP16() { paddle_lite_option.enable_fp16 = true; }
 
-void RuntimeOption::DisableLiteFP16() { lite_enable_fp16 = false; }
-void RuntimeOption::EnableLiteInt8() { lite_enable_int8 = true; }
+void RuntimeOption::DisableLiteFP16() {
+  paddle_lite_option.enable_fp16 = false;
+}
 
-void RuntimeOption::DisableLiteInt8() { lite_enable_int8 = false; }
+void RuntimeOption::EnableLiteInt8() { paddle_lite_option.enable_int8 = true; }
+
+void RuntimeOption::DisableLiteInt8() {
+  paddle_lite_option.enable_int8 = false;
+}
+
 void RuntimeOption::SetLitePowerMode(LitePowerMode mode) {
-  lite_power_mode = mode;
+  paddle_lite_option.power_mode = mode;
 }
 
 void RuntimeOption::SetLiteOptimizedModelDir(
     const std::string& optimized_model_dir) {
-  lite_optimized_model_dir = optimized_model_dir;
+  paddle_lite_option.optimized_model_dir = optimized_model_dir;
 }
 
 void RuntimeOption::SetLiteSubgraphPartitionPath(
     const std::string& nnadapter_subgraph_partition_config_path) {
-  lite_nnadapter_subgraph_partition_config_path =
+  paddle_lite_option.nnadapter_subgraph_partition_config_path =
       nnadapter_subgraph_partition_config_path;
 }
 
 void RuntimeOption::SetLiteSubgraphPartitionConfigBuffer(
     const std::string& nnadapter_subgraph_partition_config_buffer) {
-  lite_nnadapter_subgraph_partition_config_buffer =
+  paddle_lite_option.nnadapter_subgraph_partition_config_buffer =
       nnadapter_subgraph_partition_config_buffer;
 }
 
 void RuntimeOption::SetLiteDeviceNames(
     const std::vector<std::string>& nnadapter_device_names) {
-  lite_nnadapter_device_names = nnadapter_device_names;
+  paddle_lite_option.nnadapter_device_names = nnadapter_device_names;
 }
 
 void RuntimeOption::SetLiteContextProperties(
     const std::string& nnadapter_context_properties) {
-  lite_nnadapter_context_properties = nnadapter_context_properties;
+  paddle_lite_option.nnadapter_context_properties =
+      nnadapter_context_properties;
 }
 
 void RuntimeOption::SetLiteModelCacheDir(
     const std::string& nnadapter_model_cache_dir) {
-  lite_nnadapter_model_cache_dir = nnadapter_model_cache_dir;
+  paddle_lite_option.nnadapter_model_cache_dir = nnadapter_model_cache_dir;
 }
 
 void RuntimeOption::SetLiteDynamicShapeInfo(
     const std::map<std::string, std::vector<std::vector<int64_t>>>&
         nnadapter_dynamic_shape_info) {
-  lite_nnadapter_dynamic_shape_info = nnadapter_dynamic_shape_info;
+  paddle_lite_option.nnadapter_dynamic_shape_info =
+      nnadapter_dynamic_shape_info;
 }
 
 void RuntimeOption::SetLiteMixedPrecisionQuantizationConfigPath(
     const std::string& nnadapter_mixed_precision_quantization_config_path) {
-  lite_nnadapter_mixed_precision_quantization_config_path =
+  paddle_lite_option.nnadapter_mixed_precision_quantization_config_path =
       nnadapter_mixed_precision_quantization_config_path;
 }
 

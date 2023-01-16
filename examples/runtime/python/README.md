@@ -1,5 +1,5 @@
 English | [简体中文](README_CN.md)
-# Python推理
+# Python Inference
 
 Before running demo, the following two steps need to be confirmed:
 

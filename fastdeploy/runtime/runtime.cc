@@ -18,35 +18,35 @@
 #include "fastdeploy/utils/utils.h"
 
 #ifdef ENABLE_ORT_BACKEND
-#include "fastdeploy/backends/ort/ort_backend.h"
+#include "fastdeploy/runtime/backends/ort/ort_backend.h"
 #endif
 
 #ifdef ENABLE_TRT_BACKEND
-#include "fastdeploy/backends/tensorrt/trt_backend.h"
+#include "fastdeploy/runtime/backends/tensorrt/trt_backend.h"
 #endif
 
 #ifdef ENABLE_PADDLE_BACKEND
-#include "fastdeploy/backends/paddle/paddle_backend.h"
+#include "fastdeploy/runtime/backends/paddle/paddle_backend.h"
 #endif
 
 #ifdef ENABLE_POROS_BACKEND
-#include "fastdeploy/backends/poros/poros_backend.h"
+#include "fastdeploy/runtime/backends/poros/poros_backend.h"
 #endif
 
 #ifdef ENABLE_OPENVINO_BACKEND
-#include "fastdeploy/backends/openvino/ov_backend.h"
+#include "fastdeploy/runtime/backends/openvino/ov_backend.h"
 #endif
 
 #ifdef ENABLE_LITE_BACKEND
-#include "fastdeploy/backends/lite/lite_backend.h"
+#include "fastdeploy/runtime/backends/lite/lite_backend.h"
 #endif
 
 #ifdef ENABLE_RKNPU2_BACKEND
-#include "fastdeploy/backends/rknpu2/rknpu2_backend.h"
+#include "fastdeploy/runtime/backends/rknpu2/rknpu2_backend.h"
 #endif
 
 #ifdef ENABLE_SOPHGO_BACKEND
-#include "fastdeploy/backends/sophgo/sophgo_backend.h"
+#include "fastdeploy/runtime/backends/sophgo/sophgo_backend.h"
 #endif
 
 namespace fastdeploy {
@@ -390,43 +390,12 @@ void Runtime::CreateTrtBackend() {
 
 void Runtime::CreateLiteBackend() {
 #ifdef ENABLE_LITE_BACKEND
-  auto lite_option = LiteBackendOption();
-  lite_option.threads = option.cpu_thread_num;
-  lite_option.enable_int8 = option.lite_enable_int8;
-  lite_option.enable_fp16 = option.lite_enable_fp16;
-  lite_option.power_mode = static_cast<int>(option.lite_power_mode);
-  lite_option.optimized_model_dir = option.lite_optimized_model_dir;
-  lite_option.nnadapter_subgraph_partition_config_path =
-      option.lite_nnadapter_subgraph_partition_config_path;
-  lite_option.nnadapter_subgraph_partition_config_buffer =
-      option.lite_nnadapter_subgraph_partition_config_buffer;
-  lite_option.nnadapter_device_names = option.lite_nnadapter_device_names;
-  lite_option.nnadapter_context_properties =
-      option.lite_nnadapter_context_properties;
-  lite_option.nnadapter_model_cache_dir = option.lite_nnadapter_model_cache_dir;
-  lite_option.nnadapter_dynamic_shape_info =
-      option.lite_nnadapter_dynamic_shape_info;
-  lite_option.nnadapter_mixed_precision_quantization_config_path =
-      option.lite_nnadapter_mixed_precision_quantization_config_path;
-  lite_option.enable_timvx = option.enable_timvx;
-  lite_option.enable_ascend = option.enable_ascend;
-  lite_option.enable_kunlunxin = option.enable_kunlunxin;
-  lite_option.device_id = option.device_id;
-  lite_option.kunlunxin_l3_workspace_size = option.kunlunxin_l3_workspace_size;
-  lite_option.kunlunxin_locked = option.kunlunxin_locked;
-  lite_option.kunlunxin_autotune = option.kunlunxin_autotune;
-  lite_option.kunlunxin_autotune_file = option.kunlunxin_autotune_file;
-  lite_option.kunlunxin_precision = option.kunlunxin_precision;
-  lite_option.kunlunxin_adaptive_seqlen = option.kunlunxin_adaptive_seqlen;
-  lite_option.kunlunxin_enable_multi_stream =
-      option.kunlunxin_enable_multi_stream;
-
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();
   auto casted_backend = dynamic_cast<LiteBackend*>(backend_.get());
   FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
-                                          lite_option),
+                                          option.paddle_lite_option),
            "Load model from nb file failed while initializing LiteBackend.");
 #else
   FDASSERT(false,
@@ -472,9 +441,9 @@ void Runtime::CreateSophgoNPUBackend() {
 Runtime* Runtime::Clone(void* stream, int device_id) {
   Runtime* runtime = new Runtime();
   if (option.backend != Backend::OPENVINO &&
-      option.backend != Backend::PDINFER && option.backend != Backend::TRT) {
+      option.backend != Backend::PDINFER) {
     runtime->Init(option);
-    FDWARNING << "Only OpenVINO/Paddle Inference/TensorRT support \
+    FDWARNING << "Only OpenVINO/Paddle Inference support \
                   clone engine to  reduce CPU/GPU memory usage now. For "
               << option.backend
               << ", FastDeploy will create a new engine which \

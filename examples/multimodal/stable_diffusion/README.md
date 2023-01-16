@@ -7,7 +7,7 @@ This document completes the high-performance deployment of the Diffusion model w
 
 This example needs the deployment model after exporting the training model. Here are two ways to obtain the deployment model:
 
-- Methods for model export. Please refer to [Model Export](./export_EN.md) to export deployment model.
+- Methods for model export. Please refer to [Model Export](export.md) to export deployment model.
 - Download the deployment model. To facilitate developers to test the example, we have pre-exported some of the `Diffusion` models, so you can just download models and test them quickly:
 
 | Model | Scheduler |

@@ -33,13 +33,13 @@ docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.2-gpu-cuda11.4-trt
 
 Users can also compile the image by themselves according to their own needs, referring to the following documents:
 
-- [FastDeploy Serving Deployment Image Compilation](docs/zh_CN/compile.md)
+- [FastDeploy Serving Deployment Image Compilation](docs/EN/compile-en.md)
 
 ## Other Tutorials
 
-- [How to Prepare Serving Model Repository](docs/zh_CN/model_repository.md)
-- [Serving Deployment Configuration for Runtime](docs/zh_CN/model_configuration.md)
-- [Demo of Serving Deployment](docs/zh_CN/demo.md)
+- [How to Prepare Serving Model Repository](docs/EN/model_repository-en.md) 
+- [Serving Deployment Configuration for Runtime](docs/EN/model_configuration-en.md) 
+- [Demo of Serving Deployment](docs/EN/demo-en.md)
 
 
 ### Serving Deployment Demo
