@@ -49,6 +49,7 @@ void BindPPDet(pybind11::module& m) {
   pybind11::class_<vision::detection::PaddleDetPostprocessor>(
       m, "PaddleDetPostprocessor")
       .def(pybind11::init<>())
+      .def(pybind11::init<std::string>())
       .def("run",
            [](vision::detection::PaddleDetPostprocessor& self,
               std::vector<FDTensor>& inputs) {
