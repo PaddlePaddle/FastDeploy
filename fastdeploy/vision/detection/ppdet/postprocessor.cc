@@ -14,6 +14,7 @@
 
 #include "fastdeploy/vision/detection/ppdet/postprocessor.h"
 
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
@@ -31,7 +32,7 @@ bool PaddleDetPostprocessor::ProcessMask(
   int64_t out_mask_h = shape[1];
   int64_t out_mask_w = shape[2];
   int64_t out_mask_numel = shape[1] * shape[2];
-  const uint8_t* data = reinterpret_cast<const uint8_t*>(tensor.CpuData());
+  const auto* data = reinterpret_cast<const uint8_t*>(tensor.CpuData());
   int index = 0;
 
   for (int i = 0; i < results->size(); ++i) {
@@ -49,7 +50,7 @@ bool PaddleDetPostprocessor::ProcessMask(
       (*results)[i].masks[j].shape = {keep_mask_h, keep_mask_w};
       const uint8_t* current_ptr = data + index * out_mask_numel;
 
-      uint8_t* keep_mask_ptr =
+      auto* keep_mask_ptr =
           reinterpret_cast<uint8_t*>((*results)[i].masks[j].Data());
       for (int row = y1; row < y2; ++row) {
         size_t keep_nbytes_in_col = keep_mask_w * sizeof(uint8_t);
@@ -65,9 +66,19 @@ bool PaddleDetPostprocessor::ProcessMask(
 
 bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                  std::vector<DetectionResult>* results) {
+  if (DecodeAndNMSApplied() && NMSApplied()) {
+    FDERROR << "DecodeAndNMSApplied and NMSApplied can only have one true."
+            << std::endl;
+  }
+
   if (DecodeAndNMSApplied()) {
     return ProcessUnDecodeResults(tensors, results);
   }
+
+  if (NMSApplied()) {
+    return ProcessUnNMSResults(tensors, results);
+  }
+
   // Get number of boxes for each input image
   std::vector<int> num_boxes(tensors[1].shape[0]);
   int total_num_boxes = 0;
@@ -143,10 +154,6 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
   return ProcessMask(tensors[2], results);
 }
 
-void PaddleDetPostprocessor::ApplyDecodeAndNMS() {
-  apply_decode_and_nms_ = true;
-}
-
 bool PaddleDetPostprocessor::ProcessUnDecodeResults(
     const std::vector<FDTensor>& tensors,
     std::vector<DetectionResult>* results) {
@@ -167,19 +174,63 @@ bool PaddleDetPostprocessor::ProcessUnDecodeResults(
   return true;
 }
 
-std::vector<float> PaddleDetPostprocessor::GetScaleFactor() {
-  return scale_factor_;
-}
-
-void PaddleDetPostprocessor::SetScaleFactor(float* scale_factor_value) {
-  for (int i = 0; i < scale_factor_.size(); ++i) {
-    scale_factor_[i] = scale_factor_value[i];
+bool PaddleDetPostprocessor::ProcessUnNMSResults(
+    const std::vector<FDTensor>& tensors,
+    std::vector<DetectionResult>* results) {
+  if (tensors.size() > 2) {
+    FDERROR << "ProcessUnNMSResults can only support models with less than two "
+               "outputs."
+            << std::endl;
+    return false;
   }
+
+  int boxes_index = 0;
+  int scores_index = 1;
+  if (tensors[0].shape[1] == tensors[1].shape[2]) {
+    boxes_index = 0;
+    scores_index = 1;
+  } else if (tensors[0].shape[2] == tensors[1].shape[1]) {
+    boxes_index = 1;
+    scores_index = 0;
+  } else {
+    FDERROR << "The shape of boxes and scores should be [batch, boxes_num, "
+               "4], [batch, classes_num, boxes_num]"
+            << std::endl;
+    return false;
+  }
+
+  PaddleMultiClassNMS nms;
+  nms.background_label = -1;
+  nms.keep_top_k = 100;
+  nms.nms_eta = 1.0;
+  nms.nms_threshold = 0.5;
+  nms.score_threshold = 0.3;
+  nms.nms_top_k = 1000;
+  nms.normalized = true;
+  nms.Compute(static_cast<const float*>(tensors[boxes_index].Data()),
+              static_cast<const float*>(tensors[scores_index].Data()),
+              tensors[boxes_index].shape, tensors[scores_index].shape);
+
+  auto num_boxes = nms.out_num_rois_data;
+  auto box_data = static_cast<const float*>(nms.out_box_data.data());
+  // Get boxes for each input image
+  results->resize(num_boxes.size());
+  int offset = 0;
+  for (size_t i = 0; i < num_boxes.size(); ++i) {
+    const float* ptr = box_data + offset;
+    (*results)[i].Reserve(num_boxes[i]);
+    for (size_t j = 0; j < num_boxes[i]; ++j) {
+      (*results)[i].label_ids.push_back(
+          static_cast<int32_t>(round(ptr[j * 6])));
+      (*results)[i].scores.push_back(ptr[j * 6 + 1]);
+      (*results)[i].boxes.emplace_back(std::array<float, 4>(
+          {ptr[j * 6 + 2], ptr[j * 6 + 3], ptr[j * 6 + 4], ptr[j * 6 + 5]}));
+    }
+    offset += (num_boxes[i] * 6);
+  }
+  return true;
 }
 
-bool PaddleDetPostprocessor::DecodeAndNMSApplied() {
-  return apply_decode_and_nms_;
-}
 }  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy
