@@ -18,7 +18,7 @@ paddle2onnx --model_dir yolov8_n_500e_coco \
 # 固定shape
 python -m paddle2onnx.optimize --input_model yolov8_n_500e_coco/yolov8_n_500e_coco.onnx \
                                 --output_model yolov8_n_500e_coco/yolov8_n_500e_coco.onnx \
-                                --input_shape_dict "{'image':[1,3,640,640]}"
+                                --input_shape_dict "{'image':[1,3,640,640],'scale_factor':[1,2]}"
 ```
 
 ### 编写模型导出配置文件
@@ -41,6 +41,6 @@ outputs_nodes: [ 'p2o.Div.1','p2o.Concat.49' ]
 
 # ONNX模型转RKNN模型
 # 转换模型,模型将生成在picodet_s_320_coco_lcnet_non_postprocess目录下
-python tools/rknpu2/export.py --config_path tools/rknpu2/config/picodet_s_416_coco_lcnet_unquantized.yaml \
+python tools/rknpu2/export.py --config_path tools/rknpu2/config/yolov8_n_unquantized.yaml \
                               --target_platform rk3588
 ```

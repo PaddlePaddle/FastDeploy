@@ -11,13 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <iostream>
-#include <string>
 
 #include "fastdeploy/vision.h"
 
 void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
-  std::string model_file = model_dir + "/picodet_s_416_coco_lcnet.onnx";
+  std::string model_file = model_dir + "/yolov8_n_500e_coco.onnx";
   std::string params_file;
   std::string config_file = model_dir + "/infer_cfg.yml";
   auto option = fastdeploy::RuntimeOption();
@@ -44,7 +42,7 @@ void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
 }
 
 void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
-  auto model_file = model_dir + "/picodet_s_416_coco_lcnet_rk3588.rknn";
+  auto model_file = model_dir + "/yolov8_n_500e_coco_rk3588_unquantized.rknn";
   auto params_file = "";
   auto config_file = model_dir + "/infer_cfg.yml";
 

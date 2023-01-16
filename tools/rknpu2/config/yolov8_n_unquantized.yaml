@@ -1,17 +1,9 @@
 mean:
-  -
-    - 127.5
-    - 127.5
-    - 127.5
 std:
-  -
-    - 127.5
-    - 127.5
-    - 127.5
-model_path: ./yolov8_n_500e_coco.onnx
+model_path: ./yolov8_n_500e_coco/yolov8_n_500e_coco.onnx
 outputs_nodes:
   - 'p2o.Div.1'
   - 'p2o.Concat.49'
 do_quantization: False
 dataset: "./dataset.txt"
-output_folder: "./"
+output_folder: "./yolov8_n_500e_coco"
