@@ -18,14 +18,14 @@ from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
-class YOLOv5SegPreprocessor:
+class YOLOv8Preprocessor:
     def __init__(self):
-        """Create a preprocessor for YOLOv5Seg
+        """Create a preprocessor for YOLOv8
         """
-        self._preprocessor = C.vision.detection.YOLOv5SegPreprocessor()
+        self._preprocessor = C.vision.detection.YOLOv8Preprocessor()
 
     def run(self, input_ims):
-        """Preprocess input images for YOLOv5Seg
+        """Preprocess input images for YOLOv8
 
         :param: input_ims: (list of numpy.ndarray)The input image
         :return: list of FDTensor
@@ -105,14 +105,14 @@ class YOLOv5SegPreprocessor:
         self._preprocessor.stride = value
 
 
-class YOLOv5SegPostprocessor:
+class YOLOv8Postprocessor:
     def __init__(self):
-        """Create a postprocessor for YOLOv5Seg
+        """Create a postprocessor for YOLOv8
         """
-        self._postprocessor = C.vision.detection.YOLOv5SegPostprocessor()
+        self._postprocessor = C.vision.detection.YOLOv8Postprocessor()
 
     def run(self, runtime_results, ims_info):
-        """Postprocess the runtime results for YOLOv5Seg
+        """Postprocess the runtime results for YOLOv8
 
         :param: runtime_results: (list of FDTensor)The output FDTensor results from runtime
         :param: ims_info: (list of dict)Record input_shape and output_shape
@@ -161,24 +161,24 @@ class YOLOv5SegPostprocessor:
         self._postprocessor.multi_label = value
 
 
-class YOLOv5Seg(FastDeployModel):
+class YOLOv8(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
-        """Load a YOLOv5Seg model exported by YOLOv5.
+        """Load a YOLOv8 model exported by YOLOv8.
 
-        :param model_file: (str)Path of model file, e.g ./yolov5s-seg.onnx
+        :param model_file: (str)Path of model file, e.g ./yolov8s.onnx
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
-        super(YOLOv5Seg, self).__init__(runtime_option)
+        super(YOLOv8, self).__init__(runtime_option)
 
-        self._model = C.vision.detection.YOLOv5Seg(
+        self._model = C.vision.detection.YOLOv8(
             model_file, params_file, self._runtime_option, model_format)
-        assert self.initialized, "YOLOv5Seg initialize failed."
+        assert self.initialized, "YOLOv8 initialize failed."
 
     def predict(self, input_image):
         """Detect an input image
@@ -202,16 +202,16 @@ class YOLOv5Seg(FastDeployModel):
 
     @property
     def preprocessor(self):
-        """Get YOLOv5SegPreprocessor object of the loaded model
+        """Get YOLOv8Preprocessor object of the loaded model
 
-        :return YOLOv5SegPreprocessor
+        :return YOLOv8Preprocessor
         """
         return self._model.preprocessor
 
     @property
     def postprocessor(self):
-        """Get YOLOv5SegPostprocessor object of the loaded model
+        """Get YOLOv8Postprocessor object of the loaded model
 
-        :return YOLOv5SegPostprocessor
+        :return YOLOv8Postprocessor
         """
         return self._model.postprocessor

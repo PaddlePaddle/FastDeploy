@@ -60,7 +60,6 @@ For developers' testing, models exported by YOLOv5Lite are provided below. Devel
 | [YOLOv5Lite-c](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-c-sim-512.onnx) | 18MB | 50.9% | This model file is sourced from[YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
 | [YOLOv5Lite-g](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-g-sim-640.onnx) | 21MB | 57.6% | This model file is sourced from [YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
 
-
 ## Detailed Deployment Documents
 
 - [Python Deployment](python)
@@ -69,4 +68,4 @@ For developers' testing, models exported by YOLOv5Lite are provided below. Devel
 
 ## Release Note
 
-- Document and code are based on [YOLOv5-Lite v1.4](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4) 
+- Document and code are based on [YOLOv5-Lite v1.4](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4)
