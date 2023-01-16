@@ -152,7 +152,7 @@ bool Resize::ImplByCvCuda(Mat* mat) {
   // Prepare output tensor
   tensor_name = Name() + "_cvcuda_dst";
   FDTensor* dst =
-      UpdateAndGetReusedTensor({height_, width_, mat->Channels()}, mat->Type(),
+      UpdateAndGetCachedTensor({height_, width_, mat->Channels()}, mat->Type(),
                                tensor_name, Device::GPU);
   auto dst_tensor = CreateCvCudaTensorWrapData(*dst);
 

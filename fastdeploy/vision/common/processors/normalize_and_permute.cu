@@ -43,7 +43,7 @@ bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
 
   // Prepare output tensor
   tensor_name = Name() + "_dst";
-  FDTensor* dst = UpdateAndGetReusedTensor(src->Shape(), FDDataType::FP32,
+  FDTensor* dst = UpdateAndGetCachedTensor(src->Shape(), FDDataType::FP32,
                                            tensor_name, Device::GPU);
 
   // Copy alpha and beta to GPU

@@ -52,17 +52,17 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
   return ImplByOpenCV(mat);
 }
 
-FDTensor* Processor::UpdateAndGetReusedTensor(
+FDTensor* Processor::UpdateAndGetCachedTensor(
     const std::vector<int64_t>& new_shape, const FDDataType& data_type,
     const std::string& tensor_name, const Device& new_device,
     const bool& use_pinned_memory) {
-  if (reused_tensors_.count(tensor_name) == 0) {
-    reused_tensors_[tensor_name] = FDTensor();
+  if (cached_tensors_.count(tensor_name) == 0) {
+    cached_tensors_[tensor_name] = FDTensor();
   }
-  reused_tensors_[tensor_name].is_pinned_memory = use_pinned_memory;
-  reused_tensors_[tensor_name].Resize(new_shape, data_type, tensor_name,
+  cached_tensors_[tensor_name].is_pinned_memory = use_pinned_memory;
+  cached_tensors_[tensor_name].Resize(new_shape, data_type, tensor_name,
                                       new_device);
-  return &reused_tensors_[tensor_name];
+  return &cached_tensors_[tensor_name];
 }
 
 FDTensor* Processor::CreateCachedGpuInputTensor(
@@ -72,7 +72,7 @@ FDTensor* Processor::CreateCachedGpuInputTensor(
   if (src->device == Device::GPU) {
     return src;
   } else if (src->device == Device::CPU) {
-    FDTensor* tensor = UpdateAndGetReusedTensor(src->Shape(), src->Dtype(),
+    FDTensor* tensor = UpdateAndGetCachedTensor(src->Shape(), src->Dtype(),
                                                 tensor_name, Device::GPU);
     FDASSERT(cudaMemcpyAsync(tensor->Data(), src->Data(), tensor->Nbytes(),
                              cudaMemcpyHostToDevice, mat->Stream()) == 0,

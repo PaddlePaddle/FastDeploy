@@ -74,7 +74,7 @@ bool CenterCrop::ImplByCvCuda(Mat* mat) {
   // Prepare output tensor
   tensor_name = Name() + "_cvcuda_dst";
   FDTensor* dst =
-      UpdateAndGetReusedTensor({height_, width_, mat->Channels()}, src->Dtype(),
+      UpdateAndGetCachedTensor({height_, width_, mat->Channels()}, src->Dtype(),
                                tensor_name, Device::GPU);
   auto dst_tensor = CreateCvCudaTensorWrapData(*dst);
 
