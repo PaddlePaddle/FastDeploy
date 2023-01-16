@@ -56,13 +56,17 @@ class InsightFaceRecognitionPreprocessor:
         """
         return self._preprocessor.beta
 
-    @property
-    def permute(self):
+    def disable_normalize(self):
         """
-        Argument for image preprocessing step, whether to swap the B and R channel,
-        such as BGR->RGB, default true.
+        This function will disable normalize in preprocessing step.
         """
-        return self._preprocessor.permute
+        self._preprocessor.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self._preprocessor.disable_permute()
 
 
 class InsightFaceRecognitionPostprocessor:

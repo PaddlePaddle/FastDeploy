@@ -100,7 +100,6 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 > > * **size**(list[int]): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[112, 112]
 > > * **alpha**(list[float]): 预处理归一化的alpha值，计算公式为`x'=x*alpha+beta`，alpha默认为[1. / 127.5, 1.f / 127.5, 1. / 127.5]
 > > * **beta**(list[float]): 预处理归一化的beta值，计算公式为`x'=x*alpha+beta`，beta默认为[-1.f, -1.f, -1.f]
-> > * **swap_rb**(bool): 预处理是否将BGR转换成RGB，默认True
 
 #### AdaFacePostprocessor的成员变量
 以下变量为AdaFacePostprocessor的成员变量
