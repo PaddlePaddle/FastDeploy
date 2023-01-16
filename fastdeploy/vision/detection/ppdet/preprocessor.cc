@@ -90,11 +90,9 @@ bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig() {
       // Do nothing, do permute as the last operation
       has_permute = true;
       continue;
-      // processors_.push_back(std::make_shared<HWC2CHW>());
     } else if (op_name == "Pad") {
       auto size = op["size"].as<std::vector<int>>();
       auto value = op["fill_value"].as<std::vector<float>>();
-      processors_.push_back(std::make_shared<Cast>("float"));
       processors_.push_back(
           std::make_shared<PadToSize>(size[1], size[0], value));
     } else if (op_name == "PadStride") {
