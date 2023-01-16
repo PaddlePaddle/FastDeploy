@@ -64,35 +64,7 @@ struct FASTDEPLOY_DECL Mat {
     mat_type = ProcLib::OPENCV;
   }
 
-  cv::Mat* GetOpenCVMat() {
-    if (mat_type == ProcLib::OPENCV) {
-      return &cpu_mat;
-    } else if (mat_type == ProcLib::FLYCV) {
-#ifdef ENABLE_FLYCV
-      // Just a reference to fcv_mat, zero copy. After you
-      // call this method, cpu_mat and fcv_mat will point
-      // to the same memory buffer.
-      cpu_mat = ConvertFlyCVMatToOpenCV(fcv_mat);
-      mat_type = ProcLib::OPENCV;
-      return &cpu_mat;
-#else
-      FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
-#endif
-    } else if (mat_type == ProcLib::CUDA || mat_type == ProcLib::CVCUDA) {
-#ifdef WITH_GPU
-      FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
-               "[ERROR] Error occurs while sync cuda stream.");
-      cpu_mat = CreateZeroCopyOpenCVMatFromTensor(fd_tensor);
-      mat_type = ProcLib::OPENCV;
-      device = Device::CPU;
-      return &cpu_mat;
-#else
-      FDASSERT(false, "FastDeploy didn't compiled with -DWITH_GPU=ON");
-#endif
-    } else {
-      FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
-    }
-  }
+  cv::Mat* GetOpenCVMat();
 
 #ifdef ENABLE_FLYCV
   void SetMat(const fcv::Mat& mat) {

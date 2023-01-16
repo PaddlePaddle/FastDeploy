@@ -1,0 +1,56 @@
+// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#include "fastdeploy/vision/common/processors/manager.h"
+
+namespace fastdeploy {
+namespace vision {
+
+ProcessorManager::~ProcessorManager() {
+  std::cout << "~processor manager" << std::endl;
+#ifdef WITH_GPU
+  if (stream_) cudaStreamDestroy(stream_);
+#endif
+}
+
+void ProcessorManager::UseCuda(int gpu_id) {
+#ifdef WITH_GPU
+  if (gpu_id >= 0) {
+    device_id_ = gpu_id;
+    FDASSERT(cudaSetDevice(device_id_) == cudaSuccess,
+             "[ERROR] Error occurs while setting cuda device.");
+  }
+  FDASSERT(cudaStreamCreate(&stream_) == cudaSuccess,
+           "[ERROR] Error occurs while creating cuda stream.");
+  DefaultProcLib::default_lib = ProcLib::CUDA;
+#else
+  FDASSERT(false, "FastDeploy didn't compile with WITH_GPU.");
+#endif
+}
+
+void ProcessorManager::UseCvCuda(int gpu_id) {
+#ifdef ENABLE_CVCUDA
+  UseCuda(gpu_id);
+  DefaultProcLib::default_lib = ProcLib::CVCUDA;
+#else
+  FDASSERT(false, "FastDeploy didn't compile with CV-CUDA.");
+#endif
+}
+
+bool ProcessorManager::WithGpu() {
+  return (DefaultProcLib::default_lib == ProcLib::CUDA ||
+          DefaultProcLib::default_lib == ProcLib::CVCUDA);
+}
+
+}  // namespace vision
+}  // namespace fastdeploy

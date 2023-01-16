@@ -19,6 +19,36 @@
 namespace fastdeploy {
 namespace vision {
 
+cv::Mat* Mat::GetOpenCVMat() {
+  if (mat_type == ProcLib::OPENCV) {
+    return &cpu_mat;
+  } else if (mat_type == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    // Just a reference to fcv_mat, zero copy. After you
+    // call this method, cpu_mat and fcv_mat will point
+    // to the same memory buffer.
+    cpu_mat = ConvertFlyCVMatToOpenCV(fcv_mat);
+    mat_type = ProcLib::OPENCV;
+    return &cpu_mat;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
+  } else if (mat_type == ProcLib::CUDA || mat_type == ProcLib::CVCUDA) {
+#ifdef WITH_GPU
+    FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
+             "[ERROR] Error occurs while sync cuda stream.");
+    cpu_mat = CreateZeroCopyOpenCVMatFromTensor(fd_tensor);
+    mat_type = ProcLib::OPENCV;
+    device = Device::CPU;
+    return &cpu_mat;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with -DWITH_GPU=ON");
+#endif
+  } else {
+    FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
+  }
+}
+
 void* Mat::Data() {
   if (mat_type == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV
@@ -56,15 +86,15 @@ bool Mat::CopyToTensor(FDTensor* tensor) {
 }
 
 void Mat::PrintInfo(const std::string& flag) {
+  std::cout << flag << ": "
+            << "DataType=" << Type() << ", "
+            << "Channel=" << Channels() << ", "
+            << "Height=" << Height() << ", "
+            << "Width=" << Width() << ", "
+            << "Mean=";
   if (mat_type == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV
     fcv::Scalar mean = fcv::mean(fcv_mat);
-    std::cout << flag << ": "
-              << "DataType=" << Type() << ", "
-              << "Channel=" << Channels() << ", "
-              << "Height=" << Height() << ", "
-              << "Width=" << Width() << ", "
-              << "Mean=";
     for (int i = 0; i < Channels(); ++i) {
       std::cout << mean[i] << " ";
     }
@@ -74,18 +104,25 @@ void Mat::PrintInfo(const std::string& flag) {
              "FastDeploy didn't compile with FlyCV, but met data type with "
              "fcv::Mat.");
 #endif
-  } else {
+  } else if (mat_type == ProcLib::OPENCV) {
     cv::Scalar mean = cv::mean(cpu_mat);
-    std::cout << flag << ": "
-              << "DataType=" << Type() << ", "
-              << "Channel=" << Channels() << ", "
-              << "Height=" << Height() << ", "
-              << "Width=" << Width() << ", "
-              << "Mean=";
     for (int i = 0; i < Channels(); ++i) {
       std::cout << mean[i] << " ";
     }
     std::cout << std::endl;
+  } else if (mat_type == ProcLib::CUDA || mat_type == ProcLib::CVCUDA) {
+#ifdef WITH_GPU
+    FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
+             "[ERROR] Error occurs while sync cuda stream.");
+    cv::Mat tmp_mat = CreateZeroCopyOpenCVMatFromTensor(fd_tensor);
+    cv::Scalar mean = cv::mean(tmp_mat);
+    for (int i = 0; i < Channels(); ++i) {
+      std::cout << mean[i] << " ";
+    }
+    std::cout << std::endl;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with -DWITH_GPU=ON");
+#endif
   }
 }
 

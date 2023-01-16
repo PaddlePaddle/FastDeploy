@@ -22,41 +22,13 @@ namespace vision {
 
 class FASTDEPLOY_DECL ProcessorManager {
  public:
-  ~ProcessorManager() {
-    std::cout << "~processor manager" << std::endl;
-#ifdef WITH_GPU
-    if (stream_) cudaStreamDestroy(stream_);
-#endif
-  }
+  ~ProcessorManager();
 
-  void UseCuda(int gpu_id = -1) {
-#ifdef WITH_GPU
-    if (gpu_id >= 0) {
-      device_id_ = gpu_id;
-      FDASSERT(cudaSetDevice(device_id_) == cudaSuccess,
-               "[ERROR] Error occurs while setting cuda device.");
-    }
-    FDASSERT(cudaStreamCreate(&stream_) == cudaSuccess,
-             "[ERROR] Error occurs while creating cuda stream.");
-    DefaultProcLib::default_lib = ProcLib::CUDA;
-#else
-  FDASSERT(false, "FastDeploy didn't compile with WITH_GPU.");
-#endif
-  }
+  void UseCuda(int gpu_id = -1);
 
-  void UseCvCuda(int gpu_id = -1) {
-#ifdef ENABLE_CVCUDA
-    UseCuda(gpu_id);
-    DefaultProcLib::default_lib = ProcLib::CVCUDA;
-#else
-    FDASSERT(false, "FastDeploy didn't compile with CV-CUDA.");
-#endif
-  }
+  void UseCvCuda(int gpu_id = -1);
 
-  bool WithGpu() {
-    return (DefaultProcLib::default_lib == ProcLib::CUDA ||
-            DefaultProcLib::default_lib == ProcLib::CVCUDA);
-  }
+  bool WithGpu();
 
   void SetStream(Mat* mat) {
 #ifdef WITH_GPU
