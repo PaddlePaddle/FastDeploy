@@ -29,7 +29,7 @@ python -m paddle2onnx.optimize --input_model yolov8_n_500e_coco/yolov8_n_500e_co
 
 ![](https://user-images.githubusercontent.com/58363586/212599658-8a2c4b79-f59a-40b5-ade7-f77c6fcfdf2a.png)
 
-找到蓝色方框标记的NonMaxSuppression节点，可以看到红色方框标记的两个节点名称为tmp_17和p2o.Concat.9,因此需要修改outputs参数，修改后如下:
+找到蓝色方框标记的NonMaxSuppression节点，可以看到红色方框标记的两个节点名称为p2o.Div.1和p2o.Concat.9,因此需要修改outputs参数，修改后如下:
 
 ```yaml
 outputs_nodes: [ 'p2o.Div.1','p2o.Concat.49' ]
