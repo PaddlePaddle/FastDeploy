@@ -20,8 +20,6 @@ python models/export.py --grid --dynamic --weights PATH/TO/yolov7.pt
 python models/export.py --grid --dynamic --end2end --weights PATH/TO/yolov7.pt
 ```
 
-## Download the pre-trained ONNX model
-
 To facilitate testing for developers, we provide below the models exported by YOLOv7, which developers can download and use directly. (The accuracy of the models in the table is sourced from the official library)
 
 | Model                                                                    | Size  | Accuracy | Note |
