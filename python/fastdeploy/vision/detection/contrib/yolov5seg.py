@@ -180,7 +180,7 @@ class YOLOv5Seg(FastDeployModel):
             model_file, params_file, self._runtime_option, model_format)
         assert self.initialized, "YOLOv5Seg initialize failed."
 
-    def predict(self, input_image, conf_threshold=0.25, nms_iou_threshold=0.5):
+    def predict(self, input_image):
         """Detect an input image
 
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
@@ -189,8 +189,6 @@ class YOLOv5Seg(FastDeployModel):
         :return: DetectionResult
         """
 
-        self.postprocessor.conf_threshold = conf_threshold
-        self.postprocessor.nms_threshold = nms_iou_threshold
         return self._model.predict(input_image)
 
     def batch_predict(self, images):
