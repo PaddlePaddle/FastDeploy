@@ -21,10 +21,18 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model_file", required=True, help="Path of rknn model.")
-    parser.add_argument("--config_file", required=True, help="Path of config.")
+        "--model_file",
+        default="./picodet_s_416_coco_lcnet_non_postprocess/picodet_xs_416_coco_lcnet.onnx",
+        help="Path of rknn model.")
     parser.add_argument(
-        "--image", type=str, required=True, help="Path of test image file.")
+        "--config_file",
+        default="./picodet_s_416_coco_lcnet_non_postprocess/infer_cfg.yml",
+        help="Path of config.")
+    parser.add_argument(
+        "--image",
+        type=str,
+        default="./000000014439.jpg",
+        help="Path of test image file.")
     return parser.parse_args()
 
 
@@ -37,14 +45,14 @@ if __name__ == "__main__":
 
     # 配置runtime，加载模型
     runtime_option = fd.RuntimeOption()
-    runtime_option.use_rknpu2()
+    runtime_option.use_cpu()
 
-    model = fd.vision.detection.PicoDet(
+    model = fd.vision.detection.PPYOLOE(
         model_file,
         params_file,
         config_file,
         runtime_option=runtime_option,
-        model_format=fd.ModelFormat.RKNN)
+        model_format=fd.ModelFormat.ONNX)
 
     model.postprocessor.apply_decode_and_nms()
 
