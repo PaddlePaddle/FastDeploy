@@ -19,7 +19,8 @@
 - [SSD系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/ssd)
 - [YOLOv5系列模型](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov5)
 - [YOLOv6系列模型](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov6)
-- [YOLOv7系列模型](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov7)
+- [YOLOv7系列模型](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov7)  
+- [YOLOv8系列模型](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov8)
 - [RTMDet系列模型](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/rtmdet)
 - [CascadeRCNN系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/cascade_rcnn)
 - [PSSDet系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/rcnn_enhance)
@@ -78,7 +79,12 @@
 | [retinanet_r101_fpn_2x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/retinanet_r101_fpn_2x_coco.tgz) | 210M | Box AP 40.6%|  暂不支持TensorRT、ORT |
 | [retinanet_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/retinanet_r50_fpn_1x_coco.tgz) | 136M | Box AP 37.5%|  暂不支持TensorRT、ORT |
 | [tood_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/tood_r50_fpn_1x_coco.tgz) | 130M | Box AP 42.5%|  暂不支持TensorRT、ORT |
-| [ttfnet_darknet53_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ttfnet_darknet53_1x_coco.tgz) | 178M | Box AP 33.5%|  暂不支持TensorRT、ORT |
+| [ttfnet_darknet53_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ttfnet_darknet53_1x_coco.tgz) | 178M | Box AP 33.5%|  暂不支持TensorRT、ORT |  
+| [yolov8_x_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_x_500e_coco.tgz) | 265M | 
+| [yolov8_l_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_l_500e_coco.tgz) | 173M | 
+| [yolov8_m_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_m_500e_coco.tgz) | 99M | 
+| [yolov8_s_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_s_500e_coco.tgz) | 43M | 
+| [yolov8_n_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_n_500e_coco.tgz) | 13M | 
 
 ## 详细部署文档
 

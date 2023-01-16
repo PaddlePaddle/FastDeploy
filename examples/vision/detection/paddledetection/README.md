@@ -19,8 +19,18 @@ Now FastDeploy supports the deployment of the following models
 - [SSD models](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/ssd)
 - [YOLOv5 models](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov5)
 - [YOLOv6 models](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov6)
-- [YOLOv7 models](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov7)
+- [YOLOv7 models](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov7)  
+- [YOLOv8 models](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov8)
 - [RTMDet models](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/rtmdet)
+- [RTMDet models](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/rtmdet)
+- [CascadeRCNN models](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/cascade_rcnn)
+- [PSSDet models](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/rcnn_enhance)
+- [RetinaNet models](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/retinanet)
+- [PPYOLOESOD models](https://github.com/PaddlePaddle/PaddleDetection/tree/develop/configs/smalldet)
+- [FCOS models](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/fcos)
+- [TTFNet models](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/ttfnet)
+- [TOOD models](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/tood)
+- [GFL models](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/gfl)
 
 ## Export Deployment Model
 
@@ -58,7 +68,22 @@ The accuracy metric is from model descriptions in PaddleDetection. Refer to them
 | [yolov6_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6_l_300e_coco.tgz) | 229M | Box AP 51.0%|  |
 | [yolov6_s_400e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6_s_400e_coco.tgz) | 68M | Box AP 43.4%|  |
 | [yolov7_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_l_300e_coco.tgz) | 145M | Box AP 51.0%|  |
-| [yolov7_x_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_x_300e_coco.tgz) | 277M | Box AP 53.0%|  |
+| [yolov7_x_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_x_300e_coco.tgz) | 277M | Box AP 53.0%|  |  
+| [cascade_rcnn_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/cascade_rcnn_r50_fpn_1x_coco.tgz) | 271M | Box AP 41.1%|  TensorRT、ORT not supported yet|
+| [cascade_rcnn_r50_vd_fpn_ssld_2x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/cascade_rcnn_r50_vd_fpn_ssld_2x_coco.tgz) | 271M | Box AP 45.0%|  TensorRT、ORT not supported yet|
+| [faster_rcnn_enhance_3x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/faster_rcnn_enhance_3x_coco.tgz) | 119M | Box AP 41.5%|  TensorRT、ORT not supported yet|
+| [fcos_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/fcos_r50_fpn_1x_coco.tgz) | 129M | Box AP 39.6%|  TensorRT not supported yet |
+| [gfl_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/gfl_r50_fpn_1x_coco.tgz) | 128M | Box AP 41.0%|  TensorRT not supported yet|
+| [ppyoloe_crn_l_80e_sliced_visdrone_640_025](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_80e_sliced_visdrone_640_025.tgz) | 200M | Box AP 31.9%|  |
+| [retinanet_r101_fpn_2x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/retinanet_r101_fpn_2x_coco.tgz) | 210M | Box AP 40.6%| TensorRT、ORT not supported yet|
+| [retinanet_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/retinanet_r50_fpn_1x_coco.tgz) | 136M | Box AP 37.5%| TensorRT、ORT not supported yet|
+| [tood_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/tood_r50_fpn_1x_coco.tgz) | 130M | Box AP 42.5%| TensorRT、ORT not supported yet|
+| [ttfnet_darknet53_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ttfnet_darknet53_1x_coco.tgz) | 178M | Box AP 33.5%| TensorRT、ORT not supported yet|  
+| [yolov8_x_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_x_500e_coco.tgz) | 265M | 
+| [yolov8_l_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_l_500e_coco.tgz) | 173M | 
+| [yolov8_m_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_m_500e_coco.tgz) | 99M | 
+| [yolov8_s_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_s_500e_coco.tgz) | 43M | 
+| [yolov8_n_500e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov8_n_500e_coco.tgz) | 13M | 
 
 ## Detailed Deployment Documents
 
