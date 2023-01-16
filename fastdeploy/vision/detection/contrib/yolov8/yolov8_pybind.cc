@@ -15,13 +15,13 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindYOLOv5(pybind11::module& m) {
-  pybind11::class_<vision::detection::YOLOv5Preprocessor>(m,
-                                                          "YOLOv5Preprocessor")
+void BindYOLOv8(pybind11::module& m) {
+  pybind11::class_<vision::detection::YOLOv8Preprocessor>(m,
+                                                          "YOLOv8Preprocessor")
       .def(pybind11::init<>())
       .def(
           "run",
-          [](vision::detection::YOLOv5Preprocessor& self,
+          [](vision::detection::YOLOv8Preprocessor& self,
              std::vector<pybind11::array>& im_list) {
             std::vector<vision::FDMat> images;
             for (size_t i = 0; i < im_list.size(); ++i) {
@@ -31,32 +31,32 @@ void BindYOLOv5(pybind11::module& m) {
             std::vector<std::map<std::string, std::array<float, 2>>> ims_info;
             if (!self.Run(&images, &outputs, &ims_info)) {
               throw std::runtime_error(
-                  "Failed to preprocess the input data in YOLOv5Preprocessor.");
+                  "Failed to preprocess the input data in YOLOv8Preprocessor.");
             }
             for (size_t i = 0; i < outputs.size(); ++i) {
               outputs[i].StopSharing();
             }
             return make_pair(outputs, ims_info);
           })
-      .def_property("size", &vision::detection::YOLOv5Preprocessor::GetSize,
-                    &vision::detection::YOLOv5Preprocessor::SetSize)
+      .def_property("size", &vision::detection::YOLOv8Preprocessor::GetSize,
+                    &vision::detection::YOLOv8Preprocessor::SetSize)
       .def_property("padding_value",
-                    &vision::detection::YOLOv5Preprocessor::GetPaddingValue,
-                    &vision::detection::YOLOv5Preprocessor::SetPaddingValue)
+                    &vision::detection::YOLOv8Preprocessor::GetPaddingValue,
+                    &vision::detection::YOLOv8Preprocessor::SetPaddingValue)
       .def_property("is_scale_up",
-                    &vision::detection::YOLOv5Preprocessor::GetScaleUp,
-                    &vision::detection::YOLOv5Preprocessor::SetScaleUp)
+                    &vision::detection::YOLOv8Preprocessor::GetScaleUp,
+                    &vision::detection::YOLOv8Preprocessor::SetScaleUp)
       .def_property("is_mini_pad",
-                    &vision::detection::YOLOv5Preprocessor::GetMiniPad,
-                    &vision::detection::YOLOv5Preprocessor::SetMiniPad)
-      .def_property("stride", &vision::detection::YOLOv5Preprocessor::GetStride,
-                    &vision::detection::YOLOv5Preprocessor::SetStride);
+                    &vision::detection::YOLOv8Preprocessor::GetMiniPad,
+                    &vision::detection::YOLOv8Preprocessor::SetMiniPad)
+      .def_property("stride", &vision::detection::YOLOv8Preprocessor::GetStride,
+                    &vision::detection::YOLOv8Preprocessor::SetStride);
 
-  pybind11::class_<vision::detection::YOLOv5Postprocessor>(
-      m, "YOLOv5Postprocessor")
+  pybind11::class_<vision::detection::YOLOv8Postprocessor>(
+      m, "YOLOv8Postprocessor")
       .def(pybind11::init<>())
       .def("run",
-           [](vision::detection::YOLOv5Postprocessor& self,
+           [](vision::detection::YOLOv8Postprocessor& self,
               std::vector<FDTensor>& inputs,
               const std::vector<std::map<std::string, std::array<float, 2>>>&
                   ims_info) {
@@ -64,12 +64,12 @@ void BindYOLOv5(pybind11::module& m) {
              if (!self.Run(inputs, &results, ims_info)) {
                throw std::runtime_error(
                    "Failed to postprocess the runtime result in "
-                   "YOLOv5Postprocessor.");
+                   "YOLOv8Postprocessor.");
              }
              return results;
            })
       .def("run",
-           [](vision::detection::YOLOv5Postprocessor& self,
+           [](vision::detection::YOLOv8Postprocessor& self,
               std::vector<pybind11::array>& input_array,
               const std::vector<std::map<std::string, std::array<float, 2>>>&
                   ims_info) {
@@ -79,32 +79,32 @@ void BindYOLOv5(pybind11::module& m) {
              if (!self.Run(inputs, &results, ims_info)) {
                throw std::runtime_error(
                    "Failed to postprocess the runtime result in "
-                   "YOLOv5Postprocessor.");
+                   "YOLOv8Postprocessor.");
              }
              return results;
            })
       .def_property("conf_threshold",
-                    &vision::detection::YOLOv5Postprocessor::GetConfThreshold,
-                    &vision::detection::YOLOv5Postprocessor::SetConfThreshold)
+                    &vision::detection::YOLOv8Postprocessor::GetConfThreshold,
+                    &vision::detection::YOLOv8Postprocessor::SetConfThreshold)
       .def_property("nms_threshold",
-                    &vision::detection::YOLOv5Postprocessor::GetNMSThreshold,
-                    &vision::detection::YOLOv5Postprocessor::SetNMSThreshold)
+                    &vision::detection::YOLOv8Postprocessor::GetNMSThreshold,
+                    &vision::detection::YOLOv8Postprocessor::SetNMSThreshold)
       .def_property("multi_label",
-                    &vision::detection::YOLOv5Postprocessor::GetMultiLabel,
-                    &vision::detection::YOLOv5Postprocessor::SetMultiLabel);
+                    &vision::detection::YOLOv8Postprocessor::GetMultiLabel,
+                    &vision::detection::YOLOv8Postprocessor::SetMultiLabel);
 
-  pybind11::class_<vision::detection::YOLOv5, FastDeployModel>(m, "YOLOv5")
+  pybind11::class_<vision::detection::YOLOv8, FastDeployModel>(m, "YOLOv8")
       .def(pybind11::init<std::string, std::string, RuntimeOption,
                           ModelFormat>())
       .def("predict",
-           [](vision::detection::YOLOv5& self, pybind11::array& data) {
+           [](vision::detection::YOLOv8& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);
              vision::DetectionResult res;
              self.Predict(mat, &res);
              return res;
            })
       .def("batch_predict",
-           [](vision::detection::YOLOv5& self,
+           [](vision::detection::YOLOv8& self,
               std::vector<pybind11::array>& data) {
              std::vector<cv::Mat> images;
              for (size_t i = 0; i < data.size(); ++i) {
@@ -115,8 +115,8 @@ void BindYOLOv5(pybind11::module& m) {
              return results;
            })
       .def_property_readonly("preprocessor",
-                             &vision::detection::YOLOv5::GetPreprocessor)
+                             &vision::detection::YOLOv8::GetPreprocessor)
       .def_property_readonly("postprocessor",
-                             &vision::detection::YOLOv5::GetPostprocessor);
+                             &vision::detection::YOLOv8::GetPostprocessor);
 }
 }  // namespace fastdeploy

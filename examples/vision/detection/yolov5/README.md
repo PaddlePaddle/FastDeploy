@@ -6,7 +6,6 @@ English | [简体中文](README_CN.md)
   - （1）The *.onnx provided by [Official Repository](https://github.com/ultralytics/yolov5/releases/tag/v7.0) can be deployed directly；
   - （2）The YOLOv5 v7.0 model trained by personal data should employ `export.py` in [YOLOv5](https://github.com/ultralytics/yolov5) to export the ONNX files for deployment.
 
-
 ## Download Pre-trained ONNX Model
 
 For developers' testing, models exported by YOLOv5 are provided below. Developers can download them directly. (The accuracy in the following table is derived from the source official repository)
@@ -27,4 +26,4 @@ For developers' testing, models exported by YOLOv5 are provided below. Developer
 
 ## Release Note
 
-- Document and code are based on [YOLOv5 v7.0](https://github.com/ultralytics/yolov5/tree/v7.0) 
+- Document and code are based on [YOLOv5 v7.0](https://github.com/ultralytics/yolov5/tree/v7.0)
