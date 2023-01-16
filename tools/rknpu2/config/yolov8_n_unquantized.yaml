@@ -1,0 +1,16 @@
+mean:
+  -
+    - 127.5
+    - 127.5
+    - 127.5
+std:
+  -
+    - 127.5
+    - 127.5
+    - 127.5
+model_path: ./yolov8_n_500e_coco.onnx
+outputs_nodes:
+  -
+do_quantization: False
+dataset: "./dataset.txt"
+output_folder: "./"
