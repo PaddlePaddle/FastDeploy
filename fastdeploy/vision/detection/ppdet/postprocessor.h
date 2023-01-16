@@ -15,7 +15,9 @@
 #pragma once
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 #include "fastdeploy/vision/detection/ppdet/ppdet_decode.h"
+
 namespace fastdeploy {
 namespace vision {
 namespace detection {
@@ -43,7 +45,10 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
 
   /// Apply box decoding and nms step for the outputs for the model.This is
   /// only available for those model exported without box decoding and nms.
-  void ApplyDecodeAndNMS() { apply_decode_and_nms_ = true; }
+  void ApplyDecodeAndNMS(const NMSOption& option = NMSOption()) {
+    apply_decode_and_nms_ = true;
+    ppdet_decoder_.SetNMSOption(option);
+  }
 
   // Set scale_factor_ value.This is only available for those model exported
   // without box decoding and nms.

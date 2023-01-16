@@ -14,6 +14,7 @@
 #pragma once
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -24,23 +25,25 @@ class FASTDEPLOY_DECL PPDetDecode {
   explicit PPDetDecode(const std::string& config_file);
   bool DecodeAndNMS(const std::vector<FDTensor>& tensors,
                     std::vector<DetectionResult>* results);
+  void SetNMSOption(const NMSOption& option = NMSOption()) {
+    multi_class_nms_.SetNMSOption(option);
+  }
 
  private:
   std::string config_file_;
   std::string arch_;
   std::vector<int> fpn_stride_{8, 16, 32, 64};
   std::vector<float> im_shape_{416, 416};
-  float score_threshold_ = 0.5;
-  float nms_threshold_ = 0.5;
-  int reg_max_ = 8;
-  int num_class_ = 80;
   int batchs_ = 1;
   bool ReadPostprocessConfigFromYaml();
   void DisPred2Bbox(const float*& dfl_det, int label, float score, int x, int y,
-                    int stride, fastdeploy::vision::DetectionResult* results);
+                    int stride, fastdeploy::vision::DetectionResult* results,
+                    int reg_max, int num_class);
   bool PicoDetPostProcess(const std::vector<FDTensor>& outs,
-                          std::vector<DetectionResult>* results);
-  int ActivationFunctionSoftmax(const float* src, float* dst);
+                          std::vector<DetectionResult>* results, int reg_max,
+                          int num_class);
+  int ActivationFunctionSoftmax(const float* src, float* dst, int reg_max);
+  PaddleMultiClassNMS multi_class_nms_;
 };
 }  // namespace detection
 }  // namespace vision
