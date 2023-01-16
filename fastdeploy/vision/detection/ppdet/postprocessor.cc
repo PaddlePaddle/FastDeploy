@@ -153,12 +153,14 @@ bool PaddleDetPostprocessor::ProcessUnDecodeResults(
   ppdet_decoder_.DecodeAndNMS(tensors, results);
 
   // do scale
-  for (auto& result : *results) {
-    for (auto& box : result.boxes) {
-      box[0] /= GetScaleFactor()[1];
-      box[1] /= GetScaleFactor()[0];
-      box[2] /= GetScaleFactor()[1];
-      box[3] /= GetScaleFactor()[0];
+  if (GetScaleFactor()[0] != 0) {
+    for (auto& result : *results) {
+      for (auto& box : result.boxes) {
+        box[0] /= GetScaleFactor()[1];
+        box[1] /= GetScaleFactor()[0];
+        box[2] /= GetScaleFactor()[1];
+        box[3] /= GetScaleFactor()[0];
+      }
     }
   }
   return true;
