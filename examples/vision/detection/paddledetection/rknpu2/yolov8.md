@@ -40,7 +40,11 @@ outputs_nodes: [ 'p2o.Div.1','p2o.Concat.49' ]
 ```bash
 
 # ONNX模型转RKNN模型
-# 转换模型,模型将生成在picodet_s_320_coco_lcnet_non_postprocess目录下
+# 转换非全量化模型,模型将生成在yolov8_n目录下
 python tools/rknpu2/export.py --config_path tools/rknpu2/config/yolov8_n_unquantized.yaml \
+                              --target_platform rk3588
+
+# 转换全量化模型,模型将生成在yolov8_n目录下
+python tools/rknpu2/export.py --config_path tools/rknpu2/config/yolov8_n_quantized.yaml \
                               --target_platform rk3588
 ```
