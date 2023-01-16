@@ -49,9 +49,9 @@ std:
 
 例如，使用Netron可视化后，得到以下图片:
 
-![](https://user-images.githubusercontent.com/58363586/202728663-4af0b843-d012-4aeb-8a66-626b7b87ca69.png)
+![](https://user-images.githubusercontent.com/58363586/212599781-e1952da7-6eae-4951-8ca7-bab7e6940692.png)
 
-找到蓝色方框标记的NonMaxSuppression节点，可以看到红色方框标记的两个节点名称为tmp_17和p2o.Concat.9,因此需要修改outputs参数，修改后如下:
+找到蓝色方框标记的NonMaxSuppression节点，可以看到红色方框标记的两个节点名称为p2o.Div.79和p2o.Concat.9,因此需要修改outputs参数，修改后如下:
 
 ```yaml
 outputs_nodes: [ 'p2o.Div.79','p2o.Concat.9' ]
@@ -63,6 +63,6 @@ outputs_nodes: [ 'p2o.Div.79','p2o.Concat.9' ]
 
 # ONNX模型转RKNN模型
 # 转换模型,模型将生成在picodet_s_320_coco_lcnet_non_postprocess目录下
-python tools/rknpu2/export.py --config_path tools/rknpu2/config/picodet_s_416_coco_lcnet_unquantized.yaml \
+python tools/rknpu2/export.py --config_path tools/rknpu2/config/yolov8_n_unquantized.yaml \
                               --target_platform rk3588
 ```

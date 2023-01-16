@@ -21,7 +21,7 @@ RKNPU部署模型前需要将Paddle模型转换成RKNN模型，具体步骤如�
 ## 模型转换example
 
 - [Picodet RKNPU2模型转换文档](./picodet.md)
-
+- [YOLOv8 RKNPU2模型转换文档](./yolov8.md)
 
 
 ## 其他链接
