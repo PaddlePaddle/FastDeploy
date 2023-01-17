@@ -37,7 +37,8 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor : public ProcessorManager {
    * \param[in] outputs The output tensors which will feed in runtime
    * \return true if the preprocess successed, otherwise false
    */
-  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
+  virtual bool Apply(std::vector<FDMat>* images,
+                     std::vector<FDTensor>* outputs);
 
   /// This function will disable normalize in preprocessing step.
   void DisableNormalize();
@@ -47,7 +48,6 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor : public ProcessorManager {
  private:
   bool BuildPreprocessPipelineFromConfig();
   std::vector<std::shared_ptr<Processor>> processors_;
-  bool initialized_ = false;
   // for recording the switch of hwc2chw
   bool disable_permute_ = false;
   // for recording the switch of normalize

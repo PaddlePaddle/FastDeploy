@@ -45,6 +45,26 @@ class FASTDEPLOY_DECL ProcessorManager {
 
   int DeviceId() { return device_id_; }
 
+  /** \brief Process the input image and prepare input tensors for runtime
+   *
+   * \param[in] images The input image data list, all the elements are returned by cv::imread()
+   * \param[in] outputs The output tensors which will feed in runtime
+   * \return true if the preprocess successed, otherwise false
+   */
+  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
+
+  /** \brief The body of Run() function which needs to be implemented by a derived class
+   *
+   * \param[in] images The input image data list, all the elements are returned by cv::imread()
+   * \param[in] outputs The output tensors which will feed in runtime
+   * \return true if the preprocess successed, otherwise false
+   */
+  virtual bool Apply(std::vector<FDMat>* images,
+                     std::vector<FDTensor>* outputs) = 0;
+
+ protected:
+  bool initialized_ = false;
+
  private:
 #ifdef WITH_GPU
   cudaStream_t stream_ = nullptr;

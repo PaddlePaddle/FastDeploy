@@ -100,28 +100,15 @@ void PaddleClasPreprocessor::DisablePermute() {
   }
 }
 
-bool PaddleClasPreprocessor::Run(std::vector<FDMat>* images,
-                                 std::vector<FDTensor>* outputs) {
-  if (!initialized_) {
-    FDERROR << "The preprocessor is not initialized." << std::endl;
-    return false;
-  }
-  if (images->size() == 0) {
-    FDERROR << "The size of input images should be greater than 0."
-            << std::endl;
-    return false;
-  }
-
+bool PaddleClasPreprocessor::Apply(std::vector<FDMat>* images,
+                                   std::vector<FDTensor>* outputs) {
   for (size_t i = 0; i < images->size(); ++i) {
-    if (WithGpu()) {
-      SetStream(&((*images)[i]));
-    }
     for (size_t j = 0; j < processors_.size(); ++j) {
       bool ret = false;
       ret = (*(processors_[j].get()))(&((*images)[i]));
       if (!ret) {
         FDERROR << "Failed to processs image:" << i << " in "
-                << processors_[i]->Name() << "." << std::endl;
+                << processors_[j]->Name() << "." << std::endl;
         return false;
       }
     }
@@ -140,9 +127,6 @@ bool PaddleClasPreprocessor::Run(std::vector<FDMat>* images,
     function::Concat(tensors, &((*outputs)[0]), 0);
   }
   (*outputs)[0].device_id = DeviceId();
-  if (WithGpu()) {
-    SyncStream();
-  }
   return true;
 }
 

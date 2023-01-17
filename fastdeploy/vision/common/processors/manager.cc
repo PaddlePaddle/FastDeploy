@@ -17,7 +17,6 @@ namespace fastdeploy {
 namespace vision {
 
 ProcessorManager::~ProcessorManager() {
-  std::cout << "~processor manager" << std::endl;
 #ifdef WITH_GPU
   if (stream_) cudaStreamDestroy(stream_);
 #endif
@@ -50,6 +49,32 @@ void ProcessorManager::UseCvCuda(int gpu_id) {
 bool ProcessorManager::WithGpu() {
   return (DefaultProcLib::default_lib == ProcLib::CUDA ||
           DefaultProcLib::default_lib == ProcLib::CVCUDA);
+}
+
+bool ProcessorManager::Run(std::vector<FDMat>* images,
+                           std::vector<FDTensor>* outputs) {
+  if (!initialized_) {
+    FDERROR << "The preprocessor is not initialized." << std::endl;
+    return false;
+  }
+  if (images->size() == 0) {
+    FDERROR << "The size of input images should be greater than 0."
+            << std::endl;
+    return false;
+  }
+
+  for (size_t i = 0; i < images->size(); ++i) {
+    if (WithGpu()) {
+      SetStream(&((*images)[i]));
+    }
+  }
+
+  bool ret = Apply(images, outputs);
+
+  if (WithGpu()) {
+    SyncStream();
+  }
+  return ret;
 }
 
 }  // namespace vision
