@@ -1,6 +1,6 @@
 # YOLOv7Face准备部署模型
 
-- [YOLOv7Face]
+- YOLOv7Face部署模型实现来自[YOLOv7Face](https://github.com/derronqi/yolov7-face),和[基于WiderFace的预训练模型](https://github.com/derronqi/yolov7-face)
   - （1）[官方库](https://github.com/derronqi/yolov7-face)中提供的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
   - （2）开发者基于自己数据训练的YOLOv7Face模型，可按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)后，完成部署。
 
