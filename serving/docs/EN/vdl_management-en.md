@@ -2,7 +2,7 @@
 
 ### Introduction
 
-[VisualDL](https://github.com/PaddlePaddle/VisualDL/blob/develop/README_CN.md) is a visualization tool of PaddlePaddle, provides a variety of charts to show the trends of parameters, and visualizes model structures, data samples, high-dimensional data distributions, etc. After version 2.5, a new feature of serving deployment visualization is added. It mainly provides the functions of loading and editing the model repository, service management and monitoring, and providing the client to test service. Users can directly load a  initial model repository in FastDeploy examples, and complete the download of model resources required and modification of the model configuration file on VisualDL. Then start the fastdeployserver to deploy a certain model repository, monitor the service log and metrics, and help users make quick test and verification of deployed services.
+[VisualDL](https://github.com/PaddlePaddle/VisualDL/blob/develop/README_CN.md) is a visualization tool of PaddlePaddle, provides a variety of charts to show the trends of parameters, and visualizes model structures, data samples, high-dimensional data distributions, etc. After version 2.5, a new feature of serving deployment visualization is added. It mainly provides the functions of loading and editing the model repository, service management and monitoring, and providing the client to test service. You can directly load a  initial model repository in FastDeploy examples, and complete the download of model resources required and modification of the model configuration file on VisualDL. Then start the fastdeployserver to deploy a certain model repository, monitor the service log and metrics, and help users make quick test and verification of deployed services.
 
 ### Pre-requisite
 
@@ -68,7 +68,7 @@ After entering the component tab of FastDeploy Server, you can
    <img src="https://user-images.githubusercontent.com/22424850/211194661-51ecb563-0095-48ce-8143-ed7123f5b03c.png" width="100%"/>
    </p>
 
-   Users can click the basic model on the right panel, or double-click the basic model on the canvas to open the configuration editor. Click the "ensemble configuration" button to open the configuration editor of the ensemble model. You can select the configuration file you want to view in the configuration editor.
+   You can click the basic model on the right panel, or double-click the basic model on the canvas to open the configuration editor. Click the "ensemble configuration" button to open the configuration editor of the ensemble model. You can select the configuration file you want to view in the configuration editor.
 
    <p align="center">
    <img src="https://user-images.githubusercontent.com/22424850/211201905-89c3ab64-0dcc-472d-89cc-a83c79945aa5.gif" width="100%"/>
@@ -149,7 +149,7 @@ After entering the component tab of FastDeploy Server, you can
 
    d. Testing the service
 
-   Click the "open client" button to open the client for quickly testing the service. The client is written based on gradio, and will automatically help users fill in basic information according to the launch parameters of the service. Users can refer to [Use VisualDL as fastdeploy client for request visualization](./client-en.md#use-visualdl-as-fastdeploy-client-for-request-visualization) to use.
+   Click the "open client" button to open the client for quickly testing the service. The client is written based on gradio, and will automatically help users fill in basic information according to the launch parameters of the service. You can refer to [Use VisualDL as fastdeploy client for request visualization](./client-en.md#use-visualdl-as-fastdeploy-client-for-request-visualization) to use.
    <p align="center">
    <img src="https://user-images.githubusercontent.com/22424850/211198901-3e58fe9d-8667-4416-987a-200f9edeb05d.gif" width="100%"/>
    </p>
