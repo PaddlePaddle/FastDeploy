@@ -95,7 +95,7 @@ The current default configuration runs on GPU. If you want to run it on CPU or o
 
 ## Use VisualDL for Fastdeploy Serving Deployment Management
 
-You can use [VisualDL for fastdeploy serving deployment management](../../../../../serving/docs/EN/vdl_management-en.md) , the above model preparation, deployment, configuration modification and client request operations can all be performed based on VisualDL.
+You can use VisualDL for [serving deployment visualization](../../../../../serving/docs/EN/vdl_management-en.md) , the above model preparation, deployment, configuration modification and client request operations can all be performed based on VisualDL.
 
 The serving deployment of PP-OCR by VisualDL only needs the following three steps:
 ```text

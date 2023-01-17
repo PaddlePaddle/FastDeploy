@@ -34,7 +34,7 @@ docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.2-gpu-cuda11.4-trt
 - [模型配置说明](docs/zh_CN/model_configuration.md)  (说明runtime的配置选项)
 - [服务化部署示例](docs/zh_CN/demo.md) (服务化部署示例)
 - [客户端访问说明](docs/zh_CN/client.md) (客户端访问说明)
-- [使用VisualDL进行fastdeployserver下的模型服务化部署](docs/zh_CN/vdl_management.md) (使用VisualDL辅助用户进行快速的服务化部署)
+- [Serving可视化部署](docs/zh_CN/vdl_management.md) (Serving可视化部署)
 
 
 ### 服务化部署示例

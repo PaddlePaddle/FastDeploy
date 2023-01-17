@@ -306,7 +306,7 @@ message ModelInferResponse
 
 ## 客户端工具
 
-了解了fastdeployserver服务提供的接口之后，用户可以使用HTTP客户端工具来请求HTTP服务器，或者是使用GRPC客户端工具请求GRPC服务器。默认情况下，fastdeployserver启动后，8000端口用于响应HTTP请求，8001端口用于响应GRPC请求。此外，还可以使用VisualDL提供的客户端进行可视化请求。
+了解了fastdeployserver服务提供的接口之后，用户可以使用HTTP客户端工具来请求HTTP服务器，或者是使用GRPC客户端工具请求GRPC服务器。默认情况下，fastdeployserver启动后，8000端口用于响应HTTP请求，8001端口用于响应GRPC请求。此外，还可以使用[VisualDL提供的客户端进行可视化请求](#使用fastdeploy-client进行可视化请求服务)。
 
 ### 使用HTTP客户端
 

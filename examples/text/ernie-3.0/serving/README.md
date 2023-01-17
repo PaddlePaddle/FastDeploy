@@ -178,7 +178,7 @@ The current classification task (ernie_seqcls_model/config.pbtxt) is by default 
 
 ## Use VisualDL for Fastdeploy Serving Deployment Management
 
-You can use [VisualDL for fastdeploy serving deployment management](../../../../serving/docs/EN/vdl_management-en.md) , the above model preparation, deployment, configuration modification and client request operations can all be performed based on VisualDL.
+You can use VisualDL for [serving deployment visualization](../../../../serving/docs/EN/vdl_management-en.md) , the above model preparation, deployment, configuration modification and client request operations can all be performed based on VisualDL.
 
 The serving deployment of ERNIE 3.0 by VisualDL only needs the following three steps:
 ```text

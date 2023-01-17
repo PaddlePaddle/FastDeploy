@@ -69,7 +69,7 @@ output_name: detction_result
 
 ## 使用VisualDL进行服务管理
 
-用户可以使用[VisualDL进行fastdeployserver下的模型服务化部署](../../../../../serving/docs/zh_CN/vdl_management.md)管理，上述启动服务、配置修改以及客户端请求的操作都可以基于VisualDL进行。
+可以使用VisualDL进行[Serving可视化部署](../../../../../serving/docs/zh_CN/vdl_management.md)，上述启动服务、配置修改以及客户端请求的操作都可以基于VisualDL进行。
 
 通过VisualDL的可视化界面对yolov5进行服务化部署只需要如下三步：
 ```text
