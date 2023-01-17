@@ -130,7 +130,7 @@ bool RecognizerPostprocessor::Run(const std::vector<FDTensor>& tensors,
   texts->resize(total_size);
   rec_scores->resize(total_size);
 
-  const auto* tensor_data = reinterpret_cast<const float*>(tensor.Data());
+  const float* tensor_data = reinterpret_cast<const float*>(tensor.Data());
   for (int i_batch = 0; i_batch < batch; ++i_batch) {
     size_t real_index = i_batch + start_index;
     if (!indices.empty()) {

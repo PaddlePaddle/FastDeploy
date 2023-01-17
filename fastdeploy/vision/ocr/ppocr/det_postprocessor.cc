@@ -82,7 +82,7 @@ bool DBDetectorPostprocessor::Run(
   size_t batch = tensor.shape[0];
   size_t length = accumulate(tensor.shape.begin() + 1, tensor.shape.end(), 1,
                              std::multiplies<int>());
-  const auto* tensor_data = reinterpret_cast<const float*>(tensor.Data());
+  const float* tensor_data = reinterpret_cast<const float*>(tensor.Data());
 
   results->resize(batch);
   for (int i_batch = 0; i_batch < batch; ++i_batch) {

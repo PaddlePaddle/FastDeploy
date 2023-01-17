@@ -69,7 +69,7 @@ bool ClassifierPostprocessor::Run(const std::vector<FDTensor>& tensors,
 
   cls_labels->resize(total_size);
   cls_scores->resize(total_size);
-  const auto* tensor_data = reinterpret_cast<const float*>(tensor.Data());
+  const float* tensor_data = reinterpret_cast<const float*>(tensor.Data());
   for (int i_batch = 0; i_batch < batch; ++i_batch) {
     SingleBatchPostprocessor(tensor_data + i_batch * length, length,
                              &cls_labels->at(i_batch + start_index),
