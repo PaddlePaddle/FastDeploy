@@ -74,10 +74,7 @@ bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
 }
 
 #ifdef ENABLE_CVCUDA
-bool NormalizeAndPermute::ImplByCvCuda(Mat* mat) {
-  std::cout << Name() << " cvcuda" << std::endl;
-  return ImplByCuda(mat);
-}
+bool NormalizeAndPermute::ImplByCvCuda(Mat* mat) { return ImplByCuda(mat); }
 #endif
 
 }  // namespace vision

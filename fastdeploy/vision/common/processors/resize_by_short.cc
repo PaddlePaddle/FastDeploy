@@ -88,8 +88,6 @@ bool ResizeByShort::ImplByFlyCV(Mat* mat) {
 
 #ifdef ENABLE_CVCUDA
 bool ResizeByShort::ImplByCvCuda(Mat* mat) {
-  std::cout << Name() << " cvcuda" << std::endl;
-
   // Prepare input tensor
   std::string tensor_name = Name() + "_cvcuda_src";
   FDTensor* src = CreateCachedGpuInputTensor(mat, tensor_name);

@@ -124,8 +124,6 @@ bool Resize::ImplByFlyCV(Mat* mat) {
 
 #ifdef ENABLE_CVCUDA
 bool Resize::ImplByCvCuda(Mat* mat) {
-  std::cout << Name() << " cvcuda" << std::endl;
-
   if (width_ == mat->Width() && height_ == mat->Height()) {
     return true;
   }
