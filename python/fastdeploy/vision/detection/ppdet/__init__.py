@@ -508,7 +508,6 @@ class PaddleYOLOv8(PPYOLOE):
 
         super(PPYOLOE, self).__init__(runtime_option)
 
-        assert model_format == ModelFormat.PADDLE, "PaddleYOLOv8 model only support model format of ModelFormat.Paddle now."
         self._model = C.vision.detection.PaddleYOLOv8(
             model_file, params_file, config_file, self._runtime_option,
             model_format)

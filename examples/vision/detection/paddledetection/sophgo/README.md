@@ -5,8 +5,9 @@
 目前SOPHGO支持如下模型的部署
 - [PP-YOLOE系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe)
 - [PicoDet系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/picodet)
+- [YOLOV8系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/)
 
-## 准备PP-YOLOE或者PicoDet部署模型以及转换模型
+## 准备PP-YOLOE YOLOV8或者PicoDet部署模型以及转换模型
 
 SOPHGO-TPU部署模型前需要将Paddle模型转换成bmodel模型，具体步骤如下:
 - Paddle动态图模型转换为ONNX模型，请参考[PaddleDetection导出模型](https://github.com/PaddlePaddle/PaddleDetection/blob/release/2.4/deploy/EXPORT_MODEL.md).
@@ -14,7 +15,7 @@ SOPHGO-TPU部署模型前需要将Paddle模型转换成bmodel模型，具体步�
 
 ## 模型转换example
 
-PP-YOLOE和PicoDet模型转换过程类似，下面以ppyoloe_crn_s_300e_coco为例子,教大家如何转换Paddle模型到SOPHGO-TPU模型
+PP-YOLOE YOLOV8和PicoDet模型转换过程类似，下面以ppyoloe_crn_s_300e_coco为例子,教大家如何转换Paddle模型到SOPHGO-TPU模型
 
 ### 导出ONNX模型
 ```shell
