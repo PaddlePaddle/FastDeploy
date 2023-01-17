@@ -13,13 +13,10 @@
 // limitations under the License.
 
 #pragma once
-
 #include <vector>
-
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
-
 #include "fastdeploy/vision/ocr/ppocr/classifier.h"
 #include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
 #include "fastdeploy/vision/ocr/ppocr/recognizer.h"
@@ -83,7 +80,6 @@ class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
  private:
   int cls_batch_size_ = 1;
   int rec_batch_size_ = 6;
-  /// Launch the detection process in OCR.
 };
 
 namespace application {

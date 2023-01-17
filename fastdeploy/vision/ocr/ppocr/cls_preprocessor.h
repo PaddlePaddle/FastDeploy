@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #pragma once
+#include <utility>
+
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
@@ -35,12 +37,12 @@ class FASTDEPLOY_DECL ClassifierPreprocessor {
            size_t start_index, size_t end_index);
 
   /// Set mean value for the image normalization in classification preprocess
-  void SetMean(std::vector<float> mean) { mean_ = mean; }
+  void SetMean(std::vector<float> mean) { mean_ = std::move(mean); }
   /// Get mean value of the image normalization in classification preprocess
   std::vector<float> GetMean() const { return mean_; }
 
   /// Set scale value for the image normalization in classification preprocess
-  void SetScale(std::vector<float> scale) { scale_ = scale; }
+  void SetScale(std::vector<float> scale) { scale_ = std::move(scale); }
   /// Get scale value of the image normalization in classification preprocess
   std::vector<float> GetScale() const { return scale_; }
 
@@ -50,15 +52,32 @@ class FASTDEPLOY_DECL ClassifierPreprocessor {
   bool GetIsScale() const { return is_scale_; }
 
   /// Set cls_image_shape for the classification preprocess
-  void SetClsImageShape(std::vector<int> cls_image_shape)
-                      { cls_image_shape_ = cls_image_shape; }
+  void SetClsImageShape(std::vector<int> cls_image_shape) {
+    cls_image_shape_ = std::move(cls_image_shape);
+  }
   /// Get cls_image_shape for the classification preprocess
   std::vector<int> GetClsImageShape() const { return cls_image_shape_; }
 
+  /// This function will disable normalize in preprocessing step.
+  void DisableNormalize() { disable_normalize_ = true; }
+
+  /// This function will disable hwc2chw in preprocessing step.
+  void DisablePermute() { disable_permute_ = true; }
+
+  /// This function will set fixed shape to inference.
+  void SetFixedShape(bool fixed_shape) { fixed_shape_ = fixed_shape; }
+
+ private:
+  // for recording the switch of hwc2chw
+  bool disable_permute_ = false;
+  // for recording the switch of normalize
+  bool disable_normalize_ = false;
   std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
   std::vector<float> scale_ = {0.5f, 0.5f, 0.5f};
   bool is_scale_ = true;
+  bool fixed_shape_ = false;
   std::vector<int> cls_image_shape_ = {3, 48, 192};
+  void OcrClassifierResizeImage(FDMat* mat);
 };
 
 }  // namespace ocr
