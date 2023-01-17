@@ -80,7 +80,6 @@ class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
  private:
   int cls_batch_size_ = 1;
   int rec_batch_size_ = 6;
-  /// Launch the detection process in OCR.
 };
 
 namespace application {

@@ -66,7 +66,7 @@ class FASTDEPLOY_DECL RecognizerPreprocessor {
     rec_image_shape_ = std::move(rec_image_shape);
   }
   /// Get rec_image_shape for the recognition preprocess
-  std::vector<int> GetRecImageShape() const { return rec_image_shape_; }
+  std::vector<int> GetRecImageShape() { return rec_image_shape_; }
 
   /// This function will disable normalize in preprocessing step.
   void DisableNormalize() { disable_normalize_ = true; }

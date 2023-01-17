@@ -27,6 +27,7 @@ void ClassifierPreprocessor::OcrClassifierResizeImage(FDMat* mat) {
   int img_w = cls_image_shape_[2];
   if (fixed_shape_) {
     Resize::Run(mat, img_w, img_h);
+    return;
   }
   float ratio = float(mat->Width()) / float(mat->Height());
 

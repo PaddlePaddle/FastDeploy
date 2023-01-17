@@ -28,6 +28,7 @@ void RecognizerPreprocessor::OcrRecognizerResizeImage(FDMat* mat,
   if (fixed_shape_) {
     // det_image_shape_ is [c,h,w]
     Resize::Run(mat, img_w, img_h);
+    return;
   }
 
   if (static_shape_infer_) {
