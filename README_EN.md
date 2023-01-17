@@ -54,7 +54,7 @@ Including [image classification](examples/vision/classification), [object detect
 
 
 ##  🌠 Recent updates
-- ✨✨✨ In **2023.01.17** we release [**YOLOv8**](./examples/vision/detection/paddledetection/) for deployment on FastDeploy series hardware, which includes [**Paddle YOLOv8**](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov8) and [**ultralytics YOLOv8**](https://github.com/ultralytics/ultralytics)
+- ✨✨✨ In **2023.01.17** we released [**YOLOv8**](./examples/vision/detection/paddledetection/) for deployment on FastDeploy series hardware, which includes [**Paddle YOLOv8**](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov8) and [**ultralytics YOLOv8**](https://github.com/ultralytics/ultralytics)
     - Deployable hardware for [**Paddle YOLOv8**](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov8)：[**Intel CPU**](./examples/vision/detection/paddledetection/python/infer_yolov8.py), [**NVIDIA GPU**](./examples/vision/detection/paddledetection/python/infer_yolov8.py), [**Jetson**](./examples/vision/detection/paddledetection/python/infer_yolov8.py), [**Phytium**](./examples/vision/detection/paddledetection/python/infer_yolov8.py), [**Kunlunxin**](./examples/vision/detection/paddledetection/python/infer_yolov8.py), [**HUAWEI Ascend**](./examples/vision/detection/paddledetection/python/infer_yolov8.py), [**ARM CPU**](./examples/vision/detection/paddledetection/cpp/infer_yolov8.cc), both **Python** deployments and **C++** deployments are included. [**Sophgo TPU**]() and [**RK3588**]() are being updated
     - Deployable hardware for [**ultralytics YOLOv8**](https://github.com/ultralytics/ultralytics): [**Intel CPU**](./examples/vision/detection/yolov8), [**NVIDIA GPU**](./examples/vision/detection/yolov8), [**Jetson**](./examples/vision/detection/yolov8), both **Python** deployments and **C++** deployments are included
     -  FastDeploy one-line model API switch, which can achieve **YOLOv8**, **PP-YOLOE+**, **YOLOv5** and other model performance comparison
@@ -92,8 +92,8 @@ Including [image classification](examples/vision/classification), [object detect
 </font>
 
 ## 🔮 Contents
--  [A Quick Start for Python SDK](#fastdeploy-quick-start-python)  
--  [A Quick Start for C++ SDK](#fastdeploy-quick-start-cpp)
+-  [✴️ A Quick Start for Python SDK](#fastdeploy-quick-start-python)  
+-  [✴️ A Quick Start for C++ SDK](#fastdeploy-quick-start-cpp)
 - **Installation**
     - [How to Install Prebuilt Library](docs/en/build_and_install/download_prebuilt_libraries.md)
     - [How to Build GPU Deployment Environment](docs/en/build_and_install/gpu.md)
@@ -247,7 +247,7 @@ For more deployment models, please refer to [Vision Model Deployment Examples](e
 
 <div id="fastdeploy-server-models"></div>
 
-### ✴️ ✴️ Server-side and Cloud Model List ✴️ ✴️
+## ✴️ ✴️ Server-side and Cloud Model List ✴️ ✴️
 
 Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Available;
 
@@ -345,7 +345,7 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 
 | Task               | Model                                                                                        | Size(MB)   | Linux   | Android | Linux     | Linux                   | Linux                          | Linux                       | Linux                            | TBD ...  |
 |:------------------:|:-----------------------------------------------------------------------------------------:|:--------:|:-------:|:-------:|:-------:|:-----------------------:|:------------------------------:|:---------------------------:|:--------------------------------:|:-------:|
-| ---                | ---                                                                                       | ---      | ARM CPU | [ARM CPU](./java/android) | [Rockchip NPU<br>RK3588/RK3568/RK3566](./docs/en/build_and_install/rknpu2.md) | [Rockchip NPU<br>RV1109/RV1126/RK1808](./docs/en/build_and_install/rv1126.md) | [Amlogic NPU <br>A311D/S905D/C308X](./docs/en/build_and_install/a311d.md) | NXP NPU<br>i.MX&nbsp;8M&nbsp;Plus | TBD...｜ |
+| ---                | ---                                                                                       | ---      | ARM CPU | [ARM CPU](./java/android) | [Rockchip NPU<br>RK3588/RK3568/RK3566](./docs/en/build_and_install/rknpu2.md) | [Rockchip NPU<br>RV1109/RV1126/RK1808](./docs/en/build_and_install/rv1126.md) | [Amlogic NPU <br>A311D/S905D/C308X](./docs/en/build_and_install/a311d.md) | NXP NPU<br>i.MX&nbsp;8M&nbsp;Plus | TBD... |
 | Classification     | [PaddleClas/ResNet50](examples/vision/classification/paddleclas)                         | 98        | ✅       | ✅       |  [✅](./examples/vision/classification/paddleclas/rknpu2)                             |      ✅                                |                                   |                                   |         |
 | Classification     | [PaddleClas/PP-LCNet](examples/vision/classification/paddleclas)                         | 11.9      | ✅       | ✅       | ❔                             | ✅                                 | --                                | --                                | --      |
 | Classification     | [PaddleClas/PP-LCNetv2](examples/vision/classification/paddleclas)                       | 26.6      | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
