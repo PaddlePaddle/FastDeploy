@@ -74,7 +74,7 @@ bool ClassifierPostprocessor::Run(const std::vector<FDTensor>& tensors,
     SingleBatchPostprocessor(tensor_data+ i_batch * length,
                                  length,
                                  &cls_labels->at(i_batch + start_index),
-                                 &cls_scores->at(i_batch + start_index)))
+                                 &cls_scores->at(i_batch + start_index));
   }
 
   return true;
