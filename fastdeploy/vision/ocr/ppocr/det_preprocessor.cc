@@ -40,10 +40,6 @@ std::array<int, 4> OcrDetectorGetInfo(FDMat* img, int max_size_len) {
   resize_w = std::max(int(std::round(float(resize_w) / 32) * 32), 32);
 
   return {w,h,resize_w,resize_h};
-  /*
-  *ratio_h = float(resize_h) / float(h);
-  *ratio_w = float(resize_w) / float(w);
-  */
 }
 bool OcrDetectorResizeImage(FDMat* img,
                             int resize_w,

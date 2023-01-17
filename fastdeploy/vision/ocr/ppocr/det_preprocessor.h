@@ -31,8 +31,7 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
    * \param[in] batch_det_img_info_ptr The output of preprocess
    * \return true if the preprocess successed, otherwise false
    */
-  bool Run(std::vector<FDMat>* images,
-           std::vector<FDTensor>* outputs,
+  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
            std::vector<std::array<int, 4>>* batch_det_img_info_ptr);
 
   /// Set max_side_len for the detection preprocess, default is 960
@@ -55,6 +54,7 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
   /// Get is_scale of the image normalization in detection preprocess
   bool GetIsScale() const { return is_scale_; }
 
+ private:
   int max_side_len_ = 960;
   std::vector<float> mean_ = {0.485f, 0.456f, 0.406f};
   std::vector<float> scale_ = {0.229f, 0.224f, 0.225f};

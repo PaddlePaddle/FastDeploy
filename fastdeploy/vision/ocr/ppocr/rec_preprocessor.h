@@ -38,8 +38,9 @@ class FASTDEPLOY_DECL RecognizerPreprocessor {
   /// Set static_shape_infer is true or not. When deploy PP-OCR
   /// on hardware which can not support dynamic input shape very well,
   /// like Huawei Ascned, static_shape_infer needs to to be true.
-  void SetStaticShapeInfer(bool static_shape_infer)
-                    { static_shape_infer_ = static_shape_infer; }
+  void SetStaticShapeInfer(bool static_shape_infer) {
+    static_shape_infer_ = static_shape_infer;
+  }
   /// Get static_shape_infer of the recognition preprocess
   bool GetStaticShapeInfer() const { return static_shape_infer_; }
 
@@ -59,10 +60,11 @@ class FASTDEPLOY_DECL RecognizerPreprocessor {
   bool GetIsScale() const { return is_scale_; }
 
   /// Set rec_image_shape for the recognition preprocess
-  void SetRecImageShape(std::vector<int> rec_image_shape)
-                    { rec_image_shape_ = rec_image_shape; }
+  void SetRecImageShape(std::vector<int> rec_image_shape) {
+    rec_image_shape_ = rec_image_shape;
+  }
   /// Get rec_image_shape for the recognition preprocess
-  std::vector<int> GetRecImageShape() const { return rec_image_shape_; }
+  std::vector<int> GetRecImageShape() { return rec_image_shape_; }
 
   std::vector<int> rec_image_shape_ = {3, 48, 320};
   std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
