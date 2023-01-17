@@ -47,7 +47,7 @@ Including [image classification](examples/vision/classification), [object detect
 
 <div align="center">
     
-<img src="https://user-images.githubusercontent.com/54695910/212472642-eb52de72-7605-4863-a918-b381329d5f56.png" >
+<img src="https://user-images.githubusercontent.com/115439700/212800436-9cb39830-fca5-4b40-9def-a1fd83fcfc90.png" >
     
 </div>
 
@@ -72,7 +72,7 @@ Including [image classification](examples/vision/classification), [object detect
 
 <font size=0.5em>
 
-|  | <img src="https://user-images.githubusercontent.com/54695910/212475832-f32502e2-4be2-42fc-a380-2ae265417938.png" height = "30" />  | <img src="https://user-images.githubusercontent.com/54695910/212475828-240036b0-f06c-4c44-830a-d8b136099b09.png" height = "30"  /> |<img src="https://user-images.githubusercontent.com/54695910/212475827-b73a1191-b3a8-4ad5-b6f6-855b3d1ffc09.png" height = "30" />| <img src="https://user-images.githubusercontent.com/54695910/212475826-f52b0ef3-e512-49fe-9b52-e1b9d1e8b6c2.png" height = "30" />  | <img src="https://user-images.githubusercontent.com/54695910/212475825-9686ae78-bad9-4be9-852e-6ad23be209da.png" height = "30" />  | <img src="https://user-images.githubusercontent.com/54695910/212475822-067349d2-8c4a-4431-bf02-05387e2962a8.png" height = "30" />  |<img src="https://user-images.githubusercontent.com/54695910/212475820-5210efe0-3e9a-429a-ad9d-48e8da2ffd0b.png" height = "30" /> |
+|  | <img src="https://user-images.githubusercontent.com/115439700/212803609-6625b87f-cee4-49c3-89d6-a286999aed8c.png" height = "19" />  | <img src="https://user-images.githubusercontent.com/115439700/212803618-758f5525-9e97-4517-aef3-cde8f8d00a03.png" height = "19" /> |<img src="https://user-images.githubusercontent.com/115439700/212803628-b282c174-de4a-48f9-ad64-523ce5b5e115.png" height = "19" width = "250"/>| <img src="https://user-images.githubusercontent.com/54695910/212475826-f52b0ef3-e512-49fe-9b52-e1b9d1e8b6c2.png" height = "30" />  | <img src="https://user-images.githubusercontent.com/54695910/212475825-9686ae78-bad9-4be9-852e-6ad23be209da.png" height = "30" />  | <img src="https://user-images.githubusercontent.com/54695910/212475822-067349d2-8c4a-4431-bf02-05387e2962a8.png" height = "30" />  |<img src="https://user-images.githubusercontent.com/54695910/212475820-5210efe0-3e9a-429a-ad9d-48e8da2ffd0b.png" height = "30" /> |
 |:----------|:----------:|:----------:|:----------:|:----------:|:----------:|:----------:|:----------:|
 | X86_64&nbsp;CPU  |     |&nbsp;&nbsp;&nbsp;<img src="https://user-images.githubusercontent.com/54695910/212545467-e64ee45d-bf12-492c-b263-b860cb1e172b.png" height = "25"/>&nbsp;&nbsp;&nbsp;    |   <img src="https://user-images.githubusercontent.com/54695910/212474104-d82f3545-04d4-4ddd-b240-ffac34d8a920.svg" height = "17"/>  | <img src="https://user-images.githubusercontent.com/54695910/212473391-92c9f289-a81a-4927-9f31-1ab3fa3c2971.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473392-9df374d4-5daa-4e2b-856b-6e50ff1e4282.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473190-fdf3cee2-5670-47b5-85e7-6853a8dd200a.svg" height = "17"/>    | <img src="https://user-images.githubusercontent.com/54695910/212473391-92c9f289-a81a-4927-9f31-1ab3fa3c2971.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473392-9df374d4-5daa-4e2b-856b-6e50ff1e4282.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473190-fdf3cee2-5670-47b5-85e7-6853a8dd200a.svg" height = "17"/>   |   | <img src="https://user-images.githubusercontent.com/54695910/212473391-92c9f289-a81a-4927-9f31-1ab3fa3c2971.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473392-9df374d4-5daa-4e2b-856b-6e50ff1e4282.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473190-fdf3cee2-5670-47b5-85e7-6853a8dd200a.svg" height = "17"/>   |
 | NVDIA&nbsp;GPU    | <img src="https://user-images.githubusercontent.com/54695910/212545467-e64ee45d-bf12-492c-b263-b860cb1e172b.png" height = "25"/>    | <img src="https://user-images.githubusercontent.com/54695910/212545467-e64ee45d-bf12-492c-b263-b860cb1e172b.png" height = "25"/>    | <img src="https://user-images.githubusercontent.com/54695910/212474106-a297aa0d-9225-458e-b5b7-e31aec7cfa79.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212474104-d82f3545-04d4-4ddd-b240-ffac34d8a920.svg" height = "17"/>   | <img src="https://user-images.githubusercontent.com/54695910/212473390-cebf7880-7c47-407d-94ae-01784d6a23d1.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473556-d2ebb7cc-e72b-4b49-896b-83f95ae1fe63.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473190-fdf3cee2-5670-47b5-85e7-6853a8dd200a.svg" height = "17"/>    |<img src="https://user-images.githubusercontent.com/54695910/212473390-cebf7880-7c47-407d-94ae-01784d6a23d1.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473556-d2ebb7cc-e72b-4b49-896b-83f95ae1fe63.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473190-fdf3cee2-5670-47b5-85e7-6853a8dd200a.svg" height = "17"/>  |     |    |
@@ -157,7 +157,7 @@ Including [image classification](examples/vision/classification), [object detect
 pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
-##### [🔸 Conda Installation (Recommended✨)](docs/cn/build_and_install/download_prebuilt_libraries.md)
+##### [🔸 Conda Installation (Recommended✨)](docs/en/build_and_install/download_prebuilt_libraries.md)
 
 ```bash
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
@@ -254,7 +254,7 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 <details open><summary><b> Server-side and cloud model list(click to fold)</b></summary><div>
 
 <div align="center">
-  <img src="https://user-images.githubusercontent.com/54695910/198620704-741523c1-dec7-44e5-9f2b-29ddd9997344.png" />
+  <img src="https://user-images.githubusercontent.com/115439700/212801271-5621419f-3997-4f00-94d5-63c8b6474aa8.png" height = "40"/>
 </div>
 
 | Task                   | Model                                                                                           | Linux                                            | Linux      | Win     | Win        | Mac     | Mac     | Linux       | Linux           | Linux         | Linux         | Linux   | Linux   | Linux   |
@@ -340,7 +340,7 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 <details open><summary><b> Mobile and Edge Model List（click to fold）</b></summary><div>
 
 <div align="center">
-  <img src="https://user-images.githubusercontent.com/54695910/198620704-741523c1-dec7-44e5-9f2b-29ddd9997344.png" />
+  <img src="https://user-images.githubusercontent.com/115439700/212801271-5621419f-3997-4f00-94d5-63c8b6474aa8.png" height = "40"/>
 </div>
 
 | Task               | Model                                                                                        | Size(MB)   | Linux   | Android | Linux     | Linux                   | Linux                          | Linux                       | Linux                            | TBD ...  |
