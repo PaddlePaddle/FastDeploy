@@ -74,6 +74,17 @@ bool PPOCRv2::Initialized() const {
   }
   return true; 
 }
+
+std::unique_ptr<PPOCRv2> PPOCRv2::Clone() const {
+  std::unique_ptr<PPOCRv2> clone_model = utils::make_unique<PPOCRv2>(PPOCRv2(*this));
+  clone_model->detector_ = detector_->Clone().release();
+  if (classifier_ != nullptr) {
+    clone_model->classifier_ = classifier_->Clone().release();
+  }
+  clone_model->recognizer_ = recognizer_->Clone().release();
+  return clone_model;
+}
+
 bool PPOCRv2::Predict(cv::Mat* img,
                             fastdeploy::vision::OCRResult* result) {
   return Predict(*img, result);
