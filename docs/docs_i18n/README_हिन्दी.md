@@ -1,4 +1,4 @@
-  [English](../../README_EN.md) | [简体中文](../../README_CN.md) | हिन्दी | [日本語](./README_日本語.md) | [한국인](./README_한국인.md) | [Pу́сский язы́к](./README_Pу́сский_язы́к.md)
+[English](../../README_EN.md) | [简体中文](../../README_CN.md) | हिन्दी | [日本語](./README_日本語.md) | [한국인](./README_한국인.md) | [Pу́сский язы́к](./README_Pу́сский_язы́к.md)
 
 ![⚡️FastDeploy](https://user-images.githubusercontent.com/31974251/185771818-5d4423cd-c94c-4a49-9894-bc7a8d1c29d0.png)
 
@@ -20,85 +20,166 @@
     |
     <a href="docs/README_CN.md"><b> दस्तावेज़ीकरण का उपयोग करें </b></a>
     |
+   <a href="README_CN.md#fastdeploy-quick-start-python"><b> तेजी से शुरू </b></a>
+    |
     <a href="https://baidu-paddle.github.io/fastdeploy-api/"><b> APIप्रलेखन </b></a>
     |
     <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><b> चेंजलॉग </b></a>
 </p>
 
-**⚡️फास्टडिप्लोय**एक एआई अनुमान तैनाती उपकरण है जो **सभी परिदृश्य**, **उपयोग करने में आसान और लचीला** और **बेहद कुशल** है। एक📦**आउट-ऑफ-द-बॉक्स** **क्लाउड-एज** परिनियोजन अनुभव प्रदान करता  है, 🔥150+ से अधिक **टेक्स्ट**, **विजन**, **स्पीच** और **क्रॉस-मोडल** मॉडल का समर्थन करता है, और 🔚 **एंड-टू-एंड** अनुमान प्रदर्शन अनुकूलन को लागू करता है। डेवलपर्स की जरूरतों को पूरा करने के लिए छवि वर्गीकरण, ऑब्जेक्ट डिटेक्शन, छवि विभाजन, चेहरे का पता लगाने, चेहरे की पहचान, मुख्य बिंदु का पता लगाने, कटआउट, ओसीआर, एनएलपी, टीटीएस और अन्य कार्यों सहित **बहु-परिदृश्य, बहु-हार्डवेयर, बहु-मंच** उद्योग की तैनाती की जरूरत है।
-| [Image Classification](examples/vision/classification)                                                                                         | [Object Detection](examples/vision/detection)                                                                                                  | [Semantic Segmentation](examples/vision/segmentation/paddleseg)                                                                                  | [Potrait Segmentation](examples/vision/segmentation/paddleseg)                                                                                                                                                                                                                                                                                                           |
-|:----------------------------------------------------------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-| <img src='https://user-images.githubusercontent.com/54695910/200465949-da478e1b-21ce-43b8-9f3f-287460e786bd.png' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054680-2f8d1952-c120-4b67-88fc-7d2d7d2378b4.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054711-6119f0e7-d741-43b1-b273-9493d103d49f.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188054718-6395321c-8937-4fa0-881c-5b20deb92aaa.gif' height="126px" width="190px">                                                                                                                                                                                                                           |
-| [**Image Matting**](examples/vision/matting)                                                                                                   | [**Real-Time Matting**](examples/vision/matting)                                                                                               | [**OCR**](examples/vision/ocr)                                                                                                                   | [**Face Alignment**](examples/vision/facealign)                                                                                                                                                                                                                                                                                                                          |
-| <img src='https://user-images.githubusercontent.com/54695910/188058231-a5fe1ce1-0a38-460f-9582-e0b881514908.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054691-e4cb1a70-09fe-4691-bc62-5552d50bd853.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054669-a85996ba-f7f3-4646-ae1f-3b7e3e353e7d.gif' height="126px" width="190px"  > | <img src='https://user-images.githubusercontent.com/54695910/188059460-9845e717-c30a-4252-bd80-b7f6d4cf30cb.png' height="126px" width="190px">                                                                                                                                                                                                                           |
-| [**Pose Estimation**](examples/vision/keypointdetection)                                                                                       | [**Behavior Recognition**](https://github.com/PaddlePaddle/FastDeploy/issues/6)                                                                | [**NLP**](examples/text)                                                                                                                         | [**Speech**](examples/audio/pp-tts)                                                                                                                                                                                                                                                                                                                                      |
-| <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="126px" width="190px">   | <p align="left">**input** ：早上好今天是2020<br>/10/29，最低温度是-3°C。<br><br> <p align="left">**output**: [<img src="https://user-images.githubusercontent.com/54695910/200161645-871e08da-5a31-4736-879c-a88bb171a676.png" width="170" style="max-width: 100%;">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/parakeet_espnet_fs2_pwg_demo/tn_g2p/parakeet/001.wav)</p> |
-
-
-## **सामुदायिक संचार**
-
-*  **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1jznah134-3rxY~ytRb8rcPqkn9g~PDg) and chat with other community members about ideas
-
-*  **वीचैट**: क्यूआर कोड स्कैन करें, तकनीकी समुदाय में शामिल होने के लिए प्रश्नावली भरें, और सामुदायिक डेवलपर्स के साथ तैनाती के दर्द बिंदुओं और समाधानों पर चर्चा करें
-
 <div align="center">
-    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "220" height = "220" />
+    
+[<img src='https://user-images.githubusercontent.com/54695910/200465949-da478e1b-21ce-43b8-9f3f-287460e786bd.png' height="80px" width="110px">](examples/vision/classification)
+[<img src='https://user-images.githubusercontent.com/54695910/188054680-2f8d1952-c120-4b67-88fc-7d2d7d2378b4.gif' height="80px" width="110px">](examples/vision/detection)
+[<img src='https://user-images.githubusercontent.com/54695910/188054711-6119f0e7-d741-43b1-b273-9493d103d49f.gif' height="80px" width="110px">](examples/vision/segmentation/paddleseg)
+[<img src='https://user-images.githubusercontent.com/54695910/188054718-6395321c-8937-4fa0-881c-5b20deb92aaa.gif' height="80px" width="110px">](examples/vision/segmentation/paddleseg)
+[<img src='https://user-images.githubusercontent.com/54695910/188058231-a5fe1ce1-0a38-460f-9582-e0b881514908.gif' height="80px" width="110px">](examples/vision/matting)
+[<img src='https://user-images.githubusercontent.com/54695910/188054691-e4cb1a70-09fe-4691-bc62-5552d50bd853.gif' height="80px" width="110px">](examples/vision/matting)
+[<img src='https://user-images.githubusercontent.com/54695910/188054669-a85996ba-f7f3-4646-ae1f-3b7e3e353e7d.gif' height="80px" width="110px">](examples/vision/ocr)<br>
+[<img src='https://user-images.githubusercontent.com/54695910/188059460-9845e717-c30a-4252-bd80-b7f6d4cf30cb.png' height="80px" width="110px">](examples/vision/facealign)
+[<img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="80px" width="110px">](examples/vision/keypointdetection)
+[<img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="80px" width="110px">](https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif)
+[<img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="80px" width="110px">](examples/text)
+[<img src='https://user-images.githubusercontent.com/54695910/212314909-77624bdd-1d12-4431-9cca-7a944ec705d3.png' height="80px" width="110px">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/parakeet_espnet_fs2_pwg_demo/tn_g2p/parakeet/001.wav)
 </div>
 
-## डायरेक्टरी 
 
-* **🖥️ सर्वर-साइड परिनियोजन**
+**⚡️फास्टडिप्लोय**एक एआई अनुमान तैनाती उपकरण है जो **सभी परिदृश्य**, **उपयोग करने में आसान और लचीला** और **बेहद कुशल** है। एक📦**आउट-ऑफ-द-बॉक्स** **क्लाउड-एज** परिनियोजन अनुभव प्रदान करता  है, 🔥160+ से अधिक **टेक्स्ट**, **विजन**, **स्पीच** और **क्रॉस-मोडल** मॉडल का समर्थन करता है, और 🔚 **एंड-टू-एंड** अनुमान प्रदर्शन अनुकूलन को लागू करता है। डेवलपर्स की जरूरतों को पूरा करने के लिए छवि वर्गीकरण, ऑब्जेक्ट डिटेक्शन, छवि विभाजन, चेहरे का पता लगाने, चेहरे की पहचान, मुख्य बिंदु का पता लगाने, कटआउट, ओसीआर, एनएलपी, टीटीएस और अन्य कार्यों सहित **बहु-परिदृश्य, बहु-हार्डवेयर, बहु-मंच** उद्योग की तैनाती की जरूरत है।
 
-  * [Python SDK एक त्वरित शुरुआत है](#fastdeploy-quick-start-python)  
-  * [C++ SDK एक त्वरित शुरुआत है](#fastdeploy-quick-start-cpp)
-  * [सर्वर-साइड मॉडल समर्थन सूची](#fastdeploy-server-models)
+<div align="center">
+    
+<img src="https://user-images.githubusercontent.com/54695910/212472642-eb52de72-7605-4863-a918-b381329d5f56.png" >
+    
+</div>
 
-* **📲 मोबाइल और एंड-साइड परिनियोजन**
 
-  * [एंड-साइड मॉडल समर्थन सूची](#fastdeploy-edge-models)
+## 🌠 ताज़ा अपडेट
 
-* **🌐 और एप्लेट तैनाती**  
+- ✨✨✨ **2023.01.17** यह रिलीज फास्ट डिसेनियोजित हार्डवेयर श्रृंखला पर [**YOLOv8**](./examples/vision/detection/paddledetection/) की तैनाती का समर्थन करता है। जो भी शामिल [**Paddle YOLOv8**](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov8) तथा [**समुदाय ultralytics YOLOv8**](https://github.com/ultralytics/ultralytics)
+    - [**Paddle YOLOv8**](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov8) हार्डवेयर निर्दिष्ट करता है जो तैनात किया जा सकता है।[**Intel CPU**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**NVIDIA GPU**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**Jetson**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**Phytium**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**KunlunXin**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**Huawei Ascend**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**ARM CPU**](./examples/vision/detection/paddledetection/cpp/infer_yolov8.cc), शामिल **Python** तैनाती तथा **C++** तैनाती；**गणना ऊर्जा** और **RK3588** अद्यतन किया जा रहा है।
+    -  [**समुदाय ultralytics YOLOv8**](https://github.com/ultralytics/ultralytics)[**Intel CPU**] हार्डवेयर निर्दिष्ट करता है जो तैनात किया जा सकता है।(./examples/vision/detection/yolov8)、[**NVIDIA GPU**](./examples/vision/detection/yolov8)、[**Jetson**](./examples/vision/detection/yolov8), शामिल **Python** तैनाती तथा **C++** तैनाती；
+    -  FastDeploy एक लाइन मॉडल API स्विचन **YOLOv8**、 **PP-YOLOE+**、**YOLOv5** और अन्य मॉडलों की प्रदर्शन तुलना का एहसास कर सकते हैं।
+ 
+- **✨👥✨ सामुदायिक संचार**
 
-  * [Web-साइड मॉडल समर्थन सूची](#fastdeploy-web-models)
-* [Acknowledge](#fastdeploy-acknowledge)  
-* [License](#fastdeploy-license)
+    - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1m88mytoi-mBdMYcnTF~9LCKSOKXd6Tg) and chat with other community members about ideas
 
-## 🖥️  सर्वर-साइड परिनियोजन 
+    - **WeChat**: दो आयामी कोड स्कैन करें, तकनीकी समुदाय में शामिल होने के लिए प्रश्नावली भरें और समुदाय डेवलपर्स के साथ तैनात उद्योग से होने वाले दर्द बिंदुओं के बारे में संवाद करें।
+
+<div align="center">
+    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "150" height = "150" />
+</div>
+
+
+<div id="fastdeploy-acknowledge"></div>
+
+## 🌌 तर्क वापस अंत और क्षमता
+
+<font size=0.5em>
+
+|  | <img src="https://user-images.githubusercontent.com/54695910/212475832-f32502e2-4be2-42fc-a380-2ae265417938.png" height = "30" />  | <img src="https://user-images.githubusercontent.com/54695910/212475828-240036b0-f06c-4c44-830a-d8b136099b09.png" height = "30"  /> |<img src="https://user-images.githubusercontent.com/54695910/212475827-b73a1191-b3a8-4ad5-b6f6-855b3d1ffc09.png" height = "30" />| <img src="https://user-images.githubusercontent.com/54695910/212475826-f52b0ef3-e512-49fe-9b52-e1b9d1e8b6c2.png" height = "30" />  | <img src="https://user-images.githubusercontent.com/54695910/212475825-9686ae78-bad9-4be9-852e-6ad23be209da.png" height = "30" />  | <img src="https://user-images.githubusercontent.com/54695910/212475822-067349d2-8c4a-4431-bf02-05387e2962a8.png" height = "30" />  |<img src="https://user-images.githubusercontent.com/54695910/212475820-5210efe0-3e9a-429a-ad9d-48e8da2ffd0b.png" height = "30" /> |
+|:----------|:----------:|:----------:|:----------:|:----------:|:----------:|:----------:|:----------:|
+| X86_64&nbsp;CPU  |     |&nbsp;&nbsp;&nbsp;<img src="https://user-images.githubusercontent.com/54695910/212545467-e64ee45d-bf12-492c-b263-b860cb1e172b.png" height = "25"/>&nbsp;&nbsp;&nbsp;    |   <img src="https://user-images.githubusercontent.com/54695910/212474104-d82f3545-04d4-4ddd-b240-ffac34d8a920.svg" height = "17"/>  | <img src="https://user-images.githubusercontent.com/54695910/212473391-92c9f289-a81a-4927-9f31-1ab3fa3c2971.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473392-9df374d4-5daa-4e2b-856b-6e50ff1e4282.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473190-fdf3cee2-5670-47b5-85e7-6853a8dd200a.svg" height = "17"/>    | <img src="https://user-images.githubusercontent.com/54695910/212473391-92c9f289-a81a-4927-9f31-1ab3fa3c2971.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473392-9df374d4-5daa-4e2b-856b-6e50ff1e4282.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473190-fdf3cee2-5670-47b5-85e7-6853a8dd200a.svg" height = "17"/>   |   | <img src="https://user-images.githubusercontent.com/54695910/212473391-92c9f289-a81a-4927-9f31-1ab3fa3c2971.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473392-9df374d4-5daa-4e2b-856b-6e50ff1e4282.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473190-fdf3cee2-5670-47b5-85e7-6853a8dd200a.svg" height = "17"/>   |
+| NVDIA&nbsp;GPU    | <img src="https://user-images.githubusercontent.com/54695910/212545467-e64ee45d-bf12-492c-b263-b860cb1e172b.png" height = "25"/>    | <img src="https://user-images.githubusercontent.com/54695910/212545467-e64ee45d-bf12-492c-b263-b860cb1e172b.png" height = "25"/>    | <img src="https://user-images.githubusercontent.com/54695910/212474106-a297aa0d-9225-458e-b5b7-e31aec7cfa79.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212474104-d82f3545-04d4-4ddd-b240-ffac34d8a920.svg" height = "17"/>   | <img src="https://user-images.githubusercontent.com/54695910/212473390-cebf7880-7c47-407d-94ae-01784d6a23d1.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473556-d2ebb7cc-e72b-4b49-896b-83f95ae1fe63.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473190-fdf3cee2-5670-47b5-85e7-6853a8dd200a.svg" height = "17"/>    |<img src="https://user-images.githubusercontent.com/54695910/212473390-cebf7880-7c47-407d-94ae-01784d6a23d1.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473556-d2ebb7cc-e72b-4b49-896b-83f95ae1fe63.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473190-fdf3cee2-5670-47b5-85e7-6853a8dd200a.svg" height = "17"/>  |     |    |
+|Phytium CPU  |    |     |  <img src="https://user-images.githubusercontent.com/54695910/212474105-38051192-9a1c-4b24-8ad1-f842fb0bf39d.svg" height = "17"/>  | <img src="https://user-images.githubusercontent.com/54695910/212473389-8c341bbe-30d4-4a28-b50a-074be4e98ce6.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473393-ae1958bd-ab7d-4863-94b9-32863e600ba1.svg" height = "17"/>   |    |    |   |
+| KunlunXin XPU |    |    | <img src="https://user-images.githubusercontent.com/54695910/212474104-d82f3545-04d4-4ddd-b240-ffac34d8a920.svg" height = "17"/>    |<img src="https://user-images.githubusercontent.com/54695910/212473389-8c341bbe-30d4-4a28-b50a-074be4e98ce6.svg" height = "17"/>    |     |   |    |
+| Huawei Ascend NPU |     |     | <img src="https://user-images.githubusercontent.com/54695910/212474105-38051192-9a1c-4b24-8ad1-f842fb0bf39d.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212474104-d82f3545-04d4-4ddd-b240-ffac34d8a920.svg" height = "17"/>| <img src="https://user-images.githubusercontent.com/54695910/212473389-8c341bbe-30d4-4a28-b50a-074be4e98ce6.svg" height = "17"/>    |   |     |    |
+|Graphcore&nbsp;IPU   |    | <img src="https://user-images.githubusercontent.com/54695910/212545467-e64ee45d-bf12-492c-b263-b860cb1e172b.png" height = "25"/>    |    |  <img src="https://user-images.githubusercontent.com/54695910/212473391-92c9f289-a81a-4927-9f31-1ab3fa3c2971.svg" height = "17"/>  |    |    |  |
+| गणना ऊर्जा    |     |     |     | <img src="https://user-images.githubusercontent.com/54695910/212473382-e3e9063f-c298-4b61-ad35-a114aa6e6555.svg" height = "17"/>   |    |  |    |
+|Intel वीडियो कार्ड  |     |     |     | <img src="https://user-images.githubusercontent.com/54695910/212473392-9df374d4-5daa-4e2b-856b-6e50ff1e4282.svg" height = "17"/>   |    |   | |
+|Jetson  |<img src="https://user-images.githubusercontent.com/54695910/212545467-e64ee45d-bf12-492c-b263-b860cb1e172b.png" height = "25"/>   | <img src="https://user-images.githubusercontent.com/54695910/212545467-e64ee45d-bf12-492c-b263-b860cb1e172b.png" height = "25"/>   | <img src="https://user-images.githubusercontent.com/54695910/212474105-38051192-9a1c-4b24-8ad1-f842fb0bf39d.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212474106-a297aa0d-9225-458e-b5b7-e31aec7cfa79.svg" height = "17"/>   |  <img src="https://user-images.githubusercontent.com/54695910/212473390-cebf7880-7c47-407d-94ae-01784d6a23d1.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473556-d2ebb7cc-e72b-4b49-896b-83f95ae1fe63.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473190-fdf3cee2-5670-47b5-85e7-6853a8dd200a.svg" height = "17"/>     |    |   |   |
+|ARM&nbsp;CPU |    |     | <img src="https://user-images.githubusercontent.com/54695910/212474105-38051192-9a1c-4b24-8ad1-f842fb0bf39d.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212474104-d82f3545-04d4-4ddd-b240-ffac34d8a920.svg" height = "17"/>| <img src="https://user-images.githubusercontent.com/54695910/212473389-8c341bbe-30d4-4a28-b50a-074be4e98ce6.svg" height = "17"/><br><img src="https://user-images.githubusercontent.com/54695910/212473393-ae1958bd-ab7d-4863-94b9-32863e600ba1.svg" height = "17"/>   |    | <img src="https://user-images.githubusercontent.com/54695910/212473389-8c341bbe-30d4-4a28-b50a-074be4e98ce6.svg" height = "17"/>  |  <img src="https://user-images.githubusercontent.com/54695910/212473393-ae1958bd-ab7d-4863-94b9-32863e600ba1.svg" height = "17"/>  |
+|RK3588 |   |    | <img src="https://user-images.githubusercontent.com/54695910/212474105-38051192-9a1c-4b24-8ad1-f842fb0bf39d.svg" height = "17"/>    | <img src="https://user-images.githubusercontent.com/54695910/212473387-2559cc2a-024b-4452-806c-6105d8eb2339.svg" height = "17"/>  |    |    |    |
+|RV1126 |    |    | <img src="https://user-images.githubusercontent.com/54695910/212474105-38051192-9a1c-4b24-8ad1-f842fb0bf39d.svg" height = "17"/>    | <img src="https://user-images.githubusercontent.com/54695910/212473389-8c341bbe-30d4-4a28-b50a-074be4e98ce6.svg" height = "17"/>    |     |     |    |
+| Amlogic |   |     | <img src="https://user-images.githubusercontent.com/54695910/212474105-38051192-9a1c-4b24-8ad1-f842fb0bf39d.svg" height = "17"/>    | <img src="https://user-images.githubusercontent.com/54695910/212473389-8c341bbe-30d4-4a28-b50a-074be4e98ce6.svg" height = "17"/>   |     |     |   |
+| NXP |   |     | <img src="https://user-images.githubusercontent.com/54695910/212474105-38051192-9a1c-4b24-8ad1-f842fb0bf39d.svg" height = "17"/>    |<img src="https://user-images.githubusercontent.com/54695910/212473389-8c341bbe-30d4-4a28-b50a-074be4e98ce6.svg" height = "17"/>   |     |    |    |
+
+</font>
+
+
+## 🔮 प्रलेखन ट्यूटोरियल
+- [✴️ Python SDK तेजी से शुरू](#fastdeploy-quick-start-python)  
+- [✴️ C++ SDK तेजी से शुरू](#fastdeploy-quick-start-cpp)
+- **संस्थापन दस्तावेज़**
+    - [प्रीकम्पाइल लाइब्रेरी को डाउनलोड और इंस्टॉल करें](docs/cn/build_and_install/download_prebuilt_libraries.md)
+    - [GPU संकलन और तैनाती पर्यावरण स्थापित करें](docs/cn/build_and_install/gpu.md)
+    - [CPU संकलन और तैनाती पर्यावरण स्थापित करें](docs/cn/build_and_install/cpu.md)
+    - [IPU संकलन और तैनाती पर्यावरण स्थापित करें](docs/cn/build_and_install/ipu.md)
+    - [KunlunXin XPU संकलन और तैनाती पर्यावरण स्थापित करें](docs/cn/build_and_install/kunlunxin.md)
+    - [Rockchip RV1126 संकलन और तैनाती पर्यावरण स्थापित करें](docs/cn/build_and_install/rv1126.md)
+    - [Rockchip RK3588 संकलन और तैनाती पर्यावरण स्थापित करें](docs/cn/build_and_install/rknpu2.md)
+    - [Amlogic A311D संकलन और तैनाती पर्यावरण स्थापित करें](docs/cn/build_and_install/a311d.md)
+    - [Huawei Ascend संकलन और तैनाती पर्यावरण स्थापित करें](docs/cn/build_and_install/huawei_ascend.md)
+    - [Jetson संकलन और तैनाती पर्यावरण स्थापित करें](docs/cn/build_and_install/jetson.md)
+    - [Android संकलन और तैनाती पर्यावरण स्थापित करें](docs/cn/build_and_install/android.md)
+- **त्वरित उपयोग**
+    - [PP-YOLOE Python तैनाती उदाहरण](docs/cn/quick_start/models/python.md)
+    - [PP-YOLOE C++ तैनाती उदाहरण](docs/cn/quick_start/models/cpp.md)
+- **पीछे के अंत का उपयोग करें**
+    - [Runtime Python उदाहरण का उपयोग करें](docs/cn/quick_start/runtime/python.md)
+    - [Runtime C++ उदाहरण का उपयोग करें](docs/cn/quick_start/runtime/cpp.md)
+    - [मॉडल परिनियोजन के लिए तर्क संबंधी अंत को मैं कैसे कॉन्फ़िगर करूं](docs/cn/faq/how_to_change_backend.md)
+- **सेवाकरण परिनियोजन**
+    - [सेवा तैनाती छवि संकलन और स्थापना](serving/docs/zh_CN/compile.md)
+    - [सेवाकरण परिनियोजन](serving)
+- **API दस्तावेज़**
+    - [Python API दस्तावेज़](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/python/html/)
+    - [C++ API दस्तावेज़](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/cpp/html/)
+    - [Android Java API दस्तावेज़](java/android)
+- **परफ़ॉर्मेंस ट्यूनिंग**
+    - [त्वरण त्वरण](docs/cn/quantize.md)
+    - [मल्टी थ्रेडेड मल्टी प्रोसेस उपयोग](/tutorials/multi_thread)
+- **क्यू एंड ए**
+    - [1. Windows कै से इस्तेमाल करे C++ SDK](docs/cn/faq/use_sdk_on_windows.md)
+    - [2. Android कैसे इस्तेमाल करे FastDeploy C++ SDK](docs/cn/faq/use_cpp_sdk_on_android.md)
+    - [3. TensorRT उपयोग की जा रही कुछ तकनीकें](docs/cn/faq/tensorrt_tricks.md)
+- **अधिक Fastअधिक Deploy परिनियोजन मॉड्यूल**
+    - [Benchmark परीक्षण](benchmark)
+- **मॉडल समर्थन सूची**
+    - [🖥️ सर्वर साइड मॉडल सूचियों का समर्थन करता है](#fastdeploy-server-models)
+    - [📳 मोबाइल और एंड-साइड मॉडल समर्थन सूची](#fastdeploy-edge-models)
+    - [⚛️ Web और छोटे कार्यक्रम मॉडल समर्थन सूची](#fastdeploy-web-models)
+- **💕डेवलपर योगदान**
+    - [नया मॉडल जोड़ें](docs/cn/faq/develop_a_new_model.md)
+
+
 
 <div id="fastdeploy-quick-start-python"></div>
 
-<details close>
+## तेजी से शुरू💨
 
-<summary><b>पायथन एसडीके क्विक स्टार्ट (विवरण के लिए यहां क्लिक करें)</b></summary><div>
+<details Open>
 
-#### त्वरित स्थापना 
+<summary><b>Python SDK तेजी से (खोलें और सिकोड़ें)b></summary><div>
 
-#####  पूर्व-निर्भरता 
+### 🎆 त्वरित स्थापना
+
+#### 🔸 पूर्वता
 
 - CUDA >= 11.2、cuDNN >= 8.0、Python >= 3.6
 - OS: Linux x86_64/macOS/Windows 10
 
-##### संस्करण स्थापित करें 
+#### 🔸 इंस्टॉल करें GPU संस्करण
 
 ```bash
 pip install numpy opencv-python fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
-##### [Conda स्थापना (अनुशंसित) ](docs/cn/build_and_install/download_prebuilt_libraries.md)
+#### [🔸 Conda स्थापना (अनुशंसित✨)](docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 ```bash
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
 ```
 
-#####  CPU संस्करण स्थापित करें
+#### 🔸 इंस्टॉल करें CPU संस्करण
 
 ```bash
 pip install numpy opencv-python fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
-#### Python अनुमान उदाहरण 
+### 🎇 Python अनुमान उदाहरण
 
-*  मॉडल और चित्र तैयार करें
+* मॉडल और तस्वीरें तैयार करें
 
 ```bash
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
@@ -106,10 +187,10 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 ```
 
-* परीक्षण अनुमान परिणाम 
+* परीक्षण अनुमान परिणाम
 
 ```python
-# GPU/TensorRT तैनाती संदर्भ examples/vision/detection/paddledetection/python
+# GPU/TensorRT तैनाती, संदर्भ examples/vision/detection/paddledetection/python
 import cv2
 import fastdeploy.vision as vision
 
@@ -117,7 +198,7 @@ model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
                                  "ppyoloe_crn_l_300e_coco/model.pdiparams",
                                  "ppyoloe_crn_l_300e_coco/infer_cfg.yml")
 im = cv2.imread("000000014439.jpg")
-result = model.predict(im.copy())
+result = model.predict(im)
 print(result)
 
 vis_im = vision.vis_detection(im, result, score_threshold=0.5)
@@ -131,16 +212,16 @@ cv2.imwrite("vis_image.jpg", vis_im)
 
 <details close>
 
-<summary><b> C++ SDK त्वरित प्रारंभ (विवरण के लिए यहां क्लिक करें) </b></summary><div>
+<summary><b>C++ SDK तेजी से शुरू (अधिक जानकारी के लिए क्लिक करें)</b></summary><div>
 
 
-#### संस्थापन 
+### 🎆 इंस्टॉल करें
 
-C++ SDK त्वरित प्रारंभ (विवरण के लिए क्लिक करें)(docs/cn/build_and_install/download_prebuilt_libraries.md)文档  
+-  संदर्भ [C++ प्रीकम्पाइल लाइब्रेरी डाउनलोड](docs/cn/build_and_install/download_prebuilt_libraries.md)文档  
 
-#### C++ अनुमान उदाहरण 
+#### 🎇 C++ अनुमान उदाहरण
 
-* मॉडल और चित्र तैयार करें 
+* मॉडल और तस्वीरें तैयार करें
 
 ```bash
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
@@ -148,10 +229,10 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 ```
 
-* अनुमान परिणामों का परीक्षण करें 
+* परीक्षण अनुमान परिणाम
 
 ```C++
-// GPU/TensorRTपरिनियोजन संदर्भ examples/vision/detection/paddledetection/cpp
+// GPU/TensorRT तैनाती, संदर्भ examples/vision/detection/paddledetection/cpp
 #include "fastdeploy/vision.h"
 
 int main(int argc, char* argv[]) {
@@ -162,9 +243,9 @@ int main(int argc, char* argv[]) {
   auto im = cv::imread("000000014439.jpg");
 
   vision::DetectionResult res;
-  model.Predict(&im, &res);
+  model.Predict(im, &res);
 
-  auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
+  auto vis_im = vision::VisDetection(im, res, 0.5);
   cv::imwrite("vis_image.jpg", vis_im);
   return 0;
 }
@@ -172,11 +253,13 @@ int main(int argc, char* argv[]) {
 
 </div></details>
 
-अधिक परिनियोजन उदाहरणों के लिए, कृपया मॉडल परिनियोजन उदाहरण देखें(examples) .
+अधिक तैनाती के मामलों के लिए, देखें[मॉडल परिनियोजन उदाहरण](examples) .
+
 
 <div id="fastdeploy-server-models"></div>
 
-### सर्वर-साइड मॉडल समर्थन सूची  🔥🔥🔥🔥🔥
+
+## ✴️ ✴️ सर्वर साइड मॉडल सूचियों का समर्थन करता है ✴️ ✴️ 
 
 प्रतीक विवरण: (1)  ✅: पहले से समर्थित; (2) ❔:गति पर ; (3) N/A: समर्थित नहीं; <br>
 
@@ -204,6 +287,8 @@ int main(int argc, char* argv[]) {
 | Classification         | [PaddleClas/Inceptionv3](./examples/vision/classification/paddleclas)                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
 | Classification         | [PaddleClas/PP-HGNet](./examples/vision/classification/paddleclas)                           | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
 | Detection              | [PaddleDetection/PP-YOLOE](./examples/vision/detection/paddledetection)                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Detection              | [🔥PaddleDetection/YOLOv8](./examples/vision/detection/paddledetection)                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |✅       | ❔      |
+| Detection              | [🔥ultralytics/YOLOv8](./examples/vision/detection/yolov8)                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔               | ✅                           | ❔                           | ❔      |❔       | ❔      |
 | Detection              | [PaddleDetection/PicoDet](./examples/vision/detection/paddledetection)                       | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
 | Detection              | [PaddleDetection/YOLOX](./examples/vision/detection/paddledetection)                         | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅               | ✅                           | ❔                           | ✅       |
 | Detection              | [PaddleDetection/YOLOv3](./examples/vision/detection/paddledetection)                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
@@ -256,16 +341,12 @@ int main(int argc, char* argv[]) {
 | NLP                    | [PaddleNLP/ERNIE-3.0](./examples/text/ernie-3.0)                                             | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ❔                           | ❔                           | ✅       |
 | Speech                 | [PaddleSpeech/PP-TTS](./examples/audio/pp-tts)                                                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ❔                           | --                          | ✅       |
 
-
 </div></details>
-
-<div id="fastdeploy-edge-doc"></div>
-
-## 📲  मोबाइल और एंड-साइड परिनियोजन  🔥🔥🔥🔥
 
 <div id="fastdeploy-edge-models"></div>
 
-### एंड-साइड मॉडल समर्थन सूची
+## 📲 मोबाइल और एंड-साइड मॉडल समर्थन सूची
+
 <details open><summary><b>  एंड-साइड मॉडल समर्थन सूची (पतन के लिए क्लिक करें)</b></summary><div>
 
 <div align="center">
@@ -288,6 +369,7 @@ int main(int argc, char* argv[]) {
 | Classification     | [PaddleClas/Inceptionv3](examples/vision/classification/paddleclas)                      | 95.5      | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
 | Classification     | [PaddleClas/PP-HGNet](examples/vision/classification/paddleclas)                         | 59        | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
 | Detection          | [PaddleDetection/PicoDet_s](examples/vision/detection/paddledetection) | 4.9       | ✅       | ✅       | ✅                             | ✅                                    | ✅                                 | ✅                                 | --      |
+| Detection          | [YOLOv5](./examples/vision/detection/rkyolo) |        |  ❔     |  ❔      | [✅](./examples/vision/detection/rkyolo)                             | ❔                                   | ❔                                 | ❔                                 | --      |
 | Face Detection     | [deepinsight/SCRFD](./examples/vision/facedet/scrfd)                                     | 2.5       | ✅       | ✅       | ✅                             | --                                   | --                                | --                                | --      |
 | Keypoint Detection | [PaddleDetection/PP-TinyPose](examples/vision/keypointdetection/tiny_pose)               | 5.5       | ✅       | ✅       | ❔                             | ❔                                    | ❔                                 | ❔                                 | --      |
 | Segmentation       | [PaddleSeg/PP-LiteSeg(STDC1)](examples/vision/segmentation/paddleseg)                    | 32.2      | ✅       | ✅       | ✅                             | --                                   | --                                | --                                | --      |
@@ -302,7 +384,7 @@ int main(int argc, char* argv[]) {
 
 </div></details>
 
-## 🌐 🌐 Web और एप्लेट तैनाती
+## ⚛️ Web और छोटे कार्यक्रम मॉडल समर्थन सूची
 
 <div id="fastdeploy-web-models"></div>
 
@@ -321,14 +403,12 @@ int main(int argc, char* argv[]) {
 </div></details>
 
 
-<div id="fastdeploy-acknowledge"></div>
-
-## Acknowledge
+## 💐 Acknowledge
 
 यह परियोजना SDK पीढ़ी और डाउनलोड हम [EasyEdge](https://ai.baidu.com/easyedge/app/openSource) में मुक्त और खुली क्षमताओं का उपयोग करने के लिए आभारी हैं।
 
-## License
+## ©️ License
 
 <div id="fastdeploy-license"></div>
 
-FastDeploy निम्नानुसार है [Apache-2.0 खुला स्रोत लाइसेंस](./LICENSE)。
+FastDeploy निम्नानुसार है [Apache-2.0 खुला स्रोत लाइसेंस](./LICENSE)
