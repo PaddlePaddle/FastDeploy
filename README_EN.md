@@ -6,16 +6,6 @@ English | [简体中文](README_CN.md) | [हिन्दी](./docs/docs_i18n/R
 </p>
 
 <p align="center">
-    <a href="/docs/en/build_and_install"><b> Installation </b></a>
-    •
-    <a href="docs/README_EN.md"><b> Documents </b></a>
-    • <a href="/README_EN.md#Quick-Start"><b> Quick Start </b></a> •
-    <a href="https://baidu-paddle.github.io/fastdeploy-api/"><b> API Docs </b></a>
-    •
-    <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><b> Release Notes </b></a>
-</p>
-
-<p align="center">
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-dfd.svg"></a>
     <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><img src="https://img.shields.io/github/v/release/PaddlePaddle/FastDeploy?color=ffa"></a>
     <a href=""><img src="https://img.shields.io/badge/python-3.7+-aff.svg"></a>
@@ -25,7 +15,15 @@ English | [简体中文](README_CN.md) | [हिन्दी](./docs/docs_i18n/R
     <a href="https://github.com/PaddlePaddle/FastDeploy/issues"><img src="https://img.shields.io/github/issues/PaddlePaddle/FastDeploy?color=9cc"></a>
     <a href="https://github.com/PaddlePaddle/FastDeploy/stargazers"><img src="https://img.shields.io/github/stars/PaddlePaddle/FastDeploy?color=ccf"></a>
 </p>
-
+<p align="center">
+    <a href="/docs/en/build_and_install"><b> Installation </b></a>
+    |
+    <a href="docs/README_EN.md"><b> Documents </b></a>
+    | <a href="/README_EN.md#Quick-Start"><b> Quick Start </b></a> |
+    <a href="https://baidu-paddle.github.io/fastdeploy-api/"><b> API Docs </b></a>
+    |
+    <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><b> Release Notes </b></a>
+</p>
 <div align="center">
     
 [<img src='https://user-images.githubusercontent.com/54695910/200465949-da478e1b-21ce-43b8-9f3f-287460e786bd.png' height="80px" width="110px">](examples/vision/classification)
