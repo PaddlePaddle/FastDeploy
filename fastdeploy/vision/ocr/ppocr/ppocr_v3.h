@@ -36,7 +36,9 @@ class FASTDEPLOY_DECL PPOCRv3 : public PPOCRv2 {
                 fastdeploy::vision::ocr::Recognizer* rec_model)
                 : PPOCRv2(det_model, cls_model, rec_model) {
     // The only difference between v2 and v3
-    recognizer_->GetPreprocessor().rec_image_shape_[1] = 48;
+    auto preprocess_shape = recognizer_->GetPreprocessor().GetRecImageShape();
+    preprocess_shape[1] = 48;
+    recognizer_->GetPreprocessor().SetRecImageShape(preprocess_shape);
   }
   /** \brief Classification model is optional, so this function is set up the detection model path and recognition model path respectively.
    *
@@ -47,7 +49,23 @@ class FASTDEPLOY_DECL PPOCRv3 : public PPOCRv2 {
                 fastdeploy::vision::ocr::Recognizer* rec_model)
                 : PPOCRv2(det_model, rec_model) {
     // The only difference between v2 and v3
-    recognizer_->GetPreprocessor().rec_image_shape_[1] = 48;
+    auto preprocess_shape = recognizer_->GetPreprocessor().GetRecImageShape();
+    preprocess_shape[1] = 48;
+    recognizer_->GetPreprocessor().SetRecImageShape(preprocess_shape);
+  }
+
+  /** \brief Clone a new PPOCRv3 with less memory usage when multiple instances of the same model are created
+   *
+   * \return new PPOCRv3* type unique pointer
+   */
+  std::unique_ptr<PPOCRv3> Clone() const {
+    std::unique_ptr<PPOCRv3> clone_model = utils::make_unique<PPOCRv3>(PPOCRv3(*this));
+    clone_model->detector_ = detector_->Clone().release();
+    if (classifier_ != nullptr) {
+      clone_model->classifier_ = classifier_->Clone().release();
+    }
+    clone_model->recognizer_ = recognizer_->Clone().release();
+  return clone_model;
   }
 };
 

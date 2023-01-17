@@ -123,7 +123,8 @@ std::vector<cv::Mat> AlignFaceWithFivePoints(
     std::array<int, 2> output_size) {
   FDASSERT(std_landmarks.size() == 5, "The landmarks.size() must be 5.")
   FDASSERT(!image.empty(), "The input_image can't be empty.")
-  std::vector<cv::Mat> output_images(result.boxes.size());
+  std::vector<cv::Mat> output_images;
+  output_images.reserve(result.scores.size());
   if (result.boxes.empty()) {
     FDWARNING << "The result is empty." << std::endl;
     return output_images;
@@ -142,7 +143,7 @@ std::vector<cv::Mat> AlignFaceWithFivePoints(
     if (cropped_image_aligned.empty()) {
       FDWARNING << "croppedImageAligned is empty." << std::endl;
     }
-    output_images.push_back(cropped_image_aligned);
+    output_images.emplace_back(cropped_image_aligned);
   }
   return output_images;
 }
