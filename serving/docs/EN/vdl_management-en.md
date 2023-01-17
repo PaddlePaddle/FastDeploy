@@ -2,11 +2,11 @@
 
 ### Introduction
 
-[VisualDL](https://github.com/PaddlePaddle/VisualDL/blob/develop/README_CN.md) is a visualization tool of PaddlePaddle, provides a variety of charts to show the trends of parameters, and visualizes model structures, data samples, high-dimensional data distributions, etc. After version 2.5, a new feature of serving deployment visualization is added. It mainly provides the functions of loading and editing the model repository, service management and monitoring, and providing the client to test service. You can directly load a  initial model repository in FastDeploy examples, and complete the download of model resources required and modification of the model configuration file on VisualDL. Then start the fastdeployserver to deploy a certain model repository, monitor the service log and metrics, and help users make quick test and verification of deployed services.
+[VisualDL](https://github.com/PaddlePaddle/VisualDL/blob/develop/README_CN.md) is a visualization tool of PaddlePaddle, provides a variety of charts to show the trends of parameters, and visualizes model structures, data samples, high-dimensional data distributions, etc. After version 2.5, a new feature of serving deployment visualization is added. It mainly provides the functions of loading and editing the model repository, service management and monitoring, and providing the client to test service. You can directly load a  initial model repository in FastDeploy examples, and complete the download of model resources required and modification of the model configuration file on VisualDL. Then start the fastdeployserver to deploy a certain model repository, monitor the service log and metrics, and help you make quick test and verification of deployed services.
 
 ### Pre-requisite
 
-In order to use this function, users need to install fastdeployserver in the environment. You can directly use fastdeployserver by downloading the docker image of fastdeploy.
+In order to use this function, you need to install fastdeployserver in the environment. You can directly use fastdeployserver by downloading the docker image of fastdeploy.
 
 - CPU docker image
 ```bash
@@ -79,7 +79,7 @@ After entering the component tab of FastDeploy Server, you can
 
    a. Configuration modification update
 
-   When the user selects a configuration file, the configuration editor will display the configuration information in the selected configuration file. Currently, the configuration editor mainly supports users to modify the configuration of three attributes: maxBatchSize, instanceGroup, and optimization. The meanings and values of these three attributes are described as follows.
+   When the user selects a configuration file, the configuration editor will display the configuration information in the selected configuration file. Currently, the configuration editor mainly supports you to modify the configuration of three attributes: maxBatchSize, instanceGroup, and optimization. The meanings and values of these three attributes are described as follows.
    ```text
    maxBatchSize: The maximum batch size allowed in inference. Please enter a non-negative integer, such as 16
    instanceGroup: Set hardware resources the server uses and how many instances are deployed. It contains three configurable items, count represents the number of deployed instances, please enter a non-negative integer, such as 2. kind indicates the type of device used, and you can choose KIND_CPU to indicate the use of CPU or KIND_GPU to indicate the use of GPU. When KIND_GPU is selected, gpus indicates that the GPU card numbers need to be used, please enter multiple integers separated by commas (,), such as using cards 2 and 3, i.e. 2,3
@@ -131,7 +131,7 @@ After entering the component tab of FastDeploy Server, you can
 
    b. Monitoring service
 
-   At present, the monitoring of the started service is mainly realized by providing the user with the output information of the service, the metrics information, and the information of the deployed model repository. By default, the front-end will automatically update the monitored information every 10s, and users can also click the "update" button to manually update.
+   At present, the monitoring of the started service is mainly realized by providing the user with the output information of the service, the metrics information, and the information of the deployed model repository. By default, the front-end will automatically update the monitored information every 10s, and you can also click the "update" button to manually update.
    - Log (the output log of the service, which can be used to obtain the startup and loading status of the service, exception information, etc.)
    - Metrics (obtain performance-related data by accessing the metric query service)
    - Model repository configuration (used to view the model repository information deployed by the service)
@@ -149,7 +149,7 @@ After entering the component tab of FastDeploy Server, you can
 
    d. Testing the service
 
-   Click the "open client" button to open the client for quickly testing the service. The client is written based on gradio, and will automatically help users fill in basic information according to the launch parameters of the service. You can refer to [Use VisualDL as fastdeploy client for request visualization](./client-en.md#use-visualdl-as-fastdeploy-client-for-request-visualization) to use.
+   Click the "open client" button to open the client for quickly testing the service. The client is written based on gradio, and will automatically help you fill in basic information according to the launch parameters of the service. You can refer to [Use VisualDL as fastdeploy client for request visualization](./client-en.md#use-visualdl-as-fastdeploy-client-for-request-visualization) to use.
    <p align="center">
    <img src="https://user-images.githubusercontent.com/22424850/211198901-3e58fe9d-8667-4416-987a-200f9edeb05d.gif" width="100%"/>
    </p>
