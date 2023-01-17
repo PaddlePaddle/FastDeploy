@@ -23,14 +23,18 @@ PPOCRv2::PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
                              fastdeploy::vision::ocr::Recognizer* rec_model)
     : detector_(det_model), classifier_(cls_model), recognizer_(rec_model) {
   Initialized();
-  recognizer_->GetPreprocessor().GetRecImageShape()[1] = 32;
+  auto preprocess_shape = recognizer_->GetPreprocessor().GetRecImageShape();
+  preprocess_shape[1] = 32;
+  recognizer_->GetPreprocessor().SetRecImageShape(preprocess_shape);
 }
 
 PPOCRv2::PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
                              fastdeploy::vision::ocr::Recognizer* rec_model)
     : detector_(det_model), recognizer_(rec_model) {
   Initialized();
-  recognizer_->GetPreprocessor().GetRecImageShape()[1] = 32;
+  auto preprocess_shape = recognizer_->GetPreprocessor().GetRecImageShape();
+  preprocess_shape[1] = 32;
+  recognizer_->GetPreprocessor().SetRecImageShape(preprocess_shape);
 }
 
 bool PPOCRv2::SetClsBatchSize(int cls_batch_size) {
