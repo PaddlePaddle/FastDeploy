@@ -50,11 +50,13 @@ class FASTDEPLOY_DECL ClassifierPreprocessor {
   bool GetIsScale() const { return is_scale_; }
 
   /// Set cls_image_shape for the classification preprocess
-  void SetClsImageShape(std::vector<int> cls_image_shape)
-                      { cls_image_shape_ = cls_image_shape; }
+  void SetClsImageShape(std::vector<int> cls_image_shape) {
+    cls_image_shape_ = cls_image_shape;
+  }
   /// Get cls_image_shape for the classification preprocess
   std::vector<int> GetClsImageShape() const { return cls_image_shape_; }
 
+ private:
   std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
   std::vector<float> scale_ = {0.5f, 0.5f, 0.5f};
   bool is_scale_ = true;

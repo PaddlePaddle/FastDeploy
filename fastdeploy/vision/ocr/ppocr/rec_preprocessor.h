@@ -66,6 +66,7 @@ class FASTDEPLOY_DECL RecognizerPreprocessor {
   /// Get rec_image_shape for the recognition preprocess
   std::vector<int> GetRecImageShape() { return rec_image_shape_; }
 
+ private:
   std::vector<int> rec_image_shape_ = {3, 48, 320};
   std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
   std::vector<float> scale_ = {0.5f, 0.5f, 0.5f};
