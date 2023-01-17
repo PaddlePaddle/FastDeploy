@@ -135,7 +135,7 @@ bool PPOCRv2::BatchPredict(
           for (size_t i_img = start_index; i_img < end_index; ++i_img) {
             if (cls_labels_ptr->at(i_img) % 2 == 1 &&
                 cls_scores_ptr->at(i_img) >
-                    classifier_->GetPostprocessor().cls_thresh_) {
+                    classifier_->GetPostprocessor().GetClsThresh()) {
               cv::rotate(image_list[i_img], image_list[i_img], 1);
             }
           }
