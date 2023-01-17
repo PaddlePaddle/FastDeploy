@@ -42,20 +42,23 @@ class FASTDEPLOY_DECL DBDetectorPostprocessor {
   double GetDetDBThresh() const { return det_db_thresh_; }
 
   /// Set det_db_box_thresh for the detection postprocess, default is 0.6
-  void SetDetDBBoxThresh(double det_db_box_thresh)
-                        { det_db_box_thresh_ = det_db_box_thresh; }
+  void SetDetDBBoxThresh(double det_db_box_thresh) {
+    det_db_box_thresh_ = det_db_box_thresh;
+  }
   /// Get det_db_box_thresh of the detection postprocess
   double GetDetDBBoxThresh() const { return det_db_box_thresh_; }
 
   /// Set det_db_unclip_ratio for the detection postprocess, default is 1.5
-  void SetDetDBUnclipRatio(double det_db_unclip_ratio)
-                        { det_db_unclip_ratio_ = det_db_unclip_ratio; }
+  void SetDetDBUnclipRatio(double det_db_unclip_ratio) {
+    det_db_unclip_ratio_ = det_db_unclip_ratio;
+  }
   /// Get det_db_unclip_ratio_ of the detection postprocess
   double GetDetDBUnclipRatio() const { return det_db_unclip_ratio_; }
 
   /// Set det_db_score_mode for the detection postprocess, default is 'slow'
-  void SetDetDBScoreMode(std::string det_db_score_mode)
-                        { det_db_score_mode_ = det_db_score_mode; }
+  void SetDetDBScoreMode(const std::string& det_db_score_mode) {
+    det_db_score_mode_ = det_db_score_mode;
+  }
   /// Get det_db_score_mode_ of the detection postprocess
   std::string GetDetDBScoreMode() const { return det_db_score_mode_; }
 
@@ -72,9 +75,7 @@ class FASTDEPLOY_DECL DBDetectorPostprocessor {
 
  private:
   PostProcessor util_post_processor_;
-  bool SingleBatchPostprocessor(const float* out_data,
-                                int n2,
-                                int n3,
+  bool SingleBatchPostprocessor(const float* out_data, int n2, int n3,
                                 const std::array<int, 4>& det_img_info,
                                 std::vector<std::array<int, 8>>* boxes_result);
 };

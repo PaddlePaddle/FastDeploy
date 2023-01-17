@@ -67,7 +67,7 @@ bool DBDetectorPostprocessor::SingleBatchPostprocessor(
         new_box[k++] = e;
       }
     }
-    boxes_result->push_back(new_box);
+    boxes_result->emplace_back(new_box);
   }
 
   return true;
