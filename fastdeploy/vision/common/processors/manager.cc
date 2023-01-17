@@ -22,7 +22,7 @@ ProcessorManager::~ProcessorManager() {
 #endif
 }
 
-void ProcessorManager::UseCuda(int gpu_id) {
+void ProcessorManager::UseCuda(bool enable_cv_cuda, int gpu_id) {
 #ifdef WITH_GPU
   if (gpu_id >= 0) {
     device_id_ = gpu_id;
@@ -35,18 +35,17 @@ void ProcessorManager::UseCuda(int gpu_id) {
 #else
   FDASSERT(false, "FastDeploy didn't compile with WITH_GPU.");
 #endif
-}
 
-void ProcessorManager::UseCvCuda(int gpu_id) {
+  if (enable_cv_cuda) {
 #ifdef ENABLE_CVCUDA
-  UseCuda(gpu_id);
-  DefaultProcLib::default_lib = ProcLib::CVCUDA;
+    DefaultProcLib::default_lib = ProcLib::CVCUDA;
 #else
-  FDASSERT(false, "FastDeploy didn't compile with CV-CUDA.");
+    FDASSERT(false, "FastDeploy didn't compile with CV-CUDA.");
 #endif
+  }
 }
 
-bool ProcessorManager::WithGpu() {
+bool ProcessorManager::CudaUsed() {
   return (DefaultProcLib::default_lib == ProcLib::CUDA ||
           DefaultProcLib::default_lib == ProcLib::CVCUDA);
 }
@@ -64,14 +63,14 @@ bool ProcessorManager::Run(std::vector<FDMat>* images,
   }
 
   for (size_t i = 0; i < images->size(); ++i) {
-    if (WithGpu()) {
+    if (CudaUsed()) {
       SetStream(&((*images)[i]));
     }
   }
 
   bool ret = Apply(images, outputs);
 
-  if (WithGpu()) {
+  if (CudaUsed()) {
     SyncStream();
   }
   return ret;

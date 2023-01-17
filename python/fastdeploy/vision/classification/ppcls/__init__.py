@@ -35,12 +35,13 @@ class PaddleClasPreprocessor:
         """
         return self._preprocessor.run(input_ims)
 
-    def use_cvcuda(self, gpu_id=-1):
-        """Use CV-CUDA preprocessors
+    def use_cuda(self, enable_cv_cuda=False, gpu_id=-1):
+        """Use CUDA preprocessors
 
+        :param: enable_cv_cuda: Whether to enable CV-CUDA
         :param: gpu_id: GPU device id
         """
-        return self._preprocessor.use_cvcuda(gpu_id)
+        return self._preprocessor.use_cuda(enable_cv_cuda, gpu_id)
 
     def disable_normalize(self):
         """

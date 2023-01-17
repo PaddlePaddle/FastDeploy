@@ -31,16 +31,17 @@ void BindPaddleClas(pybind11::module& m) {
                    "Failed to preprocess the input data in "
                    "PaddleClasPreprocessor.");
              }
-             if (!self.WithGpu()) {
+             if (!self.CudaUsed()) {
                for (size_t i = 0; i < outputs.size(); ++i) {
                  outputs[i].StopSharing();
                }
              }
              return outputs;
            })
-      .def("use_cvcuda",
+      .def("use_cuda",
            [](vision::classification::PaddleClasPreprocessor& self,
-              int gpu_id = -1) { self.UseCvCuda(gpu_id); })
+              bool enable_cv_cuda = false,
+              int gpu_id = -1) { self.UseCuda(enable_cv_cuda, gpu_id); })
       .def("disable_normalize",
            [](vision::classification::PaddleClasPreprocessor& self) {
              self.DisableNormalize();

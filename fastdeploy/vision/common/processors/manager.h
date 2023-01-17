@@ -24,11 +24,9 @@ class FASTDEPLOY_DECL ProcessorManager {
  public:
   ~ProcessorManager();
 
-  void UseCuda(int gpu_id = -1);
+  void UseCuda(bool enable_cv_cuda = false, int gpu_id = -1);
 
-  void UseCvCuda(int gpu_id = -1);
-
-  bool WithGpu();
+  bool CudaUsed();
 
   void SetStream(Mat* mat) {
 #ifdef WITH_GPU

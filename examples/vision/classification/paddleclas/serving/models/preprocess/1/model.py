@@ -70,7 +70,7 @@ class TritonPythonModel:
             yaml_path)
         if args['model_instance_kind'] == 'GPU':
             device_id = int(args['model_instance_device_id'])
-            self.preprocess_.use_cvcuda(device_id)
+            self.preprocess_.use_cuda(False, device_id)
 
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`
