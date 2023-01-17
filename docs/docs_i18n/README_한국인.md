@@ -404,7 +404,7 @@ int main(int argc, char* argv[]) {
 
 ## 💐 Acknowledge
 
-이 프로젝트의 SDK 생성 및 다운로드는 EasyEdge (https://ai.baidu.com/easyedge/app/openSource) 의 무료 오픈 기능을 사용하여 진행되었습니다. 이에 감사드립니다.
+이 프로젝트의 SDK 생성 및 다운로드는 [EasyEdge](https://ai.baidu.com/easyedge/app/openSource) 의 무료 오픈 기능을 사용하여 진행되었습니다. 이에 감사드립니다.
 
 ## ©️ License
 
