@@ -49,7 +49,8 @@ bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig() {
       if (!disable_normalize_) {
         auto mean = op["mean"].as<std::vector<float>>();
         auto std = op["std"].as<std::vector<float>>();
-        bool is_scale = true;
+//        bool is_scale = true;
+        bool is_scale = false;
         if (op["is_scale"]) {
           is_scale = op["is_scale"].as<bool>();
         }

@@ -102,6 +102,19 @@ bool PPDetDecode::ReadPostprocessConfigFromYaml() {
  ***************************************************************/
 bool PPDetDecode::DecodeAndNMS(const std::vector<FDTensor>& tensors,
                                std::vector<DetectionResult>* results) {
+  // For models that have only been decoded.
+  if (tensors.size() == 1) {
+    FDASSERT(tensors[0].Shape().size() == 3,
+             "The size of the shape of the output Tensor can only be three.")
+    if (arch_ == "YOLOv8") {
+      NMS(tensors, results);
+    } else{
+      FDERROR << "Models without NMS only support YOLOv8" << std::endl;
+    }
+    return true;
+  }
+
+  // For the model clipping to NMS.
   if (tensors.size() == 2) {
     int boxes_index = 0;
     int scores_index = 1;
@@ -141,7 +154,10 @@ bool PPDetDecode::DecodeAndNMS(const std::vector<FDTensor>& tensors,
       offset += (num_boxes[i] * 6);
     }
     return true;
-  } else {
+  }
+
+  if (tensors.size() >= 2) {
+    // For models that do not do Decode and NMS.
     FDASSERT(tensors.size() == fpn_stride_.size() * 2,
              "The size of output must be fpn_stride * 2.")
     batchs_ = static_cast<int>(tensors[0].shape[0]);
@@ -165,6 +181,7 @@ bool PPDetDecode::DecodeAndNMS(const std::vector<FDTensor>& tensors,
     }
     return true;
   }
+  return false;
 }
 
 /***************************************************************
@@ -291,6 +308,47 @@ void PPDetDecode::DisPred2Bbox(const float*& dfl_det, int label, float score,
   results->scores.emplace_back(score);
 }
 
+bool PPDetDecode::NMS(const std::vector<FDTensor>& tensors,
+                      std::vector<DetectionResult>* results) {
+  int batch = tensors[0].shape[0];
+  // transpose
+  FDTensor tensor_transpose = tensors[0];
+  results->resize(batch);
+  for (size_t bs = 0; bs < batch; ++bs) {
+    (*results)[bs].Clear();
+    (*results)[bs].Reserve(tensor_transpose.shape[1] *
+                           (tensor_transpose.shape[2] - 4));
+    if (tensor_transpose.dtype != FDDataType::FP32) {
+      FDERROR << "Only support post process with float32 data." << std::endl;
+      return false;
+    }
+    const float* data =
+        reinterpret_cast<const float*>(tensor_transpose.Data()) +
+        bs * tensor_transpose.shape[1] * tensor_transpose.shape[2];
+    for (size_t i = 0; i < tensor_transpose.shape[1]; ++i) {
+      int s = i * tensor_transpose.shape[2];
+      for (size_t j = 4; j < tensor_transpose.shape[2]; ++j) {
+        float confidence = data[s + j];
+        // filter boxes by conf_threshold
+        if (confidence <= multi_class_nms_.score_threshold) {
+          continue;
+        }
+        int32_t label_id = j - 4;
+        (*results)[bs].boxes.emplace_back(std::array<float, 4>{
+            data[s], data[s + 1], data[s + 2], data[s + 3]});
+        (*results)[bs].label_ids.emplace_back(label_id);
+        (*results)[bs].scores.emplace_back(confidence);
+      }
+    }
+
+    if ((*results)[bs].boxes.size() == 0) {
+      std::cout << "None" << std::endl;
+      return true;
+    }
+    utils::NMS(&((*results)[bs]), multi_class_nms_.nms_threshold);
+  }
+  return true;
+}
 }  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

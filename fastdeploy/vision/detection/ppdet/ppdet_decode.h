@@ -25,6 +25,8 @@ class FASTDEPLOY_DECL PPDetDecode {
   explicit PPDetDecode(const std::string& config_file);
   bool DecodeAndNMS(const std::vector<FDTensor>& tensors,
                     std::vector<DetectionResult>* results);
+  bool NMS(const std::vector<FDTensor>& tensors,
+           std::vector<DetectionResult>* results);
   void SetNMSOption(const NMSOption& option = NMSOption()) {
     multi_class_nms_.SetNMSOption(option);
   }
