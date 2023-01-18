@@ -1,43 +1,44 @@
-# PaddleSeg C++部署示例
+English | [简体中文](README_CN.md)
+# PaddleSeg C++ Deployment Example
 
-本目录下提供`infer.cc`快速完成pp_liteseg模型在SOPHGO BM1684x板子上加速部署的示例。
+`infer.cc` in this directory provides a quick example of accelerated deployment of the pp_liteseg model on SOPHGO BM1684x.
 
-在部署前，需确认以下两个步骤:
+Before deployment, the following two steps need to be confirmed:
 
-1. 软硬件环境满足要求
-2. 根据开发环境，从头编译FastDeploy仓库
+1. Hardware and software environment meets the requirements.
+2. Compile the FastDeploy repository from scratch according to the development environment.
 
-以上步骤请参考[SOPHGO部署库编译](../../../../../../docs/cn/build_and_install/sophgo.md)实现
+For the above steps, please refer to [How to Build SOPHGO Deployment Environment](../../../../../../docs/en/build_and_install/sophgo.md).
 
-## 生成基本目录文件
+## Generate Basic Directory Files
 
-该例程由以下几个部分组成
+The routine consists of the following parts:
 ```text
 .
 ├── CMakeLists.txt
-├── build  # 编译文件夹
-├── image  # 存放图片的文件夹
+├── build  # Compile Folder
+├── image  # Folder for images
 ├── infer.cc
-└── model  # 存放模型文件的文件夹
+└── model  # Folder for models
 ```
 
-## 编译
+## Compile
 
-### 编译并拷贝SDK到thirdpartys文件夹
+### Compile and Copy SDK to folder thirdpartys
 
-请参考[SOPHGO部署库编译](../../../../../../docs/cn/build_and_install/sophgo.md)仓库编译SDK，编译完成后，将在build目录下生成fastdeploy-0.0.3目录.
+Please refer to [How to Build SOPHGO Deployment Environment](../../../../../../docs/en/build_and_install/sophgo.md) to compile SDK.After compiling, the fastdeploy-0.0.3 directory will be created in the build directory.
 
-### 拷贝模型文件，以及配置文件至model文件夹
-将Paddle模型转换为SOPHGO bmodel模型，转换步骤参考[文档](../README.md)  
-将转换后的SOPHGO bmodel模型文件拷贝至model中
+### Copy model and configuration files to folder Model
+Convert Paddle model to SOPHGO bmodel model. For the conversion steps, please refer to [Document](../README.md).
+Please copy the converted SOPHGO bmodel to folder model.
 
-### 准备测试图片至image文件夹
+### Prepare Test Images to folder image
 ```bash
 wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 cp cityscapes_demo.png ./images
 ```
 
-### 编译example
+### Compile example
 
 ```bash
 cd build
@@ -45,12 +46,12 @@ cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-0.0.3
 make
 ```
 
-## 运行例程
+## Running Routines
 
 ```bash
 ./infer_demo model images/cityscapes_demo.png
 ```
 
 
-- [模型介绍](../../)
-- [模型转换](../)
+- [Model Description](../../)
+- [Model Conversion](../)

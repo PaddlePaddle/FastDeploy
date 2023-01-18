@@ -48,7 +48,7 @@ void Mask::Reserve(int size) { data.reserve(size); }
 void Mask::Resize(int size) { data.resize(size); }
 
 void Mask::Clear() {
-  std::vector<int32_t>().swap(data);
+  std::vector<uint8_t>().swap(data);
   std::vector<int64_t>().swap(shape);
 }
 

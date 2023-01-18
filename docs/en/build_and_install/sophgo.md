@@ -1,4 +1,4 @@
-
+English | [中文](../../cn/build_and_install/sophgo.md)
 # How to Build SOPHGO Deployment Environment
 
 ## SOPHGO Environment Preparation
