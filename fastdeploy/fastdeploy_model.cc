@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/fastdeploy_model.h"
+
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
@@ -42,51 +43,72 @@ bool IsSupported(const std::vector<Backend>& backends, Backend backend) {
 bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
   if (!IsBackendAvailable(runtime_option.backend)) {
     FDERROR << runtime_option.backend
-            << " is not compiled with current FastDeploy library."
-            << std::endl;
+            << " is not compiled with current FastDeploy library." << std::endl;
     return false;
   }
 
   bool use_gpu = (runtime_option.device == Device::GPU);
   bool use_ipu = (runtime_option.device == Device::IPU);
   bool use_rknpu = (runtime_option.device == Device::RKNPU);
+  bool use_sophgotpu = (runtime_option.device == Device::SOPHGOTPUD);
   bool use_timvx = (runtime_option.device == Device::TIMVX);
-  bool use_ascend = (runtime_option.device == Device::ASCEND); 
+  bool use_ascend = (runtime_option.device == Device::ASCEND);
   bool use_kunlunxin = (runtime_option.device == Device::KUNLUNXIN);
 
   if (use_gpu) {
     if (!IsSupported(valid_gpu_backends, runtime_option.backend)) {
-      FDERROR << "The valid gpu backends of model " << ModelName() << " are " << Str(valid_gpu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      FDERROR << "The valid gpu backends of model " << ModelName() << " are "
+              << Str(valid_gpu_backends) << ", " << runtime_option.backend
+              << " is not supported." << std::endl;
       return false;
     }
   } else if (use_rknpu) {
     if (!IsSupported(valid_rknpu_backends, runtime_option.backend)) {
-      FDERROR << "The valid rknpu backends of model " << ModelName() << " are " << Str(valid_rknpu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      FDERROR << "The valid rknpu backends of model " << ModelName() << " are "
+              << Str(valid_rknpu_backends) << ", " << runtime_option.backend
+              << " is not supported." << std::endl;
+      return false;
+    }
+  } else if (use_sophgotpu) {
+    if (!IsSupported(valid_sophgonpu_backends, runtime_option.backend)) {
+      FDERROR << "The valid sophgo backends of model " << ModelName() << " are "
+              << Str(valid_sophgonpu_backends) << ", " << runtime_option.backend
+              << " is not supported." << std::endl;
       return false;
     }
   } else if (use_timvx) {
     if (!IsSupported(valid_timvx_backends, runtime_option.backend)) {
-      FDERROR << "The valid timvx backends of model " << ModelName() << " are " << Str(valid_timvx_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      FDERROR << "The valid timvx backends of model " << ModelName() << " are "
+              << Str(valid_timvx_backends) << ", " << runtime_option.backend
+              << " is not supported." << std::endl;
       return false;
     }
   } else if (use_ascend) {
     if (!IsSupported(valid_ascend_backends, runtime_option.backend)) {
-      FDERROR << "The valid ascend backends of model " << ModelName() << " are " << Str(valid_ascend_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      FDERROR << "The valid ascend backends of model " << ModelName() << " are "
+              << Str(valid_ascend_backends) << ", " << runtime_option.backend
+              << " is not supported." << std::endl;
       return false;
     }
   } else if (use_kunlunxin) {
     if (!IsSupported(valid_kunlunxin_backends, runtime_option.backend)) {
-      FDERROR << "The valid kunlunxin backends of model " << ModelName() << " are " << Str(valid_kunlunxin_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      FDERROR << "The valid kunlunxin backends of model " << ModelName()
+              << " are " << Str(valid_kunlunxin_backends) << ", "
+              << runtime_option.backend << " is not supported." << std::endl;
       return false;
     }
-  } else if(use_ipu) {
+  } else if (use_ipu) {
     if (!IsSupported(valid_ipu_backends, runtime_option.backend)) {
-      FDERROR << "The valid ipu backends of model " << ModelName() << " are " << Str(valid_ipu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      FDERROR << "The valid ipu backends of model " << ModelName() << " are "
+              << Str(valid_ipu_backends) << ", " << runtime_option.backend
+              << " is not supported." << std::endl;
       return false;
     }
   } else {
     if (!IsSupported(valid_cpu_backends, runtime_option.backend)) {
-      FDERROR << "The valid cpu backends of model " << ModelName() << " are " << Str(valid_cpu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      FDERROR << "The valid cpu backends of model " << ModelName() << " are "
+              << Str(valid_cpu_backends) << ", " << runtime_option.backend
+              << " is not supported." << std::endl;
       return false;
     }
   }
@@ -118,6 +140,8 @@ bool FastDeployModel::InitRuntimeWithSpecifiedDevice() {
     return CreateASCENDBackend();
   } else if (runtime_option.device == Device::KUNLUNXIN) {
     return CreateKunlunXinBackend();
+  } else if (runtime_option.device == Device::SOPHGOTPUD) {
+    return CreateSophgoNPUBackend();
   } else if (runtime_option.device == Device::IPU) {
 #ifdef WITH_IPU
     return CreateIpuBackend();
@@ -127,14 +151,12 @@ bool FastDeployModel::InitRuntimeWithSpecifiedDevice() {
     return false;
 #endif
   }
-  FDERROR << "Only support CPU/GPU/IPU/RKNPU/TIMVX/KunlunXin/ASCEND now." << std::endl;
+  FDERROR << "Only support CPU/GPU/IPU/RKNPU/TIMVX/KunlunXin/ASCEND now."
+          << std::endl;
   return false;
 }
 
 bool FastDeployModel::InitRuntime() {
-  FDASSERT(
-      CheckModelFormat(runtime_option.model_file, runtime_option.model_format),
-      "ModelFormatCheck Failed.");
   if (runtime_initialized_) {
     FDERROR << "The model is already initialized, cannot be initliazed again."
             << std::endl;
@@ -218,6 +240,30 @@ bool FastDeployModel::CreateRKNPUBackend() {
   return false;
 }
 
+bool FastDeployModel::CreateSophgoNPUBackend() {
+  if (valid_sophgonpu_backends.empty()) {
+    FDERROR << "There's no valid npu backends for model: " << ModelName()
+            << std::endl;
+    return false;
+  }
+
+  for (size_t i = 0; i < valid_sophgonpu_backends.size(); ++i) {
+    if (!IsBackendAvailable(valid_sophgonpu_backends[i])) {
+      continue;
+    }
+    runtime_option.backend = valid_sophgonpu_backends[i];
+    runtime_ = std::unique_ptr<Runtime>(new Runtime());
+    if (!runtime_->Init(runtime_option)) {
+      return false;
+    }
+    runtime_initialized_ = true;
+    return true;
+  }
+  FDERROR << "Cannot find an available npu backend to load this model."
+          << std::endl;
+  return false;
+}
+
 bool FastDeployModel::CreateTimVXBackend() {
   if (valid_timvx_backends.size() == 0) {
     FDERROR << "There's no valid timvx backends for model: " << ModelName()
@@ -264,7 +310,6 @@ bool FastDeployModel::CreateKunlunXinBackend() {
   return false;
 }
 
-
 bool FastDeployModel::CreateASCENDBackend() {
   if (valid_ascend_backends.size() == 0) {
     FDERROR << "There's no valid ascend backends for model: " << ModelName()
@@ -287,7 +332,6 @@ bool FastDeployModel::CreateASCENDBackend() {
   FDERROR << "Found no valid backend for model: " << ModelName() << std::endl;
   return false;
 }
-
 
 bool FastDeployModel::CreateIpuBackend() {
   if (valid_ipu_backends.size() == 0) {

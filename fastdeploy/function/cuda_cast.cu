@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#ifdef WITH_GPU
 #include "fastdeploy/function/cuda_cast.h"
-
 namespace fastdeploy {
 namespace function {
 template <typename T_IN, typename T_OUT>
@@ -30,13 +30,11 @@ void CudaCast(const FDTensor& in, FDTensor* out, cudaStream_t stream) {
   if (in.dtype == FDDataType::INT64 && out->dtype == FDDataType::INT32) {
     CudaCastKernel<int64_t, int32_t><<<blocks, threads, 0, stream>>>(
         reinterpret_cast<int64_t*>(const_cast<void*>(in.Data())),
-        reinterpret_cast<int32_t*>(out->MutableData()),
-        jobs);
+        reinterpret_cast<int32_t*>(out->MutableData()), jobs);
   } else if (in.dtype == FDDataType::INT32 && out->dtype == FDDataType::INT64) {
     CudaCastKernel<int32_t, int64_t><<<blocks, threads, 0, stream>>>(
         reinterpret_cast<int32_t*>(const_cast<void*>(in.Data())),
-        reinterpret_cast<int64_t*>(out->MutableData()),
-        jobs);
+        reinterpret_cast<int64_t*>(out->MutableData()), jobs);
   } else {
     FDASSERT(false, "CudaCast only support input INT64, output INT32.");
   }
@@ -44,3 +42,4 @@ void CudaCast(const FDTensor& in, FDTensor* out, cudaStream_t stream) {
 
 }  // namespace function
 }  // namespace fastdeploy
+#endif

@@ -28,11 +28,11 @@ Currently FastDeploy Android SDK supports image classification, target detection
 <div id="SDK"></div>  
 
 ### Download FastDeploy Android SDK  
-The release version is as follows (Java SDK currently supports Android only, and current version is 1.0.0):
+The release version is as follows (Java SDK currently supports Android only):
 
 | Platform | File | Description |
 | :--- | :--- | :---- |
-| Android Java SDK | [fastdeploy-android-sdk-1.0.0.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-1.0.0.aar) | NDK 20 compiles, minSdkVersion 15,targetSdkVersion 28 |
+| Android Java SDK | [fastdeploy-android-sdk-0.0.0.aar](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-sdk-0.0.0.aar) | NDK 20 compiles, minSdkVersion 15,targetSdkVersion 28 |
 
 For more information for pre-compile library, please refer to: [download_prebuilt_libraries.md](../../docs/cn/build_and_install/download_prebuilt_libraries.md).
 
@@ -328,7 +328,7 @@ public class SegmentationResult {
   public boolean initialized(); // Check if the result is valid.
 }  
 ```
-Other reference：C++/Python corresponding SegmentationResult description: [api/vision_results/segmentation_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/segmentation_result.md)
+Other reference: C++/Python corresponding SegmentationResult description: [api/vision_results/segmentation_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/segmentation_result.md)
 
 - Face detection result description  
 ```java

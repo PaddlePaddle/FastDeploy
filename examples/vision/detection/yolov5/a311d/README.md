@@ -1,8 +1,12 @@
-# YOLOv5 量化模型在 A311D 上的部署
-目前 FastDeploy 已经支持基于 Paddle Lite 部署 [YOLOv5](https://github.com/ultralytics/yolov5/releases/tag/v6.1) 量化模型到 A311D 上。
+English | [简体中文](README_CN.md)
+# Deploy YOLOv5 Quantification Model on A311D
+Now FastDeploy supports the deployment of YOLOv5 quantification model to A311D based on Paddle Lite.
 
-## 详细部署文档
+For model quantification and download, refer to [Model Quantification](../quantize/README.md)
 
-在 A311D 上只支持 C++ 的部署。
 
-- [C++部署](cpp)
+## Detailed Deployment Tutorials
+
+Only C++ deployment is supported on A311D.
+
+- [C++ Deployment](cpp)

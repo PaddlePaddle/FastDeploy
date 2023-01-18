@@ -1,0 +1,15 @@
+mean:
+  -
+    - 127.5
+    - 127.5
+    - 127.5
+std:
+  -
+    - 127.5
+    - 127.5
+    - 127.5
+model_path: ./ms1mv3_arcface_r18/ms1mv3_arcface_r18.onnx
+outputs_nodes:
+do_quantization: True
+dataset: "./ms1mv3_arcface_r18/datasets.txt"
+output_folder: "./ms1mv3_arcface_r18"

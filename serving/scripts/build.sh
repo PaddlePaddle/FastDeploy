@@ -12,7 +12,41 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-WITH_GPU=${1:-ON}
+
+ARGS=`getopt -a -o w:n:h:hs -l WITH_GPU:,docker_name:,http_proxy:,https_proxy: -- "$@"`
+
+eval set -- "${ARGS}"
+echo "parse start"
+
+while true
+do
+        case "$1" in
+        -w|--WITH_GPU)
+                WITH_GPU="$2"
+                shift;;
+        -n|--docker_name)
+                docker_name="$2"
+                shift;;
+        -h|--http_proxy)
+                http_proxy="$2"
+                shift;;
+        -hs|--https_proxy)
+                https_proxy="$2"
+                shift;;
+        --)
+                shift
+                break;;
+        esac
+shift
+done
+
+if [ -z $WITH_GPU ];then
+    WITH_GPU="ON"
+fi
+
+if [ -z $docker_name ];then
+    docker_name="build_fd"
+fi
 
 if [ $WITH_GPU == "ON" ]; then
 
@@ -30,7 +64,7 @@ if [ ! -d "./TensorRT-8.4.1.5/" ]; then
     rm -rf TensorRT-8.4.1.5.Linux.x86_64-gnu.cuda-11.6.cudnn8.4.tar.gz
 fi
 
-nvidia-docker run -i --rm --name build_fd \
+nvidia-docker run -i --rm --name ${docker_name} \
            -v`pwd`/..:/workspace/fastdeploy \
            -e "http_proxy=${http_proxy}" \
            -e "https_proxy=${https_proxy}" \
@@ -54,7 +88,7 @@ nvidia-docker run -i --rm --name build_fd \
             python setup.py bdist_wheel;
             cd /workspace/fastdeploy;
             rm -rf build; mkdir -p build;cd build;
-            cmake .. -DENABLE_TRT_BACKEND=ON -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy_install -DWITH_GPU=ON -DTRT_DIRECTORY=/workspace/fastdeploy/serving/TensorRT-8.4.1.5/ -DENABLE_PADDLE_BACKEND=ON -DENABLE_ORT_BACKEND=ON -DENABLE_OPENVINO_BACKEND=ON -DENABLE_VISION=OFF -DBUILD_FASTDEPLOY_PYTHON=OFF -DENABLE_PADDLE_FRONTEND=ON -DENABLE_TEXT=OFF -DLIBRARY_NAME=fastdeploy_runtime;
+            cmake .. -DENABLE_TRT_BACKEND=ON -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy_install -DWITH_GPU=ON -DTRT_DIRECTORY=/workspace/fastdeploy/serving/TensorRT-8.4.1.5/ -DENABLE_PADDLE_BACKEND=ON -DENABLE_ORT_BACKEND=ON -DENABLE_OPENVINO_BACKEND=ON -DENABLE_VISION=OFF -DBUILD_FASTDEPLOY_PYTHON=OFF -DENABLE_PADDLE2ONNX=ON -DENABLE_TEXT=OFF -DLIBRARY_NAME=fastdeploy_runtime;
             make -j`nproc`;
             make install;
             cd /workspace/fastdeploy/serving;
@@ -68,7 +102,7 @@ else
 
 echo "start build FD CPU library"
 
-docker run -i --rm --name build_fd \
+docker run -i --rm --name ${docker_name} \
            -v`pwd`/..:/workspace/fastdeploy \
            -e "http_proxy=${http_proxy}" \
            -e "https_proxy=${https_proxy}" \
@@ -87,7 +121,7 @@ docker run -i --rm --name build_fd \
             python setup.py bdist_wheel;
             cd /workspace/fastdeploy;
             rm -rf build; mkdir build; cd build;
-            cmake .. -DENABLE_TRT_BACKEND=OFF -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy_install -DWITH_GPU=OFF -DENABLE_PADDLE_BACKEND=ON -DENABLE_ORT_BACKEND=ON -DENABLE_OPENVINO_BACKEND=ON -DENABLE_VISION=OFF -DBUILD_FASTDEPLOY_PYTHON=OFF -DENABLE_PADDLE_FRONTEND=ON -DENABLE_TEXT=OFF -DLIBRARY_NAME=fastdeploy_runtime;
+            cmake .. -DENABLE_TRT_BACKEND=OFF -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy_install -DWITH_GPU=OFF -DENABLE_PADDLE_BACKEND=ON -DENABLE_ORT_BACKEND=ON -DENABLE_OPENVINO_BACKEND=ON -DENABLE_VISION=OFF -DBUILD_FASTDEPLOY_PYTHON=OFF -DENABLE_PADDLE2ONNX=ON -DENABLE_TEXT=OFF -DLIBRARY_NAME=fastdeploy_runtime;
             make -j`nproc`;
             make install;
             cd /workspace/fastdeploy/serving;
