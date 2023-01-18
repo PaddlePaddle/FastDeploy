@@ -31,7 +31,8 @@ class FASTDEPLOY_DECL PaddleSegPreprocessor {
   /** \brief Process the input image and prepare input tensors for runtime
    *
    * \param[in] images The input image data list, all the elements are returned by cv::imread()
-   * \param[in] outputs The output tensors which will feed in runtime, include image
+   * \param[in] outputs The output tensors which will feed in runtime
+   * \param[in] imgs_info The original input images shape info map, key is "shape_info", value is vector<array<int, 2>> a{{height, width}} 
    * \return true if the preprocess successed, otherwise false
    */
   virtual bool Run(
