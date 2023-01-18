@@ -36,6 +36,7 @@ struct OrtBackendOption {
   int execution_mode = -1;
   bool use_gpu = false;
   int gpu_id = 0;
+  bool use_dml;
   void* external_stream_ = nullptr;
 
   // inside parameter, maybe remove next version

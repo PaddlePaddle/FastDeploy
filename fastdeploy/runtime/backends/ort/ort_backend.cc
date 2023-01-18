@@ -48,20 +48,36 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
   if (option.use_gpu) {
     auto all_providers = Ort::GetAvailableProviders();
     bool support_cuda = false;
+    bool support_dml = false;
     std::string providers_msg = "";
     for (size_t i = 0; i < all_providers.size(); ++i) {
       providers_msg = providers_msg + all_providers[i] + ", ";
       if (all_providers[i] == "CUDAExecutionProvider") {
         support_cuda = true;
       }
+      if (all_providers[i] == "DmlExecutionProvider") {
+        support_dml = true;
+      }
     }
-    if (!support_cuda) {
+    if (!support_cuda && !support_dml) {
       FDWARNING << "Compiled fastdeploy with onnxruntime doesn't "
                    "support GPU, the available providers are "
                 << providers_msg << "will fallback to CPUExecutionProvider."
                 << std::endl;
       option_.use_gpu = false;
-    } else {
+    } else if (support_dml && option_.use_dml) {  // Use DML as optional
+
+      // Must set as below when use dml.
+      session_options_.DisableMemPattern();
+      session_options_.SetExecutionMode(ExecutionMode(0));
+
+      // Set DML provider
+      // OrtSessionOptionsAppendExecutionProvider_DML(_session_options,
+      // dml_device_id); // C API
+      int dml_device_id = option.gpu_id;
+      session_options_.AppendExecutionProvider_DML(dml_device_id);
+
+    } else {  // Default use CUDA
       OrtCUDAProviderOptions cuda_options;
       cuda_options.device_id = option.gpu_id;
       if (option.external_stream_) {
