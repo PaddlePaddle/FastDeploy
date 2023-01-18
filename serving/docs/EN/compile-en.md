@@ -18,6 +18,17 @@ cd ../
 docker build -t paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 -f serving/Dockerfile .
 ```
 
+For example, create an GPU image based on FastDeploy v1.0.0 and ubuntu 20.04，cuda11.2 environment
+```
+# Enter the serving directory and execute the script to compile the FastDeploy and serving backend
+cd serving
+bash scripts/build_fd_cuda_11_2.sh
+
+# Exit to the FastDeploy home directory and create the image
+cd ../
+docker build -t paddlepaddle/fastdeploy:1.0.0-gpu-cuda11.2-trt8.4-20.04 -f serving/Dockerfile_CUDA_11_2 .
+```
+
 ## CPU Image
 
 ```shell
