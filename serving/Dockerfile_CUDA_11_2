@@ -19,7 +19,7 @@ ARG http_proxy
 ARG https_proxy
 
 #Install the build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends curl wget vim git patchelf python3-dev python3-pip \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive TZ=Asia/Shanghai apt-get install -y --no-install-recommends curl wget vim git patchelf python3-dev python3-pip \
     python3-setuptools build-essential libgl1-mesa-glx libglib2.0-dev ca-certificates libb64-dev datacenter-gpu-manager \
     libssl-dev zlib1g-dev rapidjson-dev libboost-dev libre2-dev librdmacm-dev libnuma-dev libarchive-dev unzip && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
