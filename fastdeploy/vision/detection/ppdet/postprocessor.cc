@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/detection/ppdet/postprocessor.h"
-#include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
+
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
@@ -31,30 +31,30 @@ bool PaddleDetPostprocessor::ProcessMask(
   int64_t out_mask_h = shape[1];
   int64_t out_mask_w = shape[2];
   int64_t out_mask_numel = shape[1] * shape[2];
-  const int32_t* data = reinterpret_cast<const int32_t*>(tensor.CpuData());
+  const auto* data = reinterpret_cast<const uint8_t*>(tensor.CpuData());
   int index = 0;
 
   for (int i = 0; i < results->size(); ++i) {
     (*results)[i].contain_masks = true;
     (*results)[i].masks.resize((*results)[i].boxes.size());
     for (int j = 0; j < (*results)[i].boxes.size(); ++j) {
-      int x1 = static_cast<int>((*results)[i].boxes[j][0]);
-      int y1 = static_cast<int>((*results)[i].boxes[j][1]);
-      int x2 = static_cast<int>((*results)[i].boxes[j][2]);
-      int y2 = static_cast<int>((*results)[i].boxes[j][3]);
+      int x1 = static_cast<int>(round((*results)[i].boxes[j][0]));
+      int y1 = static_cast<int>(round((*results)[i].boxes[j][1]));
+      int x2 = static_cast<int>(round((*results)[i].boxes[j][2]));
+      int y2 = static_cast<int>(round((*results)[i].boxes[j][3]));
       int keep_mask_h = y2 - y1;
       int keep_mask_w = x2 - x1;
       int keep_mask_numel = keep_mask_h * keep_mask_w;
       (*results)[i].masks[j].Resize(keep_mask_numel);
       (*results)[i].masks[j].shape = {keep_mask_h, keep_mask_w};
-      const int32_t* current_ptr = data + index * out_mask_numel;
+      const uint8_t* current_ptr = data + index * out_mask_numel;
 
-      int32_t* keep_mask_ptr =
-          reinterpret_cast<int32_t*>((*results)[i].masks[j].Data());
+      auto* keep_mask_ptr =
+          reinterpret_cast<uint8_t*>((*results)[i].masks[j].Data());
       for (int row = y1; row < y2; ++row) {
-        size_t keep_nbytes_in_col = keep_mask_w * sizeof(int32_t);
-        const int32_t* out_row_start_ptr = current_ptr + row * out_mask_w + x1;
-        int32_t* keep_row_start_ptr = keep_mask_ptr + (row - y1) * keep_mask_w;
+        size_t keep_nbytes_in_col = keep_mask_w * sizeof(uint8_t);
+        const uint8_t* out_row_start_ptr = current_ptr + row * out_mask_w + x1;
+        uint8_t* keep_row_start_ptr = keep_mask_ptr + (row - y1) * keep_mask_w;
         std::memcpy(keep_row_start_ptr, out_row_start_ptr, keep_nbytes_in_col);
       }
       index += 1;
@@ -66,16 +66,9 @@ bool PaddleDetPostprocessor::ProcessMask(
 bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                  std::vector<DetectionResult>* results) {
   if (DecodeAndNMSApplied()) {
-    FDASSERT(tensors.size() == 2,
-             "While postprocessing with ApplyDecodeAndNMS, "
-             "there should be 2 outputs for this model, but now it's %zu.",
-             tensors.size());
-    FDASSERT(tensors[0].shape.size() == 3,
-             "While postprocessing with ApplyDecodeAndNMS, "
-             "the rank of the first outputs should be 3, but now it's %zu",
-             tensors[0].shape.size());
     return ProcessUnDecodeResults(tensors, results);
   }
+
   // Get number of boxes for each input image
   std::vector<int> num_boxes(tensors[1].shape[0]);
   int total_num_boxes = 0;
@@ -151,80 +144,27 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
   return ProcessMask(tensors[2], results);
 }
 
-void PaddleDetPostprocessor::ApplyDecodeAndNMS() {
-  apply_decode_and_nms_ = true;
-}
-
 bool PaddleDetPostprocessor::ProcessUnDecodeResults(
     const std::vector<FDTensor>& tensors,
     std::vector<DetectionResult>* results) {
-  if (tensors.size() != 2) {
-    return false;
-  }
+  results->resize(tensors[0].Shape()[0]);
 
-  int boxes_index = 0;
-  int scores_index = 1;
-  if (tensors[0].shape[1] == tensors[1].shape[2]) {
-    boxes_index = 0;
-    scores_index = 1;
-  } else if (tensors[0].shape[2] == tensors[1].shape[1]) {
-    boxes_index = 1;
-    scores_index = 0;
-  } else {
-    FDERROR << "The shape of boxes and scores should be [batch, boxes_num, "
-               "4], [batch, classes_num, boxes_num]"
-            << std::endl;
-    return false;
-  }
+  // do decode and nms
+  ppdet_decoder_.DecodeAndNMS(tensors, results);
 
-  PaddleMultiClassNMS nms;
-  nms.background_label = -1;
-  nms.keep_top_k = 100;
-  nms.nms_eta = 1.0;
-  nms.nms_threshold = 0.5;
-  nms.score_threshold = 0.3;
-  nms.nms_top_k = 1000;
-  nms.normalized = true;
-  nms.Compute(static_cast<const float*>(tensors[boxes_index].Data()),
-              static_cast<const float*>(tensors[scores_index].Data()),
-              tensors[boxes_index].shape, tensors[scores_index].shape);
-
-  auto num_boxes = nms.out_num_rois_data;
-  auto box_data = static_cast<const float*>(nms.out_box_data.data());
-  // Get boxes for each input image
-  results->resize(num_boxes.size());
-  int offset = 0;
-  for (size_t i = 0; i < num_boxes.size(); ++i) {
-    const float* ptr = box_data + offset;
-    (*results)[i].Reserve(num_boxes[i]);
-    for (size_t j = 0; j < num_boxes[i]; ++j) {
-      (*results)[i].label_ids.push_back(
-          static_cast<int32_t>(round(ptr[j * 6])));
-      (*results)[i].scores.push_back(ptr[j * 6 + 1]);
-      (*results)[i].boxes.emplace_back(std::array<float, 4>(
-          {ptr[j * 6 + 2] / GetScaleFactor()[1],
-           ptr[j * 6 + 3] / GetScaleFactor()[0],
-           ptr[j * 6 + 4] / GetScaleFactor()[1],
-           ptr[j * 6 + 5] / GetScaleFactor()[0]}));
+  // do scale
+  if (GetScaleFactor()[0] != 0) {
+    for (auto& result : *results) {
+      for (auto& box : result.boxes) {
+        box[0] /= GetScaleFactor()[1];
+        box[1] /= GetScaleFactor()[0];
+        box[2] /= GetScaleFactor()[1];
+        box[3] /= GetScaleFactor()[0];
+      }
     }
-    offset += (num_boxes[i] * 6);
   }
   return true;
 }
-
-std::vector<float> PaddleDetPostprocessor::GetScaleFactor(){
-  return scale_factor_;
-}
-
-void PaddleDetPostprocessor::SetScaleFactor(float* scale_factor_value){
-  for (int i = 0; i < scale_factor_.size(); ++i) {
-    scale_factor_[i] = scale_factor_value[i];
-  }
-}
-
-bool PaddleDetPostprocessor::DecodeAndNMSApplied() {
-  return apply_decode_and_nms_;
-}
-} // namespace detection
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace detection
+}  // namespace vision
+}  // namespace fastdeploy

@@ -5,7 +5,7 @@ Please check out the FastDeploy C++ deployment library is already in your enviro
 
 This document shows an inference sample on the CPU using the PaddleClas classification model MobileNetV2 as an example.
 
-## 1. Obtaining the Module
+## 1. Obtaining the Model
 
 ```bash
 wget https://bj.bcebos.com/fastdeploy/models/mobilenetv2.tgz

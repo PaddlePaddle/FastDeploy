@@ -36,6 +36,7 @@ Recognizer::Recognizer(const std::string& model_file,
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
     valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE}; 
+    valid_sophgonpu_backends = {Backend::SOPHGOTPU};
   }
 
   runtime_option = custom_option;
@@ -53,6 +54,12 @@ bool Recognizer::Initialize() {
   }
 
   return true;
+}
+
+std::unique_ptr<Recognizer> Recognizer::Clone() const {
+  std::unique_ptr<Recognizer> clone_model = utils::make_unique<Recognizer>(Recognizer(*this));
+  clone_model->SetRuntime(clone_model->CloneRuntime());
+  return clone_model;
 }
 
 bool Recognizer::Predict(const cv::Mat& img, std::string* text, float* rec_score) {

@@ -21,11 +21,11 @@
 #include "fastdeploy/core/allocate.h"
 #include "fastdeploy/core/fd_scalar.h"
 #include "fastdeploy/core/fd_type.h"
+#include "fastdeploy/runtime/enum_variables.h"
 
 namespace fastdeploy {
 
 struct FASTDEPLOY_DECL FDTensor {
-
   // std::vector<int8_t> data;
   void* buffer_ = nullptr;
   std::vector<int64_t> shape = {0};

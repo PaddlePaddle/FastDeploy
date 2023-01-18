@@ -170,6 +170,17 @@ class DBDetector(FastDeployModel):
             assert self.initialized, "DBDetector initialize failed."
             self._runnable = True
 
+    def clone(self):
+        """Clone OCR detection model object
+        :return: a new OCR detection model object
+        """
+        class DBDetectorClone(DBDetector):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = DBDetectorClone(self._model.clone())
+        return clone_model
+
     def predict(self, input_image):
         """Predict an input image
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
@@ -406,6 +417,17 @@ class Classifier(FastDeployModel):
             assert self.initialized, "Classifier initialize failed."
             self._runnable = True
 
+    def clone(self):
+        """Clone OCR classification model object
+        :return: a new OCR classification model object
+        """
+        class ClassifierClone(Classifier):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = ClassifierClone(self._model.clone())
+        return clone_model
+
     def predict(self, input_image):
         """Predict an input image
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
@@ -603,6 +625,17 @@ class Recognizer(FastDeployModel):
             assert self.initialized, "Recognizer initialize failed."
             self._runnable = True
 
+    def clone(self):
+        """Clone OCR recognition model object
+        :return: a new OCR recognition model object
+        """
+        class RecognizerClone(Recognizer):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = RecognizerClone(self._model.clone())
+        return clone_model
+
     def predict(self, input_image):
         """Predict an input image
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
@@ -700,47 +733,58 @@ class PPOCRv3(FastDeployModel):
         """
         assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None."
         if cls_model is None:
-            self.system = C.vision.ocr.PPOCRv3(det_model._model,
+            self.system_ = C.vision.ocr.PPOCRv3(det_model._model,
                                                rec_model._model)
         else:
-            self.system = C.vision.ocr.PPOCRv3(
+            self.system_ = C.vision.ocr.PPOCRv3(
                 det_model._model, cls_model._model, rec_model._model)
+
+    def clone(self):
+        """Clone PPOCRv3 pipeline object
+        :return: a new PPOCRv3 pipeline object
+        """
+        class PPOCRv3Clone(PPOCRv3):
+            def __init__(self, system):
+                self.system_ = system
+
+        clone_model = PPOCRv3Clone(self.system_.clone())
+        return clone_model
 
     def predict(self, input_image):
         """Predict an input image
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
         :return: OCRResult
         """
-        return self.system.predict(input_image)
+        return self.system_.predict(input_image)
 
     def batch_predict(self, images):
         """Predict a batch of input image
         :param images: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
         :return: OCRBatchResult
         """
-        return self.system.batch_predict(images)
+        return self.system_.batch_predict(images)
 
     @property
     def cls_batch_size(self):
-        return self.system.cls_batch_size
+        return self.system_.cls_batch_size
 
     @cls_batch_size.setter
     def cls_batch_size(self, value):
         assert isinstance(
             value,
             int), "The value to set `cls_batch_size` must be type of int."
-        self.system.cls_batch_size = value
+        self.system_.cls_batch_size = value
 
     @property
     def rec_batch_size(self):
-        return self.system.rec_batch_size
+        return self.system_.rec_batch_size
 
     @rec_batch_size.setter
     def rec_batch_size(self, value):
         assert isinstance(
             value,
             int), "The value to set `rec_batch_size` must be type of int."
-        self.system.rec_batch_size = value
+        self.system_.rec_batch_size = value
 
 
 class PPOCRSystemv3(PPOCRv3):
@@ -764,11 +808,22 @@ class PPOCRv2(FastDeployModel):
         """
         assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None."
         if cls_model is None:
-            self.system = C.vision.ocr.PPOCRv2(det_model._model,
+            self.system_ = C.vision.ocr.PPOCRv2(det_model._model,
                                                rec_model._model)
         else:
-            self.system = C.vision.ocr.PPOCRv2(
+            self.system_ = C.vision.ocr.PPOCRv2(
                 det_model._model, cls_model._model, rec_model._model)
+
+    def clone(self):
+        """Clone PPOCRv3 pipeline object
+        :return: a new PPOCRv3 pipeline object
+        """
+        class PPOCRv2Clone(PPOCRv2):
+            def __init__(self, system):
+                self.system_ = system
+
+        clone_model = PPOCRv2Clone(self.system_.clone())
+        return clone_model
 
     def predict(self, input_image):
         """Predict an input image
@@ -776,7 +831,7 @@ class PPOCRv2(FastDeployModel):
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
         :return: OCRResult
         """
-        return self.system.predict(input_image)
+        return self.system_.predict(input_image)
 
     def batch_predict(self, images):
         """Predict a batch of input image
@@ -784,29 +839,29 @@ class PPOCRv2(FastDeployModel):
         :return: OCRBatchResult
         """
 
-        return self.system.batch_predict(images)
+        return self.system_.batch_predict(images)
 
     @property
     def cls_batch_size(self):
-        return self.system.cls_batch_size
+        return self.system_.cls_batch_size
 
     @cls_batch_size.setter
     def cls_batch_size(self, value):
         assert isinstance(
             value,
             int), "The value to set `cls_batch_size` must be type of int."
-        self.system.cls_batch_size = value
+        self.system_.cls_batch_size = value
 
     @property
     def rec_batch_size(self):
-        return self.system.rec_batch_size
+        return self.system_.rec_batch_size
 
     @rec_batch_size.setter
     def rec_batch_size(self, value):
         assert isinstance(
             value,
             int), "The value to set `rec_batch_size` must be type of int."
-        self.system.rec_batch_size = value
+        self.system_.rec_batch_size = value
 
 
 class PPOCRSystemv2(PPOCRv2):

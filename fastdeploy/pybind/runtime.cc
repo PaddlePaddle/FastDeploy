@@ -37,12 +37,17 @@ void BindRuntime(pybind11::module& m) {
       .def("use_openvino_backend", &RuntimeOption::UseOpenVINOBackend)
       .def("use_lite_backend", &RuntimeOption::UseLiteBackend)
       .def("set_lite_device_names", &RuntimeOption::SetLiteDeviceNames)
-      .def("set_lite_context_properties", &RuntimeOption::SetLiteContextProperties)
+      .def("set_lite_context_properties",
+           &RuntimeOption::SetLiteContextProperties)
       .def("set_lite_model_cache_dir", &RuntimeOption::SetLiteModelCacheDir)
-      .def("set_lite_dynamic_shape_info", &RuntimeOption::SetLiteDynamicShapeInfo)
-      .def("set_lite_subgraph_partition_path", &RuntimeOption::SetLiteSubgraphPartitionPath)
-      .def("set_lite_mixed_precision_quantization_config_path", &RuntimeOption::SetLiteMixedPrecisionQuantizationConfigPath)
-      .def("set_lite_subgraph_partition_config_buffer", &RuntimeOption::SetLiteSubgraphPartitionConfigBuffer)
+      .def("set_lite_dynamic_shape_info",
+           &RuntimeOption::SetLiteDynamicShapeInfo)
+      .def("set_lite_subgraph_partition_path",
+           &RuntimeOption::SetLiteSubgraphPartitionPath)
+      .def("set_lite_mixed_precision_quantization_config_path",
+           &RuntimeOption::SetLiteMixedPrecisionQuantizationConfigPath)
+      .def("set_lite_subgraph_partition_config_buffer",
+           &RuntimeOption::SetLiteSubgraphPartitionConfigBuffer)
       .def("set_paddle_mkldnn", &RuntimeOption::SetPaddleMKLDNN)
       .def("set_openvino_device", &RuntimeOption::SetOpenVINODevice)
       .def("set_openvino_shape_info", &RuntimeOption::SetOpenVINOShapeInfo)
@@ -114,21 +119,7 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("ipu_available_memory_proportion",
                      &RuntimeOption::ipu_available_memory_proportion)
       .def_readwrite("ipu_enable_half_partial",
-                     &RuntimeOption::ipu_enable_half_partial)
-      .def_readwrite("kunlunxin_l3_workspace_size",
-                     &RuntimeOption::kunlunxin_l3_workspace_size)
-      .def_readwrite("kunlunxin_locked",
-                     &RuntimeOption::kunlunxin_locked)
-      .def_readwrite("kunlunxin_autotune",
-                     &RuntimeOption::kunlunxin_autotune)
-      .def_readwrite("kunlunxin_autotune_file",
-                     &RuntimeOption::kunlunxin_autotune_file)
-      .def_readwrite("kunlunxin_precision",
-                     &RuntimeOption::kunlunxin_precision)
-      .def_readwrite("kunlunxin_adaptive_seqlen",
-                     &RuntimeOption::kunlunxin_adaptive_seqlen)
-      .def_readwrite("kunlunxin_enable_multi_stream",
-                     &RuntimeOption::kunlunxin_enable_multi_stream);                              
+                     &RuntimeOption::ipu_enable_half_partial);
 
   pybind11::class_<TensorInfo>(m, "TensorInfo")
       .def_readwrite("name", &TensorInfo::name)
@@ -151,9 +142,9 @@ void BindRuntime(pybind11::module& m) {
                  auto dtype =
                      NumpyDataTypeToFDDataType(warm_datas[i][j].dtype());
                  std::vector<int64_t> data_shape;
-                 data_shape.insert(data_shape.begin(), warm_datas[i][j].shape(),
-                                   warm_datas[i][j].shape() +
-                                       warm_datas[i][j].ndim());
+                 data_shape.insert(
+                     data_shape.begin(), warm_datas[i][j].shape(),
+                     warm_datas[i][j].shape() + warm_datas[i][j].ndim());
                  warm_tensors[i][j].Resize(data_shape, dtype);
                  memcpy(warm_tensors[i][j].MutableData(),
                         warm_datas[i][j].mutable_data(),

@@ -34,6 +34,7 @@ Classifier::Classifier(const std::string& model_file,
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
     valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE};
+    valid_sophgonpu_backends = {Backend::SOPHGOTPU};
   }
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -50,6 +51,12 @@ bool Classifier::Initialize() {
   }
 
   return true;
+}
+
+std::unique_ptr<Classifier> Classifier::Clone() const {
+  std::unique_ptr<Classifier> clone_model = utils::make_unique<Classifier>(Classifier(*this));
+  clone_model->SetRuntime(clone_model->CloneRuntime());
+  return clone_model;
 }
 
 bool Classifier::Predict(const cv::Mat& img, int32_t* cls_label, float* cls_score) {

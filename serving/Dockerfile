@@ -46,7 +46,7 @@ RUN apt-get update \
 # unset proxy
 ENV http_proxy=
 ENV https_proxy=
-python3 -m pip install paddlepaddle-gpu==2.4.1.post112 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
+RUN python3 -m pip install paddlepaddle-gpu==2.4.1.post112 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
 
 COPY python/dist/*.whl /opt/fastdeploy/
 RUN python3 -m pip install  /opt/fastdeploy/*.whl \

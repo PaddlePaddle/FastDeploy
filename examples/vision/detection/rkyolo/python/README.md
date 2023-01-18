@@ -1,34 +1,35 @@
-# RKYOLO Python部署示例
+English | [简体中文](README_CN.md)
+# RKYOLO Python Deployment Example
 
-在部署前，需确认以下两个步骤
+Two steps before deployment
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../../docs/cn/build_and_install/rknpu2.md)
+- 1. Software and hardware should meet the requirements. Refer to [FastDeploy Environment Requirements](../../../../../../docs/cn/build_and_install/rknpu2.md)
 
-本目录下提供`infer.py`快速完成Picodet在RKNPU上部署的示例。执行如下脚本即可完成
+This directory provides examples that `infer.py` fast finishes the deployment of Picodet on RKNPU. The script is as follows
 
 ```bash
-# 下载部署示例代码
+# Download the example code for deployment
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/detection/rkyolo/python
 
-# 下载图片
+# Download images
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 # copy model
 cp -r ./model /path/to/FastDeploy/examples/vision/detection/rkyolo/python
 
-# 推理
+# Inference
 python3 infer.py --model_file ./model/  \
                   --image 000000014439.jpg
 ```
 
 
-## 注意事项
-RKNPU上对模型的输入要求是使用NHWC格式，且图片归一化操作会在转RKNN模型时，内嵌到模型中，因此我们在使用FastDeploy部署时，
+## Note
+The model needs to be in NHWC format on RKNPU. The normalized image will be embedded in the RKNN model. Therefore, when we deploy with FastDeploy, call DisablePermute(C++) or `disable_permute(Python)` to disable normalization and data format conversion during preprocessing.
 
-## 其它文档
+## Other Documents
 
-- [PaddleDetection 模型介绍](..)
-- [PaddleDetection C++部署](../cpp)
-- [模型预测结果说明](../../../../../../docs/api/vision_results/)
-- [转换PaddleDetection RKNN模型文档](../README.md)
+- [PaddleDetection Model Description](..)
+- [PaddleDetection C++ Deployment](../cpp)
+- [model prediction Results](../../../../../../docs/api/vision_results/)
+- [Convert PaddleDetection RKNN Model Files](../README.md)

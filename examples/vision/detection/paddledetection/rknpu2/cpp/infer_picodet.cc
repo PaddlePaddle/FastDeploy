@@ -13,8 +13,8 @@
 // limitations under the License.
 #include <iostream>
 #include <string>
+
 #include "fastdeploy/vision.h"
-#include <sys/time.h>
 
 void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
   std::string model_file = model_dir + "/picodet_s_416_coco_lcnet.onnx";
@@ -25,7 +25,7 @@ void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
   auto format = fastdeploy::ModelFormat::ONNX;
 
   auto model = fastdeploy::vision::detection::PicoDet(
-      model_file, params_file, config_file,option,format);
+      model_file, params_file, config_file, option, format);
 
   fastdeploy::TimeCounter tc;
   tc.Start();
@@ -35,14 +35,12 @@ void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  auto vis_im = fastdeploy::vision::VisDetection(im, res,0.5);
+  auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.5);
   tc.End();
   tc.PrintInfo("PPDet in ONNX");
 
   cv::imwrite("infer_onnx.jpg", vis_im);
-  std::cout
-      << "Visualized result saved in ./infer_onnx.jpg"
-      << std::endl;
+  std::cout << "Visualized result saved in ./infer_onnx.jpg" << std::endl;
 }
 
 void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
@@ -56,8 +54,10 @@ void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
   auto format = fastdeploy::ModelFormat::RKNN;
 
   auto model = fastdeploy::vision::detection::PicoDet(
-      model_file, params_file, config_file,option,format);
+      model_file, params_file, config_file, option, format);
 
+  model.GetPreprocessor().DisablePermute();
+  model.GetPreprocessor().DisableNormalize();
   model.GetPostprocessor().ApplyDecodeAndNMS();
 
   auto im = cv::imread(image_file);
@@ -73,21 +73,24 @@ void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
   tc.PrintInfo("PPDet in RKNPU2");
 
   std::cout << res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::VisDetection(im, res,0.5);
+  auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.5);
   cv::imwrite("infer_rknpu2.jpg", vis_im);
   std::cout << "Visualized result saved in ./infer_rknpu2.jpg" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
-  if (argc < 3) {
+  if (argc < 4) {
     std::cout
         << "Usage: infer_demo path/to/model_dir path/to/image run_option, "
            "e.g ./infer_model ./picodet_model_dir ./test.jpeg"
         << std::endl;
     return -1;
   }
-  RKNPU2Infer(argv[1], argv[2]);
-//ONNXInfer(argv[1], argv[2]);
+
+  if (std::atoi(argv[3]) == 0) {
+    ONNXInfer(argv[1], argv[2]);
+  } else if (std::atoi(argv[3]) == 1) {
+    RKNPU2Infer(argv[1], argv[2]);
+  }
   return 0;
 }
-

@@ -35,6 +35,8 @@ class FASTDEPLOY_DECL ArcFace : public InsightFaceRecognitionBase {
     if (model_format == ModelFormat::ONNX) {
       valid_cpu_backends = {Backend::ORT};
       valid_gpu_backends = {Backend::ORT, Backend::TRT};
+    } else if (model_format == ModelFormat::RKNN) {
+      valid_rknpu_backends = {Backend::RKNPU2};
     } else {
       valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
       valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
@@ -63,6 +65,8 @@ class FASTDEPLOY_DECL CosFace : public InsightFaceRecognitionBase {
     if (model_format == ModelFormat::ONNX) {
       valid_cpu_backends = {Backend::ORT};
       valid_gpu_backends = {Backend::ORT, Backend::TRT};
+    } else if (model_format == ModelFormat::RKNN) {
+      valid_rknpu_backends = {Backend::RKNPU2};
     } else {
       valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
       valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
@@ -83,13 +87,15 @@ class FASTDEPLOY_DECL PartialFC : public InsightFaceRecognitionBase {
    * \param[in] model_format Model format of the loaded model, default is Paddle format
    */
   PartialFC(const std::string& model_file, const std::string& params_file = "",
-          const RuntimeOption& custom_option = RuntimeOption(),
-          const ModelFormat& model_format = ModelFormat::ONNX)
+            const RuntimeOption& custom_option = RuntimeOption(),
+            const ModelFormat& model_format = ModelFormat::ONNX)
       : InsightFaceRecognitionBase(model_file, params_file, custom_option,
                                    model_format) {
     if (model_format == ModelFormat::ONNX) {
       valid_cpu_backends = {Backend::ORT};
       valid_gpu_backends = {Backend::ORT, Backend::TRT};
+    } else if (model_format == ModelFormat::RKNN) {
+      valid_rknpu_backends = {Backend::RKNPU2};
     } else {
       valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
       valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
@@ -110,13 +116,15 @@ class FASTDEPLOY_DECL VPL : public InsightFaceRecognitionBase {
    * \param[in] model_format Model format of the loaded model, default is Paddle format
    */
   VPL(const std::string& model_file, const std::string& params_file = "",
-            const RuntimeOption& custom_option = RuntimeOption(),
-            const ModelFormat& model_format = ModelFormat::ONNX)
+      const RuntimeOption& custom_option = RuntimeOption(),
+      const ModelFormat& model_format = ModelFormat::ONNX)
       : InsightFaceRecognitionBase(model_file, params_file, custom_option,
                                    model_format) {
     if (model_format == ModelFormat::ONNX) {
       valid_cpu_backends = {Backend::ORT};
       valid_gpu_backends = {Backend::ORT, Backend::TRT};
+    } else if (model_format == ModelFormat::RKNN) {
+      valid_rknpu_backends = {Backend::RKNPU2};
     } else {
       valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
       valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};

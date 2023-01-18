@@ -6,8 +6,8 @@ This directory provides `infer.cc` quickly complete the example on CPU/GPU by [U
 
 Before deployment, two steps need to be confirmed.
 
-- 1. The software and hardware environment meets the requirements. Please refer to [FastDeploy环境要求](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
-- 2. Download precompiled deployment library and samples code based on the develop environment. Please refer to [FastDeploy预编译库](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. The software and hardware environment meets the requirements. Please refer to [Environment requirements for FastDeploy](../../../../docs/en/build_and_install/download_prebuilt_libraries.md).
+- 2. Download precompiled deployment library and samples code based on the develop environment. Please refer to [FastDeploy pre-compiled libraries](../../../../docs/en/build_and_install/download_prebuilt_libraries.md).
 
 ## A Quick Start
 Take uie-base model inference on Linux as an example, execute the following command in this directory to complete the compilation test. FastDeploy version 0.7.0 or above is required to support this model (x.x.x>=0.7.0).
@@ -15,7 +15,7 @@ Take uie-base model inference on Linux as an example, execute the following comm
 ```
 mkdir build
 cd build
-# Download FastDeploy precompiled library. Users can choose proper versions in the `FastDeploy预编译库` mentioned above.
+# Download FastDeploy precompiled library. Users can choose proper versions in the `FastDeploy pre-compiled libraries` mentioned above.
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
@@ -73,10 +73,10 @@ std::string param_path = model_dir + sep + "inference.pdiparams";
 std::string vocab_path = model_dir + sep + "vocab.txt";
 using fastdeploy::text::SchemaNode;
 using fastdeploy::text::UIEResult;
-// 定义uie result对象
+// Define the uie result object
 std::vector<std::unordered_map<std::string, std::vector<UIEResult>>> results;
 
-// 初始化UIE模型
+// Initialize UIE model
 auto predictor =
     fastdeploy::text::UIEModel(model_path, param_path, vocab_path, 0.5, 128,
                                 {"时间", "选手", "赛事名称"}, option);
@@ -94,7 +94,7 @@ predictor.Predict({"2月8日上午北京冬奥会自由式滑雪女子大跳台�
 std::cout << results << std::endl;
 results.clear();
 
-// 示例输出
+// An output example
 // The result:
 // 赛事名称:
 //     text: 北京冬奥会自由式滑雪女子大跳台决赛
@@ -128,7 +128,7 @@ predictor.Predict({"（右肝肿瘤）肝细胞性肝癌（II-"
 std::cout << results << std::endl;
 results.clear();
 
-// 示例输出
+// An output example
 // The result:
 // 脉管内癌栓分级:
 //     text: M0级
@@ -174,7 +174,7 @@ predictor.Predict(
 std::cout << results << std::endl;
 results.clear();
 
-// 示例输出
+// An output example
 // The result:
 // 竞赛名称:
 //     text: 2022语言与智能技术竞赛
@@ -233,7 +233,7 @@ predictor.Predict(
 std::cout << results << std::endl;
 results.clear();
 
-// 示例输出
+// An output example
 // The result:
 // 地震触发词:
 //     text: 地震
@@ -287,7 +287,7 @@ predictor.Predict(
 std::cout << results << std::endl;
 results.clear();
 
-// 示例输出
+// An output example
 // The result:
 // 评价维度:
 //     text: 店面
@@ -332,7 +332,7 @@ predictor.Predict({"这个产品用起来真的很流畅，我非常喜欢"}, &r
 std::cout << results << std::endl;
 results.clear();
 
-// 示例输出
+// An output example
 // The result:
 // 情感倾向[正向，负向]:
 //     text: 正向
@@ -355,7 +355,7 @@ predictor.Predict({"北京市海淀区人民法院\n民事判决书\n(199x)"
                 &results);
 std::cout << results << std::endl;
 results.clear();
-// 示例输出
+// An output example
 // The result:
 // 被告:
 //     text: B公司
@@ -433,7 +433,7 @@ UIEModel(
     SchemaLanguage schema_language = SchemaLanguage::ZH);
 ```
 
-UIEModel loading and initialization. Among them, model_file, params_file are Paddle inference documents exported by trained models. Please refer to [模型导出](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2)。
+UIEModel loading and initialization. Among them, model_file, params_file are Paddle inference documents exported by trained models. Please refer to [Model export](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2).
 
 **Parameter**
 
@@ -472,8 +472,8 @@ void Predict(
 
 ## Related Documents
 
-[UIE模型详细介绍](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md)
+[Details for UIE model](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md)
 
-[UIE模型导出方法](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2)
+[How to export a UIE model](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2)
 
-[UIE Python部署方法](../python/README.md)
+[UIE Python deployment](../python/README.md)

@@ -4,7 +4,7 @@
 
 在服务化部署前，需确认
 
-- 1. 服务化镜像的软硬件环境要求和镜像拉取命令请参考[FastDeploy服务化部署](../../../../../serving/README_CN.md)
+- 1. 服务化镜像的软硬件环境要求和镜像拉取命令请参考[FastDeploy服务化部署](../../../../serving/README_CN.md)
 
 ## 准备模型
 
@@ -15,7 +15,8 @@ wget https://bj.bcebos.com/fastdeploy/models/uie/uie-base.tgz
 tar -xvfz uie-base.tgz
 
 # 将下载的模型移动到模型仓库目录
-mv uie-base/* models/uie/1/
+mv uie-base/inference.pdmodel models/uie/1/model.pdmodel
+mv uie-base/inference.pdiparams models/uie/1/model.pdiparams
 ```
 
 模型下载移动好之后，目录结构如下:
@@ -23,8 +24,8 @@ mv uie-base/* models/uie/1/
 models
 └── uie
     ├── 1
-    │   ├── inference.pdiparams
-    │   ├── inference.pdmodel
+    │   ├── model.pdiparams
+    │   ├── model.pdmodel
     │   ├── model.py
     │   └── vocab.txt
     └── config.pbtxt
@@ -54,7 +55,6 @@ I0928 04:51:15.784517 206 grpc_server.cc:4117] Started GRPCInferenceService at 0
 I0928 04:51:15.785177 206 http_server.cc:2815] Started HTTPService at 0.0.0.0:8000
 I0928 04:51:15.826578 206 http_server.cc:167] Started Metrics Service at 0.0.0.0:8002
 ```
-
 
 ## 客户端请求
 客户端请求可以在本地执行脚本请求；也可以在容器中执行。

@@ -1,11 +1,11 @@
-中文 | [English](keypointdetection_result_EN.md)
-# KeyPointDetectionResult 目标检测结果
+English | [中文](keypointdetection_result_CN.md)
+# Keypoint Detection Result
 
-KeyPointDetectionResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像中目标行为的各个关键点坐标和置信度。
+The KeyPointDetectionResult code is defined in `fastdeploy/vision/common/result.h`, and is used to indicate the coordinates and confidence level of each keypoint of the target's behavior in the image.
 
-## C++ 定义
+## C++ Definition
 
-`fastdeploy::vision::KeyPointDetectionResult`
+``fastdeploy::vision::KeyPointDetectionResult``
 
 ```c++
 struct KeyPointDetectionResult {
@@ -17,28 +17,28 @@ struct KeyPointDetectionResult {
 };
 ```
 
-- **keypoints**: 成员变量，表示识别到的目标行为的关键点坐标。
-  `keypoints.size()= N * J`
-    - `N`：图片中的目标数量
-    - `J`：num_joints（一个目标的关键点数量）
-- **scores**: 成员变量，表示识别到的目标行为的关键点坐标的置信度。
-  `scores.size()= N * J`
-    - `N`：图片中的目标数量
-    - `J`:num_joints（一个目标的关键点数量）
-- **num_joints**: 成员变量，一个目标的关键点数量
-- **Clear()**: 成员函数，用于清除结构体中存储的结果
-- **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
+- **keypoints**: Member variable which indicates the coordinates of the identified target behavior keypoint. 
+  ` keypoints.size() = N * J`:
+    - `N`: the number of targets in the image
+    - `J`: num_joints (the number of keypoints of a target)
+- **scores**: Member variable which indicates the confidence level of the keypoint coordinates of the identified target behavior. 
+  `scores.size() = N * J`:
+    - `N`: the number of targets in the picture
+    - `J`:num_joints (the number of keypoints of a target)
+- **num_joints**: Member variable which indicates the number of keypoints of a target.
+- **Clear()**: Member function used to clear the results stored in the structure.
+- **Str()**: Member function used to output the information in the structure as string (for Debug).
 
-## Python 定义
+## Python Definition
 
 `fastdeploy.vision.KeyPointDetectionResult`
 
-- **keypoints**(list of list(float)): 成员变量，表示识别到的目标行为的关键点坐标。
-  `keypoints.size()= N * J`
-  - `N`:图片中的目标数量
-  - `J`:num_joints（关键点数量）
-- **scores**(list of float): 成员变量，表示识别到的目标行为的关键点坐标的置信度。
-  `scores.size()= N * J`
-  - `N`:图片中的目标数量
-  - `J`:num_joints（一个目标的关键点数量）
-- **num_joints**(int): 成员变量，一个目标的关键点数量
+- **keypoints**(list of list(float)): Member variable which indicates the coordinates of the identified target behavior keypoint. 
+  ` keypoints.size() = N * J`:
+    - `N`: the number of targets in the image
+    - `J`: num_joints (the number of keypoints of a target)
+- **scores**(list of float): Member variable which indicates the confidence level of the keypoint coordinates of the identified target behavior. 
+  `scores.size() = N * J`:
+    - `N`: the number of targets in the picture
+    - `J`:num_joints (the number of keypoints of a target)
+- **num_joints**(int): Member variable which indicates the number of keypoints of a target.

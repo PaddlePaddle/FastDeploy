@@ -1,9 +1,9 @@
-中文 ｜ [English](face_alignment_result_EN.md)
-# FaceAlignmentResult 人脸对齐(人脸关键点检测)结果
+English | [简体中文](face_alignment_result_CN.md)
+# Face Alignment Result
 
-FaceAlignmentResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明人脸landmarks。
+The FaceAlignmentResult code is defined in `fastdeploy/vision/common/result.h`, and is used to indicate face landmarks.
 
-## C++ 定义
+## C++ Definition
 
 `fastdeploy::vision::FaceAlignmentResult`
 
@@ -15,12 +15,12 @@ struct FaceAlignmentResult {
 };
 ```
 
-- **landmarks**: 成员变量，表示单张人脸图片检测出来的所有关键点
-- **Clear()**: 成员函数，用于清除结构体中存储的结果
-- **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
+- **landmarks**: Member variable which indicates all the key points detected in a single face image.
+- **Clear()**: Member function used to clear the results stored in the structure.
+- **Str()**: Member function used to output the information in the structure as string (for Debug).
 
-## Python 定义
+## Python Definition
 
 `fastdeploy.vision.FaceAlignmentResult`
 
-- **landmarks**(list of list(float)): 成员变量，表示单张人脸图片检测出来的所有关键点
+- **landmarks**(list of list(float)): Member variable which indicates all the key points detected in a single face image.

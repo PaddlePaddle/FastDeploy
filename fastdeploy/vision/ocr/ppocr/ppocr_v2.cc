@@ -23,14 +23,18 @@ PPOCRv2::PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
                              fastdeploy::vision::ocr::Recognizer* rec_model)
     : detector_(det_model), classifier_(cls_model), recognizer_(rec_model) {
   Initialized();
-  recognizer_->GetPreprocessor().rec_image_shape_[1] = 32;
+  auto preprocess_shape = recognizer_->GetPreprocessor().GetRecImageShape();
+  preprocess_shape[1] = 32;
+  recognizer_->GetPreprocessor().SetRecImageShape(preprocess_shape);
 }
 
 PPOCRv2::PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
                              fastdeploy::vision::ocr::Recognizer* rec_model)
     : detector_(det_model), recognizer_(rec_model) {
   Initialized();
-  recognizer_->GetPreprocessor().rec_image_shape_[1] = 32;
+  auto preprocess_shape = recognizer_->GetPreprocessor().GetRecImageShape();
+  preprocess_shape[1] = 32;
+  recognizer_->GetPreprocessor().SetRecImageShape(preprocess_shape);
 }
 
 bool PPOCRv2::SetClsBatchSize(int cls_batch_size) {
@@ -74,6 +78,17 @@ bool PPOCRv2::Initialized() const {
   }
   return true; 
 }
+
+std::unique_ptr<PPOCRv2> PPOCRv2::Clone() const {
+  std::unique_ptr<PPOCRv2> clone_model = utils::make_unique<PPOCRv2>(PPOCRv2(*this));
+  clone_model->detector_ = detector_->Clone().release();
+  if (classifier_ != nullptr) {
+    clone_model->classifier_ = classifier_->Clone().release();
+  }
+  clone_model->recognizer_ = recognizer_->Clone().release();
+  return clone_model;
+}
+
 bool PPOCRv2::Predict(cv::Mat* img,
                             fastdeploy::vision::OCRResult* result) {
   return Predict(*img, result);
@@ -134,7 +149,7 @@ bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images,
           return false;
         }else{
           for (size_t i_img = start_index; i_img < end_index; ++i_img) {
-            if(cls_labels_ptr->at(i_img) % 2 == 1 && cls_scores_ptr->at(i_img) > classifier_->GetPostprocessor().cls_thresh_) {
+            if(cls_labels_ptr->at(i_img) % 2 == 1 && cls_scores_ptr->at(i_img) > classifier_->GetPostprocessor().GetClsThresh()) {
               cv::rotate(image_list[i_img], image_list[i_img], 1);
             }
           }

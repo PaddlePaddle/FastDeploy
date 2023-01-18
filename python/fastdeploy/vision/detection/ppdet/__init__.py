@@ -49,6 +49,15 @@ class PaddleDetPreprocessor:
         self._preprocessor.disable_permute()
 
 
+class NMSOption:
+    def __init__(self):
+        self.nms_option = C.vision.detection.NMSOption()
+
+    @property
+    def background_label(self):
+        return self.nms_option.background_label
+
+
 class PaddleDetPostprocessor:
     def __init__(self):
         """Create a postprocessor for PaddleDetection Model
@@ -64,10 +73,12 @@ class PaddleDetPostprocessor:
         """
         return self._postprocessor.run(runtime_results)
 
-    def apply_decode_and_nms(self):
+    def apply_decode_and_nms(self, nms_option=None):
         """This function will enable decode and nms in postprocess step.
         """
-        return self._postprocessor.apply_decode_and_nms()
+        if nms_option is None:
+            nms_option = NMSOption()
+        self._postprocessor.ApplyDecodeAndNMS(self, nms_option.nms_option)
 
 
 class PPYOLOE(FastDeployModel):
@@ -490,6 +501,31 @@ class PaddleYOLOv7(PPYOLOE):
         assert self.initialized, "PaddleYOLOv7 model initialize failed."
 
 
+class PaddleYOLOv8(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load a YOLOv8 model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g yolov8/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g yolov8/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g yolov8/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == ModelFormat.PADDLE, "PaddleYOLOv8 model only support model format of ModelFormat.Paddle now."
+        self._model = C.vision.detection.PaddleYOLOv8(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "PaddleYOLOv8 model initialize failed."
+
+
 class RTMDet(PPYOLOE):
     def __init__(self,
                  model_file,
@@ -709,7 +745,7 @@ class GFL(PPYOLOE):
         super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == ModelFormat.PADDLE, "GFL model only support model format of ModelFormat.Paddle now."
-        self._model = C.vision.detection.GFL(
-            model_file, params_file, config_file, self._runtime_option,
-            model_format)
-        assert self.initialized, "GFL model initialize failed."     
+        self._model = C.vision.detection.GFL(model_file, params_file,
+                                             config_file, self._runtime_option,
+                                             model_format)
+        assert self.initialized, "GFL model initialize failed."
