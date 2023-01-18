@@ -34,6 +34,7 @@ DBDetector::DBDetector(const std::string& model_file,
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
     valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE};
+    valid_sophgonpu_backends = {Backend::SOPHGOTPU};
   }
 
   runtime_option = custom_option;
@@ -50,6 +51,12 @@ bool DBDetector::Initialize() {
     return false;
   }
   return true;
+}
+
+std::unique_ptr<DBDetector> DBDetector::Clone() const {
+  std::unique_ptr<DBDetector> clone_model = utils::make_unique<DBDetector>(DBDetector(*this));
+  clone_model->SetRuntime(clone_model->CloneRuntime());
+  return clone_model;
 }
 
 bool DBDetector::Predict(const cv::Mat& img,

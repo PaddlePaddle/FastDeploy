@@ -38,18 +38,19 @@ class FASTDEPLOY_DECL RecognizerPreprocessor {
   /// Set static_shape_infer is true or not. When deploy PP-OCR
   /// on hardware which can not support dynamic input shape very well,
   /// like Huawei Ascned, static_shape_infer needs to to be true.
-  void SetStaticShapeInfer(bool static_shape_infer)
-                    { static_shape_infer_ = static_shape_infer; }
+  void SetStaticShapeInfer(bool static_shape_infer) {
+    static_shape_infer_ = static_shape_infer;
+  }
   /// Get static_shape_infer of the recognition preprocess
   bool GetStaticShapeInfer() const { return static_shape_infer_; }
 
   /// Set mean value for the image normalization in recognition preprocess
-  void SetMean(std::vector<float> mean) { mean_ = mean; }
+  void SetMean(const std::vector<float>& mean) { mean_ = mean; }
   /// Get mean value of the image normalization in recognition preprocess
   std::vector<float> GetMean() const { return mean_; }
 
   /// Set scale value for the image normalization in recognition preprocess
-  void SetScale(std::vector<float> scale) { scale_ = scale; }
+  void SetScale(const std::vector<float>& scale) { scale_ = scale; }
   /// Get scale value of the image normalization in recognition preprocess
   std::vector<float> GetScale() const { return scale_; }
 
@@ -59,11 +60,13 @@ class FASTDEPLOY_DECL RecognizerPreprocessor {
   bool GetIsScale() const { return is_scale_; }
 
   /// Set rec_image_shape for the recognition preprocess
-  void SetRecImageShape(std::vector<int> rec_image_shape)
-                    { rec_image_shape_ = rec_image_shape; }
+  void SetRecImageShape(const std::vector<int>& rec_image_shape) {
+    rec_image_shape_ = rec_image_shape;
+  }
   /// Get rec_image_shape for the recognition preprocess
-  std::vector<int> GetRecImageShape() const { return rec_image_shape_; }
+  std::vector<int> GetRecImageShape() { return rec_image_shape_; }
 
+ private:
   std::vector<int> rec_image_shape_ = {3, 48, 320};
   std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
   std::vector<float> scale_ = {0.5f, 0.5f, 0.5f};

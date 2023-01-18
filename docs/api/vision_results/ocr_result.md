@@ -1,9 +1,9 @@
-中文 ｜ [English](ocr_result_EN.md)
-# OCRResult OCR预测结果
+English | [中文](ocr_result_CN.md)
+# OCR prediction result
 
-OCRResult代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像检测和识别出来的文本框，文本框方向分类，以及文本框内的文本内容
+The OCRResult code is defined in `fastdeploy/vision/common/result.h`, and is used to indicate the text box detected in the image, text box orientation classification, and the text content.
 
-## C++ 定义
+## C++ Definition
 
 ```c++
 fastdeploy::vision::OCRResult
@@ -22,22 +22,22 @@ struct OCRResult {
 };
 ```
 
-- **boxes**: 成员变量，表示单张图片检测出来的所有目标框坐标，`boxes.size()`表示单张图内检测出的框的个数，每个框以8个int数值依次表示框的4个坐标点，顺序为左下，右下，右上，左上
-- **text**: 成员变量，表示多个文本框内被识别出来的文本内容，其元素个数与`boxes.size()`一致
-- **rec_scores**: 成员变量，表示文本框内识别出来的文本的置信度，其元素个数与`boxes.size()`一致
-- **cls_scores**: 成员变量，表示文本框的分类结果的置信度，其元素个数与`boxes.size()`一致
-- **cls_labels**: 成员变量，表示文本框的方向分类类别，其元素个数与`boxes.size()`一致
-- **Clear()**: 成员函数，用于清除结构体中存储的结果
-- **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
+- **boxes**: Member variable which indicates the coordinates of all detected target boxes in a single image. `boxes.size()` indicates the number of detected boxes. Each box is represented by 8 int values to indicate the 4 coordinates of the box, in the order of lower left, lower right, upper right, upper left.
+- **text**: Member variable which indicates the content of the recognized text in multiple text boxes, where the element number is the same as `boxes.size()`.
+- **rec_scores**: Member variable which indicates the confidence level of the recognized text, where the element number is the same as `boxes.size()`.
+- **cls_scores**: Member variable which indicates the confidence level of the classification result of the text box, where the element number is the same as `boxes.size()`.
+- **cls_labels**: Member variable which indicates the directional category of the textbox, where the element number is the same as `boxes.size()`.
+- **Clear()**: Member function used to clear the results stored in the structure.
+- **Str()**: Member function used to output the information in the structure as string (for Debug).
 
-## Python 定义
+## Python Definition
 
 ```python
 fastdeploy.vision.OCRResult  
 ```
 
-- **boxes**: 成员变量，表示单张图片检测出来的所有目标框坐标，`boxes.size()`表示单张图内检测出的框的个数，每个框以8个int数值依次表示框的4个坐标点，顺序为左下，右下，右上，左上
-- **text**: 成员变量，表示多个文本框内被识别出来的文本内容，其元素个数与`boxes.size()`一致
-- **rec_scores**: 成员变量，表示文本框内识别出来的文本的置信度，其元素个数与`boxes.size()`一致
-- **cls_scores**: 成员变量，表示文本框的分类结果的置信度，其元素个数与`boxes.size()`一致
-- **cls_labels**: 成员变量，表示文本框的方向分类类别，其元素个数与`boxes.size()`一致
+- **boxes**: Member variable which indicates the coordinates of all detected target boxes in a single image. `boxes.size()` indicates the number of detected boxes. Each box is represented by 8 int values to indicate the 4 coordinates of the box, in the order of lower left, lower right, upper right, upper left.
+- **text**: Member variable which indicates the content of the recognized text in multiple text boxes, where the element number is the same as `boxes.size()`.
+- **rec_scores**: Member variable which indicates the confidence level of the recognized text, where the element number is the same as `boxes.size()`.
+- **cls_scores**: Member variable which indicates the confidence level of the classification result of the text box, where the element number is the same as `boxes.size()`.
+- **cls_labels**: Member variable which indicates the directional category of the textbox, where the element number is the same as `boxes.size()`.
