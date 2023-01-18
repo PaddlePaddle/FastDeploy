@@ -24,7 +24,6 @@ namespace facedet {
 
 CenterFacePreprocessor::CenterFacePreprocessor() {
   size_ = {640, 640};
-  stride_ = 32;
 }
 
 bool CenterFacePreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
@@ -58,9 +57,9 @@ bool CenterFacePreprocessor::Preprocess(FDMat* mat, FDTensor* output,
                                static_cast<float>(mat->Width())};
 
   // centerface's preprocess steps
-  // 1. letterbox
-  // 2. BGR2RGB
-  DynamicScale(mat);
+  // 1. Resize
+  // 2. ConvertAndPermute
+  Resize::Run(mat, size_[0], size_[1]);
   std::vector<float> alpha = {1.0f, 1.0f, 1.0f};
   std::vector<float> beta = {0.0f, 0.0f, 0.0f};
   ConvertAndPermute::Run(mat, alpha, beta,true);
@@ -72,19 +71,6 @@ bool CenterFacePreprocessor::Preprocess(FDMat* mat, FDTensor* output,
   mat->ShareWithTensor(output);
   output->ExpandDim(0);
   return true;
-}
-
-void CenterFacePreprocessor::DynamicScale(FDMat* mat) {
-  int image_h = mat->Height();
-	int image_w = mat->Width();
-
-  int d_h = size_[0];
-	int d_w = size_[1];
-
-  float d_scale_h = image_h / d_h;
-	float d_scale_w = image_w / d_w;
-
-  Resize::Run(mat, d_h, d_w);
 }
 
 }  // namespace facedet

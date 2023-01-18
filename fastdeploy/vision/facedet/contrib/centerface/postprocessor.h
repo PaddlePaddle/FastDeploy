@@ -36,9 +36,9 @@ class FASTDEPLOY_DECL CenterFacePostprocessor{
    * \return true if the postprocess successed, otherwise false
    */
   bool Run(const std::vector<FDTensor>& infer_result,
-           std::vector<FaceDetectionResult>* results,
-           const std::vector<std::map<std::string,
-                             std::array<float, 2>>>& ims_info);
+          std::vector<FaceDetectionResult>* results,
+          const std::vector<std::map<std::string,
+          std::array<float, 2>>>& ims_info);
 
   /// Set conf_threshold, default 0.5
   void SetConfThreshold(const float& conf_threshold) {
@@ -48,20 +48,17 @@ class FASTDEPLOY_DECL CenterFacePostprocessor{
   /// Get conf_threshold, default 0.5
   float GetConfThreshold() const { return conf_threshold_; }
 
-  /// Set nms_threshold, default 0.45
+  /// Set nms_threshold, default 0.3
   void SetNMSThreshold(const float& nms_threshold) {
     nms_threshold_ = nms_threshold;
   }
 
-  /// Get nms_threshold, default 0.45
+  /// Get nms_threshold, default 0.3
   float GetNMSThreshold() const { return nms_threshold_; }
 
  protected:
-  void genIds(float *heatmap, int h, int w, float thresh, std::vector<int> &ids);
   float conf_threshold_;
   float nms_threshold_;
-  bool multi_label_;
-  float max_wh_;
   int landmarks_per_face_;
 };
 
