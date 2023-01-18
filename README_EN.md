@@ -45,7 +45,7 @@ Including [image classification](examples/vision/classification), [object detect
 
 <div align="center">
     
-<img src="https://user-images.githubusercontent.com/115439700/212800436-9cb39830-fca5-4b40-9def-a1fd83fcfc90.png" >
+<img src="https://user-images.githubusercontent.com/54695910/213087724-7175953a-0e07-4af8-a4a1-5304163da2e0.png" >
     
 </div>
 
