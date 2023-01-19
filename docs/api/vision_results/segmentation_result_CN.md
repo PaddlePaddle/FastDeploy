@@ -1,5 +1,5 @@
 中文 ｜ [English](segmentation_result.md)
-# SegmentationResult 目标检测结果
+# SegmentationResult 图像分割结果
 
 SegmentationResult代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像中每个像素预测出来的分割类别和分割类别的概率值。
 
