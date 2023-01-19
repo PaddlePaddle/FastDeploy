@@ -1,7 +1,7 @@
-[English](README.md) | 简体中文
-# InsightFace RKNPU准备部署模型
+English | [简体中文](README_CN.md)
+# InsightFace RKNPU Deployment Example
 
-本教程提供InsightFace模型在RKNPU2环境下的部署，模型的详细介绍已经ONNX模型的下载请查看[模型介绍文档](../README.md)。
+This document provides the deployment of the InsightFace model in the RKNPU2 environment. For details, please refer to [Model Introduction Document].本教程提供InsightFace模型在RKNPU2环境下的部署，模型的详细介绍已经ONNX模型的下载请查看[模型介绍文档](../README.md)。
 
 ## 支持模型列表
 目前FastDeploy支持如下模型的部署
