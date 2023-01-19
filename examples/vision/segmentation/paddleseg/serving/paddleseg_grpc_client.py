@@ -106,11 +106,7 @@ if __name__ == "__main__":
             # values is batch
             for value in values:
                 value = json.loads(value)
-                #print(value)
-                import fastdeploy as fd
-                result = fd.C.vision.SegmentationResult()
-                result.label_map = value["label_map"]
-                result.shape = value["shape"]
-                im = cv2.imread("cityscapes_demo.png")
-                vis_im = fd.vision.vis_segmentation(im, result, 0.5)
-                cv2.imwrite("seg.png", vis_im)
+                print(
+                    "Only print the first 20 labels in label_map of SEG_RESULT")
+                value["label_map"] = value["label_map"][:20]
+                print(value)
