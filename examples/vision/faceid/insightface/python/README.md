@@ -99,7 +99,6 @@ Member variables of AdaFacePreprocessor are as follows
 > > * **size**(list[int]): This parameter changes the size of the resize during preprocessing, containing two integer elements for [width, height] with default value [112, 112]
 > > * **alpha**(list[float]): Preprocess normalized alpha, and calculated as `x'=x*alpha+beta`. alpha defaults to [1. / 127.5, 1.f / 127.5, 1. / 127.5]
 > > * **beta**(list[float]): Preprocess normalized beta, and calculated as `x'=x*alpha+beta`，beta defaults to [-1.f, -1.f, -1.f]
-> > * **swap_rb**(bool): Whether to convert BGR to RGB in pre-processing. Default True
 
 #### Member variables of AdaFacePostprocessor
 Member variables of AdaFacePostprocessor are as follows

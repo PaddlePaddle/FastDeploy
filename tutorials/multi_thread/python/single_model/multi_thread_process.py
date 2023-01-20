@@ -1,4 +1,17 @@
-import numpy as np
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from threading import Thread
 import fastdeploy as fd
 import cv2
@@ -67,6 +80,7 @@ def build_option(args):
     option = fd.RuntimeOption()
 
     if args.device.lower() == "gpu":
+        option.use_paddle_backend()
         option.use_gpu()
 
     if args.device.lower() == "ipu":
@@ -75,6 +89,16 @@ def build_option(args):
     if args.use_trt:
         option.use_trt_backend()
     return option
+
+
+def load_model(args, runtime_option):
+    model_file = os.path.join(args.model, "inference.pdmodel")
+    params_file = os.path.join(args.model, "inference.pdiparams")
+    config_file = os.path.join(args.model, "inference_cls.yaml")
+    global model
+    model = fd.vision.classification.PaddleClasModel(
+        model_file, params_file, config_file, runtime_option=runtime_option)
+    #return model
 
 
 def predict(model, img_list, topk):
@@ -91,7 +115,7 @@ def process_predict(image):
     # predict classification result
     im = cv2.imread(image)
     result = model.predict(im, args.topk)
-    return result
+    print(result)
 
 
 class WrapperThread(Thread):
@@ -114,19 +138,15 @@ if __name__ == '__main__':
     # configure runtime and load model
     runtime_option = build_option(args)
 
-    model_file = os.path.join(args.model, "inference.pdmodel")
-    params_file = os.path.join(args.model, "inference.pdiparams")
-    config_file = os.path.join(args.model, "inference_cls.yaml")
-    model = fd.vision.classification.PaddleClasModel(
-        model_file, params_file, config_file, runtime_option=runtime_option)
     if args.use_multi_process:
-        results = []
         process_num = args.process_num
-        with Pool(process_num) as pool:
-            results = pool.map(process_predict, imgs_list)
-        for result in results:
-            print(result)
+        with Pool(
+                process_num,
+                initializer=load_model,
+                initargs=(args, runtime_option)) as pool:
+            pool.map(process_predict, imgs_list)
     else:
+        load_model(args, runtime_option)
         threads = []
         thread_num = args.thread_num
         image_num_each_thread = int(len(imgs_list) / thread_num)

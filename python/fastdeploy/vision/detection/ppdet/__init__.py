@@ -49,6 +49,15 @@ class PaddleDetPreprocessor:
         self._preprocessor.disable_permute()
 
 
+class NMSOption:
+    def __init__(self):
+        self.nms_option = C.vision.detection.NMSOption()
+
+    @property
+    def background_label(self):
+        return self.nms_option.background_label
+
+
 class PaddleDetPostprocessor:
     def __init__(self):
         """Create a postprocessor for PaddleDetection Model
@@ -64,10 +73,12 @@ class PaddleDetPostprocessor:
         """
         return self._postprocessor.run(runtime_results)
 
-    def apply_decode_and_nms(self):
+    def apply_decode_and_nms(self, nms_option=None):
         """This function will enable decode and nms in postprocess step.
         """
-        return self._postprocessor.apply_decode_and_nms()
+        if nms_option is None:
+            nms_option = NMSOption()
+        self._postprocessor.ApplyDecodeAndNMS(self, nms_option.nms_option)
 
 
 class PPYOLOE(FastDeployModel):
@@ -734,7 +745,7 @@ class GFL(PPYOLOE):
         super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == ModelFormat.PADDLE, "GFL model only support model format of ModelFormat.Paddle now."
-        self._model = C.vision.detection.GFL(
-            model_file, params_file, config_file, self._runtime_option,
-            model_format)
-        assert self.initialized, "GFL model initialize failed."     
+        self._model = C.vision.detection.GFL(model_file, params_file,
+                                             config_file, self._runtime_option,
+                                             model_format)
+        assert self.initialized, "GFL model initialize failed."
