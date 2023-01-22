@@ -48,8 +48,8 @@ endif()
 
 if(ANDROID)
   # To reduce the volume of the library
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g0 -Ofast -ffunction-sections -fdata-sections")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g0 -Ofast -ffunction-sections -fdata-sections")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g0 -Ofast -ffast-math -ffunction-sections -fdata-sections")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g0 -Ofast -ffast-math -ffunction-sections -fdata-sections")
 endif()
 
 ############################# Basic Options for FastDeploy ################################
@@ -73,9 +73,11 @@ option(WITH_KUNLUNXIN "Whether to compile for KunlunXin XPU deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
 
 ############################# Options for Android cross compiling #########################
-option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
-option(WITH_LITE_STATIC "Use Paddle Lite static lib for Android." OFF)
-option(WITH_OPENMP "Use OpenMP support for Android." OFF)
+option(WITH_OPENCV_STATIC "Whether to use OpenCV static lib for Android." OFF)
+option(WITH_LITE_STATIC "Whether to use OpenCV Paddle Lite static lib for Android." OFF)
+option(WITH_FLYCV_STATIC "Whether to use OpenCV FlyCV static lib for Android." OFF)
+option(WITH_OPENMP "Whether to use OpenCV OpenMP support for Android." OFF)
+option(WITH_JAVA "Whether to build jni lib for Android." OFF)
 
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
 option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
@@ -371,7 +373,7 @@ if(ENABLE_VISION)
   if(ENABLE_FLYCV)
     add_definitions(-DENABLE_FLYCV)
     include(${PROJECT_SOURCE_DIR}/cmake/flycv.cmake)
-    list(APPEND DEPEND_LIBS external_flycv)
+    list(APPEND DEPEND_LIBS ${FLYCV_LIBRARIES})
   endif()
 endif()
 
@@ -394,7 +396,6 @@ if(ENABLE_PADDLE2ONNX)
   include(${PROJECT_SOURCE_DIR}/cmake/paddle2onnx.cmake)
   list(APPEND DEPEND_LIBS external_paddle2onnx)
 endif(ENABLE_PADDLE2ONNX)
-
 
 configure_file(${PROJECT_SOURCE_DIR}/FastDeploy.cmake.in ${PROJECT_SOURCE_DIR}/FastDeploy.cmake @ONLY)
 configure_file(${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py.in ${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py)
@@ -447,15 +448,37 @@ endif()
 if(ANDROID)
   find_library(log-lib log)
   list(APPEND DEPEND_LIBS ${log-lib})
+  if(WITH_LITE_STATIC)
+    # need omp for static Paddle Lite lib
+    set(WITH_OPENMP ON CACHE BOOL "Force WITH_OPENMP=ON while WITH_LITE_STATIC=ON" FORCE) 
+    message(STATUS "Force WITH_OPENMP=${WITH_OPENMP} while WITH_LITE_STATIC=ON")
+  endif()
   if(WITH_OPENMP)
-    find_package(OpenMP)
-    if(OpenMP_CXX_FOUND)
-      list(APPEND DEPEND_LIBS OpenMP::OpenMP_CXX)
-    endif()
+    include(${PROJECT_SOURCE_DIR}/cmake/openmp.cmake)
   endif()
 endif()
 
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
+
+# Android JNI lib
+if(ANDROID AND WITH_JAVA)
+  include(${PROJECT_SOURCE_DIR}/cmake/fastdeploy_jni.cmake)
+  if(JNI_SRCS_Found)
+    add_library(fastdeploy_static STATIC ${ALL_DEPLOY_SRCS})
+    add_library(fastdeploy_jni SHARED ${JNI_SRCS})
+    target_link_libraries(fastdeploy_jni fastdeploy_static ${DEPEND_LIBS} 
+                          jnigraphics GLESv2 EGL)
+    add_dependencies(fastdeploy_jni fastdeploy_static)  
+    # strip debug C++ symbol table
+    set_target_properties(fastdeploy_jni PROPERTIES COMPILE_FLAGS 
+        "-fvisibility=hidden -fvisibility-inlines-hidden -fdata-sections -ffunction-sections")
+    set_target_properties(fastdeploy_jni PROPERTIES LINK_FLAGS ${COMMON_LINK_FLAGS})
+    set_target_properties(fastdeploy_jni PROPERTIES LINK_FLAGS_RELEASE ${COMMON_LINK_FLAGS_REL})
+    set_target_properties(fastdeploy_jni PROPERTIES LINK_FLAGS_MINSIZEREL ${COMMON_LINK_FLAGS_REL}) 
+  else()
+    message(FATAL_ERROR "Can not found Android JNI_SRCS!")  
+  endif()
+endif()
 
 if(WIN32)
   if(ENABLE_VISION)
@@ -503,7 +526,26 @@ elseif(ANDROID)
   install(
     TARGETS ${LIBRARY_NAME}
     LIBRARY DESTINATION lib/${ANDROID_ABI}
+    ARCHIVE DESTINATION lib/${ANDROID_ABI}
   )
+  # package omp into fastdeploy lib dir if WITH_OPENMP=ON 
+  # and WITH_LITE_STATIC=OFF.
+  if(WITH_OPENMP AND (NOT WITH_LITE_STATIC) AND OpenMP_CXX_FOUND)
+    install(
+      FILES 
+      ${OpenMP_CXX_LIBRARIES}
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/${ANDROID_ABI}
+    )
+  endif()
+  # install Android JNI lib
+  if(WITH_JAVA)
+    install(
+      TARGETS 
+      fastdeploy_jni fastdeploy_static
+      LIBRARY DESTINATION lib/${ANDROID_ABI}
+      ARCHIVE DESTINATION lib/${ANDROID_ABI}
+    )
+  endif()
 else()
   install(
     TARGETS ${LIBRARY_NAME}
