@@ -199,6 +199,9 @@ endif()
 
 if(ENABLE_LITE_BACKEND)
   add_definitions(-DENABLE_LITE_BACKEND)
+  if(WITH_LITE_STATIC)
+    add_definitions(-DWITH_LITE_STATIC)
+  endif()
   include(${PROJECT_SOURCE_DIR}/cmake/paddlelite.cmake)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_LITE_SRCS})
   list(APPEND DEPEND_LIBS external_paddle_lite)
@@ -460,24 +463,9 @@ endif()
 
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
-# Android JNI lib
+################################ JNI: FastDeploy Android JNI Lib ###############################
 if(ANDROID AND WITH_JAVA)
   include(${PROJECT_SOURCE_DIR}/cmake/fastdeploy_jni.cmake)
-  if(JNI_SRCS_Found)
-    add_library(fastdeploy_static STATIC ${ALL_DEPLOY_SRCS})
-    add_library(fastdeploy_jni SHARED ${JNI_SRCS})
-    target_link_libraries(fastdeploy_jni fastdeploy_static ${DEPEND_LIBS} 
-                          jnigraphics GLESv2 EGL)
-    add_dependencies(fastdeploy_jni fastdeploy_static)  
-    # strip debug C++ symbol table
-    set_target_properties(fastdeploy_jni PROPERTIES COMPILE_FLAGS 
-        "-fvisibility=hidden -fvisibility-inlines-hidden -fdata-sections -ffunction-sections")
-    set_target_properties(fastdeploy_jni PROPERTIES LINK_FLAGS ${COMMON_LINK_FLAGS})
-    set_target_properties(fastdeploy_jni PROPERTIES LINK_FLAGS_RELEASE ${COMMON_LINK_FLAGS_REL})
-    set_target_properties(fastdeploy_jni PROPERTIES LINK_FLAGS_MINSIZEREL ${COMMON_LINK_FLAGS_REL}) 
-  else()
-    message(FATAL_ERROR "Can not found Android JNI_SRCS!")  
-  endif()
 endif()
 
 if(WIN32)
@@ -540,10 +528,8 @@ elseif(ANDROID)
   # install Android JNI lib
   if(WITH_JAVA)
     install(
-      TARGETS 
-      fastdeploy_jni fastdeploy_static
-      LIBRARY DESTINATION lib/${ANDROID_ABI}
-      ARCHIVE DESTINATION lib/${ANDROID_ABI}
+      TARGETS fastdeploy_jni
+      LIBRARY DESTINATION jni/${ANDROID_ABI}
     )
   endif()
 else()
@@ -559,10 +545,45 @@ install(
   PATTERN "*.h"
   PATTERN "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/*/*.h"
 )
-install(
-  DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install
-  DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs
-)
+
+if(NOT ANDROID)
+  install(
+    DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs
+  )
+else()
+  # opencv/flycv always needs to be provided to users because our api
+  # explicitly depends on opencv's and flycv's api in headers.
+  # The headers and libs of opencv must be install.
+  if(ENABLE_VISION)
+    install(
+      DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/opencv
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
+    )
+  endif()
+  # only need flycv's headers (may also install libs? TODO:qiuyanjun)
+  if(ENABLE_FLYCV)
+    install(
+      DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/flycv/include
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install/flycv
+    )
+  endif()
+  # fast_tokenizer's static lib is not avaliable now! 
+  # may support some days later(TODO:qiuyanjun)
+  if(ENABLE_TEXT)
+    install(
+      DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/fast_tokenizer
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
+    )
+  endif()  
+  # some libs may not to install while in static mode
+  if(ENABLE_LITE_BACKEND AND (NOT WITH_LITE_STATIC))
+    install(
+      DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/paddlelite
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
+    )
+  endif()
+endif()
 
 if(WIN32 AND BUILD_EXAMPLES)
   get_windows_path(_tmp_install_dir ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install)
@@ -588,10 +609,12 @@ install(
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 
-install(
-  DIRECTORY ${PROJECT_SOURCE_DIR}/examples
-  DESTINATION ${CMAKE_INSTALL_PREFIX}
-)
+if(NOT ANDROID)
+  install(
+    DIRECTORY ${PROJECT_SOURCE_DIR}/examples
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
+endif()
 
 install(
   FILES ${PROJECT_SOURCE_DIR}/cmake/gflags.cmake

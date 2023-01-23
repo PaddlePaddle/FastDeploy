@@ -115,5 +115,5 @@ main() {
 main
 
 # Usage:
-# ./scripts/android/build_android_cpp.sh arm64-v8a 21
-# ./scripts/android/build_android_cpp.sh armeabi-v7a 21
+# ./scripts/android/build_android_cpp_with_static_deps_with_text_api.sh arm64-v8a 21
+# ./scripts/android/build_android_cpp_with_static_deps_with_text_api.sh armeabi-v7a 21

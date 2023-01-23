@@ -13,6 +13,12 @@
 // limitations under the License.
 
 #include "fastdeploy/runtime/backends/lite/lite_backend.h"
+// https://github.com/PaddlePaddle/Paddle-Lite/issues/8290
+#ifdef WITH_LITE_STATIC
+#include "paddle_use_ops.h"       // NOLINT
+#include "paddle_use_kernels.h"   // NOLINT
+#include "paddle_use_passes.h"    // NOLINT
+#endif
 
 #include <cstring>
 
