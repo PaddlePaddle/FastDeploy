@@ -29,9 +29,12 @@ fi
 # remove old package
 echo "[INFO] --- Packing ${CXX_PACKAGE_NAME} package ..."
 if [ -d "${CXX_PACKAGE_NAME}" ]; then
-	echo "[INFO] --- Removed old package done !"
-	rm ${CXX_PACKAGE_NAME}.tgz
 	rm -rf ${CXX_PACKAGE_NAME}
+    echo "[INFO] --- Removed old ${CXX_PACKAGE_NAME} done !"
+    if [ -f "${CXX_PACKAGE_NAME}.tgz" ]; then
+        rm ${CXX_PACKAGE_NAME}.tgz
+        echo "[INFO] --- Removed old ${CXX_PACKAGE_NAME} done !"
+    fi
 fi
 
 # package latest c++ sdk
@@ -39,11 +42,15 @@ mkdir ${CXX_PACKAGE_NAME}
 echo "[INFO] --- Collecting package contents ..."
 cp -r ${ARMV7_CXX_PACKAGE_NAME}/* ${CXX_PACKAGE_NAME}/
 cp -r ${ARMV8_CXX_PACKAGE_NAME}/* ${CXX_PACKAGE_NAME}/
-rm -rf ${CXX_PACKAGE_NAME}/examples
+if [ -d "${CXX_PACKAGE_NAME}/examples" ]; then
+    rm -rf ${CXX_PACKAGE_NAME}/examples
+fi
 echo "[INFO] --- Removed examples files ..."
 echo "[INFO] --- Removing static .a files: "
-find ${CXX_PACKAGE_NAME}/third_libs/install/ -name "*.a"
-rm $(find ${CXX_PACKAGE_NAME}/third_libs/install/ -name "*.a")
+static_files=$(find ${CXX_PACKAGE_NAME}/third_libs/install/ -name "*.a")
+if [ ${#static_files[@]} -gt 0 ]; then
+    rm $(find ${CXX_PACKAGE_NAME}/third_libs/install/ -name "*.a")
+fi
 echo "[INFO] --- Taring ${CXX_PACKAGE_NAME}.tgz package ..."
 tar -zcvf ${CXX_PACKAGE_NAME}.tgz ${CXX_PACKAGE_NAME}/* >> ${BUILT_PACKAGE_DIR}/pkg.log 2>&1
 echo "[INFO] --- Package ${CXX_PACKAGE_NAME}.tgz done ! Package size info: "

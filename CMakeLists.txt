@@ -563,10 +563,17 @@ else()
   endif()
   # only need flycv's headers (may also install libs? TODO:qiuyanjun)
   if(ENABLE_FLYCV)
-    install(
-      DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/flycv/include
-      DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install/flycv
-    )
+    if(WITH_FLYCV_STATIC)
+      install(
+        DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/flycv/include
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install/flycv
+      )
+    else()
+      install(
+        DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/flycv
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
+      )
+    endif()
   endif()
   # fast_tokenizer's static lib is not avaliable now! 
   # may support some days later(TODO:qiuyanjun)
