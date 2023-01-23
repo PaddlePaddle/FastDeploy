@@ -78,6 +78,7 @@ option(WITH_LITE_STATIC "Whether to use OpenCV Paddle Lite static lib for Androi
 option(WITH_FLYCV_STATIC "Whether to use OpenCV FlyCV static lib for Android." OFF)
 option(WITH_OPENMP "Whether to use OpenCV OpenMP support for Android." OFF)
 option(WITH_JAVA "Whether to build jni lib for Android." OFF)
+option(WITH_STATIC_LIB "Whether to build FastDeploy static lib." OFF)
 
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
 option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
@@ -463,11 +464,26 @@ endif()
 
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
-################################ JNI: FastDeploy Android JNI Lib ###############################
+################################ JNI & STATIC LIB: FastDeploy Android JNI & STATIC Lib ###############################
+if(WITH_JAVA OR WITH_STATIC_LIB)
+  # Here, we use a dummy target (fastdelpoy_dummy) 
+  # to form a build dependency tree for fastdeploy_jni
+  # lib and fastdeploy_bundle lib.
+  add_library(fastdelpoy_dummy STATIC ${ALL_DEPLOY_SRCS})
+  # Build fastdelpoy_dummy when the third-party 
+  # libraries (opencv, paddle lite, flycv) are ready.
+  add_dependencies(fastdelpoy_dummy ${LIBRARY_NAME})
+endif()
+
 if(ANDROID AND WITH_JAVA)
   include(${PROJECT_SOURCE_DIR}/cmake/fastdeploy_jni.cmake)
 endif()
 
+if(ANDROID AND WITH_STATIC_LIB)
+  bundle_static_library(${LIBRARY_NAME} fastdeploy_static bundle_fastdeploy)
+endif()
+
+##################################### Examples ####################################
 if(WIN32)
   if(ENABLE_VISION)
     if("${CMAKE_GENERATOR}" STREQUAL "Ninja")
@@ -514,8 +530,14 @@ elseif(ANDROID)
   install(
     TARGETS ${LIBRARY_NAME}
     LIBRARY DESTINATION lib/${ANDROID_ABI}
-    ARCHIVE DESTINATION lib/${ANDROID_ABI}
   )
+  if(WITH_STATIC_LIB) 
+    install(
+      FILES 
+      ${CMAKE_CURRENT_BINARY_DIR}/libfastdeploy_static.a
+      DESTINATION lib/${ANDROID_ABI}
+    )
+  endif()
   # package omp into fastdeploy lib dir if WITH_OPENMP=ON 
   # and WITH_LITE_STATIC=OFF.
   if(WITH_OPENMP AND (NOT WITH_LITE_STATIC) AND OpenMP_CXX_FOUND)
