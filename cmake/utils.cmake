@@ -74,7 +74,7 @@ function(get_osx_architecture)
   endif()
 endfunction()
 
-#only for windows
+# only for windows
 function(create_static_lib TARGET_NAME)
   set(libs ${ARGN})
   list(REMOVE_DUPLICATES libs)
@@ -98,23 +98,50 @@ function(create_static_lib TARGET_NAME)
     merge_static_libs(${TARGET_NAME} ${${TARGET_NAME}_dummy_list})
 endfunction()
 
-# Bundle several static libraries into one.
-# reference: https://github.com/PaddlePaddle/Paddle-Lite/blob/develop/cmake/lite.cmake#L252
-
 # A fake target to include all the libraries and tests the fastdeploy module depends.
 add_custom_target(fd_compile_deps COMMAND echo 1)
 
+# A function to grep LINK_ONLY dependencies from INTERFACE_LINK_LIBRARIES
+function(regrex_link_only_libraries OUTPUT_DEPS PUBLIC_DEPS)
+  string(JOIN "#" _public_deps ${PUBLIC_DEPS})
+  string(REPLACE "$<LINK_ONLY:" "" _public_deps ${_public_deps})
+  string(REPLACE ">" "" _public_deps ${_public_deps})
+  string(REPLACE "#" ";" _public_deps ${_public_deps})
+  set(${OUTPUT_DEPS} ${_public_deps} PARENT_SCOPE)
+endfunction()
+
+# Bundle several static libraries into one. This function is modified from Paddle Lite. 
+# reference: https://github.com/PaddlePaddle/Paddle-Lite/blob/develop/cmake/lite.cmake#L252
 function(bundle_static_library tgt_name bundled_tgt_name fake_target)
   list(APPEND static_libs fastdelpoy_dummy)
   add_dependencies(fd_compile_deps ${fake_target})
+  # Set redundant static libs here, protobuf is already available 
+  # in the Paddle Lite static library. So, we don't need protobuf 
+  # in opencv. And there is no need for opencv_dnn, opencv_ml, 
+  # opencv_flann and some other modules. Therefore, we chose
+  # to discard these redundant modules.
+  set(REDUNDANT_STATIC_LIBS opencv_dnn opencv_calib3d opencv_photo 
+      opencv_flann opencv_objdetect opencv_stitching opencv_gapi 
+      opencv_ml libprotobuf)
 
   function(_recursively_collect_dependencies input_target)
+    list(FIND REDUNDANT_STATIC_LIBS ${input_target} _input_redunant_id)
+    if(${_input_redunant_id} GREATER 0)
+      return()
+    endif()
     set(_input_link_libraries LINK_LIBRARIES)
+    # https://cmake.org/cmake/help/latest/prop_tgt/TYPE.html
     get_target_property(_input_type ${input_target} TYPE)
-    if (${_input_type} STREQUAL "INTERFACE_LIBRARY")
+    # In OpenCVModules.cmake, they set the deps of modules
+    # (opencv_core,...) as INTERFACE_LINK_LIBRARIES. The 
+    # 'Type' of opencv static lib is set as 'STATIC_LIBRARY'.
+    if ((${_input_type} STREQUAL "INTERFACE_LIBRARY")
+         OR (${_input_type} STREQUAL "STATIC_LIBRARY"))
       set(_input_link_libraries INTERFACE_LINK_LIBRARIES)
     endif()
-    get_target_property(public_dependencies ${input_target} ${_input_link_libraries})
+    get_target_property(_public_dependencies ${input_target} ${_input_link_libraries})
+    regrex_link_only_libraries(public_dependencies "${_public_dependencies}")
+    
     foreach(dependency IN LISTS public_dependencies)
       if(TARGET ${dependency})
         get_target_property(alias ${dependency} ALIASED_TARGET)
@@ -122,7 +149,9 @@ function(bundle_static_library tgt_name bundled_tgt_name fake_target)
           set(dependency ${alias})
         endif()
         get_target_property(_type ${dependency} TYPE)
-        if (${_type} STREQUAL "STATIC_LIBRARY")
+        list(FIND REDUNDANT_STATIC_LIBS ${dependency} _deps_redunant_id)
+        if (${_type} STREQUAL "STATIC_LIBRARY" AND 
+            (NOT (${_deps_redunant_id} GREATER 0)))
           list(APPEND static_libs ${dependency})
         endif()
 
@@ -130,7 +159,9 @@ function(bundle_static_library tgt_name bundled_tgt_name fake_target)
           GLOBAL PROPERTY _${tgt_name}_static_bundle_${dependency})
         if (NOT library_already_added)
           set_property(GLOBAL PROPERTY _${tgt_name}_static_bundle_${dependency} ON)
-          _recursively_collect_dependencies(${dependency})
+          if(NOT (${_deps_redunant_id} GREATER 0))
+            _recursively_collect_dependencies(${dependency})
+          endif()
         endif()
       endif()
     endforeach()
@@ -140,11 +171,14 @@ function(bundle_static_library tgt_name bundled_tgt_name fake_target)
   _recursively_collect_dependencies(${tgt_name})
 
   list(REMOVE_DUPLICATES static_libs)
+  list(REMOVE_ITEM static_libs ${REDUNDANT_STATIC_LIBS})
+  message(STATUS "WITH_STATIC_LIB=${WITH_STATIC_LIB}, Found all needed static libs from dependecy tree: ${static_libs}")
+  message(STATUS "Exclude some redundant static libs: ${REDUNDANT_STATIC_LIBS}")
 
   set(bundled_tgt_full_name
     ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}${bundled_tgt_name}${CMAKE_STATIC_LIBRARY_SUFFIX})
 
-  message(STATUS "bundled_tgt_full_name:  ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}${bundled_tgt_name}${CMAKE_STATIC_LIBRARY_SUFFIX}")
+  message(STATUS "Use bundled_tgt_full_name:  ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}${bundled_tgt_name}${CMAKE_STATIC_LIBRARY_SUFFIX}")
 
   if(WIN32)
     set(dummy_tgt_name dummy_${bundled_tgt_name})
@@ -163,6 +197,7 @@ function(bundle_static_library tgt_name bundled_tgt_name fake_target)
 
   add_custom_target(${fake_target} ALL COMMAND ${CMAKE_COMMAND} -E echo "Building fake_target ${fake_target}")
   add_dependencies(${fake_target} ${tgt_name})
+  add_dependencies(${fake_target} fastdelpoy_dummy)
 
   if(NOT IOS AND NOT APPLE)
     file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${bundled_tgt_name}.ar.in
@@ -184,7 +219,7 @@ function(bundle_static_library tgt_name bundled_tgt_name fake_target)
     if (CMAKE_INTERPROCEDURAL_OPTIMIZATION)
       set(ar_tool ${CMAKE_CXX_COMPILER_AR})
     endif()
-    message(STATUS "ar_tool: ${ar_tool}")
+    message(STATUS "Found ar_tool: ${ar_tool}")
 
     add_custom_command(
       TARGET ${fake_target} PRE_BUILD
@@ -207,10 +242,7 @@ function(bundle_static_library tgt_name bundled_tgt_name fake_target)
 
   add_library(${bundled_tgt_name} STATIC IMPORTED GLOBAL)
   set_property(TARGET ${bundled_tgt_name} PROPERTY IMPORTED_LOCATION
-                                         ${bundled_tgt_full_name})
-  if(TARGET ${bundled_tgt_name})                                       
-    message(STATUS "bundled_tgt_name: ${bundled_tgt_name}")     
-  endif()                                  
+                                         ${bundled_tgt_full_name})          
   add_dependencies(${bundled_tgt_name} ${fake_target})
   add_dependencies(${bundled_tgt_name} fastdelpoy_dummy)
 

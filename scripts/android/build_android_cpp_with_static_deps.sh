@@ -100,7 +100,7 @@ __build_fastdeploy_android_shared() {
         -DWITH_OPENMP=ON \
         -DWITH_JAVA=ON \
         -DCMAKE_INSTALL_PREFIX=${FASDEPLOY_INSTALL_DIR} \
-        -Wno-dev ../../.. && make -j8 
+        -Wno-dev ../../.. && make -j8 && make install  
 
   echo "-- [INFO][built][${ANDROID_ABI}][${BUILD_DIR}/install]"
 }
