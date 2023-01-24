@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
 // https://github.com/PaddlePaddle/Paddle-Lite/issues/8290
 #if (defined(WITH_LITE_STATIC) && defined(WITH_STATIC_LIB))
 // Whether to output some warning messages when using the 
