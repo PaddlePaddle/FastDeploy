@@ -32,6 +32,10 @@ set(ORT_DIRECTORY "@ORT_DIRECTORY@")
 set(OPENVINO_DIRECTORY "@OPENVINO_DIRECTORY@")
 set(RKNN2_TARGET_SOC "@RKNN2_TARGET_SOC@")
 set(WITH_KUNLUNXIN @WITH_KUNLUNXIN@)
+# Users can choose whether to use the FastDeploy static library. 
+# The default value for this option is determined by the SDK build-time options.
+# The FastDeploy dynamic library always needs to be compiled.
+option(WITH_STATIC_LIB "Whether to use FastDeploy static lib." @WITH_STATIC_LIB@)
 
 set(FASTDEPLOY_LIBS "")
 set(FASTDEPLOY_INCS "")
@@ -47,9 +51,32 @@ if(NOT MSVC)
   add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
 endif(NOT MSVC)
 
+# Set FastDeploy static lib definitions
+if(WITH_LITE_STATIC)
+  add_definitions(-DWITH_LITE_STATIC)
+endif()
+
+if(WITH_STATIC_LIB)
+  add_definitions(-DWITH_STATIC_LIB)
+  # add_definitions(-DWITH_STATIC_WARNING)
+endif()
+
+# Still need omp while using FastDeploy static lib. 
+# This is due to the use of openmp for Paddle Lite's 
+# static library.
+if(ANDROID AND WITH_STATIC_LIB AND WITH_LITE_STATIC)
+  include(${CMAKE_CURRENT_LIST_DIR}/openmp.cmake)
+endif()
+
 if(ANDROID)
   add_library(fastdeploy STATIC IMPORTED GLOBAL)
-  set_property(TARGET fastdeploy PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_LIST_DIR}/lib/${ANDROID_ABI}/lib${LIBRARY_NAME}.so)
+  if(WITH_STATIC_LIB)
+    set_property(TARGET fastdeploy PROPERTY IMPORTED_LOCATION 
+                 ${CMAKE_CURRENT_LIST_DIR}/lib/${ANDROID_ABI}/lib${LIBRARY_NAME}_static.a)
+  else()
+    set_property(TARGET fastdeploy PROPERTY IMPORTED_LOCATION 
+                 ${CMAKE_CURRENT_LIST_DIR}/lib/${ANDROID_ABI}/lib${LIBRARY_NAME}.so)
+  endif()
   list(APPEND FASTDEPLOY_LIBS fastdeploy)
   if(WITH_OPENMP AND (NOT WITH_LITE_STATIC))
     add_library(fastdeploy_omp STATIC IMPORTED GLOBAL)
@@ -115,7 +142,11 @@ endif()
 if(ENABLE_LITE_BACKEND)
   set(LITE_DIR ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/${PADDLELITE_FILENAME})
   if(ANDROID)
-    if(NOT WITH_LITE_STATIC)
+    if(WITH_LITE_STATIC)
+      if(WITH_STATIC_LIB)
+        list(APPEND FASTDEPLOY_INCS ${LITE_DIR}/include)
+      endif()
+    else()
       add_library(paddle_full_api_shared STATIC IMPORTED GLOBAL)
       set_property(TARGET paddle_full_api_shared PROPERTY IMPORTED_LOCATION ${LITE_DIR}/lib/${ANDROID_ABI}/libpaddle_full_api_shared.so)
       list(APPEND FASTDEPLOY_LIBS paddle_full_api_shared)
@@ -186,13 +217,18 @@ if(ENABLE_VISION)
   message(STATUS "The path of OpenCV is ${OpenCV_DIR}.")
   if(ANDROID)
     if(WITH_OPENCV_STATIC)
-      find_package(OpenCV REQUIRED PATHS ${OpenCV_DIR})
-      list(APPEND FASTDEPLOY_INCS ${OpenCV_INCLUDE_DIRS})
-      # For now, we still need to link OpenCV static libs.
-      # Users may use some of opencv's apis, but they may 
-      # not have been compiled into fastdeploy.
-      # list(APPEND FASTDEPLOY_LIBS ${OpenCV_LIBS})
-      list(APPEND FASTDEPLOY_LIBS opencv_core opencv_video opencv_highgui opencv_imgproc opencv_imgcodecs)
+      if(WITH_STATIC_LIB)
+        # Only need the headers of opencv while using FastDeploy static lib.
+        list(APPEND FASTDEPLOY_INCS ${OpenCV_DIR}/include)
+      else()
+        find_package(OpenCV REQUIRED PATHS ${OpenCV_DIR})
+        list(APPEND FASTDEPLOY_INCS ${OpenCV_INCLUDE_DIRS})
+        # For now, we still need to link OpenCV static libs.
+        # Users may use some of opencv's apis, but they may 
+        # not have been compiled into fastdeploy.
+        # list(APPEND FASTDEPLOY_LIBS ${OpenCV_LIBS})
+        list(APPEND FASTDEPLOY_LIBS opencv_core opencv_video opencv_highgui opencv_imgproc opencv_imgcodecs)
+      endif()
     else()
       set(OpenCV_INCLUDE_DIRS ${OpenCV_DIR}/include)
       get_filename_component(OpenCV_NATIVE_DIR ${OpenCV_DIR} DIRECTORY)
@@ -229,7 +265,6 @@ if(ENABLE_VISION)
       else()  
         # This code may be needed later. Therefore, I choose to 
         # comment it rather than delete it. (TODO:qiuyanjun)
-
         # add_library(flycv_static STATIC IMPORTED GLOBAL)
         # add_library(flycv_png16 STATIC IMPORTED GLOBAL)
         # add_library(flycv_turbojpeg STATIC IMPORTED GLOBAL)
@@ -248,7 +283,6 @@ if(ENABLE_VISION)
       list(APPEND FASTDEPLOY_LIBS ${FLYCV_LIB})
     endif()
   endif()
-
 endif()
 
 if (ENABLE_TEXT)
@@ -305,6 +339,14 @@ message(STATUS "  System                    : ${CMAKE_SYSTEM_NAME}")
 message(STATUS "  C++ compiler              : ${CMAKE_CXX_COMPILER}")
 message(STATUS "  C++ compiler version      : ${CMAKE_CXX_COMPILER_VERSION}")
 message(STATUS "  CXX flags                 : ${CMAKE_CXX_FLAGS}")
+message(STATUS "  EXE linker flags          : ${CMAKE_EXE_LINKER_FLAGS}")
+message(STATUS "  Shared linker flags       : ${CMAKE_SHARED_LINKER_FLAGS}")
+get_directory_property(tmp DIRECTORY ${PROJECT_SOURCE_DIR} COMPILE_DEFINITIONS)
+message(STATUS "  Compile definitions       : ${tmp}")
+message(STATUS "  CMAKE_PREFIX_PATH         : ${CMAKE_PREFIX_PATH}")
+message(STATUS "  CMAKE_INSTALL_PREFIX      : ${CMAKE_INSTALL_PREFIX}")
+message(STATUS "  CMAKE_MODULE_PATH         : ${CMAKE_MODULE_PATH}")
+message(STATUS "")
 message(STATUS "  WITH_GPU                  : ${WITH_GPU}")
 message(STATUS "  ENABLE_ORT_BACKEND        : ${ENABLE_ORT_BACKEND}")
 message(STATUS "  ENABLE_RKNPU2_BACKEND     : ${ENABLE_RKNPU2_BACKEND}")
@@ -343,7 +385,8 @@ if(ANDROID)
   message(STATUS "  ANDROID_ABI               : ${ANDROID_ABI}")
   message(STATUS "  ANDROID_PLATFORM          : ${ANDROID_PLATFORM}")
   message(STATUS "  ANDROID_NDK               : ${ANDROID_NDK}")
-  message(STATUS "  ANDROID_NDK_VERSION       : ${CMAKE_ANDROID_NDK_VERSION}")
+  message(STATUS "  ANDROID_NDK_MAJOR         : ${ANDROID_NDK_MAJOR}")
+  message(STATUS "  WITH_STATIC_LIB:          : ${WITH_STATIC_LIB}")
   message(STATUS "  WITH_OPENCV_STATIC:       : ${WITH_OPENCV_STATIC}")
   message(STATUS "  WITH_FLYCV_STATIC:        : ${WITH_FLYCV_STATIC}")
   if(ENABLE_LITE_BACKEND)
@@ -362,6 +405,11 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 function(install_fastdeploy_libraries DESTINATION_DIR)
+  # No dynamic libs need to install while using 
+  # FastDeploy static lib.
+  if(WITH_STATIC_LIB)
+    return()
+  endif()
   set(DYN_LIB_SUFFIX "*.so*")
   if(WIN32)
     set(DYN_LIB_SUFFIX "*.dll")

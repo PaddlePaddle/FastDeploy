@@ -468,11 +468,14 @@ target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 if(WITH_JAVA OR WITH_STATIC_LIB)
   # Here, we use a dummy target (fastdelpoy_dummy) 
   # to form a build dependency tree for fastdeploy_jni
-  # lib and fastdeploy_bundle lib.
+  # lib and fastdeploy_static lib.
   add_library(fastdelpoy_dummy STATIC ${ALL_DEPLOY_SRCS})
   # Build fastdelpoy_dummy when the third-party 
   # libraries (opencv, paddle lite, flycv) are ready.
   add_dependencies(fastdelpoy_dummy ${LIBRARY_NAME})
+  # Add WITH_STATIC_LIB compile definitions, see lite_backend.cc.
+  target_compile_definitions(fastdelpoy_dummy PRIVATE WITH_STATIC_LIB)
+  target_compile_definitions(fastdelpoy_dummy PRIVATE WITH_STATIC_LIB_AT_COMPILING)
 endif()
 
 if(ANDROID AND WITH_JAVA)
@@ -538,9 +541,9 @@ elseif(ANDROID)
       DESTINATION lib/${ANDROID_ABI}
     )
   endif()
-  # package omp into fastdeploy lib dir if WITH_OPENMP=ON 
+  # Install omp into fastdeploy lib dir if WITH_OPENMP=ON 
   # and WITH_LITE_STATIC=OFF.
-  if(WITH_OPENMP AND (NOT WITH_LITE_STATIC) AND OpenMP_CXX_FOUND)
+  if(WITH_OPENMP AND (NOT WITH_LITE_STATIC) AND OpenMP_CXX_FOUND AND ENABLE_OPENMP_SHARED)
     install(
       FILES 
       ${OpenMP_CXX_LIBRARIES}
@@ -578,10 +581,19 @@ else()
   # explicitly depends on opencv's and flycv's api in headers.
   # The headers and libs of opencv must be install.
   if(ENABLE_VISION)
-    install(
-      DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/opencv
-      DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
-    )
+    if(WITH_OPENCV_STATIC AND WITH_STATIC_LIB)
+      # Only need to install headers while building 
+      # FastDeploy static lib. (TODO:qiuyanjun)
+      install(
+        DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/opencv/sdk/native/jni/include
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install/opencv/sdk/native/jni
+      )
+    else()
+      install(
+        DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/opencv
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
+      )
+    endif()
   endif()
   # only need flycv's headers (may also install libs? TODO:qiuyanjun)
   if(ENABLE_FLYCV)
@@ -606,11 +618,20 @@ else()
     )
   endif()  
   # some libs may not to install while in static mode
-  if(ENABLE_LITE_BACKEND AND (NOT WITH_LITE_STATIC))
-    install(
-      DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/paddlelite
-      DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
-    )
+  if(ENABLE_LITE_BACKEND)
+    if(WITH_LITE_STATIC)
+      if(WITH_STATIC_LIB)
+        install(
+          DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/paddlelite/include
+          DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install/paddlelite
+        )
+      endif()
+    else()
+      install(
+        DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/paddlelite
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
+      )
+    endif()
   endif()
 endif()
 
@@ -635,6 +656,7 @@ install(
   ${PROJECT_SOURCE_DIR}/FastDeploy.cmake
   ${PROJECT_SOURCE_DIR}/cmake/FastDeployConfig.cmake
   ${PROJECT_SOURCE_DIR}/cmake/utils.cmake
+  ${PROJECT_SOURCE_DIR}/cmake/openmp.cmake
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 
