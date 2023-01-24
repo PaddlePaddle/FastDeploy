@@ -96,6 +96,7 @@ __build_fastdeploy_android_shared() {
         -DWITH_OPENCV_STATIC=ON \
         -DWITH_FLYCV_STATIC=ON \
         -DWITH_LITE_STATIC=ON \
+        -DWITH_STATIC_LIB=OFF \
         -DWITH_OPENMP=ON \
         -DWITH_JAVA=ON \
         -DCMAKE_INSTALL_PREFIX=${FASDEPLOY_INSTALL_DIR} \

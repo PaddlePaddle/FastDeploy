@@ -2,7 +2,7 @@
 # documentation: https://d.android.com/studio/projects/add-native-code.html
 
 # Sets the minimum version of CMake required to build the native library.
-cmake_minimum_required(VERSION 3.10.2)
+cmake_minimum_required(VERSION 3.22.1)
 
 # Declares and names the project.
 project("fastdeploy_jni")
@@ -15,7 +15,6 @@ project("fastdeploy_jni")
 set(FastDeploy_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/fastdeploy-android-latest-shared-dev")
 
 find_package(FastDeploy REQUIRED)
-
 # include_directories(.)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${FastDeploy_INCLUDE_DIRS})
