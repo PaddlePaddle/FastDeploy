@@ -465,10 +465,13 @@ endif()
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
 ################################ JNI & STATIC LIB: FastDeploy Android JNI & STATIC Lib ###############################
-if(WITH_JAVA OR WITH_STATIC_LIB)
+if(ANDROID AND WITH_JAVA)
+  include(${PROJECT_SOURCE_DIR}/cmake/fastdeploy_jni.cmake)
+endif()
+
+if(ANDROID AND WITH_STATIC_LIB)
   # Here, we use a dummy target (fastdelpoy_dummy) 
-  # to form a build dependency tree for fastdeploy_jni
-  # lib and fastdeploy_static lib.
+  # to form a build dependency tree for fastdeploy_static lib.
   add_library(fastdelpoy_dummy STATIC ${ALL_DEPLOY_SRCS})
   # Build fastdelpoy_dummy when the third-party 
   # libraries (opencv, paddle lite, flycv) are ready.
@@ -476,13 +479,6 @@ if(WITH_JAVA OR WITH_STATIC_LIB)
   # Add WITH_STATIC_LIB compile definitions, see lite_backend.cc.
   target_compile_definitions(fastdelpoy_dummy PRIVATE WITH_STATIC_LIB)
   target_compile_definitions(fastdelpoy_dummy PRIVATE WITH_STATIC_LIB_AT_COMPILING)
-endif()
-
-if(ANDROID AND WITH_JAVA)
-  include(${PROJECT_SOURCE_DIR}/cmake/fastdeploy_jni.cmake)
-endif()
-
-if(ANDROID AND WITH_STATIC_LIB)
   bundle_static_library(${LIBRARY_NAME} fastdeploy_static bundle_fastdeploy)
 endif()
 
@@ -530,15 +526,16 @@ if(WIN32)
     RUNTIME DESTINATION lib
   )
 elseif(ANDROID)
-  install(
-    TARGETS ${LIBRARY_NAME}
-    LIBRARY DESTINATION lib/${ANDROID_ABI}
-  )
   if(WITH_STATIC_LIB) 
     install(
       FILES 
       ${CMAKE_CURRENT_BINARY_DIR}/libfastdeploy_static.a
       DESTINATION lib/${ANDROID_ABI}
+    )
+  else()
+    install(
+      TARGETS ${LIBRARY_NAME}
+      LIBRARY DESTINATION lib/${ANDROID_ABI}
     )
   endif()
   # Install omp into fastdeploy lib dir if WITH_OPENMP=ON 

@@ -226,6 +226,8 @@ function(bundle_static_library tgt_name bundled_tgt_name fake_target)
       COMMAND rm -f ${bundled_tgt_full_name}
       COMMAND ${ar_tool} -M < ${CMAKE_CURRENT_BINARY_DIR}/${bundled_tgt_name}.ar
       COMMENT "Bundling ${bundled_tgt_name}"
+      COMMAND ${CMAKE_STRIP} --strip-unneeded ${CMAKE_CURRENT_BINARY_DIR}/libfastdeploy_static.a
+      COMMENT "Stripped unneeded symbols in ${bundled_tgt_name}"
       DEPENDS ${tgt_name}
       VERBATIM)
   else()

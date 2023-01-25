@@ -32,10 +32,10 @@ set(ORT_DIRECTORY "@ORT_DIRECTORY@")
 set(OPENVINO_DIRECTORY "@OPENVINO_DIRECTORY@")
 set(RKNN2_TARGET_SOC "@RKNN2_TARGET_SOC@")
 set(WITH_KUNLUNXIN @WITH_KUNLUNXIN@)
-# Users can choose whether to use the FastDeploy static library. 
-# The default value for this option is determined by the SDK build-time options.
-# The FastDeploy dynamic library always needs to be compiled.
-option(WITH_STATIC_LIB "Whether to use FastDeploy static lib." @WITH_STATIC_LIB@)
+# Whether to use FastDeploy static lib. The default 
+# value for this option is determined by the SDK 
+# build-time options.
+set(WITH_STATIC_LIB @WITH_STATIC_LIB@)
 
 set(FASTDEPLOY_LIBS "")
 set(FASTDEPLOY_INCS "")

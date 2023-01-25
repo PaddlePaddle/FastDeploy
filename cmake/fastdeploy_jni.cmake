@@ -27,11 +27,18 @@ if(WITH_JAVA)
     set(JNI_SRCS_FOUND ON CACHE BOOL "JNI SRCS Flags" FORCE)
   endif()
   if(JNI_SRCS_FOUND)
-    if(TARGET fastdelpoy_dummy)
+    # Here, we use a dummy target (fastdelpoy_dummy) 
+    # to form a build dependency tree for fastdeploy_jni lib.
+    add_library(fastdelpoy_jni_dummy STATIC ${ALL_DEPLOY_SRCS})
+    # Build fastdelpoy_jni_dummy when the third-party 
+    # libraries (opencv, paddle lite, flycv) are ready.
+    add_dependencies(fastdelpoy_jni_dummy ${LIBRARY_NAME})
+    target_compile_definitions(fastdelpoy_jni_dummy PRIVATE WITH_JAVA)
+    if(TARGET fastdelpoy_jni_dummy)
       add_library(fastdeploy_jni SHARED ${JNI_SRCS})
-      target_link_libraries(fastdeploy_jni fastdelpoy_dummy ${DEPEND_LIBS} 
+      target_link_libraries(fastdeploy_jni fastdelpoy_jni_dummy ${DEPEND_LIBS} 
                             jnigraphics GLESv2 EGL)
-      add_dependencies(fastdeploy_jni fastdelpoy_dummy)  
+      add_dependencies(fastdeploy_jni fastdelpoy_jni_dummy)  
       # Strip debug C++ symbol table
       set_target_properties(fastdeploy_jni PROPERTIES COMPILE_FLAGS 
           "-fvisibility=hidden -fvisibility-inlines-hidden -fdata-sections -ffunction-sections")
