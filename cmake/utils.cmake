@@ -74,29 +74,6 @@ function(get_osx_architecture)
   endif()
 endfunction()
 
-# only for windows
-function(create_static_lib TARGET_NAME)
-  set(libs ${ARGN})
-  list(REMOVE_DUPLICATES libs)
-    set(dummy_index 1)
-    set(dummy_offset 1)
-    # the dummy target would be consisted of limit size libraries
-    set(dummy_limit 60)
-    list(LENGTH libs libs_len)
-
-    foreach(lib ${libs})
-      list(APPEND dummy_list ${lib})
-      list(LENGTH dummy_list listlen)
-      if ((${listlen} GREATER ${dummy_limit}) OR (${dummy_offset} EQUAL ${libs_len}))
-        merge_static_libs(${TARGET_NAME}_dummy_${dummy_index} ${dummy_list})
-        set(dummy_list)
-        list(APPEND ${TARGET_NAME}_dummy_list ${TARGET_NAME}_dummy_${dummy_index})
-        MATH(EXPR dummy_index "${dummy_index}+1")
-      endif()
-      MATH(EXPR dummy_offset "${dummy_offset}+1")
-    endforeach()
-    merge_static_libs(${TARGET_NAME} ${${TARGET_NAME}_dummy_list})
-endfunction()
 
 # A fake target to include all the libraries and tests the fastdeploy module depends.
 add_custom_target(fd_compile_deps COMMAND echo 1)
@@ -181,18 +158,7 @@ function(bundle_static_library tgt_name bundled_tgt_name fake_target)
   message(STATUS "Use bundled_tgt_full_name:  ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}${bundled_tgt_name}${CMAKE_STATIC_LIBRARY_SUFFIX}")
 
   if(WIN32)
-    set(dummy_tgt_name dummy_${bundled_tgt_name})
-    create_static_lib(${bundled_tgt_name} ${static_libs})
-    add_custom_target(${fake_target} ALL DEPENDS ${bundled_tgt_name})
-    add_dependencies(${fake_target} ${tgt_name})
-
-    add_library(${dummy_tgt_name} STATIC IMPORTED)
-    set_target_properties(${dummy_tgt_name}
-      PROPERTIES
-        IMPORTED_LOCATION ${bundled_tgt_full_name}
-        INTERFACE_INCLUDE_DIRECTORIES $<TARGET_PROPERTY:${tgt_name},INTERFACE_INCLUDE_DIRECTORIES>)
-    add_dependencies(${dummy_tgt_name} ${fake_target})
-    return()
+    message(FATAL_ERROR "Not support FastDeploy static lib for windows now.")
   endif()
 
   add_custom_target(${fake_target} ALL COMMAND ${CMAKE_COMMAND} -E echo "Building fake_target ${fake_target}")
@@ -226,7 +192,7 @@ function(bundle_static_library tgt_name bundled_tgt_name fake_target)
       COMMAND rm -f ${bundled_tgt_full_name}
       COMMAND ${ar_tool} -M < ${CMAKE_CURRENT_BINARY_DIR}/${bundled_tgt_name}.ar
       COMMENT "Bundling ${bundled_tgt_name}"
-      COMMAND ${CMAKE_STRIP} --strip-unneeded ${CMAKE_CURRENT_BINARY_DIR}/libfastdeploy_static.a
+      COMMAND ${CMAKE_STRIP} --strip-unneeded ${CMAKE_CURRENT_BINARY_DIR}/lib${bundled_tgt_name}.a
       COMMENT "Stripped unneeded symbols in ${bundled_tgt_name}"
       DEPENDS ${tgt_name}
       VERBATIM)
