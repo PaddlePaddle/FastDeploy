@@ -64,6 +64,26 @@ void* Mat::Data() {
   return cpu_mat.ptr();
 }
 
+FDTensor* Mat::Tensor() {
+  if (mat_type == ProcLib::OPENCV) {
+    ShareWithTensor(&fd_tensor);
+  } else if (mat_type == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    cpu_mat = ConvertFlyCVMatToOpenCV(fcv_mat);
+    mat_type = ProcLib::OPENCV;
+    ShareWithTensor(&fd_tensor);
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
+  }
+  return &fd_tensor;
+}
+
+void Mat::SetTensor(FDTensor* tensor) {
+  fd_tensor.SetExternalData(tensor->Shape(), tensor->Dtype(), tensor->Data(),
+                            tensor->device, tensor->device_id);
+}
+
 void Mat::ShareWithTensor(FDTensor* tensor) {
   tensor->SetExternalData({Channels(), Height(), Width()}, Type(), Data());
   tensor->device = device;

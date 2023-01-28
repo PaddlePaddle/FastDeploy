@@ -15,7 +15,6 @@
 #pragma once
 
 #include "fastdeploy/core/fd_tensor.h"
-#include "fastdeploy/utils/utils.h"
 
 #ifdef ENABLE_CVCUDA
 #include "nvcv/Tensor.hpp"

@@ -90,25 +90,11 @@ struct FASTDEPLOY_DECL Mat {
 
   void* Data();
 
-  FDTensor* Tensor() {
-    if (mat_type == ProcLib::OPENCV) {
-      ShareWithTensor(&fd_tensor);
-    } else if (mat_type == ProcLib::FLYCV) {
-#ifdef ENABLE_FLYCV
-      cpu_mat = ConvertFlyCVMatToOpenCV(fcv_mat);
-      mat_type = ProcLib::OPENCV;
-      ShareWithTensor(&fd_tensor);
-#else
-      FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
-#endif
-    }
-    return &fd_tensor;
-  }
+  // Get fd_tensor
+  FDTensor* Tensor();
 
-  void SetTensor(FDTensor* tensor) {
-    fd_tensor.SetExternalData(tensor->Shape(), tensor->Dtype(), tensor->Data(),
-        tensor->device, tensor->device_id);
-  }
+  // Set fd_tensor
+  void SetTensor(FDTensor* tensor);
 
  private:
   int channels;
