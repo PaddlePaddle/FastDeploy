@@ -101,7 +101,7 @@ VPL model loading and initialization, among which model_file is the exported ONN
 #### Predict function
 
 > ```c++
-> ArcFace::Predict(cv::Mat* im, FaceRecognitionResult* result)
+> ArcFace::Predict(const cv::Mat& im, FaceRecognitionResult* result)
 > ```
 >
 > Model prediction interface. Input images and output detection results.
@@ -121,8 +121,6 @@ Pre-processing and post-processing parameters can be changed by modifying the me
       Revise through InsightFaceRecognitionPreprocessor::SetAlpha(std::vector<float>& alpha)
 > > * **beta**(vector&lt;float&gt;): Preprocess normalized beta, and calculated as `x'=x*alpha+beta`. beta  defaults to [-1.f, -1.f, -1.f].
       Revise through InsightFaceRecognitionPreprocessor::SetBeta(std::vector<float>& beta)
-> > * **permute**(bool): Whether to convert BGR to RGB in pre-processing. Default true
-      Revise through InsightFaceRecognitionPreprocessor::SetPermute(bool permute)
 
 #### InsightFaceRecognitionPostprocessor member variables (post-processing parameters)
 > > * **l2_normalize**(bool): Whether to perform l2 normalization before outputting the face vector. Default false.
