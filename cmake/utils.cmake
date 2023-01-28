@@ -193,7 +193,7 @@ function(bundle_static_library tgt_name bundled_tgt_name fake_target)
       COMMAND ${ar_tool} -M < ${CMAKE_CURRENT_BINARY_DIR}/${bundled_tgt_name}.ar
       COMMENT "Bundling ${bundled_tgt_name}"
       COMMAND ${CMAKE_STRIP} --strip-unneeded ${CMAKE_CURRENT_BINARY_DIR}/lib${bundled_tgt_name}.a
-      COMMENT "Stripped unneeded symbols in ${bundled_tgt_name}"
+      COMMENT "Stripped unneeded debug symbols in ${bundled_tgt_name}"
       DEPENDS ${tgt_name}
       VERBATIM)
   else()
@@ -204,6 +204,9 @@ function(bundle_static_library tgt_name bundled_tgt_name fake_target)
       TARGET ${fake_target} PRE_BUILD
       COMMAND rm -f ${bundled_tgt_full_name}
       COMMAND /usr/bin/libtool -static -o ${bundled_tgt_full_name} ${libfiles}
+      COMMENT "Bundling ${bundled_tgt_name}"
+      COMMAND ${CMAKE_STRIP} -S ${CMAKE_CURRENT_BINARY_DIR}/lib${bundled_tgt_name}.a
+      COMMENT "Stripped unneeded debug symbols in ${bundled_tgt_name}"
       DEPENDS ${tgt_name}
     )
   endif()
