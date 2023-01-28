@@ -2,7 +2,7 @@ English | [简体中文](README_CN.md)
 # YOLOv5Face Ready-to-deploy Model
 
 - [YOLOv5Face](https://github.com/deepcam-cn/yolov5-face/commit/4fd1ead)
-  - （1）The *.pt provided by the [Official Library](https://github.com/deepcam-cn/yolov5-face/) can be deployed after the [Export ONNX Model](#导出ONNX模型) to complete the deployment；
+  - （1）The *.pt provided by the [Official Library](https://github.com/deepcam-cn/yolov5-face/) can be deployed after the [Export ONNX Model](#export-onnx-model) to complete the deployment；
   - （2）As for YOLOv5Face model trained on customized data, please follow the operations guidelines in [Export ONNX Model](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)  to complete the deployment.
 
 ## Export ONNX Model

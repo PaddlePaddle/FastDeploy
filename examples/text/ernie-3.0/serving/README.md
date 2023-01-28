@@ -4,7 +4,7 @@ English | [简体中文](README_CN.md)
 
 Before serving deployment, you need to confirm
 
-- 1. Refer to [FastDeploy Serving Deployment](../../../../../serving/README_CN.md) for hardware and software environment requirements and image pull commands of serving images.
+- 1. Refer to [FastDeploy Serving Deployment](../../../../serving/README.md) for hardware and software environment requirements and image pull commands of serving images.
 
 ## Prepare Models
 
@@ -174,4 +174,4 @@ entity: 华夏   label: LOC   pos: [14, 15]
 ```
 
 ## Configuration Modification
-The current classification task (ernie_seqcls_model/config.pbtxt) is by default configured to run the OpenVINO engine on CPU; the sequence labelling task is by default configured to run the Paddle engine on GPU. If you want to run on CPU/GPU or other inference engines, you should modify the configuration. please refer to the [configuration document.](../../../../serving/docs/zh_CN/model_configuration.md)
+The current classification task (ernie_seqcls_model/config.pbtxt) is by default configured to run the OpenVINO engine on CPU; the sequence labelling task is by default configured to run the Paddle engine on GPU. If you want to run on CPU/GPU or other inference engines, you should modify the configuration. please refer to the [configuration document.](../../../../serving/docs/EN/model_configuration-en.md)

@@ -6,9 +6,7 @@ English | [简体中文](README_CN.md)
 - The YOLOv6 deployment is based on [YOLOv6](https://github.com/meituan/YOLOv6/releases/tag/0.1.0) and [Pre-trained Model Based on COCO](https://github.com/meituan/YOLOv6/releases/tag/0.1.0).
 
   - （1）The *.onnx provided by [Official Repository](https://github.com/meituan/YOLOv6/releases/tag/0.1.0) can directly conduct deployemnt；
-  - （2）Personal models trained by developers should export the ONNX model. Refer to [Detailed Deployment Documents](#详细部署文档) to complete the deployment.
-
-
+  - （2）Personal models trained by developers should export the ONNX model. Refer to [Detailed Deployment Documents](#Detailed-Deployment-Documents) to complete the deployment.
 
 ## Download Pre-trained ONNX Model
 
@@ -20,8 +18,6 @@ For developers' testing, models exported by YOLOv6 are provided below. Developer
 | [YOLOv6t](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6t.onnx) | 58MB | 41.3% | This model file is sourced from [YOLOv6](https://github.com/meituan/YOLOv6)，GPL-3.0 License |
 | [YOLOv6n](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6n.onnx) | 17MB | 35.0% | This model file is sourced from [YOLOv6](https://github.com/meituan/YOLOv6)，GPL-3.0 License |
 
-
-
 ## Detailed Deployment Documents
 
 - [Python Deployment](python)
@@ -30,4 +26,4 @@ For developers' testing, models exported by YOLOv6 are provided below. Developer
 
 ## Release Note
 
-- Document and code are based on [YOLOv6 0.1.0 version](https://github.com/meituan/YOLOv6/releases/tag/0.1.0) 
+- Document and code are based on [YOLOv6 0.1.0 version](https://github.com/meituan/YOLOv6/releases/tag/0.1.0)

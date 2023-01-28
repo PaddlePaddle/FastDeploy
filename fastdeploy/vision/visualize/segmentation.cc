@@ -12,19 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifdef ENABLE_VISION_VISUALIZE
-
-#include "fastdeploy/vision/visualize/visualize.h"
 #include "fastdeploy/vision/visualize/segmentation_arm.h"
+#include "fastdeploy/vision/visualize/visualize.h"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 
 namespace fastdeploy {
 namespace vision {
 
-static cv::Mat VisSegmentationCommonCpu(
-  const cv::Mat& im, const SegmentationResult& result,
-  float weight) {
+static cv::Mat VisSegmentationCommonCpu(const cv::Mat& im,
+                                        const SegmentationResult& result,
+                                        float weight) {
   // Use the native c++ version without any optimization.
   auto color_map = GenerateColorMap(1000);
   int64_t height = result.shape[0];
@@ -52,12 +50,12 @@ static cv::Mat VisSegmentationCommonCpu(
 
 cv::Mat VisSegmentation(const cv::Mat& im, const SegmentationResult& result,
                         float weight) {
-  // TODO: Support SSE/AVX on x86_64 platforms                        
-#ifdef __ARM_NEON 
+  // TODO: Support SSE/AVX on x86_64 platforms
+#ifdef __ARM_NEON
   return VisSegmentationNEON(im, result, weight, true);
-#else  
+#else
   return VisSegmentationCommonCpu(im, result, weight);
-#endif  
+#endif
 }
 
 cv::Mat Visualize::VisSegmentation(const cv::Mat& im,
@@ -65,14 +63,13 @@ cv::Mat Visualize::VisSegmentation(const cv::Mat& im,
   FDWARNING << "DEPRECATED: fastdeploy::vision::Visualize::VisSegmentation is "
                "deprecated, please use fastdeploy::vision:VisSegmentation "
                "function instead."
-            << std::endl;     
-#ifdef __ARM_NEON 
+            << std::endl;
+#ifdef __ARM_NEON
   return VisSegmentationNEON(im, result, 0.5f, true);
-#else  
+#else
   return VisSegmentationCommonCpu(im, result, 0.5f);
-#endif  
+#endif
 }
 
 }  // namespace vision
 }  // namespace fastdeploy
-#endif

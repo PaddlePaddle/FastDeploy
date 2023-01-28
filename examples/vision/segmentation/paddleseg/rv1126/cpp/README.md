@@ -1,7 +1,7 @@
 English | [简体中文](README_CN.md)
 # PP-LiteSeg Quantitative Model C++ Deployment Example
 
- `infer.cc` in this directory can help you quickly complete the inference acceleration of PP-LiteSeg quantization model deployment on RV1126.
+`infer.cc` in this directory can help you quickly complete the inference acceleration of PP-LiteSeg quantization model deployment on RV1126.
 
 ## Deployment Preparations
 ### FastDeploy Cross-compile Environment Preparations

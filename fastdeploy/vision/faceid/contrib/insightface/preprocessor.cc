@@ -23,11 +23,10 @@ InsightFaceRecognitionPreprocessor::InsightFaceRecognitionPreprocessor() {
   size_ = {112, 112};
   alpha_ = {1.f / 127.5f, 1.f / 127.5f, 1.f / 127.5f};
   beta_ = {-1.f, -1.f, -1.f};  // RGB
-  permute_ = true;
 }
- 
-bool InsightFaceRecognitionPreprocessor::Preprocess(FDMat * mat, FDTensor* output) {
 
+bool InsightFaceRecognitionPreprocessor::Preprocess(FDMat* mat,
+                                                    FDTensor* output) {
   // face recognition model's preprocess steps in insightface
   // reference: insightface/recognition/arcface_torch/inference.py
   // 1. Resize
@@ -39,13 +38,16 @@ bool InsightFaceRecognitionPreprocessor::Preprocess(FDMat * mat, FDTensor* outpu
   if (resize_h != mat->Height() || resize_w != mat->Width()) {
     Resize::Run(mat, resize_w, resize_h);
   }
-  if (permute_) {
+
+  if (!disable_permute_) {
     BGR2RGB::Run(mat);
   }
 
-  Convert::Run(mat, alpha_, beta_);
-  HWC2CHW::Run(mat);
-  Cast::Run(mat, "float");
+  if (!disable_normalize_) {
+    Convert::Run(mat, alpha_, beta_);
+    HWC2CHW::Run(mat);
+    Cast::Run(mat, "float");
+  }
 
   mat->ShareWithTensor(output);
   output->ExpandDim(0);  // reshape to n, h, w, c
@@ -55,7 +57,8 @@ bool InsightFaceRecognitionPreprocessor::Preprocess(FDMat * mat, FDTensor* outpu
 bool InsightFaceRecognitionPreprocessor::Run(std::vector<FDMat>* images,
                                              std::vector<FDTensor>* outputs) {
   if (images->empty()) {
-    FDERROR << "The size of input images should be greater than 0." << std::endl;
+    FDERROR << "The size of input images should be greater than 0."
+            << std::endl;
     return false;
   }
   FDASSERT(images->size() == 1, "Only support batch = 1 now.");

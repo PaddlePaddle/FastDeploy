@@ -2,7 +2,7 @@ English | [简体中文](README_CN.md)
 # InsightFace Ready-to-deploy Model
 
 - [InsightFace](https://github.com/deepinsight/insightface/commit/babb9a5)
-  - （1）The *.pt provided by the [Official Library](https://github.com/deepinsight/insightface/) can be deployed after the [Export ONNX Model](#导出ONNX模型)；
+  - （1）The *.pt provided by the [Official Library](https://github.com/deepinsight/insightface/) can be deployed after the [Export ONNX Model](#export-onnx-model)；
   - （2）As for InsightFace model trained on customized data, please follow the operations guidelines in [Export ONNX Model](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B) to complete the deployment.
 
 

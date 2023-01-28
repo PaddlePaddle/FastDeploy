@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifdef ENABLE_VISION_VISUALIZE
-
 #include "fastdeploy/vision/visualize/visualize.h"
 #include "opencv2/imgproc/imgproc.hpp"
 
@@ -21,8 +19,8 @@ namespace fastdeploy {
 
 namespace vision {
 
-cv::Mat VisHeadPose(const cv::Mat& im, const HeadPoseResult& result,
-                    int size, int line_size) {
+cv::Mat VisHeadPose(const cv::Mat& im, const HeadPoseResult& result, int size,
+                    int line_size) {
   const float PI = 3.1415926535;
   auto vis_im = im.clone();
   int h = im.rows;
@@ -37,23 +35,28 @@ cv::Mat VisHeadPose(const cv::Mat& im, const HeadPoseResult& result,
 
   // X-Axis | drawn in red
   int x1 = static_cast<int>(size * std::cos(yaw) * std::cos(roll)) + tdx;
-  int y1 = static_cast<int>(size * (std::cos(pitch) * std::sin(roll) + 
-                            std::cos(roll) * std::sin(pitch) * std::sin(yaw))) + tdy;
+  int y1 = static_cast<int>(
+               size * (std::cos(pitch) * std::sin(roll) +
+                       std::cos(roll) * std::sin(pitch) * std::sin(yaw))) +
+           tdy;
   // Y-Axis | drawn in green
   int x2 = static_cast<int>(-size * std::cos(yaw) * std::sin(roll)) + tdx;
-  int y2 = static_cast<int>(size * (std::cos(pitch) * std::cos(roll) - 
-                            std::sin(pitch) * std::sin(yaw) * std::sin(roll))) + tdy;
+  int y2 = static_cast<int>(
+               size * (std::cos(pitch) * std::cos(roll) -
+                       std::sin(pitch) * std::sin(yaw) * std::sin(roll))) +
+           tdy;
   // Z-Axis | drawn in blue
   int x3 = static_cast<int>(size * std::sin(yaw)) + tdx;
   int y3 = static_cast<int>(-size * std::cos(yaw) * std::sin(pitch)) + tdy;
 
-  cv::line(vis_im, cv::Point2i(tdx, tdy), cv::Point2i(x1, y1), cv::Scalar(0, 0, 255), line_size);
-  cv::line(vis_im, cv::Point2i(tdx, tdy), cv::Point2i(x2, y2), cv::Scalar(0, 255, 0), line_size);
-  cv::line(vis_im, cv::Point2i(tdx, tdy), cv::Point2i(x3, y3), cv::Scalar(255, 0, 0), line_size);
+  cv::line(vis_im, cv::Point2i(tdx, tdy), cv::Point2i(x1, y1),
+           cv::Scalar(0, 0, 255), line_size);
+  cv::line(vis_im, cv::Point2i(tdx, tdy), cv::Point2i(x2, y2),
+           cv::Scalar(0, 255, 0), line_size);
+  cv::line(vis_im, cv::Point2i(tdx, tdy), cv::Point2i(x3, y3),
+           cv::Scalar(255, 0, 0), line_size);
   return vis_im;
 }
 
 }  // namespace vision
 }  // namespace fastdeploy
-
-#endif

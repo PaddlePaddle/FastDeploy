@@ -3,8 +3,8 @@ English | [简体中文](README_CN.md)
 
 Before deployment, two steps require confirmation
 
-- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
+- 2. Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 This directory provides examples that `infer.py` fast finishes the deployment of EDVR on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
 
@@ -59,4 +59,4 @@ EDVR model loading and initialization, among which model_file and params_file ar
 
 - [EDVR Model Description](..)
 - [EDVR C++ Deployment](../cpp)
-- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [How to switch the model inference backend engine](../../../../../docs/en/faq/how_to_change_backend.md)

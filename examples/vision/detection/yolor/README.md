@@ -3,8 +3,8 @@ English | [简体中文](README_CN.md)
 
 - The YOLOR deployment is based on the code of [YOLOR](https://github.com/WongKinYiu/yolor/releases/tag/weights) and [Pre-trained Model Based on COCO](https://github.com/WongKinYiu/yolor/releases/tag/weights).
 
-  - （1）The *.pt provided by [Official Repository](https://github.com/WongKinYiu/yolor/releases/tag/weights) should [Export the ONNX Model](#导出ONNX模型) to complete the deployment. The *.pose model’s deployment is not supported；
-  - （2）The ScaledYOLOv4 model trained by personal data should [Export the ONNX Model](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B). Please refer to [Detailed Deployment Documents](#详细部署文档) to complete the deployment.
+  - （1）The *.pt provided by [Official Repository](https://github.com/WongKinYiu/yolor/releases/tag/weights) should [Export the ONNX Model](#Export-the-ONNX-Model) to complete the deployment. The *.pose model’s deployment is not supported；
+  - （2）The ScaledYOLOv4 model trained by personal data should [Export the ONNX Model](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B). Please refer to [Detailed Deployment Documents](#Detailed-Deployment-Documents) to complete the deployment.
 
 
 ## Export the ONNX Model
@@ -35,7 +35,6 @@ For developers' testing, models exported by YOLOR are provided below. Developers
 | [YOLOR-E6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-e6-paper-564-640-640.onnx ) | 443MB | - | This model file is sourced from [YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
 | [YOLOR-D6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-570-640-640.onnx) | 580MB | - | This model file is sourced from [YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
 | [YOLOR-D6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-573-640-640.onnx) | 580MB | - | This model file is sourced from [YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
-
 
 ## Detailed Deployment Documents
 

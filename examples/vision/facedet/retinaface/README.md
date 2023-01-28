@@ -2,13 +2,13 @@ English | [简体中文](README_CN.md)
 # RetinaFace Ready-to-deploy Model
 
 - [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface/commit/b984b4b)
-  - （1）The *.pt provided by the[Official Library](https://github.com/biubug6/Pytorch_Retinaface/) can be deployed after the [Export ONNX Model](#导出ONNX模型)；
-  - （2）As for RetinaFace model trained on customized data, please follow the [Export ONNX Model](#导出ONNX模型) to complete the deployment.
+  - （1）The *.pt provided by the[Official Library](https://github.com/biubug6/Pytorch_Retinaface/) can be deployed after the [Export ONNX Model](#Export-ONNX-Model)；
+  - （2）As for RetinaFace model trained on customized data, please follow the [Export ONNX Model](#export-onnx-model) to complete the deployment.
 
 
 ##  Export ONNX Model
 
-[Download the pre-trained ONNX model](#下载预训练ONNX模型)The model has been converted to ONNX. If you downloaded the model from the RetinaFace official repo, please follow the tutorial below to export ONNX.  
+[Download the pre-trained ONNX model](#download-pre-trained-onnx-models)The model has been converted to ONNX. If you downloaded the model from the RetinaFace official repo, please follow the tutorial below to export ONNX.  
 
 
 * Download the official repository 

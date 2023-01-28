@@ -3,8 +3,8 @@ English | [简体中文](README_CN.md)
 
 Two steps before deployment
 
-- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
+- 2. Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 This directory provides examples that `infer.py` fast finishes the deployment of AnimeGAN on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
 
@@ -68,4 +68,4 @@ AnimeGAN model loading and initialization, among which model_file and params_fil
 
 - [Style Transfer Model Description](..)
 - [C++ Deployment](../cpp)
-- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [How to switch the model inference backend engine](../../../../../docs/en/faq/how_to_change_backend.md)

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifdef ENABLE_VISION_VISUALIZE
 #pragma once
 
 #include "fastdeploy/vision/common/result.h"
@@ -202,4 +201,3 @@ FASTDEPLOY_DECL cv::Mat VisHeadPose(const cv::Mat& im,
 
 }  // namespace vision
 }  // namespace fastdeploy
-#endif

@@ -12,20 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifdef ENABLE_VISION_VISUALIZE
-
-#include "fastdeploy/vision/visualize/visualize.h"
+#include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/visualize/swap_background_arm.h"
+#include "fastdeploy/vision/visualize/visualize.h"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
-#include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
 
-static cv::Mat SwapBackgroundCommonCpu(
-  const cv::Mat& im, const cv::Mat& background,
-  const MattingResult& result, bool remove_small_connected_area) {
+static cv::Mat SwapBackgroundCommonCpu(const cv::Mat& im,
+                                       const cv::Mat& background,
+                                       const MattingResult& result,
+                                       bool remove_small_connected_area) {
   FDASSERT((!im.empty()), "Image can't be empty!");
   FDASSERT((im.channels() == 3), "Only support 3 channels image mat!");
   FDASSERT((!background.empty()), "Background image can't be empty!");
@@ -77,9 +76,10 @@ static cv::Mat SwapBackgroundCommonCpu(
   return vis_img;
 }
 
-static cv::Mat SwapBackgroundCommonCpu(
-  const cv::Mat& im, const cv::Mat& background,
-  const SegmentationResult& result, int background_label) {
+static cv::Mat SwapBackgroundCommonCpu(const cv::Mat& im,
+                                       const cv::Mat& background,
+                                       const SegmentationResult& result,
+                                       int background_label) {
   FDASSERT((!im.empty()), "Image can't be empty!");
   FDASSERT((im.channels() == 3), "Only support 3 channels image mat!");
   FDASSERT((!background.empty()), "Background image can't be empty!");
@@ -129,25 +129,25 @@ static cv::Mat SwapBackgroundCommonCpu(
 cv::Mat SwapBackground(const cv::Mat& im, const cv::Mat& background,
                        const MattingResult& result,
                        bool remove_small_connected_area) {
-  // TODO: Support SSE/AVX on x86_64 platforms                        
-#ifdef __ARM_NEON 
-  return SwapBackgroundNEON(im, background, result, 
-                            remove_small_connected_area);                       
-#else  
-  return SwapBackgroundCommonCpu(im, background, result, 
-                                 remove_small_connected_area);                          
-#endif    
+  // TODO: Support SSE/AVX on x86_64 platforms
+#ifdef __ARM_NEON
+  return SwapBackgroundNEON(im, background, result,
+                            remove_small_connected_area);
+#else
+  return SwapBackgroundCommonCpu(im, background, result,
+                                 remove_small_connected_area);
+#endif
 }
 
 cv::Mat SwapBackground(const cv::Mat& im, const cv::Mat& background,
                        const SegmentationResult& result, int background_label) {
-  // TODO: Support SSE/AVX on x86_64 platforms                        
-#ifdef __ARM_NEON 
+  // TODO: Support SSE/AVX on x86_64 platforms
+#ifdef __ARM_NEON
   // return SwapBackgroundNEON(im, background, result, background_label);
   return SwapBackgroundNEON(im, background, result, background_label);
-#else  
+#else
   return SwapBackgroundCommonCpu(im, background, result, background_label);
-#endif    
+#endif
 }
 
 // DEPRECATED
@@ -155,27 +155,26 @@ cv::Mat Visualize::SwapBackgroundMatting(const cv::Mat& im,
                                          const cv::Mat& background,
                                          const MattingResult& result,
                                          bool remove_small_connected_area) {
-// TODO: Support SSE/AVX on x86_64 platforms                        
-#ifdef __ARM_NEON 
-  return SwapBackgroundNEON(im, background, result, 
+// TODO: Support SSE/AVX on x86_64 platforms
+#ifdef __ARM_NEON
+  return SwapBackgroundNEON(im, background, result,
                             remove_small_connected_area);
-#else  
-  return SwapBackgroundCommonCpu(im, background, result, 
+#else
+  return SwapBackgroundCommonCpu(im, background, result,
                                  remove_small_connected_area);
-#endif                                              
+#endif
 }
 
 cv::Mat Visualize::SwapBackgroundSegmentation(
     const cv::Mat& im, const cv::Mat& background, int background_label,
     const SegmentationResult& result) {
-  // TODO: Support SSE/AVX on x86_64 platforms                        
-#ifdef __ARM_NEON 
+  // TODO: Support SSE/AVX on x86_64 platforms
+#ifdef __ARM_NEON
   return SwapBackgroundNEON(im, background, result, background_label);
-#else  
+#else
   return SwapBackgroundCommonCpu(im, background, result, background_label);
-#endif    
+#endif
 }
 
 }  // namespace vision
 }  // namespace fastdeploy
-#endif

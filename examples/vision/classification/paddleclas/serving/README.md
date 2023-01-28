@@ -3,7 +3,7 @@ English | [简体中文](README_CN.md)
 
 Before the service deployment, please confirm 
 
-- 1. Refer to [FastDeploy Service Deployment](../../../../../serving/README_CN.md) for software and hardware environment requirements and image pull commands
+- 1. Refer to [FastDeploy Service Deployment](../../../../../serving/README.md) for software and hardware environment requirements and image pull commands.
 
 
 ## Start the Service
@@ -39,7 +39,7 @@ CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=/serving/models --bac
 ```
 >> **Attention**:
 
->> To pull images from other hardware, refer to [Service Deployment Master Document](../../../../../serving/README_CN.md)
+>> To pull images from other hardware, refer to [Service Deployment Master Document](../../../../../serving/README.md)
 
 >> If "Address already in use" appears when running fastdeployserver to start the service, use `--grpc-port` to specify the port number and change the request port number in the client demo.
 
@@ -76,4 +76,4 @@ output_name: CLAS_RESULT
 
 ## Configuration Change
 
-The current default configuration runs the TensorRT engine on GPU. If you want to run it on CPU or other inference engines, please modify the configuration in `models/runtime/config.pbtxt`. Refer to [Configuration Document](../../../../../serving/docs/zh_CN/model_configuration.md) for more information.
+The current default configuration runs the TensorRT engine on GPU. If you want to run it on CPU or other inference engines, please modify the configuration in `models/runtime/config.pbtxt`. Refer to [Configuration Document](../../../../../serving/docs/EN/model_configuration-en.md) for more information.

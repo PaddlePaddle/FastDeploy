@@ -23,19 +23,19 @@ import sys
 def process_paddle_lite(paddle_lite_so_path):
     if platform.system().lower() != "linux":
         return
-    rpaths = ["$ORIGIN"]
+    rpaths = ["$ORIGIN", "$ORIGIN/mklml/lib/"]
     patchelf_exe = os.getenv("PATCHELF_EXE", "patchelf")
-
-    for paddle_lite_so_file in os.listdir(paddle_lite_so_path):
-        paddle_lite_so_file = os.path.join(paddle_lite_so_path,
-                                           paddle_lite_so_file)
-        if '.so' in paddle_lite_so_file:
-            command = "{} --set-rpath '{}' {}".format(
-                patchelf_exe, ":".join(rpaths), paddle_lite_so_file)
-            if platform.machine() != 'sw_64' and platform.machine(
-            ) != 'mips64':
-                assert os.system(
-                    command) == 0, "patchelf {} failed, the command: {}".format(
+    for root, dirs, files in os.walk(paddle_lite_so_path):
+        for lib in files:
+            if ".so" in lib:
+                paddle_lite_so_file = os.path.join(root, lib)
+                command = "{} --set-rpath '{}' {}".format(
+                    patchelf_exe, ":".join(rpaths), paddle_lite_so_file)
+                if platform.machine() != 'sw_64' and platform.machine(
+                ) != 'mips64':
+                    assert os.system(
+                        command
+                    ) == 0, "patchelf {} failed, the command: {}".format(
                         paddle_lite_so_file, command)
 
 

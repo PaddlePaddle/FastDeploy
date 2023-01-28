@@ -25,6 +25,7 @@
 
 namespace fastdeploy {
 
+
 /*! Inference backend supported in FastDeploy */
 enum Backend {
   UNKNOWN,  ///< Unknown inference backend
@@ -37,6 +38,17 @@ enum Backend {
   RKNPU2,     ///< RKNPU2, support RKNN format model, Rockchip NPU only
   SOPHGOTPU,  ///< SOPHGOTPU, support SOPHGO format model, Sophgo TPU only
 };
+
+/**
+ * @brief Get all the available inference backend in FastDeploy
+ */
+FASTDEPLOY_DECL std::vector<Backend> GetAvailableBackends();
+
+/**
+ * @brief Check if the inference backend available
+ */
+FASTDEPLOY_DECL bool IsBackendAvailable(const Backend& backend);
+
 
 enum FASTDEPLOY_DECL Device {
   CPU,
@@ -69,11 +81,8 @@ static std::map<ModelFormat, std::vector<Backend>> s_default_backends_cfg = {
   {ModelFormat::SOPHGO, {Backend::SOPHGOTPU}}
 };
 
-FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const Backend& b);
-
-FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const Device& d);
-
-FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
-                                         const ModelFormat& f);
+FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const Backend& b);
+FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const Device& d);
+FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const ModelFormat& f);
 
 }  // namespace fastdeploy

@@ -24,30 +24,16 @@
 #include <map>
 #include <vector>
 #include "fastdeploy/runtime/enum_variables.h"
-#include "fastdeploy/backends/lite/option.h"
-#include "fastdeploy/backends/openvino/option.h"
-#include "fastdeploy/backends/ort/option.h"
-#include "fastdeploy/backends/paddle/option.h"
-#include "fastdeploy/backends/poros/option.h"
-#include "fastdeploy/backends/rknpu2/option.h"
-#include "fastdeploy/backends/sophgo/option.h"
-#include "fastdeploy/backends/tensorrt/option.h"
+#include "fastdeploy/runtime/backends/lite/option.h"
+#include "fastdeploy/runtime/backends/openvino/option.h"
+#include "fastdeploy/runtime/backends/ort/option.h"
+#include "fastdeploy/runtime/backends/paddle/option.h"
+#include "fastdeploy/runtime/backends/poros/option.h"
+#include "fastdeploy/runtime/backends/rknpu2/option.h"
+#include "fastdeploy/runtime/backends/sophgo/option.h"
+#include "fastdeploy/runtime/backends/tensorrt/option.h"
 
 namespace fastdeploy {
-
-/**
- * @brief Get all the available inference backend in FastDeploy
- */
-FASTDEPLOY_DECL std::vector<Backend> GetAvailableBackends();
-
-/**
- * @brief Check if the inference backend available
- */
-FASTDEPLOY_DECL bool IsBackendAvailable(const Backend& backend);
-
-bool CheckModelFormat(const std::string& model_file,
-                      const ModelFormat& model_format);
-ModelFormat GuessModelFormat(const std::string& model_file);
 
 /*! @brief Option object used when create a new Runtime object
  */
@@ -364,7 +350,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
                     bool enable_half_partial = false);
 
   Backend backend = Backend::UNKNOWN;
-  // for cpu inference and preprocess
+
+  // for cpu inference
   // default will let the backend choose their own default value
   int cpu_thread_num = -1;
   int device_id = 0;
@@ -402,31 +389,6 @@ struct FASTDEPLOY_DECL RuntimeOption {
   float ipu_available_memory_proportion = 1.0;
   bool ipu_enable_half_partial = false;
 
-  // ======Only for Paddle Lite Backend=====
-  // 0: LITE_POWER_HIGH 1: LITE_POWER_LOW 2: LITE_POWER_FULL
-  // 3: LITE_POWER_NO_BIND 4: LITE_POWER_RAND_HIGH
-  // 5: LITE_POWER_RAND_LOW
-  LitePowerMode lite_power_mode = LitePowerMode::LITE_POWER_NO_BIND;
-  // enable int8 or not
-  bool lite_enable_int8 = false;
-  // enable fp16 or not
-  bool lite_enable_fp16 = false;
-  // optimized model dir for CxxConfig
-  std::string lite_optimized_model_dir = "";
-  std::string lite_nnadapter_subgraph_partition_config_path = "";
-  // and other nnadapter settings for CxxConfig
-  std::string lite_nnadapter_subgraph_partition_config_buffer = "";
-  std::string lite_nnadapter_context_properties = "";
-  std::string lite_nnadapter_model_cache_dir = "";
-  std::string lite_nnadapter_mixed_precision_quantization_config_path = "";
-  std::map<std::string, std::vector<std::vector<int64_t>>>
-      lite_nnadapter_dynamic_shape_info = {{"", {{0}}}};
-  std::vector<std::string> lite_nnadapter_device_names = {};
-
-  bool enable_timvx = false;
-  bool enable_ascend = false;
-  bool enable_kunlunxin = false;
-
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;
   std::map<std::string, std::vector<int32_t>> trt_min_shape;
@@ -458,14 +420,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   fastdeploy::rknpu2::CoreMask rknpu2_core_mask_ =
       fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
 
-  // ======Only for KunlunXin XPU Backend=======
-  int kunlunxin_l3_workspace_size = 0xfffc00;
-  bool kunlunxin_locked = false;
-  bool kunlunxin_autotune = true;
-  std::string kunlunxin_autotune_file = "";
-  std::string kunlunxin_precision = "int16";
-  bool kunlunxin_adaptive_seqlen = false;
-  bool kunlunxin_enable_multi_stream = false;
+
+  /// Option to configure Paddle Lite backend
+  LiteBackendOption paddle_lite_option;
 
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
