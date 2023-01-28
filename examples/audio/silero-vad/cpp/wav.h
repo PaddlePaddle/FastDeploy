@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
-
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include <string>
 
 namespace wav {
@@ -54,9 +52,8 @@ class WavReader {
     WavHeader header;
     fread(&header, 1, sizeof(header), fp);
     if (header.fmt_size < 16) {
-      fprintf(stderr,
-              "WaveData: expect PCM format data "
-              "to have fmt chunk of at least size 16.\n");
+      fprintf(stderr, "WaveData: expect PCM format data "
+                      "to have fmt chunk of at least size 16.\n");
       return false;
     } else if (header.fmt_size > 16) {
       int offset = 44 - 8 + header.fmt_size - 16;
@@ -84,29 +81,29 @@ class WavReader {
 
     for (int i = 0; i < num_data; ++i) {
       switch (bits_per_sample_) {
-        case 8: {
-          char sample;
-          fread(&sample, 1, sizeof(char), fp);
-          data_[i] = static_cast<float>(sample);
-          break;
-        }
-        case 16: {
-          int16_t sample;
-          fread(&sample, 1, sizeof(int16_t), fp);
-          // std::cout << sample;
-          data_[i] = static_cast<float>(sample);
-          // std::cout << data_[i];
-          break;
-        }
-        case 32: {
-          int sample;
-          fread(&sample, 1, sizeof(int), fp);
-          data_[i] = static_cast<float>(sample);
-          break;
-        }
-        default:
-          fprintf(stderr, "unsupported quantization bits");
-          exit(1);
+      case 8: {
+        char sample;
+        fread(&sample, 1, sizeof(char), fp);
+        data_[i] = static_cast<float>(sample);
+        break;
+      }
+      case 16: {
+        int16_t sample;
+        fread(&sample, 1, sizeof(int16_t), fp);
+        // std::cout << sample;
+        data_[i] = static_cast<float>(sample);
+        // std::cout << data_[i];
+        break;
+      }
+      case 32: {
+        int sample;
+        fread(&sample, 1, sizeof(int), fp);
+        data_[i] = static_cast<float>(sample);
+        break;
+      }
+      default:
+        fprintf(stderr, "unsupported quantization bits");
+        exit(1);
       }
     }
     fclose(fp);
@@ -131,11 +128,8 @@ class WavWriter {
  public:
   WavWriter(const float* data, int num_samples, int num_channel,
             int sample_rate, int bits_per_sample)
-      : data_(data),
-        num_samples_(num_samples),
-        num_channel_(num_channel),
-        sample_rate_(sample_rate),
-        bits_per_sample_(bits_per_sample) {}
+      : data_(data), num_samples_(num_samples), num_channel_(num_channel),
+        sample_rate_(sample_rate), bits_per_sample_(bits_per_sample) {}
 
   void Write(const std::string& filename) {
     FILE* fp = fopen(filename.c_str(), "w");
@@ -161,21 +155,21 @@ class WavWriter {
     for (int i = 0; i < num_samples_; ++i) {
       for (int j = 0; j < num_channel_; ++j) {
         switch (bits_per_sample_) {
-          case 8: {
-            char sample = static_cast<char>(data_[i * num_channel_ + j]);
-            fwrite(&sample, 1, sizeof(sample), fp);
-            break;
-          }
-          case 16: {
-            int16_t sample = static_cast<int16_t>(data_[i * num_channel_ + j]);
-            fwrite(&sample, 1, sizeof(sample), fp);
-            break;
-          }
-          case 32: {
-            int sample = static_cast<int>(data_[i * num_channel_ + j]);
-            fwrite(&sample, 1, sizeof(sample), fp);
-            break;
-          }
+        case 8: {
+          char sample = static_cast<char>(data_[i * num_channel_ + j]);
+          fwrite(&sample, 1, sizeof(sample), fp);
+          break;
+        }
+        case 16: {
+          int16_t sample = static_cast<int16_t>(data_[i * num_channel_ + j]);
+          fwrite(&sample, 1, sizeof(sample), fp);
+          break;
+        }
+        case 32: {
+          int sample = static_cast<int>(data_[i * num_channel_ + j]);
+          fwrite(&sample, 1, sizeof(sample), fp);
+          break;
+        }
         }
       }
     }

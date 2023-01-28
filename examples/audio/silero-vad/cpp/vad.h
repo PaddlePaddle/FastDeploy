@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
-
 #include <vector>
-
-#include "fastdeploy/runtime.h"
 #include "fastdeploy/fastdeploy_model.h"
+#include "fastdeploy/runtime.h"
 #include "fastdeploy/vision/utils/utils.h"
-#include "wav.h"
+#include "./wav.h"
 
-class Vad:public fastdeploy::FastDeployModel{
+class Vad : public fastdeploy::FastDeployModel {
  public:
   std::string ModelName() const override;
 
@@ -29,8 +27,7 @@ class Vad:public fastdeploy::FastDeployModel{
           fastdeploy::RuntimeOption()) {
     valid_cpu_backends = {fastdeploy::Backend::ORT,
                           fastdeploy::Backend::OPENVINO};
-    valid_gpu_backends = {fastdeploy::Backend::ORT,
-                          fastdeploy::Backend::TRT};
+    valid_gpu_backends = {fastdeploy::Backend::ORT, fastdeploy::Backend::TRT};
 
     runtime_option = custom_option;
     runtime_option.model_format = fastdeploy::ModelFormat::ONNX;
@@ -38,22 +35,18 @@ class Vad:public fastdeploy::FastDeployModel{
     runtime_option.params_file = "";
   }
 
-  void init() {
-    initialized = Initialize();
-  }
+  void init() { initialized = Initialize(); }
 
-  void setAudioCofig(
-      int sr, int frame_ms, float threshold,
-      int min_silence_duration_ms, int speech_pad_ms);
+  void setAudioCofig(int sr, int frame_ms, float threshold,
+                     int min_silence_duration_ms, int speech_pad_ms);
 
   void loadAudio(const std::string& wavPath);
 
   bool Predict();
 
-  std::vector<std::map<std::string, float>> getResult(
-      float removeThreshold = 1.6,
-      float expandHeadThreshold = 0.32, float expandTailThreshold = 0,
-      float mergeThreshold = 0.3);
+  std::vector<std::map<std::string, float>>
+  getResult(float removeThreshold = 1.6, float expandHeadThreshold = 0.32,
+            float expandTailThreshold = 0, float mergeThreshold = 0.3);
 
  private:
   bool Initialize();
@@ -93,9 +86,9 @@ class Vad:public fastdeploy::FastDeployModel{
 
   int64_t window_size_samples_;
   // Assign when init, support 256 512 768 for 8k; 512 1024 1536 for 16k.
-  int sr_per_ms_;  // Assign when init, support 8 or 16
+  int sr_per_ms_;            // Assign when init, support 8 or 16
   int min_silence_samples_;  // sr_per_ms_ * #ms
-  int speech_pad_samples_;  // usually a
+  int speech_pad_samples_;   // usually a
 
   /* ======================================================================== */
 
@@ -125,11 +118,11 @@ class Vad:public fastdeploy::FastDeployModel{
 
   int getSpeechPadMs() const;
 
-  const wav::WavReader &getWavReader() const;
+  const wav::WavReader& getWavReader() const;
 
-  const std::vector<int16_t> &getData() const;
+  const std::vector<int16_t>& getData() const;
 
-  const std::vector<float> &getInputWav() const;
+  const std::vector<float>& getInputWav() const;
 
   int64_t getWindowSizeSamples() const;
 

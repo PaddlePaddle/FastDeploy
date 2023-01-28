@@ -20,6 +20,26 @@
 namespace fastdeploy {
 namespace vision {
 namespace detection {
+/** \brief Config for PaddleMultiClassNMS
+   * \param[in] background_label the value of background label
+   * \param[in] keep_top_k the value of keep_top_k
+   * \param[in] nms_eta the value of nms_eta
+   * \param[in] nms_threshold a dict that contains the arguments of nms operations
+   * \param[in] nms_top_k if there are more than max_num bboxes after NMS, only top max_num will be kept.
+   * \param[in] normalized Determine whether normalized is required
+   * \param[in] score_threshold bbox threshold, bboxes with scores lower than it will not be considered.
+   */
+struct NMSOption{
+  NMSOption() = default;
+  int64_t background_label = -1;
+  int64_t keep_top_k = 100;
+  float nms_eta = 1.0;
+  float nms_threshold = 0.5;
+  int64_t nms_top_k = 1000;
+  bool normalized = true;
+  float score_threshold = 0.3;
+};
+
 struct PaddleMultiClassNMS {
   int64_t background_label = -1;
   int64_t keep_top_k = -1;
@@ -40,6 +60,16 @@ struct PaddleMultiClassNMS {
   void Compute(const float* boxes, const float* scores,
                const std::vector<int64_t>& boxes_dim,
                const std::vector<int64_t>& scores_dim);
+
+  void SetNMSOption(const struct NMSOption &nms_option){
+    background_label = nms_option.background_label;
+    keep_top_k = nms_option.keep_top_k;
+    nms_eta = nms_option.nms_eta;
+    nms_threshold = nms_option.nms_threshold;
+    nms_top_k = nms_option.nms_top_k;
+    normalized = nms_option.normalized;
+    score_threshold = nms_option.score_threshold;
+  }
 };
 }  // namespace detection
 }  // namespace vision
