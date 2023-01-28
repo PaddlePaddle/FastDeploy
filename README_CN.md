@@ -56,13 +56,13 @@
 ## 🌠 近期更新
 
 - ✨✨✨ **2023.01.17** 发布 [**YOLOv8**](./examples/vision/detection/paddledetection/) 在FastDeploy系列硬件的部署支持。 其中包括 [**Paddle YOLOv8**](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov8) 以及 [**社区 ultralytics YOLOv8**](https://github.com/ultralytics/ultralytics)
-    - [**Paddle YOLOv8**](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov8) 可以部署的硬件：[**Intel CPU**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**NVIDIA GPU**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**Jetson**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**飞腾**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**昆仑芯**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**昇腾**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**ARM CPU**](./examples/vision/detection/paddledetection/cpp/infer_yolov8.cc), 均包含 **Python** 部署和 **C++** 部署；**算能TPU** 和 **RK3588** 正在更新中
+    - [**Paddle YOLOv8**](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov8) 可以部署的硬件：[**Intel CPU**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**NVIDIA GPU**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**Jetson**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**飞腾**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**昆仑芯**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**昇腾**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**ARM CPU**](./examples/vision/detection/paddledetection/cpp/infer_yolov8.cc)、[**RK3588**](./examples/vision/detection/paddledetection/rknpu2/yolov8.md) 和 [**Sophgo TPU**](./examples/vision/detection/paddledetection/sophgo), 部分硬件包含 **Python** 部署和 **C++** 部署；
     -  [**社区 ultralytics YOLOv8**](https://github.com/ultralytics/ultralytics) 可以部署的硬件：[**Intel CPU**](./examples/vision/detection/yolov8)、[**NVIDIA GPU**](./examples/vision/detection/yolov8)、[**Jetson**](./examples/vision/detection/yolov8)，均包含 **Python** 部署和 **C++** 部署；
-    -  FastDeploy 一行模型API切换，可以实现**YOLOv8**、 **PP-YOLOE+**、**YOLOv5** 等模型性能对比
+    -  FastDeploy 一行模型API切换，可以实现**YOLOv8**、 **PP-YOLOE+**、**YOLOv5** 等模型性能对比。
  
 - **✨👥✨ 社区交流**
 
-    - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1m88mytoi-mBdMYcnTF~9LCKSOKXd6Tg) and chat with other community members about ideas
+    - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1o50e4voz-zbiIneCNRf_eH99eS2NVLg) and chat with other community members about ideas
 
     - **微信**：扫描二维码，填写问卷加入技术社区，与社区开发者交流部署产业落地痛点问题
 
