@@ -15,6 +15,7 @@ make -j
 
 3. 运行
 ```
-cp ../streamer_cfg.yml .
+# GPU解码（gpu.yml）或CPU解码（cpu.yml）
+cp ../gpu.yml streamer_cfg.yml
 ./video_decoder
 ```
