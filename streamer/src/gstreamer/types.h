@@ -14,6 +14,7 @@
 #pragma once
 
 #include "fastdeploy/core/fd_type.h"
+#include "fastdeploy/runtime/enum_variables.h"
 #include "fastdeploy/utils/perf.h"
 #include <gst/gst.h>
 
