@@ -101,7 +101,7 @@
 - [✴️ Python SDK クイックスタート](#fastdeploy-quick-start-python)  
 - [✴️ C++ SDK クイックスタート](#fastdeploy-quick-start-cpp)
 - **インストールドキュメント**
-    - [プリコンパイルされたライブラリのダウンロードとインストール](docs/cn/build_and_install/download_prebuilt_libraries.md)
+    - [プリコンパイルされたライブラリのダウンロードとインストール](../../en/build_and_install/download_prebuilt_libraries.md)
     - [GPU デプロイメント環境のコンパイルとインストール](docs/cn/build_and_install/gpu.md)
     - [CPU デプロイメント環境のコンパイルとインストール](docs/cn/build_and_install/cpu.md)
     - [IPU デプロイメント環境のコンパイルとインストール](docs/cn/build_and_install/ipu.md)
