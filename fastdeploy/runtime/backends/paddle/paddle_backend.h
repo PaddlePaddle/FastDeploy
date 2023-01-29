@@ -54,8 +54,8 @@ class PaddleBackend : public BaseBackend {
   void BuildOption(const PaddleBackendOption& option);
 
   bool InitFromPaddle(const std::string& model_file,
-                      const std::string& params_file,
-                    const PaddleBackendOption& option = PaddleBackendOption());
+                     const std::string& params_file,
+                     const PaddleBackendOption& option = PaddleBackendOption());
 
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
