@@ -49,13 +49,10 @@ void RuntimeOption::SetModelBuffer(const std::string& model_buffer,
   } else if (format == ModelFormat::ONNX) {
     model_buffer_ = model_buffer;
     model_format = ModelFormat::ONNX;
-  } else if (format == ModelFormat::TORCHSCRIPT) {
-    model_buffer_ = std::string(model_buffer, model_buffer + model_buffer_size);
-    model_format = ModelFormat::TORCHSCRIPT;
   } else {
     FDASSERT(false,
              "The model format only can be "
-             "ModelFormat::PADDLE/ModelFormat::ONNX/ModelFormat::TORCHSCRIPT.");
+             "ModelFormat::PADDLE/ModelFormat::ONNX.");
   }
 }
 

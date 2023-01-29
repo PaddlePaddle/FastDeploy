@@ -256,8 +256,25 @@ std::unique_ptr<BaseBackend> PaddleBackend::Clone(void* stream, int device_id) {
     auto clone_option = option_;
     clone_option.gpu_id = device_id;
     clone_option.external_stream_ = stream;
-    casted_backend->InitFromPaddle(clone_option.model_file,
-                                   clone_option.params_file, clone_option);
+    if (!clone_option.model_from_memory_) {
+      std::string model_buffer = "";
+      std::string params_buffer = "";
+      FDASSERT(
+          ReadBinaryFromFile(clone_option.model_file, &model_buffer),
+          "Fail to read binary from model file while cloning PaddleBackend");
+      FDASSERT(ReadBinaryFromFile(clone_option.params_file, &params_buffer),
+               "Fail to read binary from parameter file while cloning "
+               "PaddleBackend");
+      FDASSERT(
+          casted_backend->InitFromPaddle(model_buffer, params_buffer,
+                                         clone_option),
+          "Clone model from Paddle failed while initialize PaddleBackend.");
+    } else {
+      FDERROR
+          << "When model loading from memory doesn't support to clone engine"
+          << std::endl;
+    }
+
     FDWARNING << "The target device id:" << device_id
               << " is different from current device id:" << option_.gpu_id
               << ", cannot share memory with current engine." << std::endl;

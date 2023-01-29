@@ -730,13 +730,31 @@ std::unique_ptr<BaseBackend> TrtBackend::Clone(void* stream, int device_id) {
     auto clone_option = option_;
     clone_option.gpu_id = device_id;
     clone_option.external_stream_ = stream;
-    if (option_.model_format == ModelFormat::ONNX) {
-      FDASSERT(casted_backend->InitFromOnnx(option_.model_file, clone_option),
-               "Clone model from ONNX failed while initialize TrtBackend.");
+    if (!clone_option.model_from_memory_) {
+      if (option_.model_format == ModelFormat::ONNX) {
+        std::string model_buffer = "";
+        FDASSERT(
+            ReadBinaryFromFile(clone_option.model_file, &model_buffer),
+            "Fail to read binary from model file while cloning TrtBackend");
+        FDASSERT(casted_backend->InitFromOnnx(model_buffer, clone_option),
+                 "Clone model from ONNX failed while initialize TrtBackend.");
+      } else {
+        std::string model_buffer = "";
+        std::string params_buffer = "";
+        FDASSERT(
+            ReadBinaryFromFile(clone_option.model_file, &model_buffer),
+            "Fail to read binary from model file while cloning TrtBackend");
+        FDASSERT(
+            ReadBinaryFromFile(clone_option.params_file, &params_buffer),
+            "Fail to read binary from parameter file while cloning TrtBackend");
+        FDASSERT(casted_backend->InitFromPaddle(model_buffer, params_buffer,
+                                                clone_option),
+                 "Clone model from Paddle failed while initialize TrtBackend.");
+      }
     } else {
-      FDASSERT(casted_backend->InitFromPaddle(
-                   option_.model_file, option_.params_file, clone_option),
-               "Clone model from Paddle failed while initialize TrtBackend.");
+      FDERROR
+          << "When model loading from memory doesn't support to clone engine"
+          << std::endl;
     }
     FDWARNING << "The target device id:" << device_id
               << " is different from current device id:" << option_.gpu_id

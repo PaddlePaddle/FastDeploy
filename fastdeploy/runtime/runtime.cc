@@ -327,7 +327,6 @@ void Runtime::CreateOrtBackend() {
   ort_option.use_gpu = (option.device == Device::GPU) ? true : false;
   ort_option.gpu_id = option.device_id;
   ort_option.external_stream_ = option.external_stream_;
-  ort_option.model_from_memory_ = option.model_from_memory_;
   FDASSERT(option.model_format == ModelFormat::PADDLE ||
                option.model_format == ModelFormat::ONNX,
            "OrtBackend only support model format of ModelFormat::PADDLE / "
@@ -335,14 +334,14 @@ void Runtime::CreateOrtBackend() {
   backend_ = utils::make_unique<OrtBackend>();
   auto casted_backend = dynamic_cast<OrtBackend*>(backend_.get());
   if (option.model_format == ModelFormat::ONNX) {
-    if (!ort_option.model_from_memory_) {
+    if (!option.model_from_memory_) {
       FDASSERT(ReadBinaryFromFile(option.model_file, &option.model_buffer_),
                "Fail to read binary from model file");
     }
     FDASSERT(casted_backend->InitFromOnnx(option.model_buffer_, ort_option),
              "Load model from ONNX failed while initliazing OrtBackend.");
   } else {
-    if (!ort_option.model_from_memory_) {
+    if (!option.model_from_memory_) {
       FDASSERT(ReadBinaryFromFile(option.model_file, &option.model_buffer_),
                "Fail to read binary from model file");
       FDASSERT(ReadBinaryFromFile(option.params_file, &option.params_buffer_),
