@@ -29,6 +29,9 @@ Install DeepStream 6.1.1 and dependencies manually，or use below docker：
 docker pull nvcr.io/nvidia/deepstream:6.1.1-devel
 ```
 
+### CPU
+- GSTreamer 1.14+
+
 ## Build
 
 1. [Build FastDeploy](../docs/en/build_and_install), or download [FastDeploy prebuilt libraries](../docs/en/build_and_install/download_prebuilt_libraries.md)
@@ -45,9 +48,12 @@ cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 ```
 
+CMake Options:
+- ENABLE_DEEPSTREAM, whether to enable NVIDIA DeepStream, ON by default.
+
 3. Build and Run Example
 
 | Example | Brief |
 |:--|:--|
 | [PP-YOLOE](./examples/ppyoloe) | Multiple input videos, PP-YOLOE object detection, NvTracker, Hardware codec, writing to mp4 file |
-| [Video Decoder](./examples/video_decoder) | Video decoding using hardward |  
+| [Video Decoder](./examples/video_decoder) | Video decoding using GPU or CPU |  
