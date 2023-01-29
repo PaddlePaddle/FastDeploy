@@ -283,8 +283,7 @@ void Runtime::CreatePaddleBackend() {
 
 void Runtime::CreateOpenVINOBackend() {
   // TODO(huangjianhui) OpenVINO only supports to load ONNX format model from
-  // memory
-  // Temporarily disable this function
+  // memory Temporarily disable this function
   FDASSERT(option.model_from_memory_ == false,
            "OpenVINOBackend don't support to load model from memory");
 #ifdef ENABLE_OPENVINO_BACKEND

@@ -103,16 +103,9 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_buffer,
   // PaddleReader instead now
   std::string contents;
 
-  // if (option.model_from_memory_) {
   config_.SetModelBuffer(model_buffer.c_str(), model_buffer.size(),
                          params_buffer.c_str(), params_buffer.size());
   contents = model_buffer;
-  // } else {
-  //   config_.SetModel(model_file, params_file);
-  //   if (!ReadBinaryFromFile(model_file, &contents)) {
-  //     return false;
-  //   }
-  // }
   config_.EnableMemoryOptim();
   BuildOption(option);
   auto reader = paddle2onnx::PaddleReader(contents.c_str(), contents.size());
