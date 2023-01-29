@@ -213,8 +213,8 @@ FDTensor* Runtime::GetOutputTensor(const std::string& name) {
 void Runtime::CreatePaddleBackend() {
 #ifdef ENABLE_PADDLE_BACKEND
   auto pd_option = PaddleBackendOption();
-  pd_option.model_file_ = option.model_file;
-  pd_option.params_file_ = option.params_file;
+  pd_option.model_file = option.model_file;
+  pd_option.params_file = option.params_file;
   pd_option.enable_mkldnn = option.pd_enable_mkldnn;
   pd_option.enable_log_info = option.pd_enable_log_info;
   pd_option.mkldnn_cache_size = option.pd_mkldnn_cache_size;

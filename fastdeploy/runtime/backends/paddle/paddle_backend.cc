@@ -166,7 +166,7 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_buffer,
     // Set the shape info file.
     std::string curr_model_dir = "./";
     if (!option.model_from_memory_) {
-      curr_model_dir = GetDirFromPath(option.model_file_);
+      curr_model_dir = GetDirFromPath(option.model_file);
     }
     std::string shape_range_info =
         PathJoin(curr_model_dir, "shape_range_info.pbtxt");
@@ -260,8 +260,8 @@ std::unique_ptr<BaseBackend> PaddleBackend::Clone(void* stream, int device_id) {
     auto clone_option = option_;
     clone_option.gpu_id = device_id;
     clone_option.external_stream_ = stream;
-    casted_backend->InitFromPaddle(clone_option.model_file_,
-                                   clone_option.params_file_, clone_option);
+    casted_backend->InitFromPaddle(clone_option.model_file,
+                                   clone_option.params_file, clone_option);
     FDWARNING << "The target device id:" << device_id
               << " is different from current device id:" << option_.gpu_id
               << ", cannot share memory with current engine." << std::endl;
