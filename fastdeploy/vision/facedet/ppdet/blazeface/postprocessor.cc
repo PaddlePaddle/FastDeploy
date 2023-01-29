@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/facedet/contrib/blazeface/postprocessor.h"
+#include "fastdeploy/vision/facedet/ppdet/blazeface/postprocessor.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 

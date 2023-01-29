@@ -18,8 +18,8 @@
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
-#include "fastdeploy/vision/facedet/contrib/blazeface/preprocessor.h"
-#include "fastdeploy/vision/facedet/contrib/blazeface/postprocessor.h"
+#include "fastdeploy/vision/facedet/ppdet/blazeface/preprocessor.h"
+#include "fastdeploy/vision/facedet/ppdet/blazeface/postprocessor.h"
 
 namespace fastdeploy {
 

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/facedet/contrib/blazeface/blazeface.h"
+#include "fastdeploy/vision/facedet/ppdet/blazeface/blazeface.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
@@ -29,7 +29,7 @@ BlazeFace::BlazeFace(const std::string& model_file,
                      const ModelFormat& model_format)
                      : preprocessor_(config_file){
   valid_cpu_backends = {Backend::OPENVINO,Backend::PDINFER, Backend::LITE};
-  valid_gpu_backends = {Backend::LITE, Backend::PDINFER, Backend::TRT};
+  valid_gpu_backends = {Backend::OPENVINO, Backend::LITE, Backend::PDINFER};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -57,7 +57,7 @@ bool BlazeFace::Predict(const cv::Mat& im, FaceDetectionResult* result){
 bool BlazeFace::BatchPredict(const std::vector<cv::Mat>& images,
                               std::vector<FaceDetectionResult>* results){
   std::vector<FDMat> fd_images = WrapMat(images);
-  FDASSERT(images.size() == 1, "Only support batch = 1 now.");
+  // FDASSERT(images.size() == 1, "Only support batch = 1 now.");
   std::vector<std::map<std::string, std::array<float, 2>>> ims_info;
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, &ims_info)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;

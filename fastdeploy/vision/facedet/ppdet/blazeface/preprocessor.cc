@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/facedet/contrib/blazeface/preprocessor.h"
+#include "fastdeploy/vision/facedet/ppdet/blazeface/preprocessor.h"
 #include "fastdeploy/function/concat.h"
 #include "fastdeploy/function/pad.h"
 #include "fastdeploy/vision/common/processors/mat.h"
@@ -54,6 +54,10 @@ bool BlazeFacePreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor
   auto* scale_factor_ptr =
       reinterpret_cast<float*>((*outputs)[1].MutableData());
   auto* im_shape_ptr = reinterpret_cast<float*>((*outputs)[2].MutableData());
+
+  // Concat all the preprocessed data to a batch tensor
+  std::vector<FDTensor> im_tensors(images->size());
+
   for (size_t i = 0; i < images->size(); ++i) {
     int origin_w = (*images)[i].Width();
     int origin_h = (*images)[i].Height();
@@ -80,11 +84,7 @@ bool BlazeFacePreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor
     }
     im_shape_ptr[2 * i] = max_hw[0];
     im_shape_ptr[2 * i + 1] = max_hw[1];
-  }
 
-  // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> im_tensors(images->size());
-  for (size_t i = 0; i < images->size(); ++i) {
     if ((*images)[i].Height() < max_hw[0] || (*images)[i].Width() < max_hw[1]) {
       // if the size of image less than max_hw, pad to max_hw
       FDTensor tensor;
@@ -100,6 +100,23 @@ bool BlazeFacePreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor
     // Reshape to 1xCxHxW
     im_tensors[i].ExpandDim(0);
   }
+
+  // for (size_t i = 0; i < images->size(); ++i) {
+  //   if ((*images)[i].Height() < max_hw[0] || (*images)[i].Width() < max_hw[1]) {
+  //     // if the size of image less than max_hw, pad to max_hw
+  //     FDTensor tensor;
+  //     (*images)[i].ShareWithTensor(&tensor);
+  //     function::Pad(tensor, &(im_tensors[i]),
+  //                   {0, 0, max_hw[0] - (*images)[i].Height(),
+  //                    max_hw[1] - (*images)[i].Width()},
+  //                   0);
+  //   } else {
+  //     // No need pad
+  //     (*images)[i].ShareWithTensor(&(im_tensors[i]));
+  //   }
+  //   // Reshape to 1xCxHxW
+  //   im_tensors[i].ExpandDim(0);
+  // }
 
   if (im_tensors.size() == 1) {
     // If there's only 1 input, no need to concat
