@@ -410,6 +410,8 @@ void Runtime::CreateTrtBackend() {
 
 void Runtime::CreateLiteBackend() {
 #ifdef ENABLE_LITE_BACKEND
+  FDASSERT(option.model_from_memory_ == false,
+           "LiteBackend don't support to load model from memory");
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();
@@ -429,6 +431,8 @@ void Runtime::CreateRKNPU2Backend() {
   auto rknpu2_option = RKNPU2BackendOption();
   rknpu2_option.cpu_name = option.rknpu2_cpu_name_;
   rknpu2_option.core_mask = option.rknpu2_core_mask_;
+  FDASSERT(option.model_from_memory_ == false,
+           "RKNPU2Backend don't support to load model from memory");
   FDASSERT(option.model_format == ModelFormat::RKNN,
            "RKNPU2Backend only support model format of ModelFormat::RKNN");
   backend_ = utils::make_unique<RKNPU2Backend>();
@@ -445,6 +449,8 @@ void Runtime::CreateRKNPU2Backend() {
 void Runtime::CreateSophgoNPUBackend() {
 #ifdef ENABLE_SOPHGO_BACKEND
   auto sophgo_option = SophgoBackendOption();
+  FDASSERT(option.model_from_memory_ == false,
+           "SophgoBackend don't support to load model from memory");
   FDASSERT(option.model_format == ModelFormat::SOPHGO,
            "SophgoBackend only support model format of ModelFormat::SOPHGO");
   backend_ = utils::make_unique<SophgoBackend>();
