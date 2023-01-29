@@ -38,6 +38,9 @@ struct OrtBackendOption {
   int gpu_id = 0;
   void* external_stream_ = nullptr;
 
+  // load model and paramters from memory
+  bool model_from_memory_ = false;
+
   // inside parameter, maybe remove next version
   bool remove_multiclass_nms_ = false;
   std::map<std::string, std::string> custom_op_info_;

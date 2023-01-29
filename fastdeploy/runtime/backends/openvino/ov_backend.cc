@@ -237,7 +237,6 @@ bool OpenVINOBackend::InitFromOnnx(const std::string& model_file,
   option_ = option;
 
   std::shared_ptr<ov::Model> model = core_.read_model(model_file);
-
   if (option_.shape_infos.size() > 0) {
     std::map<std::string, ov::PartialShape> shape_infos;
     for (const auto& item : option_.shape_infos) {
