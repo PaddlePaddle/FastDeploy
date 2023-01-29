@@ -173,13 +173,9 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_buffer,
     if (!CheckFileExists(shape_range_info)) {
       FDINFO << "Start generating shape range info file." << std::endl;
       paddle_infer::Config analysis_config;
-      // if (option.model_from_memory_) {
       analysis_config.SetModelBuffer(model_buffer.c_str(), model_buffer.size(),
                                      params_buffer.c_str(),
                                      params_buffer.size());
-      // } else {
-      //   analysis_config.SetModel(model_file, params_file);
-      // }
       analysis_config.CollectShapeRangeInfo(shape_range_info);
       auto predictor_tmp = paddle_infer::CreatePredictor(analysis_config);
       std::map<std::string, std::vector<int>> max_shape;
