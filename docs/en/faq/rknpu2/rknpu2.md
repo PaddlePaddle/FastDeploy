@@ -14,61 +14,22 @@ The following tests are at end-to-end speed, and the test environment is as foll
 * with single-core NPU
 
 
-| Mission Scenario               | Model                | Model Version(tested version)               | ARM CPU/RKNN speed(ms) |
-|------------------|-------------------|-------------------------------|--------------------|
-| Detection        | Picodet           | Picodet-s                     | 162/112            |
-| Detection        | RKYOLOV5          | YOLOV5-S-Relu(int8)           | -/57               |
-| Detection        | RKYOLOX           | -                             | -/-                |
-| Detection        | RKYOLOV7          | -                             | -/-                |
-| Segmentation     | Unet              | Unet-cityscapes               | -/-                |
-| Segmentation     | PP-HumanSegV2Lite | portrait                      | 133/43             |
-| Segmentation     | PP-HumanSegV2Lite | human                         | 133/43             |
-| Face Detection   | SCRFD             | SCRFD-2.5G-kps-640            | 108/42             |
+| Mission Scenario                 | Model                                                                                       | Model Version(tested version)          | ARM CPU/RKNN speed(ms) |
+|----------------------|------------------------------------------------------------------------------------------|--------------------------|--------------------|
+| Detection            | [Picodet](../../../../examples/vision/detection/paddledetection/rknpu2/README.md)        | Picodet-s                | 162/112            |
+| Detection            | [RKYOLOV5](../../../../examples/vision/detection/rkyolo/README.md)                       | YOLOV5-S-Relu(int8)      | -/57               |
+| Detection            | [RKYOLOX](../../../../examples/vision/detection/rkyolo/README.md)                        | -                        | -/-                |
+| Detection            | [RKYOLOV7](../../../../examples/vision/detection/rkyolo/README.md)                       | -                        | -/-                |
+| Segmentation         | [Unet](../../../../examples/vision/segmentation/paddleseg/rknpu2/README.md)              | Unet-cityscapes          | -/-                |
+| Segmentation         | [PP-HumanSegV2Lite](../../../../examples/vision/segmentation/paddleseg/rknpu2/README.md) | portrait(int8)           | 133/43             |
+| Segmentation         | [PP-HumanSegV2Lite](../../../../examples/vision/segmentation/paddleseg/rknpu2/README.md) | human(int8)              | 133/43             |
+| Face Detection       | [SCRFD](../../../../examples/vision/facedet/scrfd/rknpu2/README.md)                      | SCRFD-2.5G-kps-640(int8) | 108/42             |
+| Face FaceRecognition | [InsightFace](../../../../examples/vision/faceid/insightface/rknpu2/README_CN.md)        | ms1mv3_arcface_r18(int8) | 81/12              |
+| Classification       | [ResNet](../../../../examples/vision/classification/paddleclas/rknpu2/README.md)         | ResNet50_vd              | -/33               |
 
+## Download Pre-trained library
 
-## How to use RKNPU2 Backend to Infer Models
+For convenience, here we provide the 1.0.2 version of FastDeploy.
 
-We provide an example on Scrfd model here to show how to use RKNPU2 Backend for model inference. The modifications mentioned in the annotations below are in comparison to the ONNX CPU.
-
-```c++
-int infer_scrfd_npu() {
-    char model_path[] = "./model/scrfd_2.5g_bnkps_shape640x640.rknn";
-    char image_file[] = "./image/test_lite_face_detector_3.jpg";
-    auto option = fastdeploy::RuntimeOption();
-	// Modification1: option.UseRKNPU2 function should be called
-    option.UseRKNPU2();  
-
-	// Modification2: The parameter 'fastdeploy::ModelFormat::RKNN' should be transferred when loading the model
-    auto *model = new fastdeploy::vision::facedet::SCRFD(model_path,"",option,fastdeploy::ModelFormat::RKNN);  
-    if (!model->Initialized()) {
-        std::cerr << "Failed to initialize." << std::endl;
-        return 0;
-    }
-
-	// Modification3(optional): RKNPU2 supports to normalize using NPU and the input format is nhwc format.
-	// The action of DisableNormalizeAndPermute will block the nor action and hwc to chw converting action during preprocessing.
-	// If you use an already supported model list, please call its method before Predict.
-    model->DisableNormalizeAndPermute();
-    auto im = cv::imread(image_file);
-    auto im_bak = im.clone();
-    fastdeploy::vision::FaceDetectionResult res;
-    clock_t start = clock();
-    if (!model->Predict(&im, &res, 0.8, 0.8)) {
-        std::cerr << "Failed to predict." << std::endl;
-        return 0;
-    }
-    clock_t end = clock();
-    double dur = (double) (end - start);
-    printf("infer_scrfd_npu use time:%f\n", (dur / CLOCKS_PER_SEC));
-    auto vis_im = fastdeploy::vision::Visualize::VisFaceDetection(im_bak, res);
-    cv::imwrite("scrfd_rknn_vis_result.jpg", vis_im);
-    std::cout << "Visualized result saved in ./scrfd_rknn_vis_result.jpg" << std::endl;
-    return 0;
-}
-```
-
-
-## Other related Documents
-- [How to Build RKNPU2 Deployment Environment](../../build_and_install/rknpu2.md)
-- [RKNN-Toolkit2 Installation Document](./install_rknn_toolkit2.md)
-- [How to convert ONNX to RKNN](./export.md)
+- [FastDeploy RK356X c++ SDK](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-rk356X-1.0.2.tgz)
+- [FastDeploy RK3588 c++ SDK](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-rk3588-1.0.2.tgz)
