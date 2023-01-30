@@ -389,7 +389,7 @@ int main(int argc, char* argv[]) {
 
 <details open><summary><b> Список поддержки развертывания веб-приложений и апплетов (нажмите, чтобы уменьшить)</b></summary><div>
 
-| Сценарии миссий              | Модели                                                                                          | [web_demo](examples/application/js/web_demo) |
+| Сценарии миссий              | Модели                                                                                          | [web_demo](./../../examples/application/js/web_demo) |
 |:------------------:|:-------------------------------------------------------------------------------------------:|:--------------------------------------------:|
 | ---                | ---                                                                                         | [Paddle.js](./../../examples/application/js)         |
 | Detection          | [FaceDetection](./../../examples/application/js/web_demo/src/pages/cv/detection)                    | ✅                                            |
