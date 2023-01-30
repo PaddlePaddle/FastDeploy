@@ -14,6 +14,12 @@
 
 #include "fastdeploy/vision/common/processors/resize_by_short.h"
 
+#ifdef ENABLE_CVCUDA
+#include <cvcuda/OpResize.hpp>
+
+#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
+#endif
+
 namespace fastdeploy {
 namespace vision {
 
@@ -51,7 +57,7 @@ bool ResizeByShort::ImplByFlyCV(Mat* mat) {
   } else if (interp_ == 2) {
     interp_method = fcv::InterpolationType::INTER_CUBIC;
   } else if (interp_ == 3) {
-    interp_method = fcv::InterpolationType::INTER_AREA; 
+    interp_method = fcv::InterpolationType::INTER_AREA;
   } else {
     FDERROR << "LimitByShort: Only support interp_ be 0/1/2/3 with FlyCV, but "
                "now it's "
@@ -76,6 +82,37 @@ bool ResizeByShort::ImplByFlyCV(Mat* mat) {
       mat->SetWidth(new_im.width());
     }
   }
+  return true;
+}
+#endif
+
+#ifdef ENABLE_CVCUDA
+bool ResizeByShort::ImplByCvCuda(Mat* mat) {
+  // Prepare input tensor
+  std::string tensor_name = Name() + "_cvcuda_src";
+  FDTensor* src = CreateCachedGpuInputTensor(mat, tensor_name);
+  auto src_tensor = CreateCvCudaTensorWrapData(*src);
+
+  double scale = GenerateScale(mat->Width(), mat->Height());
+  int width = static_cast<int>(round(scale * mat->Width()));
+  int height = static_cast<int>(round(scale * mat->Height()));
+
+  // Prepare output tensor
+  tensor_name = Name() + "_cvcuda_dst";
+  FDTensor* dst = UpdateAndGetCachedTensor(
+      {height, width, mat->Channels()}, mat->Type(), tensor_name, Device::GPU);
+  auto dst_tensor = CreateCvCudaTensorWrapData(*dst);
+
+  // CV-CUDA Interp value is compatible with OpenCV
+  cvcuda::Resize resize_op;
+  resize_op(mat->Stream(), src_tensor, dst_tensor,
+            NVCVInterpolationType(interp_));
+
+  mat->SetTensor(dst);
+  mat->SetWidth(width);
+  mat->SetHeight(height);
+  mat->device = Device::GPU;
+  mat->mat_type = ProcLib::CVCUDA;
   return true;
 }
 #endif
