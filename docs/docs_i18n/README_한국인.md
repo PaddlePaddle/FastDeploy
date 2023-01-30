@@ -389,9 +389,9 @@ int main(int argc, char* argv[]) {
 
 <details open><summary><b>웹 및 애플릿 배포 지원 목록 (누르면 축소)</b></summary><div>
 
-| 작업 장면              | 모형                                                                                          | [web_demo](examples/application/js/web_demo) |
+| 작업 장면              | 모형                                                                                          | [web_demo](./../../examples/application/js/web_demo) |
 |:------------------:|:-------------------------------------------------------------------------------------------:|:--------------------------------------------:|
-| ---                | ---                                                                                         | [Paddle.js](examples/application/js)         |
+| ---                | ---                                                                                         | [Paddle.js](./../../examples/application/js)         |
 | Detection          | [FaceDetection](./../../examples/application/js/web_demo/src/pages/cv/detection)                    | ✅                                            |
 | Detection          | [ScrewDetection](./../../examples/application/js/web_demo/src/pages/cv/detection)                   | ✅                                            |
 | Segmentation       | [PaddleSeg/HumanSeg](./../../examples/application/js/web_demo/src/pages/cv/segmentation/HumanSeg) | ✅                                            |
