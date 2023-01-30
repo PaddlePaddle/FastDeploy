@@ -51,8 +51,26 @@ class FASTDEPLOY_DECL Processor {
     return false;
   }
 
+  virtual bool ImplByOpenCV(std::vector<Mat>* mats) {
+    for (size_t i = 0; i < mats->size(); ++i) {
+      if (ImplByOpenCV(&((*mats)[i])) != true) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   virtual bool ImplByFlyCV(Mat* mat) {
     return ImplByOpenCV(mat);
+  }
+
+  virtual bool ImplByFlyCV(std::vector<Mat>* mats) {
+    for (size_t i = 0; i < mats->size(); ++i) {
+      if (ImplByFlyCV(&((*mats)[i])) != true) {
+        return false;
+      }
+    }
+    return true;
   }
 
   virtual bool ImplByCuda(Mat* mat) {
@@ -63,7 +81,22 @@ class FASTDEPLOY_DECL Processor {
     return ImplByOpenCV(mat);
   }
 
+  // CUDA and CV-CUDA processors cannot use for-loop to do batch processing,
+  // because of the GPU tensor cache logic.
+  // So if the CUDA/CV-CUDA processor's batch processing function is not
+  // implemented, it will fallback to OpenCV.
+  virtual bool ImplByCuda(std::vector<Mat>* mats) {
+    return ImplByOpenCV(mats);
+  }
+
+  virtual bool ImplByCvCuda(std::vector<Mat>* mats) {
+    return ImplByOpenCV(mats);
+  }
+
   virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
+
+  virtual bool operator()(std::vector<Mat>* mats,
+                          ProcLib lib = ProcLib::DEFAULT);
 
  protected:
   // Update and get the cached tensor from the cached_tensors_ map.
@@ -83,6 +116,11 @@ class FASTDEPLOY_DECL Processor {
   // CPU tensor to this new GPU tensor.
   FDTensor* CreateCachedGpuInputTensor(Mat* mat,
                                        const std::string& tensor_name);
+
+  // Create an input tensor with batch dimension
+  // The mats must have same shapes.
+  FDTensor* CreateCachedGpuInputTensor(
+    std::vector<Mat>* mats, const std::string& tensor_name);
 
  private:
   std::unordered_map<std::string, FDTensor> cached_tensors_;

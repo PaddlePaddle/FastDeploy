@@ -31,9 +31,11 @@ class FASTDEPLOY_DECL NormalizeAndPermute : public Processor {
 #endif
 #ifdef WITH_GPU
   bool ImplByCuda(Mat* mat);
+  bool ImplByCuda(std::vector<Mat>* mats);
 #endif
 #ifdef ENABLE_CVCUDA
   bool ImplByCvCuda(Mat* mat);
+  bool ImplByCvCuda(std::vector<Mat>* mats);
 #endif
   std::string Name() { return "NormalizeAndPermute"; }
 

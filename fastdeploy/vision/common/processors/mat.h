@@ -165,5 +165,7 @@ FASTDEPLOY_DECL FDMat WrapMat(const cv::Mat& image);
  */
 FASTDEPLOY_DECL std::vector<FDMat> WrapMat(const std::vector<cv::Mat>& images);
 
+bool CheckShapeConsistency(std::vector<Mat>* mats);
+
 }  // namespace vision
 }  // namespace fastdeploy

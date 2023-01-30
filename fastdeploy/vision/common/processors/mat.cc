@@ -247,5 +247,16 @@ std::vector<FDMat> WrapMat(const std::vector<cv::Mat>& images) {
   return mats;
 }
 
+bool CheckShapeConsistency(std::vector<Mat>* mats) {
+  for (size_t i = 1; i < mats->size(); ++i) {
+    if ((*mats)[i].Channels() != (*mats)[0].Channels() ||
+        (*mats)[i].Width() != (*mats)[0].Width() ||
+        (*mats)[i].Height() != (*mats)[0].Height()) {
+      return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace vision
 }  // namespace fastdeploy
