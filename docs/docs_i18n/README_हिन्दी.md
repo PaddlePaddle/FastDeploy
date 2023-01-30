@@ -134,7 +134,7 @@
     - [2. Android कैसे इस्तेमाल करे FastDeploy C++ SDK](./../../docs/en/faq/use_cpp_sdk_on_android.md)
     - [3. TensorRT उपयोग की जा रही कुछ तकनीकें](./../../docs/en/faq/tensorrt_tricks.md)
 - **अधिक Fastअधिक Deploy परिनियोजन मॉड्यूल**
-    - [Benchmark परीक्षण](benchmark)
+    - [Benchmark परीक्षण](./../../benchmark)
 - **मॉडल समर्थन सूची**
     - [🖥️ सर्वर साइड मॉडल सूचियों का समर्थन करता है](#fastdeploy-server-models)
     - [📳 मोबाइल और एंड-साइड मॉडल समर्थन सूची](#fastdeploy-edge-models)
@@ -165,7 +165,7 @@
 pip install numpy opencv-python fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
-#### [🔸 Conda स्थापना (अनुशंसित✨)](docs/en/build_and_install/download_prebuilt_libraries.md)
+#### [🔸 Conda स्थापना (अनुशंसित✨)](./../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 ```bash
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
@@ -253,7 +253,7 @@ int main(int argc, char* argv[]) {
 
 </div></details>
 
-अधिक तैनाती के मामलों के लिए, देखें[मॉडल परिनियोजन उदाहरण](examples) .
+अधिक तैनाती के मामलों के लिए, देखें[मॉडल परिनियोजन उदाहरण](./../../examples) .
 
 
 <div id="fastdeploy-server-models"></div>
