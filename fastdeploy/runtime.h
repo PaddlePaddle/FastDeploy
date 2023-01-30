@@ -21,6 +21,3 @@
 #pragma once
 #include "fastdeploy/core/config.h"
 #include "fastdeploy/runtime/runtime.h"
-#if (defined(WITH_LITE_STATIC) && defined(WITH_STATIC_LIB))
-#include "fastdeploy/api_helpers.h"
-#endif
