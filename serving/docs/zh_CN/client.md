@@ -523,7 +523,7 @@ FastDeploy服务的客户端页面主要分四部分，第一部分为fastdeploy
 
 
   第二种是"原始形式"，这种方式相当于一个原始的http客户端，输入框中输入http请求的原始负载（一个json格式的http请求body），输出框中显示服务器返回的原始负载（返回的json格式的结果）。例如对于[paddledetection](../../../examples/vision/detection/paddledetection/serving/README_CN.md)的serving的请求内容格式如下，完整数据可以参考[数据文件](../../../examples/vision/detection/paddledetection/serving/ppdet_request.json)。
-  
+
   ```json
   {
   "inputs": [

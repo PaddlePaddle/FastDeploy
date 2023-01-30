@@ -10,16 +10,16 @@
 
 - CPU镜像
 ```bash
-docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.2-cpu-only-21.10
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.x.x-cpu-only-21.10
 ```
 - GPU镜像
 ```bash
-docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.2-gpu-cuda11.4-trt8.4-21.10
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.x.x-gpu-cuda11.4-trt8.4-21.10
 ```
 使用如下命令可以进入容器
 
 ```bash
-nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/FastDeploy registry.baidubce.com/paddlepaddle/fastdeploy:1.0.2-gpu-cuda11.4-trt8.4-21.10  bash
+nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/FastDeploy registry.baidubce.com/paddlepaddle/fastdeploy:x.x.x-gpu-cuda11.4-trt8.4-21.10  bash
 ```
 在容器中使用如下命令可以安装VisualDL
 ```python

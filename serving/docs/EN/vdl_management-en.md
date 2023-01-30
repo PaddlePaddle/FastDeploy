@@ -10,16 +10,16 @@ In order to use this function, you need to install fastdeployserver in the envir
 
 - CPU docker image
 ```bash
-docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.2-cpu-only-21.10
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.x.x-cpu-only-21.10
 ```
 - GPU docker image
 ```bash
-docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.2-gpu-cuda11.4-trt8.4-21.10
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.x.x-gpu-cuda11.4-trt8.4-21.10
 ```
 
 You can enter a container using command
 ```bash
-nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/FastDeploy registry.baidubce.com/paddlepaddle/fastdeploy:1.0.2-gpu-cuda11.4-trt8.4-21.10  bash
+nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/FastDeploy registry.baidubce.com/paddlepaddle/fastdeploy:x.x.x-gpu-cuda11.4-trt8.4-21.10  bash
 ```
 
 And install VisualDL in the container by
