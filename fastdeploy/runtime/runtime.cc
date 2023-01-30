@@ -93,7 +93,13 @@ bool AutoSelectBackend(RuntimeOption& option) {
       return true;
     }
   }
-  return true;
+  std::string debug_message = Str(candidates);
+  FDERROR << "The candiate backends for " << option.model_format << " & "
+          << option.device << " are " << debug_message
+          << ", but both of them have not been compiled with current "
+             "FastDeploy yet."
+          << std::endl;
+  return false;
 }
 
 bool Runtime::Init(const RuntimeOption& _option) {
