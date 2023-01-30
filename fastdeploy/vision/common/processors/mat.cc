@@ -19,6 +19,36 @@
 namespace fastdeploy {
 namespace vision {
 
+cv::Mat* Mat::GetOpenCVMat() {
+  if (mat_type == ProcLib::OPENCV) {
+    return &cpu_mat;
+  } else if (mat_type == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    // Just a reference to fcv_mat, zero copy. After you
+    // call this method, cpu_mat and fcv_mat will point
+    // to the same memory buffer.
+    cpu_mat = ConvertFlyCVMatToOpenCV(fcv_mat);
+    mat_type = ProcLib::OPENCV;
+    return &cpu_mat;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
+  } else if (mat_type == ProcLib::CUDA || mat_type == ProcLib::CVCUDA) {
+#ifdef WITH_GPU
+    FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
+             "[ERROR] Error occurs while sync cuda stream.");
+    cpu_mat = CreateZeroCopyOpenCVMatFromTensor(fd_tensor);
+    mat_type = ProcLib::OPENCV;
+    device = Device::CPU;
+    return &cpu_mat;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with -DWITH_GPU=ON");
+#endif
+  } else {
+    FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
+  }
+}
+
 void* Mat::Data() {
   if (mat_type == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV
@@ -28,8 +58,30 @@ void* Mat::Data() {
              "FastDeploy didn't compile with FlyCV, but met data type with "
              "fcv::Mat.");
 #endif
+  } else if (device == Device::GPU) {
+    return fd_tensor.Data();
   }
   return cpu_mat.ptr();
+}
+
+FDTensor* Mat::Tensor() {
+  if (mat_type == ProcLib::OPENCV) {
+    ShareWithTensor(&fd_tensor);
+  } else if (mat_type == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    cpu_mat = ConvertFlyCVMatToOpenCV(fcv_mat);
+    mat_type = ProcLib::OPENCV;
+    ShareWithTensor(&fd_tensor);
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
+  }
+  return &fd_tensor;
+}
+
+void Mat::SetTensor(FDTensor* tensor) {
+  fd_tensor.SetExternalData(tensor->Shape(), tensor->Dtype(), tensor->Data(),
+                            tensor->device, tensor->device_id);
 }
 
 void Mat::ShareWithTensor(FDTensor* tensor) {
@@ -54,15 +106,15 @@ bool Mat::CopyToTensor(FDTensor* tensor) {
 }
 
 void Mat::PrintInfo(const std::string& flag) {
+  std::cout << flag << ": "
+            << "DataType=" << Type() << ", "
+            << "Channel=" << Channels() << ", "
+            << "Height=" << Height() << ", "
+            << "Width=" << Width() << ", "
+            << "Mean=";
   if (mat_type == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV
     fcv::Scalar mean = fcv::mean(fcv_mat);
-    std::cout << flag << ": "
-              << "DataType=" << Type() << ", "
-              << "Channel=" << Channels() << ", "
-              << "Height=" << Height() << ", "
-              << "Width=" << Width() << ", "
-              << "Mean=";
     for (int i = 0; i < Channels(); ++i) {
       std::cout << mean[i] << " ";
     }
@@ -72,18 +124,25 @@ void Mat::PrintInfo(const std::string& flag) {
              "FastDeploy didn't compile with FlyCV, but met data type with "
              "fcv::Mat.");
 #endif
-  } else {
+  } else if (mat_type == ProcLib::OPENCV) {
     cv::Scalar mean = cv::mean(cpu_mat);
-    std::cout << flag << ": "
-              << "DataType=" << Type() << ", "
-              << "Channel=" << Channels() << ", "
-              << "Height=" << Height() << ", "
-              << "Width=" << Width() << ", "
-              << "Mean=";
     for (int i = 0; i < Channels(); ++i) {
       std::cout << mean[i] << " ";
     }
     std::cout << std::endl;
+  } else if (mat_type == ProcLib::CUDA || mat_type == ProcLib::CVCUDA) {
+#ifdef WITH_GPU
+    FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
+             "[ERROR] Error occurs while sync cuda stream.");
+    cv::Mat tmp_mat = CreateZeroCopyOpenCVMatFromTensor(fd_tensor);
+    cv::Scalar mean = cv::mean(tmp_mat);
+    for (int i = 0; i < Channels(); ++i) {
+      std::cout << mean[i] << " ";
+    }
+    std::cout << std::endl;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with -DWITH_GPU=ON");
+#endif
   }
 }
 
@@ -97,6 +156,8 @@ FDDataType Mat::Type() {
              "FastDeploy didn't compile with FlyCV, but met data type with "
              "fcv::Mat.");
 #endif
+  } else if (mat_type == ProcLib::CUDA || mat_type == ProcLib::CVCUDA) {
+    return fd_tensor.Dtype();
   }
   return OpenCVDataTypeToFD(cpu_mat.type());
 }
@@ -128,50 +189,49 @@ Mat Mat::Create(const FDTensor& tensor, ProcLib lib) {
 #else
     FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
 #endif
-  } 
+  }
   cv::Mat tmp_ocv_mat = CreateZeroCopyOpenCVMatFromTensor(tensor);
   Mat mat = Mat(tmp_ocv_mat);
   return mat;
 }
 
-Mat Mat::Create(int height, int width, int channels,
-                FDDataType type, void* data) {
+Mat Mat::Create(int height, int width, int channels, FDDataType type,
+                void* data) {
   if (DefaultProcLib::default_lib == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV
-    fcv::Mat tmp_fcv_mat = CreateZeroCopyFlyCVMatFromBuffer(
-      height, width, channels, type, data);
+    fcv::Mat tmp_fcv_mat =
+        CreateZeroCopyFlyCVMatFromBuffer(height, width, channels, type, data);
     Mat mat = Mat(tmp_fcv_mat);
     return mat;
 #else
     FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
 #endif
   }
-  cv::Mat tmp_ocv_mat = CreateZeroCopyOpenCVMatFromBuffer(
-      height, width, channels, type, data);
+  cv::Mat tmp_ocv_mat =
+      CreateZeroCopyOpenCVMatFromBuffer(height, width, channels, type, data);
   Mat mat = Mat(tmp_ocv_mat);
-  return mat;    
+  return mat;
 }
 
-Mat Mat::Create(int height, int width, int channels,
-                FDDataType type, void* data,
-                ProcLib lib) {
+Mat Mat::Create(int height, int width, int channels, FDDataType type,
+                void* data, ProcLib lib) {
   if (lib == ProcLib::DEFAULT) {
     return Create(height, width, channels, type, data);
-  }                  
+  }
   if (lib == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV
-    fcv::Mat tmp_fcv_mat = CreateZeroCopyFlyCVMatFromBuffer(
-      height, width, channels, type, data);
+    fcv::Mat tmp_fcv_mat =
+        CreateZeroCopyFlyCVMatFromBuffer(height, width, channels, type, data);
     Mat mat = Mat(tmp_fcv_mat);
     return mat;
 #else
     FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
 #endif
-  } 
-  cv::Mat tmp_ocv_mat = CreateZeroCopyOpenCVMatFromBuffer(
-      height, width, channels, type, data);
+  }
+  cv::Mat tmp_ocv_mat =
+      CreateZeroCopyOpenCVMatFromBuffer(height, width, channels, type, data);
   Mat mat = Mat(tmp_ocv_mat);
-  return mat;    
+  return mat;
 }
 
 FDMat WrapMat(const cv::Mat& image) {
