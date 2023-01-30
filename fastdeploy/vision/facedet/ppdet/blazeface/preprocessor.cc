@@ -14,10 +14,7 @@
 
 #include "fastdeploy/vision/facedet/ppdet/blazeface/preprocessor.h"
 #include "fastdeploy/function/concat.h"
-#include "fastdeploy/function/pad.h"
 #include "fastdeploy/vision/common/processors/mat.h"
-#include "fastdeploy/vision/common/processors/normalize_and_permute.h"
-#include "fastdeploy/vision/common/processors/normalize.h"
 #include "yaml-cpp/yaml.h"
 
 namespace fastdeploy {
