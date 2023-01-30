@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #ifdef WITH_GPU
+#ifdef ENABLE_VISION
 #include "fastdeploy/vision/common/processors/normalize_and_permute.h"
 
 namespace fastdeploy {
@@ -79,4 +80,5 @@ bool NormalizeAndPermute::ImplByCvCuda(Mat* mat) { return ImplByCuda(mat); }
 
 }  // namespace vision
 }  // namespace fastdeploy
+#endif
 #endif
