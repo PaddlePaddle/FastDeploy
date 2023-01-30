@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-    <a href="/docs/cn/build_and_install"><b> संस्थापन  </b></a>
+    <a href="./../../docs/cn/build_and_install"><b> संस्थापन  </b></a>
     |
     <a href="./../../docs/README_EN.md"><b> दस्तावेज़ीकरण का उपयोग करें </b></a>
     |
