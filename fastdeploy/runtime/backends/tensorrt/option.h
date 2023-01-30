@@ -25,9 +25,6 @@ struct TrtBackendOption {
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
 
-  // load model and paramters from memory
-  bool model_from_memory_ = false;
-
   // format of input model
   ModelFormat model_format = ModelFormat::AUTOREC;
 

@@ -240,7 +240,6 @@ void Runtime::CreatePaddleBackend() {
     trt_option.opt_shape = option.trt_opt_shape;
     trt_option.serialize_file = option.trt_serialize_file;
     trt_option.enable_pinned_memory = option.enable_pinned_memory;
-    trt_option.model_from_memory_ = option.model_from_memory_;
     pd_option.trt_option = trt_option;
     pd_option.trt_disabled_ops_ = option.trt_disabled_ops_;
   }
@@ -375,7 +374,6 @@ void Runtime::CreateTrtBackend() {
   trt_option.serialize_file = option.trt_serialize_file;
   trt_option.enable_pinned_memory = option.enable_pinned_memory;
   trt_option.external_stream_ = option.external_stream_;
-  trt_option.model_from_memory_ = option.model_from_memory_;
   FDASSERT(option.model_format == ModelFormat::PADDLE ||
                option.model_format == ModelFormat::ONNX,
            "TrtBackend only support model format of ModelFormat::PADDLE / "
@@ -383,14 +381,14 @@ void Runtime::CreateTrtBackend() {
   backend_ = utils::make_unique<TrtBackend>();
   auto casted_backend = dynamic_cast<TrtBackend*>(backend_.get());
   if (option.model_format == ModelFormat::ONNX) {
-    if (!trt_option.model_from_memory_) {
+    if (!option.model_from_memory_) {
       FDASSERT(ReadBinaryFromFile(option.model_file, &option.model_buffer_),
                "Fail to read binary from model file");
     }
     FDASSERT(casted_backend->InitFromOnnx(option.model_buffer_, trt_option),
              "Load model from ONNX failed while initliazing TrtBackend.");
   } else {
-    if (!trt_option.model_from_memory_) {
+    if (!option.model_from_memory_) {
       FDASSERT(ReadBinaryFromFile(option.model_file, &option.model_buffer_),
                "Fail to read binary from model file");
       FDASSERT(ReadBinaryFromFile(option.params_file, &option.params_buffer_),
@@ -479,7 +477,7 @@ Runtime* Runtime::Clone(void* stream, int device_id) {
   FDINFO << "Runtime Clone with Backend:: " << option.backend << " in "
          << option.device << "." << std::endl;
   runtime->option = option;
-  runtime->backend_ = backend_->Clone(stream, device_id);
+  runtime->backend_ = backend_->Clone(option, stream, device_id);
   return runtime;
 }
 

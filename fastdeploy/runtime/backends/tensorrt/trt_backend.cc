@@ -723,14 +723,20 @@ std::vector<TensorInfo> TrtBackend::GetOutputInfos() {
   return infos;
 }
 
-std::unique_ptr<BaseBackend> TrtBackend::Clone(void* stream, int device_id) {
+std::unique_ptr<BaseBackend> TrtBackend::Clone(RuntimeOption& runtime_option,
+                                               void* stream, int device_id) {
   std::unique_ptr<BaseBackend> new_backend = utils::make_unique<TrtBackend>();
   auto casted_backend = dynamic_cast<TrtBackend*>(new_backend.get());
   if (device_id > 0 && device_id != option_.gpu_id) {
     auto clone_option = option_;
     clone_option.gpu_id = device_id;
     clone_option.external_stream_ = stream;
-    if (!clone_option.model_from_memory_) {
+    if (runtime_option.model_from_memory_) {
+      FDASSERT(casted_backend->InitFromPaddle(runtime_option.model_buffer_,
+                                              runtime_option.params_buffer_,
+                                              clone_option),
+               "Clone model from Paddle failed while initialize TrtBackend.");
+    } else {
       if (option_.model_format == ModelFormat::ONNX) {
         std::string model_buffer = "";
         FDASSERT(
@@ -751,10 +757,6 @@ std::unique_ptr<BaseBackend> TrtBackend::Clone(void* stream, int device_id) {
                                                 clone_option),
                  "Clone model from Paddle failed while initialize TrtBackend.");
       }
-    } else {
-      FDERROR
-          << "When model loading from memory doesn't support to clone engine"
-          << std::endl;
     }
     FDWARNING << "The target device id:" << device_id
               << " is different from current device id:" << option_.gpu_id

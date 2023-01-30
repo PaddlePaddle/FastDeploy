@@ -64,7 +64,8 @@ class PaddleBackend : public BaseBackend {
 
   int NumOutputs() const override { return outputs_desc_.size(); }
 
-  std::unique_ptr<BaseBackend> Clone(void* stream = nullptr,
+  std::unique_ptr<BaseBackend> Clone(RuntimeOption &runtime_option,
+                                     void* stream = nullptr,
                                      int device_id = -1) override;
 
   TensorInfo GetInputInfo(int index) override;

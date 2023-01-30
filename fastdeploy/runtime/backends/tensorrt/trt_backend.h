@@ -87,7 +87,8 @@ class TrtBackend : public BaseBackend {
   TensorInfo GetOutputInfo(int index);
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
-  std::unique_ptr<BaseBackend> Clone(void* stream = nullptr,
+  std::unique_ptr<BaseBackend> Clone(RuntimeOption &runtime_option,
+                                     void* stream = nullptr,
                                      int device_id = -1) override;
 
   ~TrtBackend() {

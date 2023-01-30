@@ -248,7 +248,8 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
   return true;
 }
 
-std::unique_ptr<BaseBackend> PaddleBackend::Clone(void* stream, int device_id) {
+std::unique_ptr<BaseBackend> PaddleBackend::Clone(RuntimeOption& runtime_option,
+                                                  void* stream, int device_id) {
   std::unique_ptr<BaseBackend> new_backend =
       utils::make_unique<PaddleBackend>();
   auto casted_backend = dynamic_cast<PaddleBackend*>(new_backend.get());
@@ -256,7 +257,13 @@ std::unique_ptr<BaseBackend> PaddleBackend::Clone(void* stream, int device_id) {
     auto clone_option = option_;
     clone_option.gpu_id = device_id;
     clone_option.external_stream_ = stream;
-    if (!clone_option.model_from_memory_) {
+    if (runtime_option.model_from_memory_) {
+      FDASSERT(
+          casted_backend->InitFromPaddle(runtime_option.model_buffer_,
+                                         runtime_option.params_buffer_,
+                                         clone_option),
+          "Clone model from Paddle failed while initialize PaddleBackend.");
+    } else {
       std::string model_buffer = "";
       std::string params_buffer = "";
       FDASSERT(
@@ -269,10 +276,6 @@ std::unique_ptr<BaseBackend> PaddleBackend::Clone(void* stream, int device_id) {
           casted_backend->InitFromPaddle(model_buffer, params_buffer,
                                          clone_option),
           "Clone model from Paddle failed while initialize PaddleBackend.");
-    } else {
-      FDERROR
-          << "When model loading from memory doesn't support to clone engine"
-          << std::endl;
     }
 
     FDWARNING << "The target device id:" << device_id
