@@ -353,33 +353,35 @@ FDTensor::FDTensor(const char* tensor_name) { name = tensor_name; }
 FDTensor::FDTensor(const Scalar& scalar) {
   Allocate({1}, scalar.dtype());
   switch (scalar.dtype()) {
-  case FDDataType::BOOL:
-    (reinterpret_cast<bool*>(Data()))[0] = scalar.to<bool>();
-    break;
-  case FDDataType::UINT8:
-    (reinterpret_cast<uint8_t*>(Data()))[0] = scalar.to<uint8_t>();
-    break;
-  case FDDataType::INT8:
-    (reinterpret_cast<int8_t*>(Data()))[0] = scalar.to<int8_t>();
-    break;
-  case FDDataType::INT16:
-    (reinterpret_cast<int16_t*>(Data()))[0] = scalar.to<int16_t>();
-    break;
-  case FDDataType::INT32:
-    (reinterpret_cast<int*>(Data()))[0] = scalar.to<int>();
-    break;
-  case FDDataType::INT64:
-    (reinterpret_cast<int64_t*>(Data()))[0] = scalar.to<int64_t>();
-    break;
-  case FDDataType::FP16:
-    (reinterpret_cast<float16*>(Data()))[0] = scalar.to<float16>();
-    break;
-  case FDDataType::FP32:
-    (reinterpret_cast<float*>(Data()))[0] = scalar.to<float>();
-    break;
-  case FDDataType::FP64:
-    (reinterpret_cast<double*>(Data()))[0] = scalar.to<double>();
-    break;
+    case FDDataType::BOOL:
+      (reinterpret_cast<bool*>(Data()))[0] = scalar.to<bool>();
+      break;
+    case FDDataType::UINT8:
+      (reinterpret_cast<uint8_t*>(Data()))[0] = scalar.to<uint8_t>();
+      break;
+    case FDDataType::INT8:
+      (reinterpret_cast<int8_t*>(Data()))[0] = scalar.to<int8_t>();
+      break;
+    case FDDataType::INT16:
+      (reinterpret_cast<int16_t*>(Data()))[0] = scalar.to<int16_t>();
+      break;
+    case FDDataType::INT32:
+      (reinterpret_cast<int*>(Data()))[0] = scalar.to<int>();
+      break;
+    case FDDataType::INT64:
+      (reinterpret_cast<int64_t*>(Data()))[0] = scalar.to<int64_t>();
+      break;
+    case FDDataType::FP16:
+      (reinterpret_cast<float16*>(Data()))[0] = scalar.to<float16>();
+      break;
+    case FDDataType::FP32:
+      (reinterpret_cast<float*>(Data()))[0] = scalar.to<float>();
+      break;
+    case FDDataType::FP64:
+      (reinterpret_cast<double*>(Data()))[0] = scalar.to<double>();
+      break;
+    default:
+      break;  
   }
 }
 

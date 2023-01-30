@@ -54,9 +54,15 @@ elseif(APPLE)
       "${FLYCV_INSTALL_DIR}/lib/libflycv.dylib"
       CACHE FILEPATH "flycv compile library." FORCE)      
 elseif(ANDROID)
-  set(FLYCV_COMPILE_LIB
-  "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libflycv_shared.so"
-  CACHE FILEPATH "flycv compile library." FORCE)   
+  if(WITH_FLYCV_STATIC)
+    set(FLYCV_COMPILE_LIB
+    "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libflycv_static.a"
+    CACHE FILEPATH "flycv compile library." FORCE)   
+  else()
+    set(FLYCV_COMPILE_LIB
+    "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libflycv_shared.so"
+    CACHE FILEPATH "flycv compile library." FORCE)  
+  endif()  
 else()
   set(FLYCV_COMPILE_LIB
       "${FLYCV_INSTALL_DIR}/lib/libflycv_shared.so"
@@ -134,3 +140,22 @@ add_library(external_flycv STATIC IMPORTED GLOBAL)
 set_property(TARGET external_flycv PROPERTY IMPORTED_LOCATION
                                          ${FLYCV_COMPILE_LIB})
 add_dependencies(external_flycv ${FLYCV_PROJECT})
+
+set(FLYCV_LIBRARIES external_flycv)
+if(ANDROID AND WITH_FLYCV_STATIC)
+  add_library(external_flycv_png16 STATIC IMPORTED GLOBAL)
+  add_library(external_flycv_turbojpeg STATIC IMPORTED GLOBAL)
+  add_library(external_flycv_z STATIC IMPORTED GLOBAL)
+  set_property(TARGET external_flycv_png16 PROPERTY IMPORTED_LOCATION
+              "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libpng16.a")
+  set_property(TARGET external_flycv_turbojpeg PROPERTY IMPORTED_LOCATION
+              "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libturbojpeg.a") 
+  set_property(TARGET external_flycv_z PROPERTY IMPORTED_LOCATION
+              "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libz.a")  
+  add_dependencies(external_flycv_png16 ${FLYCV_PROJECT})      
+  add_dependencies(external_flycv_turbojpeg ${FLYCV_PROJECT})
+  add_dependencies(external_flycv_z ${FLYCV_PROJECT})  
+  list(APPEND FLYCV_LIBRARIES external_flycv_png16) 
+  list(APPEND FLYCV_LIBRARIES external_flycv_turbojpeg) 
+  list(APPEND FLYCV_LIBRARIES external_flycv_z)                           
+endif()
