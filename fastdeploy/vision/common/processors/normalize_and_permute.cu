@@ -77,6 +77,6 @@ bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
 bool NormalizeAndPermute::ImplByCvCuda(Mat* mat) { return ImplByCuda(mat); }
 #endif
 
+}  // namespace vision
 }  // namespace fastdeploy
-#endif
 #endif
