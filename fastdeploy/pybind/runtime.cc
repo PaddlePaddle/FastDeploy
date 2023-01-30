@@ -84,6 +84,8 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("backend", &RuntimeOption::backend)
       .def_readwrite("external_stream", &RuntimeOption::external_stream_)
       .def_readwrite("model_from_memory", &RuntimeOption::model_from_memory_)
+      .def_readwrite("model_buffer_size", &RuntimeOption::model_buffer_size_)
+      .def_readwrite("params_buffer_size", &RuntimeOption::params_buffer_size_)
       .def_readwrite("cpu_thread_num", &RuntimeOption::cpu_thread_num)
       .def_readwrite("device_id", &RuntimeOption::device_id)
       .def_readwrite("device", &RuntimeOption::device)

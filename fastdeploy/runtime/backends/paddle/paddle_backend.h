@@ -53,8 +53,8 @@ class PaddleBackend : public BaseBackend {
   virtual ~PaddleBackend() = default;
   void BuildOption(const PaddleBackendOption& option);
 
-  bool InitFromPaddle(const std::string& model_file,
-                     const std::string& params_file,
+  bool InitFromPaddle(const std::string& model_buffer,
+                     const std::string& params_buffer,
                      const PaddleBackendOption& option = PaddleBackendOption());
 
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
