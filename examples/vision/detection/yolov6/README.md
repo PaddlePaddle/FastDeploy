@@ -7,6 +7,11 @@ English | [简体中文](README_CN.md)
 
   - （1）The *.onnx provided by [Official Repository](https://github.com/meituan/YOLOv6/releases/tag/0.1.0) can directly conduct deployemnt；
   - （2）Personal models trained by developers should export the ONNX model. Refer to [Detailed Deployment Documents](#Detailed-Deployment-Documents) to complete the deployment.
+<<<<<<< HEAD
+
+
+=======
+>>>>>>> 30def02a8969f52f40b5e3e305271ef8662126f2
 
 ## Download Pre-trained ONNX Model
 
