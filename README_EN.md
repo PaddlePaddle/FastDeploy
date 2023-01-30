@@ -58,8 +58,8 @@ Including [image classification](examples/vision/classification), [object detect
     - You can deploy [**ultralytics YOLOv8**](https://github.com/ultralytics/ultralytics) on [**Intel CPU**](./examples/vision/detection/yolov8), [**NVIDIA GPU**](./examples/vision/detection/yolov8), [**Jetson**](./examples/vision/detection/yolov8). Both **Python** deployments and **C++** deployments are included
     -  Fastdeploy supports quick deployment of multiple models, including **YOLOv8**, **PP-YOLOE+**, **YOLOv5** and other models
 -  Serving deployment combined with VisualDL supports visual deployment. After the VDL service is started in the FastDeploy container, you can modify the model configuration, start/manage the model service, view performance data, and send requests on the VDL interface. For details, see related documents
-    - Serving deployment visualization(https://github.com/PaddlePaddle/FastDeploy/blob/develop/serving/docs/EN/vdl_management-en.md) 
-    - Serving request visualization(https://github.com/PaddlePaddle/FastDeploy/blob/develop/serving/docs/EN/client-en.md#use-visualdl-as-fastdeploy-client-for-request-visualization)
+    - [Serving deployment visualization](https://github.com/PaddlePaddle/FastDeploy/blob/develop/serving/docs/EN/vdl_management-en.md) 
+    - [Serving request visualization](https://github.com/PaddlePaddle/FastDeploy/blob/develop/serving/docs/EN/client-en.md#use-visualdl-as-fastdeploy-client-for-request-visualization)
   
 - **✨👥✨ Community**
   
