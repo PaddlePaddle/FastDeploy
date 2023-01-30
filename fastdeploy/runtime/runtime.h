@@ -85,7 +85,6 @@ struct FASTDEPLOY_DECL Runtime {
 
   RuntimeOption option;
 
-#ifdef ENABLE_POROS_BACKEND
   /** \brief Compile TorchScript Module, only for Poros backend
    *
    * \param[in] prewarm_tensors Prewarm datas for compile
@@ -94,7 +93,6 @@ struct FASTDEPLOY_DECL Runtime {
    */
   bool Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
                const RuntimeOption& _option);
-#endif
 
  private:
   void CreateOrtBackend();

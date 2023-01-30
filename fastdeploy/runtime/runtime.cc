@@ -484,4 +484,36 @@ Runtime* Runtime::Clone(void* stream, int device_id) {
   return runtime;
 }
 
+// only for poros backend
+bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
+                      const RuntimeOption& _option) {
+#ifdef ENABLE_POROS_BACKEND
+  option = _option;
+  auto poros_option = PorosBackendOption();
+  poros_option.use_gpu = (option.device == Device::GPU) ? true : false;
+  poros_option.gpu_id = option.device_id;
+  poros_option.long_to_int = option.long_to_int;
+  poros_option.use_nvidia_tf32 = option.use_nvidia_tf32;
+  poros_option.unconst_ops_thres = option.unconst_ops_thres;
+  poros_option.poros_file = option.poros_file;
+  poros_option.is_dynamic = option.is_dynamic;
+  poros_option.enable_fp16 = option.trt_enable_fp16;
+  poros_option.max_batch_size = option.trt_max_batch_size;
+  poros_option.max_workspace_size = option.trt_max_workspace_size;
+  FDASSERT(
+      option.model_format == ModelFormat::TORCHSCRIPT,
+      "PorosBackend only support model format of ModelFormat::TORCHSCRIPT.");
+  backend_ = utils::make_unique<PorosBackend>();
+  auto casted_backend = dynamic_cast<PorosBackend*>(backend_.get());
+  FDASSERT(
+      casted_backend->Compile(option.model_file, prewarm_tensors, poros_option),
+      "Load model from Torchscript failed while initliazing PorosBackend.");
+#else
+  FDASSERT(false,
+           "PorosBackend is not available, please compiled with "
+           "ENABLE_POROS_BACKEND=ON.");
+#endif
+  return true;
+}
+
 }  // namespace fastdeploy
