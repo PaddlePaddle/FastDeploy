@@ -101,24 +101,24 @@
 - [✴️ Python SDK クイックスタート](#fastdeploy-quick-start-python)  
 - [✴️ C++ SDK クイックスタート](#fastdeploy-quick-start-cpp)
 - **インストールドキュメント**
-    - [プリコンパイルされたライブラリのダウンロードとインストール](./../../en/build_and_install/download_prebuilt_libraries.md)
-    - [GPU デプロイメント環境のコンパイルとインストール](./../../en/build_and_install/gpu.md)
-    - [CPU デプロイメント環境のコンパイルとインストール](./../../en/build_and_install/cpu.md)
-    - [IPU デプロイメント環境のコンパイルとインストール](./../../en/build_and_install/ipu.md)
-    - [KunlunXin XPUデプロイメント環境のコンパイルとインストール](./../../en/build_and_install/kunlunxin.md)
-    - [Rockchip RV1126 デプロイメント環境のコンパイルとインストール](./../../en/build_and_install/rv1126.md)
-    - [Rockchip RK3588 デプロイメント環境のコンパイルとインストール](./../../en/build_and_install/rknpu2.md)
-    - [Amlogic A311D デプロイメント環境のコンパイルとインストール](./../../en/build_and_install/a311d.md)
-    - [Huawei Ascend  デプロイメント環境のコンパイルとインストール](./../../en/build_and_install/huawei_ascend.md)
-    - [Jetson デプロイメント環境のコンパイルとインストール](./../../en/build_and_install/jetson.md)
-    - [Android デプロイメント環境のコンパイルとインストール](./../../en/build_and_install/android.md)
+    - [プリコンパイルされたライブラリのダウンロードとインストール](./../../docs/en/build_and_install/download_prebuilt_libraries.md)
+    - [GPU デプロイメント環境のコンパイルとインストール](./../../docs/en/build_and_install/gpu.md)
+    - [CPU デプロイメント環境のコンパイルとインストール](./../../docs/en/build_and_install/cpu.md)
+    - [IPU デプロイメント環境のコンパイルとインストール](./../../docs/en/build_and_install/ipu.md)
+    - [KunlunXin XPUデプロイメント環境のコンパイルとインストール](./../../docs/en/build_and_install/kunlunxin.md)
+    - [Rockchip RV1126 デプロイメント環境のコンパイルとインストール](./../../docs/en/build_and_install/rv1126.md)
+    - [Rockchip RK3588 デプロイメント環境のコンパイルとインストール](./../../docs/en/build_and_install/rknpu2.md)
+    - [Amlogic A311D デプロイメント環境のコンパイルとインストール](./../../docs/en/build_and_install/a311d.md)
+    - [Huawei Ascend  デプロイメント環境のコンパイルとインストール](./../../docs/en/build_and_install/huawei_ascend.md)
+    - [Jetson デプロイメント環境のコンパイルとインストール](./../../docs/en/build_and_install/jetson.md)
+    - [Android デプロイメント環境のコンパイルとインストール](./../../docs/en/build_and_install/android.md)
 - **クイックユース**
-    - [PP-YOLOE Python 展開例](./../../en/quick_start/models/python.md)
-    - [PP-YOLOE C++ 展開例](./../../en/quick_start/models/cpp.md)
+    - [PP-YOLOE Python 展開例](./../../docs/en/quick_start/models/python.md)
+    - [PP-YOLOE C++ 展開例](./../../docs/en/quick_start/models/cpp.md)
 - **バックエンドの利用**
-    - [Runtime Python 使用例](./../../en/quick_start/runtime/python.md)
-    - [Runtime C++ 使用例](./../../en/quick_start/runtime/cpp.md)
-    - [モデルデプロイメントのための推論バックエンドの設定方法](./../../en/faq/how_to_change_backend.md)
+    - [Runtime Python 使用例](./../../docs/en/quick_start/runtime/python.md)
+    - [Runtime C++ 使用例](./../../docs/en/quick_start/runtime/cpp.md)
+    - [モデルデプロイメントのための推論バックエンドの設定方法](./../../docs/en/faq/how_to_change_backend.md)
 - **サービス・デプロイメント**
     - [サービス展開イメージのコンパイルとインストール](./../../serving/docs/zh_CN/compile.md)
     - [サービス・デプロイメント](./../../serving)
@@ -130,9 +130,9 @@
     - [量的加速](./../../docs/cn/quantize.md)
     - [マルチスレッド・マルチプロセスの使用](./../../tutorials/multi_thread)
 - **よくある質問**
-    - [1. Windows上C++ SDK の場合使用方法](./../../en/faq/use_sdk_on_windows.md)
-    - [2. FastDeploy C++ SDKをAndroidで使用する方法](./../../en/faq/use_cpp_sdk_on_android.md)
-    - [3. TensorRT 使い方のコツ](./../../en/faq/tensorrt_tricks.md)
+    - [1. Windows上C++ SDK の場合使用方法](./../../docs/en/faq/use_sdk_on_windows.md)
+    - [2. FastDeploy C++ SDKをAndroidで使用する方法](./../../docs/en/faq/use_cpp_sdk_on_android.md)
+    - [3. TensorRT 使い方のコツ](./../../doc/en/faq/tensorrt_tricks.md)
 - **続きを読むFastDeployモジュールのデプロイメント**
     - [Benchmark テスト](./../../benchmark)
 - **モデル対応表**
@@ -140,7 +140,7 @@
     - [📳 モバイル・エンド側モデル対応表](#fastdeploy-edge-models)
     - [⚛️ アプレットモデル対応表](#fastdeploy-web-models)
 - **💕 開発者拠出金**
-    - [新規モデルの追加](./../../en/faq/develop_a_new_model.md)
+    - [新規モデルの追加](./../../docs/en/faq/develop_a_new_model.md)
 
 
 
@@ -165,7 +165,7 @@
 pip install numpy opencv-python fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
-#### [🔸 Conda のインストール（推奨✨)](docs/cn/build_and_install/download_prebuilt_libraries.md)
+#### [🔸 Conda のインストール（推奨✨)](./../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 ```bash
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
