@@ -59,16 +59,33 @@ class FASTDEPLOY_DECL Processor {
     return ImplByOpenCV(mat);
   }
 
+  virtual bool ImplByCvCuda(Mat* mat) {
+    return ImplByOpenCV(mat);
+  }
+
   virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
 
  protected:
-  FDTensor* UpdateAndGetReusedBuffer(
-      const std::vector<int64_t>& new_shape, const int& opencv_dtype,
-      const std::string& buffer_name, const Device& new_device = Device::CPU,
+  // Update and get the cached tensor from the cached_tensors_ map.
+  // The tensor is indexed by a string.
+  // If the tensor doesn't exists in the map, then create a new tensor.
+  // If the tensor exists and shape is getting larger, then realloc the buffer.
+  // If the tensor exists and shape is not getting larger, then return the
+  // cached tensor directly.
+  FDTensor* UpdateAndGetCachedTensor(
+      const std::vector<int64_t>& new_shape, const FDDataType& data_type,
+      const std::string& tensor_name, const Device& new_device = Device::CPU,
       const bool& use_pinned_memory = false);
 
+  // Create an input tensor on GPU and save into cached_tensors_.
+  // If the Mat is on GPU, return the mat->Tensor() directly.
+  // If the Mat is on CPU, then create a cached GPU tensor and copy the mat's
+  // CPU tensor to this new GPU tensor.
+  FDTensor* CreateCachedGpuInputTensor(Mat* mat,
+                                       const std::string& tensor_name);
+
  private:
-  std::unordered_map<std::string, FDTensor> reused_buffers_;
+  std::unordered_map<std::string, FDTensor> cached_tensors_;
 };
 
 }  // namespace vision
