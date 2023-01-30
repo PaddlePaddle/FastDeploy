@@ -37,9 +37,11 @@ Users can also compile the image by themselves according to their own needs, ref
 
 ## Other Tutorials
 
-- [How to Prepare Serving Model Repository](docs/EN/model_repository-en.md) 
-- [Serving Deployment Configuration for Runtime](docs/EN/model_configuration-en.md) 
+- [How to Prepare Serving Model Repository](docs/EN/model_repository-en.md)
+- [Serving Deployment Configuration for Runtime](docs/EN/model_configuration-en.md)
 - [Demo of Serving Deployment](docs/EN/demo-en.md)
+- [Client Access Instruction](docs/EN/client-en.md)
+- [Serving deployment visualization](docs/EN/vdl_management-en.md)
 
 
 ### Serving Deployment Demo

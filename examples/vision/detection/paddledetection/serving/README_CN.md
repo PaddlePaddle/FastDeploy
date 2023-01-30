@@ -93,3 +93,19 @@ output_name: DET_RESULT
 ## 配置修改
 
 当前默认配置在GPU上运行Paddle引擎， 如果要在CPU或其他推理引擎上运行。 需要修改`models/runtime/config.pbtxt`中配置，详情请参考[配置文档](../../../../../serving/docs/zh_CN/model_configuration.md)
+
+
+## 使用VisualDL进行可视化部署
+
+可以使用VisualDL进行[Serving可视化部署](../../../../../serving/docs/zh_CN/vdl_management.md)，上述启动服务、配置修改以及客户端请求的操作都可以基于VisualDL进行。
+
+通过VisualDL的可视化界面对PaddleDetection进行服务化部署只需要如下三步：
+```text
+1. 载入模型库：./vision/detection/paddledetection/serving/models
+2. 下载模型资源文件：点击preprocess模型，点击版本号1添加预训练模型，选择检测模型ppyoloe_crn_l_300e_coco进行下载，此时preprocess中将会有资源文件infer_cfg.yml。点击runtime模型，点击版本号1添加预训练模型，选择检测模型ppyoloe_crn_l_300e_coco进行下载，此时runtime中将会有资源文件model.pdmodel和model.pdiparams。
+3. 设置启动配置文件：点击ensemble配置按钮，选择配置文件ppyoloe_config.pbtxt，并设为启动配置文件。点击runtime模型，选择配置文件ppyoloe_runtime_config.pbtxt，并设为启动配置文件。
+4. 启动服务：点击启动服务按钮，输入启动参数。
+```
+ <p align="center">
+  <img src="https://user-images.githubusercontent.com/22424850/211710983-2d1f1427-6738-409d-903b-2b4e4ab6cbfc.gif" width="100%"/>
+</p>
