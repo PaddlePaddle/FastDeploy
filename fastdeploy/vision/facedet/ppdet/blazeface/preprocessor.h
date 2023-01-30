@@ -23,7 +23,8 @@ namespace vision {
 
 namespace facedet {
 
-class FASTDEPLOY_DECL BlazeFacePreprocessor: public fastdeploy::vision::detection::PaddleDetPreprocessor {
+class FASTDEPLOY_DECL BlazeFacePreprocessor:
+      public fastdeploy::vision::detection::PaddleDetPreprocessor {
  public:
   /** \brief Create a preprocessor instance for BlazeFace serials model
    */

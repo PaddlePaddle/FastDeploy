@@ -59,7 +59,6 @@ class FASTDEPLOY_DECL BlazeFacePostprocessor{
  protected:
   float conf_threshold_;
   float nms_threshold_;
-
 };
 
 }  // namespace facedet
