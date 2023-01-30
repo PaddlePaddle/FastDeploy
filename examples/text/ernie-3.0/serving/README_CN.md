@@ -176,7 +176,7 @@ entity: 华夏   label: LOC   pos: [14, 15]
 
 当前分类任务(ernie_seqcls_model/config.pbtxt)默认配置在CPU上运行OpenVINO引擎; 序列标注任务默认配置在GPU上运行Paddle引擎。如果要在CPU/GPU或其他推理引擎上运行, 需要修改配置，详情请参考[配置文档](../../../../serving/docs/zh_CN/model_configuration.md)
 
-## 使用VisualDL进行服务管理
+## 使用VisualDL进行可视化部署
 
 可以使用VisualDL进行[Serving可视化部署](../../../../serving/docs/zh_CN/vdl_management.md)，上述启动服务、配置修改以及客户端请求的操作都可以基于VisualDL进行。
 

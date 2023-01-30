@@ -93,8 +93,7 @@ python3 client.py
 
 The current default configuration runs on GPU. If you want to run it on CPU or other inference engines, please modify the configuration in `models/runtime/config.pbtxt`. Refer to [Configuration Document](../../../../../serving/docs/EN/model_configuration-en.md) for more information.
 
-## Use VisualDL for Fastdeploy Serving Deployment Management
-
+## Use VisualDL for serving deployment visualization
 You can use VisualDL for [serving deployment visualization](../../../../../serving/docs/EN/vdl_management-en.md) , the above model preparation, deployment, configuration modification and client request operations can all be performed based on VisualDL.
 
 The serving deployment of PP-OCR by VisualDL only needs the following three steps:

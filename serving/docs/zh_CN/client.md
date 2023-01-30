@@ -6,7 +6,7 @@
 fastdeployserver实现了由[kserve](https://github.com/kserve/kserve)提出的为机器学习模型推理服务而设计的[Predict Protocol协议](https://github.com/kserve/kserve/blob/master/docs/predict-api/v2/required_api.md) API，该API既简单易用同时又支持高性能部署的使用场景，目前提供基于HTTP和GRPC两种网络协议的访问方式。
 
 
-当fastdeployserver启动后，默认情况下，8000端口用于响应HTTP请求，8001端口用于响应GRPC请求。用户需要请求的资源通常有两种：
+当fastdeployserver启动后，默认情况下，8000端口用于响应HTTP请求，8001端口用于响应GRPC请求。需要请求的资源通常有两种：
 
 ### **模型的元信息（metadata)**
 
@@ -306,11 +306,11 @@ message ModelInferResponse
 
 ## 客户端工具
 
-了解了fastdeployserver服务提供的接口之后，用户可以使用HTTP客户端工具来请求HTTP服务器，或者是使用GRPC客户端工具请求GRPC服务器。默认情况下，fastdeployserver启动后，8000端口用于响应HTTP请求，8001端口用于响应GRPC请求。此外，还可以使用[VisualDL提供的客户端进行可视化请求](#使用fastdeploy-client进行可视化请求服务)。
+了解了fastdeployserver服务提供的接口之后，可以使用HTTP客户端工具来请求HTTP服务器，或者是使用GRPC客户端工具请求GRPC服务器。默认情况下，fastdeployserver启动后，8000端口用于响应HTTP请求，8001端口用于响应GRPC请求。此外，还可以使用[VisualDL提供的客户端进行可视化请求](#使用fastdeploy-client进行可视化请求)。
 
 ### 使用HTTP客户端
 
-这里分别介绍如何使用tritonclient和requests库来访问fastdeployserver的HTTP服务，第一种工具是专门为模型服务做的客户端，对请求和响应进行了封装，方便用户使用。而第二种工具通用的http客户端工具，使用该工具进行访问可以帮助用户更好地理解上述原理描述中的数据结构。
+这里分别介绍如何使用tritonclient和requests库来访问fastdeployserver的HTTP服务，第一种工具是专门为模型服务做的客户端，对请求和响应进行了封装，方便开发者使用。而第二种工具通用的http客户端工具，使用该工具进行访问可以帮助开发者更好地理解上述原理描述中的数据结构。
 
 一. 使用tritonclient访问服务
 
@@ -423,7 +423,7 @@ response = response.json()  # 返回数据为json，以json格式解析后即为
 ```bash
 pip install tritonclient[grpc]
 ```
-tritonclient\[grpc\]提供了使用GRPC的客户端，并且对GRPC的交互进行了封装，使得用户不用手动和服务端建立连接，也不用去直接使用grpc的stub去调用服务器的接口，而是封装后给用户提供了和tritonclient HTTP客户端一样的接口进行使用。
+tritonclient\[grpc\]提供了使用GRPC的客户端，并且对GRPC的交互进行了封装，使得不用手动和服务端建立连接，也不用去直接使用grpc的stub去调用服务器的接口，而是封装后给开发者提供了和tritonclient HTTP客户端一样的接口进行使用。
 
 1.获取yolov5的模型元数据
 ```python
@@ -479,14 +479,20 @@ response = client.infer(
 response_outputs = response.as_numpy('detction_result') # 根据输出变量名获取结果
 ```
 
-### 使用fastdeploy client进行可视化请求服务
+### 使用fastdeploy client进行可视化请求
 
-VisualDL提供客户端组件用于快速的访问fastdeployserver服务，帮助用户进行预测请求和结果的可视化，对部署的服务进行快速验证。该页面基于gradio进行开发。
+VisualDL提供客户端组件用于快速的访问fastdeployserver服务，帮助开发者进行预测请求和结果的可视化，对部署的服务进行快速验证。该页面基于gradio进行开发，向推理服务发送http请求并获取结果。
  <p align="center">
   <img src="https://user-images.githubusercontent.com/22424850/211204267-8e044f32-1008-46a7-828a-d7c27ac5754a.gif" width="100%"/>
   </p>
 
 #### 使用方式
+
+安装VisualDL（版本需>=2.5.0)
+
+```shell
+python3 -m pip install visualdl
+```
 
 使用命令
 
@@ -497,7 +503,7 @@ visualdl --host 0.0.0.0 --port 8080
 
 #### 功能说明
 
-FastDeploy服务的客户端页面主要分四部分，第一部分为fastdeployserver服务的参数设置区，包括http服务的ip, 端口号，性能服务的端口号，要请求推理服务的模型名称和版本号。第二部分为模型的输入和输出区，帮助用户对预测请求和返回结果进行可视化。第三部分为服务的性能统计区，用于展示服务当前的性能指标。第四部分用来显示各个操作的执行状态。
+FastDeploy服务的客户端页面主要分四部分，第一部分为fastdeployserver服务的参数设置区，包括http服务的ip, 端口号，性能服务的端口号，要请求推理服务的模型名称和版本号。第二部分为模型的输入和输出区，帮助开发者对预测请求和返回结果进行可视化。第三部分为服务的性能统计区，用于展示服务当前的性能指标。第四部分用来显示各个操作的执行状态。
 
  <p align="center">
   <img src="https://user-images.githubusercontent.com/22424850/211206389-9932d606-ea71-4f05-87eb-dcc21c5eeec9.png" width="100%"/>
@@ -510,13 +516,31 @@ FastDeploy服务的客户端页面主要分四部分，第一部分为fastdeploy
 
 - 模型的输入和输出区
 
-  当前提供两种访问服务的方式，第一种是"组件形式"，这种方式会通过服务器直接获取模型的输入和输出，并且通过gradio的组件来进行表示，每个输入和输出变量配有一个文本组件和一个图像组件，用户根据变量的实际类型来选择对应组件进行使用，比如变量是图像数据则用图像组件输入，是文本则用文本组件进行输入。返回的数据也会通过组件进行可视化呈现。由于不同任务可视化的解析操作不同，因此上方提供了任务类型的选择，当不指定任务类型的时候，输出变量只用文本组件进行显示，显示服务器返回的原始数据。当指定了任务类型，将会对返回的数据进行解析，并且使用图像组件来可视化呈现出来。
+  当前提供两种访问服务的方式，第一种是"组件形式"，这种方式会通过服务器直接获取模型的输入和输出，并且通过gradio的组件来进行表示，每个输入和输出变量配有一个文本组件和一个图像组件，开发者根据变量的实际类型来选择对应组件进行使用，比如变量是图像数据则用图像组件输入，是文本则用文本组件进行输入。返回的数据也会通过组件进行可视化呈现。由于不同任务可视化的解析操作不同，因此上方提供了任务类型的选择，当不指定任务类型的时候，输出变量只用文本组件进行显示，显示服务器返回的原始数据。当指定了任务类型，将会对返回的数据进行解析，并且使用图像组件来可视化呈现出来。
   <p align="center">
   <img src="https://user-images.githubusercontent.com/22424850/211207902-4717011d-8ae2-4105-9508-ab164896f177.gif" width="100%"/>
   </p>
 
 
-  第二种是"原始形式"，这种方式相当于一个原始的http客户端，输入框中输入http请求的原始负载，输出框中显示服务器返回的原始负载。使用这种方式，输入和输出的构造格式对用户完全不透明，因此不建议使用。
+  第二种是"原始形式"，这种方式相当于一个原始的http客户端，输入框中输入http请求的原始负载（一个json格式的http请求body），输出框中显示服务器返回的原始负载（返回的json格式的结果）。例如对于[paddledetection](../../../examples/vision/detection/paddledetection/serving/README_CN.md)的serving的请求内容格式如下，完整数据可以参考[数据文件](../../../examples/vision/detection/paddledetection/serving/ppdet_request.json)。
+  
+  ```json
+  {
+  "inputs": [
+    {
+      "name": "INPUT",
+      "shape": [1, 404, 640, 3],
+      "datatype": "UINT8",
+      "data": 具体的图像数据
+    },
+  "outputs": [
+    {
+      "name": "DET_RESULT"
+    }
+  ]
+  }
+  ```
+
   <p align="center">
   <img src="https://user-images.githubusercontent.com/22424850/211208731-381222bb-8fbe-45fa-bf78-4a3e2c7f6f04.gif" width="100%"/>
   </p>
@@ -531,4 +555,4 @@ FastDeploy服务的客户端页面主要分四部分，第一部分为fastdeploy
   </p>
 - 执行状态显示区
 
-  显示在客户端界面执行的所有操作的情况，当用户点击"获取模型输入输出"、"提交请求"和"更新统计数据"按钮的时候，如果发生异常，执行状态显示区会给出异常发生的原因，如果执行成功也会有相应提醒，以便用户知道执行情况。
+  显示在客户端界面执行的所有操作的情况，当开发者点击"获取模型输入输出"、"提交请求"和"更新统计数据"按钮的时候，如果发生异常，执行状态显示区会给出异常发生的原因，如果执行成功也会有相应提醒，以便开发者知道执行情况。

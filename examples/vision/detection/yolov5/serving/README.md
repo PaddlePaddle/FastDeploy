@@ -57,7 +57,7 @@ output_name: detction_result
 
 The default is to run ONNXRuntime on CPU. If developers need to run it on GPU or other inference engines, please see the  [Configs File](../../../../../serving/docs/EN/model_configuration-en.md) to modify the configs in `models/runtime/config.pbtxt`.
 
-## Use VisualDL for Fastdeploy Serving Deployment Management
+## Use VisualDL for serving deployment visualization
 
 You can use VisualDL for [serving deployment visualization](../../../../../serving/docs/EN/vdl_management-en.md) , the above model preparation, deployment, configuration modification and client request operations can all be performed based on VisualDL.
 

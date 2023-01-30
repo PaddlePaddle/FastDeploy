@@ -489,11 +489,18 @@ The FastDeploy Client component is mainly used to quickly access the fastdeploys
 
 #### Usage
 
+Install VisualDL (version>=2.5.0)
+
+```shell
+python3 -m pip install visualdl
+```
+
 use command
 
 ```shell
 visualdl --host 0.0.0.0 --port 8080
 ```
+
 Then open `http://127.0.0.1:8080` in the browser (please replace it with the ip of the machine that starts visualdl if not localhost), you can see the component tab of FastDeploy Client.
 
 #### Function Description
@@ -517,7 +524,26 @@ The client component is mainly divided into four parts. The first part is the pa
    </p>
 
 
-   The second is "original form", which is equivalent to an original http client, where the payload of the http request is input in the input text box, and the original payload returned by the server is displayed in the output text box. Using this approach, the construct format of the input and output is completely opaque to the user, so it is not recommended unless neccessary.
+   The second is "original form", which is equivalent to an original http client, where the payload (json body) of the http request is input in the input text box, and the original payload returned by the server is displayed in the output text box. For example, request payload for [paddledetection](../../../examples/vision/detection/paddledetection/serving/README.md) is as follows, complete content can be found in [file](../../../examples/vision/detection/paddledetection/serving/ppdet_request.json).
+
+   ```json
+  {
+  "inputs": [
+    {
+      "name": "INPUT",
+      "shape": [1, 404, 640, 3],
+      "datatype": "UINT8",
+      "data": image content
+    },
+  "outputs": [
+    {
+      "name": "DET_RESULT"
+    }
+  ]
+  }
+  ```
+
+
    <p align="center">
    <img src="https://user-images.githubusercontent.com/22424850/211208731-381222bb-8fbe-45fa-bf78-4a3e2c7f6f04.gif" width="100%"/>
    </p>

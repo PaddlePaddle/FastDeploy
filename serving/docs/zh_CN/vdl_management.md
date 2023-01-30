@@ -4,7 +4,7 @@
 
 [VisualDL](https://github.com/PaddlePaddle/VisualDL/blob/develop/README_CN.md)是飞桨可视化分析工具，以丰富的图表呈现训练参数变化趋势、模型结构、数据样本、高维数据分布等，并在v2.5版本中新增了serving可视化部署的能力。VisualDL的serving可视化部署主要提供模型库载入和编辑，serving管理监控，以及提供客户端快速测试服务的功能。使用VisualDL可以直接载入一个比较初始的模型库，并完成模型库所需模型资源的下载、模型配置文件的数据修改，开启fastdeployserver服务化部署某个模型库，监控服务的状态和指标，并对已经部署的服务进行快速的测试验证。
 
-### 前置条件
+### 环境要求
 
 为了使用该功能，需要在环境里安装fastdeployserver。可以通过下载fastdeploy的docker镜像来直接使用fastdeployserver。
 
