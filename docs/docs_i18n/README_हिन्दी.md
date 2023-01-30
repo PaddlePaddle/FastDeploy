@@ -20,7 +20,7 @@
     |
     <a href="./../../docs/README_EN.md"><b> दस्तावेज़ीकरण का उपयोग करें </b></a>
     |
-   <a href="README_EN.md#Quick-Start"><b> तेजी से शुरू </b></a>
+   <a href="./../../README_EN.md#Quick-Start"><b> तेजी से शुरू </b></a>
     |
     <a href="https://baidu-paddle.github.io/fastdeploy-api/"><b> APIप्रलेखन </b></a>
     |
