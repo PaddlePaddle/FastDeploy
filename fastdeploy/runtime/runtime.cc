@@ -51,55 +51,76 @@
 
 namespace fastdeploy {
 
-bool Runtime::Init(const RuntimeOption& _option) {
-  option = _option;
-  // Choose default backend by model format
-  if (option.backend == Backend::UNKNOWN) {
-    auto iter = s_default_backends_cfg.find(option.model_format);
-    if (iter == s_default_backends_cfg.end()) {
-      FDERROR << "Cannot found a default backend for model format: "
-              << option.model_format
-              << ", please define the inference backend in RuntimeOption."
-              << std::endl;
-      return false;
-    }
-    for (const auto& b : iter->second) {
-      if (IsBackendAvailable(b)) {
-        option.backend = b;
-        FDINFO << "FastDeploy will choose " << b << " to inference this model."
-               << std::endl;
+bool AutoSelectBackend(RuntimeOption& option) {
+  auto iter0 = s_default_backends_by_format.find(option.model_format);
+  if (iter0 == s_default_backends_by_format.end()) {
+    FDERROR << "Cannot found a default backend for model format: "
+            << option.model_format
+            << ", please define the inference backend in RuntimeOption."
+            << std::endl;
+    return false;
+  }
+
+  auto iter1 = s_default_backends_by_device.find(option.device);
+  if (iter1 == s_default_backends_by_device.end()) {
+    FDERROR << "Cannot found a default backend for device: " << option.device
+            << ", please define the inference backend in RuntimeOption."
+            << std::endl;
+    return false;
+  }
+
+  std::vector<Backend> candidates;
+  for (const auto& b0 : iter0->second) {
+    for (const auto& b1 : iter1->second) {
+      if (b0 == b1) {
+        candidates.push_back(b0);
       }
     }
-    if (option.backend == Backend::UNKNOWN) {
-      FDERROR << "Cannot found available backends for model format: "
-              << option.model_format << "." << std::endl;
+  }
+
+  if (candidates.size() == 0) {
+    FDERROR << "Cannot found availabel inference backends by model format: "
+            << option.model_format << " with device: " << option.device
+            << std::endl;
+    return false;
+  }
+
+  for (const auto& b : candidates) {
+    if (IsBackendAvailable(b)) {
+      option.backend = b;
+      FDINFO << "FastDeploy will choose " << b << " to inference this model."
+             << std::endl;
+      return true;
+    }
+  }
+  return true;
+}
+
+bool Runtime::Init(const RuntimeOption& _option) {
+  option = _option;
+
+  // Choose default backend by model format and device if backend is not
+  // specified
+  if (option.backend == Backend::UNKNOWN) {
+    if (!AutoSelectBackend(option)) {
       return false;
     }
   }
 
   if (option.backend == Backend::ORT) {
-    FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
-             "Backend::ORT only supports Device::CPU/Device::GPU.");
     CreateOrtBackend();
-    FDINFO << "Runtime initialized with Backend::ORT in " << option.device
-           << "." << std::endl;
   } else if (option.backend == Backend::TRT) {
-    FDASSERT(option.device == Device::GPU,
-             "Backend::TRT only supports Device::GPU.");
     CreateTrtBackend();
-    FDINFO << "Runtime initialized with Backend::TRT in " << option.device
-           << "." << std::endl;
   } else if (option.backend == Backend::PDINFER) {
-    FDASSERT(
-        option.device == Device::CPU || option.device == Device::GPU ||
-            option.device == Device::IPU,
-        "Backend::PDINFER only supports Device::CPU/Device::GPU/Device::IPU.");
-    FDASSERT(
-        option.model_format == ModelFormat::PADDLE,
-        "Backend::PDINFER only supports model format of ModelFormat::PADDLE.");
     CreatePaddleBackend();
-    FDINFO << "Runtime initialized with Backend::PDINFER in " << option.device
-           << "." << std::endl;
+  } else if (option.backend == Backend::OPENVINO) {
+    CreateOpenVINOBackend();
+  } else if (option.backend == Backend::LITE) {
+    CreateLiteBackend();
+  } else if (option.backend == Backend::RKNPU2) {
+    CreateRKNPU2Backend();
+  } else if (option.backend == Backend::SOPHGOTPU) {
+    CreateSophgoNPUBackend();
   } else if (option.backend == Backend::POROS) {
     FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
              "Backend::POROS only supports Device::CPU/Device::GPU.");
@@ -109,35 +130,6 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDINFO << "Runtime initialized with Backend::POROS in " << option.device
            << "." << std::endl;
     return true;
-  } else if (option.backend == Backend::OPENVINO) {
-    FDASSERT(option.device == Device::CPU,
-             "Backend::OPENVINO only supports Device::CPU");
-    CreateOpenVINOBackend();
-    FDINFO << "Runtime initialized with Backend::OPENVINO in " << option.device
-           << "." << std::endl;
-  } else if (option.backend == Backend::LITE) {
-    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX ||
-                 option.device == Device::KUNLUNXIN ||
-                 option.device == Device::ASCEND,
-             "Backend::LITE only supports "
-             "Device::CPU/Device::TIMVX/Device::KUNLUNXIN.");
-    CreateLiteBackend();
-    FDINFO << "Runtime initialized with Backend::LITE in " << option.device
-           << "." << std::endl;
-  } else if (option.backend == Backend::RKNPU2) {
-    FDASSERT(option.device == Device::RKNPU,
-             "Backend::RKNPU2 only supports Device::RKNPU2");
-    CreateRKNPU2Backend();
-
-    FDINFO << "Runtime initialized with Backend::RKNPU2 in " << option.device
-           << "." << std::endl;
-  } else if (option.backend == Backend::SOPHGOTPU) {
-    FDASSERT(option.device == Device::SOPHGOTPUD,
-             "Backend::SOPHGO only supports Device::SOPHGO");
-    CreateSophgoNPUBackend();
-
-    FDINFO << "Runtime initialized with Backend::SOPHGO in " << option.device
-           << "." << std::endl;
   } else {
     FDERROR << "Runtime only support "
                "Backend::ORT/Backend::TRT/Backend::PDINFER/Backend::POROS as "
@@ -211,6 +203,13 @@ FDTensor* Runtime::GetOutputTensor(const std::string& name) {
 }
 
 void Runtime::CreatePaddleBackend() {
+  FDASSERT(
+      option.device == Device::CPU || option.device == Device::GPU ||
+          option.device == Device::IPU,
+      "Backend::PDINFER only supports Device::CPU/Device::GPU/Device::IPU.");
+  FDASSERT(
+      option.model_format == ModelFormat::PADDLE,
+      "Backend::PDINFER only supports model format of ModelFormat::PADDLE.");
 #ifdef ENABLE_PADDLE_BACKEND
   auto pd_option = PaddleBackendOption();
   pd_option.model_file = option.model_file;
@@ -265,8 +264,6 @@ void Runtime::CreatePaddleBackend() {
     pd_option.ipu_option = ipu_option;
   }
 #endif
-  FDASSERT(option.model_format == ModelFormat::PADDLE,
-           "PaddleBackend only support model format of ModelFormat::PADDLE.");
   backend_ = utils::make_unique<PaddleBackend>();
   auto casted_backend = dynamic_cast<PaddleBackend*>(backend_.get());
   if (pd_option.model_from_memory_) {
@@ -283,9 +280,17 @@ void Runtime::CreatePaddleBackend() {
            "PaddleBackend is not available, please compiled with "
            "ENABLE_PADDLE_BACKEND=ON.");
 #endif
+  FDINFO << "Runtime initialized with Backend::PDINFER in " << option.device
+         << "." << std::endl;
 }
 
 void Runtime::CreateOpenVINOBackend() {
+  FDASSERT(option.device == Device::CPU,
+           "Backend::OPENVINO only supports Device::CPU");
+  FDASSERT(option.model_format == ModelFormat::PADDLE ||
+               option.model_format == ModelFormat::ONNX,
+           "OpenVINOBackend only support model format of ModelFormat::PADDLE / "
+           "ModelFormat::ONNX.");
 #ifdef ENABLE_OPENVINO_BACKEND
   auto ov_option = OpenVINOBackendOption();
   ov_option.cpu_thread_num = option.cpu_thread_num;
@@ -295,10 +300,6 @@ void Runtime::CreateOpenVINOBackend() {
   for (const auto& op : option.ov_cpu_operators) {
     ov_option.cpu_operators.insert(op);
   }
-  FDASSERT(option.model_format == ModelFormat::PADDLE ||
-               option.model_format == ModelFormat::ONNX,
-           "OpenVINOBackend only support model format of ModelFormat::PADDLE / "
-           "ModelFormat::ONNX.");
   backend_ = utils::make_unique<OpenVINOBackend>();
   auto casted_backend = dynamic_cast<OpenVINOBackend*>(backend_.get());
 
@@ -315,9 +316,17 @@ void Runtime::CreateOpenVINOBackend() {
            "OpenVINOBackend is not available, please compiled with "
            "ENABLE_OPENVINO_BACKEND=ON.");
 #endif
+  FDINFO << "Runtime initialized with Backend::OPENVINO in " << option.device
+         << "." << std::endl;
 }
 
 void Runtime::CreateOrtBackend() {
+  FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
+           "Backend::ORT only supports Device::CPU/Device::GPU.");
+  FDASSERT(option.model_format == ModelFormat::PADDLE ||
+               option.model_format == ModelFormat::ONNX,
+           "OrtBackend only support model format of ModelFormat::PADDLE / "
+           "ModelFormat::ONNX.");
 #ifdef ENABLE_ORT_BACKEND
   auto ort_option = OrtBackendOption();
   ort_option.graph_optimization_level = option.ort_graph_opt_level;
@@ -328,10 +337,6 @@ void Runtime::CreateOrtBackend() {
   ort_option.gpu_id = option.device_id;
   ort_option.external_stream_ = option.external_stream_;
 
-  FDASSERT(option.model_format == ModelFormat::PADDLE ||
-               option.model_format == ModelFormat::ONNX,
-           "OrtBackend only support model format of ModelFormat::PADDLE / "
-           "ModelFormat::ONNX.");
   backend_ = utils::make_unique<OrtBackend>();
   auto casted_backend = dynamic_cast<OrtBackend*>(backend_.get());
   if (option.model_format == ModelFormat::ONNX) {
@@ -347,9 +352,17 @@ void Runtime::CreateOrtBackend() {
            "OrtBackend is not available, please compiled with "
            "ENABLE_ORT_BACKEND=ON.");
 #endif
+  FDINFO << "Runtime initialized with Backend::ORT in " << option.device << "."
+         << std::endl;
 }
 
 void Runtime::CreateTrtBackend() {
+  FDASSERT(option.device == Device::GPU,
+           "Backend::TRT only supports Device::GPU.");
+  FDASSERT(option.model_format == ModelFormat::PADDLE ||
+               option.model_format == ModelFormat::ONNX,
+           "TrtBackend only support model format of ModelFormat::PADDLE / "
+           "ModelFormat::ONNX.");
 #ifdef ENABLE_TRT_BACKEND
   auto trt_option = TrtBackendOption();
   trt_option.model_file = option.model_file;
@@ -367,10 +380,6 @@ void Runtime::CreateTrtBackend() {
   trt_option.enable_pinned_memory = option.enable_pinned_memory;
   trt_option.external_stream_ = option.external_stream_;
 
-  FDASSERT(option.model_format == ModelFormat::PADDLE ||
-               option.model_format == ModelFormat::ONNX,
-           "TrtBackend only support model format of ModelFormat::PADDLE / "
-           "ModelFormat::ONNX.");
   backend_ = utils::make_unique<TrtBackend>();
   auto casted_backend = dynamic_cast<TrtBackend*>(backend_.get());
   if (option.model_format == ModelFormat::ONNX) {
@@ -386,12 +395,19 @@ void Runtime::CreateTrtBackend() {
            "TrtBackend is not available, please compiled with "
            "ENABLE_TRT_BACKEND=ON.");
 #endif
+  FDINFO << "Runtime initialized with Backend::TRT in " << option.device << "."
+         << std::endl;
 }
 
 void Runtime::CreateLiteBackend() {
-#ifdef ENABLE_LITE_BACKEND
+  FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX ||
+               option.device == Device::KUNLUNXIN ||
+               option.device == Device::ASCEND,
+           "Backend::LITE only supports "
+           "Device::CPU/Device::TIMVX/Device::KUNLUNXIN/Device::ASCEND.");
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
+#ifdef ENABLE_LITE_BACKEND
   backend_ = utils::make_unique<LiteBackend>();
   auto casted_backend = dynamic_cast<LiteBackend*>(backend_.get());
   FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
@@ -402,15 +418,19 @@ void Runtime::CreateLiteBackend() {
            "LiteBackend is not available, please compiled with "
            "ENABLE_LITE_BACKEND=ON.");
 #endif
+  FDINFO << "Runtime initialized with Backend::LITE in " << option.device << "."
+         << std::endl;
 }
 
 void Runtime::CreateRKNPU2Backend() {
+  FDASSERT(option.device == Device::RKNPU,
+           "Backend::RKNPU2 only supports Device::RKNPU2");
+  FDASSERT(option.model_format == ModelFormat::RKNN,
+           "RKNPU2Backend only support model format of ModelFormat::RKNN");
 #ifdef ENABLE_RKNPU2_BACKEND
   auto rknpu2_option = RKNPU2BackendOption();
   rknpu2_option.cpu_name = option.rknpu2_cpu_name_;
   rknpu2_option.core_mask = option.rknpu2_core_mask_;
-  FDASSERT(option.model_format == ModelFormat::RKNN,
-           "RKNPU2Backend only support model format of ModelFormat::RKNN");
   backend_ = utils::make_unique<RKNPU2Backend>();
   auto casted_backend = dynamic_cast<RKNPU2Backend*>(backend_.get());
   FDASSERT(casted_backend->InitFromRKNN(option.model_file, rknpu2_option),
@@ -420,13 +440,17 @@ void Runtime::CreateRKNPU2Backend() {
            "RKNPU2Backend is not available, please compiled with "
            "ENABLE_RKNPU2_BACKEND=ON.");
 #endif
+  FDINFO << "Runtime initialized with Backend::RKNPU2 in " << option.device
+         << "." << std::endl;
 }
 
 void Runtime::CreateSophgoNPUBackend() {
-#ifdef ENABLE_SOPHGO_BACKEND
-  auto sophgo_option = SophgoBackendOption();
+  FDASSERT(option.device == Device::SOPHGOTPUD,
+           "Backend::SOPHGO only supports Device::SOPHGO");
   FDASSERT(option.model_format == ModelFormat::SOPHGO,
            "SophgoBackend only support model format of ModelFormat::SOPHGO");
+#ifdef ENABLE_SOPHGO_BACKEND
+  auto sophgo_option = SophgoBackendOption();
   backend_ = utils::make_unique<SophgoBackend>();
   auto casted_backend = dynamic_cast<SophgoBackend*>(backend_.get());
   FDASSERT(casted_backend->InitFromSophgo(option.model_file, sophgo_option),
@@ -436,6 +460,8 @@ void Runtime::CreateSophgoNPUBackend() {
            "SophgoBackend is not available, please compiled with "
            "ENABLE_SOPHGO_BACKEND=ON.");
 #endif
+  FDINFO << "Runtime initialized with Backend::SOPHGO in " << option.device
+         << "." << std::endl;
 }
 
 Runtime* Runtime::Clone(void* stream, int device_id) {
