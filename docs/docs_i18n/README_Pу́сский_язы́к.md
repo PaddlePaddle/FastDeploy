@@ -391,7 +391,7 @@ int main(int argc, char* argv[]) {
 
 | Сценарии миссий              | Модели                                                                                          | [web_demo](examples/application/js/web_demo) |
 |:------------------:|:-------------------------------------------------------------------------------------------:|:--------------------------------------------:|
-| ---                | ---                                                                                         | [Paddle.js](examples/application/js)         |
+| ---                | ---                                                                                         | [Paddle.js](./../../examples/application/js)         |
 | Detection          | [FaceDetection](./../../examples/application/js/web_demo/src/pages/cv/detection)                    | ✅                                            |
 | Detection          | [ScrewDetection](./../../examples/application/js/web_demo/src/pages/cv/detection)                   | ✅                                            |
 | Segmentation       | [PaddleSeg/HumanSeg](./../../examples/application/js/web_demo/src/pages/cv/segmentation/HumanSeg) | ✅                                            |
