@@ -6,8 +6,6 @@ The YOLOv7End2EndTRT deployment is based on [YOLOv7](https://github.com/WongKinY
   - （1）*.pt provided by [Official Repository](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1) should [Export the ONNX Model](#Export-the-ONNX-Model) to complete the deployment. The deployment of *.trt and *.pose models is not supported.
   - （2）The YOLOv7 model  trained by personal data should [Export the ONNX Model](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B). Please refer to [Detailed Deployment Documents](#Detailed-Deployment-Documents) to complete the deployment.
 
-
-
 ## Export the ONNX Model
 
 ```bash
@@ -37,7 +35,6 @@ For developers' testing, models exported by YOLOv7End2EndTRT are provided below.
 - [Python Deployment](python)
 - [C++ Deployement](cpp)
 
-
 ## Release Note
 
-- Document and code are based on [YOLOv7 0.1](https://github.com/WongKinYiu/yolov7/tree/v0.1) 
+- Document and code are based on [YOLOv7 0.1](https://github.com/WongKinYiu/yolov7/tree/v0.1)

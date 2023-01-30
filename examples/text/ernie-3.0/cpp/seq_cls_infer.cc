@@ -63,6 +63,7 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
 
   if (FLAGS_device == "kunlunxin") {
     option->UseKunlunXin();
+    option->UsePaddleLiteBackend();
     return true;
   } else if (FLAGS_device == "gpu") {
     option->UseGpu();

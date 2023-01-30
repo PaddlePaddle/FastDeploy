@@ -63,11 +63,6 @@ int AdaptivePool2d::enqueue(const nvinfer1::PluginTensorDesc* inputDesc,
                             const nvinfer1::PluginTensorDesc* outputDesc,
                             const void* const* inputs, void* const* outputs,
                             void* workspace, cudaStream_t stream) noexcept {
-  if (inputDesc[0].type != nvinfer1::DataType::kFLOAT) {
-    return -1;
-  }
-  auto const* data = static_cast<float const*>(inputs[0]);
-  auto* result = static_cast<float*>(outputs[0]);
   int nums = outputDesc[0].dims.d[0] * outputDesc[0].dims.d[1] *
              outputDesc[0].dims.d[2] * outputDesc[0].dims.d[3];
   std::vector<int64_t> input_size, output_size;
@@ -75,8 +70,18 @@ int AdaptivePool2d::enqueue(const nvinfer1::PluginTensorDesc* inputDesc,
     input_size.push_back(inputDesc[0].dims.d[i]);
     output_size.push_back(outputDesc[0].dims.d[i]);
   }
-  CudaAdaptivePool(input_size, output_size, result, data, stream,
-                   pooling_type_);
+  if (inputDesc[0].type == nvinfer1::DataType::kHALF) {
+    if (outputDesc[0].type == nvinfer1::DataType::kHALF) {
+      CudaAdaptivePool(input_size, output_size, outputs[0], inputs[0], stream,
+                       pooling_type_, "half", "half");
+    } else if (outputDesc[0].type == nvinfer1::DataType::kFLOAT) {
+      CudaAdaptivePool(input_size, output_size, outputs[0], inputs[0], stream,
+                       pooling_type_, "half", "float");
+    }
+  } else if (inputDesc[0].type == nvinfer1::DataType::kFLOAT) {
+    CudaAdaptivePool(input_size, output_size, outputs[0], inputs[0], stream,
+                     pooling_type_, "float", "float");
+  }
   return cudaPeekAtLastError();
 }
 
@@ -106,7 +111,12 @@ nvinfer1::DataType AdaptivePool2d::getOutputDataType(
 bool AdaptivePool2d::supportsFormatCombination(
     int pos, const nvinfer1::PluginTensorDesc* inOut, int nbInputs,
     int nbOutputs) noexcept {
-  return (inOut[pos].format == nvinfer1::PluginFormat::kLINEAR);
+  if ((inOut[pos].format == nvinfer1::PluginFormat::kLINEAR) &&
+      (inOut[pos].type == nvinfer1::DataType::kFLOAT ||
+       inOut[pos].type == nvinfer1::DataType::kHALF)) {
+    return true;
+  }
+  return false;
 }
 
 int AdaptivePool2d::initialize() noexcept { return 0; }
