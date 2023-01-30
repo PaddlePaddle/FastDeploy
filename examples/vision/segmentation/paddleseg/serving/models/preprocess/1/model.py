@@ -63,14 +63,13 @@ class TritonPythonModel:
             self.output_dtype.append(output_config["data_type"])
         print("preprocess output names:", self.output_names)
 
-        # init PaddleClasPreprocess class
-        yaml_path = os.path.abspath(os.path.dirname(
-            __file__)) + "/inference_cls.yaml"
-        self.preprocess_ = fd.vision.classification.PaddleClasPreprocessor(
+        # init PaddleSegPreprocess class
+        yaml_path = os.path.abspath(os.path.dirname(__file__)) + "/deploy.yaml"
+        self.preprocess_ = fd.vision.segmentation.PaddleSegPreprocessor(
             yaml_path)
-        if args['model_instance_kind'] == 'GPU':
-            device_id = int(args['model_instance_device_id'])
-            self.preprocess_.use_cuda(False, device_id)
+        #if args['model_instance_kind'] == 'GPU':
+        #    device_id = int(args['model_instance_device_id'])
+        #    self.preprocess_.use_gpu(device_id)
 
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`
@@ -96,15 +95,17 @@ class TritonPythonModel:
             data = pb_utils.get_input_tensor_by_name(request,
                                                      self.input_names[0])
             data = data.as_numpy()
-            outputs = self.preprocess_.run(data)
+            outputs, im_info = self.preprocess_.run(data)
 
-            # PaddleCls preprocess has only one output
+            # PaddleSeg preprocess has two outputs
             dlpack_tensor = outputs[0].to_dlpack()
-            output_tensor = pb_utils.Tensor.from_dlpack(self.output_names[0],
-                                                        dlpack_tensor)
-
+            output_tensor_0 = pb_utils.Tensor.from_dlpack(self.output_names[0],
+                                                          dlpack_tensor)
+            output_tensor_1 = pb_utils.Tensor(
+                self.output_names[1], np.array(
+                    [im_info], dtype=np.object_))
             inference_response = pb_utils.InferenceResponse(
-                output_tensors=[output_tensor, ])
+                output_tensors=[output_tensor_0, output_tensor_1])
             responses.append(inference_response)
         return responses
 
