@@ -14,8 +14,8 @@
 
 import json
 import numpy as np
+import time
 import os
-
 import fastdeploy as fd
 
 # triton_python_backend_utils is available in every Triton Python model. You
@@ -52,25 +52,19 @@ class TritonPythonModel:
         self.input_names = []
         for input_config in self.model_config["input"]:
             self.input_names.append(input_config["name"])
-        print("preprocess input names:", self.input_names)
+        print("postprocess input names:", self.input_names)
 
         self.output_names = []
         self.output_dtype = []
         for output_config in self.model_config["output"]:
             self.output_names.append(output_config["name"])
-            # dtype = pb_utils.triton_string_to_numpy(output_config["data_type"])
-            # self.output_dtype.append(dtype)
-            self.output_dtype.append(output_config["data_type"])
-        print("preprocess output names:", self.output_names)
+            dtype = pb_utils.triton_string_to_numpy(output_config["data_type"])
+            self.output_dtype.append(dtype)
+        print("postprocess output names:", self.output_names)
 
-        # init PaddleClasPreprocess class
-        yaml_path = os.path.abspath(os.path.dirname(
-            __file__)) + "/inference_cls.yaml"
-        self.preprocess_ = fd.vision.classification.PaddleClasPreprocessor(
+        yaml_path = os.path.abspath(os.path.dirname(__file__)) + "/deploy.yaml"
+        self.postprocess_ = fd.vision.segmentation.PaddleSegPostprocessor(
             yaml_path)
-        if args['model_instance_kind'] == 'GPU':
-            device_id = int(args['model_instance_device_id'])
-            self.preprocess_.use_cuda(False, device_id)
 
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`
@@ -93,18 +87,23 @@ class TritonPythonModel:
         """
         responses = []
         for request in requests:
-            data = pb_utils.get_input_tensor_by_name(request,
-                                                     self.input_names[0])
-            data = data.as_numpy()
-            outputs = self.preprocess_.run(data)
+            infer_outputs = pb_utils.get_input_tensor_by_name(
+                request, self.input_names[0])
+            im_info = pb_utils.get_input_tensor_by_name(request,
+                                                        self.input_names[1])
+            infer_outputs = infer_outputs.as_numpy()
+            im_info = im_info.as_numpy()
+            for i in range(im_info.shape[0]):
+                im_info[i] = json.loads(im_info[i].decode('utf-8').replace(
+                    "'", '"'))
 
-            # PaddleCls preprocess has only one output
-            dlpack_tensor = outputs[0].to_dlpack()
-            output_tensor = pb_utils.Tensor.from_dlpack(self.output_names[0],
-                                                        dlpack_tensor)
+            results = self.postprocess_.run([infer_outputs], im_info[0])
+            r_str = fd.vision.utils.fd_result_to_json(results)
 
+            r_np = np.array(r_str, dtype=np.object_)
+            out_tensor = pb_utils.Tensor(self.output_names[0], r_np)
             inference_response = pb_utils.InferenceResponse(
-                output_tensors=[output_tensor, ])
+                output_tensors=[out_tensor, ])
             responses.append(inference_response)
         return responses
 
