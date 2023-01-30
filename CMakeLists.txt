@@ -480,13 +480,16 @@ if(ANDROID AND WITH_STATIC_LIB)
   # Here, we use a dummy target (fastdelpoy_dummy) 
   # to form a build dependency tree for fastdeploy_static lib.
   add_library(fastdelpoy_dummy STATIC ${ALL_DEPLOY_SRCS})
+  # Still add ${DEPEND_LIBS} for cmake to form link_libraries 
+  # property tree for a static library. 
+  target_link_libraries(fastdelpoy_dummy ${DEPEND_LIBS})
   # Build fastdelpoy_dummy when the third-party 
   # libraries (opencv, paddle lite, flycv) are ready.
   add_dependencies(fastdelpoy_dummy ${LIBRARY_NAME})
   # Add WITH_STATIC_LIB compile definitions, see lite_backend.cc.
   target_compile_definitions(fastdelpoy_dummy PRIVATE WITH_STATIC_LIB)
   target_compile_definitions(fastdelpoy_dummy PRIVATE WITH_STATIC_LIB_AT_COMPILING)
-  bundle_static_library(${LIBRARY_NAME} fastdeploy_static bundle_fastdeploy)
+  bundle_static_library(fastdelpoy_dummy fastdeploy_static bundle_fastdeploy)
 endif()
 
 ##################################### Examples ####################################

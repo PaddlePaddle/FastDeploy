@@ -90,7 +90,7 @@ endfunction()
 # Bundle several static libraries into one. This function is modified from Paddle Lite. 
 # reference: https://github.com/PaddlePaddle/Paddle-Lite/blob/develop/cmake/lite.cmake#L252
 function(bundle_static_library tgt_name bundled_tgt_name fake_target)
-  list(APPEND static_libs fastdelpoy_dummy)
+  list(APPEND static_libs ${tgt_name})
   add_dependencies(fd_compile_deps ${fake_target})
   # Set redundant static libs here, protobuf is already available 
   # in the Paddle Lite static library. So, we don't need protobuf 
@@ -163,7 +163,7 @@ function(bundle_static_library tgt_name bundled_tgt_name fake_target)
 
   add_custom_target(${fake_target} ALL COMMAND ${CMAKE_COMMAND} -E echo "Building fake_target ${fake_target}")
   add_dependencies(${fake_target} ${tgt_name})
-  add_dependencies(${fake_target} fastdelpoy_dummy)
+  # add_dependencies(${fake_target} fastdelpoy_dummy)
 
   if(NOT IOS AND NOT APPLE)
     file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${bundled_tgt_name}.ar.in
@@ -215,7 +215,7 @@ function(bundle_static_library tgt_name bundled_tgt_name fake_target)
   set_property(TARGET ${bundled_tgt_name} PROPERTY IMPORTED_LOCATION
                                          ${bundled_tgt_full_name})          
   add_dependencies(${bundled_tgt_name} ${fake_target})
-  add_dependencies(${bundled_tgt_name} fastdelpoy_dummy)
+  add_dependencies(${bundled_tgt_name} ${tgt_name})
 
 endfunction()
 
