@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #pragma once
-#include "fastdeploy/vision/detection/ppdet/base.h"
 #include "fastdeploy/vision/detection/ppdet/postprocessor.h"
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
@@ -62,12 +61,12 @@ class FASTDEPLOY_DECL BlazeFace: public FastDeployModel{
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
                             std::vector<FaceDetectionResult>* results);
 
-  // Get preprocessor reference of BlazeFace
+  /// Get preprocessor reference of BlazeFace
   virtual BlazeFacePreprocessor& GetPreprocessor() {
     return preprocessor_;
   }
 
-  // Get postprocessor reference of BlazeFace
+  /// Get postprocessor reference of BlazeFace
   virtual BlazeFacePostprocessor& GetPostprocessor() {
     return postprocessor_;
   }

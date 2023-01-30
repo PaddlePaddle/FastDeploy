@@ -23,14 +23,14 @@ namespace vision {
 namespace facedet {
 
 BlazeFacePostprocessor::BlazeFacePostprocessor() {
-  conf_threshold_ = 0.3;
-  nms_threshold_ = 0.5;
+  conf_threshold_ = 0.5;
+  nms_threshold_ = 0.3;
 }
 
 bool BlazeFacePostprocessor::Run(const std::vector<FDTensor>& tensors,
                                  std::vector<FaceDetectionResult>* results,
                                  const std::vector<std::map<std::string,
-                                       std::array<float, 2>>>& ims_info) {
+                                 std::array<float, 2>>>& ims_info) {
   // Get number of boxes for each input image
   std::vector<int> num_boxes(tensors[1].shape[0]);
   int total_num_boxes = 0;

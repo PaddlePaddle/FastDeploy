@@ -74,35 +74,6 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
-void TrtInfer(const std::string& model_dir, const std::string& image_file) {
-  auto model_file = model_dir + sep + "model.pdmodel";
-  auto params_file = model_dir + sep + "model.pdiparams";
-  auto config_file = model_dir + sep + "infer_cfg.yml";
-  auto option = fastdeploy::RuntimeOption();
-  option.UseGpu();
-  option.UseTrtBackend();
-  // option.SetTrtInputShape("images", {1, 3, 640, 640});
-  auto model = fastdeploy::vision::facedet::BlazeFace(
-                model_file, params_file, config_file, option);
-  if (!model.Initialized()) {
-    std::cerr << "Failed to initialize." << std::endl;
-    return;
-  }
-
-  auto im = cv::imread(image_file);
-
-  fastdeploy::vision::FaceDetectionResult res;
-  if (!model.Predict(im, &res)) {
-    std::cerr << "Failed to predict." << std::endl;
-    return;
-  }
-  std::cout << res.Str() << std::endl;
-
-  auto vis_im = fastdeploy::vision::VisFaceDetection(im, res);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
-}
-
 int main(int argc, char* argv[]) {
   if (argc < 4) {
     std::cout << "Usage: infer_demo path/to/model path/to/image run_option, "
@@ -118,8 +89,6 @@ int main(int argc, char* argv[]) {
     CpuInfer(argv[1], argv[2]);
   } else if (std::atoi(argv[3]) == 1) {
     GpuInfer(argv[1], argv[2]);
-  } else if (std::atoi(argv[3]) == 2) {
-    TrtInfer(argv[1], argv[2]);
   }
   return 0;
 }

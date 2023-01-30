@@ -28,8 +28,8 @@ namespace facedet {
 
 BlazeFacePreprocessor::BlazeFacePreprocessor(const std::string& config_file) {
   is_scale_ = false;
-  nml_mean_ = {123, 117, 104};
-  nml_std_ = {127.502231, 127.502231, 127.502231};
+  normalize_mean_ = {123, 117, 104};
+  normalize_std_ = {127.502231, 127.502231, 127.502231};
   this->config_file_ = config_file;
   FDASSERT(BuildPreprocessPipelineFromConfig(),
            "Failed to create PaddleDetPreprocessor.");
@@ -100,23 +100,6 @@ bool BlazeFacePreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor
     // Reshape to 1xCxHxW
     im_tensors[i].ExpandDim(0);
   }
-
-  // for (size_t i = 0; i < images->size(); ++i) {
-  //   if ((*images)[i].Height() < max_hw[0] || (*images)[i].Width() < max_hw[1]) {
-  //     // if the size of image less than max_hw, pad to max_hw
-  //     FDTensor tensor;
-  //     (*images)[i].ShareWithTensor(&tensor);
-  //     function::Pad(tensor, &(im_tensors[i]),
-  //                   {0, 0, max_hw[0] - (*images)[i].Height(),
-  //                    max_hw[1] - (*images)[i].Width()},
-  //                   0);
-  //   } else {
-  //     // No need pad
-  //     (*images)[i].ShareWithTensor(&(im_tensors[i]));
-  //   }
-  //   // Reshape to 1xCxHxW
-  //   im_tensors[i].ExpandDim(0);
-  // }
 
   if (im_tensors.size() == 1) {
     // If there's only 1 input, no need to concat

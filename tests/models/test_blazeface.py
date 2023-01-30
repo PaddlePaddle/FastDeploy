@@ -22,24 +22,23 @@ import runtime_config as rc
 
 
 def test_detection_blazeface():
-    model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-lite-e.onnx"
+    model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/blazeface_1000e.tgz"
     input_url1 = "https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg"
     input_url2 = "https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000570688.jpg"
-    result_url1 = "https://bj.bcebos.com/paddlehub/fastdeploy/yolov7face_result1.pkl"
-    result_url2 = "https://bj.bcebos.com/paddlehub/fastdeploy/yolov7face_result2.pkl"
-    # fd.download(model_url, "resources")
+    result_url1 = "https://bj.bcebos.com/paddlehub/fastdeploy/blazeface_result1.pkl"
+    result_url2 = "https://bj.bcebos.com/paddlehub/fastdeploy/blazeface_result2.pkl"
+    fd.download_and_decompress(model_url, "resources")
     fd.download(input_url1, "resources")
     fd.download(input_url2, "resources")
-    # fd.download(result_url1, "resources")
-    # fd.download(result_url2, "resources")
 
-    model_dir = "resources/blazeface_1000e/"
+
+    model_dir = "resources/blazeface_1000e"
     model_file = os.path.join(model_dir, "model.pdmodel")
     params_file = os.path.join(model_dir, "model.pdiparams")
     config_file = os.path.join(model_dir, "infer_cfg.yml")
     model = fd.vision.facedet.BlazeFace(
         model_file, params_file, config_file, runtime_option=rc.test_option)
-    model.postprocessor.conf_threshold = 0.3
+    model.postprocessor.conf_threshold = 0.5
 
     with open("resources/blazeface_result1.pkl", "rb") as f:
         expect1 = pickle.load(f)
@@ -107,12 +106,12 @@ def test_detection_blazeface():
 def test_detection_blazeface_runtime():
     model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/blazeface_1000e.tgz"
     input_url1 = "https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg"
-    result_url1 = "https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_result1.pkl"
-    fd.download(model_url, "resources")
+    result_url1 = "https://bj.bcebos.com/paddlehub/fastdeploy/blazeface_result1.pkl"
+    fd.download_and_decompress(model_url, "resources")
     fd.download(input_url1, "resources")
     fd.download(result_url1, "resources")
 
-    model_dir = "resources/blazeface_1000e/"
+    model_dir = "resources/blazeface_1000e"
     model_file = os.path.join(model_dir, "model.pdmodel")
     params_file = os.path.join(model_dir, "model.pdiparams")
     config_file = os.path.join(model_dir, "infer_cfg.yml")
@@ -124,7 +123,7 @@ def test_detection_blazeface_runtime():
     rc.test_option.use_openvino_backend()
     runtime = fd.Runtime(rc.test_option)
 
-    with open("resources/blaze_result1.pkl", "rb") as f:
+    with open("resources/blazeface_result1.pkl", "rb") as f:
         expect1 = pickle.load(f)
 
     im1 = cv2.imread("resources/000000014439.jpg")

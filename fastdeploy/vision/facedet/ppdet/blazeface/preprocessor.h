@@ -52,9 +52,9 @@ class FASTDEPLOY_DECL BlazeFacePreprocessor: public fastdeploy::vision::detectio
   // the maximum resize scale cannot exceed 1.0
   bool is_scale_;
 
-  std::vector<float> nml_mean_;
+  std::vector<float> normalize_mean_;
 
-  std::vector<float> nml_std_;
+  std::vector<float> normalize_std_;
   
   std::vector<std::shared_ptr<Processor>> processors_;
   // read config file
