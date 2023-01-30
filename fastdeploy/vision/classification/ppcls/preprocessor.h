@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include "fastdeploy/vision/common/processors/manager.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
@@ -22,7 +23,7 @@ namespace vision {
 namespace classification {
 /*! @brief Preprocessor object for PaddleClas serials model.
  */
-class FASTDEPLOY_DECL PaddleClasPreprocessor {
+class FASTDEPLOY_DECL PaddleClasPreprocessor : public ProcessorManager {
  public:
   /** \brief Create a preprocessor instance for PaddleClas serials model
    *
@@ -36,15 +37,8 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
    * \param[in] outputs The output tensors which will feed in runtime
    * \return true if the preprocess successed, otherwise false
    */
-  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
-
-  /** \brief Use GPU to run preprocessing
-   *
-   * \param[in] gpu_id GPU device id
-   */
-  void UseGpu(int gpu_id = -1);
-
-  bool WithGpu() { return use_cuda_; }
+  virtual bool Apply(std::vector<FDMat>* images,
+                     std::vector<FDTensor>* outputs);
 
   /// This function will disable normalize in preprocessing step.
   void DisableNormalize();
@@ -54,10 +48,6 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
  private:
   bool BuildPreprocessPipelineFromConfig();
   std::vector<std::shared_ptr<Processor>> processors_;
-  bool initialized_ = false;
-  bool use_cuda_ = false;
-  // GPU device id
-  int device_id_ = -1;
   // for recording the switch of hwc2chw
   bool disable_permute_ = false;
   // for recording the switch of normalize
