@@ -74,13 +74,14 @@ option(WITH_KUNLUNXIN "Whether to compile for KunlunXin XPU deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
 
 ############################# Options for Android cross compiling #########################
-option(WITH_OPENCV_STATIC "Whether to use OpenCV static lib for Android." OFF)
-option(WITH_LITE_STATIC "Whether to use OpenCV Paddle Lite static lib for Android." OFF)
-option(WITH_FLYCV_STATIC "Whether to use OpenCV FlyCV static lib for Android." OFF)
-option(WITH_OPENMP "Whether to use OpenCV OpenMP support for Android." OFF)
-option(WITH_JAVA "Whether to build jni lib for Android." OFF)
-option(WITH_STATIC_LIB "Whether to build FastDeploy static lib." OFF)
-
+if(ANDROID)
+  option(WITH_OPENCV_STATIC "Whether to use OpenCV static lib for Android." OFF)
+  option(WITH_LITE_STATIC "Whether to use OpenCV Paddle Lite static lib for Android." OFF)
+  option(WITH_FLYCV_STATIC "Whether to use OpenCV FlyCV static lib for Android." OFF)
+  option(WITH_OPENMP "Whether to use OpenCV OpenMP support for Android." OFF)
+  option(WITH_JAVA "Whether to build jni lib for Android." OFF)
+  option(WITH_STATIC_LIB "Whether to build FastDeploy static lib." OFF)
+endif()
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
 option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
 
