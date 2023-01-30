@@ -20,7 +20,7 @@ public class SegmentationWelcomeActivity extends Activity {
             );
             getWindow().setStatusBarColor(Color.TRANSPARENT);
         }
-        setContentView(R.layout.super_resolution_welcome);
+        setContentView(R.layout.segmentation_welcome);
     }
 
     public void startActivity(View view) {
