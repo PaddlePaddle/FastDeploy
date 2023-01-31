@@ -28,7 +28,7 @@ CenterFacePostprocessor::CenterFacePostprocessor() {
 }
 
 bool CenterFacePostprocessor::Run(const std::vector<FDTensor>& infer_result,
- std::vector<FaceDetectionResult>* results,
+                              std::vector<FaceDetectionResult>* results,
                               const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info) {
   int batch = infer_result[0].shape[0];
  
@@ -60,13 +60,13 @@ bool CenterFacePostprocessor::Run(const std::vector<FDTensor>& infer_result,
 
     std::vector<int> ids;
     for (int i = 0; i < fea_h; i++) {
-		  for (int j = 0; j < fea_w; j++) {
-			  if (heatmap_out[i*fea_w + j] > conf_threshold_) {
+      for (int j = 0; j < fea_w; j++) {
+        if (heatmap_out[i*fea_w + j] > conf_threshold_) {
           ids.push_back(i);
           ids.push_back(j);
-			  }
-		  }
-	  }
+        }
+      }
+    }
 
     auto iter_out = ims_info[bs].find("output_shape");
     auto iter_ipt = ims_info[bs].find("input_shape");

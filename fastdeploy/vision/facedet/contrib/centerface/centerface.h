@@ -58,7 +58,7 @@ class FASTDEPLOY_DECL CenterFace: public FastDeployModel{
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
                             std::vector<FaceDetectionResult>* results);
 
-    /// Get preprocessor reference of CenterFace
+  /// Get preprocessor reference of CenterFace
   virtual CenterFacePreprocessor& GetPreprocessor() {
     return preprocessor_;
   }

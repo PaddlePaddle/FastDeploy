@@ -67,14 +67,14 @@ class CenterFacePostprocessor:
     @property
     def conf_threshold(self):
         """
-        confidence threshold for postprocessing, default is 0.5
+        confidence threshold for postprocessing, default is 0.3
         """
         return self._postprocessor.conf_threshold
 
     @property
     def nms_threshold(self):
         """
-        nms threshold for postprocessing, default is 0.45
+        nms threshold for postprocessing, default is 0.5
         """
         return self._postprocessor.nms_threshold
 
