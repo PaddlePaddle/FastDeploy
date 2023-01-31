@@ -14,6 +14,7 @@
 
 #include "fastdeploy/vision/facedet/ppdet/blazeface/preprocessor.h"
 #include "fastdeploy/function/concat.h"
+#include "fastdeploy/function/pad.h"
 #include "fastdeploy/vision/common/processors/mat.h"
 #include "yaml-cpp/yaml.h"
 
