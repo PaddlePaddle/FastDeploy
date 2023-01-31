@@ -367,7 +367,7 @@ void Runtime::CreateOrtBackend() {
       std::string model_buffer = "";
       FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
                "Fail to read binary from model file");
-      FDASSERT(casted_backend->InitFromOnnx(option.model_buffer_, ort_option),
+      FDASSERT(casted_backend->InitFromOnnx(model_buffer, ort_option),
                "Load model from ONNX failed while initliazing OrtBackend.");
     }
   } else {
