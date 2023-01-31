@@ -48,7 +48,7 @@ BlazeFace模型加载和初始化
 > ```python
 > BlazeFace.predict(input_image)
 > ```
-> 通过调用BlazeFacePostprocessor.conf_threshold()调整conf_threshold
+> 通过BlazeFace.postprocessor.conf_threshold = 0.2，来修改conf_threshold
 >
 > 模型预测结口，输入图像直接输出检测结果。
 >
