@@ -472,7 +472,6 @@ void Runtime::CreateLiteBackend() {
            "Device::CPU/Device::TIMVX/Device::KUNLUNXIN/Device::ASCEND.");
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
-#ifdef ENABLE_LITE_BACKEND
   backend_ = utils::make_unique<LiteBackend>();
   auto casted_backend = dynamic_cast<LiteBackend*>(backend_.get());
   FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
@@ -520,7 +519,6 @@ void Runtime::CreateSophgoNPUBackend() {
            "Backend::SOPHGO only supports Device::SOPHGO");
   FDASSERT(option.model_format == ModelFormat::SOPHGO,
            "SophgoBackend only support model format of ModelFormat::SOPHGO");
-#ifdef ENABLE_SOPHGO_BACKEND
   auto sophgo_option = SophgoBackendOption();
   backend_ = utils::make_unique<SophgoBackend>();
   auto casted_backend = dynamic_cast<SophgoBackend*>(backend_.get());
