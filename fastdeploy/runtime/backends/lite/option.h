@@ -52,7 +52,7 @@ enum LitePowerMode {
 
 struct LiteBackendOption {
   /// Paddle Lite power mode for mobile device.
-  LitePowerMode power_mode = LITE_POWER_NO_BIND::LITE_POWER_NO_BIND;
+  LitePowerMode power_mode = LITE_POWER_NO_BIND;
   /// Number of threads while use CPU
   int cpu_threads = 1;
   /// Enable use half precision

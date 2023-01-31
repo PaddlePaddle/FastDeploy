@@ -124,7 +124,7 @@ void RuntimeOption::SetExternalStream(void* external_stream) {
 void RuntimeOption::SetCpuThreadNum(int thread_num) {
   FDASSERT(thread_num > 0, "The thread_num must be greater than 0.");
   cpu_thread_num = thread_num;
-  paddle_lite_option.threads = thread_num;
+  paddle_lite_option.cpu_threads = thread_num;
 }
 
 void RuntimeOption::SetOrtGraphOptLevel(int level) {
