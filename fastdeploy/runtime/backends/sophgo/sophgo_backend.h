@@ -53,6 +53,13 @@ class SophgoBackend : public BaseBackend {
               std::vector<FDTensor>* outputs,
               bool copy_to_fd = true) override;
 
+#ifdef ENABLE_BENCHMARK
+  virtual bool Infer(std::vector<FDTensor>& inputs,
+                     std::vector<FDTensor>* outputs,
+                     double* mean_time_of_pure_backend,
+                     int repeat = 1, bool copy_to_fd = true) override; // NOLINT
+#endif
+
  private:
   std::vector<TensorInfo> inputs_desc_;
   std::vector<TensorInfo> outputs_desc_;

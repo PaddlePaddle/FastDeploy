@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include "fastdeploy/runtime/backends/poros/poros_backend.h"
-
+#ifdef ENABLE_BENCHMARK
+#include "fastdeploy/utils/perf.h"
+#endif
 #include <sys/time.h>
 
 namespace fastdeploy {
@@ -238,4 +240,76 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs,
   return true;
 }
 
+#ifdef ENABLE_BENCHMARK
+bool PorosBackend::Infer(std::vector<FDTensor>& inputs,
+                         std::vector<FDTensor>* outputs, 
+                         double* mean_time_of_pure_backend,
+                         int repeat, bool copy_to_fd) {
+  FDASSERT(repeat > 0, "repeat param must > 0, but got %d", repeat);                         
+  // Convert FD Tensor to PyTorch Tensor
+  std::vector<torch::jit::IValue> poros_inputs;
+  bool is_backend_cuda =
+      _options.device == baidu::mirana::poros::Device::GPU ? true : false;
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    poros_inputs.push_back(CreatePorosValue(inputs[i], is_backend_cuda));
+  }
+
+  // Infer repeat - 1 times
+  double time_of_pure_backend = 0.0;
+  for (int i = 0; i < repeat - 1; ++i) {
+    TimeCounter tc;
+    tc.Start();
+    auto tmp_poros_outputs = _poros_module->forward(poros_inputs);
+    tc.End();
+    time_of_pure_backend += tc.Duration();
+  }
+  // Infer the last time to get outputs
+  TimeCounter tc;
+  tc.Start();
+  auto poros_outputs = _poros_module->forward(poros_inputs);
+  tc.End();
+  time_of_pure_backend += tc.Duration();
+
+  *mean_time_of_pure_backend = 
+    time_of_pure_backend / static_cast<double>(repeat);
+
+  // Convert PyTorch Tensor to FD Tensor
+  if (poros_outputs.isTensor()) {
+    CopyTensorToCpu(poros_outputs.toTensor(), &((*outputs)[0]),
+                    is_backend_cuda);
+  } else if (poros_outputs.isTuple()) {
+    // deal with multi outputs
+    auto poros_outputs_tuple = poros_outputs.toTuple();
+    size_t index = 0;
+    for (size_t i = 0; i < poros_outputs_tuple->elements().size(); ++i) {
+      auto poros_tensor = poros_outputs_tuple->elements()[i];
+      if (poros_tensor.isTensor()) {
+        CopyTensorToCpu(poros_tensor.toTensor(), &((*outputs)[index]),
+                        is_backend_cuda);
+        index += 1;
+      } else if (poros_tensor.isList()) {
+        auto poros_tensor_list = poros_tensor.toList();
+        for (const auto list_idx : c10::irange(0, poros_tensor_list.size())) {
+          const auto& elt = poros_tensor_list.get(list_idx);
+          CopyTensorToCpu(elt.toTensor(), &((*outputs)[index]),
+                          is_backend_cuda);
+          index += 1;
+        }
+      } else if (poros_tensor.isTuple()) {
+        auto poros_tensor_tuple = poros_tensor.toTuple();
+        for (size_t j = 0; j < poros_tensor_tuple->elements().size(); ++j) {
+          CopyTensorToCpu(poros_tensor_tuple->elements()[j].toTensor(),
+                          &((*outputs)[index]), is_backend_cuda);
+          index += 1;
+        }
+      } else {
+        continue;
+      }
+    }
+  } else {
+    FDERROR << "Convert to FDTensor Failed!!!!!" << std::endl;
+  }
+  return true;
+}
+#endif
 }  // namespace fastdeploy

@@ -75,7 +75,7 @@ class FASTDEPLOY_DECL FastDeployModel {
     return runtime_initialized_ && initialized;
   }
 
-  /** \brief This is a debug interface, used to record the time of backend runtime
+  /** \brief This is a debug interface, used to record the time of runtime (backend + h2d + d2h)
    *
    * example code @code
    * auto model = fastdeploy::vision::PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml");
@@ -98,7 +98,7 @@ class FASTDEPLOY_DECL FastDeployModel {
     enable_record_time_of_runtime_ = true;
   }
 
-  /** \brief Disable to record the time of backend runtime, see `EnableRecordTimeOfRuntime()` for more detail
+  /** \brief Disable to record the time of runtime, see `EnableRecordTimeOfRuntime()` for more detail
   */
   virtual void DisableRecordTimeOfRuntime() {
     enable_record_time_of_runtime_ = false;
@@ -113,6 +113,45 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool EnabledRecordTimeOfRuntime() {
     return enable_record_time_of_runtime_;
   }
+
+#ifdef ENABLE_BENCHMARK
+/** \brief This is a debug interface, used to record the pure inference time of backend (no h2d+d2h)
+   *
+   * example code @code
+   * auto model = fastdeploy::vision::PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml");
+   * if (!model.Initialized()) {
+   *   std::cerr << "Failed to initialize." << std::endl;
+   *   return -1;
+   * }
+   * model.EnableRecordTimeOfRuntime();
+   * model.EnableRecordTimeOfBackend();
+   * cv::Mat im = cv::imread("test.jpg");
+   * for (auto i = 0; i < 1000; ++i) {
+   *   fastdeploy::vision::DetectionResult result;
+   *   model.Predict(&im, &result);
+   * }
+   * model.PrintStatisInfoOfRuntime();
+   * @endcode After called the `PrintStatisInfoOfRuntime()`, the statistical information of runtime will be printed in the console
+   */
+  virtual void EnableRecordTimeOfBackend(int repeat = 1) {
+    time_of_backend_.clear();
+    std::vector<double>().swap(time_of_backend_);
+    enable_record_time_of_backend_ = true;
+    repeat_for_time_of_backend_ = repeat;
+  }
+
+  /** \brief Disable to record the time of backend, see `EnableRecordTimeOfBackend()` for more detail
+  */
+  virtual void DisableRecordTimeOfBackend() {
+    enable_record_time_of_backend_ = false;
+  }
+
+  /** \brief Check if the `EnableRecordTimeOfBackend()` method is enabled.
+  */
+  virtual bool EnabledRecordTimeOfBackend() {
+    return enable_record_time_of_backend_;
+  }
+#endif
 
   /** \brief Release reused input/output buffers
   */
@@ -158,9 +197,17 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool runtime_initialized_ = false;
   // whether to record inference time
   bool enable_record_time_of_runtime_ = false;
-
-  // record inference time for backend
+  // record inference time for runtime (backend+h2d+d2h)
   std::vector<double> time_of_runtime_;
+#ifdef ENABLE_BENCHMARK  
+  // whether to record the inference time of backend (no h2d+d2h)
+  bool enable_record_time_of_backend_ = false;
+  // record inference time for backend (backend+h2d+d2h)
+  std::vector<double> time_of_backend_;
+  // The repeats to record time of backend.
+  // mean_time=total_time/repeat
+  int repeat_for_time_of_backend_ = 1;
+#endif  
 };
 
 }  // namespace fastdeploy

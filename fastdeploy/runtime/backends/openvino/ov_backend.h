@@ -55,6 +55,13 @@ class OpenVINOBackend : public BaseBackend {
   std::unique_ptr<BaseBackend> Clone(void* stream = nullptr,
                                      int device_id = -1) override;
 
+#ifdef ENABLE_BENCHMARK
+  virtual bool Infer(std::vector<FDTensor>& inputs,
+                     std::vector<FDTensor>* outputs,
+                     double* mean_time_of_pure_backend,
+                     int repeat = 1, bool copy_to_fd = true) override; // NOLINT
+#endif    
+
  private:
   void InitTensorInfo(const std::vector<ov::Output<ov::Node>>& ov_outputs,
                       std::map<std::string, TensorInfo>* tensor_infos);

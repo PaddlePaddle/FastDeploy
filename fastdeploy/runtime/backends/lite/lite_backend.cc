@@ -31,6 +31,10 @@ codes for ops, kernels and passes for Paddle Lite.
 #include "paddle_use_passes.h"    // NOLINT
 #endif
 
+#ifdef ENABLE_BENCHMARK
+#include "fastdeploy/utils/perf.h"
+#endif
+
 #include <cstring>
 
 namespace fastdeploy {
@@ -336,5 +340,83 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
   }
   return true;
 }
+
+#ifdef ENABLE_BENCHMARK
+bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
+                        std::vector<FDTensor>* outputs,
+                        double* mean_time_of_pure_backend,
+                        int repeat, bool copy_to_fd) {
+  FDASSERT(repeat > 0, "repeat param must > 0, but got %d", repeat);                        
+  if (inputs.size() != inputs_desc_.size()) {
+    FDERROR << "[LiteBackend] Size of inputs(" << inputs.size()
+            << ") should keep same with the inputs of this model("
+            << inputs_desc_.size() << ")." << std::endl;
+    return false;
+  }
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    auto iter = inputs_order_.find(inputs[i].name);
+    if (iter == inputs_order_.end()) {
+      FDERROR << "Cannot find input with name:" << inputs[i].name
+              << " in loaded model." << std::endl;
+      return false;
+    }
+    auto tensor = predictor_->GetInput(iter->second);
+    // Adjust dims only, allocate lazy.
+    tensor->Resize(inputs[i].shape);
+    if (inputs[i].dtype == FDDataType::FP32) {
+      tensor->CopyFromCpu<float, paddle::lite_api::TargetType::kHost>(
+          reinterpret_cast<const float*>(
+              const_cast<void*>(inputs[i].CpuData())));
+    } else if (inputs[i].dtype == FDDataType::INT32) {
+      tensor->CopyFromCpu<int, paddle::lite_api::TargetType::kHost>(
+          reinterpret_cast<const int*>(const_cast<void*>(inputs[i].CpuData())));
+    } else if (inputs[i].dtype == FDDataType::INT8) {
+      tensor->CopyFromCpu<int8_t, paddle::lite_api::TargetType::kHost>(
+          reinterpret_cast<const int8_t*>(
+              const_cast<void*>(inputs[i].CpuData())));
+    } else if (inputs[i].dtype == FDDataType::UINT8) {
+      tensor->CopyFromCpu<uint8_t, paddle::lite_api::TargetType::kHost>(
+          reinterpret_cast<const uint8_t*>(
+              const_cast<void*>(inputs[i].CpuData())));
+    } else if (inputs[i].dtype == FDDataType::INT64) {
+#if (defined(__aarch64__) || defined(__x86_64__) || defined(_M_X64) || \
+     defined(_M_ARM64))
+      tensor->CopyFromCpu<int64_t, paddle::lite_api::TargetType::kHost>(
+          reinterpret_cast<const int64_t*>(
+              const_cast<void*>(inputs[i].CpuData())));
+#else
+      FDASSERT(false, "FDDataType::INT64 is not support for x86/armv7 now!");
+#endif
+    } else {
+      FDASSERT(false, "Unexpected data type of %d.", inputs[i].dtype);
+    }
+  }
+  
+  double time_of_pure_backend = 0.0;
+  for (int i = 0; i < repeat; ++i) {
+    TimeCounter tc;
+    tc.Start();
+    predictor_->Run();
+    tc.End();
+    time_of_pure_backend += tc.Duration();
+  }
+
+  *mean_time_of_pure_backend = 
+    time_of_pure_backend / static_cast<double>(repeat);
+
+  outputs->resize(outputs_desc_.size());
+  for (size_t i = 0; i < outputs_desc_.size(); ++i) {
+    auto tensor = predictor_->GetOutput(i);
+    if (outputs_desc_[i].dtype != LiteDataTypeToFD(tensor->precision())) {
+      outputs_desc_[i].dtype = LiteDataTypeToFD(tensor->precision());
+    }
+    (*outputs)[i].Resize(tensor->shape(), outputs_desc_[i].dtype,
+                         outputs_desc_[i].name);
+    memcpy((*outputs)[i].MutableData(), tensor->data<void>(),
+           (*outputs)[i].Nbytes());
+  }
+  return true;
+}
+#endif    
 
 }  // namespace fastdeploy

@@ -94,6 +94,13 @@ struct FASTDEPLOY_DECL Runtime {
   bool Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
                const RuntimeOption& _option);
 
+#ifdef ENABLE_BENCHMARK
+  bool Infer(std::vector<FDTensor>& input_tensors,
+             std::vector<FDTensor>* output_tensors,
+             double* mean_time_of_pure_backend,
+             int repeat = 1); // NOLINT
+#endif    
+
  private:
   void CreateOrtBackend();
   void CreatePaddleBackend();

@@ -73,7 +73,6 @@ class BaseBackend {
   virtual bool Infer(std::vector<FDTensor>& inputs,
                      std::vector<FDTensor>* outputs,
                      bool copy_to_fd = true) = 0;
-
   // Optional: For those backends which can share memory
   // while creating multiple inference engines with same model file
   virtual std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
@@ -81,6 +80,18 @@ class BaseBackend {
     FDERROR << "Clone no support" << std::endl;
     return nullptr;
   }
+#ifdef ENABLE_BENCHMARK
+  // This method is only for benchmark, the output value of 
+  // 'mean_time_of_pure_backend' will not include the time 
+  // of H2D and D2H.
+  virtual bool Infer(std::vector<FDTensor>& inputs,
+                     std::vector<FDTensor>* outputs,
+                     double* mean_time_of_pure_backend,
+                     int repeat = 1, bool copy_to_fd = true) {
+    FDERROR << "Infer for benchmark no support!" << std::endl;
+    return false;
+  }
+#endif    
 };
 
 }  // namespace fastdeploy

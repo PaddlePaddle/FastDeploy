@@ -23,6 +23,9 @@
 #ifdef ENABLE_PADDLE2ONNX
 #include "paddle2onnx/converter.h"
 #endif
+#ifdef ENABLE_BENCHMARK
+#include "fastdeploy/utils/perf.h"
+#endif
 
 namespace fastdeploy {
 
@@ -355,6 +358,95 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
 
   return true;
 }
+
+#ifdef ENABLE_BENCHMARK
+bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
+                       std::vector<FDTensor>* outputs,
+                       double* mean_time_of_pure_backend,
+                       int repeat, bool copy_to_fd) {
+  FDASSERT(repeat > 0, "repeat param must > 0, but got %d", repeat);                      
+  if (inputs.size() != NumInputs()) {
+    FDERROR << "Require " << NumInputs() << "inputs, but get " << inputs.size()
+            << "." << std::endl;
+    return false;
+  }
+  if (ShapeRangeInfoUpdated(inputs)) {
+    // meet new shape output of predefined max/min shape
+    // rebuild the tensorrt engine
+    FDWARNING
+        << "TensorRT engine will be rebuilt once shape range information "
+           "changed, this may take lots of time, you can set a proper shape "
+           "range before loading model to avoid rebuilding process. refer "
+           "https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/en/"
+           "faq/"
+           "tensorrt_tricks.md for more details."
+        << std::endl;
+    BuildTrtEngine();
+  }
+
+  cudaSetDevice(option_.gpu_id);
+  SetInputs(inputs);
+  AllocateOutputsBuffer(outputs, copy_to_fd);
+
+  double time_of_pure_backend = 0.0;
+  for (int i = 0; i < repeat; ++i) {
+    TimeCounter tc;
+    tc.Start();
+    if (!context_->enqueueV2(bindings_.data(), stream_, nullptr)) {
+      FDERROR << "Failed to Infer with TensorRT." << std::endl;
+      return false;
+    }
+    tc.End();
+    time_of_pure_backend += tc.Duration();
+  }
+
+  *mean_time_of_pure_backend = 
+    time_of_pure_backend / static_cast<double>(repeat);
+
+  for (size_t i = 0; i < outputs->size(); ++i) {
+    // if the final output tensor's dtype is different from the model output
+    // tensor's dtype, then we need cast the data to the final output's dtype
+    auto model_output_dtype =
+        GetFDDataType(outputs_device_buffer_[(*outputs)[i].name].dtype());
+    if ((*outputs)[i].dtype != model_output_dtype) {
+      FDTensor output_tensor;
+      output_tensor.SetExternalData(
+          (*outputs)[i].shape, model_output_dtype,
+          outputs_device_buffer_[(*outputs)[i].name].data(), Device::GPU);
+
+      casted_output_tensors_[(*outputs)[i].name].Resize(
+          (*outputs)[i].shape, (*outputs)[i].dtype, (*outputs)[i].name,
+          Device::GPU);
+      function::CudaCast(output_tensor,
+                         &casted_output_tensors_[(*outputs)[i].name], stream_);
+      if (!copy_to_fd) {
+        (*outputs)[i].SetExternalData(
+            (*outputs)[i].shape, model_output_dtype,
+            casted_output_tensors_[(*outputs)[i].name].MutableData(),
+            Device::GPU, option_.gpu_id);
+      }
+    } else {
+      casted_output_tensors_[(*outputs)[i].name].SetExternalData(
+          (*outputs)[i].shape, model_output_dtype,
+          outputs_device_buffer_[(*outputs)[i].name].data(), Device::GPU);
+    }
+  }
+  if (copy_to_fd) {
+    for (size_t i = 0; i < outputs->size(); ++i) {
+      FDASSERT(
+          cudaMemcpyAsync((*outputs)[i].Data(),
+                          casted_output_tensors_[(*outputs)[i].name].Data(),
+                          (*outputs)[i].Nbytes(), cudaMemcpyDeviceToHost,
+                          stream_) == 0,
+          "[ERROR] Error occurs while copy memory from GPU to CPU.");
+    }
+    FDASSERT(cudaStreamSynchronize(stream_) == cudaSuccess,
+             "[ERROR] Error occurs while sync cuda stream.");
+  }
+
+  return true;
+}
+#endif
 
 void TrtBackend::GetInputOutputInfo() {
   // Read the original dtypes from inputs_desc_ and outputs_desc_

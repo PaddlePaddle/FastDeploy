@@ -16,6 +16,9 @@
 #ifdef ENABLE_PADDLE2ONNX
 #include "paddle2onnx/converter.h"
 #endif
+#ifdef ENABLE_BENCHMARK
+#include "fastdeploy/utils/perf.h"
+#endif
 
 namespace fastdeploy {
 
@@ -379,6 +382,61 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
   }
   return true;
 }
+
+#ifdef ENABLE_BENCHMARK
+bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
+                            std::vector<FDTensor>* outputs, 
+                            double* mean_time_of_pure_backend,
+                            int repeat, bool copy_to_fd) {
+  FDASSERT(repeat > 0, "repeat param must > 0, but got %d", repeat);  
+  if (inputs.size() != input_infos_.size()) {
+    FDERROR << "[OpenVINOBackend] Size of the inputs(" << inputs.size()
+            << ") should keep same with the inputs of this model("
+            << input_infos_.size() << ")." << std::endl;
+    return false;
+  }
+
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    ov::Shape shape(inputs[i].shape.begin(), inputs[i].shape.end());
+    ov::Tensor ov_tensor(FDDataTypeToOV(inputs[i].dtype), shape,
+                         inputs[i].Data());
+    request_.set_tensor(inputs[i].name, ov_tensor);
+  }
+
+  double time_of_pure_backend = 0.0;
+  for (int i = 0; i < repeat; ++i) {
+    TimeCounter tc;
+    tc.Start();
+    request_.infer();
+    tc.End();
+    time_of_pure_backend += tc.Duration();
+  }
+
+  *mean_time_of_pure_backend = 
+    time_of_pure_backend / static_cast<double>(repeat);
+
+  outputs->resize(output_infos_.size());
+  for (size_t i = 0; i < output_infos_.size(); ++i) {
+    auto out_tensor = request_.get_output_tensor(i);
+    auto out_tensor_shape = out_tensor.get_shape();
+    std::vector<int64_t> shape(out_tensor_shape.begin(),
+                               out_tensor_shape.end());
+    if (copy_to_fd) {
+      (*outputs)[i].Resize(shape,
+                           OpenVINODataTypeToFD(out_tensor.get_element_type()),
+                           output_infos_[i].name, Device::CPU);
+      memcpy((*outputs)[i].MutableData(), out_tensor.data(),
+             (*outputs)[i].Nbytes());
+    } else {
+      (*outputs)[i].name = output_infos_[i].name;
+      (*outputs)[i].SetExternalData(
+          shape, OpenVINODataTypeToFD(out_tensor.get_element_type()),
+          out_tensor.data(), Device::CPU);
+    }
+  }
+  return true;
+}
+#endif
 
 std::unique_ptr<BaseBackend> OpenVINOBackend::Clone(void* stream,
                                                     int device_id) {

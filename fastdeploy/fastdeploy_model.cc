@@ -32,12 +32,18 @@ std::string Str(const std::vector<Backend>& backends) {
 }
 
 bool IsSupported(const std::vector<Backend>& backends, Backend backend) {
+#ifdef ENABLE_BENCHMARK
+  // In benchmark mode, we don't check to see if the backend 
+  // is supported for current model.
+  return true;
+#else  
   for (size_t i = 0; i < backends.size(); ++i) {
     if (backends[i] == backend) {
       return true;
     }
   }
   return false;
+#endif  
 }
 
 bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
@@ -362,7 +368,27 @@ bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
   if (enable_record_time_of_runtime_) {
     tc.Start();
   }
-  auto ret = runtime_->Infer(input_tensors, output_tensors);
+  bool ret = false;
+  if (enable_record_time_of_backend_) {
+#ifdef ENABLE_BENCHMARK    
+    double mean_time_of_backend = 0.0;
+    ret = runtime_->Infer(input_tensors, output_tensors, 
+                          &mean_time_of_backend,
+                          repeat_for_time_of_backend_);
+    if (time_of_backend_.size() > 50000) {
+      FDWARNING << "There are already 50000 records of backend, will force to "
+                   "disable record time of backend now."
+                << std::endl;
+      enable_record_time_of_backend_ = false;
+    }
+    time_of_backend_.push_back(mean_time_of_backend);                      
+#else
+    FDASSERT(false, "FastDeploy was not compiled with benchmark mode!");
+#endif    
+  } else {
+    ret = runtime_->Infer(input_tensors, output_tensors);
+  }
+  
   if (enable_record_time_of_runtime_) {
     tc.End();
     if (time_of_runtime_.size() > 50000) {
@@ -371,7 +397,12 @@ bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
                 << std::endl;
       enable_record_time_of_runtime_ = false;
     }
+#ifdef ENABLE_BENCHMARK
+    time_of_runtime_.push_back(
+      tc.Duration() / static_cast<double>(repeat_for_time_of_backend_));
+#else
     time_of_runtime_.push_back(tc.Duration());
+#endif    
   }
   return ret;
 }
@@ -416,6 +447,48 @@ std::map<std::string, float> FastDeployModel::PrintStatisInfoOfRuntime() {
   statis_info_of_runtime_dict["warmup_iter"] = warmup_iter;
   statis_info_of_runtime_dict["avg_time"] = avg_time;
   statis_info_of_runtime_dict["iterations"] = time_of_runtime_.size();
+  
+  if(enable_record_time_of_backend_) {
+#ifdef ENABLE_BENCHMARK
+    if (time_of_backend_.size() < 10) {
+      FDWARNING << "PrintStatisInfoOfRuntime require the backend ran 10 times at "
+                  "least, but now you only ran "
+                << time_of_backend_.size() << " times." << std::endl;
+    }
+    double backend_warmup_time = 0.0;
+    double backend_remain_time = 0.0;
+    int backend_warmup_iter = time_of_backend_.size() / 5;
+    for (size_t i = 0; i < time_of_backend_.size(); ++i) {
+      if (i < backend_warmup_iter) {
+        backend_warmup_time += time_of_backend_[i];
+      } else {
+        backend_remain_time += time_of_backend_[i];
+      }
+    }
+    double backend_avg_time = 
+      backend_remain_time / (time_of_backend_.size() - backend_warmup_iter);
+    std::cout << "============= Backend Statis Info(" << ModelName()
+              << ") =============" << std::endl;
+    std::cout << "Total iterations: " << time_of_backend_.size() << std::endl;
+    std::cout << "Total time of backend: " << warmup_time + remain_time << "s."
+              << std::endl;
+    std::cout << "Warmup iterations: " << warmup_iter << std::endl;
+    std::cout << "Total time of backend in warmup step: " << warmup_time << "s."
+              << std::endl;
+    std::cout << "Average time of backend exclude warmup step: "
+              << avg_time * 1000 << "ms." << std::endl;
+
+    statis_info_of_runtime_dict["backend_total_time"] = backend_warmup_time + backend_remain_time;
+    statis_info_of_runtime_dict["backend_warmup_time"] = backend_warmup_time;
+    statis_info_of_runtime_dict["backend_remain_time"] = backend_remain_time;
+    statis_info_of_runtime_dict["backend_warmup_iter"] = backend_warmup_iter;
+    statis_info_of_runtime_dict["backend_avg_time"] = backend_avg_time;
+    statis_info_of_runtime_dict["backend_iterations"] = time_of_backend_.size();
+#else
+    FDASSERT(false, "FastDeploy was not compiled with benchmark mode!");
+#endif    
+  }
+
   return statis_info_of_runtime_dict;
 }
 }  // namespace fastdeploy
