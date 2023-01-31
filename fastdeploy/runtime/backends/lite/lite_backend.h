@@ -21,7 +21,6 @@
 
 #include "paddle_api.h"  // NOLINT
 
-#include "fastdeploy/runtime/backends/lite/utils.h"
 #include "fastdeploy/runtime/backends/backend.h"
 #include "fastdeploy/runtime/backends/lite/option.h"
 
