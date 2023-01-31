@@ -14,11 +14,11 @@ mkdir build
 cd build
 # 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz # x.x.x >= 1.0.4
-tar xvf fastdeploy-linux-x64-x.x.x.tgz # x.x.x > 1.0.2
+tar xvf fastdeploy-linux-x64-x.x.x.tgz # x.x.x > 1.0.4
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x # x.x.x >= 1.0.4
 make -j
 
-#下载官方转换好的YOLOv7Face模型文件和测试图片
+#下载官方转换好的BlazeFace模型文件和测试图片
 wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 wget https://bj.bcebos.com/paddlehub/fastdeploy/blzeface-1000e.tgz
 
