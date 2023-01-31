@@ -114,7 +114,6 @@ class FASTDEPLOY_DECL FastDeployModel {
     return enable_record_time_of_runtime_;
   }
 
-#ifdef ENABLE_BENCHMARK
 /** \brief This is a debug interface, used to record the pure inference time of backend (no h2d+d2h)
    *
    * example code @code
@@ -151,7 +150,6 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool EnabledRecordTimeOfBackend() {
     return enable_record_time_of_backend_;
   }
-#endif
 
   /** \brief Release reused input/output buffers
   */
@@ -199,7 +197,6 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool enable_record_time_of_runtime_ = false;
   // record inference time for runtime (backend+h2d+d2h)
   std::vector<double> time_of_runtime_;
-#ifdef ENABLE_BENCHMARK  
   // whether to record the inference time of backend (no h2d+d2h)
   bool enable_record_time_of_backend_ = false;
   // record inference time for backend (backend+h2d+d2h)
@@ -207,7 +204,6 @@ class FASTDEPLOY_DECL FastDeployModel {
   // The repeats to record time of backend.
   // mean_time=total_time/repeat
   int repeat_for_time_of_backend_ = 1;
-#endif  
 };
 
 }  // namespace fastdeploy

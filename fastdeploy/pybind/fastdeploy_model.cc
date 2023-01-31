@@ -28,6 +28,9 @@ void BindFDModel(pybind11::module& m) {
       .def("enable_record_time_of_runtime", &FastDeployModel::EnableRecordTimeOfRuntime)
       .def("disable_record_time_of_runtime",
            &FastDeployModel::DisableRecordTimeOfRuntime)
+      .def("enable_record_time_of_backend", &FastDeployModel::EnableRecordTimeOfBackend)
+      .def("disable_record_time_of_backend",
+           &FastDeployModel::DisableRecordTimeOfBackend)     
       .def("print_statis_info_of_runtime",
            &FastDeployModel::PrintStatisInfoOfRuntime)
       .def("initialized", &FastDeployModel::Initialized)
