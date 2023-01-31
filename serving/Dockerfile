@@ -43,14 +43,15 @@ RUN apt-get update \
     && python3 -m pip install -U pip \
     && python3 -m pip install paddlenlp fast-tokenizer-python
 
-# unset proxy
-ENV http_proxy=
-ENV https_proxy=
 RUN python3 -m pip install paddlepaddle-gpu==2.4.1.post112 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
 
 COPY python/dist/*.whl /opt/fastdeploy/
 RUN python3 -m pip install  /opt/fastdeploy/*.whl \
     && rm -rf /opt/fastdeploy/*.whl
+
+# unset proxy
+ENV http_proxy=
+ENV https_proxy=
 
 COPY serving/build/libtriton_fastdeploy.so /opt/tritonserver/backends/fastdeploy/
 COPY build/fastdeploy_install /opt/fastdeploy/
