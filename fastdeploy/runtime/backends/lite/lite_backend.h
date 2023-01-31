@@ -54,6 +54,7 @@ class LiteBackend : public BaseBackend {
   void ConfigureTimvx(const LiteBackendOption& option);
   void ConfigureAscend(const LiteBackendOption& option);
   void ConfigureKunlunXin(const LiteBackendOption& option);
+  void ConfigureNNAdapter(const LiteBackendOption& option);
 
   paddle::lite_api::CxxConfig config_;
   std::shared_ptr<paddle::lite_api::PaddlePredictor> predictor_;

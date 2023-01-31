@@ -57,7 +57,7 @@ void LiteBackend::ConfigureCpu(const LiteBackendOption& option) {
     }
   } else {
     valid_places.push_back(
-        paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kFFloat)});
+        paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kFloat)});
   }
   config_.set_valid_places(valid_places);
 }
@@ -67,7 +67,7 @@ void LiteBackend::ConfigureKunlunXin(const LiteBackendOption& option) {
   valid_places.push_back(
       paddle::lite_api::Place{TARGET(kXPU), PRECISION(kInt8)});
   if (option.enable_fp16) {
-    valid_places.push_back((paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFP16)});
+    valid_places.push_back(paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFP16)});
   }
   valid_places.push_back(
       paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFloat)});
@@ -123,7 +123,7 @@ void LiteBackend::ConfigureTimvx(const LiteBackendOption& option) {
   ConfigureNNAdapter(option);
 }
 
-void LiteBackend::ConfigureAscend(const LiteBackend& option) {
+void LiteBackend::ConfigureAscend(const LiteBackendOption& option) {
   config_.set_nnadapter_device_names({"huawei_ascend_npu"});
   std::vector<paddle::lite_api::Place> valid_places;
   valid_places.push_back(

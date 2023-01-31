@@ -38,13 +38,13 @@ namespace fastdeploy {
 void LiteBackend::BuildOption(const LiteBackendOption& option) {
   option_ = option;
 
-  if (option_.target == Device::CPU) {
+  if (option_.device == Device::CPU) {
     ConfigureCpu(option_);
-  } else if (option_.target == Device::TIMVX) {
+  } else if (option_.device == Device::TIMVX) {
     ConfigureTimvx(option_);
-  } else if (option_.target == Device::KUNLUNXIN) {
+  } else if (option_.device == Device::KUNLUNXIN) {
     ConfigureKunlunXin(option_);
-  } else if (option_.target == Device::ASCEND) {
+  } else if (option_.device == Device::ASCEND) {
     ConfigureAscend(option_);
   }
   if (option_.cpu_threads > 0) {
@@ -100,7 +100,7 @@ bool LiteBackend::InitFromPaddle(const std::string& model_file,
     auto shape = tensor->shape();
     info.shape.assign(shape.begin(), shape.end());
     info.name = output_names[i];
-    if (!option_.enable_kunlunxin) {
+    if (!option_.device == Device::KUNLUNXIN) {
       info.dtype = LiteDataTypeToFD(tensor->precision());
     }
     outputs_desc_.emplace_back(info);
