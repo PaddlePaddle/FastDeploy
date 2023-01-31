@@ -65,7 +65,7 @@ class BlazeFacePostprocessor:
     @property
     def conf_threshold(self):
         """
-        confidence threshold for postprocessing, default is 0.01
+        confidence threshold for postprocessing, default is 0.5
         """
         return self._postprocessor.conf_threshold
 

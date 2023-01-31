@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #pragma once
-#include "fastdeploy/vision/detection/ppdet/postprocessor.h"
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"

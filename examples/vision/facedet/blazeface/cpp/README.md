@@ -13,9 +13,9 @@
 mkdir build
 cd build
 # 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz # x.x.x > 1.0.2
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz # x.x.x >= 1.0.4
 tar xvf fastdeploy-linux-x64-x.x.x.tgz # x.x.x > 1.0.2
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x # x.x.x > 1.0.2
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x # x.x.x >= 1.0.4
 make -j
 
 #下载官方转换好的YOLOv7Face模型文件和测试图片
@@ -27,13 +27,6 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/blzeface-1000e.tgz
 ./infer_demo blazeface-1000e/ test_lite_face_detector_3.jpg 0
 # GPU推理
 ./infer_demo blazeface-1000e/ test_lite_face_detector_3.jpg 1
-
-#使用yolov7-lite-e.onnx模型
-# CPU推理
-./infer_demo blazeface-1000e/ test_lite_face_detector_3.jpg 0
-# GPU推理
-./infer_demo blazeface-1000e/ test_lite_face_detector_3.jpg 1
-```
 
 运行完成可视化结果如下图所示
 
@@ -50,25 +43,25 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/blzeface-1000e.tgz
 fastdeploy::vision::facedet::BlazeFace(
         const string& model_file,
         const string& params_file = "",
+        const string& config_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
         const ModelFormat& model_format = ModelFormat::PADDLE)
 ```
 
-BlazeFace模型加载和初始化，其中model_file为导出的ONNX模型格式。
+BlazeFace模型加载和初始化，其中model_file为导出的PADDLE模型格式。
 
 **参数**
 
 > * **model_file**(str): 模型文件路径
 > * **params_file**(str): 参数文件路径，当模型格式为ONNX时，此参数传入空字符串即可
+> * **config_file**(str): 配置文件路径，当模型格式为ONNX时，此参数传入空字符串即可
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
 > * **model_format**(ModelFormat): 模型格式，默认为PADDLE格式
 
 #### Predict函数
 
 > ```c++
-> BlazeFace::Predict(cv::Mat* im, FaceDetectionResult* result,
->                 float conf_threshold = 0.3,
->                 float nms_iou_threshold = 0.5)
+> BlazeFace::Predict(cv::Mat& im, FaceDetectionResult* result)
 > ```
 >
 > 模型预测接口，输入图像直接输出检测结果。
@@ -77,8 +70,6 @@ BlazeFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 >
 > > * **im**: 输入图像，注意需为HWC，BGR格式
 > > * **result**: 检测结果，包括检测框，各个框的置信度, FaceDetectionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
-> > * **conf_threshold**: 检测框置信度过滤阈值
-> > * **nms_iou_threshold**: NMS处理过程中iou阈值
 
 - [模型介绍](../../)
 - [Python部署](../python)
