@@ -75,10 +75,10 @@ class PorosBackend : public BaseBackend {
   std::vector<TensorInfo> GetOutputInfos() override;
 
 #ifdef ENABLE_BENCHMARK
-  virtual bool Infer(std::vector<FDTensor>& inputs,
-                     std::vector<FDTensor>* outputs,
-                     double* mean_time_of_pure_backend,
-                     int repeat = 1, bool copy_to_fd = true) override; // NOLINT
+  bool Infer(std::vector<FDTensor>& inputs,
+             std::vector<FDTensor>* outputs,
+             double* mean_time_of_pure_backend,
+             int repeat = 1, bool copy_to_fd = true) override; // NOLINT
 #endif    
 
  private:
