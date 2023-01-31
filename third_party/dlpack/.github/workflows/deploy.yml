@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test_linux:
+    name: Deploy Docs
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: recursive
+
+    - name: Configuring Test Environment
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install build-essential doxygen ghp-import
+        python3 -m pip install -U pip wheel
+
+    - name: Installing dependencies
+      run: |
+        python3 -m pip install -r doc_requirements.txt
+
+    - name: Generating Docs
+      run: |
+        make doc
+
+    - name: Deploying on GitHub Pages
+      run: |
+        touch docs/build/.nojekyll
+        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/$GITHUB_REPOSITORY
+        git config --global user.email "dlpack-gh-actions-bot@nomail"
+        git config --global user.name "dlpack-gh-actions-bot"
+        ghp-import -m "Generate DLPack website" -b gh-pages docs/build
+        git push origin gh-pages -f

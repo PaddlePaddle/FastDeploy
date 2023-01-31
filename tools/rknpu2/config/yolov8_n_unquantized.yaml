@@ -1,0 +1,9 @@
+mean:
+std:
+model_path: ./yolov8_n_500e_coco/yolov8_n_500e_coco.onnx
+outputs_nodes:
+  - 'p2o.Div.1'
+  - 'p2o.Concat.49'
+do_quantization: False
+dataset: "./dataset.txt"
+output_folder: "./yolov8_n_500e_coco"

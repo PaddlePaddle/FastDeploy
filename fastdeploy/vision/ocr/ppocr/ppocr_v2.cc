@@ -22,101 +22,157 @@ PPOCRv2::PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
                              fastdeploy::vision::ocr::Classifier* cls_model,
                              fastdeploy::vision::ocr::Recognizer* rec_model)
     : detector_(det_model), classifier_(cls_model), recognizer_(rec_model) {
-  recognizer_->rec_image_shape[1] = 32;
+  Initialized();
+  auto preprocess_shape = recognizer_->GetPreprocessor().GetRecImageShape();
+  preprocess_shape[1] = 32;
+  recognizer_->GetPreprocessor().SetRecImageShape(preprocess_shape);
 }
 
 PPOCRv2::PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
                              fastdeploy::vision::ocr::Recognizer* rec_model)
     : detector_(det_model), recognizer_(rec_model) {
-  recognizer_->rec_image_shape[1] = 32;
+  Initialized();
+  auto preprocess_shape = recognizer_->GetPreprocessor().GetRecImageShape();
+  preprocess_shape[1] = 32;
+  recognizer_->GetPreprocessor().SetRecImageShape(preprocess_shape);
+}
+
+bool PPOCRv2::SetClsBatchSize(int cls_batch_size) {
+  if (cls_batch_size < -1 || cls_batch_size == 0) {
+    FDERROR << "batch_size > 0 or batch_size == -1." << std::endl;
+    return false;
+  }
+  cls_batch_size_ = cls_batch_size;
+  return true;
+}
+
+int PPOCRv2::GetClsBatchSize() {
+  return cls_batch_size_;
+}
+
+bool PPOCRv2::SetRecBatchSize(int rec_batch_size) {
+  if (rec_batch_size < -1 || rec_batch_size == 0) {
+    FDERROR << "batch_size > 0 or batch_size == -1." << std::endl;
+    return false;
+  }
+  rec_batch_size_ = rec_batch_size;
+  return true;
+}
+
+int PPOCRv2::GetRecBatchSize() {
+  return rec_batch_size_;
 }
 
 bool PPOCRv2::Initialized() const {
   
-  if (detector_ != nullptr && !detector_->Initialized()){
+  if (detector_ != nullptr && !detector_->Initialized()) {
     return false;
   }
 
-  if (classifier_ != nullptr && !classifier_->Initialized()){
+  if (classifier_ != nullptr && !classifier_->Initialized()) {
     return false;
   }
 
-  if (recognizer_ != nullptr && !recognizer_->Initialized()){
+  if (recognizer_ != nullptr && !recognizer_->Initialized()) {
     return false;
   }
   return true; 
 }
 
-bool PPOCRv2::Detect(cv::Mat* img,
-                           fastdeploy::vision::OCRResult* result) {
-  if (!detector_->Predict(img, &(result->boxes))) {
-    FDERROR << "There's error while detecting image in PPOCR." << std::endl;
-    return false;
+std::unique_ptr<PPOCRv2> PPOCRv2::Clone() const {
+  std::unique_ptr<PPOCRv2> clone_model = utils::make_unique<PPOCRv2>(PPOCRv2(*this));
+  clone_model->detector_ = detector_->Clone().release();
+  if (classifier_ != nullptr) {
+    clone_model->classifier_ = classifier_->Clone().release();
   }
-  vision::ocr::SortBoxes(result);
-  return true;
-}
-
-bool PPOCRv2::Recognize(cv::Mat* img,
-                              fastdeploy::vision::OCRResult* result) {
-  std::tuple<std::string, float> rec_result;
-  if (!recognizer_->Predict(img, &rec_result)) {
-    FDERROR << "There's error while recognizing image in PPOCR." << std::endl;
-    return false;
-  }
-
-  result->text.push_back(std::get<0>(rec_result));
-  result->rec_scores.push_back(std::get<1>(rec_result));
-  return true;
-}
-
-bool PPOCRv2::Classify(cv::Mat* img,
-                             fastdeploy::vision::OCRResult* result) {
-  std::tuple<int, float> cls_result;
-
-  if (!classifier_->Predict(img, &cls_result)) {
-    FDERROR << "There's error while classifying image in PPOCR." << std::endl;
-    return false;
-  }
-
-  result->cls_labels.push_back(std::get<0>(cls_result));
-  result->cls_scores.push_back(std::get<1>(cls_result));
-  return true;
+  clone_model->recognizer_ = recognizer_->Clone().release();
+  return clone_model;
 }
 
 bool PPOCRv2::Predict(cv::Mat* img,
                             fastdeploy::vision::OCRResult* result) {
-  result->Clear();
-  if (nullptr != detector_ && !Detect(img, result)) {
-    FDERROR << "Failed to detect image." << std::endl;
+  return Predict(*img, result);
+}
+
+bool PPOCRv2::Predict(const cv::Mat& img,
+                            fastdeploy::vision::OCRResult* result) {
+  std::vector<fastdeploy::vision::OCRResult> batch_result(1);
+  bool success = BatchPredict({img},&batch_result);
+  if(!success){
+    return success;
+  }
+  *result = std::move(batch_result[0]);
+  return true;
+};
+
+bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images,
+                           std::vector<fastdeploy::vision::OCRResult>* batch_result) {
+  batch_result->clear();
+  batch_result->resize(images.size());
+  std::vector<std::vector<std::array<int, 8>>> batch_boxes(images.size());
+
+  if (!detector_->BatchPredict(images, &batch_boxes)) {
+    FDERROR << "There's error while detecting image in PPOCR." << std::endl;
     return false;
   }
 
-  // Get croped images by detection result
-  std::vector<cv::Mat> image_list;
-  for (size_t i = 0; i < result->boxes.size(); ++i) {
-    auto crop_im = vision::ocr::GetRotateCropImage(*img, (result->boxes)[i]);
-    image_list.push_back(crop_im);
+  for(int i_batch = 0; i_batch < batch_boxes.size(); ++i_batch) {
+    vision::ocr::SortBoxes(&(batch_boxes[i_batch]));
+    (*batch_result)[i_batch].boxes = batch_boxes[i_batch];
   }
-  if (result->boxes.size() == 0) {
-    image_list.push_back(*img);
-  }
+  
+  for(int i_batch = 0; i_batch < images.size(); ++i_batch) {
+    fastdeploy::vision::OCRResult& ocr_result = (*batch_result)[i_batch];
+    // Get croped images by detection result
+    const std::vector<std::array<int, 8>>& boxes = ocr_result.boxes;
+    const cv::Mat& img = images[i_batch];
+    std::vector<cv::Mat> image_list;
+    if (boxes.size() == 0) {
+      image_list.emplace_back(img);
+    }else{
+      image_list.resize(boxes.size());
+      for (size_t i_box = 0; i_box < boxes.size(); ++i_box) {
+        image_list[i_box] = vision::ocr::GetRotateCropImage(img, boxes[i_box]);
+      }
+    }
+    std::vector<int32_t>* cls_labels_ptr = &ocr_result.cls_labels;
+    std::vector<float>* cls_scores_ptr = &ocr_result.cls_scores;
 
-  for (size_t i = 0; i < image_list.size(); ++i) {
-    if (nullptr != classifier_ && !Classify(&(image_list[i]), result)) {
-      FDERROR << "Failed to classify croped image of index " << i << "." << std::endl;
-      return false;
+    std::vector<std::string>* text_ptr = &ocr_result.text;
+    std::vector<float>* rec_scores_ptr = &ocr_result.rec_scores;
+
+    if (nullptr != classifier_) {
+      for(size_t start_index = 0; start_index < image_list.size(); start_index+=cls_batch_size_) {
+        size_t end_index = std::min(start_index + cls_batch_size_, image_list.size());
+        if (!classifier_->BatchPredict(image_list, cls_labels_ptr, cls_scores_ptr, start_index, end_index)) {
+          FDERROR << "There's error while recognizing image in PPOCR." << std::endl;
+          return false;
+        }else{
+          for (size_t i_img = start_index; i_img < end_index; ++i_img) {
+            if(cls_labels_ptr->at(i_img) % 2 == 1 && cls_scores_ptr->at(i_img) > classifier_->GetPostprocessor().GetClsThresh()) {
+              cv::rotate(image_list[i_img], image_list[i_img], 1);
+            }
+          }
+        }
+      }
     }
-    if (nullptr != classifier_ && result->cls_labels[i] % 2 == 1 && result->cls_scores[i] > classifier_->cls_thresh) {
-      cv::rotate(image_list[i], image_list[i], 1);
+
+    std::vector<float> width_list;
+    for (int i = 0; i < image_list.size(); i++) {
+      width_list.push_back(float(image_list[i].cols) / image_list[i].rows);
     }
-    if (nullptr != recognizer_ && !Recognize(&(image_list[i]), result)) {
-      FDERROR << "Failed to recgnize croped image of index " << i << "." << std::endl;
-      return false;
+    std::vector<int> indices = vision::ocr::ArgSort(width_list);
+
+    for(size_t start_index = 0; start_index < image_list.size(); start_index+=rec_batch_size_) {
+      size_t end_index = std::min(start_index + rec_batch_size_, image_list.size());
+      if (!recognizer_->BatchPredict(image_list, text_ptr, rec_scores_ptr, start_index, end_index, indices)) {
+        FDERROR << "There's error while recognizing image in PPOCR." << std::endl;
+        return false;
+      }
     }
   }
   return true;
-};
+}
 
 }  // namesapce pipeline
 }  // namespace fastdeploy

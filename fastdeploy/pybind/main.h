@@ -21,7 +21,7 @@
 
 #include <type_traits>
 
-#include "fastdeploy/runtime.h"
+#include "fastdeploy/runtime/runtime.h"
 
 #ifdef ENABLE_VISION
 #include "fastdeploy/vision.h"
@@ -30,6 +30,10 @@
 
 #ifdef ENABLE_TEXT
 #include "fastdeploy/text.h"
+#endif
+
+#ifdef ENABLE_ENCRYPTION
+#include "fastdeploy/encryption.h"
 #endif
 
 #include "fastdeploy/core/float16.h"
@@ -67,9 +71,11 @@ FDDataType CTypeToFDDataType() {
     return FDDataType::FP32;
   } else if (std::is_same<T, double>::value) {
     return FDDataType::FP64;
+  } else if (std::is_same<T, int8_t>::value) {
+    return FDDataType::INT8;
   }
-  FDASSERT(false,
-           "CTypeToFDDataType only support int32/int64/float32/float64 now.");
+  FDASSERT(false, "CTypeToFDDataType only support "
+           "int8/int32/int64/float32/float64 now.");
   return FDDataType::FP32;
 }
 

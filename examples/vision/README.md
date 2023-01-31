@@ -1,33 +1,36 @@
-# 视觉模型部署
+English | [简体中文](README_CN.md) 
 
-本目录下提供了各类视觉模型的部署，主要涵盖以下任务类型
+# Visual Model Deployment
 
-| 任务类型           | 说明                                  | 预测结果结构体                                                                          |
+This directory provides the deployment of various visual models, including the following task types
+
+| Task Type           |  Description                               | Predicted Structure                                                                         |
 |:-------------- |:----------------------------------- |:-------------------------------------------------------------------------------- |
-| Detection      | 目标检测，输入图像，检测图像中物体位置，并返回检测框坐标及类别和置信度 | [DetectionResult](../../docs/api/vision_results/detection_result.md)       |
-| Segmentation   | 语义分割，输入图像，给出图像中每个像素的分类及置信度          | [SegmentationResult](../../docs/api/vision_results/segmentation_result.md) |
-| Classification | 图像分类，输入图像，给出图像的分类结果和置信度             | [ClassifyResult](../../docs/api/vision_results/classification_result.md)   |
-| FaceDetection | 人脸检测，输入图像，检测图像中人脸位置，并返回检测框坐标及人脸关键点             | [FaceDetectionResult](../../docs/api/vision_results/face_detection_result.md)   |
-| FaceAlignment |  人脸对齐(人脸关键点检测)，输入图像，返回人脸关键点            | [FaceAlignmentResult](../../docs/api/vision_results/face_alignment_result.md)   |
-| KeypointDetection   | 关键点检测，输入图像，返回图像中人物行为的各个关键点坐标和置信度         | [KeyPointDetectionResult](../../docs/api/vision_results/keypointdetection_result.md) |
-| FaceRecognition | 人脸识别，输入图像，返回可用于相似度计算的人脸特征的embedding            | [FaceRecognitionResult](../../docs/api/vision_results/face_recognition_result.md)   |
-| Matting | 抠图，输入图像，返回图片的前景每个像素点的Alpha值            | [MattingResult](../../docs/api/vision_results/matting_result.md)   |
-| OCR | 文本框检测，分类，文本框内容识别，输入图像，返回文本框坐标，文本框的方向类别以及框内的文本内容            | [OCRResult](../../docs/api/vision_results/ocr_result.md)   |
-| MOT | 多目标跟踪，输入图像，检测图像中物体位置，并返回检测框坐标，对象id及类别置信度        | [MOTResult](../../docs/api/vision_results/mot_result.md)   |
-| HeadPose | 头部姿态估计，返回头部欧拉角            | [HeadPoseResult](../../docs/api/vision_results/headpose_result.md)   |
+| Detection      | Target detection. Input the image, detect the object’s position in the image, and return the detected box coordinates, category, and confidence coefficient | [DetectionResult](../../docs/api/vision_results/detection_result.md)       |
+| Segmentation   | Semantic segmentation. Input the image and output the classification and confidence coefficient of each pixel         | [SegmentationResult](../../docs/api/vision_results/segmentation_result.md) |
+| Classification | Image classification. Input the image and output the classification result and confidence coefficient of the image             | [ClassifyResult](../../docs/api/vision_results/classification_result.md)   |
+| FaceDetection | Face detection. Input the image, detect the position of faces in the image, and return detected box coordinates and key points of faces            | [FaceDetectionResult](../../docs/api/vision_results/face_detection_result.md)   |
+| FaceAlignment |  Face alignment(key points detection).Input the image and return face key points           | [FaceAlignmentResult](../../docs/api/vision_results/face_alignment_result.md)   |
+| KeypointDetection   | Key point detection. Input the image and return the coordinates and confidence coefficient of the key points of the person's behavior in the image         | [KeyPointDetectionResult](../../docs/api/vision_results/keypointdetection_result.md) |
+| FaceRecognition | Face recognition. Input the image and return an embedding of facial features that can be used for similarity calculation            | [FaceRecognitionResult](../../docs/api/vision_results/face_recognition_result.md)   |
+| Matting | Matting. Input the image and return the Alpha value of each pixel in the foreground of the image           | [MattingResult](../../docs/api/vision_results/matting_result.md)   |
+| OCR | Text box detection, classification, and text box content recognition. Input the image and return the text box’s coordinates, orientation category, and content         | [OCRResult](../../docs/api/vision_results/ocr_result.md)   |
+| MOT | Multi-objective tracking. Input the image and detect the position of objects in the image, and return detected box coordinates, object id, and class confidence        | [MOTResult](../../docs/api/vision_results/mot_result.md)   |
+| HeadPose | Head posture estimation. Return head Euler angle            | [HeadPoseResult](../../docs/api/vision_results/headpose_result.md)   |
 
-## FastDeploy API设计
+## FastDeploy API Design
 
-视觉模型具有较有统一任务范式，在设计API时（包括C++/Python），FastDeploy将视觉模型的部署拆分为四个步骤
+Generally, visual models have a uniform task paradigm. When designing API (including C++/Python), FastDeploy conducts four steps to deploy visual models
 
-- 模型加载
-- 图像预处理
-- 模型推理
-- 推理结果后处理
+- Model loading
+- Image pre-processing
+- Model Inference
+- Post-processing of inference results
 
-FastDeploy针对飞桨的视觉套件，以及外部热门模型，提供端到端的部署服务，用户只需准备模型，按以下步骤即可完成整个模型的部署
+Targeted at the vision suite of PaddlePaddle and external popular models, FastDeploy provides an end-to-end deployment service. Users merely prepare the model and follow these steps to complete the deployment
 
-- 加载模型
-- 调用`predict`接口
+- Model Loading
+- Calling the `predict`interface
 
-FastDeploy在各视觉模型部署时，也支持一键切换后端推理引擎，详情参阅[如何切换模型推理引擎](../../docs/cn/faq/how_to_change_backend.md)。
+When deploying visual models, FastDeploy supports one-click switching of the backend inference engine. Please refer to [How to switch model inference engine](../../docs/en/faq/how_to_change_backend.md).
+

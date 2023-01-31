@@ -71,6 +71,56 @@ TEST(fastdeploy, flycv_rgb2bgr) {
   check_data(reinterpret_cast<const uint8_t*>(opencv.Data()), reinterpret_cast<const uint8_t*>(flycv.Data()), opencv.Numel());
   check_type(opencv.dtype, flycv.dtype);
 }
+
+TEST(fastdeploy, flycv_rgb2gray) {
+  CheckShape check_shape;
+  CheckData check_data;
+  CheckType check_type;
+
+  cv::Mat mat(64, 64, CV_8UC3);
+  cv::randu(mat, cv::Scalar::all(0), cv::Scalar::all(255));
+  cv::Mat mat1 = mat.clone();
+
+  vision::Mat mat_opencv(mat);
+  vision::Mat mat_flycv(mat1);
+  vision::RGB2GRAY::Run(&mat_opencv, vision::ProcLib::OPENCV);
+  vision::RGB2GRAY::Run(&mat_flycv, vision::ProcLib::FLYCV);
+
+  FDTensor opencv;
+  FDTensor flycv;
+
+  mat_opencv.ShareWithTensor(&opencv);
+  mat_flycv.ShareWithTensor(&flycv);
+
+  check_shape(opencv.shape, flycv.shape);
+  check_data(reinterpret_cast<const uint8_t*>(opencv.Data()), reinterpret_cast<const uint8_t*>(flycv.Data()), opencv.Numel());
+  check_type(opencv.dtype, flycv.dtype);
+}
+
+TEST(fastdeploy, flycv_bgr2gray) {
+  CheckShape check_shape;
+  CheckData check_data;
+  CheckType check_type;
+
+  cv::Mat mat(64, 64, CV_8UC3);
+  cv::randu(mat, cv::Scalar::all(0), cv::Scalar::all(255));
+  cv::Mat mat1 = mat.clone();
+
+  vision::Mat mat_opencv(mat);
+  vision::Mat mat_flycv(mat1);
+  vision::BGR2GRAY::Run(&mat_opencv, vision::ProcLib::OPENCV);
+  vision::BGR2GRAY::Run(&mat_flycv, vision::ProcLib::FLYCV);
+
+  FDTensor opencv;
+  FDTensor flycv;
+
+  mat_opencv.ShareWithTensor(&opencv);
+  mat_flycv.ShareWithTensor(&flycv);
+
+  check_shape(opencv.shape, flycv.shape);
+  check_data(reinterpret_cast<const uint8_t*>(opencv.Data()), reinterpret_cast<const uint8_t*>(flycv.Data()), opencv.Numel());
+  check_type(opencv.dtype, flycv.dtype);
+}
 #endif
 
 }  // namespace fastdeploy

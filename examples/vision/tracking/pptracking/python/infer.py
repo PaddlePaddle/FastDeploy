@@ -21,8 +21,7 @@ def parse_arguments():
     import argparse
     import ast
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model", required=True, help="Path of PaddleSeg model.")
+    parser.add_argument("--model", required=True, help="Path of model.")
     parser.add_argument(
         "--video", type=str, required=True, help="Path of test video file.")
     parser.add_argument(

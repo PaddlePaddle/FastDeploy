@@ -22,7 +22,6 @@ void CpuInfer(const std::string& model_file, const std::string& image_file) {
   }
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
 
   fastdeploy::vision::DetectionResult res;
   if (!model.Predict(&im, &res)) {
@@ -31,7 +30,7 @@ void CpuInfer(const std::string& model_file, const std::string& image_file) {
   }
   std::cout << res.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res);
+  auto vis_im = fastdeploy::vision::VisDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -47,7 +46,6 @@ void GpuInfer(const std::string& model_file, const std::string& image_file) {
   }
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
 
   fastdeploy::vision::DetectionResult res;
   if (!model.Predict(&im, &res)) {
@@ -56,7 +54,7 @@ void GpuInfer(const std::string& model_file, const std::string& image_file) {
   }
   std::cout << res.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res);
+  auto vis_im = fastdeploy::vision::VisDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -74,7 +72,6 @@ void TrtInfer(const std::string& model_file, const std::string& image_file) {
   }
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
 
   fastdeploy::vision::DetectionResult res;
   if (!model.Predict(&im, &res)) {
@@ -83,7 +80,7 @@ void TrtInfer(const std::string& model_file, const std::string& image_file) {
   }
   std::cout << res.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res);
+  auto vis_im = fastdeploy::vision::VisDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }

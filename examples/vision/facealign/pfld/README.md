@@ -1,26 +1,27 @@
-# PFLD 模型部署
+English | [简体中文](README_CN.md)
+# PFLD Model Deployment
 
-## 模型版本说明
+## Model Description
 
 - [PFLD](https://github.com/Hsintao/pfld_106_face_landmarks/commit/e150195)
 
-## 支持模型列表
+## List of Supported Models
 
-目前FastDeploy支持如下模型的部署
+Now FastDeploy supports the deployment of the following models
 
-- [PFLD 模型](https://github.com/Hsintao/pfld_106_face_landmarks)
+- [PFLD Model](https://github.com/Hsintao/pfld_106_face_landmarks)
 
-## 下载预训练模型
+## Download Pre-trained Models
 
-为了方便开发者的测试，下面提供了PFLD导出的各系列模型，开发者可直接下载使用。
+For developers' testing, models exported by PFLD are provided below. Developers can download and use them directly. 
 
-| 模型                                                               | 参数大小    | 精度    | 备注 |
+| Model                                                               | Parameter Size    | Accuracy    | Note |
 |:---------------------------------------------------------------- |:----- |:----- | :------ |
 | [pfld-106-v2.onnx](https://bj.bcebos.com/paddlehub/fastdeploy/pfld-106-v2.onnx) | 4.9M | - |
 | [pfld-106-v3.onnx](https://bj.bcebos.com/paddlehub/fastdeploy/pfld-106-v3.onnx) | 5.6MB | - |
 | [pfld-106-lite.onnx](https://bj.bcebos.com/paddlehub/fastdeploy/pfld-106-lite.onnx) | 1.1MB | - |
 
-## 详细部署文档
+## Detailed Deployment Tutorials
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python Deployment](python)
+- [C++ Deployment](cpp)

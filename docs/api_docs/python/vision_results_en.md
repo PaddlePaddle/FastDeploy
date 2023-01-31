@@ -25,7 +25,7 @@ The code of DetectionResult is defined in `fastdeploy/vision/common/result.h` an
 
 API: `fastdeploy.vision.DetectionResult`, The DetectionResult will return:
 - **boxes**(list of list(float)):Member variable, represents the coordinates of all target boxes detected by a single image. boxes is a list, each element of which is a list of length 4, representing a box with 4 float values in order of xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corners.
-- **socres**(list of float):Member variable indicating the confidence of all targets detected by a single image.
+- **scores**(list of float):Member variable indicating the confidence of all targets detected by a single image.
 - **label_ids**(list of int):Member variable indicating all target categories detected for a single image.
 - **masks**:Member variable that represents all instances of mask detected from a single image, with the same number of elements and shape size as boxes.
 - **contain_masks**:Member variable indicating whether the detection result contains the instance mask, the result of the instance segmentation model is generally set to `True`.
@@ -49,10 +49,9 @@ API: `fastdeploy.vision.FaceDetectionResult`, The FaceDetectionResult will retur
 The KeyPointDetectionResult code is defined in `fastdeploy/vision/common/result.h` and is used to indicate the coordinates and confidence of each keypoint of the target behavior in the image.
 
 API:`fastdeploy.vision.KeyPointDetectionResult`, The KeyPointDetectionResult will return:
-- **keypoints**(list of list(float)): Member variable, representing the key point coordinates of the identified target behavior. `keypoints.size()= N * J * 2`，
+- **keypoints**(list of list(float)): Member variable, representing the key point coordinates of the identified target behavior. `keypoints.size()= N * J`，
     - `N`: number of objects in the picture
     - `J`: num_joints（number of keypoints for a target）
-    - `3`: 坐标信息[x, y]
 - **scores**(list of float): Member variable, representing the confidence of the keypoint coordinates of the recognized target behavior. `scores.size()= N * J`
     - `N`: number of objects in the picture
     - `J`: num_joints（number of keypoints for a target）

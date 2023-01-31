@@ -15,7 +15,7 @@
 #include "fastdeploy/function/eigen.h"
 
 namespace fastdeploy {
-
+namespace function {
 std::shared_ptr<EigenDeviceWrapper> EigenDeviceWrapper::instance_ = nullptr;
 
 std::shared_ptr<EigenDeviceWrapper> EigenDeviceWrapper::GetInstance() {
@@ -29,4 +29,5 @@ const Eigen::DefaultDevice* EigenDeviceWrapper::GetDevice() const {
   return &device_;
 }
 
+}
 }  // namespace fastdeploy

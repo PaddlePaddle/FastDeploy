@@ -40,3 +40,5 @@ yalc.*
 .yalc
 examples/vision/collect_quantize_cc.sh
 examples/vision/tests_quantize
+fastdeploy/LICENSE
+fastdeploy/ThirdPartyNotices.txt

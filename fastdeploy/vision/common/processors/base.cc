@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/common/processors/base.h"
-#include "fastdeploy/vision/common/processors/proc_lib.h"
 
 #include "fastdeploy/utils/utils.h"
+#include "fastdeploy/vision/common/processors/proc_lib.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -31,9 +31,60 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
 #else
     FDASSERT(false, "FastDeploy didn't compile with FlyCV.");
 #endif
+  } else if (target == ProcLib::CUDA) {
+#ifdef WITH_GPU
+    FDASSERT(mat->Stream() != nullptr,
+             "CUDA processor requires cuda stream, please set stream for Mat");
+    return ImplByCuda(mat);
+#else
+    FDASSERT(false, "FastDeploy didn't compile with WITH_GPU.");
+#endif
+  } else if (target == ProcLib::CVCUDA) {
+#ifdef ENABLE_CVCUDA
+    FDASSERT(mat->Stream() != nullptr,
+             "CV-CUDA requires cuda stream, please set stream for Mat");
+    return ImplByCvCuda(mat);
+#else
+    FDASSERT(false, "FastDeploy didn't compile with CV-CUDA.");
+#endif
   }
   // DEFAULT & OPENCV
   return ImplByOpenCV(mat);
+}
+
+FDTensor* Processor::UpdateAndGetCachedTensor(
+    const std::vector<int64_t>& new_shape, const FDDataType& data_type,
+    const std::string& tensor_name, const Device& new_device,
+    const bool& use_pinned_memory) {
+  if (cached_tensors_.count(tensor_name) == 0) {
+    cached_tensors_[tensor_name] = FDTensor();
+  }
+  cached_tensors_[tensor_name].is_pinned_memory = use_pinned_memory;
+  cached_tensors_[tensor_name].Resize(new_shape, data_type, tensor_name,
+                                      new_device);
+  return &cached_tensors_[tensor_name];
+}
+
+FDTensor* Processor::CreateCachedGpuInputTensor(
+    Mat* mat, const std::string& tensor_name) {
+#ifdef WITH_GPU
+  FDTensor* src = mat->Tensor();
+  if (src->device == Device::GPU) {
+    return src;
+  } else if (src->device == Device::CPU) {
+    FDTensor* tensor = UpdateAndGetCachedTensor(src->Shape(), src->Dtype(),
+                                                tensor_name, Device::GPU);
+    FDASSERT(cudaMemcpyAsync(tensor->Data(), src->Data(), tensor->Nbytes(),
+                             cudaMemcpyHostToDevice, mat->Stream()) == 0,
+             "[ERROR] Error occurs while copy memory from CPU to GPU.");
+    return tensor;
+  } else {
+    FDASSERT(false, "FDMat is on unsupported device: %d", src->device);
+  }
+#else
+  FDASSERT(false, "FastDeploy didn't compile with WITH_GPU.");
+#endif
+  return nullptr;
 }
 
 void EnableFlyCV() {

@@ -24,7 +24,9 @@ from . import facealign
 from . import faceid
 from . import ocr
 from . import headpose
+from . import sr
 from . import evaluation
+from . import generation
 from .utils import fd_result_to_json
 from .visualize import *
 from .. import C

@@ -1,4 +1,4 @@
-([简体中文](./README_cn.md)|English)
+[简体中文](README_CN.md) | English
 
 # PP-TTS Streaming Text-to-Speech Serving
 

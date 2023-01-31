@@ -1,3 +1,5 @@
+[English](../../en/build_and_install/third_libraries.md) | 简体中文
+
 # 第三方库依赖
 
 FastDeploy当前根据编译选项，会依赖如下第三方依赖

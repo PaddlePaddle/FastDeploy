@@ -1,0 +1,82 @@
+[English](README.md) | 简体中文
+# YOLOv5 服务化部署示例
+
+在服务化部署前，需确认
+
+- 1. 服务化镜像的软硬件环境要求和镜像拉取命令请参考[FastDeploy服务化部署](../../../../../serving/README_CN.md)
+
+
+## 启动服务
+
+```bash
+#下载部署示例代码
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy/examples/vision/detection/yolov5/serving/
+
+#下载yolov5模型文件
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s.onnx
+
+# 将模型放入 models/runtime/1目录下, 并重命名为model.onnx
+mv yolov5s.onnx models/runtime/1/model.onnx
+
+# 拉取fastdeploy镜像(x.y.z为镜像版本号，需参照serving文档替换为数字)
+# GPU镜像
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
+# CPU镜像
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10
+
+# 运行容器.容器名字为 fd_serving, 并挂载当前目录为容器的 /yolov5_serving 目录
+nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/yolov5_serving registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10  bash
+
+# 启动服务(不设置CUDA_VISIBLE_DEVICES环境变量，会拥有所有GPU卡的调度权限)
+CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=/yolov5_serving/models --backend-config=python,shm-default-byte-size=10485760
+```
+>> **注意**: 当出现"Address already in use", 请使用`--grpc-port`指定端口号来启动服务，同时更改yolov5_grpc_client.py中的请求端口号
+
+服务启动成功后， 会有以下输出:
+```
+......
+I0928 04:51:15.784517 206 grpc_server.cc:4117] Started GRPCInferenceService at 0.0.0.0:8001
+I0928 04:51:15.785177 206 http_server.cc:2815] Started HTTPService at 0.0.0.0:8000
+I0928 04:51:15.826578 206 http_server.cc:167] Started Metrics Service at 0.0.0.0:8002
+```
+
+
+## 客户端请求
+
+在物理机器中执行以下命令，发送grpc请求并输出结果
+```
+#下载测试图片
+wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
+
+#安装客户端依赖
+python3 -m pip install tritonclient[all]
+
+# 发送请求
+python3 yolov5_grpc_client.py
+```
+
+发送请求成功后，会返回json格式的检测结果并打印输出:
+```
+output_name: detction_result
+{'boxes': [[268.48028564453125, 81.05305480957031, 298.69476318359375, 169.43902587890625], [104.73116302490234, 45.66197204589844, 127.58382415771484, 93.44938659667969], [378.9093933105469, 39.75013732910156, 395.6086120605469, 84.24342346191406], [158.552978515625, 80.36149597167969, 199.18576049804688, 168.18191528320312], [414.37530517578125, 90.94805908203125, 506.3218994140625, 280.40521240234375], [364.00341796875, 56.608917236328125, 381.97857666015625, 115.96823120117188], [351.7251281738281, 42.635345458984375, 366.9103088378906, 98.04837036132812], [505.8882751464844, 114.36674499511719, 593.1248779296875, 275.99530029296875], [327.7086181640625, 38.36369323730469, 346.84991455078125, 80.89302062988281], [583.493408203125, 114.53289794921875, 612.3546142578125, 175.87353515625], [186.4706573486328, 44.941375732421875, 199.6645050048828, 61.037628173828125], [169.6158905029297, 48.01460266113281, 178.1415557861328, 60.88859558105469], [25.81019401550293, 117.19969177246094, 59.88878631591797, 152.85012817382812], [352.1452941894531, 46.71272277832031, 381.9460754394531, 106.75212097167969], [1.875, 150.734375, 37.96875, 173.78125], [464.65728759765625, 15.901412963867188, 472.512939453125, 34.11640930175781], [64.625, 135.171875, 84.5, 154.40625], [57.8125, 151.234375, 103.0, 174.15625], [165.890625, 88.609375, 527.90625, 339.953125], [101.40625, 152.5625, 118.890625, 169.140625]], 'scores': [0.8965693116188049, 0.8695310950279236, 0.8684297800064087, 0.8429877758026123, 0.8358422517776489, 0.8151364326477051, 0.8089362382888794, 0.801361083984375, 0.7947245836257935, 0.7606497406959534, 0.6325908303260803, 0.6139386892318726, 0.5906146764755249, 0.505328893661499, 0.40457233786582947, 0.3460320234298706, 0.33283042907714844, 0.3325657248497009, 0.2594234347343445, 0.25389009714126587], 'label_ids': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24, 0, 24, 24, 33, 24], 'masks': [], 'contain_masks': False}
+```
+
+## 配置修改
+
+当前默认配置在CPU上运行ONNXRuntime引擎， 如果要在GPU或其他推理引擎上运行。 需要修改`models/runtime/config.pbtxt`中配置，详情请参考[配置文档](../../../../../serving/docs/zh_CN/model_configuration.md)
+
+
+## 使用VisualDL进行可视化部署
+
+可以使用VisualDL进行[Serving可视化部署](../../../../../serving/docs/zh_CN/vdl_management.md)，上述启动服务、配置修改以及客户端请求的操作都可以基于VisualDL进行。
+
+通过VisualDL的可视化界面对yolov5进行服务化部署只需要如下三步：
+```text
+1. 载入模型库：./vision/detection/yolov5/serving/models
+2. 下载模型资源文件：点击runtime模型，点击版本号1添加预训练模型，选择检测模型yolov5s进行下载。
+3. 启动服务：点击启动服务按钮，输入启动参数。
+```
+ <p align="center">
+  <img src="https://user-images.githubusercontent.com/22424850/211709339-023fef22-3ffc-4b3d-bce5-ea4202bb9c61.gif" width="100%"/>
+</p>

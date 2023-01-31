@@ -1,78 +1,79 @@
+English | [简体中文](README_CN.md)
 # Paddle.js-demo
 
-## Demo 目录
+## Demo Directory
 
-| 分类 | 名称             | 目录                                                     |
+| Classification | Name             | Directory                                                     |
 |:----:| :--------------- | -------------------------------------------------------- |
-|  CV  | 人像扣图         | /src/pages/cv/segmentation/HumanSeg               |
-|  CV  | 人像分割背景替换 | /src/pages/cv/segmentation/HumanSeg |
-|  CV  | 手势识别AI猜丁壳 | /src/pages/cv/recognition/GestureRecognition             |
-|  CV  | 1000种物品识别   | /src/pages/cv/recognition/ItemIdentification             |
-|  CV  | 酒瓶识别         | /src/pages/cv/recognition/WineBottleIdentification       |
-|  CV  | 文本检测         | /src/pages/cv/ocr/TextDetection                          |
-|  CV  | 文本识别         | /src/pages/cv/ocr/TextRecognition                        |
+|  CV  | Portrait matting         | /src/pages/cv/segmentation/HumanSeg               |
+|  CV  | Portrait segmentation background replacement | /src/pages/cv/segmentation/HumanSeg |
+|  CV  | Gesture recognition AI 'Rock Paper Scissors' | /src/pages/cv/recognition/GestureRecognition             |
+|  CV  | Identify 1000 items   | /src/pages/cv/recognition/ItemIdentification             |
+|  CV  | Wine bottle recognition         | /src/pages/cv/recognition/WineBottleIdentification       |
+|  CV  | Text detection         | /src/pages/cv/ocr/TextDetection                          |
+|  CV  | Text Recognition        | /src/pages/cv/ocr/TextRecognition                        |
 
-## 开发简介
+## Introduction to Development
 
-### 安装依赖
+### Install dependencies
 
 ```sh
 npm install
 ```
 
-### 开发
+### Development
 
 ```sh
 npm run dev
 ```
 
-### 查看页面
+### Page View
 
-访问 `http://localhost:5173/main/index.html` 进入主页
+Visit `http://localhost:5173/main/index.html` and enter homepage
 
-### 构建
+### Construction
 
 ```sh
 npm run build
 ```
 
-### [ESLint](https://eslint.org/) 格式化
+### [ESLint](https://eslint.org/) Formatting
 
 ```sh
 npm run lint
 ```
 
-### 工程风格
+### Project style
 
-1. 项目使用TypeScript
-2. 推荐使用 Vue 的组合式 API，可以根据 'src/pages/ExampleFile.vue' 模板创建新的组件
-3. CSS 使用 Less
-4. eslint 使用的是 Vue 推荐的，一般情况请尽量符合对应的要求
-5. store 使用的是 [Pinia](https://pinia.web3doc.top/)
-6. router 使用的是 [vue-router](https://router.vuejs.org/zh/)
+1. Use TypeScript
+2. Vue's compositional API is recommended. Creating new components according to the 'src/pages/ExampleFile.vue' template
+3. use Less for CSS
+4. Use what Vue recommends for eslint. Try to meet the requirements.
+5. Use [Pinia](https://pinia.web3doc.top/) for store
+6. Use [vue-router](https://router.vuejs.org/zh/) for router
 
-### src 目录简介
+### Brief introduction to src
 
 ```text
-├─assets 资源文件
-├─components 全局组件
-├─router 路由
-├─stores 存储库
+├─assets  
+├─components  
+├─router 
+├─stores 
 └─pages 
-    └─cv cv相关demo
-        ├─ocr ocr相关demo
+    └─cv  demo of cv
+        ├─ocr  demo of ocr
         │  ├─TextDetection
         │  └─TextRecognition
         ├─...
-        ├─recognition 识别相关demo
+        ├─recognition  demo of recognition
         │  ├─GestureRecognition
         │  ├─ItemIdentification
         │  ├─...
         │  └─WineBottleIdentification
-        └─segmentation 分割相关demo
+        └─segmentation  demo of segmentation
             ├─PortraitBackgroundReplacement
             ├─...
             └─PortraitMatting
 
 ```
-新增组件在对应类别下新增即可，可以参考模板 'src/pages/ExampleFile.vue'
+Add new components under corresponding categories. Refer to 'src/pages/ExampleFile.vue' for its template

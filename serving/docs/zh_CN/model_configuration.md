@@ -1,8 +1,9 @@
+中文 ｜ [English](../EN/model_configuration-en.md)
 # 模型配置
 模型存储库中的每个模型都必须包含一个模型配置，该配置提供了关于模型的必要和可选信息。这些配置信息一般写在 *config.pbtxt* 文件中，[ModelConfig protobuf](https://github.com/triton-inference-server/common/blob/main/protobuf/model_config.proto)格式。
 
 ## 模型通用最小配置
-详细的模型通用配置请看官网文档: [model_configuration](https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md).Triton的最小模型配置必须包括: *platform* 或 *backend* 属性、*max_batch_size* 属性和模型的输入输出.
+详细的模型通用配置请看官网文档: [model_configuration](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md).Triton的最小模型配置必须包括: *platform* 或 *backend* 属性、*max_batch_size* 属性和模型的输入输出.
 
 例如一个Paddle模型，有两个输入*input0* 和 *input1*，一个输出*output0*，输入输出都是float32类型的tensor，最大batch为8.则最小的配置如下:
 
@@ -82,7 +83,7 @@ FastDeploy后端目前支持*cpu*和*gpu*推理，*cpu*上支持*paddle*、*onnx
 
 
 #### 配置使用Paddle引擎
-除去配置 *Instance Groups*，决定模型运行在CPU还是GPU上。Paddle引擎中，还可以进行如下配置:
+除去配置 *Instance Groups*，决定模型运行在CPU还是GPU上。Paddle引擎中，还可以进行如下配置,具体例子可参照[PP-OCRv3例子中Runtime配置](../../../examples/vision/ocr/PP-OCRv3/serving/models/cls_runtime/config.pbtxt):
 
 ```
 optimization {
@@ -112,7 +113,7 @@ optimization {
 ```
 
 ### 配置使用ONNXRuntime引擎
-除去配置 *Instance Groups*，决定模型运行在CPU还是GPU上。ONNXRuntime引擎中，还可以进行如下配置:
+除去配置 *Instance Groups*，决定模型运行在CPU还是GPU上。ONNXRuntime引擎中，还可以进行如下配置，具体例子可参照[YOLOv5的Runtime配置](../../../examples/vision/detection/yolov5/serving/models/runtime/config.pbtxt):
 
 ```
 optimization {
@@ -167,4 +168,39 @@ optimization {
     ]
   }
 }
+```
+
+配置TensorRT动态shape的格式如下，可参照[PaddleCls例子中Runtime配置](../../../examples/vision/classification/paddleclas/serving/models/runtime/config.pbtxt):
+```
+optimization {
+  execution_accelerators {
+  gpu_execution_accelerator : [ {
+    # use TRT engine
+    name: "tensorrt",
+    # use fp16 on TRT engine
+    parameters { key: "precision" value: "trt_fp16" }
+  },
+  {
+    # Configure the minimum shape of dynamic shape
+    name: "min_shape"
+    # All input name and minimum shape
+    parameters { key: "input1" value: "1 3 224 224" }
+    parameters { key: "input2" value: "1 10" }
+  },
+  {
+    # Configure the optimal shape of dynamic shape
+    name: "opt_shape"
+    # All input name and optimal shape
+    parameters { key: "input1" value: "2 3 224 224" }
+    parameters { key: "input2" value: "2 20" }
+  },
+  {
+    # Configure the maximum shape of dynamic shape
+    name: "max_shape"
+    # All input name and maximum shape
+    parameters { key: "input1" value: "8 3 224 224" }
+    parameters { key: "input2" value: "8 30" }
+  }
+  ]
+}}
 ```

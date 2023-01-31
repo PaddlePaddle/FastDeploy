@@ -28,10 +28,12 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-cv::Mat GetRotateCropImage(const cv::Mat& srcimage,
+FASTDEPLOY_DECL cv::Mat GetRotateCropImage(const cv::Mat& srcimage,
                            const std::array<int, 8>& box);
 
-void SortBoxes(OCRResult* result);
+FASTDEPLOY_DECL void SortBoxes(std::vector<std::array<int, 8>>* boxes);
+
+FASTDEPLOY_DECL std::vector<int> ArgSort(const std::vector<float> &array);
 
 }  // namespace ocr
 }  // namespace vision

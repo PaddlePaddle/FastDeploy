@@ -13,10 +13,407 @@
 // limitations under the License.
 
 #pragma once
-#include "fastdeploy/vision/detection/ppdet/mask_rcnn.h"
-#include "fastdeploy/vision/detection/ppdet/picodet.h"
-#include "fastdeploy/vision/detection/ppdet/ppyolo.h"
-#include "fastdeploy/vision/detection/ppdet/ppyoloe.h"
-#include "fastdeploy/vision/detection/ppdet/rcnn.h"
-#include "fastdeploy/vision/detection/ppdet/yolov3.h"
-#include "fastdeploy/vision/detection/ppdet/yolox.h"
+#include "fastdeploy/vision/detection/ppdet/base.h"
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
+
+namespace fastdeploy {
+namespace vision {
+namespace detection {
+
+class FASTDEPLOY_DECL PicoDet : public PPDetBase {
+ public:
+  /** \brief Set path of model file and configuration file, and the configuration of runtime
+   *
+   * \param[in] model_file Path of model file, e.g picodet/model.pdmodel
+   * \param[in] params_file Path of parameter file, e.g picodet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] config_file Path of configuration file for deployment, e.g picodet/infer_cfg.yml
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
+   * \param[in] model_format Model format of the loaded model, default is Paddle format
+   */
+  PicoDet(const std::string& model_file, const std::string& params_file,
+          const std::string& config_file,
+          const RuntimeOption& custom_option = RuntimeOption(),
+          const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
+                          Backend::LITE};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_rknpu_backends = {Backend::RKNPU2};
+    valid_kunlunxin_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
+    valid_sophgonpu_backends = {Backend::SOPHGOTPU};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PicoDet"; }
+};
+
+class FASTDEPLOY_DECL PPYOLOE : public PPDetBase {
+ public:
+  /** \brief Set path of model file and configuration file, and the configuration of runtime
+   *
+   * \param[in] model_file Path of model file, e.g ppyoloe/model.pdmodel
+   * \param[in] params_file Path of parameter file, e.g picodet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] config_file Path of configuration file for deployment, e.g picodet/infer_cfg.yml
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
+   * \param[in] model_format Model format of the loaded model, default is Paddle format
+   */
+  PPYOLOE(const std::string& model_file, const std::string& params_file,
+          const std::string& config_file,
+          const RuntimeOption& custom_option = RuntimeOption(),
+          const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
+                          Backend::LITE};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_timvx_backends = {Backend::LITE};
+    valid_kunlunxin_backends = {Backend::LITE};
+    valid_rknpu_backends = {Backend::RKNPU2};
+    valid_ascend_backends = {Backend::LITE};
+    valid_sophgonpu_backends = {Backend::SOPHGOTPU};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PPYOLOE"; }
+};
+
+class FASTDEPLOY_DECL PPYOLO : public PPDetBase {
+ public:
+  /** \brief Set path of model file and configuration file, and the configuration of runtime
+   *
+   * \param[in] model_file Path of model file, e.g ppyolo/model.pdmodel
+   * \param[in] params_file Path of parameter file, e.g ppyolo/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] config_file Path of configuration file for deployment, e.g picodet/infer_cfg.yml
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
+   * \param[in] model_format Model format of the loaded model, default is Paddle format
+   */
+  PPYOLO(const std::string& model_file, const std::string& params_file,
+         const std::string& config_file,
+         const RuntimeOption& custom_option = RuntimeOption(),
+         const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::PDINFER, Backend::LITE};
+    valid_gpu_backends = {Backend::PDINFER};
+    valid_kunlunxin_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/PP-YOLO"; }
+};
+
+class FASTDEPLOY_DECL YOLOv3 : public PPDetBase {
+ public:
+  YOLOv3(const std::string& model_file, const std::string& params_file,
+         const std::string& config_file,
+         const RuntimeOption& custom_option = RuntimeOption(),
+         const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
+                          Backend::LITE};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_kunlunxin_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/YOLOv3"; }
+};
+
+class FASTDEPLOY_DECL PaddleYOLOX : public PPDetBase {
+ public:
+  PaddleYOLOX(const std::string& model_file, const std::string& params_file,
+              const std::string& config_file,
+              const RuntimeOption& custom_option = RuntimeOption(),
+              const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
+                          Backend::LITE};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_kunlunxin_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/YOLOX"; }
+};
+
+class FASTDEPLOY_DECL FasterRCNN : public PPDetBase {
+ public:
+  FasterRCNN(const std::string& model_file, const std::string& params_file,
+             const std::string& config_file,
+             const RuntimeOption& custom_option = RuntimeOption(),
+             const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::PDINFER, Backend::LITE};
+    valid_gpu_backends = {Backend::PDINFER};
+    valid_kunlunxin_backends = {Backend::LITE};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/FasterRCNN"; }
+};
+
+class FASTDEPLOY_DECL MaskRCNN : public PPDetBase {
+ public:
+  MaskRCNN(const std::string& model_file, const std::string& params_file,
+           const std::string& config_file,
+           const RuntimeOption& custom_option = RuntimeOption(),
+           const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::PDINFER, Backend::LITE};
+    valid_gpu_backends = {Backend::PDINFER};
+    valid_kunlunxin_backends = {Backend::LITE};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/MaskRCNN"; }
+};
+
+class FASTDEPLOY_DECL SSD : public PPDetBase {
+ public:
+  SSD(const std::string& model_file, const std::string& params_file,
+      const std::string& config_file,
+      const RuntimeOption& custom_option = RuntimeOption(),
+      const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::PDINFER, Backend::LITE};
+    valid_gpu_backends = {Backend::PDINFER};
+    valid_kunlunxin_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/SSD"; }
+};
+
+class FASTDEPLOY_DECL PaddleYOLOv5 : public PPDetBase {
+ public:
+  PaddleYOLOv5(const std::string& model_file, const std::string& params_file,
+               const std::string& config_file,
+               const RuntimeOption& custom_option = RuntimeOption(),
+               const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_kunlunxin_backends = {Backend::LITE};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/YOLOv5"; }
+};
+
+class FASTDEPLOY_DECL PaddleYOLOv6 : public PPDetBase {
+ public:
+  PaddleYOLOv6(const std::string& model_file, const std::string& params_file,
+               const std::string& config_file,
+               const RuntimeOption& custom_option = RuntimeOption(),
+               const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_kunlunxin_backends = {Backend::LITE};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/YOLOv6"; }
+};
+
+class FASTDEPLOY_DECL PaddleYOLOv7 : public PPDetBase {
+ public:
+  PaddleYOLOv7(const std::string& model_file, const std::string& params_file,
+               const std::string& config_file,
+               const RuntimeOption& custom_option = RuntimeOption(),
+               const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_kunlunxin_backends = {Backend::LITE};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/YOLOv7"; }
+};
+
+class FASTDEPLOY_DECL PaddleYOLOv8 : public PPDetBase {
+ public:
+  PaddleYOLOv8(const std::string& model_file, const std::string& params_file,
+               const std::string& config_file,
+               const RuntimeOption& custom_option = RuntimeOption(),
+               const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
+                          Backend::LITE};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_kunlunxin_backends = {Backend::LITE};
+    valid_rknpu_backends = {Backend::RKNPU2};
+    valid_ascend_backends = {Backend::LITE};
+    valid_sophgonpu_backends = {Backend::SOPHGOTPU};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/YOLOv8"; }
+};
+
+class FASTDEPLOY_DECL RTMDet : public PPDetBase {
+ public:
+  RTMDet(const std::string& model_file, const std::string& params_file,
+         const std::string& config_file,
+         const RuntimeOption& custom_option = RuntimeOption(),
+         const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_kunlunxin_backends = {Backend::LITE};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/RTMDet"; }
+};
+
+class FASTDEPLOY_DECL CascadeRCNN : public PPDetBase {
+ public:
+  CascadeRCNN(const std::string& model_file, const std::string& params_file,
+              const std::string& config_file,
+              const RuntimeOption& custom_option = RuntimeOption(),
+              const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::PDINFER};
+    valid_gpu_backends = {Backend::PDINFER};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const {
+    return "PaddleDetection/CascadeRCNN";
+  }
+};
+
+class FASTDEPLOY_DECL PSSDet : public PPDetBase {
+ public:
+  PSSDet(const std::string& model_file, const std::string& params_file,
+         const std::string& config_file,
+         const RuntimeOption& custom_option = RuntimeOption(),
+         const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::PDINFER};
+    valid_gpu_backends = {Backend::PDINFER};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/PSSDet"; }
+};
+
+class FASTDEPLOY_DECL RetinaNet : public PPDetBase {
+ public:
+  RetinaNet(const std::string& model_file, const std::string& params_file,
+            const std::string& config_file,
+            const RuntimeOption& custom_option = RuntimeOption(),
+            const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::PDINFER};
+    valid_gpu_backends = {Backend::PDINFER};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/RetinaNet"; }
+};
+
+class FASTDEPLOY_DECL PPYOLOESOD : public PPDetBase {
+ public:
+  PPYOLOESOD(const std::string& model_file, const std::string& params_file,
+             const std::string& config_file,
+             const RuntimeOption& custom_option = RuntimeOption(),
+             const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/PPYOLOESOD"; }
+};
+
+class FASTDEPLOY_DECL FCOS : public PPDetBase {
+ public:
+  FCOS(const std::string& model_file, const std::string& params_file,
+       const std::string& config_file,
+       const RuntimeOption& custom_option = RuntimeOption(),
+       const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::PDINFER};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/FCOS"; }
+};
+
+class FASTDEPLOY_DECL TTFNet : public PPDetBase {
+ public:
+  TTFNet(const std::string& model_file, const std::string& params_file,
+         const std::string& config_file,
+         const RuntimeOption& custom_option = RuntimeOption(),
+         const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::PDINFER};
+    valid_gpu_backends = {Backend::PDINFER};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/TTFNet"; }
+};
+
+class FASTDEPLOY_DECL TOOD : public PPDetBase {
+ public:
+  TOOD(const std::string& model_file, const std::string& params_file,
+       const std::string& config_file,
+       const RuntimeOption& custom_option = RuntimeOption(),
+       const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::PDINFER};
+    valid_gpu_backends = {Backend::PDINFER};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/TOOD"; }
+};
+
+class FASTDEPLOY_DECL GFL : public PPDetBase {
+ public:
+  GFL(const std::string& model_file, const std::string& params_file,
+      const std::string& config_file,
+      const RuntimeOption& custom_option = RuntimeOption(),
+      const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/GFL"; }
+};
+
+}  // namespace detection
+}  // namespace vision
+}  // namespace fastdeploy

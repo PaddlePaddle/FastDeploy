@@ -1,14 +1,14 @@
+[English](../../en/build_and_install/android.md) | 简体中文
+
 # Android部署库编译
 
-FastDeploy当前在Android仅支持Paddle-Lite后端推理，支持armeabi-v7a和arm64-v8a两种cpu架构，在armv8.2架构的arm设备支持fp16精度推理。相关编译选项说明如下：  
+FastDeploy当前在Android仅支持Paddle Lite后端推理，支持armeabi-v7a和arm64-v8a两种cpu架构，在armv8.2架构的arm设备支持fp16精度推理。相关编译选项说明如下：  
 
 |编译选项|默认值|说明|备注|  
 |:---|:---|:---|:---|  
 |ENABLE_LITE_BACKEND|OFF|编译Android库时需要设置为ON| - |
 |WITH_OPENCV_STATIC|OFF|是否使用OpenCV静态库| - |
 |WITH_LITE_STATIC|OFF|是否使用Lite静态库| 暂不支持使用Lite静态库 |
-|WITH_LITE_FULL_API|ON|是否使用Lite Full API库| 目前必须为ON |
-|WITH_LITE_FP16|OFF|是否使用带FP16支持的Lite库| 目前仅支持 arm64-v8a 架构|
 
 更多编译选项请参考[FastDeploy编译选项说明](./README.md)
 
@@ -47,12 +47,6 @@ FASDEPLOY_INSTALL_DIR="${BUILD_DIR}/install"
 mkdir build && mkdir ${BUILD_ROOT} && mkdir ${BUILD_DIR}
 cd ${BUILD_DIR}
 
-# Check fp16 support (only support arm64-v8a now)
-WITH_LITE_FP16=ON
-if [ "$ANDROID_ABI" = "armeabi-v7a" ]; then
-  WITH_LITE_FP16=OFF
-fi
-
 # CMake configuration with Android toolchain
 cmake -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} \
       -DCMAKE_BUILD_TYPE=MinSizeRel \
@@ -63,7 +57,6 @@ cmake -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} \
       -DANDROID_TOOLCHAIN=${ANDROID_TOOLCHAIN} \
       -DENABLE_LITE_BACKEND=ON \
       -DENABLE_VISION=ON \
-      -DWITH_LITE_FP16=${WITH_LITE_FP16} \
       -DCMAKE_INSTALL_PREFIX=${FASDEPLOY_INSTALL_DIR} \
       -Wno-dev ../../..
 
@@ -83,6 +76,7 @@ make install
 └── third_libs                       # 第三方依赖库
     └── install
         ├── opencv
+        ├── flycv
         └── paddlelite
 ```
 在examples/vision目录下可查看Android C++ SDK 使用案例：

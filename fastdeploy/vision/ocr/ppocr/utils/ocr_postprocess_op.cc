@@ -318,10 +318,12 @@ std::vector<std::vector<std::vector<int>>> PostProcessor::BoxesFromBitmap(
 }
 
 std::vector<std::vector<std::vector<int>>> PostProcessor::FilterTagDetRes(
-    std::vector<std::vector<std::vector<int>>> boxes, float ratio_h,
-    float ratio_w, const std::map<std::string, std::array<float, 2>> &im_info) {
-  int oriimg_h = im_info.at("input_shape")[0];
-  int oriimg_w = im_info.at("input_shape")[1];
+    std::vector<std::vector<std::vector<int>>> boxes,
+    const std::array<int,4>& det_img_info) {
+  int oriimg_w = det_img_info[0];
+  int oriimg_h = det_img_info[1];
+  float ratio_w = float(det_img_info[2])/float(oriimg_w);
+  float ratio_h = float(det_img_info[3])/float(oriimg_h);
 
   std::vector<std::vector<std::vector<int>>> root_points;
   for (int n = 0; n < boxes.size(); n++) {

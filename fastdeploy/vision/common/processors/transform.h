@@ -18,6 +18,7 @@
 #include "fastdeploy/vision/common/processors/center_crop.h"
 #include "fastdeploy/vision/common/processors/color_space_convert.h"
 #include "fastdeploy/vision/common/processors/convert.h"
+#include "fastdeploy/vision/common/processors/convert_and_permute.h"
 #include "fastdeploy/vision/common/processors/crop.h"
 #include "fastdeploy/vision/common/processors/hwc2chw.h"
 #include "fastdeploy/vision/common/processors/limit_by_stride.h"
@@ -36,7 +37,6 @@ namespace fastdeploy {
 namespace vision {
 
 void FuseTransforms(std::vector<std::shared_ptr<Processor>>* processors);
-
 // Fuse Normalize + Cast(Float) to Normalize
 void FuseNormalizeCast(std::vector<std::shared_ptr<Processor>>* processors);
 // Fuse Normalize + HWC2CHW to NormalizeAndPermute

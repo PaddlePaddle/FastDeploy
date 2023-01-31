@@ -1,43 +1,44 @@
-# PP-Humanseg v1模型前端部署
+English | [简体中文](README_CN.md)
+# PP-Humanseg v1 Model Frontend Deployment
 
-## 模型版本说明
+## Model Version
 
 - [PP-HumanSeg Release/2.6](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/contrib/PP-HumanSeg/)
 
 
-## 前端部署PP-Humanseg v1模型
+## Deploy PP-Humanseg v1 Model on Frontend
 
-PP-Humanseg v1模型web demo部署及使用参考[文档](../../../../application/js/web_demo/README.md)
+To deploy and use PP-Humanseg v1 model of web demo, please refer to [document](../../../../application/js/web_demo/README.md).
 
 
-## PP-Humanseg v1 js接口
+## PP-Humanseg v1 js interface
 
 ```
 import * as humanSeg from "@paddle-js-models/humanseg";
-# 模型加载与初始化
+# Load and initialise model
 await humanSeg.load(Config);
-# 人像分割
+# Portrait segmentation
 const res = humanSeg.getGrayValue(input)
-# 提取人像与背景的二值图
+# Extract the binary map of portrait and background
 humanSeg.drawMask(res)
-# 用于替换背景的可视化函数
+# Visualization function for background replacement
 humanSeg.drawHumanSeg(res)
-# 背景虚化
+# Blur background
 humanSeg.blurBackground(res)
 ```
 
-**load()函数参数**
-> * **Config**(dict): PP-Humanseg模型配置参数，默认为{modelpath : 'https://paddlejs.bj.bcebos.com/models/fuse/humanseg/humanseg_398x224_fuse_activation/model.json', mean: [0.5, 0.5, 0.5], std: [0.5, 0.5, 0.5], enableLightModel: false}；modelPath为默认的PP-Humanseg js模型，mean，std分别为预处理的均值和标准差，enableLightModel为是否使用更轻量的模型。
+**Parameters in function load()**
+> * **Config**(dict): Configuration parameter for PP-Humanseg model, default is {modelpath : 'https://paddlejs.bj.bcebos.com/models/fuse/humanseg/humanseg_398x224_fuse_activation/model.json', mean: [0.5, 0.5, 0.5], std: [0.5, 0.5, 0.5], enableLightModel: false}；modelPath is the default PP-Humanseg js model. Mean, std respectively represent the mean and standard deviation of the preprocessing, and enableLightModel represents whether to use a lighter model.
 
 
-**getGrayValue()函数参数**
-> * **input**(HTMLImageElement | HTMLVideoElement | HTMLCanvasElement): 输入图像参数。
+**Parameters in function getGrayValue()**
+> * **input**(HTMLImageElement | HTMLVideoElement | HTMLCanvasElement): Input image parameter.
 
-**drawMask()函数参数**
-> * **seg_values**(number[]): 输入参数，一般是getGrayValue函数计算的结果作为输入
+**Parameters in function drawMask()**
+> * **seg_values**(number[]): Input parameter, generally the result of function getGrayValue is used as input.
 
-**blurBackground()函数参数**
-> * **seg_values**(number[]): 输入参数，一般是getGrayValue函数计算的结果作为输入
+**Parameters in function blurBackground()**
+> * **seg_values**(number[]): Input parameter, generally the result of function getGrayValue is used as input.
 
-**drawHumanSeg()函数参数**
-> * **seg_values**(number[]): 输入参数，一般是getGrayValue函数计算的结果作为输入
+**Parameters in function drawHumanSeg()**
+> * **seg_values**(number[]): Input parameter, generally the result of function getGrayValue is used as input.

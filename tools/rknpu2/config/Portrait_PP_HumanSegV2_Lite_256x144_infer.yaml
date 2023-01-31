@@ -1,0 +1,15 @@
+mean:
+  -
+    - 127.5
+    - 127.5
+    - 127.5
+std:
+  -
+    - 127.5
+    - 127.5
+    - 127.5
+model_path: ./Portrait_PP_HumanSegV2_Lite_256x144_infer/Portrait_PP_HumanSegV2_Lite_256x144_infer.onnx
+outputs_nodes:
+do_quantization: True
+dataset: "./Portrait_PP_HumanSegV2_Lite_256x144_infer/dataset.txt"
+output_folder: "./Portrait_PP_HumanSegV2_Lite_256x144_infer"

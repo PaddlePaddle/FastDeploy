@@ -1,20 +1,22 @@
+English | [中文](../../cn/faq/develop_a_new_model.md)
 # How to Integrate New Model on FastDeploy
 
  How to add a new model on FastDeploy, including C++/Python deployment?  Here, we take the ResNet50 model in torchvision v0.12.0 as an example, introducing external [Model Integration](#modelsupport) on FastDeploy. The whole process only needs 3 steps.
 
 | Step        | Description                                                                      | Create or modify the files                |
 |:-----------:|:--------------------------------------------------------------------------------:|:-----------------------------------------:|
-| [1](#step2) | Add a model implementation to the corresponding task module in FastDeploy/vision | resnet.h、resnet.cc、vision.h               |
-| [2](#step4) | Python interface binding via pybind                                              | resnet_pybind.cc、classification_pybind.cc |
-| [3](#step5) | Use Python to call Interface                                                     | resnet.py、\_\_init\_\_.py                 |
+| [1](#step2) | Add a model implementation to the corresponding task module in FastDeploy/vision | resnet.h, resnet.cc, vision.h               |
+| [2](#step4) | Python interface binding via pybind                                              | resnet_pybind.cc, classification_pybind.cc |
+| [3](#step5) | Use Python to call Interface                                                     | resnet.py, \_\_init\_\_.py                 |
 
 After completing the above 3 steps, an external model is integrated.
 
 If you want to contribute your code to FastDeploy, it is very kind of you to add test code, instructions (Readme), and code annotations for the added model in the [test](#test).
 
-## Model Integration
+## Model Integration    <span id="modelsupport"></span>
 
-### Prepare the models
+### Prepare the models  <span id="step1"></span>
+
 
 Before integrating external models, it is important to convert the trained models (.pt, .pdparams, etc.) to the model formats (.onnx, .pdmodel) that FastDeploy supports for deployment. Most open source repositories provide model conversion scripts for developers. As torchvision does not provide conversion scripts, developers can write conversion scripts manually. In this demo, we convert `torchvison.models.resnet50` to `resnet50.onnx` with the following code for your reference.
 
@@ -39,7 +41,7 @@ torch.onnx.export(model,
 
 Running the above script will generate a`resnet50.onnx` file.
 
-### C++
+### C++ <span id="step2"></span>
 
 * Create`resnet.h` file
   * Create a path
@@ -63,7 +65,7 @@ class FASTDEPLOY_DECL ResNet : public FastDeployModel {
   * Create a path
     * FastDeploy/fastdeploy/vision/classification/contrib/resnet.cc (FastDeploy/C++ code/vision/task name/external model name/model name.cc)
   * Create content
-    * Implement the specific logic of the functions declared in `resnet.h` to `resnet.cc`, where `PreProcess` and `PostProcess` need to refer to the official source library for pre- and post-processing logic reproduction. The specific logic of each ResNet function is as follows. For more detailed code, please refer to [resnet.cc](https:// github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-d229d702de28345253a53f2a5839fd2c638f3d32fffa6a7d04d23db9da13a871).
+    * Implement the specific logic of the functions declared in `resnet.h` to `resnet.cc`, where `PreProcess` and `PostProcess` need to refer to the official source library for pre- and post-processing logic reproduction. The specific logic of each ResNet function is as follows. For more detailed code, please refer to [resnet.cc](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-d229d702de28345253a53f2a5839fd2c638f3d32fffa6a7d04d23db9da13a871).
 
 ```C++
 ResNet::ResNet(...) {
@@ -92,7 +94,7 @@ bool ResNet::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
   return true;
 }
 ```
-
+<span id="step3"></span>
 * Add new model file to`vision.h`
   * modify location
     * FastDeploy/fastdeploy/vision.h
@@ -104,7 +106,7 @@ bool ResNet::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
 #endif
 ```
 
-### Pybind
+### Pybind  <span id="step4"></span>
 
 * Create Pybind file
 
@@ -145,7 +147,7 @@ bool ResNet::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
     }
     ```
 
-### Python
+### Python  <span id="step5"></span>
 
 * Create`resnet.py`file
   * Create path
@@ -166,7 +168,7 @@ class ResNet(FastDeployModel):
     def size(self, wh):
         ...
 ```
-
+<span id="step6"></span>
 * Import ResNet classes
   * modify path
     * FastDeploy/python/fastdeploy/vision/classification/\_\_init\_\_.py (FastDeploy/Python code/fastdeploy/vision model/task name/\_\_init\_\_.py)
@@ -176,7 +178,7 @@ class ResNet(FastDeployModel):
 from .contrib.resnet import ResNet
 ```
 
-## Test
+## Test <span id="test"></span>
 
 ### Compile
 
@@ -228,7 +230,7 @@ pip install fastdeploy_gpu_python-Version number-cpxx-cpxxm-system architecture.
 ```
 
 * C++
-  * Write CmakeLists、C++  code and README.md . Please refer to[cpp/](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-afcbe607b796509581f89e38b84190717f1eeda2df0419a2ac9034197ead5f96)
+  * Write CmakeLists、C++  code and README.md . Please refer to [cpp/](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-afcbe607b796509581f89e38b84190717f1eeda2df0419a2ac9034197ead5f96)
   * Compile infer.cc
     * Path：FastDeploy/examples/vision/classification/resnet/cpp/
 
@@ -239,7 +241,7 @@ make
 ```
 
 * Python
-  * Please refer to[python/](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-5a0d6be8c603a8b81454ac14c17fb93555288d9adf92bbe40454449309700135) for Python code and Readme.md
+  * Please refer to [python/](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-5a0d6be8c603a8b81454ac14c17fb93555288d9adf92bbe40454449309700135) for Python code and Readme.md
 
 ### Annotate the Code
 
@@ -248,7 +250,7 @@ make
 To make the code clear for understanding,  developers can annotate the newly-added code.
 
 - C++ code
-  Developers need to add annotations for functions and variables in the resnet.h file, there are three annotating methods as follows, please refer to [resnet.h](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff- 69128489e918f305c208476ba793d8167e77de2aa7cadf5dcbac30da448bd28e) for more details.
+  Developers need to add annotations for functions and variables in the resnet.h file, there are three annotating methods as follows, please refer to [resnet.h](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-69128489e918f305c208476ba793d8167e77de2aa7cadf5dcbac30da448bd28e) for more details.
 
 ```C++
 /** \brief Predict for the input "im", the result will be saved in "result".

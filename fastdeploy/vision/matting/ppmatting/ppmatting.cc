@@ -28,6 +28,7 @@ PPMatting::PPMatting(const std::string& model_file,
   config_file_ = config_file;
   valid_cpu_backends = {Backend::ORT, Backend::PDINFER, Backend::LITE};
   valid_gpu_backends = {Backend::PDINFER, Backend::TRT};
+  valid_kunlunxin_backends = {Backend::LITE};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -170,7 +171,7 @@ bool PPMatting::Postprocess(
     return false;
   }
   std::vector<int64_t> dim{0, 2, 3, 1};
-  Transpose(alpha_tensor, &alpha_tensor, dim);
+  function::Transpose(alpha_tensor, &alpha_tensor, dim);
   alpha_tensor.Squeeze(0);
   Mat mat = Mat::Create(alpha_tensor);
 

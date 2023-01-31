@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
   fd::RuntimeOption runtime_option;
   runtime_option.SetModelPath(model_file, params_file, fd::ModelFormat::PADDLE);
   // CPU
-  runtime_option.UsePaddleBackend();
+  runtime_option.UsePaddleInferBackend();
   runtime_option.SetCpuThreadNum(12);
   // GPU
   // runtime_option.UseGpu(0);

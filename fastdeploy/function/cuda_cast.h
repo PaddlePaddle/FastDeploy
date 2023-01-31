@@ -17,7 +17,7 @@
 #include "fastdeploy/core/fd_tensor.h"
 
 namespace fastdeploy {
-
+namespace function {
 /** Cast the type of the data in GPU buffer.
     @param in The input tensor.
     @param out The output tensor
@@ -25,5 +25,5 @@ namespace fastdeploy {
 */
 FASTDEPLOY_DECL void CudaCast(const FDTensor& in, FDTensor* out,
                               cudaStream_t stream);
-
+}  // namespace function
 }  // namespace fastdeploy

@@ -16,9 +16,9 @@
 
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
-#ifdef ENABLE_CUDA_PREPROCESS
+#ifdef WITH_GPU
 #include "fastdeploy/vision/utils/cuda_utils.h"
-#endif  // ENABLE_CUDA_PREPROCESS
+#endif  // WITH_GPU
 
 namespace fastdeploy {
 
@@ -72,18 +72,20 @@ YOLOv6::YOLOv6(const std::string& model_file, const std::string& params_file,
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+    valid_kunlunxin_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
   }
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
-#ifdef ENABLE_CUDA_PREPROCESS
+#ifdef WITH_GPU
   cudaSetDevice(runtime_option.device_id);
   cudaStream_t stream;
   CUDA_CHECK(cudaStreamCreate(&stream));
   cuda_stream_ = reinterpret_cast<void*>(stream);
   runtime_option.SetExternalStream(cuda_stream_);
-#endif  // ENABLE_CUDA_PREPROCESS
+#endif  // WITH_GPU
   initialized = Initialize();
 }
 
@@ -121,14 +123,14 @@ bool YOLOv6::Initialize() {
 }
 
 YOLOv6::~YOLOv6() {
-#ifdef ENABLE_CUDA_PREPROCESS
+#ifdef WITH_GPU
   if (use_cuda_preprocessing_) {
     CUDA_CHECK(cudaFreeHost(input_img_cuda_buffer_host_));
     CUDA_CHECK(cudaFree(input_img_cuda_buffer_device_));
     CUDA_CHECK(cudaFree(input_tensor_cuda_buffer_device_));
     CUDA_CHECK(cudaStreamDestroy(reinterpret_cast<cudaStream_t>(cuda_stream_)));
   }
-#endif  // ENABLE_CUDA_PREPROCESS
+#endif  // WITH_GPU
 }
 
 bool YOLOv6::Preprocess(Mat* mat, FDTensor* output,
@@ -136,7 +138,7 @@ bool YOLOv6::Preprocess(Mat* mat, FDTensor* output,
   // process after image load
   float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
                          size[0] * 1.0f / static_cast<float>(mat->Width()));
-  if (ratio != 1.0) {
+  if (std::fabs(ratio - 1.0f) > 1e-06) {
     int interp = cv::INTER_AREA;
     if (ratio > 1.0) {
       interp = cv::INTER_LINEAR;
@@ -171,7 +173,7 @@ bool YOLOv6::Preprocess(Mat* mat, FDTensor* output,
 }
 
 void YOLOv6::UseCudaPreprocessing(int max_image_size) {
-#ifdef ENABLE_CUDA_PREPROCESS
+#ifdef WITH_GPU
   use_cuda_preprocessing_ = true;
   is_scale_up = true;
   if (input_img_cuda_buffer_host_ == nullptr) {
@@ -185,8 +187,7 @@ void YOLOv6::UseCudaPreprocessing(int max_image_size) {
                           3 * size[0] * size[1] * sizeof(float)));
   }
 #else
-  FDWARNING << "The FastDeploy didn't compile with BUILD_CUDA_SRC=ON."
-            << std::endl;
+  FDWARNING << "The FastDeploy didn't compile with WITH_GPU=ON." << std::endl;
   use_cuda_preprocessing_ = false;
 #endif
 }
@@ -194,7 +195,7 @@ void YOLOv6::UseCudaPreprocessing(int max_image_size) {
 bool YOLOv6::CudaPreprocess(
     Mat* mat, FDTensor* output,
     std::map<std::string, std::array<float, 2>>* im_info) {
-#ifdef ENABLE_CUDA_PREPROCESS
+#ifdef WITH_GPU
   if (is_mini_pad != false || is_no_pad != false || is_scale_up != true) {
     FDERROR << "Preprocessing with CUDA is only available when the arguments "
                "satisfy (is_mini_pad=false, is_no_pad=false, is_scale_up=true)."
@@ -230,7 +231,7 @@ bool YOLOv6::CudaPreprocess(
 #else
   FDERROR << "CUDA src code was not enabled." << std::endl;
   return false;
-#endif  // ENABLE_CUDA_PREPROCESS
+#endif  // WITH_GPU
 }
 
 bool YOLOv6::Postprocess(

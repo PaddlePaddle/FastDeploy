@@ -1,2 +1,2 @@
-faster_toeknizer
+fast-tokenizer-python
 paddlenlp

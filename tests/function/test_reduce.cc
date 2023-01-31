@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <array>
-#include <vector>
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/function/reduce.h"
 #include "glog/logging.h"
-#include "gtest/gtest.h"
 #include "gtest_utils.h"
+#include "gtest/gtest.h"
+#include <array>
+#include <vector>
 
 namespace fastdeploy {
-
+namespace function {
 TEST(fastdeploy, reduce_max) {
   FDTensor input, output;
   CheckShape check_shape;
@@ -312,8 +312,10 @@ TEST(fastdeploy, reduce_argmax) {
 
   std::vector<int> inputs = {2, 4, 3, 7, 1, 5};
   std::vector<int64_t> expected_result_axis0 = {1, 0, 1};
+  std::vector<uint8_t> expected_result_uint8_axis0 = {1, 0, 1};
   std::vector<int64_t> expected_result_axis1 = {1, 0};
   std::vector<int64_t> expected_result_noaxis = {3};
+  
   input.SetExternalData({2, 3}, FDDataType::INT32, inputs.data());
 
   // axis = 0, output_dtype = FDDataType::INT64, keep_dim = false, flatten =
@@ -322,6 +324,13 @@ TEST(fastdeploy, reduce_argmax) {
   check_shape(output.shape, {3});
   check_data(reinterpret_cast<const int64_t*>(output.Data()),
              expected_result_axis0.data(), expected_result_axis0.size());
+
+  // axis = 0, output_dtype = FDDataType::UINT8, keep_dim = false, flatten =
+  // false
+  ArgMax(input, &output, 0, FDDataType::UINT8);
+  check_shape(output.shape, {3});
+  check_data(reinterpret_cast<const uint8_t*>(output.Data()),
+             expected_result_uint8_axis0.data(), expected_result_axis0.size());
 
   // axis = -1, output_dtype = FDDataType::INT64, keep_dim = false, flatten =
   // false
@@ -371,4 +380,5 @@ TEST(fastdeploy, reduce_argmin) {
              expected_result_noaxis.data(), expected_result_noaxis.size());
 }
 
+}  // namespace function
 }  // namespace fastdeploy

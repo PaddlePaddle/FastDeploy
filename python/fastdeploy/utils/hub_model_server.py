@@ -98,6 +98,20 @@ class ModelServer(object):
         except requests.exceptions.ConnectionError as e:
             raise ServerConnectionError(self._url)
 
+    def get_model_list(self):
+        '''
+        Get all pre-trained models information in dataset.
+        Return:
+            result(dict): key is category name, value is a list which contains models \
+                information such as name, format and version.
+        '''
+        api = '{}/{}'.format(self._url, 'fastdeploy_listmodels')
+        try:
+            result = requests.get(api, timeout=self._timeout)
+            return result.json()
+        except requests.exceptions.ConnectionError as e:
+            raise ServerConnectionError(self._url)
+
     def is_connected(self):
         return self.check(self._url)
 

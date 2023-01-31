@@ -1,44 +1,48 @@
-# PaddleClas C++部署示例
+English | [简体中文](README_CN.md)
+# PaddleClas C++ Deployment Example
 
-本目录下提供`infer.cc`快速完成PaddleClas系列模型在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+This directory provides examples that `infer.cc` fast finishes the deployment of PaddleClas models on CPU/GPU and GPU accelerated by TensorRT. 
 
-在部署前，需确认以下两个步骤
+Before deployment, two steps require confirmation.
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md).  
+- 2. Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md).
 
-以Linux上ResNet50_vd推理为例，在本目录执行如下命令即可完成编译测试
+Taking ResNet50_vd inference on Linux as an example, the compilation test can be completed by executing the following command in this directory. FastDeploy version 0.7.0 or above (x.x.x>=0.7.0)  is required to support this model.
 
 ```bash
-#下载SDK，编译模型examples代码（SDK中包含了examples代码）
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.4.0.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.4.0.tgz
-cd fastdeploy-linux-x64-gpu-0.4.0/examples/vision/classification/paddleclas/cpp
 mkdir build
 cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.4.0
+# Download FastDeploy precompiled library. Users can choose your appropriate version in the`FastDeploy Precompiled Library` mentioned above 
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
+tar xvf fastdeploy-linux-x64-x.x.x.tgz
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
-# 下载ResNet50_vd模型文件和测试图片
+# Download ResNet50_vd model file and test images 
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz
 tar -xvf ResNet50_vd_infer.tgz
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
 
-# CPU推理
+# CPU inference
 ./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 0
-# GPU推理
+# GPU inference
 ./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 1
-# GPU上TensorRT推理
+# TensorRT inference on GPU
 ./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 2
+# IPU inference
+./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 3
+# KunlunXin XPU inference
+./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 4
 ```
 
-以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
-- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+The above command works for Linux or MacOS. Refer to 
+- [How to use FastDeploy C++ SDK in Windows](../../../../../docs/cn/faq/use_sdk_on_windows.md) for SDK use-pattern in Windows
 
-## PaddleClas C++接口
+## PaddleClas C++ Interface 
 
-### PaddleClas类
+### PaddleClas Class
 
 ```c++
 fastdeploy::vision::classification::PaddleClasModel(
@@ -49,32 +53,32 @@ fastdeploy::vision::classification::PaddleClasModel(
         const ModelFormat& model_format = ModelFormat::PADDLE)
 ```
 
-PaddleClas模型加载和初始化，其中model_file, params_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/inference_deployment/export_model.md#2-%E5%88%86%E7%B1%BB%E6%A8%A1%E5%9E%8B%E5%AF%BC%E5%87%BA)
+PaddleClas model loading and initialization, where model_file and params_file are the Paddle inference files exported from the training model. Refer to [Model Export](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/inference_deployment/export_model.md#2-%E5%88%86%E7%B1%BB%E6%A8%A1%E5%9E%8B%E5%AF%BC%E5%87%BA) for more information
 
-**参数**
+**Parameter**
 
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径
-> * **config_file**(str): 推理部署配置文件
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
+> * **model_file**(str): Model file path 
+> * **params_file**(str): Parameter file path 
+> * **config_file**(str): Inference deployment configuration file
+> * **runtime_option**(RuntimeOption): Backend inference configuration. None by default. (use the default configuration)
+> * **model_format**(ModelFormat): Model format. Paddle format by default
 
-#### Predict函数
+#### Predict function
 
 > ```c++
 > PaddleClasModel::Predict(cv::Mat* im, ClassifyResult* result, int topk = 1)
 > ```
 >
-> 模型预测接口，输入图像直接输出检测结果。
+> Model prediction interface. Input images and output results directly.
 >
-> **参数**
+> **Parameter**
 >
-> > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 分类结果，包括label_id，以及相应的置信度, ClassifyResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
-> > * **topk**(int):返回预测概率最高的topk个分类结果，默认为1
+> > * **im**: Input images in HWC or BGR format
+> > * **result**: The classification result, including label_id, and the corresponding confidence. Refer to [Visual Model Prediction Results](../../../../../docs/api/vision_results/) for the description of ClassifyResult
+> > * **topk**(int): Return the topk classification results with the highest prediction probability. Default 1
 
 
-- [模型介绍](../../)
-- [Python部署](../python)
-- [视觉模型预测结果](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [Model Description](../../)
+- [Python Deployment](../python)
+- [Visual Model prediction results](../../../../../docs/api/vision_results/)
+- [How to switch the model inference backend engine](../../../../../docs/en/faq/how_to_change_backend.md)

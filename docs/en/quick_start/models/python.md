@@ -1,3 +1,5 @@
+English | [中文](../../../cn/quick_start/models/python.md)
+
 # Python Deployment
 
 Make sure that FastDeploy is installed in the development environment. Refer to [FastDeploy Installation](../../build_and_install/) to install the pre-built FastDeploy, or build and install according to your own needs.
@@ -10,7 +12,7 @@ This document uses the PaddleDetection target detection model PPYOLOE as an exam
 import fastdeploy as fd
 
 model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz"
-image_url - "https://bj.bcebos.com/fastdeploy/tests/test_det.jpg"
+image_url = "https://bj.bcebos.com/fastdeploy/tests/test_det.jpg"
 fd.download_and_decompress(model_url, path=".")
 fd.download(image_url, path=".")
 ```

@@ -52,7 +52,7 @@ def build_option(args):
     elif args.backend.lower() == "ort":
         option.use_ort_backend()
     elif args.backend.lower() == "paddle":
-        option.use_paddle_backend()
+        option.use_paddle_infer_backend()
     elif args.backend.lower() == "openvino":
         assert args.device.lower(
         ) == "cpu", "OpenVINO backend require inference on device CPU."
@@ -72,5 +72,5 @@ model = fd.vision.segmentation.PaddleSegModel(
 
 # 预测图片检测结果
 im = cv2.imread(args.image)
-result = model.predict(im.copy())
+result = model.predict(im)
 print(result)

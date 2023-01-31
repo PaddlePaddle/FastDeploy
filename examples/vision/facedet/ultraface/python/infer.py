@@ -43,7 +43,7 @@ model = fd.vision.facedet.UltraFace(args.model, runtime_option=runtime_option)
 
 # 预测图片检测结果
 im = cv2.imread(args.image)
-result = model.predict(im.copy())
+result = model.predict(im)
 print(result)
 # 预测结果可视化
 vis_im = fd.vision.vis_face_detection(im, result)

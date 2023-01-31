@@ -24,6 +24,7 @@
 #include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
 #include "fastdeploy/vision/ocr/ppocr/recognizer.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_postprocess_op.h"
+#include "fastdeploy/utils/unique_ptr.h"
 
 namespace fastdeploy {
 /** \brief This pipeline can launch detection model, classification model and recognition model sequentially. All OCR pipeline APIs are defined inside this namespace.
@@ -52,6 +53,12 @@ class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
   PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
                 fastdeploy::vision::ocr::Recognizer* rec_model);
 
+  /** \brief Clone a new PPOCRv2 with less memory usage when multiple instances of the same model are created
+   *
+   * \return new PPOCRv2* type unique pointer
+   */
+  std::unique_ptr<PPOCRv2> Clone() const;
+
   /** \brief Predict the input image and get OCR result.
    *
    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
@@ -59,18 +66,31 @@ class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
    * \return true if the prediction successed, otherwise false.
    */
   virtual bool Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+  virtual bool Predict(const cv::Mat& img,
+                      fastdeploy::vision::OCRResult* result);
+  /** \brief BatchPredict the input image and get OCR result.
+   *
+   * \param[in] images The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * \param[in] batch_result The output list of OCR result will be writen to this structure.
+   * \return true if the prediction successed, otherwise false.
+   */
+  virtual bool BatchPredict(const std::vector<cv::Mat>& images,
+               std::vector<fastdeploy::vision::OCRResult>* batch_result);
+  
   bool Initialized() const override;
+  bool SetClsBatchSize(int cls_batch_size);
+  int GetClsBatchSize();
+  bool SetRecBatchSize(int rec_batch_size);
+  int GetRecBatchSize();
 
  protected:
   fastdeploy::vision::ocr::DBDetector* detector_ = nullptr;
   fastdeploy::vision::ocr::Classifier* classifier_ = nullptr;
   fastdeploy::vision::ocr::Recognizer* recognizer_ = nullptr;
-  /// Launch the detection process in OCR.
-  virtual bool Detect(cv::Mat* img, fastdeploy::vision::OCRResult* result);
-  /// Launch the recognition process in OCR.
-  virtual bool Recognize(cv::Mat* img, fastdeploy::vision::OCRResult* result);
-  /// Launch the classification process in OCR.
-  virtual bool Classify(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+
+ private:
+  int cls_batch_size_ = 1;
+  int rec_batch_size_ = 6;
 };
 
 namespace application {

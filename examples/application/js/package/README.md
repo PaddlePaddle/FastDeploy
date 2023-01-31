@@ -1,43 +1,41 @@
-[English](README_en.md) | 简体中文
+English | [简体中文](README_CN.md)
 
-# Paddle.js Model Module介绍
+# Introduction to Paddle.js Demo Module
 
-该部分是基于 Paddle.js 进行开发的模型库，主要提供 Web 端可直接引入使用模型的能力。
+This part is a model library developed based on Paddle.js, which mainly provides the ability to directly introduce and use models on the web side.
 
-| demo名称         | 源码目录                                               | npm包                                                        |
-| ---------------- | ------------------------------------------------------ | ------------------------------------------------------------ |
-| 人脸检测         | [facedetect](./packages/paddlejs-models/facedetect) | [@paddle-js-models/facedetect](https://www.npmjs.com/package/@paddle-js-models/facedetect) |
-| 螺丝钉检测       | [detect](./packages/paddlejs-models/detect)      | [@paddle-js-models/detect](https://www.npmjs.com/package/@paddle-js-models/detect) |
-| 人像分割背景替换 | [humanseg](./packages/paddlejs-models/humanseg)  | [@paddle-js-models/humanseg](https://www.npmjs.com/package/@paddle-js-models/humanseg) |
-| 手势识别AI猜丁壳 | [gesture](./packages/paddlejs-models/gesture)    | [@paddle-js-models/gesture](https://www.npmjs.com/package/@paddle-js-models/gesture) |
-| 1000种物品识别   | [mobilenet](./packages/paddlejs-models/mobilenet) | [@paddle-js-models/mobilenet](https://www.npmjs.com/package/@paddle-js-models/mobilenet) |
-| 文本检测         | [ocrdetection](./packages/paddlejs-models/ocrdetection) | [@paddle-js-models/ocrdet](https://www.npmjs.com/package/@paddle-js-models/ocrdet) |
-| 文本识别         | [ocr](./packages/paddlejs-models/ocr)           | [@paddle-js-models/ocr](https://www.npmjs.com/package/@paddle-js-models/ocr) |
+| demo name | source directory | npm package |
+| - | - | - |
+| face detection | [facedetect](./packages/paddlejs-models/facedetect) | [@paddle-js-models/facedetect](https://www.npmjs.com/package/@paddle-js-models/facedetect) |
+| Screw detection | [detect](./packages/paddlejs-models/detect) | [@paddle-js-models/detect](https://www.npmjs.com/package/@paddle-js-models/detect ) |
+| Portrait segmentation background replacement | [humanseg](./packages/paddlejs-models/humanseg) | [@paddle-js-models/humanseg](https://www.npmjs.com/package/@paddle-js-models/humanseg) |
+| Gesture Recognition AI Guessing Shell | [gesture](./packages/paddlejs-models/gesture) | [@paddle-js-models/gesture](https://www.npmjs.com/package/@paddle-js-models/gesture) |
+| 1000 Item Recognition | [mobilenet](./packages/paddlejs-models/mobilenet) | [@paddle-js-models/mobilenet](https://www.npmjs.com/package/@paddle-js-models/mobilenet) |
+| Text Detection | [ocrdetection](./packages/paddlejs-models/ocrdetection) | [@paddle-js-models/ocrdet](https://www.npmjs.com/package/@paddle-js-models/ocrdet ) |
+| Text Recognition | [ocr](./packages/paddlejs-models/ocr) | [@paddle-js-models/ocr](https://www.npmjs.com/package/@paddle-js-models/ocr) |
 
-## 开发使用
+## Usage
 
-该部分是使用 `pnpm` 搭建的 Menorepo
+This part is Menorepo built with `pnpm`
 
-### 安装依赖
+### Install dependencies
 
-```sh
+````sh
 pnpm i
-```
+````
 
-### 开发
-参考 Package.json 使用 `yalc` 进行开发测试。
+### Development
+See Package.json for development testing with `yalc`.
 
-```sh
+````sh
 pnpm run dev:xxx
-```
+````
 
-### 整体简介
+### Overall Introduction
 
-1. 使用 rollup 一次性打包生成 commonjs 和 es 规范的代码；同时具有可扩展性；目前由于依赖的cv库有些问题；就没有配置umd打包。
-2. 打包时基于 api-extractor 实现 d.ts 文件生成，实现支持 ts 引入生成我们的包
-3. 基于 jest 支持测试并显示测试相关覆盖率等
-4. 基于 ts 和 eslint 维护代码风格，保证代码更好开发
-5. 基于 conventional-changelog-cli 实现自定义关键词生成对应生成changelog
-6. 基于 yalc 实现本地打包开发测试
-
-
+1. Use rollup to package the code of commonjs and es specifications at one time; at the same time, it is extensible; at present, there are some problems with the dependent cv library; there is no configuration for umd packaging.
+2. The d.ts file is generated based on api-extractor during packaging, and the introduction of ts is supported to generate our package
+3. Support testing based on jest and display test related coverage, etc.
+4. Maintain code style based on ts and eslint to ensure better code development
+5. Generate custom keywords based on conventional-changelog-cli and generate changelog accordingly
+6. Implement local packaging development and testing based on yalc

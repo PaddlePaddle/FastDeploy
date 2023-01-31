@@ -50,6 +50,7 @@ class UIEModel(FastDeployModel):
                  position_prob=0.5,
                  max_length=128,
                  schema=[],
+                 batch_size=64,
                  runtime_option=RuntimeOption(),
                  model_format=ModelFormat.PADDLE,
                  schema_language=SchemaLanguage.ZH):
@@ -63,9 +64,10 @@ class UIEModel(FastDeployModel):
         else:
             assert "The type of schema should be list or dict."
         schema_language = C.text.SchemaLanguage(schema_language)
-        self._model = C.text.UIEModel(
-            model_file, params_file, vocab_file, position_prob, max_length,
-            schema, runtime_option._option, model_format, schema_language)
+        self._model = C.text.UIEModel(model_file, params_file, vocab_file,
+                                      position_prob, max_length, schema,
+                                      batch_size, runtime_option._option,
+                                      model_format, schema_language)
         assert self.initialized, "UIEModel initialize failed."
 
     def set_schema(self, schema):
@@ -86,7 +88,8 @@ class UIEModel(FastDeployModel):
         for result in results:
             uie_result = dict()
             for key, uie_results in result.items():
+                uie_result[key] = list()
                 for uie_res in uie_results:
-                    uie_result[key] = uie_res.get_dict()
+                    uie_result[key].append(uie_res.get_dict())
             new_results += [uie_result]
         return new_results

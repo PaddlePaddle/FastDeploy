@@ -46,10 +46,9 @@ API:`fastdeploy.vision.FaceDetectionResult` , 该结果返回:
 KeyPointDetectionResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像中目标行为的各个关键点坐标和置信度。
 
 API:`fastdeploy.vision.KeyPointDetectionResult` , 该结果返回:
-- **keypoints**(list of list(float)): 成员变量，表示识别到的目标行为的关键点坐标。`keypoints.size()= N * J * 2`，
+- **keypoints**(list of list(float)): 成员变量，表示识别到的目标行为的关键点坐标。`keypoints.size()= N * J`，
     - `N`：图片中的目标数量
     - `J`：num_joints（一个目标的关键点数量）
-    - `3`:坐标信息[x, y]
 - **scores**(list of float): 成员变量，表示识别到的目标行为的关键点坐标的置信度。`scores.size()= N * J`
     - `N`：图片中的目标数量
     - `J`:num_joints（一个目标的关键点数量）

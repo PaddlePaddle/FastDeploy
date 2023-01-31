@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <vector>
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/function/softmax.h"
 #include "glog/logging.h"
-#include "gtest/gtest.h"
 #include "gtest_utils.h"
+#include "gtest/gtest.h"
+#include <vector>
 
 namespace fastdeploy {
-
+namespace function {
 TEST(fastdeploy, softmax) {
   FDTensor input, input1, output;
   CheckShape check_shape;
@@ -57,4 +57,5 @@ TEST(fastdeploy, softmax) {
              expected_result_axis1.data(), expected_result_axis1.size());
 }
 
+}  // namespace function
 }  // namespace fastdeploy

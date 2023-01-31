@@ -67,7 +67,7 @@ struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
  */
 struct FASTDEPLOY_DECL Mask : public BaseResult {
   /// Mask data buffer
-  std::vector<int32_t> data;
+  std::vector<uint8_t> data;
   /// Shape of mask
   std::vector<int64_t> shape;  // (H,W) ...
   ResultType type = ResultType::MASK;
@@ -95,6 +95,7 @@ struct FASTDEPLOY_DECL Mask : public BaseResult {
 /*! @brief Detection result structure for all the object detection models and instance segmentation models
  */
 struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
+  DetectionResult() = default;
   /** \brief All the detected object boxes for an input image, the size of `boxes` is the number of detected objects, and the element of `boxes` is a array of 4 float values, means [xmin, ymin, xmax, ymax]
    */
   std::vector<std::array<float, 4>> boxes;
@@ -106,13 +107,15 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   /** \brief For instance segmentation model, `masks` is the predict mask for all the deteced objects
    */
   std::vector<Mask> masks;
-  //// Shows if the DetectionResult has mask
+  /// Shows if the DetectionResult has mask
   bool contain_masks = false;
 
   ResultType type = ResultType::DETECTION;
 
-  DetectionResult() {}
+  /// Copy constructor
   DetectionResult(const DetectionResult& res);
+  /// Move assignment
+  DetectionResult& operator=(DetectionResult&& other);
 
   /// Clear detection result
   void Clear();
@@ -244,6 +247,7 @@ struct FASTDEPLOY_DECL FaceAlignmentResult : public BaseResult {
 /*! @brief Segmentation result structure for all the segmentation models
  */
 struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
+  SegmentationResult() = default;
   /** \brief
    * `label_map` stores the pixel-level category labels for input image. the number of pixels is equal to label_map.size()
   */
@@ -254,11 +258,20 @@ struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
   std::vector<float> score_map;
   /// The output shape, means [H, W]
   std::vector<int64_t> shape;
+  /// SegmentationResult whether containing score_map
   bool contain_score_map = false;
 
+  /// Copy constructor
+  SegmentationResult(const SegmentationResult& other) = default;
+  /// Move assignment
+  SegmentationResult& operator=(SegmentationResult&& other);
+
   ResultType type = ResultType::SEGMENTATION;
-  /// Clear detection result
+  /// Clear Segmentation result
   void Clear();
+
+  /// Clear Segmentation result and free the memory
+  void Free();
 
   void Reserve(int size);
 
@@ -313,8 +326,11 @@ struct FASTDEPLOY_DECL MattingResult : public BaseResult {
 
   MattingResult() {}
   MattingResult(const MattingResult& res);
-  /// Clear detection result
+  /// Clear matting result
   void Clear();
+
+  /// Free matting result
+  void Free();
 
   void Reserve(int size);
 

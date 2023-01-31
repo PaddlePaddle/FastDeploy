@@ -1,9 +1,10 @@
-# PaddleSpeech 流式语音合成
+English | [简体中文](README_CN.md)
+# PaddleSpeech Streaming Text-to-Speech
 
 
-- 本文示例的实现来自[PaddleSpeech 流式语音合成](https://github.com/PaddlePaddle/PaddleSpeech/tree/r1.2).
+- The examples in this document are from [PaddleSpeech Streaming Text-to-Speech](https://github.com/PaddlePaddle/PaddleSpeech/tree/r1.2).
 
-## 详细部署文档
+## Detailed deployment document
 
-- [Python部署](python)
-- [Serving部署](serving)
+- [Python deployment](python)
+- [Serving deployment](serving)

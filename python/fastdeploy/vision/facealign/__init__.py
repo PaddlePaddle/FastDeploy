@@ -14,3 +14,5 @@
 
 from __future__ import absolute_import
 from .contrib.pfld import PFLD
+from .contrib.pipnet import PIPNet
+from .contrib.face_landmark_1000 import FaceLandmark1000

@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <array>
-#include <vector>
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/function/concat.h"
 #include "glog/logging.h"
-#include "gtest/gtest.h"
 #include "gtest_utils.h"
+#include "gtest/gtest.h"
+#include <array>
+#include <vector>
 
 namespace fastdeploy {
-
+namespace function {
 TEST(fastdeploy, concat1) {
   CheckShape check_shape;
   std::vector<FDTensor> inputs(3);
@@ -77,4 +77,5 @@ TEST(fastdeploy, concat5) {
   check_shape(output.shape, {5, 6, 4, 5});
 }
 
+}  // namespace function
 }  // namespace fastdeploy

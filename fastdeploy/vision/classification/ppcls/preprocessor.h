@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include "fastdeploy/vision/common/processors/manager.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
@@ -22,7 +23,7 @@ namespace vision {
 namespace classification {
 /*! @brief Preprocessor object for PaddleClas serials model.
  */
-class FASTDEPLOY_DECL PaddleClasPreprocessor {
+class FASTDEPLOY_DECL PaddleClasPreprocessor : public ProcessorManager {
  public:
   /** \brief Create a preprocessor instance for PaddleClas serials model
    *
@@ -36,13 +37,23 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
    * \param[in] outputs The output tensors which will feed in runtime
    * \return true if the preprocess successed, otherwise false
    */
-  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
+  virtual bool Apply(std::vector<FDMat>* images,
+                     std::vector<FDTensor>* outputs);
 
+  /// This function will disable normalize in preprocessing step.
+  void DisableNormalize();
+  /// This function will disable hwc2chw in preprocessing step.
+  void DisablePermute();
 
  private:
-  bool BuildPreprocessPipelineFromConfig(const std::string& config_file);
+  bool BuildPreprocessPipelineFromConfig();
   std::vector<std::shared_ptr<Processor>> processors_;
-  bool initialized_ = false;
+  // for recording the switch of hwc2chw
+  bool disable_permute_ = false;
+  // for recording the switch of normalize
+  bool disable_normalize_ = false;
+  // read config file
+  std::string config_file_;
 };
 
 }  // namespace classification

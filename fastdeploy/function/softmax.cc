@@ -21,6 +21,7 @@
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
+namespace function {
 template <typename T>
 struct ValueClip {
   T operator()(const T& x) const {
@@ -124,4 +125,5 @@ void Softmax(const FDTensor& x, FDTensor* out, int axis) {
                        ([&] { SoftmaxKernel<data_t>(x, &out_tmp, axis); }));
   *out = std::move(out_tmp);
 }
+}  // namespace function
 }  // namespace fastdeploy

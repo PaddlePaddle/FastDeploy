@@ -1,31 +1,31 @@
-# PP-Matting模型部署
+English | [简体中文](README_CN.md)
+# PP-Matting Model Deployment
 
-## 模型版本说明
+## Model Description
 
 - [PP-Matting Release/2.6](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
 
-## 支持模型列表
+## List of Supported Models
 
-目前FastDeploy支持如下模型的部署
+Now FastDeploy supports the deployment of the following models
 
-- [PP-Matting系列模型](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
-- [PP-HumanMatting系列模型](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
-- [ModNet系列模型](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
-
-
-## 导出部署模型
-
-在部署前，需要先将PP-Matting导出成部署模型，导出步骤参考文档[导出模型](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)(Tips:导出PP-Matting系列模型和PP-HumanMatting系列模型需要设置导出脚本的`--input_shape`参数)
+- [PP-Matting models](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
+- [PP-HumanMatting models](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
+- [ModNet models](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
 
 
-## 下载预训练模型
+## Export Deployment Model
 
-为了方便开发者的测试，下面提供了PP-Matting导出的各系列模型，开发者可直接下载使用。
-
-其中精度指标来源于PP-Matting中对各模型的介绍(未提供精度数据)，详情各参考PP-Matting中的说明。
+Before deployment, PP-Matting needs to be exported into the deployment model. Refer to [Export Model](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting) for more information. (Tips: You need to set the `--input_shape` parameter of the export script when exporting PP-Matting and PP-HumanMatting models)
 
 
-| 模型                                                               | 参数大小    | 精度    | 备注 |
+## Download Pre-trained Models
+
+For developers' testing, models exported by PP-Matting are provided below. Developers can download and use them directly.
+
+The accuracy metric is sourced from the model description in PP-Matting. (Accuracy data are not provided) Refer to the introduction in PP-Matting for more details.
+
+| Model                                                               | Parameter Size    | Accuracy    | Note |
 |:---------------------------------------------------------------- |:----- |:----- | :------ |
 | [PP-Matting-512](https://bj.bcebos.com/paddlehub/fastdeploy/PP-Matting-512.tgz) | 106MB | - |
 | [PP-Matting-1024](https://bj.bcebos.com/paddlehub/fastdeploy/PP-Matting-1024.tgz) | 106MB | - |
@@ -36,7 +36,7 @@
 
 
 
-## 详细部署文档
+## Detailed Deployment Tutorials
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python Deployment](python)
+- [C++ Deployment](cpp)

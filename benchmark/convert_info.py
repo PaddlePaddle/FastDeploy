@@ -70,10 +70,8 @@ for i in range(line_nums):
                 cpu_rss_mb_list = cpu_rss_mb_ori.split(".")
                 cpu_rss_mb = cpu_rss_mb_list[0] + "." + cpu_rss_mb_list[1][:2]
             if "gpu_rss_mb" in lines[i + 4]:
-                gpu_rss_mb_ori = lines[i + 4].split(": ")[1]
-                # two decimal places
-                gpu_rss_mb_list = gpu_rss_mb_ori.split(".")
-                gpu_rss_mb = gpu_rss_mb_list[0] + "." + gpu_rss_mb_list[1][:2]
+                gpu_rss_mb_ori = lines[i + 4].split(": ")[1].strip()
+                gpu_rss_mb = str(gpu_rss_mb_ori) + ".0"
         if "ort_cpu_1" in lines[i]:
             ort_cpu_thread1[
                 model_name] = runtime + "\t" + end2end + "\t" + cpu_rss_mb
@@ -111,7 +109,7 @@ for i in range(line_nums):
 
 f2 = open("struct_cpu_" + domain + ".txt", "w")
 f2.writelines(
-    "model_name\tthread_nums\tort_run\tort_end2end\tcpu_rss_mb\tov_run\tov_end2end\tcpu_rss_mb\tpaddle_run\tpaddle_end2end\tcpu_rss_mb\n"
+    "model_name\tthread_nums\tort_run\tort_end2end\tcpu_mem\tov_run\tov_end2end\tcpu_mem\tpaddle_run\tpaddle_end2end\tcpu_mem\n"
 )
 for model_name in model_name_set:
     lines1 = model_name + '\t1\t'
@@ -148,7 +146,7 @@ f2.close()
 
 f3 = open("struct_gpu_" + domain + ".txt", "w")
 f3.writelines(
-    "model_name\tort_run\tort_end2end\tgpu_rss_mb\tpaddle_run\tpaddle_end2end\tgpu_rss_mb\tpaddle_trt_run\tpaddle_trt_end2end\tgpu_rss_mb\tpaddle_trt_fp16_run\tpaddle_trt_fp16_end2end\tgpu_rss_mb\ttrt_run\ttrt_end2end\tgpu_rss_mb\ttrt_fp16_run\ttrt_fp16_end2end\tgpu_rss_mb\n"
+    "model_name\tort_run\tort_end2end\tgpu_mem\tpaddle_run\tpaddle_end2end\tgpu_mem\tpaddle_trt_run\tpaddle_trt_end2end\tgpu_mem\tpaddle_trt_fp16_run\tpaddle_trt_fp16_end2end\tgpu_mem\ttrt_run\ttrt_end2end\tgpu_mem\ttrt_fp16_run\ttrt_fp16_end2end\tgpu_mem\n"
 )
 for model_name in model_name_set:
     lines1 = model_name + '\t'

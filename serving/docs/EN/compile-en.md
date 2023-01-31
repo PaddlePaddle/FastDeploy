@@ -1,6 +1,7 @@
+English | [中文](../zh_CN/compile.md)
 # FastDeploy Serving Deployment Image Compilation
 
-How to create a FastDploy image
+This document is about how to create a FastDploy image.
 
 ## GPU Image
 
@@ -12,8 +13,20 @@ cd serving
 bash scripts/build.sh
 
 # Exit to the FastDeploy home directory and create the image
+# x.y.z is FastDeploy version, example: 1.0.0
 cd ../
-docker build -t paddlepaddle/fastdeploy:0.3.0-gpu-cuda11.4-trt8.4-21.10 -f serving/Dockerfile .
+docker build -t paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 -f serving/Dockerfile .
+```
+
+For example, create an GPU image based on FastDeploy v1.0.0 and ubuntu 20.04，cuda11.2 environment
+```
+# Enter the serving directory and execute the script to compile the FastDeploy and serving backend
+cd serving
+bash scripts/build_fd_cuda_11_2.sh
+
+# Exit to the FastDeploy home directory and create the image
+cd ../
+docker build -t paddlepaddle/fastdeploy:1.0.0-gpu-cuda11.2-trt8.4-20.04 -f serving/Dockerfile_CUDA_11_2 .
 ```
 
 ## CPU Image
@@ -25,8 +38,9 @@ cd serving
 bash scripts/build.sh OFF
 
 # Exit to the FastDeploy home directory and create the image
+# x.y.z is FastDeploy version, example: 1.0.0
 cd ../
-docker build -t paddlepaddle/fastdeploy:0.3.0-cpu-only-21.10 -f serving/Dockerfile_cpu .
+docker build -t paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10 -f serving/Dockerfile_cpu .
 ```
 
 ## IPU Image
@@ -37,6 +51,7 @@ cd serving
 bash scripts/build_fd_ipu.sh
 
 # Exit to the FastDeploy home directory and create the image
+# x.y.z is FastDeploy version, example: 1.0.0
 cd ../
-docker build -t paddlepaddle/fastdeploy:0.3.0-ipu-only-21.10 -f serving/Dockerfile_ipu .
+docker build -t paddlepaddle/fastdeploy:x.y.z-ipu-only-21.10 -f serving/Dockerfile_ipu .
 ```

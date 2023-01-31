@@ -41,12 +41,22 @@ class FASTDEPLOY_DECL FastDeployModel {
   std::vector<Backend> valid_gpu_backends = {Backend::ORT};
   /** Model's valid ipu backends. This member defined all the ipu backends have successfully tested for the model
    */
-  std::vector<Backend> valid_ipu_backends = {Backend::PDINFER};
-
-
+  std::vector<Backend> valid_ipu_backends = {};
+  /** Model's valid timvx backends. This member defined all the timvx backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_timvx_backends = {};
+  /** Model's valid ascend backends. This member defined all the cann backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_ascend_backends = {};
+  /** Model's valid KunlunXin xpu backends. This member defined all the KunlunXin xpu backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_kunlunxin_backends = {};
   /** Model's valid hardware backends. This member defined all the gpu backends have successfully tested for the model
    */
   std::vector<Backend> valid_rknpu_backends = {};
+  /** Model's valid hardware backends. This member defined all the sophgo npu backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_sophgonpu_backends = {};
 
   /// Get number of inputs for this model
   virtual int NumInputsOfRuntime() { return runtime_->NumInputs(); }
@@ -111,21 +121,39 @@ class FASTDEPLOY_DECL FastDeployModel {
     std::vector<FDTensor>().swap(reused_output_tensors_);
   }
 
+  virtual fastdeploy::Runtime* CloneRuntime() { return runtime_->Clone(); }
+
+  virtual bool SetRuntime(fastdeploy::Runtime* clone_runtime) {
+    runtime_ = std::unique_ptr<Runtime>(clone_runtime);
+    return true;
+  }
+
+  virtual std::unique_ptr<FastDeployModel> Clone() {
+    FDERROR << ModelName() << " doesn't support Cone() now." << std::endl;
+    return nullptr;
+  }
+
  protected:
   virtual bool InitRuntime();
-  virtual bool CreateCpuBackend();
-  virtual bool CreateGpuBackend();
-  virtual bool CreateIpuBackend();
-  virtual bool CreateRKNPUBackend();
 
   bool initialized = false;
-  std::vector<Backend> valid_external_backends_;
   // Reused input tensors
   std::vector<FDTensor> reused_input_tensors_;
   // Reused output tensors
   std::vector<FDTensor> reused_output_tensors_;
 
  private:
+  bool InitRuntimeWithSpecifiedBackend();
+  bool InitRuntimeWithSpecifiedDevice();
+  bool CreateCpuBackend();
+  bool CreateGpuBackend();
+  bool CreateIpuBackend();
+  bool CreateRKNPUBackend();
+  bool CreateSophgoNPUBackend();
+  bool CreateTimVXBackend();
+  bool CreateKunlunXinBackend();
+  bool CreateASCENDBackend();
+
   std::shared_ptr<Runtime> runtime_;
   bool runtime_initialized_ = false;
   // whether to record inference time

@@ -18,11 +18,11 @@
 #include "fastdeploy/function/softmax.h"
 #include "fastdeploy/runtime.h"
 #include "fastdeploy/utils/path.h"
-#include "faster_tokenizer/tokenizers/ernie_faster_tokenizer.h"
+#include "fast_tokenizer/tokenizers/ernie_fast_tokenizer.h"
 #include "gflags/gflags.h"
 
 using namespace paddlenlp;
-using namespace faster_tokenizer::tokenizers_impl;
+using namespace fast_tokenizer::tokenizers_impl;
 #ifdef WIN32
 const char sep = '\\';
 #else
@@ -32,7 +32,7 @@ const char sep = '/';
 DEFINE_string(model_dir, "", "Directory of the inference model.");
 DEFINE_string(vocab_path, "", "Path of the vocab file.");
 DEFINE_string(device, "cpu",
-              "Type of inference device, support 'cpu' or 'gpu'.");
+              "Type of inference device, support 'cpu', 'kunlunxin' or 'gpu'.");
 DEFINE_string(backend, "onnx_runtime",
               "The inference runtime backend, support: ['onnx_runtime', "
               "'paddle', 'openvino', 'tensorrt', 'paddle_tensorrt']");
@@ -55,7 +55,17 @@ void PrintUsage() {
 }
 
 bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
-  if (FLAGS_device == "gpu") {
+  std::string model_path = FLAGS_model_dir + sep + "infer.pdmodel";
+  std::string param_path = FLAGS_model_dir + sep + "infer.pdiparams";
+  fastdeploy::FDINFO << "model_path = " << model_path
+                     << ", param_path = " << param_path << std::endl;
+  option->SetModelPath(model_path, param_path);
+
+  if (FLAGS_device == "kunlunxin") {
+    option->UseKunlunXin();
+    option->UsePaddleLiteBackend();
+    return true;
+  } else if (FLAGS_device == "gpu") {
     option->UseGpu();
   } else if (FLAGS_device == "cpu") {
     option->UseCpu();
@@ -69,7 +79,7 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
   if (FLAGS_backend == "onnx_runtime") {
     option->UseOrtBackend();
   } else if (FLAGS_backend == "paddle") {
-    option->UsePaddleBackend();
+    option->UsePaddleInferBackend();
   } else if (FLAGS_backend == "openvino") {
     option->UseOpenVINOBackend();
   } else if (FLAGS_backend == "tensorrt" ||
@@ -97,11 +107,7 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
                         << FLAGS_backend << "'" << std::endl;
     return false;
   }
-  std::string model_path = FLAGS_model_dir + sep + "infer.pdmodel";
-  std::string param_path = FLAGS_model_dir + sep + "infer.pdiparams";
-  fastdeploy::FDINFO << "model_path = " << model_path
-                     << ", param_path = " << param_path << std::endl;
-  option->SetModelPath(model_path, param_path);
+  
   return true;
 }
 
@@ -124,10 +130,10 @@ struct SeqClsResult {
 
 struct ErnieForSequenceClassificationPredictor {
   fastdeploy::Runtime runtime_;
-  ErnieFasterTokenizer tokenizer_;
+  ErnieFastTokenizer tokenizer_;
   ErnieForSequenceClassificationPredictor(
       const fastdeploy::RuntimeOption& option,
-      const ErnieFasterTokenizer& tokenizer)
+      const ErnieFastTokenizer& tokenizer)
       : tokenizer_(tokenizer) {
     runtime_.Init(option);
   }
@@ -135,8 +141,8 @@ struct ErnieForSequenceClassificationPredictor {
   bool Preprocess(const std::vector<std::string>& texts,
                   const std::vector<std::string>& texts_pair,
                   std::vector<fastdeploy::FDTensor>* inputs) {
-    std::vector<faster_tokenizer::core::Encoding> encodings;
-    std::vector<faster_tokenizer::core::EncodeInput> text_pair_input;
+    std::vector<fast_tokenizer::core::Encoding> encodings;
+    std::vector<fast_tokenizer::core::EncodeInput> text_pair_input;
     // 1. Tokenize the text or (text, text_pair)
     if (texts_pair.empty()) {
       for (int i = 0; i < texts.size(); ++i) {
@@ -187,11 +193,11 @@ struct ErnieForSequenceClassificationPredictor {
                    std::vector<SeqClsResult>* seq_cls_results) {
     const auto& logits = outputs[0];
     fastdeploy::FDTensor probs;
-    fastdeploy::Softmax(logits, &probs);
+    fastdeploy::function::Softmax(logits, &probs);
 
     fastdeploy::FDTensor labels, confidences;
-    fastdeploy::Max(probs, &confidences, {-1});
-    fastdeploy::ArgMax(probs, &labels, -1);
+    fastdeploy::function::Max(probs, &confidences, {-1});
+    fastdeploy::function::ArgMax(probs, &labels, -1);
     if (labels.Numel() != confidences.Numel()) {
       return false;
     }
@@ -242,7 +248,7 @@ int main(int argc, char* argv[]) {
       return -1;
     }
   }
-  ErnieFasterTokenizer tokenizer(vocab_path);
+  ErnieFastTokenizer tokenizer(vocab_path);
 
   ErnieForSequenceClassificationPredictor predictor(option, tokenizer);
 

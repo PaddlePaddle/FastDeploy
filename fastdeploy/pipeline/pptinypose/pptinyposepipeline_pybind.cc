@@ -18,31 +18,8 @@ namespace fastdeploy {
 void BindPPTinyPosePipeline(pybind11::module& m) {
   pybind11::class_<pipeline::PPTinyPose>(m, "PPTinyPose")
 
-      // explicitly pybind more kinds of detection models here
-      .def(pybind11::init<fastdeploy::vision::detection::PPYOLOE*,
-                          fastdeploy::vision::keypointdetection::PPTinyPose*>())
-
       .def(pybind11::init<fastdeploy::vision::detection::PicoDet*,
                           fastdeploy::vision::keypointdetection::PPTinyPose*>())
-
-      .def(pybind11::init<fastdeploy::vision::detection::PPYOLO*,
-                          fastdeploy::vision::keypointdetection::PPTinyPose*>())
-
-      .def(pybind11::init<fastdeploy::vision::detection::PPYOLOv2*,
-                          fastdeploy::vision::keypointdetection::PPTinyPose*>())
-
-      .def(pybind11::init<fastdeploy::vision::detection::PaddleYOLOX*,
-                          fastdeploy::vision::keypointdetection::PPTinyPose*>())
-
-      .def(pybind11::init<fastdeploy::vision::detection::FasterRCNN*,
-                          fastdeploy::vision::keypointdetection::PPTinyPose*>())
-
-      .def(pybind11::init<fastdeploy::vision::detection::YOLOv3*,
-                          fastdeploy::vision::keypointdetection::PPTinyPose*>())
-      
-      .def(pybind11::init<fastdeploy::vision::detection::MaskRCNN*,
-                          fastdeploy::vision::keypointdetection::PPTinyPose*>())
-
       .def("predict", [](pipeline::PPTinyPose& self,
                          pybind11::array& data) {
         auto mat = PyArrayToCvMat(data);

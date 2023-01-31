@@ -22,6 +22,7 @@
 #include "unsupported/Eigen/CXX11/Tensor"
 
 namespace fastdeploy {
+namespace function {
 // EigenDim converts shape into Eigen::DSizes.
 template <int D>
 struct EigenDim {
@@ -135,4 +136,5 @@ class EigenDeviceWrapper {
   static std::shared_ptr<EigenDeviceWrapper> instance_;
 };
 
+}  // namespace function
 }  // namespace fastdeploy

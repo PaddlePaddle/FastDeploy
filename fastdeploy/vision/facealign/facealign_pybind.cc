@@ -17,9 +17,14 @@
 namespace fastdeploy {
 
 void BindPFLD(pybind11::module& m);
+void BindFaceLandmark1000(pybind11::module& m);
+void BindPIPNet(pybind11::module& m);
 
 void BindFaceAlign(pybind11::module& m) {
   auto facedet_module = m.def_submodule("facealign", "Face alignment models.");
   BindPFLD(facedet_module);
+  BindFaceLandmark1000(facedet_module);
+  BindPIPNet(facedet_module);
+
 }
 }  // namespace fastdeploy

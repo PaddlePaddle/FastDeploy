@@ -29,3 +29,45 @@ target_link_libraries(infer_ppyolo_demo ${FASTDEPLOY_LIBS})
 
 add_executable(infer_mask_rcnn_demo ${PROJECT_SOURCE_DIR}/infer_mask_rcnn.cc)
 target_link_libraries(infer_mask_rcnn_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_ssd_demo ${PROJECT_SOURCE_DIR}/infer_ssd.cc)
+target_link_libraries(infer_ssd_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_yolov5_demo ${PROJECT_SOURCE_DIR}/infer_yolov5.cc)
+target_link_libraries(infer_yolov5_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_yolov6_demo ${PROJECT_SOURCE_DIR}/infer_yolov6.cc)
+target_link_libraries(infer_yolov6_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_yolov7_demo ${PROJECT_SOURCE_DIR}/infer_yolov7.cc)
+target_link_libraries(infer_yolov7_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_yolov8_demo ${PROJECT_SOURCE_DIR}/infer_yolov8.cc)
+target_link_libraries(infer_yolov8_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_rtmdet_demo ${PROJECT_SOURCE_DIR}/infer_rtmdet.cc)
+target_link_libraries(infer_rtmdet_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_cascadercnn_demo ${PROJECT_SOURCE_DIR}/infer_cascadercnn.cc)
+target_link_libraries(infer_cascadercnn_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_pssdet_demo ${PROJECT_SOURCE_DIR}/infer_pssdet.cc)
+target_link_libraries(infer_pssdet_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_retinanet_demo ${PROJECT_SOURCE_DIR}/infer_retinanet.cc)
+target_link_libraries(infer_retinanet_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_ppyoloesod_demo ${PROJECT_SOURCE_DIR}/infer_ppyoloesod.cc)
+target_link_libraries(infer_ppyoloesod_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_fcos_demo ${PROJECT_SOURCE_DIR}/infer_fcos.cc)
+target_link_libraries(infer_fcos_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_ttfnet_demo ${PROJECT_SOURCE_DIR}/infer_ttfnet.cc)
+target_link_libraries(infer_ttfnet_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_tood_demo ${PROJECT_SOURCE_DIR}/infer_tood.cc)
+target_link_libraries(infer_tood_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_gfl_demo ${PROJECT_SOURCE_DIR}/infer_gfl.cc)
+target_link_libraries(infer_gfl_demo ${FASTDEPLOY_LIBS})

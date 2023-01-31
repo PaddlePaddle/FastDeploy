@@ -1,4 +1,20 @@
-# Image Classification API
+# Image Classification(图像分类)
+
+## fastdeploy.vision.classification.PaddleClasPreprocessor
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.classification.PaddleClasPreprocessor
+    :members:
+    :inherited-members:
+```
+
+## fastdeploy.vision.classification.PaddleClasPostprocessor
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.classification.PaddleClasPostprocessor
+    :members:
+    :inherited-members:
+```
 
 ## fastdeploy.vision.classification.PaddleClasModel
 

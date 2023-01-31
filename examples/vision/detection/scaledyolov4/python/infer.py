@@ -7,9 +7,9 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of scaledyolov4 onnx model.")
+        "--model", default=None, help="Path of scaledyolov4 onnx model.")
     parser.add_argument(
-        "--image", required=True, help="Path of test image file.")
+        "--image", default=None, help="Path of test image file.")
     parser.add_argument(
         "--device",
         type=str,
@@ -37,14 +37,22 @@ def build_option(args):
 
 args = parse_arguments()
 
+if args.model is None:
+    model = fd.download_model(name='ScaledYOLOv4-P5')
+else:
+    model = args.model
+
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.detection.ScaledYOLOv4(
-    args.model, runtime_option=runtime_option)
+model = fd.vision.detection.ScaledYOLOv4(model, runtime_option=runtime_option)
 
 # 预测图片检测结果
-im = cv2.imread(args.image)
-result = model.predict(im.copy())
+if args.image is None:
+    image = fd.utils.get_detection_test_image()
+else:
+    image = args.image
+im = cv2.imread(image)
+result = model.predict(im)
 print(result)
 
 # 预测结果可视化

@@ -17,8 +17,8 @@
 #cmakedefine FASTDEPLOY_LIB
 #endif
 
-#ifndef ENABLE_PADDLE_FRONTEND
-#cmakedefine ENABLE_PADDLE_FRONTEND
+#ifndef ENABLE_PADDLE2ONNX
+#cmakedefine ENABLE_PADDLE2ONNX
 #endif
 
 #ifndef ENABLE_ORT_BACKEND
@@ -55,18 +55,4 @@
 
 #ifndef ENABLE_TEXT
 #cmakedefine ENABLE_TEXT
-#endif
-
-#ifndef ENABLE_OPENCV_CUDA
-#cmakedefine ENABLE_OPENCV_CUDA
-#endif
-
-#ifdef ENABLE_VISION
-#ifndef ENABLE_VISION_VISUALIZE
-#define ENABLE_VISION_VISUALIZE
-#endif
-#endif
-
-#ifndef ENABLE_FDTENSOR_FUNC
-#cmakedefine ENABLE_FDTENSOR_FUNC
 #endif

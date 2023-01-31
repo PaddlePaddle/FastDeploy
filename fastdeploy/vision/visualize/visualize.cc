@@ -12,14 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifdef ENABLE_VISION_VISUALIZE
 #include "fastdeploy/vision/visualize/visualize.h"
 
 namespace fastdeploy {
 namespace vision {
-
-int Visualize::num_classes_ = 0;
-std::vector<int> Visualize::color_map_ = std::vector<int>();
 
 static std::vector<int> global_fd_vis_color_map = std::vector<int>();
 
@@ -41,6 +37,10 @@ std::vector<int> GenerateColorMap(int num_classes) {
   }
   return color_map;
 }
+
+// This class will deprecated, please not use it
+int Visualize::num_classes_ = 0;
+std::vector<int> Visualize::color_map_ = std::vector<int>();
 
 const std::vector<int>& Visualize::GetColorMap(int num_classes) {
   if (num_classes < num_classes_) {
@@ -65,4 +65,3 @@ const std::vector<int>& Visualize::GetColorMap(int num_classes) {
 
 }  // namespace vision
 }  // namespace fastdeploy
-#endif

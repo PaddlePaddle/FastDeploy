@@ -17,6 +17,9 @@
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_postprocess_op.h"
+#include "fastdeploy/vision/ocr/ppocr/rec_preprocessor.h"
+#include "fastdeploy/vision/ocr/ppocr/rec_postprocessor.h"
+#include "fastdeploy/utils/unique_ptr.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -41,37 +44,54 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
              const std::string& label_path = "",
              const RuntimeOption& custom_option = RuntimeOption(),
              const ModelFormat& model_format = ModelFormat::PADDLE);
+  
   /// Get model's name
   std::string ModelName() const { return "ppocr/ocr_rec"; }
+
+  /** \brief Clone a new Recognizer with less memory usage when multiple instances of the same model are created
+   *
+   * \return new Recognizer* type unique pointer
+   */
+  virtual std::unique_ptr<Recognizer> Clone() const;
+
   /** \brief Predict the input image and get OCR recognition model result.
    *
-   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
-   * \param[in] rec_result The output of OCR recognition model result will be writen to this structure.
+   * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * \param[in] text The text result of rec model will be written into this parameter.
+   * \param[in] rec_score The sccore result of rec model will be written into this parameter.
    * \return true if the prediction is successed, otherwise false.
    */
-  virtual bool Predict(cv::Mat* img,
-                       std::tuple<std::string, float>* rec_result);
+  virtual bool Predict(const cv::Mat& img, std::string* text, float* rec_score);
 
-  // Pre & Post parameters
-  std::vector<std::string> label_list;
-  int rec_batch_num;
-  int rec_img_h;
-  int rec_img_w;
-  std::vector<int> rec_image_shape;
+  /** \brief BatchPredict the input image and get OCR recognition model result.
+   *
+   * \param[in] images The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * \param[in] texts The list of text results of rec model will be written into this vector.
+   * \param[in] rec_scores The list of sccore result of rec model will be written into this vector.
+   * \return true if the prediction is successed, otherwise false.
+   */
+  virtual bool BatchPredict(const std::vector<cv::Mat>& images,
+               std::vector<std::string>* texts, std::vector<float>* rec_scores);
+  
+  virtual bool BatchPredict(const std::vector<cv::Mat>& images,
+               std::vector<std::string>* texts, std::vector<float>* rec_scores,
+               size_t start_index, size_t end_index,
+               const std::vector<int>& indices);
 
-  std::vector<float> mean;
-  std::vector<float> scale;
-  bool is_scale;
+  /// Get preprocessor reference of DBDetectorPreprocessor
+  virtual RecognizerPreprocessor& GetPreprocessor() {
+    return preprocessor_;
+  }
+
+  /// Get postprocessor reference of DBDetectorPostprocessor
+  virtual RecognizerPostprocessor& GetPostprocessor() {
+    return postprocessor_;
+  }
 
  private:
   bool Initialize();
-  /// Preprocess the input data, and set the preprocessed results to `outputs`
-  bool Preprocess(Mat* img, FDTensor* outputs,
-                  const std::vector<int>& rec_image_shape);
-  /*! @brief Postprocess the inferenced results, and set the final result to `rec_result`
-   */
-  bool Postprocess(FDTensor& infer_result,
-                   std::tuple<std::string, float>* rec_result);
+  RecognizerPreprocessor preprocessor_;
+  RecognizerPostprocessor postprocessor_;
 };
 
 }  // namespace ocr

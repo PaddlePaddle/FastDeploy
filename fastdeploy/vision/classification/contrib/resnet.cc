@@ -87,7 +87,7 @@ bool ResNet::Postprocess(FDTensor& infer_result,
   // 1. Softmax 2. Choose topk labels 3. Put the result into ClassifyResult variable.
 
   int num_classes = infer_result.shape[1];
-  Softmax(infer_result, &infer_result);
+  function::Softmax(infer_result, &infer_result);
   const float* infer_result_buffer = reinterpret_cast<float*>(infer_result.Data());
   topk = std::min(num_classes, topk);
   result->label_ids =
