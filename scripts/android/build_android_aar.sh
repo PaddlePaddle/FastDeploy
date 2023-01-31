@@ -29,9 +29,12 @@ fi
 # remove old package
 echo "[INFO] --- Packing ${CXX_PACKAGE_NAME} package ..."
 if [ -d "${CXX_PACKAGE_NAME}" ]; then
-	echo "[INFO] --- Removed old package done !"
-	rm ${CXX_PACKAGE_NAME}.tgz
 	rm -rf ${CXX_PACKAGE_NAME}
+    echo "[INFO] --- Removed old ${CXX_PACKAGE_NAME} done !"
+    if [ -f "${CXX_PACKAGE_NAME}.tgz" ]; then
+        rm ${CXX_PACKAGE_NAME}.tgz
+        echo "[INFO] --- Removed old ${CXX_PACKAGE_NAME} done !"
+    fi
 fi
 
 # package latest c++ sdk
@@ -39,11 +42,28 @@ mkdir ${CXX_PACKAGE_NAME}
 echo "[INFO] --- Collecting package contents ..."
 cp -r ${ARMV7_CXX_PACKAGE_NAME}/* ${CXX_PACKAGE_NAME}/
 cp -r ${ARMV8_CXX_PACKAGE_NAME}/* ${CXX_PACKAGE_NAME}/
-rm -rf ${CXX_PACKAGE_NAME}/examples
+# Fix Paddle Lite headers to support FastDeploy static lib
+SDK_LITE_INCLUDE_DIR=${CXX_PACKAGE_NAME}/third_libs/install/paddlelite/include
+ARMV7_LITE_INCLUDE_DIR=${ARMV7_CXX_PACKAGE_NAME}/third_libs/install/paddlelite/include
+ARMV8_LITE_INCLUDE_DIR=${ARMV8_CXX_PACKAGE_NAME}/third_libs/install/paddlelite/include
+rm ${SDK_LITE_INCLUDE_DIR}/paddle_use_kernels.h
+cat ${ARMV8_LITE_INCLUDE_DIR}/paddle_use_kernels.h | head -n 3 >> ${SDK_LITE_INCLUDE_DIR}/paddle_use_kernels.h
+echo "#if (defined(__aarch64__) || defined(_M_ARM64))" >> ${SDK_LITE_INCLUDE_DIR}/paddle_use_kernels.h
+cat ${ARMV8_LITE_INCLUDE_DIR}/paddle_use_kernels.h | grep -v "#" | grep "USE" >> ${SDK_LITE_INCLUDE_DIR}/paddle_use_kernels.h
+echo "#else" >> ${SDK_LITE_INCLUDE_DIR}/paddle_use_kernels.h
+cat ${ARMV7_LITE_INCLUDE_DIR}/paddle_use_kernels.h | grep -v "#" | grep "USE" >> ${SDK_LITE_INCLUDE_DIR}/paddle_use_kernels.h
+echo "#endif" >> ${SDK_LITE_INCLUDE_DIR}/paddle_use_kernels.h
+echo "[INFO] --- Fixed Paddle Lite paddle_use_kernels.h to support FastDeploy static lib."
+if [ -d "${CXX_PACKAGE_NAME}/examples" ]; then
+    rm -rf ${CXX_PACKAGE_NAME}/examples
+fi
 echo "[INFO] --- Removed examples files ..."
 echo "[INFO] --- Removing static .a files: "
-find ${CXX_PACKAGE_NAME}/third_libs/install/ -name "*.a"
-rm $(find ${CXX_PACKAGE_NAME}/third_libs/install/ -name "*.a")
+static_files=$(find ${CXX_PACKAGE_NAME}/third_libs/install/ -name "*.a")
+if [ ${#static_files[@]} -gt 10 ]; then
+    echo "${#static_files[@]}: ${static_files}"
+    rm $(find ${CXX_PACKAGE_NAME}/third_libs/install/ -name "*.a")
+fi
 echo "[INFO] --- Taring ${CXX_PACKAGE_NAME}.tgz package ..."
 tar -zcvf ${CXX_PACKAGE_NAME}.tgz ${CXX_PACKAGE_NAME}/* >> ${BUILT_PACKAGE_DIR}/pkg.log 2>&1
 echo "[INFO] --- Package ${CXX_PACKAGE_NAME}.tgz done ! Package size info: "

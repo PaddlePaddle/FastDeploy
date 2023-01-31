@@ -22,7 +22,6 @@
 // \author Qi Liu, Xinyu Wang
 
 #ifdef WITH_GPU
-#ifdef ENABLE_VISION
 #include <opencv2/opencv.hpp>
 
 #include "fastdeploy/vision/utils/cuda_utils.h"
@@ -145,5 +144,4 @@ void CudaYoloPreprocess(uint8_t* src, int src_width, int src_height, float* dst,
 }  // namespace utils
 }  // namespace vision
 }  // namespace fastdeploy
-#endif
 #endif

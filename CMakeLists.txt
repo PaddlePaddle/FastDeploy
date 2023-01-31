@@ -48,8 +48,8 @@ endif()
 
 if(ANDROID)
   # To reduce the volume of the library
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g0 -Ofast -ffunction-sections -fdata-sections")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g0 -Ofast -ffunction-sections -fdata-sections")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g0 -Ofast -ffast-math -ffunction-sections -fdata-sections")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g0 -Ofast -ffast-math -ffunction-sections -fdata-sections")
 endif()
 
 ############################# Basic Options for FastDeploy ################################
@@ -74,10 +74,14 @@ option(WITH_KUNLUNXIN "Whether to compile for KunlunXin XPU deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
 
 ############################# Options for Android cross compiling #########################
-option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
-option(WITH_LITE_STATIC "Use Paddle Lite static lib for Android." OFF)
-option(WITH_OPENMP "Use OpenMP support for Android." OFF)
-
+if(ANDROID)
+  option(WITH_OPENCV_STATIC "Whether to use OpenCV static lib for Android." OFF)
+  option(WITH_LITE_STATIC "Whether to use OpenCV Paddle Lite static lib for Android." OFF)
+  option(WITH_FLYCV_STATIC "Whether to use OpenCV FlyCV static lib for Android." OFF)
+  option(WITH_OPENMP "Whether to use OpenCV OpenMP support for Android." OFF)
+  option(WITH_JAVA "Whether to build jni lib for Android." OFF)
+  option(WITH_STATIC_LIB "Whether to build FastDeploy static lib." OFF)
+endif()
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
 option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
 
@@ -153,10 +157,6 @@ add_definitions(-DFASTDEPLOY_LIB)
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h)
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/main.cc.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/main.cc)
 file(GLOB_RECURSE ALL_DEPLOY_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cc)
-if(WITH_GPU)
-  file(GLOB_RECURSE DEPLOY_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cu)
-  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_CUDA_SRCS})
-endif()
 file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/ort/*.cc)
 file(GLOB_RECURSE DEPLOY_PADDLE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/paddle/*.cc)
 file(GLOB_RECURSE DEPLOY_POROS_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/poros/*.cc)
@@ -170,6 +170,14 @@ file(GLOB_RECURSE DEPLOY_ENCRYPTION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}
 file(GLOB_RECURSE DEPLOY_PIPELINE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pipeline/*.cc)
 file(GLOB_RECURSE DEPLOY_TEXT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/text/*.cc)
 file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*_pybind.cc)
+if(WITH_GPU)
+  file(GLOB_RECURSE DEPLOY_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cu)
+  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_CUDA_SRCS})
+  file(GLOB_RECURSE DEPLOY_VISION_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cu)
+  list(APPEND DEPLOY_VISION_SRCS ${DEPLOY_VISION_CUDA_SRCS})
+  file(GLOB_RECURSE DEPLOY_TEXT_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/text/*.cu)
+  list(APPEND DEPLOY_TEXT_SRCS ${DEPLOY_TEXT_CUDA_SRCS})
+endif()
 list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_POROS_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_OPENVINO_SRCS} ${DEPLOY_LITE_SRCS} ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS} ${DEPLOY_PIPELINE_SRCS} ${DEPLOY_RKNPU2_SRCS} ${DEPLOY_SOPHGO_SRCS} ${DEPLOY_ENCRYPTION_SRCS})
 
 set(DEPEND_LIBS "")
@@ -198,6 +206,9 @@ endif()
 
 if(ENABLE_LITE_BACKEND)
   add_definitions(-DENABLE_LITE_BACKEND)
+  if(WITH_LITE_STATIC)
+    add_definitions(-DWITH_LITE_STATIC)
+  endif()
   include(${PROJECT_SOURCE_DIR}/cmake/paddlelite.cmake)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_LITE_SRCS})
   list(APPEND DEPEND_LIBS external_paddle_lite)
@@ -372,7 +383,7 @@ if(ENABLE_VISION)
   if(ENABLE_FLYCV)
     add_definitions(-DENABLE_FLYCV)
     include(${PROJECT_SOURCE_DIR}/cmake/flycv.cmake)
-    list(APPEND DEPEND_LIBS external_flycv)
+    list(APPEND DEPEND_LIBS ${FLYCV_LIBRARIES})
   endif()
 
   if(ENABLE_CVCUDA)
@@ -401,7 +412,6 @@ if(ENABLE_PADDLE2ONNX)
   include(${PROJECT_SOURCE_DIR}/cmake/paddle2onnx.cmake)
   list(APPEND DEPEND_LIBS external_paddle2onnx)
 endif(ENABLE_PADDLE2ONNX)
-
 
 configure_file(${PROJECT_SOURCE_DIR}/FastDeploy.cmake.in ${PROJECT_SOURCE_DIR}/FastDeploy.cmake @ONLY)
 configure_file(${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py.in ${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py)
@@ -454,16 +464,40 @@ endif()
 if(ANDROID)
   find_library(log-lib log)
   list(APPEND DEPEND_LIBS ${log-lib})
+  if(WITH_LITE_STATIC)
+    # need omp for static Paddle Lite lib
+    set(WITH_OPENMP ON CACHE BOOL "Force WITH_OPENMP=ON while WITH_LITE_STATIC=ON" FORCE) 
+    message(STATUS "Force WITH_OPENMP=${WITH_OPENMP} while WITH_LITE_STATIC=ON")
+  endif()
   if(WITH_OPENMP)
-    find_package(OpenMP)
-    if(OpenMP_CXX_FOUND)
-      list(APPEND DEPEND_LIBS OpenMP::OpenMP_CXX)
-    endif()
+    include(${PROJECT_SOURCE_DIR}/cmake/openmp.cmake)
   endif()
 endif()
 
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
+################################ JNI & STATIC LIB: FastDeploy Android JNI & STATIC Lib ###############################
+if(ANDROID AND WITH_JAVA)
+  include(${PROJECT_SOURCE_DIR}/cmake/fastdeploy_jni.cmake)
+endif()
+
+if(ANDROID AND WITH_STATIC_LIB)
+  # Here, we use a dummy target (fastdelpoy_dummy) 
+  # to form a build dependency tree for fastdeploy_static lib.
+  add_library(fastdelpoy_dummy STATIC ${ALL_DEPLOY_SRCS})
+  # Still add ${DEPEND_LIBS} for cmake to form link_libraries 
+  # property tree for a static library. 
+  target_link_libraries(fastdelpoy_dummy ${DEPEND_LIBS})
+  # Build fastdelpoy_dummy when the third-party 
+  # libraries (opencv, paddle lite, flycv) are ready.
+  add_dependencies(fastdelpoy_dummy ${LIBRARY_NAME})
+  # Add WITH_STATIC_LIB compile definitions, see lite_backend.cc.
+  target_compile_definitions(fastdelpoy_dummy PRIVATE WITH_STATIC_LIB)
+  target_compile_definitions(fastdelpoy_dummy PRIVATE WITH_STATIC_LIB_AT_COMPILING)
+  bundle_static_library(fastdelpoy_dummy fastdeploy_static bundle_fastdeploy)
+endif()
+
+##################################### Examples ####################################
 if(WIN32)
   if(ENABLE_VISION)
     if("${CMAKE_GENERATOR}" STREQUAL "Ninja")
@@ -507,10 +541,34 @@ if(WIN32)
     RUNTIME DESTINATION lib
   )
 elseif(ANDROID)
-  install(
-    TARGETS ${LIBRARY_NAME}
-    LIBRARY DESTINATION lib/${ANDROID_ABI}
-  )
+  if(WITH_STATIC_LIB) 
+    install(
+      FILES 
+      ${CMAKE_CURRENT_BINARY_DIR}/libfastdeploy_static.a
+      DESTINATION lib/${ANDROID_ABI}
+    )
+  else()
+    install(
+      TARGETS ${LIBRARY_NAME}
+      LIBRARY DESTINATION lib/${ANDROID_ABI}
+    )
+  endif()
+  # Install omp into fastdeploy lib dir if WITH_OPENMP=ON 
+  # and WITH_LITE_STATIC=OFF.
+  if(WITH_OPENMP AND (NOT WITH_LITE_STATIC) AND OpenMP_CXX_FOUND AND ENABLE_OPENMP_SHARED)
+    install(
+      FILES 
+      ${OpenMP_CXX_LIBRARIES}
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/${ANDROID_ABI}
+    )
+  endif()
+  # install Android JNI lib
+  if(WITH_JAVA)
+    install(
+      TARGETS fastdeploy_jni
+      LIBRARY DESTINATION jni/${ANDROID_ABI}
+    )
+  endif()
 else()
   install(
     TARGETS ${LIBRARY_NAME}
@@ -524,10 +582,70 @@ install(
   PATTERN "*.h"
   PATTERN "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/*/*.h"
 )
-install(
-  DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install
-  DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs
-)
+
+if(NOT ANDROID)
+  install(
+    DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs
+  )
+else()
+  # opencv/flycv always needs to be provided to users because our api
+  # explicitly depends on opencv's and flycv's api in headers.
+  # The headers and libs of opencv must be install.
+  if(ENABLE_VISION)
+    if(WITH_OPENCV_STATIC AND WITH_STATIC_LIB)
+      # Only need to install headers while building 
+      # FastDeploy static lib. (TODO:qiuyanjun)
+      install(
+        DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/opencv/sdk/native/jni/include
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install/opencv/sdk/native/jni
+      )
+    else()
+      install(
+        DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/opencv
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
+      )
+    endif()
+  endif()
+  # only need flycv's headers (may also install libs? TODO:qiuyanjun)
+  if(ENABLE_FLYCV)
+    if(WITH_FLYCV_STATIC)
+      install(
+        DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/flycv/include
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install/flycv
+      )
+    else()
+      install(
+        DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/flycv
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
+      )
+    endif()
+  endif()
+  # fast_tokenizer's static lib is not avaliable now! 
+  # may support some days later(TODO:qiuyanjun)
+  if(ENABLE_TEXT)
+    install(
+      DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/fast_tokenizer
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
+    )
+  endif()  
+  # some libs may not to install while in static mode
+  if(ENABLE_LITE_BACKEND)
+    if(WITH_LITE_STATIC)
+      if(WITH_STATIC_LIB)
+        install(
+          DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/paddlelite/include
+          DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install/paddlelite
+        )
+      endif()
+    else()
+      install(
+        DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/paddlelite
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
+      )
+    endif()
+  endif()
+endif()
 
 if(WIN32 AND BUILD_EXAMPLES)
   get_windows_path(_tmp_install_dir ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install)
@@ -550,13 +668,16 @@ install(
   ${PROJECT_SOURCE_DIR}/FastDeploy.cmake
   ${PROJECT_SOURCE_DIR}/cmake/FastDeployConfig.cmake
   ${PROJECT_SOURCE_DIR}/cmake/utils.cmake
+  ${PROJECT_SOURCE_DIR}/cmake/openmp.cmake
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 
-install(
-  DIRECTORY ${PROJECT_SOURCE_DIR}/examples
-  DESTINATION ${CMAKE_INSTALL_PREFIX}
-)
+if(NOT ANDROID)
+  install(
+    DIRECTORY ${PROJECT_SOURCE_DIR}/examples
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
+endif()
 
 install(
   FILES ${PROJECT_SOURCE_DIR}/cmake/gflags.cmake

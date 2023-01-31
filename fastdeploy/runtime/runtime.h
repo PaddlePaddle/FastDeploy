@@ -51,15 +51,6 @@ struct FASTDEPLOY_DECL Runtime {
    */
   bool Infer();
 
-  /** \brief Compile TorchScript Module, only for Poros backend
-   *
-   * \param[in] prewarm_tensors Prewarm datas for compile
-   * \param[in] _option Runtime option
-   * \return true if compile successed, otherwise false
-   */
-  bool Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
-               const RuntimeOption& _option);
-
   /** \brief Get number of inputs
    */
   int NumInputs() { return backend_->NumInputs(); }
@@ -95,6 +86,15 @@ struct FASTDEPLOY_DECL Runtime {
   void ReleaseModelMemoryBuffer();
 
   RuntimeOption option;
+
+  /** \brief Compile TorchScript Module, only for Poros backend
+   *
+   * \param[in] prewarm_tensors Prewarm datas for compile
+   * \param[in] _option Runtime option
+   * \return true if compile successed, otherwise false
+   */
+  bool Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
+               const RuntimeOption& _option);
 
  private:
   void CreateOrtBackend();
