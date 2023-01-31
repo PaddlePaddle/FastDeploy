@@ -72,7 +72,8 @@ enum ModelFormat {
 };
 
 /// Describle all the supported backends for specified model format
-static std::map<ModelFormat, std::vector<Backend>> s_default_backends_cfg = {
+static std::map<ModelFormat, std::vector<Backend>>
+    s_default_backends_by_format = {
   {ModelFormat::PADDLE, {Backend::PDINFER, Backend::LITE,
                       Backend::ORT, Backend::OPENVINO, Backend::TRT}},
   {ModelFormat::ONNX, {Backend::ORT, Backend::OPENVINO, Backend::TRT}},
@@ -81,8 +82,22 @@ static std::map<ModelFormat, std::vector<Backend>> s_default_backends_cfg = {
   {ModelFormat::SOPHGO, {Backend::SOPHGOTPU}}
 };
 
+/// Describle all the supported backends for specified device
+static std::map<Device, std::vector<Backend>>
+    s_default_backends_by_device = {
+  {Device::CPU, {Backend::LITE, Backend::PDINFER, Backend::ORT,
+                Backend::OPENVINO, Backend::POROS}},
+  {Device::GPU, {Backend::PDINFER, Backend::ORT, Backend::TRT, Backend::POROS}},
+  {Device::RKNPU, {Backend::RKNPU2}},
+  {Device::IPU, {Backend::PDINFER}},
+  {Device::TIMVX, {Backend::LITE}},
+  {Device::KUNLUNXIN, {Backend::LITE}},
+  {Device::ASCEND, {Backend::LITE}},
+  {Device::SOPHGOTPUD, {Backend::SOPHGOTPU}}
+};
+
+
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const Backend& b);
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const Device& d);
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const ModelFormat& f);
-
 }  // namespace fastdeploy
