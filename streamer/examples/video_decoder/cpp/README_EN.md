@@ -15,6 +15,7 @@ make -j
 
 3. Run
 ```
-cp ../streamer_cfg.yml .
+# GPU decoding(gpu.yml) or CPU decoding(cpu.yml)
+cp ../gpu.yml streamer_cfg.yml
 ./video_decoder
 ```

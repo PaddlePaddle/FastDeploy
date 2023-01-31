@@ -101,7 +101,7 @@ VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
 #### Predict函数
 
 > ```c++
-> ArcFace::Predict(cv::Mat* im, FaceRecognitionResult* result)
+> ArcFace::Predict(const cv::Mat& im, FaceRecognitionResult* result)
 > ```
 >
 > 模型预测接口，输入图像直接输出检测结果。
@@ -121,8 +121,6 @@ VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
       通过InsightFaceRecognitionPreprocessor::SetAlpha(std::vector<float>& alpha)来进行修改
 > > * **beta**(vector&lt;float&gt;): 预处理归一化的beta值，计算公式为`x'=x*alpha+beta`，beta默认为[-1.f, -1.f, -1.f],
       通过InsightFaceRecognitionPreprocessor::SetBeta(std::vector<float>& beta)来进行修改
-> > * **permute**(bool): 预处理是否将BGR转换成RGB，默认true,
-      通过InsightFaceRecognitionPreprocessor::SetPermute(bool permute)来进行修改
 
 #### InsightFaceRecognitionPostprocessor成员变量(后处理参数)
 > > * **l2_normalize**(bool): 输出人脸向量之前是否执行l2归一化，默认false,

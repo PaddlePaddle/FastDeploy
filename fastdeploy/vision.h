@@ -29,6 +29,7 @@
 #include "fastdeploy/vision/detection/contrib/yolov7/yolov7.h"
 #include "fastdeploy/vision/detection/contrib/yolov7end2end_ort.h"
 #include "fastdeploy/vision/detection/contrib/yolov7end2end_trt.h"
+#include "fastdeploy/vision/detection/contrib/yolov8/yolov8.h"
 #include "fastdeploy/vision/detection/contrib/yolox.h"
 #include "fastdeploy/vision/detection/contrib/rknpu2/model.h"
 #include "fastdeploy/vision/detection/ppdet/model.h"

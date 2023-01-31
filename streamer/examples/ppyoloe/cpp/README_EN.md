@@ -4,7 +4,7 @@ English | [简体中文](README_CN.md)
 
 ## Build and Run
 
-1. Build FastDeploy Streamer first, [README](../../../README.md)
+1. This example requires DeepStream, please prepare DeepStream environment and build FastDeploy Streamer, refer to [README](../../../README.md)
 
 2. Build Example
 ```
