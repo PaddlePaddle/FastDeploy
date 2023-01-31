@@ -7,19 +7,18 @@
 
 | 步骤 | 说明                                | 创建或修改的文件                            |
 |:------:|:-------------------------------------:|:---------------------------------------------:|
-| [1](#step2)    |  在fastdeploy/vision相应任务模块增加模型实现       | resnet.h、resnet.cc、vision.h                     |
-| [2](#step4)     | 通过pybind完成Python接口绑定 | resnet_pybind.cc、classification_pybind.cc |
-| [3](#step5)     | 实现Python相应调用接口    | resnet.py、\_\_init\_\_.py                        |
+| [1](#step2)    |  在fastdeploy/vision相应任务模块增加模型实现       | yolov7face.h、yolov7face.cc、preprocessor.h、preprocess.cc、postprocessor.h、postprocessor.cc、vision.h                     |
+| [2](#step4)     | 通过pybind完成Python接口绑定 | yolov7face_pybind.cc |
+| [3](#step5)     | 实现Python相应调用接口    | yolov7face.py、\_\_init\_\_.py                        |
 
 在完成上述3步之后，一个外部模型就集成好了。
 <br />
 如果您想为FastDeploy贡献代码，还需要为新增模型添加测试代码、说明文档和代码注释，可在[测试](#test)中查看。
 ## 模型集成     <span id="modelsupport"></span>
 
-### 模型准备  <span id="step1"></span>
+### 1 模型准备  <span id="step1"></span>
 
-
-在集成外部模型之前，先要将训练好的模型（.pt，.pdparams 等）转换成FastDeploy支持部署的模型格式（.onnx，.pdmodel）。多数开源仓库会提供模型转换脚本，可以直接利用脚本做模型的转换。由于torchvision没有提供转换脚本，因此手动编写转换脚本，本文中将 `torchvison.models.resnet50` 转换为 `resnet50.onnx`， 参考代码如下：
+在集成外部模型之前，先要将训练好的模型（.pt，.pdparams 等）转换成FastDeploy支持部署的模型格式（.onnx，.pdmodel）。多数开源仓库会提供模型转换脚本，可以直接利用脚本做模型的转换。例如yolov7face官方库提供的[export.py](https://github.com/derronqi/yolov7-face/blob/main/models/export.py)文件， 若官方库未提供转换导出文件，则需要手动编写转换脚本，如torchvision没有提供转换脚本，因此手动编写转换脚本，下文中将 `torchvison.models.resnet50` 转换为 `resnet50.onnx`，参考代码如下：
 
 ```python
 import torch
@@ -41,52 +40,129 @@ torch.onnx.export(model,
 ```
 执行上述脚本将会得到 `resnet50.onnx` 文件。
 
-### C++部分  <span id="step2"></span>
-* 创建`resnet.h`文件
+### 2 CPP代码实现  <span id="step2"></span>
+#### 2.1 前处理类实现 
+* 创建`preprocessor.h`文件
   * 创建位置
-    * FastDeploy/fastdeploy/vision/classification/contrib/resnet.h (FastDeploy/C++代码存放位置/视觉模型/任务名称/外部模型/模型名.h)
+    * FastDeploy/fastdeploy/vision/facedet/contrib/preprocess.h (FastDeploy/C++代码存放位置/视觉模型/任务名称/外部模型/precessor.h)
   * 创建内容
-    * 首先在resnet.h中创建 ResNet类并继承FastDeployModel父类，之后声明`Predict`、`Initialize`、`Preprocess`、`Postprocess`和`构造函数`，以及必要的变量，具体的代码细节请参考[resnet.h](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-69128489e918f305c208476ba793d8167e77de2aa7cadf5dcbac30da448bd28e)。
+    * 首先在preprocess.h中创建 Yolov7FacePreprocess 类,之后声明`Run`、`preprocess`、`LetterBox`和`构造函数`，以及必要的变量及其`set`和`get`方法，具体的代码细节请参考[preprocess.h](https://github.com/CoolKbh/FastDeploy/blob/develop/fastdeploy/vision/facedet/contrib/yolov7face/preprocessor.h)。
 
 ```C++
-class FASTDEPLOY_DECL ResNet : public FastDeployModel {
+class FASTDEPLOY_DECL Yolov7FacePreprocessor {
  public:
-  ResNet(...);
-  virtual bool Predict(...);
- private:
-  bool Initialize();
+  Yolov7FacePreprocessor(...);
+  bool Run(...);
+ protected:
   bool Preprocess(...);
-  bool Postprocess(...);
+  void LetterBox(...);
 };
 ```
 
-* 创建`resnet.cc`文件
+* 创建`preprocessor.cc`文件
   * 创建位置
-    * FastDeploy/fastdeploy/vision/classification/contrib/resnet.cc (FastDeploy/C++代码存放位置/视觉模型/任务名称/外部模型/模型名.cc)
+    * FastDeploy/fastdeploy/vision/facedet/contrib/preprocessor.cc (FastDeploy/C++代码存放位置/视觉模型/任务名称/外部模型/preprocessor.cc)
   * 创建内容
-    * 在`resnet.cc`中实现`resnet.h`中声明函数的具体逻辑，其中`PreProcess` 和 `PostProcess`需要参考源官方库的前后处理逻辑复现，ResNet每个函数具体逻辑如下，具体的代码请参考[resnet.cc](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-d229d702de28345253a53f2a5839fd2c638f3d32fffa6a7d04d23db9da13a871)。
+    * 在`preprocessor.cc`中实现`preprocessor.h`中声明函数的具体逻辑，其中`Preprocess`需要参考源官方库的前后处理逻辑复现，preprocessor每个函数具体逻辑如下，具体的代码请参考[preprocessor.cc](https://github.com/CoolKbh/FastDeploy/blob/develop/fastdeploy/vision/facedet/contrib/yolov7face/preprocessor.cc)。
 
 ```C++
-ResNet::ResNet(...) {
+Yolov7FacePreprocessor::Yolov7FacePreprocessor(...) {
+  // 构造函数逻辑
+  // 全局变量赋值
+}
+bool Yolov7FacePreprocessor::Run() {
+  // 执行前处理
+  // 根据传入图片数量对每张图片处理，并返回结果
+  return true;
+}
+bool Yolov7FacePreprocessor::Preprocess(FDMat* mat, FDTensor* output,
+                                        std::map<std::string, std::array<float, 2>>* im_info) {
+// 前处理逻辑
+// 1. LetterBox 2. convert and permute 3. 处理结果存入 FDTensor类中  
+  return true;
+}
+void Yolov7FacePreprocessor::LetterBox(FDMat* mat) {
+  //LetterBox
+  return true;
+}
+```
+
+#### 2.2 后处理类实现
+* 创建`postprocessor.h`文件
+  * 创建位置
+    * FastDeploy/fastdeploy/vision/facedet/contrib/postprocessor.h (FastDeploy/C++代码存放位置/视觉模型/任务名称/外部模型/postprocessor.h)
+  * 创建内容
+    * 首先在postprocess.h中创建 Yolov7FacePostprocess 类,之后声明`Run`和`构造函数`，以及必要的变量及其`set`和`get`方法，具体的代码细节请参考[postprocessor.h](https://github.com/CoolKbh/FastDeploy/blob/develop/fastdeploy/vision/facedet/contrib/yolov7face/postprocessor.h)。
+
+```C++
+class FASTDEPLOY_DECL Yolov7FacePostprocessor {
+ public:
+  Yolov7FacePostprocessor(...);
+  bool Run(...);
+};
+```
+
+* 创建`postprocessor.cc`文件
+  * 创建位置
+    * FastDeploy/fastdeploy/vision/facedet/contrib/postprocessor.cc (FastDeploy/C++代码存放位置/视觉模型/任务名称/外部模型/postprocessor.cc)
+  * 创建内容
+    * 在`postprocessor.cc`中实现`postprocessor.h`中声明函数的具体逻辑，其中`Postprocess`需要参考源官方库的前后处理逻辑复现，postprocessor每个函数具体逻辑如下，具体的代码请参考[postprocessor.cc](https://github.com/CoolKbh/FastDeploy/blob/develop/fastdeploy/vision/facedet/contrib/yolov7face/postprocessor.cc)。
+
+```C++
+Yolov7FacePostprocessor::Yolov7FacePostprocessor(...) {
+  // 构造函数逻辑
+  // 全局变量赋值
+}
+bool Yolov7FacePostprocessor::Run() {
+  // 后处理逻辑
+  // 1. Padding 2. Choose box by conf_threshold 3. NMS 4. 结果存入 FaceDetectionResult类
+  return true;
+}
+
+```
+#### 2.3 YOLOv7Face实现
+* 创建`yolov7face.h`文件
+  * 创建位置
+    * FastDeploy/fastdeploy/vision/facedet/contrib/yolov7face.h (FastDeploy/C++代码存放位置/视觉模型/任务名称/外部模型/模型名.h)
+  * 创建内容
+    * 首先在yolov7face.h中创建 YOLOv7Face 类并继承FastDeployModel父类，之后声明`Predict`、`BatchPredict`、`Initialize`和`构造函数`，以及必要的变量及其`set`和`get`方法，具体的代码细节请参考[yolov7face.h](https://github.com/CoolKbh/FastDeploy/blob/develop/fastdeploy/vision/facedet/contrib/yolov7face/yolov7face.h)。
+
+```C++
+class FASTDEPLOY_DECL YOLOv7Face : public FastDeployModel {
+ public:
+  YOLOv7Face(...);
+  virtual bool Predict(...);
+  virtual bool BatchPredict(...);
+ protected:
+  bool Initialize();
+  Yolov7FacePreprocessor preprocessor_;
+  Yolov7FacePostprocessor postprocessor_;
+};
+```
+
+* 创建`yolov7face.cc`文件
+  * 创建位置
+    * FastDeploy/fastdeploy/vision/facedet/contrib/yolov7face.cc (FastDeploy/C++代码存放位置/视觉模型/任务名称/外部模型/模型名.cc)
+  * 创建内容
+    * 在`yolov7face.cc`中实现`yolov7face.h`中声明函数的具体逻辑，YOLOv7Face每个函数具体逻辑如下，具体的代码请参考[yolov7face.cc](https://github.com/CoolKbh/FastDeploy/blob/develop/fastdeploy/vision/facedet/contrib/yolov7face/yolov7face.cc)。
+
+```C++
+YOLOv7Face::YOLOv7Face(...) {
   // 构造函数逻辑
   // 1. 指定 Backend 2. 设置RuntimeOption 3. 调用Initialize()函数
 }
-bool ResNet::Initialize() {
+bool YOLOv7Face::Initialize() {
   // 初始化逻辑
   // 1. 全局变量赋值 2. 调用InitRuntime()函数
   return true;
 }
-bool ResNet::Preprocess(Mat* mat, FDTensor* output) {
-// 前处理逻辑
-// 1. Resize 2. BGR2RGB 3. Normalize 4. HWC2CHW 5. 处理结果存入 FDTensor类中  
-  return true;
-}
-bool ResNet::Postprocess(FDTensor& infer_result, ClassifyResult* result, int topk) {
-  //后处理逻辑
-  // 1. Softmax 2. Choose topk labels 3. 结果存入 ClassifyResult类
-  return true;
-}
 bool ResNet::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
+  Preprocess(...)
+  Infer(...)
+  Postprocess(...)
+  return true;
+}
+bool ResNet::BatchPredict(cv::Mat* im, ClassifyResult* result, int topk) {
   Preprocess(...)
   Infer(...)
   Postprocess(...)
@@ -139,7 +215,7 @@ void BindClassification(pybind11::module& m) {
 ```
 
 
-### Python部分  <span id="step5"></span>
+### Python接口封装  <span id="step5"></span>
 
 
 * 创建`resnet.py`文件
@@ -203,7 +279,7 @@ cd dist
 pip install fastdeploy_gpu_python-版本号-cpxx-cpxxm-系统架构.whl
 ```
 
-### 编写测试代码
+### 示例代码开发
   * 创建位置: FastDeploy/examples/vision/classification/resnet/ (FastDeploy/示例目录/视觉模型/任务名称/模型名/)
   * 创建目录结构
 
