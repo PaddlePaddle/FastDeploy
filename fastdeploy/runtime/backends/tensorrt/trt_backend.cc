@@ -179,8 +179,7 @@ bool TrtBackend::InitFromOnnx(const std::string& model_buffer,
   option_ = option;
   cudaSetDevice(option_.gpu_id);
 
-  std::string onnx_content = "";
-  onnx_content = model_buffer;
+  std::string onnx_content = model_buffer;
 
   // This part of code will record the original outputs order
   // because the converted tensorrt network may exist wrong order of outputs

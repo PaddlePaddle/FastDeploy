@@ -229,19 +229,14 @@ class RuntimeOption:
 
     def set_model_buffer(self,
                          model_buffer,
-                         model_buffer_size,
                          params_buffer="",
-                         params_buffer_size=0,
                          model_format=ModelFormat.PADDLE):
         """Specify the memory buffer of model and parameter. Used when model and params are loaded directly from memory
         :param model_buffer: (bytes)The memory buffer of model
-        :param model_buffer_size: (unsigned int)The size of model memory buffer
         :param params_buffer: (bytes)The memory buffer of the parameters
-        :param params_buffer_size: (unsigned inst)The size of parameters memory buffer
         :param model_format: (ModelFormat)Format of model, support ModelFormat.PADDLE/ModelFormat.ONNX/ModelFormat.TORCHSCRIPT
         """
-        return self._option.set_model_buffer(model_buffer, model_buffer_size,
-                                             params_buffer, params_buffer_size,
+        return self._option.set_model_buffer(model_buffer, params_buffer,
                                              model_format)
 
     def use_gpu(self, device_id=0):

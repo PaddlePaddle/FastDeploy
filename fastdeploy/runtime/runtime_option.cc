@@ -38,17 +38,13 @@ void RuntimeOption::SetModelPath(const std::string& model_path,
   }
 }
 
-void RuntimeOption::SetModelBuffer(const char* model_buffer,
-                                   size_t model_buffer_size,
-                                   const char* params_buffer,
-                                   size_t params_buffer_size,
+void RuntimeOption::SetModelBuffer(const std::string& model_buffer,
+                                   const std::string& params_buffer,
                                    const ModelFormat& format) {
   model_from_memory_ = true;
-  model_buffer_size_ = model_buffer_size;
   if (format == ModelFormat::PADDLE) {
     model_buffer_ = model_buffer;
     params_buffer_ = params_buffer;
-    params_buffer_size_ = params_buffer_size;
     model_format = ModelFormat::PADDLE;
   } else if (format == ModelFormat::ONNX) {
     model_buffer_ = model_buffer;

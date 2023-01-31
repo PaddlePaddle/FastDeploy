@@ -92,6 +92,8 @@ struct FASTDEPLOY_DECL Runtime {
    */
   Runtime* Clone(void* stream = nullptr, int device_id = -1);
 
+  void ReleaseModelMemoryBuffer();
+
   RuntimeOption option;
 
  private:

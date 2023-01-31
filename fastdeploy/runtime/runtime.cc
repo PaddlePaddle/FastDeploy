@@ -210,6 +210,15 @@ FDTensor* Runtime::GetOutputTensor(const std::string& name) {
   return nullptr;
 }
 
+void Runtime::ReleaseModelMemoryBuffer() {
+  if (option.model_from_memory_) {
+    option.model_buffer_.clear();
+    option.model_buffer_.shrink_to_fit();
+    option.params_buffer_.clear();
+    option.params_buffer_.shrink_to_fit();
+  }
+}
+
 void Runtime::CreatePaddleBackend() {
 #ifdef ENABLE_PADDLE_BACKEND
   auto pd_option = PaddleBackendOption();
@@ -263,23 +272,22 @@ void Runtime::CreatePaddleBackend() {
            "PaddleBackend only support model format of ModelFormat::PADDLE.");
   backend_ = utils::make_unique<PaddleBackend>();
   auto casted_backend = dynamic_cast<PaddleBackend*>(backend_.get());
-  std::string model_buffer = "";
-  std::string params_buffer = "";
   if (pd_option.model_from_memory_) {
-    model_buffer = std::string(
-        option.model_buffer_, option.model_buffer_ + option.model_buffer_size_);
-    params_buffer =
-        std::string(option.params_buffer_,
-                    option.params_buffer_ + option.params_buffer_size_);
+    FDASSERT(casted_backend->InitFromPaddle(option.model_buffer_,
+                                            option.params_buffer_, pd_option),
+             "Load model from Paddle failed while initliazing PaddleBackend.");
+    ReleaseModelMemoryBuffer();
   } else {
+    std::string model_buffer = "";
+    std::string params_buffer = "";
     FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
              "Fail to read binary from model file");
     FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
              "Fail to read binary from parameter file");
+    FDASSERT(
+        casted_backend->InitFromPaddle(model_buffer, params_buffer, pd_option),
+        "Load model from Paddle failed while initliazing PaddleBackend.");
   }
-  FDASSERT(
-      casted_backend->InitFromPaddle(model_buffer, params_buffer, pd_option),
-      "Load model from Paddle failed while initliazing PaddleBackend.");
 #else
   FDASSERT(false,
            "PaddleBackend is not available, please compiled with "
@@ -340,36 +348,34 @@ void Runtime::CreateOrtBackend() {
   backend_ = utils::make_unique<OrtBackend>();
   auto casted_backend = dynamic_cast<OrtBackend*>(backend_.get());
   if (option.model_format == ModelFormat::ONNX) {
-    std::string model_buffer = "";
     if (option.model_from_memory_) {
-      model_buffer =
-          std::string(option.model_buffer_,
-                      option.model_buffer_ + option.model_buffer_size_);
+      FDASSERT(casted_backend->InitFromOnnx(option.model_buffer_, ort_option),
+               "Load model from ONNX failed while initliazing OrtBackend.");
+      ReleaseModelMemoryBuffer();
     } else {
+      std::string model_buffer = "";
       FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
                "Fail to read binary from model file");
+      FDASSERT(casted_backend->InitFromOnnx(option.model_buffer_, ort_option),
+               "Load model from ONNX failed while initliazing OrtBackend.");
     }
-    FDASSERT(casted_backend->InitFromOnnx(model_buffer, ort_option),
-             "Load model from ONNX failed while initliazing OrtBackend.");
   } else {
-    std::string model_buffer = "";
-    std::string params_buffer = "";
     if (option.model_from_memory_) {
-      model_buffer =
-          std::string(option.model_buffer_,
-                      option.model_buffer_ + option.model_buffer_size_);
-      params_buffer =
-          std::string(option.params_buffer_,
-                      option.params_buffer_ + option.params_buffer_size_);
+      FDASSERT(casted_backend->InitFromPaddle(
+                   option.model_buffer_, option.params_buffer_, ort_option),
+               "Load model from Paddle failed while initliazing OrtBackend.");
+      ReleaseModelMemoryBuffer();
     } else {
+      std::string model_buffer = "";
+      std::string params_buffer = "";
       FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
                "Fail to read binary from model file");
       FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
                "Fail to read binary from parameter file");
+      FDASSERT(casted_backend->InitFromPaddle(model_buffer, params_buffer,
+                                              ort_option),
+               "Load model from Paddle failed while initliazing OrtBackend.");
     }
-    FDASSERT(
-        casted_backend->InitFromPaddle(model_buffer, params_buffer, ort_option),
-        "Load model from Paddle failed while initliazing OrtBackend.");
   }
 #else
   FDASSERT(false,
@@ -402,36 +408,34 @@ void Runtime::CreateTrtBackend() {
   backend_ = utils::make_unique<TrtBackend>();
   auto casted_backend = dynamic_cast<TrtBackend*>(backend_.get());
   if (option.model_format == ModelFormat::ONNX) {
-    std::string model_buffer = "";
-    if (!option.model_from_memory_) {
-      model_buffer =
-          std::string(option.model_buffer_,
-                      option.model_buffer_ + option.model_buffer_size_);
+    if (option.model_from_memory_) {
+      FDASSERT(casted_backend->InitFromOnnx(option.model_buffer_, trt_option),
+               "Load model from ONNX failed while initliazing TrtBackend.");
+      ReleaseModelMemoryBuffer();
     } else {
+      std::string model_buffer = "";
       FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
                "Fail to read binary from model file");
+      FDASSERT(casted_backend->InitFromOnnx(model_buffer, trt_option),
+               "Load model from ONNX failed while initliazing TrtBackend.");
     }
-    FDASSERT(casted_backend->InitFromOnnx(model_buffer, trt_option),
-             "Load model from ONNX failed while initliazing TrtBackend.");
   } else {
-    std::string model_buffer = "";
-    std::string params_buffer = "";
     if (option.model_from_memory_) {
-      model_buffer =
-          std::string(option.model_buffer_,
-                      option.model_buffer_ + option.model_buffer_size_);
-      params_buffer =
-          std::string(option.params_buffer_,
-                      option.params_buffer_ + option.params_buffer_size_);
+      FDASSERT(casted_backend->InitFromPaddle(
+                   option.model_buffer_, option.params_buffer_, trt_option),
+               "Load model from Paddle failed while initliazing TrtBackend.");
+      ReleaseModelMemoryBuffer();
     } else {
+      std::string model_buffer = "";
+      std::string params_buffer = "";
       FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
                "Fail to read binary from model file");
       FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
                "Fail to read binary from parameter file");
+      FDASSERT(casted_backend->InitFromPaddle(model_buffer, params_buffer,
+                                              trt_option),
+               "Load model from Paddle failed while initliazing TrtBackend.");
     }
-    FDASSERT(
-        casted_backend->InitFromPaddle(model_buffer, params_buffer, trt_option),
-        "Load model from Paddle failed while initliazing TrtBackend.");
   }
 #else
   FDASSERT(false,

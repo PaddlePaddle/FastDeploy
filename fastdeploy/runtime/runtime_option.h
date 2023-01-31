@@ -50,16 +50,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /** \brief Specify the memory buffer of model and parameter. Used when model and params are loaded directly from memory
    *
-   * \param[in] model_buffer The pointer of model memory buffer
-   * \param[in] model_buffer_size The size of model memory buffer
-   * \param[in] params_buffer The pointer of parameters memory buffer
-   * \param[in] params_buffer_size The size of parameters memory buffer
+   * \param[in] model_buffer The string of model memory buffer
+   * \param[in] params_buffer The string of parameters memory buffer
    * \param[in] format Format of the loaded model
    */
-  void SetModelBuffer(const char* model_buffer,
-                      size_t model_buffer_size,
-                      const char* params_buffer = nullptr,
-                      size_t params_buffer_size = 0,
+  void SetModelBuffer(const std::string& model_buffer,
+                      const std::string& params_buffer = "",
                       const ModelFormat& format = ModelFormat::PADDLE);
 
   /// Use cpu to inference, the runtime will inference on CPU by default
@@ -431,10 +427,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // format of input model
   ModelFormat model_format = ModelFormat::PADDLE;
 
-  const char* model_buffer_ = nullptr;
-  const char* params_buffer_ = nullptr;
-  size_t model_buffer_size_ = 0;
-  size_t params_buffer_size_ = 0;
+  std::string model_buffer_ = "";
+  std::string params_buffer_ = "";
   bool model_from_memory_ = false;
 };
 
