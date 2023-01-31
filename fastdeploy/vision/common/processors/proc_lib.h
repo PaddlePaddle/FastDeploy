@@ -18,7 +18,7 @@
 namespace fastdeploy {
 namespace vision {
 
-enum class FASTDEPLOY_DECL ProcLib { DEFAULT, OPENCV, FLYCV, CUDA };
+enum class FASTDEPLOY_DECL ProcLib { DEFAULT, OPENCV, FLYCV, CUDA, CVCUDA };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const ProcLib& p);
 
