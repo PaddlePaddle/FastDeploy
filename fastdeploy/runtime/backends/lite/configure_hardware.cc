@@ -154,5 +154,7 @@ void LiteBackend::ConfigureNNAdapter(const LiteBackendOption& option) {
     config_.set_nnadapter_subgraph_partition_config_path(
         option.nnadapter_subgraph_partition_config_path);
   }
+
+  config_.set_nnadapter_dynamic_shape_info(nnadapter_dynamic_shape_info);
 }
 }  // namespace fastdeploy

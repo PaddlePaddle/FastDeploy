@@ -231,7 +231,8 @@ FDDataType LiteDataTypeToFD(const paddle::lite_api::PrecisionType& dtype) {
   } else if (dtype == paddle::lite_api::PrecisionType::kFP64) {
     return FDDataType::FP64;
   }
-  FDASSERT(false, "Unexpected data type of %d.", dtype);
+  FDASSERT(false, "Unexpected data type of %s.",
+           paddle::lite_api::PrecisionToStr(dtype).c_str());
   return FDDataType::FP32;
 }
 
