@@ -70,11 +70,11 @@ Formula: rnn_matmul = rnn_origin +  Matmul( $ S_{t-1} $,  WeightList_hh)
 
 3) rnn_cell
 Method: Split the rnn_matmul op output into 4 copies, each copy performs a different activation function calculation, and finally outputs lstm_x_y.tmp_c[1,  1,  48]. x∈[0, 3], y∈[0, 24].
-For details, please refer to [rnn_cell](../paddlejs-backend-webgl/src/ops/shader/rnn/rnn_cell.ts).
+For details, please refer to [rnn_cell](https://github.com/PaddlePaddle/Paddle.js/blob/release/v2.2.5/packages/paddlejs-backend-webgl/src/ops/shader/rnn/rnn_cell.ts).
 
 
 4) rnn_hidden
 Split the rnn_matmul op output into 4 copies, each copy performs a different activation function calculation, and finally outputs lstm_x_y.tmp_h[1,  1,  48]. x∈[0, 3], y∈[0, 24].
-For details, please refer to [rnn_hidden](../paddlejs-backend-webgl/src/ops/shader/rnn/rnn_hidden.ts).
+For details, please refer to [rnn_hidden](https://github.com/PaddlePaddle/Paddle.js/blob/release/v2.2.5/packages/paddlejs-backend-webgl/src/ops/shader/rnn/rnn_hidden.ts).
 
 
