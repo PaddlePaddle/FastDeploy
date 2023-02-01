@@ -24,6 +24,7 @@ namespace fastdeploy {
 struct TrtBackendOption {
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
+
   // format of input model
   ModelFormat model_format = ModelFormat::AUTOREC;
 
