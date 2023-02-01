@@ -100,7 +100,7 @@ void PaddleClasPreprocessor::DisablePermute() {
   }
 }
 
-bool PaddleClasPreprocessor::Apply(std::vector<FDMat>* images,
+bool PaddleClasPreprocessor::Apply(FDMatBatch* image_batch,
                                    std::vector<FDTensor>* outputs) {
   TimeCounter tc;
   tc.Start();
@@ -118,12 +118,14 @@ bool PaddleClasPreprocessor::Apply(std::vector<FDMat>* images,
   // }
 
   for (size_t j = 0; j < processors_.size(); ++j) {
-    if (!(*(processors_[j].get()))(images)) {
+    if (!(*(processors_[j].get()))(image_batch)) {
       FDERROR << "Failed to processs image in " << processors_[j]->Name() << "."
               << std::endl;
       return false;
     }
   }
+
+  auto images = image_batch->mats;
 
   tc.End();
   std::cout << "processors: " << tc.Duration() << std::endl;
@@ -131,9 +133,14 @@ bool PaddleClasPreprocessor::Apply(std::vector<FDMat>* images,
   tc.Start();
 
   outputs->resize(1);
-  if ((*images)[0].Tensor()->Shape().size() == 4 &&
-      (*images)[0].device == Device::GPU) {
-    (*outputs)[0] = std::move(*((*images)[0].Tensor()));
+  // if ((*images)[0].Tensor()->Shape().size() == 4 &&
+  //     (*images)[0].device == Device::GPU) {
+  //   (*outputs)[0] = std::move(*((*images)[0].Tensor()));
+  //   (*outputs)[0].device_id = DeviceId();
+  //   return true;
+  // }
+  if (image_batch->has_batched_tensor) {
+    (*outputs)[0] = std::move(*(image_batch->Tensor()));
     (*outputs)[0].device_id = DeviceId();
     return true;
   }

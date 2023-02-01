@@ -143,23 +143,20 @@ bool Resize::ImplByCvCuda(Mat* mat) {
   }
 
   // Prepare input tensor
-  std::string tensor_name = Name() + "_cvcuda_src";
-  FDTensor* src = CreateCachedGpuInputTensor(mat, tensor_name);
+  FDTensor* src = CreateCachedGpuInputTensor(mat);
   auto src_tensor = CreateCvCudaTensorWrapData(*src);
 
   // Prepare output tensor
-  tensor_name = Name() + "_cvcuda_dst";
-  FDTensor* dst =
-      UpdateAndGetCachedTensor({height_, width_, mat->Channels()}, mat->Type(),
-                               tensor_name, Device::GPU);
-  auto dst_tensor = CreateCvCudaTensorWrapData(*dst);
+  mat->output_cache->Resize({height_, width_, mat->Channels()}, mat->Type(),
+                            "output_cache", Device::GPU);
+  auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
 
   // CV-CUDA Interp value is compatible with OpenCV
   cvcuda::Resize resize_op;
   resize_op(mat->Stream(), src_tensor, dst_tensor,
             NVCVInterpolationType(interp_));
 
-  mat->SetTensor(dst);
+  mat->SetTensor(mat->output_cache);
   mat->SetWidth(width_);
   mat->SetHeight(height_);
   mat->device = Device::GPU;

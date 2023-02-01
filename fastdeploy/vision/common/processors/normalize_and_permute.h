@@ -31,11 +31,11 @@ class FASTDEPLOY_DECL NormalizeAndPermute : public Processor {
 #endif
 #ifdef WITH_GPU
   bool ImplByCuda(Mat* mat);
-  bool ImplByCuda(std::vector<Mat>* mats);
+  bool ImplByCuda(MatBatch* mat_batch);
 #endif
 #ifdef ENABLE_CVCUDA
   bool ImplByCvCuda(Mat* mat);
-  bool ImplByCvCuda(std::vector<Mat>* mats);
+  bool ImplByCvCuda(MatBatch* mat_batch);
 #endif
   std::string Name() { return "NormalizeAndPermute"; }
 
@@ -78,6 +78,8 @@ class FASTDEPLOY_DECL NormalizeAndPermute : public Processor {
  private:
   std::vector<float> alpha_;
   std::vector<float> beta_;
+  FDTensor gpu_alpha_;
+  FDTensor gpu_beta_;
   bool swap_rb_;
 };
 }  // namespace vision

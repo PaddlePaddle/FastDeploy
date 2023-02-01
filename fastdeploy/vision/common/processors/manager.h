@@ -16,6 +16,7 @@
 
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/processors/mat.h"
+#include "fastdeploy/vision/common/processors/mat_batch.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -53,11 +54,11 @@ class FASTDEPLOY_DECL ProcessorManager {
 
   /** \brief The body of Run() function which needs to be implemented by a derived class
    *
-   * \param[in] images The input image data list, all the elements are returned by cv::imread()
+   * \param[in] image_batch The input image batch
    * \param[in] outputs The output tensors which will feed in runtime
    * \return true if the preprocess successed, otherwise false
    */
-  virtual bool Apply(std::vector<FDMat>* images,
+  virtual bool Apply(FDMatBatch* image_batch,
                      std::vector<FDTensor>* outputs) = 0;
 
  protected:
@@ -68,6 +69,11 @@ class FASTDEPLOY_DECL ProcessorManager {
   cudaStream_t stream_ = nullptr;
 #endif
   int device_id_ = -1;
+
+  std::vector<FDTensor> input_caches_;
+  std::vector<FDTensor> output_caches_;
+  FDTensor batch_input_cache_;
+  FDTensor batch_output_cache_;
 };
 
 }  // namespace vision

@@ -65,16 +65,13 @@ bool CenterCrop::ImplByFlyCV(Mat* mat) {
 #ifdef ENABLE_CVCUDA
 bool CenterCrop::ImplByCvCuda(Mat* mat) {
   // Prepare input tensor
-  std::string tensor_name = Name() + "_cvcuda_src";
-  FDTensor* src = CreateCachedGpuInputTensor(mat, tensor_name);
+  FDTensor* src = CreateCachedGpuInputTensor(mat);
   auto src_tensor = CreateCvCudaTensorWrapData(*src);
 
   // Prepare output tensor
-  tensor_name = Name() + "_cvcuda_dst";
-  FDTensor* dst =
-      UpdateAndGetCachedTensor({height_, width_, mat->Channels()}, src->Dtype(),
-                               tensor_name, Device::GPU);
-  auto dst_tensor = CreateCvCudaTensorWrapData(*dst);
+  mat->output_cache->Resize({height_, width_, mat->Channels()}, src->Dtype(),
+                            "output_cache", Device::GPU);
+  auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
 
   int offset_x = static_cast<int>((mat->Width() - width_) / 2);
   int offset_y = static_cast<int>((mat->Height() - height_) / 2);
@@ -82,11 +79,33 @@ bool CenterCrop::ImplByCvCuda(Mat* mat) {
   NVCVRectI crop_roi = {offset_x, offset_y, width_, height_};
   crop_op(mat->Stream(), src_tensor, dst_tensor, crop_roi);
 
-  mat->SetTensor(dst);
+  mat->SetTensor(mat->output_cache);
   mat->SetWidth(width_);
   mat->SetHeight(height_);
   mat->device = Device::GPU;
   mat->mat_type = ProcLib::CVCUDA;
+  return true;
+}
+
+bool CenterCrop::ImplByCvCuda(std::vector<Mat>* mats) {
+  std::cout << "CenterCrop batch cvcuda" << std::endl;
+  for (size_t i = 0; i < mats->size(); ++i) {
+    if (ImplByCvCuda(&((*mats)[i])) != true) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool CenterCrop::ImplByCvCuda(MatBatch* mat_batch) {
+  std::cout << "CenterCrop batch cvcuda" << std::endl;
+  for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+    if (ImplByCvCuda(&((*(mat_batch->mats))[i])) != true) {
+      return false;
+    }
+  }
+  mat_batch->device = Device::GPU;
+  mat_batch->mat_type = ProcLib::CVCUDA;
   return true;
 }
 #endif

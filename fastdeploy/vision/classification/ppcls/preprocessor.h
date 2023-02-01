@@ -33,11 +33,11 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor : public ProcessorManager {
 
   /** \brief Process the input image and prepare input tensors for runtime
    *
-   * \param[in] images The input image data list, all the elements are returned by cv::imread()
+   * \param[in] image_batch The input image batch
    * \param[in] outputs The output tensors which will feed in runtime
    * \return true if the preprocess successed, otherwise false
    */
-  virtual bool Apply(std::vector<FDMat>* images,
+  virtual bool Apply(FDMatBatch* image_batch,
                      std::vector<FDTensor>* outputs);
 
   /// This function will disable normalize in preprocessing step.

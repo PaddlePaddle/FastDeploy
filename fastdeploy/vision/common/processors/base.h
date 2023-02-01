@@ -16,6 +16,7 @@
 
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/processors/mat.h"
+#include "fastdeploy/vision/common/processors/mat_batch.h"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include <unordered_map>
@@ -60,6 +61,15 @@ class FASTDEPLOY_DECL Processor {
     return true;
   }
 
+  virtual bool ImplByOpenCV(MatBatch* mat_batch) {
+    for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+      if (ImplByOpenCV(&(*(mat_batch->mats))[i]) != true) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   virtual bool ImplByFlyCV(Mat* mat) {
     return ImplByOpenCV(mat);
   }
@@ -93,9 +103,16 @@ class FASTDEPLOY_DECL Processor {
     return ImplByOpenCV(mats);
   }
 
+  virtual bool ImplByCvCuda(MatBatch* mat_batch) {
+    return ImplByOpenCV(mat_batch);
+  }
+
   virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
 
   virtual bool operator()(std::vector<Mat>* mats,
+                          ProcLib lib = ProcLib::DEFAULT);
+
+  virtual bool operator()(MatBatch* mat_batch,
                           ProcLib lib = ProcLib::DEFAULT);
 
  protected:
@@ -105,22 +122,22 @@ class FASTDEPLOY_DECL Processor {
   // If the tensor exists and shape is getting larger, then realloc the buffer.
   // If the tensor exists and shape is not getting larger, then return the
   // cached tensor directly.
-  FDTensor* UpdateAndGetCachedTensor(
-      const std::vector<int64_t>& new_shape, const FDDataType& data_type,
-      const std::string& tensor_name, const Device& new_device = Device::CPU,
-      const bool& use_pinned_memory = false);
+  // FDTensor* UpdateAndGetCachedTensor(
+  //     const std::vector<int64_t>& new_shape, const FDDataType& data_type,
+  //     const std::string& tensor_name, const Device& new_device = Device::CPU,
+  //     const bool& use_pinned_memory = false);
 
-  // Create an input tensor on GPU and save into cached_tensors_.
-  // If the Mat is on GPU, return the mat->Tensor() directly.
-  // If the Mat is on CPU, then create a cached GPU tensor and copy the mat's
-  // CPU tensor to this new GPU tensor.
-  FDTensor* CreateCachedGpuInputTensor(Mat* mat,
-                                       const std::string& tensor_name);
+  // // Create an input tensor on GPU and save into cached_tensors_.
+  // // If the Mat is on GPU, return the mat->Tensor() directly.
+  // // If the Mat is on CPU, then create a cached GPU tensor and copy the mat's
+  // // CPU tensor to this new GPU tensor.
+  // FDTensor* CreateCachedGpuInputTensor(Mat* mat,
+  //                                      const std::string& tensor_name);
 
   // Create an input tensor with batch dimension
   // The mats must have same shapes.
-  FDTensor* CreateCachedGpuInputTensor(
-    std::vector<Mat>* mats, const std::string& tensor_name);
+  // FDTensor* CreateCachedGpuInputTensor(
+  //   std::vector<Mat>* mats, const std::string& tensor_name);
 
  private:
   std::unordered_map<std::string, FDTensor> cached_tensors_;
