@@ -368,46 +368,62 @@ bool FastDeployModel::CreateIpuBackend() {
 
 bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
                             std::vector<FDTensor>* output_tensors) {
-  TimeCounter tc;
-  if (enable_record_time_of_runtime_) {
-    tc.Start();
-  }
+  
   bool ret = false;
   if (enable_record_time_of_backend_) {
-#ifdef ENABLE_BENCHMARK    
-    double mean_time_of_backend = 0.0;
+#ifdef ENABLE_BENCHMARK 
+    TimeCounter tc;
+    if (enable_record_time_of_runtime_) {
+      tc.Start();
+    }
+    double mean_time_of_backend = 0.0;   
     ret = runtime_->Infer(input_tensors, output_tensors, 
                           &mean_time_of_backend,
-                          repeat_for_time_of_backend_);
+                          repeat_for_time_of_backend_);     
+    // record time of backend                        
     if (time_of_backend_.size() > 50000) {
       FDWARNING << "There are already 50000 records of backend, will force to "
                    "disable record time of backend now."
                 << std::endl;
       enable_record_time_of_backend_ = false;
     }
-    time_of_backend_.push_back(mean_time_of_backend);                      
+    time_of_backend_.push_back(mean_time_of_backend);    
+    // record time of runtime here
+    if (enable_record_time_of_runtime_) {
+      tc.End();
+      if (time_of_runtime_.size() > 50000) {
+        FDWARNING << "There are already 50000 records of runtime, will force to "
+                    "disable record time of runtime now."
+                  << std::endl;
+        enable_record_time_of_runtime_ = false;
+      }
+      double total_time_of_backend = 
+        mean_time_of_backend * repeat_for_time_of_backend_;  
+      double once_h2d_d2h_time = tc.Duration() - total_time_of_backend;
+      time_of_runtime_.push_back(once_h2d_d2h_time + mean_time_of_backend);  
+    }   
 #else
     FDASSERT(false, "FastDeploy was not compiled with benchmark mode!");
 #endif    
   } else {
+    TimeCounter tc;
+    if (enable_record_time_of_runtime_) {
+      tc.Start();
+    }
     ret = runtime_->Infer(input_tensors, output_tensors);
+    if (enable_record_time_of_runtime_) {
+      tc.End();
+      if (time_of_runtime_.size() > 50000) {
+        FDWARNING << "There are already 50000 records of runtime, will force to "
+                    "disable record time of runtime now."
+                  << std::endl;
+        enable_record_time_of_runtime_ = false;
+      }
+      time_of_runtime_.push_back(tc.Duration());
+    }
   }
   
-  if (enable_record_time_of_runtime_) {
-    tc.End();
-    if (time_of_runtime_.size() > 50000) {
-      FDWARNING << "There are already 50000 records of runtime, will force to "
-                   "disable record time of runtime now."
-                << std::endl;
-      enable_record_time_of_runtime_ = false;
-    }
-#ifdef ENABLE_BENCHMARK
-    time_of_runtime_.push_back(
-      tc.Duration() / static_cast<double>(repeat_for_time_of_backend_));
-#else
-    time_of_runtime_.push_back(tc.Duration());
-#endif    
-  }
+  
   return ret;
 }
 
