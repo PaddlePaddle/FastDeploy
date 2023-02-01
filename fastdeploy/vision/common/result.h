@@ -128,6 +128,42 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   std::string Str();
 };
 
+/*! @brief Detection result structure for the rotated object detection models
+ */
+struct FASTDEPLOY_DECL Rotated : public BaseResult {
+  Rotated() = default;
+  /** \brief All the detected object boxes for an input image, the size of `boxes` is the number of detected objects, and the element of `boxes` is a array of 4 float values, means [xmin, ymin, xmax, ymax]
+   */
+  std::vector<std::array<float, 8>> boxes_rotated;
+  /** \brief The confidence for all the detected objects
+   */
+  std::vector<float> scores;
+  /// The classify label for all the detected objects
+  std::vector<int32_t> label_ids;
+  /** \brief For instance segmentation model, `masks` is the predict mask for all the deteced objects
+   */
+  std::vector<Mask> masks;
+  /// Shows if the DetectionResult has mask
+  bool contain_masks = false;
+  
+  ResultType type = ResultType::DETECTION;
+
+  /// Copy constructor
+  Rotated(const Rotated& res);
+  /// Move assignment
+  Rotated& operator=(Rotated&& other);
+
+  /// Clear detection result
+  void Clear();
+
+  void Reserve(int size);
+
+  void Resize(int size);
+
+  /// Debug function, convert the result to string to print
+  std::string Str();
+};
+
 /*! @brief KeyPoint Detection result structure for all the keypoint detection models
  */
 struct FASTDEPLOY_DECL KeyPointDetectionResult : public BaseResult {

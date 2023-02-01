@@ -139,6 +139,79 @@ std::string DetectionResult::Str() {
   return out;
 }
 
+Rotated::Rotated(const Rotated& res) {
+  boxes_rotated.assign(res.boxes_rotated.begin(), res.boxes_rotated.end());
+  scores.assign(res.scores.begin(), res.scores.end());
+  label_ids.assign(res.label_ids.begin(), res.label_ids.end());
+  contain_masks = res.contain_masks;
+  if (contain_masks) {
+    masks.clear();
+    size_t mask_size = res.masks.size();
+    for (size_t i = 0; i < mask_size; ++i) {
+      masks.emplace_back(res.masks[i]);
+    }
+  }
+}
+
+Rotated& Rotated::operator=(Rotated&& other) {
+  if (&other != this) {
+    boxes_rotated = std::move(other.boxes_rotated);
+    scores = std::move(other.scores);
+    label_ids = std::move(other.label_ids);
+    contain_masks = std::move(other.contain_masks);
+    if (contain_masks) {
+      masks.clear();
+      masks = std::move(other.masks);
+    }
+  }
+  return *this;
+}
+
+void Rotated::Clear() {
+  std::vector<std::array<float, 8>>().swap(boxes_rotated);
+  std::vector<float>().swap(scores);
+  std::vector<int32_t>().swap(label_ids);
+  std::vector<Mask>().swap(masks);
+  contain_masks = false;
+}
+
+void Rotated::Reserve(int size) {
+  boxes_rotated.reserve(size);
+  scores.reserve(size);
+  label_ids.reserve(size);
+  masks.reserve(size);
+}
+
+void Rotated::Resize(int size) {
+  boxes_rotated.resize(size);
+  scores.resize(size);
+  label_ids.resize(size);
+  masks.resize(size);
+}
+
+std::string Rotated::Str() {
+  std::string out;
+  if (!contain_masks) {
+    out = "DetectionResult: [x1, y1, x2, y2, x3, y3, x4, y4, score, label_id]\n";
+  } else {
+    out =
+        "DetectionResult: [x1, y1, x2, y2, x3, y3, x4, y4, score, label_id, "
+        "mask_shape]\n";
+  }
+  for (size_t i = 0; i < boxes_rotated.size(); ++i) {
+    out = out + std::to_string(boxes_rotated[i][0]) + "," +
+          std::to_string(boxes_rotated[i][1]) + ", " + std::to_string(boxes_rotated[i][2]) +
+          ", " + std::to_string(boxes_rotated[i][3]) + ", " +
+          std::to_string(scores[i]) + ", " + std::to_string(label_ids[i]);
+    if (!contain_masks) {
+      out += "\n";
+    } else {
+      out += ", " + masks[i].Str();
+    }
+  }
+  return out;
+}
+
 void KeyPointDetectionResult::Clear() {
   std::vector<std::array<float, 2>>().swap(keypoints);
   std::vector<float>().swap(scores);
