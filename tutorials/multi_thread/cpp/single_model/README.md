@@ -1,4 +1,4 @@
-English | [中文]((README_CN.md))
+English | [中文]((README_CN.md)
 
 # Example of PaddleClas models Python Deployment
 
@@ -36,7 +36,7 @@ wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/Ima
 >> **Notice**: the last number in above command is thread number
 
 The above command works for Linux or MacOS. For SDK in Windows, refer to:  
-- [How to use FastDeploy C++ SDK in Windows ](../../../docs/cn/faq/use_sdk_on_windows.md)
+- [How to use FastDeploy C++ SDK in Windows ](../../../../docs/cn/faq/use_sdk_on_windows.md)
 
 The result returned after running is as follows
 ```
