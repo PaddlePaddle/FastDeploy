@@ -731,8 +731,8 @@ std::unique_ptr<BaseBackend> TrtBackend::Clone(RuntimeOption& runtime_option,
     clone_option.gpu_id = device_id;
     clone_option.external_stream_ = stream;
     if (runtime_option.model_from_memory_) {
-      FDASSERT(casted_backend->InitFromPaddle(runtime_option.model_buffer_,
-                                              runtime_option.params_buffer_,
+      FDASSERT(casted_backend->InitFromPaddle(runtime_option.model_file,
+                                              runtime_option.params_file,
                                               clone_option),
                "Clone model from Paddle failed while initialize TrtBackend.");
     } else {
