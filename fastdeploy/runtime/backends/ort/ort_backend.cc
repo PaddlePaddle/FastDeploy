@@ -74,7 +74,41 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
 }
 
 bool OrtBackend::Init(const RuntimeOption& option) {
-  return true;
+  if (option.device != Device::CPU && option.device != Device::GPU) {
+    FDERROR
+        << "Backend::ORT only supports Device::CPU/Device::GPU, but now its "
+        << option.device << "." << std::endl;
+    return false;
+  }
+  OrtBackendOption ort_option = option.ort_option;
+  ort_option.device = option.device;
+  ort_option.device_id = option.device_id;
+  ort_option.external_stream_ = option.external_stream_;
+
+  if (option.model_format == ModelFormat::PADDLE) {
+    if (option.model_from_memory_) {
+      return InitFromPaddle(option.model_file, option.params_file, ort_option);
+    }
+    std::string model_buffer, params_buffer;
+    FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
+             "Failed to read model file.");
+    FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
+             "Failed to read parameters file.");
+    return InitFromPaddle(model_buffer, params_buffer, ort_option);
+  } else if (option.model_format == ModelFormat::ONNX) {
+    if (option.model_from_memory_) {
+      return InitFromOnnx(option.model_file, ort_option);
+    }
+    std::string model_buffer;
+    FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
+             "Failed to read model file.");
+    return InitFromOnnx(model_buffer, ort_option);
+  } else {
+    FDERROR << "Only support Paddle/ONNX model format for OrtBackend."
+            << std::endl;
+    return false;
+  }
+  return false;
 }
 
 bool OrtBackend::InitFromPaddle(const std::string& model_buffer,
