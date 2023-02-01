@@ -73,8 +73,8 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
   }
 }
 
-bool OrtBackend::InitFromPaddle(const std::string& model_file,
-                                const std::string& params_file,
+bool OrtBackend::InitFromPaddle(const std::string& model_buffer,
+                                const std::string& params_buffer,
                                 const OrtBackendOption& option, bool verbose) {
   if (initialized_) {
     FDERROR << "OrtBackend is already initlized, cannot initialize again."
@@ -92,7 +92,8 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
   strcpy(ops[1].op_name, "pool2d");
   strcpy(ops[1].export_op_name, "AdaptivePool2d");
 
-  if (!paddle2onnx::Export(model_file.c_str(), params_file.c_str(),
+  if (!paddle2onnx::Export(model_buffer.c_str(), model_buffer.size(),
+                           params_buffer.c_str(), params_buffer.size(),
                            &model_content_ptr, &model_content_size, 11, true,
                            verbose, true, true, true, ops.data(), 2,
                            "onnxruntime", nullptr, 0, "", &save_external)) {
@@ -112,9 +113,8 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
              model_file_name.c_str());
     f << onnx_model_proto;
     f.close();
-    return InitFromOnnx(model_file_name, option, false);
   }
-  return InitFromOnnx(onnx_model_proto, option, true);
+  return InitFromOnnx(onnx_model_proto, option);
 #else
   FDERROR << "Didn't compile with PaddlePaddle Frontend, you can try to "
              "call `InitFromOnnx` instead."
@@ -124,8 +124,7 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
 }
 
 bool OrtBackend::InitFromOnnx(const std::string& model_file,
-                              const OrtBackendOption& option,
-                              bool from_memory_buffer) {
+                              const OrtBackendOption& option) {
   if (initialized_) {
     FDERROR << "OrtBackend is already initlized, cannot initialize again."
             << std::endl;
@@ -134,17 +133,7 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
 
   BuildOption(option);
   InitCustomOperators();
-  if (from_memory_buffer) {
-    session_ = {env_, model_file.data(), model_file.size(), session_options_};
-  } else {
-#ifdef _WIN32
-    session_ = {env_,
-                std::wstring(model_file.begin(), model_file.end()).c_str(),
-                session_options_};
-#else
-    session_ = {env_, model_file.c_str(), session_options_};
-#endif
-  }
+  session_ = {env_, model_file.data(), model_file.size(), session_options_};
   binding_ = std::make_shared<Ort::IoBinding>(session_);
 
   Ort::MemoryInfo memory_info("Cpu", OrtDeviceAllocator, 0, OrtMemTypeDefault);

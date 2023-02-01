@@ -208,6 +208,15 @@ FDTensor* Runtime::GetOutputTensor(const std::string& name) {
   return nullptr;
 }
 
+void Runtime::ReleaseModelMemoryBuffer() {
+  if (option.model_from_memory_) {
+    option.model_buffer_.clear();
+    option.model_buffer_.shrink_to_fit();
+    option.params_buffer_.clear();
+    option.params_buffer_.shrink_to_fit();
+  }
+}
+
 void Runtime::CreatePaddleBackend() {
   FDASSERT(
       option.device == Device::CPU || option.device == Device::GPU ||
@@ -231,12 +240,6 @@ void Runtime::CreatePaddleBackend() {
   pd_option.enable_pinned_memory = option.enable_pinned_memory;
   pd_option.external_stream_ = option.external_stream_;
   pd_option.model_from_memory_ = option.model_from_memory_;
-  if (pd_option.model_from_memory_) {
-    pd_option.model_buffer_ = option.model_buffer_;
-    pd_option.params_buffer_ = option.params_buffer_;
-    pd_option.model_buffer_size_ = option.model_buffer_size_;
-    pd_option.params_buffer_size_ = option.params_buffer_size_;
-  }
 #ifdef ENABLE_TRT_BACKEND
   if (pd_option.use_gpu && option.pd_enable_trt) {
     pd_option.enable_trt = true;
@@ -276,10 +279,17 @@ void Runtime::CreatePaddleBackend() {
     FDASSERT(casted_backend->InitFromPaddle(option.model_buffer_,
                                             option.params_buffer_, pd_option),
              "Load model from Paddle failed while initliazing PaddleBackend.");
+    ReleaseModelMemoryBuffer();
   } else {
-    FDASSERT(casted_backend->InitFromPaddle(option.model_file,
-                                            option.params_file, pd_option),
-             "Load model from Paddle failed while initliazing PaddleBackend.");
+    std::string model_buffer = "";
+    std::string params_buffer = "";
+    FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
+             "Fail to read binary from model file");
+    FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
+             "Fail to read binary from parameter file");
+    FDASSERT(
+        casted_backend->InitFromPaddle(model_buffer, params_buffer, pd_option),
+        "Load model from Paddle failed while initliazing PaddleBackend.");
   }
 #else
   FDASSERT(false,
@@ -291,6 +301,10 @@ void Runtime::CreatePaddleBackend() {
 }
 
 void Runtime::CreateOpenVINOBackend() {
+  // TODO(huangjianhui) OpenVINO only supports to load ONNX format model from
+  // memory Temporarily disable this function
+  FDASSERT(option.model_from_memory_ == false,
+           "OpenVINOBackend don't support to load model from memory");
   FDASSERT(option.device == Device::CPU,
            "Backend::OPENVINO only supports Device::CPU");
   FDASSERT(option.model_format == ModelFormat::PADDLE ||
@@ -342,16 +356,37 @@ void Runtime::CreateOrtBackend() {
   ort_option.use_gpu = (option.device == Device::GPU) ? true : false;
   ort_option.gpu_id = option.device_id;
   ort_option.external_stream_ = option.external_stream_;
-
   backend_ = utils::make_unique<OrtBackend>();
   auto casted_backend = dynamic_cast<OrtBackend*>(backend_.get());
   if (option.model_format == ModelFormat::ONNX) {
-    FDASSERT(casted_backend->InitFromOnnx(option.model_file, ort_option),
-             "Load model from ONNX failed while initliazing OrtBackend.");
+    if (option.model_from_memory_) {
+      FDASSERT(casted_backend->InitFromOnnx(option.model_buffer_, ort_option),
+               "Load model from ONNX failed while initliazing OrtBackend.");
+      ReleaseModelMemoryBuffer();
+    } else {
+      std::string model_buffer = "";
+      FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
+               "Fail to read binary from model file");
+      FDASSERT(casted_backend->InitFromOnnx(model_buffer, ort_option),
+               "Load model from ONNX failed while initliazing OrtBackend.");
+    }
   } else {
-    FDASSERT(casted_backend->InitFromPaddle(option.model_file,
-                                            option.params_file, ort_option),
-             "Load model from Paddle failed while initliazing OrtBackend.");
+    if (option.model_from_memory_) {
+      FDASSERT(casted_backend->InitFromPaddle(
+                   option.model_buffer_, option.params_buffer_, ort_option),
+               "Load model from Paddle failed while initliazing OrtBackend.");
+      ReleaseModelMemoryBuffer();
+    } else {
+      std::string model_buffer = "";
+      std::string params_buffer = "";
+      FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
+               "Fail to read binary from model file");
+      FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
+               "Fail to read binary from parameter file");
+      FDASSERT(casted_backend->InitFromPaddle(model_buffer, params_buffer,
+                                              ort_option),
+               "Load model from Paddle failed while initliazing OrtBackend.");
+    }
   }
 #else
   FDASSERT(false,
@@ -385,16 +420,37 @@ void Runtime::CreateTrtBackend() {
   trt_option.serialize_file = option.trt_serialize_file;
   trt_option.enable_pinned_memory = option.enable_pinned_memory;
   trt_option.external_stream_ = option.external_stream_;
-
   backend_ = utils::make_unique<TrtBackend>();
   auto casted_backend = dynamic_cast<TrtBackend*>(backend_.get());
   if (option.model_format == ModelFormat::ONNX) {
-    FDASSERT(casted_backend->InitFromOnnx(option.model_file, trt_option),
-             "Load model from ONNX failed while initliazing TrtBackend.");
+    if (option.model_from_memory_) {
+      FDASSERT(casted_backend->InitFromOnnx(option.model_buffer_, trt_option),
+               "Load model from ONNX failed while initliazing TrtBackend.");
+      ReleaseModelMemoryBuffer();
+    } else {
+      std::string model_buffer = "";
+      FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
+               "Fail to read binary from model file");
+      FDASSERT(casted_backend->InitFromOnnx(model_buffer, trt_option),
+               "Load model from ONNX failed while initliazing TrtBackend.");
+    }
   } else {
-    FDASSERT(casted_backend->InitFromPaddle(option.model_file,
-                                            option.params_file, trt_option),
-             "Load model from Paddle failed while initliazing TrtBackend.");
+    if (option.model_from_memory_) {
+      FDASSERT(casted_backend->InitFromPaddle(
+                   option.model_buffer_, option.params_buffer_, trt_option),
+               "Load model from Paddle failed while initliazing TrtBackend.");
+      ReleaseModelMemoryBuffer();
+    } else {
+      std::string model_buffer = "";
+      std::string params_buffer = "";
+      FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
+               "Fail to read binary from model file");
+      FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
+               "Fail to read binary from parameter file");
+      FDASSERT(casted_backend->InitFromPaddle(model_buffer, params_buffer,
+                                              trt_option),
+               "Load model from Paddle failed while initliazing TrtBackend.");
+    }
   }
 #else
   FDASSERT(false,
@@ -406,6 +462,9 @@ void Runtime::CreateTrtBackend() {
 }
 
 void Runtime::CreateLiteBackend() {
+#ifdef ENABLE_LITE_BACKEND
+  FDASSERT(option.model_from_memory_ == false,
+           "LiteBackend don't support to load model from memory");
   FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX ||
                option.device == Device::KUNLUNXIN ||
                option.device == Device::ASCEND,
@@ -413,7 +472,6 @@ void Runtime::CreateLiteBackend() {
            "Device::CPU/Device::TIMVX/Device::KUNLUNXIN/Device::ASCEND.");
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
-#ifdef ENABLE_LITE_BACKEND
   backend_ = utils::make_unique<LiteBackend>();
   auto casted_backend = dynamic_cast<LiteBackend*>(backend_.get());
   FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
@@ -429,6 +487,8 @@ void Runtime::CreateLiteBackend() {
 }
 
 void Runtime::CreateRKNPU2Backend() {
+  FDASSERT(option.model_from_memory_ == false,
+           "RKNPU2Backend don't support to load model from memory");
   FDASSERT(option.device == Device::RKNPU,
            "Backend::RKNPU2 only supports Device::RKNPU2");
   FDASSERT(option.model_format == ModelFormat::RKNN,
@@ -451,11 +511,14 @@ void Runtime::CreateRKNPU2Backend() {
 }
 
 void Runtime::CreateSophgoNPUBackend() {
+#ifdef ENABLE_SOPHGO_BACKEND
+  auto sophgo_option = SophgoBackendOption();
+  FDASSERT(option.model_from_memory_ == false,
+           "SophgoBackend don't support to load model from memory");
   FDASSERT(option.device == Device::SOPHGOTPUD,
            "Backend::SOPHGO only supports Device::SOPHGO");
   FDASSERT(option.model_format == ModelFormat::SOPHGO,
            "SophgoBackend only support model format of ModelFormat::SOPHGO");
-#ifdef ENABLE_SOPHGO_BACKEND
   auto sophgo_option = SophgoBackendOption();
   backend_ = utils::make_unique<SophgoBackend>();
   auto casted_backend = dynamic_cast<SophgoBackend*>(backend_.get());
@@ -486,7 +549,7 @@ Runtime* Runtime::Clone(void* stream, int device_id) {
   FDINFO << "Runtime Clone with Backend:: " << option.backend << " in "
          << option.device << "." << std::endl;
   runtime->option = option;
-  runtime->backend_ = backend_->Clone(stream, device_id);
+  runtime->backend_ = backend_->Clone(option, stream, device_id);
   return runtime;
 }
 
