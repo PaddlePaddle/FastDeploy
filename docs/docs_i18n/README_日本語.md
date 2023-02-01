@@ -132,7 +132,7 @@
 - **よくある質問**
     - [1. Windows上C++ SDK の場合使用方法](./../../docs/en/faq/use_sdk_on_windows.md)
     - [2. FastDeploy C++ SDKをAndroidで使用する方法](./../../docs/en/faq/use_cpp_sdk_on_android.md)
-    - [3. TensorRT 使い方のコツ](./../../doc/en/faq/tensorrt_tricks.md)
+    - [3. TensorRT 使い方のコツ](./../../docs/en/faq/tensorrt_tricks.md)
 - **続きを読むFastDeployモジュールのデプロイメント**
     - [Benchmark テスト](./../../benchmark)
 - **モデル対応表**
