@@ -57,6 +57,7 @@ __build_fastdeploy_linux_x86_64_gpu_shared() {
         -DTRT_DIRECTORY=${TRT_DIRECTORY} \
         -DCUDA_DIRECTORY=${CUDA_DIRECTORY} \
         -DENABLE_ORT_BACKEND=ON \
+        -DENABLE_TRT_BACKEND=ON \
         -DENABLE_PADDLE_BACKEND=ON \
         -DENABLE_OPENVINO_BACKEND=ON \
         -DENABLE_PADDLE2ONNX=ON \

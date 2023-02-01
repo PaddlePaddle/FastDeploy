@@ -64,7 +64,7 @@ __build_fastdeploy_linux_x86_64_shared() {
         -DCMAKE_INSTALL_PREFIX=${FASDEPLOY_INSTALL_DIR} \
         -Wno-dev ../../.. && make -j8 && make install
 
-  echo "-- [INFO][built][${OSX_ARCH}][${BUILD_DIR}/install]"
+  echo "-- [INFO][built][x86_64]][${BUILD_DIR}/install]"
 }
 
 main() {
