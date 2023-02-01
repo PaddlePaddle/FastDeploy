@@ -128,7 +128,7 @@ VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
 #### InsightFaceRecognitionPostprocessor成员变量(后处理参数)
 > > * **l2_normalize**(bool): 输出人脸向量之前是否执行l2归一化，默认false,
-      InsightFaceRecognitionPostprocessor::SetL2Normalize(bool& l2_normalize)来进行修改
+      通过InsightFaceRecognitionPostprocessor::SetL2Normalize(bool& l2_normalize)来进行修改
 
 - [模型介绍](../../../)
 - [Python部署](../python)
