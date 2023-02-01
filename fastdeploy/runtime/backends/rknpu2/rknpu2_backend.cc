@@ -514,14 +514,14 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
 
   // run rknn
   double time_of_pure_backend = 0.0;
+  TimeCounter tc;
+  tc.Start();
   for (int i = 0; i < repeat; ++i) {
-    TimeCounter tc;
-    tc.Start();
     ret = rknn_run(ctx, nullptr);
-    tc.End();
-    time_of_pure_backend += tc.Duration();
   }
-
+  tc.End();
+  time_of_pure_backend += tc.Duration();
+  
   *mean_time_of_pure_backend = 
     time_of_pure_backend / static_cast<double>(repeat);
 

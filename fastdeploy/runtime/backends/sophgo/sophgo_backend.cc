@@ -263,21 +263,18 @@ bool SophgoBackend::Infer(std::vector<FDTensor>& inputs,
   
   // Infer repeat - 1 times
   double time_of_pure_backend = 0.0;
+  TimeCounter tc;
+  tc.Start();
   for (int i = 0; i < repeat-1; ++i) {
-    TimeCounter tc;
-    tc.Start();
+    
     bool launch_status = bmrt_launch_tensor_ex(
       p_bmrt_, net_name_.c_str(), input_tensors, net_info_->input_num,
       output_tensors, net_info_->output_num, true, false);
     assert(launch_status);
     status = bm_thread_sync(handle_);
     assert(status == BM_SUCCESS);
-    tc.End();
-    time_of_pure_backend += tc.Duration();
   }
   // Infer the last time to get outputs
-  TimeCounter tc;
-  tc.Start();
   bool launch_status = bmrt_launch_tensor_ex(
       p_bmrt_, net_name_.c_str(), input_tensors, net_info_->input_num,
       output_tensors, net_info_->output_num, true, false);

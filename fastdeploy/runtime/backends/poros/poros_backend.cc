@@ -256,16 +256,12 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs,
 
   // Infer repeat - 1 times
   double time_of_pure_backend = 0.0;
-  for (int i = 0; i < repeat - 1; ++i) {
-    TimeCounter tc;
-    tc.Start();
-    auto tmp_poros_outputs = _poros_module->forward(poros_inputs);
-    tc.End();
-    time_of_pure_backend += tc.Duration();
-  }
-  // Infer the last time to get outputs
   TimeCounter tc;
   tc.Start();
+  for (int i = 0; i < repeat - 1; ++i) {
+    auto tmp_poros_outputs = _poros_module->forward(poros_inputs);
+  }
+  // Infer the last time to get outputs
   auto poros_outputs = _poros_module->forward(poros_inputs);
   tc.End();
   time_of_pure_backend += tc.Duration();

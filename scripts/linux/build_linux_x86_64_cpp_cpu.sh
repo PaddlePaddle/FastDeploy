@@ -52,7 +52,7 @@ __build_fastdeploy_linux_x86_64_shared() {
   local FASDEPLOY_INSTALL_DIR="${ROOT_PATH}/${BUILD_DIR}/install"
   cd "${BUILD_DIR}" && echo "-- [INFO] Working Dir: ${PWD}"
 
-  cmake -DCMAKE_BUILD_TYPE=MinSizeRel \
+  cmake -DCMAKE_BUILD_TYPE=Release \
         -DWITH_GPU=OFF \
         -DENABLE_ORT_BACKEND=ON \
         -DENABLE_PADDLE_BACKEND=ON \

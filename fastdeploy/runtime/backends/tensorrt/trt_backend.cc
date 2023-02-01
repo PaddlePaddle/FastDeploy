@@ -364,7 +364,7 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
                        std::vector<FDTensor>* outputs,
                        double* mean_time_of_pure_backend,
                        int repeat, bool copy_to_fd) {
-  FDASSERT(repeat > 0, "repeat param must > 0, but got %d", repeat);                      
+  FDASSERT(repeat > 1, "repeat param must > 1 for TRT, but got %d", repeat);                      
   if (inputs.size() != NumInputs()) {
     FDERROR << "Require " << NumInputs() << "inputs, but get " << inputs.size()
             << "." << std::endl;
@@ -389,19 +389,18 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
   AllocateOutputsBuffer(outputs, copy_to_fd);
 
   double time_of_pure_backend = 0.0;
+  TimeCounter tc;
+  tc.Start();
   for (int i = 0; i < repeat; ++i) {
-    TimeCounter tc;
-    tc.Start();
     if (!context_->enqueueV2(bindings_.data(), stream_, nullptr)) {
       FDERROR << "Failed to Infer with TensorRT." << std::endl;
       return false;
     }
-    tc.End();
-    time_of_pure_backend += tc.Duration();
   }
-
+  tc.End();
+  time_of_pure_backend += tc.Duration();
   *mean_time_of_pure_backend = 
-    time_of_pure_backend / static_cast<double>(repeat);
+    time_of_pure_backend / static_cast<double>(repeat-1);
 
   for (size_t i = 0; i < outputs->size(); ++i) {
     // if the final output tensor's dtype is different from the model output

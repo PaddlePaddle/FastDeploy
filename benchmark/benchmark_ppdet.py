@@ -17,6 +17,7 @@ import cv2
 import os
 import numpy as np
 import time
+from sympy import EX
 from tqdm import tqdm
 
 def parse_arguments():
@@ -317,13 +318,15 @@ if __name__ == '__main__':
             monitor = Monitor(enable_gpu, gpu_id)
             monitor.start()
 
+        repeat = 100
         model.enable_record_time_of_runtime()
+        model.enable_record_time_of_backend(repeat)
         im_ori = cv2.imread(args.image)
         for i in tqdm(range(args.iter_num)):
             im = im_ori
             start = time.time()
             result = model.predict(im)
-            end2end_statis.append(time.time() - start)
+            end2end_statis.append((time.time() - start)/repeat)
 
         runtime_statis = model.print_statis_info_of_runtime()
 
@@ -340,11 +343,14 @@ if __name__ == '__main__':
                 'utilization.gpu'] if 'gpu' in mem_info else 0
 
         dump_result["runtime"] = runtime_statis["avg_time"] * 1000
+        dump_result["backend"] = runtime_statis["backend_avg_time"] * 1000
         dump_result["end2end"] = np.mean(end2end_statis_repeat) * 1000
 
         f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
+        f.writelines("Backend(ms): {} \n".format(str(dump_result["backend"])))
         f.writelines("End2End(ms): {} \n".format(str(dump_result["end2end"])))
         print("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
+        print("Backend(ms): {} \n".format(str(dump_result["backend"])))
         print("End2End(ms): {} \n".format(str(dump_result["end2end"])))
         if enable_collect_memory_info:
             f.writelines("cpu_rss_mb: {} \n".format(
@@ -356,7 +362,8 @@ if __name__ == '__main__':
             print("cpu_rss_mb: {} \n".format(str(dump_result["cpu_rss_mb"])))
             print("gpu_rss_mb: {} \n".format(str(dump_result["gpu_rss_mb"])))
             print("gpu_util: {} \n".format(str(dump_result["gpu_util"])))
-    except:
+    except Exception as e:
         f.writelines("!!!!!Infer Failed\n")
+        raise e
 
     f.close()

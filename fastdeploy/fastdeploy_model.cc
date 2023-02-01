@@ -35,6 +35,10 @@ bool IsSupported(const std::vector<Backend>& backends, Backend backend) {
 #ifdef ENABLE_BENCHMARK
   // In benchmark mode, we don't check to see if the backend 
   // is supported for current model.
+  FDWARNING << "In benchmark mode, we don't check to see if " 
+            << "the backend [" << backend 
+            << "] is supported for current model!"
+            << std::endl;
   return true;
 #else  
   for (size_t i = 0; i < backends.size(); ++i) {
@@ -470,13 +474,13 @@ std::map<std::string, float> FastDeployModel::PrintStatisInfoOfRuntime() {
     std::cout << "============= Backend Statis Info(" << ModelName()
               << ") =============" << std::endl;
     std::cout << "Total iterations: " << time_of_backend_.size() << std::endl;
-    std::cout << "Total time of backend: " << warmup_time + remain_time << "s."
+    std::cout << "Total time of backend: " << backend_warmup_time + backend_remain_time << "s."
               << std::endl;
-    std::cout << "Warmup iterations: " << warmup_iter << std::endl;
-    std::cout << "Total time of backend in warmup step: " << warmup_time << "s."
+    std::cout << "Warmup iterations: " << backend_warmup_iter << std::endl;
+    std::cout << "Total time of backend in warmup step: " << backend_warmup_time << "s."
               << std::endl;
     std::cout << "Average time of backend exclude warmup step: "
-              << avg_time * 1000 << "ms." << std::endl;
+              << backend_avg_time * 1000 << "ms." << std::endl;
 
     statis_info_of_runtime_dict["backend_total_time"] = backend_warmup_time + backend_remain_time;
     statis_info_of_runtime_dict["backend_warmup_time"] = backend_warmup_time;

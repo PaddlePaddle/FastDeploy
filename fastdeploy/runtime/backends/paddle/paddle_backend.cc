@@ -278,13 +278,14 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
   }
 
   double time_of_pure_backend = 0.0;
-  for (int i = 0; i < repeat; ++i) {
-    TimeCounter tc;
-    tc.Start();
+  TimeCounter tc;
+  tc.Start();
+  for (int i = 0; i < repeat; ++i) {  
     predictor_->Run();
-    tc.End();
-    time_of_pure_backend += tc.Duration();
   }
+  tc.End();
+  time_of_pure_backend += tc.Duration();
+  
   *mean_time_of_pure_backend = 
     time_of_pure_backend / static_cast<double>(repeat);
 

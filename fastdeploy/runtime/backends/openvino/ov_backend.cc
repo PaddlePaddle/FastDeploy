@@ -404,13 +404,13 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
   }
 
   double time_of_pure_backend = 0.0;
+  TimeCounter tc;
+  tc.Start();
   for (int i = 0; i < repeat; ++i) {
-    TimeCounter tc;
-    tc.Start();
     request_.infer();
-    tc.End();
-    time_of_pure_backend += tc.Duration();
   }
+  tc.End();
+  time_of_pure_backend += tc.Duration();
 
   *mean_time_of_pure_backend = 
     time_of_pure_backend / static_cast<double>(repeat);

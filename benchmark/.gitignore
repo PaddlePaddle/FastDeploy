@@ -1,0 +1,12 @@
+*.tgz
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.jpg
+*.png
+*.jpeg
+*.txt
+*.log
+yolov8_s_*
+._yolov8_s_*

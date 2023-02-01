@@ -52,7 +52,7 @@ __build_fastdeploy_linux_x86_64_gpu_shared() {
   local FASDEPLOY_INSTALL_DIR="${ROOT_PATH}/${BUILD_DIR}/install"
   cd "${BUILD_DIR}" && echo "-- [INFO] Working Dir: ${PWD}"
 
-  cmake -DCMAKE_BUILD_TYPE=MinSizeRel \
+  cmake -DCMAKE_BUILD_TYPE=Release \
         -DWITH_GPU=ON \
         -DTRT_DIRECTORY=${TRT_DIRECTORY} \
         -DCUDA_DIRECTORY=${CUDA_DIRECTORY} \
