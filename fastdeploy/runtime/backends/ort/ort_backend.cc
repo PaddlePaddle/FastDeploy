@@ -73,6 +73,10 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
   }
 }
 
+bool OrtBackend::Init(const RuntimeOption& option) {
+  return true;
+}
+
 bool OrtBackend::InitFromPaddle(const std::string& model_buffer,
                                 const std::string& params_buffer,
                                 const OrtBackendOption& option, bool verbose) {
