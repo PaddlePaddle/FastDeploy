@@ -21,6 +21,7 @@
 
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/core/fd_type.h"
+#include "fastdeploy/runtime/runtime_option.h"
 
 namespace fastdeploy {
 
@@ -55,18 +56,29 @@ class BaseBackend {
 
   virtual bool Initialized() const { return initialized_; }
 
+  // Get number of inputs of the model
   virtual int NumInputs() const = 0;
+  // Get number of outputs of the model
   virtual int NumOutputs() const = 0;
+  // Get information of input tensor
   virtual TensorInfo GetInputInfo(int index) = 0;
+  // Get information of output tensor
   virtual TensorInfo GetOutputInfo(int index) = 0;
+  // Get information of all the input tensors
   virtual std::vector<TensorInfo> GetInputInfos() = 0;
+  // Get information of all the output tensors
   virtual std::vector<TensorInfo> GetOutputInfos() = 0;
+
   // if copy_to_fd is true, copy memory data to FDTensor
   // else share memory to FDTensor(only Paddle、ORT、TRT、OpenVINO support it)
   virtual bool Infer(std::vector<FDTensor>& inputs,
                      std::vector<FDTensor>* outputs,
                      bool copy_to_fd = true) = 0;
-  virtual std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+
+  // Optional: For those backends which can share memory
+  // while creating multiple inference engines with same model file
+  virtual std::unique_ptr<BaseBackend> Clone(RuntimeOption &runtime_option,
+                                             void *stream = nullptr,
                                              int device_id = -1) {
     FDERROR << "Clone no support" << std::endl;
     return nullptr;

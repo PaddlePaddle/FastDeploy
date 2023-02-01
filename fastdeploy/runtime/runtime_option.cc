@@ -21,47 +21,19 @@ namespace fastdeploy {
 void RuntimeOption::SetModelPath(const std::string& model_path,
                                  const std::string& params_path,
                                  const ModelFormat& format) {
-  if (format == ModelFormat::PADDLE) {
-    model_file = model_path;
-    params_file = params_path;
-    model_format = ModelFormat::PADDLE;
-  } else if (format == ModelFormat::ONNX) {
-    model_file = model_path;
-    model_format = ModelFormat::ONNX;
-  } else if (format == ModelFormat::TORCHSCRIPT) {
-    model_file = model_path;
-    model_format = ModelFormat::TORCHSCRIPT;
-  } else {
-    FDASSERT(false,
-             "The model format only can be "
-             "ModelFormat::PADDLE/ModelFormat::ONNX/ModelFormat::TORCHSCRIPT.");
-  }
+  model_file = model_path;
+  params_file = params_path;
+  model_format = format;
+  model_from_memory_ = false;
 }
 
-void RuntimeOption::SetModelBuffer(const char* model_buffer,
-                                   size_t model_buffer_size,
-                                   const char* params_buffer,
-                                   size_t params_buffer_size,
+void RuntimeOption::SetModelBuffer(const std::string& model_buffer,
+                                   const std::string& params_buffer,
                                    const ModelFormat& format) {
-  model_buffer_size_ = model_buffer_size;
-  params_buffer_size_ = params_buffer_size;
+  model_file = model_buffer;
+  params_file = params_buffer;
+  model_format = format;
   model_from_memory_ = true;
-  if (format == ModelFormat::PADDLE) {
-    model_buffer_ = std::string(model_buffer, model_buffer + model_buffer_size);
-    params_buffer_ =
-        std::string(params_buffer, params_buffer + params_buffer_size);
-    model_format = ModelFormat::PADDLE;
-  } else if (format == ModelFormat::ONNX) {
-    model_buffer_ = std::string(model_buffer, model_buffer + model_buffer_size);
-    model_format = ModelFormat::ONNX;
-  } else if (format == ModelFormat::TORCHSCRIPT) {
-    model_buffer_ = std::string(model_buffer, model_buffer + model_buffer_size);
-    model_format = ModelFormat::TORCHSCRIPT;
-  } else {
-    FDASSERT(false,
-             "The model format only can be "
-             "ModelFormat::PADDLE/ModelFormat::ONNX/ModelFormat::TORCHSCRIPT.");
-  }
 }
 
 void RuntimeOption::UseGpu(int gpu_id) {
@@ -335,37 +307,6 @@ void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
 
 void RuntimeOption::SetOpenVINOStreams(int num_streams) {
   ov_num_streams = num_streams;
-}
-
-bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
-                      const RuntimeOption& _option) {
-#ifdef ENABLE_POROS_BACKEND
-  option = _option;
-  auto poros_option = PorosBackendOption();
-  poros_option.use_gpu = (option.device == Device::GPU) ? true : false;
-  poros_option.gpu_id = option.device_id;
-  poros_option.long_to_int = option.long_to_int;
-  poros_option.use_nvidia_tf32 = option.use_nvidia_tf32;
-  poros_option.unconst_ops_thres = option.unconst_ops_thres;
-  poros_option.poros_file = option.poros_file;
-  poros_option.is_dynamic = option.is_dynamic;
-  poros_option.enable_fp16 = option.trt_enable_fp16;
-  poros_option.max_batch_size = option.trt_max_batch_size;
-  poros_option.max_workspace_size = option.trt_max_workspace_size;
-  FDASSERT(
-      option.model_format == ModelFormat::TORCHSCRIPT,
-      "PorosBackend only support model format of ModelFormat::TORCHSCRIPT.");
-  backend_ = utils::make_unique<PorosBackend>();
-  auto casted_backend = dynamic_cast<PorosBackend*>(backend_.get());
-  FDASSERT(
-      casted_backend->Compile(option.model_file, prewarm_tensors, poros_option),
-      "Load model from Torchscript failed while initliazing PorosBackend.");
-#else
-  FDASSERT(false,
-           "PorosBackend is not available, please compiled with "
-           "ENABLE_POROS_BACKEND=ON.");
-#endif
-  return true;
 }
 
 void RuntimeOption::EnablePaddleTrtCollectShape() { pd_collect_shape = true; }
