@@ -71,3 +71,6 @@ target_link_libraries(infer_tood_demo ${FASTDEPLOY_LIBS})
 
 add_executable(infer_gfl_demo ${PROJECT_SOURCE_DIR}/infer_gfl.cc)
 target_link_libraries(infer_gfl_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_ppyoloer_demo ${PROJECT_SOURCE_DIR}/infer_ppyoloer.cc)
+target_link_libraries(infer_ppyoloer_demo ${FASTDEPLOY_LIBS})
