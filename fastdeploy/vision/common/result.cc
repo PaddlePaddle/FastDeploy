@@ -124,14 +124,18 @@ void DetectionResult::Reserve(int size) {
   boxes.reserve(size);
   scores.reserve(size);
   label_ids.reserve(size);
-  masks.reserve(size);
+  if (contain_masks) {
+    masks.reserve(size);
+  }
 }
 
 void DetectionResult::Resize(int size) {
   boxes.resize(size);
   scores.resize(size);
   label_ids.resize(size);
-  masks.resize(size);
+  if (contain_masks) {
+    masks.resize(size);
+  }
 }
 
 std::string DetectionResult::Str() {
