@@ -106,4 +106,4 @@ if __name__ == "__main__":
             bboxes = batch_bboxes[i_batch]
             for i_box in range(len(texts)):
                 print('text=', texts[i_box].decode('utf-8'), '  score=',
-                      scores[i_box], '  bboxes=', bboxes[i_box])
+                      scores[i_box], '  bbox=', bboxes[i_box])
