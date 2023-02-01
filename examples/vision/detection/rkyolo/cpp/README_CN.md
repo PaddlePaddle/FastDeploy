@@ -35,7 +35,7 @@ mkdir thirdpartys
 
 ### 编译并拷贝SDK到thirdpartys文件夹
 
-请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)仓库编译SDK，编译完成后，将在build目录下生成
+请参考[RK2代NPU部署库编译](../../../../../docs/cn/build_and_install/rknpu2.md)仓库编译SDK，编译完成后，将在build目录下生成
 fastdeploy-0.0.3目录，请移动它至thirdpartys目录下.
 
 ### 拷贝模型文件，以及配置文件至model文件夹
@@ -67,4 +67,4 @@ cd ./build/install
 
 - [模型介绍](../../)
 - [Python部署](../python)
-- [视觉模型预测结果](../../../../../../docs/api/vision_results/)
+- [视觉模型预测结果](../../../../../docs/api/vision_results/)
