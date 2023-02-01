@@ -113,7 +113,7 @@ VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
 > **参数**
 >
 > > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 检测结果，包括检测框，各个框的置信度, FaceRecognitionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > * **result**: 检测结果，包括检测框，各个框的置信度, FaceRecognitionResult说明参考[视觉模型预测结果](../../../../../../docs/api/vision_results/)
 
 ### 修改预处理以及后处理的参数
 预处理和后处理的参数的需要通过修改InsightFaceRecognitionPostprocessor，InsightFaceRecognitionPreprocessor的成员变量来进行修改。
@@ -132,5 +132,5 @@ VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
 - [模型介绍](../../../)
 - [Python部署](../python)
-- [视觉模型预测结果](../../../../../../../docs/api/vision_results/README.md)
+- [视觉模型预测结果](../../../../../../docs/api/vision_results/README.md)
 - [如何切换模型推理后端引擎](../../../../../../docs/cn/faq/how_to_change_backend.md)
