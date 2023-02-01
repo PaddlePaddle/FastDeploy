@@ -1,4 +1,4 @@
-English | [简体中文](README_ CN.md)
+English | [简体中文](README_CN.md)
 # YOLOv8 C++ Deployment Example
 
 This directory provides the example that `infer.cc` fast finishes the deployment of YOLOv8 on CPU/GPU and GPU through TensorRT.
