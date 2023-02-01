@@ -94,25 +94,19 @@ void Vad::setAudioCofig(int sr, int frame_ms, float threshold,
 }
 
 bool Vad::Preprocess(std::vector<float> audioWindowData) {
-    fastdeploy::FDTensor inputTensor, srTensor, hTensor, cTensor;
-    inputTensor.SetExternalData(input_node_dims_, fastdeploy::FDDataType::FP32,
-                                audioWindowData.data());
-    inputTensor.name = "input";
-    srTensor.SetExternalData(sr_node_dims_, fastdeploy::FDDataType::INT64,
-                             sr_.data());
-    srTensor.name = "sr";
-    hTensor.SetExternalData(hc_node_dims_, fastdeploy::FDDataType::FP32,
-                            _h.data());
-    hTensor.name = "h";
-    cTensor.SetExternalData(hc_node_dims_, fastdeploy::FDDataType::FP32,
-                            _c.data());
-    cTensor.name = "c";
-
-    inputTensors_.clear();
-    inputTensors_.emplace_back(inputTensor);
-    inputTensors_.emplace_back(srTensor);
-    inputTensors_.emplace_back(hTensor);
-    inputTensors_.emplace_back(cTensor);
+    inputTensors_.resize(4);
+    inputTensors_[0].name = "input";
+    inputTensors_[0].SetExternalData(input_node_dims_, fastdeploy::FDDataType::FP32,
+                                     audioWindowData.data());
+    inputTensors_[1].name = "sr";
+    inputTensors_[1].SetExternalData(sr_node_dims_, fastdeploy::FDDataType::INT64,
+                                     sr_.data());
+    inputTensors_[2].name = "h";
+    inputTensors_[2].SetExternalData(hc_node_dims_, fastdeploy::FDDataType::FP32,
+                                     _h.data());
+    inputTensors_[3].name = "c";
+    inputTensors_[3].SetExternalData(hc_node_dims_, fastdeploy::FDDataType::FP32,
+                                     _c.data());
     return true;
 }
 
