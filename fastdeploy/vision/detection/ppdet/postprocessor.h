@@ -17,6 +17,7 @@
 #include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 #include "fastdeploy/vision/detection/ppdet/ppdet_decode.h"
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms_rotated.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -68,6 +69,9 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   // Process mask tensor for MaskRCNN
   bool ProcessMask(const FDTensor& tensor,
                    std::vector<DetectionResult>* results);
+  
+  bool ProcessRotated(const std::vector<FDTensor>& tensors,
+                      std::vector<Rotated>* results);
 };
 
 }  // namespace detection

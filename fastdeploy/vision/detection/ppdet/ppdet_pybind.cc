@@ -230,5 +230,10 @@ void BindPPDet(pybind11::module& m) {
                                                                          "GFL")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>());
+
+  pybind11::class_<vision::detection::PPYOLOER, vision::detection::PPDetBase>(m,
+                                                                         "PPYOLOER")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
 }
 }  // namespace fastdeploy

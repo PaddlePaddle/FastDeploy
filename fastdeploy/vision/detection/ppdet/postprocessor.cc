@@ -165,6 +165,33 @@ bool PaddleDetPostprocessor::ProcessUnDecodeResults(
   }
   return true;
 }
+
+bool PaddleDetPostprocessor::ProcessRotated(
+    const std::vector<FDTensor>& tensors,
+    std::vector<Rotated>* results) {
+  results->resize(tensors[0].Shape()[0]);
+
+  // do decode and nms
+  ppdet_decoder_.DecodeAndNMSRotated(tensors, results);
+
+  // do scale
+  if (GetScaleFactor()[0] != 0) {
+    for (auto& result : *results) {
+      for (auto& box : result.boxes_rotated) {
+        box[0] /= GetScaleFactor()[1];
+        box[1] /= GetScaleFactor()[0];
+        box[2] /= GetScaleFactor()[1];
+        box[3] /= GetScaleFactor()[0];
+        box[4] /= GetScaleFactor()[1];
+        box[5] /= GetScaleFactor()[0];
+        box[6] /= GetScaleFactor()[1];
+        box[7] /= GetScaleFactor()[0];
+      }
+    }
+  }
+  return true;
+}
+
 }  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

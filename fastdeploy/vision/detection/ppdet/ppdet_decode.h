@@ -15,6 +15,7 @@
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms_rotated.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -25,6 +26,8 @@ class FASTDEPLOY_DECL PPDetDecode {
   explicit PPDetDecode(const std::string& config_file);
   bool DecodeAndNMS(const std::vector<FDTensor>& tensors,
                     std::vector<DetectionResult>* results);
+  bool DecodeAndNMSRotated(const std::vector<FDTensor>& tensors,
+                           std::vector<Rotated>* results)
   void SetNMSOption(const NMSOption& option = NMSOption()) {
     multi_class_nms_.SetNMSOption(option);
   }
@@ -44,6 +47,7 @@ class FASTDEPLOY_DECL PPDetDecode {
                           int num_class);
   int ActivationFunctionSoftmax(const float* src, float* dst, int reg_max);
   PaddleMultiClassNMS multi_class_nms_;
+  PaddleMultiClassNMSRotated multi_class_nms_rotated_;
 };
 }  // namespace detection
 }  // namespace vision

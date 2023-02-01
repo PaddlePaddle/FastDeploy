@@ -15,6 +15,7 @@
 #pragma once
 #include "fastdeploy/vision/detection/ppdet/base.h"
 #include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms_rotated.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -412,6 +413,22 @@ class FASTDEPLOY_DECL GFL : public PPDetBase {
   }
 
   virtual std::string ModelName() const { return "PaddleDetection/GFL"; }
+};
+
+class FASTDEPLOY_DECL PPYOLOER : public PPDetBase {
+ public:
+  PPYOLOER(const std::string& model_file, const std::string& params_file,
+           const std::string& config_file,
+           const RuntimeOption& custom_option = RuntimeOption(),
+           const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                model_format) {
+    valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/PPYOLOER"; }
 };
 
 }  // namespace detection
