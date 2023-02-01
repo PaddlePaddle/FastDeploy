@@ -353,8 +353,8 @@ void Runtime::CreateOrtBackend() {
   ort_option.intra_op_num_threads = option.cpu_thread_num;
   ort_option.inter_op_num_threads = option.ort_inter_op_num_threads;
   ort_option.execution_mode = option.ort_execution_mode;
-  ort_option.use_gpu = (option.device == Device::GPU) ? true : false;
-  ort_option.gpu_id = option.device_id;
+  ort_option.device = Device::GPU;
+  ort_option.device_id = option.device_id;
   ort_option.external_stream_ = option.external_stream_;
   backend_ = utils::make_unique<OrtBackend>();
   auto casted_backend = dynamic_cast<OrtBackend*>(backend_.get());

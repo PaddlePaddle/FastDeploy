@@ -45,7 +45,7 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
   if (option.execution_mode >= 0) {
     session_options_.SetExecutionMode(ExecutionMode(option.execution_mode));
   }
-  if (option.use_gpu) {
+  if (option.device == Device::GPU) {
     auto all_providers = Ort::GetAvailableProviders();
     bool support_cuda = false;
     std::string providers_msg = "";
@@ -60,10 +60,10 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
                    "support GPU, the available providers are "
                 << providers_msg << "will fallback to CPUExecutionProvider."
                 << std::endl;
-      option_.use_gpu = false;
+      option_.device = Device::CPU;
     } else {
       OrtCUDAProviderOptions cuda_options;
-      cuda_options.device_id = option.gpu_id;
+      cuda_options.device_id = option.device_id;
       if (option.external_stream_) {
         cuda_options.has_user_compute_stream = 1;
         cuda_options.user_compute_stream = option.external_stream_;
@@ -221,7 +221,7 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
 
   // from FDTensor to Ort Inputs
   for (size_t i = 0; i < inputs.size(); ++i) {
-    auto ort_value = CreateOrtValue(inputs[i], option_.use_gpu);
+    auto ort_value = CreateOrtValue(inputs[i], option_.device == Device::GPU);
     binding_->BindInput(inputs[i].name.c_str(), ort_value);
   }
 
@@ -297,7 +297,7 @@ void OrtBackend::InitCustomOperators() {
   if (custom_operators_.size() == 0) {
     MultiClassNmsOp* multiclass_nms = new MultiClassNmsOp{};
     custom_operators_.push_back(multiclass_nms);
-    if (option_.use_gpu) {
+    if (option_.device == Device::GPU) {
       AdaptivePool2dOp* adaptive_pool2d =
           new AdaptivePool2dOp{"CUDAExecutionProvider"};
       custom_operators_.push_back(adaptive_pool2d);
