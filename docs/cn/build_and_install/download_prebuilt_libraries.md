@@ -22,7 +22,7 @@ FastDeploy提供各平台预编译库，供开发者直接下载安装使用。�
 
 ### Python安装
 
-Release版本（当前最新1.0.2）安装
+Release版本（当前最新1.0.3）安装
 ```bash
 pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
@@ -43,8 +43,8 @@ Release版本
 
 | 平台 | 文件 | 说明 |
 | :--- | :--- | :---- |
-| Linux x64 | [fastdeploy-linux-x64-gpu-1.0.2.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-1.0.2.tgz) | g++ 8.2, CUDA 11.2, cuDNN 8.2编译产出 |
-| Windows x64 | [fastdeploy-win-x64-gpu-1.0.2.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-1.0.2.zip) | Visual Studio 16 2019, CUDA 11.2, cuDNN 8.2编译产出 |
+| Linux x64 | [fastdeploy-linux-x64-gpu-1.0.3.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-1.0.3.tgz) | g++ 8.2, CUDA 11.2, cuDNN 8.2编译产出 |
+| Windows x64 | [fastdeploy-win-x64-gpu-1.0.3.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-1.0.3.zip) | Visual Studio 16 2019, CUDA 11.2, cuDNN 8.2编译产出 |
 
 Develop版本（Nightly build）
 
@@ -65,7 +65,7 @@ Develop版本（Nightly build）
 
 ### Python安装
 
-Release版本（当前最新1.0.2）安装
+Release版本（当前最新1.0.3）安装
 ```bash
 pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
@@ -81,22 +81,22 @@ Release版本
 
 | 平台 | 文件 | 说明 |
 | :--- | :--- | :---- |
-| Linux x64 | [fastdeploy-linux-x64-1.0.2.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-1.0.2.tgz) | g++ 8.2编译产出 |
-| Windows x64 | [fastdeploy-win-x64-1.0.2.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-1.0.2.zip) | Visual Studio 16 2019编译产出 |
-| Mac OSX x64 | [fastdeploy-osx-x86_64-1.0.2.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-x86_64-1.0.2.tgz) | clang++ 10.0.0编译产出|
-| Mac OSX arm64 | [fastdeploy-osx-arm64-1.0.2.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-arm64-1.0.2.tgz) | clang++ 13.0.0编译产出 |
-| Linux aarch64 | [fastdeploy-linux-aarch64-1.0.2.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-1.0.2.tgz) | gcc 6.3编译产出 |  
-| Android armv7&v8 | [fastdeploy-android-1.0.2-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-1.0.2-shared.tgz) | NDK 25及clang++编译产出, 支持arm64-v8a及armeabi-v7a |      
-| Android armv7&v8 | [fastdeploy-android-with-text-1.0.2-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-with-text-1.0.2-shared.tgz) | 包含FastTokenizer、UIE等Text API，NDK 25及clang++编译产出, 支持arm64-v8a及armeabi-v7a |
+| Linux x64 | [fastdeploy-linux-x64-1.0.3.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-1.0.3.tgz) | g++ 8.2编译产出 |
+| Windows x64 | [fastdeploy-win-x64-1.0.3.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-1.0.3.zip) | Visual Studio 16 2019编译产出 |
+| Mac OSX x64 | [fastdeploy-osx-x86_64-1.0.3.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-x86_64-1.0.3.tgz) | clang++ 10.0.0编译产出|
+| Mac OSX arm64 | [fastdeploy-osx-arm64-1.0.3.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-arm64-1.0.3.tgz) | clang++ 13.0.0编译产出 |
+| Linux aarch64 | [fastdeploy-linux-aarch64-1.0.3.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-1.0.3.tgz) | gcc 6.3编译产出 |  
+| Android armv7&v8 | [fastdeploy-android-1.0.3-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-1.0.3-shared.tgz) | NDK 25及clang++编译产出, 支持arm64-v8a及armeabi-v7a |      
+| Android armv7&v8 | [fastdeploy-android-with-text-1.0.3-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-with-text-1.0.3-shared.tgz) | 包含FastTokenizer、UIE等Text API，NDK 25及clang++编译产出, 支持arm64-v8a及armeabi-v7a |
 
 ## Java SDK安装
 
-Release版本（Java SDK 目前仅支持Android，版本为1.0.0）  
+Release版本（Java SDK 目前仅支持Android，版本为1.0.3）  
 
 | 平台 | 文件 | 说明 |
 | :--- | :--- | :---- |
-| Android Java SDK | [fastdeploy-android-sdk-1.0.2.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-1.0.2.aar) | NDK 20 编译产出, minSdkVersion 15, targetSdkVersion 28 |  
-| Android Java SDK | [fastdeploy-android-sdk-with-text-1.0.2.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-with-text-1.0.2.aar) | 包含FastTokenizer、UIE等Text API，NDK 20 编译产出, minSdkVersion 15, targetSdkVersion 28 |
+| Android Java SDK | [fastdeploy-android-sdk-1.0.3.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-1.0.3.aar) | NDK 20 编译产出, minSdkVersion 15, targetSdkVersion 28 |  
+| Android Java SDK | [fastdeploy-android-sdk-with-text-1.0.3.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-with-text-1.0.3.aar) | 包含FastTokenizer、UIE等Text API，NDK 20 编译产出, minSdkVersion 15, targetSdkVersion 28 |
 
 
 Develop版本（Nightly build）
