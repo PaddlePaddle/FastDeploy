@@ -43,7 +43,7 @@ jobs:
           export ENABLE_OPENVINO_BACKEND=OFF
           export ENABLE_VISION=ON
           export ENABLE_TEXT=ON
-          
+          python -m pip install wheel
           python setup.py build
           python setup.py bdist_wheel
           ls -l
