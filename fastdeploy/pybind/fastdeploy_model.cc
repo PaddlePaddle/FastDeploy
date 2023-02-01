@@ -33,6 +33,9 @@ void BindFDModel(pybind11::module& m) {
            &FastDeployModel::DisableRecordTimeOfBackend)     
       .def("print_statis_info_of_runtime",
            &FastDeployModel::PrintStatisInfoOfRuntime)
+      .def("get_current_time_of_runtime", &FastDeployModel::GetCurrentTimeOfRuntime)   
+      .def("get_current_time_of_backend", &FastDeployModel::GetCurrentTimeOfBackend)  
+      .def("get_current_time_of_h2d_d2h", &FastDeployModel::GetCurrentTimeOfH2dAndD2h) 
       .def("initialized", &FastDeployModel::Initialized)
       .def_readwrite("runtime_option", &FastDeployModel::runtime_option)
       .def_readwrite("valid_cpu_backends", &FastDeployModel::valid_cpu_backends)

@@ -399,9 +399,8 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
   }
   tc.End();
   time_of_pure_backend += tc.Duration();
-  *mean_time_of_pure_backend = 
-    time_of_pure_backend / static_cast<double>(repeat-1);
-
+  
+  tc.Start();
   for (size_t i = 0; i < outputs->size(); ++i) {
     // if the final output tensor's dtype is different from the model output
     // tensor's dtype, then we need cast the data to the final output's dtype
@@ -442,7 +441,10 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
     FDASSERT(cudaStreamSynchronize(stream_) == cudaSuccess,
              "[ERROR] Error occurs while sync cuda stream.");
   }
-
+  tc.End();
+  time_of_pure_backend += tc.Duration();
+  *mean_time_of_pure_backend = 
+    time_of_pure_backend / static_cast<double>(repeat);
   return true;
 }
 #endif

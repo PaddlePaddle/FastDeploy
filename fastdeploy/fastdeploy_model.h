@@ -151,6 +151,18 @@ class FASTDEPLOY_DECL FastDeployModel {
     return enable_record_time_of_backend_;
   }
 
+  virtual double GetCurrentTimeOfRuntime() {
+    return current_time_of_runtime_;
+  }
+
+  virtual double GetCurrentTimeOfBackend() {
+    return current_time_of_backend_;
+  }
+
+  virtual double GetCurrentTimeOfH2dAndD2h() {
+    return current_time_of_h2d_d2h_;
+  }
+
   /** \brief Release reused input/output buffers
   */
   virtual void ReleaseReusedBuffer() {
@@ -204,6 +216,9 @@ class FASTDEPLOY_DECL FastDeployModel {
   // The repeats to record time of backend.
   // mean_time=total_time/repeat
   int repeat_for_time_of_backend_ = 1;
+  double current_time_of_backend_ = 0.0;
+  double current_time_of_runtime_ = 0.0;
+  double current_time_of_h2d_d2h_ = 0.0;
 };
 
 }  // namespace fastdeploy

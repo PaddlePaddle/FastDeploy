@@ -376,9 +376,8 @@ bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
     if (enable_record_time_of_runtime_) {
       tc.Start();
     }
-    double mean_time_of_backend = 0.0;   
     ret = runtime_->Infer(input_tensors, output_tensors, 
-                          &mean_time_of_backend,
+                          &current_time_of_backend_,
                           repeat_for_time_of_backend_);     
     // record time of backend                        
     if (time_of_backend_.size() > 50000) {
@@ -387,7 +386,7 @@ bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
                 << std::endl;
       enable_record_time_of_backend_ = false;
     }
-    time_of_backend_.push_back(mean_time_of_backend);    
+    time_of_backend_.push_back(current_time_of_backend_);    
     // record time of runtime here
     if (enable_record_time_of_runtime_) {
       tc.End();
@@ -398,9 +397,11 @@ bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
         enable_record_time_of_runtime_ = false;
       }
       double total_time_of_backend = 
-        mean_time_of_backend * repeat_for_time_of_backend_;  
-      double once_h2d_d2h_time = tc.Duration() - total_time_of_backend;
-      time_of_runtime_.push_back(once_h2d_d2h_time + mean_time_of_backend);  
+        current_time_of_backend_ * repeat_for_time_of_backend_;  
+      current_time_of_h2d_d2h_ = tc.Duration() - total_time_of_backend;
+      FDINFO << "tc.Duration(): " << tc.Duration() << std::endl;
+      current_time_of_runtime_ = current_time_of_h2d_d2h_ + current_time_of_backend_;
+      time_of_runtime_.push_back(current_time_of_runtime_);  
     }   
 #else
     FDASSERT(false, "FastDeploy was not compiled with benchmark mode!");
@@ -419,7 +420,8 @@ bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
                   << std::endl;
         enable_record_time_of_runtime_ = false;
       }
-      time_of_runtime_.push_back(tc.Duration());
+      current_time_of_runtime_ = tc.Duration();
+      time_of_runtime_.push_back(current_time_of_runtime_);
     }
   }
   

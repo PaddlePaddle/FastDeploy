@@ -62,6 +62,15 @@ class FastDeployModel:
     def print_statis_info_of_runtime(self):
         return self._model.print_statis_info_of_runtime()
 
+    def get_current_time_of_runtime(self):
+        return self._model.get_current_time_of_runtime()    
+
+    def get_current_time_of_backend(self):
+        return self._model.get_current_time_of_backend()
+
+    def get_current_time_of_h2d_d2h(self):
+        return self._model.get_current_time_of_h2d_d2h()        
+
     @property
     def runtime_option(self):
         return self._model.runtime_option if self._model is not None else None

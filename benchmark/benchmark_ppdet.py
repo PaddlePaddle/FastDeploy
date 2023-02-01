@@ -269,6 +269,8 @@ if __name__ == '__main__':
     enable_collect_memory_info = args.enable_collect_memory_info
     dump_result = dict()
     end2end_statis = list()
+    prepost_statis = list()
+    h2d_d2h_statis = list()
     cpu_mem = list()
     gpu_mem = list()
     gpu_util = list()
@@ -326,12 +328,22 @@ if __name__ == '__main__':
             im = im_ori
             start = time.time()
             result = model.predict(im)
-            end2end_statis.append((time.time() - start)/repeat)
+            end = time.time()
+            curr_time_of_backend = model.get_current_time_of_backend()
+            curr_time_of_h2d_d2h = model.get_current_time_of_h2d_d2h()
+            total_time_of_backend = curr_time_of_backend * repeat
+            curr_pre_post_h2d_d2h_time = (end - start) - total_time_of_backend
+            curr_pre_post_time = curr_pre_post_h2d_d2h_time - curr_time_of_h2d_d2h
+            end2end_statis.append(curr_pre_post_h2d_d2h_time + curr_time_of_backend)
+            prepost_statis.append(curr_pre_post_time)
+            h2d_d2h_statis.append(curr_time_of_h2d_d2h)
 
         runtime_statis = model.print_statis_info_of_runtime()
 
         warmup_iter = args.iter_num // 5
         end2end_statis_repeat = end2end_statis[warmup_iter:]
+        prepost_statis_repeat = prepost_statis[warmup_iter:]
+        h2d_d2h_statis_repeat = h2d_d2h_statis[warmup_iter:]
         if enable_collect_memory_info:
             monitor.stop()
             mem_info = monitor.output()
@@ -344,13 +356,19 @@ if __name__ == '__main__':
 
         dump_result["runtime"] = runtime_statis["avg_time"] * 1000
         dump_result["backend"] = runtime_statis["backend_avg_time"] * 1000
+        dump_result["prepost"] = np.mean(prepost_statis_repeat) * 1000
+        dump_result["h2d_d2h"] = np.mean(h2d_d2h_statis_repeat) * 1000
         dump_result["end2end"] = np.mean(end2end_statis_repeat) * 1000
 
         f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
         f.writelines("Backend(ms): {} \n".format(str(dump_result["backend"])))
+        f.writelines("PrePost(ms): {} \n".format(str(dump_result["prepost"])))
+        f.writelines("H2D_D2H(ms): {} \n".format(str(dump_result["h2d_d2h"])))
         f.writelines("End2End(ms): {} \n".format(str(dump_result["end2end"])))
         print("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
         print("Backend(ms): {} \n".format(str(dump_result["backend"])))
+        print("PrePost(ms): {} \n".format(str(dump_result["prepost"])))
+        print("H2D_D2H(ms): {} \n".format(str(dump_result["h2d_d2h"])))
         print("End2End(ms): {} \n".format(str(dump_result["end2end"])))
         if enable_collect_memory_info:
             f.writelines("cpu_rss_mb: {} \n".format(
