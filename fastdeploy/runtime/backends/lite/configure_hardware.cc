@@ -41,7 +41,7 @@ namespace fastdeploy {
 #define FD_LITE_HOST TARGET(kX86)
 #endif
 
-void LiteBackend::ConfigureCpu(const LiteBackendOption& option) {
+std::vector<paddle::lite_api::Place> GetPlacesForCpu(const LiteBackendOption& option) {
   std::vector<paddle::lite_api::Place> valid_places;
   valid_places.push_back(
       paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kInt8)});
@@ -59,7 +59,11 @@ void LiteBackend::ConfigureCpu(const LiteBackendOption& option) {
     valid_places.push_back(
         paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kFloat)});
   }
-  config_.set_valid_places(valid_places);
+  return valid_places;
+}
+
+void LiteBackend::ConfigureCpu(const LiteBackendOption& option) {
+  config_.set_valid_places(GetPlacesForCpu(option));
 }
 
 void LiteBackend::ConfigureKunlunXin(const LiteBackendOption& option) {
@@ -71,18 +75,8 @@ void LiteBackend::ConfigureKunlunXin(const LiteBackendOption& option) {
   }
   valid_places.push_back(
       paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFloat)});
-
-  if (option.enable_fp16) {
-    paddle::lite_api::MobileConfig check_fp16_config;
-    if (check_fp16_config.check_fp16_valid()) {
-      valid_places.push_back(
-          paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kFP16)});
-    }
   }
-  valid_places.push_back(
-      paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kInt8)});
-  valid_places.push_back(
-      paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kFloat)});
+
   config_.set_xpu_dev_per_thread(option.device_id);
   config_.set_xpu_workspace_l3_size_per_thread(
       option.kunlunxin_l3_workspace_size);
@@ -95,6 +89,8 @@ void LiteBackend::ConfigureKunlunXin(const LiteBackendOption& option) {
   if (option.kunlunxin_enable_multi_stream) {
     config_.enable_xpu_multi_stream();
   }
+  auto cpu_places = GetPlacesForCpu(option);
+  valid_places.insert(valid_places.end(), cpu_places.begin(), cpu_places.end());
   config_.set_valid_places(valid_places);
 }
 
@@ -105,20 +101,8 @@ void LiteBackend::ConfigureTimvx(const LiteBackendOption& option) {
       paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});
   valid_places.push_back(
       paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kFloat)});
-  if (option.enable_fp16) {
-    FDWARNING << "TIMVX doesn't support half precision, will force to use "
-                 "float32 precision."
-              << std::endl;
-    paddle::lite_api::MobileConfig check_fp16_config;
-    if (check_fp16_config.check_fp16_valid()) {
-      valid_places.push_back(
-          paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kFP16)});
-    }
-  }
-  valid_places.push_back(
-      paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kInt8)});
-  valid_places.push_back(
-      paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kFloat)});
+  auto cpu_places = GetPlacesForCpu(option);
+  valid_places.insert(valid_places.end(), cpu_places.begin(), cpu_places.end());
   config_.set_valid_places(valid_places);
   ConfigureNNAdapter(option);
 }
@@ -130,20 +114,8 @@ void LiteBackend::ConfigureAscend(const LiteBackendOption& option) {
       paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});
   valid_places.push_back(
       paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kFloat)});
-  if (option.enable_fp16) {
-    FDWARNING << "Ascend doesn't support half precision, will force to use "
-                 "float32 precision."
-              << std::endl;
-    paddle::lite_api::MobileConfig check_fp16_config;
-    if (check_fp16_config.check_fp16_valid()) {
-      valid_places.push_back(
-          paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kFP16)});
-    }
-  }
-  valid_places.push_back(
-      paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kInt8)});
-  valid_places.push_back(
-      paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kFloat)});
+  auto cpu_places = GetPlacesForCpu(option);
+  valid_places.insert(valid_places.end(), cpu_places.begin(), cpu_places.end());
   config_.set_valid_places(valid_places);
   ConfigureNNAdapter(option);
 }
