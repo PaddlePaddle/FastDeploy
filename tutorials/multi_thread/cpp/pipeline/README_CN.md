@@ -47,7 +47,7 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_
 >> **注意**: 最后一位数字表示线程数
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
-- [如何在Windows中使用FastDeploy C++ SDK](../../../docs/cn/faq/use_sdk_on_windows.md)
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../docs/cn/faq/use_sdk_on_windows.md)
 
 运行完成后返回结果如下所示
 ```
