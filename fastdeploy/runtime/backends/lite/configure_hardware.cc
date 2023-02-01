@@ -41,7 +41,8 @@ namespace fastdeploy {
 #define FD_LITE_HOST TARGET(kX86)
 #endif
 
-std::vector<paddle::lite_api::Place> GetPlacesForCpu(const LiteBackendOption& option) {
+std::vector<paddle::lite_api::Place> GetPlacesForCpu(
+    const LiteBackendOption& option) {
   std::vector<paddle::lite_api::Place> valid_places;
   valid_places.push_back(
       paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kInt8)});
@@ -55,10 +56,9 @@ std::vector<paddle::lite_api::Place> GetPlacesForCpu(const LiteBackendOption& op
                    "fallback to float32."
                 << std::endl;
     }
-  } else {
-    valid_places.push_back(
-        paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kFloat)});
   }
+  valid_places.push_back(
+      paddle::lite_api::Place{FD_LITE_HOST, PRECISION(kFloat)});
   return valid_places;
 }
 
@@ -71,27 +71,28 @@ void LiteBackend::ConfigureKunlunXin(const LiteBackendOption& option) {
   valid_places.push_back(
       paddle::lite_api::Place{TARGET(kXPU), PRECISION(kInt8)});
   if (option.enable_fp16) {
-    valid_places.push_back(paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFP16)});
+    valid_places.push_back(
+        paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFP16)});
   }
   valid_places.push_back(
       paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFloat)});
-  }
+}
 
-  config_.set_xpu_dev_per_thread(option.device_id);
-  config_.set_xpu_workspace_l3_size_per_thread(
-      option.kunlunxin_l3_workspace_size);
-  config_.set_xpu_l3_cache_method(option.kunlunxin_l3_workspace_size,
-                                  option.kunlunxin_locked);
-  config_.set_xpu_conv_autotune(option.kunlunxin_autotune,
-                                option.kunlunxin_autotune_file);
-  config_.set_xpu_multi_encoder_method(option.kunlunxin_precision,
-                                       option.kunlunxin_adaptive_seqlen);
-  if (option.kunlunxin_enable_multi_stream) {
-    config_.enable_xpu_multi_stream();
-  }
-  auto cpu_places = GetPlacesForCpu(option);
-  valid_places.insert(valid_places.end(), cpu_places.begin(), cpu_places.end());
-  config_.set_valid_places(valid_places);
+config_.set_xpu_dev_per_thread(option.device_id);
+config_.set_xpu_workspace_l3_size_per_thread(
+    option.kunlunxin_l3_workspace_size);
+config_.set_xpu_l3_cache_method(option.kunlunxin_l3_workspace_size,
+                                option.kunlunxin_locked);
+config_.set_xpu_conv_autotune(option.kunlunxin_autotune,
+                              option.kunlunxin_autotune_file);
+config_.set_xpu_multi_encoder_method(option.kunlunxin_precision,
+                                     option.kunlunxin_adaptive_seqlen);
+if (option.kunlunxin_enable_multi_stream) {
+  config_.enable_xpu_multi_stream();
+}
+auto cpu_places = GetPlacesForCpu(option);
+valid_places.insert(valid_places.end(), cpu_places.begin(), cpu_places.end());
+config_.set_valid_places(valid_places);
 }
 
 void LiteBackend::ConfigureTimvx(const LiteBackendOption& option) {
