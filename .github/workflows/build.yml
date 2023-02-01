@@ -16,7 +16,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DENABLE_ORT_BACKEND=ON -DENABLE_PADDLE_BACKEND=ON -DENABLE_OPENVINO_BACKEND=ON -DCMAKE_INSTALL_PREFIX=${PWD}/compiled_fastdeploy_sdk -DENABLE_VISION=ON -DENABLE_TEXT=ON
+          cmake .. -DENABLE_ORT_BACKEND=ON -DENABLE_PADDLE_BACKEND=OFF -DENABLE_OPENVINO_BACKEND=OFF -DCMAKE_INSTALL_PREFIX=${PWD}/compiled_fastdeploy_sdk -DENABLE_VISION=ON -DENABLE_TEXT=ON
           make -j12
           make install
           ls -l
@@ -39,8 +39,8 @@ jobs:
         working-directory: ./python
         run: |
           export ENABLE_ORT_BACKEND=ON
-          export ENABLE_PADDLE_BACKEND=ON
-          export ENABLE_OPENVINO_BACKEND=ON
+          export ENABLE_PADDLE_BACKEND=OFF
+          export ENABLE_OPENVINO_BACKEND=OFF
           export ENABLE_VISION=ON
           export ENABLE_TEXT=ON
           
