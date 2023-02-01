@@ -220,8 +220,10 @@ class TritonPythonModel:
                     batch_rec_texts, dtype=np.object_))
             out_tensor_1 = pb_utils.Tensor(self.output_names[1],
                                            np.array(batch_rec_scores))
+            out_tensor_2 = pb_utils.Tensor(self.output_names[2],
+                                           np.array(box_list))
             inference_response = pb_utils.InferenceResponse(
-                output_tensors=[out_tensor_0, out_tensor_1])
+                output_tensors=[out_tensor_0, out_tensor_1, out_tensor_2])
             responses.append(inference_response)
         return responses
 
