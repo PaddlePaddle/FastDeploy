@@ -6,9 +6,8 @@ set +x
 #                        readonly global variables
 # -------------------------------------------------------------------------------
 readonly ROOT_PATH=$(pwd)
-readonly BUILD_ROOT=build/MacOSX
-readonly OSX_ARCH=$1  # arm64, x86_64
-readonly BUILD_DIR=${BUILD_ROOT}/${OSX_ARCH}
+readonly BUILD_ROOT=build/Linux
+readonly BUILD_DIR=${BUILD_ROOT}/x86_64
 
 # -------------------------------------------------------------------------------
 #                                 tasks
@@ -48,29 +47,13 @@ __check_cxx_envs() {
   fi
 }
 
-__build_fastdeploy_osx_arm64_shared() {
+__build_fastdeploy_linux_x86_64_shared() {
 
   local FASDEPLOY_INSTALL_DIR="${ROOT_PATH}/${BUILD_DIR}/install"
   cd "${BUILD_DIR}" && echo "-- [INFO] Working Dir: ${PWD}"
 
   cmake -DCMAKE_BUILD_TYPE=MinSizeRel \
-        -DENABLE_ORT_BACKEND=ON \
-        -DENABLE_PADDLE2ONNX=ON \
-        -DENABLE_VISION=ON \
-        -DENABLE_BENCHMARK=ON \
-        -DBUILD_EXAMPLES=ON \
-        -DCMAKE_INSTALL_PREFIX=${FASDEPLOY_INSTALL_DIR} \
-        -Wno-dev ../../.. && make -j8 && make install
-
-  echo "-- [INFO][built][${OSX_ARCH}][${BUILD_DIR}/install]"
-}
-
-__build_fastdeploy_osx_x86_64_shared() {
-
-  local FASDEPLOY_INSTALL_DIR="${ROOT_PATH}/${BUILD_DIR}/install"
-  cd "${BUILD_DIR}" && echo "-- [INFO] Working Dir: ${PWD}"
-
-  cmake -DCMAKE_BUILD_TYPE=MinSizeRel \
+        -DWITH_GPU=OFF \
         -DENABLE_ORT_BACKEND=ON \
         -DENABLE_PADDLE_BACKEND=ON \
         -DENABLE_OPENVINO_BACKEND=ON \
@@ -87,16 +70,11 @@ __build_fastdeploy_osx_x86_64_shared() {
 main() {
   __make_build_dir
   __check_cxx_envs
-  if [ "$OSX_ARCH" = "arm64" ]; then
-    __build_fastdeploy_osx_arm64_shared
-  else
-    __build_fastdeploy_osx_x86_64_shared
-  fi
+  __build_fastdeploy_linux_x86_64_shared
   exit 0
 }
 
 main
 
 # Usage:
-# ./scripts/macosx/build_macosx_cpp.sh arm64
-# ./scripts/macosx/build_macosx_cpp.sh x86_64
+# ./scripts/linux/build_linux_x86_64_cpp_cpu.sh
