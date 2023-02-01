@@ -44,7 +44,7 @@ unzip face_demo.zip
 </div>
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
-- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
 ## InsightFace C++接口
 
@@ -132,5 +132,5 @@ VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
 - [模型介绍](../../../)
 - [Python部署](../python)
-- [视觉模型预测结果](../../../../../../docs/api/vision_results/README.md)
+- [视觉模型预测结果](../../../../../../../docs/api/vision_results/README.md)
 - [如何切换模型推理后端引擎](../../../../../../docs/cn/faq/how_to_change_backend.md)
