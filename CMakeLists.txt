@@ -72,6 +72,7 @@ option(WITH_ASCEND "Whether to compile for Huawei Ascend deploy." OFF)
 option(WITH_TIMVX "Whether to compile for TIMVX deploy." OFF)
 option(WITH_KUNLUNXIN "Whether to compile for KunlunXin XPU deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
+option(WITH_CAPI "Whether to compile with c api." OFF)
 
 ############################# Options for Android cross compiling #########################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
@@ -157,6 +158,7 @@ if(WITH_GPU)
   file(GLOB_RECURSE DEPLOY_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cu)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_CUDA_SRCS})
 endif()
+
 file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/ort/*.cc)
 file(GLOB_RECURSE DEPLOY_PADDLE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/paddle/*.cc)
 file(GLOB_RECURSE DEPLOY_POROS_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/poros/*.cc)
@@ -401,6 +403,11 @@ if(ENABLE_PADDLE2ONNX)
   include(${PROJECT_SOURCE_DIR}/cmake/paddle2onnx.cmake)
   list(APPEND DEPEND_LIBS external_paddle2onnx)
 endif(ENABLE_PADDLE2ONNX)
+
+if(WITH_CAPI)
+  include(${PROJECT_SOURCE_DIR}/c_api/CMakeLists.txt)
+  add_definitions(-DFD_CAPI)
+endif()
 
 
 configure_file(${PROJECT_SOURCE_DIR}/FastDeploy.cmake.in ${PROJECT_SOURCE_DIR}/FastDeploy.cmake @ONLY)
