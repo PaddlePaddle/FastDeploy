@@ -210,10 +210,10 @@ FDTensor* Runtime::GetOutputTensor(const std::string& name) {
 
 void Runtime::ReleaseModelMemoryBuffer() {
   if (option.model_from_memory_) {
-    option.model_buffer_.clear();
-    option.model_buffer_.shrink_to_fit();
-    option.params_buffer_.clear();
-    option.params_buffer_.shrink_to_fit();
+    option.model_file.clear();
+    option.model_file.shrink_to_fit();
+    option.params_file.clear();
+    option.params_file.shrink_to_fit();
   }
 }
 
@@ -276,8 +276,8 @@ void Runtime::CreatePaddleBackend() {
   backend_ = utils::make_unique<PaddleBackend>();
   auto casted_backend = dynamic_cast<PaddleBackend*>(backend_.get());
   if (pd_option.model_from_memory_) {
-    FDASSERT(casted_backend->InitFromPaddle(option.model_buffer_,
-                                            option.params_buffer_, pd_option),
+    FDASSERT(casted_backend->InitFromPaddle(option.model_file,
+                                            option.params_file, pd_option),
              "Load model from Paddle failed while initliazing PaddleBackend.");
     ReleaseModelMemoryBuffer();
   } else {
@@ -360,7 +360,7 @@ void Runtime::CreateOrtBackend() {
   auto casted_backend = dynamic_cast<OrtBackend*>(backend_.get());
   if (option.model_format == ModelFormat::ONNX) {
     if (option.model_from_memory_) {
-      FDASSERT(casted_backend->InitFromOnnx(option.model_buffer_, ort_option),
+      FDASSERT(casted_backend->InitFromOnnx(option.model_file, ort_option),
                "Load model from ONNX failed while initliazing OrtBackend.");
       ReleaseModelMemoryBuffer();
     } else {
@@ -372,8 +372,8 @@ void Runtime::CreateOrtBackend() {
     }
   } else {
     if (option.model_from_memory_) {
-      FDASSERT(casted_backend->InitFromPaddle(
-                   option.model_buffer_, option.params_buffer_, ort_option),
+      FDASSERT(casted_backend->InitFromPaddle(option.model_file,
+                                              option.params_file, ort_option),
                "Load model from Paddle failed while initliazing OrtBackend.");
       ReleaseModelMemoryBuffer();
     } else {
@@ -424,7 +424,7 @@ void Runtime::CreateTrtBackend() {
   auto casted_backend = dynamic_cast<TrtBackend*>(backend_.get());
   if (option.model_format == ModelFormat::ONNX) {
     if (option.model_from_memory_) {
-      FDASSERT(casted_backend->InitFromOnnx(option.model_buffer_, trt_option),
+      FDASSERT(casted_backend->InitFromOnnx(option.model_file, trt_option),
                "Load model from ONNX failed while initliazing TrtBackend.");
       ReleaseModelMemoryBuffer();
     } else {
@@ -436,8 +436,8 @@ void Runtime::CreateTrtBackend() {
     }
   } else {
     if (option.model_from_memory_) {
-      FDASSERT(casted_backend->InitFromPaddle(
-                   option.model_buffer_, option.params_buffer_, trt_option),
+      FDASSERT(casted_backend->InitFromPaddle(option.model_file,
+                                              option.params_file, trt_option),
                "Load model from Paddle failed while initliazing TrtBackend.");
       ReleaseModelMemoryBuffer();
     } else {
