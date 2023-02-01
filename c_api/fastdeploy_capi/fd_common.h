@@ -64,14 +64,13 @@ typedef int8_t FD_Bool;
   enum
 
 PD_ENUM(FD_ModelFormat){
-    CPU,
-    GPU,
-    RKNPU,
-    IPU,
-    TIMVX,
-    KUNLUNXIN,
-    ASCEND,
-    SOPHGOTPUD};
+  AUTOREC,      ///< Auto recognize the model format by model file name
+  PADDLE,       ///< Model with paddlepaddle format
+  ONNX,         ///< Model with ONNX format
+  RKNN,         ///< Model with RKNN format
+  TORCHSCRIPT,  ///< Model with TorchScript format
+  SOPHGO,       ///< Model with SOPHGO format
+  };
 
 PD_ENUM(FD_rknpu2_CpuName){
   RK356X = 0, /* run on RK356X. */

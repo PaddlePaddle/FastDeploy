@@ -56,14 +56,12 @@ FASTDEPLOY_CAPI_EXPORT extern void FD_RuntimeOptionSetModelPath(
  *
  * \param[in] fd_runtime_option pointer to FD_RuntimeOption object
  * \param[in] model_buffer The memory buffer of model
- * \param[in] model_buffer_size The size of the model data
  * \param[in] params_buffer The memory buffer of the combined parameters file
- * \param[in] params_buffer_size The size of the combined parameters data
  * \param[in] format Format of the loaded model
  */
 FASTDEPLOY_CAPI_EXPORT extern void FD_RuntimeOptionSetModelBuffer(__fd_keep FD_RuntimeOption *fd_runtime_option,
-                      const char* model_buffer, size_t model_buffer_size,
-                      const char* params_buffer, size_t params_buffer_size,
+                      const char* model_buffer,
+                      const char* params_buffer,
                       const FD_ModelFormat);
 
 
