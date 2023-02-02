@@ -39,13 +39,7 @@ class OrtBackend : public BaseBackend {
 
   void BuildOption(const OrtBackendOption& option);
 
-  bool InitFromPaddle(const std::string& model_buffer,
-                      const std::string& params_buffer,
-                      const OrtBackendOption& option = OrtBackendOption(),
-                      bool verbose = false);
-
-  bool InitFromOnnx(const std::string& model_buffer,
-                    const OrtBackendOption& option = OrtBackendOption());
+  bool Init(const RuntimeOption& option);
 
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
@@ -62,6 +56,14 @@ class OrtBackend : public BaseBackend {
   void InitCustomOperators();
 
  private:
+  bool InitFromPaddle(const std::string& model_buffer,
+                      const std::string& params_buffer,
+                      const OrtBackendOption& option = OrtBackendOption(),
+                      bool verbose = false);
+
+  bool InitFromOnnx(const std::string& model_buffer,
+                    const OrtBackendOption& option = OrtBackendOption());
+
   Ort::Env env_;
   Ort::Session session_{nullptr};
   Ort::SessionOptions session_options_;
