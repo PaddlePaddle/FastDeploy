@@ -1,3 +1,4 @@
+English | [中文](../../../cn/faq/rknpu2/build.md) 
 # FastDeploy RKNPU2 Engine Compilation 
 
 ## FastDeploy supported backends
