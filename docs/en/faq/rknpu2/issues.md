@@ -1,3 +1,4 @@
+English | [中文](../../../cn/faq/rknpu2/issues.md) 
 # RKNPU2 FAQs
 
 This document collects the common problems when using FastDeploy.
