@@ -104,7 +104,7 @@ bool LiteBackend::InitFromPaddle(const std::string& model_file,
     auto shape = tensor->shape();
     info.shape.assign(shape.begin(), shape.end());
     info.name = output_names[i];
-    if (!option_.device == Device::KUNLUNXIN) {
+    if (option_.device != Device::KUNLUNXIN) {
       info.dtype = LiteDataTypeToFD(tensor->precision());
     }
     outputs_desc_.emplace_back(info);
