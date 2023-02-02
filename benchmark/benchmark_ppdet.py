@@ -40,7 +40,7 @@ def parse_arguments():
         required=True,
         type=int,
         default=300,
-        help="number of iterations for computing performace.")
+        help="number of iterations for computing performace.") 
     parser.add_argument(
         "--backend_repeat",
         required=True,
@@ -71,6 +71,11 @@ def parse_arguments():
         type=ast.literal_eval,
         default=False,
         help="whether enable collect memory info")  
+    parser.add_argument(
+        "--enable_record_time_of_backend",
+        type=ast.literal_eval,
+        default=False,
+        help="whether enable record time of backend")     
     args = parser.parse_args()
     return args
 
@@ -273,6 +278,7 @@ if __name__ == '__main__':
 
     gpu_id = args.device_id
     enable_collect_memory_info = args.enable_collect_memory_info
+    enable_record_time_of_backend = args.enable_record_time_of_backend
     backend_repeat = args.backend_repeat
     dump_result = dict()
     end2end_statis = list()
@@ -327,26 +333,34 @@ if __name__ == '__main__':
             monitor = Monitor(enable_gpu, gpu_id)
             monitor.start()
 
-        if args.device.lower() in ("gpu", "xpu", "npu", "kunlunxin", "ascend"):
-          if backend_repeat < 100:
-            print(f"[WARNING] The backend_repeat for {args.device} should >= 100, \
-              but got {backend_repeat}!")
         model.enable_record_time_of_runtime()
-        model.enable_record_time_of_backend(backend_repeat)
+        if enable_record_time_of_backend:
+          if args.device.lower() in ("gpu", "xpu", "npu", "kunlunxin", "ascend"):
+            if backend_repeat < 100:
+              print(f"[WARNING] The backend_repeat for {args.device} should >= 100, \
+                but got {backend_repeat}!")
+          model.enable_record_time_of_backend(backend_repeat)
         im_ori = cv2.imread(args.image)
         for i in tqdm(range(args.iter_num)):
             im = im_ori
             start = time.time()
             result = model.predict(im)
             end = time.time()
-            curr_time_of_backend = model.get_current_time_of_backend()
-            curr_time_of_h2d_d2h = model.get_current_time_of_h2d_d2h()
-            total_time_of_backend = curr_time_of_backend * backend_repeat
-            curr_pre_post_h2d_d2h_time = (end - start) - total_time_of_backend
-            curr_pre_post_time = curr_pre_post_h2d_d2h_time - curr_time_of_h2d_d2h
-            end2end_statis.append(curr_pre_post_h2d_d2h_time + curr_time_of_backend)
-            prepost_statis.append(curr_pre_post_time)
-            h2d_d2h_statis.append(curr_time_of_h2d_d2h)
+            if enable_record_time_of_backend:
+              curr_time_of_backend = model.get_current_time_of_backend()
+              curr_time_of_h2d_d2h = model.get_current_time_of_h2d_d2h()
+              total_time_of_backend = curr_time_of_backend * backend_repeat
+              curr_pre_post_h2d_d2h_time = (end - start) - total_time_of_backend
+              curr_pre_post_time = curr_pre_post_h2d_d2h_time - curr_time_of_h2d_d2h
+              end2end_statis.append(curr_pre_post_h2d_d2h_time + curr_time_of_backend)
+              prepost_statis.append(curr_pre_post_time)
+              h2d_d2h_statis.append(curr_time_of_h2d_d2h)
+            else:
+              curr_time_of_runtime = model.get_current_time_of_runtime()
+              curr_pre_post_time = (end - start) - curr_time_of_runtime
+              end2end_statis.append((end - start))
+              prepost_statis.append(curr_pre_post_time)
+              h2d_d2h_statis.append(0.)
 
         runtime_statis = model.print_statis_info_of_runtime()
 
@@ -365,7 +379,10 @@ if __name__ == '__main__':
                 'utilization.gpu'] if 'gpu' in mem_info else 0
 
         dump_result["runtime"] = runtime_statis["avg_time"] * 1000
-        dump_result["backend"] = runtime_statis["backend_avg_time"] * 1000
+        if enable_record_time_of_backend:
+          dump_result["backend"] = runtime_statis["backend_avg_time"] * 1000
+        else:
+          dump_result["backend"] = 0.  
         dump_result["prepost"] = np.mean(prepost_statis_repeat) * 1000
         dump_result["h2d_d2h"] = np.mean(h2d_d2h_statis_repeat) * 1000
         dump_result["end2end"] = np.mean(end2end_statis_repeat) * 1000
