@@ -237,7 +237,6 @@ bool OpenVINOBackend::InitFromOnnx(const std::string& model_file,
   option_ = option;
 
   std::shared_ptr<ov::Model> model = core_.read_model(model_file);
-
   if (option_.shape_infos.size() > 0) {
     std::map<std::string, ov::PartialShape> shape_infos;
     for (const auto& item : option_.shape_infos) {
@@ -380,8 +379,8 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
   return true;
 }
 
-std::unique_ptr<BaseBackend> OpenVINOBackend::Clone(void* stream,
-                                                    int device_id) {
+std::unique_ptr<BaseBackend> OpenVINOBackend::Clone(
+    RuntimeOption& runtime_option, void* stream, int device_id) {
   std::unique_ptr<BaseBackend> new_backend =
       utils::make_unique<OpenVINOBackend>();
   auto casted_backend = dynamic_cast<OpenVINOBackend*>(new_backend.get());
