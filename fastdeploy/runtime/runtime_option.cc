@@ -58,7 +58,7 @@ void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
 
 void RuntimeOption::UseTimVX() {
   device = Device::TIMVX;
-  paddle_lite_option.enable_timvx = true;
+  paddle_lite_option.device = device;
 }
 
 void RuntimeOption::UseKunlunXin(int kunlunxin_id, int l3_workspace_size,
@@ -68,7 +68,7 @@ void RuntimeOption::UseKunlunXin(int kunlunxin_id, int l3_workspace_size,
                                  bool adaptive_seqlen,
                                  bool enable_multi_stream) {
   device = Device::KUNLUNXIN;
-  paddle_lite_option.enable_kunlunxin = true;
+  paddle_lite_option.device = device;
   paddle_lite_option.device_id = kunlunxin_id;
   paddle_lite_option.kunlunxin_l3_workspace_size = l3_workspace_size;
   paddle_lite_option.kunlunxin_locked = locked;
@@ -81,7 +81,7 @@ void RuntimeOption::UseKunlunXin(int kunlunxin_id, int l3_workspace_size,
 
 void RuntimeOption::UseAscend() {
   device = Device::ASCEND;
-  paddle_lite_option.enable_ascend = true;
+  paddle_lite_option.device = device;
 }
 
 void RuntimeOption::UseSophgo() {
@@ -96,7 +96,8 @@ void RuntimeOption::SetExternalStream(void* external_stream) {
 void RuntimeOption::SetCpuThreadNum(int thread_num) {
   FDASSERT(thread_num > 0, "The thread_num must be greater than 0.");
   cpu_thread_num = thread_num;
-  paddle_lite_option.threads = thread_num;
+  paddle_lite_option.cpu_threads = thread_num;
+  ort_option.intra_op_num_threads = thread_num;
 }
 
 void RuntimeOption::SetOrtGraphOptLevel(int level) {
@@ -104,7 +105,7 @@ void RuntimeOption::SetOrtGraphOptLevel(int level) {
   auto valid_level = std::find(supported_level.begin(), supported_level.end(),
                                level) != supported_level.end();
   FDASSERT(valid_level, "The level must be -1, 0, 1, 2.");
-  ort_graph_opt_level = level;
+  ort_option.graph_optimization_level = level;
 }
 
 // use paddle inference backend
