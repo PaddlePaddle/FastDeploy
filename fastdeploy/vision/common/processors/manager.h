@@ -35,6 +35,12 @@ class FASTDEPLOY_DECL ProcessorManager {
 #endif
   }
 
+  void SetStream(MatBatch* mat_batch) {
+#ifdef WITH_GPU
+    mat_batch->SetStream(stream_);
+#endif
+  }
+
   void SyncStream() {
 #ifdef WITH_GPU
     FDASSERT(cudaStreamSynchronize(stream_) == cudaSuccess,
