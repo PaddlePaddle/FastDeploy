@@ -1,3 +1,4 @@
+English | [中文](../../../cn/faq/rknpu2/environment.md) 
 # FastDeploy RKNPU2 inference environment setup
 
 ## Introduction
