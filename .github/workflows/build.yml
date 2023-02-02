@@ -1,25 +1,7 @@
 name: Build
-on: [push, pull_request]
+on: [pull_request]
 
 jobs:
-  macOS-latest-cpp:
-    runs-on: macOS-latest
-
-    steps:
-      - name: Clone
-        uses: actions/checkout@v1
-
-      - name: Get CMake
-        uses: lukka/get-cmake@latest
-
-      - name: Build FastDeploy
-        run: |
-          mkdir build
-          cd build
-          cmake .. -DENABLE_ORT_BACKEND=ON -DENABLE_PADDLE_BACKEND=OFF -DENABLE_OPENVINO_BACKEND=OFF -DCMAKE_INSTALL_PREFIX=${PWD}/compiled_fastdeploy_sdk -DENABLE_VISION=ON -DENABLE_TEXT=ON
-          make -j12
-          make install
-          ls -l
   macOS-latest-py:
     runs-on: macos-latest
 
