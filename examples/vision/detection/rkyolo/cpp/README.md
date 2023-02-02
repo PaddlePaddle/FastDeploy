@@ -35,7 +35,7 @@ mkdir thirdpartys
 
 ### Compile and copy SDK to the thirdpartys folder
 
-Refer to [RK2 generation NPU deployment repository compilation](../../../../../../docs/cn/build_and_install/rknpu2.md). It will generate fastdeploy-0.0.3 directory in the build directory after compilation. Move it to the thirdpartys directory.
+Refer to [RK2 generation NPU deployment repository compilation](../../../../../docs/cn/build_and_install/rknpu2.md). It will generate fastdeploy-0.0.3 directory in the build directory after compilation. Move it to the thirdpartys directory.
 
 ### Copy model files and configuration files to the model folder
 In the process of Paddle dynamic graph model -> Paddle static graph model -> ONNX model, the ONNX file and the corresponding yaml configuration file will be generated. Please save the configuration file in the model folder.
@@ -66,4 +66,4 @@ cd ./build/install
 
 - [Model Description](../../)
 - [Python Deployment](../python)
-- [Vision Model Prediction Results](../../../../../../docs/api/vision_results/)
+- [Vision Model Prediction Results](../../../../../docs/api/vision_results/)
