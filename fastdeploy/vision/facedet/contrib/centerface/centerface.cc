@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/facedet/contrib/centerface/centerface.h"
-#include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy{

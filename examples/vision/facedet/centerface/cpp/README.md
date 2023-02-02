@@ -14,9 +14,9 @@ Taking the CPU inference on Linux as an example, the compilation test can be com
 mkdir build
 cd build
 # Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above 
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz # x.x.x > 1.0.2
-tar xvf fastdeploy-linux-x64-x.x.x.tgz # x.x.x > 1.0.2
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x # x.x.x > 1.0.2
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz # x.x.x > 1.0.4
+tar xvf fastdeploy-linux-x64-x.x.x.tgz # x.x.x > 1.0.4
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x # x.x.x > 1.0.4
 make -j
 
 # Download the official converted CenterFace model files and test images 
@@ -63,9 +63,7 @@ CenterFace model loading and initialization, among which model_file is the expor
 #### Predict Function
 
 > ```c++
-> CenterFace::Predict(cv::Mat* im, FaceDetectionResult* result,
->                 float conf_threshold = 0.3,
->                 float nms_iou_threshold = 0.5)
+> CenterFace::Predict(cv::Mat* im, FaceDetectionResult* result)
 > ```
 >
 > Model prediction interface. Input images and output detection results.
@@ -74,8 +72,6 @@ CenterFace model loading and initialization, among which model_file is the expor
 >
 > > * **im**: Input images in HWC or BGR format
 > > * **result**: Detection results, including detection box and confidence of each box. Refer to [Vision Model Prediction Result](../../../../../docs/api/vision_results/) for FaceDetectionResult
-> > * **conf_threshold**: Filtering threshold of detection box confidence
-> > * **nms_iou_threshold**: iou threshold during NMS processing
 
 - [Model Description](../../)
 - [Python Deployment](../python)

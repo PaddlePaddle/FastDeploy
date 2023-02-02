@@ -12,7 +12,7 @@ English | [简体中文](README_CN.md)
 For developers' testing, models exported by CenterFace are provided below. Developers can download them directly. (The accuracy in the following table is derived from the source official repository on WIDER FACE test set)
 | Model                                                               | Size    | Accuracy(Easy Set,Medium Set,Hard Set)  | Note |
 |:---------------------------------------------------------------- |:----- |:----- |:---- |
-| [CenterFace](https://bj.bcebos.com/paddlehub/fastdeploy/CenterFace.onnx) | 969KB | 93.2%,92.1%,87.3% | This model file is sourced from [CenterFace](https://github.com/Star-Clouds/CenterFace.git)，MIT license |
+| [CenterFace](https://bj.bcebos.com/paddlehub/fastdeploy/CenterFace.onnx) | 7.2MB | 93.2%,92.1%,87.3% | This model file is sourced from [CenterFace](https://github.com/Star-Clouds/CenterFace.git)，MIT license |
 
 
 ## Detailed Deployment Documents

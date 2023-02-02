@@ -48,7 +48,7 @@ CenterFace model loading and initialization, among which model_file is the expor
 ### predict function
 
 > ```python
-> CenterFace.predict(image_data, conf_threshold=0.3, nms_iou_threshold=0.5)
+> CenterFace.predict(image_data)
 > ```
 >
 > Model prediction interface. Input images and output detection results.
@@ -56,8 +56,6 @@ CenterFace model loading and initialization, among which model_file is the expor
 > **Parameter**
 >
 > > * **image_data**(np.ndarray): Input data in HWC or BGR format
-> > * **conf_threshold**(float):  Filtering threshold of detection box confidence
-> > * **nms_iou_threshold**(float): iou threshold during NMS processing
 
 
 > **Return**
@@ -69,10 +67,6 @@ CenterFace model loading and initialization, among which model_file is the expor
 Users can modify the following pre-processing parameters to their needs, which affects the final inference and deployment results
 
 > > * **size**(list[int]): This parameter changes the size of the resize used during preprocessing, containing two integer elements for [width, height] with default value [640, 640]
-> > * **padding_value**(list[float]): This parameter is used to change the padding value of images during resize, containing three floating-point elements that represent the value of three channels. Default value [114, 114, 114]
-> > * **is_no_pad**(bool): Specify whether to resize the image through padding or not. `is_no_pad=True` represents no paddling. Default `is_no_pad=False`
-> > * **is_mini_pad**(bool): This parameter sets the width and height of the image after resize to the value nearest to the `size` member variable and to the point where the padded pixel size is divisible by the `stride` member variable. Default `is_mini_pad=False`
-> > * **stride**(int): Used with the `is_mini_pad` member variable. Default `stride=32`
 
 ## Other Documents
 

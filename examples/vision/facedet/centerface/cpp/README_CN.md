@@ -13,9 +13,9 @@
 mkdir build
 cd build
 # 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz # x.x.x > 1.0.2
-tar xvf fastdeploy-linux-x64-x.x.x.tgz # x.x.x > 1.0.2
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x # x.x.x > 1.0.2
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz # x.x.x > 1.0.4
+tar xvf fastdeploy-linux-x64-x.x.x.tgz # x.x.x > 1.0.4
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x # x.x.x > 1.0.4
 make -j
 
 #下载官方转换好的CenterFace模型文件和测试图片
@@ -62,9 +62,7 @@ CenterFace模型加载和初始化，其中model_file为导出的ONNX模型格�
 #### Predict函数
 
 > ```c++
-> CenterFace::Predict(cv::Mat* im, FaceDetectionResult* result,
->                 float conf_threshold = 0.3,
->                 float nms_iou_threshold = 0.5)
+> CenterFace::Predict(cv::Mat* im, FaceDetectionResult* result)
 > ```
 >
 > 模型预测接口，输入图像直接输出检测结果。
@@ -73,8 +71,6 @@ CenterFace模型加载和初始化，其中model_file为导出的ONNX模型格�
 >
 > > * **im**: 输入图像，注意需为HWC，BGR格式
 > > * **result**: 检测结果，包括检测框，各个框的置信度, FaceDetectionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
-> > * **conf_threshold**: 检测框置信度过滤阈值
-> > * **nms_iou_threshold**: NMS处理过程中iou阈值
 
 - [模型介绍](../../)
 - [Python部署](../python)
