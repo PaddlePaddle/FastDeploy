@@ -139,4 +139,5 @@ void LiteBackend::ConfigureNNAdapter(const LiteBackendOption& option) {
 
   config_.set_nnadapter_dynamic_shape_info(option.nnadapter_dynamic_shape_info);
 }
+
 }  // namespace fastdeploy
