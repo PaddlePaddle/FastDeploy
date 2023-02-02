@@ -88,7 +88,6 @@ bool ResizeByShort::ImplByFlyCV(Mat* mat) {
 
 #ifdef ENABLE_CVCUDA
 bool ResizeByShort::ImplByCvCuda(Mat* mat) {
-  std::cout << "ResizeByShort cvcuda" << std::endl;
   // Prepare input tensor
   FDTensor* src = CreateCachedGpuInputTensor(mat);
   auto src_tensor = CreateCvCudaTensorWrapData(*src);
@@ -115,87 +114,7 @@ bool ResizeByShort::ImplByCvCuda(Mat* mat) {
   return true;
 }
 
-bool ResizeByShort::ImplByCvCuda(std::vector<Mat>* mats) {
-  std::cout << "ResizeByShort batch cvcuda" << std::endl;
-  // Prepare input batch
-  std::string tensor_name = Name() + "_cvcuda_src";
-  std::vector<FDTensor*> src_tensors;
-  for (size_t i = 0; i < mats->size(); ++i) {
-    FDTensor* src = CreateCachedGpuInputTensor(&(*mats)[i]);
-    src_tensors.push_back(src);
-    // src->PrintInfo();
-  }
-  nvcv::ImageBatchVarShape src_batch(4);
-  CreateCvCudaImageBatchVarShape(src_tensors, src_batch);
-  // for (size_t i = 0; i < src_tensors.size(); ++i) {
-  //   nvcv::ImageDataStridedCuda::Buffer buf;
-  //   buf.numPlanes = 1;
-  //   buf.planes[0].width = src_tensors[i]->Shape()[1] *
-  //   src_tensors[i]->Shape()[2]; buf.planes[0].height =
-  //   src_tensors[i]->Shape()[0]; buf.planes[0].rowStride = buf.planes[0].width
-  //   * FDDataTypeSize(src_tensors[i]->Dtype()); buf.planes[0].basePtr =
-  //   reinterpret_cast<NVCVByte*>(const_cast<void*>(src_tensors[i]->Data()));
-  //   nvcv::ImageWrapData nvimg{
-  //       nvcv::ImageDataStridedCuda{nvcv::ImageFormat{CreateCvCudaImageFormat(src_tensors[i]->Dtype(),
-  //       (int)src_tensors[i]->Shape()[2])}, buf}
-  //   };
-  //   src_batch.pushBack(nvimg);
-  // }
-
-  // Prepare output batch
-  tensor_name = Name() + "_cvcuda_dst";
-  std::vector<FDTensor*> dst_tensors;
-  for (size_t i = 0; i < mats->size(); ++i) {
-    Mat* mat = &(*mats)[i];
-    double scale = GenerateScale(mat->Width(), mat->Height());
-    int width = static_cast<int>(round(scale * mat->Width()));
-    int height = static_cast<int>(round(scale * mat->Height()));
-    mat->output_cache->Resize({height, width, mat->Channels()}, mat->Type(),
-                              "output_cache", Device::GPU);
-    dst_tensors.push_back(mat->output_cache);
-    // dst->PrintInfo();
-  }
-  nvcv::ImageBatchVarShape dst_batch(4);
-  CreateCvCudaImageBatchVarShape(dst_tensors, dst_batch);
-  // for (size_t i = 0; i < dst_tensors.size(); ++i) {
-  //   nvcv::ImageDataStridedCuda::Buffer buf;
-  //   buf.numPlanes = 1;
-  //   buf.planes[0].width = dst_tensors[i]->Shape()[1] *
-  //   dst_tensors[i]->Shape()[2]; buf.planes[0].height =
-  //   dst_tensors[i]->Shape()[0]; buf.planes[0].rowStride = buf.planes[0].width
-  //   * FDDataTypeSize(dst_tensors[i]->Dtype()); buf.planes[0].basePtr =
-  //   reinterpret_cast<NVCVByte*>(const_cast<void*>(dst_tensors[i]->Data()));
-  //   nvcv::ImageWrapData nvimg{
-  //       nvcv::ImageDataStridedCuda{nvcv::ImageFormat{CreateCvCudaImageFormat(dst_tensors[i]->Dtype(),
-  //       (int)dst_tensors[i]->Shape()[2])}, buf}
-  //   };
-  //   dst_batch.pushBack(nvimg);
-  // }
-
-  // CV-CUDA Interp value is compatible with OpenCV
-  // std::cout << std::hex << (void*)((*mats)[0].Stream()) << std::dec <<
-  // std::endl;
-  cvcuda::Resize resize_op;
-  resize_op((*mats)[0].Stream(), src_batch, dst_batch,
-            NVCVInterpolationType(interp_));
-
-  // FDASSERT(cudaStreamSynchronize((*mats)[0].Stream()) == cudaSuccess,
-  //          "[ERROR] Error occurs while sync cuda stream.");
-
-  for (size_t i = 0; i < mats->size(); ++i) {
-    Mat* mat = &(*mats)[i];
-    mat->SetTensor(dst_tensors[i]);
-    mat->SetWidth(dst_tensors[i]->Shape()[1]);
-    mat->SetHeight(dst_tensors[i]->Shape()[0]);
-    mat->device = Device::GPU;
-    mat->mat_type = ProcLib::CVCUDA;
-  }
-  return true;
-}
-
 bool ResizeByShort::ImplByCvCuda(MatBatch* mat_batch) {
-  std::cout << "ResizeByShort batch cvcuda" << std::endl;
-
   // TODO(wangxinyu): to support batched tensor as input
   FDASSERT(mat_batch->has_batched_tensor == false,
            "ResizeByShort doesn't support batched tensor as input for now.");
@@ -220,7 +139,6 @@ bool ResizeByShort::ImplByCvCuda(MatBatch* mat_batch) {
     mat->output_cache->Resize({height, width, mat->Channels()}, mat->Type(),
                               "output_cache", Device::GPU);
     dst_tensors.push_back(mat->output_cache);
-    // dst->PrintInfo();
   }
   nvcv::ImageBatchVarShape dst_batch(4);
   CreateCvCudaImageBatchVarShape(dst_tensors, dst_batch);
@@ -238,6 +156,8 @@ bool ResizeByShort::ImplByCvCuda(MatBatch* mat_batch) {
     mat->device = Device::GPU;
     mat->mat_type = ProcLib::CVCUDA;
   }
+  mat_batch->device = Device::GPU;
+  mat_batch->mat_type = ProcLib::CVCUDA;
   return true;
 }
 #endif

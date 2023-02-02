@@ -34,7 +34,6 @@ class FASTDEPLOY_DECL ResizeByShort : public Processor {
 #endif
 #ifdef ENABLE_CVCUDA
   bool ImplByCvCuda(Mat* mat);
-  bool ImplByCvCuda(std::vector<Mat>* mats);
   bool ImplByCvCuda(MatBatch* mat_batch);
 #endif
   std::string Name() { return "ResizeByShort"; }

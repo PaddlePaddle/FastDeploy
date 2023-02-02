@@ -87,18 +87,7 @@ bool CenterCrop::ImplByCvCuda(Mat* mat) {
   return true;
 }
 
-bool CenterCrop::ImplByCvCuda(std::vector<Mat>* mats) {
-  std::cout << "CenterCrop batch cvcuda" << std::endl;
-  for (size_t i = 0; i < mats->size(); ++i) {
-    if (ImplByCvCuda(&((*mats)[i])) != true) {
-      return false;
-    }
-  }
-  return true;
-}
-
 bool CenterCrop::ImplByCvCuda(MatBatch* mat_batch) {
-  std::cout << "CenterCrop batch cvcuda" << std::endl;
   for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
     if (ImplByCvCuda(&((*(mat_batch->mats))[i])) != true) {
       return false;

@@ -83,19 +83,8 @@ bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
 }
 
 bool NormalizeAndPermute::ImplByCuda(MatBatch* mat_batch) {
-  std::cout << "NormalizeAndPermute cuda" << std::endl;
-
-  // if (!CheckShapeConsistency(mats)) {
-  //   return false;
-  // }
-
-  // Mat* mat = &(*(mat_batch->mats))[0];
-
   // Prepare input tensor
-  // std::string tensor_name = Name() + "_cvcuda_src";
   FDTensor* src = CreateCachedGpuInputTensor(mat_batch);
-
-  src->PrintInfo();
 
   // Prepare output tensor
   mat_batch->output_cache->Resize(src->Shape(), FDDataType::FP32,
@@ -115,8 +104,6 @@ bool NormalizeAndPermute::ImplByCuda(MatBatch* mat_batch) {
   cudaMemcpy(gpu_beta_.Data(), beta_.data(), gpu_beta_.Nbytes(),
              cudaMemcpyHostToDevice);
 
-  // cudaStreamSynchronize(mat->Stream());
-
   int jobs =
       mat_batch->output_cache->Numel() / mat_batch->output_cache->shape[1];
   int threads = 256;
@@ -129,15 +116,10 @@ bool NormalizeAndPermute::ImplByCuda(MatBatch* mat_batch) {
       mat_batch->output_cache->shape[1], swap_rb_,
       mat_batch->output_cache->shape[0], jobs);
 
-  // cudaStreamSynchronize(mat->Stream());
-
-  mat_batch->output_cache->PrintInfo();
-
   mat_batch->SetTensor(mat_batch->output_cache);
   mat_batch->device = Device::GPU;
   mat_batch->layout = MatBatchLayout::NCHW;
   mat_batch->mat_type = ProcLib::CUDA;
-  mat_batch->has_batched_tensor = true;
   return true;
 }
 
