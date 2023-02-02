@@ -118,5 +118,13 @@ FastDeploy现在已经集成FlyCV, 用户可以在支持的硬件平台上使用
 
 
 ## 六.昇腾部署Demo参考
-- 华为昇腾NPU 上使用C++部署 PaddleClas 分类模型请参考：[PaddleClas 华为升腾NPU C++ 部署示例](../../../examples/vision/classification/paddleclas/cpp/README.md)
-- 华为昇腾NPU 上使用Python部署 PaddleClas 分类模型请参考：[PaddleClas 华为升腾NPU Python 部署示例](../../../examples/vision/classification/paddleclas/python/README.md)
+
+| 模型系列 | C++ 部署示例 | Python 部署示例 |
+| :-----------| :--------   | :--------------- |
+|   PaddleClas       |   [昇腾NPU C++ 部署示例](../../../examples/vision/classification/paddleclas/cpp/README_CN.md)       |    [昇腾NPU Python 部署示例](../../../examples/vision/classification/paddleclas/python/README_CN.md)          |  
+|   PaddleDetection  |      [昇腾NPU C++ 部署示例](../../../examples/vision/detection/paddledetection/cpp/README_CN.md)        |     [昇腾NPU Python 部署示例](../../../examples/vision/detection/paddledetection/python/README_CN.md)               |
+|   PaddleSeg        |      [昇腾NPU C++ 部署示例](../../../examples/vision/segmentation/paddleseg/cpp/README_CN.md)        |      [昇腾NPU Python 部署示例](../../../examples//vision/segmentation/paddleseg/python/README_CN.md)              |
+|   PaddleOCR        |     [昇腾NPU C++ 部署示例](../../../examples/vision/ocr/PP-OCRv3/cpp/README_CN.md)         |      [昇腾NPU Python 部署示例](../../../examples/vision//ocr/PP-OCRv3/python/README_CN.md)              |
+|   Yolov5           |      [昇腾NPU C++ 部署示例](../../../examples/vision/detection/yolov5/cpp/README_CN.md)       |       [昇腾NPU Python 部署示例](../../../examples/vision/sdetection/yolov5/python/README_CN.md)             |
+|   Yolov6           |      [昇腾NPU C++ 部署示例](../../../examples/vision/detection/yolov6/cpp/README_CN.md)        |       [昇腾NPU Python 部署示例](../../../examples/vision/detection/yolov6/python/README_CN.md)             |
+|   Yolov7           |      [昇腾NPU C++ 部署示例](../../../examples/vision/detection/yolov7/cpp/README_CN.md)        |       [昇腾NPU Python 部署示例](../../../examples/vision/detection/yolov7/python/README_CN.md)             |
