@@ -306,7 +306,7 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
 
   // from FDTensor to Ort Inputs
   for (size_t i = 0; i < inputs.size(); ++i) {
-    auto ort_value = CreateOrtValue(inputs[i], option_.use_gpu);
+    auto ort_value = CreateOrtValue(inputs[i], option_.device == Device::GPU);
     binding_->BindInput(inputs[i].name.c_str(), ort_value);
   }
 
