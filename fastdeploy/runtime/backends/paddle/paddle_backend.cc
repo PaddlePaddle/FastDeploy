@@ -92,23 +92,19 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
 bool PaddleBackend::InitFromPaddle(const std::string& model_buffer,
                                    const std::string& params_buffer,
                                    const PaddleBackendOption& option) {
-  // bool PaddleBackend::InitFromPaddle(const std::string& contents) {
   if (initialized_) {
     FDERROR << "PaddleBackend is already initlized, cannot initialize again."
             << std::endl;
     return false;
   }
-
-  // The input/output information get from predictor is not right, use
-  // PaddleReader instead now
-  std::string contents;
-
   config_.SetModelBuffer(model_buffer.c_str(), model_buffer.size(),
                          params_buffer.c_str(), params_buffer.size());
-  contents = model_buffer;
   config_.EnableMemoryOptim();
   BuildOption(option);
-  auto reader = paddle2onnx::PaddleReader(contents.c_str(), contents.size());
+  
+  // The input/output information get from predictor is not right, use
+  // PaddleReader instead now
+  auto reader = paddle2onnx::PaddleReader(model_buffer.c_str(), model_buffer.size());
   // If it's a quantized model, and use cpu with mkldnn, automaticaly switch to
   // int8 mode
   if (reader.is_quantize_model) {
