@@ -21,47 +21,19 @@ namespace fastdeploy {
 void RuntimeOption::SetModelPath(const std::string& model_path,
                                  const std::string& params_path,
                                  const ModelFormat& format) {
-  if (format == ModelFormat::PADDLE) {
-    model_file = model_path;
-    params_file = params_path;
-    model_format = ModelFormat::PADDLE;
-  } else if (format == ModelFormat::ONNX) {
-    model_file = model_path;
-    model_format = ModelFormat::ONNX;
-  } else if (format == ModelFormat::TORCHSCRIPT) {
-    model_file = model_path;
-    model_format = ModelFormat::TORCHSCRIPT;
-  } else {
-    FDASSERT(false,
-             "The model format only can be "
-             "ModelFormat::PADDLE/ModelFormat::ONNX/ModelFormat::TORCHSCRIPT.");
-  }
+  model_file = model_path;
+  params_file = params_path;
+  model_format = format;
+  model_from_memory_ = false;
 }
 
-void RuntimeOption::SetModelBuffer(const char* model_buffer,
-                                   size_t model_buffer_size,
-                                   const char* params_buffer,
-                                   size_t params_buffer_size,
+void RuntimeOption::SetModelBuffer(const std::string& model_buffer,
+                                   const std::string& params_buffer,
                                    const ModelFormat& format) {
-  model_buffer_size_ = model_buffer_size;
-  params_buffer_size_ = params_buffer_size;
+  model_file = model_buffer;
+  params_file = params_buffer;
+  model_format = format;
   model_from_memory_ = true;
-  if (format == ModelFormat::PADDLE) {
-    model_buffer_ = std::string(model_buffer, model_buffer + model_buffer_size);
-    params_buffer_ =
-        std::string(params_buffer, params_buffer + params_buffer_size);
-    model_format = ModelFormat::PADDLE;
-  } else if (format == ModelFormat::ONNX) {
-    model_buffer_ = std::string(model_buffer, model_buffer + model_buffer_size);
-    model_format = ModelFormat::ONNX;
-  } else if (format == ModelFormat::TORCHSCRIPT) {
-    model_buffer_ = std::string(model_buffer, model_buffer + model_buffer_size);
-    model_format = ModelFormat::TORCHSCRIPT;
-  } else {
-    FDASSERT(false,
-             "The model format only can be "
-             "ModelFormat::PADDLE/ModelFormat::ONNX/ModelFormat::TORCHSCRIPT.");
-  }
 }
 
 void RuntimeOption::UseGpu(int gpu_id) {
@@ -125,6 +97,7 @@ void RuntimeOption::SetCpuThreadNum(int thread_num) {
   FDASSERT(thread_num > 0, "The thread_num must be greater than 0.");
   cpu_thread_num = thread_num;
   paddle_lite_option.threads = thread_num;
+  ort_option.intra_op_num_threads = thread_num;
 }
 
 void RuntimeOption::SetOrtGraphOptLevel(int level) {
@@ -132,7 +105,7 @@ void RuntimeOption::SetOrtGraphOptLevel(int level) {
   auto valid_level = std::find(supported_level.begin(), supported_level.end(),
                                level) != supported_level.end();
   FDASSERT(valid_level, "The level must be -1, 0, 1, 2.");
-  ort_graph_opt_level = level;
+  ort_option.graph_optimization_level = level;
 }
 
 // use paddle inference backend
