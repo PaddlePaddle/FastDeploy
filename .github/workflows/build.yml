@@ -56,7 +56,7 @@ jobs:
         name: Run commands
         id: runcmd
         with:
-          arch: armv7
+          arch: aarch64
           distro: ubuntu18.04
           
       - name: Clone
