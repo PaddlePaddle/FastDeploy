@@ -237,4 +237,5 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs,
   }
   return true;
 }
+
 }  // namespace fastdeploy
