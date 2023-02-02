@@ -37,7 +37,7 @@ include(${PROJECT_SOURCE_DIR}/cmake/utils.cmake)
 # Set C++11 as standard for the whole project
 if(NOT MSVC)
   set(CMAKE_CXX_STANDARD 11)
-  set(CMAKE_CXX_FLAGS "-Wno-format")
+  set(CMAKE_CXX_FLAGS "-Wno-format -g0 -O3")
   add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
 endif(NOT MSVC)
 
@@ -149,6 +149,8 @@ get_osx_architecture()
 
 ##################################### Building: FastDeploy C++ SDK #######################################
 add_definitions(-DFASTDEPLOY_LIB)
+# set CMAKE_BUILD_TYPE to Release
+add_definitions(-DCMAKE_BUILD_TYPE=Release)
 # configure files before glob sources.
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h)
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/main.cc.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/main.cc)

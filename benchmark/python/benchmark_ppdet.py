@@ -19,6 +19,7 @@ import numpy as np
 import time
 from tqdm import tqdm
 
+
 def parse_arguments():
     import argparse
     import ast
@@ -43,12 +44,14 @@ def parse_arguments():
     parser.add_argument(
         "--device",
         default="cpu",
-        help="Type of inference device, support 'cpu', 'gpu', 'kunlunxin', 'ascend' etc.")
+        help="Type of inference device, support 'cpu', 'gpu', 'kunlunxin', 'ascend' etc."
+    )
     parser.add_argument(
         "--backend",
         type=str,
         default="default",
-        help="inference backend, default, ort, ov, trt, paddle, paddle_trt, lite.")
+        help="inference backend, default, ort, ov, trt, paddle, paddle_trt, lite."
+    )
     parser.add_argument(
         "--enable_trt_fp16",
         type=ast.literal_eval,
@@ -58,7 +61,7 @@ def parse_arguments():
         "--enable_lite_fp16",
         type=ast.literal_eval,
         default=False,
-        help="whether enable fp16 in lite backend")    
+        help="whether enable fp16 in lite backend")
     parser.add_argument(
         "--enable_collect_memory_info",
         type=ast.literal_eval,
@@ -130,7 +133,7 @@ def build_option(args):
         else:
             raise Exception(
                 "While inference with CPU, only support default/ort/lite/paddle now, {} is not supported.".
-                format(backend))    
+                format(backend))
     elif device == "ascend":
         option.use_ascend()
         if backend == "lite":
@@ -142,11 +145,11 @@ def build_option(args):
         else:
             raise Exception(
                 "While inference with CPU, only support default/lite now, {} is not supported.".
-                format(backend))                
+                format(backend))
     else:
         raise Exception(
-            "Only support device CPU/GPU/Kunlunxin/Ascend now, {} is not supported.".format(
-                device))
+            "Only support device CPU/GPU/Kunlunxin/Ascend now, {} is not supported.".
+            format(device))
 
     return option
 
