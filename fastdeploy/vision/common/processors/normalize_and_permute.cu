@@ -29,12 +29,6 @@ __global__ void NormalizeAndPermuteKernel(const uint8_t* src, float* dst,
   int n = idx / img_size;        // batch index
   int p = idx - (n * img_size);  // pixel index within the image
 
-  // if (swap_rb) {
-  //   uint8_t tmp = src[num_channel * idx];
-  //   src[num_channel * idx] = src[num_channel * idx + 2];
-  //   src[num_channel * idx + 2] = tmp;
-  // }
-
   for (int i = 0; i < num_channel; ++i) {
     int j = i;
     if (swap_rb) {
