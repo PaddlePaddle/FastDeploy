@@ -102,67 +102,22 @@ void PaddleClasPreprocessor::DisablePermute() {
 
 bool PaddleClasPreprocessor::Apply(FDMatBatch* image_batch,
                                    std::vector<FDTensor>* outputs) {
-  TimeCounter tc;
-  tc.Start();
-
-  // for (size_t i = 0; i < images->size(); ++i) {
-  //   for (size_t j = 0; j < processors_.size(); ++j) {
-  //     bool ret = false;
-  //     ret = (*(processors_[j].get()))(&((*images)[i]));
-  //     if (!ret) {
-  //       FDERROR << "Failed to processs image:" << i << " in "
-  //               << processors_[j]->Name() << "." << std::endl;
-  //       return false;
-  //     }
-  //   }
-  // }
-
   for (size_t j = 0; j < processors_.size(); ++j) {
-    if (!(*(processors_[j].get()))(image_batch)) {
+    ProcLib lib = ProcLib::DEFAULT;
+    if (initial_resize_on_cpu_ && j == 0 &&
+        processors_[j]->Name().find("Resize") == 0) {
+      lib = ProcLib::OPENCV;
+    }
+    if (!(*(processors_[j].get()))(image_batch, lib)) {
       FDERROR << "Failed to processs image in " << processors_[j]->Name() << "."
               << std::endl;
       return false;
     }
   }
 
-  auto images = image_batch->mats;
-
-  tc.End();
-  std::cout << "processors: " << tc.Duration() << std::endl;
-
-  tc.Start();
-
   outputs->resize(1);
-  // if ((*images)[0].Tensor()->Shape().size() == 4 &&
-  //     (*images)[0].device == Device::GPU) {
-  //   (*outputs)[0] = std::move(*((*images)[0].Tensor()));
-  //   (*outputs)[0].device_id = DeviceId();
-  //   return true;
-  // }
-  if (image_batch->has_batched_tensor) {
-    (*outputs)[0] = std::move(*(image_batch->Tensor()));
-    (*outputs)[0].device_id = DeviceId();
-    return true;
-  }
-
-  // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> tensors(images->size());
-  for (size_t i = 0; i < images->size(); ++i) {
-    (*images)[i].ShareWithTensor(&(tensors[i]));
-    tensors[i].ExpandDim(0);
-
-    tensors[i].PrintInfo();
-  }
-  if (tensors.size() == 1) {
-    (*outputs)[0] = std::move(tensors[0]);
-  } else {
-    function::Concat(tensors, &((*outputs)[0]), 0);
-  }
+  (*outputs)[0] = std::move(*(image_batch->Tensor()));
   (*outputs)[0].device_id = DeviceId();
-
-  tc.End();
-  std::cout << "concat: " << tc.Duration() << std::endl;
-  (*outputs)[0].PrintInfo();
   return true;
 }
 

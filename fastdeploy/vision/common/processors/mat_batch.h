@@ -25,12 +25,17 @@ enum MatBatchLayout { NHWC, NCHW };
 
 struct FASTDEPLOY_DECL MatBatch {
   MatBatch() = default;
+
+  // MatBatch is intialized with a list of mats,
+  // the data is stored in the mats separately.
+  // Call Tensor() function to get a batched 4-dimension tensor.
   explicit MatBatch(std::vector<Mat>* _mats) {
     mats = _mats;
     layout = MatBatchLayout::NHWC;
     mat_type = ProcLib::OPENCV;
   }
 
+  // Get the batched 4-dimension tensor.
   FDTensor* Tensor();
 
   void SetTensor(FDTensor* tensor);
@@ -39,8 +44,6 @@ struct FASTDEPLOY_DECL MatBatch {
 #ifdef WITH_GPU
   cudaStream_t stream = nullptr;
 #endif
-  // Currently, fd_tensor is only used by CUDA and CV-CUDA,
-  // OpenCV and FlyCV are not using it.
   FDTensor fd_tensor;
 
  public:
@@ -56,24 +59,17 @@ struct FASTDEPLOY_DECL MatBatch {
   MatBatchLayout layout = MatBatchLayout::NHWC;
   Device device = Device::CPU;
 
-  // False: the data is stored in the mats seperately
+  // False: the data is stored in the mats separately
   // True: the data is stored in the fd_tensor continuously in 4 dimensions
   bool has_batched_tensor = false;
 };
 
 typedef MatBatch FDMatBatch;
 
-// bool CheckShapeConsistency(std::vector<Mat>* mats);
-
-// Create an input tensor on GPU and save into input_cache.
-// If the Mat is on GPU, return the mat->Tensor() directly.
-// If the Mat is on CPU, then update the input cache tensor and copy the mat's
-// CPU tensor to this new GPU input cache tensor.
-// FDTensor* CreateCachedGpuInputTensor(Mat* mat);
-
-// // Create an input tensor on GPU with batch dimension
-// FDTensor* CreateCachedGpuInputTensor(std::vector<Mat>* mats);
-
+// Create a batched input tensor on GPU and save into input_cache.
+// If the MatBatch is on GPU, return the Tensor() directly.
+// If the MatBatch is on CPU, then copy the CPU tensors to GPU and get a GPU
+// batched input tensor.
 FDTensor* CreateCachedGpuInputTensor(MatBatch* mat_batch);
 
 }  // namespace vision

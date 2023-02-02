@@ -61,8 +61,16 @@ class FASTDEPLOY_DECL ProcessorManager {
   virtual bool Apply(FDMatBatch* image_batch,
                      std::vector<FDTensor>* outputs) = 0;
 
+  // When the first operator is Resize, and input image size is large,
+  // maybe it's better to run resize on CPU, because the HostToDevice memcpy is
+  // time consuming.
+  void InitialResizeOnCpu(bool v) {
+    initial_resize_on_cpu_ = v;
+  }
+
  protected:
   bool initialized_ = false;
+  bool initial_resize_on_cpu_ = false;
 
  private:
 #ifdef WITH_GPU

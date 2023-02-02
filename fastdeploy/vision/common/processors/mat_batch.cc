@@ -25,11 +25,33 @@ void MatBatch::SetStream(cudaStream_t s) {
 }
 #endif
 
-FDTensor* MatBatch::Tensor() { return &fd_tensor; }
+FDTensor* MatBatch::Tensor() {
+  if (has_batched_tensor) {
+    return &fd_tensor;
+  }
+  FDASSERT(CheckShapeConsistency(mats), "Mats shapes are not consistent.")
+  // Each mat has its own tensor,
+  // to get a batched tensor, we need copy these tensors to a batched tensor
+  FDTensor* src = (*mats)[0].Tensor();
+  auto new_shape = src->Shape();
+  new_shape.insert(new_shape.begin(), mats->size());
+  input_cache->Resize(new_shape, src->Dtype(), "batch_input_cache", device);
+  for (size_t i = 0; i < mats->size(); ++i) {
+    FDASSERT(device == (*mats)[i].Tensor()->device,
+             "Mats and MatBatch are not on the same device");
+    uint8_t* p = reinterpret_cast<uint8_t*>(input_cache->Data());
+    int num_bytes = (*mats)[i].Tensor()->Nbytes();
+    FDTensor::CopyBuffer(p + i * num_bytes, (*mats)[i].Tensor()->Data(),
+                         num_bytes, device, false);
+  }
+  SetTensor(input_cache);
+  return &fd_tensor;
+}
 
 void MatBatch::SetTensor(FDTensor* tensor) {
   fd_tensor.SetExternalData(tensor->Shape(), tensor->Dtype(), tensor->Data(),
                             tensor->device, tensor->device_id);
+  has_batched_tensor = true;
 }
 
 FDTensor* CreateCachedGpuInputTensor(MatBatch* mat_batch) {
@@ -38,42 +60,14 @@ FDTensor* CreateCachedGpuInputTensor(MatBatch* mat_batch) {
   FDASSERT(CheckShapeConsistency(mats), "Mats shapes are not consistent.")
   FDTensor* src = (*mats)[0].Tensor();
   if (mat_batch->device == Device::GPU) {
-    if (mat_batch->has_batched_tensor) {
-      return mat_batch->Tensor();
-    }
-    // Mats on GPU, but each mat has its own tensor,
-    // to get a batch tensor, we need to copy these tensors to a batch tensor
-    auto new_shape = src->Shape();
-    new_shape.insert(new_shape.begin(), mat_batch->mats->size());
-
-    mat_batch->input_cache->Resize(new_shape, src->Dtype(), "batch_input_cache",
-                                   Device::GPU);
-    mat_batch->input_cache->PrintInfo();
-    for (size_t i = 0; i < mats->size(); ++i) {
-      uint8_t* p = reinterpret_cast<uint8_t*>(mat_batch->input_cache->Data());
-      int num_bytes = (*mats)[i].Tensor()->Nbytes();
-      FDASSERT(cudaMemcpyAsync(p + i * num_bytes, (*mats)[i].Tensor()->Data(),
-                               num_bytes, cudaMemcpyDeviceToDevice,
-                               (*mats)[i].Stream()) == 0,
-               "[ERROR] Error occurs while copy memory from GPU to GPU.");
-    }
-    return mat_batch->input_cache;
+    return mat_batch->Tensor();
   } else if (mat_batch->device == Device::CPU) {
-    // Mats on CPU, we need copy these tensors from CPU to GPU
-    FDASSERT(src->Shape().size() == 3, "The CPU tensor must has 3 dims.")
-    auto new_shape = src->Shape();
-    new_shape.insert(new_shape.begin(), mats->size());
-    mat_batch->input_cache->Resize(new_shape, src->Dtype(), "batch_input_cache",
-                                   Device::GPU);
+    // Mats on CPU, we need copy them to GPU and then get a batched GPU tensor
     for (size_t i = 0; i < mats->size(); ++i) {
-      uint8_t* p = reinterpret_cast<uint8_t*>(mat_batch->input_cache->Data());
-      int num_bytes = (*mats)[i].Tensor()->Nbytes();
-      FDASSERT(cudaMemcpyAsync(p + i * num_bytes, (*mats)[i].Tensor()->Data(),
-                               num_bytes, cudaMemcpyHostToDevice,
-                               (*mats)[i].Stream()) == 0,
-               "[ERROR] Error occurs while copy memory from CPU to GPU.");
+      FDTensor* tensor = CreateCachedGpuInputTensor(&(*mats)[i]);
+      (*mats)[i].SetTensor(tensor);
     }
-    return mat_batch->input_cache;
+    return mat_batch->Tensor();
   } else {
     FDASSERT(false, "FDMat is on unsupported device: %d", src->device);
   }
