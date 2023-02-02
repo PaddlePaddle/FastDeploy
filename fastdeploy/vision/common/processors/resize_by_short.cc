@@ -125,7 +125,7 @@ bool ResizeByShort::ImplByCvCuda(MatBatch* mat_batch) {
     FDTensor* src = CreateCachedGpuInputTensor(&(*(mat_batch->mats))[i]);
     src_tensors.push_back(src);
   }
-  nvcv::ImageBatchVarShape src_batch(4);
+  nvcv::ImageBatchVarShape src_batch(mat_batch->mats->size());
   CreateCvCudaImageBatchVarShape(src_tensors, src_batch);
 
   // Prepare output batch
@@ -140,7 +140,7 @@ bool ResizeByShort::ImplByCvCuda(MatBatch* mat_batch) {
                               "output_cache", Device::GPU);
     dst_tensors.push_back(mat->output_cache);
   }
-  nvcv::ImageBatchVarShape dst_batch(4);
+  nvcv::ImageBatchVarShape dst_batch(mat_batch->mats->size());
   CreateCvCudaImageBatchVarShape(dst_tensors, dst_batch);
 
   // CV-CUDA Interp value is compatible with OpenCV
