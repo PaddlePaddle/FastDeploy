@@ -117,6 +117,12 @@ In end-to-end model inference, the pre-processing and post-processing phases are
 
 
 ## Deployment demo reference
-- Deploying PaddleClas Classification Model on Huawei Ascend NPU using C++ please refer to: [PaddleClas Huawei Ascend NPU C++ Deployment Example](../../../examples/vision/classification/paddleclas/cpp/README.md)
-
-- Deploying PaddleClas classification model on Huawei Ascend NPU using Python please refer to: [PaddleClas Huawei Ascend NPU Python Deployment Example](../../../examples/vision/classification/paddleclas/python/README.md)
+| Model | C++ Example | Python Example |
+| :-----------| :--------   | :--------------- |
+|   PaddleClas       |   [Ascend NPU C++ Example](../../../examples/vision/classification/paddleclas/cpp/README_CN.md)       |    [Ascend NPU Python Example](../../../examples/vision/classification/paddleclas/python/README_CN.md)          |  
+|   PaddleDetection  |      [Ascend NPU C++ Example](../../../examples/vision/detection/paddledetection/cpp/README_CN.md)        |     [Ascend NPU Python Example](../../../examples/vision/detection/paddledetection/python/README_CN.md)               |
+|   PaddleSeg        |      [Ascend NPU C++ Example](../../../examples/vision/segmentation/paddleseg/cpp/README_CN.md)        |      [Ascend NPU Python Example](../../../examples//vision/segmentation/paddleseg/python/README_CN.md)              |
+|   PaddleOCR        |     [Ascend NPU C++ Example](../../../examples/vision/ocr/PP-OCRv3/cpp/README_CN.md)         |      [Ascend NPU Python Example](../../../examples/vision//ocr/PP-OCRv3/python/README_CN.md)              |
+|   Yolov5           |      [Ascend NPU C++ Example](../../../examples/vision/detection/yolov5/cpp/README_CN.md)       |       [Ascend NPU Python Example](../../../examples/vision/detection/yolov5/python/README_CN.md)             |
+|   Yolov6           |      [Ascend NPU C++ Example](../../../examples/vision/detection/yolov6/cpp/README_CN.md)        |       [Ascend NPU Python Example](../../../examples/vision/detection/yolov6/python/README_CN.md)             |
+|   Yolov7           |      [Ascend NPU C++ Example](../../../examples/vision/detection/yolov7/cpp/README_CN.md)        |       [Ascend NPU Python Example](../../../examples/vision/detection/yolov7/python/README_CN.md)             |
