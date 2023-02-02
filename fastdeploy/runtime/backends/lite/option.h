@@ -15,11 +15,29 @@
 #pragma once
 
 #include "fastdeploy/core/fd_type.h"
+// https://github.com/PaddlePaddle/Paddle-Lite/issues/8290
+#if (defined(WITH_LITE_STATIC) && defined(WITH_STATIC_LIB))
+// Whether to output some warning messages when using the 
+// FastDepoy static library, default OFF. These messages
+// are only reserve for debugging.
+#if defined(WITH_STATIC_WARNING)
+#warning You are using the FastDeploy static library. \
+We will automatically add some registration codes for \
+ops, kernels and passes for Paddle Lite.
+#endif
+#if !defined(WITH_STATIC_LIB_AT_COMPILING)
+#include "paddle_use_ops.h"       // NOLINT
+#include "paddle_use_kernels.h"   // NOLINT
+#include "paddle_use_passes.h"    // NOLINT
+#endif
+#endif
+
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
-#include <map>
+#include <map>  
+
 namespace fastdeploy {
 
 /*! Paddle Lite power mode for mobile device. */

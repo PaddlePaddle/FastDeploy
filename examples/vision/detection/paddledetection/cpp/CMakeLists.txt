@@ -42,6 +42,9 @@ target_link_libraries(infer_yolov6_demo ${FASTDEPLOY_LIBS})
 add_executable(infer_yolov7_demo ${PROJECT_SOURCE_DIR}/infer_yolov7.cc)
 target_link_libraries(infer_yolov7_demo ${FASTDEPLOY_LIBS})
 
+add_executable(infer_yolov8_demo ${PROJECT_SOURCE_DIR}/infer_yolov8.cc)
+target_link_libraries(infer_yolov8_demo ${FASTDEPLOY_LIBS})
+
 add_executable(infer_rtmdet_demo ${PROJECT_SOURCE_DIR}/infer_rtmdet.cc)
 target_link_libraries(infer_rtmdet_demo ${FASTDEPLOY_LIBS})
 

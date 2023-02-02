@@ -30,6 +30,9 @@ FastDeploy Streamer（FDStreamer）是一个AI多媒体流处理框架，以Pipe
 docker pull nvcr.io/nvidia/deepstream:6.1.1-devel
 ```
 
+### CPU
+- GSTreamer 1.14+
+
 ## 编译和运行
 
 1. [编译FastDeploy](../docs/cn/build_and_install), 或直接下载[FastDeploy预编译库](../docs/cn/build_and_install/download_prebuilt_libraries.md)
@@ -46,9 +49,12 @@ cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 ```
 
+编译选项：
+- ENABLE_DEEPSTREAM，是否使用NVIDIA DeepStream，非NVIDIA GPU的环境需关闭此选项，默认ON
+
 3. 编译和运行Example
 
 | Example | 简介 |
 |:--|:--|
 | [PP-YOLOE](./examples/ppyoloe) | 多路视频接入，PP-YOLOE目标检测，NVTracker跟踪，硬编解码，写入mp4文件 |
-| [Video Decoder](./examples/video_decoder) | 视频硬解码 |  
+| [Video Decoder](./examples/video_decoder) | 视频硬解码和软解码 |  

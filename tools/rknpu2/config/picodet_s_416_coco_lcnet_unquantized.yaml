@@ -1,0 +1,17 @@
+mean:
+  -
+    - 127.5
+    - 127.5
+    - 127.5
+std:
+  -
+    - 127.5
+    - 127.5
+    - 127.5
+model_path: ./picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet.onnx
+outputs_nodes:
+  - 'p2o.Div.79'
+  - 'p2o.Concat.9'
+do_quantization: False
+dataset:
+output_folder: "./picodet_s_416_coco_lcnet"

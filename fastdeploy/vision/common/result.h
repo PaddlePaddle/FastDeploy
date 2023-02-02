@@ -67,7 +67,7 @@ struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
  */
 struct FASTDEPLOY_DECL Mask : public BaseResult {
   /// Mask data buffer
-  std::vector<int32_t> data;
+  std::vector<uint8_t> data;
   /// Shape of mask
   std::vector<int64_t> shape;  // (H,W) ...
   ResultType type = ResultType::MASK;
@@ -107,7 +107,7 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   /** \brief For instance segmentation model, `masks` is the predict mask for all the deteced objects
    */
   std::vector<Mask> masks;
-  //// Shows if the DetectionResult has mask
+  /// Shows if the DetectionResult has mask
   bool contain_masks = false;
 
   ResultType type = ResultType::DETECTION;
