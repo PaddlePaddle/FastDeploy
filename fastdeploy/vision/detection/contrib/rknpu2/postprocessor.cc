@@ -141,7 +141,6 @@ int RKYOLOPostprocessor::ProcessFP16(float* input, int* anchor, int grid_h,
           } else {
             limit_score = box_conf_f32 * class_prob_f32;
           }
-          // printf("limit score: %f", limit_score);
           if (limit_score > conf_threshold_) {
             float box_x, box_y, box_w, box_h;
             if (anchor_per_branch_ == 1) {
