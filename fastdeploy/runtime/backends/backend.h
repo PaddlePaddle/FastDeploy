@@ -21,6 +21,7 @@
 
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/core/fd_type.h"
+#include "fastdeploy/runtime/runtime_option.h"
 
 namespace fastdeploy {
 
