@@ -47,3 +47,38 @@ jobs:
           python setup.py build
           python setup.py bdist_wheel
           ls -l
+  linux-aarch64-py:
+    runs-on: ubuntu-18.04
+    name: Build on ubuntu-18.04 aarch64
+    steps:
+      - uses: actions/checkout@v3
+      - uses: uraimo/run-on-arch-action@v2
+        name: Run commands
+        id: runcmd
+        with:
+          arch: armv7
+          distro: ubuntu18.04
+          
+      - name: Clone
+        uses: actions/checkout@v1
+
+      - name: Get CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Get Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Build FastDeploy
+        working-directory: ./python
+        run: |
+          export ENABLE_ORT_BACKEND=ON
+          export ENABLE_PADDLE_BACKEND=OFF
+          export ENABLE_OPENVINO_BACKEND=OFF
+          export ENABLE_VISION=ON
+          export ENABLE_TEXT=ON
+          python -m pip install wheel
+          python setup.py build
+          python setup.py bdist_wheel
+          ls -l
