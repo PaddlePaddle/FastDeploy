@@ -360,14 +360,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   bool enable_pinned_memory = false;
 
-  // ======Only for ORT Backend========
-  // -1 means use default value by ort
-  // 0: ORT_DISABLE_ALL 1: ORT_ENABLE_BASIC 2: ORT_ENABLE_EXTENDED 3:
-  // ORT_ENABLE_ALL
-  int ort_graph_opt_level = -1;
-  int ort_inter_op_num_threads = -1;
-  // 0: ORT_SEQUENTIAL 1: ORT_PARALLEL
-  int ort_execution_mode = -1;
+  OrtBackendOption ort_option;
 
   // ======Only for Paddle Backend=====
   bool pd_enable_mkldnn = true;
