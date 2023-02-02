@@ -142,6 +142,7 @@ class TritonPythonModel:
             results = self.postprocessor.run([infer_outputs], im_infos)
             batch_rec_texts = []
             batch_rec_scores = []
+            batch_box_list = []
             for i_batch in range(len(results)):
 
                 cls_labels = []
@@ -158,6 +159,9 @@ class TritonPythonModel:
                         crop_img = get_rotate_crop_image(ori_imgs[i_batch],
                                                          box)
                         image_list.append(crop_img)
+
+                batch_box_list.append(box_list)
+
                 cls_pre_tensors = self.cls_preprocessor.run(image_list)
                 cls_dlpack_tensor = cls_pre_tensors[0].to_dlpack()
                 cls_input_tensor = pb_utils.Tensor.from_dlpack(
@@ -220,8 +224,10 @@ class TritonPythonModel:
                     batch_rec_texts, dtype=np.object_))
             out_tensor_1 = pb_utils.Tensor(self.output_names[1],
                                            np.array(batch_rec_scores))
+            out_tensor_2 = pb_utils.Tensor(self.output_names[2],
+                                           np.array(batch_box_list))
             inference_response = pb_utils.InferenceResponse(
-                output_tensors=[out_tensor_0, out_tensor_1])
+                output_tensors=[out_tensor_0, out_tensor_1, out_tensor_2])
             responses.append(inference_response)
         return responses
 
