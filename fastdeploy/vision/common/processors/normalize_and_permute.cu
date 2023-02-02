@@ -46,7 +46,6 @@ __global__ void NormalizeAndPermuteKernel(const uint8_t* src, float* dst,
 }
 
 bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
-  std::cout << "NormalizeAndPermute cuda" << std::endl;
   // Prepare input tensor
   FDTensor* src = CreateCachedGpuInputTensor(mat);
 

@@ -47,6 +47,8 @@ struct FASTDEPLOY_DECL MatBatch {
   FDTensor fd_tensor;
 
  public:
+  // When using CV-CUDA/CUDA, please set input/output cache,
+  // refer to manager.cc
   FDTensor* input_cache;
   FDTensor* output_cache;
 #ifdef WITH_GPU

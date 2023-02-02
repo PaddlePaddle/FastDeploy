@@ -96,14 +96,6 @@ struct FASTDEPLOY_DECL Mat {
   // Set fd_tensor
   void SetTensor(FDTensor* tensor);
 
-  void SetInputCache(FDTensor* tensor) {
-    input_cache = tensor;
-  }
-
-  void SetOutputCache(FDTensor* tensor) {
-    output_cache = tensor;
-  }
-
  private:
   int channels;
   int height;
@@ -127,8 +119,11 @@ struct FASTDEPLOY_DECL Mat {
   void SetChannels(int s) { channels = s; }
   void SetWidth(int w) { width = w; }
   void SetHeight(int h) { height = h; }
-  FDTensor* input_cache;
-  FDTensor* output_cache;
+
+  // When using CV-CUDA/CUDA, please set input/output cache,
+  // refer to manager.cc
+  FDTensor* input_cache = nullptr;
+  FDTensor* output_cache = nullptr;
 #ifdef WITH_GPU
   cudaStream_t Stream() const { return stream; }
   void SetStream(cudaStream_t s) { stream = s; }
@@ -182,9 +177,5 @@ bool CheckShapeConsistency(std::vector<Mat>* mats);
 // If the Mat is on CPU, then update the input cache tensor and copy the mat's
 // CPU tensor to this new GPU input cache tensor.
 FDTensor* CreateCachedGpuInputTensor(Mat* mat);
-
-// Create an input tensor on GPU with batch dimension
-FDTensor* CreateCachedGpuInputTensor(std::vector<Mat>* mats);
-
 }  // namespace vision
 }  // namespace fastdeploy

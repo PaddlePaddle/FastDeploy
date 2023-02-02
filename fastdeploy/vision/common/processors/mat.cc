@@ -282,55 +282,5 @@ FDTensor* CreateCachedGpuInputTensor(Mat* mat) {
   return nullptr;
 }
 
-FDTensor* CreateCachedGpuInputTensor(std::vector<Mat>* mats) {
-#ifdef WITH_GPU
-  Mat* mat = &(*mats)[0];
-  FDTensor* src = mat->Tensor();
-  if (src->device == Device::GPU) {
-    // Mats on GPU, but each mat has its own tensor,
-    // to get a batch tensor, we need to copy these tensors to a batch tensor
-    if (src->Shape().size() == 3) {
-      auto new_shape = src->Shape();
-      new_shape.insert(new_shape.begin(), mats->size());
-
-      mat->input_cache->Resize(new_shape, src->Dtype(), "input_cache",
-                               Device::GPU);
-      mat->input_cache->PrintInfo();
-      for (size_t i = 0; i < mats->size(); ++i) {
-        uint8_t* p = reinterpret_cast<uint8_t*>(mat->input_cache->Data());
-        int num_bytes = (*mats)[i].Tensor()->Nbytes();
-        FDASSERT(cudaMemcpyAsync(p + i * num_bytes, (*mats)[i].Tensor()->Data(),
-                                 num_bytes, cudaMemcpyDeviceToDevice,
-                                 (*mats)[i].Stream()) == 0,
-                 "[ERROR] Error occurs while copy memory from GPU to GPU.");
-      }
-      return mat->input_cache;
-    }
-    return src;
-  } else if (src->device == Device::CPU) {
-    // Mats on CPU, we need copy these tensors from CPU to GPU
-    FDASSERT(src->Shape().size() == 3, "The CPU tensor must has 3 dims.")
-    auto new_shape = src->Shape();
-    new_shape.insert(new_shape.begin(), mats->size());
-    mat->input_cache->Resize(new_shape, src->Dtype(), "input_cache",
-                             Device::GPU);
-    for (size_t i = 0; i < mats->size(); ++i) {
-      uint8_t* p = reinterpret_cast<uint8_t*>(mat->input_cache->Data());
-      int num_bytes = (*mats)[i].Tensor()->Nbytes();
-      FDASSERT(cudaMemcpyAsync(p + i * num_bytes, (*mats)[i].Tensor()->Data(),
-                               num_bytes, cudaMemcpyHostToDevice,
-                               (*mats)[i].Stream()) == 0,
-               "[ERROR] Error occurs while copy memory from CPU to GPU.");
-    }
-    return mat->input_cache;
-  } else {
-    FDASSERT(false, "FDMat is on unsupported device: %d", src->device);
-  }
-#else
-  FDASSERT(false, "FastDeploy didn't compile with WITH_GPU.");
-#endif
-  return nullptr;
-}
-
 }  // namespace vision
 }  // namespace fastdeploy
