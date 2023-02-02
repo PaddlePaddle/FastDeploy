@@ -13,8 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/text/uie/model.h"
-#include "fastdeploy/function/concat.h"
-#include "fastdeploy/function/split.h"
+
 #include <algorithm>
 #include <codecvt>
 #include <locale>
@@ -23,6 +22,8 @@
 
 #include "fast_tokenizer/pretokenizers/pretokenizer.h"
 #include "fast_tokenizer/utils/utf8.h"
+#include "fastdeploy/function/concat.h"
+#include "fastdeploy/function/split.h"
 
 namespace fastdeploy {
 namespace text {
@@ -169,12 +170,13 @@ UIEModel::UIEModel(const std::string& model_file,
                    const fastdeploy::RuntimeOption& custom_option,
                    const fastdeploy::ModelFormat& model_format,
                    SchemaLanguage schema_language)
-    : max_length_(max_length), position_prob_(position_prob),
-      schema_language_(schema_language), batch_size_(batch_size),
+    : max_length_(max_length),
+      position_prob_(position_prob),
+      schema_language_(schema_language),
+      batch_size_(batch_size),
       tokenizer_(vocab_file) {
   runtime_option = custom_option;
-  runtime_option.model_format = model_format;
-  runtime_option.SetModelPath(model_file, params_file);
+  runtime_option.SetModelPath(model_file, params_file, model_format);
   initialized = Initialize();
   SetSchema(schema);
   tokenizer_.EnableTruncMethod(
@@ -190,12 +192,13 @@ UIEModel::UIEModel(const std::string& model_file,
                    const fastdeploy::RuntimeOption& custom_option,
                    const fastdeploy::ModelFormat& model_format,
                    SchemaLanguage schema_language)
-    : max_length_(max_length), position_prob_(position_prob),
-      schema_language_(schema_language), batch_size_(batch_size),
+    : max_length_(max_length),
+      position_prob_(position_prob),
+      schema_language_(schema_language),
+      batch_size_(batch_size),
       tokenizer_(vocab_file) {
   runtime_option = custom_option;
-  runtime_option.model_format = model_format;
-  runtime_option.SetModelPath(model_file, params_file);
+  runtime_option.SetModelPath(model_file, params_file, model_format);
   initialized = Initialize();
   SetSchema(schema);
   tokenizer_.EnableTruncMethod(
@@ -210,12 +213,13 @@ UIEModel::UIEModel(const std::string& model_file,
                    const fastdeploy::RuntimeOption& custom_option,
                    const fastdeploy::ModelFormat& model_format,
                    SchemaLanguage schema_language)
-    : max_length_(max_length), position_prob_(position_prob),
-      schema_language_(schema_language), batch_size_(batch_size),
+    : max_length_(max_length),
+      position_prob_(position_prob),
+      schema_language_(schema_language),
+      batch_size_(batch_size),
       tokenizer_(vocab_file) {
   runtime_option = custom_option;
-  runtime_option.model_format = model_format;
-  runtime_option.SetModelPath(model_file, params_file);
+  runtime_option.SetModelPath(model_file, params_file, model_format);
   initialized = Initialize();
   SetSchema(schema);
   tokenizer_.EnableTruncMethod(

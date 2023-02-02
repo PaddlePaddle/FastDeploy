@@ -44,7 +44,7 @@ unzip face_demo.zip
 </div>
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
-- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
 ## InsightFace C++接口
 
@@ -113,7 +113,7 @@ VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
 > **参数**
 >
 > > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 检测结果，包括检测框，各个框的置信度, FaceRecognitionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > * **result**: 检测结果，包括检测框，各个框的置信度, FaceRecognitionResult说明参考[视觉模型预测结果](../../../../../../docs/api/vision_results/)
 
 ### 修改预处理以及后处理的参数
 预处理和后处理的参数的需要通过修改InsightFaceRecognitionPostprocessor，InsightFaceRecognitionPreprocessor的成员变量来进行修改。

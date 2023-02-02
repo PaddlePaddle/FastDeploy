@@ -83,7 +83,7 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 
 > **返回**
 >
-> > 返回`fastdeploy.vision.FaceRecognitionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > 返回`fastdeploy.vision.FaceRecognitionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../../docs/api/vision_results/)
 
 ### 类成员属性
 #### 预处理参数
@@ -104,5 +104,5 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 
 - [InsightFace 模型介绍](..)
 - [InsightFace C++部署](../cpp)
-- [模型预测结果说明](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [模型预测结果说明](../../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../../../docs/cn/faq/how_to_change_backend.md)
