@@ -16,6 +16,7 @@
 - [晶晨A311D部署环境](a311d.md)
 - [昆仑芯XPU部署环境](kunlunxin.md)
 - [华为昇腾部署环境](huawei_ascend.md)
+- [算能硬件部署环境](sophgo.md)
 
 
 ## FastDeploy编译选项说明

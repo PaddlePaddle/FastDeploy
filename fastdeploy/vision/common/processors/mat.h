@@ -17,6 +17,10 @@
 #include "fastdeploy/vision/common/processors/proc_lib.h"
 #include "opencv2/core/core.hpp"
 
+#ifdef WITH_GPU
+#include <cuda_runtime_api.h>
+#endif
+
 namespace fastdeploy {
 namespace vision {
 
@@ -60,24 +64,7 @@ struct FASTDEPLOY_DECL Mat {
     mat_type = ProcLib::OPENCV;
   }
 
-  cv::Mat* GetOpenCVMat() {
-    if (mat_type == ProcLib::OPENCV) {
-      return &cpu_mat;
-    } else if (mat_type == ProcLib::FLYCV) {
-#ifdef ENABLE_FLYCV
-      // Just a reference to fcv_mat, zero copy. After you
-      // call this method, cpu_mat and fcv_mat will point
-      // to the same memory buffer.
-      cpu_mat = ConvertFlyCVMatToOpenCV(fcv_mat);
-      mat_type = ProcLib::OPENCV;
-      return &cpu_mat;
-#else
-      FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
-#endif
-    } else {
-      FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
-    }
-  }
+  cv::Mat* GetOpenCVMat();
 
 #ifdef ENABLE_FLYCV
   void SetMat(const fcv::Mat& mat) {
@@ -103,6 +90,12 @@ struct FASTDEPLOY_DECL Mat {
 
   void* Data();
 
+  // Get fd_tensor
+  FDTensor* Tensor();
+
+  // Set fd_tensor
+  void SetTensor(FDTensor* tensor);
+
  private:
   int channels;
   int height;
@@ -111,6 +104,12 @@ struct FASTDEPLOY_DECL Mat {
 #ifdef ENABLE_FLYCV
   fcv::Mat fcv_mat;
 #endif
+#ifdef WITH_GPU
+  cudaStream_t stream = nullptr;
+#endif
+  // Currently, fd_tensor is only used by CUDA and CV-CUDA,
+  // OpenCV and FlyCV are not using it.
+  FDTensor fd_tensor;
 
  public:
   FDDataType Type();
@@ -120,6 +119,10 @@ struct FASTDEPLOY_DECL Mat {
   void SetChannels(int s) { channels = s; }
   void SetWidth(int w) { width = w; }
   void SetHeight(int h) { height = h; }
+#ifdef WITH_GPU
+  cudaStream_t Stream() const { return stream; }
+  void SetStream(cudaStream_t s) { stream = s; }
+#endif
 
   // Transfer the vision::Mat to FDTensor
   void ShareWithTensor(FDTensor* tensor);

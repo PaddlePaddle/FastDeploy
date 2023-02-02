@@ -78,8 +78,9 @@ std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
     out << "ModelFormat::SOPHGO";
   } else if (format == ModelFormat::TORCHSCRIPT) {
     out << "ModelFormat::TORCHSCRIPT";
+  } else {
+    out << "UNKNOWN-ModelFormat";
   }
-  out << "UNKNOWN-ModelFormat";
   return out;
 }
 

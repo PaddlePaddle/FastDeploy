@@ -53,6 +53,12 @@ bool DBDetector::Initialize() {
   return true;
 }
 
+std::unique_ptr<DBDetector> DBDetector::Clone() const {
+  std::unique_ptr<DBDetector> clone_model = utils::make_unique<DBDetector>(DBDetector(*this));
+  clone_model->SetRuntime(clone_model->CloneRuntime());
+  return clone_model;
+}
+
 bool DBDetector::Predict(const cv::Mat& img,
                          std::vector<std::array<int, 8>>* boxes_result) {
   std::vector<std::vector<std::array<int, 8>>> det_results;

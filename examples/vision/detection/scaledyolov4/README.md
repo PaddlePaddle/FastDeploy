@@ -11,7 +11,7 @@ English | [简体中文](README_CN.md)
 
 
   Visit the official [ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4) github repository, follow the guidelines to download the `scaledyolov4.pt` model, and employ `models/export.py` to get the file in `onnx` format.  If you have any problems with the exported `onnx` model, refer to [ScaledYOLOv4#401](https://github.com/WongKinYiu/ScaledYOLOv4/issues/401) for solution.
-  
+
 
   ```bash
   # Download the ScaledYOLOv4 model file
@@ -38,8 +38,6 @@ For developers' testing, models exported by ScaledYOLOv4 are provided below. Dev
 | [ScaledYOLOv4-P6+BoF](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p6_.onnx) | 487MB | - | This model file is sourced from [ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
 | [ScaledYOLOv4-P7](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p7.onnx) | 1.1GB | - | This model file is sourced from [ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
 
-
-
 ## Detailed Deployment Documents
 
 - [Python Deployment](python)
@@ -48,4 +46,4 @@ For developers' testing, models exported by ScaledYOLOv4 are provided below. Dev
 
 ## Release Note
 
-- Document and code are based on [ScaledYOLOv4 CommitID: 6768003](https://github.com/WongKinYiu/ScaledYOLOv4/commit/676800364a3446900b9e8407bc880ea2127b3415) 
+- Document and code are based on [ScaledYOLOv4 CommitID: 6768003](https://github.com/WongKinYiu/ScaledYOLOv4/commit/676800364a3446900b9e8407bc880ea2127b3415)

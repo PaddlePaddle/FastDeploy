@@ -175,3 +175,17 @@ entity: 华夏   label: LOC   pos: [14, 15]
 ## 配置修改
 
 当前分类任务(ernie_seqcls_model/config.pbtxt)默认配置在CPU上运行OpenVINO引擎; 序列标注任务默认配置在GPU上运行Paddle引擎。如果要在CPU/GPU或其他推理引擎上运行, 需要修改配置，详情请参考[配置文档](../../../../serving/docs/zh_CN/model_configuration.md)
+
+## 使用VisualDL进行可视化部署
+
+可以使用VisualDL进行[Serving可视化部署](../../../../serving/docs/zh_CN/vdl_management.md)，上述启动服务、配置修改以及客户端请求的操作都可以基于VisualDL进行。
+
+通过VisualDL的可视化界面对ERNIE 3.0进行服务化部署只需要如下三步：
+```text
+1. 载入模型库：./text/ernie-3.0/serving/models
+2. 下载模型资源文件：点击ernie_seqcls_model模型，点击版本号1添加预训练模型，选择文本分类模型ernie_3.0_ernie_seqcls_model进行下载。点击ernie_tokencls_model模型，点击版本号1添加预训练模型，选择文本分类模型ernie_tokencls_model进行下载。
+3. 启动服务：点击启动服务按钮，输入启动参数。
+```
+ <p align="center">
+  <img src="https://user-images.githubusercontent.com/22424850/211708353-507d6038-b754-4520-884b-1156703a44c6.gif" width="100%"/>
+</p>

@@ -148,7 +148,7 @@ const postConfig = {thresh: 0.5};
 await model.predict(Config);
 ```
 
-以OCR文本检测 demo为例，修改文本检测后处理的参数实现扩大文本检测框的效果，修改OCR web demo中执行[模型预测代码](https://github.com/PaddlePaddle/FastDeploy/tree/develop/examples/application/web_demo/src/pages/cv/ocr/TextRecognition/TextRecognition.vue#L99)，即：
+以OCR文本检测 demo为例，修改文本检测后处理的参数实现扩大文本检测框的效果，修改OCR web demo中执行[模型预测代码](https://github.com/PaddlePaddle/FastDeploy/tree/develop/examples/application/js/web_demo/src/pages/cv/ocr/TextRecognition/TextRecognition.vue#L99)，即：
 
 ```
 const res = await ocr.recognize(img, { canvas: canvas.value });

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/detection/ppdet/preprocessor.h"
+
 #include "fastdeploy/function/concat.h"
 #include "fastdeploy/function/pad.h"
 #include "yaml-cpp/yaml.h"
@@ -89,11 +90,9 @@ bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig() {
       // Do nothing, do permute as the last operation
       has_permute = true;
       continue;
-      // processors_.push_back(std::make_shared<HWC2CHW>());
     } else if (op_name == "Pad") {
       auto size = op["size"].as<std::vector<int>>();
       auto value = op["fill_value"].as<std::vector<float>>();
-      processors_.push_back(std::make_shared<Cast>("float"));
       processors_.push_back(
           std::make_shared<PadToSize>(size[1], size[0], value));
     } else if (op_name == "PadStride") {
@@ -126,7 +125,7 @@ bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images,
     FDERROR << "The preprocessor is not initialized." << std::endl;
     return false;
   }
-  if (images->size() == 0) {
+  if (images->empty()) {
     FDERROR << "The size of input images should be greater than 0."
             << std::endl;
     return false;
@@ -146,9 +145,9 @@ bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images,
   // All the tensor will pad to the max size to compose a batched tensor
   std::vector<int> max_hw({-1, -1});
 
-  float* scale_factor_ptr =
+  auto* scale_factor_ptr =
       reinterpret_cast<float*>((*outputs)[1].MutableData());
-  float* im_shape_ptr = reinterpret_cast<float*>((*outputs)[2].MutableData());
+  auto* im_shape_ptr = reinterpret_cast<float*>((*outputs)[2].MutableData());
   for (size_t i = 0; i < images->size(); ++i) {
     int origin_w = (*images)[i].Width();
     int origin_h = (*images)[i].Height();
@@ -208,18 +207,22 @@ bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images,
 }
 void PaddleDetPreprocessor::DisableNormalize() {
   this->disable_normalize_ = true;
-  // the DisableNormalize function will be invalid if the configuration file is loaded during preprocessing
+  // the DisableNormalize function will be invalid if the configuration file is
+  // loaded during preprocessing
   if (!BuildPreprocessPipelineFromConfig()) {
-    FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
+    FDERROR << "Failed to build preprocess pipeline from configuration file."
+            << std::endl;
   }
 }
 void PaddleDetPreprocessor::DisablePermute() {
   this->disable_permute_ = true;
-  // the DisablePermute function will be invalid if the configuration file is loaded during preprocessing
+  // the DisablePermute function will be invalid if the configuration file is
+  // loaded during preprocessing
   if (!BuildPreprocessPipelineFromConfig()) {
-    FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
+    FDERROR << "Failed to build preprocess pipeline from configuration file."
+            << std::endl;
   }
 }
-} // namespace detection
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace detection
+}  // namespace vision
+}  // namespace fastdeploy

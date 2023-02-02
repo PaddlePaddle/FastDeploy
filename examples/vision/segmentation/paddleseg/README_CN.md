@@ -1,34 +1,47 @@
-[English](README.md) | 简体中文
-# 视觉模型部署
+# PaddleSeg 模型部署
 
-本目录下提供了各类视觉模型的部署，主要涵盖以下任务类型
+## 模型版本说明
 
-| 任务类型           | 说明                                  | 预测结果结构体                                                                          |
-|:-------------- |:----------------------------------- |:-------------------------------------------------------------------------------- |
-| Detection      | 目标检测，输入图像，检测图像中物体位置，并返回检测框坐标及类别和置信度 | [DetectionResult](../../docs/api/vision_results/detection_result.md)       |
-| Segmentation   | 语义分割，输入图像，给出图像中每个像素的分类及置信度          | [SegmentationResult](../../docs/api/vision_results/segmentation_result.md) |
-| Classification | 图像分类，输入图像，给出图像的分类结果和置信度             | [ClassifyResult](../../docs/api/vision_results/classification_result.md)   |
-| FaceDetection | 人脸检测，输入图像，检测图像中人脸位置，并返回检测框坐标及人脸关键点             | [FaceDetectionResult](../../docs/api/vision_results/face_detection_result.md)   |
-| FaceAlignment |  人脸对齐(人脸关键点检测)，输入图像，返回人脸关键点            | [FaceAlignmentResult](../../docs/api/vision_results/face_alignment_result.md)   |
-| KeypointDetection   | 关键点检测，输入图像，返回图像中人物行为的各个关键点坐标和置信度         | [KeyPointDetectionResult](../../docs/api/vision_results/keypointdetection_result.md) |
-| FaceRecognition | 人脸识别，输入图像，返回可用于相似度计算的人脸特征的embedding            | [FaceRecognitionResult](../../docs/api/vision_results/face_recognition_result.md)   |
-| Matting | 抠图，输入图像，返回图片的前景每个像素点的Alpha值            | [MattingResult](../../docs/api/vision_results/matting_result.md)   |
-| OCR | 文本框检测，分类，文本框内容识别，输入图像，返回文本框坐标，文本框的方向类别以及框内的文本内容            | [OCRResult](../../docs/api/vision_results/ocr_result.md)   |
-| MOT | 多目标跟踪，输入图像，检测图像中物体位置，并返回检测框坐标，对象id及类别置信度        | [MOTResult](../../docs/api/vision_results/mot_result.md)   |
-| HeadPose | 头部姿态估计，返回头部欧拉角            | [HeadPoseResult](../../docs/api/vision_results/headpose_result.md)   |
+- [PaddleSeg develop](https://github.com/PaddlePaddle/PaddleSeg/tree/develop)
 
-## FastDeploy API设计
+目前FastDeploy支持如下模型的部署 
 
-视觉模型具有较有统一任务范式，在设计API时（包括C++/Python），FastDeploy将视觉模型的部署拆分为四个步骤
+- [U-Net系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/configs/unet/README.md)
+- [PP-LiteSeg系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/configs/pp_liteseg/README.md)
+- [PP-HumanSeg系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/contrib/PP-HumanSeg/README.md)
+- [FCN系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/configs/fcn/README.md)
+- [DeepLabV3系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/configs/deeplabv3/README.md)
 
-- 模型加载
-- 图像预处理
-- 模型推理
-- 推理结果后处理
+【注意】如你部署的为**PP-Matting**、**PP-HumanMatting**以及**ModNet**请参考[Matting模型部署](../../matting)
 
-FastDeploy针对飞桨的视觉套件，以及外部热门模型，提供端到端的部署服务，用户只需准备模型，按以下步骤即可完成整个模型的部署
+## 准备PaddleSeg部署模型
 
-- 加载模型
-- 调用`predict`接口
+PaddleSeg模型导出，请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export_cn.md)  
 
-FastDeploy在各视觉模型部署时，也支持一键切换后端推理引擎，详情参阅[如何切换模型推理引擎](../../docs/cn/faq/how_to_change_backend.md)。
+**注意**
+- PaddleSeg导出的模型包含`model.pdmodel`、`model.pdiparams`和`deploy.yaml`三个文件，FastDeploy会从yaml文件中获取模型在推理时需要的预处理信息
+
+## 下载预训练模型
+
+为了方便开发者的测试，下面提供了PaddleSeg导出的部分模型
+- without-argmax导出方式为：**不指定**`--input_shape`，**指定**`--output_op none`
+- with-argmax导出方式为：**不指定**`--input_shape`，**指定**`--output_op argmax`
+
+开发者可直接下载使用。
+
+| 模型                                                               | 参数文件大小    |输入Shape |  mIoU | mIoU (flip) | mIoU (ms+flip) |
+|:---------------------------------------------------------------- |:----- |:----- | :----- | :----- | :----- |
+| [Unet-cityscapes-with-argmax](https://bj.bcebos.com/paddlehub/fastdeploy/Unet_cityscapes_with_argmax_infer.tgz) \| [Unet-cityscapes-without-argmax](https://bj.bcebos.com/paddlehub/fastdeploy/Unet_cityscapes_without_argmax_infer.tgz)  | 52MB | 1024x512 | 65.00% | 66.02% | 66.89% |
+| [PP-LiteSeg-B(STDC2)-cityscapes-with-argmax](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer.tgz) \| [PP-LiteSeg-B(STDC2)-cityscapes-without-argmax](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.tgz) | 31MB  | 1024x512 | 79.04% |	79.52% | 79.85% |
+|[PP-HumanSegV1-Lite-with-argmax(通用人像分割模型)](https://bj.bcebos.com/paddlehub/fastdeploy/Portrait_PP_HumanSegV1_Lite_with_argmax_infer.tgz) \| [PP-HumanSegV1-Lite-without-argmax(通用人像分割模型)](https://bj.bcebos.com/paddlehub/fastdeploy/PP_HumanSegV1_Lite_infer.tgz) |  543KB | 192x192 | 86.2% | - | - |
+|[PP-HumanSegV2-Lite-with-argmax(通用人像分割模型)](https://bj.bcebos.com/paddlehub/fastdeploy/PP_HumanSegV2_Lite_192x192_with_argmax_infer.tgz) \| [PP-HumanSegV2-Lite-without-argmax(通用人像分割模型)](https://bj.bcebos.com/paddlehub/fastdeploy/PP_HumanSegV2_Lite_192x192_infer.tgz) |  12MB | 192x192 | 92.52% | - | - |
+| [PP-HumanSegV2-Mobile-with-argmax(通用人像分割模型)](https://bj.bcebos.com/paddlehub/fastdeploy/PP_HumanSegV2_Mobile_192x192_with_argmax_infer.tgz) \| [PP-HumanSegV2-Mobile-without-argmax(通用人像分割模型)](https://bj.bcebos.com/paddlehub/fastdeploy/PP_HumanSegV2_Mobile_192x192_infer.tgz) |  29MB | 192x192 | 93.13% | - | - |
+|[PP-HumanSegV1-Server-with-argmax(通用人像分割模型)](https://bj.bcebos.com/paddlehub/fastdeploy/PP_HumanSegV1_Server_with_argmax_infer.tgz) \| [PP-HumanSegV1-Server-without-argmax(通用人像分割模型)](https://bj.bcebos.com/paddlehub/fastdeploy/PP_HumanSegV1_Server_infer.tgz) |  103MB | 512x512 | 96.47% | - | - |
+| [Portait-PP-HumanSegV2-Lite-with-argmax(肖像分割模型)](https://bj.bcebos.com/paddlehub/fastdeploy/Portrait_PP_HumanSegV2_Lite_256x144_with_argmax_infer.tgz) \| [Portait-PP-HumanSegV2-Lite-without-argmax(肖像分割模型)](https://bj.bcebos.com/paddlehub/fastdeploy/Portrait_PP_HumanSegV2_Lite_256x144_infer.tgz) |  3.6M | 256x144 | 96.63% | - | - |
+| [FCN-HRNet-W18-cityscapes-with-argmax](https://bj.bcebos.com/paddlehub/fastdeploy/FCN_HRNet_W18_cityscapes_with_argmax_infer.tgz) \| [FCN-HRNet-W18-cityscapes-without-argmax](https://bj.bcebos.com/paddlehub/fastdeploy/FCN_HRNet_W18_cityscapes_without_argmax_infer.tgz)(暂时不支持ONNXRuntime的GPU推理) |  37MB | 1024x512 | 78.97% | 79.49% | 79.74% |
+| [Deeplabv3-ResNet101-OS8-cityscapes-with-argmax](https://bj.bcebos.com/paddlehub/fastdeploy/Deeplabv3_ResNet101_OS8_cityscapes_with_argmax_infer.tgz) \| [Deeplabv3-ResNet101-OS8-cityscapes-without-argmax](https://bj.bcebos.com/paddlehub/fastdeploy/Deeplabv3_ResNet101_OS8_cityscapes_without_argmax_infer.tgz) |  150MB | 1024x512 | 79.90% | 80.22% | 80.47% |
+
+## 详细部署文档
+
+- [Python部署](python)
+- [C++部署](cpp)

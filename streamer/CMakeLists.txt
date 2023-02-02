@@ -40,8 +40,6 @@ if(ENABLE_DEEPSTREAM)
   link_directories(/opt/nvidia/deepstream/deepstream/lib/)
   list(APPEND ALL_STREAMER_SRCS ${DEEPSTREAM_SRCS})
   list(APPEND DEPEND_LIBS nvdsgst_meta nvds_meta)
-else()
-  message(FATAL_ERROR "Currently, DeepStream is required, we will make it optional later.")
 endif()
 
 # Link the yaml-cpp in system path, because deepstream also depends on yaml-cpp,

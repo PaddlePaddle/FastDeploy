@@ -36,7 +36,6 @@ For developers' testing, models exported by YOLOR are provided below. Developers
 | [YOLOR-D6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-570-640-640.onnx) | 580MB | - | This model file is sourced from [YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
 | [YOLOR-D6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-573-640-640.onnx) | 580MB | - | This model file is sourced from [YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
 
-
 ## Detailed Deployment Documents
 
 - [Python Deployment](python)

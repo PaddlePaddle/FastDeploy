@@ -61,7 +61,7 @@ endif(WIN32)
 message("FASTTOKENIZER_COMPILE_LIB = ${FASTTOKENIZER_COMPILE_LIB}")
 
 set(FASTTOKENIZER_URL_BASE "https://bj.bcebos.com/paddlenlp/fast_tokenizer/")
-set(FASTTOKENIZER_VERSION "1.0.0")
+set(FASTTOKENIZER_VERSION "1.0.1")
 
 # Set download url
 if(WIN32)
