@@ -56,6 +56,11 @@ class BaseBackend {
 
   virtual bool Initialized() const { return initialized_; }
 
+  virtual bool Init(const RuntimeOption& option) {
+    FDERROR << "Not Implement Yet." << std::endl;
+    return false;
+  }
+
   // Get number of inputs of the model
   virtual int NumInputs() const = 0;
   // Get number of outputs of the model

@@ -45,7 +45,7 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
   if (option.execution_mode >= 0) {
     session_options_.SetExecutionMode(ExecutionMode(option.execution_mode));
   }
-  if (option.use_gpu) {
+  if (option.device == Device::GPU) {
     auto all_providers = Ort::GetAvailableProviders();
     bool support_cuda = false;
     std::string providers_msg = "";
@@ -60,10 +60,10 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
                    "support GPU, the available providers are "
                 << providers_msg << "will fallback to CPUExecutionProvider."
                 << std::endl;
-      option_.use_gpu = false;
+      option_.device = Device::CPU;
     } else {
       OrtCUDAProviderOptions cuda_options;
-      cuda_options.device_id = option.gpu_id;
+      cuda_options.device_id = option.device_id;
       if (option.external_stream_) {
         cuda_options.has_user_compute_stream = 1;
         cuda_options.user_compute_stream = option.external_stream_;
@@ -71,6 +71,44 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
       session_options_.AppendExecutionProvider_CUDA(cuda_options);
     }
   }
+}
+
+bool OrtBackend::Init(const RuntimeOption& option) {
+  if (option.device != Device::CPU && option.device != Device::GPU) {
+    FDERROR
+        << "Backend::ORT only supports Device::CPU/Device::GPU, but now its "
+        << option.device << "." << std::endl;
+    return false;
+  }
+  OrtBackendOption ort_option = option.ort_option;
+  ort_option.device = option.device;
+  ort_option.device_id = option.device_id;
+  ort_option.external_stream_ = option.external_stream_;
+
+  if (option.model_format == ModelFormat::PADDLE) {
+    if (option.model_from_memory_) {
+      return InitFromPaddle(option.model_file, option.params_file, ort_option);
+    }
+    std::string model_buffer, params_buffer;
+    FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
+             "Failed to read model file.");
+    FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
+             "Failed to read parameters file.");
+    return InitFromPaddle(model_buffer, params_buffer, ort_option);
+  } else if (option.model_format == ModelFormat::ONNX) {
+    if (option.model_from_memory_) {
+      return InitFromOnnx(option.model_file, ort_option);
+    }
+    std::string model_buffer;
+    FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
+             "Failed to read model file.");
+    return InitFromOnnx(model_buffer, ort_option);
+  } else {
+    FDERROR << "Only support Paddle/ONNX model format for OrtBackend."
+            << std::endl;
+    return false;
+  }
+  return false;
 }
 
 bool OrtBackend::InitFromPaddle(const std::string& model_buffer,
@@ -221,7 +259,7 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
 
   // from FDTensor to Ort Inputs
   for (size_t i = 0; i < inputs.size(); ++i) {
-    auto ort_value = CreateOrtValue(inputs[i], option_.use_gpu);
+    auto ort_value = CreateOrtValue(inputs[i], option_.device == Device::GPU);
     binding_->BindInput(inputs[i].name.c_str(), ort_value);
   }
 
@@ -297,7 +335,7 @@ void OrtBackend::InitCustomOperators() {
   if (custom_operators_.size() == 0) {
     MultiClassNmsOp* multiclass_nms = new MultiClassNmsOp{};
     custom_operators_.push_back(multiclass_nms);
-    if (option_.use_gpu) {
+    if (option_.device == Device::GPU) {
       AdaptivePool2dOp* adaptive_pool2d =
           new AdaptivePool2dOp{"CUDAExecutionProvider"};
       custom_operators_.push_back(adaptive_pool2d);

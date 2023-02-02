@@ -97,6 +97,7 @@ void RuntimeOption::SetCpuThreadNum(int thread_num) {
   FDASSERT(thread_num > 0, "The thread_num must be greater than 0.");
   cpu_thread_num = thread_num;
   paddle_lite_option.threads = thread_num;
+  ort_option.intra_op_num_threads = thread_num;
 }
 
 void RuntimeOption::SetOrtGraphOptLevel(int level) {
@@ -104,7 +105,7 @@ void RuntimeOption::SetOrtGraphOptLevel(int level) {
   auto valid_level = std::find(supported_level.begin(), supported_level.end(),
                                level) != supported_level.end();
   FDASSERT(valid_level, "The level must be -1, 0, 1, 2.");
-  ort_graph_opt_level = level;
+  ort_option.graph_optimization_level = level;
 }
 
 // use paddle inference backend
