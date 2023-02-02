@@ -353,33 +353,31 @@ make
 ### 为代码添加注释
 为了方便用户理解代码，我们需要为新增代码添加注释，添加注释方法可参考如下示例。
 - C++ 代码
-您需要在resnet.h文件中为函数和变量增加注释，有如下三种注释方式，具体可参考[resnet.h](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-69128489e918f305c208476ba793d8167e77de2aa7cadf5dcbac30da448bd28e)。
+您需要在resnet.h文件中为函数和变量增加注释，有如下三种注释方式，具体可参考[yolov7face.h](https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/vision/facedet/contrib/yolov7face/yolov7face.h)。
 
 ```C++
 /** \brief Predict for the input "im", the result will be saved in "result".
 *
 * \param[in] im Input image for inference.
 * \param[in] result Saving the inference result.
-* \param[in] topk The length of return values, e.g., if topk==2, the result will include the 2 most possible class label for input image.
 */
-virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
+virtual bool Predict(cv::Mat& im, FaceDetectionResult* result);
 /// Tuple of (width, height)
 std::vector<int> size;
-/*! @brief Initialize for ResNet model, assign values to the global variables and call InitRuntime()
+/*! @brief Initialize for YOLOv7Face model, assign values to the global variables and call InitRuntime()
 */
 bool Initialize();
 ```
 - Python 代码
-你需要为resnet.py文件中的函数和变量增加适当的注释，示例如下，具体可参考[resnet.py](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-a4dc5ec2d450e91f1c03819bf314c238b37ac678df56d7dea3aab7feac10a157)。
+你需要为yolov7face.py文件中的函数和变量增加适当的注释，示例如下，具体可参考[yolov7face.py](https://github.com/PaddlePaddle/FastDeploy/tree/develop/python/fastdeploy/vision/facedet/contrib/yolov7face.py)。
 
 ```python  
-  def predict(self, input_image, topk=1):
-    """Classify an input image
-    :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
-    :param topk: (int)The topk result by the classify confidence score, default 1
-    :return: ClassifyResult
-    """
-    return self._model.predict(input_image, topk)
+    def predict(self, input_image):
+         """Detect the location and key points of human faces from an input image
+         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+         :return: FaceDetectionResult
+         """
+         return self._model.predict(input_image)
 ```
 
 对于集成模型过程中的其他文件，您也可以对实现的细节添加适当的注释说明。
