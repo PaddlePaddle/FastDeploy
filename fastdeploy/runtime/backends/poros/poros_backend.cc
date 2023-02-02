@@ -13,9 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/runtime/backends/poros/poros_backend.h"
-#ifdef ENABLE_BENCHMARK
-#include "fastdeploy/utils/perf.h"
-#endif
+
 #include <sys/time.h>
 
 namespace fastdeploy {

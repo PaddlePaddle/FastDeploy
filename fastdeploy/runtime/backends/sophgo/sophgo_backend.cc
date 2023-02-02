@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/runtime/backends/sophgo/sophgo_backend.h"
-#ifdef ENABLE_BENCHMARK
-#include "fastdeploy/utils/perf.h"
-#endif
+
 #include <assert.h>
 
 namespace fastdeploy {

@@ -73,7 +73,7 @@ class RKNPU2Backend : public BaseBackend {
   std::vector<TensorInfo> GetOutputInfos() override;
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
-             
+
  private:
   // The object of rknn context.
   rknn_context ctx{};

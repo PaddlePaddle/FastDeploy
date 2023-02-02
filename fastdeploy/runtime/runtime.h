@@ -98,7 +98,7 @@ struct FASTDEPLOY_DECL Runtime {
   bool Infer(std::vector<FDTensor>& input_tensors,
              std::vector<FDTensor>* output_tensors,
              double* mean_time_of_pure_backend,
-             int repeat = 1); // NOLINT
+             int repeat = 100); // NOLINT
 #endif    
 
  private:
