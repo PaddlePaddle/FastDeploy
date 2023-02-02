@@ -56,6 +56,11 @@ class BaseBackend {
 
   virtual bool Initialized() const { return initialized_; }
 
+  virtual bool Init(const RuntimeOption& option) {
+    FDERROR << "Not Implement Yet." << std::endl;
+    return false;
+  }
+
   // Get number of inputs of the model
   virtual int NumInputs() const = 0;
   // Get number of outputs of the model
@@ -76,7 +81,8 @@ class BaseBackend {
                      bool copy_to_fd = true) = 0;
   // Optional: For those backends which can share memory
   // while creating multiple inference engines with same model file
-  virtual std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+  virtual std::unique_ptr<BaseBackend> Clone(RuntimeOption &runtime_option,
+                                             void *stream = nullptr,
                                              int device_id = -1) {
     FDERROR << "Clone no support" << std::endl;
     return nullptr;
