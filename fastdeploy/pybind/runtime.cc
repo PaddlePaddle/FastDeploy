@@ -87,10 +87,6 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("cpu_thread_num", &RuntimeOption::cpu_thread_num)
       .def_readwrite("device_id", &RuntimeOption::device_id)
       .def_readwrite("device", &RuntimeOption::device)
-      .def_readwrite("ort_graph_opt_level", &RuntimeOption::ort_graph_opt_level)
-      .def_readwrite("ort_inter_op_num_threads",
-                     &RuntimeOption::ort_inter_op_num_threads)
-      .def_readwrite("ort_execution_mode", &RuntimeOption::ort_execution_mode)
       .def_readwrite("trt_max_shape", &RuntimeOption::trt_max_shape)
       .def_readwrite("trt_opt_shape", &RuntimeOption::trt_opt_shape)
       .def_readwrite("trt_min_shape", &RuntimeOption::trt_min_shape)
