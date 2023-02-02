@@ -21,7 +21,19 @@ namespace utils {
 
 // The implementation refers to
 // https://github.com/PaddlePaddle/PaddleDetection/blob/release/2.4/deploy/cpp/src/utils.cc
-void NMS(DetectionResult* result, float iou_threshold) {
+void NMS(DetectionResult* result, float iou_threshold,
+         std::vector<int>* index) {
+  // get sorted score indices
+  std::vector<int> sorted_indices;
+  if (index != nullptr) {
+    std::map<float, int, std::greater<float>> score_map;
+    for (size_t i = 0; i < result->scores.size(); ++i) {
+      score_map.insert(std::pair<float, int>(result->scores[i], i));
+    }
+    for (auto iter : score_map) {
+      sorted_indices.push_back(iter.second);
+    }
+  }
   utils::SortDetectionResult(result);
 
   std::vector<float> area_of_boxes(result->boxes.size());
@@ -63,6 +75,9 @@ void NMS(DetectionResult* result, float iou_threshold) {
     result->boxes.emplace_back(backup.boxes[i]);
     result->scores.push_back(backup.scores[i]);
     result->label_ids.push_back(backup.label_ids[i]);
+    if (index != nullptr) {
+      index->push_back(sorted_indices[i]);
+    }
   }
 }
 

@@ -21,47 +21,19 @@ namespace fastdeploy {
 void RuntimeOption::SetModelPath(const std::string& model_path,
                                  const std::string& params_path,
                                  const ModelFormat& format) {
-  if (format == ModelFormat::PADDLE) {
-    model_file = model_path;
-    params_file = params_path;
-    model_format = ModelFormat::PADDLE;
-  } else if (format == ModelFormat::ONNX) {
-    model_file = model_path;
-    model_format = ModelFormat::ONNX;
-  } else if (format == ModelFormat::TORCHSCRIPT) {
-    model_file = model_path;
-    model_format = ModelFormat::TORCHSCRIPT;
-  } else {
-    FDASSERT(false,
-             "The model format only can be "
-             "ModelFormat::PADDLE/ModelFormat::ONNX/ModelFormat::TORCHSCRIPT.");
-  }
+  model_file = model_path;
+  params_file = params_path;
+  model_format = format;
+  model_from_memory_ = false;
 }
 
-void RuntimeOption::SetModelBuffer(const char* model_buffer,
-                                   size_t model_buffer_size,
-                                   const char* params_buffer,
-                                   size_t params_buffer_size,
+void RuntimeOption::SetModelBuffer(const std::string& model_buffer,
+                                   const std::string& params_buffer,
                                    const ModelFormat& format) {
-  model_buffer_size_ = model_buffer_size;
-  params_buffer_size_ = params_buffer_size;
+  model_file = model_buffer;
+  params_file = params_buffer;
+  model_format = format;
   model_from_memory_ = true;
-  if (format == ModelFormat::PADDLE) {
-    model_buffer_ = std::string(model_buffer, model_buffer + model_buffer_size);
-    params_buffer_ =
-        std::string(params_buffer, params_buffer + params_buffer_size);
-    model_format = ModelFormat::PADDLE;
-  } else if (format == ModelFormat::ONNX) {
-    model_buffer_ = std::string(model_buffer, model_buffer + model_buffer_size);
-    model_format = ModelFormat::ONNX;
-  } else if (format == ModelFormat::TORCHSCRIPT) {
-    model_buffer_ = std::string(model_buffer, model_buffer + model_buffer_size);
-    model_format = ModelFormat::TORCHSCRIPT;
-  } else {
-    FDASSERT(false,
-             "The model format only can be "
-             "ModelFormat::PADDLE/ModelFormat::ONNX/ModelFormat::TORCHSCRIPT.");
-  }
 }
 
 void RuntimeOption::UseGpu(int gpu_id) {
@@ -85,8 +57,8 @@ void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
 }
 
 void RuntimeOption::UseTimVX() {
-  enable_timvx = true;
   device = Device::TIMVX;
+  paddle_lite_option.enable_timvx = true;
 }
 
 void RuntimeOption::UseKunlunXin(int kunlunxin_id, int l3_workspace_size,
@@ -95,21 +67,21 @@ void RuntimeOption::UseKunlunXin(int kunlunxin_id, int l3_workspace_size,
                                  const std::string& precision,
                                  bool adaptive_seqlen,
                                  bool enable_multi_stream) {
-  enable_kunlunxin = true;
-  device_id = kunlunxin_id;
-  kunlunxin_l3_workspace_size = l3_workspace_size;
-  kunlunxin_locked = locked;
-  kunlunxin_autotune = autotune;
-  kunlunxin_autotune_file = autotune_file;
-  kunlunxin_precision = precision;
-  kunlunxin_adaptive_seqlen = adaptive_seqlen;
-  kunlunxin_enable_multi_stream = enable_multi_stream;
   device = Device::KUNLUNXIN;
+  paddle_lite_option.enable_kunlunxin = true;
+  paddle_lite_option.device_id = kunlunxin_id;
+  paddle_lite_option.kunlunxin_l3_workspace_size = l3_workspace_size;
+  paddle_lite_option.kunlunxin_locked = locked;
+  paddle_lite_option.kunlunxin_autotune = autotune;
+  paddle_lite_option.kunlunxin_autotune_file = autotune_file;
+  paddle_lite_option.kunlunxin_precision = precision;
+  paddle_lite_option.kunlunxin_adaptive_seqlen = adaptive_seqlen;
+  paddle_lite_option.kunlunxin_enable_multi_stream = enable_multi_stream;
 }
 
 void RuntimeOption::UseAscend() {
-  enable_ascend = true;
   device = Device::ASCEND;
+  paddle_lite_option.enable_ascend = true;
 }
 
 void RuntimeOption::UseSophgo() {
@@ -124,6 +96,8 @@ void RuntimeOption::SetExternalStream(void* external_stream) {
 void RuntimeOption::SetCpuThreadNum(int thread_num) {
   FDASSERT(thread_num > 0, "The thread_num must be greater than 0.");
   cpu_thread_num = thread_num;
+  paddle_lite_option.threads = thread_num;
+  ort_option.intra_op_num_threads = thread_num;
 }
 
 void RuntimeOption::SetOrtGraphOptLevel(int level) {
@@ -131,7 +105,7 @@ void RuntimeOption::SetOrtGraphOptLevel(int level) {
   auto valid_level = std::find(supported_level.begin(), supported_level.end(),
                                level) != supported_level.end();
   FDASSERT(valid_level, "The level must be -1, 0, 1, 2.");
-  ort_graph_opt_level = level;
+  ort_option.graph_optimization_level = level;
 }
 
 // use paddle inference backend
@@ -231,57 +205,65 @@ void RuntimeOption::SetOpenVINODevice(const std::string& name) {
   openvino_device = name;
 }
 
-void RuntimeOption::EnableLiteFP16() { lite_enable_fp16 = true; }
+void RuntimeOption::EnableLiteFP16() { paddle_lite_option.enable_fp16 = true; }
 
-void RuntimeOption::DisableLiteFP16() { lite_enable_fp16 = false; }
-void RuntimeOption::EnableLiteInt8() { lite_enable_int8 = true; }
+void RuntimeOption::DisableLiteFP16() {
+  paddle_lite_option.enable_fp16 = false;
+}
 
-void RuntimeOption::DisableLiteInt8() { lite_enable_int8 = false; }
+void RuntimeOption::EnableLiteInt8() { paddle_lite_option.enable_int8 = true; }
+
+void RuntimeOption::DisableLiteInt8() {
+  paddle_lite_option.enable_int8 = false;
+}
+
 void RuntimeOption::SetLitePowerMode(LitePowerMode mode) {
-  lite_power_mode = mode;
+  paddle_lite_option.power_mode = mode;
 }
 
 void RuntimeOption::SetLiteOptimizedModelDir(
     const std::string& optimized_model_dir) {
-  lite_optimized_model_dir = optimized_model_dir;
+  paddle_lite_option.optimized_model_dir = optimized_model_dir;
 }
 
 void RuntimeOption::SetLiteSubgraphPartitionPath(
     const std::string& nnadapter_subgraph_partition_config_path) {
-  lite_nnadapter_subgraph_partition_config_path =
+  paddle_lite_option.nnadapter_subgraph_partition_config_path =
       nnadapter_subgraph_partition_config_path;
 }
 
 void RuntimeOption::SetLiteSubgraphPartitionConfigBuffer(
     const std::string& nnadapter_subgraph_partition_config_buffer) {
-  lite_nnadapter_subgraph_partition_config_buffer =
+  paddle_lite_option.nnadapter_subgraph_partition_config_buffer =
       nnadapter_subgraph_partition_config_buffer;
 }
 
 void RuntimeOption::SetLiteDeviceNames(
     const std::vector<std::string>& nnadapter_device_names) {
-  lite_nnadapter_device_names = nnadapter_device_names;
+  paddle_lite_option.nnadapter_device_names = nnadapter_device_names;
 }
 
 void RuntimeOption::SetLiteContextProperties(
     const std::string& nnadapter_context_properties) {
-  lite_nnadapter_context_properties = nnadapter_context_properties;
+  paddle_lite_option.nnadapter_context_properties =
+      nnadapter_context_properties;
 }
 
 void RuntimeOption::SetLiteModelCacheDir(
     const std::string& nnadapter_model_cache_dir) {
-  lite_nnadapter_model_cache_dir = nnadapter_model_cache_dir;
+  paddle_lite_option.nnadapter_model_cache_dir = nnadapter_model_cache_dir;
 }
 
 void RuntimeOption::SetLiteDynamicShapeInfo(
     const std::map<std::string, std::vector<std::vector<int64_t>>>&
         nnadapter_dynamic_shape_info) {
-  lite_nnadapter_dynamic_shape_info = nnadapter_dynamic_shape_info;
+  paddle_lite_option.nnadapter_dynamic_shape_info =
+      nnadapter_dynamic_shape_info;
 }
 
 void RuntimeOption::SetLiteMixedPrecisionQuantizationConfigPath(
     const std::string& nnadapter_mixed_precision_quantization_config_path) {
-  lite_nnadapter_mixed_precision_quantization_config_path =
+  paddle_lite_option.nnadapter_mixed_precision_quantization_config_path =
       nnadapter_mixed_precision_quantization_config_path;
 }
 
@@ -326,37 +308,6 @@ void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
 
 void RuntimeOption::SetOpenVINOStreams(int num_streams) {
   ov_num_streams = num_streams;
-}
-
-bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
-                      const RuntimeOption& _option) {
-#ifdef ENABLE_POROS_BACKEND
-  option = _option;
-  auto poros_option = PorosBackendOption();
-  poros_option.use_gpu = (option.device == Device::GPU) ? true : false;
-  poros_option.gpu_id = option.device_id;
-  poros_option.long_to_int = option.long_to_int;
-  poros_option.use_nvidia_tf32 = option.use_nvidia_tf32;
-  poros_option.unconst_ops_thres = option.unconst_ops_thres;
-  poros_option.poros_file = option.poros_file;
-  poros_option.is_dynamic = option.is_dynamic;
-  poros_option.enable_fp16 = option.trt_enable_fp16;
-  poros_option.max_batch_size = option.trt_max_batch_size;
-  poros_option.max_workspace_size = option.trt_max_workspace_size;
-  FDASSERT(
-      option.model_format == ModelFormat::TORCHSCRIPT,
-      "PorosBackend only support model format of ModelFormat::TORCHSCRIPT.");
-  backend_ = utils::make_unique<PorosBackend>();
-  auto casted_backend = dynamic_cast<PorosBackend*>(backend_.get());
-  FDASSERT(
-      casted_backend->Compile(option.model_file, prewarm_tensors, poros_option),
-      "Load model from Torchscript failed while initliazing PorosBackend.");
-#else
-  FDASSERT(false,
-           "PorosBackend is not available, please compiled with "
-           "ENABLE_POROS_BACKEND=ON.");
-#endif
-  return true;
 }
 
 void RuntimeOption::EnablePaddleTrtCollectShape() { pd_collect_shape = true; }

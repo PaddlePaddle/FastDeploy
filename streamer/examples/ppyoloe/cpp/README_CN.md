@@ -4,7 +4,7 @@
 
 ## 编译和运行
 
-1. 需要先FastDeploy Streamer, 请参考[README](../../../README_CN.md)
+1. 该示例依赖DeepStream，需要准备DeepStream环境，并编译FastDeploy Streamer，请参考[README](../../../README_CN.md)
 
 2. 编译Example
 ```

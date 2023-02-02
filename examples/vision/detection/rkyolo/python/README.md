@@ -3,7 +3,7 @@ English | [简体中文](README_CN.md)
 
 Two steps before deployment
 
-- 1. Software and hardware should meet the requirements. Refer to [FastDeploy Environment Requirements](../../../../../../docs/cn/build_and_install/rknpu2.md)
+- 1. Software and hardware should meet the requirements. Refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/rknpu2.md)
 
 This directory provides examples that `infer.py` fast finishes the deployment of Picodet on RKNPU. The script is as follows
 
@@ -31,5 +31,5 @@ The model needs to be in NHWC format on RKNPU. The normalized image will be embe
 
 - [PaddleDetection Model Description](..)
 - [PaddleDetection C++ Deployment](../cpp)
-- [model prediction Results](../../../../../../docs/api/vision_results/)
+- [model prediction Results](../../../../../docs/api/vision_results/)
 - [Convert PaddleDetection RKNN Model Files](../README.md)

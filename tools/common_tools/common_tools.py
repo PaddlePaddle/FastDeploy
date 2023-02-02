@@ -132,7 +132,44 @@ def main():
             print(
                 "Model convert failed! Please check if you have installed it!")
     if args.tools == "simple_serving":
-        uvicorn.run(args.app, host=args.host, port=args.port, app_dir='.')
+        custom_logging_config = {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "default": {
+                    "()": "uvicorn.logging.DefaultFormatter",
+                    "fmt": "%(asctime)s %(levelprefix)s %(message)s",
+                    'datefmt': '%Y-%m-%d %H:%M:%S',
+                    "use_colors": None,
+                },
+            },
+            "handlers": {
+                "default": {
+                    "formatter": "default",
+                    "class": "logging.StreamHandler",
+                    "stream": "ext://sys.stderr",
+                },
+                'null': {
+                    "formatter": "default",
+                    "class": 'logging.NullHandler'
+                }
+            },
+            "loggers": {
+                "": {
+                    "handlers": ["null"],
+                    "level": "DEBUG"
+                },
+                "uvicorn.error": {
+                    "handlers": ["default"],
+                    "level": "DEBUG"
+                }
+            },
+        }
+        uvicorn.run(args.app,
+                    host=args.host,
+                    port=args.port,
+                    app_dir='.',
+                    log_config=custom_logging_config)
 
 
 if __name__ == '__main__':

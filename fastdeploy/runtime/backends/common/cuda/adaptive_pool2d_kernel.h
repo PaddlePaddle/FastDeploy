@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <cuda_fp16.h>
 #include <cstdint>
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -25,8 +26,10 @@
 namespace fastdeploy {
 
 void CudaAdaptivePool(const std::vector<int64_t>& input_dims,
-                      const std::vector<int64_t>& output_dims, float* output,
-                      const float* input, void* compute_stream,
-                      const std::string& pooling_type);
+                      const std::vector<int64_t>& output_dims, void* output,
+                      const void* input, void* compute_stream,
+                      const std::string& pooling_type,
+                      const std::string& dtype = "float",
+                      const std::string& out_dtype = "float");
 
 }  // namespace fastdeploy

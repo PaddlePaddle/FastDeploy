@@ -1,13 +1,13 @@
 mean:
   -
-    - 128.5
-    - 128.5
-    - 128.5
+    - 127.5
+    - 127.5
+    - 127.5
 std:
   -
-    - 128.5
-    - 128.5
-    - 128.5
+    - 127.5
+    - 127.5
+    - 127.5
 model_path: ./Portrait_PP_HumanSegV2_Lite_256x144_infer/Portrait_PP_HumanSegV2_Lite_256x144_infer.onnx
 outputs_nodes:
 do_quantization: True

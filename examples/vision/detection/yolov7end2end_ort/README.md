@@ -31,13 +31,11 @@ For developers' testing, models exported by YOLOv7End2EndORT are provided below.
 | [yolov7-d6-end2end-ort-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-d6-end2end-ort-nms.onnx) | 511MB | 56.6% | This model file is sourced from [YOLOv7](https://github.com/WongKinYiu/yolov7)，GPL-3.0 License |
 | [yolov7-e6e-end2end-ort-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6e-end2end-ort-nms.onnx) | 579MB | 56.8% | This model file is sourced from [YOLOv7](https://github.com/WongKinYiu/yolov7)，GPL-3.0 License |
 
-
 ## Detailed Deployment Documents
 
 - [Python Deployment](python)
 - [C++ Deployment](cpp)
 
-
 ## Release Note
 
-- Document and code are based on [YOLOv7 0.1](https://github.com/WongKinYiu/yolov7/tree/v0.1) 
+- Document and code are based on [YOLOv7 0.1](https://github.com/WongKinYiu/yolov7/tree/v0.1)
