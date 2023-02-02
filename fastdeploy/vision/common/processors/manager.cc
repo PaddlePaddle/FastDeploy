@@ -73,7 +73,7 @@ bool ProcessorManager::Run(std::vector<FDMat>* images,
 
   for (size_t i = 0; i < images->size(); ++i) {
     if (CudaUsed()) {
-      SetStream(image_batch);
+      SetStream(&image_batch);
     }
     (*images)[i].input_cache = &input_caches_[i];
     (*images)[i].output_cache = &output_caches_[i];
