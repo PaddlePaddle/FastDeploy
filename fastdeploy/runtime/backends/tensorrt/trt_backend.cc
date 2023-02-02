@@ -364,7 +364,7 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
                        std::vector<FDTensor>* outputs,
                        double* mean_time_of_pure_backend,
                        int repeat, bool copy_to_fd) {
-  FDASSERT(repeat > 1, "repeat param must > 1 for TRT, but got %d", repeat);                      
+  FDASSERT(repeat > 0, "repeat param must > 0, but got %d", repeat);                      
   if (inputs.size() != NumInputs()) {
     FDERROR << "Require " << NumInputs() << "inputs, but get " << inputs.size()
             << "." << std::endl;
@@ -397,10 +397,7 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
       return false;
     }
   }
-  tc.End();
-  time_of_pure_backend += tc.Duration();
   
-  tc.Start();
   for (size_t i = 0; i < outputs->size(); ++i) {
     // if the final output tensor's dtype is different from the model output
     // tensor's dtype, then we need cast the data to the final output's dtype
@@ -443,6 +440,11 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
   }
   tc.End();
   time_of_pure_backend += tc.Duration();
+  // Since TensorRT's inference is asynchronous, we need to count
+  // the last inference time before exiting the function. The last 
+  // inference time-consuming, including only one H2D_D2H time. 
+  // Therefore, backend_time is an approximation. Namely:
+  //    mean_backend_time = (total_backend_time+1*h2d_d2h_time)/repeat.
   *mean_time_of_pure_backend = 
     time_of_pure_backend / static_cast<double>(repeat);
   return true;

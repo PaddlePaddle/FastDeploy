@@ -150,15 +150,21 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool EnabledRecordTimeOfBackend() {
     return enable_record_time_of_backend_;
   }
-
+  
+  /** \brief Get the time of runtime for current inference.
+  */
   virtual double GetCurrentTimeOfRuntime() {
     return current_time_of_runtime_;
   }
-
+  
+  /** \brief  Get the time of backend for current inference.
+  */
   virtual double GetCurrentTimeOfBackend() {
     return current_time_of_backend_;
   }
 
+  /** \brief  Get the time of h2d and d2h for current inference.
+  */
   virtual double GetCurrentTimeOfH2dAndD2h() {
     return current_time_of_h2d_d2h_;
   }

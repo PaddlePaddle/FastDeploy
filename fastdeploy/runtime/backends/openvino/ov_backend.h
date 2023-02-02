@@ -59,7 +59,7 @@ class OpenVINOBackend : public BaseBackend {
   bool Infer(std::vector<FDTensor>& inputs,
              std::vector<FDTensor>* outputs,
              double* mean_time_of_pure_backend,
-             int repeat = 1, bool copy_to_fd = true) override; // NOLINT
+             int repeat = 100, bool copy_to_fd = true) override; // NOLINT
 #endif    
 
  private:

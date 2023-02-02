@@ -283,12 +283,7 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
   for (int i = 0; i < repeat; ++i) {  
     predictor_->Run();
   }
-  tc.End();
-  time_of_pure_backend += tc.Duration();
   
-  *mean_time_of_pure_backend = 
-    time_of_pure_backend / static_cast<double>(repeat);
-
   // output share backend memory only support CPU or GPU
   if (option_.use_ipu) {
     copy_to_fd = true;
@@ -301,6 +296,15 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
     }
     PaddleTensorToFDTensor(handle, &((*outputs)[i]), copy_to_fd);
   }
+  // Since Paddle's inference on via TRT/GPU is asynchronous, we need to count
+  // the last inference time before exiting the function. The last 
+  // inference time-consuming, including only one H2D_D2H time. 
+  // Therefore, backend_time is an approximation. Namely:
+  //    mean_backend_time = (total_backend_time+1*h2d_d2h_time)/repeat.
+  tc.End();
+  time_of_pure_backend += tc.Duration();
+  *mean_time_of_pure_backend = 
+    time_of_pure_backend / static_cast<double>(repeat);
   return true;
 }
 #endif
