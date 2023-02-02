@@ -73,7 +73,7 @@ Android Studio 生成 JNI 函数定义: 鼠标停留在Java中定义的native函
 ## 在C++层实现JNI函数  
 <div id="CPP"></div>
 
-以下为PicoDet JNI层实现的示例，相关的辅助函数不在此处赘述，完整的C++代码请参考 [android/app/src/main/cpp](../../../examples/vision/detection/paddledetection/android/app/src/main/cpp/).
+以下为PicoDet JNI层实现的示例，相关的辅助函数不在此处赘述，完整的C++代码请参考 [android/app/src/main/cpp](../../examples/vision/detection/paddledetection/android/app/src/main/cpp/).
 ```C++
 // Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 //
