@@ -1,7 +1,7 @@
 English | [简体中文](README_CN.md)
 # BlazeFace C++ Deployment Example
 
-This directory provides examples that `infer.cc` fast finishes the deployment of BlazeFace在on CPU/GPU。
+This directory provides examples that `infer.cc` fast finishes the deployment of BlazeFace on CPU/GPU。
 
 Before deployment, two steps require confirmation
 
