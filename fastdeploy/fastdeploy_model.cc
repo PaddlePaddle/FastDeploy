@@ -399,7 +399,6 @@ bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
       double total_time_of_backend = 
         current_time_of_backend_ * repeat_for_time_of_backend_;  
       current_time_of_h2d_d2h_ = tc.Duration() - total_time_of_backend;
-      FDINFO << "tc.Duration(): " << tc.Duration() << std::endl;
       current_time_of_runtime_ = current_time_of_h2d_d2h_ + current_time_of_backend_;
       time_of_runtime_.push_back(current_time_of_runtime_);  
     }   

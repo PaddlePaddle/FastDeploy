@@ -42,6 +42,12 @@ def parse_arguments():
         default=300,
         help="number of iterations for computing performace.")
     parser.add_argument(
+        "--backend_repeat",
+        required=True,
+        type=int,
+        default=10,
+        help="number of repeats for computing backend performace.")    
+    parser.add_argument(
         "--device",
         default="cpu",
         help="Type of inference device, support 'cpu', 'gpu', 'kunlunxin', 'ascend' etc.")
@@ -64,7 +70,7 @@ def parse_arguments():
         "--enable_collect_memory_info",
         type=ast.literal_eval,
         default=False,
-        help="whether enable collect memory info")
+        help="whether enable collect memory info")  
     args = parser.parse_args()
     return args
 
@@ -267,6 +273,7 @@ if __name__ == '__main__':
 
     gpu_id = args.device_id
     enable_collect_memory_info = args.enable_collect_memory_info
+    backend_repeat = args.backend_repeat
     dump_result = dict()
     end2end_statis = list()
     prepost_statis = list()
@@ -320,9 +327,12 @@ if __name__ == '__main__':
             monitor = Monitor(enable_gpu, gpu_id)
             monitor.start()
 
-        repeat = 100
+        if args.device.lower() in ("gpu", "xpu", "npu", "kunlunxin", "ascend"):
+          if backend_repeat < 100:
+            print(f"[WARNING] The backend_repeat for {args.device} should >= 100, \
+              but got {backend_repeat}!")
         model.enable_record_time_of_runtime()
-        model.enable_record_time_of_backend(repeat)
+        model.enable_record_time_of_backend(backend_repeat)
         im_ori = cv2.imread(args.image)
         for i in tqdm(range(args.iter_num)):
             im = im_ori
@@ -331,7 +341,7 @@ if __name__ == '__main__':
             end = time.time()
             curr_time_of_backend = model.get_current_time_of_backend()
             curr_time_of_h2d_d2h = model.get_current_time_of_h2d_d2h()
-            total_time_of_backend = curr_time_of_backend * repeat
+            total_time_of_backend = curr_time_of_backend * backend_repeat
             curr_pre_post_h2d_d2h_time = (end - start) - total_time_of_backend
             curr_pre_post_time = curr_pre_post_h2d_d2h_time - curr_time_of_h2d_d2h
             end2end_statis.append(curr_pre_post_h2d_d2h_time + curr_time_of_backend)
