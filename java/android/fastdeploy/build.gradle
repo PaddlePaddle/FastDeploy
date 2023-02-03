@@ -28,7 +28,7 @@ android {
     externalNativeBuild {
         cmake {
             path "src/main/cpp/CMakeLists.txt"
-            version "3.10.2"
+            version "3.22.1"
         }
     }
     sourceSets {
@@ -36,7 +36,7 @@ android {
             jniLibs.srcDirs = ['libs']
         }
     }
-    ndkVersion '20.1.5948944'
+    ndkVersion '25.1.8937393'
 }
 
 dependencies {

@@ -45,9 +45,9 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_
 # KunlunXin XPU multi-thread inference
 ./multi_thread_demo ./ch_PP-OCRv3_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv3_rec_infer ./ppocr_keys_v1.txt ./12.jpg 4 1
 >> **Notice**: the last number in above command is thread number
-
+```
 The above command works for Linux or MacOS. For SDK in Windows, refer to:
-- [How to use FastDeploy C++ SDK in Windows](../../../docs/cn/faq/use_sdk_on_windows.md)
+- [How to use FastDeploy C++ SDK in Windows](../../../../docs/cn/faq/use_sdk_on_windows.md)
 
 The result returned after running is as follows
 ```

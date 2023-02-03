@@ -89,32 +89,22 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   }
 }
 
-bool PaddleBackend::InitFromPaddle(const std::string& model_file,
-                                   const std::string& params_file,
+bool PaddleBackend::InitFromPaddle(const std::string& model_buffer,
+                                   const std::string& params_buffer,
                                    const PaddleBackendOption& option) {
   if (initialized_) {
     FDERROR << "PaddleBackend is already initlized, cannot initialize again."
             << std::endl;
     return false;
   }
-
-  // The input/output information get from predictor is not right, use
-  // PaddleReader instead now
-  std::string contents;
-
-  if (option.model_from_memory_) {
-    config_.SetModelBuffer(model_file.c_str(), option.model_buffer_size_,
-                           params_file.c_str(), option.params_buffer_size_);
-    contents = model_file;
-  } else {
-    config_.SetModel(model_file, params_file);
-    if (!ReadBinaryFromFile(model_file, &contents)) {
-      return false;
-    }
-  }
+  config_.SetModelBuffer(model_buffer.c_str(), model_buffer.size(),
+                         params_buffer.c_str(), params_buffer.size());
   config_.EnableMemoryOptim();
   BuildOption(option);
-  auto reader = paddle2onnx::PaddleReader(contents.c_str(), contents.size());
+  
+  // The input/output information get from predictor is not right, use
+  // PaddleReader instead now
+  auto reader = paddle2onnx::PaddleReader(model_buffer.c_str(), model_buffer.size());
   // If it's a quantized model, and use cpu with mkldnn, automaticaly switch to
   // int8 mode
   if (reader.is_quantize_model) {
@@ -172,20 +162,16 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
     // Set the shape info file.
     std::string curr_model_dir = "./";
     if (!option.model_from_memory_) {
-      curr_model_dir = GetDirFromPath(model_file);
+      curr_model_dir = GetDirFromPath(option.model_file);
     }
     std::string shape_range_info =
         PathJoin(curr_model_dir, "shape_range_info.pbtxt");
     if (!CheckFileExists(shape_range_info)) {
       FDINFO << "Start generating shape range info file." << std::endl;
       paddle_infer::Config analysis_config;
-      if (option.model_from_memory_) {
-        analysis_config.SetModelBuffer(
-            model_file.c_str(), option.model_buffer_size_, params_file.c_str(),
-            option.params_buffer_size_);
-      } else {
-        analysis_config.SetModel(model_file, params_file);
-      }
+      analysis_config.SetModelBuffer(model_buffer.c_str(), model_buffer.size(),
+                                     params_buffer.c_str(),
+                                     params_buffer.size());
       analysis_config.CollectShapeRangeInfo(shape_range_info);
       auto predictor_tmp = paddle_infer::CreatePredictor(analysis_config);
       std::map<std::string, std::vector<int>> max_shape;
@@ -258,7 +244,8 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
   return true;
 }
 
-std::unique_ptr<BaseBackend> PaddleBackend::Clone(void* stream, int device_id) {
+std::unique_ptr<BaseBackend> PaddleBackend::Clone(RuntimeOption& runtime_option,
+                                                  void* stream, int device_id) {
   std::unique_ptr<BaseBackend> new_backend =
       utils::make_unique<PaddleBackend>();
   auto casted_backend = dynamic_cast<PaddleBackend*>(new_backend.get());
@@ -266,8 +253,27 @@ std::unique_ptr<BaseBackend> PaddleBackend::Clone(void* stream, int device_id) {
     auto clone_option = option_;
     clone_option.gpu_id = device_id;
     clone_option.external_stream_ = stream;
-    casted_backend->InitFromPaddle(clone_option.model_file,
-                                   clone_option.params_file, clone_option);
+    if (runtime_option.model_from_memory_) {
+      FDASSERT(
+          casted_backend->InitFromPaddle(runtime_option.model_file,
+                                         runtime_option.params_file,
+                                         clone_option),
+          "Clone model from Paddle failed while initialize PaddleBackend.");
+    } else {
+      std::string model_buffer = "";
+      std::string params_buffer = "";
+      FDASSERT(
+          ReadBinaryFromFile(clone_option.model_file, &model_buffer),
+          "Fail to read binary from model file while cloning PaddleBackend");
+      FDASSERT(ReadBinaryFromFile(clone_option.params_file, &params_buffer),
+               "Fail to read binary from parameter file while cloning "
+               "PaddleBackend");
+      FDASSERT(
+          casted_backend->InitFromPaddle(model_buffer, params_buffer,
+                                         clone_option),
+          "Clone model from Paddle failed while initialize PaddleBackend.");
+    }
+
     FDWARNING << "The target device id:" << device_id
               << " is different from current device id:" << option_.gpu_id
               << ", cannot share memory with current engine." << std::endl;

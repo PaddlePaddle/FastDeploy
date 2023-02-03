@@ -14,6 +14,12 @@
 
 #include "fastdeploy/vision/common/processors/center_crop.h"
 
+#ifdef ENABLE_CVCUDA
+#include <cvcuda/OpCustomCrop.hpp>
+
+#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
+#endif
+
 namespace fastdeploy {
 namespace vision {
 
@@ -52,6 +58,35 @@ bool CenterCrop::ImplByFlyCV(Mat* mat) {
   mat->SetMat(new_im);
   mat->SetWidth(width_);
   mat->SetHeight(height_);
+  return true;
+}
+#endif
+
+#ifdef ENABLE_CVCUDA
+bool CenterCrop::ImplByCvCuda(Mat* mat) {
+  // Prepare input tensor
+  std::string tensor_name = Name() + "_cvcuda_src";
+  FDTensor* src = CreateCachedGpuInputTensor(mat, tensor_name);
+  auto src_tensor = CreateCvCudaTensorWrapData(*src);
+
+  // Prepare output tensor
+  tensor_name = Name() + "_cvcuda_dst";
+  FDTensor* dst =
+      UpdateAndGetCachedTensor({height_, width_, mat->Channels()}, src->Dtype(),
+                               tensor_name, Device::GPU);
+  auto dst_tensor = CreateCvCudaTensorWrapData(*dst);
+
+  int offset_x = static_cast<int>((mat->Width() - width_) / 2);
+  int offset_y = static_cast<int>((mat->Height() - height_) / 2);
+  cvcuda::CustomCrop crop_op;
+  NVCVRectI crop_roi = {offset_x, offset_y, width_, height_};
+  crop_op(mat->Stream(), src_tensor, dst_tensor, crop_roi);
+
+  mat->SetTensor(dst);
+  mat->SetWidth(width_);
+  mat->SetHeight(height_);
+  mat->device = Device::GPU;
+  mat->mat_type = ProcLib::CVCUDA;
   return true;
 }
 #endif

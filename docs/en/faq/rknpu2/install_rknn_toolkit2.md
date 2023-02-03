@@ -1,4 +1,4 @@
-English | [中文](../../../cn/faq/rknpu2/install_rknn_toolkit2.md) 
+English | [中文](../../cn/faq/rknpu2/install_rknn_toolkit2.md) 
 # RKNN-Toolkit2 Installation
 
 ## Download

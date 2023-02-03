@@ -53,9 +53,9 @@ class PaddleBackend : public BaseBackend {
   virtual ~PaddleBackend() = default;
   void BuildOption(const PaddleBackendOption& option);
 
-  bool
-  InitFromPaddle(const std::string& model_file, const std::string& params_file,
-                 const PaddleBackendOption& option = PaddleBackendOption());
+  bool InitFromPaddle(const std::string& model_buffer,
+                     const std::string& params_buffer,
+                     const PaddleBackendOption& option = PaddleBackendOption());
 
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
@@ -64,7 +64,8 @@ class PaddleBackend : public BaseBackend {
 
   int NumOutputs() const override { return outputs_desc_.size(); }
 
-  std::unique_ptr<BaseBackend> Clone(void* stream = nullptr,
+  std::unique_ptr<BaseBackend> Clone(RuntimeOption &runtime_option,
+                                     void* stream = nullptr,
                                      int device_id = -1) override;
 
   TensorInfo GetInputInfo(int index) override;

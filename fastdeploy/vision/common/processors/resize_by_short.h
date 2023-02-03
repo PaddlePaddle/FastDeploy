@@ -32,6 +32,9 @@ class FASTDEPLOY_DECL ResizeByShort : public Processor {
 #ifdef ENABLE_FLYCV
   bool ImplByFlyCV(Mat* mat);
 #endif
+#ifdef ENABLE_CVCUDA
+  bool ImplByCvCuda(Mat* mat);
+#endif
   std::string Name() { return "ResizeByShort"; }
 
   static bool Run(Mat* mat, int target_size, int interp = 1,

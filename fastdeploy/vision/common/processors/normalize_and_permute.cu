@@ -37,48 +37,45 @@ __global__ void NormalizeAndPermuteKernel(uint8_t* src, float* dst,
 }
 
 bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
-  cv::Mat* im = mat->GetOpenCVMat();
-  std::string buf_name = Name() + "_src";
-  std::vector<int64_t> shape = {im->rows, im->cols, im->channels()};
-  FDTensor* src =
-      UpdateAndGetReusedBuffer(shape, im->type(), buf_name, Device::GPU);
-  FDASSERT(cudaMemcpy(src->Data(), im->ptr(), src->Nbytes(),
-                      cudaMemcpyHostToDevice) == 0,
-           "Error occurs while copy memory from CPU to GPU.");
+  // Prepare input tensor
+  std::string tensor_name = Name() + "_cvcuda_src";
+  FDTensor* src = CreateCachedGpuInputTensor(mat, tensor_name);
 
-  buf_name = Name() + "_dst";
-  FDTensor* dst = UpdateAndGetReusedBuffer(shape, CV_32FC(im->channels()),
-                                           buf_name, Device::GPU);
-  cv::Mat res(im->rows, im->cols, CV_32FC(im->channels()), dst->Data());
+  // Prepare output tensor
+  tensor_name = Name() + "_dst";
+  FDTensor* dst = UpdateAndGetCachedTensor(src->Shape(), FDDataType::FP32,
+                                           tensor_name, Device::GPU);
 
-  buf_name = Name() + "_alpha";
-  FDTensor* alpha = UpdateAndGetReusedBuffer({(int64_t)alpha_.size()}, CV_32FC1,
-                                             buf_name, Device::GPU);
-  FDASSERT(cudaMemcpy(alpha->Data(), alpha_.data(), alpha->Nbytes(),
-                      cudaMemcpyHostToDevice) == 0,
-           "Error occurs while copy memory from CPU to GPU.");
+  // Copy alpha and beta to GPU
+  tensor_name = Name() + "_alpha";
+  FDMat alpha_mat =
+      FDMat::Create(1, 1, alpha_.size(), FDDataType::FP32, alpha_.data());
+  FDTensor* alpha = CreateCachedGpuInputTensor(&alpha_mat, tensor_name);
 
-  buf_name = Name() + "_beta";
-  FDTensor* beta = UpdateAndGetReusedBuffer({(int64_t)beta_.size()}, CV_32FC1,
-                                            buf_name, Device::GPU);
-  FDASSERT(cudaMemcpy(beta->Data(), beta_.data(), beta->Nbytes(),
-                      cudaMemcpyHostToDevice) == 0,
-           "Error occurs while copy memory from CPU to GPU.");
+  tensor_name = Name() + "_beta";
+  FDMat beta_mat =
+      FDMat::Create(1, 1, beta_.size(), FDDataType::FP32, beta_.data());
+  FDTensor* beta = CreateCachedGpuInputTensor(&beta_mat, tensor_name);
 
-  int jobs = im->cols * im->rows;
+  int jobs = mat->Width() * mat->Height();
   int threads = 256;
   int blocks = ceil(jobs / (float)threads);
-  NormalizeAndPermuteKernel<<<blocks, threads, 0, NULL>>>(
+  NormalizeAndPermuteKernel<<<blocks, threads, 0, mat->Stream()>>>(
       reinterpret_cast<uint8_t*>(src->Data()),
       reinterpret_cast<float*>(dst->Data()),
       reinterpret_cast<float*>(alpha->Data()),
-      reinterpret_cast<float*>(beta->Data()), im->channels(), swap_rb_, jobs);
+      reinterpret_cast<float*>(beta->Data()), mat->Channels(), swap_rb_, jobs);
 
-  mat->SetMat(res);
+  mat->SetTensor(dst);
   mat->device = Device::GPU;
   mat->layout = Layout::CHW;
+  mat->mat_type = ProcLib::CUDA;
   return true;
 }
+
+#ifdef ENABLE_CVCUDA
+bool NormalizeAndPermute::ImplByCvCuda(Mat* mat) { return ImplByCuda(mat); }
+#endif
 
 }  // namespace vision
 }  // namespace fastdeploy

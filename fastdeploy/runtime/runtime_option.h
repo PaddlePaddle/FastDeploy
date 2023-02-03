@@ -50,14 +50,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /** \brief Specify the memory buffer of model and parameter. Used when model and params are loaded directly from memory
    *
-   * \param[in] model_buffer The memory buffer of model
-   * \param[in] model_buffer_size The size of the model data
-   * \param[in] params_buffer The memory buffer of the combined parameters file
-   * \param[in] params_buffer_size The size of the combined parameters data
+   * \param[in] model_buffer The string of model memory buffer
+   * \param[in] params_buffer The string of parameters memory buffer
    * \param[in] format Format of the loaded model
    */
-  void SetModelBuffer(const char* model_buffer, size_t model_buffer_size,
-                      const char* params_buffer, size_t params_buffer_size,
+  void SetModelBuffer(const std::string& model_buffer,
+                      const std::string& params_buffer = "",
                       const ModelFormat& format = ModelFormat::PADDLE);
 
   /// Use cpu to inference, the runtime will inference on CPU by default
@@ -362,14 +360,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   bool enable_pinned_memory = false;
 
-  // ======Only for ORT Backend========
-  // -1 means use default value by ort
-  // 0: ORT_DISABLE_ALL 1: ORT_ENABLE_BASIC 2: ORT_ENABLE_EXTENDED 3:
-  // ORT_ENABLE_ALL
-  int ort_graph_opt_level = -1;
-  int ort_inter_op_num_threads = -1;
-  // 0: ORT_SEQUENTIAL 1: ORT_PARALLEL
-  int ort_execution_mode = -1;
+  OrtBackendOption ort_option;
 
   // ======Only for Paddle Backend=====
   bool pd_enable_mkldnn = true;
@@ -424,16 +415,14 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Option to configure Paddle Lite backend
   LiteBackendOption paddle_lite_option;
 
-  std::string model_file = "";   // Path of model file
-  std::string params_file = "";  // Path of parameters file, can be empty
+  // If model_from_memory is true, the model_file and params_file is
+  // binary stream in memory;
+  // Otherwise, the model_file and params_file means the path of file
+  std::string model_file = "";
+  std::string params_file = "";
+  bool model_from_memory_ = false;
   // format of input model
   ModelFormat model_format = ModelFormat::PADDLE;
-
-  std::string model_buffer_ = "";
-  std::string params_buffer_ = "";
-  size_t model_buffer_size_ = 0;
-  size_t params_buffer_size_ = 0;
-  bool model_from_memory_ = false;
 };
 
 }  // namespace fastdeploy

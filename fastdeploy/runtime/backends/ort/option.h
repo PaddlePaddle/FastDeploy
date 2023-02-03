@@ -34,12 +34,8 @@ struct OrtBackendOption {
   // 0: ORT_SEQUENTIAL
   // 1: ORT_PARALLEL
   int execution_mode = -1;
-  bool use_gpu = false;
-  int gpu_id = 0;
+  Device device = Device::CPU;
+  int device_id = 0;
   void* external_stream_ = nullptr;
-
-  // inside parameter, maybe remove next version
-  bool remove_multiclass_nms_ = false;
-  std::map<std::string, std::string> custom_op_info_;
 };
 }  // namespace fastdeploy
