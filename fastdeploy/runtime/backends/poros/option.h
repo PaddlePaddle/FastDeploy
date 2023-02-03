@@ -23,12 +23,8 @@
 namespace fastdeploy {
 
 struct PorosBackendOption {
-#ifdef WITH_GPU
-  bool use_gpu = true;
-#else
-  bool use_gpu = false;
-#endif
-  int gpu_id = 0;
+  Device device = Device::CPU;
+  int device_id = 0;
   bool long_to_int = true;
   // There is calculation precision in tf32 mode on A10, it can bring some
   // performance improvement, but there may be diff

@@ -96,11 +96,6 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("trt_max_batch_size", &RuntimeOption::trt_max_batch_size)
       .def_readwrite("trt_max_workspace_size",
                      &RuntimeOption::trt_max_workspace_size)
-      .def_readwrite("is_dynamic", &RuntimeOption::is_dynamic)
-      .def_readwrite("long_to_int", &RuntimeOption::long_to_int)
-      .def_readwrite("use_nvidia_tf32", &RuntimeOption::use_nvidia_tf32)
-      .def_readwrite("unconst_ops_thres", &RuntimeOption::unconst_ops_thres)
-      .def_readwrite("poros_file", &RuntimeOption::poros_file)
       .def_readwrite("ipu_device_num", &RuntimeOption::ipu_device_num)
       .def_readwrite("ipu_micro_batch_size",
                      &RuntimeOption::ipu_micro_batch_size)
