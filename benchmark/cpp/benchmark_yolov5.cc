@@ -49,6 +49,19 @@ void PrintUsage() {
   std::cout << "Default value of use_fp16: false" << std::endl;
 }
 
+std::string strip(const std::string& str, char ch = ' ') {
+  // Remove the ch characters at both ends of str
+  int i = 0;
+  while (str[i] == ch) {
+    i++;
+  }
+  int j = str.size() - 1;
+  while (str[j] == ch) {
+    j--;
+  }
+  return str.substr(i, j + 1 - i);
+}
+
 // Record current cpu memory usage into file
 void DumpCurrentCpuMemoryUsage(std::string name) {
   int iPid = (int)getpid();
@@ -85,6 +98,44 @@ void DumpCurrentGpuMemoryUsage(std::string name) {
   }
   pclose(pp);
   return;
+}
+
+// Get Max cpu memory usage
+float GetCpuMemoryUsage(std::string name) {
+  std::ifstream read(name);
+  std::string line;
+  float max_cpu_mem = -1;
+  while (getline(read, line)) {
+    std::stringstream ss(line);
+    std::string tmp;
+    std::vector<std::string> nums;
+    while (getline(ss, tmp, ' ')) {
+      tmp = strip(tmp);
+      if (tmp.empty()) continue;
+      nums.push_back(tmp);
+    }
+    max_cpu_mem = std::max(max_cpu_mem, stof(nums[3]));
+  }
+  return max_cpu_mem / 1024;
+}
+
+// Get Max gpu memory usage
+float GetGpuMemoryUsage(std::string name) {
+  std::ifstream read(name);
+  std::string line;
+  float max_gpu_mem = -1;
+  while (getline(read, line)) {
+    std::stringstream ss(line);
+    std::string tmp;
+    std::vector<std::string> nums;
+    while (getline(ss, tmp, ',')) {
+      tmp = strip(tmp);
+      if (tmp.empty()) continue;
+      nums.push_back(tmp);
+    }
+    max_gpu_mem = std::max(max_gpu_mem, stof(nums[6]));
+  }
+  return max_gpu_mem;
 }
 
 bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
@@ -134,21 +185,6 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
   }
 
   return true;
-}
-
-std::vector<std::string> split_string(const std::string& str_in) {
-  std::vector<std::string> str_out;
-  std::string tmp_str = str_in;
-  while (!tmp_str.empty()) {
-    size_t next_offset = tmp_str.find(":");
-    str_out.push_back(tmp_str.substr(0, next_offset));
-    if (next_offset == std::string::npos) {
-      break;
-    } else {
-      tmp_str = tmp_str.substr(next_offset + 1);
-    }
-  }
-  return str_out;
 }
 
 bool RunModel(std::string model_file, std::string image_file, size_t warmup,
@@ -212,20 +248,20 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
 }
 
 int main(int argc, char* argv[]) {
-  int repeats = 100;
-  int warmup = 20;
-  int dump_period = 10;
+  int repeats = 1000;
+  int warmup = 200;
+  int dump_period = 100;
   std::string cpu_mem_file_name = "result_cpu.txt";
   std::string gpu_mem_file_name = "result_gpu.txt";
   google::ParseCommandLineFlags(&argc, &argv, true);
-  // Run model and check memory leak.
+  // Run model
   if (RunModel(FLAGS_model, FLAGS_image, warmup, repeats, dump_period,
                cpu_mem_file_name, gpu_mem_file_name) != true) {
     exit(1);
   }
-  std::cout << "Test end, heap result is stored into " << cpu_mem_file_name
-            << "\n";
-  std::cout << "Test end, heap result is stored into " << gpu_mem_file_name
-            << "\n";
+  float cpu_mem = GetCpuMemoryUsage(cpu_mem_file_name);
+  float gpu_mem = GetGpuMemoryUsage(gpu_mem_file_name);
+  std::cout << "cpu_rss_mb: " << cpu_mem << "MB." << std::endl;
+  std::cout << "gpu_rss_mb: " << gpu_mem << "MB." << std::endl;
   return 0;
 }
