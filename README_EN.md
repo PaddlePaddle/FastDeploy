@@ -67,7 +67,7 @@ Including [image classification](examples/vision/classification), [object detect
   - **Wechat**：Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group, and share the deployment industry implementation pain points with the community developers
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/207262688-4225bc39-4337-4966-a5cc-26bd6557d226.jpg"  width = "150" height = "150" />
+<img src="https://user-images.githubusercontent.com/54695910/216615983-bbb78319-0231-4635-86d1-f2ebf9eac85d.jpg"  width = "150" height = "150" />
 </div>
 
 ## 🌌 Inference Backend and Abilities
