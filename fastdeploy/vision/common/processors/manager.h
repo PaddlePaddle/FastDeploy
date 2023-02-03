@@ -25,7 +25,18 @@ class FASTDEPLOY_DECL ProcessorManager {
  public:
   ~ProcessorManager();
 
-  void UseCuda(bool enable_cv_cuda = false, int gpu_id = -1);
+  /** \brief Use CUDA to boost the performance of processors
+   *
+   * \param[in] enable_cv_cuda ture: use CV-CUDA, false: use CUDA only
+   * \param[in] gpu_id GPU device id
+   * \param[in] initial_resize_on_cpu When the initial operator is Resize,
+   *     and input image size is large, maybe it's better to run resize on CPU,
+   *     because the HostToDevice memcpy is time consuming. Set this true to
+   *     run the initial resize on CPU.
+   * \return true if the preprocess successed, otherwise false
+   */
+  void UseCuda(bool enable_cv_cuda = false, int gpu_id = -1,
+               bool initial_resize_on_cpu = false);
 
   bool CudaUsed();
 
@@ -58,7 +69,7 @@ class FASTDEPLOY_DECL ProcessorManager {
    */
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
 
-  /** \brief The body of Run() function which needs to be implemented by a derived class
+  /** \brief Apply() is the body of Run() function, it needs to be implemented by a derived class
    *
    * \param[in] image_batch The input image batch
    * \param[in] outputs The output tensors which will feed in runtime
@@ -66,13 +77,6 @@ class FASTDEPLOY_DECL ProcessorManager {
    */
   virtual bool Apply(FDMatBatch* image_batch,
                      std::vector<FDTensor>* outputs) = 0;
-
-  // When the first operator is Resize, and input image size is large,
-  // maybe it's better to run resize on CPU, because the HostToDevice memcpy is
-  // time consuming.
-  void InitialResizeOnCpu(bool v) {
-    initial_resize_on_cpu_ = v;
-  }
 
  protected:
   bool initialized_ = false;

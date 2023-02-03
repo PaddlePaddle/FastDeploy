@@ -35,13 +35,21 @@ class PaddleClasPreprocessor:
         """
         return self._preprocessor.run(input_ims)
 
-    def use_cuda(self, enable_cv_cuda=False, gpu_id=-1):
+    def use_cuda(self,
+                 enable_cv_cuda=False,
+                 gpu_id=-1,
+                 initial_resize_on_cpu=False):
         """Use CUDA preprocessors
 
-        :param: enable_cv_cuda: Whether to enable CV-CUDA
+        :param: enable_cv_cuda: Ture: use CV-CUDA, False: use CUDA only
         :param: gpu_id: GPU device id
+        :param: initial_resize_on_cpu: When the initial operator is Resize,
+            and input image size is large, maybe it's better to run resize on CPU,
+            because the HostToDevice memcpy is time consuming. Set this True to
+            run the initial resize on CPU.
         """
-        return self._preprocessor.use_cuda(enable_cv_cuda, gpu_id)
+        return self._preprocessor.use_cuda(enable_cv_cuda, gpu_id,
+                                           initial_resize_on_cpu)
 
     def disable_normalize(self):
         """

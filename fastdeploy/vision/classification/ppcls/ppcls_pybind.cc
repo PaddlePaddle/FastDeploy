@@ -40,8 +40,10 @@ void BindPaddleClas(pybind11::module& m) {
            })
       .def("use_cuda",
            [](vision::classification::PaddleClasPreprocessor& self,
-              bool enable_cv_cuda = false,
-              int gpu_id = -1) { self.UseCuda(enable_cv_cuda, gpu_id); })
+              bool enable_cv_cuda = false, int gpu_id = -1,
+              initial_resize_on_cpu = false) {
+             self.UseCuda(enable_cv_cuda, gpu_id, initial_resize_on_cpu);
+           })
       .def("disable_normalize",
            [](vision::classification::PaddleClasPreprocessor& self) {
              self.DisableNormalize();
