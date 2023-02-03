@@ -100,7 +100,7 @@ void OpenVINOBackend::InitTensorInfo(
 bool OpenVINOBackend::Init(const RuntimeOption& option) {
   if (option.model_from_memory_) {
     FDERROR << "OpenVINOBackend doesn't support load model from memory, please "
-               "load model from dist."
+               "load model from disk."
             << std::endl;
     return false;
   }
