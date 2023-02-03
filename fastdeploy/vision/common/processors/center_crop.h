@@ -26,6 +26,9 @@ class FASTDEPLOY_DECL CenterCrop : public Processor {
 #ifdef ENABLE_FLYCV
   bool ImplByFlyCV(Mat* mat);
 #endif
+#ifdef ENABLE_CVCUDA
+  bool ImplByCvCuda(Mat* mat);
+#endif
   std::string Name() { return "CenterCrop"; }
 
   static bool Run(Mat* mat, const int& width, const int& height,

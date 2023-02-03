@@ -93,3 +93,17 @@ python3 client.py
 ## 配置修改
 
 当前默认配置在GPU上运行， 如果要在CPU或其他推理引擎上运行。 需要修改`models/runtime/config.pbtxt`中配置，详情请参考[配置文档](../../../../../serving/docs/zh_CN/model_configuration.md)
+
+## 使用VisualDL进行可视化部署
+
+可以使用VisualDL进行[Serving可视化部署](../../../../../serving/docs/zh_CN/vdl_management.md)，上述启动服务、配置修改以及客户端请求的操作都可以基于VisualDL进行。
+
+通过VisualDL的可视化界面对PP-OCR进行服务化部署只需要如下三步：
+```text
+1. 载入模型库：./vision/ocr/PP-OCRv3/serving
+2. 下载模型资源文件：点击det_runtime模型，点击版本号1添加预训练模型，选择文字识别模型ch_PP-OCRv3_det进行下载。点击cls_runtime模型，点击版本号1添加预训练模型，选择文字识别模型ch_ppocr_mobile_v2.0_cls进行下载。点击rec_runtime模型，点击版本号1添加预训练模型，选择文字识别模型ch_PP-OCRv3_rec进行下载。点击rec_postprocess模型，点击版本号1添加预训练模型，选择文字识别模型ch_PP-OCRv3_rec进行下载。
+3. 启动服务：点击启动服务按钮，输入启动参数。
+```
+ <p align="center">
+  <img src="https://user-images.githubusercontent.com/22424850/211709324-b07bb303-ced2-4137-9df7-0d2574ba84c8.gif" width="100%"/>
+</p>
