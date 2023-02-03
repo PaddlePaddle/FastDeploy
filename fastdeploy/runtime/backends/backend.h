@@ -22,6 +22,7 @@
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/core/fd_type.h"
 #include "fastdeploy/runtime/runtime_option.h"
+#include "fastdeploy/benchmark/benchmark.h"
 
 namespace fastdeploy {
 
@@ -87,18 +88,9 @@ class BaseBackend {
     FDERROR << "Clone no support" << std::endl;
     return nullptr;
   }
-#ifdef ENABLE_BENCHMARK
-  // This method is only for benchmark, the output value of 
-  // 'mean_time_of_pure_backend' will not include the time 
-  // of H2D and D2H.
-  virtual bool Infer(std::vector<FDTensor>& inputs,
-                     std::vector<FDTensor>* outputs,
-                     double* mean_time_of_pure_backend,
-                     int repeat = 100, bool copy_to_fd = true) {
-    FDERROR << "Infer for benchmark no support!" << std::endl;
-    return false;
-  }
-#endif    
+
+  benchmark::BenchmarkOption benchmark_option_;  
+  benchmark::BenchmarkResult benchmark_result_; 
 };
 
 }  // namespace fastdeploy

@@ -73,13 +73,6 @@ class PaddleBackend : public BaseBackend {
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
 
-#ifdef ENABLE_BENCHMARK
-  bool Infer(std::vector<FDTensor>& inputs,
-             std::vector<FDTensor>* outputs,
-             double* mean_time_of_pure_backend,
-             int repeat = 100, bool copy_to_fd = true) override; // NOLINT
-#endif    
-
  private:
   void
   CollectShapeRun(paddle_infer::Predictor* predictor,

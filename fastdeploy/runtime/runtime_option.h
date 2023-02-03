@@ -32,6 +32,7 @@
 #include "fastdeploy/runtime/backends/rknpu2/option.h"
 #include "fastdeploy/runtime/backends/sophgo/option.h"
 #include "fastdeploy/runtime/backends/tensorrt/option.h"
+#include "fastdeploy/benchmark/option.h"
 
 namespace fastdeploy {
 
@@ -347,6 +348,18 @@ struct FASTDEPLOY_DECL RuntimeOption {
                     float available_memory_proportion = 1.0,
                     bool enable_half_partial = false);
 
+  void EnableProfiling(bool inclue_h2d_d2h = false, 
+                       int repeat = 100, int warmup = 50) {
+    benchmark_option.enable_profile = true;
+    benchmark_option.warmup = warmup;
+    benchmark_option.repeats = repeat;
+    benchmark_option.include_h2d_d2h = inclue_h2d_d2h;
+  }
+
+  void DisableProfiling() {
+    benchmark_option.enable_profile = false;
+  }
+
   Backend backend = Backend::UNKNOWN;
 
   // for cpu inference
@@ -423,6 +436,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool model_from_memory_ = false;
   // format of input model
   ModelFormat model_format = ModelFormat::PADDLE;
+
+  // Benchmark option
+  benchmark::BenchmarkOption benchmark_option;  
 };
 
 }  // namespace fastdeploy

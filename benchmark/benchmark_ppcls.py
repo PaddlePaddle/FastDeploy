@@ -35,17 +35,17 @@ def parse_arguments():
     parser.add_argument(
         "--device_id", type=int, default=0, help="device(gpu) id")
     parser.add_argument(
-        "--iter_num",
+        "--repeat",
         required=True,
         type=int,
-        default=300,
-        help="number of iterations for computing performace.")
+        default=1000,
+        help="number of repeats for profiling.")    
     parser.add_argument(
-        "--backend_repeat",
+        "--warmup",
         required=True,
         type=int,
-        default=10,
-        help="number of repeats for computing backend performace.")    
+        default=50,
+        help="number of warmup for profiling.")      
     parser.add_argument(
         "--device",
         default="cpu",
@@ -66,10 +66,10 @@ def parse_arguments():
         default=False,
         help="whether enable collect memory info")
     parser.add_argument(
-        "--enable_record_time_of_backend",
+        "--include_h2d_d2h",
         type=ast.literal_eval,
         default=False,
-        help="whether enable record time of backend")     
+        help="whether enable run profiling")       
     args = parser.parse_args()
     return args
 
@@ -79,6 +79,11 @@ def build_option(args):
     device = args.device
     backend = args.backend
     enable_trt_fp16 = args.enable_trt_fp16
+    repeat = args.repeat
+    warmup = args.warmup
+    include_h2d_d2h = args.include_h2d_d2h
+
+    option.enable_profiling(include_h2d_d2h, repeat, warmup)    
     option.set_cpu_thread_num(args.cpu_num_thread)
     if device == "gpu":
         option.use_gpu()
@@ -239,12 +244,7 @@ if __name__ == '__main__':
 
     gpu_id = args.device_id
     enable_collect_memory_info = args.enable_collect_memory_info
-    enable_record_time_of_backend = args.enable_record_time_of_backend
-    backend_repeat = args.backend_repeat
     dump_result = dict()
-    end2end_statis = list()
-    prepost_statis = list()
-    h2d_d2h_statis = list()
     cpu_mem = list()
     gpu_mem = list()
     gpu_util = list()
@@ -261,8 +261,10 @@ if __name__ == '__main__':
     f.writelines("===={}====: \n".format(os.path.split(file_path)[-1][:-4]))
 
     try:
+        print("build model start")    
         model = fd.vision.classification.PaddleClasModel(
             model_file, params_file, config_file, runtime_option=option)
+        print("build model done")    
         if enable_collect_memory_info:
             import multiprocessing
             import subprocess
@@ -272,42 +274,19 @@ if __name__ == '__main__':
             enable_gpu = args.device == "gpu"
             monitor = Monitor(enable_gpu, gpu_id)
             monitor.start()
-
-        model.enable_record_time_of_runtime()
-        if enable_record_time_of_backend:
-          if args.device.lower() in ("gpu", "xpu", "npu", "kunlunxin", "ascend"):
-            if backend_repeat < 100:
-              print(f"[WARNING] The backend_repeat for {args.device} should >= 100, \
-                but got {backend_repeat}!")
-          model.enable_record_time_of_backend(backend_repeat)
+        
+        print(args.image)
         im_ori = cv2.imread(args.image)
-        for i in tqdm(range(args.iter_num)):
-            im = im_ori
-            start = time.time()
-            result = model.predict(im)
-            end = time.time()
-            if enable_record_time_of_backend:
-              curr_time_of_backend = model.get_current_time_of_backend()
-              curr_time_of_h2d_d2h = model.get_current_time_of_h2d_d2h()
-              total_time_of_backend = curr_time_of_backend * backend_repeat
-              curr_pre_post_h2d_d2h_time = (end - start) - total_time_of_backend
-              curr_pre_post_time = curr_pre_post_h2d_d2h_time - curr_time_of_h2d_d2h
-              end2end_statis.append(curr_pre_post_h2d_d2h_time + curr_time_of_backend)
-              prepost_statis.append(curr_pre_post_time)
-              h2d_d2h_statis.append(curr_time_of_h2d_d2h)
-            else:
-              curr_time_of_runtime = model.get_current_time_of_runtime()
-              curr_pre_post_time = (end - start) - curr_time_of_runtime
-              end2end_statis.append((end - start))
-              prepost_statis.append(curr_pre_post_time)
-              h2d_d2h_statis.append(0.)    
+        
+        print(im_ori.shape)
+        print("predict start")
+        result = model.predict(im_ori)
+        
+        print("predict done")
+        time_cost = model.get_profiling_result()
 
-        runtime_statis = model.print_statis_info_of_runtime()
+        print(time_cost*1000)
 
-        warmup_iter = args.iter_num // 5
-        end2end_statis_repeat = end2end_statis[warmup_iter:]
-        prepost_statis_repeat = prepost_statis[warmup_iter:]
-        h2d_d2h_statis_repeat = h2d_d2h_statis[warmup_iter:]
         if enable_collect_memory_info:
             monitor.stop()
             mem_info = monitor.output()
@@ -318,25 +297,10 @@ if __name__ == '__main__':
             dump_result["gpu_util"] = mem_info['gpu'][
                 'utilization.gpu'] if 'gpu' in mem_info else 0
 
-        dump_result["runtime"] = runtime_statis["avg_time"] * 1000
-        if enable_record_time_of_backend:
-          dump_result["backend"] = runtime_statis["backend_avg_time"] * 1000
-        else:
-          dump_result["backend"] = 0.  
-        dump_result["prepost"] = np.mean(prepost_statis_repeat) * 1000
-        dump_result["h2d_d2h"] = np.mean(h2d_d2h_statis_repeat) * 1000
-        dump_result["end2end"] = np.mean(end2end_statis_repeat) * 1000
+        dump_result["runtime"] = time_cost * 1000
 
         f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
-        f.writelines("Backend(ms): {} \n".format(str(dump_result["backend"])))
-        f.writelines("PrePost(ms): {} \n".format(str(dump_result["prepost"])))
-        f.writelines("H2D_D2H(ms): {} \n".format(str(dump_result["h2d_d2h"])))
-        f.writelines("End2End(ms): {} \n".format(str(dump_result["end2end"])))
         print("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
-        print("Backend(ms): {} \n".format(str(dump_result["backend"])))
-        print("PrePost(ms): {} \n".format(str(dump_result["prepost"])))
-        print("H2D_D2H(ms): {} \n".format(str(dump_result["h2d_d2h"])))
-        print("End2End(ms): {} \n".format(str(dump_result["end2end"])))
         if enable_collect_memory_info:
             f.writelines("cpu_rss_mb: {} \n".format(
                 str(dump_result["cpu_rss_mb"])))

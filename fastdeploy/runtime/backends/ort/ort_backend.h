@@ -54,14 +54,7 @@ class OrtBackend : public BaseBackend {
   std::vector<TensorInfo> GetOutputInfos() override;
   static std::vector<OrtCustomOp*> custom_operators_;
   void InitCustomOperators();
-
-#ifdef ENABLE_BENCHMARK
-  bool Infer(std::vector<FDTensor>& inputs,
-             std::vector<FDTensor>* outputs,
-             double* mean_time_of_pure_backend,
-             int repeat = 100, bool copy_to_fd = true) override; // NOLINT
-#endif    
-
+  
  private:
   bool InitFromPaddle(const std::string& model_buffer,
                       const std::string& params_buffer,

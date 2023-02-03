@@ -77,6 +77,8 @@ void BindRuntime(pybind11::module& m) {
       .def("set_ipu_config", &RuntimeOption::SetIpuConfig)
       .def("delete_paddle_backend_pass",
            &RuntimeOption::DeletePaddleBackendPass)
+      .def("enable_profiling", &RuntimeOption::EnableProfiling)
+      .def("disable_profiling", &RuntimeOption::DisableProfiling)
       .def("disable_paddle_trt_ops", &RuntimeOption::DisablePaddleTrtOPs)
       .def_readwrite("model_file", &RuntimeOption::model_file)
       .def_readwrite("params_file", &RuntimeOption::params_file)
@@ -217,6 +219,7 @@ void BindRuntime(pybind11::module& m) {
       .def("num_outputs", &Runtime::NumOutputs)
       .def("get_input_info", &Runtime::GetInputInfo)
       .def("get_output_info", &Runtime::GetOutputInfo)
+      .def("get_profiling_result", &Runtime::GetProfilingResult)
       .def_readonly("option", &Runtime::option);
 
   pybind11::enum_<Backend>(m, "Backend", pybind11::arithmetic(),

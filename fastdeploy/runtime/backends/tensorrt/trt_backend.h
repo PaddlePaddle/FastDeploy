@@ -97,13 +97,6 @@ class TrtBackend : public BaseBackend {
     }
   }
 
-#ifdef ENABLE_BENCHMARK
-  bool Infer(std::vector<FDTensor>& inputs,
-             std::vector<FDTensor>* outputs,
-             double* mean_time_of_pure_backend,
-             int repeat = 100, bool copy_to_fd = true) override; // NOLINT
-#endif    
-
  private:
   TrtBackendOption option_;
   std::shared_ptr<nvinfer1::ICudaEngine> engine_;

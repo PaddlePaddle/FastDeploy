@@ -21,9 +21,6 @@
 #ifdef ENABLE_PADDLE2ONNX
 #include "paddle2onnx/converter.h"
 #endif
-#ifdef ENABLE_BENCHMARK
-#include "fastdeploy/utils/perf.h"
-#endif
 
 #include <memory>
 
@@ -290,61 +287,6 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
 
   return true;
 }
-
-#ifdef ENABLE_BENCHMARK
-bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
-                       std::vector<FDTensor>* outputs, 
-                       double* mean_time_of_pure_backend,
-                       int repeat, bool copy_to_fd) {
-  FDASSERT(repeat > 0, "repeat param must > 0, but got %d", repeat);                      
-  if (inputs.size() != inputs_desc_.size()) {
-    FDERROR << "[OrtBackend] Size of the inputs(" << inputs.size()
-            << ") should keep same with the inputs of this model("
-            << inputs_desc_.size() << ")." << std::endl;
-    return false;
-  }
-
-  // from FDTensor to Ort Inputs
-  for (size_t i = 0; i < inputs.size(); ++i) {
-    auto ort_value = CreateOrtValue(inputs[i], option_.device == Device::GPU);
-    binding_->BindInput(inputs[i].name.c_str(), ort_value);
-  }
-
-  for (size_t i = 0; i < outputs_desc_.size(); ++i) {
-    Ort::MemoryInfo memory_info("Cpu", OrtDeviceAllocator, 0,
-                                OrtMemTypeDefault);
-    binding_->BindOutput(outputs_desc_[i].name.c_str(), memory_info);
-  }
-  
-  double time_of_pure_backend = 0.0;
-  TimeCounter tc;
-  tc.Start();
-  for (int i = 0; i < repeat; ++i) {
-    // Inference with inputs
-    try {
-      session_.Run({}, *(binding_.get()));
-    } catch (const std::exception& e) {
-      FDERROR << "Failed to Infer: " << e.what() << std::endl;
-      return false;
-    }
-  }
-  tc.End();
-  time_of_pure_backend += tc.Duration();
-  
-  *mean_time_of_pure_backend = 
-    time_of_pure_backend / static_cast<double>(repeat);
-
-  // Convert result after inference
-  std::vector<Ort::Value> ort_outputs = binding_->GetOutputValues();
-  outputs->resize(ort_outputs.size());
-  for (size_t i = 0; i < ort_outputs.size(); ++i) {
-    OrtValueToFDTensor(ort_outputs[i], &((*outputs)[i]), outputs_desc_[i].name,
-                       copy_to_fd);
-  }
-
-  return true;
-}
-#endif
 
 TensorInfo OrtBackend::GetInputInfo(int index) {
   FDASSERT(index < NumInputs(),

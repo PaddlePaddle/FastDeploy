@@ -23,6 +23,7 @@
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/runtime/runtime_option.h"
 #include "fastdeploy/utils/perf.h"
+#include "fastdeploy/benchmark/benchmark.h"
 
 /** \brief All C++ FastDeploy APIs are defined inside this namespace
 *
@@ -96,12 +97,9 @@ struct FASTDEPLOY_DECL Runtime {
   bool Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
                const RuntimeOption& _option);
 
-#ifdef ENABLE_BENCHMARK
-  bool Infer(std::vector<FDTensor>& input_tensors,
-             std::vector<FDTensor>* output_tensors,
-             double* mean_time_of_pure_backend,
-             int repeat = 100); // NOLINT
-#endif    
+  double GetProfilingResult() {
+    return backend_->benchmark_result_.time_of_runtime;
+  }             
 
  private:
   void CreateOrtBackend();

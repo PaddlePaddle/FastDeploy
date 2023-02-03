@@ -144,6 +144,9 @@ class Runtime:
             index, self.num_outputs)
         return self._runtime.get_output_info(index)
 
+    def get_profiling_result(self):
+        return self._runtime.get_profiling_result()      
+
 
 class RuntimeOption:
     """Options for FastDeploy Runtime.
@@ -551,6 +554,14 @@ class RuntimeOption:
         return self._option.set_ipu_config(enable_fp16, replica_num,
                                            available_memory_proportion,
                                            enable_half_partial)
+
+    def enable_profiling(self, 
+                         inclue_h2d_d2h=False,
+                         repeat=100, warmup=50):
+        return self._option.enable_profiling(inclue_h2d_d2h, repeat, warmup)   
+
+    def disable_profiling(self):
+        return self._option.disable_profiling()
 
     def __repr__(self):
         attrs = dir(self._option)

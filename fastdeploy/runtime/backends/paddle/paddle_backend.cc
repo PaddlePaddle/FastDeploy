@@ -17,9 +17,6 @@
 #include <sstream>
 
 #include "fastdeploy/utils/path.h"
-#ifdef ENABLE_BENCHMARK
-#include "fastdeploy/utils/perf.h"
-#endif
 
 namespace fastdeploy {
 
@@ -383,55 +380,5 @@ void PaddleBackend::CollectShapeRun(
   }
   predictor->Run();
 }
-
-#ifdef ENABLE_BENCHMARK
-bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
-                          std::vector<FDTensor>* outputs,
-                          double* mean_time_of_pure_backend,
-                          int repeat, bool copy_to_fd) {
-  FDASSERT(repeat > 0, "repeat param must > 0, but got %d", repeat);                                                  
-  if (inputs.size() != inputs_desc_.size()) {
-    FDERROR << "[PaddleBackend] Size of inputs(" << inputs.size()
-            << ") should keep same with the inputs of this model("
-            << inputs_desc_.size() << ")." << std::endl;
-    return false;
-  }
-
-  for (size_t i = 0; i < inputs.size(); ++i) {
-    auto handle = predictor_->GetInputHandle(inputs[i].name);
-    ShareTensorFromFDTensor(handle.get(), inputs[i]);
-  }
-
-  double time_of_pure_backend = 0.0;
-  TimeCounter tc;
-  tc.Start();
-  for (int i = 0; i < repeat; ++i) {  
-    predictor_->Run();
-  }
-  
-  // output share backend memory only support CPU or GPU
-  if (option_.use_ipu) {
-    copy_to_fd = true;
-  }
-  outputs->resize(outputs_desc_.size());
-  for (size_t i = 0; i < outputs_desc_.size(); ++i) {
-    auto handle = predictor_->GetOutputHandle(outputs_desc_[i].name);
-    if (copy_to_fd) {
-      (*outputs)[i].is_pinned_memory = option_.enable_pinned_memory;
-    }
-    PaddleTensorToFDTensor(handle, &((*outputs)[i]), copy_to_fd);
-  }
-  // Since Paddle's inference on via TRT/GPU is asynchronous, we need to count
-  // the last inference time before exiting the function. The last 
-  // inference time-consuming, including only one H2D_D2H time. 
-  // Therefore, backend_time is an approximation. Namely:
-  //    mean_backend_time = (total_backend_time+1*h2d_d2h_time)/repeat.
-  tc.End();
-  time_of_pure_backend += tc.Duration();
-  *mean_time_of_pure_backend = 
-    time_of_pure_backend / static_cast<double>(repeat);
-  return true;
-}
-#endif
 
 }  // namespace fastdeploy

@@ -172,22 +172,6 @@ bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
   return backend_->Infer(input_tensors, output_tensors);
 }
 
-#ifdef ENABLE_BENCHMARK
-bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
-                    std::vector<FDTensor>* output_tensors,
-                    double* mean_time_of_pure_backend,
-                    int repeat) {
-  FDASSERT(repeat > 0, "repeat param must > 0, but got %d", repeat);                     
-  for (auto& tensor : input_tensors) {
-    FDASSERT(tensor.device_id < 0 || tensor.device_id == option.device_id,
-             "Device id of input tensor(%d) and runtime(%d) are not same.",
-             tensor.device_id, option.device_id);
-  }
-  return backend_->Infer(input_tensors, output_tensors, 
-                         mean_time_of_pure_backend, repeat);
-}
-#endif
-
 bool Runtime::Infer() {
   bool result = backend_->Infer(input_tensors_, &output_tensors_, false);
   for (auto& tensor : output_tensors_) {
@@ -338,6 +322,7 @@ void Runtime::CreateOpenVINOBackend() {
   }
   backend_ = utils::make_unique<OpenVINOBackend>();
   auto casted_backend = dynamic_cast<OpenVINOBackend*>(backend_.get());
+  casted_backend->benchmark_option_ = option.benchmark_option;
 
   if (option.model_format == ModelFormat::ONNX) {
     FDASSERT(casted_backend->InitFromOnnx(option.model_file, ov_option),

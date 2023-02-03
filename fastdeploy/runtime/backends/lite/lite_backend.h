@@ -49,13 +49,6 @@ class LiteBackend : public BaseBackend {
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
 
-#ifdef ENABLE_BENCHMARK
-  bool Infer(std::vector<FDTensor>& inputs,
-             std::vector<FDTensor>* outputs,
-             double* mean_time_of_pure_backend,
-             int repeat = 100, bool copy_to_fd = true) override; // NOLINT
-#endif    
-
  private:
   void ConfigureCpu(const LiteBackendOption& option);
   void ConfigureTimvx(const LiteBackendOption& option);

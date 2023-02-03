@@ -114,60 +114,9 @@ class FASTDEPLOY_DECL FastDeployModel {
     return enable_record_time_of_runtime_;
   }
 
-/** \brief This is a debug interface, used to record the pure inference time of backend (no h2d+d2h)
-   *
-   * example code @code
-   * auto model = fastdeploy::vision::PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml");
-   * if (!model.Initialized()) {
-   *   std::cerr << "Failed to initialize." << std::endl;
-   *   return -1;
-   * }
-   * model.EnableRecordTimeOfRuntime();
-   * model.EnableRecordTimeOfBackend();
-   * cv::Mat im = cv::imread("test.jpg");
-   * for (auto i = 0; i < 1000; ++i) {
-   *   fastdeploy::vision::DetectionResult result;
-   *   model.Predict(&im, &result);
-   * }
-   * model.PrintStatisInfoOfRuntime();
-   * @endcode After called the `PrintStatisInfoOfRuntime()`, the statistical information of runtime will be printed in the console
-   */
-  virtual void EnableRecordTimeOfBackend(int repeat = 1) {
-    time_of_backend_.clear();
-    std::vector<double>().swap(time_of_backend_);
-    enable_record_time_of_backend_ = true;
-    repeat_for_time_of_backend_ = repeat;
-  }
-
-  /** \brief Disable to record the time of backend, see `EnableRecordTimeOfBackend()` for more detail
-  */
-  virtual void DisableRecordTimeOfBackend() {
-    enable_record_time_of_backend_ = false;
-  }
-
-  /** \brief Check if the `EnableRecordTimeOfBackend()` method is enabled.
-  */
-  virtual bool EnabledRecordTimeOfBackend() {
-    return enable_record_time_of_backend_;
-  }
-  
-  /** \brief Get the time of runtime for current inference.
-  */
-  virtual double GetCurrentTimeOfRuntime() {
-    return current_time_of_runtime_;
-  }
-  
-  /** \brief  Get the time of backend for current inference.
-  */
-  virtual double GetCurrentTimeOfBackend() {
-    return current_time_of_backend_;
-  }
-
-  /** \brief  Get the time of h2d and d2h for current inference.
-  */
-  virtual double GetCurrentTimeOfH2dAndD2h() {
-    return current_time_of_h2d_d2h_;
-  }
+  virtual double GetProfilingResult() {
+    return runtime_->GetProfilingResult();
+  }            
 
   /** \brief Release reused input/output buffers
   */
@@ -208,23 +157,14 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool CreateTimVXBackend();
   bool CreateKunlunXinBackend();
   bool CreateASCENDBackend();
+  
+  bool IsSupported(const std::vector<Backend>& backends, Backend backend);
 
   std::shared_ptr<Runtime> runtime_;
   bool runtime_initialized_ = false;
   // whether to record inference time
   bool enable_record_time_of_runtime_ = false;
-  // record inference time for runtime (backend+h2d+d2h)
   std::vector<double> time_of_runtime_;
-  // whether to record the inference time of backend (no h2d+d2h)
-  bool enable_record_time_of_backend_ = false;
-  // record inference time for backend (backend+h2d+d2h)
-  std::vector<double> time_of_backend_;
-  // The repeats to record time of backend.
-  // mean_time=total_time/repeat
-  int repeat_for_time_of_backend_ = 1;
-  double current_time_of_backend_ = 0.0;
-  double current_time_of_runtime_ = 0.0;
-  double current_time_of_h2d_d2h_ = 0.0;
 };
 
 }  // namespace fastdeploy

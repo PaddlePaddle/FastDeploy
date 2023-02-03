@@ -51,25 +51,11 @@ class FastDeployModel:
     def disable_record_time_of_runtime(self):
         self._model.disable_record_time_of_runtime()
 
-    def enable_record_time_of_backend(self, repeat=1):
-        assert isinstance(repeat, int
-        ), "The value to set `repeat` must be type of int."
-        self._model.enable_record_time_of_backend(repeat)
-
-    def disable_record_time_of_backend(self):
-        self._model.disable_record_time_of_backend()    
-
     def print_statis_info_of_runtime(self):
         return self._model.print_statis_info_of_runtime()
 
-    def get_current_time_of_runtime(self):
-        return self._model.get_current_time_of_runtime()    
-
-    def get_current_time_of_backend(self):
-        return self._model.get_current_time_of_backend()
-
-    def get_current_time_of_h2d_d2h(self):
-        return self._model.get_current_time_of_h2d_d2h()        
+    def get_profiling_result(self):
+        return self._model.get_profiling_result()    
 
     @property
     def runtime_option(self):
