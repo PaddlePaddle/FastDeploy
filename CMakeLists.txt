@@ -129,7 +129,7 @@ include_directories(${HEAD_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 if (WITH_TIMVX)
-  include(${PROJECT_SOURCE_DIR}/cmake/timvx.cmake)
+  #include(${PROJECT_SOURCE_DIR}/cmake/timvx.cmake)
 endif()
 
 if (WITH_ASCEND)
