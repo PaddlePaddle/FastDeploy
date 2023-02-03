@@ -219,7 +219,7 @@ void BindRuntime(pybind11::module& m) {
       .def("num_outputs", &Runtime::NumOutputs)
       .def("get_input_info", &Runtime::GetInputInfo)
       .def("get_output_info", &Runtime::GetOutputInfo)
-      .def("get_profiling_result", &Runtime::GetProfilingResult)
+      .def("get_profile_time", &Runtime::GetProfileTime)
       .def_readonly("option", &Runtime::option);
 
   pybind11::enum_<Backend>(m, "Backend", pybind11::arithmetic(),

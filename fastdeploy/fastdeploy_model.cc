@@ -31,32 +31,29 @@ std::string Str(const std::vector<Backend>& backends) {
   return oss.str();
 }
 
-bool FastDeployModel::IsSupported(const std::vector<Backend>& backends, 
-                                  Backend backend) {
-#ifdef ENABLE_BENCHMARK
-  if (runtime_option.benchmark_option.enable_profile) {
-    // In benchmark mode, we don't check to see if the backend 
-    // is supported for current model.
-    FDWARNING << "In benchmark mode, we don't check to see if " 
-              << "the backend [" << backend 
-              << "] is supported for current model!"
-              << std::endl;
-    return true;
-  } else {
-    for (size_t i = 0; i < backends.size(); ++i) {
-      if (backends[i] == backend) {
-        return true;
-      }
-    }
-    return false;
-  }  
-#else  
+bool CheckBackendSupported(const std::vector<Backend>& backends,
+                           Backend backend) {
   for (size_t i = 0; i < backends.size(); ++i) {
     if (backends[i] == backend) {
       return true;
     }
   }
   return false;
+}
+
+bool FastDeployModel::IsSupported(const std::vector<Backend>& backends, 
+                                  Backend backend) {
+#ifdef ENABLE_BENCHMARK
+  if (runtime_option.benchmark_option.enable_profile) {
+    FDWARNING << "In benchmark mode, we don't check to see if " 
+              << "the backend [" << backend 
+              << "] is supported for current model!"
+              << std::endl;
+    return true;
+  }
+  return CheckBackendSupported(backends, backend);  
+#else  
+  return CheckBackendSupported(backends, backend);
 #endif  
 }
 

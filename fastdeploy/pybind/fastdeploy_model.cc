@@ -30,8 +30,8 @@ void BindFDModel(pybind11::module& m) {
            &FastDeployModel::DisableRecordTimeOfRuntime)
       .def("print_statis_info_of_runtime",
            &FastDeployModel::PrintStatisInfoOfRuntime)
-      .def("get_profiling_result",
-           &FastDeployModel::GetProfilingResult)     
+      .def("get_profile_time",
+           &FastDeployModel::GetProfileTime)     
       .def("initialized", &FastDeployModel::Initialized)
       .def_readwrite("runtime_option", &FastDeployModel::runtime_option)
       .def_readwrite("valid_cpu_backends", &FastDeployModel::valid_cpu_backends)

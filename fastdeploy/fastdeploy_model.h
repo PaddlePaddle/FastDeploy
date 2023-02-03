@@ -114,8 +114,8 @@ class FASTDEPLOY_DECL FastDeployModel {
     return enable_record_time_of_runtime_;
   }
 
-  virtual double GetProfilingResult() {
-    return runtime_->GetProfilingResult();
+  virtual double GetProfileTime() {
+    return runtime_->GetProfileTime();
   }            
 
   /** \brief Release reused input/output buffers
@@ -157,8 +157,8 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool CreateTimVXBackend();
   bool CreateKunlunXinBackend();
   bool CreateASCENDBackend();
-  
-  bool IsSupported(const std::vector<Backend>& backends, Backend backend);
+  bool IsSupported(const std::vector<Backend>& backends,
+                   Backend backend);
 
   std::shared_ptr<Runtime> runtime_;
   bool runtime_initialized_ = false;

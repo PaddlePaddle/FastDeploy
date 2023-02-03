@@ -144,8 +144,8 @@ class Runtime:
             index, self.num_outputs)
         return self._runtime.get_output_info(index)
 
-    def get_profiling_result(self):
-        return self._runtime.get_profiling_result()      
+    def get_profile_time(self):
+        return self._runtime.get_profile_time()      
 
 
 class RuntimeOption:

@@ -105,7 +105,6 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
             << std::endl;
     return false;
   }
-  FDINFO << "casted_backend OV InitFromPaddle start!" << std::endl;
   option_ = option;
 
   std::shared_ptr<ov::Model> model = core_.read_model(model_file, params_file);
@@ -203,7 +202,6 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
 
   request_ = compiled_model_.create_infer_request();
   initialized_ = true;
-  FDINFO << "casted_backend OV InitFromPaddle done!" << std::endl;
   return true;
 }
 
@@ -350,7 +348,7 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
     return false;
   }
 
-  PROFILE_LOOP_H2D_D2H_BEGIN(benchmark_option_)
+  RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
   for (size_t i = 0; i < inputs.size(); ++i) {
     ov::Shape shape(inputs[i].shape.begin(), inputs[i].shape.end());
     ov::Tensor ov_tensor(FDDataTypeToOV(inputs[i].dtype), shape,
@@ -358,9 +356,9 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
     request_.set_tensor(inputs[i].name, ov_tensor);
   }
 
-  PROFILE_LOOP_BEGIN(benchmark_option_)
+  RUNTIME_PROFILE_LOOP_BEGIN
   request_.infer();
-  PROFILE_LOOP_END(benchmark_result_)
+  RUNTIME_PROFILE_LOOP_END
 
   outputs->resize(output_infos_.size());
   for (size_t i = 0; i < output_infos_.size(); ++i) {
@@ -381,7 +379,7 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
           out_tensor.data(), Device::CPU);
     }
   }
-  PROFILE_LOOP_H2D_D2H_END(benchmark_result_)
+  RUNTIME_PROFILE_LOOP_H2D_D2H_END
   return true;
 }
 

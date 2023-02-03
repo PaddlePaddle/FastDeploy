@@ -35,6 +35,11 @@ def parse_arguments():
     parser.add_argument(
         "--device_id", type=int, default=0, help="device(gpu) id")
     parser.add_argument(
+        "--profile_mode",
+        type=str,
+        default="runtime",
+        help="runtime or end2end.")      
+    parser.add_argument(
         "--repeat",
         required=True,
         type=int,
@@ -79,11 +84,8 @@ def build_option(args):
     device = args.device
     backend = args.backend
     enable_trt_fp16 = args.enable_trt_fp16
-    repeat = args.repeat
-    warmup = args.warmup
-    include_h2d_d2h = args.include_h2d_d2h
-
-    option.enable_profiling(include_h2d_d2h, repeat, warmup)    
+    if args.profile_mode == "runtime":
+        option.enable_profiling(args.include_h2d_d2h, args.repeat, args.warmup)    
     option.set_cpu_thread_num(args.cpu_num_thread)
     if device == "gpu":
         option.use_gpu()
@@ -261,10 +263,8 @@ if __name__ == '__main__':
     f.writelines("===={}====: \n".format(os.path.split(file_path)[-1][:-4]))
 
     try:
-        print("build model start")    
         model = fd.vision.classification.PaddleClasModel(
             model_file, params_file, config_file, runtime_option=option)
-        print("build model done")    
         if enable_collect_memory_info:
             import multiprocessing
             import subprocess
@@ -275,17 +275,25 @@ if __name__ == '__main__':
             monitor = Monitor(enable_gpu, gpu_id)
             monitor.start()
         
-        print(args.image)
         im_ori = cv2.imread(args.image)
-        
-        print(im_ori.shape)
-        print("predict start")
-        result = model.predict(im_ori)
-        
-        print("predict done")
-        time_cost = model.get_profiling_result()
-
-        print(time_cost*1000)
+        if args.profile_mode == "runtime":
+            result = model.predict(im_ori)
+            profile_time = model.get_profile_time()
+            dump_result["runtime"] = profile_time * 1000
+            f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
+            print("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
+        else:
+            # end2end
+            for i in range(args.warmup):
+                result = model.predict(im_ori)
+            
+            start = time.time()
+            for i in tqdm(range(args.repeat)):
+                result = model.predict(im_ori)
+            end = time.time()
+            dump_result["end2end"] = ((end - start) / args.repeat) * 1000.0
+            f.writelines("End2End(ms): {} \n".format(str(dump_result["end2end"])))
+            print("End2End(ms): {} \n".format(str(dump_result["end2end"])))
 
         if enable_collect_memory_info:
             monitor.stop()
@@ -296,11 +304,7 @@ if __name__ == '__main__':
                 'memory.used'] if 'gpu' in mem_info else 0
             dump_result["gpu_util"] = mem_info['gpu'][
                 'utilization.gpu'] if 'gpu' in mem_info else 0
-
-        dump_result["runtime"] = time_cost * 1000
-
-        f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
-        print("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
+        
         if enable_collect_memory_info:
             f.writelines("cpu_rss_mb: {} \n".format(
                 str(dump_result["cpu_rss_mb"])))

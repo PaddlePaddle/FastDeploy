@@ -97,7 +97,7 @@ struct FASTDEPLOY_DECL Runtime {
   bool Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
                const RuntimeOption& _option);
 
-  double GetProfilingResult() {
+  double GetProfileTime() {
     return backend_->benchmark_result_.time_of_runtime;
   }             
 

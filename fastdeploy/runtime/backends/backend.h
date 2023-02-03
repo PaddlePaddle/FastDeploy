@@ -93,4 +93,13 @@ class BaseBackend {
   benchmark::BenchmarkResult benchmark_result_; 
 };
 
+#define RUNTIME_PROFILE_LOOP_BEGIN                       \
+  __RUNTIME_PROFILE_LOOP_BEGIN(benchmark_option_)
+#define RUNTIME_PROFILE_LOOP_END                         \
+  __RUNTIME_PROFILE_LOOP_END(benchmark_result_)
+#define RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN               \
+  __RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN(benchmark_option_)
+#define RUNTIME_PROFILE_LOOP_H2D_D2H_END                 \
+  __RUNTIME_PROFILE_LOOP_H2D_D2H_END(benchmark_result_)
+
 }  // namespace fastdeploy
