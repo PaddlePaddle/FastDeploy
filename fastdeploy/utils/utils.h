@@ -203,8 +203,7 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
 FASTDEPLOY_DECL std::vector<int64_t>
 GetStride(const std::vector<int64_t>& dims);
 
-template <typename T, typename std::enable_if<std::is_integral<T>::value,
-                                              bool>::type = true>
+template <typename T>
 std::string Str(const std::vector<T>& shape) {
   std::ostringstream oss;
   oss << "[ " << shape[0];

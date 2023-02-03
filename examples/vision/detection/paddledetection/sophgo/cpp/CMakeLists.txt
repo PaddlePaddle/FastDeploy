@@ -14,6 +14,8 @@ include_directories(${FastDeploy_INCLUDE_DIRS})
 
 add_executable(infer_ppyoloe ${PROJECT_SOURCE_DIR}/infer_ppyoloe.cc)
 add_executable(infer_picodet ${PROJECT_SOURCE_DIR}/infer_picodet.cc)
+add_executable(infer_yolov8 ${PROJECT_SOURCE_DIR}/infer_yolov8.cc)
 # 添加FastDeploy库依赖
 target_link_libraries(infer_ppyoloe ${FASTDEPLOY_LIBS})
 target_link_libraries(infer_picodet ${FASTDEPLOY_LIBS})
+target_link_libraries(infer_yolov8 ${FASTDEPLOY_LIBS})

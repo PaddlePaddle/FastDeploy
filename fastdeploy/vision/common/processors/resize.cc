@@ -14,6 +14,12 @@
 
 #include "fastdeploy/vision/common/processors/resize.h"
 
+#ifdef ENABLE_CVCUDA
+#include <cvcuda/OpResize.hpp>
+
+#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
+#endif
+
 namespace fastdeploy {
 namespace vision {
 
@@ -79,7 +85,7 @@ bool Resize::ImplByFlyCV(Mat* mat) {
   } else if (interp_ == 2) {
     interp_method = fcv::InterpolationType::INTER_CUBIC;
   } else if (interp_ == 3) {
-    interp_method = fcv::InterpolationType::INTER_AREA;  
+    interp_method = fcv::InterpolationType::INTER_AREA;
   } else {
     FDERROR << "Resize: Only support interp_ be 0/1/2/3 with FlyCV, but "
                "now it's "
@@ -112,6 +118,52 @@ bool Resize::ImplByFlyCV(Mat* mat) {
             << std::endl;
     return false;
   }
+  return true;
+}
+#endif
+
+#ifdef ENABLE_CVCUDA
+bool Resize::ImplByCvCuda(Mat* mat) {
+  if (width_ == mat->Width() && height_ == mat->Height()) {
+    return true;
+  }
+  if (fabs(scale_w_ - 1.0) < 1e-06 && fabs(scale_h_ - 1.0) < 1e-06) {
+    return true;
+  }
+
+  if (width_ > 0 && height_ > 0) {
+  } else if (scale_w_ > 0 && scale_h_ > 0) {
+    width_ = std::round(scale_w_ * mat->Width());
+    height_ = std::round(scale_h_ * mat->Height());
+  } else {
+    FDERROR << "Resize: the parameters must satisfy (width > 0 && height > 0) "
+               "or (scale_w > 0 && scale_h > 0)."
+            << std::endl;
+    return false;
+  }
+
+  // Prepare input tensor
+  std::string tensor_name = Name() + "_cvcuda_src";
+  FDTensor* src = CreateCachedGpuInputTensor(mat, tensor_name);
+  auto src_tensor = CreateCvCudaTensorWrapData(*src);
+
+  // Prepare output tensor
+  tensor_name = Name() + "_cvcuda_dst";
+  FDTensor* dst =
+      UpdateAndGetCachedTensor({height_, width_, mat->Channels()}, mat->Type(),
+                               tensor_name, Device::GPU);
+  auto dst_tensor = CreateCvCudaTensorWrapData(*dst);
+
+  // CV-CUDA Interp value is compatible with OpenCV
+  cvcuda::Resize resize_op;
+  resize_op(mat->Stream(), src_tensor, dst_tensor,
+            NVCVInterpolationType(interp_));
+
+  mat->SetTensor(dst);
+  mat->SetWidth(width_);
+  mat->SetHeight(height_);
+  mat->device = Device::GPU;
+  mat->mat_type = ProcLib::CVCUDA;
   return true;
 }
 #endif

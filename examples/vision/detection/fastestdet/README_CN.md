@@ -11,7 +11,7 @@
 为了方便开发者的测试，下面提供了FastestDet导出的模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
 | 模型                                                               | 大小    | 精度  | 备注 |
 |:---------------------------------------------------------------- |:----- |:----- |:---- |
-| [FastestDet](https://bj.bcebos.com/paddlehub/fastdeploy/FastestDetn.onnx) | 969KB | 25.3% | 此模型文件来源于[FastestDet](https://github.com/dog-qiuqiu/FastestDet.git)，BSD-3-Clause license |
+| [FastestDet](https://bj.bcebos.com/paddlehub/fastdeploy/FastestDet.onnx) | 969KB | 25.3% | 此模型文件来源于[FastestDet](https://github.com/dog-qiuqiu/FastestDet.git)，BSD-3-Clause license |
 
 
 ## 详细部署文档
