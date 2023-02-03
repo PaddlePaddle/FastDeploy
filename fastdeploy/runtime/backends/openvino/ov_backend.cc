@@ -97,6 +97,33 @@ void OpenVINOBackend::InitTensorInfo(
   }
 }
 
+bool OpenVINOBackend::Init(const RuntimeOption& option) {
+  if (option.model_from_memory_) {
+    FDERROR << "OpenVINOBackend doesn't support load model from memory, please "
+               "load model from dist."
+            << std::endl;
+    return false;
+  }
+  if (option.device != Device::CPU) {
+    FDERROR << "OpenVINOBackend only supports Device::CPU, but now its "
+            << option.device << "." << std::endl;
+    return false;
+  }
+
+  if (option.model_format == ModelFormat::PADDLE) {
+    return InitFromPaddle(option.model_file, option.params_file,
+                          option.openvino_option);
+  } else if (option.model_format == ModelFormat::ONNX) {
+    return InitFromOnnx(option.model_file, option.openvino_option);
+  } else {
+    FDERROR << "OpenVINOBackend only supports model format Paddle/ONNX, but "
+               "now its "
+            << option.model_format << std::endl;
+    return false;
+  }
+  return false;
+}
+
 bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
                                      const std::string& params_file,
                                      const OpenVINOBackendOption& option) {
