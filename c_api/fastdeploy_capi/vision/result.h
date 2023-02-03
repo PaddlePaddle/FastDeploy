@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma
+#pragma once
 
 #include "fastdeploy_capi/fd_common.h"
 #include "fastdeploy_capi/fd_type.h"
 
 typedef struct FD_ClassifyResult FD_ClassifyResult;
 typedef struct FD_ClassifyResultData FD_ClassifyResultData;
+typedef struct FD_DetectionResult FD_DetectionResult;
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,7 +34,7 @@ FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_ClassifyResult* FD_CreateClassifyResu
 
 /** \brief Destroy a FD_ClassifyResult object
  *
- * \param[in] fd_runtime_option pointer to FD_ClassifyResult object
+ * \param[in] fd_classify_result pointer to FD_ClassifyResult object
  */
 
 FASTDEPLOY_CAPI_EXPORT extern void FD_DestroyClassifyResult(__fd_take FD_ClassifyResult* fd_classify_result);
@@ -42,17 +43,31 @@ FASTDEPLOY_CAPI_EXPORT extern void FD_DestroyClassifyResult(__fd_take FD_Classif
 /** \brief Get data in FD_ClassifyResult object
  *
  * \param[in] fd_classify_result pointer to FD_ClassifyResult object
- * \param[in] fd_classify_result_data pointer to FD_ClassifyResultData object
+ * \return fd_classify_result_data pointer to FD_ClassifyResultData object
  */
 FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_ClassifyResultData* FD_ClassifyResultGetData(__fd_keep FD_ClassifyResult* fd_classify_result);
 
 /** \brief Destroy a FD_ClassifyResultData object
  *
- * \param[in] fd_runtime_option pointer to FD_ClassifyResultData object
+ * \param[in] fd_classify_result_data pointer to FD_ClassifyResultData object
  */
 
 FASTDEPLOY_CAPI_EXPORT extern void FD_DestroyClassifyResultData(__fd_take FD_ClassifyResultData* fd_classify_result_data);
 
+
+/** \brief Create a new FD_DetectionResult
+ *
+ * \return Return a pointer to FD_DetectionResult object
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_DetectionResult* FD_CreateDetectionResult();
+
+/** \brief Destroy a FD_DetectionResult object
+ *
+ * \param[in] fd_detection_result pointer to FD_DetectionResult object
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern void FD_DestroyDetectionResult(__fd_take FD_DetectionResult* fd_detection_result);
 
 #ifdef __cplusplus
 }  // extern "C"

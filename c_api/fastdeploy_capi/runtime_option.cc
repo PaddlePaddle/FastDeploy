@@ -52,8 +52,7 @@ void FD_RuntimeOptionSetModelPath(__fd_keep FD_RuntimeOption *fd_runtime_option,
 
 void FD_RuntimeOptionSetModelBuffer(
     __fd_keep FD_RuntimeOption *fd_runtime_option, const char *model_buffer,
-    const char *params_buffer,
-    const FD_ModelFormat format) {
+    const char *params_buffer, const FD_ModelFormat format) {
   CHECK_AND_CONVERT_FD_RuntimeOption;
   runtime_option->SetModelBuffer(model_buffer, params_buffer,
                                  static_cast<fastdeploy::ModelFormat>(format));

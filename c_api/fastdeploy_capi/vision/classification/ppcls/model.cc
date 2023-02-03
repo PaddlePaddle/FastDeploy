@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy_capi/vision/classification/classification_model.h"
+#include "fastdeploy_capi/vision/classification/ppcls/model.h"
 
 #include "fastdeploy_capi/types_internal.h"
 
 namespace fastdeploy {
-std::unique_ptr<fastdeploy::vision::classification::PaddleClasModel>& CheckAndConvertFD_PaddleClasModel(FD_PaddleClasModel* fd_paddleclas_model){
+std::unique_ptr<fastdeploy::vision::classification::PaddleClasModel>&
+CheckAndConvertFD_PaddleClasModel(FD_PaddleClasModel* fd_paddleclas_model) {
   FDASSERT(fd_paddleclas_model != nullptr,
            "The pointer of fd_paddleclas_model shouldn't be nullptr.");
   return fd_paddleclas_model->paddleclas_model;

@@ -12,28 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include "fastdeploy_capi/vision/visualize.h"
 
-#include "fastdeploy_capi/fd_common.h"
-#include "fastdeploy_capi/fd_type.h"
+#include "fastdeploy/vision/visualize/visualize.h"
+#include "fastdeploy_capi/types_internal.h"
 
-typedef struct FD_DetectionResult FD_DetectionResult;
-
-#ifdef __cplusplus
 extern "C" {
-#endif
 
-/** \brief Visualize Detection
- *
- * \return Return a pointer to cv::Mat object
- */
-
-FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_Mat* FD_VisDetection(FD_Mat* im, FD_DetectionResult* fd_detection_result, int line_size, float font_size);
-
-
-
-
-
-#ifdef __cplusplus
-}  // extern "C"
-#endif
+FD_Mat* FD_VisDetection(FD_Mat* im, FD_DetectionResult* fd_detection_result,
+                        int line_size, float font_size) {
+  CHECK_AND_CONVERT_FD_DetectionResult;
+  cv::Mat result = fastdeploy::vision::Visualize::VisDetection(
+      *(reinterpret_cast<cv::Mat*>(im)), *detection_result, line_size,
+      font_size);
+  return new cv::Mat(result);
+}
+}

@@ -24,6 +24,13 @@ CheckAndConvertFD_ClassifyResult(FD_ClassifyResult* fd_classify_result) {
            "The pointer of fd_classify_result shouldn't be nullptr.");
   return fd_classify_result->classify_result;
 }
+
+std::unique_ptr<fastdeploy::vision::DetectionResult>&
+CheckAndConvertFD_DetectionResult(FD_DetectionResult* fd_detection_result) {
+  FDASSERT(fd_detection_result != nullptr,
+           "The pointer of fd_detection_result shouldn't be nullptr.");
+  return fd_detection_result->detection_result;
+}
 }  // namespace fastdeploy
 
 extern "C" {
@@ -52,5 +59,18 @@ FD_ClassifyResultData* FD_ClassifyResultGetData(
   fd_classify_result_data->scores.size = classify_result->scores.size();
   fd_classify_result_data->scores.data = classify_result->scores.data();
   fd_classify_result_data->type = classify_result->type;
+}
+
+FD_DetectionResult* FD_CreateDetectionResult() {
+  FD_DetectionResult* fd_detection_result = new FD_DetectionResult();
+  fd_detection_result->detection_result =
+      std::unique_ptr<fastdeploy::vision::DetectionResult>(
+          new fastdeploy::vision::DetectionResult());
+  return fd_detection_result;
+}
+
+void FD_DestroyDetectionResult(
+    __fd_take FD_DetectionResult* fd_detection_result) {
+  delete fd_detection_result;
 }
 }
