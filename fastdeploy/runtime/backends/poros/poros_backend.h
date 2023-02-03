@@ -51,7 +51,6 @@ class PorosBackend : public BaseBackend {
 
   void BuildOption(const PorosBackendOption& option);
 
-  bool Init(const RuntimeOption& option);
   bool Compile(const std::string& model_file,
                std::vector<std::vector<FDTensor>>& prewarm_tensors,
                const PorosBackendOption& option = PorosBackendOption());

@@ -13,6 +13,10 @@
 # limitations under the License.
 include(ExternalProject)
 
+if(NOT ENABLE_TRT_BACKEND)
+  message(FATAL_ERROR "While ENABLE_POROS_BACKEND, requires ENABLE_TRT_BACKEND=ON, but now its OFF.")
+endif()
+
 set(POROS_PROJECT "extern_poros")
 set(POROS_PREFIX_DIR ${THIRD_PARTY_PATH}/poros)
 set(POROS_SOURCE_DIR
