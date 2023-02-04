@@ -1,7 +1,7 @@
 English | [简体中文](README_CN.md)
 # PaddleSeg C++ Deployment Example
 
-This directory provides examples that `infer.cc` fast finishes the deployment of Unet on CPU/GPU and GPU accelerated by TensorRT. 
+This directory provides examples that `infer.cc` fast finishes the deployment of Unet on CPU/GPU and GPU accelerated by TensorRT.
 
 Before deployment, two steps require confirmation
 
@@ -15,7 +15,7 @@ Taking the inference on Linux as an example, the compilation test can be complet
 ```bash
 mkdir build
 cd build
-# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above 
+# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
@@ -35,6 +35,8 @@ wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 ./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 2
 # kunlunxin XPU inference
 ./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 3
+# Huawei Ascend Inference
+./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 4
 ```
 
 The visualized result after running is as follows
@@ -45,7 +47,7 @@ The visualized result after running is as follows
 The above command works for Linux or MacOS. For SDK use-pattern in Windows, refer to:
 - [How to use FastDeploy C++ SDK in Windows](../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
-## PaddleSeg C++ Interface 
+## PaddleSeg C++ Interface
 
 ### PaddleSeg Class
 
@@ -62,7 +64,7 @@ PaddleSegModel model loading and initialization, among which model_file is the e
 
 **Parameter**
 
-> * **model_file**(str): Model file path 
+> * **model_file**(str): Model file path
 > * **params_file**(str): Parameter file path
 > * **config_file**(str): Inference deployment configuration file
 > * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
