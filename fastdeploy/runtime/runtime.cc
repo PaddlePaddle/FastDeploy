@@ -275,7 +275,7 @@ void Runtime::CreatePaddleBackend() {
 #endif
   backend_ = utils::make_unique<PaddleBackend>();
   auto casted_backend = dynamic_cast<PaddleBackend*>(backend_.get());
-  casted_backend.benchmark_option_ = option.benchmark_option;
+  casted_backend->benchmark_option_ = option.benchmark_option;
 
   if (pd_option.model_from_memory_) {
     FDASSERT(casted_backend->InitFromPaddle(option.model_file,
@@ -356,7 +356,7 @@ void Runtime::CreateTrtBackend() {
   trt_option.external_stream_ = option.external_stream_;
   backend_ = utils::make_unique<TrtBackend>();
   auto casted_backend = dynamic_cast<TrtBackend*>(backend_.get());
-  casted_backend.benchmark_option_ = option.benchmark_option;
+  casted_backend->benchmark_option_ = option.benchmark_option;
 
   if (option.model_format == ModelFormat::ONNX) {
     if (option.model_from_memory_) {
@@ -410,7 +410,7 @@ void Runtime::CreateLiteBackend() {
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();
   auto casted_backend = dynamic_cast<LiteBackend*>(backend_.get());
-  casted_backend.benchmark_option_ = option.benchmark_option;
+  casted_backend->benchmark_option_ = option.benchmark_option;
 
   FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
                                           option.paddle_lite_option),
