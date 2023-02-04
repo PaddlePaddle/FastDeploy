@@ -136,6 +136,8 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
             << inputs_desc_.size() << ")." << std::endl;
     return false;
   }
+
+  RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
   for (size_t i = 0; i < inputs.size(); ++i) {
     auto iter = inputs_order_.find(inputs[i].name);
     if (iter == inputs_order_.end()) {
@@ -144,7 +146,6 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
       return false;
     }
 
-    RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
     auto tensor = predictor_->GetInput(iter->second);
     // Adjust dims only, allocate lazy.
     tensor->Resize(inputs[i].shape);
@@ -180,7 +181,7 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
   RUNTIME_PROFILE_LOOP_BEGIN(1)
   predictor_->Run();
   RUNTIME_PROFILE_LOOP_END
-  
+
   outputs->resize(outputs_desc_.size());
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
     auto tensor = predictor_->GetOutput(i);
