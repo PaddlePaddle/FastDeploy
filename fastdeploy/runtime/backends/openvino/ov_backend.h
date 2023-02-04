@@ -32,13 +32,7 @@ class OpenVINOBackend : public BaseBackend {
   OpenVINOBackend() {}
   virtual ~OpenVINOBackend() = default;
 
-  bool
-  InitFromPaddle(const std::string& model_file, const std::string& params_file,
-                 const OpenVINOBackendOption& option = OpenVINOBackendOption());
-
-  bool
-  InitFromOnnx(const std::string& model_file,
-               const OpenVINOBackendOption& option = OpenVINOBackendOption());
+  bool Init(const RuntimeOption& option);
 
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
@@ -57,6 +51,15 @@ class OpenVINOBackend : public BaseBackend {
                                      int device_id = -1) override;
   
  private:
+  bool
+  InitFromPaddle(const std::string& model_file, const std::string& params_file,
+                 const OpenVINOBackendOption& option = OpenVINOBackendOption());
+
+  bool
+  InitFromOnnx(const std::string& model_file,
+               const OpenVINOBackendOption& option = OpenVINOBackendOption());
+
+
   void InitTensorInfo(const std::vector<ov::Output<ov::Node>>& ov_outputs,
                       std::map<std::string, TensorInfo>* tensor_infos);
 
