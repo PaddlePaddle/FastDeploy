@@ -356,7 +356,7 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
     request_.set_tensor(inputs[i].name, ov_tensor);
   }
 
-  RUNTIME_PROFILE_LOOP_BEGIN
+  RUNTIME_PROFILE_LOOP_BEGIN(1)
   request_.infer();
   RUNTIME_PROFILE_LOOP_END
 

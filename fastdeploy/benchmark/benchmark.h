@@ -19,13 +19,15 @@
 #include "fastdeploy/benchmark/results.h"
 
 #ifdef ENABLE_BENCHMARK                            
-  #define __RUNTIME_PROFILE_LOOP_BEGIN(option)                          \
-    int __p_loop = 1;                                                   \
+  #define __RUNTIME_PROFILE_LOOP_BEGIN(option, base_loop)               \
+    int __p_loop = (base_loop);                                         \
     const bool __p_enable_profile = option.enable_profile;              \
     const bool __p_include_h2d_d2h = option.include_h2d_d2h;            \
     const int __p_repeats = option.repeats;                             \
     const int __p_warmup = option.warmup;                               \
-    if (!__p_include_h2d_d2h) { FDINFO << option << std::endl; }        \
+    if ((!__p_include_h2d_d2h) && __p_enable_profile) {                 \
+      FDINFO << option << std::endl;                                    \
+    }                                                                   \
     if ((__p_enable_profile && (!__p_include_h2d_d2h))) {               \
       __p_loop = (__p_repeats) + (__p_warmup);                          \
     }                                                                   \
@@ -48,13 +50,15 @@
       }                                                                 \
     }
 
-  #define __RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN(option)                  \
-    int __p_loop_h = 1;                                                 \
+  #define __RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN(option, base_loop)       \
+    int __p_loop_h = (base_loop);                                       \
     const bool __p_enable_profile_h = option.enable_profile;            \
     const bool __p_include_h2d_d2h_h = option.include_h2d_d2h;          \
     const int __p_repeats_h = option.repeats;                           \
     const int __p_warmup_h = option.warmup;                             \
-    if (__p_include_h2d_d2h_h) { FDINFO << option << std::endl; }       \
+    if (__p_enable_profile_h && __p_include_h2d_d2h_h) {                \
+      FDINFO << option << std::endl;                                    \
+    }                                                                   \
     if ((__p_enable_profile_h && __p_include_h2d_d2h_h)) {              \
       __p_loop_h = (__p_repeats_h) + (__p_warmup_h);                    \
     }                                                                   \
@@ -77,8 +81,10 @@
       }                                                                 \
     }  
 #else
-  #define __RUNTIME_PROFILE_LOOP_BEGIN(option) {}
-  #define __RUNTIME_PROFILE_LOOP_END(result) {}
-  #define __RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN(option) {}
-  #define __RUNTIME_PROFILE_LOOP_H2D_D2H_END(result) {}
+  #define __RUNTIME_PROFILE_LOOP_BEGIN(option, base_loop)               \
+    for (int __p_i = 0; __p_i < (base_loop); ++ __p_i) { 
+  #define __RUNTIME_PROFILE_LOOP_END(result) }
+  #define __RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN(option, base_loop)       \
+    for (int __p_i_h = 0; __p_i_h < (base_loop); ++ __p_i_h) {
+  #define __RUNTIME_PROFILE_LOOP_H2D_D2H_END(result) }
 #endif
