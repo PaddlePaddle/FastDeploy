@@ -143,6 +143,8 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
               << " in loaded model." << std::endl;
       return false;
     }
+
+    RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
     auto tensor = predictor_->GetInput(iter->second);
     // Adjust dims only, allocate lazy.
     tensor->Resize(inputs[i].shape);
@@ -174,9 +176,11 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
       FDASSERT(false, "Unexpected data type of %d.", inputs[i].dtype);
     }
   }
-
+  
+  RUNTIME_PROFILE_LOOP_BEGIN(1)
   predictor_->Run();
-
+  RUNTIME_PROFILE_LOOP_END
+  
   outputs->resize(outputs_desc_.size());
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
     auto tensor = predictor_->GetOutput(i);
@@ -188,6 +192,7 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
     memcpy((*outputs)[i].MutableData(), tensor->data<void>(),
            (*outputs)[i].Nbytes());
   }
+  RUNTIME_PROFILE_LOOP_H2D_D2H_END
   return true;
 }
 

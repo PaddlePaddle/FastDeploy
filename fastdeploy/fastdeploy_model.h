@@ -113,7 +113,8 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool EnabledRecordTimeOfRuntime() {
     return enable_record_time_of_runtime_;
   }
-
+  /** \brief Get profile time of Runtime after the profile process is done.
+   */
   virtual double GetProfileTime() {
     return runtime_->GetProfileTime();
   }            

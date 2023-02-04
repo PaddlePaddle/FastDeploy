@@ -17,10 +17,10 @@ namespace fastdeploy {
 namespace benchmark {
 
 struct BenchmarkOption {
-  int warmup = 50;             ///< Warmup for backend inference.
+  int warmup = 50;              ///< Warmup for backend inference.
   int repeats = 100;            ///< Repeats for backend inference.
-  bool enable_profile = false;  ///< Wheter to use profile or not.
-  bool include_h2d_d2h = false; ///< Wheter to include time of H2D_D2H for time of runtime.
+  bool enable_profile = false;  ///< Whether to use profile or not.
+  bool include_h2d_d2h = false; ///< Whether to include time of H2D_D2H for time of runtime.
 
   friend std::ostream& operator<<(
     std::ostream& output, const BenchmarkOption &option) {

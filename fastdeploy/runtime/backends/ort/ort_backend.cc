@@ -258,6 +258,7 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
   }
 
   // from FDTensor to Ort Inputs
+  RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
   for (size_t i = 0; i < inputs.size(); ++i) {
     auto ort_value = CreateOrtValue(inputs[i], option_.device == Device::GPU);
     binding_->BindInput(inputs[i].name.c_str(), ort_value);
@@ -270,12 +271,14 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
   }
 
   // Inference with inputs
+  RUNTIME_PROFILE_LOOP_BEGIN(1)
   try {
     session_.Run({}, *(binding_.get()));
   } catch (const std::exception& e) {
     FDERROR << "Failed to Infer: " << e.what() << std::endl;
     return false;
   }
+  RUNTIME_PROFILE_LOOP_END
 
   // Convert result after inference
   std::vector<Ort::Value> ort_outputs = binding_->GetOutputValues();
@@ -284,7 +287,7 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
     OrtValueToFDTensor(ort_outputs[i], &((*outputs)[i]), outputs_desc_[i].name,
                        copy_to_fd);
   }
-
+  RUNTIME_PROFILE_LOOP_H2D_D2H_END
   return true;
 }
 
