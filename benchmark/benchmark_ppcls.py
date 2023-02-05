@@ -74,7 +74,7 @@ def parse_arguments():
         "--include_h2d_d2h",
         type=ast.literal_eval,
         default=False,
-        help="whether enable run profiling")       
+        help="whether run profiling with h2d and d2h")       
     args = parser.parse_args()
     return args
 
