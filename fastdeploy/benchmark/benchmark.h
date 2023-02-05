@@ -25,11 +25,9 @@
     const bool __p_include_h2d_d2h = option.include_h2d_d2h;            \
     const int __p_repeats = option.repeats;                             \
     const int __p_warmup = option.warmup;                               \
-    if ((!__p_include_h2d_d2h) && __p_enable_profile) {                 \
-      FDINFO << option << std::endl;                                    \
-    }                                                                   \
-    if ((__p_enable_profile && (!__p_include_h2d_d2h))) {               \
+    if (__p_enable_profile && (!__p_include_h2d_d2h)) {                 \
       __p_loop = (__p_repeats) + (__p_warmup);                          \
+      FDINFO << option << std::endl;                                    \
     }                                                                   \
     TimeCounter __p_tc;                                                 \
     bool __p_tc_start = false;                                          \
@@ -57,10 +55,8 @@
     const int __p_repeats_h = option.repeats;                           \
     const int __p_warmup_h = option.warmup;                             \
     if (__p_enable_profile_h && __p_include_h2d_d2h_h) {                \
-      FDINFO << option << std::endl;                                    \
-    }                                                                   \
-    if ((__p_enable_profile_h && __p_include_h2d_d2h_h)) {              \
       __p_loop_h = (__p_repeats_h) + (__p_warmup_h);                    \
+      FDINFO << option << std::endl;                                    \
     }                                                                   \
     TimeCounter __p_tc_h;                                               \
     bool __p_tc_start_h = false;                                        \
