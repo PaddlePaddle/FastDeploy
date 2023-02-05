@@ -17,8 +17,8 @@ namespace fastdeploy {
 namespace benchmark {
 
 struct BenchmarkResult {
-  double time_of_runtime; ///< Means pure_backend_time+time_of_h2d_d2h(if include_h2d_d2h=true).
-  double time_of_end2end; ///< time_of_end2end=time_of_runtime+time_of_(preprocess+postprocess).
+  ///< Means pure_backend_time+time_of_h2d_d2h(if include_h2d_d2h=true).
+  double time_of_runtime = 0.0f; 
 };
 
 } // namespace benchmark
