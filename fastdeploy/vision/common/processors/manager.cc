@@ -22,8 +22,7 @@ ProcessorManager::~ProcessorManager() {
 #endif
 }
 
-void ProcessorManager::UseCuda(bool enable_cv_cuda, int gpu_id,
-                               bool initial_resize_on_cpu) {
+void ProcessorManager::UseCuda(bool enable_cv_cuda, int gpu_id) {
 #ifdef WITH_GPU
   if (gpu_id >= 0) {
     device_id_ = gpu_id;
@@ -44,7 +43,6 @@ void ProcessorManager::UseCuda(bool enable_cv_cuda, int gpu_id,
     FDASSERT(false, "FastDeploy didn't compile with CV-CUDA.");
 #endif
   }
-  initial_resize_on_cpu_ = initial_resize_on_cpu;
 }
 
 bool ProcessorManager::CudaUsed() {

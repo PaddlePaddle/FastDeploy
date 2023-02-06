@@ -41,6 +41,16 @@ class PaddleClasPreprocessor(ProcessorManager):
         """
         self._manager.disable_permute()
 
+    def initial_resize_on_cpu(self, v):
+        """
+        When the initial operator is Resize, and input image size is large,
+        maybe it's better to run resize on CPU, because the HostToDevice memcpy
+        is time consuming. Set this True to run the initial resize on CPU.
+
+        :param: v: True or False
+        """
+        self._manager.initial_resize_on_cpu(v)
+
 
 class PaddleClasPostprocessor:
     def __init__(self, topk=1):

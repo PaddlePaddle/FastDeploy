@@ -36,8 +36,6 @@ void BindProcessorManager(pybind11::module& m) {
            })
       .def("use_cuda",
            [](vision::ProcessorManager& self, bool enable_cv_cuda = false,
-              int gpu_id = -1, bool initial_resize_on_cpu = false) {
-             self.UseCuda(enable_cv_cuda, gpu_id, initial_resize_on_cpu);
-           });
+              int gpu_id = -1) { self.UseCuda(enable_cv_cuda, gpu_id); });
 }
 }  // namespace fastdeploy
