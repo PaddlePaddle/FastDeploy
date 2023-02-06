@@ -244,17 +244,9 @@ void Runtime::CreatePaddleBackend() {
   if (pd_option.use_gpu && option.pd_enable_trt) {
     pd_option.enable_trt = true;
     pd_option.collect_shape = option.pd_collect_shape;
-    auto trt_option = TrtBackendOption();
-    trt_option.gpu_id = option.device_id;
-    trt_option.enable_fp16 = option.trt_enable_fp16;
-    trt_option.max_batch_size = option.trt_max_batch_size;
-    trt_option.max_workspace_size = option.trt_max_workspace_size;
-    trt_option.max_shape = option.trt_max_shape;
-    trt_option.min_shape = option.trt_min_shape;
-    trt_option.opt_shape = option.trt_opt_shape;
-    trt_option.serialize_file = option.trt_serialize_file;
-    trt_option.enable_pinned_memory = option.enable_pinned_memory;
-    pd_option.trt_option = trt_option;
+    pd_option.trt_option = option.trt_option;
+    pd_option.trt_option.gpu_id = option.device_id;
+    pd_option.trt_option.enable_pinned_memory = option.enable_pinned_memory;
     pd_option.trt_disabled_ops_ = option.trt_disabled_ops_;
   }
 #endif

@@ -17,8 +17,6 @@
 
 namespace fastdeploy {
 
-/*! @brief Option object to configure TensorRT backend
- */
 void BindTrtOption(pybind11::module& m) {
   pybind11::class_<TrtBackendOption>(m, "TrtBackendOption")
       .def(pybind11::init())

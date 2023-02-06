@@ -62,7 +62,7 @@ struct TrtBackendOption {
   std::string serialize_file = "";
 
   // The below parameters may be removed in next version, please do not
-  // visit or use them direcly
+  // visit or use them directly
   std::map<std::string, std::vector<int32_t>> max_shape;
   std::map<std::string, std::vector<int32_t>> min_shape;
   std::map<std::string, std::vector<int32_t>> opt_shape;

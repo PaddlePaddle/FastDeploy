@@ -392,7 +392,7 @@ class RuntimeOption:
         logging.warning(
             "`RuntimeOption.set_openvino_cpu_operators` will be deprecated in v1.2.0, please use `RuntimeOption.openvino_option.set_cpu_operators` instead."
         )
-        self._option.set_cpu_operators(operators)
+        self._option.openvino_option.set_cpu_operators(operators)
 
     def enable_paddle_log_info(self):
         """Enable print out the debug log information while using Paddle Inference backend, the log information is disabled by default.

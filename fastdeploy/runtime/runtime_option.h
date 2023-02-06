@@ -375,6 +375,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   bool enable_pinned_memory = false;
 
+  /// Option to configure ONNX Runtime backend
   OrtBackendOption ort_option;
 
   // ======Only for Paddle Backend=====
@@ -395,15 +396,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   float ipu_available_memory_proportion = 1.0;
   bool ipu_enable_half_partial = false;
 
-  // ======Only for Trt Backend=======
-  std::map<std::string, std::vector<int32_t>> trt_max_shape;
-  std::map<std::string, std::vector<int32_t>> trt_min_shape;
-  std::map<std::string, std::vector<int32_t>> trt_opt_shape;
-  std::string trt_serialize_file = "";
-  bool trt_enable_fp16 = false;
-  bool trt_enable_int8 = false;
-  size_t trt_max_batch_size = 1;
-  size_t trt_max_workspace_size = 1 << 30;
+  /// Option to configure TensorRT backend
+  TrtBackendOption trt_option;
+
   // ======Only for PaddleTrt Backend=======
   std::vector<std::string> trt_disabled_ops_{};
 

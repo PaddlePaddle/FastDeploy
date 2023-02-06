@@ -239,7 +239,7 @@ void RuntimeOption::EnableLiteInt8() {
 }
 
 void RuntimeOption::DisableLiteInt8() {
-  FDWARNING << "RuntimeOption::EnableLiteInt8 is a useless api, this calling "
+  FDWARNING << "RuntimeOption::DisableLiteInt8 is a useless api, this calling "
                "will not bring any effects, and will be removed in v1.2.0. if "
                "you load a quantized model, it will automatically run with "
                "int8 mode; otherwise it will run with float mode."
@@ -324,7 +324,7 @@ void RuntimeOption::SetLiteMixedPrecisionQuantizationConfigPath(
     const std::string& nnadapter_mixed_precision_quantization_config_path) {
   FDWARNING
       << "`RuntimeOption::SetLiteMixedPrecisionQuantizationConfigPath` will be "
-         "removed in v1.2.0, please modify its member variable direcly, e.g "
+         "removed in v1.2.0, please modify its member variable directly, e.g "
          "`runtime_option.paddle_lite_option.paddle_lite_option.nnadapter_"
          "mixed_precision_quantization_config_path = ...`"
       << std::endl;
@@ -345,15 +345,15 @@ void RuntimeOption::SetTrtInputShape(const std::string& input_name,
 void RuntimeOption::SetTrtMaxWorkspaceSize(size_t max_workspace_size) {
   FDWARNING << "`RuntimeOption::SetTrtMaxWorkspaceSize` will be removed in "
                "v1.2.0, please modify its member variable directly, e.g "
-               "`RuntimeOption.trt_option.max_workspace_size = 1 << 30`."
-            << std::endl;
+               "`RuntimeOption.trt_option.max_workspace_size = "
+            << max_workspace_size << "`." << std::endl;
   trt_option.max_workspace_size = max_workspace_size;
 }
 void RuntimeOption::SetTrtMaxBatchSize(size_t max_batch_size) {
   FDWARNING << "`RuntimeOption::SetTrtMaxBatchSize` will be removed in v1.2.0, "
                "please modify its member variable directly, e.g "
-               "`RuntimeOption.trt_option.max_batch_size = 32`."
-            << std::endl;
+               "`RuntimeOption.trt_option.max_batch_size = "
+            << max_batch_size << "`." << std::endl;
   trt_option.max_batch_size = max_batch_size;
 }
 
@@ -380,17 +380,16 @@ void RuntimeOption::DisablePinnedMemory() { enable_pinned_memory = false; }
 void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
   FDWARNING << "`RuntimeOption::SetTrtCacheFile` will be removed in v1.2.0, "
                "please modify its member variable directly, e.g "
-               "`runtime_option.trt_option.serialize_file = "
-               "\"/Downloads/resnet50.trt\"."
-            << std::endl;
+               "`runtime_option.trt_option.serialize_file = \""
+            << cache_file_path << "\"." << std::endl;
   trt_option.serialize_file = cache_file_path;
 }
 
 void RuntimeOption::SetOpenVINOStreams(int num_streams) {
   FDWARNING << "`RuntimeOption::SetOpenVINOStreams` will be removed in v1.2.0, "
                "please modify its member variable directly, e.g "
-               "`runtime_option.openvino_option.num_streams = 1`."
-            << std::endl;
+               "`runtime_option.openvino_option.num_streams = "
+            << num_streams << "`." << std::endl;
   openvino_option.num_streams = num_streams;
 }
 
