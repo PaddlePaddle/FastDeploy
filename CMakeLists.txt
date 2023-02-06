@@ -68,6 +68,7 @@ option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
 option(ENABLE_CVCUDA "Whether to enable NVIDIA CV-CUDA to boost image preprocess." OFF)
 option(ENABLE_ENCRYPTION "Whether to enable ENCRYPTION." OFF)
+option(ENABLE_BENCHMARK "Whether to enable Benchmark mode." OFF)
 option(WITH_ASCEND "Whether to compile for Huawei Ascend deploy." OFF)
 option(WITH_TIMVX "Whether to compile for TIMVX deploy." OFF)
 option(WITH_KUNLUNXIN "Whether to compile for KunlunXin XPU deploy." OFF)
@@ -468,7 +469,7 @@ if(ANDROID)
   list(APPEND DEPEND_LIBS ${log-lib})
   if(WITH_LITE_STATIC)
     # need omp for static Paddle Lite lib
-    set(WITH_OPENMP ON CACHE BOOL "Force WITH_OPENMP=ON while WITH_LITE_STATIC=ON" FORCE) 
+    set(WITH_OPENMP ON CACHE BOOL "Force WITH_OPENMP=ON while WITH_LITE_STATIC=ON" FORCE)
     message(STATUS "Force WITH_OPENMP=${WITH_OPENMP} while WITH_LITE_STATIC=ON")
   endif()
   if(WITH_OPENMP)
@@ -484,13 +485,13 @@ if(ANDROID AND WITH_JAVA)
 endif()
 
 if(ANDROID AND WITH_STATIC_LIB)
-  # Here, we use a dummy target (fastdelpoy_dummy) 
+  # Here, we use a dummy target (fastdelpoy_dummy)
   # to form a build dependency tree for fastdeploy_static lib.
   add_library(fastdelpoy_dummy STATIC ${ALL_DEPLOY_SRCS})
-  # Still add ${DEPEND_LIBS} for cmake to form link_libraries 
-  # property tree for a static library. 
+  # Still add ${DEPEND_LIBS} for cmake to form link_libraries
+  # property tree for a static library.
   target_link_libraries(fastdelpoy_dummy ${DEPEND_LIBS})
-  # Build fastdelpoy_dummy when the third-party 
+  # Build fastdelpoy_dummy when the third-party
   # libraries (opencv, paddle lite, flycv) are ready.
   add_dependencies(fastdelpoy_dummy ${LIBRARY_NAME})
   # Add WITH_STATIC_LIB compile definitions, see lite_backend.cc.
@@ -543,9 +544,9 @@ if(WIN32)
     RUNTIME DESTINATION lib
   )
 elseif(ANDROID)
-  if(WITH_STATIC_LIB) 
+  if(WITH_STATIC_LIB)
     install(
-      FILES 
+      FILES
       ${CMAKE_CURRENT_BINARY_DIR}/libfastdeploy_static.a
       DESTINATION lib/${ANDROID_ABI}
     )
@@ -555,11 +556,11 @@ elseif(ANDROID)
       LIBRARY DESTINATION lib/${ANDROID_ABI}
     )
   endif()
-  # Install omp into fastdeploy lib dir if WITH_OPENMP=ON 
+  # Install omp into fastdeploy lib dir if WITH_OPENMP=ON
   # and WITH_LITE_STATIC=OFF.
   if(WITH_OPENMP AND (NOT WITH_LITE_STATIC) AND OpenMP_CXX_FOUND AND ENABLE_OPENMP_SHARED)
     install(
-      FILES 
+      FILES
       ${OpenMP_CXX_LIBRARIES}
       DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/${ANDROID_ABI}
     )
@@ -596,7 +597,7 @@ else()
   # The headers and libs of opencv must be install.
   if(ENABLE_VISION)
     if(WITH_OPENCV_STATIC AND WITH_STATIC_LIB)
-      # Only need to install headers while building 
+      # Only need to install headers while building
       # FastDeploy static lib. (TODO:qiuyanjun)
       install(
         DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/opencv/sdk/native/jni/include
@@ -623,14 +624,14 @@ else()
       )
     endif()
   endif()
-  # fast_tokenizer's static lib is not avaliable now! 
+  # fast_tokenizer's static lib is not avaliable now!
   # may support some days later(TODO:qiuyanjun)
   if(ENABLE_TEXT)
     install(
       DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/fast_tokenizer
       DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
     )
-  endif()  
+  endif()
   # some libs may not to install while in static mode
   if(ENABLE_LITE_BACKEND)
     if(WITH_LITE_STATIC)
