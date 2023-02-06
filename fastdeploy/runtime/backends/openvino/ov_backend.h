@@ -49,7 +49,7 @@ class OpenVINOBackend : public BaseBackend {
   std::unique_ptr<BaseBackend> Clone(RuntimeOption &runtime_option,
                                      void* stream = nullptr,
                                      int device_id = -1) override;
-
+  
  private:
   bool
   InitFromPaddle(const std::string& model_file, const std::string& params_file,

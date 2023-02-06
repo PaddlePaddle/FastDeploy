@@ -275,6 +275,8 @@ void Runtime::CreatePaddleBackend() {
 #endif
   backend_ = utils::make_unique<PaddleBackend>();
   auto casted_backend = dynamic_cast<PaddleBackend*>(backend_.get());
+  casted_backend->benchmark_option_ = option.benchmark_option;
+
   if (pd_option.model_from_memory_) {
     FDASSERT(casted_backend->InitFromPaddle(option.model_file,
                                             option.params_file, pd_option),
@@ -303,6 +305,7 @@ void Runtime::CreatePaddleBackend() {
 void Runtime::CreateOpenVINOBackend() {
 #ifdef ENABLE_OPENVINO_BACKEND
   backend_ = utils::make_unique<OpenVINOBackend>();
+  backend_->benchmark_option_ = option.benchmark_option;
   FDASSERT(backend_->Init(option), "Failed to initialize OpenVINOBackend.");
 #else
   FDASSERT(false,
@@ -316,6 +319,8 @@ void Runtime::CreateOpenVINOBackend() {
 void Runtime::CreateOrtBackend() {
 #ifdef ENABLE_ORT_BACKEND
   backend_ = utils::make_unique<OrtBackend>();
+  backend_->benchmark_option_ = option.benchmark_option;
+
   FDASSERT(backend_->Init(option), "Failed to initialize Backend::ORT.");
 #else
   FDASSERT(false,
@@ -351,6 +356,8 @@ void Runtime::CreateTrtBackend() {
   trt_option.external_stream_ = option.external_stream_;
   backend_ = utils::make_unique<TrtBackend>();
   auto casted_backend = dynamic_cast<TrtBackend*>(backend_.get());
+  casted_backend->benchmark_option_ = option.benchmark_option;
+
   if (option.model_format == ModelFormat::ONNX) {
     if (option.model_from_memory_) {
       FDASSERT(casted_backend->InitFromOnnx(option.model_file, trt_option),
@@ -403,6 +410,8 @@ void Runtime::CreateLiteBackend() {
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();
   auto casted_backend = dynamic_cast<LiteBackend*>(backend_.get());
+  casted_backend->benchmark_option_ = option.benchmark_option;
+
   FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
                                           option.paddle_lite_option),
            "Load model from nb file failed while initializing LiteBackend.");

@@ -287,14 +287,18 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
     BuildTrtEngine();
   }
 
+  RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
   cudaSetDevice(option_.gpu_id);
   SetInputs(inputs);
   AllocateOutputsBuffer(outputs, copy_to_fd);
-
+  
+  RUNTIME_PROFILE_LOOP_BEGIN(1)
   if (!context_->enqueueV2(bindings_.data(), stream_, nullptr)) {
     FDERROR << "Failed to Infer with TensorRT." << std::endl;
     return false;
   }
+  RUNTIME_PROFILE_LOOP_END
+  
   for (size_t i = 0; i < outputs->size(); ++i) {
     // if the final output tensor's dtype is different from the model output
     // tensor's dtype, then we need cast the data to the final output's dtype
@@ -335,7 +339,7 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
     FDASSERT(cudaStreamSynchronize(stream_) == cudaSuccess,
              "[ERROR] Error occurs while sync cuda stream.");
   }
-
+  RUNTIME_PROFILE_LOOP_H2D_D2H_END
   return true;
 }
 

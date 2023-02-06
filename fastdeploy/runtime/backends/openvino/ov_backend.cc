@@ -375,6 +375,7 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
     return false;
   }
 
+  RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
   for (size_t i = 0; i < inputs.size(); ++i) {
     ov::Shape shape(inputs[i].shape.begin(), inputs[i].shape.end());
     ov::Tensor ov_tensor(FDDataTypeToOV(inputs[i].dtype), shape,
@@ -382,7 +383,9 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
     request_.set_tensor(inputs[i].name, ov_tensor);
   }
 
+  RUNTIME_PROFILE_LOOP_BEGIN(1)
   request_.infer();
+  RUNTIME_PROFILE_LOOP_END
 
   outputs->resize(output_infos_.size());
   for (size_t i = 0; i < output_infos_.size(); ++i) {
@@ -403,6 +406,7 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
           out_tensor.data(), Device::CPU);
     }
   }
+  RUNTIME_PROFILE_LOOP_H2D_D2H_END
   return true;
 }
 
