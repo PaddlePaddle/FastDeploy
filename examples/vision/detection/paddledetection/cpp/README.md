@@ -1,7 +1,7 @@
 English | [简体中文](README_CN.md)
 # PaddleDetection C++ Deployment Example
 
-This directory provides examples that `infer_xxx.cc` fast finishes the deployment of PaddleDetection models, including PPYOLOE/PicoDet/YOLOX/YOLOv3/PPYOLO/FasterRCNN/YOLOv5/YOLOv6/YOLOv7/RTMDet on CPU/GPU and GPU accelerated by TensorRT. 
+This directory provides examples that `infer_xxx.cc` fast finishes the deployment of PaddleDetection models, including PPYOLOE/PicoDet/YOLOX/YOLOv3/PPYOLO/FasterRCNN/YOLOv5/YOLOv6/YOLOv7/RTMDet on CPU/GPU and GPU accelerated by TensorRT.
 
 Before deployment, two steps require confirmation
 
@@ -15,13 +15,13 @@ ppyoloe is taken as an example for inference deployment
 
 mkdir build
 cd build
-# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above 
+# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
-# Download the PPYOLOE model file and test images 
+# Download the PPYOLOE model file and test images
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 tar xvf ppyoloe_crn_l_300e_coco.tgz
@@ -33,12 +33,16 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 ./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 1
 # TensorRT Inference on GPU
 ./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 2
+# Kunlunxin XPU Inference
+./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 3
+# Huawei Ascend Inference
+./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 4
 ```
 
 The above command works for Linux or MacOS. For SDK use-pattern in Windows, refer to:
 - [How to use FastDeploy C++ SDK in Windows](../../../../../docs/en/faq/use_sdk_on_windows.md)
 
-## PaddleDetection C++ Interface 
+## PaddleDetection C++ Interface
 
 ### Model Class
 
@@ -56,7 +60,7 @@ Loading and initializing PaddleDetection PPYOLOE model, where the format of mode
 
 **Parameter**
 
-> * **model_file**(str): Model file path 
+> * **model_file**(str): Model file path
 > * **params_file**(str): Parameter file path
 > * **config_file**(str): •	Configuration file path, which is the deployment yaml file exported by PaddleDetection
 > * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
@@ -73,7 +77,7 @@ Loading and initializing PaddleDetection PPYOLOE model, where the format of mode
 > **Parameter**
 >
 > > * **im**: Input images in HWC or BGR format
-> > * **result**: Detection result, including detection box and confidence of each box. Refer to [Vision Model Prediction Result](../../../../../docs/api/vision_results/) for DetectionResult 
+> > * **result**: Detection result, including detection box and confidence of each box. Refer to [Vision Model Prediction Result](../../../../../docs/api/vision_results/) for DetectionResult
 
 - [Model Description](../../)
 - [Python Deployment](../python)

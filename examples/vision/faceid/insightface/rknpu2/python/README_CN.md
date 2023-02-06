@@ -75,7 +75,7 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 > ArcFace.predict(image_data)
 > ```
 >
-> 模型预测结口，输入图像直接输出检测结果。
+> 模型预测接口，输入图像直接输出检测结果。
 >
 > **参数**
 >

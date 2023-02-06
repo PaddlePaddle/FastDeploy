@@ -98,6 +98,7 @@ void RuntimeOption::SetCpuThreadNum(int thread_num) {
   cpu_thread_num = thread_num;
   paddle_lite_option.cpu_threads = thread_num;
   ort_option.intra_op_num_threads = thread_num;
+  openvino_option.cpu_thread_num = thread_num;
 }
 
 void RuntimeOption::SetOrtGraphOptLevel(int level) {
@@ -202,7 +203,7 @@ void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
 }
 
 void RuntimeOption::SetOpenVINODevice(const std::string& name) {
-  openvino_device = name;
+  openvino_option.device = name;
 }
 
 void RuntimeOption::EnableLiteFP16() { paddle_lite_option.enable_fp16 = true; }
@@ -307,7 +308,7 @@ void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
 }
 
 void RuntimeOption::SetOpenVINOStreams(int num_streams) {
-  ov_num_streams = num_streams;
+  openvino_option.num_streams = num_streams;
 }
 
 void RuntimeOption::EnablePaddleTrtCollectShape() { pd_collect_shape = true; }

@@ -275,6 +275,8 @@ void Runtime::CreatePaddleBackend() {
 #endif
   backend_ = utils::make_unique<PaddleBackend>();
   auto casted_backend = dynamic_cast<PaddleBackend*>(backend_.get());
+  casted_backend->benchmark_option_ = option.benchmark_option;
+
   if (pd_option.model_from_memory_) {
     FDASSERT(casted_backend->InitFromPaddle(option.model_file,
                                             option.params_file, pd_option),
@@ -301,36 +303,10 @@ void Runtime::CreatePaddleBackend() {
 }
 
 void Runtime::CreateOpenVINOBackend() {
-  // TODO(huangjianhui) OpenVINO only supports to load ONNX format model from
-  // memory Temporarily disable this function
-  FDASSERT(option.model_from_memory_ == false,
-           "OpenVINOBackend don't support to load model from memory");
-  FDASSERT(option.device == Device::CPU,
-           "Backend::OPENVINO only supports Device::CPU");
-  FDASSERT(option.model_format == ModelFormat::PADDLE ||
-               option.model_format == ModelFormat::ONNX,
-           "OpenVINOBackend only support model format of ModelFormat::PADDLE / "
-           "ModelFormat::ONNX.");
 #ifdef ENABLE_OPENVINO_BACKEND
-  auto ov_option = OpenVINOBackendOption();
-  ov_option.cpu_thread_num = option.cpu_thread_num;
-  ov_option.device = option.openvino_device;
-  ov_option.shape_infos = option.ov_shape_infos;
-  ov_option.num_streams = option.ov_num_streams;
-  for (const auto& op : option.ov_cpu_operators) {
-    ov_option.cpu_operators.insert(op);
-  }
   backend_ = utils::make_unique<OpenVINOBackend>();
-  auto casted_backend = dynamic_cast<OpenVINOBackend*>(backend_.get());
-
-  if (option.model_format == ModelFormat::ONNX) {
-    FDASSERT(casted_backend->InitFromOnnx(option.model_file, ov_option),
-             "Load model from ONNX failed while initliazing OrtBackend.");
-  } else {
-    FDASSERT(casted_backend->InitFromPaddle(option.model_file,
-                                            option.params_file, ov_option),
-             "Load model from Paddle failed while initliazing OrtBackend.");
-  }
+  backend_->benchmark_option_ = option.benchmark_option;
+  FDASSERT(backend_->Init(option), "Failed to initialize OpenVINOBackend.");
 #else
   FDASSERT(false,
            "OpenVINOBackend is not available, please compiled with "
@@ -343,6 +319,8 @@ void Runtime::CreateOpenVINOBackend() {
 void Runtime::CreateOrtBackend() {
 #ifdef ENABLE_ORT_BACKEND
   backend_ = utils::make_unique<OrtBackend>();
+  backend_->benchmark_option_ = option.benchmark_option;
+
   FDASSERT(backend_->Init(option), "Failed to initialize Backend::ORT.");
 #else
   FDASSERT(false,
@@ -378,6 +356,8 @@ void Runtime::CreateTrtBackend() {
   trt_option.external_stream_ = option.external_stream_;
   backend_ = utils::make_unique<TrtBackend>();
   auto casted_backend = dynamic_cast<TrtBackend*>(backend_.get());
+  casted_backend->benchmark_option_ = option.benchmark_option;
+
   if (option.model_format == ModelFormat::ONNX) {
     if (option.model_from_memory_) {
       FDASSERT(casted_backend->InitFromOnnx(option.model_file, trt_option),
@@ -430,6 +410,8 @@ void Runtime::CreateLiteBackend() {
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();
   auto casted_backend = dynamic_cast<LiteBackend*>(backend_.get());
+  casted_backend->benchmark_option_ = option.benchmark_option;
+
   FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
                                           option.paddle_lite_option),
            "Load model from nb file failed while initializing LiteBackend.");

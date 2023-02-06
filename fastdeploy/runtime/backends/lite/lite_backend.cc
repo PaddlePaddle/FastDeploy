@@ -100,7 +100,7 @@ bool LiteBackend::InitFromPaddle(const std::string& model_file,
     auto shape = tensor->shape();
     info.shape.assign(shape.begin(), shape.end());
     info.name = output_names[i];
-    if (!option_.device == Device::KUNLUNXIN) {
+    if (option_.device != Device::KUNLUNXIN) {
       info.dtype = LiteDataTypeToFD(tensor->precision());
     }
     outputs_desc_.emplace_back(info);
@@ -136,6 +136,8 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
             << inputs_desc_.size() << ")." << std::endl;
     return false;
   }
+
+  RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
   for (size_t i = 0; i < inputs.size(); ++i) {
     auto iter = inputs_order_.find(inputs[i].name);
     if (iter == inputs_order_.end()) {
@@ -143,6 +145,7 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
               << " in loaded model." << std::endl;
       return false;
     }
+
     auto tensor = predictor_->GetInput(iter->second);
     // Adjust dims only, allocate lazy.
     tensor->Resize(inputs[i].shape);
@@ -174,8 +177,10 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
       FDASSERT(false, "Unexpected data type of %d.", inputs[i].dtype);
     }
   }
-
+  
+  RUNTIME_PROFILE_LOOP_BEGIN(1)
   predictor_->Run();
+  RUNTIME_PROFILE_LOOP_END
 
   outputs->resize(outputs_desc_.size());
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
@@ -188,6 +193,7 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
     memcpy((*outputs)[i].MutableData(), tensor->data<void>(),
            (*outputs)[i].Nbytes());
   }
+  RUNTIME_PROFILE_LOOP_H2D_D2H_END
   return true;
 }
 

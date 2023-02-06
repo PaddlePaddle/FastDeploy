@@ -9,11 +9,11 @@ Before deployment, two steps require confirmation.
 This directory provides examples that `infer_xxx.py` fast finishes the deployment of PPYOLOE/PicoDet models on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
 
 ```bash
-# Download deployment example code 
+# Download deployment example code
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/detection/paddledetection/python/
 
-# Download the PPYOLOE model file and test images 
+# Download the PPYOLOE model file and test images
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 tar xvf ppyoloe_crn_l_300e_coco.tgz
@@ -24,6 +24,10 @@ python infer_ppyoloe.py --model_dir ppyoloe_crn_l_300e_coco --image 000000014439
 python infer_ppyoloe.py --model_dir ppyoloe_crn_l_300e_coco --image 000000014439.jpg --device gpu
 # TensorRT inference on GPU  （Attention: It is somewhat time-consuming for the operation of model serialization when running TensorRT inference for the first time. Please be patient.）
 python infer_ppyoloe.py --model_dir ppyoloe_crn_l_300e_coco --image 000000014439.jpg --device gpu --use_trt True
+# Kunlunxin XPU Inference
+python infer_ppyoloe.py --model_dir ppyoloe_crn_l_300e_coco --image 000000014439.jpg --device kunlunxin
+# Huawei Ascend Inference
+python infer_ppyoloe.py --model_dir ppyoloe_crn_l_300e_coco --image 000000014439.jpg --device ascend
 ```
 
 The visualized result after running is as follows
@@ -31,7 +35,7 @@ The visualized result after running is as follows
 <img src="https://user-images.githubusercontent.com/19339784/184326520-7075e907-10ed-4fad-93f8-52d0e35d4964.jpg", width=480px, height=320px />
 </div>
 
-## PaddleDetection Python Interface 
+## PaddleDetection Python Interface
 
 ```python
 fastdeploy.vision.detection.PPYOLOE(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
@@ -52,7 +56,7 @@ PaddleDetection model loading and initialization, among which model_file and par
 
 **Parameter**
 
-> * **model_file**(str): Model file path 
+> * **model_file**(str): Model file path
 > * **params_file**(str): Parameter file path
 > * **config_file**(str): Inference configuration yaml file path
 > * **runtime_option**(RuntimeOption): Backend inference configuration. None by default. (use the default configuration)
