@@ -17,7 +17,7 @@ import cv2
 import os
 import numpy as np
 import time
-
+from tqdm import tqdm 
 
 def parse_arguments():
     import argparse
@@ -35,11 +35,22 @@ def parse_arguments():
     parser.add_argument(
         "--device_id", type=int, default=0, help="device(gpu) id")
     parser.add_argument(
-        "--iter_num",
+        "--profile_mode",
+        type=str,
+        default="runtime",
+        help="runtime or end2end.")      
+    parser.add_argument(
+        "--repeat",
         required=True,
         type=int,
-        default=300,
-        help="number of iterations for computing performace.")
+        default=1000,
+        help="number of repeats for profiling.")    
+    parser.add_argument(
+        "--warmup",
+        required=True,
+        type=int,
+        default=50,
+        help="number of warmup for profiling.")      
     parser.add_argument(
         "--device",
         default="cpu",
@@ -59,6 +70,11 @@ def parse_arguments():
         type=ast.literal_eval,
         default=False,
         help="whether enable collect memory info")
+    parser.add_argument(
+        "--include_h2d_d2h",
+        type=ast.literal_eval,
+        default=False,
+        help="whether run profiling with h2d and d2h")       
     args = parser.parse_args()
     return args
 
@@ -68,6 +84,8 @@ def build_option(args):
     device = args.device
     backend = args.backend
     enable_trt_fp16 = args.enable_trt_fp16
+    if args.profile_mode == "runtime":
+        option.enable_profiling(args.include_h2d_d2h, args.repeat, args.warmup)    
     option.set_cpu_thread_num(args.cpu_num_thread)
     if device == "gpu":
         option.use_gpu()
@@ -229,7 +247,6 @@ if __name__ == '__main__':
     gpu_id = args.device_id
     enable_collect_memory_info = args.enable_collect_memory_info
     dump_result = dict()
-    end2end_statis = list()
     cpu_mem = list()
     gpu_mem = list()
     gpu_util = list()
@@ -257,19 +274,27 @@ if __name__ == '__main__':
             enable_gpu = args.device == "gpu"
             monitor = Monitor(enable_gpu, gpu_id)
             monitor.start()
-
-        model.enable_record_time_of_runtime()
+        
         im_ori = cv2.imread(args.image)
-        for i in range(args.iter_num):
-            im = im_ori
+        if args.profile_mode == "runtime":
+            result = model.predict(im_ori)
+            profile_time = model.get_profile_time()
+            dump_result["runtime"] = profile_time * 1000
+            f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
+            print("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
+        else:
+            # end2end
+            for i in range(args.warmup):
+                result = model.predict(im_ori)
+            
             start = time.time()
-            result = model.predict(im)
-            end2end_statis.append(time.time() - start)
+            for i in tqdm(range(args.repeat)):
+                result = model.predict(im_ori)
+            end = time.time()
+            dump_result["end2end"] = ((end - start) / args.repeat) * 1000.0
+            f.writelines("End2End(ms): {} \n".format(str(dump_result["end2end"])))
+            print("End2End(ms): {} \n".format(str(dump_result["end2end"])))
 
-        runtime_statis = model.print_statis_info_of_runtime()
-
-        warmup_iter = args.iter_num // 5
-        end2end_statis_repeat = end2end_statis[warmup_iter:]
         if enable_collect_memory_info:
             monitor.stop()
             mem_info = monitor.output()
@@ -279,14 +304,7 @@ if __name__ == '__main__':
                 'memory.used'] if 'gpu' in mem_info else 0
             dump_result["gpu_util"] = mem_info['gpu'][
                 'utilization.gpu'] if 'gpu' in mem_info else 0
-
-        dump_result["runtime"] = runtime_statis["avg_time"] * 1000
-        dump_result["end2end"] = np.mean(end2end_statis_repeat) * 1000
-
-        f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
-        f.writelines("End2End(ms): {} \n".format(str(dump_result["end2end"])))
-        print("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
-        print("End2End(ms): {} \n".format(str(dump_result["end2end"])))
+        
         if enable_collect_memory_info:
             f.writelines("cpu_rss_mb: {} \n".format(
                 str(dump_result["cpu_rss_mb"])))
@@ -297,7 +315,8 @@ if __name__ == '__main__':
             print("cpu_rss_mb: {} \n".format(str(dump_result["cpu_rss_mb"])))
             print("gpu_rss_mb: {} \n".format(str(dump_result["gpu_rss_mb"])))
             print("gpu_util: {} \n".format(str(dump_result["gpu_util"])))
-    except:
+    except Exception as e:
         f.writelines("!!!!!Infer Failed\n")
+        raise e
 
     f.close()

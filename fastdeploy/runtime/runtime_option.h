@@ -32,6 +32,7 @@
 #include "fastdeploy/runtime/backends/rknpu2/option.h"
 #include "fastdeploy/runtime/backends/sophgo/option.h"
 #include "fastdeploy/runtime/backends/tensorrt/option.h"
+#include "fastdeploy/benchmark/option.h"
 
 namespace fastdeploy {
 
@@ -346,6 +347,26 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetIpuConfig(bool enable_fp16 = false, int replica_num = 1,
                     float available_memory_proportion = 1.0,
                     bool enable_half_partial = false);
+  
+  /** \brief Set the profile mode as 'true'.
+   *
+   * \param[in] inclue_h2d_d2h Whether to include time of H2D_D2H for time of runtime.
+   * \param[in] repeat Repeat times for runtime inference.
+   * \param[in] warmup Warmup times for runtime inference.
+   */
+  void EnableProfiling(bool inclue_h2d_d2h = false, 
+                       int repeat = 100, int warmup = 50) {
+    benchmark_option.enable_profile = true;
+    benchmark_option.warmup = warmup;
+    benchmark_option.repeats = repeat;
+    benchmark_option.include_h2d_d2h = inclue_h2d_d2h;
+  }
+  
+  /** \brief Set the profile mode as 'false'.
+   */
+  void DisableProfiling() {
+    benchmark_option.enable_profile = false;
+  }
 
   Backend backend = Backend::UNKNOWN;
 
@@ -414,6 +435,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool model_from_memory_ = false;
   // format of input model
   ModelFormat model_format = ModelFormat::PADDLE;
+
+  // Benchmark option
+  benchmark::BenchmarkOption benchmark_option;  
 };
 
 }  // namespace fastdeploy

@@ -144,6 +144,11 @@ class Runtime:
             index, self.num_outputs)
         return self._runtime.get_output_info(index)
 
+    def get_profile_time(self):
+        """Get profile time of Runtime after the profile process is done.
+        """
+        return self._runtime.get_profile_time()      
+
 
 class RuntimeOption:
     """Options for FastDeploy Runtime.
@@ -530,6 +535,21 @@ class RuntimeOption:
         :return OrtBackendOption
         """
         return self._option.ort_option
+
+    def enable_profiling(self, 
+                         inclue_h2d_d2h=False,
+                         repeat=100, warmup=50):
+        """Set the profile mode as 'true'.
+        :param inclue_h2d_d2h Whether to include time of H2D_D2H for time of runtime.
+        :param repeat Repeat times for runtime inference.
+        :param warmup Warmup times for runtime inference.
+        """                 
+        return self._option.enable_profiling(inclue_h2d_d2h, repeat, warmup)   
+
+    def disable_profiling(self):
+        """Set the profile mode as 'false'.
+        """
+        return self._option.disable_profiling()
 
     def __repr__(self):
         attrs = dir(self._option)
