@@ -16,6 +16,8 @@
 namespace fastdeploy {
 namespace benchmark {
 
+/*! @brief Result object used to record the time of runtime after benchmark profiling is done.
+ */
 struct BenchmarkResult {
   ///< Means pure_backend_time+time_of_h2d_d2h(if include_h2d_d2h=true).
   double time_of_runtime = 0.0f; 

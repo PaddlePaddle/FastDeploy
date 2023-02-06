@@ -16,6 +16,8 @@
 namespace fastdeploy {
 namespace benchmark {
 
+/*! @brief Option object used to control the behavior of the benchmark profiling.
+ */
 struct BenchmarkOption {
   int warmup = 50;              ///< Warmup for backend inference.
   int repeats = 100;            ///< Repeats for backend inference.
