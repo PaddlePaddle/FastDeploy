@@ -147,7 +147,7 @@ class Runtime:
     def get_profile_time(self):
         """Get profile time of Runtime after the profile process is done.
         """
-        return self._runtime.get_profile_time()      
+        return self._runtime.get_profile_time()
 
 
 class RuntimeOption:
@@ -263,6 +263,9 @@ class RuntimeOption:
 
         :param level: (int)Optimization level, -1 means the default setting
         """
+        logging.warning(
+            "`RuntimeOption.set_ort_graph_opt_level` will be deprecated in v1.2.0, please use `RuntimeOption.graph_optimize_level = 99` instead."
+        )
         return self._option.set_ort_graph_opt_level(level)
 
     def use_paddle_backend(self):
@@ -305,29 +308,36 @@ class RuntimeOption:
         """
         return self.use_lite_backend()
 
-    def set_lite_device_names(self, device_names):
-        """Set nnadapter device name for Paddle Lite backend.
-        """
-        return self._option.set_lite_device_names(device_names)
-
     def set_lite_context_properties(self, context_properties):
         """Set nnadapter context properties for Paddle Lite backend.
         """
+        logging.warning(
+            "`RuntimeOption.set_lite_context_properties` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.nnadapter_context_properties = ...` instead."
+        )
         return self._option.set_lite_context_properties(context_properties)
 
     def set_lite_model_cache_dir(self, model_cache_dir):
         """Set nnadapter model cache dir for Paddle Lite backend.
         """
+        logging.warning(
+            "`RuntimeOption.set_lite_model_cache_dir` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.nnadapter_model_cache_dir = ...` instead."
+        )
         return self._option.set_lite_model_cache_dir(model_cache_dir)
 
     def set_lite_dynamic_shape_info(self, dynamic_shape_info):
         """ Set nnadapter dynamic shape info for Paddle Lite backend.
         """
+        logging.warning(
+            "`RuntimeOption.set_lite_dynamic_shape_info` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.nnadapter_dynamic_shape_info = ...` instead."
+        )
         return self._option.set_lite_dynamic_shape_info(dynamic_shape_info)
 
     def set_lite_subgraph_partition_path(self, subgraph_partition_path):
         """ Set nnadapter subgraph partition path for Paddle Lite backend.
         """
+        logging.warning(
+            "`RuntimeOption.set_lite_subgraph_partition_path` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.nnadapter_subgraph_partition_config_path = ...` instead."
+        )
         return self._option.set_lite_subgraph_partition_path(
             subgraph_partition_path)
 
@@ -335,6 +345,9 @@ class RuntimeOption:
                                                   subgraph_partition_buffer):
         """ Set nnadapter subgraph partition buffer for Paddle Lite backend.
         """
+        logging.warning(
+            "`RuntimeOption.set_lite_subgraph_partition_buffer` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.nnadapter_subgraph_partition_config_buffer = ...` instead."
+        )
         return self._option.set_lite_subgraph_partition_config_buffer(
             subgraph_partition_buffer)
 
@@ -342,6 +355,9 @@ class RuntimeOption:
             self, mixed_precision_quantization_config_path):
         """ Set nnadapter mixed precision quantization config path for Paddle Lite backend..
         """
+        logging.warning(
+            "`RuntimeOption.set_lite_mixed_precision_quantization_config_path` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.nnadapter_mixed_precision_quantization_config_path = ...` instead."
+        )
         return self._option.set_lite_mixed_precision_quantization_config_path(
             mixed_precision_quantization_config_path)
 
@@ -354,25 +370,31 @@ class RuntimeOption:
         """Set device name for OpenVINO, default 'CPU', can also be 'AUTO', 'GPU', 'GPU.1'....
            This interface is deprecated, please use `RuntimeOption.openvino_option.set_device` instead.
         """
-        logging.error(
-            "`RuntimeOption.set_openvino_device` is deprecated, please use `RuntimeOption.openvino_option.set_device` instead."
+        logging.warning(
+            "`RuntimeOption.set_openvino_device` will be deprecated in v1.2.0, please use `RuntimeOption.openvino_option.set_device` instead."
         )
-        raise Exception(
-            "`RuntimeOption.set_openvino_device` is deprecated, please use `RuntimeOption.openvino_option.set_device` instead."
-        )
+        return self._option.set_openvino_device(name)
 
     def set_openvino_shape_info(self, shape_info):
         """Set shape information of the models' inputs, used for GPU to fix the shape
+           This interface is deprecated, please use `RuntimeOption.openvino_option.set_shape_info` instead.
 
         :param shape_info: (dict{str, list of int})Shape information of model's inputs, e.g {"image": [1, 3, 640, 640], "scale_factor": [1, 2]}
         """
+        logging.warning(
+            "`RuntimeOption.set_openvino_shape_info` will be deprecated in v1.2.0, please use `RuntimeOption.openvino_option.set_shape_info` instead."
+        )
         return self._option.set_openvino_shape_info(shape_info)
 
     def set_openvino_cpu_operators(self, operators):
         """While using OpenVINO backend and intel GPU, this interface specifies unsupported operators to run on CPU
+           This interface is deprecated, please use `RuntimeOption.openvino_option.set_cpu_operators` instead.
 
         :param operators: (list of string)list of operators' name, e.g ["MulticlasNms"]
         """
+        logging.warning(
+            "`RuntimeOption.set_openvino_cpu_operators` will be deprecated in v1.2.0, please use `RuntimeOption.openvino_option.set_cpu_operators` instead."
+        )
         return self._option.set_openvino_cpu_operators(operators)
 
     def enable_paddle_log_info(self):
@@ -536,15 +558,13 @@ class RuntimeOption:
         """
         return self._option.ort_option
 
-    def enable_profiling(self, 
-                         inclue_h2d_d2h=False,
-                         repeat=100, warmup=50):
+    def enable_profiling(self, inclue_h2d_d2h=False, repeat=100, warmup=50):
         """Set the profile mode as 'true'.
         :param inclue_h2d_d2h Whether to include time of H2D_D2H for time of runtime.
         :param repeat Repeat times for runtime inference.
         :param warmup Warmup times for runtime inference.
-        """                 
-        return self._option.enable_profiling(inclue_h2d_d2h, repeat, warmup)   
+        """
+        return self._option.enable_profiling(inclue_h2d_d2h, repeat, warmup)
 
     def disable_profiling(self):
         """Set the profile mode as 'false'.
