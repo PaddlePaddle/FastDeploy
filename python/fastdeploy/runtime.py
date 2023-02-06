@@ -347,8 +347,14 @@ class RuntimeOption:
 
     def set_openvino_device(self, name="CPU"):
         """Set device name for OpenVINO, default 'CPU', can also be 'AUTO', 'GPU', 'GPU.1'....
+           This interface is deprecated, please use `RuntimeOption.openvino_option.set_device` instead.
         """
-        return self._option.set_openvino_device(name)
+        logging.error(
+            "`RuntimeOption.set_openvino_device` is deprecated, please use `RuntimeOption.openvino_option.set_device` instead."
+        )
+        raise Exception(
+            "`RuntimeOption.set_openvino_device` is deprecated, please use `RuntimeOption.openvino_option.set_device` instead."
+        )
 
     def set_openvino_shape_info(self, shape_info):
         """Set shape information of the models' inputs, used for GPU to fix the shape
@@ -492,6 +498,38 @@ class RuntimeOption:
         return self._option.set_ipu_config(enable_fp16, replica_num,
                                            available_memory_proportion,
                                            enable_half_partial)
+
+    @property
+    def poros_option(self):
+        """Get PorosBackendOption object to configure Poros backend
+
+        :return PorosBackendOption
+        """
+        return self._option.poros_option
+
+    @property
+    def paddle_lite_option(self):
+        """Get LiteBackendOption object to configure Paddle Lite backend
+
+        :return LiteBackendOption
+        """
+        return self._option.paddle_lite_option
+
+    @property
+    def openvino_option(self):
+        """Get OpenVINOOption object to configure OpenVINO backend
+
+        :return OpenVINOOption
+        """
+        return self._option.openvino_option
+
+    @property
+    def ort_option(self):
+        """Get OrtBackendOption object to configure ONNX Runtime backend
+
+        :return OrtBackendOption
+        """
+        return self._option.ort_option
 
     def __repr__(self):
         attrs = dir(self._option)
