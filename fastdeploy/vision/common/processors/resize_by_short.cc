@@ -23,7 +23,7 @@
 namespace fastdeploy {
 namespace vision {
 
-bool ResizeByShort::ImplByOpenCV(Mat* mat) {
+bool ResizeByShort::ImplByOpenCV(FDMat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
@@ -43,7 +43,7 @@ bool ResizeByShort::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool ResizeByShort::ImplByFlyCV(Mat* mat) {
+bool ResizeByShort::ImplByFlyCV(FDMat* mat) {
   fcv::Mat* im = mat->GetFlyCVMat();
   int origin_w = im->width();
   int origin_h = im->height();
@@ -87,7 +87,7 @@ bool ResizeByShort::ImplByFlyCV(Mat* mat) {
 #endif
 
 #ifdef ENABLE_CVCUDA
-bool ResizeByShort::ImplByCvCuda(Mat* mat) {
+bool ResizeByShort::ImplByCvCuda(FDMat* mat) {
   // Prepare input tensor
   FDTensor* src = CreateCachedGpuInputTensor(mat);
   auto src_tensor = CreateCvCudaTensorWrapData(*src);
@@ -114,7 +114,7 @@ bool ResizeByShort::ImplByCvCuda(Mat* mat) {
   return true;
 }
 
-bool ResizeByShort::ImplByCvCuda(MatBatch* mat_batch) {
+bool ResizeByShort::ImplByCvCuda(FDMatBatch* mat_batch) {
   // TODO(wangxinyu): to support batched tensor as input
   FDASSERT(mat_batch->has_batched_tensor == false,
            "ResizeByShort doesn't support batched tensor as input for now.");
@@ -132,7 +132,7 @@ bool ResizeByShort::ImplByCvCuda(MatBatch* mat_batch) {
   tensor_name = Name() + "_cvcuda_dst";
   std::vector<FDTensor*> dst_tensors;
   for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
-    Mat* mat = &(*(mat_batch->mats))[i];
+    FDMat* mat = &(*(mat_batch->mats))[i];
     double scale = GenerateScale(mat->Width(), mat->Height());
     int width = static_cast<int>(round(scale * mat->Width()));
     int height = static_cast<int>(round(scale * mat->Height()));
@@ -149,7 +149,7 @@ bool ResizeByShort::ImplByCvCuda(MatBatch* mat_batch) {
             NVCVInterpolationType(interp_));
 
   for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
-    Mat* mat = &(*(mat_batch->mats))[i];
+    FDMat* mat = &(*(mat_batch->mats))[i];
     mat->SetTensor(dst_tensors[i]);
     mat->SetWidth(dst_tensors[i]->Shape()[1]);
     mat->SetHeight(dst_tensors[i]->Shape()[0]);
@@ -188,7 +188,7 @@ double ResizeByShort::GenerateScale(const int origin_w, const int origin_h) {
   return scale;
 }
 
-bool ResizeByShort::Run(Mat* mat, int target_size, int interp, bool use_scale,
+bool ResizeByShort::Run(FDMat* mat, int target_size, int interp, bool use_scale,
                         const std::vector<int>& max_hw, ProcLib lib) {
   auto r = ResizeByShort(target_size, interp, use_scale, max_hw);
   return r(mat, lib);

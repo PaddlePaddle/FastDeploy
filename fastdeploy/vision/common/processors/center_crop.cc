@@ -23,7 +23,7 @@
 namespace fastdeploy {
 namespace vision {
 
-bool CenterCrop::ImplByOpenCV(Mat* mat) {
+bool CenterCrop::ImplByOpenCV(FDMat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
   int height = static_cast<int>(im->rows);
   int width = static_cast<int>(im->cols);
@@ -42,7 +42,7 @@ bool CenterCrop::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool CenterCrop::ImplByFlyCV(Mat* mat) {
+bool CenterCrop::ImplByFlyCV(FDMat* mat) {
   fcv::Mat* im = mat->GetFlyCVMat();
   int height = static_cast<int>(im->height());
   int width = static_cast<int>(im->width());
@@ -63,7 +63,7 @@ bool CenterCrop::ImplByFlyCV(Mat* mat) {
 #endif
 
 #ifdef ENABLE_CVCUDA
-bool CenterCrop::ImplByCvCuda(Mat* mat) {
+bool CenterCrop::ImplByCvCuda(FDMat* mat) {
   // Prepare input tensor
   FDTensor* src = CreateCachedGpuInputTensor(mat);
   auto src_tensor = CreateCvCudaTensorWrapData(*src);
@@ -87,7 +87,7 @@ bool CenterCrop::ImplByCvCuda(Mat* mat) {
   return true;
 }
 
-bool CenterCrop::ImplByCvCuda(MatBatch* mat_batch) {
+bool CenterCrop::ImplByCvCuda(FDMatBatch* mat_batch) {
   for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
     if (ImplByCvCuda(&((*(mat_batch->mats))[i])) != true) {
       return false;
@@ -99,7 +99,7 @@ bool CenterCrop::ImplByCvCuda(MatBatch* mat_batch) {
 }
 #endif
 
-bool CenterCrop::Run(Mat* mat, const int& width, const int& height,
+bool CenterCrop::Run(FDMat* mat, const int& width, const int& height,
                      ProcLib lib) {
   auto c = CenterCrop(width, height);
   return c(mat, lib);

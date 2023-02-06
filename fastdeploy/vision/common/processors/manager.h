@@ -40,13 +40,13 @@ class FASTDEPLOY_DECL ProcessorManager {
 
   bool CudaUsed();
 
-  void SetStream(Mat* mat) {
+  void SetStream(FDMat* mat) {
 #ifdef WITH_GPU
     mat->SetStream(stream_);
 #endif
   }
 
-  void SetStream(MatBatch* mat_batch) {
+  void SetStream(FDMatBatch* mat_batch) {
 #ifdef WITH_GPU
     mat_batch->SetStream(stream_);
 #endif

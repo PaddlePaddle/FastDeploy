@@ -17,7 +17,7 @@ namespace fastdeploy {
 namespace vision {
 
 #ifdef WITH_GPU
-void MatBatch::SetStream(cudaStream_t s) {
+void FDMatBatch::SetStream(cudaStream_t s) {
   stream = s;
   for (size_t i = 0; i < mats->size(); ++i) {
     (*mats)[i].SetStream(s);
@@ -25,7 +25,7 @@ void MatBatch::SetStream(cudaStream_t s) {
 }
 #endif
 
-FDTensor* MatBatch::Tensor() {
+FDTensor* FDMatBatch::Tensor() {
   if (has_batched_tensor) {
     return &fd_tensor;
   }
@@ -48,13 +48,13 @@ FDTensor* MatBatch::Tensor() {
   return &fd_tensor;
 }
 
-void MatBatch::SetTensor(FDTensor* tensor) {
+void FDMatBatch::SetTensor(FDTensor* tensor) {
   fd_tensor.SetExternalData(tensor->Shape(), tensor->Dtype(), tensor->Data(),
                             tensor->device, tensor->device_id);
   has_batched_tensor = true;
 }
 
-FDTensor* CreateCachedGpuInputTensor(MatBatch* mat_batch) {
+FDTensor* CreateCachedGpuInputTensor(FDMatBatch* mat_batch) {
 #ifdef WITH_GPU
   auto mats = mat_batch->mats;
   FDASSERT(CheckShapeConsistency(mats), "Mats shapes are not consistent.")

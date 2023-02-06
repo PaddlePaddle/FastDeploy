@@ -25,17 +25,17 @@ class FASTDEPLOY_DECL NormalizeAndPermute : public Processor {
                       const std::vector<float>& min = std::vector<float>(),
                       const std::vector<float>& max = std::vector<float>(),
                       bool swap_rb = false);
-  bool ImplByOpenCV(Mat* mat);
+  bool ImplByOpenCV(FDMat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFlyCV(Mat* mat);
+  bool ImplByFlyCV(FDMat* mat);
 #endif
 #ifdef WITH_GPU
-  bool ImplByCuda(Mat* mat);
-  bool ImplByCuda(MatBatch* mat_batch);
+  bool ImplByCuda(FDMat* mat);
+  bool ImplByCuda(FDMatBatch* mat_batch);
 #endif
 #ifdef ENABLE_CVCUDA
-  bool ImplByCvCuda(Mat* mat);
-  bool ImplByCvCuda(MatBatch* mat_batch);
+  bool ImplByCvCuda(FDMat* mat);
+  bool ImplByCvCuda(FDMatBatch* mat_batch);
 #endif
   std::string Name() { return "NormalizeAndPermute"; }
 
@@ -49,7 +49,7 @@ class FASTDEPLOY_DECL NormalizeAndPermute : public Processor {
   // There will be some precomputation in contruct function
   // and the `norm(mat)` only need to compute result = mat * alpha + beta
   // which will reduce lots of time
-  static bool Run(Mat* mat, const std::vector<float>& mean,
+  static bool Run(FDMat* mat, const std::vector<float>& mean,
                   const std::vector<float>& std, bool is_scale = true,
                   const std::vector<float>& min = std::vector<float>(),
                   const std::vector<float>& max = std::vector<float>(),

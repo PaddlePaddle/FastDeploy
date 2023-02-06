@@ -47,12 +47,12 @@ class FASTDEPLOY_DECL Processor {
 
   virtual std::string Name() = 0;
 
-  virtual bool ImplByOpenCV(Mat* mat) {
+  virtual bool ImplByOpenCV(FDMat* mat) {
     FDERROR << Name() << " Not Implement Yet." << std::endl;
     return false;
   }
 
-  virtual bool ImplByOpenCV(MatBatch* mat_batch) {
+  virtual bool ImplByOpenCV(FDMatBatch* mat_batch) {
     for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
       if (ImplByOpenCV(&(*(mat_batch->mats))[i]) != true) {
         return false;
@@ -61,11 +61,11 @@ class FASTDEPLOY_DECL Processor {
     return true;
   }
 
-  virtual bool ImplByFlyCV(Mat* mat) {
+  virtual bool ImplByFlyCV(FDMat* mat) {
     return ImplByOpenCV(mat);
   }
 
-  virtual bool ImplByFlyCV(MatBatch* mat_batch) {
+  virtual bool ImplByFlyCV(FDMatBatch* mat_batch) {
     for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
       if (ImplByFlyCV(&(*(mat_batch->mats))[i]) != true) {
         return false;
@@ -74,11 +74,11 @@ class FASTDEPLOY_DECL Processor {
     return true;
   }
 
-  virtual bool ImplByCuda(Mat* mat) {
+  virtual bool ImplByCuda(FDMat* mat) {
     return ImplByOpenCV(mat);
   }
 
-  virtual bool ImplByCuda(MatBatch* mat_batch) {
+  virtual bool ImplByCuda(FDMatBatch* mat_batch) {
     for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
       if (ImplByCuda(&(*(mat_batch->mats))[i]) != true) {
         return false;
@@ -87,11 +87,11 @@ class FASTDEPLOY_DECL Processor {
     return true;
   }
 
-  virtual bool ImplByCvCuda(Mat* mat) {
+  virtual bool ImplByCvCuda(FDMat* mat) {
     return ImplByOpenCV(mat);
   }
 
-  virtual bool ImplByCvCuda(MatBatch* mat_batch) {
+  virtual bool ImplByCvCuda(FDMatBatch* mat_batch) {
     for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
       if (ImplByCvCuda(&(*(mat_batch->mats))[i]) != true) {
         return false;
@@ -100,9 +100,9 @@ class FASTDEPLOY_DECL Processor {
     return true;
   }
 
-  virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
+  virtual bool operator()(FDMat* mat, ProcLib lib = ProcLib::DEFAULT);
 
-  virtual bool operator()(MatBatch* mat_batch,
+  virtual bool operator()(FDMatBatch* mat_batch,
                           ProcLib lib = ProcLib::DEFAULT);
 };
 

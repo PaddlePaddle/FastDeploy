@@ -39,7 +39,7 @@ __global__ void NormalizeAndPermuteKernel(const uint8_t* src, float* dst,
   }
 }
 
-bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
+bool NormalizeAndPermute::ImplByCuda(FDMat* mat) {
   // Prepare input tensor
   FDTensor* src = CreateCachedGpuInputTensor(mat);
 
@@ -75,7 +75,7 @@ bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
   return true;
 }
 
-bool NormalizeAndPermute::ImplByCuda(MatBatch* mat_batch) {
+bool NormalizeAndPermute::ImplByCuda(FDMatBatch* mat_batch) {
   // Prepare input tensor
   FDTensor* src = CreateCachedGpuInputTensor(mat_batch);
 
@@ -111,15 +111,15 @@ bool NormalizeAndPermute::ImplByCuda(MatBatch* mat_batch) {
 
   mat_batch->SetTensor(mat_batch->output_cache);
   mat_batch->device = Device::GPU;
-  mat_batch->layout = MatBatchLayout::NCHW;
+  mat_batch->layout = FDMatBatchLayout::NCHW;
   mat_batch->mat_type = ProcLib::CUDA;
   return true;
 }
 
 #ifdef ENABLE_CVCUDA
-bool NormalizeAndPermute::ImplByCvCuda(Mat* mat) { return ImplByCuda(mat); }
+bool NormalizeAndPermute::ImplByCvCuda(FDMat* mat) { return ImplByCuda(mat); }
 
-bool NormalizeAndPermute::ImplByCvCuda(MatBatch* mat_batch) {
+bool NormalizeAndPermute::ImplByCvCuda(FDMatBatch* mat_batch) {
   return ImplByCuda(mat_batch);
 }
 #endif

@@ -20,7 +20,7 @@
 namespace fastdeploy {
 namespace vision {
 
-bool Processor::operator()(Mat* mat, ProcLib lib) {
+bool Processor::operator()(FDMat* mat, ProcLib lib) {
   ProcLib target = lib;
   if (lib == ProcLib::DEFAULT) {
     target = DefaultProcLib::default_lib;
@@ -52,7 +52,7 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
   return ImplByOpenCV(mat);
 }
 
-bool Processor::operator()(MatBatch* mat_batch, ProcLib lib) {
+bool Processor::operator()(FDMatBatch* mat_batch, ProcLib lib) {
   ProcLib target = lib;
   if (lib == ProcLib::DEFAULT) {
     target = DefaultProcLib::default_lib;
