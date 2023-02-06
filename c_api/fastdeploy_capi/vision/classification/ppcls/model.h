@@ -19,42 +19,44 @@
 #include "fastdeploy_capi/vision/result.h"
 #include "fastdeploy_capi/runtime_option.h"
 
-typedef struct FD_PaddleClasModel FD_PaddleClasModel;
+typedef struct FD_PaddleClasModelWrapper FD_PaddleClasModelWrapper;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/** \brief Create a new FD_PaddleClasModel
+/** \brief Create a new FD_PaddleClasModelWrapper object
  *
  * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
  * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
  * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
- * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
+ * \param[in] fd_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
  * \return Return a pointer to FD_PaddleClasModel object
  */
 
-FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_PaddleClasModel* FD_CreatePaddleClasModel(const char* model_file, const char* params_file,
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_PaddleClasModelWrapper* FD_CreatePaddleClasModelWrapper(const char* model_file, const char* params_file,
                                                                                     const char* config_file,
-                                                                                    FD_RuntimeOption* fd_runtime_option,
+                                                                                    FD_RuntimeOptionWrapper* fd_runtime_option_wrapper,
                                                                                     const FD_ModelFormat model_format);
 
-/** \brief Destroy a FD_PaddleClasModel object
+/** \brief Destroy a FD_PaddleClasModelWrapper object
  *
- * \param[in] fd_paddleclas_model pointer to FD_PaddleClasModel object
+ * \param[in] fd_paddleclas_model_wrapper pointer to FD_PaddleClasModelWrapper object
  */
 
-FASTDEPLOY_CAPI_EXPORT extern void FD_DestroyPaddleClasModel(__fd_take FD_PaddleClasModel* fd_paddleclas_model);
+FASTDEPLOY_CAPI_EXPORT extern void FD_DestroyPaddleClasModelWrapper(__fd_take FD_PaddleClasModelWrapper* fd_paddleclas_model_wrapper);
 
 /** \brief Predict the classification result for an input image
  *
- * \param[in] fd_paddleclas_model pointer to FD_PaddleClasModel object
+ * \param[in] fd_paddleclas_model_wrapper pointer to FD_PaddleClasModelWrapper object
+ * \param[in] img pointer to cv::Mat image
+ * \param[in] fd_classify_result_wrapper pointer to FD_PaddleClasModelWrapper object, which stores the result.
  */
 
-FASTDEPLOY_CAPI_EXPORT extern void FD_PaddleClasModelPredict(__fd_take FD_PaddleClasModel* fd_paddleclas_model,
-                                    FD_Mat* img, FD_ClassifyResult* fd_classify_result);
+FASTDEPLOY_CAPI_EXPORT extern void FD_PaddleClasModelWrapperPredict(__fd_take FD_PaddleClasModelWrapper* fd_paddleclas_model_wrapper,
+                                    FD_Mat* img, FD_ClassifyResultWrapper* fd_classify_result_wrapper);
 
 #ifdef __cplusplus
 }  // extern "C"

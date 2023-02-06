@@ -19,6 +19,11 @@
 
 #include "fastdeploy_capi/fd_common.h"  // NOLINT
 
+typedef struct FD_OneDimArrayUint8 {
+  size_t size;
+  uint8_t* data;
+} FD_OneDimArrayUint8;  // std::vector<int32_t>
+
 typedef struct FD_OneDimArrayInt32 {
   size_t size;
   int32_t* data;
@@ -37,7 +42,7 @@ typedef struct FD_OneDimArrayInt64 {
 typedef struct FD_OneDimArrayFloat {
   size_t size;
   float* data;
-} FD_OneDimArrayFloat;  // std::vector<size_t>
+} FD_OneDimArrayFloat;  // std::vector<float>
 
 typedef struct FD_OneDimArrayCstr {
   size_t size;
@@ -51,7 +56,12 @@ typedef struct FD_Cstr {
 
 typedef struct FD_TwoDimArraySize {
   size_t size;
-  FD_OneDimArraySize** data;
+  FD_OneDimArraySize* data;
 } FD_TwoDimArraySize;  // std::vector<std::vector<size_t>>
+
+typedef struct FD_TwoDimArrayFloat {
+  size_t size;
+  FD_OneDimArrayFloat* data;
+} FD_TwoDimArrayFloat;  // std::vector<std::vector<float>>
 
 typedef void FD_Mat;

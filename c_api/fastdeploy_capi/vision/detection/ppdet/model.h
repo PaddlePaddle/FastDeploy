@@ -19,42 +19,45 @@
 #include "fastdeploy_capi/vision/result.h"
 #include "fastdeploy_capi/runtime_option.h"
 
-typedef struct FD_PPYOLOE FD_PPYOLOE;
+typedef struct FD_PPYOLOEWrapper FD_PPYOLOEWrapper;
+typedef struct FD_RuntimeOptionWrapper FD_RuntimeOptionWrapper;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/** \brief Create a new FD_PPYOLOE
+/** \brief Create a new FD_PPYOLOEWrapper object
  *
  * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
  * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
  * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
- * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
+ * \param[in] fd_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
- * \return Return a pointer to FD_PPYOLOE object
+ * \return Return a pointer to FD_PPYOLOEWrapper object
  */
 
-FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_PPYOLOE* FD_CreatesPPYOLOE(const char* model_file, const char* params_file,
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_PPYOLOEWrapper* FD_CreatesPPYOLOEWrapper(const char* model_file, const char* params_file,
                                                                                     const char* config_file,
-                                                                                    FD_RuntimeOption* fd_runtime_option,
+                                                                                    FD_RuntimeOptionWrapper* fd_runtime_option_wrapper,
                                                                                     const FD_ModelFormat model_format);
 
-/** \brief Destroy a FD_PPYOLOE object
+/** \brief Destroy a FD_PPYOLOEWrapper object
  *
- * \param[in] fd_ppyoloe pointer to FD_PPYOLOE object
+ * \param[in] fd_ppyoloe_wrapper pointer to FD_PPYOLOEWrapper object
  */
 
-FASTDEPLOY_CAPI_EXPORT extern void FD_DestroyPPYOLOE(__fd_take FD_PPYOLOE* fd_ppyoloe);
+FASTDEPLOY_CAPI_EXPORT extern void FD_DestroyPPYOLOEWrapper(__fd_take FD_PPYOLOEWrapper* fd_ppyoloe_wrapper);
 
 /** \brief Predict the detection result for an input image
  *
- * \param[in] fd_ppyoloe pointer to FD_PPYOLOE object
+ * \param[in] fd_ppyoloe_wrapper pointer to FD_PPYOLOEWrapper object
+ * \param[in] img pointer to cv::Mat image
+ * \param[in] fd_detection_result_wrapper pointer to FD_DetectionResultWrapper object, which stores the result.
  */
 
-FASTDEPLOY_CAPI_EXPORT extern void FD_PPYOLOEPredict(__fd_take FD_PPYOLOE* fd_ppyoloe,
-                                    FD_Mat* img, FD_DetectionResult* fd_classify_result);
+FASTDEPLOY_CAPI_EXPORT extern void FD_PPYOLOEWrapperPredict(__fd_take FD_PPYOLOEWrapper* fd_ppyoloe_wrapper,
+                                    FD_Mat* img, FD_DetectionResultWrapper* fd_detection_result_wrapper);
 
 #ifdef __cplusplus
 }  // extern "C"
