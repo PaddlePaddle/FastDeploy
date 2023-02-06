@@ -1,25 +1,25 @@
-[English](../../../en/faq/rknpu2/build.md) | 中文
-# FastDeploy RKNPU2引擎编译
+English | [中文](../../../cn/faq/rknpu2/build.md) 
+# FastDeploy RKNPU2 Engine Compilation 
 
-## FastDeploy后端支持详情
-FastDeploy当前在RK平台上支持后端引擎如下:
+## FastDeploy supported backends
+FastDeploy currently supports the following backends on the RK platform: 
 
-| 后端                | 平台                   | 支持模型格式 | 说明                                         |
+| Backend                | Platform                    | Supported model formats  | Notes                                          |
 |:------------------|:---------------------|:-------|:-------------------------------------------|
-| ONNX&nbsp;Runtime | RK356X   <br> RK3588 | ONNX   | 编译开关`ENABLE_ORT_BACKEND`为ON或OFF控制，默认OFF    |
-| RKNPU2            | RK356X   <br> RK3588 | RKNN   | 编译开关`ENABLE_RKNPU2_BACKEND`为ON或OFF控制，默认OFF |
+| ONNX&nbsp;Runtime | RK356X   <br> RK3588 | ONNX   | Compile switch `ENABLE_ORT_BACKEND` is controlled by ON or OFF. Default OFF    |
+| RKNPU2            | RK356X   <br> RK3588 | RKNN   | Compile switch `ENABLE_RKNPU2_BACKEND` is controlled by ON or OFF. Default OFF  |
 
-## 编译FastDeploy SDK
+## Compile FastDeploy SDK
 
-### 板端编译FastDeploy C++ SDK
+### Compile FastDeploy C++ SDK on board side 
 
-RKNPU2暂时仅支持linux系统, 以下教程在RK3568(debian 10)、RK3588(debian 11) 环境下完成。
+Currently, RKNPU2 is only available on linux. The following tutorial is completed on RK3568(debian 10) and RK3588(debian 11). 
 
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
 
-# 如果您使用的是develop分支输入以下命令
+# If you are using the develop branch, type the following command 
 git checkout develop
 
 mkdir build && cd build
@@ -32,12 +32,12 @@ make -j8
 make install
 ```
 
-### 交叉编译FastDeploy C++ SDK
+### Cross-compile FastDeploy C++ SDK
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
 
-# 如果您使用的是develop分支输入以下命令
+# If you are using the develop branch, type the following command 
 git checkout develop
 
 mkdir build && cd build
@@ -48,21 +48,22 @@ cmake ..  -DCMAKE_C_COMPILER=/home/zbc/opt/gcc-linaro-6.3.1-2017.05-x86_64_aarch
           -DENABLE_ORT_BACKEND=OFF \
 	      -DENABLE_RKNPU2_BACKEND=ON \
 	      -DENABLE_VISION=ON \
-	      -DRKNN2_TARGET_SOC=RK356X \
+	      -DRKNN2_TARGET_SOC=RK3588 \
+	      -DENABLE_FLYCV=ON \
           -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.0
 make -j8
 make install
 ```
 
-### 板端编译Python SDK
+### Compile the Python SDK on the board
 
-RKNPU2暂时仅支持linux系统, 以下教程在RK3568(debian 10)、RK3588(debian 11) 环境下完成。Python打包依赖`wheel`，编译前请先执行`pip install wheel`
+Currently, RKNPU2 is only available on linux. The following tutorial is  completed on RK3568(debian 10) and RK3588(debian 11). Packing Python is dependent on `wheel`, so run `pip install wheel` before compiling.
 
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
 
-# 如果您使用的是develop分支输入以下命令
+# If you are using the develop branch, type the following command 
 git checkout develop
 
 cd python
