@@ -44,8 +44,9 @@ args = parse_arguments()
 runtime_option = build_option(args)
 model = fd.vision.classification.YOLOv5Cls(
     args.model, runtime_option=runtime_option)
+model.postprocessor.topk = args.topk
 
 # 预测图片分类结果
 im = cv2.imread(args.image)
-result = model.predict(im, args.topk)
+result = model.predict(im)
 print(result)
