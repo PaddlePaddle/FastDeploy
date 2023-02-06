@@ -19,12 +19,14 @@ namespace fastdeploy {
 void BindLiteOption(pybind11::module& m);
 void BindOpenVINOOption(pybind11::module& m);
 void BindOrtOption(pybind11::module& m);
+void BindTrtOption(pybind11::module& m);
 void BindPorosOption(pybind11::module& m);
 
 void BindOption(pybind11::module& m) {
   BindLiteOption(m);
   BindOpenVINOOption(m);
   BindOrtOption(m);
+  BindTrtOption(m);
   BindPorosOption(m);
 
   pybind11::class_<RuntimeOption>(m, "RuntimeOption")
@@ -40,6 +42,7 @@ void BindOption(pybind11::module& m) {
       .def_readwrite("paddle_lite_option", &RuntimeOption::paddle_lite_option)
       .def_readwrite("openvino_option", &RuntimeOption::openvino_option)
       .def_readwrite("ort_option", &RuntimeOption::ort_option)
+      .def_readwrite("trt_option", &RuntimeOption::trt_option)
       .def_readwrite("poros_option", &RuntimeOption::poros_option)
       .def("set_external_stream", &RuntimeOption::SetExternalStream)
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
@@ -50,7 +53,6 @@ void BindOption(pybind11::module& m) {
       .def("use_trt_backend", &RuntimeOption::UseTrtBackend)
       .def("use_openvino_backend", &RuntimeOption::UseOpenVINOBackend)
       .def("use_lite_backend", &RuntimeOption::UseLiteBackend)
-      .def("set_lite_device_names", &RuntimeOption::SetLiteDeviceNames)
       .def("set_lite_context_properties",
            &RuntimeOption::SetLiteContextProperties)
       .def("set_lite_model_cache_dir", &RuntimeOption::SetLiteModelCacheDir)

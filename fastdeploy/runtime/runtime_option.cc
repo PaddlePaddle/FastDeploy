@@ -102,6 +102,10 @@ void RuntimeOption::SetCpuThreadNum(int thread_num) {
 }
 
 void RuntimeOption::SetOrtGraphOptLevel(int level) {
+  FDWARNING << "`RuntimeOption::SetOrtGraphOptLevel` will be removed in "
+               "v1.2.0, please modify its member variables directly, e.g "
+               "`runtime_option.ort_option.graph_optimization_level = 99`."
+            << std::endl;
   std::vector<int> supported_level{-1, 0, 1, 2};
   auto valid_level = std::find(supported_level.begin(), supported_level.end(),
                                level) != supported_level.end();
@@ -203,67 +207,127 @@ void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
 }
 
 void RuntimeOption::SetOpenVINODevice(const std::string& name) {
-  openvino_option.device = name;
+  FDWARNING << "`RuntimeOption::SetOpenVINODevice` will be removed in v1.2.0, "
+               "please use `RuntimeOption.openvino_option.SetDeivce(const "
+               "std::string&)` instead."
+            << std::endl;
+  openvino_option.SetDevice(name);
 }
 
-void RuntimeOption::EnableLiteFP16() { paddle_lite_option.enable_fp16 = true; }
+void RuntimeOption::EnableLiteFP16() {
+  FDWARNING << "`RuntimeOption::EnableLiteFP16` will be removed in v1.2.0, "
+               "please modify its member variables directly, e.g "
+               "`runtime_option.paddle_lite_option.enable_fp16 = true`"
+            << std::endl;
+  paddle_lite_option.enable_fp16 = true;
+}
 
 void RuntimeOption::DisableLiteFP16() {
+  FDWARNING << "`RuntimeOption::EnableLiteFP16` will be removed in v1.2.0, "
+               "please modify its member variables directly, e.g "
+               "`runtime_option.paddle_lite_option.enable_fp16 = false`"
+            << std::endl;
   paddle_lite_option.enable_fp16 = false;
 }
 
-void RuntimeOption::EnableLiteInt8() { paddle_lite_option.enable_int8 = true; }
+void RuntimeOption::EnableLiteInt8() {
+  FDWARNING << "RuntimeOption::EnableLiteInt8 is a useless api, this calling "
+               "will not bring any effects, and will be removed in v1.2.0. if "
+               "you load a quantized model, it will automatically run with "
+               "int8 mode; otherwise it will run with float mode."
+            << std::endl;
+}
 
 void RuntimeOption::DisableLiteInt8() {
-  paddle_lite_option.enable_int8 = false;
+  FDWARNING << "RuntimeOption::EnableLiteInt8 is a useless api, this calling "
+               "will not bring any effects, and will be removed in v1.2.0. if "
+               "you load a quantized model, it will automatically run with "
+               "int8 mode; otherwise it will run with float mode."
+            << std::endl;
 }
 
 void RuntimeOption::SetLitePowerMode(LitePowerMode mode) {
+  FDWARNING << "`RuntimeOption::SetLitePowerMode` will be removed in v1.2.0, "
+               "please modify its member variable directly, e.g "
+               "`runtime_option.paddle_lite_option.power_mode = 3;`"
+            << std::endl;
   paddle_lite_option.power_mode = mode;
 }
 
 void RuntimeOption::SetLiteOptimizedModelDir(
     const std::string& optimized_model_dir) {
+  FDWARNING
+      << "`RuntimeOption::SetLiteOptimizedModelDir` will be removed in v1.2.0, "
+         "please modify its member variable directly, e.g "
+         "`runtime_option.paddle_lite_option.optimized_model_dir = \"...\"`"
+      << std::endl;
   paddle_lite_option.optimized_model_dir = optimized_model_dir;
 }
 
 void RuntimeOption::SetLiteSubgraphPartitionPath(
     const std::string& nnadapter_subgraph_partition_config_path) {
+  FDWARNING << "`RuntimeOption::SetLiteSubgraphPartitionPath` will be removed "
+               "in v1.2.0, please modify its member variable directly, e.g "
+               "`runtime_option.paddle_lite_option.nnadapter_subgraph_"
+               "partition_config_path = \"...\";` "
+            << std::endl;
   paddle_lite_option.nnadapter_subgraph_partition_config_path =
       nnadapter_subgraph_partition_config_path;
 }
 
 void RuntimeOption::SetLiteSubgraphPartitionConfigBuffer(
     const std::string& nnadapter_subgraph_partition_config_buffer) {
+  FDWARNING
+      << "`RuntimeOption::SetLiteSubgraphPartitionConfigBuffer` will be "
+         "removed in v1.2.0, please modify its member variable directly, e.g "
+         "`runtime_option.paddle_lite_option.nnadapter_subgraph_partition_"
+         "config_buffer = ...`"
+      << std::endl;
   paddle_lite_option.nnadapter_subgraph_partition_config_buffer =
       nnadapter_subgraph_partition_config_buffer;
 }
 
-void RuntimeOption::SetLiteDeviceNames(
-    const std::vector<std::string>& nnadapter_device_names) {
-  paddle_lite_option.nnadapter_device_names = nnadapter_device_names;
-}
-
 void RuntimeOption::SetLiteContextProperties(
     const std::string& nnadapter_context_properties) {
+  FDWARNING << "`RuntimeOption::SetLiteContextProperties` will be removed in "
+               "v1.2.0, please modify its member variable directly, e.g "
+               "`runtime_option.paddle_lite_option.nnadapter_context_"
+               "properties = ...`"
+            << std::endl;
   paddle_lite_option.nnadapter_context_properties =
       nnadapter_context_properties;
 }
 
 void RuntimeOption::SetLiteModelCacheDir(
     const std::string& nnadapter_model_cache_dir) {
+  FDWARNING
+      << "`RuntimeOption::SetLiteModelCacheDir` will be removed in v1.2.0, "
+         "please modify its member variable directly, e.g "
+         "`runtime_option.paddle_lite_option.nnadapter_model_cache_dir = ...`"
+      << std::endl;
   paddle_lite_option.nnadapter_model_cache_dir = nnadapter_model_cache_dir;
 }
 
 void RuntimeOption::SetLiteDynamicShapeInfo(
     const std::map<std::string, std::vector<std::vector<int64_t>>>&
         nnadapter_dynamic_shape_info) {
+  FDWARNING << "`RuntimeOption::SetLiteDynamicShapeInfo` will be removed in "
+               "v1.2.0, please modify its member variable directly, e.g "
+               "`runtime_option.paddle_lite_option.paddle_lite_option."
+               "nnadapter_dynamic_shape_info = ...`"
+            << std::endl;
   paddle_lite_option.nnadapter_dynamic_shape_info =
       nnadapter_dynamic_shape_info;
 }
 
 void RuntimeOption::SetLiteMixedPrecisionQuantizationConfigPath(
     const std::string& nnadapter_mixed_precision_quantization_config_path) {
+  FDWARNING
+      << "`RuntimeOption::SetLiteMixedPrecisionQuantizationConfigPath` will be "
+         "removed in v1.2.0, please modify its member variable direcly, e.g "
+         "`runtime_option.paddle_lite_option.paddle_lite_option.nnadapter_"
+         "mixed_precision_quantization_config_path = ...`"
+      << std::endl;
   paddle_lite_option.nnadapter_mixed_precision_quantization_config_path =
       nnadapter_mixed_precision_quantization_config_path;
 }
@@ -272,42 +336,61 @@ void RuntimeOption::SetTrtInputShape(const std::string& input_name,
                                      const std::vector<int32_t>& min_shape,
                                      const std::vector<int32_t>& opt_shape,
                                      const std::vector<int32_t>& max_shape) {
-  trt_min_shape[input_name].clear();
-  trt_max_shape[input_name].clear();
-  trt_opt_shape[input_name].clear();
-  trt_min_shape[input_name].assign(min_shape.begin(), min_shape.end());
-  if (opt_shape.size() == 0) {
-    trt_opt_shape[input_name].assign(min_shape.begin(), min_shape.end());
-  } else {
-    trt_opt_shape[input_name].assign(opt_shape.begin(), opt_shape.end());
-  }
-  if (max_shape.size() == 0) {
-    trt_max_shape[input_name].assign(min_shape.begin(), min_shape.end());
-  } else {
-    trt_max_shape[input_name].assign(max_shape.begin(), max_shape.end());
-  }
+  FDWARNING << "`RuntimeOption::SetTrtInputShape` will be removed in v1.2.0, "
+               "please use `RuntimeOption.trt_option.SetShape()` instead."
+            << std::endl;
+  trt_option.SetShape(input_name, min_shape, opt_shape, max_shape);
 }
 
 void RuntimeOption::SetTrtMaxWorkspaceSize(size_t max_workspace_size) {
-  trt_max_workspace_size = max_workspace_size;
+  FDWARNING << "`RuntimeOption::SetTrtMaxWorkspaceSize` will be removed in "
+               "v1.2.0, please modify its member variable directly, e.g "
+               "`RuntimeOption.trt_option.max_workspace_size = 1 << 30`."
+            << std::endl;
+  trt_option.max_workspace_size = max_workspace_size;
 }
 void RuntimeOption::SetTrtMaxBatchSize(size_t max_batch_size) {
-  trt_max_batch_size = max_batch_size;
+  FDWARNING << "`RuntimeOption::SetTrtMaxBatchSize` will be removed in v1.2.0, "
+               "please modify its member variable directly, e.g "
+               "`RuntimeOption.trt_option.max_batch_size = 32`."
+            << std::endl;
+  trt_option.max_batch_size = max_batch_size;
 }
 
-void RuntimeOption::EnableTrtFP16() { trt_enable_fp16 = true; }
+void RuntimeOption::EnableTrtFP16() {
+  FDWARNING << "`RuntimeOption::EnableTrtFP16` will be removed in v1.2.0, "
+               "please modify its member variable directly, e.g "
+               "`runtime_option.trt_option.enable_fp16 = true;`"
+            << std::endl;
+  trt_option.enable_fp16 = true;
+}
 
-void RuntimeOption::DisableTrtFP16() { trt_enable_fp16 = false; }
+void RuntimeOption::DisableTrtFP16() {
+  FDWARNING << "`RuntimeOption::DisableTrtFP16` will be removed in v1.2.0, "
+               "please modify its member variable directly, e.g "
+               "`runtime_option.trt_option.enable_fp16 = false;`"
+            << std::endl;
+  trt_option.enable_fp16 = false;
+}
 
 void RuntimeOption::EnablePinnedMemory() { enable_pinned_memory = true; }
 
 void RuntimeOption::DisablePinnedMemory() { enable_pinned_memory = false; }
 
 void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
-  trt_serialize_file = cache_file_path;
+  FDWARNING << "`RuntimeOption::SetTrtCacheFile` will be removed in v1.2.0, "
+               "please modify its member variable directly, e.g "
+               "`runtime_option.trt_option.serialize_file = "
+               "\"/Downloads/resnet50.trt\"."
+            << std::endl;
+  trt_option.serialize_file = cache_file_path;
 }
 
 void RuntimeOption::SetOpenVINOStreams(int num_streams) {
+  FDWARNING << "`RuntimeOption::SetOpenVINOStreams` will be removed in v1.2.0, "
+               "please modify its member variable directly, e.g "
+               "`runtime_option.openvino_option.num_streams = 1`."
+            << std::endl;
   openvino_option.num_streams = num_streams;
 }
 
