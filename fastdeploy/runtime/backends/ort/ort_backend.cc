@@ -24,7 +24,6 @@
 
 #include <memory>
 
-
 namespace fastdeploy {
 
 std::vector<OrtCustomOp*> OrtBackend::custom_operators_ =
@@ -130,11 +129,11 @@ bool OrtBackend::InitFromPaddle(const std::string& model_buffer,
   strcpy(ops[1].op_name, "pool2d");
   strcpy(ops[1].export_op_name, "AdaptivePool2d");
 
-  if (!paddle2onnx::Export(model_buffer.c_str(), model_buffer.size(),
-                           params_buffer.c_str(), params_buffer.size(),
-                           &model_content_ptr, &model_content_size, 11, true,
-                           verbose, true, true, true, ops.data(), 2,
-                           "onnxruntime", nullptr, 0, "", &save_external)) {
+  if (!paddle2onnx::Export(
+          model_buffer.c_str(), model_buffer.size(), params_buffer.c_str(),
+          params_buffer.size(), &model_content_ptr, &model_content_size, 11,
+          true, verbose, true, true, true, ops.data(), 2, "onnxruntime",
+          nullptr, 0, "", &save_external, true)) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;

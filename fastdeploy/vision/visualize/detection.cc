@@ -22,6 +22,9 @@ namespace vision {
 
 cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
                      float score_threshold, int line_size, float font_size) {
+  if (result.scores.empty()) {
+    return im.clone();
+  }
   if (result.contain_masks) {
     FDASSERT(result.boxes.size() == result.masks.size(),
              "The size of masks must be equal to the size of boxes, but now "
