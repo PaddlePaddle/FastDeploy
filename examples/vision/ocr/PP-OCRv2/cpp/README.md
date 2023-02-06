@@ -1,7 +1,7 @@
 English | [简体中文](README_CN.md)
 # PPOCRv2 C++ Deployment Example
 
-This directory provides examples that `infer.cc` fast finishes the deployment of PPOCRv2 on CPU/GPU and GPU accelerated by TensorRT. 
+This directory provides examples that `infer.cc` fast finishes the deployment of PPOCRv2 on CPU/GPU and GPU accelerated by TensorRT.
 
 Two steps before deployment
 
@@ -13,7 +13,7 @@ Taking the CPU inference on Linux as an example, the compilation test can be com
 ```
 mkdir build
 cd build
-# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above 
+# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
@@ -54,7 +54,7 @@ The visualized result after running is as follows
 <img width="640" src="https://user-images.githubusercontent.com/109218879/185826024-f7593a0c-1bd2-4a60-b76c-15588484fa08.jpg">
 
 
-## PPOCRv2 C++ Interface 
+## PPOCRv2 C++ Interface
 
 ### PPOCRv2 Class
 
@@ -98,7 +98,7 @@ The initialization of PPOCRv2, consisting of detection and recognition models (N
 > > * **result**: OCR prediction results, including the position of the detection box from the detection model, the classification of the direction from the classification model, and the recognition result from the recognition model. Refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for OCRResult
 
 
-## DBDetector C++ Interface 
+## DBDetector C++ Interface
 
 ### DBDetector Class
 
@@ -112,7 +112,7 @@ DBDetector model loading and initialization. The model is in paddle format.
 
 **Parameter**
 
-> * **model_file**(str): Model file path 
+> * **model_file**(str): Model file path
 > * **params_file**(str): Parameter file path. Merely passing an empty string when the model is in ONNX format
 > * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
 > * **model_format**(ModelFormat): Model format. Paddle format by default
@@ -139,7 +139,7 @@ Users can modify the following pre-processing parameters to their needs, which a
 
 > > * **max_side_len**(int): The long side’s maximum size of the oriented view before detection. The long side will be resized to this size when exceeding the value. And the short side will be scaled in equal proportion. Default 960
 > > * **det_db_thresh**(double): The binarization threshold of the prediction image from DB models. Default 0.3
-> > * **det_db_box_thresh**(double): The threshold for the output box of DB models, below which the predicted box is discarded. Default 0.6 
+> > * **det_db_box_thresh**(double): The threshold for the output box of DB models, below which the predicted box is discarded. Default 0.6
 > > * **det_db_unclip_ratio**(double): The expansion ratio of the DB model output box. Default 1.5
 > > * **det_db_score_mode**(string): The way to calculate the average score of the text box in DB post-processing. Default slow, which is identical to the calculation of the polygon area’s average score
 > > * **use_dilation**(bool): Whether to expand the feature map from the detection. Default False
