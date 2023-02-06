@@ -75,7 +75,7 @@ class FASTDEPLOY_DECL FastDeployModel {
     return runtime_initialized_ && initialized;
   }
 
-  /** \brief This is a debug interface, used to record the time of backend runtime
+  /** \brief This is a debug interface, used to record the time of runtime (backend + h2d + d2h)
    *
    * example code @code
    * auto model = fastdeploy::vision::PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml");
@@ -98,7 +98,7 @@ class FASTDEPLOY_DECL FastDeployModel {
     enable_record_time_of_runtime_ = true;
   }
 
-  /** \brief Disable to record the time of backend runtime, see `EnableRecordTimeOfRuntime()` for more detail
+  /** \brief Disable to record the time of runtime, see `EnableRecordTimeOfRuntime()` for more detail
   */
   virtual void DisableRecordTimeOfRuntime() {
     enable_record_time_of_runtime_ = false;
@@ -113,6 +113,11 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool EnabledRecordTimeOfRuntime() {
     return enable_record_time_of_runtime_;
   }
+  /** \brief Get profile time of Runtime after the profile process is done.
+   */
+  virtual double GetProfileTime() {
+    return runtime_->GetProfileTime();
+  }            
 
   /** \brief Release reused input/output buffers
   */
@@ -153,13 +158,13 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool CreateTimVXBackend();
   bool CreateKunlunXinBackend();
   bool CreateASCENDBackend();
+  bool IsSupported(const std::vector<Backend>& backends,
+                   Backend backend);
 
   std::shared_ptr<Runtime> runtime_;
   bool runtime_initialized_ = false;
   // whether to record inference time
   bool enable_record_time_of_runtime_ = false;
-
-  // record inference time for backend
   std::vector<double> time_of_runtime_;
 };
 
