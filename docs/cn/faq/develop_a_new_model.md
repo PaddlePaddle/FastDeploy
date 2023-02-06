@@ -3,7 +3,7 @@
 
 # FastDeploy集成新模型流程
 
-在FastDeploy里面新增一个模型，包括增加C++/Python的部署支持。 本文以torchvision v0.12.0中的YOLOv7Face模型为例，介绍使用FastDeploy做外部[模型集成](#modelsupport)，具体包括如下3步。
+在FastDeploy里面新增一个模型，包括增加C++/Python的部署支持。 本文以YOLOv7Face模型为例，介绍使用FastDeploy做外部[模型集成](#modelsupport)，具体包括如下3步。
 
 | 步骤 | 说明                                | 创建或修改的文件                            |
 |:------:|:-------------------------------------:|:---------------------------------------------:|
@@ -208,15 +208,15 @@ void BindYOLOv7Face(pybind11::module& m) {
     m, "Yolov7FacePreprocessor")
     .def(pybind11::init<>())
     .def("run", ...)
-    .def_property_readonly("size", ...)
-    .def_property_readonly("padding_color_value", ...)
-    .def_property_readonly("is_scale_up", ...);
+    .def_property("size", ...)
+    .def_property("padding_color_value", ...)
+    .def_property("is_scale_up", ...);
   pybind11::class_<vision::facedet::Yolov7FacePostprocessor>(
     m, "Yolov7FacePostprocessor")
     .def(pybind11::init<>())
     .def("run", ...)
-    .def_property_readonly("conf_threshold", ...)
-    .def_property_readonly("nms_threshold", ...);
+    .def_property("conf_threshold", ...)
+    .def_property("nms_threshold", ...);
 }
 ```
 
