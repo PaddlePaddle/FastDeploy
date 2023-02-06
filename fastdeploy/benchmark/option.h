@@ -14,6 +14,10 @@
 #pragma once
 
 namespace fastdeploy {
+
+/** \brief All C++ FastDeploy benchmark profile APIs are defined inside this namespace
+*
+*/
 namespace benchmark {
 
 /*! @brief Option object used to control the behavior of the benchmark profiling.
