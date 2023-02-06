@@ -11,25 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-#include "fastdeploy/pybind/main.h"
+#pragma once
 
 namespace fastdeploy {
+namespace benchmark {
 
-void BindRetinaFace(pybind11::module& m);
-void BindUltraFace(pybind11::module& m);
-void BindYOLOv5Face(pybind11::module& m);
-void BindYOLOv7Face(pybind11::module& m);
-void BindBlazeFace(pybind11::module& m);
-void BindSCRFD(pybind11::module& m);
+/*! @brief Result object used to record the time of runtime after benchmark profiling is done.
+ */
+struct BenchmarkResult {
+  ///< Means pure_backend_time+time_of_h2d_d2h(if include_h2d_d2h=true).
+  double time_of_runtime = 0.0f; 
+};
 
-void BindFaceDet(pybind11::module& m) {
-  auto facedet_module = m.def_submodule("facedet", "Face detection models.");
-  BindRetinaFace(facedet_module);
-  BindUltraFace(facedet_module);
-  BindYOLOv5Face(facedet_module);
-  BindYOLOv7Face(facedet_module);
-  BindBlazeFace(facedet_module);
-  BindSCRFD(facedet_module);
-}
-}  // namespace fastdeploy
+} // namespace benchmark
+} // namespace fastdeploy
