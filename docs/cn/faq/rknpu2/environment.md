@@ -1,3 +1,4 @@
+[English](../../../en/faq/rknpu2/environment.md) | 中文
 # FastDeploy RKNPU2推理环境搭建
 
 ## 简介
