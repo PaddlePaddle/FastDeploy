@@ -221,14 +221,17 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
             << inputs_desc_.size() << ")." << std::endl;
     return false;
   }
-
+  
+  RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
   for (size_t i = 0; i < inputs.size(); ++i) {
     auto handle = predictor_->GetInputHandle(inputs[i].name);
     ShareTensorFromFDTensor(handle.get(), inputs[i]);
   }
-
+  
+  RUNTIME_PROFILE_LOOP_BEGIN(1)
   predictor_->Run();
-
+  RUNTIME_PROFILE_LOOP_END
+  
   // output share backend memory only support CPU or GPU
   if (option_.use_ipu) {
     copy_to_fd = true;
@@ -241,6 +244,7 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
     }
     PaddleTensorToFDTensor(handle, &((*outputs)[i]), copy_to_fd);
   }
+  RUNTIME_PROFILE_LOOP_H2D_D2H_END
   return true;
 }
 
