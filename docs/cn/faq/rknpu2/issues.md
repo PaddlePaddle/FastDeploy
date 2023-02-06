@@ -1,3 +1,4 @@
+[English](../../../en/faq/rknpu2/issues.md) | 中文
 # RKNPU2常见问题合集
 
 在使用FastDeploy的过程中大家可能会碰到很多的问题，这个文档用来记录已经解决的共性问题，方便大家查阅。
