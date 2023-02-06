@@ -34,8 +34,8 @@ struct TrtBackendOption {
    *
    * \param[in] tensor_name The name of input for the model which is dynamic shape
    * \param[in] min The minimal shape for the input tensor
-   * \param[in] opt The optimized shape for the input tensor, just set the most common shape, if set as default value, it will keep same with min_shape
-   * \param[in] max The maximum shape for the input tensor, if set as default value, it will keep same with min_shape
+   * \param[in] opt The optimized shape for the input tensor, just set the most common shape
+   * \param[in] max The maximum shape for the input tensor
    */
   void SetShape(const std::string& tensor_name,
                 const std::vector<int32_t>& min,
