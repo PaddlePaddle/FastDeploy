@@ -31,13 +31,30 @@ std::string Str(const std::vector<Backend>& backends) {
   return oss.str();
 }
 
-bool IsSupported(const std::vector<Backend>& backends, Backend backend) {
+bool CheckBackendSupported(const std::vector<Backend>& backends,
+                           Backend backend) {
   for (size_t i = 0; i < backends.size(); ++i) {
     if (backends[i] == backend) {
       return true;
     }
   }
   return false;
+}
+
+bool FastDeployModel::IsSupported(const std::vector<Backend>& backends, 
+                                  Backend backend) {
+#ifdef ENABLE_BENCHMARK
+  if (runtime_option.benchmark_option.enable_profile) {
+    FDWARNING << "In benchmark mode, we don't check to see if " 
+              << "the backend [" << backend 
+              << "] is supported for current model!"
+              << std::endl;
+    return true;
+  }
+  return CheckBackendSupported(backends, backend);  
+#else  
+  return CheckBackendSupported(backends, backend);
+#endif  
 }
 
 bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
@@ -367,12 +384,13 @@ bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
     tc.End();
     if (time_of_runtime_.size() > 50000) {
       FDWARNING << "There are already 50000 records of runtime, will force to "
-                   "disable record time of runtime now."
+                    "disable record time of runtime now."
                 << std::endl;
       enable_record_time_of_runtime_ = false;
     }
     time_of_runtime_.push_back(tc.Duration());
   }
+  
   return ret;
 }
 
@@ -416,6 +434,7 @@ std::map<std::string, float> FastDeployModel::PrintStatisInfoOfRuntime() {
   statis_info_of_runtime_dict["warmup_iter"] = warmup_iter;
   statis_info_of_runtime_dict["avg_time"] = avg_time;
   statis_info_of_runtime_dict["iterations"] = time_of_runtime_.size();
+  
   return statis_info_of_runtime_dict;
 }
 }  // namespace fastdeploy
