@@ -79,7 +79,6 @@ void BindOption(pybind11::module& m) {
       .def_readwrite("model_from_memory", &RuntimeOption::model_from_memory_)
       .def_readwrite("cpu_thread_num", &RuntimeOption::cpu_thread_num)
       .def_readwrite("device_id", &RuntimeOption::device_id)
-      .def_readwrite("device", &RuntimeOption::device);
       .def_readwrite("device", &RuntimeOption::device)
       .def_readwrite("ipu_device_num", &RuntimeOption::ipu_device_num)
       .def_readwrite("ipu_micro_batch_size",
