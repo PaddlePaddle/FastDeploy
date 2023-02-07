@@ -32,6 +32,7 @@
 #include "fastdeploy/runtime/backends/rknpu2/option.h"
 #include "fastdeploy/runtime/backends/sophgo/option.h"
 #include "fastdeploy/runtime/backends/tensorrt/option.h"
+#include "fastdeploy/benchmark/option.h"
 
 namespace fastdeploy {
 
@@ -183,14 +184,14 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void SetOpenVINOShapeInfo(
       const std::map<std::string, std::vector<int64_t>>& shape_info) {
-    ov_shape_infos = shape_info;
+    openvino_option.shape_infos = shape_info;
   }
 
   /**
    * @brief While use OpenVINO backend with intel GPU, use this interface to specify operators run on CPU
    */
   void SetOpenVINOCpuOperators(const std::vector<std::string>& operators) {
-    ov_cpu_operators = operators;
+    openvino_option.SetCpuOperators(operators);
   }
 
   /**
@@ -346,6 +347,26 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetIpuConfig(bool enable_fp16 = false, int replica_num = 1,
                     float available_memory_proportion = 1.0,
                     bool enable_half_partial = false);
+  
+  /** \brief Set the profile mode as 'true'.
+   *
+   * \param[in] inclue_h2d_d2h Whether to include time of H2D_D2H for time of runtime.
+   * \param[in] repeat Repeat times for runtime inference.
+   * \param[in] warmup Warmup times for runtime inference.
+   */
+  void EnableProfiling(bool inclue_h2d_d2h = false, 
+                       int repeat = 100, int warmup = 50) {
+    benchmark_option.enable_profile = true;
+    benchmark_option.warmup = warmup;
+    benchmark_option.repeats = repeat;
+    benchmark_option.include_h2d_d2h = inclue_h2d_d2h;
+  }
+  
+  /** \brief Set the profile mode as 'false'.
+   */
+  void DisableProfiling() {
+    benchmark_option.enable_profile = false;
+  }
 
   Backend backend = Backend::UNKNOWN;
 
@@ -360,14 +381,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   bool enable_pinned_memory = false;
 
-  // ======Only for ORT Backend========
-  // -1 means use default value by ort
-  // 0: ORT_DISABLE_ALL 1: ORT_ENABLE_BASIC 2: ORT_ENABLE_EXTENDED 3:
-  // ORT_ENABLE_ALL
-  int ort_graph_opt_level = -1;
-  int ort_inter_op_num_threads = -1;
-  // 0: ORT_SEQUENTIAL 1: ORT_PARALLEL
-  int ort_execution_mode = -1;
+  OrtBackendOption ort_option;
 
   // ======Only for Paddle Backend=====
   bool pd_enable_mkldnn = true;
@@ -406,11 +420,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   int unconst_ops_thres = -1;
   std::string poros_file = "";
 
-  // ======Only for OpenVINO Backend=======
-  int ov_num_streams = 0;
-  std::string openvino_device = "CPU";
-  std::map<std::string, std::vector<int64_t>> ov_shape_infos;
-  std::vector<std::string> ov_cpu_operators;
+  OpenVINOBackendOption openvino_option;
 
   // ======Only for RKNPU2 Backend=======
   fastdeploy::rknpu2::CpuName rknpu2_cpu_name_ =
@@ -430,6 +440,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool model_from_memory_ = false;
   // format of input model
   ModelFormat model_format = ModelFormat::PADDLE;
+
+  // Benchmark option
+  benchmark::BenchmarkOption benchmark_option;  
 };
 
 }  // namespace fastdeploy

@@ -92,23 +92,19 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
 bool PaddleBackend::InitFromPaddle(const std::string& model_buffer,
                                    const std::string& params_buffer,
                                    const PaddleBackendOption& option) {
-  // bool PaddleBackend::InitFromPaddle(const std::string& contents) {
   if (initialized_) {
     FDERROR << "PaddleBackend is already initlized, cannot initialize again."
             << std::endl;
     return false;
   }
-
-  // The input/output information get from predictor is not right, use
-  // PaddleReader instead now
-  std::string contents;
-
   config_.SetModelBuffer(model_buffer.c_str(), model_buffer.size(),
                          params_buffer.c_str(), params_buffer.size());
-  contents = model_buffer;
   config_.EnableMemoryOptim();
   BuildOption(option);
-  auto reader = paddle2onnx::PaddleReader(contents.c_str(), contents.size());
+  
+  // The input/output information get from predictor is not right, use
+  // PaddleReader instead now
+  auto reader = paddle2onnx::PaddleReader(model_buffer.c_str(), model_buffer.size());
   // If it's a quantized model, and use cpu with mkldnn, automaticaly switch to
   // int8 mode
   if (reader.is_quantize_model) {
@@ -225,14 +221,17 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
             << inputs_desc_.size() << ")." << std::endl;
     return false;
   }
-
+  
+  RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
   for (size_t i = 0; i < inputs.size(); ++i) {
     auto handle = predictor_->GetInputHandle(inputs[i].name);
     ShareTensorFromFDTensor(handle.get(), inputs[i]);
   }
-
+  
+  RUNTIME_PROFILE_LOOP_BEGIN(1)
   predictor_->Run();
-
+  RUNTIME_PROFILE_LOOP_END
+  
   // output share backend memory only support CPU or GPU
   if (option_.use_ipu) {
     copy_to_fd = true;
@@ -245,6 +244,7 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
     }
     PaddleTensorToFDTensor(handle, &((*outputs)[i]), copy_to_fd);
   }
+  RUNTIME_PROFILE_LOOP_H2D_D2H_END
   return true;
 }
 

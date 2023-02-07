@@ -77,6 +77,8 @@ void BindRuntime(pybind11::module& m) {
       .def("set_ipu_config", &RuntimeOption::SetIpuConfig)
       .def("delete_paddle_backend_pass",
            &RuntimeOption::DeletePaddleBackendPass)
+      .def("enable_profiling", &RuntimeOption::EnableProfiling)
+      .def("disable_profiling", &RuntimeOption::DisableProfiling)
       .def("disable_paddle_trt_ops", &RuntimeOption::DisablePaddleTrtOPs)
       .def_readwrite("model_file", &RuntimeOption::model_file)
       .def_readwrite("params_file", &RuntimeOption::params_file)
@@ -87,10 +89,6 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("cpu_thread_num", &RuntimeOption::cpu_thread_num)
       .def_readwrite("device_id", &RuntimeOption::device_id)
       .def_readwrite("device", &RuntimeOption::device)
-      .def_readwrite("ort_graph_opt_level", &RuntimeOption::ort_graph_opt_level)
-      .def_readwrite("ort_inter_op_num_threads",
-                     &RuntimeOption::ort_inter_op_num_threads)
-      .def_readwrite("ort_execution_mode", &RuntimeOption::ort_execution_mode)
       .def_readwrite("trt_max_shape", &RuntimeOption::trt_max_shape)
       .def_readwrite("trt_opt_shape", &RuntimeOption::trt_opt_shape)
       .def_readwrite("trt_min_shape", &RuntimeOption::trt_min_shape)
@@ -221,6 +219,7 @@ void BindRuntime(pybind11::module& m) {
       .def("num_outputs", &Runtime::NumOutputs)
       .def("get_input_info", &Runtime::GetInputInfo)
       .def("get_output_info", &Runtime::GetOutputInfo)
+      .def("get_profile_time", &Runtime::GetProfileTime)
       .def_readonly("option", &Runtime::option);
 
   pybind11::enum_<Backend>(m, "Backend", pybind11::arithmetic(),
