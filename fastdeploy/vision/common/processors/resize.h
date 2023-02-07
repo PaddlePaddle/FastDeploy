@@ -31,16 +31,16 @@ class FASTDEPLOY_DECL Resize : public Processor {
     use_scale_ = use_scale;
   }
 
-  bool ImplByOpenCV(Mat* mat);
+  bool ImplByOpenCV(FDMat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFlyCV(Mat* mat);
+  bool ImplByFlyCV(FDMat* mat);
 #endif
 #ifdef ENABLE_CVCUDA
-  bool ImplByCvCuda(Mat* mat);
+  bool ImplByCvCuda(FDMat* mat);
 #endif
   std::string Name() { return "Resize"; }
 
-  static bool Run(Mat* mat, int width, int height, float scale_w = -1.0,
+  static bool Run(FDMat* mat, int width, int height, float scale_w = -1.0,
                   float scale_h = -1.0, int interp = 1, bool use_scale = false,
                   ProcLib lib = ProcLib::DEFAULT);
 

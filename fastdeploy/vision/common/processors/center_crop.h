@@ -22,16 +22,17 @@ namespace vision {
 class FASTDEPLOY_DECL CenterCrop : public Processor {
  public:
   CenterCrop(int width, int height) : height_(height), width_(width) {}
-  bool ImplByOpenCV(Mat* mat);
+  bool ImplByOpenCV(FDMat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFlyCV(Mat* mat);
+  bool ImplByFlyCV(FDMat* mat);
 #endif
 #ifdef ENABLE_CVCUDA
-  bool ImplByCvCuda(Mat* mat);
+  bool ImplByCvCuda(FDMat* mat);
+  bool ImplByCvCuda(FDMatBatch* mat_batch);
 #endif
   std::string Name() { return "CenterCrop"; }
 
-  static bool Run(Mat* mat, const int& width, const int& height,
+  static bool Run(FDMat* mat, const int& width, const int& height,
                   ProcLib lib = ProcLib::DEFAULT);
 
  private:
