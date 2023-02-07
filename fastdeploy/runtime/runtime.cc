@@ -244,17 +244,9 @@ void Runtime::CreatePaddleBackend() {
   if (pd_option.use_gpu && option.pd_enable_trt) {
     pd_option.enable_trt = true;
     pd_option.collect_shape = option.pd_collect_shape;
-    auto trt_option = TrtBackendOption();
-    trt_option.gpu_id = option.device_id;
-    trt_option.enable_fp16 = option.trt_enable_fp16;
-    trt_option.max_batch_size = option.trt_max_batch_size;
-    trt_option.max_workspace_size = option.trt_max_workspace_size;
-    trt_option.max_shape = option.trt_max_shape;
-    trt_option.min_shape = option.trt_min_shape;
-    trt_option.opt_shape = option.trt_opt_shape;
-    trt_option.serialize_file = option.trt_serialize_file;
-    trt_option.enable_pinned_memory = option.enable_pinned_memory;
-    pd_option.trt_option = trt_option;
+    pd_option.trt_option = option.trt_option;
+    pd_option.trt_option.gpu_id = option.device_id;
+    pd_option.trt_option.enable_pinned_memory = option.enable_pinned_memory;
     pd_option.trt_disabled_ops_ = option.trt_disabled_ops_;
   }
 #endif
@@ -339,41 +331,33 @@ void Runtime::CreateTrtBackend() {
            "TrtBackend only support model format of ModelFormat::PADDLE / "
            "ModelFormat::ONNX.");
 #ifdef ENABLE_TRT_BACKEND
-  auto trt_option = TrtBackendOption();
-  trt_option.model_file = option.model_file;
-  trt_option.params_file = option.params_file;
-  trt_option.model_format = option.model_format;
-  trt_option.gpu_id = option.device_id;
-  trt_option.enable_fp16 = option.trt_enable_fp16;
-  trt_option.enable_int8 = option.trt_enable_int8;
-  trt_option.max_batch_size = option.trt_max_batch_size;
-  trt_option.max_workspace_size = option.trt_max_workspace_size;
-  trt_option.max_shape = option.trt_max_shape;
-  trt_option.min_shape = option.trt_min_shape;
-  trt_option.opt_shape = option.trt_opt_shape;
-  trt_option.serialize_file = option.trt_serialize_file;
-  trt_option.enable_pinned_memory = option.enable_pinned_memory;
-  trt_option.external_stream_ = option.external_stream_;
+  option.trt_option.model_file = option.model_file;
+  option.trt_option.params_file = option.params_file;
+  option.trt_option.model_format = option.model_format;
+  option.trt_option.gpu_id = option.device_id;
+  option.trt_option.enable_pinned_memory = option.enable_pinned_memory;
+  option.trt_option.external_stream_ = option.external_stream_;
   backend_ = utils::make_unique<TrtBackend>();
   auto casted_backend = dynamic_cast<TrtBackend*>(backend_.get());
   casted_backend->benchmark_option_ = option.benchmark_option;
 
   if (option.model_format == ModelFormat::ONNX) {
     if (option.model_from_memory_) {
-      FDASSERT(casted_backend->InitFromOnnx(option.model_file, trt_option),
-               "Load model from ONNX failed while initliazing TrtBackend.");
+      FDASSERT(
+          casted_backend->InitFromOnnx(option.model_file, option.trt_option),
+          "Load model from ONNX failed while initliazing TrtBackend.");
       ReleaseModelMemoryBuffer();
     } else {
       std::string model_buffer = "";
       FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
                "Fail to read binary from model file");
-      FDASSERT(casted_backend->InitFromOnnx(model_buffer, trt_option),
+      FDASSERT(casted_backend->InitFromOnnx(model_buffer, option.trt_option),
                "Load model from ONNX failed while initliazing TrtBackend.");
     }
   } else {
     if (option.model_from_memory_) {
-      FDASSERT(casted_backend->InitFromPaddle(option.model_file,
-                                              option.params_file, trt_option),
+      FDASSERT(casted_backend->InitFromPaddle(
+                   option.model_file, option.params_file, option.trt_option),
                "Load model from Paddle failed while initliazing TrtBackend.");
       ReleaseModelMemoryBuffer();
     } else {
@@ -384,7 +368,7 @@ void Runtime::CreateTrtBackend() {
       FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
                "Fail to read binary from parameter file");
       FDASSERT(casted_backend->InitFromPaddle(model_buffer, params_buffer,
-                                              trt_option),
+                                              option.trt_option),
                "Load model from Paddle failed while initliazing TrtBackend.");
     }
   }
@@ -505,9 +489,10 @@ bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
   }
   option.poros_option.device = option.device;
   option.poros_option.device_id = option.device_id;
-  option.poros_option.enable_fp16 = option.trt_enable_fp16;
-  option.poros_option.max_batch_size = option.trt_max_batch_size;
-  option.poros_option.max_workspace_size = option.trt_max_workspace_size;
+  option.poros_option.enable_fp16 = option.trt_option.enable_fp16;
+  option.poros_option.max_batch_size = option.trt_option.max_batch_size;
+  option.poros_option.max_workspace_size = option.trt_option.max_workspace_size;
+
   backend_ = utils::make_unique<PorosBackend>();
   auto casted_backend = dynamic_cast<PorosBackend*>(backend_.get());
   FDASSERT(

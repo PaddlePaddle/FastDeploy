@@ -48,6 +48,8 @@ enum LitePowerMode {
   LITE_POWER_RAND_LOW = 5    ///< Use Lite Backend with rand low power mode
 };
 
+/*! @brief Option object to configure Paddle Lite backend
+ */
 struct LiteBackendOption {
   /// Paddle Lite power mode for mobile device.
   int power_mode = 3;
@@ -55,12 +57,20 @@ struct LiteBackendOption {
   int cpu_threads = 1;
   /// Enable use half precision
   bool enable_fp16 = false;
-  /// Enable use int8 precision for quantized model
-  bool enable_int8 = false;
-
+  /// Inference device, Paddle Lite support CPU/KUNLUNXIN/TIMVX/ASCEND
   Device device = Device::CPU;
+  /// Index of inference device
+  int device_id = 0;
 
-  // optimized model dir for CxxConfig
+  int kunlunxin_l3_workspace_size = 0xfffc00;
+  bool kunlunxin_locked = false;
+  bool kunlunxin_autotune = true;
+  std::string kunlunxin_autotune_file = "";
+  std::string kunlunxin_precision = "int16";
+  bool kunlunxin_adaptive_seqlen = false;
+  bool kunlunxin_enable_multi_stream = false;
+
+  /// Optimized model dir for CxxConfig
   std::string optimized_model_dir = "";
   std::string nnadapter_subgraph_partition_config_path = "";
   std::string nnadapter_subgraph_partition_config_buffer = "";
@@ -70,13 +80,5 @@ struct LiteBackendOption {
   std::map<std::string, std::vector<std::vector<int64_t>>>
     nnadapter_dynamic_shape_info = {{"", {{0}}}};
   std::vector<std::string> nnadapter_device_names = {};
-  int device_id = 0;
-  int kunlunxin_l3_workspace_size = 0xfffc00;
-  bool kunlunxin_locked = false;
-  bool kunlunxin_autotune = true;
-  std::string kunlunxin_autotune_file = "";
-  std::string kunlunxin_precision = "int16";
-  bool kunlunxin_adaptive_seqlen = false;
-  bool kunlunxin_enable_multi_stream = false;
 };
 }  // namespace fastdeploy

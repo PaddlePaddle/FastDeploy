@@ -154,6 +154,8 @@ class RuntimeOption:
     """Options for FastDeploy Runtime.
     """
 
+    __slots__ = ["_option"]
+
     def __init__(self):
         """Initialize a FastDeploy RuntimeOption object.
         """
@@ -266,7 +268,7 @@ class RuntimeOption:
         logging.warning(
             "`RuntimeOption.set_ort_graph_opt_level` will be deprecated in v1.2.0, please use `RuntimeOption.graph_optimize_level = 99` instead."
         )
-        return self._option.set_ort_graph_opt_level(level)
+        self._option.ort_option.graph_optimize_level = level
 
     def use_paddle_backend(self):
         """Use Paddle Inference backend, support inference Paddle model on CPU/Nvidia GPU.
@@ -314,7 +316,7 @@ class RuntimeOption:
         logging.warning(
             "`RuntimeOption.set_lite_context_properties` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.nnadapter_context_properties = ...` instead."
         )
-        return self._option.set_lite_context_properties(context_properties)
+        self._option.paddle_lite_option.nnadapter_context_properties = context_properties
 
     def set_lite_model_cache_dir(self, model_cache_dir):
         """Set nnadapter model cache dir for Paddle Lite backend.
@@ -322,7 +324,8 @@ class RuntimeOption:
         logging.warning(
             "`RuntimeOption.set_lite_model_cache_dir` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.nnadapter_model_cache_dir = ...` instead."
         )
-        return self._option.set_lite_model_cache_dir(model_cache_dir)
+
+        self._option.paddle_lite_option.nnadapter_model_cache_dir = model_cache_dir
 
     def set_lite_dynamic_shape_info(self, dynamic_shape_info):
         """ Set nnadapter dynamic shape info for Paddle Lite backend.
@@ -330,7 +333,7 @@ class RuntimeOption:
         logging.warning(
             "`RuntimeOption.set_lite_dynamic_shape_info` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.nnadapter_dynamic_shape_info = ...` instead."
         )
-        return self._option.set_lite_dynamic_shape_info(dynamic_shape_info)
+        self._option.paddle_lite_option.nnadapter_dynamic_shape_info = dynamic_shape_info
 
     def set_lite_subgraph_partition_path(self, subgraph_partition_path):
         """ Set nnadapter subgraph partition path for Paddle Lite backend.
@@ -338,8 +341,7 @@ class RuntimeOption:
         logging.warning(
             "`RuntimeOption.set_lite_subgraph_partition_path` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.nnadapter_subgraph_partition_config_path = ...` instead."
         )
-        return self._option.set_lite_subgraph_partition_path(
-            subgraph_partition_path)
+        self._option.paddle_lite_option.nnadapter_subgraph_partition_config_path = subgraph_partition_path
 
     def set_lite_subgraph_partition_config_buffer(self,
                                                   subgraph_partition_buffer):
@@ -348,8 +350,7 @@ class RuntimeOption:
         logging.warning(
             "`RuntimeOption.set_lite_subgraph_partition_buffer` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.nnadapter_subgraph_partition_config_buffer = ...` instead."
         )
-        return self._option.set_lite_subgraph_partition_config_buffer(
-            subgraph_partition_buffer)
+        self._option.paddle_lite_option.nnadapter_subgraph_partition_config_buffer = subgraph_partition_buffer
 
     def set_lite_mixed_precision_quantization_config_path(
             self, mixed_precision_quantization_config_path):
@@ -358,8 +359,7 @@ class RuntimeOption:
         logging.warning(
             "`RuntimeOption.set_lite_mixed_precision_quantization_config_path` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.nnadapter_mixed_precision_quantization_config_path = ...` instead."
         )
-        return self._option.set_lite_mixed_precision_quantization_config_path(
-            mixed_precision_quantization_config_path)
+        self._option.paddle_lite_option.nnadapter_mixed_precision_quantization_config_path = mixed_precision_quantization_config_path
 
     def set_paddle_mkldnn(self, use_mkldnn=True):
         """Enable/Disable MKLDNN while using Paddle Inference backend, mkldnn is enabled by default.
@@ -373,7 +373,7 @@ class RuntimeOption:
         logging.warning(
             "`RuntimeOption.set_openvino_device` will be deprecated in v1.2.0, please use `RuntimeOption.openvino_option.set_device` instead."
         )
-        return self._option.set_openvino_device(name)
+        self._option.openvino_option.set_device(name)
 
     def set_openvino_shape_info(self, shape_info):
         """Set shape information of the models' inputs, used for GPU to fix the shape
@@ -384,7 +384,7 @@ class RuntimeOption:
         logging.warning(
             "`RuntimeOption.set_openvino_shape_info` will be deprecated in v1.2.0, please use `RuntimeOption.openvino_option.set_shape_info` instead."
         )
-        return self._option.set_openvino_shape_info(shape_info)
+        self._option.openvino_option.set_shape_info(shape_info)
 
     def set_openvino_cpu_operators(self, operators):
         """While using OpenVINO backend and intel GPU, this interface specifies unsupported operators to run on CPU
@@ -395,7 +395,7 @@ class RuntimeOption:
         logging.warning(
             "`RuntimeOption.set_openvino_cpu_operators` will be deprecated in v1.2.0, please use `RuntimeOption.openvino_option.set_cpu_operators` instead."
         )
-        return self._option.set_openvino_cpu_operators(operators)
+        self._option.openvino_option.set_cpu_operators(operators)
 
     def enable_paddle_log_info(self):
         """Enable print out the debug log information while using Paddle Inference backend, the log information is disabled by default.
@@ -415,17 +415,26 @@ class RuntimeOption:
     def enable_lite_fp16(self):
         """Enable half precision inference while using Paddle Lite backend on ARM CPU, fp16 is disabled by default.
         """
-        return self._option.enable_lite_fp16()
+        logging.warning(
+            "`RuntimeOption.enable_lite_fp16` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.enable_fp16 = True` instead."
+        )
+        self._option.paddle_lite_option.enable_fp16 = True
 
     def disable_lite_fp16(self):
         """Disable half precision inference while using Paddle Lite backend on ARM CPU, fp16 is disabled by default.
         """
-        return self._option.disable_lite_fp16()
+        logging.warning(
+            "`RuntimeOption.disable_lite_fp16` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.enable_fp16 = False` instead."
+        )
+        self._option.paddle_lite_option.enable_fp16 = False
 
     def set_lite_power_mode(self, mode):
         """Set POWER mode while using Paddle Lite backend on ARM CPU.
         """
-        return self._option.set_lite_power_mode(mode)
+        logging.warning(
+            "`RuntimeOption.set_lite_powermode` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.power_mode = {}` instead.".
+            format(mode))
+        self._option.paddle_lite_option.power_mode = mode
 
     def set_trt_input_shape(self,
                             tensor_name,
@@ -439,30 +448,42 @@ class RuntimeOption:
         :param opt_shape: (list of int)Optimize shape of the input, this offten set as the most common input shape, if set to None, it will keep same with min_shape
         :param max_shape: (list of int)Maximum shape of the input, e.g [8, 3, 224, 224], if set to None, it will keep same with the min_shape
         """
+        logging.warning(
+            "`RuntimeOption.set_trt_input_shape` will be deprecated in v1.2.0, please use `RuntimeOption.trt_option.set_shape()` instead."
+        )
         if opt_shape is None and max_shape is None:
             opt_shape = min_shape
             max_shape = min_shape
         else:
             assert opt_shape is not None and max_shape is not None, "Set min_shape only, or set min_shape, opt_shape, max_shape both."
-        return self._option.set_trt_input_shape(tensor_name, min_shape,
-                                                opt_shape, max_shape)
+        return self._option.trt_option.set_shape(tensor_name, min_shape,
+                                                 opt_shape, max_shape)
 
     def set_trt_cache_file(self, cache_file_path):
         """Set a cache file path while using TensorRT backend. While loading a Paddle/ONNX model with set_trt_cache_file("./tensorrt_cache/model.trt"), if file `./tensorrt_cache/model.trt` exists, it will skip building tensorrt engine and load the cache file directly; if file `./tensorrt_cache/model.trt` doesn't exist, it will building tensorrt engine and save the engine as binary string to the cache file.
 
         :param cache_file_path: (str)Path of tensorrt cache file
         """
-        return self._option.set_trt_cache_file(cache_file_path)
+        logging.warning(
+            "`RuntimeOption.set_trt_cache_file` will be deprecated in v1.2.0, please use `RuntimeOption.trt_option.serialize_file = {}` instead.".
+            format(cache_file_path))
+        self._option.trt_option.serialize_file = cache_file_path
 
     def enable_trt_fp16(self):
         """Enable half precision inference while using TensorRT backend, notice that not all the Nvidia GPU support FP16, in those cases, will fallback to FP32 inference.
         """
-        return self._option.enable_trt_fp16()
+        logging.warning(
+            "`RuntimeOption.enable_trt_fp16` will be deprecated in v1.2.0, please use `RuntimeOption.trt_option.enable_fp16 = True` instead."
+        )
+        self._option.trt_option.enable_fp16 = True
 
     def disable_trt_fp16(self):
         """Disable half precision inference while suing TensorRT backend.
         """
-        return self._option.disable_trt_fp16()
+        logging.warning(
+            "`RuntimeOption.disable_trt_fp16` will be deprecated in v1.2.0, please use `RuntimeOption.trt_option.enable_fp16 = False` instead."
+        )
+        self._option.trt_option.enable_fp16 = False
 
     def enable_pinned_memory(self):
         """Enable pinned memory. Pinned memory can be utilized to speedup the data transfer between CPU and GPU. Currently it's only suppurted in TRT backend and Paddle Inference backend.
@@ -482,12 +503,18 @@ class RuntimeOption:
     def set_trt_max_workspace_size(self, trt_max_workspace_size):
         """Set max workspace size while using TensorRT backend.
         """
-        return self._option.set_trt_max_workspace_size(trt_max_workspace_size)
+        logging.warning(
+            "`RuntimeOption.set_trt_max_workspace_size` will be deprecated in v1.2.0, please use `RuntimeOption.trt_option.max_workspace_size = {}` instead.".
+            format(trt_max_workspace_size))
+        self._option.trt_option.max_workspace_size = trt_max_workspace_size
 
     def set_trt_max_batch_size(self, trt_max_batch_size):
         """Set max batch size while using TensorRT backend.
         """
-        return self._option.set_trt_max_batch_size(trt_max_batch_size)
+        logging.warning(
+            "`RuntimeOption.set_trt_max_batch_size` will be deprecated in v1.2.0, please use `RuntimeOption.trt_option.max_batch_size = {}` instead.".
+            format(trt_max_batch_size))
+        self._option.trt_option.max_batch_size = trt_max_batch_size
 
     def enable_paddle_trt_collect_shape(self):
         """Enable collect subgraph shape information while using Paddle Inference with TensorRT
@@ -557,6 +584,14 @@ class RuntimeOption:
         :return OrtBackendOption
         """
         return self._option.ort_option
+
+    @property
+    def trt_option(self):
+        """Get TrtBackendOption object to configure TensorRT backend
+
+        :return TrtBackendOption
+        """
+        return self._option.trt_option
 
     def enable_profiling(self, inclue_h2d_d2h=False, repeat=100, warmup=50):
         """Set the profile mode as 'true'.

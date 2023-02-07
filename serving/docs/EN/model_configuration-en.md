@@ -162,7 +162,8 @@ optimization {
     gpu_execution_accelerator : [
       {
         name : "tensorrt"
-        # Use FP16 inference in TensorRT. You can also choose: trt_fp32, trt_int8
+        # Use FP16 inference in TensorRT. You can also choose: trt_fp32
+        # If the loaded model is a quantized model, this precision will be int8 automatically
         parameters { key: "precision" value: "trt_fp16" }
       }
     ]
