@@ -21,9 +21,7 @@
 // FastDepoy static library, default OFF. These messages
 // are only reserve for debugging.
 #if defined(WITH_STATIC_WARNING)
-#warning You are using the FastDeploy static library. \
-We will automatically add some registration codes for \
-ops, kernels and passes for Paddle Lite.
+#warning You are using the FastDeploy static library. We will automatically add some registration codes for ops, kernels and passes for Paddle Lite. // NOLINT
 #endif
 #if !defined(WITH_STATIC_LIB_AT_COMPILING)
 #include "paddle_use_ops.h"       // NOLINT
@@ -52,7 +50,7 @@ enum LitePowerMode {
 
 struct LiteBackendOption {
   /// Paddle Lite power mode for mobile device.
-  LitePowerMode power_mode = LITE_POWER_NO_BIND;
+  int power_mode = 3;
   /// Number of threads while use CPU
   int cpu_threads = 1;
   /// Enable use half precision

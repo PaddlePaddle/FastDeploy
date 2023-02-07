@@ -413,12 +413,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // ======Only for PaddleTrt Backend=======
   std::vector<std::string> trt_disabled_ops_{};
 
-  // ======Only for Poros Backend=======
-  bool is_dynamic = false;
-  bool long_to_int = true;
-  bool use_nvidia_tf32 = false;
-  int unconst_ops_thres = -1;
-  std::string poros_file = "";
+  PorosBackendOption poros_option;
 
   OpenVINOBackendOption openvino_option;
 
