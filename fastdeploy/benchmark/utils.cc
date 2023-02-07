@@ -12,12 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <sys/types.h>
+#if defined(__linux__) || defined(__ANDROID__)
+#include <unistd.h>
+#endif
+#include <cmath>
+
 #include "fastdeploy/benchmark/utils.h"
 
 namespace fastdeploy {
 namespace benchmark {
 
+// Remove the ch characters at both ends of str
+static std::string strip(const std::string& str, char ch = ' ') {
+  int i = 0;
+  while (str[i] == ch) {
+    i++;
+  }
+  int j = str.size() - 1;
+  while (str[j] == ch) {
+    j--;
+  }
+  return str.substr(i, j + 1 - i);
+}
+
 void DumpCurrentCpuMemoryUsage(const std::string& name) {
+#if defined(__linux__) || defined(__ANDROID__)
   int iPid = static_cast<int>(getpid());
   std::string command = "pmap -x " + std::to_string(iPid) + " | grep total";
   FILE* pp = popen(command.data(), "r");
@@ -31,10 +51,15 @@ void DumpCurrentCpuMemoryUsage(const std::string& name) {
     write.close();
   }
   pclose(pp);
+#else
+  FDASSERT(false,
+           "Currently collect cpu memory info only supports Linux and ANDROID.")
+#endif
   return;
 }
 
 void DumpCurrentGpuMemoryUsage(const std::string& name, int device_id) {
+#if defined(__linux__) || defined(WITH_GPU)
   std::string command = "nvidia-smi --id=" + std::to_string(device_id) +
                         " --query-gpu=index,uuid,name,timestamp,memory.total,"
                         "memory.free,memory.used,utilization.gpu,utilization."
@@ -50,6 +75,10 @@ void DumpCurrentGpuMemoryUsage(const std::string& name, int device_id) {
     write.close();
   }
   pclose(pp);
+#else
+  FDASSERT(false,
+           "Currently collect gpu memory info only supports Linux in GPU.")
+#endif
   return;
 }
 
