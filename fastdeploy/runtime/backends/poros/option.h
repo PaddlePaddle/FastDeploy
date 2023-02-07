@@ -22,6 +22,8 @@
 
 namespace fastdeploy {
 
+/*! @brief Option object to configure Poros backend
+ */
 struct PorosBackendOption {
   Device device = Device::CPU;
   int device_id = 0;
