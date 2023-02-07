@@ -47,17 +47,19 @@ nvcv::TensorWrapData CreateCvCudaTensorWrapData(const FDTensor& tensor) {
            "When create CVCUDA tensor from FD tensor,"
            "tensor shape should be 3-Dim, HWC layout");
   int batchsize = 1;
+  int h = tensor.Shape()[0];
+  int w = tensor.Shape()[1];
+  int c = tensor.Shape()[2];
 
   nvcv::TensorDataStridedCuda::Buffer buf;
   buf.strides[3] = FDDataTypeSize(tensor.Dtype());
-  buf.strides[2] = tensor.shape[2] * buf.strides[3];
-  buf.strides[1] = tensor.shape[1] * buf.strides[2];
-  buf.strides[0] = tensor.shape[0] * buf.strides[1];
+  buf.strides[2] = c * buf.strides[3];
+  buf.strides[1] = w * buf.strides[2];
+  buf.strides[0] = h * buf.strides[1];
   buf.basePtr = reinterpret_cast<NVCVByte*>(const_cast<void*>(tensor.Data()));
 
   nvcv::Tensor::Requirements req = nvcv::Tensor::CalcRequirements(
-      batchsize, {tensor.shape[1], tensor.shape[0]},
-      CreateCvCudaImageFormat(tensor.Dtype(), tensor.shape[2]));
+      batchsize, {w, h}, CreateCvCudaImageFormat(tensor.Dtype(), c));
 
   nvcv::TensorDataStridedCuda tensor_data(
       nvcv::TensorShape{req.shape, req.rank, req.layout},
@@ -69,6 +71,33 @@ void* GetCvCudaTensorDataPtr(const nvcv::TensorWrapData& tensor) {
   auto data =
       dynamic_cast<const nvcv::ITensorDataStridedCuda*>(tensor.exportData());
   return reinterpret_cast<void*>(data->basePtr());
+}
+
+nvcv::ImageWrapData CreateImageWrapData(const FDTensor& tensor) {
+  FDASSERT(tensor.shape.size() == 3,
+           "When create CVCUDA image from FD tensor,"
+           "tensor shape should be 3-Dim, HWC layout");
+  int h = tensor.Shape()[0];
+  int w = tensor.Shape()[1];
+  int c = tensor.Shape()[2];
+  nvcv::ImageDataStridedCuda::Buffer buf;
+  buf.numPlanes = 1;
+  buf.planes[0].width = w;
+  buf.planes[0].height = h;
+  buf.planes[0].rowStride = w * c * FDDataTypeSize(tensor.Dtype());
+  buf.planes[0].basePtr =
+      reinterpret_cast<NVCVByte*>(const_cast<void*>(tensor.Data()));
+  nvcv::ImageWrapData nvimg{nvcv::ImageDataStridedCuda{
+      nvcv::ImageFormat{CreateCvCudaImageFormat(tensor.Dtype(), c)}, buf}};
+  return nvimg;
+}
+
+void CreateCvCudaImageBatchVarShape(std::vector<FDTensor*>& tensors,
+                                    nvcv::ImageBatchVarShape& img_batch) {
+  for (size_t i = 0; i < tensors.size(); ++i) {
+    FDASSERT(tensors[i]->device == Device::GPU, "Tensor must on GPU.");
+    img_batch.pushBack(CreateImageWrapData(*(tensors[i])));
+  }
 }
 #endif
 
