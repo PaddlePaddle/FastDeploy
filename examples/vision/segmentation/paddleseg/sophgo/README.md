@@ -18,7 +18,14 @@ Here we take [PP-LiteSeg-B(STDC2)-cityscapes-without-argmax](https://bj.bcebos.c
 
 ### Download PP-LiteSeg-B(STDC2)-cityscapes-without-argmax, and convert it to ONNX
 ```shell
-https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.tgz
+# Download Paddle2ONNX repository.
+git clone https://github.com/PaddlePaddle/Paddle2ONNX
+
+# Download the Paddle static map model and fix the input shape.
+## Go to the directory where the input shape is fixed for the Paddle static map model.
+cd Paddle2ONNX/tools/paddle
+
+wget https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.tgz
 tar xvf PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.tgz
 
 # Modify the input shape of PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer model from dynamic input to constant input.

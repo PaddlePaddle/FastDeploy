@@ -18,7 +18,14 @@ SOPHGO-TPU部署模型前需要将Paddle模型转换成bmodel模型，具体步�
 
 ### 下载PP-LiteSeg-B(STDC2)-cityscapes-without-argmax模型,并转换为ONNX模型
 ```shell
-https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.tgz
+# 下载Paddle2ONNX仓库
+git clone https://github.com/PaddlePaddle/Paddle2ONNX
+
+# 下载Paddle静态图模型并为Paddle静态图模型固定输入shape
+## 进入为Paddle静态图模型固定输入shape的目录
+cd Paddle2ONNX/tools/paddle
+
+wget https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.tgz
 tar xvf PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.tgz
 
 # 修改PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer模型的输入shape，由动态输入变成固定输入

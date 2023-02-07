@@ -14,6 +14,7 @@ struct SegmentationResult {
   std::vector<int64_t> shape;
   bool contain_score_map = false;
   void Clear();
+  void Free();
   std::string Str();
 };
 ```
@@ -22,6 +23,7 @@ struct SegmentationResult {
 - **score_map**: 成员变量，与label_map一一对应的所预测的分割类别概率值(当导出模型时指定`--output_op argmax`)或者经过softmax归一化化后的概率值(当导出模型时指定`--output_op softmax`或者导出模型时指定`--output_op none`同时模型初始化的时候设置模型[类成员属性](../../../examples/vision/segmentation/paddleseg/cpp/)`apply_softmax=True`)
 - **shape**: 成员变量，表示输出图片的shape，为H\*W
 - **Clear()**: 成员函数，用于清除结构体中存储的结果
+- **Free()**: 成员函数，用于清除结构体中存储的结果并释放内存
 - **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
 
 ## Python 定义
