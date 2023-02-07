@@ -81,4 +81,5 @@ struct LiteBackendOption {
     nnadapter_dynamic_shape_info = {{"", {{0}}}};
   std::vector<std::string> nnadapter_device_names = {};
 };
+
 }  // namespace fastdeploy
