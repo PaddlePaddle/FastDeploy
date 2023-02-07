@@ -71,7 +71,6 @@ void BindOption(pybind11::module& m) {
       .def("enable_profiling", &RuntimeOption::EnableProfiling)
       .def("disable_profiling", &RuntimeOption::DisableProfiling)
       .def("disable_paddle_trt_ops", &RuntimeOption::DisablePaddleTrtOPs)
-      .def("disable_paddle_trt_ops", &RuntimeOption::DisablePaddleTrtOPs)
       .def_readwrite("model_file", &RuntimeOption::model_file)
       .def_readwrite("params_file", &RuntimeOption::params_file)
       .def_readwrite("model_format", &RuntimeOption::model_format)
