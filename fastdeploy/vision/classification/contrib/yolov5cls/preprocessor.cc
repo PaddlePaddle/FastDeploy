@@ -47,8 +47,7 @@ bool YOLOv5ClsPreprocessor::Preprocess(FDMat* mat, FDTensor* output,
   Convert::Run(mat, alpha, beta);
   std::vector<float> mean = {0.485f, 0.456f, 0.406f};
   std::vector<float> std = {0.229f, 0.224f, 0.225f};
-  Normalize::Run(mat, mean, std, false);
-  HWC2CHW::Run(mat);
+  NormalizeAndPermute::Run(mat, mean, std, false);
   Cast::Run(mat, "float");
 
   // Record output shape of preprocessed image
