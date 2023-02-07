@@ -16,21 +16,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <cmath>
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
 
-#if defined(_WIN32)
-#ifdef FASTDEPLOY_LIB
-#define FASTDEPLOY_DECL __declspec(dllexport)
-#else
-#define FASTDEPLOY_DECL __declspec(dllimport)
-#endif  // FASTDEPLOY_LIB
-#else
-#define FASTDEPLOY_DECL __attribute__((visibility("default")))
-#endif  // _WIN32
+#include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace benchmark {
