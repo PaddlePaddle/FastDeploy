@@ -492,6 +492,7 @@ bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
   option.poros_option.enable_fp16 = option.trt_option.enable_fp16;
   option.poros_option.max_batch_size = option.trt_option.max_batch_size;
   option.poros_option.max_workspace_size = option.trt_option.max_workspace_size;
+
   backend_ = utils::make_unique<PorosBackend>();
   auto casted_backend = dynamic_cast<PorosBackend*>(backend_.get());
   FDASSERT(

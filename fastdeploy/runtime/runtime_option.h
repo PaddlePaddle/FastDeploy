@@ -424,10 +424,10 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string model_file = "";
   std::string params_file = "";
   bool model_from_memory_ = false;
-  // format of input model
+  /// format of input model
   ModelFormat model_format = ModelFormat::PADDLE;
 
-  // Benchmark option
+  /// Benchmark option
   benchmark::BenchmarkOption benchmark_option;
 };
 

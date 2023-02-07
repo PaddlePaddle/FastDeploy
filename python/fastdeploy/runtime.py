@@ -324,6 +324,7 @@ class RuntimeOption:
         logging.warning(
             "`RuntimeOption.set_lite_model_cache_dir` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_lite_option.nnadapter_model_cache_dir = ...` instead."
         )
+
         self._option.paddle_lite_option.nnadapter_model_cache_dir = model_cache_dir
 
     def set_lite_dynamic_shape_info(self, dynamic_shape_info):

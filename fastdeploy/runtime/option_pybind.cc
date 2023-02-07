@@ -81,5 +81,19 @@ void BindOption(pybind11::module& m) {
       .def_readwrite("cpu_thread_num", &RuntimeOption::cpu_thread_num)
       .def_readwrite("device_id", &RuntimeOption::device_id)
       .def_readwrite("device", &RuntimeOption::device);
+      .def_readwrite("device", &RuntimeOption::device)
+      .def_readwrite("ipu_device_num", &RuntimeOption::ipu_device_num)
+      .def_readwrite("ipu_micro_batch_size",
+                     &RuntimeOption::ipu_micro_batch_size)
+      .def_readwrite("ipu_enable_pipelining",
+                     &RuntimeOption::ipu_enable_pipelining)
+      .def_readwrite("ipu_batches_per_step",
+                     &RuntimeOption::ipu_batches_per_step)
+      .def_readwrite("ipu_enable_fp16", &RuntimeOption::ipu_enable_fp16)
+      .def_readwrite("ipu_replica_num", &RuntimeOption::ipu_replica_num)
+      .def_readwrite("ipu_available_memory_proportion",
+                     &RuntimeOption::ipu_available_memory_proportion)
+      .def_readwrite("ipu_enable_half_partial",
+                     &RuntimeOption::ipu_enable_half_partial);
 }
 }  // namespace fastdeploy
