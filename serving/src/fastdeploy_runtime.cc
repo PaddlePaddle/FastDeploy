@@ -296,9 +296,6 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                                value_string.begin(), ::tolower);
                 if (value_string == "trt_fp16") {
                   runtime_options_->trt_option.enable_fp16 = true;
-                } else if (value_string == "trt_int8") {
-                  // TODO(liqi): use EnableTrtINT8
-                  runtime_options_->trt_option.enable_int8 = true;
                 } else if (value_string == "pd_fp16") {
                   // TODO(liqi): paddle inference don't currently have interface
                   // for fp16.
