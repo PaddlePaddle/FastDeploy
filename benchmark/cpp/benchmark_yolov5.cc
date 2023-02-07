@@ -72,7 +72,8 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     for (int i = 0; i < repeats; i++) {
       if (FLAGS_collect_memory_info && i % dump_period == 0) {
         fastdeploy::benchmark::DumpCurrentCpuMemoryUsage(cpu_mem_file_name);
-        fastdeploy::benchmark::DumpCurrentGpuMemoryUsage(gpu_mem_file_name);
+        fastdeploy::benchmark::DumpCurrentGpuMemoryUsage(gpu_mem_file_name,
+                                                         FLAGS_device_id);
       }
       tc.Start();
       if (!model.Predict(im, &res)) {
