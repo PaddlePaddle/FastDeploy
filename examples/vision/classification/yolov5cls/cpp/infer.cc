@@ -27,7 +27,6 @@ void CpuInfer(const std::string& model_file, const std::string& image_file) {
   }
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
 
   fastdeploy::vision::ClassifyResult res;
   if (!model.Predict(im, &res)) {
@@ -48,7 +47,6 @@ void GpuInfer(const std::string& model_file, const std::string& image_file) {
   }
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
 
   fastdeploy::vision::ClassifyResult res;
   if (!model.Predict(im, &res)) {
@@ -71,7 +69,6 @@ void TrtInfer(const std::string& model_file, const std::string& image_file) {
   }
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
 
   fastdeploy::vision::ClassifyResult res;
   if (!model.Predict(im, &res)) {

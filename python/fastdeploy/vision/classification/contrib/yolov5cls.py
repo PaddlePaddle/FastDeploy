@@ -35,7 +35,7 @@ class YOLOv5ClsPreprocessor:
     @property
     def size(self):
         """
-        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default size = [352, 352]
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default size = [224, 224]
         """
         return self._preprocessor.size
 
@@ -60,7 +60,7 @@ class YOLOv5ClsPostprocessor:
 
         :param: runtime_results: (list of FDTensor)The output FDTensor results from runtime
         :param: ims_info: (list of dict)Record input_shape and output_shape
-        :return: list of DetectionResult(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
+        :return: list of ClassifyResult(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
         """
         return self._postprocessor.run(runtime_results, ims_info)
 
@@ -101,20 +101,19 @@ class YOLOv5Cls(FastDeployModel):
         assert self.initialized, "YOLOv5Cls initialize failed."
 
     def predict(self, input_image):
-        """Detect an input image
+        """Classify an input image
 
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
-        :return: DetectionResult
+        :return: ClassifyResult
         """
         assert input_image is not None, "Input image is None."
         return self._model.predict(input_image)
 
     def batch_predict(self, images):
-        assert len(images) == 1,"YOLOv5Cls is only support 1 image in batch_predict"
         """Classify a batch of input image
 
         :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
-        :return list of DetectionResult
+        :return list of ClassifyResult
         """
 
         return self._model.batch_predict(images)
