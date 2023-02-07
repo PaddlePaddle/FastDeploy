@@ -100,32 +100,23 @@ void PaddleClasPreprocessor::DisablePermute() {
   }
 }
 
-bool PaddleClasPreprocessor::Apply(std::vector<FDMat>* images,
+bool PaddleClasPreprocessor::Apply(FDMatBatch* image_batch,
                                    std::vector<FDTensor>* outputs) {
-  for (size_t i = 0; i < images->size(); ++i) {
-    for (size_t j = 0; j < processors_.size(); ++j) {
-      bool ret = false;
-      ret = (*(processors_[j].get()))(&((*images)[i]));
-      if (!ret) {
-        FDERROR << "Failed to processs image:" << i << " in "
-                << processors_[j]->Name() << "." << std::endl;
-        return false;
-      }
+  for (size_t j = 0; j < processors_.size(); ++j) {
+    ProcLib lib = ProcLib::DEFAULT;
+    if (initial_resize_on_cpu_ && j == 0 &&
+        processors_[j]->Name().find("Resize") == 0) {
+      lib = ProcLib::OPENCV;
+    }
+    if (!(*(processors_[j].get()))(image_batch, lib)) {
+      FDERROR << "Failed to processs image in " << processors_[j]->Name() << "."
+              << std::endl;
+      return false;
     }
   }
 
   outputs->resize(1);
-  // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> tensors(images->size());
-  for (size_t i = 0; i < images->size(); ++i) {
-    (*images)[i].ShareWithTensor(&(tensors[i]));
-    tensors[i].ExpandDim(0);
-  }
-  if (tensors.size() == 1) {
-    (*outputs)[0] = std::move(tensors[0]);
-  } else {
-    function::Concat(tensors, &((*outputs)[0]), 0);
-  }
+  (*outputs)[0] = std::move(*(image_batch->Tensor()));
   (*outputs)[0].device_id = DeviceId();
   return true;
 }
