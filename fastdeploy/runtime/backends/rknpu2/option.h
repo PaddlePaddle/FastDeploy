@@ -34,4 +34,18 @@ typedef enum _rknpu2_core_mask {
   RKNN_NPU_CORE_UNDEFINED,
 } CoreMask;
 }  // namespace rknpu2
+
+struct RKNPU2BackendOption {
+  rknpu2::CpuName cpu_name = rknpu2::CpuName::RK3588;
+
+  // The specification of NPU core setting.It has the following choices :
+  // RKNN_NPU_CORE_AUTO : Referring to automatic mode, meaning that it will
+  // select the idle core inside the NPU.
+  // RKNN_NPU_CORE_0 : Running on the NPU0 core
+  // RKNN_NPU_CORE_1: Runing on the NPU1 core
+  // RKNN_NPU_CORE_2: Runing on the NPU2 core
+  // RKNN_NPU_CORE_0_1: Running on both NPU0 and NPU1 core simultaneously.
+  // RKNN_NPU_CORE_0_1_2: Running on both NPU0, NPU1 and NPU2 simultaneously.
+  rknpu2::CoreMask core_mask = rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
+};
 }  // namespace fastdeploy

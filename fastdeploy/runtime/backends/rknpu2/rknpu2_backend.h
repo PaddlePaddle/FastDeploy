@@ -24,19 +24,6 @@
 #include <vector>
 
 namespace fastdeploy {
-struct RKNPU2BackendOption {
-  rknpu2::CpuName cpu_name = rknpu2::CpuName::RK3588;
-
-  // The specification of NPU core setting.It has the following choices :
-  // RKNN_NPU_CORE_AUTO : Referring to automatic mode, meaning that it will
-  // select the idle core inside the NPU.
-  // RKNN_NPU_CORE_0 : Running on the NPU0 core
-  // RKNN_NPU_CORE_1: Runing on the NPU1 core
-  // RKNN_NPU_CORE_2: Runing on the NPU2 core
-  // RKNN_NPU_CORE_0_1: Running on both NPU0 and NPU1 core simultaneously.
-  // RKNN_NPU_CORE_0_1_2: Running on both NPU0, NPU1 and NPU2 simultaneously.
-  rknpu2::CoreMask core_mask = rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
-};
 
 class RKNPU2Backend : public BaseBackend {
  public:
@@ -44,6 +31,26 @@ class RKNPU2Backend : public BaseBackend {
 
   virtual ~RKNPU2Backend();
 
+  int NumInputs() const override {
+    return static_cast<int>(inputs_desc_.size());
+  }
+
+  int NumOutputs() const override {
+    return static_cast<int>(outputs_desc_.size());
+  }
+
+  bool Init(const RuntimeOption& option);
+
+  TensorInfo GetInputInfo(int index) override;
+  TensorInfo GetOutputInfo(int index) override;
+  std::vector<TensorInfo> GetInputInfos() override;
+  std::vector<TensorInfo> GetOutputInfos() override;
+  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
+             bool copy_to_fd = true) override;
+
+ private:
+  bool InitFromRKNN(const std::string& model_file,
+                    const RKNPU2BackendOption& option = RKNPU2BackendOption());
   // RKNN API
   bool LoadModel(void* model);
 
@@ -56,25 +63,6 @@ class RKNPU2Backend : public BaseBackend {
   // BaseBackend API
   void BuildOption(const RKNPU2BackendOption& option);
 
-  bool InitFromRKNN(const std::string& model_file,
-                    const RKNPU2BackendOption& option = RKNPU2BackendOption());
-
-  int NumInputs() const override {
-    return static_cast<int>(inputs_desc_.size());
-  }
-
-  int NumOutputs() const override {
-    return static_cast<int>(outputs_desc_.size());
-  }
-
-  TensorInfo GetInputInfo(int index) override;
-  TensorInfo GetOutputInfo(int index) override;
-  std::vector<TensorInfo> GetInputInfos() override;
-  std::vector<TensorInfo> GetOutputInfos() override;
-  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
-             bool copy_to_fd = true) override;
-
- private:
   // The object of rknn context.
   rknn_context ctx{};
   // The structure rknn_sdk_version is used to indicate the version

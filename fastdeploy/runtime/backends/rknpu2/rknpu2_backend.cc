@@ -74,6 +74,29 @@ void RKNPU2Backend::BuildOption(const RKNPU2BackendOption& option) {
   this->option_.core_mask = option.core_mask;
 }
 
+bool RKNPU2Backend::Init(const RuntimeOption& option) {
+  if (option.model_format != ModelFormat::RKNN) {
+    FDERROR << "Backend::RKNPU2 only supports RKNN model format, but now it's "
+            << option.model_format << std::endl;
+    return false;
+  }
+  if (option.device != Device::RKNPU) {
+    FDERROR << "Backend::RKNPU2 only support RKNPU2 device, but now it's "
+            << option.device << std::endl;
+    return false;
+  }
+  if (option.model_from_memory_) {
+    FDERROR << "Backend::RKNPU2 doesn't support load model from memory, please "
+               "load model from disk."
+            << std::endl;
+    return false;
+  }
+  RKNPU2BackendOption rknpu2_option;
+  rknpu2_option.cpu_name = option.rknpu2_cpu_name_;
+  rknpu2_option.core_mask = option.rknpu2_core_mask_;
+  return InitFromRKNN(option.model_file, rknpu2_option);
+}
+
 /***************************************************************
  *  @name       InitFromRKNN
  *  @brief      Initialize RKNN model
