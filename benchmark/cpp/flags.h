@@ -12,15 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef BENCHMARK_CPP_UTILS_H_
-#define BENCHMARK_CPP_UTILS_H_
-#include <sys/types.h>
-#include <unistd.h>
-#include <cmath>
-#include <fstream>
-#include <iostream>
-#include <string>
-#include <vector>
+#pragma once
 
 #include "gflags/gflags.h"
 #include "fastdeploy/utils/perf.h"
@@ -55,95 +47,6 @@ void PrintUsage() {
   std::cout << "Default value of device: cpu" << std::endl;
   std::cout << "Default value of backend: default" << std::endl;
   std::cout << "Default value of use_fp16: false" << std::endl;
-}
-
-std::string strip(const std::string& str, char ch = ' ') {
-  // Remove the ch characters at both ends of str
-  int i = 0;
-  while (str[i] == ch) {
-    i++;
-  }
-  int j = str.size() - 1;
-  while (str[j] == ch) {
-    j--;
-  }
-  return str.substr(i, j + 1 - i);
-}
-
-// Record current cpu memory usage into file
-void DumpCurrentCpuMemoryUsage(std::string name) {
-  int iPid = static_cast<int>(getpid());
-  std::string command = "pmap -x " + std::to_string(iPid) + " | grep total";
-  FILE* pp = popen(command.data(), "r");
-  if (!pp) return;
-  char tmp[1024];
-
-  while (fgets(tmp, sizeof(tmp), pp) != NULL) {
-    std::ofstream write;
-    write.open(name, std::ios::app);
-    write << tmp;
-    write.close();
-  }
-  pclose(pp);
-  return;
-}
-
-// Record current gpu memory usage into file
-void DumpCurrentGpuMemoryUsage(std::string name) {
-  std::string command = "nvidia-smi --id=" + std::to_string(FLAGS_device_id) +
-                        " --query-gpu=index,uuid,name,timestamp,memory.total,"
-                        "memory.free,memory.used,utilization.gpu,utilization."
-                        "memory --format=csv,noheader,nounits";
-  FILE* pp = popen(command.data(), "r");
-  if (!pp) return;
-  char tmp[1024];
-
-  while (fgets(tmp, sizeof(tmp), pp) != NULL) {
-    std::ofstream write;
-    write.open(name, std::ios::app);
-    write << tmp;
-    write.close();
-  }
-  pclose(pp);
-  return;
-}
-
-// Get Max cpu memory usage
-float GetCpuMemoryUsage(std::string name) {
-  std::ifstream read(name);
-  std::string line;
-  float max_cpu_mem = -1;
-  while (getline(read, line)) {
-    std::stringstream ss(line);
-    std::string tmp;
-    std::vector<std::string> nums;
-    while (getline(ss, tmp, ' ')) {
-      tmp = strip(tmp);
-      if (tmp.empty()) continue;
-      nums.push_back(tmp);
-    }
-    max_cpu_mem = std::max(max_cpu_mem, stof(nums[3]));
-  }
-  return max_cpu_mem / 1024;
-}
-
-// Get Max gpu memory usage
-float GetGpuMemoryUsage(std::string name) {
-  std::ifstream read(name);
-  std::string line;
-  float max_gpu_mem = -1;
-  while (getline(read, line)) {
-    std::stringstream ss(line);
-    std::string tmp;
-    std::vector<std::string> nums;
-    while (getline(ss, tmp, ',')) {
-      tmp = strip(tmp);
-      if (tmp.empty()) continue;
-      nums.push_back(tmp);
-    }
-    max_gpu_mem = std::max(max_gpu_mem, stof(nums[6]));
-  }
-  return max_gpu_mem;
 }
 
 bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
@@ -194,5 +97,3 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
 
   return true;
 }
-
-#endif  // BENCHMARK_CPP_UTILS_H_

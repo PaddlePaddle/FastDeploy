@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "fastdeploy/benchmark/utils.h"
 #include "fastdeploy/vision.h"
-#include "utils.h"
+#include "flags.h"
 
 bool RunModel(std::string model_file, std::string image_file, size_t warmup,
               size_t repeats, size_t dump_period, std::string cpu_mem_file_name,
@@ -42,6 +43,9 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     }
     double profile_time = model.GetProfileTime() * 1000;
     std::cout << "Runtime(ms): " << profile_time << "ms." << std::endl;
+    auto vis_im = fastdeploy::vision::VisDetection(im, res);
+    cv::imwrite("vis_result.jpg", vis_im);
+    std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
   } else {
     // For End2End
     // Step1: warm up for warmup times
@@ -56,8 +60,8 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     // wait for 2 second to ensure that memory gets stable
     sleep(2);
     if (FLAGS_collect_memory_info) {
-      DumpCurrentCpuMemoryUsage(cpu_mem_file_name);
-      DumpCurrentGpuMemoryUsage(gpu_mem_file_name);
+      fastdeploy::benchmark::DumpCurrentCpuMemoryUsage(cpu_mem_file_name);
+      fastdeploy::benchmark::DumpCurrentGpuMemoryUsage(gpu_mem_file_name);
     }
     std::vector<float> end2end_statis;
     // Step2: repeat for repeats times
@@ -66,8 +70,8 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     fastdeploy::vision::DetectionResult res;
     for (int i = 0; i < repeats; i++) {
       if (FLAGS_collect_memory_info && i % dump_period == 0) {
-        DumpCurrentCpuMemoryUsage(cpu_mem_file_name);
-        DumpCurrentGpuMemoryUsage(gpu_mem_file_name);
+        fastdeploy::benchmark::DumpCurrentCpuMemoryUsage(cpu_mem_file_name);
+        fastdeploy::benchmark::DumpCurrentGpuMemoryUsage(gpu_mem_file_name);
       }
       tc.Start();
       if (!model.Predict(im, &res)) {
@@ -102,8 +106,8 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
   if (FLAGS_collect_memory_info) {
-    float cpu_mem = GetCpuMemoryUsage(cpu_mem_file_name);
-    float gpu_mem = GetGpuMemoryUsage(gpu_mem_file_name);
+    float cpu_mem = fastdeploy::benchmark::GetCpuMemoryUsage(cpu_mem_file_name);
+    float gpu_mem = fastdeploy::benchmark::GetGpuMemoryUsage(gpu_mem_file_name);
     std::cout << "cpu_rss_mb: " << cpu_mem << "MB." << std::endl;
     std::cout << "gpu_rss_mb: " << gpu_mem << "MB." << std::endl;
   }
