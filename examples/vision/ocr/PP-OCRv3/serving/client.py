@@ -99,9 +99,11 @@ if __name__ == "__main__":
         result = runner.Run([im, ])
         batch_texts = result['rec_texts']
         batch_scores = result['rec_scores']
+        batch_bboxes = result['det_bboxes']
         for i_batch in range(len(batch_texts)):
             texts = batch_texts[i_batch]
             scores = batch_scores[i_batch]
+            bboxes = batch_bboxes[i_batch]
             for i_box in range(len(texts)):
                 print('text=', texts[i_box].decode('utf-8'), '  score=',
-                      scores[i_box])
+                      scores[i_box], '  bbox=', bboxes[i_box])

@@ -21,6 +21,7 @@ void BindUltraFace(pybind11::module& m);
 void BindYOLOv5Face(pybind11::module& m);
 void BindYOLOv7Face(pybind11::module& m);
 void BindCenterFace(pybind11::module& m);
+void BindBlazeFace(pybind11::module& m);
 void BindSCRFD(pybind11::module& m);
 
 void BindFaceDet(pybind11::module& m) {
@@ -30,6 +31,7 @@ void BindFaceDet(pybind11::module& m) {
   BindYOLOv5Face(facedet_module);
   BindYOLOv7Face(facedet_module);
   BindCenterFace(facedet_module);
+  BindBlazeFace(facedet_module);
   BindSCRFD(facedet_module);
 }
 }  // namespace fastdeploy

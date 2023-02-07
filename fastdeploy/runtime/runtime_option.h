@@ -32,6 +32,7 @@
 #include "fastdeploy/runtime/backends/rknpu2/option.h"
 #include "fastdeploy/runtime/backends/sophgo/option.h"
 #include "fastdeploy/runtime/backends/tensorrt/option.h"
+#include "fastdeploy/benchmark/option.h"
 
 namespace fastdeploy {
 
@@ -50,14 +51,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /** \brief Specify the memory buffer of model and parameter. Used when model and params are loaded directly from memory
    *
-   * \param[in] model_buffer The memory buffer of model
-   * \param[in] model_buffer_size The size of the model data
-   * \param[in] params_buffer The memory buffer of the combined parameters file
-   * \param[in] params_buffer_size The size of the combined parameters data
+   * \param[in] model_buffer The string of model memory buffer
+   * \param[in] params_buffer The string of parameters memory buffer
    * \param[in] format Format of the loaded model
    */
-  void SetModelBuffer(const char* model_buffer, size_t model_buffer_size,
-                      const char* params_buffer, size_t params_buffer_size,
+  void SetModelBuffer(const std::string& model_buffer,
+                      const std::string& params_buffer = "",
                       const ModelFormat& format = ModelFormat::PADDLE);
 
   /// Use cpu to inference, the runtime will inference on CPU by default
@@ -185,14 +184,14 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void SetOpenVINOShapeInfo(
       const std::map<std::string, std::vector<int64_t>>& shape_info) {
-    ov_shape_infos = shape_info;
+    openvino_option.shape_infos = shape_info;
   }
 
   /**
    * @brief While use OpenVINO backend with intel GPU, use this interface to specify operators run on CPU
    */
   void SetOpenVINOCpuOperators(const std::vector<std::string>& operators) {
-    ov_cpu_operators = operators;
+    openvino_option.SetCpuOperators(operators);
   }
 
   /**
@@ -348,9 +347,30 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetIpuConfig(bool enable_fp16 = false, int replica_num = 1,
                     float available_memory_proportion = 1.0,
                     bool enable_half_partial = false);
+  
+  /** \brief Set the profile mode as 'true'.
+   *
+   * \param[in] inclue_h2d_d2h Whether to include time of H2D_D2H for time of runtime.
+   * \param[in] repeat Repeat times for runtime inference.
+   * \param[in] warmup Warmup times for runtime inference.
+   */
+  void EnableProfiling(bool inclue_h2d_d2h = false, 
+                       int repeat = 100, int warmup = 50) {
+    benchmark_option.enable_profile = true;
+    benchmark_option.warmup = warmup;
+    benchmark_option.repeats = repeat;
+    benchmark_option.include_h2d_d2h = inclue_h2d_d2h;
+  }
+  
+  /** \brief Set the profile mode as 'false'.
+   */
+  void DisableProfiling() {
+    benchmark_option.enable_profile = false;
+  }
 
   Backend backend = Backend::UNKNOWN;
-  // for cpu inference and preprocess
+
+  // for cpu inference
   // default will let the backend choose their own default value
   int cpu_thread_num = -1;
   int device_id = 0;
@@ -361,14 +381,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   bool enable_pinned_memory = false;
 
-  // ======Only for ORT Backend========
-  // -1 means use default value by ort
-  // 0: ORT_DISABLE_ALL 1: ORT_ENABLE_BASIC 2: ORT_ENABLE_EXTENDED 3:
-  // ORT_ENABLE_ALL
-  int ort_graph_opt_level = -1;
-  int ort_inter_op_num_threads = -1;
-  // 0: ORT_SEQUENTIAL 1: ORT_PARALLEL
-  int ort_execution_mode = -1;
+  OrtBackendOption ort_option;
 
   // ======Only for Paddle Backend=====
   bool pd_enable_mkldnn = true;
@@ -388,31 +401,6 @@ struct FASTDEPLOY_DECL RuntimeOption {
   float ipu_available_memory_proportion = 1.0;
   bool ipu_enable_half_partial = false;
 
-  // ======Only for Paddle Lite Backend=====
-  // 0: LITE_POWER_HIGH 1: LITE_POWER_LOW 2: LITE_POWER_FULL
-  // 3: LITE_POWER_NO_BIND 4: LITE_POWER_RAND_HIGH
-  // 5: LITE_POWER_RAND_LOW
-  LitePowerMode lite_power_mode = LitePowerMode::LITE_POWER_NO_BIND;
-  // enable int8 or not
-  bool lite_enable_int8 = false;
-  // enable fp16 or not
-  bool lite_enable_fp16 = false;
-  // optimized model dir for CxxConfig
-  std::string lite_optimized_model_dir = "";
-  std::string lite_nnadapter_subgraph_partition_config_path = "";
-  // and other nnadapter settings for CxxConfig
-  std::string lite_nnadapter_subgraph_partition_config_buffer = "";
-  std::string lite_nnadapter_context_properties = "";
-  std::string lite_nnadapter_model_cache_dir = "";
-  std::string lite_nnadapter_mixed_precision_quantization_config_path = "";
-  std::map<std::string, std::vector<std::vector<int64_t>>>
-      lite_nnadapter_dynamic_shape_info = {{"", {{0}}}};
-  std::vector<std::string> lite_nnadapter_device_names = {};
-
-  bool enable_timvx = false;
-  bool enable_ascend = false;
-  bool enable_kunlunxin = false;
-
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;
   std::map<std::string, std::vector<int32_t>> trt_min_shape;
@@ -425,18 +413,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // ======Only for PaddleTrt Backend=======
   std::vector<std::string> trt_disabled_ops_{};
 
-  // ======Only for Poros Backend=======
-  bool is_dynamic = false;
-  bool long_to_int = true;
-  bool use_nvidia_tf32 = false;
-  int unconst_ops_thres = -1;
-  std::string poros_file = "";
+  PorosBackendOption poros_option;
 
-  // ======Only for OpenVINO Backend=======
-  int ov_num_streams = 0;
-  std::string openvino_device = "CPU";
-  std::map<std::string, std::vector<int64_t>> ov_shape_infos;
-  std::vector<std::string> ov_cpu_operators;
+  OpenVINOBackendOption openvino_option;
 
   // ======Only for RKNPU2 Backend=======
   fastdeploy::rknpu2::CpuName rknpu2_cpu_name_ =
@@ -444,25 +423,21 @@ struct FASTDEPLOY_DECL RuntimeOption {
   fastdeploy::rknpu2::CoreMask rknpu2_core_mask_ =
       fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
 
-  // ======Only for KunlunXin XPU Backend=======
-  int kunlunxin_l3_workspace_size = 0xfffc00;
-  bool kunlunxin_locked = false;
-  bool kunlunxin_autotune = true;
-  std::string kunlunxin_autotune_file = "";
-  std::string kunlunxin_precision = "int16";
-  bool kunlunxin_adaptive_seqlen = false;
-  bool kunlunxin_enable_multi_stream = false;
 
-  std::string model_file = "";   // Path of model file
-  std::string params_file = "";  // Path of parameters file, can be empty
+  /// Option to configure Paddle Lite backend
+  LiteBackendOption paddle_lite_option;
+
+  // If model_from_memory is true, the model_file and params_file is
+  // binary stream in memory;
+  // Otherwise, the model_file and params_file means the path of file
+  std::string model_file = "";
+  std::string params_file = "";
+  bool model_from_memory_ = false;
   // format of input model
   ModelFormat model_format = ModelFormat::PADDLE;
 
-  std::string model_buffer_ = "";
-  std::string params_buffer_ = "";
-  size_t model_buffer_size_ = 0;
-  size_t params_buffer_size_ = 0;
-  bool model_from_memory_ = false;
+  // Benchmark option
+  benchmark::BenchmarkOption benchmark_option;  
 };
 
 }  // namespace fastdeploy

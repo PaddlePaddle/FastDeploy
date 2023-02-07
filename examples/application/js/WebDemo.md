@@ -149,7 +149,7 @@ const postConfig = {thresh: 0.5};
 await model.predict(Config);
 ````
 
-Take the OCR text detection demo as an example, modify the parameters of the text detection post-processing to achieve the effect of expanding the text detection frame, and modify the OCR web demo to execute the [model prediction code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/examples/application/web_demo/src/pages/cv/ocr/TextRecognition/TextRecognition.vue#L99), ie:
+Take the OCR text detection demo as an example, modify the parameters of the text detection post-processing to achieve the effect of expanding the text detection frame, and modify the OCR web demo to execute the [model prediction code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/examples/application/js/web_demo/src/pages/cv/ocr/TextRecognition/TextRecognition.vue#L99), ie:
 
 ````
 const res = await ocr.recognize(img, { canvas: canvas.value });

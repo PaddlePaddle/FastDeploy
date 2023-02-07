@@ -56,3 +56,7 @@
 #ifndef ENABLE_TEXT
 #cmakedefine ENABLE_TEXT
 #endif
+
+#ifndef ENABLE_BENCHMARK
+#cmakedefine ENABLE_BENCHMARK
+#endif
