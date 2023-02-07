@@ -119,8 +119,8 @@ bool TrtBackend::Init(const RuntimeOption& runtime_option) {
             << runtime_option.device << "." << std::endl;
     return false;
   }
-  if (runtime_option.model_format == ModelFormat::PADDLE &&
-      runtime_option.model_format == ModelFormat::ONNX) {
+  if (runtime_option.model_format != ModelFormat::PADDLE &&
+      runtime_option.model_format != ModelFormat::ONNX) {
     FDERROR
         << "TrtBackend only supports model format PADDLE/ONNX, but now it's "
         << runtime_option.model_format << "." << std::endl;
