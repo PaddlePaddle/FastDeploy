@@ -19,12 +19,14 @@ namespace fastdeploy {
 void BindLiteOption(pybind11::module& m);
 void BindOpenVINOOption(pybind11::module& m);
 void BindOrtOption(pybind11::module& m);
+void BindTrtOption(pybind11::module& m);
 void BindPorosOption(pybind11::module& m);
 
 void BindOption(pybind11::module& m) {
   BindLiteOption(m);
   BindOpenVINOOption(m);
   BindOrtOption(m);
+  BindTrtOption(m);
   BindPorosOption(m);
 
   pybind11::class_<RuntimeOption>(m, "RuntimeOption")
@@ -40,47 +42,22 @@ void BindOption(pybind11::module& m) {
       .def_readwrite("paddle_lite_option", &RuntimeOption::paddle_lite_option)
       .def_readwrite("openvino_option", &RuntimeOption::openvino_option)
       .def_readwrite("ort_option", &RuntimeOption::ort_option)
+      .def_readwrite("trt_option", &RuntimeOption::trt_option)
       .def_readwrite("poros_option", &RuntimeOption::poros_option)
       .def("set_external_stream", &RuntimeOption::SetExternalStream)
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
       .def("use_paddle_backend", &RuntimeOption::UsePaddleBackend)
       .def("use_poros_backend", &RuntimeOption::UsePorosBackend)
       .def("use_ort_backend", &RuntimeOption::UseOrtBackend)
-      .def("set_ort_graph_opt_level", &RuntimeOption::SetOrtGraphOptLevel)
       .def("use_trt_backend", &RuntimeOption::UseTrtBackend)
       .def("use_openvino_backend", &RuntimeOption::UseOpenVINOBackend)
       .def("use_lite_backend", &RuntimeOption::UseLiteBackend)
-      .def("set_lite_device_names", &RuntimeOption::SetLiteDeviceNames)
-      .def("set_lite_context_properties",
-           &RuntimeOption::SetLiteContextProperties)
-      .def("set_lite_model_cache_dir", &RuntimeOption::SetLiteModelCacheDir)
-      .def("set_lite_dynamic_shape_info",
-           &RuntimeOption::SetLiteDynamicShapeInfo)
-      .def("set_lite_subgraph_partition_path",
-           &RuntimeOption::SetLiteSubgraphPartitionPath)
-      .def("set_lite_mixed_precision_quantization_config_path",
-           &RuntimeOption::SetLiteMixedPrecisionQuantizationConfigPath)
-      .def("set_lite_subgraph_partition_config_buffer",
-           &RuntimeOption::SetLiteSubgraphPartitionConfigBuffer)
       .def("set_paddle_mkldnn", &RuntimeOption::SetPaddleMKLDNN)
-      .def("set_openvino_device", &RuntimeOption::SetOpenVINODevice)
-      .def("set_openvino_shape_info", &RuntimeOption::SetOpenVINOShapeInfo)
-      .def("set_openvino_cpu_operators",
-           &RuntimeOption::SetOpenVINOCpuOperators)
       .def("enable_paddle_log_info", &RuntimeOption::EnablePaddleLogInfo)
       .def("disable_paddle_log_info", &RuntimeOption::DisablePaddleLogInfo)
       .def("set_paddle_mkldnn_cache_size",
            &RuntimeOption::SetPaddleMKLDNNCacheSize)
-      .def("enable_lite_fp16", &RuntimeOption::EnableLiteFP16)
-      .def("disable_lite_fp16", &RuntimeOption::DisableLiteFP16)
-      .def("set_lite_power_mode", &RuntimeOption::SetLitePowerMode)
-      .def("set_trt_input_shape", &RuntimeOption::SetTrtInputShape)
-      .def("set_trt_max_workspace_size", &RuntimeOption::SetTrtMaxWorkspaceSize)
-      .def("set_trt_max_batch_size", &RuntimeOption::SetTrtMaxBatchSize)
       .def("enable_paddle_to_trt", &RuntimeOption::EnablePaddleToTrt)
-      .def("enable_trt_fp16", &RuntimeOption::EnableTrtFP16)
-      .def("disable_trt_fp16", &RuntimeOption::DisableTrtFP16)
-      .def("set_trt_cache_file", &RuntimeOption::SetTrtCacheFile)
       .def("enable_pinned_memory", &RuntimeOption::EnablePinnedMemory)
       .def("disable_pinned_memory", &RuntimeOption::DisablePinnedMemory)
       .def("enable_paddle_trt_collect_shape",
@@ -103,15 +80,6 @@ void BindOption(pybind11::module& m) {
       .def_readwrite("cpu_thread_num", &RuntimeOption::cpu_thread_num)
       .def_readwrite("device_id", &RuntimeOption::device_id)
       .def_readwrite("device", &RuntimeOption::device)
-      .def_readwrite("trt_max_shape", &RuntimeOption::trt_max_shape)
-      .def_readwrite("trt_opt_shape", &RuntimeOption::trt_opt_shape)
-      .def_readwrite("trt_min_shape", &RuntimeOption::trt_min_shape)
-      .def_readwrite("trt_serialize_file", &RuntimeOption::trt_serialize_file)
-      .def_readwrite("trt_enable_fp16", &RuntimeOption::trt_enable_fp16)
-      .def_readwrite("trt_enable_int8", &RuntimeOption::trt_enable_int8)
-      .def_readwrite("trt_max_batch_size", &RuntimeOption::trt_max_batch_size)
-      .def_readwrite("trt_max_workspace_size",
-                     &RuntimeOption::trt_max_workspace_size)
       .def_readwrite("ipu_device_num", &RuntimeOption::ipu_device_num)
       .def_readwrite("ipu_micro_batch_size",
                      &RuntimeOption::ipu_micro_batch_size)

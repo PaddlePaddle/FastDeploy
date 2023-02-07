@@ -23,7 +23,6 @@ void BindLiteOption(pybind11::module& m) {
       .def_readwrite("power_mode", &LiteBackendOption::power_mode)
       .def_readwrite("cpu_threads", &LiteBackendOption::cpu_threads)
       .def_readwrite("enable_fp16", &LiteBackendOption::enable_fp16)
-      .def_readwrite("enable_int8", &LiteBackendOption::enable_int8)
       .def_readwrite("device", &LiteBackendOption::device)
       .def_readwrite("optimized_model_dir",
                      &LiteBackendOption::optimized_model_dir)

@@ -162,7 +162,8 @@ optimization {
     gpu_execution_accelerator : [
       {
         name : "tensorrt"
-        # 使用TensorRT的FP16推理,其他可选项为: trt_fp32、trt_int8
+        # 使用TensorRT的FP16推理,其他可选项为: trt_fp32
+        # 如果加载的是量化模型，此精度设置无效，会默认使用int8进行推理
         parameters { key: "precision" value: "trt_fp16" }
       }
     ]
