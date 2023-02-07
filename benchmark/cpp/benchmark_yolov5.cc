@@ -61,7 +61,8 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     sleep(2);
     if (FLAGS_collect_memory_info) {
       fastdeploy::benchmark::DumpCurrentCpuMemoryUsage(cpu_mem_file_name);
-      fastdeploy::benchmark::DumpCurrentGpuMemoryUsage(gpu_mem_file_name);
+      fastdeploy::benchmark::DumpCurrentGpuMemoryUsage(gpu_mem_file_name,
+                                                       FLAGS_device_id);
     }
     std::vector<float> end2end_statis;
     // Step2: repeat for repeats times

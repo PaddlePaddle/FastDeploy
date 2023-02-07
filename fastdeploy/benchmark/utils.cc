@@ -34,8 +34,8 @@ void DumpCurrentCpuMemoryUsage(const std::string& name) {
   return;
 }
 
-void DumpCurrentGpuMemoryUsage(const std::string& name) {
-  std::string command = "nvidia-smi --id=" + std::to_string(FLAGS_device_id) +
+void DumpCurrentGpuMemoryUsage(const std::string& name, int device_id) {
+  std::string command = "nvidia-smi --id=" + std::to_string(device_id) +
                         " --query-gpu=index,uuid,name,timestamp,memory.total,"
                         "memory.free,memory.used,utilization.gpu,utilization."
                         "memory --format=csv,noheader,nounits";

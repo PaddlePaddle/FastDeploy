@@ -18,6 +18,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -41,7 +42,7 @@ std::string strip(const std::string& str, char ch = ' ') {
 void DumpCurrentCpuMemoryUsage(const std::string& name);
 
 // Record current gpu memory usage into file
-void DumpCurrentGpuMemoryUsage(const std::string& name);
+void DumpCurrentGpuMemoryUsage(const std::string& name, int device_id);
 
 // Get Max cpu memory usage
 float GetCpuMemoryUsage(const std::string& name);
