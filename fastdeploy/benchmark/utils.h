@@ -22,6 +22,16 @@
 #include <string>
 #include <vector>
 
+#if defined(_WIN32)
+#ifdef FASTDEPLOY_LIB
+#define FASTDEPLOY_DECL __declspec(dllexport)
+#else
+#define FASTDEPLOY_DECL __declspec(dllimport)
+#endif  // FASTDEPLOY_LIB
+#else
+#define FASTDEPLOY_DECL __attribute__((visibility("default")))
+#endif  // _WIN32
+
 namespace fastdeploy {
 namespace benchmark {
 
@@ -39,16 +49,17 @@ std::string strip(const std::string& str, char ch = ' ') {
 }
 
 // Record current cpu memory usage into file
-void DumpCurrentCpuMemoryUsage(const std::string& name);
+FASTDEPLOY_DECL void DumpCurrentCpuMemoryUsage(const std::string& name);
 
 // Record current gpu memory usage into file
-void DumpCurrentGpuMemoryUsage(const std::string& name, int device_id);
+FASTDEPLOY_DECL void DumpCurrentGpuMemoryUsage(const std::string& name,
+                                               int device_id);
 
 // Get Max cpu memory usage
-float GetCpuMemoryUsage(const std::string& name);
+FASTDEPLOY_DECL float GetCpuMemoryUsage(const std::string& name);
 
 // Get Max gpu memory usage
-float GetGpuMemoryUsage(const std::string& name);
+FASTDEPLOY_DECL float GetGpuMemoryUsage(const std::string& name);
 
 
 }  // namespace benchmark
