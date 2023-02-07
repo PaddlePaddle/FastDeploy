@@ -56,7 +56,7 @@ FASTDEPLOY_CAPI_EXPORT extern void FD_DestroyPPYOLOEWrapper(__fd_take FD_PPYOLOE
  * \param[in] fd_detection_result_wrapper pointer to FD_DetectionResultWrapper object, which stores the result.
  */
 
-FASTDEPLOY_CAPI_EXPORT extern void FD_PPYOLOEWrapperPredict(__fd_take FD_PPYOLOEWrapper* fd_ppyoloe_wrapper,
+FASTDEPLOY_CAPI_EXPORT extern FD_Bool FD_PPYOLOEWrapperPredict(__fd_take FD_PPYOLOEWrapper* fd_ppyoloe_wrapper,
                                     FD_Mat* img, FD_DetectionResultWrapper* fd_detection_result_wrapper);
 
 #ifdef __cplusplus

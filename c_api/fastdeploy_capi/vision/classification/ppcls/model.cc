@@ -50,7 +50,7 @@ void FD_DestroyPaddleClasModelWrapper(
   delete fd_paddleclas_model_wrapper;
 }
 
-void FD_PaddleClasModelWrapperPredict(
+FD_Bool FD_PaddleClasModelWrapperPredict(
     __fd_take FD_PaddleClasModelWrapper* fd_paddleclas_model_wrapper,
     FD_Mat* img, FD_ClassifyResultWrapper* fd_classify_result_wrapper) {
   cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
@@ -58,6 +58,6 @@ void FD_PaddleClasModelWrapperPredict(
       PaddleClasModelWrapper, fd_paddleclas_model_wrapper);
   auto& classify_result = CHECK_AND_CONVERT_FD_TYPE(ClassifyResultWrapper,
                                                     fd_classify_result_wrapper);
-  paddleclas_model->Predict(im, classify_result.get());
+  return paddleclas_model->Predict(im, classify_result.get());
 }
 }

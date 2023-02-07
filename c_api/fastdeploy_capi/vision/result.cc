@@ -55,9 +55,9 @@ void FD_DestroyClassifyResultWrapper(
 
 void FD_DestroyClassifyResult(__fd_take FD_ClassifyResult* fd_classify_result) {
   // delete label_ids
-  delete fd_classify_result->label_ids.data;
+  delete[] fd_classify_result->label_ids.data;
   // delete scores
-  delete fd_classify_result->scores.data;
+  delete[] fd_classify_result->scores.data;
   delete fd_classify_result;
 }
 
@@ -122,8 +122,8 @@ void FD_DestroyDetectionResultWrapper(
 void FD_DestroyOneDimMask(__fd_take FD_OneDimMask* fd_one_dim_mask) {
   // delete data (FD_Mask array)
   for (size_t i = 0; i < fd_one_dim_mask->size; i++) {
-    delete fd_one_dim_mask->data[i].data.data;
-    delete fd_one_dim_mask->data[i].shape.data;
+    delete[] fd_one_dim_mask->data[i].data.data;
+    delete[] fd_one_dim_mask->data[i].shape.data;
   }
   delete fd_one_dim_mask;
 }
@@ -132,13 +132,13 @@ void FD_DestroyDetectionResult(
     __fd_take FD_DetectionResult* fd_detection_result) {
   // delete boxes
   for (size_t i = 0; i < fd_detection_result->boxes.size; i++) {
-    delete fd_detection_result->boxes.data[i].data;
+    delete[] fd_detection_result->boxes.data[i].data;
   }
-  delete fd_detection_result->boxes.data;
+  delete[] fd_detection_result->boxes.data;
   // delete scores
-  delete fd_detection_result->scores.data;
+  delete[] fd_detection_result->scores.data;
   // delete label_ids
-  delete fd_detection_result->label_ids.data;
+  delete[] fd_detection_result->label_ids.data;
   // delete masks
   FD_DestroyOneDimMask(&fd_detection_result->masks);
   delete fd_detection_result;

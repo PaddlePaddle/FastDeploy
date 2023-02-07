@@ -44,15 +44,15 @@ typedef struct FD_OneDimArrayFloat {
   float* data;
 } FD_OneDimArrayFloat;  // std::vector<float>
 
-typedef struct FD_OneDimArrayCstr {
-  size_t size;
-  char** data;
-} FD_OneDimArrayCstr;  // std::vector<std::string>
-
 typedef struct FD_Cstr {
   size_t size;
   char* data;
 } FD_Cstr;  // std::string
+
+typedef struct FD_OneDimArrayCstr {
+  size_t size;
+  FD_Cstr* data;
+} FD_OneDimArrayCstr;  // std::vector<std::string>
 
 typedef struct FD_TwoDimArraySize {
   size_t size;

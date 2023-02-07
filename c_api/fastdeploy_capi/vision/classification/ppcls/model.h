@@ -55,7 +55,7 @@ FASTDEPLOY_CAPI_EXPORT extern void FD_DestroyPaddleClasModelWrapper(__fd_take FD
  * \param[in] fd_classify_result_wrapper pointer to FD_PaddleClasModelWrapper object, which stores the result.
  */
 
-FASTDEPLOY_CAPI_EXPORT extern void FD_PaddleClasModelWrapperPredict(__fd_take FD_PaddleClasModelWrapper* fd_paddleclas_model_wrapper,
+FASTDEPLOY_CAPI_EXPORT extern FD_Bool FD_PaddleClasModelWrapperPredict(__fd_take FD_PaddleClasModelWrapper* fd_paddleclas_model_wrapper,
                                     FD_Mat* img, FD_ClassifyResultWrapper* fd_classify_result_wrapper);
 
 #ifdef __cplusplus

@@ -48,7 +48,7 @@ void FD_DestroyPPYOLOEWrapper(__fd_take FD_PPYOLOEWrapper* fd_ppyoloe_wrapper) {
   delete fd_ppyoloe_wrapper;
 }
 
-void FD_PPYOLOEWrapperPredict(
+FD_Bool FD_PPYOLOEWrapperPredict(
     FD_PPYOLOEWrapper* fd_ppyoloe_wrapper, FD_Mat* img,
     FD_DetectionResultWrapper* fd_detection_result_wrapper) {
   cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
@@ -56,6 +56,6 @@ void FD_PPYOLOEWrapperPredict(
       CHECK_AND_CONVERT_FD_TYPE(PPYOLOEWrapper, fd_ppyoloe_wrapper);
   auto& detection_result = CHECK_AND_CONVERT_FD_TYPE(
       DetectionResultWrapper, fd_detection_result_wrapper);
-  ppyoloe_model->Predict(im, detection_result.get());
+  return ppyoloe_model->Predict(im, detection_result.get());
 }
 }
