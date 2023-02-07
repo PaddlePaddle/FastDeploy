@@ -26,22 +26,22 @@ struct BenchmarkOption {
   int warmup = 50;              ///< Warmup for backend inference.
   int repeats = 100;            ///< Repeats for backend inference.
   bool enable_profile = false;  ///< Whether to use profile or not.
-  bool include_h2d_d2h = false; ///< Whether to include time of H2D_D2H for time of runtime.
+  bool include_h2d_d2h = false;  ///< Whether to include time of H2D_D2H for time of runtime. // NOLINT
 
   friend std::ostream& operator<<(
     std::ostream& output, const BenchmarkOption &option) {
-    if (!option.include_h2d_d2h) {                                    
-      output << "Running profiling for Runtime "                     
-             << "without H2D and D2H, ";                
-    } else {                                                             
-      output << "Running profiling for Runtime "                        
-             << "with H2D and D2H, ";                   
-    }          
-    output << "Repeats: " << option.repeats << ", "                  
-           << "Warmup: " << option.warmup;                   
-    return output;         
+    if (!option.include_h2d_d2h) {
+      output << "Running profiling for Runtime "
+             << "without H2D and D2H, ";
+    } else {
+      output << "Running profiling for Runtime "
+             << "with H2D and D2H, ";
+    }
+    output << "Repeats: " << option.repeats << ", "
+           << "Warmup: " << option.warmup;
+    return output;
   }
 };
 
-} // namespace benchmark
-} // namespace fastdeploy
+}  // namespace benchmark
+}  // namespace fastdeploy

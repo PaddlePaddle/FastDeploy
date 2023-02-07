@@ -30,12 +30,20 @@ DEFINE_string(image, "", "Path of the image file.");
 DEFINE_string(device, "cpu",
               "Type of inference device, support 'cpu' or 'gpu'.");
 DEFINE_int32(device_id, 0, "device(gpu) id.");
+DEFINE_int32(warmup, 200, "Number of warmup for profiling.");
+DEFINE_int32(repeat, 1000, "Number of repeats for profiling.");
+DEFINE_string(profile_mode, "Runtime", "runtime or end2end.");
 DEFINE_string(backend, "default",
               "The inference runtime backend, support: ['default', 'ort', "
               "'paddle', 'ov', 'trt', 'paddle_trt']");
 DEFINE_bool(
+    include_h2d_d2h, false, "Whether run profiling with h2d and d2h.");
+DEFINE_bool(
     use_fp16, false,
     "Whether to use FP16 mode, only support 'trt' and 'paddle_trt' backend");
+DEFINE_bool(
+    collect_memory_info, false, "Whether to collect memory info");
+DEFINE_int32(dump_period, 100, "How often to collect memory info.");
 
 void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path --device "
