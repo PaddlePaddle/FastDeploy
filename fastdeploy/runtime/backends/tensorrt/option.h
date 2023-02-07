@@ -31,7 +31,7 @@ struct TrtBackendOption {
   size_t max_workspace_size = 1 << 30;
 
   /*
-   * @breif Enable half precison inference, on some device not support half precision, it will fallback to float32 mode
+   * @brief Enable half precison inference, on some device not support half precision, it will fallback to float32 mode
    */
   bool enable_fp16 = false;
 
