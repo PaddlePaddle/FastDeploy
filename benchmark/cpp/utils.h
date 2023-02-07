@@ -36,6 +36,7 @@ DEFINE_string(profile_mode, "runtime", "runtime or end2end.");
 DEFINE_string(backend, "default",
               "The inference runtime backend, support: ['default', 'ort', "
               "'paddle', 'ov', 'trt', 'paddle_trt']");
+DEFINE_int32(cpu_thread_nums, 8, "Set numbers of cpu thread.");
 DEFINE_bool(
     include_h2d_d2h, false, "Whether run profiling with h2d and d2h.");
 DEFINE_bool(
@@ -170,7 +171,7 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
       return false;
     }
   } else if (FLAGS_device == "cpu") {
-    option->SetCpuThreadNum(8);
+    option->SetCpuThreadNum(FLAGS_cpu_thread_nums);
     if (FLAGS_backend == "ort") {
       option->UseOrtBackend();
     } else if (FLAGS_backend == "ov") {

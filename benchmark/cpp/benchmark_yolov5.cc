@@ -90,12 +90,12 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
 }
 
 int main(int argc, char* argv[]) {
+  google::ParseCommandLineFlags(&argc, &argv, true);
   int repeats = FLAGS_repeat;
   int warmup = FLAGS_warmup;
   int dump_period = FLAGS_dump_period;
   std::string cpu_mem_file_name = "result_cpu.txt";
   std::string gpu_mem_file_name = "result_gpu.txt";
-  google::ParseCommandLineFlags(&argc, &argv, true);
   // Run model
   if (RunModel(FLAGS_model, FLAGS_image, warmup, repeats, dump_period,
                cpu_mem_file_name, gpu_mem_file_name) != true) {
