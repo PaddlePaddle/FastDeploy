@@ -18,6 +18,7 @@
 
 #ifdef ENABLE_CVCUDA
 #include "nvcv/Tensor.hpp"
+#include <nvcv/ImageBatch.hpp>
 
 namespace fastdeploy {
 namespace vision {
@@ -25,7 +26,10 @@ namespace vision {
 nvcv::ImageFormat CreateCvCudaImageFormat(FDDataType type, int channel);
 nvcv::TensorWrapData CreateCvCudaTensorWrapData(const FDTensor& tensor);
 void* GetCvCudaTensorDataPtr(const nvcv::TensorWrapData& tensor);
+nvcv::ImageWrapData CreateImageWrapData(const FDTensor& tensor);
+void CreateCvCudaImageBatchVarShape(std::vector<FDTensor*>& tensors,
+                                    nvcv::ImageBatchVarShape& img_batch);
 
-}
-}
+}  // namespace vision
+}  // namespace fastdeploy
 #endif

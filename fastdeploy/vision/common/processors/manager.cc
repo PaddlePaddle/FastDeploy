@@ -62,13 +62,24 @@ bool ProcessorManager::Run(std::vector<FDMat>* images,
     return false;
   }
 
-  for (size_t i = 0; i < images->size(); ++i) {
-    if (CudaUsed()) {
-      SetStream(&((*images)[i]));
-    }
+  if (images->size() > input_caches_.size()) {
+    input_caches_.resize(images->size());
+    output_caches_.resize(images->size());
   }
 
-  bool ret = Apply(images, outputs);
+  FDMatBatch image_batch(images);
+  image_batch.input_cache = &batch_input_cache_;
+  image_batch.output_cache = &batch_output_cache_;
+
+  for (size_t i = 0; i < images->size(); ++i) {
+    if (CudaUsed()) {
+      SetStream(&image_batch);
+    }
+    (*images)[i].input_cache = &input_caches_[i];
+    (*images)[i].output_cache = &output_caches_[i];
+  }
+
+  bool ret = Apply(&image_batch, outputs);
 
   if (CudaUsed()) {
     SyncStream();

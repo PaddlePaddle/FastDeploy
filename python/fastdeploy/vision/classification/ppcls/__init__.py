@@ -16,44 +16,40 @@ from __future__ import absolute_import
 import logging
 from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
+from ...common import ProcessorManager
 
 
-class PaddleClasPreprocessor:
+class PaddleClasPreprocessor(ProcessorManager):
     def __init__(self, config_file):
         """Create a preprocessor for PaddleClasModel from configuration file
 
         :param config_file: (str)Path of configuration file, e.g resnet50/inference_cls.yaml
         """
-        self._preprocessor = C.vision.classification.PaddleClasPreprocessor(
+        super(PaddleClasPreprocessor, self).__init__()
+        self._manager = C.vision.classification.PaddleClasPreprocessor(
             config_file)
-
-    def run(self, input_ims):
-        """Preprocess input images for PaddleClasModel
-
-        :param: input_ims: (list of numpy.ndarray)The input image
-        :return: list of FDTensor
-        """
-        return self._preprocessor.run(input_ims)
-
-    def use_cuda(self, enable_cv_cuda=False, gpu_id=-1):
-        """Use CUDA preprocessors
-
-        :param: enable_cv_cuda: Whether to enable CV-CUDA
-        :param: gpu_id: GPU device id
-        """
-        return self._preprocessor.use_cuda(enable_cv_cuda, gpu_id)
 
     def disable_normalize(self):
         """
         This function will disable normalize in preprocessing step.
         """
-        self._preprocessor.disable_normalize()
+        self._manager.disable_normalize()
 
     def disable_permute(self):
         """
         This function will disable hwc2chw in preprocessing step.
         """
-        self._preprocessor.disable_permute()
+        self._manager.disable_permute()
+
+    def initial_resize_on_cpu(self, v):
+        """
+        When the initial operator is Resize, and input image size is large,
+        maybe it's better to run resize on CPU, because the HostToDevice memcpy
+        is time consuming. Set this True to run the initial resize on CPU.
+
+        :param: v: True or False
+        """
+        self._manager.initial_resize_on_cpu(v)
 
 
 class PaddleClasPostprocessor:
