@@ -101,9 +101,11 @@ int main(int argc, char* argv[]) {
                cpu_mem_file_name, gpu_mem_file_name) != true) {
     exit(1);
   }
-  float cpu_mem = GetCpuMemoryUsage(cpu_mem_file_name);
-  float gpu_mem = GetGpuMemoryUsage(gpu_mem_file_name);
-  std::cout << "cpu_rss_mb: " << cpu_mem << "MB." << std::endl;
-  std::cout << "gpu_rss_mb: " << gpu_mem << "MB." << std::endl;
+  if (FLAGS_collect_memory_info) {
+    float cpu_mem = GetCpuMemoryUsage(cpu_mem_file_name);
+    float gpu_mem = GetGpuMemoryUsage(gpu_mem_file_name);
+    std::cout << "cpu_rss_mb: " << cpu_mem << "MB." << std::endl;
+    std::cout << "gpu_rss_mb: " << gpu_mem << "MB." << std::endl;
+  }
   return 0;
 }

@@ -32,7 +32,7 @@ DEFINE_string(device, "cpu",
 DEFINE_int32(device_id, 0, "device(gpu) id.");
 DEFINE_int32(warmup, 200, "Number of warmup for profiling.");
 DEFINE_int32(repeat, 1000, "Number of repeats for profiling.");
-DEFINE_string(profile_mode, "Runtime", "runtime or end2end.");
+DEFINE_string(profile_mode, "runtime", "runtime or end2end.");
 DEFINE_string(backend, "default",
               "The inference runtime backend, support: ['default', 'ort', "
               "'paddle', 'ov', 'trt', 'paddle_trt']");
