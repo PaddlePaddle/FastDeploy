@@ -13,10 +13,24 @@
 # limitations under the License.
 
 from __future__ import absolute_import
-from .contrib.yolov5face import YOLOv5Face
-from .contrib.yolov7face import *
-from .contrib.centerface import *
-from .contrib.blazeface import *
-from .contrib.retinaface import RetinaFace
-from .contrib.scrfd import SCRFD
-from .contrib.ultraface import UltraFace
+
+
+class ProcessorManager:
+    def __init__(self):
+        self._manager = None
+
+    def run(self, input_ims):
+        """Process input image
+
+        :param: input_ims: (list of numpy.ndarray) The input images
+        :return: list of FDTensor
+        """
+        return self._manager.run(input_ims)
+
+    def use_cuda(self, enable_cv_cuda=False, gpu_id=-1):
+        """Use CUDA processors
+
+        :param: enable_cv_cuda: Ture: use CV-CUDA, False: use CUDA only
+        :param: gpu_id: GPU device id
+        """
+        return self._manager.use_cuda(enable_cv_cuda, gpu_id)
