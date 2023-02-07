@@ -408,9 +408,6 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Option to configure OpenVINO backend
   OpenVINOBackendOption openvino_option;
 
-  /// Option to configure TensorRT backend
-  TrtBackendOption trt_option;
-
   // ======Only for RKNPU2 Backend=======
   fastdeploy::rknpu2::CpuName rknpu2_cpu_name_ =
       fastdeploy::rknpu2::CpuName::RK3588;

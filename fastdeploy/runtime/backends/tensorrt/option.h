@@ -30,12 +30,17 @@ struct TrtBackendOption {
   /// `max_workspace_size` for TensorRT
   size_t max_workspace_size = 1 << 30;
 
+  /*
+   * @breif Enable half precison inference, on some device not support half precision, it will fallback to float32 mode
+   */
+  bool enable_fp16 = false;
+
   /** \brief Set shape range of input tensor for the model that contain dynamic input shape while using TensorRT backend
    *
    * \param[in] tensor_name The name of input for the model which is dynamic shape
    * \param[in] min The minimal shape for the input tensor
-   * \param[in] opt The optimized shape for the input tensor, just set the most common shape
-   * \param[in] max The maximum shape for the input tensor
+   * \param[in] opt The optimized shape for the input tensor, just set the most common shape, if set as default value, it will keep same with min_shape
+   * \param[in] max The maximum shape for the input tensor, if set as default value, it will keep same with min_shape
    */
   void SetShape(const std::string& tensor_name,
                 const std::vector<int32_t>& min,
@@ -69,7 +74,6 @@ struct TrtBackendOption {
   bool enable_pinned_memory = false;
   void* external_stream_ = nullptr;
   int gpu_id = 0;
-  bool enable_fp16 = false;
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
   // format of input model

@@ -154,6 +154,8 @@ class RuntimeOption:
     """Options for FastDeploy Runtime.
     """
 
+    __slots__ = ["_option"]
+
     def __init__(self):
         """Initialize a FastDeploy RuntimeOption object.
         """
