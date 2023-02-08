@@ -53,6 +53,10 @@ bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   for (size_t i = start_index; i < end_index; ++i) {
     FDMat* mat = &(images->at(i));
     OcrClassifierResizeImage(mat, cls_image_shape_);
+    std::cout << "Preprocess Resize Shape is "
+              << mat->Channels() << ","
+              << mat->Height() << ","
+              << mat->Width() << std::endl;
     if(!disable_normalize_){
       Normalize::Run(mat, mean_, scale_, is_scale_);
     }
