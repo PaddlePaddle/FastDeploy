@@ -25,7 +25,7 @@ namespace fastdeploy{
         IntPtr fd_detection_result_wrapper_ptr = FD_C_CreateDetectionResultWrapper();
         FD_C_PPYOLOEWrapperPredict(fd_ppyoloe_wrapper, img.CvPtr, fd_detection_result_wrapper_ptr); // predict
         IntPtr fd_detection_result_ptr = FD_C_DetectionResultWrapperGetData(fd_detection_result_wrapper_ptr); // get result from wrapper
-        FD_C_DetectionResult fd_detection_result = (FD_C_DetectionResult)Marshal.PtrToStructure(fd_detection_result_ptr, typeof(FD_C_DetectionResult));
+        FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(fd_detection_result_ptr, typeof(FD_DetectionResult));
         DetectionResult detection_result = ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
         FD_C_DestroyDetectionResultWrapper(fd_detection_result_wrapper_ptr); // free fd_detection_result_wrapper_ptr
         FD_C_DestroyDetectionResult(fd_detection_result_ptr); // free fd_detection_result_ptr

@@ -25,7 +25,7 @@ namespace fastdeploy{
         IntPtr fd_classify_result_wrapper_ptr = FD_C_CreateClassifyResultWrapper();
         FD_C_PPYOLOEWrapperPredict(fd_paddleclas_model_wrapper, img.CvPtr, fd_classify_result_wrapper_ptr); // predict
         IntPtr fd_classify_result_ptr = FD_C_ClassifyResultWrapperGetData(fd_classify_result_wrapper_ptr); // get result from wrapper
-        FD_C_DetectionResult fd_classify_result = (FD_C_DetectionResult)Marshal.PtrToStructure(fd_detection_result_ptr, typeof(FD_C_ClassifyResult));
+        FD_ClassifyResult fd_classify_result = (FD_ClassifyResult)Marshal.PtrToStructure(fd_detection_result_ptr, typeof(FD_ClassifyResult));
         ClassifyResult classify_result = ConvertResult.ConvertCResultToClassifyResult(fd_classify_result);
         FD_C_DestroyClassifyResultWrapper(fd_classify_result_wrapper_ptr); // free fd_classify_result_wrapper_ptr
         FD_C_DestroyClassifyResult(fd_classify_result_ptr); // free fd_classify_result_ptr

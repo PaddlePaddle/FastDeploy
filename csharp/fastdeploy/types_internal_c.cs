@@ -105,15 +105,15 @@ namespace fastdeploy{
 }
  
  [StructLayout(LayoutKind.Sequential)]
-        public struct FD_DetectionResult
-        {
-            public FD_TwoDimArrayFloat boxes;
-            public FD_OneDimArrayFloat scores;
-            public FD_OneDimArrayInt32 label_ids;
-            public FD_OneDimMask masks;
-            [MarshalAs(UnmanagedType.U1)]
-            public bool contain_masks;
-            public FD_ResultType type;
+  public struct FD_DetectionResult
+  {
+      public FD_TwoDimArrayFloat boxes;
+      public FD_OneDimArrayFloat scores;
+      public FD_OneDimArrayInt32 label_ids;
+      public FD_OneDimMask masks;
+      [MarshalAs(UnmanagedType.U1)]
+      public bool contain_masks;
+      public FD_ResultType type;
 }
 
   }

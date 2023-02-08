@@ -138,7 +138,7 @@ namespace fastdeploy{
       fd_detection_result.boxes.data = Marshal.AllocHGlobal(size);
       for (int i = 0; i < boxes.Length; i++)
       {
-          Marshal.StructureToPtr(boxes[i], fd_detection_result.boxes.data+i* Marshal.SizeOf(boxes[0]), True);
+          Marshal.StructureToPtr(boxes[i], fd_detection_result.boxes.data+i* Marshal.SizeOf(boxes[0]), true);
       }
               
       // copy scores
