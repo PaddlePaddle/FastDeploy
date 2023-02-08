@@ -15,7 +15,7 @@ def parse_arguments():
 
 
 runtime_option = fd.RuntimeOption()
-runtime_option.use_kunlunxin()
+runtime_option.use_ascend()
 
 # 配置runtime，加载模型
 model_file = os.path.join(args.model, "model.pdmodel")

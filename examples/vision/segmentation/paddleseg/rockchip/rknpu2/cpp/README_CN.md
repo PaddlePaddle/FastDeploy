@@ -8,7 +8,7 @@
 1. 软硬件环境满足要求
 2. 根据开发环境，下载预编译部署库或者从头编译FastDeploy仓库
 
-以上步骤请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)实现
+以上步骤请参考[RK2代NPU部署库编译](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/rknpu2/rknpu2.md)实现
 
 ## 生成基本目录文件
 
@@ -37,7 +37,7 @@ mkdir thirdpartys
 
 ### 编译并拷贝SDK到thirdpartys文件夹
 
-请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)仓库编译SDK，编译完成后，将在build目录下生成fastdeploy-0.0.3目录，请移动它至thirdpartys目录下.
+请参考[RK2代NPU部署库编译](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/rknpu2/rknpu2.md)仓库编译SDK，编译完成后，将在build目录下生成fastdeploy-x-x-x目录，请移动它至thirdpartys目录下.
 
 ### 拷贝模型文件，以及配置文件至model文件夹
 在Paddle动态图模型 -> Paddle静态图模型 -> ONNX模型的过程中，将生成ONNX文件以及对应的yaml配置文件，请将配置文件存放到model文件夹内。

@@ -3,7 +3,15 @@
 
 ## 支持模型列表
 
-- PP-LiteSeg部署模型实现来自[PaddleSeg PP-LiteSeg系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/configs/pp_liteseg/README.md)
+- [PP-LiteSeg系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/configs/pp_liteseg/README.md)
+
+为了方便开发者的测试，下面提供了PaddleSeg导出的部分推理模型，开发者可直接下载使用。
+
+PaddleSeg模型导出，请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export_cn.md)  
+
+| 模型                              | 参数文件大小    |输入Shape |  mIoU | mIoU (flip) | mIoU (ms+flip) |
+|:---------------------------------------------------------------- |:----- |:----- | :----- | :----- | :----- |
+| [PP-LiteSeg-T(STDC1)-cityscapes-without-argmax](https://bj.bcebos.com/fastdeploy/models/rk1/ppliteseg.tar.gz)| 31MB  | 1024x512 | 77.04% | 77.73% | 77.46% |
 
 ## 准备PP-LiteSeg部署模型以及转换模型
 
@@ -93,5 +101,6 @@ model_deploy.py \
 ```
 最终获得可以在BM1684x上能够运行的bmodel模型pp_liteseg_1684x_f32.bmodel。如果需要进一步对模型进行加速，可以将ONNX模型转换为INT8 bmodel，具体步骤参见[TPU-MLIR文档](https://github.com/sophgo/tpu-mlir/blob/master/README.md)。
 
-## 其他链接
+## 快速链接
 - [Cpp部署](./cpp)
+- [Python部署](./python)

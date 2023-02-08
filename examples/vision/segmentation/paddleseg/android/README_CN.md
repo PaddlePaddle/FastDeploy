@@ -173,5 +173,5 @@ model.init(modelFile, paramFile, configFile, option);
 
 ## 更多参考文档
 如果您想知道更多的FastDeploy Java API文档以及如何通过JNI来接入FastDeploy C++ API感兴趣，可以参考以下内容:  
-- [在 Android 中使用 FastDeploy Java SDK](../../../../../java/android/)
-- [在 Android 中使用 FastDeploy C++ SDK](../../../../../docs/cn/faq/use_cpp_sdk_on_android.md)  
+- [在 Android 中使用 FastDeploy Java SDK](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android)
+- [在 Android 中使用 FastDeploy C++ SDK](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/use_cpp_sdk_on_android.md)  

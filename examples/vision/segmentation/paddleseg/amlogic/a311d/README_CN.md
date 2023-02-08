@@ -6,7 +6,9 @@
 由于晶晨A311D的NPU仅支持INT8量化模型的部署，因此所支持的量化模型如下：
 - [PP-LiteSeg系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/configs/pp_liteseg/README.md)
 
-为了方便开发者的测试，下面提供了PaddleSeg导出的部分模型，开发者可直接下载使用。
+为了方便开发者的测试，下面提供了PaddleSeg导出的部分推理模型，开发者可直接下载使用。
+
+PaddleSeg模型导出，请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export_cn.md)  
 
 | 模型                              | 参数文件大小    |输入Shape |  mIoU | mIoU (flip) | mIoU (ms+flip) |
 |:---------------------------------------------------------------- |:----- |:----- | :----- | :----- | :----- |
