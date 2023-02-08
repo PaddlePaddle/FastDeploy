@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using System.Runtime.InteropServices;
 using fastdeploy.vision;
 
@@ -33,7 +35,7 @@ namespace fastdeploy{
   }  
 
   [StructLayout(LayoutKind.Sequential)]
-        public struct FD_OneDimArrayFloat {
+  public struct FD_OneDimArrayFloat {
     public nuint size;
     public IntPtr data; // float[]
   } 
@@ -46,27 +48,27 @@ namespace fastdeploy{
   }
 
   [StructLayout(LayoutKind.Sequential)]
-        public struct FD_OneDimArrayCstr
+  public struct FD_OneDimArrayCstr
   {
     public nuint size;
     public IntPtr data; // FD_Cstr[]
   }
 
   [StructLayout(LayoutKind.Sequential)]
-        public struct FD_TwoDimArraySize
+  public struct FD_TwoDimArraySize
   {
     public nuint size;
     public IntPtr data; // FD_OneDimArraySize[]
   }
 
   [StructLayout(LayoutKind.Sequential)]
-        public struct FD_TwoDimArrayFloat {
+    public struct FD_TwoDimArrayFloat {
     public nuint size;
     public IntPtr data; // FD_OneDimArrayFloat[]
   }
 
-        public enum FD_ResultType
-        {
+  public enum FD_ResultType
+  {
     UNKNOWN_RESULT,
     CLASSIFY,
     DETECTION,
@@ -83,26 +85,27 @@ namespace fastdeploy{
   }
 
   [StructLayout(LayoutKind.Sequential)]
-        public struct FD_ClassifyResult
-        {
-            public FD_OneDimArrayInt32 label_ids;
-            public FD_OneDimArrayFloat scores;
-            public FD_ResultType type;
-} 
+  public struct FD_ClassifyResult
+  {
+      public FD_OneDimArrayInt32 label_ids;
+      public FD_OneDimArrayFloat scores;
+      public FD_ResultType type;
+  } 
  
  [StructLayout(LayoutKind.Sequential)]
-        public struct FD_Mask
-        {
-            public FD_OneDimArrayUint8 data;
-            public FD_OneDimArrayInt64 shape;
-            public FD_ResultType type;
-}
+  public struct FD_Mask
+  {
+      public FD_OneDimArrayUint8 data;
+      public FD_OneDimArrayInt64 shape;
+      public FD_ResultType type;
+  }
  
  [StructLayout(LayoutKind.Sequential)]
-        public struct FD_OneDimMask {
-  public nint size;
-            public IntPtr data; // FD_Mask*
-}
+    public struct FD_OneDimMask 
+  {
+    public nint size;
+    public IntPtr data; // FD_Mask*
+  }
  
  [StructLayout(LayoutKind.Sequential)]
   public struct FD_DetectionResult
@@ -114,7 +117,7 @@ namespace fastdeploy{
       [MarshalAs(UnmanagedType.U1)]
       public bool contain_masks;
       public FD_ResultType type;
-}
+  }
 
   }
 }

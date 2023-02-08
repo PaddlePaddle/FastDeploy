@@ -35,24 +35,24 @@ namespace fastdeploy{
       // below are underlying C api
       private IntPtr fd_paddleclas_model_wrapper;
       [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatePaddleClasModelWrapper")]
-      private static IntPtr FD_C_CreatePaddleClasModelWrapper(string model_file, string params_file,
+      private static extern IntPtr FD_C_CreatePaddleClasModelWrapper(string model_file, string params_file,
                                                      string config_file, IntPtr fd_runtime_option_wrapper,
                                                      ModelFormat model_format);
       [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyPaddleClasModelWrapper")]
-      private static void FD_C_DestroyPaddleClasModelWrapper(IntPtr fd_paddleclas_model_wrapper);
+      private static extern void FD_C_DestroyPaddleClasModelWrapper(IntPtr fd_paddleclas_model_wrapper);
       [DllImport("fastdeploy.dll", EntryPoint = "FD_C_PaddleClasModelWrapperPredict")]
-      private static bool FD_C_PaddleClasModelWrapperPredict(IntPtr fd_paddleclas_model_wrapper,
+      private static extern bool FD_C_PaddleClasModelWrapperPredict(IntPtr fd_paddleclas_model_wrapper,
                                     IntPtr img, IntPtr fd_classify_result_wrapper);
       [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreateClassifyResultWrapper")]
-      IntPtr FD_C_CreateClassifyResultWrapper();
+      private static extern IntPtr FD_C_CreateClassifyResultWrapper();
       [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyClassifyResultWrapper")]
-      void FD_C_DestroyClassifyResultWrapper(IntPtr fd_classify_result_wrapper);
+      private static extern void FD_C_DestroyClassifyResultWrapper(IntPtr fd_classify_result_wrapper);
       [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyClassifyResult")]
-      void FD_C_DestroyClassifyResult(IntPtr fd_classify_result);
+      private static extern void FD_C_DestroyClassifyResult(IntPtr fd_classify_result);
       [DllImport("fastdeploy.dll", EntryPoint = "FD_C_ClassifyResultWrapperGetData")]
-      IntPtr FD_C_ClassifyResultWrapperGetData(IntPtr fd_classify_result_wrapper);
+      private static extern IntPtr FD_C_ClassifyResultWrapperGetData(IntPtr fd_classify_result_wrapper);
       [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreateClassifyResultWrapperFromData")]
-      IntPtr FD_C_CreateClassifyResultWrapperFromData(IntPtr fd_classify_result);
+      private static extern IntPtr FD_C_CreateClassifyResultWrapperFromData(IntPtr fd_classify_result);
     }
 
     }
