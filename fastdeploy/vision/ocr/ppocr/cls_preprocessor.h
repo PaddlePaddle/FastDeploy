@@ -61,6 +61,14 @@ class FASTDEPLOY_DECL ClassifierPreprocessor {
   /// This function will disable hwc2chw in preprocessing step.
   void DisablePermute() { disable_normalize_ = true; }
 
+  /// Set static_shape_infer is true or not. When deploy PP-OCR
+  /// on hardware which can not support dynamic input shape very well,
+  /// like Huawei Ascned, static_shape_infer needs to to be true.
+  void SetStaticShapeInfer(bool static_shape_infer) {
+    static_shape_infer_ = static_shape_infer;
+  }
+  /// Get static_shape_infer of the recognition preprocess
+  bool GetStaticShapeInfer() const { return static_shape_infer_; }
  private:
   // for recording the switch of hwc2chw
   bool disable_permute_ = false;
@@ -70,6 +78,9 @@ class FASTDEPLOY_DECL ClassifierPreprocessor {
   std::vector<float> scale_ = {0.5f, 0.5f, 0.5f};
   bool is_scale_ = true;
   std::vector<int> cls_image_shape_ = {3, 48, 192};
+  bool static_shape_infer_ = false;
+  void OcrClassifierResizeImage(FDMat* mat,
+                                const std::vector<int>& cls_image_shape);
 };
 
 }  // namespace ocr

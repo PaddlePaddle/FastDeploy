@@ -155,7 +155,9 @@ FASTDEPLOY_DECL cv::Mat VisMatting(const cv::Mat& im,
  * \param[in] result the result produced by model
  * \return cv::Mat type stores the visualized results
  */
-FASTDEPLOY_DECL cv::Mat VisOcr(const cv::Mat& im, const OCRResult& ocr_result);
+FASTDEPLOY_DECL cv::Mat VisOcr(const cv::Mat& im,
+                               const OCRResult& ocr_result,
+                               const float score_threshold=0);
 
 FASTDEPLOY_DECL cv::Mat VisMOT(const cv::Mat& img, const MOTResult& results,
                                float score_threshold = 0.0f,

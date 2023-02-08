@@ -58,6 +58,22 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
   void DisableNormalize() { disable_permute_ = true; }
   /// This function will disable hwc2chw in preprocessing step.
   void DisablePermute() { disable_normalize_ = true; }
+
+  /// Set cls_image_shape for the classification preprocess
+  void SetDetImageShape(const std::vector<int>& det_image_shape) {
+    det_image_shape_ = det_image_shape;
+  }
+  /// Get cls_image_shape for the classification preprocess
+  std::vector<int> GetDetImageShape() const { return det_image_shape_; }
+
+  /// Set static_shape_infer is true or not. When deploy PP-OCR
+  /// on hardware which can not support dynamic input shape very well,
+  /// like Huawei Ascned, static_shape_infer needs to to be true.
+  void SetStaticShapeInfer(bool static_shape_infer) {
+    static_shape_infer_ = static_shape_infer;
+  }
+  /// Get static_shape_infer of the recognition preprocess
+  bool GetStaticShapeInfer() const { return static_shape_infer_; }
  private:
   // for recording the switch of hwc2chw
   bool disable_permute_ = false;
@@ -67,6 +83,9 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
   std::vector<float> mean_ = {0.485f, 0.456f, 0.406f};
   std::vector<float> scale_ = {0.229f, 0.224f, 0.225f};
   bool is_scale_ = true;
+  std::vector<int> det_image_shape_ = {3, 960, 960};
+  bool static_shape_infer_ = false;
+  std::array<int, 4> OcrDetectorGetInfo(FDMat* img, int max_size_len);
 };
 
 }  // namespace ocr

@@ -21,9 +21,12 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-std::array<int, 4> OcrDetectorGetInfo(FDMat* img, int max_size_len) {
+std::array<int, 4> DBDetectorPreprocessor::OcrDetectorGetInfo(FDMat* img, int max_size_len) {
   int w = img->Width();
   int h = img->Height();
+  if(static_shape_infer_){
+    return {w, h, det_image_shape_[2], det_image_shape_[1]};
+  }
 
   float ratio = 1.f;
   int max_wh = w >= h ? w : h;
@@ -45,14 +48,12 @@ std::array<int, 4> OcrDetectorGetInfo(FDMat* img, int max_size_len) {
   *ratio_w = float(resize_w) / float(w);
   */
 }
-bool OcrDetectorResizeImage(FDMat* img,
-                            int resize_w,
-                            int resize_h,
-                            int max_resize_w,
-                            int max_resize_h) {
+
+bool OcrDetectorResizeImage(FDMat* img, int resize_w,
+                            int resize_h, int max_resize_w, int max_resize_h) {
   Resize::Run(img, resize_w, resize_h);
   std::vector<float> value = {0, 0, 0};
-  Pad::Run(img, 0, max_resize_h-resize_h, 0, max_resize_w - resize_w, value);
+  Pad::Run(img, 0, max_resize_h - resize_h, 0, max_resize_w - resize_w, value);
   return true;
 }
 
@@ -63,6 +64,7 @@ bool DBDetectorPreprocessor::Run(std::vector<FDMat>* images,
     FDERROR << "The size of input images should be greater than 0." << std::endl;
     return false;
   }
+
   int max_resize_w = 0;
   int max_resize_h = 0;
   std::vector<std::array<int, 4>>& batch_det_img_info = *batch_det_img_info_ptr;
@@ -70,13 +72,15 @@ bool DBDetectorPreprocessor::Run(std::vector<FDMat>* images,
   batch_det_img_info.resize(images->size());
   for (size_t i = 0; i < images->size(); ++i) {
     FDMat* mat = &(images->at(i));
-    batch_det_img_info[i] = OcrDetectorGetInfo(mat,max_side_len_);
+    batch_det_img_info[i] = OcrDetectorGetInfo(mat, max_side_len_);
     max_resize_w = std::max(max_resize_w,batch_det_img_info[i][2]);
     max_resize_h = std::max(max_resize_h,batch_det_img_info[i][3]);
   }
   for (size_t i = 0; i < images->size(); ++i) {
     FDMat* mat = &(images->at(i));
-    OcrDetectorResizeImage(mat, batch_det_img_info[i][2],batch_det_img_info[i][3],max_resize_w,max_resize_h);
+    OcrDetectorResizeImage(mat, batch_det_img_info[i][2],
+                           batch_det_img_info[i][3],max_resize_w,
+                           max_resize_h);
 
     if(!disable_normalize_ && !disable_permute_){
       NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);

@@ -21,8 +21,12 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-void OcrClassifierResizeImage(FDMat* mat,
+void ClassifierPreprocessor::OcrClassifierResizeImage(FDMat* mat,
                               const std::vector<int>& cls_image_shape) {
+  if(static_shape_infer_){
+    Resize::Run(mat, cls_image_shape_[2], cls_image_shape_[1]);
+    return;
+  }
   int img_c = cls_image_shape[0];
   int img_h = cls_image_shape[1];
   int img_w = cls_image_shape[2];
@@ -53,10 +57,6 @@ bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   for (size_t i = start_index; i < end_index; ++i) {
     FDMat* mat = &(images->at(i));
     OcrClassifierResizeImage(mat, cls_image_shape_);
-    std::cout << "Preprocess Resize Shape is "
-              << mat->Channels() << ","
-              << mat->Height() << ","
-              << mat->Width() << std::endl;
     if(!disable_normalize_){
       Normalize::Run(mat, mean_, scale_, is_scale_);
     }
