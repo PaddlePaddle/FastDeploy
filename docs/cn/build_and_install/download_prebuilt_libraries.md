@@ -98,7 +98,6 @@ Release版本（Java SDK 目前仅支持Android，版本为1.0.3）
 | :--- | :--- | :---- |
 | Android Java SDK | [fastdeploy-android-sdk-1.0.3.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-1.0.3.aar) | NDK 20 编译产出, minSdkVersion 15, targetSdkVersion 28 |  
 | Android Java SDK | [fastdeploy-android-sdk-with-text-1.0.3.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-with-text-1.0.3.aar) | 包含FastTokenizer、UIE等 Text API，NDK 20 编译产出, minSdkVersion 15, targetSdkVersion 28 |
-| Android Java SDK | [fastdeploy-android-sdk-with-text-only-1.0.3.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-with-text-only-1.0.3.aar) | 仅包含 FastTokenizer、UIE 等 Text API，NDK 25 及 clang++ 编译产出， minSdkVersion 15， targetSdkVersion 28，不包含 OpenCV 等 CV API|
 
 
 Develop版本（Nightly build）
@@ -115,4 +114,3 @@ Develop版本（Nightly build）
 | Android armv7&v8 | [fastdeploy-android-with-text-only-0.0.0-shared.tgz](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-with-text-only-0.0.0-shared.tgz) | 仅包含FastTokenizer、UIE等Text API，NDK 25及clang++编译产出, 支持arm64-v8a及armeabi-v7a |
 | Android Java SDK | [fastdeploy-android-sdk-0.0.0.aar](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-sdk-0.0.0.aar) | NDK 20 编译产出, minSdkVersion 15, targetSdkVersion 28 |  
 | Android Java SDK | [fastdeploy-android-sdk-with-text-0.0.0.aar](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-sdk-with-text-0.0.0.aar) | 包含FastTokenizer、UIE等Text API，NDK 20 编译产出, minSdkVersion 15, targetSdkVersion 28 |
-| Android Java SDK | [fastdeploy-android-sdk-with-text-only-0.0.0.aar](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-sdk-with-text-only-0.0.0.aar) | 仅包含FastTokenizer、UIE等Text API，NDK 20 编译产出, minSdkVersion 15, targetSdkVersion 28 |
