@@ -59,7 +59,7 @@ void DumpCurrentCpuMemoryUsage(const std::string& name) {
 }
 
 void DumpCurrentGpuMemoryUsage(const std::string& name, int device_id) {
-#if defined(__linux__) || defined(WITH_GPU)
+#if defined(__linux__) && defined(WITH_GPU)
   std::string command = "nvidia-smi --id=" + std::to_string(device_id) +
                         " --query-gpu=index,uuid,name,timestamp,memory.total,"
                         "memory.free,memory.used,utilization.gpu,utilization."
