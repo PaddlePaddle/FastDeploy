@@ -85,7 +85,14 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   option.UseTrtBackend();
-  auto model = fastdeploy::vision::segmentation::PaddleSegModel(
+  // If use original Tensorrt, not Paddle-TensorRT,
+  // comment the following two lines
+  option.EnablePaddleToTrt();
+  option.EnablePaddleTrtCollectShape();
+  option.SetTrtInputShape("x", {1, 3, 256, 256}, {1, 3, 1024, 1024},
+                          {1, 3, 2048, 2048})
+
+      auto model = fastdeploy::vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option);
 
   if (!model.Initialized()) {
