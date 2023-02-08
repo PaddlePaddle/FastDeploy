@@ -28,16 +28,17 @@ class FASTDEPLOY_DECL ResizeByShort : public Processor {
     interp_ = interp;
     use_scale_ = use_scale;
   }
-  bool ImplByOpenCV(Mat* mat);
+  bool ImplByOpenCV(FDMat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFlyCV(Mat* mat);
+  bool ImplByFlyCV(FDMat* mat);
 #endif
 #ifdef ENABLE_CVCUDA
-  bool ImplByCvCuda(Mat* mat);
+  bool ImplByCvCuda(FDMat* mat);
+  bool ImplByCvCuda(FDMatBatch* mat_batch);
 #endif
   std::string Name() { return "ResizeByShort"; }
 
-  static bool Run(Mat* mat, int target_size, int interp = 1,
+  static bool Run(FDMat* mat, int target_size, int interp = 1,
                   bool use_scale = true,
                   const std::vector<int>& max_hw = std::vector<int>(),
                   ProcLib lib = ProcLib::DEFAULT);
