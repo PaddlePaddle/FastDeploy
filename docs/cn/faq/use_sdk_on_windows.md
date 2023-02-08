@@ -2,6 +2,7 @@
 
 # 在 Windows 使用 FastDeploy C++ SDK
 
+【**注意**】**编译只支持Release模型，不支持Debug模型**
 
 ## 1. 准备环境和Windows部署库
 <div id="Environment"></div>  
@@ -10,6 +11,7 @@
 - Visual Studio 16 2019
 - cuda >= 11.2 (当WITH_GPU=ON)
 - cudnn >= 8.0 (当WITH_GPU=ON)
+
 
 1. 根据需求，选择下载对应的C++(CPU/GPU)部署库，下载文档见[安装文档说明](../build_and_install)
 > 假定当前下载解压后的库路径在`D:\Download\fastdeploy-win-x64-gpu-x.x.x
