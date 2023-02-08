@@ -66,7 +66,15 @@ class FASTDEPLOY_DECL RecognizerPreprocessor {
   /// Get rec_image_shape for the recognition preprocess
   std::vector<int> GetRecImageShape() { return rec_image_shape_; }
 
+  /// This function will disable normalize in preprocessing step.
+  void DisableNormalize() { disable_permute_ = true; }
+  /// This function will disable hwc2chw in preprocessing step.
+  void DisablePermute() { disable_normalize_ = true; }
  private:
+  // for recording the switch of hwc2chw
+  bool disable_permute_ = false;
+  // for recording the switch of normalize
+  bool disable_normalize_ = false;
   std::vector<int> rec_image_shape_ = {3, 48, 320};
   std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
   std::vector<float> scale_ = {0.5f, 0.5f, 0.5f};

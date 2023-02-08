@@ -53,19 +53,24 @@ bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   for (size_t i = start_index; i < end_index; ++i) {
     FDMat* mat = &(images->at(i));
     OcrClassifierResizeImage(mat, cls_image_shape_);
-    Normalize::Run(mat, mean_, scale_, is_scale_);
+    if(!disable_normalize_){
+      Normalize::Run(mat, mean_, scale_, is_scale_);
+    }
     std::vector<float> value = {0, 0, 0};
     if (mat->Width() < cls_image_shape_[2]) {
       Pad::Run(mat, 0, 0, 0, cls_image_shape_[2] - mat->Width(), value);
     }
-    HWC2CHW::Run(mat);
-    Cast::Run(mat, "float");
+
+    if(!disable_permute_){
+      HWC2CHW::Run(mat);
+      Cast::Run(mat, "float");
+    }
   }
   // Only have 1 output Tensor.
   outputs->resize(1);
   // Concat all the preprocessed data to a batch tensor
   size_t tensor_size = end_index - start_index;
-  std::vector<FDTensor> tensors(tensor_size); 
+  std::vector<FDTensor> tensors(tensor_size);
   for (size_t i = 0; i < tensor_size; ++i) {
     (*images)[i + start_index].ShareWithTensor(&(tensors[i]));
     tensors[i].ExpandDim(0);

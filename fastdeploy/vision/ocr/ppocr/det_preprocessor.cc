@@ -77,7 +77,19 @@ bool DBDetectorPreprocessor::Run(std::vector<FDMat>* images,
   for (size_t i = 0; i < images->size(); ++i) {
     FDMat* mat = &(images->at(i));
     OcrDetectorResizeImage(mat, batch_det_img_info[i][2],batch_det_img_info[i][3],max_resize_w,max_resize_h);
-    NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
+
+    if(!disable_normalize_ && !disable_permute_){
+      NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
+    } else{
+      if(!disable_normalize_){
+        Normalize::Run(mat, mean_, scale_, is_scale_);
+      }
+      if(!disable_permute_){
+        HWC2CHW::Run(mat);
+        Cast::Run(mat, "float");
+      }
+    }
+
     /*
     Normalize::Run(mat, mean_, scale_, is_scale_);
     HWC2CHW::Run(mat);
@@ -87,7 +99,7 @@ bool DBDetectorPreprocessor::Run(std::vector<FDMat>* images,
   // Only have 1 output Tensor.
   outputs->resize(1);
   // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> tensors(images->size()); 
+  std::vector<FDTensor> tensors(images->size());
   for (size_t i = 0; i < images->size(); ++i) {
     (*images)[i].ShareWithTensor(&(tensors[i]));
     tensors[i].ExpandDim(0);

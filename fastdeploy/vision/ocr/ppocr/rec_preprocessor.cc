@@ -85,7 +85,17 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
     }
     FDMat* mat = &(images->at(real_index));
     OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_, static_shape_infer_);
-    NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
+    if(!disable_normalize_ && !disable_permute_){
+      NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
+    } else{
+      if(!disable_normalize_){
+        Normalize::Run(mat, mean_, scale_, is_scale_);
+      }
+      if(!disable_permute_){
+        HWC2CHW::Run(mat);
+        Cast::Run(mat, "float");
+      }
+    }
   }
   // Only have 1 output Tensor.
   outputs->resize(1);
