@@ -50,7 +50,7 @@ infer_ppyoloe_demo.exe ppyoloe_crn_l_300e_coco 000000014439.jpg 1  # GPU
 infer_ppyoloe_demo.exe ppyoloe_crn_l_300e_coco 000000014439.jpg 2  # GPU + TensorRT
 ```
 
-在此步骤中使用到的`fastdeploy_init_bat`提供更多其它功能，帮忙开发者使用，包括
+在此步骤中使用到的`fastdeploy_init.bat`提供更多其它功能，帮忙开发者使用，包括
 - 查看SDK中所有dll, lib和include的路径
 - 安装SDK中所有dll至指定目录
 - 配置SDK环境变量
