@@ -378,26 +378,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Option to configure ONNX Runtime backend
   OrtBackendOption ort_option;
 
-  // ======Only for Paddle Backend=====
-  bool pd_enable_mkldnn = true;
-  bool pd_enable_log_info = false;
-  bool pd_enable_trt = false;
-  bool pd_collect_shape = false;
-  int pd_mkldnn_cache_size = 1;
-  std::vector<std::string> pd_delete_pass_names;
-
-  // ======Only for Paddle IPU Backend =======
-  int ipu_device_num = 1;
-  int ipu_micro_batch_size = 1;
-  bool ipu_enable_pipelining = false;
-  int ipu_batches_per_step = 1;
-  bool ipu_enable_fp16 = false;
-  int ipu_replica_num = 1;
-  float ipu_available_memory_proportion = 1.0;
-  bool ipu_enable_half_partial = false;
-
   /// Option to configure TensorRT backend
   TrtBackendOption trt_option;
+
+  /// Option to configure Paddle Inference backend
+  PaddleBackendOption paddle_infer_option;
 
   // ======Only for PaddleTrt Backend=======
   std::vector<std::string> trt_disabled_ops_{};

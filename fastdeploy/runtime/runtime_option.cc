@@ -99,6 +99,7 @@ void RuntimeOption::SetCpuThreadNum(int thread_num) {
   paddle_lite_option.cpu_threads = thread_num;
   ort_option.intra_op_num_threads = thread_num;
   openvino_option.cpu_thread_num = thread_num;
+  paddle_infer_option.cpu_thread_num = thread_num;
 }
 
 void RuntimeOption::SetOrtGraphOptLevel(int level) {
@@ -174,25 +175,47 @@ void RuntimeOption::UseLiteBackend() {
 }
 
 void RuntimeOption::SetPaddleMKLDNN(bool pd_mkldnn) {
-  pd_enable_mkldnn = pd_mkldnn;
+  FDWARNING << "`RuntimeOption::SetPaddleMKLDNN` will be removed in v1.2.0, "
+               "please modify its member variable directly, e.g "
+               "`option.paddle_infer_option.enable_mkldnn = true`"
+            << std::endl;
+  paddle_infer_option.enable_mkldnn = pd_mkldnn;
 }
 
 void RuntimeOption::DeletePaddleBackendPass(const std::string& pass_name) {
-  pd_delete_pass_names.push_back(pass_name);
+  FDWARNING
+      << "`RuntimeOption::DeletePaddleBackendPass` will be removed in v1.2.0, "
+         "please use `option.paddle_infer_option.DeletePass` instead."
+      << std::endl;
+  paddle_infer_option.DeletePass(pass_name);
 }
-void RuntimeOption::EnablePaddleLogInfo() { pd_enable_log_info = true; }
+void RuntimeOption::EnablePaddleLogInfo() {
+  FDWARNING << "`RuntimeOption::EnablePaddleLogInfo` will be removed in "
+               "v1.2.0, please modify its member variable directly, e.g "
+               "`option.paddle_infer_option.enable_log_info = true`"
+            << std::endl;
+  paddle_infer_option.enable_log_info = true;
+}
 
-void RuntimeOption::DisablePaddleLogInfo() { pd_enable_log_info = false; }
+void RuntimeOption::DisablePaddleLogInfo() {
+  FDWARNING << "`RuntimeOption::DisablePaddleLogInfo` will be removed in "
+               "v1.2.0, please modify its member variable directly, e.g "
+               "`option.paddle_infer_option.enable_log_info = false`"
+            << std::endl;
+  paddle_infer_option.enable_log_info = false;
+}
 
 void RuntimeOption::EnablePaddleToTrt() {
-  FDASSERT(backend == Backend::TRT,
-           "Should call UseTrtBackend() before call EnablePaddleToTrt().");
 #ifdef ENABLE_PADDLE_BACKEND
+  FDWARNING << "`RuntimeOption::EnablePaddleToTrt` will be removed in v1.2.0, "
+               "please modify its member variable directly, e.g "
+               "`option.paddle_infer_option.enable_trt = true`"
+            << std::endl;
   FDINFO << "While using TrtBackend with EnablePaddleToTrt, FastDeploy will "
             "change to use Paddle Inference Backend."
          << std::endl;
   backend = Backend::PDINFER;
-  pd_enable_trt = true;
+  paddle_infer_option.enable_trt = true;
 #else
   FDASSERT(false,
            "While using TrtBackend with EnablePaddleToTrt, require the "
@@ -202,8 +225,11 @@ void RuntimeOption::EnablePaddleToTrt() {
 }
 
 void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
-  FDASSERT(size > 0, "Parameter size must greater than 0.");
-  pd_mkldnn_cache_size = size;
+  FDWARNING << "`RuntimeOption::SetPaddleMKLDNNCacheSize` will be removed in "
+               "v1.2.0, please modify its member variable directly, e.g "
+               "`option.paddle_infer_option.mkldnn_cache_size = size`."
+            << std::endl;
+  paddle_infer_option.mkldnn_cache_size = size;
 }
 
 void RuntimeOption::SetOpenVINODevice(const std::string& name) {
@@ -393,12 +419,28 @@ void RuntimeOption::SetOpenVINOStreams(int num_streams) {
   openvino_option.num_streams = num_streams;
 }
 
-void RuntimeOption::EnablePaddleTrtCollectShape() { pd_collect_shape = true; }
+void RuntimeOption::EnablePaddleTrtCollectShape() {
+  FDWARNING << "`RuntimeOption::EnablePaddleTrtCollectShape` will be removed "
+               "in v1.2.0, please modify its member variable directly, e.g "
+               "runtime_option.paddle_infer_option.collect_trt_shape = true`."
+            << std::endl;
+  paddle_infer_option.collect_trt_shape = true;
+}
 
-void RuntimeOption::DisablePaddleTrtCollectShape() { pd_collect_shape = false; }
+void RuntimeOption::DisablePaddleTrtCollectShape() {
+  FDWARNING << "`RuntimeOption::DisablePaddleTrtCollectShape` will be removed "
+               "in v1.2.0, please modify its member variable directly, e.g "
+               "runtime_option.paddle_infer_option.collect_trt_shape = false`."
+            << std::endl;
+  paddle_infer_option.collect_trt_shape = false;
+}
 
 void RuntimeOption::DisablePaddleTrtOPs(const std::vector<std::string>& ops) {
-  trt_disabled_ops_.insert(trt_disabled_ops_.end(), ops.begin(), ops.end());
+  FDWARNING << "`RuntimeOption::DisablePaddleTrtOps` will be removed in "
+               "v.1.20, please use "
+               "`runtime_option.paddle_infer_option.DisableTrtOps` instead."
+            << std::endl;
+  paddle_infer_option.DisableTrtOps(ops);
 }
 
 void RuntimeOption::UseIpu(int device_num, int micro_batch_size,
@@ -419,10 +461,11 @@ void RuntimeOption::UseIpu(int device_num, int micro_batch_size,
 void RuntimeOption::SetIpuConfig(bool enable_fp16, int replica_num,
                                  float available_memory_proportion,
                                  bool enable_half_partial) {
-  ipu_enable_fp16 = enable_fp16;
-  ipu_replica_num = replica_num;
-  ipu_available_memory_proportion = available_memory_proportion;
-  ipu_enable_half_partial = enable_half_partial;
+  paddle_infer_option.ipu_option.ipu_enable_fp16 = enable_fp16;
+  paddle_infer_option.ipu_option.ipu_replica_num = replica_num;
+  paddle_infer_option.ipu_option.ipu_available_memory_proportion =
+      available_memory_proportion;
+  paddle_infer_option.ipu_option.ipu_enable_half_partial = enable_half_partial;
 }
 
 }  // namespace fastdeploy
