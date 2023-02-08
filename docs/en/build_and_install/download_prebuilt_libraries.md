@@ -105,6 +105,7 @@ Install the released version（Android is 1.0.3 pre-release）
 | :--- | :--- | :---- |
 | Android Java SDK | [fastdeploy-android-sdk-1.0.3.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-1.0.3.aar) | NDK 20, minSdkVersion 15, targetSdkVersion 28 |  
 | Android Java SDK | [fastdeploy-android-sdk-with-text-1.0.3.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-with-text-1.0.3.aar) | contains Text API, such as FastTokenizer and UI, NDK 20, minSdkVersion 15, targetSdkVersion 28 |
+| Android Java SDK | [fastdeploy-android-sdk-with-text-only-1.0.3.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-with-text-only-1.0.3.aar) | only contains Text API, such as FastTokenizer and UI, NDK 20, minSdkVersion 15, targetSdkVersion 28 |
 
 Install the Develop version（Nightly build）
 
@@ -116,6 +117,8 @@ Install the Develop version（Nightly build）
 | Mac OSX arm64 | [fastdeploy-osx-arm64-0.0.0.tgz](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-osx-arm64-0.0.0.tgz) | clang++ 13.0.0 to compile |
 | Linux aarch64 | - | - |  
 | Android armv7&v8 | [fastdeploy-android-0.0.0-shared.tgz](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-0.0.0-shared.tgz) | NDK 25, clang++, support arm64-v8a and armeabi-v7a |  
-| Android armv7&v8 | [fastdeploy-android-with-text-0.0.0-shared.tgz](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-with-text-0.0.0-shared.tgz) | contains Text API, such as FastTokenizer and UIE，NDK 25, clang++, support arm64-v8a and armeabi-v7a |  
+| Android armv7&v8 | [fastdeploy-android-with-text-0.0.0-shared.tgz](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-with-text-0.0.0-shared.tgz) | contains Text API, such as FastTokenizer and UIE，NDK 25, clang++, support arm64-v8a and armeabi-v7a |
+| Android armv7&v8 | [fastdeploy-android-with-text-only-0.0.0-shared.tgz](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-with-text-only-0.0.0-shared.tgz) | only contains Text API, such as FastTokenizer and UIE，NDK 25, clang++, support arm64-v8a and armeabi-v7a |
 | Android Java SDK | [fastdeploy-android-sdk-0.0.0.aar](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-sdk-0.0.0.aar) | NDK 20, minSdkVersion 15, targetSdkVersion 28 |  
 | Android Java SDK | [fastdeploy-android-sdk-with-text-0.0.0.aar](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-sdk-with-text-0.0.0.aar) | contains Text API, such as FastTokenizer and UI, NDK 20, minSdkVersion 15, targetSdkVersion 28 |
+| Android Java SDK | [fastdeploy-android-sdk-with-text-only-0.0.0.aar](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-sdk-with-text-only-0.0.0.aar) | only contains Text API, such as FastTokenizer and UI, NDK 20, minSdkVersion 15, targetSdkVersion 28 |

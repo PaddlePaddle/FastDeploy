@@ -112,5 +112,7 @@ Develop版本（Nightly build）
 | Linux aarch64 | - | - |  
 | Android armv7&v8 | [fastdeploy-android-0.0.0-shared.tgz](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-0.0.0-shared.tgz) | NDK 25及clang++编译产出, 支持arm64-v8a及armeabi-v7a |  
 | Android armv7&v8 | [fastdeploy-android-with-text-0.0.0-shared.tgz](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-with-text-0.0.0-shared.tgz) | 包含FastTokenizer、UIE等Text API，NDK 25及clang++编译产出, 支持arm64-v8a及armeabi-v7a |  
+| Android armv7&v8 | [fastdeploy-android-with-text-only-0.0.0-shared.tgz](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-with-text-only-0.0.0-shared.tgz) | 仅包含FastTokenizer、UIE等Text API，NDK 25及clang++编译产出, 支持arm64-v8a及armeabi-v7a |
 | Android Java SDK | [fastdeploy-android-sdk-0.0.0.aar](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-sdk-0.0.0.aar) | NDK 20 编译产出, minSdkVersion 15, targetSdkVersion 28 |  
 | Android Java SDK | [fastdeploy-android-sdk-with-text-0.0.0.aar](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-sdk-with-text-0.0.0.aar) | 包含FastTokenizer、UIE等Text API，NDK 20 编译产出, minSdkVersion 15, targetSdkVersion 28 |
+| Android Java SDK | [fastdeploy-android-sdk-with-text-only-0.0.0.aar](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-sdk-with-text-only-0.0.0.aar) | 仅包含FastTokenizer、UIE等Text API，NDK 20 编译产出, minSdkVersion 15, targetSdkVersion 28 |
