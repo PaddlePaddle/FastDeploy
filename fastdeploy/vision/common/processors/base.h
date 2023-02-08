@@ -16,6 +16,7 @@
 
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/processors/mat.h"
+#include "fastdeploy/vision/common/processors/mat_batch.h"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include <unordered_map>
@@ -46,46 +47,63 @@ class FASTDEPLOY_DECL Processor {
 
   virtual std::string Name() = 0;
 
-  virtual bool ImplByOpenCV(Mat* mat) {
+  virtual bool ImplByOpenCV(FDMat* mat) {
     FDERROR << Name() << " Not Implement Yet." << std::endl;
     return false;
   }
 
-  virtual bool ImplByFlyCV(Mat* mat) {
+  virtual bool ImplByOpenCV(FDMatBatch* mat_batch) {
+    for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+      if (ImplByOpenCV(&(*(mat_batch->mats))[i]) != true) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  virtual bool ImplByFlyCV(FDMat* mat) {
     return ImplByOpenCV(mat);
   }
 
-  virtual bool ImplByCuda(Mat* mat) {
+  virtual bool ImplByFlyCV(FDMatBatch* mat_batch) {
+    for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+      if (ImplByFlyCV(&(*(mat_batch->mats))[i]) != true) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  virtual bool ImplByCuda(FDMat* mat) {
     return ImplByOpenCV(mat);
   }
 
-  virtual bool ImplByCvCuda(Mat* mat) {
+  virtual bool ImplByCuda(FDMatBatch* mat_batch) {
+    for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+      if (ImplByCuda(&(*(mat_batch->mats))[i]) != true) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  virtual bool ImplByCvCuda(FDMat* mat) {
     return ImplByOpenCV(mat);
   }
 
-  virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
+  virtual bool ImplByCvCuda(FDMatBatch* mat_batch) {
+    for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+      if (ImplByCvCuda(&(*(mat_batch->mats))[i]) != true) {
+        return false;
+      }
+    }
+    return true;
+  }
 
- protected:
-  // Update and get the cached tensor from the cached_tensors_ map.
-  // The tensor is indexed by a string.
-  // If the tensor doesn't exists in the map, then create a new tensor.
-  // If the tensor exists and shape is getting larger, then realloc the buffer.
-  // If the tensor exists and shape is not getting larger, then return the
-  // cached tensor directly.
-  FDTensor* UpdateAndGetCachedTensor(
-      const std::vector<int64_t>& new_shape, const FDDataType& data_type,
-      const std::string& tensor_name, const Device& new_device = Device::CPU,
-      const bool& use_pinned_memory = false);
+  virtual bool operator()(FDMat* mat, ProcLib lib = ProcLib::DEFAULT);
 
-  // Create an input tensor on GPU and save into cached_tensors_.
-  // If the Mat is on GPU, return the mat->Tensor() directly.
-  // If the Mat is on CPU, then create a cached GPU tensor and copy the mat's
-  // CPU tensor to this new GPU tensor.
-  FDTensor* CreateCachedGpuInputTensor(Mat* mat,
-                                       const std::string& tensor_name);
-
- private:
-  std::unordered_map<std::string, FDTensor> cached_tensors_;
+  virtual bool operator()(FDMatBatch* mat_batch,
+                          ProcLib lib = ProcLib::DEFAULT);
 };
 
 }  // namespace vision
