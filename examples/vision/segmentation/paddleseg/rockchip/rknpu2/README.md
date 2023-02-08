@@ -53,7 +53,7 @@ RKNPU部署模型前需要将Paddle模型转换成RKNN模型，具体步骤如�
 
 上述步骤可参考以下具体示例
 
-## 模型转换example
+## 模型转换示例
 
 * [PP-HumanSeg](./pp_humanseg.md)
 
