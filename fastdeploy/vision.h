@@ -41,6 +41,7 @@
 #include "fastdeploy/vision/facedet/contrib/ultraface.h"
 #include "fastdeploy/vision/facedet/contrib/yolov5face.h"
 #include "fastdeploy/vision/facedet/contrib/yolov7face/yolov7face.h"
+#include "fastdeploy/vision/facedet/contrib/centerface/centerface.h"
 #include "fastdeploy/vision/facedet/ppdet/blazeface/blazeface.h"
 #include "fastdeploy/vision/faceid/contrib/insightface/model.h"
 #include "fastdeploy/vision/faceid/contrib/adaface/adaface.h"
