@@ -17,16 +17,6 @@
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy_capi/types_internal.h"
 
-namespace fastdeploy {
-std::unique_ptr<fastdeploy::RuntimeOption>&
-FD_C_CheckAndConvertRuntimeOptionWrapper(
-    FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper) {
-  FDASSERT(fd_c_runtime_option_wrapper != nullptr,
-           "The pointer of fd_c_runtime_option_wrapper shouldn't be nullptr.");
-  return fd_c_runtime_option_wrapper->runtime_option;
-}
-}  // namespace fastdeploy
-
 extern "C" {
 
 FD_C_RuntimeOptionWrapper* FD_C_CreateRuntimeOptionWrapper() {

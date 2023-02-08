@@ -17,25 +17,6 @@
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy_capi/types_internal.h"
 
-namespace fastdeploy {
-std::unique_ptr<fastdeploy::vision::ClassifyResult>&
-FD_C_CheckAndConvertClassifyResultWrapper(
-    FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper) {
-  FDASSERT(fd_c_classify_result_wrapper != nullptr,
-           "The pointer of fd_c_classify_result_wrapper shouldn't be nullptr.");
-  return fd_c_classify_result_wrapper->classify_result;
-}
-
-std::unique_ptr<fastdeploy::vision::DetectionResult>&
-FD_C_CheckAndConvertDetectionResultWrapper(
-    FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper) {
-  FDASSERT(
-      fd_c_detection_result_wrapper != nullptr,
-      "The pointer of fd_c_detection_result_wrapper shouldn't be nullptr.");
-  return fd_c_detection_result_wrapper->detection_result;
-}
-}  // namespace fastdeploy
-
 extern "C" {
 
 // Classification Results

@@ -16,17 +16,6 @@
 
 #include "fastdeploy_capi/types_internal.h"
 
-namespace fastdeploy {
-std::unique_ptr<fastdeploy::vision::classification::PaddleClasModel>&
-FD_C_CheckAndConvertPaddleClasModelWrapper(
-    FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper) {
-  FDASSERT(
-      fd_c_paddleclas_model_wrapper != nullptr,
-      "The pointer of fd_c_paddleclas_model_wrapper shouldn't be nullptr.");
-  return fd_c_paddleclas_model_wrapper->paddleclas_model;
-}
-}  // namespace fastdeploy
-
 extern "C" {
 
 FD_C_PaddleClasModelWrapper* FD_C_CreatePaddleClasModelWrapper(

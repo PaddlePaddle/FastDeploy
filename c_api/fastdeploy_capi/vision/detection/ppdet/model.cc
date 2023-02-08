@@ -17,15 +17,6 @@
 #include "fastdeploy_capi/types_internal.h"
 #include "fastdeploy_capi/vision/visualize.h"
 
-namespace fastdeploy {
-std::unique_ptr<fastdeploy::vision::detection::PPYOLOE>&
-FD_C_CheckAndConvertPPYOLOEWrapper(FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper) {
-  FDASSERT(fd_c_ppyoloe_wrapper != nullptr,
-           "The pointer of fd_c_ppyoloe_wrapper shouldn't be nullptr.");
-  return fd_c_ppyoloe_wrapper->ppyoloe_model;
-}
-}  // namespace fastdeploy
-
 extern "C" {
 
 FD_C_PPYOLOEWrapper* FD_C_CreatesPPYOLOEWrapper(
