@@ -159,7 +159,7 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_buffer,
     outputs_desc_[i].shape.assign(shape.begin(), shape.end());
     outputs_desc_[i].dtype = ReaderDataTypeToFD(reader.outputs[i].dtype);
   }
-  if (option.collect_shape) {
+  if (option.collect_trt_shape) {
     // Set the shape info file.
     std::string curr_model_dir = "./";
     if (!option.model_from_memory_) {
@@ -349,10 +349,13 @@ void PaddleBackend::CollectShapeRun(
     const std::map<std::string, std::vector<int>>& shape) const {
   auto input_names = predictor->GetInputNames();
   auto input_type = predictor->GetInputTypes();
-  for (auto name : input_names) {
+  for (const auto& name : input_names) {
     FDASSERT(shape.find(name) != shape.end() &&
                  input_type.find(name) != input_type.end(),
-             "Paddle Input name [%s] is not one of the trt dynamic shape.",
+             "When collect_trt_shape is true, please define max/opt/min shape "
+             "for model's input:[\"%s\"] by "
+             "(C++)RuntimeOption.trt_option.SetShape/"
+             "(Python)RuntimeOption.trt_option.set_shape.",
              name.c_str());
     auto tensor = predictor->GetInputHandle(name);
     auto shape_value = shape.at(name);

@@ -56,16 +56,12 @@ struct PaddleBackendOption {
   bool enable_trt = false;
 
   /*
-   * @brief TensorRT Option, this will configure the tensorrt engine, if enable_trt is true
-   */
-  TrtBackendOption trt_option;
-  /*
    * @brief IPU option, this will configure the IPU hardware, if inference model in IPU
    */
   IpuOption ipu_option;
 
   /// Collect shape for model while enabel_trt is true
-  bool collect_shape = false;
+  bool collect_trt_shape = false;
   /// Cache input shape for mkldnn while the input data will change dynamiclly
   int mkldnn_cache_size = -1;
   /// initialize memory size(MB) for GPU
@@ -81,6 +77,7 @@ struct PaddleBackendOption {
 
   // The belowing parameters may be removed, please do not
   // read or write them directly
+  TrtBackendOption trt_option;
   bool enable_pinned_memory = false;
   void* external_stream_ = nullptr;
   Device device = Device::CPU;

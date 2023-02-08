@@ -542,17 +542,17 @@ class RuntimeOption:
         """Enable collect subgraph shape information while using Paddle Inference with TensorRT
         """
         logging.warning(
-            "`RuntimeOption.enable_paddle_trt_collect_shape` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_infer_option.collect_shape = True` instead."
+            "`RuntimeOption.enable_paddle_trt_collect_shape` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_infer_option.collect_trt_shape = True` instead."
         )
-        self._option.paddle_infer_option.collect_shape = True
+        self._option.paddle_infer_option.collect_trt_shape = True
 
     def disable_paddle_trt_collect_shape(self):
         """Disable collect subgraph shape information while using Paddle Inference with TensorRT
         """
         logging.warning(
-            "`RuntimeOption.disable_paddle_trt_collect_shape` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_infer_option.collect_shape = False` instead."
+            "`RuntimeOption.disable_paddle_trt_collect_shape` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_infer_option.collect_trt_shape = False` instead."
         )
-        self._option.paddle_infer_option.collect_shape = False
+        self._option.paddle_infer_option.collect_trt_shape = False
 
     def delete_paddle_backend_pass(self, pass_name):
         """Delete pass by name in paddle backend

@@ -422,17 +422,17 @@ void RuntimeOption::SetOpenVINOStreams(int num_streams) {
 void RuntimeOption::EnablePaddleTrtCollectShape() {
   FDWARNING << "`RuntimeOption::EnablePaddleTrtCollectShape` will be removed "
                "in v1.2.0, please modify its member variable directly, e.g "
-               "runtime_option.paddle_infer_option.collect_shape = true`."
+               "runtime_option.paddle_infer_option.collect_trt_shape = true`."
             << std::endl;
-  paddle_infer_option.collect_shape = true;
+  paddle_infer_option.collect_trt_shape = true;
 }
 
 void RuntimeOption::DisablePaddleTrtCollectShape() {
   FDWARNING << "`RuntimeOption::DisablePaddleTrtCollectShape` will be removed "
                "in v1.2.0, please modify its member variable directly, e.g "
-               "runtime_option.paddle_infer_option.collect_shape = false`."
+               "runtime_option.paddle_infer_option.collect_trt_shape = false`."
             << std::endl;
-  paddle_infer_option.collect_shape = false;
+  paddle_infer_option.collect_trt_shape = false;
 }
 
 void RuntimeOption::DisablePaddleTrtOPs(const std::vector<std::string>& ops) {
