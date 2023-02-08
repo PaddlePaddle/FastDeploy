@@ -103,8 +103,8 @@ int main(int argc, char* argv[]) {
   if (FLAGS_collect_memory_info) {
     float cpu_mem = fastdeploy::benchmark::GetCpuMemoryUsage(cpu_mem_file_name);
     float gpu_mem = fastdeploy::benchmark::GetGpuMemoryUsage(gpu_mem_file_name);
-    std::cout << "cpu_rss_mb: " << cpu_mem << "MB." << std::endl;
-    std::cout << "gpu_rss_mb: " << gpu_mem << "MB." << std::endl;
+    std::cout << "cpu_pss_mb: " << cpu_mem << "MB." << std::endl;
+    std::cout << "gpu_pss_mb: " << gpu_mem << "MB." << std::endl;
   }
   return 0;
 }
