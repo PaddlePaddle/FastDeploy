@@ -425,7 +425,9 @@ endif(ENABLE_PADDLE2ONNX)
 
 if(WITH_CAPI)
   include(${PROJECT_SOURCE_DIR}/c_api/CMakeLists.txt)
+  if(MSVC)
   add_definitions(-DFD_CAPI)
+  endif()
 endif()
 
 

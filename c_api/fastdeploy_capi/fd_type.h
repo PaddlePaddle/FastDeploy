@@ -19,49 +19,49 @@
 
 #include "fastdeploy_capi/fd_common.h"  // NOLINT
 
-typedef struct FD_OneDimArrayUint8 {
+typedef struct FD_C_OneDimArrayUint8 {
   size_t size;
   uint8_t* data;
-} FD_OneDimArrayUint8;  // std::vector<int32_t>
+} FD_C_OneDimArrayUint8;  // std::vector<int32_t>
 
-typedef struct FD_OneDimArrayInt32 {
+typedef struct FD_C_OneDimArrayInt32 {
   size_t size;
   int32_t* data;
-} FD_OneDimArrayInt32;  // std::vector<int32_t>
+} FD_C_OneDimArrayInt32;  // std::vector<int32_t>
 
-typedef struct FD_OneDimArraySize {
+typedef struct FD_C_OneDimArraySize {
   size_t size;
   size_t* data;
-} FD_OneDimArraySize;  // std::vector<size_t>
+} FD_C_OneDimArraySize;  // std::vector<size_t>
 
-typedef struct FD_OneDimArrayInt64 {
+typedef struct FD_C_OneDimArrayInt64 {
   size_t size;
   int64_t* data;
-} FD_OneDimArrayInt64;  // std::vector<int64_t>
+} FD_C_OneDimArrayInt64;  // std::vector<int64_t>
 
-typedef struct FD_OneDimArrayFloat {
+typedef struct FD_C_OneDimArrayFloat {
   size_t size;
   float* data;
-} FD_OneDimArrayFloat;  // std::vector<float>
+} FD_C_OneDimArrayFloat;  // std::vector<float>
 
-typedef struct FD_Cstr {
+typedef struct FD_C_Cstr {
   size_t size;
   char* data;
-} FD_Cstr;  // std::string
+} FD_C_Cstr;  // std::string
 
-typedef struct FD_OneDimArrayCstr {
+typedef struct FD_C_OneDimArrayCstr {
   size_t size;
-  FD_Cstr* data;
-} FD_OneDimArrayCstr;  // std::vector<std::string>
+  FD_C_Cstr* data;
+} FD_C_OneDimArrayCstr;  // std::vector<std::string>
 
-typedef struct FD_TwoDimArraySize {
+typedef struct FD_C_TwoDimArraySize {
   size_t size;
-  FD_OneDimArraySize* data;
-} FD_TwoDimArraySize;  // std::vector<std::vector<size_t>>
+  FD_C_OneDimArraySize* data;
+} FD_C_TwoDimArraySize;  // std::vector<std::vector<size_t>>
 
-typedef struct FD_TwoDimArrayFloat {
+typedef struct FD_C_TwoDimArrayFloat {
   size_t size;
-  FD_OneDimArrayFloat* data;
-} FD_TwoDimArrayFloat;  // std::vector<std::vector<float>>
+  FD_C_OneDimArrayFloat* data;
+} FD_C_TwoDimArrayFloat;  // std::vector<std::vector<float>>
 
-typedef void FD_Mat;
+typedef void* FD_C_Mat;

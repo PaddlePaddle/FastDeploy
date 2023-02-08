@@ -19,12 +19,14 @@
 
 extern "C" {
 
-FD_Mat* FD_VisDetection(FD_Mat* im, FD_DetectionResult* fd_detection_result,
-                        float score_threshold, int line_size, float font_size) {
-  FD_DetectionResultWrapper* fd_detection_result_wrapper =
-      FD_CreateDetectionResultWrapperFromData(fd_detection_result);
+FD_C_Mat FD_C_VisDetection(FD_C_Mat im,
+                           FD_C_DetectionResult* fd_c_detection_result,
+                           float score_threshold, int line_size,
+                           float font_size) {
+  FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper =
+      FD_C_CreateDetectionResultWrapperFromData(fd_c_detection_result);
   auto& detection_result = CHECK_AND_CONVERT_FD_TYPE(
-      DetectionResultWrapper, fd_detection_result_wrapper);
+      DetectionResultWrapper, fd_c_detection_result_wrapper);
   cv::Mat result = fastdeploy::vision::Visualize::VisDetection(
       *(reinterpret_cast<cv::Mat*>(im)), *detection_result, score_threshold,
       line_size, font_size);

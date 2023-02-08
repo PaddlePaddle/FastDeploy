@@ -16,38 +16,47 @@
 
 #include <memory>
 #include "fastdeploy_capi/fd_type.h"
-#include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/runtime/runtime_option.h"
+
+#ifdef ENABLE_VISION
+#include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/classification/ppcls/model.h"
 #include "fastdeploy/vision/detection/ppdet/model.h"
 
-typedef struct FD_RuntimeOptionWrapper {
-  std::unique_ptr<fastdeploy::RuntimeOption> runtime_option;
-} FD_RuntimeOptionWrapper;
-
-
-typedef struct FD_ClassifyResultWrapper {
+typedef struct FD_C_ClassifyResultWrapper {
   std::unique_ptr<fastdeploy::vision::ClassifyResult> classify_result;
-} FD_ClassifyResultWrapper;
+} FD_C_ClassifyResultWrapper;
 
-typedef struct FD_DetectionResultWrapper {
+typedef struct FD_C_DetectionResultWrapper {
   std::unique_ptr<fastdeploy::vision::DetectionResult> detection_result;
-} FD_DetectionResultWrapper;
+} FD_C_DetectionResultWrapper;
 
-typedef struct FD_PaddleClasModelWrapper {
+typedef struct FD_C_PaddleClasModelWrapper {
   std::unique_ptr<fastdeploy::vision::classification::PaddleClasModel> paddleclas_model;
-} FD_PaddleClasModelWrapper;
+} FD_C_PaddleClasModelWrapper;
 
-typedef struct FD_PPYOLOEWrapper {
+typedef struct FD_C_PPYOLOEWrapper {
   std::unique_ptr<fastdeploy::vision::detection::PPYOLOE> ppyoloe_model;
-} FD_PPYOLOEWrapper;
+} FD_C_PPYOLOEWrapper;
 
 namespace fastdeploy{
-std::unique_ptr<fastdeploy::RuntimeOption>& CheckAndConvertFD_RuntimeOptionWrapper(FD_RuntimeOptionWrapper* fd_runtime_option_wrapper);
-std::unique_ptr<fastdeploy::vision::ClassifyResult>& CheckAndConvertFD_ClassifyResultWrapper(FD_ClassifyResultWrapper* fd_classify_result_wrapper);
-std::unique_ptr<fastdeploy::vision::DetectionResult>& CheckAndConvertFD_DetectionResultWrapper(FD_DetectionResultWrapper* fd_detection_result_wrapper);
-std::unique_ptr<fastdeploy::vision::classification::PaddleClasModel>& CheckAndConvertFD_PaddleClasModelWrapper(FD_PaddleClasModelWrapper* fd_paddleclas_model_wrapper);
-std::unique_ptr<fastdeploy::vision::detection::PPYOLOE>& CheckAndConvertFD_PPYOLOEWrapper(FD_PPYOLOEWrapper* fd_ppyoloe_wrapper);
+std::unique_ptr<fastdeploy::vision::ClassifyResult>& FD_C_CheckAndConvertClassifyResultWrapper(FD_C_ClassifyResultWrapper* fd_classify_result_wrapper);
+std::unique_ptr<fastdeploy::vision::DetectionResult>& FD_C_CheckAndConvertDetectionResultWrapper(FD_C_DetectionResultWrapper* fd_detection_result_wrapper);
+std::unique_ptr<fastdeploy::vision::classification::PaddleClasModel>& FD_C_CheckAndConvertPaddleClasModelWrapper(FD_C_PaddleClasModelWrapper* fd_paddleclas_model_wrapper);
+std::unique_ptr<fastdeploy::vision::detection::PPYOLOE>& FD_C_CheckAndConvertPPYOLOEWrapper(FD_C_PPYOLOEWrapper* fd_ppyoloe_wrapper);
 }
 
-#define CHECK_AND_CONVERT_FD_TYPE(TYPENAME, variable_name)  fastdeploy::CheckAndConvertFD_##TYPENAME(variable_name)
+#endif
+
+
+typedef struct FD_C_RuntimeOptionWrapper {
+  std::unique_ptr<fastdeploy::RuntimeOption> runtime_option;
+} FD_C_RuntimeOptionWrapper;
+
+namespace fastdeploy{
+  std::unique_ptr<fastdeploy::RuntimeOption>& FD_C_CheckAndConvertRuntimeOptionWrapper(FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper);
+}
+
+
+
+#define CHECK_AND_CONVERT_FD_TYPE(TYPENAME, variable_name)  fastdeploy::FD_C_CheckAndConvert##TYPENAME(variable_name)

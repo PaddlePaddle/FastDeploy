@@ -1,4 +1,4 @@
-// Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,15 +55,15 @@
 #define __fd_keep
 #endif
 
-typedef int8_t FD_Bool;
+typedef int8_t FD_C_Bool;
 #define TRUE 1
 #define FALSE 0
 
-#define PD_ENUM(type)   \
+#define FD_ENUM(type)   \
   typedef int32_t type; \
   enum
 
-PD_ENUM(FD_ModelFormat){
+FD_ENUM(FD_C_ModelFormat){
   AUTOREC,      ///< Auto recognize the model format by model file name
   PADDLE,       ///< Model with paddlepaddle format
   ONNX,         ///< Model with ONNX format
@@ -72,13 +72,13 @@ PD_ENUM(FD_ModelFormat){
   SOPHGO,       ///< Model with SOPHGO format
   };
 
-PD_ENUM(FD_rknpu2_CpuName){
+FD_ENUM(FD_C_rknpu2_CpuName){
   RK356X = 0, /* run on RK356X. */
   RK3588 = 1, /* default,run on RK3588. */
   UNDEFINED,
   };
 
-PD_ENUM(FD_rknpu2_CoreMask){
+FD_ENUM(FD_C_rknpu2_CoreMask){
   RKNN_NPU_CORE_AUTO = 0,  //< default, run on NPU core randomly.
   RKNN_NPU_CORE_0 = 1,    //< run on NPU core 0.
   RKNN_NPU_CORE_1 = 2,    //< run on NPU core 1.
@@ -90,7 +90,7 @@ PD_ENUM(FD_rknpu2_CoreMask){
   RKNN_NPU_CORE_UNDEFINED,
 };
 
-PD_ENUM(FD_LitePowerMode){
+FD_ENUM(FD_C_LitePowerMode){
   LITE_POWER_HIGH = 0,       ///< Use Lite Backend with high power mode
   LITE_POWER_LOW = 1,        ///< Use Lite Backend with low power mode
   LITE_POWER_FULL = 2,       ///< Use Lite Backend with full power mode

@@ -18,46 +18,47 @@
 
 namespace fastdeploy {
 std::unique_ptr<fastdeploy::vision::classification::PaddleClasModel>&
-CheckAndConvertFD_PaddleClasModelWrapper(
-    FD_PaddleClasModelWrapper* fd_paddleclas_model_wrapper) {
-  FDASSERT(fd_paddleclas_model_wrapper != nullptr,
-           "The pointer of fd_paddleclas_model_wrapper shouldn't be nullptr.");
-  return fd_paddleclas_model_wrapper->paddleclas_model;
+FD_C_CheckAndConvertPaddleClasModelWrapper(
+    FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper) {
+  FDASSERT(
+      fd_c_paddleclas_model_wrapper != nullptr,
+      "The pointer of fd_c_paddleclas_model_wrapper shouldn't be nullptr.");
+  return fd_c_paddleclas_model_wrapper->paddleclas_model;
 }
 }  // namespace fastdeploy
 
 extern "C" {
 
-FD_PaddleClasModelWrapper* FD_CreatePaddleClasModelWrapper(
+FD_C_PaddleClasModelWrapper* FD_C_CreatePaddleClasModelWrapper(
     const char* model_file, const char* params_file, const char* config_file,
-    FD_RuntimeOptionWrapper* fd_runtime_option_wrapper,
-    const FD_ModelFormat model_format) {
+    FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
+    const FD_C_ModelFormat model_format) {
   auto& runtime_option = CHECK_AND_CONVERT_FD_TYPE(RuntimeOptionWrapper,
-                                                   fd_runtime_option_wrapper);
-  FD_PaddleClasModelWrapper* fd_paddleclas_model_wrapper =
-      new FD_PaddleClasModelWrapper();
-  fd_paddleclas_model_wrapper->paddleclas_model =
+                                                   fd_c_runtime_option_wrapper);
+  FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper =
+      new FD_C_PaddleClasModelWrapper();
+  fd_c_paddleclas_model_wrapper->paddleclas_model =
       std::unique_ptr<fastdeploy::vision::classification::PaddleClasModel>(
           new fastdeploy::vision::classification::PaddleClasModel(
               std::string(model_file), std::string(params_file),
               std::string(config_file), *runtime_option,
               static_cast<fastdeploy::ModelFormat>(model_format)));
-  return fd_paddleclas_model_wrapper;
+  return fd_c_paddleclas_model_wrapper;
 }
 
-void FD_DestroyPaddleClasModelWrapper(
-    __fd_take FD_PaddleClasModelWrapper* fd_paddleclas_model_wrapper) {
-  delete fd_paddleclas_model_wrapper;
+void FD_C_DestroyPaddleClasModelWrapper(
+    __fd_take FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper) {
+  delete fd_c_paddleclas_model_wrapper;
 }
 
-FD_Bool FD_PaddleClasModelWrapperPredict(
-    __fd_take FD_PaddleClasModelWrapper* fd_paddleclas_model_wrapper,
-    FD_Mat* img, FD_ClassifyResultWrapper* fd_classify_result_wrapper) {
+FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
+    __fd_take FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper,
+    FD_C_Mat img, FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper) {
   cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
   auto& paddleclas_model = CHECK_AND_CONVERT_FD_TYPE(
-      PaddleClasModelWrapper, fd_paddleclas_model_wrapper);
-  auto& classify_result = CHECK_AND_CONVERT_FD_TYPE(ClassifyResultWrapper,
-                                                    fd_classify_result_wrapper);
+      PaddleClasModelWrapper, fd_c_paddleclas_model_wrapper);
+  auto& classify_result = CHECK_AND_CONVERT_FD_TYPE(
+      ClassifyResultWrapper, fd_c_classify_result_wrapper);
   return paddleclas_model->Predict(im, classify_result.get());
 }
 }

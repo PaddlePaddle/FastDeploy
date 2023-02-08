@@ -19,43 +19,44 @@
 
 namespace fastdeploy {
 std::unique_ptr<fastdeploy::vision::detection::PPYOLOE>&
-CheckAndConvertFD_PPYOLOEWrapper(FD_PPYOLOEWrapper* fd_ppyoloe_wrapper) {
-  FDASSERT(fd_ppyoloe_wrapper != nullptr,
-           "The pointer of fd_ppyoloe_wrapper shouldn't be nullptr.");
-  return fd_ppyoloe_wrapper->ppyoloe_model;
+FD_C_CheckAndConvertPPYOLOEWrapper(FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper) {
+  FDASSERT(fd_c_ppyoloe_wrapper != nullptr,
+           "The pointer of fd_c_ppyoloe_wrapper shouldn't be nullptr.");
+  return fd_c_ppyoloe_wrapper->ppyoloe_model;
 }
 }  // namespace fastdeploy
 
 extern "C" {
 
-FD_PPYOLOEWrapper* FD_CreatesPPYOLOEWrapper(
+FD_C_PPYOLOEWrapper* FD_C_CreatesPPYOLOEWrapper(
     const char* model_file, const char* params_file, const char* config_file,
-    FD_RuntimeOptionWrapper* fd_runtime_option_wrapper,
-    const FD_ModelFormat model_format) {
+    FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
+    const FD_C_ModelFormat model_format) {
   auto& runtime_option = CHECK_AND_CONVERT_FD_TYPE(RuntimeOptionWrapper,
-                                                   fd_runtime_option_wrapper);
-  FD_PPYOLOEWrapper* fd_ppyoloe_wrapper = new FD_PPYOLOEWrapper();
-  fd_ppyoloe_wrapper->ppyoloe_model =
+                                                   fd_c_runtime_option_wrapper);
+  FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper = new FD_C_PPYOLOEWrapper();
+  fd_c_ppyoloe_wrapper->ppyoloe_model =
       std::unique_ptr<fastdeploy::vision::detection::PPYOLOE>(
           new fastdeploy::vision::detection::PPYOLOE(
               std::string(model_file), std::string(params_file),
               std::string(config_file), *runtime_option,
               static_cast<fastdeploy::ModelFormat>(model_format)));
-  return fd_ppyoloe_wrapper;
+  return fd_c_ppyoloe_wrapper;
 }
 
-void FD_DestroyPPYOLOEWrapper(__fd_take FD_PPYOLOEWrapper* fd_ppyoloe_wrapper) {
-  delete fd_ppyoloe_wrapper;
+void FD_C_DestroyPPYOLOEWrapper(
+    __fd_take FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper) {
+  delete fd_c_ppyoloe_wrapper;
 }
 
-FD_Bool FD_PPYOLOEWrapperPredict(
-    FD_PPYOLOEWrapper* fd_ppyoloe_wrapper, FD_Mat* img,
-    FD_DetectionResultWrapper* fd_detection_result_wrapper) {
+FD_C_Bool FD_C_PPYOLOEWrapperPredict(
+    FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper, FD_C_Mat img,
+    FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper) {
   cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
   auto& ppyoloe_model =
-      CHECK_AND_CONVERT_FD_TYPE(PPYOLOEWrapper, fd_ppyoloe_wrapper);
+      CHECK_AND_CONVERT_FD_TYPE(PPYOLOEWrapper, fd_c_ppyoloe_wrapper);
   auto& detection_result = CHECK_AND_CONVERT_FD_TYPE(
-      DetectionResultWrapper, fd_detection_result_wrapper);
+      DetectionResultWrapper, fd_c_detection_result_wrapper);
   return ppyoloe_model->Predict(im, detection_result.get());
 }
 }

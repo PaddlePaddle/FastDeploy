@@ -15,6 +15,14 @@
 ##################################### Building: FastDeploy C API #######################################
 message("----start--CAPI-------")
 
+if(NOT WITH_CAPI)
+  return()
+endif()
+
 file(GLOB_RECURSE DEPLOY_CAPI_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/c_api/fastdeploy_capi/*.cc)
+if(NOT ENABLE_VISION)
+    file(GLOB_RECURSE DEPLOY_VISION_CAPI_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/c_api/fastdeploy_capi/vision/*.cc)
+    list(REMOVE_ITEM DEPLOY_CAPI_SRCS ${DEPLOY_VISION_CAPI_SRCS})
+endif()
 list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_CAPI_SRCS})
 include_directories(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/c_api)
