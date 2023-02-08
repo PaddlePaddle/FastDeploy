@@ -92,10 +92,9 @@ __build_fastdeploy_android_shared() {
         -DENABLE_FLYCV=OFF \
         -DENABLE_TEXT=ON \
         -DENABLE_VISION=OFF \
-        -DBUILD_EXAMPLES=ON \
-        -DWITH_OPENCV_STATIC=OFF \
-        -DWITH_LITE_STATIC=OFF \
-        -DWITH_OPENMP=OFF \
+        -DBUILD_EXAMPLES=OFF \
+        -DWITH_LITE_STATIC=ON \
+        -DWITH_OPENMP=ON \
         -DCMAKE_INSTALL_PREFIX=${FASDEPLOY_INSTALL_DIR} \
         -Wno-dev ../../.. && make -j8 && make install
 
