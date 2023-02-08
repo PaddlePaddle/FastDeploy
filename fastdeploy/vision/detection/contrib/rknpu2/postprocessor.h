@@ -56,27 +56,28 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
   float GetNMSThreshold() const { return nms_threshold_; }
 
   /// Set height and weight
-  void SetHeightAndWeight(int& height, int& width) {
+  void SetHeightAndWeight(const int& height,const int& width) {
     height_ = height;
     width_ = width;
   }
 
   /// Set pad_hw_values
-  void SetPadHWValues(std::vector<std::vector<int>> pad_hw_values) {
+  void SetPadHWValues(const std::vector<std::vector<int>>& pad_hw_values) {
     pad_hw_values_ = pad_hw_values;
   }
 
   /// Set scale
-  void SetScale(std::vector<float> scale) { scale_ = scale; }
+  void SetScale(const std::vector<float>& scale) { scale_ = scale; }
 
   /// Set Anchor
-  void SetAnchor(std::vector<int> anchors, int anchor_per_branch) {
+  void SetAnchor(const std::vector<int>& anchors,
+                 const int& anchor_per_branch) {
     anchors_ = anchors;
     anchor_per_branch_ = anchor_per_branch;
   }
 
   /// Set the number of class
-  void SetClassNum(int num) {
+  void SetClassNum(const int& num) {
     obj_class_num_ = num;
     prob_box_size_ = obj_class_num_ + 5;
   }
