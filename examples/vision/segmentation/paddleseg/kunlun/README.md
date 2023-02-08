@@ -1,7 +1,5 @@
 # 使用FastDeploy部署PaddleSeg模型
 
-FastDeploy支持在NVIDIA GPU、X86 CPU、飞腾CPU、ARM CPU、Intel GPU(独立显卡/集成显卡)硬件上部署PaddleSeg模型
-
 ## 模型版本说明
 
 - [PaddleSeg develop](https://github.com/PaddlePaddle/PaddleSeg/tree/develop)
@@ -15,7 +13,7 @@ FastDeploy支持在NVIDIA GPU、X86 CPU、飞腾CPU、ARM CPU、Intel GPU(独立
 - [DeepLabV3系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/configs/deeplabv3/README.md)
 - [SegFormer系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/configs/segformer/README.md)
 
->>**注意**】如部署的为**PP-Matting**、**PP-HumanMatting**以及**ModNet**请参考[Matting模型部署](../../matting/)
+>>**注意** 若需要在华为昇腾上部署**PP-Matting**、**PP-HumanMatting**请从[Matting模型部署](../../ppmating/)下载对应模型，部署过程与此文档一致
 
 ## 准备PaddleSeg部署模型
 PaddleSeg模型导出，请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export_cn.md)  
@@ -23,7 +21,7 @@ PaddleSeg模型导出，请参考其文档说明[模型导出](https://github.co
 **注意**
 - PaddleSeg导出的模型包含`model.pdmodel`、`model.pdiparams`和`deploy.yaml`三个文件，FastDeploy会从yaml文件中获取模型在推理时需要的预处理信息
 
-## 下载预训练模型
+## 预导出的推理模型
 
 为了方便开发者的测试，下面提供了PaddleSeg导出的部分模型
 - without-argmax导出方式为：**不指定**`--input_shape`，**指定**`--output_op none`

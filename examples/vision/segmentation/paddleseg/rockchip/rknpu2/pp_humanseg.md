@@ -1,5 +1,5 @@
 [English](pp_humanseg_EN.md) | 简体中文
-# PPHumanSeg模型部署
+# PP-HumanSeg模型转换示例
 
 ## 转换模型
 下面以Portait-PP-HumanSegV2_Lite(肖像分割模型)为例子，教大家如何转换PaddleSeg模型到RKNN模型。

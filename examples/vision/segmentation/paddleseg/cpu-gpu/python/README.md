@@ -1,82 +1,45 @@
-English | [简体中文](README_CN.md)
-# PaddleSeg Python Deployment Example
+[English](README.md) | 简体中文
+# PaddleSeg Python部署示例
+本目录下提供`infer.py`快速完成PP-LiteSeg在CPU/GPU，以及GPU上通过Paddle-TensorRT加速部署的示例。执行如下脚本即可完成
 
-Before deployment, two steps require confirmation
+## 部署环境准备
 
-- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+在部署前，需确认软硬件环境，同时下载预编译python wheel 包，参考文档[FastDeploy预编译库安装](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install#FastDeploy预编译库安装)
 
-【Attention】For the deployment of  **PP-Matting**、**PP-HumanMatting** and **ModNet**, refer to [Matting Model Deployment](../../../matting)
+【注意】如你部署的为**PP-Matting**、**PP-HumanMatting**以及**ModNet**请参考[Matting模型部署](../../../ppmatting)
 
-This directory provides examples that `infer.py`  fast finishes the deployment of Unet on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
 ```bash
-# Download the deployment example code
+#下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd FastDeploy/examples/vision/segmentation/paddleseg/python
+cd FastDeploy/examples/vision/segmentation/paddleseg/cpu-gpu/python
 
-# Download Unet model files and test images
-wget https://bj.bcebos.com/paddlehub/fastdeploy/Unet_cityscapes_without_argmax_infer.tgz
-tar -xvf Unet_cityscapes_without_argmax_infer.tgz
+# 下载Unet模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.tgz
+tar -xvf PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.tgz
 wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 
-# CPU inference
-python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_demo.png --device cpu
-# GPU inference
-python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_demo.png --device gpu
-# TensorRT inference on GPU（Attention: It is somewhat time-consuming for the operation of model serialization when running TensorRT inference for the first time. Please be patient.）
-python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_demo.png --device gpu --use_trt True
-# kunlunxin XPU inference
-python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_demo.png --device kunlunxin
+# CPU推理
+python infer.py --model PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer --image cityscapes_demo.png --device cpu
+# GPU推理
+python infer.py --model PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer --image cityscapes_demo.png --device gpu
+# GPU上使用Paddle-TensorRT推理 （注意：Paddle-TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
+python infer.py --model PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer --image cityscapes_demo.png --device gpu --use_trt True
 ```
 
-The visualized result after running is as follows
+运行完成可视化结果如下图所示
 <div  align="center">  
 <img src="https://user-images.githubusercontent.com/16222477/191712880-91ae128d-247a-43e0-b1e3-cafae78431e0.jpg", width=512px, height=256px />
 </div>
 
-## PaddleSegModel Python Interface
+## 快速链接
+- [PaddleSeg python API文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/python/html/semantic_segmentation.html)
+- [FastDeploy部署PaddleSeg模型概览](..)
+- [PaddleSeg C++部署](../cpp)
 
-```python
-fd.vision.segmentation.PaddleSegModel(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
-```
-
-PaddleSeg model loading and initialization, among which model_file, params_file, and config_file are the Paddle inference files exported from the training model. Refer to [Model Export](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export_cn.md)  for more information
-
-**Parameter**
-
-> * **model_file**(str): Model file path
-> * **params_file**(str): Parameter file path
-> * **config_file**(str): Inference deployment configuration file
-> * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
-> * **model_format**(ModelFormat): Model format. Paddle format by default
-
-### predict function
-
-> ```python
-> PaddleSegModel.predict(input_image)
-> ```
->
-> Model prediction interface. Input images and output detection results.
->
-> **Parameter**
->
-> > * **input_image**(np.ndarray): Input data in HWC or BGR format
-
-> **Return**
->
-> > Return `fastdeploy.vision.SegmentationResult` structure. Refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for the description of the structure.
-
-### Class Member Variable
-#### Pre-processing Parameter
-Users can modify the following pre-processing parameters to their needs, which affects the final inference and deployment results
-
-> > * **is_vertical_screen**(bool): For PP-HumanSeg models, the input image is portrait with height greater than width by setting this parameter to `true`
-#### Post-processing Parameter
-> > * **apply_softmax**(bool): The `apply_softmax` parameter is not specified when the model is exported. Set this parameter to `true` to normalize the probability result (score_map) of the predicted output segmentation label (label_map) in softmax
-
-## Other Documents
-
-- [PaddleSeg Model Description](..)
-- [PaddleSeg C++ Deployment](../cpp)
-- [Model Prediction Results](../../../../../docs/api/vision_results/)
-- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
+## 常见问题
+- [如何将模型预测结果SegmentationResult转为numpy格式](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/vision_result_related_problems.md)
+- [如何切换模型推理后端引擎](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/how_to_change_backend.md)
+- [Intel GPU(独立显卡/集成显卡)的使用](https://github.com/PaddlePaddle/FastDeploy/blob/develop/tutorials/intel_gpu/README.md)
+- [编译CPU部署库](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install/cpu.md)
+- [编译GPU部署库](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install/gpu.md)
+- [编译Jetson部署库](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install/jetson.md)

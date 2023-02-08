@@ -10,7 +10,7 @@
 
 ## 部署步骤
 
-1. 目标检测 PaddleSeg Demo 位于 `fastdeploy/examples/vision/segmentation/paddleseg/android` 目录
+1. 目标检测 PaddleSeg Demo 位于 `path/to/paddleseg/android` 目录
 2. 用 Android Studio 打开 paddleseg/android 工程
 3. 手机连接电脑，打开 USB 调试和文件传输模式，并在 Android Studio 上连接自己的手机设备（手机需要开启允许从 USB 安装软件权限）
 
@@ -161,7 +161,7 @@ model.init(modelFile, paramFile, configFile, option);
 ## 替换 FastDeploy SDK和模型  
 替换FastDeploy预测库和模型的步骤非常简单。预测库所在的位置为 `app/libs/fastdeploy-android-sdk-xxx.aar`，其中 `xxx` 表示当前您使用的预测库版本号。模型所在的位置为，`app/src/main/assets/models/portrait_pp_humansegv2_lite_256x144_inference_model`。  
 - 替换FastDeploy Android SDK: 下载或编译最新的FastDeploy Android SDK，解压缩后放在 `app/libs` 目录下；详细配置文档可参考:  
-     - [在 Android 中使用 FastDeploy Java SDK](../../../../../java/android/)
+     - [在 Android 中使用 FastDeploy Java SDK](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android)
 
 - 替换PaddleSeg模型的步骤：  
   - 将您的PaddleSeg模型放在 `app/src/main/assets/models` 目录下；  

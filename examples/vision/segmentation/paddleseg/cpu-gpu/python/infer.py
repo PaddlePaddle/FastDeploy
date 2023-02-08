@@ -32,6 +32,10 @@ def build_option(args):
 
     if args.use_trt:
         option.use_trt_backend()
+        # If use original Tensorrt, not Paddle-TensorRT,
+        # comment the following two lines
+        option.enable_paddle_to_trt()
+        option.enable_paddle_trt_collect_shape()
         option.set_trt_input_shape("x", [1, 3, 256, 256], [1, 3, 1024, 1024],
                                    [1, 3, 2048, 2048])
     return option

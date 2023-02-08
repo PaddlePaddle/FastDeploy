@@ -19,7 +19,7 @@ For real-time portrait segmentation on Android, this demo has good ease of use a
 </p>
 
 > **Notes:**
->> If you encounter an NDK configuration error during importing, compiling or running the program, please open ` File > Project Structure > SDK Location` and change `Andriod SDK location` to your locally configured SDK path. 
+>> If you encounter an NDK configuration error during importing, compiling or running the program, please open ` File > Project Structure > SDK Location` and change `Andriod SDK location` to your locally configured SDK path.
 
 4. Click the Run button to automatically compile the APP and install it to your phone. (The process will automatically download the pre-compiled FastDeploy Android library and model files, internet connection required.)
 The success interface is as follows. Figure 1: Install APP on phone; Figure 2: The opening interface, it will automatically recognize the person in the picture and draw the mask; Figure 3: APP setting options, click setting in the upper right corner, and you can set different options.
@@ -159,11 +159,11 @@ model.init(modelFile, paramFile, configFile, option);
 For details, please refer to [SegmentationMainActivity](./app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/segmentation/SegmentationMainActivity.java).
 
 ##  Replace FastDeploy SDK and model  
- Steps to replace the FastDeploy prediction libraries and model are very simple. The location of the prediction library is `app/libs/fastdeploy-android-sdk-xxx.aar`, where `xxx` indicates the version of the prediction library you are currently using. The location of the model is, `app/src/main/assets/models/portrait_pp_humansegv2_lite_256x144_inference_model`. 
+ Steps to replace the FastDeploy prediction libraries and model are very simple. The location of the prediction library is `app/libs/fastdeploy-android-sdk-xxx.aar`, where `xxx` indicates the version of the prediction library you are currently using. The location of the model is, `app/src/main/assets/models/portrait_pp_humansegv2_lite_256x144_inference_model`.
 - Replace FastDeploy Android SDK: Download or compile the latest FastDeploy Android SDK, unzip it and put it in the `app/libs` directory. For details please refer to:
-     - [Use FastDeploy Java SDK on Android](../../../../../java/android/)
+     - [Use FastDeploy Java SDK on Android](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android)
 
-- Steps for replacing the PaddleSeg model.   
+- Steps for replacing the PaddleSeg model.  
   - Put your PaddleSeg model in `app/src/main/assets/models`;  
   - Modify the model path in `app/src/main/res/values/strings.xml`, such as:
 ```xml
@@ -173,5 +173,5 @@ For details, please refer to [SegmentationMainActivity](./app/src/main/java/com/
 
 ## Other Documenets
 If you are interested in more FastDeploy Java API documents and how to access the FastDeploy C++ API via JNI, you can refer to the following:
-- [Use FastDeploy Java SDK on Android](../../../../../java/android/)
-- [Use FastDeploy C++ SDK on Android](../../../../../docs/en/faq/use_cpp_sdk_on_android.md)  
+- [Use FastDeploy Java SDK on Android](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android)
+- [Use FastDeploy C++ SDK on Android](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/use_cpp_sdk_on_android.md)  
