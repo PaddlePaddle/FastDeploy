@@ -40,12 +40,12 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
            std::vector<DetectionResult>* results);
 
   /// Set nms_threshold, default 0.45
-  void SetNMSThreshold(const float& nms_threshold) {
+  void SetNMSThreshold(float nms_threshold) {
     nms_threshold_ = nms_threshold;
   }
 
   /// Set conf_threshold, default 0.25
-  void SetConfThreshold(const float& conf_threshold) {
+  void SetConfThreshold(float conf_threshold) {
     conf_threshold_ = conf_threshold;
   }
 
@@ -56,7 +56,7 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
   float GetNMSThreshold() const { return nms_threshold_; }
 
   /// Set height and weight
-  void SetHeightAndWeight(const int& height,const int& width) {
+  void SetHeightAndWeight(int height,int width) {
     height_ = height;
     width_ = width;
   }
@@ -70,14 +70,13 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
   void SetScale(const std::vector<float>& scale) { scale_ = scale; }
 
   /// Set Anchor
-  void SetAnchor(const std::vector<int>& anchors,
-                 const int& anchor_per_branch) {
+  void SetAnchor(const std::vector<int>& anchors, int anchor_per_branch) {
     anchors_ = anchors;
     anchor_per_branch_ = anchor_per_branch;
   }
 
   /// Set the number of class
-  void SetClassNum(const int& num) {
+  void SetClassNum(int num) {
     obj_class_num_ = num;
     prob_box_size_ = obj_class_num_ + 5;
   }
