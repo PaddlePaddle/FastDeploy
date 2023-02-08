@@ -8,7 +8,7 @@
 
 ## 前端部署PP-Humanseg v1模型
 
-PP-Humanseg v1模型web demo部署及使用参考[文档](../../../../application/js/web_demo/README.md)
+PP-Humanseg v1模型web demo部署及使用参考[文档](https://github.com/PaddlePaddle/FastDeploy/blob/develop/examples/application/js/README_CN.md)
 
 
 ## PP-Humanseg v1 js接口

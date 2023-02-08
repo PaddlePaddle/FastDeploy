@@ -3,7 +3,7 @@
 
 在部署前，需确认以下步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../../docs/cn/build_and_install/sophgo.md)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install/sophgo.md)
 
 本目录下提供`infer.py`快速完成 pp_liteseg 在SOPHGO TPU上部署的示例。执行如下脚本即可完成
 

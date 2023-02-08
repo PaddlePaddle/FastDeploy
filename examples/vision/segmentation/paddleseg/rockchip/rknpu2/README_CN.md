@@ -6,9 +6,28 @@
 - [PaddleSeg develop](https://github.com/PaddlePaddle/PaddleSeg/tree/develop)
 
 目前FastDeploy使用RKNPU2推理PPSeg支持如下模型的部署:
+- [U-Net系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/configs/unet/README.md)
+- [PP-LiteSeg系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/configs/pp_liteseg/README.md)
+- [PP-HumanSeg系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/contrib/PP-HumanSeg/README.md)
+- [FCN系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/configs/fcn/README.md)
+- [DeepLabV3系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/configs/deeplabv3/README.md)
 
-| 模型                                                                                                                                           | 参数文件大小 | 输入Shape  | mIoU   | mIoU (flip) | mIoU (ms+flip) |
-|:---------------------------------------------------------------------------------------------------------------------------------------------|:-------|:---------|:-------|:------------|:---------------|
+## 准备PaddleSeg部署模型
+PaddleSeg模型导出，请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export_cn.md)  
+
+**注意**
+- PaddleSeg导出的模型包含`model.pdmodel`、`model.pdiparams`和`deploy.yaml`三个文件，FastDeploy会从yaml文件中获取模型在推理时需要的预处理信息
+
+## 下载预训练模型
+
+为了方便开发者的测试，下面提供了PaddleSeg导出的部分模型
+- without-argmax导出方式为：**不指定**`--input_shape`，**指定**`--output_op none`
+- with-argmax导出方式为：**不指定**`--input_shape`，**指定**`--output_op argmax`
+
+开发者可直接下载使用。
+
+| 模型 | 参数文件大小 | 输入Shape  | mIoU   | mIoU (flip) | mIoU (ms+flip) |
+|:----------------|:-------|:---------|:-------|:------------|:---------------|
 | [Unet-cityscapes](https://bj.bcebos.com/paddlehub/fastdeploy/Unet_cityscapes_without_argmax_infer.tgz)                                       | 52MB   | 1024x512 | 65.00% | 66.02%      | 66.89%         |
 | [PP-LiteSeg-T(STDC1)-cityscapes](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer.tgz)          | 31MB   | 1024x512 | 77.04% | 77.73%      | 77.46%         |
 | [PP-HumanSegV1-Lite(通用人像分割模型)](https://bj.bcebos.com/paddlehub/fastdeploy/PP_HumanSegV1_Lite_infer.tgz)                                      | 543KB  | 192x192  | 86.2%  | -           | -              |
@@ -21,14 +40,16 @@
 
 ## 准备PaddleSeg部署模型以及转换模型
 RKNPU部署模型前需要将Paddle模型转换成RKNN模型，具体步骤如下:
-* Paddle动态图模型转换为ONNX模型，请参考[PaddleSeg模型导出说明](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/contrib/PP-HumanSeg)
-* ONNX模型转换RKNN模型的过程，请参考[转换文档](../../../../../docs/cn/faq/rknpu2/export.md)进行转换。
+* PaddleSeg训练模型导出为推理模型，请参考[PaddleSeg模型导出说明](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export_cn.md)，也可以使用上表中的FastDeploy的预导出模型
+* Paddle模型转换为ONNX模型，请参考[Paddle2ONNX](https://github.com/PaddlePaddle/Paddle2ONNX)
+* ONNX模型转换RKNN模型的过程，请参考[转换文档](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/rknpu2/export.md)进行转换。
+上述步骤可以可参考以下具体示例
 
 ## 模型转换example
 
 * [PPHumanSeg](./pp_humanseg.md)
 
 ## 详细部署文档
-- [RKNN总体部署教程](../../../../../docs/cn/faq/rknpu2/rknpu2.md)
+- [RKNN总体部署教程](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/rknpu2/rknpu2.md)
 - [C++部署](cpp)
 - [Python部署](python)

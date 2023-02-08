@@ -6,7 +6,7 @@ FastDeploy是一款全场景、易用灵活、极致高效的AI推理部署工�
 
 ## 详细文档
 
-- [NVIDIA GPU、X86 CPU、飞腾CPU、ARM CPU](cpu-gpu)
+- [NVIDIA GPU、X86 CPU、飞腾CPU、ARM CPU、Intel GPU(独立显卡/集成显卡)](cpu-gpu)
 - [昆仑](kunlun)
 - [升腾](ascend)
 - [瑞芯微](rockchip)

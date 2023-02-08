@@ -8,7 +8,7 @@
 1. 软硬件环境满足要求
 2. 根据开发环境，从头编译FastDeploy仓库
 
-以上步骤请参考[SOPHGO部署库编译](../../../../../../docs/cn/build_and_install/sophgo.md)实现
+以上步骤请参考[SOPHGO部署库编译](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install/sophgo.md)实现
 
 ## 生成基本目录文件
 
@@ -26,7 +26,7 @@
 
 ### 编译并拷贝SDK到thirdpartys文件夹
 
-请参考[SOPHGO部署库编译](../../../../../../docs/cn/build_and_install/sophgo.md)仓库编译SDK，编译完成后，将在build目录下生成fastdeploy-0.0.3目录.
+请参考[SOPHGO部署库编译](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install/sophgo.md)仓库编译SDK，编译完成后，将在build目录下生成fastdeploy-0.0.3目录.
 
 ### 拷贝模型文件，以及配置文件至model文件夹
 将Paddle模型转换为SOPHGO bmodel模型，转换步骤参考[文档](../README.md)  

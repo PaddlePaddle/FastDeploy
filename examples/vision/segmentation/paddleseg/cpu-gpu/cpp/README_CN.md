@@ -82,7 +82,7 @@ PaddleSegModel模型加载和初始化，其中model_file为导出的Paddle模�
 > **参数**
 >
 > > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 分割结果，包括分割预测的标签以及标签对应的概率值, SegmentationResult说明参考[SegmentationResult结构体介绍](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/segmentation_result_CN.md)
+> > * **result**: 分割结果，包括分割预测的标签以及标签对应的概率值, SegmentationResult结构体说明参考[SegmentationResult结构体介绍](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/segmentation_result_CN.md)
 
 ### 类成员属性
 #### 预处理参数

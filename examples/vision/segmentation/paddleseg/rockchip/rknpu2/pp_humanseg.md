@@ -2,7 +2,7 @@
 # PPHumanSeg模型部署
 
 ## 转换模型
-下面以Portait-PP-HumanSegV2_Lite(肖像分割模型)为例子，教大家如何转换PPSeg模型到RKNN模型。
+下面以Portait-PP-HumanSegV2_Lite(肖像分割模型)为例子，教大家如何转换PaddleSeg模型到RKNN模型。
 
 ```bash
 # 下载Paddle2ONNX仓库
