@@ -56,18 +56,39 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
   }
 }
 
-bool LiteBackend::InitFromPaddle(const std::string& model_file,
-                                 const std::string& params_file,
-                                 const LiteBackendOption& option) {
+bool LiteBackend::Init(const RuntimeOption& runtime_option) {
   if (initialized_) {
     FDERROR << "LiteBackend is already initialized, cannot initialize again."
             << std::endl;
     return false;
   }
 
-  config_.set_model_file(model_file);
-  config_.set_param_file(params_file);
-  BuildOption(option);
+  if (runtime_option.model_format != ModelFormat::PADDLE) {
+    FDERROR
+        << "PaddleLiteBackend only supports model format PADDLE, but now it's "
+        << runtime_option.model_format << "." << std::endl;
+    return false;
+  }
+  if (runtime_option.device != Device::CPU &&
+      runtime_option.device != Device::KUNLUNXIN &&
+      runtime_option.device != Device::ASCEND &&
+      runtime_option.device != Device::TIMVX) {
+    FDERROR << "PaddleLiteBackend only supports "
+               "Device::CPU/Device::TIMVX/Device::KUNLUNXIN/Device::ASCEND, "
+               "but now it's "
+            << runtime_option.device << "." << std::endl;
+    return false;
+  }
+  if (runtime_option.model_from_memory_) {
+    FDERROR << "PaddleLiteBackend doesn't support load model from memory, "
+               "please load model from disk."
+            << std::endl;
+    return false;
+  }
+
+  config_.set_model_file(runtime_option.model_file);
+  config_.set_param_file(runtime_option.params_file);
+  BuildOption(runtime_option.paddle_lite_option);
   predictor_ =
       paddle::lite_api::CreatePaddlePredictor<paddle::lite_api::CxxConfig>(
           config_);
@@ -177,7 +198,7 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
       FDASSERT(false, "Unexpected data type of %d.", inputs[i].dtype);
     }
   }
-  
+
   RUNTIME_PROFILE_LOOP_BEGIN(1)
   predictor_->Run();
   RUNTIME_PROFILE_LOOP_END
