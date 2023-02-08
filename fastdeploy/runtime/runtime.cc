@@ -385,18 +385,8 @@ void Runtime::CreateRKNPU2Backend() {
 
 void Runtime::CreateSophgoNPUBackend() {
 #ifdef ENABLE_SOPHGO_BACKEND
-  auto sophgo_option = SophgoBackendOption();
-  FDASSERT(option.model_from_memory_ == false,
-           "SophgoBackend don't support to load model from memory");
-  FDASSERT(option.device == Device::SOPHGOTPUD,
-           "Backend::SOPHGO only supports Device::SOPHGO");
-  FDASSERT(option.model_format == ModelFormat::SOPHGO,
-           "SophgoBackend only support model format of ModelFormat::SOPHGO");
-  auto sophgo_option = SophgoBackendOption();
   backend_ = utils::make_unique<SophgoBackend>();
-  auto casted_backend = dynamic_cast<SophgoBackend*>(backend_.get());
-  FDASSERT(casted_backend->InitFromSophgo(option.model_file, sophgo_option),
-           "Load model from nb file failed while initializing LiteBackend.");
+  FDASSERT(backend_->Init(option), "Failed to initialize Sophgo backend.");
 #else
   FDASSERT(false,
            "SophgoBackend is not available, please compiled with "
