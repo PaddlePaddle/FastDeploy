@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include "fastdeploy_capi/fd_type.h"
 #include "fastdeploy_capi/fd_common.h"
-#include "fastdeploy_capi/vision/result.h"
+#include "fastdeploy_capi/fd_type.h"
 #include "fastdeploy_capi/runtime_option.h"
+#include "fastdeploy_capi/vision/result.h"
 
 typedef struct FD_C_PaddleClasModelWrapper FD_C_PaddleClasModelWrapper;
 
@@ -36,17 +36,19 @@ extern "C" {
  * \return Return a pointer to FD_C_PaddleClasModelWrapper object
  */
 
-FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_PaddleClasModelWrapper* FD_C_CreatePaddleClasModelWrapper(const char* model_file, const char* params_file,
-                                                                                    const char* config_file,
-                                                                                    FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
-                                                                                    const FD_C_ModelFormat model_format);
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_PaddleClasModelWrapper*
+FD_C_CreatePaddleClasModelWrapper(
+    const char* model_file, const char* params_file, const char* config_file,
+    FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
+    const FD_C_ModelFormat model_format);
 
 /** \brief Destroy a FD_C_PaddleClasModelWrapper object
  *
  * \param[in] fd_c_paddleclas_model_wrapper pointer to FD_C_PaddleClasModelWrapper object
  */
 
-FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroyPaddleClasModelWrapper(__fd_take FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper);
+FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroyPaddleClasModelWrapper(
+    __fd_take FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper);
 
 /** \brief Predict the classification result for an input image
  *
@@ -55,8 +57,9 @@ FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroyPaddleClasModelWrapper(__fd_take 
  * \param[in] fd_c_classify_result_wrapper pointer to FD_C_PaddleClasModelWrapper object, which stores the result.
  */
 
-FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PaddleClasModelWrapperPredict(__fd_take FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper,
-                                    FD_C_Mat img, FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper);
+FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
+    __fd_take FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper,
+    FD_C_Mat img, FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper);
 
 #ifdef __cplusplus
 }  // extern "C"

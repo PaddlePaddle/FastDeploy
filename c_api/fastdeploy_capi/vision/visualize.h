@@ -18,7 +18,6 @@
 #include "fastdeploy_capi/fd_type.h"
 #include "fastdeploy_capi/vision/result.h"
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -28,9 +27,9 @@ extern "C" {
  * \return Return a pointer to cv::Mat object
  */
 
-FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat FD_C_VisDetection(FD_C_Mat im, FD_C_DetectionResult* fd_detection_result, float score_threshold, int line_size,
-                                float font_size);
-
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat
+FD_C_VisDetection(FD_C_Mat im, FD_C_DetectionResult* fd_detection_result,
+                  float score_threshold, int line_size, float font_size);
 
 #ifdef __cplusplus
 }  // extern "C"

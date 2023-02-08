@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include "fastdeploy_capi/fd_type.h"
 #include "fastdeploy_capi/fd_common.h"
-#include "fastdeploy_capi/vision/result.h"
+#include "fastdeploy_capi/fd_type.h"
 #include "fastdeploy_capi/runtime_option.h"
+#include "fastdeploy_capi/vision/result.h"
 
 typedef struct FD_C_PPYOLOEWrapper FD_C_PPYOLOEWrapper;
 typedef struct FD_C_RuntimeOptionWrapper FD_C_RuntimeOptionWrapper;
@@ -37,17 +37,19 @@ extern "C" {
  * \return Return a pointer to FD_C_PPYOLOEWrapper object
  */
 
-FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_PPYOLOEWrapper* FD_C_CreatesPPYOLOEWrapper(const char* model_file, const char* params_file,
-                                                                                    const char* config_file,
-                                                                                    FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
-                                                                                    const FD_C_ModelFormat model_format);
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_PPYOLOEWrapper*
+FD_C_CreatesPPYOLOEWrapper(
+    const char* model_file, const char* params_file, const char* config_file,
+    FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
+    const FD_C_ModelFormat model_format);
 
 /** \brief Destroy a FD_C_PPYOLOEWrapper object
  *
  * \param[in] fd_c_ppyoloe_wrapper pointer to FD_C_PPYOLOEWrapper object
  */
 
-FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroyPPYOLOEWrapper(__fd_take FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper);
+FASTDEPLOY_CAPI_EXPORT extern void
+FD_C_DestroyPPYOLOEWrapper(__fd_take FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper);
 
 /** \brief Predict the detection result for an input image
  *
@@ -56,8 +58,9 @@ FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroyPPYOLOEWrapper(__fd_take FD_C_PPY
  * \param[in] fd_c_detection_result_wrapper pointer to FD_C_DetectionResultWrapper object, which stores the result.
  */
 
-FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PPYOLOEWrapperPredict(__fd_take FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper,
-                                    FD_C_Mat img, FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper);
+FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PPYOLOEWrapperPredict(
+    __fd_take FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper, FD_C_Mat img,
+    FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper);
 
 #ifdef __cplusplus
 }  // extern "C"
