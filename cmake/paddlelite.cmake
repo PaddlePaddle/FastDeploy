@@ -21,7 +21,7 @@ set(PADDLELITE_SOURCE_DIR
     ${THIRD_PARTY_PATH}/${PADDLELITE_FILENAME}/src/${PADDLELITE_PROJECT})
 set(PADDLELITE_INSTALL_DIR ${THIRD_PARTY_PATH}/install/${PADDLELITE_FILENAME})  
 set(PADDLELITE_INC_DIR
-    "${PADDLELITE_INSTALL_DIR}/cxx/include"
+    "${PADDLELITE_INSTALL_DIR}/include"
     CACHE PATH "paddlelite include directory." FORCE)
 if(ANDROID)    
   set(PADDLELITE_LIB_DIR
@@ -29,7 +29,7 @@ if(ANDROID)
       CACHE PATH "paddlelite lib directory." FORCE)
 else()
   set(PADDLELITE_LIB_DIR
-  "${PADDLELITE_INSTALL_DIR}/cxx/lib/"
+  "${PADDLELITE_INSTALL_DIR}/lib/"
   CACHE PATH "paddlelite lib directory." FORCE)
 endif()    
 set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" "${PADDLELITE_LIB_DIR}")
@@ -105,14 +105,14 @@ else()
     UPDATE_COMMAND ""
     INSTALL_COMMAND
       ${CMAKE_COMMAND} -E remove_directory ${PADDLELITE_INSTALL_DIR} &&
-      ${CMAKE_COMMAND} -E make_directory ${PADDLELITE_INSTALL_DIR}/cxx/lib &&
-      ${CMAKE_COMMAND} -E rename ${PADDLELITE_SOURCE_DIR}/cxx/lib ${PADDLELITE_INSTALL_DIR}/cxx/lib &&
-      ${CMAKE_COMMAND} -E copy_directory ${PADDLELITE_SOURCE_DIR}/cxx/include ${PADDLELITE_INC_DIR}
+      ${CMAKE_COMMAND} -E make_directory ${PADDLELITE_INSTALL_DIR} &&
+      ${CMAKE_COMMAND} -E rename ${PADDLELITE_SOURCE_DIR}/lib/ ${PADDLELITE_INSTALL_DIR}/lib &&
+      ${CMAKE_COMMAND} -E copy_directory ${PADDLELITE_SOURCE_DIR}/include ${PADDLELITE_INC_DIR}
     BUILD_BYPRODUCTS ${PADDLELITE_LIB})
 endif()  
 
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND BUILD_FASTDEPLOY_PYTHON)
-  add_custom_target(patchelf_paddle_lite ALL COMMAND  bash -c "PATCHELF_EXE=${PATCHELF_EXE} python ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_lite.py ${PADDLELITE_INSTALL_DIR}/cxx/lib/" DEPENDS ${LIBRARY_NAME})
+  add_custom_target(patchelf_paddle_lite ALL COMMAND  bash -c "PATCHELF_EXE=${PATCHELF_EXE} python ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_lite.py ${PADDLELITE_INSTALL_DIR}/lib/" DEPENDS ${LIBRARY_NAME})
 endif()
 
 add_library(external_paddle_lite STATIC IMPORTED GLOBAL)
