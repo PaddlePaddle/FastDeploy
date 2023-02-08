@@ -1,31 +1,31 @@
-English | [简体中文](README_CN.md)
-# PaddleSeg Deployment Examples for C++
+[English](README.md) | 简体中文
+# PaddleSeg C++部署示例
 
-This directory demonstrates the deployment of PaddleSeg series models on RKNPU2. The following deployment process takes PHumanSeg as an example.
+本目录下用于展示PaddleSeg系列模型在RKNPU2上的部署，以下的部署过程以PPHumanSeg为例子。
 
-Before deployment, the following two steps need to be confirmed:
+在部署前，需确认以下两个步骤:
 
-1. Hardware and software environment meets the requirements.
-2. Download the pre-compiled deployment repository or compile the FastDeploy repository from scratch according to the development environment.
+1. 软硬件环境满足要求
+2. 根据开发环境，下载预编译部署库或者从头编译FastDeploy仓库
 
-For the above steps, please refer to [How to Build RKNPU2 Deployment Environment](../../../../../../docs/en/build_and_install/rknpu2.md).
+以上步骤请参考[RK2代NPU部署库编译](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/rknpu2/rknpu2.md)实现
 
-## Generate Basic Directory Files
+## 生成基本目录文件
 
-The routine consists of the following parts:
+该例程由以下几个部分组成
 ```text
 .
 ├── CMakeLists.txt
-├── build  # Compile Folder
-├── image  # Folder for images
+├── build  # 编译文件夹
+├── image  # 存放图片的文件夹
 ├── infer_cpu_npu.cc
 ├── infer_cpu_npu.h
 ├── main.cc
-├── model  # Folder for models
-└── thirdpartys  # Folder for sdk
+├── model  # 存放模型文件的文件夹
+└── thirdpartys  # 存放sdk的文件夹
 ```
 
-First, please build a directory structure
+首先需要先生成目录结构
 ```bash
 mkdir build
 mkdir images
@@ -33,23 +33,23 @@ mkdir model
 mkdir thirdpartys
 ```
 
-## Compile
+## 编译
 
-### Compile and Copy SDK to folder thirdpartys
+### 编译并拷贝SDK到thirdpartys文件夹
 
-Please refer to [How to Build RKNPU2 Deployment Environment](../../../../../../docs/en/build_and_install/rknpu2.md) to compile SDK.After compiling, the fastdeploy-0.0.3 directory will be created in the build directory, please move it to the thirdpartys directory.
+请参考[RK2代NPU部署库编译](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/rknpu2/rknpu2.md)仓库编译SDK，编译完成后，将在build目录下生成fastdeploy-x-x-x目录，请移动它至thirdpartys目录下.
 
-### Copy model and configuration files to folder Model
-In the process of Paddle dynamic map model -> Paddle static map model -> ONNX mdoel, ONNX file and the corresponding yaml configuration file will be generated. Please move the configuration file to the folder model.
-After converting to RKNN, the model file also needs to be copied to folder model. Run the following command to download and use (the model file is RK3588. RK3568 needs to be [reconverted to PPSeg RKNN model](../README.md)).
+### 拷贝模型文件，以及配置文件至model文件夹
+在Paddle动态图模型 -> Paddle静态图模型 -> ONNX模型的过程中，将生成ONNX文件以及对应的yaml配置文件，请将配置文件存放到model文件夹内。
+转换为RKNN后的模型文件也需要拷贝至model，输入以下命令下载使用(模型文件为RK3588，RK3568需要重新[转换PPSeg RKNN模型](../README.md))。
 
-### Prepare Test Images to folder image
+### 准备测试图片至image文件夹
 ```bash
 wget https://paddleseg.bj.bcebos.com/dygraph/pp_humanseg_v2/images.zip
 unzip -qo images.zip
 ```
 
-### Compile example
+### 编译example
 
 ```bash
 cd build
@@ -58,16 +58,19 @@ make -j8
 make install
 ```
 
-## Running Routines
+## 运行例程
 
 ```bash
 cd ./build/install
 ./rknpu_test model/Portrait_PP_HumanSegV2_Lite_256x144_infer/ images/portrait_heng.jpg
 ```
 
-## Notes
-The input requirement for the model on RKNPU is to use NHWC format, and image normalization will be embedded into the model when converting the RKNN model, so we need to call DisableNormalizeAndPermute(C++) or disable_normalize_and_permute(Python) first when deploying with FastDeploy to disable normalization and data format conversion in the preprocessing stage.
+## 注意事项
+RKNPU上对模型的输入要求是使用NHWC格式，且图片归一化操作会在转RKNN模型时，内嵌到模型中，因此我们在使用FastDeploy部署时，需要先调用DisableNormalizeAndPermute(C++)或`disable_normalize_and_permute(Python)，在预处理阶段禁用归一化以及数据格式的转换
 
-- [Model Description](../../)
-- [Python Deployment](../python)
-- [Convert PPSeg and RKNN model](../README.md)
+## 快速链接
+- [FastDeploy部署PaddleSeg模型概览](../../)
+- [Python部署](../python)
+- [转换PPSeg RKNN模型文档](../README.md)
+- [PaddleSeg C++ API文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/cpp/html/namespacefastdeploy_1_1vision_1_1segmentation.html)
+)
