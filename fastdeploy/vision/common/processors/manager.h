@@ -16,6 +16,7 @@
 
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/processors/mat.h"
+#include "fastdeploy/vision/common/processors/mat_batch.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -24,13 +25,25 @@ class FASTDEPLOY_DECL ProcessorManager {
  public:
   ~ProcessorManager();
 
+  /** \brief Use CUDA to boost the performance of processors
+   *
+   * \param[in] enable_cv_cuda ture: use CV-CUDA, false: use CUDA only
+   * \param[in] gpu_id GPU device id
+   * \return true if the preprocess successed, otherwise false
+   */
   void UseCuda(bool enable_cv_cuda = false, int gpu_id = -1);
 
   bool CudaUsed();
 
-  void SetStream(Mat* mat) {
+  void SetStream(FDMat* mat) {
 #ifdef WITH_GPU
     mat->SetStream(stream_);
+#endif
+  }
+
+  void SetStream(FDMatBatch* mat_batch) {
+#ifdef WITH_GPU
+    mat_batch->SetStream(stream_);
 #endif
   }
 
@@ -51,13 +64,13 @@ class FASTDEPLOY_DECL ProcessorManager {
    */
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
 
-  /** \brief The body of Run() function which needs to be implemented by a derived class
+  /** \brief Apply() is the body of Run() function, it needs to be implemented by a derived class
    *
-   * \param[in] images The input image data list, all the elements are returned by cv::imread()
+   * \param[in] image_batch The input image batch
    * \param[in] outputs The output tensors which will feed in runtime
    * \return true if the preprocess successed, otherwise false
    */
-  virtual bool Apply(std::vector<FDMat>* images,
+  virtual bool Apply(FDMatBatch* image_batch,
                      std::vector<FDTensor>* outputs) = 0;
 
  protected:
@@ -68,6 +81,11 @@ class FASTDEPLOY_DECL ProcessorManager {
   cudaStream_t stream_ = nullptr;
 #endif
   int device_id_ = -1;
+
+  std::vector<FDTensor> input_caches_;
+  std::vector<FDTensor> output_caches_;
+  FDTensor batch_input_cache_;
+  FDTensor batch_output_cache_;
 };
 
 }  // namespace vision

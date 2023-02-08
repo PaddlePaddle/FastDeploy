@@ -51,7 +51,6 @@ if __name__ == '__main__':
     option.use_poros_backend()
     option.set_model_path(
         "std_resnet50_script.pt", model_format=ModelFormat.TORCHSCRIPT)
-    option.is_dynamic = True
     # compile
     runtime = fd.Runtime(option)
     runtime.compile(prewarm_datas)

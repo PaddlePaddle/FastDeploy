@@ -285,12 +285,7 @@ if __name__ == '__main__':
 
     gpu_id = args.device_id
     enable_collect_memory_info = args.enable_collect_memory_info
-    enable_record_time_of_backend = args.enable_record_time_of_backend
-    backend_repeat = args.backend_repeat
     dump_result = dict()
-    end2end_statis = list()
-    prepost_statis = list()
-    h2d_d2h_statis = list()
     cpu_mem = list()
     gpu_mem = list()
     gpu_util = list()

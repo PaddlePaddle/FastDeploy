@@ -18,63 +18,110 @@
 namespace fastdeploy {
 namespace vision {
 
-__global__ void NormalizeAndPermuteKernel(uint8_t* src, float* dst,
+__global__ void NormalizeAndPermuteKernel(const uint8_t* src, float* dst,
                                           const float* alpha, const float* beta,
                                           int num_channel, bool swap_rb,
-                                          int edge) {
+                                          int batch_size, int edge) {
   int idx = blockDim.x * blockIdx.x + threadIdx.x;
   if (idx >= edge) return;
 
-  if (swap_rb) {
-    uint8_t tmp = src[num_channel * idx];
-    src[num_channel * idx] = src[num_channel * idx + 2];
-    src[num_channel * idx + 2] = tmp;
-  }
+  int img_size = edge / batch_size;
+  int n = idx / img_size;        // batch index
+  int p = idx - (n * img_size);  // pixel index within the image
 
   for (int i = 0; i < num_channel; ++i) {
-    dst[idx + edge * i] = src[num_channel * idx + i] * alpha[i] + beta[i];
+    int j = i;
+    if (swap_rb) {
+      j = 2 - i;
+    }
+    dst[n * img_size * num_channel + i * img_size + p] =
+        src[num_channel * idx + j] * alpha[i] + beta[i];
   }
 }
 
-bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
+bool NormalizeAndPermute::ImplByCuda(FDMat* mat) {
   // Prepare input tensor
-  std::string tensor_name = Name() + "_cvcuda_src";
-  FDTensor* src = CreateCachedGpuInputTensor(mat, tensor_name);
+  FDTensor* src = CreateCachedGpuInputTensor(mat);
 
   // Prepare output tensor
-  tensor_name = Name() + "_dst";
-  FDTensor* dst = UpdateAndGetCachedTensor(src->Shape(), FDDataType::FP32,
-                                           tensor_name, Device::GPU);
+  mat->output_cache->Resize(src->Shape(), FDDataType::FP32, "output_cache",
+                            Device::GPU);
 
   // Copy alpha and beta to GPU
-  tensor_name = Name() + "_alpha";
-  FDMat alpha_mat =
-      FDMat::Create(1, 1, alpha_.size(), FDDataType::FP32, alpha_.data());
-  FDTensor* alpha = CreateCachedGpuInputTensor(&alpha_mat, tensor_name);
+  gpu_alpha_.Resize({1, 1, static_cast<int>(alpha_.size())}, FDDataType::FP32,
+                    "alpha", Device::GPU);
+  cudaMemcpy(gpu_alpha_.Data(), alpha_.data(), gpu_alpha_.Nbytes(),
+             cudaMemcpyHostToDevice);
 
-  tensor_name = Name() + "_beta";
-  FDMat beta_mat =
-      FDMat::Create(1, 1, beta_.size(), FDDataType::FP32, beta_.data());
-  FDTensor* beta = CreateCachedGpuInputTensor(&beta_mat, tensor_name);
+  gpu_beta_.Resize({1, 1, static_cast<int>(beta_.size())}, FDDataType::FP32,
+                   "beta", Device::GPU);
+  cudaMemcpy(gpu_beta_.Data(), beta_.data(), gpu_beta_.Nbytes(),
+             cudaMemcpyHostToDevice);
 
-  int jobs = mat->Width() * mat->Height();
+  int jobs = 1 * mat->Width() * mat->Height();
   int threads = 256;
   int blocks = ceil(jobs / (float)threads);
   NormalizeAndPermuteKernel<<<blocks, threads, 0, mat->Stream()>>>(
       reinterpret_cast<uint8_t*>(src->Data()),
-      reinterpret_cast<float*>(dst->Data()),
-      reinterpret_cast<float*>(alpha->Data()),
-      reinterpret_cast<float*>(beta->Data()), mat->Channels(), swap_rb_, jobs);
+      reinterpret_cast<float*>(mat->output_cache->Data()),
+      reinterpret_cast<float*>(gpu_alpha_.Data()),
+      reinterpret_cast<float*>(gpu_beta_.Data()), mat->Channels(), swap_rb_, 1,
+      jobs);
 
-  mat->SetTensor(dst);
+  mat->SetTensor(mat->output_cache);
   mat->device = Device::GPU;
   mat->layout = Layout::CHW;
   mat->mat_type = ProcLib::CUDA;
   return true;
 }
 
+bool NormalizeAndPermute::ImplByCuda(FDMatBatch* mat_batch) {
+  // Prepare input tensor
+  FDTensor* src = CreateCachedGpuInputTensor(mat_batch);
+
+  // Prepare output tensor
+  mat_batch->output_cache->Resize(src->Shape(), FDDataType::FP32,
+                                  "output_cache", Device::GPU);
+  // NHWC -> NCHW
+  std::swap(mat_batch->output_cache->shape[1],
+            mat_batch->output_cache->shape[3]);
+
+  // Copy alpha and beta to GPU
+  gpu_alpha_.Resize({1, 1, static_cast<int>(alpha_.size())}, FDDataType::FP32,
+                    "alpha", Device::GPU);
+  cudaMemcpy(gpu_alpha_.Data(), alpha_.data(), gpu_alpha_.Nbytes(),
+             cudaMemcpyHostToDevice);
+
+  gpu_beta_.Resize({1, 1, static_cast<int>(beta_.size())}, FDDataType::FP32,
+                   "beta", Device::GPU);
+  cudaMemcpy(gpu_beta_.Data(), beta_.data(), gpu_beta_.Nbytes(),
+             cudaMemcpyHostToDevice);
+
+  int jobs =
+      mat_batch->output_cache->Numel() / mat_batch->output_cache->shape[1];
+  int threads = 256;
+  int blocks = ceil(jobs / (float)threads);
+  NormalizeAndPermuteKernel<<<blocks, threads, 0, mat_batch->Stream()>>>(
+      reinterpret_cast<uint8_t*>(src->Data()),
+      reinterpret_cast<float*>(mat_batch->output_cache->Data()),
+      reinterpret_cast<float*>(gpu_alpha_.Data()),
+      reinterpret_cast<float*>(gpu_beta_.Data()),
+      mat_batch->output_cache->shape[1], swap_rb_,
+      mat_batch->output_cache->shape[0], jobs);
+
+  mat_batch->SetTensor(mat_batch->output_cache);
+  mat_batch->device = Device::GPU;
+  mat_batch->layout = FDMatBatchLayout::NCHW;
+  mat_batch->mat_type = ProcLib::CUDA;
+  return true;
+}
+
 #ifdef ENABLE_CVCUDA
-bool NormalizeAndPermute::ImplByCvCuda(Mat* mat) { return ImplByCuda(mat); }
+bool NormalizeAndPermute::ImplByCvCuda(FDMat* mat) { return ImplByCuda(mat); }
+
+bool NormalizeAndPermute::ImplByCvCuda(FDMatBatch* mat_batch) {
+  return ImplByCuda(mat_batch);
+}
 #endif
 
 }  // namespace vision

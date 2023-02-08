@@ -23,9 +23,13 @@
 #include <set>
 namespace fastdeploy {
 
+/*! @brief Option object to configure OpenVINO backend
+ */
 struct OpenVINOBackendOption {
   std::string device = "CPU";
   int cpu_thread_num = -1;
+
+  /// Number of streams while use OpenVINO
   int num_streams = 0;
 
   /**

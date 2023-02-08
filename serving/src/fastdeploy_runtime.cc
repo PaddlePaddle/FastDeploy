@@ -168,7 +168,10 @@ TRITONSERVER_Error* ModelState::Create(TRITONBACKEND_Model* triton_model,
 }
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
-    : BackendModel(triton_model), model_load_(false), main_runtime_(nullptr), is_clone_(true) {
+    : BackendModel(triton_model),
+      model_load_(false),
+      main_runtime_(nullptr),
+      is_clone_(true) {
   // Create runtime options that will be cloned and used for each
   // instance when creating that instance's runtime.
   runtime_options_.reset(new fastdeploy::RuntimeOption());
@@ -227,14 +230,14 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                   ParseBoolValue(value_string, &pd_enable_mkldnn));
               runtime_options_->SetPaddleMKLDNN(pd_enable_mkldnn);
             } else if (param_key == "use_paddle_log") {
-                runtime_options_->EnablePaddleLogInfo();
+              runtime_options_->EnablePaddleLogInfo();
             } else if (param_key == "num_streams") {
-                int num_streams;
-                THROW_IF_BACKEND_MODEL_ERROR(
+              int num_streams;
+              THROW_IF_BACKEND_MODEL_ERROR(
                   ParseIntValue(value_string, &num_streams));
-                runtime_options_->SetOpenVINOStreams(num_streams);
+              runtime_options_->openvino_option.num_streams = num_streams;
             } else if (param_key == "is_clone") {
-                THROW_IF_BACKEND_MODEL_ERROR(
+              THROW_IF_BACKEND_MODEL_ERROR(
                   ParseBoolValue(value_string, &is_clone_));
             } else if (param_key == "use_ipu") {
               // runtime_options_->UseIpu();
@@ -271,11 +274,11 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
               std::vector<int32_t> shape;
               FDParseShape(params, input_name, &shape);
               if (name == "min_shape") {
-                runtime_options_->trt_min_shape[input_name] = shape;
+                runtime_options_->trt_option.min_shape[input_name] = shape;
               } else if (name == "max_shape") {
-                runtime_options_->trt_max_shape[input_name] = shape;
+                runtime_options_->trt_option.max_shape[input_name] = shape;
               } else {
-                runtime_options_->trt_opt_shape[input_name] = shape;
+                runtime_options_->trt_option.opt_shape[input_name] = shape;
               }
             }
           }
@@ -292,12 +295,10 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 std::transform(value_string.begin(), value_string.end(),
                                value_string.begin(), ::tolower);
                 if (value_string == "trt_fp16") {
-                  runtime_options_->EnableTrtFP16();
-                } else if (value_string == "trt_int8") {
-                  // TODO(liqi): use EnableTrtINT8
-                  runtime_options_->trt_enable_int8 = true;
+                  runtime_options_->trt_option.enable_fp16 = true;
                 } else if (value_string == "pd_fp16") {
-                  // TODO(liqi): paddle inference don't currently have interface for fp16.
+                  // TODO(liqi): paddle inference don't currently have interface
+                  // for fp16.
                 }
                 // } else if( param_key == "max_batch_size") {
                 //   THROW_IF_BACKEND_MODEL_ERROR(ParseUnsignedLongLongValue(
@@ -307,15 +308,15 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 //       value_string,
                 //       &runtime_options_->trt_max_workspace_size));
               } else if (param_key == "cache_file") {
-                runtime_options_->SetTrtCacheFile(value_string);
+                runtime_options_->trt_option.serialize_file = value_string;
               } else if (param_key == "use_paddle") {
                 runtime_options_->EnablePaddleToTrt();
               } else if (param_key == "use_paddle_log") {
                 runtime_options_->EnablePaddleLogInfo();
               } else if (param_key == "is_clone") {
                 THROW_IF_BACKEND_MODEL_ERROR(
-                  ParseBoolValue(value_string, &is_clone_));
-              } 
+                    ParseBoolValue(value_string, &is_clone_));
+              }
             }
           }
         }
@@ -330,17 +331,17 @@ TRITONSERVER_Error* ModelState::LoadModel(
     const int32_t instance_group_device_id, std::string* model_path,
     std::string* params_path, fastdeploy::Runtime** runtime,
     cudaStream_t stream) {
-  
   // FastDeploy Runtime creation is not thread-safe, so multiple creations
   // are serialized with a global lock.
   // The Clone interface can be invoked only when the main_runtime_ is created.
   static std::mutex global_context_mu;
   std::lock_guard<std::mutex> glock(global_context_mu);
 
-  if(model_load_ && is_clone_) {
-    if(main_runtime_ == nullptr) {
-      return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_NOT_FOUND,
-                                  std::string("main_runtime is nullptr").c_str());
+  if (model_load_ && is_clone_) {
+    if (main_runtime_ == nullptr) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_NOT_FOUND,
+          std::string("main_runtime is nullptr").c_str());
     }
     *runtime = main_runtime_->Clone((void*)stream, instance_group_device_id);
   } else {
@@ -367,21 +368,21 @@ TRITONSERVER_Error* ModelState::LoadModel(
         if (not exists) {
           return TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_NOT_FOUND,
-              std::string("Paddle params should be named as 'model.pdiparams' or "
-                          "not provided.'")
+              std::string(
+                  "Paddle params should be named as 'model.pdiparams' or "
+                  "not provided.'")
                   .c_str());
         }
-        runtime_options_->model_format = fastdeploy::ModelFormat::PADDLE;
-        runtime_options_->model_file = *model_path;
-        runtime_options_->params_file = *params_path;
+        runtime_options_->SetModelPath(*model_path, *params_path,
+                                       fastdeploy::ModelFormat::PADDLE);
       } else {
-        runtime_options_->model_format = fastdeploy::ModelFormat::ONNX;
-        runtime_options_->model_file = *model_path;
+        runtime_options_->SetModelPath(*model_path, "",
+                                       fastdeploy::ModelFormat::ONNX);
       }
     }
 
     // GPU
-  #ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_GPU
     if ((instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
         (instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
       runtime_options_->UseGpu(instance_group_device_id);
@@ -389,17 +390,17 @@ TRITONSERVER_Error* ModelState::LoadModel(
     } else if (runtime_options_->device != fastdeploy::Device::IPU) {
       runtime_options_->UseCpu();
     }
-  #else
+#else
     if (runtime_options_->device != fastdeploy::Device::IPU) {
       // If Device is set to IPU, just skip CPU setting.
       runtime_options_->UseCpu();
     }
-  #endif  // TRITON_ENABLE_GPU
+#endif  // TRITON_ENABLE_GPU
 
     *runtime = main_runtime_ = new fastdeploy::Runtime();
     if (!(*runtime)->Init(*runtime_options_)) {
       return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_NOT_FOUND,
-                                  std::string("Runtime init error").c_str());
+                                   std::string("Runtime init error").c_str());
     }
     model_load_ = true;
   }
@@ -942,8 +943,8 @@ void ModelInstanceState::ProcessRequests(TRITONBACKEND_Request** requests,
 
   if (!all_response_failed) {
     FD_RESPOND_ALL_AND_SET_TRUE_IF_ERROR(responses, request_count,
-                                      all_response_failed,
-                                      Run(&responses, request_count));
+                                         all_response_failed,
+                                         Run(&responses, request_count));
   }
 
   uint64_t compute_end_ns = 0;
@@ -1067,17 +1068,16 @@ TRITONSERVER_Error* ModelInstanceState::SetInputTensors(
         allowed_input_types;
     if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
       allowed_input_types = {{TRITONSERVER_MEMORY_GPU, DeviceId()},
-                              {TRITONSERVER_MEMORY_CPU_PINNED, 0},
-                              {TRITONSERVER_MEMORY_CPU, 0}};
+                             {TRITONSERVER_MEMORY_CPU_PINNED, 0},
+                             {TRITONSERVER_MEMORY_CPU, 0}};
     } else {
       allowed_input_types = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
-                              {TRITONSERVER_MEMORY_CPU, 0}};
+                             {TRITONSERVER_MEMORY_CPU, 0}};
     }
 
-    RETURN_IF_ERROR(
-        collector->ProcessTensor(
-            input_name, nullptr, 0, allowed_input_types, &input_buffer,
-            &batchn_byte_size, &memory_type, &memory_type_id));
+    RETURN_IF_ERROR(collector->ProcessTensor(
+        input_name, nullptr, 0, allowed_input_types, &input_buffer,
+        &batchn_byte_size, &memory_type, &memory_type_id));
 
     int32_t device_id = -1;
     fastdeploy::Device device;
@@ -1089,9 +1089,9 @@ TRITONSERVER_Error* ModelInstanceState::SetInputTensors(
     }
 
     fastdeploy::FDTensor fdtensor(in_name);
-    fdtensor.SetExternalData(
-      batchn_shape, ConvertDataTypeToFD(input_datatype),
-      const_cast<char*>(input_buffer), device, device_id);
+    fdtensor.SetExternalData(batchn_shape, ConvertDataTypeToFD(input_datatype),
+                             const_cast<char*>(input_buffer), device,
+                             device_id);
     runtime_->BindInputTensor(in_name, fdtensor);
   }
 
@@ -1130,23 +1130,22 @@ TRITONSERVER_Error* ModelInstanceState::ReadOutputTensors(
   for (auto& output_name : output_names_) {
     auto* output_tensor = runtime_->GetOutputTensor(output_name);
     if (output_tensor == nullptr) {
-        RETURN_IF_ERROR(
-            TRITONSERVER_ErrorNew(
-                TRITONSERVER_ERROR_INTERNAL,
-                (std::string("output tensor '") + output_name + "' is not found")
-                    .c_str()));
+      RETURN_IF_ERROR(TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INTERNAL,
+          (std::string("output tensor '") + output_name + "' is not found")
+              .c_str()));
     }
     TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
     int64_t memory_type_id = 0;
-    if(output_tensor->device == fastdeploy::Device::GPU) {
+    if (output_tensor->device == fastdeploy::Device::GPU) {
       memory_type = TRITONSERVER_MEMORY_GPU;
       memory_type_id = DeviceId();
     }
     responder.ProcessTensor(
         output_tensor->name, ConvertFDType(output_tensor->dtype),
         output_tensor->shape,
-        reinterpret_cast<char*>(output_tensor->MutableData()),
-        memory_type, memory_type_id);
+        reinterpret_cast<char*>(output_tensor->MutableData()), memory_type,
+        memory_type_id);
   }
 
   // Finalize and wait for any pending buffer copies.

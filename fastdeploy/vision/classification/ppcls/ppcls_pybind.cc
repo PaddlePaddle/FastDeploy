@@ -15,33 +15,9 @@
 
 namespace fastdeploy {
 void BindPaddleClas(pybind11::module& m) {
-  pybind11::class_<vision::classification::PaddleClasPreprocessor>(
-      m, "PaddleClasPreprocessor")
+  pybind11::class_<vision::classification::PaddleClasPreprocessor,
+                   vision::ProcessorManager>(m, "PaddleClasPreprocessor")
       .def(pybind11::init<std::string>())
-      .def("run",
-           [](vision::classification::PaddleClasPreprocessor& self,
-              std::vector<pybind11::array>& im_list) {
-             std::vector<vision::FDMat> images;
-             for (size_t i = 0; i < im_list.size(); ++i) {
-               images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
-             }
-             std::vector<FDTensor> outputs;
-             if (!self.Run(&images, &outputs)) {
-               throw std::runtime_error(
-                   "Failed to preprocess the input data in "
-                   "PaddleClasPreprocessor.");
-             }
-             if (!self.CudaUsed()) {
-               for (size_t i = 0; i < outputs.size(); ++i) {
-                 outputs[i].StopSharing();
-               }
-             }
-             return outputs;
-           })
-      .def("use_cuda",
-           [](vision::classification::PaddleClasPreprocessor& self,
-              bool enable_cv_cuda = false,
-              int gpu_id = -1) { self.UseCuda(enable_cv_cuda, gpu_id); })
       .def("disable_normalize",
            [](vision::classification::PaddleClasPreprocessor& self) {
              self.DisableNormalize();
@@ -49,6 +25,10 @@ void BindPaddleClas(pybind11::module& m) {
       .def("disable_permute",
            [](vision::classification::PaddleClasPreprocessor& self) {
              self.DisablePermute();
+           })
+      .def("initial_resize_on_cpu",
+           [](vision::classification::PaddleClasPreprocessor& self, bool v) {
+             self.InitialResizeOnCpu(v);
            });
 
   pybind11::class_<vision::classification::PaddleClasPostprocessor>(
