@@ -35,6 +35,7 @@ Classifier::Classifier(const std::string& model_file,
     valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE};
     valid_sophgonpu_backends = {Backend::SOPHGOTPU};
+    valid_rknpu_backends = {Backend::RKNPU2};
   }
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
