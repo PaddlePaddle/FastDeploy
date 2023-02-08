@@ -13,25 +13,28 @@
 // limitations under the License.
 
 #include "fastdeploy/vision.h"
+
 #ifdef WIN32
 const char sep = '\\';
 #else
 const char sep = '/';
 #endif
 
-void InitAndInfer(const std::string& model_dir, const std::string& image_file,
-                  const fastdeploy::RuntimeOption& option) {
+void AscendInfer(const std::string& model_dir, const std::string& image_file) {
   auto model_file = model_dir + sep + "model.pdmodel";
   auto params_file = model_dir + sep + "model.pdiparams";
   auto config_file = model_dir + sep + "deploy.yaml";
-
+  auto option = fastdeploy::RuntimeOption();
+  option.UseAscend();
   auto model = fastdeploy::vision::segmentation::PaddleSegModel(
-      model_file, params_file, config_file,option);
+      model_file, params_file, config_file, option);
 
-  assert(model.Initialized());
+  if (!model.Initialized()) {
+    std::cerr << "Failed to initialize." << std::endl;
+    return;
+  }
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
 
   fastdeploy::vision::SegmentationResult res;
   if (!model.Predict(im, &res)) {
@@ -40,37 +43,20 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file,
   }
 
   std::cout << res.Str() << std::endl;
-
+  auto vis_im = fastdeploy::vision::VisSegmentation(im, res, 0.5);
+  cv::imwrite("vis_result.jpg", vis_im);
+  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
-
 int main(int argc, char* argv[]) {
-  if (argc < 4) {
-    std::cout << "Usage: infer_demo path/to/quant_model "
-                 "path/to/image "
-                 "run_option, "
-                 "e.g ./infer_demo ./ResNet50_vd_quant ./test.jpeg 0"
-              << std::endl;
-    std::cout << "The data type of run_option is int, 0: run on cpu with ORT "
-                 "backend; 1: run "
-                 "on gpu with TensorRT backend. "
-              << std::endl;
+  if (argc < 3) {
+    std::cout
+        << "Usage: infer_demo path/to/model_dir path/to/image run_option, "
+           "e.g ./infer_model ./ppseg_model_dir ./test.jpeg"
+        << std::endl;
     return -1;
   }
 
-  fastdeploy::RuntimeOption option;
-  int flag = std::atoi(argv[3]);
-
-  if (flag == 0) {
-    option.UseCpu();
-    option.UseOrtBackend();
-  } else if (flag == 1) {
-    option.UseCpu();
-    option.UsePaddleInferBackend();
-  }
-
-  std::string model_dir = argv[1];
-  std::string test_image = argv[2];
-  InitAndInfer(model_dir, test_image, option);
+  AscendInfer(argv[1], argv[2]);
   return 0;
 }

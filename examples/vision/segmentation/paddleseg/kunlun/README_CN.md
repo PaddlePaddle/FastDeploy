@@ -13,7 +13,7 @@
 - [DeepLabV3系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/configs/deeplabv3/README.md)
 - [SegFormer系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/configs/segformer/README.md)
 
-【注意】如你部署的为**PP-Matting**、**PP-HumanMatting**以及**ModNet**请参考[Matting模型部署](../../matting/)
+>>**注意** 若需要在华为昇腾上部署**PP-Matting**、**PP-HumanMatting**请从[Matting模型部署](../../matting/)下载对应模型，部署过程与此文档一致
 
 ## 准备PaddleSeg部署模型
 PaddleSeg模型导出，请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export_cn.md)  

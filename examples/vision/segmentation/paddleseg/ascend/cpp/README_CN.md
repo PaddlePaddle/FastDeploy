@@ -3,7 +3,7 @@
 
 本目录下提供`infer.cc`快速完成PP-LiteSeg在华为昇腾上部署的示例。
 
-在部署前，需自行编译基于昆仑芯XPU的预测库，参考文档[昆仑芯XPU部署环境编译安装](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install/kunlunxin.md)
+在部署前，需自行编译基于华为昇腾NPU的预测库，参考文档[华为昇腾NPU部署环境编译](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install/huawei_ascend.md)
 
 >>**注意** **PP-Matting**、**PP-HumanMatting**的模型，请从[Matting模型部署](../../../matting)下载
 

@@ -1,22 +1,17 @@
 [English](README.md) | 简体中文
-# PaddleSeg C++部署示例
+# PaddleSeg Python部署示例
 
-本目录下提供`infer.cc`快速完成PP-LiteSeg在华为昇腾上部署的示例。
+本目录下提供`infer.py`快速完成PP-LiteSeg在华为昇腾上部署的示例。
 
-在部署前，需自行编译基于昆仑芯XPU的预测库，参考文档[昆仑芯XPU部署环境编译安装](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install/kunlunxin.md)
+在部署前，需自行编译基于华为昇腾NPU的FastDeploy python wheel包，参考文档[华为昇腾NPU部署环境编译](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install/huawei_ascend.md)，编译python wheel包并安装
 
 >>**注意** **PP-Matting**、**PP-HumanMatting**的模型，请从[Matting模型部署](../../../matting)下载
+
 
 ```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/segmentation/paddleseg/ascend/cpp
-
-mkdir build
-cd build
-# 使用编译完成的FastDeploy库编译infer_demo
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-ascend
-make -j
 
 # 下载PP-LiteSeg模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.tgz
@@ -24,7 +19,7 @@ tar -xvf PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.tgz
 wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 
 # 华为昇腾推理
-./infer_demo PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer cityscapes_demo.png
+python infer.py --model PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer --image cityscapes_demo.png
 ```
 
 运行完成可视化结果如下图所示
@@ -32,20 +27,13 @@ wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 <img src="https://user-images.githubusercontent.com/16222477/191712880-91ae128d-247a-43e0-b1e3-cafae78431e0.jpg", width=512px, height=256px />
 </div>
 
-## PaddleSeg C++接口
+## PaddleSegModel Python接口
 
-### PaddleSeg类
-
-```c++
-fastdeploy::vision::segmentation::PaddleSegModel(
-        const string& model_file,
-        const string& params_file = "",
-        const string& config_file,
-        const RuntimeOption& runtime_option = RuntimeOption(),
-        const ModelFormat& model_format = ModelFormat::PADDLE)
+```python
+fd.vision.segmentation.PaddleSegModel(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
-PaddleSegModel模型加载和初始化，其中model_file为导出的Paddle模型格式。
+PaddleSeg模型加载和初始化，其中model_file, params_file以及config_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export_cn.md)
 
 **参数**
 
@@ -55,18 +43,21 @@ PaddleSegModel模型加载和初始化，其中model_file为导出的Paddle模�
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
 > * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
 
-#### Predict函数
+### predict函数
 
-> ```c++
-> PaddleSegModel::Predict(cv::Mat* im, DetectionResult* result)
+> ```python
+> PaddleSegModel.predict(input_image)
 > ```
 >
-> 模型预测接口，输入图像直接输出检测结果。
+> 模型预测结口，输入图像直接输出检测结果。
 >
 > **参数**
 >
-> > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 分割结果，包括分割预测的标签以及标签对应的概率值, SegmentationResult结构体说明参考[SegmentationResult结构体介绍](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/segmentation_result_CN.md)
+> > * **input_image**(np.ndarray): 输入数据，注意需为HWC，BGR格式
+
+> **返回**
+>
+> > 返回`fastdeploy.vision.SegmentationResult`结构体，SegmentationResult结构体说明参考[SegmentationResult结构体介绍](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/segmentation_result_CN.md)
 
 ### 类成员属性
 #### 预处理参数
@@ -78,11 +69,11 @@ PaddleSegModel模型加载和初始化，其中model_file为导出的Paddle模�
 > > * **apply_softmax**(bool): 当模型导出时，并未指定`apply_softmax`参数，可通过此设置此参数为`true`，将预测的输出分割标签（label_map）对应的概率结果(score_map)做softmax归一化处理
 
 ## 快速链接
-- [PaddleSeg模型介绍](../../)
-- [Python部署](../python)
+
+- [PaddleSeg 模型介绍](..)
+- [PaddleSeg C++部署](../cpp)
 
 ## 常见问题
 - [如何将模型预测结果SegmentationResult转为numpy格式](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/segmentation_result_CN.md)
 - [如何切换模型推理后端引擎](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/how_to_change_backend.md)
-- [PaddleSeg C++ API文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/cpp/html/namespacefastdeploy_1_1vision_1_1segmentation.html)
-)
+- [PaddleSeg python API文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/python/html/semantic_segmentation.html)
