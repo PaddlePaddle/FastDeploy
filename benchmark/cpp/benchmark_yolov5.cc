@@ -20,8 +20,7 @@
 #include "flags.h"
 
 bool RunModel(std::string model_file, std::string image_file, size_t warmup,
-              size_t repeats, size_t dump_period, std::string cpu_mem_file_name,
-              std::string gpu_mem_file_name) {
+              size_t repeats, size_t sampling_interval) {
   // Initialization
   auto option = fastdeploy::RuntimeOption();
   if (!CreateRuntimeOption(&option)) {
@@ -52,6 +51,11 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
   } else {
     // For End2End
     // Step1: warm up for warmup times
+    if (FLAGS_collect_memory_info) {
+      fastdeploy::benchmark::ResourceUsageMonitor resource_moniter(
+          sampling_interval, FLAGS_device_id);
+      resource_monter.Start();
+    }
     std::cout << "Warmup " << warmup << " times..." << std::endl;
     for (int i = 0; i < warmup; i++) {
       fastdeploy::vision::DetectionResult res;
@@ -60,37 +64,23 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
         return false;
       }
     }
-    std::vector<float> end2end_statis;
     // Step2: repeat for repeats times
     std::cout << "Counting time..." << std::endl;
+    std::cout << "Repeat " << repeats << " times..." << std::endl;
     fastdeploy::TimeCounter tc;
-    fastdeploy::vision::DetectionResult res;
-    if (FLAGS_collect_memory_info) {
-      std::thread th1(fastdeploy::benchmark::DumpCurrentCpuMemoryUsage,
-                      cpu_mem_file_name);
-      std::thread th2(fastdeploy::benchmark::DumpCurrentGpuMemoryUsage,
-                      gpu_mem_file_name, FLAGS_device_id);
-      th1.detach();
-      th2.detach();
-    }
+    tc.Start();
     for (int i = 0; i < repeats; i++) {
-      tc.Start();
+      fastdeploy::vision::DetectionResult res;
       if (!model.Predict(im, &res)) {
         std::cerr << "Failed to predict." << std::endl;
         return false;
       }
-      tc.End();
-      end2end_statis.push_back(tc.Duration() * 1000);
     }
-    float end2end = std::accumulate(end2end_statis.end() - repeats,
-                                    end2end_statis.end(), 0.f) /
-                    repeats;
+    tc.End();
+    double end2end = tc.Duration() / repeats;
     std::cout << "End2End(ms): " << end2end << "ms." << std::endl;
     if (FLAGS_collect_memory_info) {
-      pthread_t rt1 = th1.native_handle();
-      pthread_t rt2 = th2.native_handle();
-      pthread_cancel(rt1);
-      pthread_cancel(rt2);
+      resource_monter.Stop();
     }
     auto vis_im = fastdeploy::vision::VisDetection(im, res);
     cv::imwrite("vis_result.jpg", vis_im);
@@ -104,12 +94,12 @@ int main(int argc, char* argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
   int repeats = FLAGS_repeat;
   int warmup = FLAGS_warmup;
-  int dump_period = FLAGS_dump_period;
+  int sampling_interval = FLAGS_sampling_interval;
   std::string cpu_mem_file_name = "result_cpu.txt";
   std::string gpu_mem_file_name = "result_gpu.txt";
   // Run model
-  if (RunModel(FLAGS_model, FLAGS_image, warmup, repeats, dump_period,
-               cpu_mem_file_name, gpu_mem_file_name) != true) {
+  if (RunModel(FLAGS_model, FLAGS_image, warmup, repeats, sampling_interval) !=
+      true) {
     exit(1);
   }
   if (FLAGS_collect_memory_info) {

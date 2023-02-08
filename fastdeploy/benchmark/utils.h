@@ -18,6 +18,33 @@
 namespace fastdeploy {
 namespace benchmark {
 
+class FASTDEPLOY_DECL ResourceUsageMonitor {
+ public:
+  explicit ResourceUsageMonitor(int sampling_interval_ms = 50,
+                                int gpu_id = 0)
+      : ResourceUsageMonitor(sampling_interval_ms, gpu_id) {}
+  ResourceUsageMonitor(int sampling_interval_ms, int gpu_id);
+  ~ResourceUsageMonitor() { StopInternal(); }
+
+  void Start();
+  void Stop();
+  ResourceUsageMonitor(ResourceUsageMonitor&) = delete;
+  ResourceUsageMonitor& operator=(const ResourceUsageMonitor&) = delete;
+  ResourceUsageMonitor(ResourceUsageMonitor&&) = delete;
+  ResourceUsageMonitor& operator=(const ResourceUsageMonitor&&) = delete;
+
+ private:
+  void StopInternal();
+
+  bool is_supported_ = false;
+  bool stop_signal_ = false;
+  const int sampling_interval_;
+  const std::string cpu_mem_file_name_ = "result_cpu.txt";
+  const std::string gpu_mem_file_name_ = "result_gpu.txt";
+  const gpu_id_ = 0;
+  std::unique_ptr<std::thread> check_memory_thd_ = nullptr;
+};
+
 // Record current cpu memory usage into file
 FASTDEPLOY_DECL void DumpCurrentCpuMemoryUsage(const std::string& name);
 

@@ -24,6 +24,64 @@
 namespace fastdeploy {
 namespace benchmark {
 
+ResourceUsageMonitor::ResourceUsageMonitor(int sampling_interval_ms, int gpu_id)
+    : is_supported_(false),
+      sampling_interval_(sampling_interval_ms),
+      gpu_id_(gpu_id) {
+#if defined(__linux__) || defined(__ANDROID__)
+  is_supported_ = true;
+#else
+  is_supported_ = false;
+#endif
+  if (!is_supported_) {
+    FDASSERT(false,
+             "Currently ResourceUsageMonitor only supports Linux and ANDROID.")
+    return;
+  }
+}
+
+void ResourceUsageMonitor::Start() {
+  if (!is_supported_) return;
+  if (check_memory_thd_ != nullptr) {
+    FDINFO << "Memory monitoring has already started!" << std::endl;
+    return;
+  }
+  FDINFO << "Start monitoring memory!" << std::endl;
+  stop_signal_ = false;
+  check_memory_thd_.reset(new std::thread(([this]() {
+    // Note we retrieve the memory usage at the very beginning of the thread.
+    while (true) {
+      DumpCurrentCpuMemoryUsage(cpu_mem_file_name_);
+#if defined(WITH_GPU)
+      DumpCurrentGpuMemoryUsage(gpu_mem_file_name, gpu_id_);
+#endif
+      if (stop_signal_) break;
+      std::this_thread::sleep_for(
+          std::chrono::milliseconds(sampling_interval_));
+    }
+  })));
+}
+
+void ResourceUsageMonitor::Stop() {
+  if (!is_supported_) return;
+  if (check_memory_thd_ == nullptr) {
+    FDINFO << "Memory monitoring hasn't started yet or has stopped!"
+           << std::endl;
+    return;
+  }
+  FDINFO << "stop monitoring memory!" << std::endl;
+  StopInternal();
+}
+
+void ResourceUsageMonitor::StopInternal() {
+  stop_signal_ = true;
+  if (check_memory_thd_ == nullptr) return;
+  if (check_memory_thd_ != nullptr) {
+    check_memory_thd_->join();
+  }
+  check_memory_thd_.reset(nullptr);
+}
+
 // Remove the ch characters at both ends of str
 static std::string strip(const std::string& str, char ch = ' ') {
   int i = 0;
@@ -41,20 +99,17 @@ void DumpCurrentCpuMemoryUsage(const std::string& name) {
 #if defined(__linux__) || defined(__ANDROID__)
   int iPid = static_cast<int>(getpid());
   std::string command = "pmap -x " + std::to_string(iPid) + " | grep total";
-  while (true) {
-    FILE* pp = popen(command.data(), "r");
-    if (!pp) return;
-    char tmp[1024];
+  FILE* pp = popen(command.data(), "r");
+  if (!pp) return;
+  char tmp[1024];
 
-    while (fgets(tmp, sizeof(tmp), pp) != NULL) {
-      std::ofstream write;
-      write.open(name, std::ios::app);
-      write << tmp;
-      write.close();
-    }
-    pclose(pp);
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  while (fgets(tmp, sizeof(tmp), pp) != NULL) {
+    std::ofstream write;
+    write.open(name, std::ios::app);
+    write << tmp;
+    write.close();
   }
+  pclose(pp);
 #else
   FDASSERT(false,
            "Currently collect cpu memory info only supports Linux and ANDROID.")
@@ -67,7 +122,7 @@ void DumpCurrentGpuMemoryUsage(const std::string& name, int device_id) {
   std::string command = "nvidia-smi --id=" + std::to_string(device_id) +
                         " --query-gpu=index,uuid,name,timestamp,memory.total,"
                         "memory.free,memory.used,utilization.gpu,utilization."
-                        "memory --format=csv,noheader,nounits -lms 50";
+                        "memory --format=csv,noheader,nounits";
   FILE* pp = popen(command.data(), "r");
   if (!pp) return;
   char tmp[1024];
