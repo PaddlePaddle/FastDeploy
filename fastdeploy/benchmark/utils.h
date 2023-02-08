@@ -13,27 +13,10 @@
 // limitations under the License.
 #pragma once
 
-#include <sys/types.h>
-#include <unistd.h>
-#include <cmath>
-
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace benchmark {
-
-// Remove the ch characters at both ends of str
-std::string strip(const std::string& str, char ch = ' ') {
-  int i = 0;
-  while (str[i] == ch) {
-    i++;
-  }
-  int j = str.size() - 1;
-  while (str[j] == ch) {
-    j--;
-  }
-  return str.substr(i, j + 1 - i);
-}
 
 // Record current cpu memory usage into file
 FASTDEPLOY_DECL void DumpCurrentCpuMemoryUsage(const std::string& name);
@@ -47,7 +30,6 @@ FASTDEPLOY_DECL float GetCpuMemoryUsage(const std::string& name);
 
 // Get Max gpu memory usage
 FASTDEPLOY_DECL float GetGpuMemoryUsage(const std::string& name);
-
 
 }  // namespace benchmark
 }  // namespace fastdeploy
