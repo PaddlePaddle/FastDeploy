@@ -92,8 +92,11 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  RKNPU2Infer(argv[1], argv[2]);
-//  ONNXInfer(argv[1], argv[2]);
+  if (std::atoi(argv[3]) == 0) {
+    ONNXInfer(argv[1], argv[2]);
+  } else if (std::atoi(argv[3]) == 1) {
+    RKNPU2Infer(argv[1], argv[2]);
+  }
   return 0;
 }
 
