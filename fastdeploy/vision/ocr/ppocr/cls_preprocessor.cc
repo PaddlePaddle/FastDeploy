@@ -21,12 +21,8 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-void ClassifierPreprocessor::OcrClassifierResizeImage(FDMat* mat,
+void OcrClassifierResizeImage(FDMat* mat,
                               const std::vector<int>& cls_image_shape) {
-  if(static_shape_infer_){
-    Resize::Run(mat, cls_image_shape_[2], cls_image_shape_[1]);
-    return;
-  }
   int img_c = cls_image_shape[0];
   int img_h = cls_image_shape[1];
   int img_w = cls_image_shape[2];
