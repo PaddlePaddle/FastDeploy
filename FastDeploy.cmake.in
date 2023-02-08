@@ -154,7 +154,7 @@ if(ENABLE_LITE_BACKEND)
     endif()
   else()
     # Linux/Mac/Win/...
-    find_library(LITE_LIB paddle_full_api_shared ${LITE_DIR}/cxx/lib NO_DEFAULT_PATH)
+    find_library(LITE_LIB paddle_full_api_shared ${LITE_DIR}/lib NO_DEFAULT_PATH)
     list(APPEND FASTDEPLOY_LIBS ${LITE_LIB})
   endif()
 endif()
