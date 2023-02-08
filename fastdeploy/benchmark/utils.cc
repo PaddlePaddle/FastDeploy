@@ -17,6 +17,7 @@
 #include <unistd.h>
 #endif
 #include <cmath>
+#include <thread>
 
 #include "fastdeploy/benchmark/utils.h"
 
@@ -40,17 +41,20 @@ void DumpCurrentCpuMemoryUsage(const std::string& name) {
 #if defined(__linux__) || defined(__ANDROID__)
   int iPid = static_cast<int>(getpid());
   std::string command = "pmap -x " + std::to_string(iPid) + " | grep total";
-  FILE* pp = popen(command.data(), "r");
-  if (!pp) return;
-  char tmp[1024];
+  while (true) {
+    FILE* pp = popen(command.data(), "r");
+    if (!pp) return;
+    char tmp[1024];
 
-  while (fgets(tmp, sizeof(tmp), pp) != NULL) {
-    std::ofstream write;
-    write.open(name, std::ios::app);
-    write << tmp;
-    write.close();
+    while (fgets(tmp, sizeof(tmp), pp) != NULL) {
+      std::ofstream write;
+      write.open(name, std::ios::app);
+      write << tmp;
+      write.close();
+    }
+    pclose(pp);
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
-  pclose(pp);
 #else
   FDASSERT(false,
            "Currently collect cpu memory info only supports Linux and ANDROID.")
@@ -63,7 +67,7 @@ void DumpCurrentGpuMemoryUsage(const std::string& name, int device_id) {
   std::string command = "nvidia-smi --id=" + std::to_string(device_id) +
                         " --query-gpu=index,uuid,name,timestamp,memory.total,"
                         "memory.free,memory.used,utilization.gpu,utilization."
-                        "memory --format=csv,noheader,nounits";
+                        "memory --format=csv,noheader,nounits -lms 50";
   FILE* pp = popen(command.data(), "r");
   if (!pp) return;
   char tmp[1024];

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <pthread.h>
+#include <thread>
+
 #include "fastdeploy/benchmark/utils.h"
 #include "fastdeploy/vision.h"
 #include "flags.h"
@@ -62,12 +65,15 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     std::cout << "Counting time..." << std::endl;
     fastdeploy::TimeCounter tc;
     fastdeploy::vision::DetectionResult res;
+    if (FLAGS_collect_memory_info) {
+      std::thread th1(fastdeploy::benchmark::DumpCurrentCpuMemoryUsage,
+                      cpu_mem_file_name);
+      std::thread th2(fastdeploy::benchmark::DumpCurrentGpuMemoryUsage,
+                      gpu_mem_file_name, FLAGS_device_id);
+      th1.detach();
+      th2.detach();
+    }
     for (int i = 0; i < repeats; i++) {
-      if (FLAGS_collect_memory_info && i % dump_period == 0) {
-        fastdeploy::benchmark::DumpCurrentCpuMemoryUsage(cpu_mem_file_name);
-        fastdeploy::benchmark::DumpCurrentGpuMemoryUsage(gpu_mem_file_name,
-                                                         FLAGS_device_id);
-      }
       tc.Start();
       if (!model.Predict(im, &res)) {
         std::cerr << "Failed to predict." << std::endl;
@@ -80,6 +86,12 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
                                     end2end_statis.end(), 0.f) /
                     repeats;
     std::cout << "End2End(ms): " << end2end << "ms." << std::endl;
+    if (FLAGS_collect_memory_info) {
+      pthread_t rt1 = th1.native_handle();
+      pthread_t rt2 = th2.native_handle();
+      pthread_cancel(rt1);
+      pthread_cancel(rt2);
+    }
     auto vis_im = fastdeploy::vision::VisDetection(im, res);
     cv::imwrite("vis_result.jpg", vis_im);
     std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
