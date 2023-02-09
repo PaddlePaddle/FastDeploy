@@ -79,16 +79,16 @@ void ResourceUsageMonitor::Start() {
     while (true) {
       std::string cpu_mem_info = GetCurrentCpuMemoryInfo();
       // get max_cpu_mem
-      std::vector<std::string> tokens;
-      split(cpu_mem_info, tokens, ' ');
-      max_cpu_mem_ = std::max(max_cpu_mem_, stof(tokens[3]) / 1024);
+      std::vector<std::string> cpu_tokens;
+      split(cpu_mem_info, cpu_tokens, ' ');
+      max_cpu_mem_ = std::max(max_cpu_mem_, stof(cpu_tokens[3]) / 1024);
 #if defined(WITH_GPU)
       std::string gpu_mem_info = GetCurrentGpuMemoryInfo(gpu_id_);
       // get max_gpu_mem and max_gpu_util
-      std::vector<std::string> tokens;
-      split(gpu_mem_info, tokens, ',') max_gpu_mem_ =
-          std::max(max_gpu_mem_, stof(tokens[6]));
-      max_gpu_util_ = std::max(max_gpu_util_, stof(tokens[7]));
+      std::vector<std::string> gpu_tokens;
+      split(gpu_mem_info, gpu_tokens, ',');
+      max_gpu_mem_ = std::max(max_gpu_mem_, stof(gpu_tokens[6]));
+      max_gpu_util_ = std::max(max_gpu_util_, stof(gpu_tokens[7]));
 #endif
       if (stop_signal_) break;
       std::this_thread::sleep_for(
@@ -123,7 +123,7 @@ std::string ResourceUsageMonitor::GetCurrentCpuMemoryInfo() {
   int iPid = static_cast<int>(getpid());
   std::string command = "pmap -x " + std::to_string(iPid) + " | grep total";
   FILE* pp = popen(command.data(), "r");
-  if (!pp) return;
+  if (!pp) return "";
   char tmp[1024];
 
   while (fgets(tmp, sizeof(tmp), pp) != NULL) {
@@ -145,7 +145,7 @@ std::string ResourceUsageMonitor::GetCurrentGpuMemoryInfo(int device_id) {
                         "memory.free,memory.used,utilization.gpu,utilization."
                         "memory --format=csv,noheader,nounits";
   FILE* pp = popen(command.data(), "r");
-  if (!pp) return;
+  if (!pp) return "";
   char tmp[1024];
 
   while (fgets(tmp, sizeof(tmp), pp) != NULL) {

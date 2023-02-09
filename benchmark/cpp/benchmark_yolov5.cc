@@ -78,6 +78,12 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     std::cout << "End2End(ms): " << end2end << "ms." << std::endl;
     if (FLAGS_collect_memory_info) {
       resource_moniter.Stop();
+      float cpu_mem = resource_moniter.GetMaxCpuMem();
+      float gpu_mem = resource_moniter.GetMaxGpuMem();
+      float gpu_util = resource_moniter.GetMaxGpuUtil();
+      std::cout << "cpu_pss_mb: " << cpu_mem << "MB." << std::endl;
+      std::cout << "gpu_pss_mb: " << gpu_mem << "MB." << std::endl;
+      std::cout << "gpu_util: " << gpu_util << std::endl;
     }
     auto vis_im = fastdeploy::vision::VisDetection(im, res);
     cv::imwrite("vis_result.jpg", vis_im);
@@ -96,14 +102,6 @@ int main(int argc, char* argv[]) {
   if (RunModel(FLAGS_model, FLAGS_image, warmup, repeats, sampling_interval) !=
       true) {
     exit(1);
-  }
-  if (FLAGS_collect_memory_info) {
-    float cpu_mem = resource_moniter.GetMaxCpuMem();
-    float gpu_mem = resource_moniter.GetMaxGpuMem();
-    float gpu_util = resource_moniter.GetMaxGpuUtil();
-    std::cout << "cpu_pss_mb: " << cpu_mem << "MB." << std::endl;
-    std::cout << "gpu_pss_mb: " << gpu_mem << "MB." << std::endl;
-    std::cout << "gpu_util: " << gpu_util << std::endl;
   }
   return 0;
 }
