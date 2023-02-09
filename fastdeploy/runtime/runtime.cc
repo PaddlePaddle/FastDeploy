@@ -226,61 +226,24 @@ void Runtime::CreatePaddleBackend() {
       option.model_format == ModelFormat::PADDLE,
       "Backend::PDINFER only supports model format of ModelFormat::PADDLE.");
 #ifdef ENABLE_PADDLE_BACKEND
-  auto pd_option = PaddleBackendOption();
-  pd_option.model_file = option.model_file;
-  pd_option.params_file = option.params_file;
-  pd_option.enable_mkldnn = option.pd_enable_mkldnn;
-  pd_option.enable_log_info = option.pd_enable_log_info;
-  pd_option.mkldnn_cache_size = option.pd_mkldnn_cache_size;
-  pd_option.use_gpu = (option.device == Device::GPU) ? true : false;
-  pd_option.use_ipu = (option.device == Device::IPU) ? true : false;
-  pd_option.gpu_id = option.device_id;
-  pd_option.delete_pass_names = option.pd_delete_pass_names;
-  pd_option.cpu_thread_num = option.cpu_thread_num;
-  pd_option.enable_pinned_memory = option.enable_pinned_memory;
-  pd_option.external_stream_ = option.external_stream_;
-  pd_option.model_from_memory_ = option.model_from_memory_;
-#ifdef ENABLE_TRT_BACKEND
-  if (pd_option.use_gpu && option.pd_enable_trt) {
-    pd_option.enable_trt = true;
-    pd_option.collect_shape = option.pd_collect_shape;
-    auto trt_option = TrtBackendOption();
-    trt_option.gpu_id = option.device_id;
-    trt_option.enable_fp16 = option.trt_enable_fp16;
-    trt_option.max_batch_size = option.trt_max_batch_size;
-    trt_option.max_workspace_size = option.trt_max_workspace_size;
-    trt_option.max_shape = option.trt_max_shape;
-    trt_option.min_shape = option.trt_min_shape;
-    trt_option.opt_shape = option.trt_opt_shape;
-    trt_option.serialize_file = option.trt_serialize_file;
-    trt_option.enable_pinned_memory = option.enable_pinned_memory;
-    pd_option.trt_option = trt_option;
-    pd_option.trt_disabled_ops_ = option.trt_disabled_ops_;
-  }
-#endif
-#ifdef WITH_IPU
-  if (pd_option.use_ipu) {
-    auto ipu_option = IpuOption();
-    ipu_option.ipu_device_num = option.ipu_device_num;
-    ipu_option.ipu_micro_batch_size = option.ipu_micro_batch_size;
-    ipu_option.ipu_enable_pipelining = option.ipu_enable_pipelining;
-    ipu_option.ipu_batches_per_step = option.ipu_batches_per_step;
-    ipu_option.ipu_enable_fp16 = option.ipu_enable_fp16;
-    ipu_option.ipu_replica_num = option.ipu_replica_num;
-    ipu_option.ipu_available_memory_proportion =
-        option.ipu_available_memory_proportion;
-    ipu_option.ipu_enable_half_partial = option.ipu_enable_half_partial;
-    pd_option.ipu_option = ipu_option;
-  }
-#endif
+  option.paddle_infer_option.model_file = option.model_file;
+  option.paddle_infer_option.params_file = option.params_file;
+  option.paddle_infer_option.model_from_memory_ = option.model_from_memory_;
+  option.paddle_infer_option.device = option.device;
+  option.paddle_infer_option.device_id = option.device_id;
+  option.paddle_infer_option.enable_pinned_memory = option.enable_pinned_memory;
+  option.paddle_infer_option.external_stream_ = option.external_stream_;
+  option.paddle_infer_option.trt_option = option.trt_option;
+  option.paddle_infer_option.trt_option.gpu_id = option.device_id;
   backend_ = utils::make_unique<PaddleBackend>();
   auto casted_backend = dynamic_cast<PaddleBackend*>(backend_.get());
   casted_backend->benchmark_option_ = option.benchmark_option;
 
-  if (pd_option.model_from_memory_) {
-    FDASSERT(casted_backend->InitFromPaddle(option.model_file,
-                                            option.params_file, pd_option),
-             "Load model from Paddle failed while initliazing PaddleBackend.");
+  if (option.model_from_memory_) {
+    FDASSERT(
+        casted_backend->InitFromPaddle(option.model_file, option.params_file,
+                                       option.paddle_infer_option),
+        "Load model from Paddle failed while initliazing PaddleBackend.");
     ReleaseModelMemoryBuffer();
   } else {
     std::string model_buffer = "";
@@ -289,9 +252,9 @@ void Runtime::CreatePaddleBackend() {
              "Fail to read binary from model file");
     FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
              "Fail to read binary from parameter file");
-    FDASSERT(
-        casted_backend->InitFromPaddle(model_buffer, params_buffer, pd_option),
-        "Load model from Paddle failed while initliazing PaddleBackend.");
+    FDASSERT(casted_backend->InitFromPaddle(model_buffer, params_buffer,
+                                            option.paddle_infer_option),
+             "Load model from Paddle failed while initliazing PaddleBackend.");
   }
 #else
   FDASSERT(false,
@@ -332,62 +295,16 @@ void Runtime::CreateOrtBackend() {
 }
 
 void Runtime::CreateTrtBackend() {
-  FDASSERT(option.device == Device::GPU,
-           "Backend::TRT only supports Device::GPU.");
-  FDASSERT(option.model_format == ModelFormat::PADDLE ||
-               option.model_format == ModelFormat::ONNX,
-           "TrtBackend only support model format of ModelFormat::PADDLE / "
-           "ModelFormat::ONNX.");
 #ifdef ENABLE_TRT_BACKEND
-  auto trt_option = TrtBackendOption();
-  trt_option.model_file = option.model_file;
-  trt_option.params_file = option.params_file;
-  trt_option.model_format = option.model_format;
-  trt_option.gpu_id = option.device_id;
-  trt_option.enable_fp16 = option.trt_enable_fp16;
-  trt_option.enable_int8 = option.trt_enable_int8;
-  trt_option.max_batch_size = option.trt_max_batch_size;
-  trt_option.max_workspace_size = option.trt_max_workspace_size;
-  trt_option.max_shape = option.trt_max_shape;
-  trt_option.min_shape = option.trt_min_shape;
-  trt_option.opt_shape = option.trt_opt_shape;
-  trt_option.serialize_file = option.trt_serialize_file;
-  trt_option.enable_pinned_memory = option.enable_pinned_memory;
-  trt_option.external_stream_ = option.external_stream_;
+  option.trt_option.model_file = option.model_file;
+  option.trt_option.params_file = option.params_file;
+  option.trt_option.model_format = option.model_format;
+  option.trt_option.gpu_id = option.device_id;
+  option.trt_option.enable_pinned_memory = option.enable_pinned_memory;
+  option.trt_option.external_stream_ = option.external_stream_;
   backend_ = utils::make_unique<TrtBackend>();
-  auto casted_backend = dynamic_cast<TrtBackend*>(backend_.get());
-  casted_backend->benchmark_option_ = option.benchmark_option;
-
-  if (option.model_format == ModelFormat::ONNX) {
-    if (option.model_from_memory_) {
-      FDASSERT(casted_backend->InitFromOnnx(option.model_file, trt_option),
-               "Load model from ONNX failed while initliazing TrtBackend.");
-      ReleaseModelMemoryBuffer();
-    } else {
-      std::string model_buffer = "";
-      FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
-               "Fail to read binary from model file");
-      FDASSERT(casted_backend->InitFromOnnx(model_buffer, trt_option),
-               "Load model from ONNX failed while initliazing TrtBackend.");
-    }
-  } else {
-    if (option.model_from_memory_) {
-      FDASSERT(casted_backend->InitFromPaddle(option.model_file,
-                                              option.params_file, trt_option),
-               "Load model from Paddle failed while initliazing TrtBackend.");
-      ReleaseModelMemoryBuffer();
-    } else {
-      std::string model_buffer = "";
-      std::string params_buffer = "";
-      FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
-               "Fail to read binary from model file");
-      FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
-               "Fail to read binary from parameter file");
-      FDASSERT(casted_backend->InitFromPaddle(model_buffer, params_buffer,
-                                              trt_option),
-               "Load model from Paddle failed while initliazing TrtBackend.");
-    }
-  }
+  backend_->benchmark_option_ = option.benchmark_option;
+  FDASSERT(backend_->Init(option), "Failed to initialize TensorRT backend.");
 #else
   FDASSERT(false,
            "TrtBackend is not available, please compiled with "
@@ -399,29 +316,18 @@ void Runtime::CreateTrtBackend() {
 
 void Runtime::CreateLiteBackend() {
 #ifdef ENABLE_LITE_BACKEND
-  FDASSERT(option.model_from_memory_ == false,
-           "LiteBackend don't support to load model from memory");
-  FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX ||
-               option.device == Device::KUNLUNXIN ||
-               option.device == Device::ASCEND,
-           "Backend::LITE only supports "
-           "Device::CPU/Device::TIMVX/Device::KUNLUNXIN/Device::ASCEND.");
-  FDASSERT(option.model_format == ModelFormat::PADDLE,
-           "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();
-  auto casted_backend = dynamic_cast<LiteBackend*>(backend_.get());
-  casted_backend->benchmark_option_ = option.benchmark_option;
+  backend_->benchmark_option_ = option.benchmark_option;
 
-  FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
-                                          option.paddle_lite_option),
+  FDASSERT(backend_->Init(option),
            "Load model from nb file failed while initializing LiteBackend.");
 #else
   FDASSERT(false,
            "LiteBackend is not available, please compiled with "
            "ENABLE_LITE_BACKEND=ON.");
 #endif
-  FDINFO << "Runtime initialized with Backend::LITE in " << option.device << "."
-         << std::endl;
+  FDINFO << "Runtime initialized with Backend::PDLITE in " << option.device
+         << "." << std::endl;
 }
 
 void Runtime::CreateRKNPU2Backend() {
@@ -450,18 +356,8 @@ void Runtime::CreateRKNPU2Backend() {
 
 void Runtime::CreateSophgoNPUBackend() {
 #ifdef ENABLE_SOPHGO_BACKEND
-  auto sophgo_option = SophgoBackendOption();
-  FDASSERT(option.model_from_memory_ == false,
-           "SophgoBackend don't support to load model from memory");
-  FDASSERT(option.device == Device::SOPHGOTPUD,
-           "Backend::SOPHGO only supports Device::SOPHGO");
-  FDASSERT(option.model_format == ModelFormat::SOPHGO,
-           "SophgoBackend only support model format of ModelFormat::SOPHGO");
-  auto sophgo_option = SophgoBackendOption();
   backend_ = utils::make_unique<SophgoBackend>();
-  auto casted_backend = dynamic_cast<SophgoBackend*>(backend_.get());
-  FDASSERT(casted_backend->InitFromSophgo(option.model_file, sophgo_option),
-           "Load model from nb file failed while initializing LiteBackend.");
+  FDASSERT(backend_->Init(option), "Failed to initialize Sophgo backend.");
 #else
   FDASSERT(false,
            "SophgoBackend is not available, please compiled with "
@@ -505,9 +401,10 @@ bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
   }
   option.poros_option.device = option.device;
   option.poros_option.device_id = option.device_id;
-  option.poros_option.enable_fp16 = option.trt_enable_fp16;
-  option.poros_option.max_batch_size = option.trt_max_batch_size;
-  option.poros_option.max_workspace_size = option.trt_max_workspace_size;
+  option.poros_option.enable_fp16 = option.trt_option.enable_fp16;
+  option.poros_option.max_batch_size = option.trt_option.max_batch_size;
+  option.poros_option.max_workspace_size = option.trt_option.max_workspace_size;
+
   backend_ = utils::make_unique<PorosBackend>();
   auto casted_backend = dynamic_cast<PorosBackend*>(backend_.get());
   FDASSERT(

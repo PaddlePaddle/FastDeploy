@@ -73,6 +73,7 @@ option(WITH_ASCEND "Whether to compile for Huawei Ascend deploy." OFF)
 option(WITH_TIMVX "Whether to compile for TIMVX deploy." OFF)
 option(WITH_KUNLUNXIN "Whether to compile for KunlunXin XPU deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
+option(WITH_CAPI "Whether to compile with c api." OFF)
 
 ############################# Options for Android cross compiling #########################
 if(ANDROID)
@@ -416,6 +417,14 @@ if(ENABLE_PADDLE2ONNX)
   list(APPEND DEPEND_LIBS external_paddle2onnx)
 endif(ENABLE_PADDLE2ONNX)
 
+if(WITH_CAPI)
+  include(${PROJECT_SOURCE_DIR}/c_api/CMakeLists.txt)
+  if(MSVC)
+  add_definitions(-DFD_CAPI)
+  endif()
+endif()
+
+
 configure_file(${PROJECT_SOURCE_DIR}/FastDeploy.cmake.in ${PROJECT_SOURCE_DIR}/FastDeploy.cmake @ONLY)
 configure_file(${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py.in ${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py)
 configure_file(${PROJECT_SOURCE_DIR}/python/scripts/process_libraries.py.in ${PROJECT_SOURCE_DIR}/python/scripts/process_libraries.py)
@@ -609,21 +618,21 @@ else()
         DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
       )
     endif()
-  endif()
-  # only need flycv's headers (may also install libs? TODO:qiuyanjun)
-  if(ENABLE_FLYCV)
-    if(WITH_FLYCV_STATIC)
-      install(
-        DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/flycv/include
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install/flycv
-      )
-    else()
-      install(
-        DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/flycv
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
-      )
+    # only need flycv's headers (may also install libs? TODO:qiuyanjun)
+    if(ENABLE_FLYCV)
+      if(WITH_FLYCV_STATIC)
+        install(
+          DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/flycv/include
+          DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install/flycv
+        )
+      else()
+        install(
+          DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/flycv
+          DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
+        )
+      endif()
     endif()
-  endif()
+  endif(ENABLE_VISION)
   # fast_tokenizer's static lib is not avaliable now!
   # may support some days later(TODO:qiuyanjun)
   if(ENABLE_TEXT)

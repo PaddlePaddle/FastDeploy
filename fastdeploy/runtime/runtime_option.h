@@ -61,22 +61,19 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /// Use cpu to inference, the runtime will inference on CPU by default
   void UseCpu();
-
   /// Use Nvidia GPU to inference
   void UseGpu(int gpu_id = 0);
-
+  /// Use RKNPU2 e.g RK3588/RK356X to inference
   void UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name =
                      fastdeploy::rknpu2::CpuName::RK3588,
                  fastdeploy::rknpu2::CoreMask rknpu2_core =
                      fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0);
-
-  /// Use TimVX to inference
+  /// Use TimVX e.g RV1126/A311D to inference
   void UseTimVX();
-
   /// Use Huawei Ascend to inference
   void UseAscend();
-
-  ///
+  /// Use Sophgo to inference
+  void UseSophgo();
   /// \brief Turn on KunlunXin XPU.
   ///
   /// \param kunlunxin_id the KunlunXin XPU card to use (default is 0).
@@ -106,227 +103,25 @@ struct FASTDEPLOY_DECL RuntimeOption {
                     bool adaptive_seqlen = false,
                     bool enable_multi_stream = false);
 
-  /// Use Sophgo to inference
-  void UseSophgo();
-
   void SetExternalStream(void* external_stream);
-
   /*
    * @brief Set number of cpu threads while inference on CPU, by default it will decided by the different backends
    */
   void SetCpuThreadNum(int thread_num);
-
-  /// Set ORT graph opt level, default is decide by ONNX Runtime itself
-  void SetOrtGraphOptLevel(int level = -1);
-
   /// Set Paddle Inference as inference backend, support CPU/GPU
-  void UsePaddleBackend();
-
-  /// Wrapper function of UsePaddleBackend()
   void UsePaddleInferBackend() { return UsePaddleBackend(); }
-
   /// Set ONNX Runtime as inference backend, support CPU/GPU
   void UseOrtBackend();
-
-  /// Set SOPHGO Runtime as inference backend, support CPU/GPU
+  /// Set SOPHGO Runtime as inference backend, support SOPHGO
   void UseSophgoBackend();
-
   /// Set TensorRT as inference backend, only support GPU
   void UseTrtBackend();
-
   /// Set Poros backend as inference backend, support CPU/GPU
   void UsePorosBackend();
-
   /// Set OpenVINO as inference backend, only support CPU
   void UseOpenVINOBackend();
-
   /// Set Paddle Lite as inference backend, only support arm cpu
-  void UseLiteBackend();
-
-  /// Wrapper function of UseLiteBackend()
   void UsePaddleLiteBackend() { return UseLiteBackend(); }
-
-  /// Set mkldnn switch while using Paddle Inference as inference backend
-  void SetPaddleMKLDNN(bool pd_mkldnn = true);
-
-  /*
-   * @brief If TensorRT backend is used, EnablePaddleToTrt will change to use Paddle Inference backend, and use its integrated TensorRT instead.
-   */
-  void EnablePaddleToTrt();
-
-  /**
-   * @brief Delete pass by name while using Paddle Inference as inference backend, this can be called multiple times to delete a set of passes
-   */
-  void DeletePaddleBackendPass(const std::string& delete_pass_name);
-
-  /**
-   * @brief Enable print debug information while using Paddle Inference as inference backend, the backend disable the debug information by default
-   */
-  void EnablePaddleLogInfo();
-
-  /**
-   * @brief Disable print debug information while using Paddle Inference as inference backend
-   */
-  void DisablePaddleLogInfo();
-
-  /**
-   * @brief Set shape cache size while using Paddle Inference with mkldnn, by default it will cache all the difference shape
-   */
-  void SetPaddleMKLDNNCacheSize(int size);
-
-  /**
-   * @brief Set device name for OpenVINO, default 'CPU', can also be 'AUTO', 'GPU', 'GPU.1'....
-   */
-  void SetOpenVINODevice(const std::string& name = "CPU");
-
-  /**
-   * @brief Set shape info for OpenVINO
-   */
-  void SetOpenVINOShapeInfo(
-      const std::map<std::string, std::vector<int64_t>>& shape_info) {
-    openvino_option.shape_infos = shape_info;
-  }
-
-  /**
-   * @brief While use OpenVINO backend with intel GPU, use this interface to specify operators run on CPU
-   */
-  void SetOpenVINOCpuOperators(const std::vector<std::string>& operators) {
-    openvino_option.SetCpuOperators(operators);
-  }
-
-  /**
-   * @brief Set optimzed model dir for Paddle Lite backend.
-   */
-  void SetLiteOptimizedModelDir(const std::string& optimized_model_dir);
-
-  /**
-   * @brief Set subgraph partition path for Paddle Lite backend.
-   */
-  void SetLiteSubgraphPartitionPath(
-      const std::string& nnadapter_subgraph_partition_config_path);
-
-  /**
-   * @brief Set subgraph partition path for Paddle Lite backend.
-   */
-  void SetLiteSubgraphPartitionConfigBuffer(
-      const std::string& nnadapter_subgraph_partition_config_buffer);
-
-  /**
-   * @brief Set device name for Paddle Lite backend.
-   */
-  void
-  SetLiteDeviceNames(const std::vector<std::string>& nnadapter_device_names);
-
-  /**
-   * @brief Set context properties for Paddle Lite backend.
-   */
-  void
-  SetLiteContextProperties(const std::string& nnadapter_context_properties);
-
-  /**
-   * @brief Set model cache dir for Paddle Lite backend.
-   */
-  void SetLiteModelCacheDir(const std::string& nnadapter_model_cache_dir);
-
-  /**
-   * @brief Set dynamic shape info for Paddle Lite backend.
-   */
-  void SetLiteDynamicShapeInfo(
-      const std::map<std::string, std::vector<std::vector<int64_t>>>&
-          nnadapter_dynamic_shape_info);
-
-  /**
-   * @brief Set mixed precision quantization config path for Paddle Lite backend.
-   */
-  void SetLiteMixedPrecisionQuantizationConfigPath(
-      const std::string& nnadapter_mixed_precision_quantization_config_path);
-
-  /**
-   * @brief enable half precision while use paddle lite backend
-   */
-  void EnableLiteFP16();
-
-  /**
-   * @brief disable half precision, change to full precision(float32)
-   */
-  void DisableLiteFP16();
-
-  /**
-    * @brief enable int8 precision while use paddle lite backend
-    */
-  void EnableLiteInt8();
-
-  /**
-    * @brief disable int8 precision, change to full precision(float32)
-    */
-  void DisableLiteInt8();
-
-  /**
-   * @brief Set power mode while using Paddle Lite as inference backend, mode(0: LITE_POWER_HIGH; 1: LITE_POWER_LOW; 2: LITE_POWER_FULL; 3: LITE_POWER_NO_BIND, 4: LITE_POWER_RAND_HIGH; 5: LITE_POWER_RAND_LOW, refer [paddle lite](https://paddle-lite.readthedocs.io/zh/latest/api_reference/cxx_api_doc.html#set-power-mode) for more details)
-   */
-  void SetLitePowerMode(LitePowerMode mode);
-
-  /** \brief Set shape range of input tensor for the model that contain dynamic input shape while using TensorRT backend
-   *
-   * \param[in] input_name The name of input for the model which is dynamic shape
-   * \param[in] min_shape The minimal shape for the input tensor
-   * \param[in] opt_shape The optimized shape for the input tensor, just set the most common shape, if set as default value, it will keep same with min_shape
-   * \param[in] max_shape The maximum shape for the input tensor, if set as default value, it will keep same with min_shape
-   */
-  void SetTrtInputShape(
-      const std::string& input_name, const std::vector<int32_t>& min_shape,
-      const std::vector<int32_t>& opt_shape = std::vector<int32_t>(),
-      const std::vector<int32_t>& max_shape = std::vector<int32_t>());
-
-  /// Set max_workspace_size for TensorRT, default 1<<30
-  void SetTrtMaxWorkspaceSize(size_t trt_max_workspace_size);
-
-  /// Set max_batch_size for TensorRT, default 32
-  void SetTrtMaxBatchSize(size_t max_batch_size);
-
-  /**
-   * @brief Enable FP16 inference while using TensorRT backend. Notice: not all the GPU device support FP16, on those device doesn't support FP16, FastDeploy will fallback to FP32 automaticly
-   */
-  void EnableTrtFP16();
-
-  /// Disable FP16 inference while using TensorRT backend
-  void DisableTrtFP16();
-
-  /**
-   * @brief Set cache file path while use TensorRT backend. Loadding a Paddle/ONNX model and initialize TensorRT will take a long time, by this interface it will save the tensorrt engine to `cache_file_path`, and load it directly while execute the code again
-   */
-  void SetTrtCacheFile(const std::string& cache_file_path);
-
-  /**
-   * @brief Enable pinned memory. Pinned memory can be utilized to speedup the data transfer between CPU and GPU. Currently it's only suppurted in TRT backend and Paddle Inference backend.
-   */
-  void EnablePinnedMemory();
-
-  /**
-   * @brief Disable pinned memory
-   */
-  void DisablePinnedMemory();
-
-  /**
-   * @brief Enable to collect shape in paddle trt backend
-   */
-  void EnablePaddleTrtCollectShape();
-
-  /**
-   * @brief Disable to collect shape in paddle trt backend
-   */
-  void DisablePaddleTrtCollectShape();
-
-  /**
-   * @brief Prevent ops running in paddle trt backend
-   */
-  void DisablePaddleTrtOPs(const std::vector<std::string>& ops);
-
-  /*
-   * @brief Set number of streams by the OpenVINO backends
-   */
-  void SetOpenVINOStreams(int num_streams);
-
   /** \Use Graphcore IPU to inference.
    *
    * \param[in] device_num the number of IPUs.
@@ -337,95 +132,42 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void UseIpu(int device_num = 1, int micro_batch_size = 1,
               bool enable_pipelining = false, int batches_per_step = 1);
 
-  /** \brief Set IPU config.
-   *
-   * \param[in] enable_fp16 enable fp16.
-   * \param[in] replica_num the number of graph replication.
-   * \param[in] available_memory_proportion the available memory proportion for matmul/conv.
-   * \param[in] enable_half_partial enable fp16 partial for matmul, only work with fp16.
-   */
-  void SetIpuConfig(bool enable_fp16 = false, int replica_num = 1,
-                    float available_memory_proportion = 1.0,
-                    bool enable_half_partial = false);
-  
+  /// Option to configure ONNX Runtime backend
+  OrtBackendOption ort_option;
+  /// Option to configure TensorRT backend
+  TrtBackendOption trt_option;
+  /// Option to configure Paddle Inference backend
+  PaddleBackendOption paddle_infer_option;
+  /// Option to configure Poros backend
+  PorosBackendOption poros_option;
+  /// Option to configure OpenVINO backend
+  OpenVINOBackendOption openvino_option;
+  /// Option to configure Paddle Lite backend
+  LiteBackendOption paddle_lite_option;
+
   /** \brief Set the profile mode as 'true'.
    *
    * \param[in] inclue_h2d_d2h Whether to include time of H2D_D2H for time of runtime.
    * \param[in] repeat Repeat times for runtime inference.
    * \param[in] warmup Warmup times for runtime inference.
    */
-  void EnableProfiling(bool inclue_h2d_d2h = false, 
+  void EnableProfiling(bool inclue_h2d_d2h = false,
                        int repeat = 100, int warmup = 50) {
     benchmark_option.enable_profile = true;
     benchmark_option.warmup = warmup;
     benchmark_option.repeats = repeat;
     benchmark_option.include_h2d_d2h = inclue_h2d_d2h;
   }
-  
+
   /** \brief Set the profile mode as 'false'.
    */
   void DisableProfiling() {
     benchmark_option.enable_profile = false;
   }
 
-  Backend backend = Backend::UNKNOWN;
 
-  // for cpu inference
-  // default will let the backend choose their own default value
-  int cpu_thread_num = -1;
-  int device_id = 0;
-
-  Device device = Device::CPU;
-
-  void* external_stream_ = nullptr;
-
-  bool enable_pinned_memory = false;
-
-  OrtBackendOption ort_option;
-
-  // ======Only for Paddle Backend=====
-  bool pd_enable_mkldnn = true;
-  bool pd_enable_log_info = false;
-  bool pd_enable_trt = false;
-  bool pd_collect_shape = false;
-  int pd_mkldnn_cache_size = 1;
-  std::vector<std::string> pd_delete_pass_names;
-
-  // ======Only for Paddle IPU Backend =======
-  int ipu_device_num = 1;
-  int ipu_micro_batch_size = 1;
-  bool ipu_enable_pipelining = false;
-  int ipu_batches_per_step = 1;
-  bool ipu_enable_fp16 = false;
-  int ipu_replica_num = 1;
-  float ipu_available_memory_proportion = 1.0;
-  bool ipu_enable_half_partial = false;
-
-  // ======Only for Trt Backend=======
-  std::map<std::string, std::vector<int32_t>> trt_max_shape;
-  std::map<std::string, std::vector<int32_t>> trt_min_shape;
-  std::map<std::string, std::vector<int32_t>> trt_opt_shape;
-  std::string trt_serialize_file = "";
-  bool trt_enable_fp16 = false;
-  bool trt_enable_int8 = false;
-  size_t trt_max_batch_size = 1;
-  size_t trt_max_workspace_size = 1 << 30;
-  // ======Only for PaddleTrt Backend=======
-  std::vector<std::string> trt_disabled_ops_{};
-
-  PorosBackendOption poros_option;
-
-  OpenVINOBackendOption openvino_option;
-
-  // ======Only for RKNPU2 Backend=======
-  fastdeploy::rknpu2::CpuName rknpu2_cpu_name_ =
-      fastdeploy::rknpu2::CpuName::RK3588;
-  fastdeploy::rknpu2::CoreMask rknpu2_core_mask_ =
-      fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
-
-
-  /// Option to configure Paddle Lite backend
-  LiteBackendOption paddle_lite_option;
+  /// Benchmark option
+  benchmark::BenchmarkOption benchmark_option;
 
   // If model_from_memory is true, the model_file and params_file is
   // binary stream in memory;
@@ -433,11 +175,80 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string model_file = "";
   std::string params_file = "";
   bool model_from_memory_ = false;
-  // format of input model
+  /// format of input model
   ModelFormat model_format = ModelFormat::PADDLE;
 
-  // Benchmark option
-  benchmark::BenchmarkOption benchmark_option;  
+  // for cpu inference
+  // default will let the backend choose their own default value
+  int cpu_thread_num = -1;
+  int device_id = 0;
+  Backend backend = Backend::UNKNOWN;
+
+  Device device = Device::CPU;
+
+  void* external_stream_ = nullptr;
+
+  bool enable_pinned_memory = false;
+
+  // ======Only for RKNPU2 Backend=======
+  fastdeploy::rknpu2::CpuName rknpu2_cpu_name_ =
+      fastdeploy::rknpu2::CpuName::RK3588;
+  fastdeploy::rknpu2::CoreMask rknpu2_core_mask_ =
+      fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
+
+  // *** The belowing api are deprecated, will be removed in v1.2.0
+  // *** Do not use it anymore
+
+  void SetPaddleMKLDNN(bool pd_mkldnn = true); 
+  void EnablePaddleToTrt();
+  void DeletePaddleBackendPass(const std::string& delete_pass_name);
+  void EnablePaddleLogInfo();
+  void DisablePaddleLogInfo();
+  void SetPaddleMKLDNNCacheSize(int size);
+  void SetOpenVINODevice(const std::string& name = "CPU");
+  void SetOpenVINOShapeInfo(
+      const std::map<std::string, std::vector<int64_t>>& shape_info) {
+    openvino_option.shape_infos = shape_info;
+  }
+  void SetOpenVINOCpuOperators(const std::vector<std::string>& operators) {
+    openvino_option.SetCpuOperators(operators);
+  }
+  void SetLiteOptimizedModelDir(const std::string& optimized_model_dir);
+  void SetLiteSubgraphPartitionPath(
+      const std::string& nnadapter_subgraph_partition_config_path);
+  void SetLiteSubgraphPartitionConfigBuffer(
+      const std::string& nnadapter_subgraph_partition_config_buffer);
+  void
+  SetLiteContextProperties(const std::string& nnadapter_context_properties);
+  void SetLiteModelCacheDir(const std::string& nnadapter_model_cache_dir);
+  void SetLiteDynamicShapeInfo(
+      const std::map<std::string, std::vector<std::vector<int64_t>>>&
+          nnadapter_dynamic_shape_info);
+  void SetLiteMixedPrecisionQuantizationConfigPath(
+      const std::string& nnadapter_mixed_precision_quantization_config_path);
+  void EnableLiteFP16();
+  void DisableLiteFP16();
+  void EnableLiteInt8();
+  void DisableLiteInt8();
+  void SetLitePowerMode(LitePowerMode mode);
+  void SetTrtInputShape(
+      const std::string& input_name, const std::vector<int32_t>& min_shape,
+      const std::vector<int32_t>& opt_shape = std::vector<int32_t>(),
+      const std::vector<int32_t>& max_shape = std::vector<int32_t>());
+  void SetTrtMaxWorkspaceSize(size_t trt_max_workspace_size);
+  void SetTrtMaxBatchSize(size_t max_batch_size);
+  void EnableTrtFP16();
+  void DisableTrtFP16();
+  void SetTrtCacheFile(const std::string& cache_file_path);
+  void EnablePinnedMemory();
+  void DisablePinnedMemory();
+  void EnablePaddleTrtCollectShape();
+  void DisablePaddleTrtCollectShape();
+  void DisablePaddleTrtOPs(const std::vector<std::string>& ops);
+  void SetOpenVINOStreams(int num_streams);
+  void SetOrtGraphOptLevel(int level = -1);
+  void UsePaddleBackend();
+  void UseLiteBackend();
 };
 
 }  // namespace fastdeploy
