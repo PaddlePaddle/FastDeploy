@@ -12,16 +12,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-##################################### Building: FastDeploy C API #######################################
-message("----start--C# API-------")
+##################################### Building: FastDeploy C# API #######################################
+PROJECT(fastdeploy_csharp CSharp)
 
-if(NOT WITH_CSHARPAPI)
-  return()
-endif()
+CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 
-file(GLOB_RECURSE DEPLOY_CSHARPAPI_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/csharp/fastdeploy/*.cs)
+option(ENABLE_VISION "Whether to enable vision models usage." OFF)
+
+file(GLOB_RECURSE DEPLOY_CSHARPAPI_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/*.cs)
 if(NOT ENABLE_VISION)
-    file(GLOB_RECURSE DEPLOY_VISION_CSHARPAPI_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/csharp/fastdeploy/vision/*.cs)
+    file(GLOB_RECURSE DEPLOY_VISION_CSHARPAPI_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/vision/*.cs)
     list(REMOVE_ITEM DEPLOY_CSHARPAPI_SRCS ${DEPLOY_VISION_CSHARPAPI_SRCS})
 endif()
-list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_CSHARPAPI_SRCS})
+
+# Define the DLL target, including all relevant project files.
+add_library(fastdeploy_csharp SHARED ${DEPLOY_CSHARPAPI_SRCS})
+
+# Set the C# language version (defaults to 3.0 if not set).
+set(CMAKE_CSharp_FLAGS "/langversion:10")
+# Add in some .NET reference libraries.
+set_property(TARGET fastdeploy_csharp PROPERTY VS_DOTNET_REFERENCES
+    "Microsoft.CSharp"
+    "System"
+    "System.Core"
+    "System.Data"
+    "System.Deployment"
+    "System.Drawing"
+    "System.Net.Http"
+    "System.Xml"
+)
+
+set_property(TARGET fastdeploy_csharp
+    PROPERTY VS_PACKAGE_REFERENCES  "OpenCvSharp4_4.7.0.20230115"
+)
