@@ -1,1 +1,0 @@
-../../segmentation/ppmatting/README_CN.md
