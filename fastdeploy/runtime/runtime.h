@@ -95,6 +95,11 @@ struct FASTDEPLOY_DECL Runtime {
    */
   bool Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
                const RuntimeOption& _option);
+  /** \brief Get profile time of Runtime after the profile process is done.
+   */
+  double GetProfileTime() {
+    return backend_->benchmark_result_.time_of_runtime;
+  }             
 
  private:
   void CreateOrtBackend();

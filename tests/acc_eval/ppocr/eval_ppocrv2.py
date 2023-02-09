@@ -103,7 +103,7 @@ rec_model = fd.vision.ocr.Recognizer(
     runtime_option=runtime_option)
 
 # PPOCR的Rec模型开启静态推理, 其他硬件不需要的话请注释掉.
-rec_model.preprocessor.static_shape = True
+rec_model.preprocessor.static_shape_infer = True
 
 # 创建PP-OCR，串联3个模型，其中cls_model可选，如无需求，可设置为None
 ppocr_v2 = fd.vision.ocr.PPOCRv2(

@@ -247,5 +247,40 @@ std::vector<FDMat> WrapMat(const std::vector<cv::Mat>& images) {
   return mats;
 }
 
+bool CheckShapeConsistency(std::vector<Mat>* mats) {
+  for (size_t i = 1; i < mats->size(); ++i) {
+    if ((*mats)[i].Channels() != (*mats)[0].Channels() ||
+        (*mats)[i].Width() != (*mats)[0].Width() ||
+        (*mats)[i].Height() != (*mats)[0].Height()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+FDTensor* CreateCachedGpuInputTensor(Mat* mat) {
+#ifdef WITH_GPU
+  FDTensor* src = mat->Tensor();
+  if (src->device == Device::GPU) {
+    return src;
+  } else if (src->device == Device::CPU) {
+    // Mats on CPU, we need copy these tensors from CPU to GPU
+    FDASSERT(src->Shape().size() == 3, "The CPU tensor must has 3 dims.")
+    mat->input_cache->Resize(src->Shape(), src->Dtype(), "input_cache",
+                             Device::GPU);
+    FDASSERT(
+        cudaMemcpyAsync(mat->input_cache->Data(), src->Data(), src->Nbytes(),
+                        cudaMemcpyHostToDevice, mat->Stream()) == 0,
+        "[ERROR] Error occurs while copy memory from CPU to GPU.");
+    return mat->input_cache;
+  } else {
+    FDASSERT(false, "FDMat is on unsupported device: %d", src->device);
+  }
+#else
+  FDASSERT(false, "FastDeploy didn't compile with WITH_GPU.");
+#endif
+  return nullptr;
+}
+
 }  // namespace vision
 }  // namespace fastdeploy

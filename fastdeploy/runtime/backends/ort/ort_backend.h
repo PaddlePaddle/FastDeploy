@@ -54,7 +54,7 @@ class OrtBackend : public BaseBackend {
   std::vector<TensorInfo> GetOutputInfos() override;
   static std::vector<OrtCustomOp*> custom_operators_;
   void InitCustomOperators();
-
+  
  private:
   bool InitFromPaddle(const std::string& model_buffer,
                       const std::string& params_buffer,

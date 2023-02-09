@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/core/fd_tensor.h"
-#include "fastdeploy/core/float16.h"
-#include "fastdeploy/utils/utils.h"
 
 #include <algorithm>
 #include <cstring>
+
+#include "fastdeploy/core/float16.h"
+#include "fastdeploy/utils/utils.h"
 #ifdef WITH_GPU
 #include <cuda_runtime_api.h>
 #endif
@@ -142,6 +143,9 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape,
                       const FDDataType& data_type,
                       const std::string& tensor_name,
                       const Device& new_device) {
+  if (device != new_device) {
+    FreeFn();
+  }
   external_data_ptr = nullptr;
   name = tensor_name;
   device = new_device;
@@ -269,9 +273,10 @@ bool FDTensor::ReallocFn(size_t nbytes) {
     }
     return buffer_ != nullptr;
 #else
-    FDASSERT(false, "The FastDeploy FDTensor allocator didn't compile under "
-                    "-DWITH_GPU=ON,"
-                    "so this is an unexpected problem happend.");
+    FDASSERT(false,
+             "The FastDeploy FDTensor allocator didn't compile under "
+             "-DWITH_GPU=ON,"
+             "so this is an unexpected problem happend.");
 #endif
   } else {
     if (is_pinned_memory) {
@@ -285,9 +290,10 @@ bool FDTensor::ReallocFn(size_t nbytes) {
       }
       return buffer_ != nullptr;
 #else
-      FDASSERT(false, "The FastDeploy FDTensor allocator didn't compile under "
-                      "-DWITH_GPU=ON,"
-                      "so this is an unexpected problem happend.");
+      FDASSERT(false,
+               "The FastDeploy FDTensor allocator didn't compile under "
+               "-DWITH_GPU=ON,"
+               "so this is an unexpected problem happend.");
 #endif
     }
     buffer_ = realloc(buffer_, nbytes);
@@ -296,8 +302,7 @@ bool FDTensor::ReallocFn(size_t nbytes) {
 }
 
 void FDTensor::FreeFn() {
-  if (external_data_ptr != nullptr)
-    external_data_ptr = nullptr;
+  if (external_data_ptr != nullptr) external_data_ptr = nullptr;
   if (buffer_ != nullptr) {
     if (device == Device::GPU) {
 #ifdef WITH_GPU
@@ -381,13 +386,16 @@ FDTensor::FDTensor(const Scalar& scalar) {
       (reinterpret_cast<double*>(Data()))[0] = scalar.to<double>();
       break;
     default:
-      break;  
+      break;
   }
 }
 
 FDTensor::FDTensor(const FDTensor& other)
-    : shape(other.shape), name(other.name), dtype(other.dtype),
-      device(other.device), external_data_ptr(other.external_data_ptr),
+    : shape(other.shape),
+      name(other.name),
+      dtype(other.dtype),
+      device(other.device),
+      external_data_ptr(other.external_data_ptr),
       device_id(other.device_id) {
   // Copy buffer
   if (other.buffer_ == nullptr) {
@@ -401,9 +409,12 @@ FDTensor::FDTensor(const FDTensor& other)
 }
 
 FDTensor::FDTensor(FDTensor&& other)
-    : buffer_(other.buffer_), shape(std::move(other.shape)),
-      name(std::move(other.name)), dtype(other.dtype),
-      external_data_ptr(other.external_data_ptr), device(other.device),
+    : buffer_(other.buffer_),
+      shape(std::move(other.shape)),
+      name(std::move(other.name)),
+      dtype(other.dtype),
+      external_data_ptr(other.external_data_ptr),
+      device(other.device),
       device_id(other.device_id) {
   other.name = "";
   // Note(zhoushunjie): Avoid double free.

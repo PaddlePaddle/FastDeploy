@@ -30,12 +30,7 @@ class SophgoBackend : public BaseBackend {
  public:
   SophgoBackend() = default;
   virtual ~SophgoBackend();
-  bool LoadModel(void* model);
-  bool GetSDKAndDeviceVersion();
-  bool GetModelInputOutputInfos();
-  void BuildOption(const SophgoBackendOption& option);
-  bool InitFromSophgo(const std::string& model_file,
-              const SophgoBackendOption& option = SophgoBackendOption());
+  bool Init(const RuntimeOption& option);
 
   int NumInputs() const override {
       return static_cast<int>(inputs_desc_.size());
@@ -54,6 +49,10 @@ class SophgoBackend : public BaseBackend {
               bool copy_to_fd = true) override;
 
  private:
+  bool LoadModel(void* model);
+  bool GetSDKAndDeviceVersion();
+  bool GetModelInputOutputInfos();
+
   std::vector<TensorInfo> inputs_desc_;
   std::vector<TensorInfo> outputs_desc_;
   std::string net_name_;
