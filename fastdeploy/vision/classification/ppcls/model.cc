@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/classification/ppcls/model.h"
+
 #include "fastdeploy/utils/unique_ptr.h"
 
 namespace fastdeploy {
@@ -23,7 +24,8 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
                                  const std::string& params_file,
                                  const std::string& config_file,
                                  const RuntimeOption& custom_option,
-                                 const ModelFormat& model_format) : preprocessor_(config_file) {
+                                 const ModelFormat& model_format)
+    : preprocessor_(config_file) {
   if (model_format == ModelFormat::PADDLE) {
     valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT,
                           Backend::LITE};
@@ -32,15 +34,16 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
     valid_ascend_backends = {Backend::LITE};
     valid_kunlunxin_backends = {Backend::LITE};
     valid_ipu_backends = {Backend::PDINFER};
-  }else if (model_format == ModelFormat::SOPHGO) {
+    valid_directml_backends = {Backend::ORT};
+  } else if (model_format == ModelFormat::SOPHGO) {
     valid_sophgonpu_backends = {Backend::SOPHGOTPU};
-  } 
-  else {
+  } else {
     valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
     valid_gpu_backends = {Backend::ORT, Backend::TRT};
     valid_rknpu_backends = {Backend::RKNPU2};
+    valid_directml_backends = {Backend::ORT};
   }
-  
+
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -48,8 +51,9 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
   initialized = Initialize();
 }
 
-std::unique_ptr<PaddleClasModel>  PaddleClasModel::Clone() const {
-  std::unique_ptr<PaddleClasModel> clone_model = utils::make_unique<PaddleClasModel>(PaddleClasModel(*this));
+std::unique_ptr<PaddleClasModel> PaddleClasModel::Clone() const {
+  std::unique_ptr<PaddleClasModel> clone_model =
+      utils::make_unique<PaddleClasModel>(PaddleClasModel(*this));
   clone_model->SetRuntime(clone_model->CloneRuntime());
   return clone_model;
 }
@@ -79,7 +83,8 @@ bool PaddleClasModel::Predict(const cv::Mat& im, ClassifyResult* result) {
   return true;
 }
 
-bool PaddleClasModel::BatchPredict(const std::vector<cv::Mat>& images, std::vector<ClassifyResult>* results) {
+bool PaddleClasModel::BatchPredict(const std::vector<cv::Mat>& images,
+                                   std::vector<ClassifyResult>* results) {
   std::vector<FDMat> fd_images = WrapMat(images);
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
@@ -92,7 +97,8 @@ bool PaddleClasModel::BatchPredict(const std::vector<cv::Mat>& images, std::vect
   }
 
   if (!postprocessor_.Run(reused_output_tensors_, results)) {
-    FDERROR << "Failed to postprocess the inference results by runtime." << std::endl;
+    FDERROR << "Failed to postprocess the inference results by runtime."
+            << std::endl;
     return false;
   }
 
