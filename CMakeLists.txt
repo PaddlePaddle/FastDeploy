@@ -73,6 +73,7 @@ option(WITH_ASCEND "Whether to compile for Huawei Ascend deploy." OFF)
 option(WITH_TIMVX "Whether to compile for TIMVX deploy." OFF)
 option(WITH_KUNLUNXIN "Whether to compile for KunlunXin XPU deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
+
 ############################# Options for Android cross compiling #########################
 if(ANDROID)
   option(WITH_OPENCV_STATIC "Whether to use OpenCV static lib for Android." OFF)
