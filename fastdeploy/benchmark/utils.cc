@@ -53,7 +53,7 @@ void ResourceUsageMonitor::Start() {
     while (true) {
       DumpCurrentCpuMemoryUsage(cpu_mem_file_name_);
 #if defined(WITH_GPU)
-      DumpCurrentGpuMemoryUsage(gpu_mem_file_name, gpu_id_);
+      DumpCurrentGpuMemoryUsage(gpu_mem_file_name_, gpu_id_);
 #endif
       if (stop_signal_) break;
       std::this_thread::sleep_for(
