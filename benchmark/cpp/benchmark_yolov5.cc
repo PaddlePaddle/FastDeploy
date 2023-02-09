@@ -77,13 +77,13 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     double end2end = tc.Duration() / repeats * 1000;
     std::cout << "End2End(ms): " << end2end << "ms." << std::endl;
     if (FLAGS_collect_memory_info) {
-      resource_moniter.Stop();
       float cpu_mem = resource_moniter.GetMaxCpuMem();
       float gpu_mem = resource_moniter.GetMaxGpuMem();
       float gpu_util = resource_moniter.GetMaxGpuUtil();
       std::cout << "cpu_pss_mb: " << cpu_mem << "MB." << std::endl;
       std::cout << "gpu_pss_mb: " << gpu_mem << "MB." << std::endl;
       std::cout << "gpu_util: " << gpu_util << std::endl;
+      resource_moniter.Stop();
     }
     auto vis_im = fastdeploy::vision::VisDetection(im, res);
     cv::imwrite("vis_result.jpg", vis_im);
