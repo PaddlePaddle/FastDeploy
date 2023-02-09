@@ -23,6 +23,9 @@ python infer_paddle_model.py --model yolov6s_infer --image 000000014439.jpg  --d
 python infer_paddle_model.py --model yolov6s_infer --image 000000014439.jpg  --device gpu
 # KunlunXin XPU inference
 python infer_paddle_model.py --model yolov6s_infer --image 000000014439.jpg  --device kunlunxin
+# Huawei Ascend Inference
+python infer_paddle_model.py --model yolov6s_infer --image 000000014439.jpg  --device ascend
+
 ```
 If you want to verify the inference of ONNX models, refer to the following command:
 ```bash
@@ -34,7 +37,7 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 python infer.py --model yolov6s.onnx --image 000000014439.jpg --device cpu
 # GPU inference
 python infer.py --model yolov6s.onnx --image 000000014439.jpg --device gpu
-# TensorRT inference on GPU 
+# TensorRT inference on GPU
 python infer.py --model yolov6s.onnx --image 000000014439.jpg --device gpu --use_trt True
 ```
 
@@ -42,7 +45,7 @@ The visualized result after running is as follows
 
 <img width="640" src="https://user-images.githubusercontent.com/67993288/184301725-390e4abb-db2b-482d-931d-469381322626.jpg">
 
-## YOLOv6 Python Interface 
+## YOLOv6 Python Interface
 
 ```python
 fastdeploy.vision.detection.YOLOv6(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
@@ -52,7 +55,7 @@ YOLOv6 model loading and initialization, among which model_file is the exported 
 
 **Parameter**
 
-> * **model_file**(str): Model file path 
+> * **model_file**(str): Model file path
 > * **params_file**(str): Parameter file path. No need to set when the model is in ONNX format
 > * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
 > * **model_format**(ModelFormat): Model format. ONNX format by default

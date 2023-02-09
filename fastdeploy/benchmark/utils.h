@@ -11,22 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "fastdeploy/pybind/main.h"
+#pragma once
+
+#include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
-void BindYOLOv5Cls(pybind11::module& m) {
-  pybind11::class_<vision::classification::YOLOv5Cls, FastDeployModel>(
-      m, "YOLOv5Cls")
-      .def(pybind11::init<std::string, std::string, RuntimeOption,
-                          ModelFormat>())
-      .def("predict",
-           [](vision::classification::YOLOv5Cls& self, pybind11::array& data,
-              int topk = 1) {
-             auto mat = PyArrayToCvMat(data);
-             vision::ClassifyResult res;
-             self.Predict(&mat, &res, topk);
-             return res;
-           })
-      .def_readwrite("size", &vision::classification::YOLOv5Cls::size);
-}
+namespace benchmark {
+
+// Record current cpu memory usage into file
+FASTDEPLOY_DECL void DumpCurrentCpuMemoryUsage(const std::string& name);
+
+// Record current gpu memory usage into file
+FASTDEPLOY_DECL void DumpCurrentGpuMemoryUsage(const std::string& name,
+                                               int device_id);
+
+// Get Max cpu memory usage
+FASTDEPLOY_DECL float GetCpuMemoryUsage(const std::string& name);
+
+// Get Max gpu memory usage
+FASTDEPLOY_DECL float GetGpuMemoryUsage(const std::string& name);
+
+}  // namespace benchmark
 }  // namespace fastdeploy

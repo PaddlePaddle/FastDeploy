@@ -1,3 +1,4 @@
+[English](../../../en/faq/rknpu2/build.md) | 中文
 # FastDeploy RKNPU2引擎编译
 
 ## FastDeploy后端支持详情
