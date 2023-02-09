@@ -51,8 +51,9 @@ void LiteBackend::ConfigureCpu(const LiteBackendOption& option) {
 
 void LiteBackend::ConfigureKunlunXin(const LiteBackendOption& option) {
   std::vector<paddle::lite_api::Place> valid_places;
-  valid_places.push_back(
-      paddle::lite_api::Place{TARGET(kXPU), PRECISION(kInt8)});
+  // TODO(yeliang): Placing kInt8 first may cause accuracy issues of some model
+  // valid_places.push_back(
+  //     paddle::lite_api::Place{TARGET(kXPU), PRECISION(kInt8)});
   if (option.enable_fp16) {
     valid_places.push_back(
         paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFP16)});
