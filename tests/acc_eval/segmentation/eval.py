@@ -54,5 +54,5 @@ model = fd.vision.segmentation.PaddleSegModel(
     model_file, params_file, config_file, runtime_option=runtime_option)
 
 res = fd.vision.evaluation.eval_segmentation(
-    model=model, data_dir="../dataset/FD_dataset/data/cityscapes")
+    model=model, data_dir="../dataset/cityscapes")
 print(res)
