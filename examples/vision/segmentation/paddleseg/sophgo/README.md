@@ -1,8 +1,13 @@
 [English](README.md) | 简体中文
-# PaddleSeg C++部署示例
+# PaddleSeg在算能（Sophgo）硬件上通过FastDeploy部署模型
+PaddleSeg支持通过FastDeploy在算能TPU上部署相关Segmentation模型
 
-## 支持模型列表
+## 算能硬件支持的PaddleSeg模型
 
+- [PaddleSeg](https://github.com/PaddlePaddle/PaddleSeg)
+>> **注意**：支持PaddleSeg高于2.6版本的Segmentation模型
+
+目前算能TPU支持的模型如下：
 - [PP-LiteSeg系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/configs/pp_liteseg/README.md)
 
 ## 预导出的推理模型

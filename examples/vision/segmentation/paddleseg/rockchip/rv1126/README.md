@@ -1,10 +1,16 @@
 [English](README.md) | 简体中文
-# 在瑞芯微 RV1126 上使用 FastDeploy 部署 PaddleSeg 模型
-瑞芯微 RV1126 是一款编解码芯片，专门面相人工智能的机器视觉领域。目前，FastDeploy 支持在 RV1126 上基于 Paddle-Lite 部署 PaddleSeg 相关模型
+# PaddleSeg在瑞芯微 RV1126上通过FastDeploy部署模型
+瑞芯微 RV1126 是一款编解码芯片，专门面相人工智能的机器视觉领域。PaddleSeg支持通过FastDeploy在RV1126上基于Paddle-Lite部署相关Segmentation模型
 
-## 瑞芯微 RV1126 支持的PaddleSeg模型
+## 瑞芯微 RV1126支持的PaddleSeg模型
+
+- [PaddleSeg](https://github.com/PaddlePaddle/PaddleSeg)
+>> **注意**：支持PaddleSeg高于2.6版本的Segmentation模型
+
 目前瑞芯微 RV1126 的 NPU 支持的量化模型如下：
-## 预导出的推理模型
+- [PP-LiteSeg系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/configs/pp_liteseg/README.md)
+
+## 预导出的量化推理模型
 为了方便开发者的测试，下面提供了PaddleSeg导出的部分量化后的推理模型，开发者可直接下载使用。
 
 | 模型                              | 参数文件大小    |输入Shape |  mIoU | mIoU (flip) | mIoU (ms+flip) |

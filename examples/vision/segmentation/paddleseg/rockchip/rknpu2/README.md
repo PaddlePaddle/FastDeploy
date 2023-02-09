@@ -1,6 +1,7 @@
 [English](README.md) | 简体中文
 
-# 基于RKNPU2使用FastDeploy部署PaddleSeg模型
+# PaddleSeg利用FastDeploy基于RKNPU2部署Segmentation模型
+
 RKNPU2 提供了一个高性能接口来访问 Rockchip NPU，支持如下硬件的部署
 - RK3566/RK3568
 - RK3588/RK3588S
@@ -10,7 +11,8 @@ RKNPU2 提供了一个高性能接口来访问 Rockchip NPU，支持如下硬件
 
 ## 模型版本说明
 
-- [PaddleSeg develop](https://github.com/PaddlePaddle/PaddleSeg/tree/develop)
+- [PaddleSeg](https://github.com/PaddlePaddle/PaddleSeg)
+>> **注意**：支持PaddleSeg高于2.6版本的Segmentation模型
 
 目前FastDeploy使用RKNPU2推理PaddleSeg支持如下模型的部署:
 - [U-Net系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/configs/unet/README.md)

@@ -1,10 +1,13 @@
+[English](README.md) | 简体中文
+
 # PaddleSeg模型高性能全场景部署方案-FastDeploy
 
-PaddleSeg通过FastDeploy支持在NVIDIA GPU、X86 CPU、飞腾CPU、ARM CPU、Intel GPU(独立显卡/集成显卡)硬件上部署
+PaddleSeg支持利用FastDeploy在NVIDIA GPU、X86 CPU、飞腾CPU、ARM CPU、Intel GPU(独立显卡/集成显卡)硬件上部署Segmentation模型
 
 ## 模型版本说明
 
-- [PaddleSeg develop](https://github.com/PaddlePaddle/PaddleSeg/tree/develop)
+- [PaddleSeg](https://github.com/PaddlePaddle/PaddleSeg)
+>> **注意**：支持PaddleSeg高于2.6版本的Segmentation模型
 
 目前FastDeploy支持如下模型的部署
 

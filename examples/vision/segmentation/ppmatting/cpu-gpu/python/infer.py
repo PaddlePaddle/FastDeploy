@@ -38,6 +38,10 @@ def build_option(args):
 
     if args.use_trt:
         option.use_trt_backend()
+        # If use original Tensorrt, not Paddle-TensorRT,
+        # comment the following two lines
+        option.enable_paddle_to_trt()
+        option.enable_paddle_trt_collect_shape()
         option.set_trt_input_shape("img", [1, 3, 512, 512])
 
     if args.device.lower() == "kunlunxin":
