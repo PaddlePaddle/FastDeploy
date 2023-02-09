@@ -1,42 +1,22 @@
-English | [简体中文](README_CN.md)
-# PP-Matting Model Deployment
+# PaddleSeg高性能全场景模型部署方案—FastDeploy
 
-## Model Description
+## FastDeploy介绍
 
-- [PP-Matting Release/2.6](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
+[FastDeploy](https://github.com/PaddlePaddle/FastDeploy)是一款全场景、易用灵活、极致高效的AI推理部署工具，使用FastDeploy可以简单高效的在10+款硬件上对PaddleSeg Matting模型进行快速部署
 
-## List of Supported Models
+## 支持如下的硬件部署
 
-Now FastDeploy supports the deployment of the following models
+| 硬件支持列表 |  |   |   |
+|:----- | :-- | :-- | :-- |
+| [NVIDIA GPU](cpu-gpu) | [X86 CPU](cpu-gpu)| [飞腾CPU](cpu-gpu) | [ARM CPU](cpu-gpu) |
+| [Intel GPU(独立显卡/集成显卡)](cpu-gpu) | [昆仑](cpu-gpu) | [昇腾](cpu-gpu) |
 
-- [PP-Matting models](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
-- [PP-HumanMatting models](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
-- [ModNet models](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
+## 常见问题
 
+遇到问题可查看常见问题集合文档或搜索FastDeploy issues，链接如下：
 
-## Export Deployment Model
+[常见问题集合](https://github.com/PaddlePaddle/FastDeploy/tree/develop/docs/cn/faq)
 
-Before deployment, PP-Matting needs to be exported into the deployment model. Refer to [Export Model](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting) for more information. (Tips: You need to set the `--input_shape` parameter of the export script when exporting PP-Matting and PP-HumanMatting models)
+[FastDeploy issues](https://github.com/PaddlePaddle/FastDeploy/issues)
 
-
-## Download Pre-trained Models
-
-For developers' testing, models exported by PP-Matting are provided below. Developers can download and use them directly.
-
-The accuracy metric is sourced from the model description in PP-Matting. (Accuracy data are not provided) Refer to the introduction in PP-Matting for more details.
-
-| Model                                                               | Parameter Size    | Accuracy    | Note |
-|:---------------------------------------------------------------- |:----- |:----- | :------ |
-| [PP-Matting-512](https://bj.bcebos.com/paddlehub/fastdeploy/PP-Matting-512.tgz) | 106MB | - |
-| [PP-Matting-1024](https://bj.bcebos.com/paddlehub/fastdeploy/PP-Matting-1024.tgz) | 106MB | - |
-| [PP-HumanMatting](https://bj.bcebos.com/paddlehub/fastdeploy/PPHumanMatting.tgz) | 247MB | - |
-| [Modnet-ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/PPModnet_ResNet50_vd.tgz) | 355MB | - |
-| [Modnet-MobileNetV2](https://bj.bcebos.com/paddlehub/fastdeploy/PPModnet_MobileNetV2.tgz) | 28MB | - |
-| [Modnet-HRNet_w18](https://bj.bcebos.com/paddlehub/fastdeploy/PPModnet_HRNet_w18.tgz) | 51MB | - |
-
-
-
-## Detailed Deployment Tutorials
-
-- [Python Deployment](python)
-- [C++ Deployment](cpp)
+若以上方式都无法解决问题，欢迎给FastDeploy提交新的[issue](https://github.com/PaddlePaddle/FastDeploy/issues)

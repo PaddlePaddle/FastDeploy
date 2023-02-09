@@ -1,10 +1,13 @@
-# 使用FastDeploy部署PaddleSeg模型
+[English](README.md) | 简体中文
 
-FastDeploy支持在华为昇腾上部署PaddleSeg模型
+# PaddleSeg利用FastDeploy在华为昇腾上部署模型
 
-## 模型版本说明
+PaddleSeg支持通过FastDeploy在华为昇腾上部署Segmentation相关模型
 
-- [PaddleSeg develop](https://github.com/PaddlePaddle/PaddleSeg/tree/develop)
+## 支持的PaddleSeg模型
+
+- [PaddleSeg](https://github.com/PaddlePaddle/PaddleSeg)
+>> **注意**：支持PaddleSeg高于2.6版本的Segmentation模型
 
 目前FastDeploy支持如下模型的部署
 

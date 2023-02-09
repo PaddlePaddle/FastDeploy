@@ -3,7 +3,7 @@
 
 在部署前，需确认以下步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/rknpu2/rknpu2.md)
+- 1. 软硬件环境满足要求，RKNPU2环境部署等参考[FastDeploy环境要求](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/rknpu2/rknpu2.md)
 
 【注意】如你部署的为**PP-Matting**、**PP-HumanMatting**以及**ModNet**请参考[Matting模型部署](../../../../../matting/)
 

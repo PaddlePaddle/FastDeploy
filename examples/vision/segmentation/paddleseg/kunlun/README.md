@@ -1,8 +1,13 @@
-# 使用FastDeploy部署PaddleSeg模型
+[English](README.md) | 简体中文
+
+# PaddleSeg模型高性能全场景部署方案-FastDeploy
+
+PaddleSeg支持利用FastDeploy在昆仑芯片上部署Segmentation模型
 
 ## 模型版本说明
 
-- [PaddleSeg develop](https://github.com/PaddlePaddle/PaddleSeg/tree/develop)
+- [PaddleSeg](https://github.com/PaddlePaddle/PaddleSeg)
+>> **注意**：支持PaddleSeg高于2.6版本的Segmentation模型
 
 目前FastDeploy支持如下模型的部署
 

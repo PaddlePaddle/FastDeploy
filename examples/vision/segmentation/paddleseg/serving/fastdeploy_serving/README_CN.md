@@ -1,9 +1,7 @@
 [English](README.md) | 简体中文
 # PaddleSeg 服务化部署示例
 
-在服务化部署前，需确认
-
-- 1. 服务化镜像的软硬件环境要求和镜像拉取命令请参考[FastDeploy服务化部署](https://github.com/PaddlePaddle/FastDeploy/blob/develop/serving/README_CN.md)
+在服务化部署前，需确认服务化镜像的软硬件环境要求和镜像拉取命令，请参考[FastDeploy服务化部署](https://github.com/PaddlePaddle/FastDeploy/blob/develop/serving/README_CN.md)
 
 
 ## 启动服务

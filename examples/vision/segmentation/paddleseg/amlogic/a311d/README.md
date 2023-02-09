@@ -1,13 +1,17 @@
 [English](README.md) | 简体中文
 
-# 在晶晨A311D上使用FastDeploy部署PaddleSeg模型
-晶晨A311D是一款先进的AI应用处理器。FastDeploy支持在A311D上基于Paddle-Lite部署PaddleSeg相关模型
+# PaddleSeg在晶晨A311D上通过FastDeploy部署模型
+晶晨A311D是一款先进的AI应用处理器。PaddleSeg支持通过FastDeploy在A311D上基于Paddle-Lite部署相关Segmentation模型
 
 ## 晶晨A311D支持的PaddleSeg模型
-目前所支持的PaddleSeg模型如下：
+
+- [PaddleSeg](https://github.com/PaddlePaddle/PaddleSeg)
+>> **注意**：支持PaddleSeg高于2.6版本的Segmentation模型
+
+目前晶晨A311D所支持的PaddleSeg模型如下：
 - [PP-LiteSeg系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/configs/pp_liteseg/README.md)
 
-## 预导出的推理模型
+## 预导出的量化推理模型
 为了方便开发者的测试，下面提供了PaddleSeg导出的部分量化后的推理模型，开发者可直接下载使用。
 
 | 模型                              | 参数文件大小    |输入Shape |  mIoU | mIoU (flip) | mIoU (ms+flip) |

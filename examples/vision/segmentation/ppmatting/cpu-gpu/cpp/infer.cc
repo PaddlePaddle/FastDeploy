@@ -121,6 +121,10 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file,
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   option.UseTrtBackend();
+  // If use original Tensorrt, not Paddle-TensorRT,
+  // comment the following two lines
+  option.EnablePaddleToTrt();
+  option.EnablePaddleTrtCollectShape();
   option.SetTrtInputShape("img", {1, 3, 512, 512});
   auto model = fastdeploy::vision::matting::PPMatting(model_file, params_file,
                                                       config_file, option);
