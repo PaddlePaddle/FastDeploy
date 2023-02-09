@@ -299,10 +299,12 @@ if(WITH_GPU)
   include_directories(${CUDA_DIRECTORY}/include)
   if(WIN32)
     find_library(CUDA_LIB cudart ${CUDA_DIRECTORY}/lib/x64)
+    find_library(NVJPEG_LIB nvjpeg ${CUDA_DIRECTORY}/lib/x64)
   else()
     find_library(CUDA_LIB cudart ${CUDA_DIRECTORY}/lib64)
+    find_library(NVJPEG_LIB nvjpeg ${CUDA_DIRECTORY}/lib64)
   endif()
-  list(APPEND DEPEND_LIBS ${CUDA_LIB})
+  list(APPEND DEPEND_LIBS ${CUDA_LIB} ${NVJPEG_LIB})
 
   # build CUDA source files in fastdeploy, CUDA source files include CUDA preprocessing, TRT plugins, etc.
   enable_language(CUDA)
