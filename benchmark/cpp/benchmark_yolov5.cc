@@ -51,7 +51,7 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     if (FLAGS_collect_memory_info) {
       fastdeploy::benchmark::ResourceUsageMonitor resource_moniter(
           sampling_interval, FLAGS_device_id);
-      resource_monter.Start();
+      resource_moniter.Start();
     }
     std::cout << "Warmup " << warmup << " times..." << std::endl;
     for (int i = 0; i < warmup; i++) {
@@ -64,10 +64,10 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     // Step2: repeat for repeats times
     std::cout << "Counting time..." << std::endl;
     std::cout << "Repeat " << repeats << " times..." << std::endl;
+    fastdeploy::vision::DetectionResult res;
     fastdeploy::TimeCounter tc;
     tc.Start();
     for (int i = 0; i < repeats; i++) {
-      fastdeploy::vision::DetectionResult res;
       if (!model.Predict(im, &res)) {
         std::cerr << "Failed to predict." << std::endl;
         return false;
@@ -77,7 +77,7 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     double end2end = tc.Duration() / repeats;
     std::cout << "End2End(ms): " << end2end << "ms." << std::endl;
     if (FLAGS_collect_memory_info) {
-      resource_monter.Stop();
+      resource_moniter.Stop();
     }
     auto vis_im = fastdeploy::vision::VisDetection(im, res);
     cv::imwrite("vis_result.jpg", vis_im);

@@ -13,6 +13,7 @@
 // limitations under the License.
 #pragma once
 
+#include <memory>
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
