@@ -102,6 +102,9 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
       option->UsePaddleInferBackend();
     } else if (FLAGS_backend == "lite") {
       option->UsePaddleLiteBackend();
+      if (FLAGS_use_fp16) {
+        option->EnableLiteFP16();
+      }
     } else if (FLAGS_backend == "default") {
       return true;
     } else {
