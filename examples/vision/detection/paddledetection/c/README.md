@@ -44,9 +44,9 @@ The above command works for Linux or MacOS. For SDK use-pattern in Windows, refe
 FD_C_RuntimeOptionWrapper* FD_C_CreateRuntimeOptionWrapper()
 ```
 
-Create a RuntimeOption object, and return a pointer to manipulate it.
-
-**Return**
+> Create a RuntimeOption object, and return a pointer to manipulate it.
+>
+> **Return**
 > * **fd_c_runtime_option_wrapper**(FD_C_RuntimeOptionWrapper*): Pointer to manipulate RuntimeOption object.
 
 
@@ -67,6 +67,7 @@ void FD_C_RuntimeOptionWrapperUseGpu(
     int gpu_id)
 ```
 > Enable Gpu inference.
+>
 > **Params**
 >
 > * **fd_c_runtime_option_wrapper**(FD_C_RuntimeOptionWrapper*): Pointer to manipulate RuntimeOption object.
@@ -120,6 +121,7 @@ FD_C_Bool FD_C_Imwrite(const char* savepath,  FD_C_Mat img);
 ```
 
 > Write image to a file.
+>
 > **Params**
 >
 > * **savepath**(const char*): save path

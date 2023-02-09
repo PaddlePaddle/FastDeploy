@@ -47,9 +47,10 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 FD_C_RuntimeOptionWrapper* FD_C_CreateRuntimeOptionWrapper()
 ```
 
-创建一个RuntimeOption的配置对象，并且返回操作它的指针。
-
-**返回**
+> 创建一个RuntimeOption的配置对象，并且返回操作它的指针。
+>
+> **返回**
+>
 > * **fd_c_runtime_option_wrapper**(FD_C_RuntimeOptionWrapper*): 指向RuntimeOption对象的指针
 
 
@@ -70,6 +71,7 @@ void FD_C_RuntimeOptionWrapperUseGpu(
     int gpu_id)
 ```
 > 开启GPU推理
+>
 > **参数**
 >
 > * **fd_c_runtime_option_wrapper**(FD_C_RuntimeOptionWrapper*): 指向RuntimeOption对象的指针
@@ -123,6 +125,7 @@ FD_C_Bool FD_C_Imwrite(const char* savepath,  FD_C_Mat img);
 ```
 
 > 将图像写入文件中。
+>
 > **参数**
 >
 > * **savepath**(const char*): 保存图像的路径
