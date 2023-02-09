@@ -93,6 +93,10 @@ void RuntimeOption::SetExternalStream(void* external_stream) {
   external_stream_ = external_stream;
 }
 
+void RuntimeOption::SetExternalRawStream(size_t external_stream) {
+  external_stream_ = (void*) external_stream;
+}
+
 void RuntimeOption::SetCpuThreadNum(int thread_num) {
   FDASSERT(thread_num > 0, "The thread_num must be greater than 0.");
   cpu_thread_num = thread_num;
