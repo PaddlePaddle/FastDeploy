@@ -77,6 +77,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use Huawei Ascend to inference
   void UseAscend();
 
+  /// Use onnxruntime DirectML to inference
+  void UseDirectML();
+
   ///
   /// \brief Turn on KunlunXin XPU.
   ///

@@ -45,6 +45,9 @@ class FASTDEPLOY_DECL FastDeployModel {
   /** Model's valid timvx backends. This member defined all the timvx backends have successfully tested for the model
    */
   std::vector<Backend> valid_timvx_backends = {};
+    /** Model's valid directml backends. This member defined all the cann backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_directml_backends = {};
   /** Model's valid ascend backends. This member defined all the cann backends have successfully tested for the model
    */
   std::vector<Backend> valid_ascend_backends = {};
@@ -153,6 +156,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool CreateTimVXBackend();
   bool CreateKunlunXinBackend();
   bool CreateASCENDBackend();
+  bool CreateDirectMLBackend();
 
   std::shared_ptr<Runtime> runtime_;
   bool runtime_initialized_ = false;

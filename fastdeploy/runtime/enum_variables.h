@@ -29,7 +29,8 @@ namespace fastdeploy {
 /*! Inference backend supported in FastDeploy */
 enum Backend {
   UNKNOWN,  ///< Unknown inference backend
-  ORT,  ///< ONNX Runtime, support Paddle/ONNX format model, CPU / Nvidia GPU
+  ORT,  //< ONNX Runtime, support Paddle/ONNX format model,
+  //< CPU/ Nvidia GPU DirectML
   TRT,  ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
   PDINFER,  ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
   POROS,    ///< Poros, support TorchScript format model, CPU / Nvidia GPU
@@ -58,7 +59,8 @@ enum FASTDEPLOY_DECL Device {
   TIMVX,
   KUNLUNXIN,
   ASCEND,
-  SOPHGOTPUD
+  SOPHGOTPUD,
+  DIRECTML
 };
 
 /*! Deep learning model format */
@@ -93,7 +95,8 @@ static std::map<Device, std::vector<Backend>>
   {Device::TIMVX, {Backend::LITE}},
   {Device::KUNLUNXIN, {Backend::LITE}},
   {Device::ASCEND, {Backend::LITE}},
-  {Device::SOPHGOTPUD, {Backend::SOPHGOTPU}}
+  {Device::SOPHGOTPUD, {Backend::SOPHGOTPU}},
+  {Device::DIRECTML, {Backend::ORT}}
 };
 
 

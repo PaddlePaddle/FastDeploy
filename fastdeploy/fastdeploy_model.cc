@@ -53,6 +53,7 @@ bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
   bool use_sophgotpu = (runtime_option.device == Device::SOPHGOTPUD);
   bool use_timvx = (runtime_option.device == Device::TIMVX);
   bool use_ascend = (runtime_option.device == Device::ASCEND);
+  bool use_directml = (runtime_option.device == Device::DIRECTML);
   bool use_kunlunxin = (runtime_option.device == Device::KUNLUNXIN);
 
   if (use_gpu) {
@@ -88,6 +89,13 @@ bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
       FDERROR << "The valid ascend backends of model " << ModelName() << " are "
               << Str(valid_ascend_backends) << ", " << runtime_option.backend
               << " is not supported." << std::endl;
+      return false;
+    }
+  } else if (use_directml) {
+    if (!IsSupported(valid_directml_backends, runtime_option.backend)) {
+      FDERROR << "The valid directml backends of model " << ModelName()
+              << " are " << Str(valid_directml_backends) << ", "
+              << runtime_option.backend << " is not supported." << std::endl;
       return false;
     }
   } else if (use_kunlunxin) {
@@ -138,6 +146,8 @@ bool FastDeployModel::InitRuntimeWithSpecifiedDevice() {
     return CreateTimVXBackend();
   } else if (runtime_option.device == Device::ASCEND) {
     return CreateASCENDBackend();
+  } else if (runtime_option.device == Device::DIRECTML) {
+    return CreateDirectMLBackend();
   } else if (runtime_option.device == Device::KUNLUNXIN) {
     return CreateKunlunXinBackend();
   } else if (runtime_option.device == Device::SOPHGOTPUD) {
@@ -151,8 +161,9 @@ bool FastDeployModel::InitRuntimeWithSpecifiedDevice() {
     return false;
 #endif
   }
-  FDERROR << "Only support CPU/GPU/IPU/RKNPU/TIMVX/KunlunXin/ASCEND now."
-          << std::endl;
+  FDERROR
+      << "Only support CPU/GPU/IPU/RKNPU/TIMVX/KunlunXin/ASCEND/DirectML now."
+      << std::endl;
   return false;
 }
 
@@ -330,6 +341,30 @@ bool FastDeployModel::CreateASCENDBackend() {
     return true;
   }
   FDERROR << "Found no valid backend for model: " << ModelName() << std::endl;
+  return false;
+}
+
+bool FastDeployModel::CreateDirectMLBackend() {
+  if (valid_directml_backends.size() == 0) {
+    FDERROR << "There's no valid directml backends for model: " << ModelName()
+            << std::endl;
+    return false;
+  }
+
+  for (size_t i = 0; i < valid_directml_backends.size(); ++i) {
+    if (!IsBackendAvailable(valid_directml_backends[i])) {
+      continue;
+    }
+    runtime_option.backend = valid_directml_backends[i];
+    runtime_ = std::unique_ptr<Runtime>(new Runtime());
+    if (!runtime_->Init(runtime_option)) {
+      return false;
+    }
+    runtime_initialized_ = true;
+    return true;
+  }
+  FDERROR << "Found no valid directml backend for model: " << ModelName()
+          << std::endl;
   return false;
 }
 

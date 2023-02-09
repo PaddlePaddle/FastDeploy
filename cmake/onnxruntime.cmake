@@ -75,7 +75,8 @@ else()
     endif()
   endif()
 endif()
-set(ONNXRUNTIME_URL "${ONNXRUNTIME_URL_PREFIX}${ONNXRUNTIME_FILENAME}")
+#set(ONNXRUNTIME_URL "${ONNXRUNTIME_URL_PREFIX}${ONNXRUNTIME_FILENAME}")
+set(ONNXRUNTIME_URL "https://bj.bcebos.com/fastdeploy/third_libs/xyy_x64.zip")
 
 include_directories(${ONNXRUNTIME_INC_DIR}
 )# For ONNXRUNTIME code to include internal headers.

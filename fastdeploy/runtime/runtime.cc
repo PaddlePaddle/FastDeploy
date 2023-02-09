@@ -342,6 +342,7 @@ void Runtime::CreateOrtBackend() {
   ort_option.use_gpu = (option.device == Device::GPU) ? true : false;
   ort_option.gpu_id = option.device_id;
   ort_option.external_stream_ = option.external_stream_;
+  ort_option.use_dml = (option.device == Device::DIRECTML) ? true : false;
 
   backend_ = utils::make_unique<OrtBackend>();
   auto casted_backend = dynamic_cast<OrtBackend*>(backend_.get());
