@@ -82,12 +82,14 @@ std:
 找到蓝色方框标记的NonMaxSuppression节点，可以看到红色方框标记的两个节点名称为p2o.Div.79和p2o.Concat.9,因此需要修改outputs参数，修改后如下:
 
 ```yaml
-outputs_nodes: [ 'p2o.Div.79','p2o.Concat.9' ]
+outputs_nodes:
+  - 'p2o.Mul.179'
+  - 'p2o.Concat.9'
 ```
 
 ### ONNX模型转RKNN模型
 
-为了方便大家使用，我们提供了python脚本，通过我们预配置config你将能够快速的转换ONNX模型到RKNN模型
+为了方便大家使用，我们提供了python脚本，通过我们预配置的config文件，你将能够快速地转换ONNX模型到RKNN模型
 
 ```bash
 python tools/rknpu2/export.py --config_path tools/rknpu2/config/picodet_s_416_coco_lcnet_unquantized.yaml \
