@@ -14,6 +14,7 @@
 #pragma once
 
 #include <memory>
+#include <thread>  // NOLINT
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
@@ -26,6 +27,28 @@ class FASTDEPLOY_DECL ResourceUsageMonitor {
 
   void Start();
   void Stop();
+
+  float GetMaxCpuMem() const {
+    if (!is_supported_ || check_memory_thd_ == nullptr) {
+      return -1.0f;
+    }
+    return max_cpu_mem_;
+  }
+
+  float GetMaxGpuMem() const {
+    if (!is_supported_ || check_memory_thd_ == nullptr) {
+      return -1.0f;
+    }
+    return max_gpu_mem_;
+  }
+
+  float GetMaxGpuUtil() const {
+    if (!is_supported_ || check_memory_thd_ == nullptr) {
+      return -1.0f;
+    }
+    return max_gpu_util_;
+  }
+
   ResourceUsageMonitor(ResourceUsageMonitor&) = delete;
   ResourceUsageMonitor& operator=(const ResourceUsageMonitor&) = delete;
   ResourceUsageMonitor(ResourceUsageMonitor&&) = delete;
@@ -33,28 +56,20 @@ class FASTDEPLOY_DECL ResourceUsageMonitor {
 
  private:
   void StopInternal();
+  // Get current cpu memory info
+  std::string GetCurrentCpuMemoryInfo();
+  // Get current gpu memory info
+  std::string GetCurrentGpuMemoryInfo(int device_id);
 
   bool is_supported_ = false;
   bool stop_signal_ = false;
   const int sampling_interval_;
-  const std::string cpu_mem_file_name_ = "result_cpu.txt";
-  const std::string gpu_mem_file_name_ = "result_gpu.txt";
+  float max_cpu_mem_ = 0.0f;
+  float max_gpu_mem_ = 0.0f;
+  float max_gpu_util_ = 0.0f;
   const int gpu_id_ = 0;
   std::unique_ptr<std::thread> check_memory_thd_ = nullptr;
 };
-
-// Record current cpu memory usage into file
-FASTDEPLOY_DECL void DumpCurrentCpuMemoryUsage(const std::string& name);
-
-// Record current gpu memory usage into file
-FASTDEPLOY_DECL void DumpCurrentGpuMemoryUsage(const std::string& name,
-                                               int device_id);
-
-// Get Max cpu memory usage
-FASTDEPLOY_DECL float GetCpuMemoryUsage(const std::string& name);
-
-// Get Max gpu memory usage
-FASTDEPLOY_DECL float GetGpuMemoryUsage(const std::string& name);
 
 }  // namespace benchmark
 }  // namespace fastdeploy

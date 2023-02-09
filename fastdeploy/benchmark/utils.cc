@@ -17,12 +17,38 @@
 #include <unistd.h>
 #endif
 #include <cmath>
-#include <thread>
 
 #include "fastdeploy/benchmark/utils.h"
 
 namespace fastdeploy {
 namespace benchmark {
+
+// Remove the ch characters at both ends of str
+static std::string strip(const std::string& str, char ch = ' ') {
+  int i = 0;
+  while (str[i] == ch) {
+    i++;
+  }
+  int j = str.size() - 1;
+  while (str[j] == ch) {
+    j--;
+  }
+  return str.substr(i, j + 1 - i);
+}
+
+// Split string
+static void split(const std::string& s, std::vector<std::string>& tokens,
+                  char delim = ' ') {
+  tokens.clear();
+  size_t lastPos = s.find_first_not_of(delim, 0);
+  size_t pos = s.find(delim, lastPos);
+  while (lastPos != std::string::npos) {
+    tokens.emplace_back(s.substr(lastPos, pos - lastPos));
+    lastPos = s.find_first_not_of(delim, pos);
+    pos = s.find(delim, lastPos);
+  }
+  return;
+}
 
 ResourceUsageMonitor::ResourceUsageMonitor(int sampling_interval_ms, int gpu_id)
     : is_supported_(false),
@@ -51,9 +77,18 @@ void ResourceUsageMonitor::Start() {
   check_memory_thd_.reset(new std::thread(([this]() {
     // Note we retrieve the memory usage at the very beginning of the thread.
     while (true) {
-      DumpCurrentCpuMemoryUsage(cpu_mem_file_name_);
+      std::string cpu_mem_info = GetCurrentCpuMemoryInfo();
+      // get max_cpu_mem
+      std::vector<std::string> tokens;
+      split(cpu_mem_info, tokens, ' ');
+      max_cpu_mem_ = std::max(max_cpu_mem_, stof(tokens[3]) / 1024);
 #if defined(WITH_GPU)
-      DumpCurrentGpuMemoryUsage(gpu_mem_file_name_, gpu_id_);
+      std::string gpu_mem_info = GetCurrentGpuMemoryInfo(gpu_id_);
+      // get max_gpu_mem and max_gpu_util
+      std::vector<std::string> tokens;
+      split(gpu_mem_info, tokens, ',') max_gpu_mem_ =
+          std::max(max_gpu_mem_, stof(tokens[6]));
+      max_gpu_util_ = std::max(max_gpu_util_, stof(tokens[7]));
 #endif
       if (stop_signal_) break;
       std::this_thread::sleep_for(
@@ -69,7 +104,7 @@ void ResourceUsageMonitor::Stop() {
            << std::endl;
     return;
   }
-  FDINFO << "stop monitoring memory!" << std::endl;
+  FDINFO << "Stop monitoring memory!" << std::endl;
   StopInternal();
 }
 
@@ -82,20 +117,8 @@ void ResourceUsageMonitor::StopInternal() {
   check_memory_thd_.reset(nullptr);
 }
 
-// Remove the ch characters at both ends of str
-static std::string strip(const std::string& str, char ch = ' ') {
-  int i = 0;
-  while (str[i] == ch) {
-    i++;
-  }
-  int j = str.size() - 1;
-  while (str[j] == ch) {
-    j--;
-  }
-  return str.substr(i, j + 1 - i);
-}
-
-void DumpCurrentCpuMemoryUsage(const std::string& name) {
+std::string ResourceUsageMonitor::GetCurrentCpuMemoryInfo() {
+  std::string result = "";
 #if defined(__linux__) || defined(__ANDROID__)
   int iPid = static_cast<int>(getpid());
   std::string command = "pmap -x " + std::to_string(iPid) + " | grep total";
@@ -104,20 +127,18 @@ void DumpCurrentCpuMemoryUsage(const std::string& name) {
   char tmp[1024];
 
   while (fgets(tmp, sizeof(tmp), pp) != NULL) {
-    std::ofstream write;
-    write.open(name, std::ios::app);
-    write << tmp;
-    write.close();
+    result += tmp;
   }
   pclose(pp);
 #else
   FDASSERT(false,
            "Currently collect cpu memory info only supports Linux and ANDROID.")
 #endif
-  return;
+  return result;
 }
 
-void DumpCurrentGpuMemoryUsage(const std::string& name, int device_id) {
+std::string ResourceUsageMonitor::GetCurrentGpuMemoryInfo(int device_id) {
+  std::string result = "";
 #if defined(__linux__) && defined(WITH_GPU)
   std::string command = "nvidia-smi --id=" + std::to_string(device_id) +
                         " --query-gpu=index,uuid,name,timestamp,memory.total,"
@@ -128,53 +149,14 @@ void DumpCurrentGpuMemoryUsage(const std::string& name, int device_id) {
   char tmp[1024];
 
   while (fgets(tmp, sizeof(tmp), pp) != NULL) {
-    std::ofstream write;
-    write.open(name, std::ios::app);
-    write << tmp;
-    write.close();
+    result += tmp;
   }
   pclose(pp);
 #else
   FDASSERT(false,
            "Currently collect gpu memory info only supports Linux in GPU.")
 #endif
-  return;
-}
-
-float GetCpuMemoryUsage(const std::string& name) {
-  std::ifstream read(name);
-  std::string line;
-  float max_cpu_mem = -1;
-  while (getline(read, line)) {
-    std::stringstream ss(line);
-    std::string tmp;
-    std::vector<std::string> nums;
-    while (getline(ss, tmp, ' ')) {
-      tmp = strip(tmp);
-      if (tmp.empty()) continue;
-      nums.push_back(tmp);
-    }
-    max_cpu_mem = std::max(max_cpu_mem, stof(nums[3]));
-  }
-  return max_cpu_mem / 1024;
-}
-
-float GetGpuMemoryUsage(const std::string& name) {
-  std::ifstream read(name);
-  std::string line;
-  float max_gpu_mem = -1;
-  while (getline(read, line)) {
-    std::stringstream ss(line);
-    std::string tmp;
-    std::vector<std::string> nums;
-    while (getline(ss, tmp, ',')) {
-      tmp = strip(tmp);
-      if (tmp.empty()) continue;
-      nums.push_back(tmp);
-    }
-    max_gpu_mem = std::max(max_gpu_mem, stof(nums[6]));
-  }
-  return max_gpu_mem;
+  return result;
 }
 
 }  // namespace benchmark

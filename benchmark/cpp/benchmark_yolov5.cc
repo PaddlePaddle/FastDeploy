@@ -47,12 +47,12 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
   } else {
     // For End2End
-    // Step1: warm up for warmup times
+    fastdeploy::benchmark::ResourceUsageMonitor resource_moniter(
+        sampling_interval, FLAGS_device_id);
     if (FLAGS_collect_memory_info) {
-      fastdeploy::benchmark::ResourceUsageMonitor resource_moniter(
-          sampling_interval, FLAGS_device_id);
       resource_moniter.Start();
     }
+    // Step1: warm up for warmup times
     std::cout << "Warmup " << warmup << " times..." << std::endl;
     for (int i = 0; i < warmup; i++) {
       fastdeploy::vision::DetectionResult res;
@@ -74,7 +74,7 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
       }
     }
     tc.End();
-    double end2end = tc.Duration() / repeats;
+    double end2end = tc.Duration() / repeats * 1000;
     std::cout << "End2End(ms): " << end2end << "ms." << std::endl;
     if (FLAGS_collect_memory_info) {
       resource_moniter.Stop();
@@ -92,18 +92,18 @@ int main(int argc, char* argv[]) {
   int repeats = FLAGS_repeat;
   int warmup = FLAGS_warmup;
   int sampling_interval = FLAGS_sampling_interval;
-  std::string cpu_mem_file_name = "result_cpu.txt";
-  std::string gpu_mem_file_name = "result_gpu.txt";
   // Run model
   if (RunModel(FLAGS_model, FLAGS_image, warmup, repeats, sampling_interval) !=
       true) {
     exit(1);
   }
   if (FLAGS_collect_memory_info) {
-    float cpu_mem = fastdeploy::benchmark::GetCpuMemoryUsage(cpu_mem_file_name);
-    float gpu_mem = fastdeploy::benchmark::GetGpuMemoryUsage(gpu_mem_file_name);
+    float cpu_mem = resource_moniter.GetMaxCpuMem();
+    float gpu_mem = resource_moniter.GetMaxGpuMem();
+    float gpu_util = resource_moniter.GetMaxGpuUtil();
     std::cout << "cpu_pss_mb: " << cpu_mem << "MB." << std::endl;
     std::cout << "gpu_pss_mb: " << gpu_mem << "MB." << std::endl;
+    std::cout << "gpu_util: " << gpu_util << std::endl;
   }
   return 0;
 }
