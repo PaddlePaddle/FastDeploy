@@ -458,14 +458,4 @@ void RuntimeOption::UseIpu(int device_num, int micro_batch_size,
 #endif
 }
 
-void RuntimeOption::SetIpuConfig(bool enable_fp16, int replica_num,
-                                 float available_memory_proportion,
-                                 bool enable_half_partial) {
-  paddle_infer_option.ipu_option.ipu_enable_fp16 = enable_fp16;
-  paddle_infer_option.ipu_option.ipu_replica_num = replica_num;
-  paddle_infer_option.ipu_option.ipu_available_memory_proportion =
-      available_memory_proportion;
-  paddle_infer_option.ipu_option.ipu_enable_half_partial = enable_half_partial;
-}
-
 }  // namespace fastdeploy
