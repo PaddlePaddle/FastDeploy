@@ -70,15 +70,8 @@ FDDataType GetFDDataType(const nvinfer1::DataType& dtype);
 class TrtBackend : public BaseBackend {
  public:
   TrtBackend() : engine_(nullptr), context_(nullptr) {}
-  void BuildOption(const TrtBackendOption& option);
 
-  bool InitFromPaddle(const std::string& model_file,
-                      const std::string& params_file,
-                      const TrtBackendOption& option = TrtBackendOption(),
-                      bool verbose = false);
-  bool InitFromOnnx(const std::string& model_file,
-                    const TrtBackendOption& option = TrtBackendOption(),
-                    bool from_memory_buffer = false);
+  bool Init(const RuntimeOption& runtime_option);
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
 
@@ -88,7 +81,8 @@ class TrtBackend : public BaseBackend {
   TensorInfo GetOutputInfo(int index);
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
-  std::unique_ptr<BaseBackend> Clone(void* stream = nullptr,
+  std::unique_ptr<BaseBackend> Clone(RuntimeOption &runtime_option,
+                                     void* stream = nullptr,
                                      int device_id = -1) override;
 
   ~TrtBackend() {
@@ -98,6 +92,15 @@ class TrtBackend : public BaseBackend {
   }
 
  private:
+  void BuildOption(const TrtBackendOption& option);
+
+  bool InitFromPaddle(const std::string& model_buffer,
+                      const std::string& params_buffer,
+                      const TrtBackendOption& option = TrtBackendOption(),
+                      bool verbose = false);
+  bool InitFromOnnx(const std::string& model_buffer,
+                    const TrtBackendOption& option = TrtBackendOption());
+
   TrtBackendOption option_;
   std::shared_ptr<nvinfer1::ICudaEngine> engine_;
   std::shared_ptr<nvinfer1::IExecutionContext> context_;

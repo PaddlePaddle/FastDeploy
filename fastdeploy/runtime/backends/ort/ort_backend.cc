@@ -25,6 +25,7 @@
 #endif
 
 #include <memory>
+
 namespace fastdeploy {
 
 std::vector<OrtCustomOp*> OrtBackend::custom_operators_ =

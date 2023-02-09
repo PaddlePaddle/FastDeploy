@@ -12,12 +12,12 @@ Taking the CPU inference on Linux as an example, the compilation test can be com
 ```bash
 mkdir build
 cd build
-# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above 
+# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
-# Download the official converted yolov5 Paddle model files and test images 
+# Download the official converted yolov5 Paddle model files and test images
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s_infer.tar
 tar -xvf yolov5s_infer.tar
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
@@ -31,11 +31,13 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 ./infer_paddle_demo yolov5s_infer 000000014439.jpg 2
 # KunlunXin XPU inference
 ./infer_paddle_demo yolov5s_infer 000000014439.jpg 3
+# Huawei Ascend Inference
+./infer_paddle_demo yolov5s_infer 000000014439.jpg 4
 ```
 
 The above steps apply to the inference of Paddle models. If you want to conduct the inference of ONNX models, follow these steps:
 ```bash
-# 1. Download the official converted yolov5 ONNX model files and test images 
+# 1. Download the official converted yolov5 ONNX model files and test images
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s.onnx
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
@@ -53,7 +55,7 @@ The visualized result after running is as follows
 The above command works for Linux or MacOS. For SDK use-pattern in Windows, refer to:
 - [How to use FastDeploy C++ SDK in Windows](../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
-## YOLOv5 C++ Interface 
+## YOLOv5 C++ Interface
 
 ### YOLOv5 Class
 
@@ -69,7 +71,7 @@ YOLOv5 model loading and initialization, among which model_file is the exported 
 
 **Parameter**
 
-> * **model_file**(str): Model file path 
+> * **model_file**(str): Model file path
 > * **params_file**(str): Parameter file path. Merely passing an empty string when the model is in ONNX format
 > * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
 > * **model_format**(ModelFormat): Model format. ONNX format by default
