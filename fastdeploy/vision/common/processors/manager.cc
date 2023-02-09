@@ -43,6 +43,8 @@ void ProcessorManager::UseCuda(bool enable_cv_cuda, int gpu_id) {
     FDASSERT(false, "FastDeploy didn't compile with CV-CUDA.");
 #endif
   }
+
+  img_decoder_ = ImageDecoder(ImageDecoderLib::NVJPEG);
 }
 
 bool ProcessorManager::CudaUsed() {
@@ -85,6 +87,24 @@ bool ProcessorManager::Run(std::vector<FDMat>* images,
     SyncStream();
   }
   return ret;
+}
+
+bool ProcessorManager::Run(const std::vector<std::string>& img_names,
+                           std::vector<FDTensor>* outputs) {
+  std::vector<FDMat> mats(img_names.size());
+
+  if (mats.size() > output_caches_.size()) {
+    output_caches_.resize(mats.size());
+  }
+
+  for (size_t i = 0; i < mats.size(); ++i) {
+    if (CudaUsed()) {
+      SetStream(&mats[i]);
+    }
+    mats[i].output_cache = &output_caches_[i];
+  }
+  img_decoder_.BatchDecode(img_names, &mats);
+  return Run(&mats, outputs);
 }
 
 }  // namespace vision

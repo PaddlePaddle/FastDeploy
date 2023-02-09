@@ -82,6 +82,16 @@ FDTensor* Mat::Tensor() {
 void Mat::SetTensor(FDTensor* tensor) {
   fd_tensor.SetExternalData(tensor->Shape(), tensor->Dtype(), tensor->Data(),
                             tensor->device, tensor->device_id);
+  device = tensor->device;
+  if (layout = Layout::HWC) {
+    height = tensor->Shape()[0];
+    width = tensor->Shape()[1];
+    channels = tensor->Shape()[2];
+  } else if (layout = Layout::CHW) {
+    channels = tensor->Shape()[0];
+    height = tensor->Shape()[1];
+    width = tensor->Shape()[2];
+  }
 }
 
 void Mat::ShareWithTensor(FDTensor* tensor) {

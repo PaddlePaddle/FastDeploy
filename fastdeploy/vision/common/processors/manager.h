@@ -17,6 +17,7 @@
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/processors/mat.h"
 #include "fastdeploy/vision/common/processors/mat_batch.h"
+#include "fastdeploy/vision/common/image_decoder/image_decoder.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -56,13 +57,22 @@ class FASTDEPLOY_DECL ProcessorManager {
 
   int DeviceId() { return device_id_; }
 
-  /** \brief Process the input image and prepare input tensors for runtime
+  /** \brief Process the input images and prepare input tensors for runtime
    *
    * \param[in] images The input image data list, all the elements are returned by cv::imread()
    * \param[in] outputs The output tensors which will feed in runtime
    * \return true if the preprocess successed, otherwise false
    */
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
+
+  /** \brief Process the input images and prepare input tensors for runtime
+   *
+   * \param[in] img_names The input image file name list
+   * \param[in] outputs The output tensors which will feed in runtime
+   * \return true if the preprocess successed, otherwise false
+   */
+  bool Run(const std::vector<std::string>& img_names,
+           std::vector<FDTensor>* outputs);
 
   /** \brief Apply() is the body of Run() function, it needs to be implemented by a derived class
    *
@@ -86,6 +96,8 @@ class FASTDEPLOY_DECL ProcessorManager {
   std::vector<FDTensor> output_caches_;
   FDTensor batch_input_cache_;
   FDTensor batch_output_cache_;
+
+  ImageDecoder img_decoder_;
 };
 
 }  // namespace vision
