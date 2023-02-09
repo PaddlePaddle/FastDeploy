@@ -27,13 +27,14 @@ DEFINE_int32(repeat, 1000, "Number of repeats for profiling.");
 DEFINE_string(profile_mode, "runtime", "runtime or end2end.");
 DEFINE_string(backend, "default",
               "The inference runtime backend, support: ['default', 'ort', "
-              "'paddle', 'ov', 'trt', 'paddle_trt']");
+              "'paddle', 'ov', 'trt', 'paddle_trt', 'lite']");
 DEFINE_int32(cpu_thread_nums, 8, "Set numbers of cpu thread.");
 DEFINE_bool(
     include_h2d_d2h, false, "Whether run profiling with h2d and d2h.");
 DEFINE_bool(
     use_fp16, false,
-    "Whether to use FP16 mode, only support 'trt' and 'paddle_trt' backend");
+    "Whether to use FP16 mode, only support 'trt', 'paddle_trt' "
+    "and 'lite' backend");
 DEFINE_bool(
     collect_memory_info, false, "Whether to collect memory info");
 DEFINE_int32(dump_period, 100, "How often to collect memory info.");
@@ -58,7 +59,6 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
       option->UsePaddleInferBackend();
     } else if (FLAGS_backend == "trt" || FLAGS_backend == "paddle_trt") {
       option->UseTrtBackend();
-      option->SetTrtInputShape("input", {1, 3, 112, 112});
       if (FLAGS_backend == "paddle_trt") {
         option->EnablePaddleToTrt();
       }
@@ -81,11 +81,16 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
       option->UseOpenVINOBackend();
     } else if (FLAGS_backend == "paddle") {
       option->UsePaddleInferBackend();
+    } else if (FLAGS_backend == "lite") {
+      option->UsePaddleLiteBackend();
+      if (FLAGS_use_fp16) {
+        option->EnableLiteFP16();
+      }
     } else if (FLAGS_backend == "default") {
       return true;
     } else {
       std::cout << "While inference with CPU, only support "
-                   "default/ort/ov/paddle now, "
+                   "default/ort/ov/paddle/lite now, "
                 << FLAGS_backend << " is not supported." << std::endl;
       return false;
     }

@@ -47,7 +47,8 @@ void BindPaddleOption(pybind11::module& m) {
       .def_readwrite("gpu_mem_init_size",
                      &PaddleBackendOption::gpu_mem_init_size)
       .def("disable_trt_ops", &PaddleBackendOption::DisableTrtOps)
-      .def("delete_pass", &PaddleBackendOption::DeletePass);
+      .def("delete_pass", &PaddleBackendOption::DeletePass)
+      .def("set_ipu_config", &PaddleBackendOption::SetIpuConfig);
 }
 
 }  // namespace fastdeploy

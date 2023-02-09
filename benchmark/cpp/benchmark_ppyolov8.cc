@@ -16,7 +16,13 @@
 #include "fastdeploy/vision.h"
 #include "flags.h"
 
-bool RunModel(std::string model_file, std::string image_file, size_t warmup,
+#ifdef WIN32
+const char sep = '\\';
+#else
+const char sep = '/';
+#endif
+
+bool RunModel(std::string model_dir, std::string image_file, size_t warmup,
               size_t repeats, size_t dump_period, std::string cpu_mem_file_name,
               std::string gpu_mem_file_name) {
   // Initialization
@@ -25,10 +31,15 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     PrintUsage();
     return false;
   }
+  auto model_file = model_dir + sep + "model.pdmodel";
+  auto params_file = model_dir + sep + "model.pdiparams";
+  auto config_file = model_dir + sep + "infer_cfg.yml";
+
   if (FLAGS_profile_mode == "runtime") {
     option.EnableProfiling(FLAGS_include_h2d_d2h, repeats, warmup);
   }
-  auto model = fastdeploy::vision::detection::YOLOv5(model_file, "", option);
+  auto model = fastdeploy::vision::detection::PaddleYOLOv8(
+      model_file, params_file, config_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return false;
