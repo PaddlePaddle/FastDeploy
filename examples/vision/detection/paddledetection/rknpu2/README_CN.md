@@ -24,7 +24,7 @@ RKNPU部署模型前需要将Paddle模型转换成RKNN模型，具体步骤如�
 
 ### 注意点
 
-PPDetection在RKNPU2上使用时要注意以下几点:
+PPDetection模型在RKNPU2上部署时要注意以下几点:
 
 * 模型导出需要包含Decode
 * 由于RKNPU2不支持NMS，因此输出节点必须裁剪至NMS之前
@@ -62,14 +62,14 @@ python -m paddle2onnx.optimize --input_model picodet_s_416_coco_lcnet/picodet_s_
 ```yaml
 mean:
   -
-    - 127.5
-    - 127.5
-    - 127.5
+    - 123.675
+    - 116.28
+    - 103.53
 std:
   -
-    - 127.5
-    - 127.5
-    - 127.5
+    - 58.395
+    - 57.12
+    - 57.375
 ```
 
 **修改outputs参数**
