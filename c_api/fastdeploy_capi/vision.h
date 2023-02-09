@@ -13,6 +13,8 @@
 // limitations under the License.
 #pragma once
 
+#include "fastdeploy_capi/config.h"
+
 #ifdef ENABLE_VISION
 #include "fastdeploy_capi/vision/classification/ppcls/model.h"
 #include "fastdeploy_capi/vision/detection/ppdet/model.h"

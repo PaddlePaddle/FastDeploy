@@ -6,12 +6,6 @@ option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
 
 include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 
-if(ENABLE_VISION)
-add_definitions(-DENABLE_VISION)
-else()
-return()
-endif()
-
 # 添加FastDeploy依赖头文件
 include_directories(${FASTDEPLOY_INCS})
 
