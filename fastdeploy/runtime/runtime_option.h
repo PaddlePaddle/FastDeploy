@@ -111,6 +111,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   void SetExternalStream(void* external_stream);
 
+  void SetExternalRawStream(size_t external_stream);
+
   /*
    * @brief Set number of cpu threads while inference on CPU, by default it will decided by the different backends
    */
