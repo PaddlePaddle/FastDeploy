@@ -1,6 +1,8 @@
 English | [简体中文](README_CN.md)
 # PaddleSegmentation Serving Deployment Demo
 
+Before serving deployment, it is necessary to confirm the hardware and software environment requirements of the service image and the image pull command, please refer to [FastDeploy service deployment](https://github.com/PaddlePaddle/FastDeploy/blob/develop/serving/README.md)
+
 ## Launch Serving
 
 ```bash

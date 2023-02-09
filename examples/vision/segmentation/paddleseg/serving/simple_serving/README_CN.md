@@ -2,10 +2,9 @@
 
 # PaddleSeg Python轻量服务化部署示例
 
-在部署前，需确认以下两个步骤
+## 部署环境准备
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install/download_prebuilt_libraries.md)
+在部署前，需确认软硬件环境，同时下载预编译python wheel 包，参考文档[FastDeploy预编译库安装](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install#FastDeploy预编译库安装)
 
 服务端：
 ```bash
