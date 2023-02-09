@@ -1,13 +1,13 @@
 mean:
   -
-    - 127.5
-    - 127.5
-    - 127.5
+    - 123.675
+    - 116.28
+    - 103.53
 std:
   -
-    - 127.5
-    - 127.5
-    - 127.5
+    - 58.395
+    - 57.12
+    - 57.375
 model_path: ./picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet.onnx
 outputs_nodes:
   - 'p2o.Div.79'

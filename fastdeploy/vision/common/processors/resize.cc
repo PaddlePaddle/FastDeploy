@@ -23,7 +23,7 @@
 namespace fastdeploy {
 namespace vision {
 
-bool Resize::ImplByOpenCV(Mat* mat) {
+bool Resize::ImplByOpenCV(FDMat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "Resize: The format of input is not HWC." << std::endl;
     return false;
@@ -61,7 +61,7 @@ bool Resize::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool Resize::ImplByFlyCV(Mat* mat) {
+bool Resize::ImplByFlyCV(FDMat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "Resize: The format of input is not HWC." << std::endl;
     return false;
@@ -123,7 +123,7 @@ bool Resize::ImplByFlyCV(Mat* mat) {
 #endif
 
 #ifdef ENABLE_CVCUDA
-bool Resize::ImplByCvCuda(Mat* mat) {
+bool Resize::ImplByCvCuda(FDMat* mat) {
   if (width_ == mat->Width() && height_ == mat->Height()) {
     return true;
   }
@@ -143,23 +143,20 @@ bool Resize::ImplByCvCuda(Mat* mat) {
   }
 
   // Prepare input tensor
-  std::string tensor_name = Name() + "_cvcuda_src";
-  FDTensor* src = CreateCachedGpuInputTensor(mat, tensor_name);
+  FDTensor* src = CreateCachedGpuInputTensor(mat);
   auto src_tensor = CreateCvCudaTensorWrapData(*src);
 
   // Prepare output tensor
-  tensor_name = Name() + "_cvcuda_dst";
-  FDTensor* dst =
-      UpdateAndGetCachedTensor({height_, width_, mat->Channels()}, mat->Type(),
-                               tensor_name, Device::GPU);
-  auto dst_tensor = CreateCvCudaTensorWrapData(*dst);
+  mat->output_cache->Resize({height_, width_, mat->Channels()}, mat->Type(),
+                            "output_cache", Device::GPU);
+  auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
 
   // CV-CUDA Interp value is compatible with OpenCV
   cvcuda::Resize resize_op;
   resize_op(mat->Stream(), src_tensor, dst_tensor,
             NVCVInterpolationType(interp_));
 
-  mat->SetTensor(dst);
+  mat->SetTensor(mat->output_cache);
   mat->SetWidth(width_);
   mat->SetHeight(height_);
   mat->device = Device::GPU;
@@ -168,8 +165,8 @@ bool Resize::ImplByCvCuda(Mat* mat) {
 }
 #endif
 
-bool Resize::Run(Mat* mat, int width, int height, float scale_w, float scale_h,
-                 int interp, bool use_scale, ProcLib lib) {
+bool Resize::Run(FDMat* mat, int width, int height, float scale_w,
+                 float scale_h, int interp, bool use_scale, ProcLib lib) {
   if (mat->Height() == height && mat->Width() == width) {
     return true;
   }
