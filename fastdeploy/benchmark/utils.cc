@@ -98,7 +98,9 @@ void ResourceUsageMonitor::Start() {
 }
 
 void ResourceUsageMonitor::Stop() {
-  if (!is_supported_) return;
+  if (!is_supported_) {
+    return;
+  }
   if (check_memory_thd_ == nullptr) {
     FDINFO << "Memory monitoring hasn't started yet or has stopped!"
            << std::endl;
@@ -110,7 +112,9 @@ void ResourceUsageMonitor::Stop() {
 
 void ResourceUsageMonitor::StopInternal() {
   stop_signal_ = true;
-  if (check_memory_thd_ == nullptr) return;
+  if (check_memory_thd_ == nullptr) {
+    return;
+  }
   if (check_memory_thd_ != nullptr) {
     check_memory_thd_->join();
   }

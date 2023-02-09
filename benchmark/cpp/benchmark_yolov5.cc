@@ -33,6 +33,12 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     return false;
   }
   auto im = cv::imread(image_file);
+  // For collect memory info
+  fastdeploy::benchmark::ResourceUsageMonitor resource_moniter(
+      sampling_interval, FLAGS_device_id);
+  if (FLAGS_collect_memory_info) {
+    resource_moniter.Start();
+  }
   // For Runtime
   if (FLAGS_profile_mode == "runtime") {
     fastdeploy::vision::DetectionResult res;
@@ -47,11 +53,6 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
   } else {
     // For End2End
-    fastdeploy::benchmark::ResourceUsageMonitor resource_moniter(
-        sampling_interval, FLAGS_device_id);
-    if (FLAGS_collect_memory_info) {
-      resource_moniter.Start();
-    }
     // Step1: warm up for warmup times
     std::cout << "Warmup " << warmup << " times..." << std::endl;
     for (int i = 0; i < warmup; i++) {
@@ -76,18 +77,18 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
     tc.End();
     double end2end = tc.Duration() / repeats * 1000;
     std::cout << "End2End(ms): " << end2end << "ms." << std::endl;
-    if (FLAGS_collect_memory_info) {
-      float cpu_mem = resource_moniter.GetMaxCpuMem();
-      float gpu_mem = resource_moniter.GetMaxGpuMem();
-      float gpu_util = resource_moniter.GetMaxGpuUtil();
-      std::cout << "cpu_pss_mb: " << cpu_mem << "MB." << std::endl;
-      std::cout << "gpu_pss_mb: " << gpu_mem << "MB." << std::endl;
-      std::cout << "gpu_util: " << gpu_util << std::endl;
-      resource_moniter.Stop();
-    }
     auto vis_im = fastdeploy::vision::VisDetection(im, res);
     cv::imwrite("vis_result.jpg", vis_im);
     std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  }
+  if (FLAGS_collect_memory_info) {
+    float cpu_mem = resource_moniter.GetMaxCpuMem();
+    float gpu_mem = resource_moniter.GetMaxGpuMem();
+    float gpu_util = resource_moniter.GetMaxGpuUtil();
+    std::cout << "cpu_pss_mb: " << cpu_mem << "MB." << std::endl;
+    std::cout << "gpu_pss_mb: " << gpu_mem << "MB." << std::endl;
+    std::cout << "gpu_util: " << gpu_util << std::endl;
+    resource_moniter.Stop();
   }
 
   return true;
@@ -99,8 +100,7 @@ int main(int argc, char* argv[]) {
   int warmup = FLAGS_warmup;
   int sampling_interval = FLAGS_sampling_interval;
   // Run model
-  if (RunModel(FLAGS_model, FLAGS_image, warmup, repeats, sampling_interval) !=
-      true) {
+  if (!RunModel(FLAGS_model, FLAGS_image, warmup, repeats, sampling_interval)) {
     exit(1);
   }
   return 0;
