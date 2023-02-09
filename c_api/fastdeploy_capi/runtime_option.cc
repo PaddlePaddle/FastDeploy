@@ -17,7 +17,9 @@
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy_capi/types_internal.h"
 
+#ifdef __cplusplus
 extern "C" {
+#endif
 
 FD_C_RuntimeOptionWrapper* FD_C_CreateRuntimeOptionWrapper() {
   FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper =
@@ -28,7 +30,7 @@ FD_C_RuntimeOptionWrapper* FD_C_CreateRuntimeOptionWrapper() {
   return fd_c_runtime_option_wrapper;
 }
 
-void FD_C_DestroyRuntimeOption(
+void FD_C_DestroyRuntimeOptionWrapper(
     __fd_take FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper) {
   delete fd_c_runtime_option_wrapper;
 }
@@ -404,15 +406,6 @@ void FD_C_RuntimeOptionWrapperUseIpu(
                          batches_per_step);
 }
 
-void FD_C_RuntimeOptionWrapperSetIpuConfig(
-    __fd_keep FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
-    FD_C_Bool enable_fp16, int replica_num, float available_memory_proportion,
-    FD_C_Bool enable_half_partial) {
-  auto& runtime_option = CHECK_AND_CONVERT_FD_TYPE(RuntimeOptionWrapper,
-                                                   fd_c_runtime_option_wrapper);
-  runtime_option->SetIpuConfig(enable_fp16, replica_num,
-                               available_memory_proportion,
-                               enable_half_partial);
+#ifdef __cplusplus
 }
-
-}  // extern "C"
+#endif
