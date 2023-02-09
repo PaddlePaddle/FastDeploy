@@ -1,4 +1,4 @@
-// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.  //NOLINT
+// Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,19 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #pragma once
-#include <cstdint>
-#include <cmath>
-#include <vector>
 
-namespace fastdeploy {
-namespace vision {
-namespace detection {
-float Clamp(float val, int min, int max);
-int NMS(int valid_count, std::vector<float>& output_locations,
-        std::vector<int>& class_id, std::vector<int>& order, float threshold,
-        bool class_agnostic);
+#include "fastdeploy_capi/fd_common.h"
+#include "fastdeploy_capi/fd_type.h"
+#include "fastdeploy_capi/vision/result.h"
 
-}  // namespace detection
-}  // namespace vision
-}  // namespace fastdeploy
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** \brief Visualize Detection
+ *
+ * \return Return a pointer to cv::Mat object
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat
+FD_C_VisDetection(FD_C_Mat im, FD_C_DetectionResult* fd_detection_result,
+                  float score_threshold, int line_size, float font_size);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
