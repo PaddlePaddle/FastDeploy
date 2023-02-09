@@ -48,6 +48,7 @@ void BindOption(pybind11::module& m) {
       .def_readwrite("poros_option", &RuntimeOption::poros_option)
       .def_readwrite("paddle_infer_option", &RuntimeOption::paddle_infer_option)
       .def("set_external_stream", &RuntimeOption::SetExternalStream)
+      .def("set_external_raw_stream", &RuntimeOption::SetExternalRawStream)
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
       .def("use_paddle_backend", &RuntimeOption::UsePaddleBackend)
       .def("use_poros_backend", &RuntimeOption::UsePorosBackend)
