@@ -76,5 +76,10 @@ python -m paddle2onnx.optimize --input_model ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_r
 执行以下步骤转换ONNX格式模型到RKNN模型:
 
 ```bash
-
+python tools/rknpu2/export.py --config_path tools/rknpu2/config/ppocrv3_det.yaml \
+                              --target_platform rk3588
+python tools/rknpu2/export.py --config_path tools/rknpu2/config/ppocrv3_rec.yaml \
+                              --target_platform rk3588
+python tools/rknpu2/export.py --config_path tools/rknpu2/config/ppocrv3_cls.yaml \
+                              --target_platform rk3588
 ```
