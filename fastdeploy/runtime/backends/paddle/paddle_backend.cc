@@ -44,6 +44,10 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
                "file will save to the directory where paddle model saved."
             << std::endl;
         use_static = true;
+        std::string opt_cache_dir =
+            GetDirFromPath(option.trt_option.serialize_file);
+
+        config_.SetOptimCacheDir(opt_cache_dir);
       }
       config_.EnableTensorRtEngine(option.trt_option.max_workspace_size,
                                    option.trt_option.max_batch_size, 3,
