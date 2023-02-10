@@ -1,19 +1,24 @@
-/*
- * SPDX-FileCopyrightText: Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES.
- * All rights reserved. SPDX-License-Identifier: Apache-2.0
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Part of the following code in this file refs to
+// https://github.com/CVCUDA/CV-CUDA/blob/release_v0.2.x/samples/common/NvDecoder.cpp
+//
+// Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Licensed under the Apache-2.0 license
+// \brief
+// \author NVIDIA
 
 #ifdef WITH_GPU
 #include "fastdeploy/vision/common/image_decoder/nvjpeg_decoder.h"
@@ -54,19 +59,6 @@ static int host_free(void* p) { return (int)cudaFreeHost(p); }
 
 static int read_images(const FileNames& image_names, FileData& raw_data,
                        std::vector<size_t>& raw_len) {
-  // int counter = 0;
-
-  // while (counter < batch_size)
-  // {
-  //     if (cur_iter == image_names.end())
-  //     {
-  //         std::cerr << "Image list is too short to fill the batch, adding
-  //         files "
-  //                      "from the beginning of the image list"
-  //                   << std::endl;
-  //         cur_iter = image_names.begin();
-  //     }
-
   for (size_t i = 0; i < image_names.size(); ++i) {
     if (image_names.size() == 0) {
       std::cerr << "No valid images left in the input list, exit" << std::endl;
@@ -197,11 +189,6 @@ int decode_images(const FileData& img_data, const std::vector<size_t>& img_len,
                   std::vector<nvjpegImage_t>& out, decode_params_t& params,
                   double& time) {
   CHECK_CUDA(cudaStreamSynchronize(params.stream));
-  // cudaEvent_t startEvent = NULL, stopEvent = NULL;
-  // float       loopTime = 0;
-
-  // CHECK_CUDA(cudaEventCreate(&startEvent));
-  // CHECK_CUDA(cudaEventCreate(&stopEvent));
 
   std::vector<const unsigned char*> batched_bitstreams;
   std::vector<size_t> batched_bitstreams_size;
@@ -242,8 +229,6 @@ int decode_images(const FileData& img_data, const std::vector<size_t>& img_len,
       otherdecode_output.push_back(out[i]);
     }
   }
-
-  // CHECK_CUDA(cudaEventRecord(startEvent, params.stream));
 
   if (batched_bitstreams.size() > 0) {
     CHECK_NVJPEG(nvjpegDecodeBatchedInitialize(
@@ -291,13 +276,6 @@ int decode_images(const FileData& img_data, const std::vector<size_t>& img_len,
                                  &otherdecode_output[i], params.stream));
     }
   }
-  // CHECK_CUDA(cudaEventRecord(stopEvent, params.stream));
-
-  // CHECK_CUDA(cudaEventSynchronize(stopEvent));
-  // CHECK_CUDA(cudaEventElapsedTime(&loopTime, startEvent, stopEvent));
-  // time = 0.001 * static_cast<double>(loopTime); // cudaEventElapsedTime
-  // returns milliseconds
-
   return EXIT_SUCCESS;
 }
 
@@ -314,12 +292,6 @@ double process_images(const FileNames& image_names, decode_params_t& params,
   // we wrap over image files to process total_images of files
   auto file_iter = image_names.begin();
 
-  // stream for decoding
-  // CHECK_CUDA(cudaStreamCreateWithFlags(&params.stream,
-  // cudaStreamNonBlocking));
-
-  // int total_processed = 0;
-
   // output buffer sizes, for convenience
   std::vector<nvjpegImage_t> isz(params.batch_size);
 
@@ -331,35 +303,17 @@ double process_images(const FileNames& image_names, decode_params_t& params,
     }
   }
 
-  // double test_time = 0;
-  // int    warmup    = 0;
-  // while (total_processed < image_names.size())
-  // {
   if (read_images(image_names, file_data, file_len)) return EXIT_FAILURE;
 
   if (prepare_buffers(file_data, file_len, widths, heights, iout, isz,
-                      output_buffers, image_names, params))
+                      output_buffers, image_names, params)) {
     return EXIT_FAILURE;
+  }
 
   double time;
-  if (decode_images(file_data, file_len, iout, params, time))
+  if (decode_images(file_data, file_len, iout, params, time)) {
     return EXIT_FAILURE;
-  // if (warmup < params.warmup)
-  // {
-  //     warmup++;
-  // }
-  // else
-  // {
-  // total_processed += params.batch_size;
-  // test_time += time;
-  // }
-
-  // if (params.write_decoded)
-  //     write_images(iout, widths, heights, params, current_names);
-  // }
-  // total = test_time;
-
-  // CHECK_CUDA(cudaStreamDestroy(params.stream));
+  }
 
   return EXIT_SUCCESS;
 }

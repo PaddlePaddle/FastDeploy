@@ -16,11 +16,6 @@
 
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/processors/mat.h"
-#include "fastdeploy/vision/common/processors/mat_batch.h"
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/imgproc/imgproc.hpp"
-// #include <unordered_map>
-
 #include "fastdeploy/vision/common/image_decoder/nvjpeg_decoder.h"
 
 namespace fastdeploy {
