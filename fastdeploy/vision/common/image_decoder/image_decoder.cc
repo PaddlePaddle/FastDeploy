@@ -19,14 +19,18 @@ namespace vision {
 
 ImageDecoder::ImageDecoder(ImageDecoderLib lib) {
   if (lib == ImageDecoderLib::NVJPEG) {
+#ifdef WITH_GPU
     nvjpeg::init_decoder(nvjpeg_params_);
+#endif
   }
   lib_ = lib;
 }
 
 ImageDecoder::~ImageDecoder() {
   if (lib_ == ImageDecoderLib::NVJPEG) {
+#ifdef WITH_GPU
     nvjpeg::destroy_decoder(nvjpeg_params_);
+#endif
   }
 }
 
@@ -36,11 +40,12 @@ bool ImageDecoder::Decode(const std::string& img_name, FDMat* mat) {
 
 bool ImageDecoder::BatchDecode(const std::vector<std::string>& img_names,
                                std::vector<FDMat>* mats) {
+#ifdef WITH_GPU
   nvjpeg_params_.batch_size = img_names.size();
   std::vector<nvjpegImage_t> output_imgs(nvjpeg_params_.batch_size);
   std::vector<int> widths(nvjpeg_params_.batch_size);
   std::vector<int> heights(nvjpeg_params_.batch_size);
-  // TODO(wangxinyu): support other target output format
+  // TODO(wangxinyu): support other output format
   nvjpeg_params_.fmt = NVJPEG_OUTPUT_BGRI;
   double total;
   nvjpeg_params_.stream = (*mats)[0].Stream();
@@ -60,6 +65,11 @@ bool ImageDecoder::BatchDecode(const std::vector<std::string>& img_names,
     (*mats)[i].layout = Layout::HWC;
     (*mats)[i].SetTensor(output_buffers[i]);
   }
+#else
+  FDASSERT(
+      false,
+      "nvJPEG requires GPU, but FastDeploy didn't compile with WITH_GPU=ON.");
+#endif
   return true;
 }
 

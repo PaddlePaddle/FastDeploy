@@ -16,6 +16,10 @@
 namespace fastdeploy {
 namespace vision {
 
+ProcessorManager::ProcessorManager() {
+  img_decoder_ = std::make_shared<ImageDecoder>();
+}
+
 ProcessorManager::~ProcessorManager() {
 #ifdef WITH_GPU
   if (stream_) cudaStreamDestroy(stream_);
@@ -44,7 +48,7 @@ void ProcessorManager::UseCuda(bool enable_cv_cuda, int gpu_id) {
 #endif
   }
 
-  img_decoder_ = ImageDecoder(ImageDecoderLib::NVJPEG);
+  img_decoder_ = std::make_shared<ImageDecoder>(ImageDecoderLib::NVJPEG);
 }
 
 bool ProcessorManager::CudaUsed() {
@@ -103,7 +107,7 @@ bool ProcessorManager::Run(const std::vector<std::string>& img_names,
     }
     mats[i].output_cache = &output_caches_[i];
   }
-  img_decoder_.BatchDecode(img_names, &mats);
+  img_decoder_->BatchDecode(img_names, &mats);
   return Run(&mats, outputs);
 }
 

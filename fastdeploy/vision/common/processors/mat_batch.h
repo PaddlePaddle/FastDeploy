@@ -29,7 +29,7 @@ struct FASTDEPLOY_DECL FDMatBatch {
   // MatBatch is intialized with a list of mats,
   // the data is stored in the mats separately.
   // Call Tensor() function to get a batched 4-dimension tensor.
-  explicit FDMatBatch(std::vector<Mat>* _mats) {
+  explicit FDMatBatch(std::vector<FDMat>* _mats) {
     mats = _mats;
     layout = FDMatBatchLayout::NHWC;
     mat_type = ProcLib::OPENCV;

@@ -83,11 +83,11 @@ void Mat::SetTensor(FDTensor* tensor) {
   fd_tensor.SetExternalData(tensor->Shape(), tensor->Dtype(), tensor->Data(),
                             tensor->device, tensor->device_id);
   device = tensor->device;
-  if (layout = Layout::HWC) {
+  if (layout == Layout::HWC) {
     height = tensor->Shape()[0];
     width = tensor->Shape()[1];
     channels = tensor->Shape()[2];
-  } else if (layout = Layout::CHW) {
+  } else if (layout == Layout::CHW) {
     channels = tensor->Shape()[0];
     height = tensor->Shape()[1];
     width = tensor->Shape()[2];
@@ -272,6 +272,9 @@ FDTensor* CreateCachedGpuInputTensor(Mat* mat) {
 #ifdef WITH_GPU
   FDTensor* src = mat->Tensor();
   if (src->device == Device::GPU) {
+    if (src->Data() == mat->output_cache->Data()) {
+      std::swap(mat->input_cache, mat->output_cache);
+    }
     return src;
   } else if (src->device == Device::CPU) {
     // Mats on CPU, we need copy these tensors from CPU to GPU

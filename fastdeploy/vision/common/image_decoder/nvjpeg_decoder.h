@@ -17,6 +17,7 @@
 
 #pragma once
 
+#ifdef WITH_GPU
 #include "fastdeploy/core/fd_tensor.h"
 
 #include <cuda_runtime_api.h>
@@ -56,14 +57,16 @@ struct decode_params_t {
   bool hw_decode_available;
 };
 
-void init_decoder(decode_params_t &params);
-void destroy_decoder(decode_params_t &params);
+void init_decoder(decode_params_t& params);
+void destroy_decoder(decode_params_t& params);
 
-double process_images(const FileNames &image_names, decode_params_t &params,
-                      double &total, std::vector<nvjpegImage_t> &iout,
+double process_images(const FileNames& image_names, decode_params_t& params,
+                      double& total, std::vector<nvjpegImage_t>& iout,
                       std::vector<FDTensor*>& output_buffers,
-                      std::vector<int> &widths, std::vector<int> &heights);
+                      std::vector<int>& widths, std::vector<int>& heights);
 
 }  // namespace nvjpeg
 }  // namespace vision
 }  // namespace fastdeploy
+
+#endif  // WITH_GPU

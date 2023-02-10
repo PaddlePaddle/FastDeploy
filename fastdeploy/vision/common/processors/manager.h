@@ -24,6 +24,7 @@ namespace vision {
 
 class FASTDEPLOY_DECL ProcessorManager {
  public:
+  ProcessorManager();
   ~ProcessorManager();
 
   /** \brief Use CUDA to boost the performance of processors
@@ -97,7 +98,7 @@ class FASTDEPLOY_DECL ProcessorManager {
   FDTensor batch_input_cache_;
   FDTensor batch_output_cache_;
 
-  ImageDecoder img_decoder_;
+  std::shared_ptr<ImageDecoder> img_decoder_;
 };
 
 }  // namespace vision

@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+#ifdef WITH_GPU
 #include "fastdeploy/vision/common/image_decoder/nvjpeg_decoder.h"
 
 namespace fastdeploy {
@@ -41,18 +42,18 @@ namespace nvjpeg {
     }                                                                       \
   }
 
-static int dev_malloc(void **p, size_t s) { return (int)cudaMalloc(p, s); }
+static int dev_malloc(void** p, size_t s) { return (int)cudaMalloc(p, s); }
 
-static int dev_free(void *p) { return (int)cudaFree(p); }
+static int dev_free(void* p) { return (int)cudaFree(p); }
 
-static int host_malloc(void **p, size_t s, unsigned int f) {
+static int host_malloc(void** p, size_t s, unsigned int f) {
   return (int)cudaHostAlloc(p, s, f);
 }
 
-static int host_free(void *p) { return (int)cudaFreeHost(p); }
+static int host_free(void* p) { return (int)cudaFreeHost(p); }
 
-static int read_images(const FileNames &image_names, FileData &raw_data,
-                       std::vector<size_t> &raw_len) {
+static int read_images(const FileNames& image_names, FileData& raw_data,
+                       std::vector<size_t>& raw_len) {
   // int counter = 0;
 
   // while (counter < batch_size)
@@ -100,14 +101,14 @@ static int read_images(const FileNames &image_names, FileData &raw_data,
 }
 
 // prepare buffers for RGBi output format
-static int prepare_buffers(FileData &file_data, std::vector<size_t> &file_len,
-                           std::vector<int> &img_width,
-                           std::vector<int> &img_height,
-                           std::vector<nvjpegImage_t> &ibuf,
-                           std::vector<nvjpegImage_t> &isz,
-                           std::vector<FDTensor *> &output_buffers,
-                           const FileNames &current_names,
-                           decode_params_t &params) {
+static int prepare_buffers(FileData& file_data, std::vector<size_t>& file_len,
+                           std::vector<int>& img_width,
+                           std::vector<int>& img_height,
+                           std::vector<nvjpegImage_t>& ibuf,
+                           std::vector<nvjpegImage_t>& isz,
+                           std::vector<FDTensor*>& output_buffers,
+                           const FileNames& current_names,
+                           decode_params_t& params) {
   int widths[NVJPEG_MAX_COMPONENT];
   int heights[NVJPEG_MAX_COMPONENT];
   int channels;
@@ -115,48 +116,11 @@ static int prepare_buffers(FileData &file_data, std::vector<size_t> &file_len,
 
   for (long unsigned int i = 0; i < file_data.size(); i++) {
     CHECK_NVJPEG(nvjpegGetImageInfo(
-        params.nvjpeg_handle, (unsigned char *)file_data[i].data(), file_len[i],
+        params.nvjpeg_handle, (unsigned char*)file_data[i].data(), file_len[i],
         &channels, &subsampling, widths, heights));
 
     img_width[i] = widths[0];
     img_height[i] = heights[0];
-    std::cout << "Processing: " << current_names[i] << std::endl;
-#ifdef NVJPEG_DEBUG
-    std::cout << "Image is " << channels << " channels." << std::endl;
-    for (int c = 0; c < channels; c++) {
-      std::cout << "Channel #" << c << " size: " << widths[c] << " x "
-                << heights[c] << std::endl;
-    }
-    switch (subsampling) {
-      case NVJPEG_CSS_444:
-        std::cout << "YUV 4:4:4 chroma subsampling" << std::endl;
-        break;
-      case NVJPEG_CSS_440:
-        std::cout << "YUV 4:4:0 chroma subsampling" << std::endl;
-        break;
-      case NVJPEG_CSS_422:
-        std::cout << "YUV 4:2:2 chroma subsampling" << std::endl;
-        break;
-      case NVJPEG_CSS_420:
-        std::cout << "YUV 4:2:0 chroma subsampling" << std::endl;
-        break;
-      case NVJPEG_CSS_411:
-        std::cout << "YUV 4:1:1 chroma subsampling" << std::endl;
-        break;
-      case NVJPEG_CSS_410:
-        std::cout << "YUV 4:1:0 chroma subsampling" << std::endl;
-        break;
-      case NVJPEG_CSS_GRAY:
-        std::cout << "Grayscale JPEG " << std::endl;
-        break;
-      case NVJPEG_CSS_410V:
-        std::cout << "YUV 4:1:0 chroma subsampling" << std::endl;
-        break;
-      case NVJPEG_CSS_UNKNOWN:
-        std::cout << "Unknown chroma subsampling" << std::endl;
-        return EXIT_FAILURE;
-    }
-#endif
 
     int mul = 1;
     // in the case of interleaved RGB output, write only to single channel, but
@@ -177,8 +141,7 @@ static int prepare_buffers(FileData &file_data, std::vector<size_t> &file_len,
     output_buffers[i]->Resize({heights[0], widths[0], mul * channels},
                               FDDataType::UINT8, "output_cache", Device::GPU);
 
-    uint8_t *cur_buffer =
-        reinterpret_cast<uint8_t *>(output_buffers[i]->Data());
+    uint8_t* cur_buffer = reinterpret_cast<uint8_t*>(output_buffers[i]->Data());
 
     // realloc output buffer if required
     for (int c = 0; c < channels; c++) {
@@ -196,7 +159,7 @@ static int prepare_buffers(FileData &file_data, std::vector<size_t> &file_len,
   return EXIT_SUCCESS;
 }
 
-static void create_decoupled_api_handles(decode_params_t &params) {
+static void create_decoupled_api_handles(decode_params_t& params) {
   CHECK_NVJPEG(nvjpegDecoderCreate(params.nvjpeg_handle, NVJPEG_BACKEND_DEFAULT,
                                    &params.nvjpeg_decoder));
   CHECK_NVJPEG(nvjpegDecoderStateCreate(params.nvjpeg_handle,
@@ -219,7 +182,7 @@ static void create_decoupled_api_handles(decode_params_t &params) {
                                         &params.nvjpeg_decode_params));
 }
 
-static void destroy_decoupled_api_handles(decode_params_t &params) {
+static void destroy_decoupled_api_handles(decode_params_t& params) {
   CHECK_NVJPEG(nvjpegDecodeParamsDestroy(params.nvjpeg_decode_params));
   CHECK_NVJPEG(nvjpegJpegStreamDestroy(params.jpeg_streams[0]));
   CHECK_NVJPEG(nvjpegJpegStreamDestroy(params.jpeg_streams[1]));
@@ -230,9 +193,9 @@ static void destroy_decoupled_api_handles(decode_params_t &params) {
   CHECK_NVJPEG(nvjpegDecoderDestroy(params.nvjpeg_decoder));
 }
 
-int decode_images(const FileData &img_data, const std::vector<size_t> &img_len,
-                  std::vector<nvjpegImage_t> &out, decode_params_t &params,
-                  double &time) {
+int decode_images(const FileData& img_data, const std::vector<size_t>& img_len,
+                  std::vector<nvjpegImage_t>& out, decode_params_t& params,
+                  double& time) {
   CHECK_CUDA(cudaStreamSynchronize(params.stream));
   // cudaEvent_t startEvent = NULL, stopEvent = NULL;
   // float       loopTime = 0;
@@ -240,12 +203,12 @@ int decode_images(const FileData &img_data, const std::vector<size_t> &img_len,
   // CHECK_CUDA(cudaEventCreate(&startEvent));
   // CHECK_CUDA(cudaEventCreate(&stopEvent));
 
-  std::vector<const unsigned char *> batched_bitstreams;
+  std::vector<const unsigned char*> batched_bitstreams;
   std::vector<size_t> batched_bitstreams_size;
   std::vector<nvjpegImage_t> batched_output;
 
   // bit-streams that batched decode cannot handle
-  std::vector<const unsigned char *> otherdecode_bitstreams;
+  std::vector<const unsigned char*> otherdecode_bitstreams;
   std::vector<size_t> otherdecode_bitstreams_size;
   std::vector<nvjpegImage_t> otherdecode_output;
 
@@ -254,19 +217,19 @@ int decode_images(const FileData &img_data, const std::vector<size_t> &img_len,
       // extract bitstream meta data to figure out whether a bit-stream can be
       // decoded
       nvjpegJpegStreamParseHeader(params.nvjpeg_handle,
-                                  (const unsigned char *)img_data[i].data(),
+                                  (const unsigned char*)img_data[i].data(),
                                   img_len[i], params.jpeg_streams[0]);
       int isSupported = -1;
       nvjpegDecodeBatchedSupported(params.nvjpeg_handle, params.jpeg_streams[0],
                                    &isSupported);
 
       if (isSupported == 0) {
-        batched_bitstreams.push_back((const unsigned char *)img_data[i].data());
+        batched_bitstreams.push_back((const unsigned char*)img_data[i].data());
         batched_bitstreams_size.push_back(img_len[i]);
         batched_output.push_back(out[i]);
       } else {
         otherdecode_bitstreams.push_back(
-            (const unsigned char *)img_data[i].data());
+            (const unsigned char*)img_data[i].data());
         otherdecode_bitstreams_size.push_back(img_len[i]);
         otherdecode_output.push_back(out[i]);
       }
@@ -274,7 +237,7 @@ int decode_images(const FileData &img_data, const std::vector<size_t> &img_len,
   } else {
     for (int i = 0; i < params.batch_size; i++) {
       otherdecode_bitstreams.push_back(
-          (const unsigned char *)img_data[i].data());
+          (const unsigned char*)img_data[i].data());
       otherdecode_bitstreams_size.push_back(img_len[i]);
       otherdecode_output.push_back(out[i]);
     }
@@ -338,10 +301,10 @@ int decode_images(const FileData &img_data, const std::vector<size_t> &img_len,
   return EXIT_SUCCESS;
 }
 
-double process_images(const FileNames &image_names, decode_params_t &params,
-                      double &total, std::vector<nvjpegImage_t> &iout,
-                      std::vector<FDTensor *> &output_buffers,
-                      std::vector<int> &widths, std::vector<int> &heights) {
+double process_images(const FileNames& image_names, decode_params_t& params,
+                      double& total, std::vector<nvjpegImage_t>& iout,
+                      std::vector<FDTensor*>& output_buffers,
+                      std::vector<int>& widths, std::vector<int>& heights) {
   FDASSERT(image_names.size() == params.batch_size,
            "Number of images and batch size must be equal.");
   // vector for storing raw files and file lengths
@@ -401,7 +364,7 @@ double process_images(const FileNames &image_names, decode_params_t &params,
   return EXIT_SUCCESS;
 }
 
-void init_decoder(decode_params_t &params) {
+void init_decoder(decode_params_t& params) {
   params.hw_decode_available = true;
   nvjpegDevAllocator_t dev_allocator = {&dev_malloc, &dev_free};
   nvjpegPinnedAllocator_t pinned_allocator = {&host_malloc, &host_free};
@@ -426,82 +389,14 @@ void init_decoder(decode_params_t &params) {
   create_decoupled_api_handles(params);
 }
 
-void destroy_decoder(decode_params_t &params) {
+void destroy_decoder(decode_params_t& params) {
   destroy_decoupled_api_handles(params);
   CHECK_NVJPEG(nvjpegJpegStateDestroy(params.nvjpeg_state));
   CHECK_NVJPEG(nvjpegDestroy(params.nvjpeg_handle));
-}
-
-int NvDecode(std::string images_dir, int total_images, int batch_size,
-             nvjpegOutputFormat_t outputFormat, uint8_t *gpuWorkspace) {
-  std::vector<nvjpegImage_t> iout;
-  std::vector<int> widths, heights;
-  iout.resize(batch_size);
-  widths.resize(batch_size);
-  heights.resize(batch_size);
-
-  decode_params_t params;
-  // params.input_dir           = images_dir;
-  params.batch_size = batch_size;
-  // params.warmup              = 0;
-  params.fmt = outputFormat;
-  // params.write_decoded       = false;
-  params.hw_decode_available = true;
-  // params.total_images        = (total_images / params.batch_size) *
-  // params.batch_size; params.output_dir          = "./";
-
-  nvjpegDevAllocator_t dev_allocator = {&dev_malloc, &dev_free};
-  nvjpegPinnedAllocator_t pinned_allocator = {&host_malloc, &host_free};
-  nvjpegStatus_t status =
-      nvjpegCreateEx(NVJPEG_BACKEND_HARDWARE, &dev_allocator, &pinned_allocator,
-                     NVJPEG_FLAGS_DEFAULT, &params.nvjpeg_handle);
-  if (status == NVJPEG_STATUS_ARCH_MISMATCH) {
-    std::cout
-        << "Hardware Decoder not supported. Falling back to default backend"
-        << std::endl;
-    CHECK_NVJPEG(nvjpegCreateEx(NVJPEG_BACKEND_DEFAULT, &dev_allocator,
-                                &pinned_allocator, NVJPEG_FLAGS_DEFAULT,
-                                &params.nvjpeg_handle));
-    params.hw_decode_available = false;
-  } else {
-    CHECK_NVJPEG(status);
-  }
-
-  CHECK_NVJPEG(
-      nvjpegJpegStateCreate(params.nvjpeg_handle, &params.nvjpeg_state));
-
-  create_decoupled_api_handles(params);
-
-  // read source images
-  FileNames image_names;
-  // readInput(params.input_dir, image_names);
-  image_names.push_back("ILSVRC2012_val_00000010.jpeg");
-
-  // double total;
-  // if (process_images(image_names, params, total, iout, gpuWorkspace, widths,
-  // heights))
-  //     return EXIT_FAILURE;
-
-#ifdef PROFILE_SAMPLE
-  std::cout << "Total decoding time: " << total << " (s)" << std::endl;
-  std::cout << "Avg decoding time per image: " << total / params.total_images
-            << " (s)" << std::endl;
-  std::cout << "Avg images per sec: " << params.total_images / total
-            << std::endl;
-  std::cout << "Avg decoding time per batch: "
-            << total / ((params.total_images + params.batch_size - 1) /
-                        params.batch_size)
-            << " (s)" << std::endl;
-#endif
-
-  destroy_decoupled_api_handles(params);
-
-  CHECK_NVJPEG(nvjpegJpegStateDestroy(params.nvjpeg_state));
-  CHECK_NVJPEG(nvjpegDestroy(params.nvjpeg_handle));
-
-  return EXIT_SUCCESS;
 }
 
 }  // namespace nvjpeg
 }  // namespace vision
 }  // namespace fastdeploy
+
+#endif  // WITH_GPU
