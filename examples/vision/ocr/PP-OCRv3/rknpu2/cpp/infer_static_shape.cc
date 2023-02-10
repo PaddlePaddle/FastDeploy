@@ -13,32 +13,36 @@
 // limitations under the License.
 
 #include "fastdeploy/vision.h"
-#ifdef WIN32
-const char sep = '\\';
-#else
-const char sep = '/';
-#endif
 
-void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model_dir, const std::string& rec_model_dir, const std::string& rec_label_file, const std::string& image_file, const fastdeploy::RuntimeOption& option) {
-  auto det_model_file = det_model_dir + sep + "ch_PP-OCRv3_det_infer.onnx";
+void InitAndInfer(const std::string& det_model_file,
+                  const std::string& cls_model_file,
+                  const std::string& rec_model_file,
+                  const std::string& rec_label_file,
+                  const std::string& image_file,
+                  const fastdeploy::RuntimeOption& option) {
   auto det_params_file = "";
 
-  auto cls_model_file = cls_model_dir + sep + "ch_ppocr_mobile_v2.0_cls_infer.onnx";
   auto cls_params_file = "";
 
-  auto rec_model_file = rec_model_dir + sep + "ch_PP-OCRv3_rec_infer.onnx";
   auto rec_params_file = "";
 
   auto det_option = option;
   auto cls_option = option;
   auto rec_option = option;
 
-  auto det_model = fastdeploy::vision::ocr::DBDetector(det_model_file, det_params_file, det_option,fastdeploy::ONNX);
-  auto cls_model = fastdeploy::vision::ocr::Classifier(cls_model_file, cls_params_file, cls_option,fastdeploy::ONNX);
-  auto rec_model = fastdeploy::vision::ocr::Recognizer(rec_model_file, rec_params_file, rec_label_file, rec_option,fastdeploy::ONNX);
+  auto det_model = fastdeploy::vision::ocr::DBDetector(det_model_file, det_params_file, det_option);
+  auto cls_model = fastdeploy::vision::ocr::Classifier(cls_model_file, cls_params_file, cls_option);
+  auto rec_model = fastdeploy::vision::ocr::Recognizer(rec_model_file, rec_params_file, rec_label_file, rec_option);
 
-  // Users could enable static shape infer for rec model when deploy PP-OCR on hardware 
-  // which can not support dynamic shape infer well, like Huawei Ascend series. 
+  cls_model.GetPreprocessor().DisableNormalize();
+  cls_model.GetPreprocessor().DisablePermute();
+
+  det_model.GetPreprocessor().DisableNormalize();
+  det_model.GetPreprocessor().DisablePermute();
+  det_model.GetPreprocessor().SetStaticShapeInfer(true);
+
+  rec_model.GetPreprocessor().DisableNormalize();
+  rec_model.GetPreprocessor().DisablePermute();
   rec_model.GetPreprocessor().SetStaticShapeInfer(true);
 
   assert(det_model.Initialized());
@@ -51,7 +55,7 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
 
   // When users enable static shape infer for rec model, the batch size of cls and rec model must to be set to 1.
   ppocr_v3.SetClsBatchSize(1);
-  ppocr_v3.SetRecBatchSize(1); 
+  ppocr_v3.SetRecBatchSize(1);
 
   if(!ppocr_v3.Initialized()){
     std::cerr << "Failed to initialize PP-OCR." << std::endl;
@@ -59,7 +63,7 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   }
 
   auto im = cv::imread(image_file);
-  
+
   fastdeploy::vision::OCRResult result;
   if (!ppocr_v3.Predict(im, &result)) {
     std::cerr << "Failed to predict." << std::endl;
@@ -74,14 +78,34 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
 }
 
 int main(int argc, char* argv[]) {
-  fastdeploy::RuntimeOption option;
-  option.UseCpu();
+  if (argc < 7) {
+    std::cout << "Usage: infer_demo path/to/det_model path/to/cls_model "
+                 "path/to/rec_model path/to/rec_label_file path/to/image "
+                 "run_option, "
+                 "e.g ./infer_demo ./ch_PP-OCRv3_det_infer "
+                 "./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv3_rec_infer "
+                 "./ppocr_keys_v1.txt ./12.jpg 0"
+              << std::endl;
+    std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
+                 "with ascend."
+              << std::endl;
+    return -1;
+  }
 
-  std::string det_model_dir = "../ch_PP-OCRv3_det_infer";
-  std::string cls_model_dir = "../ch_ppocr_mobile_v2.0_cls_infer";
-  std::string rec_model_dir = "../ch_PP-OCRv3_rec_infer";
-  std::string rec_label_file = "../ppocr_keys_v1.txt";
-  std::string test_image = "../12.jpg";
+  fastdeploy::RuntimeOption option;
+  int flag = std::atoi(argv[6]);
+
+  if (flag == 0) {
+    option.UseCpu();
+  } else if (flag == 1) {
+    option.UseRKNPU2();
+  }
+
+  std::string det_model_dir = argv[1];
+  std::string cls_model_dir = argv[2];
+  std::string rec_model_dir = argv[3];
+  std::string rec_label_file = argv[4];
+  std::string test_image = argv[5];
   InitAndInfer(det_model_dir, cls_model_dir, rec_model_dir, rec_label_file, test_image, option);
   return 0;
 }

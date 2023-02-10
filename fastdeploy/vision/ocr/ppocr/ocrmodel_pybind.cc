@@ -40,7 +40,15 @@ void BindPPOCRModel(pybind11::module& m) {
           outputs[i].StopSharing();
         }
         return std::make_pair(outputs, batch_det_img_info);
-      });
+      })
+      .def("disable_normalize",
+           [](vision::ocr::DBDetectorPreprocessor& self) {
+             self.DisableNormalize();
+           })
+      .def("disable_permute",
+           [](vision::ocr::DBDetectorPreprocessor& self) {
+             self.DisablePermute();
+           });
 
   pybind11::class_<vision::ocr::DBDetectorPostprocessor>(m, "DBDetectorPostprocessor")
       .def(pybind11::init<>())
@@ -115,7 +123,15 @@ void BindPPOCRModel(pybind11::module& m) {
           outputs[i].StopSharing();
         }
         return outputs;
-      });
+      })
+      .def("disable_normalize",
+           [](vision::ocr::ClassifierPreprocessor& self) {
+             self.DisableNormalize();
+           })
+      .def("disable_permute",
+           [](vision::ocr::ClassifierPreprocessor& self) {
+             self.DisablePermute();
+           });
 
   pybind11::class_<vision::ocr::ClassifierPostprocessor>(m, "ClassifierPostprocessor")
       .def(pybind11::init<>())
@@ -187,7 +203,15 @@ void BindPPOCRModel(pybind11::module& m) {
         outputs[i].StopSharing();
       }
       return outputs;
-    });
+    })
+    .def("disable_normalize",
+         [](vision::ocr::ClassifierPreprocessor& self) {
+           self.DisableNormalize();
+         })
+    .def("disable_permute",
+         [](vision::ocr::ClassifierPreprocessor& self) {
+           self.DisablePermute();
+         });
 
   pybind11::class_<vision::ocr::RecognizerPostprocessor>(m, "RecognizerPostprocessor")
       .def(pybind11::init<std::string>())
