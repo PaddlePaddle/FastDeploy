@@ -27,7 +27,7 @@ YOLOv5::YOLOv5(const std::string& model_file, const std::string& params_file,
   } else if (model_format == ModelFormat::SOPHGO) {
     valid_sophgonpu_backends = {Backend::SOPHGOTPU};
   } else {
-    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE, Backend::OPENVINO};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
     valid_kunlunxin_backends = {Backend::LITE};
     valid_timvx_backends = {Backend::LITE};

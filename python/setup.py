@@ -83,6 +83,7 @@ setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY", "/usr/local/cuda")
 setup_configs["LIBRARY_NAME"] = PACKAGE_NAME
 setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
 setup_configs["OPENCV_DIRECTORY"] = os.getenv("OPENCV_DIRECTORY", "")
+setup_configs["OPENVINO_DIRECTORY"] = os.getenv("OPENVINO_DIRECTORY", "")
 setup_configs["ORT_DIRECTORY"] = os.getenv("ORT_DIRECTORY", "")
 setup_configs["PADDLEINFERENCE_DIRECTORY"] = os.getenv(
     "PADDLEINFERENCE_DIRECTORY", "")
