@@ -10,7 +10,7 @@
 - [IPU部署环境编译安装](cn/build_and_install/ipu.md)
 - [昆仑芯XPU部署环境编译安装](cn/build_and_install/kunlunxin.md)
 - [瑞芯微RV1126部署环境编译安装](cn/build_and_install/rv1126.md)
-- [瑞芯微RK3588部署环境编译安装](cn/build_and_install/rknpu2.md)
+- [瑞芯微RK3588、RK356X部署环境编译安装](cn/build_and_install/rknpu2.md)
 - [晶晨A311D部署环境编译安装](cn/build_and_install/a311d.md)
 - [华为昇腾部署环境编译安装](cn/build_and_install/huawei_ascend.md)
 - [Jetson部署环境编译安装](cn/build_and_install/jetson.md)
