@@ -48,13 +48,13 @@ if(WIN32) #Win
   if(WITH_GPU)
     set(ONNXRUNTIME_FILENAME "onnxruntime-win-x64-gpu-${ONNXRUNTIME_VERSION}.zip")
   elseif(WITH_DIRECTML)
-    set(ONNXRUNTIME_URL "https://bj.bcebos.com/fastdeploy/third_libs/xyy_x64.zip")
+    set(ONNXRUNTIME_FILENAME "onnxruntime-directml-win-x64.zip")
   else()
     set(ONNXRUNTIME_FILENAME "onnxruntime-win-x64-${ONNXRUNTIME_VERSION}.zip")
   endif()
   if(NOT CMAKE_CL_64)
     if(WITH_DIRECTML)
-      set(ONNXRUNTIME_URL "https://bj.bcebos.com/fastdeploy/third_libs/xyy_win32.zip")
+    set(ONNXRUNTIME_FILENAME "onnxruntime-directml-win-x86.zip")
     else()
       set(ONNXRUNTIME_FILENAME "onnxruntime-win-x86-${ONNXRUNTIME_VERSION}.zip")
     endif()
@@ -81,8 +81,7 @@ else()
     endif()
   endif()
 endif()
-# TO un-comment
-# set(ONNXRUNTIME_URL "${ONNXRUNTIME_URL_PREFIX}${ONNXRUNTIME_FILENAME}")
+set(ONNXRUNTIME_URL "${ONNXRUNTIME_URL_PREFIX}${ONNXRUNTIME_FILENAME}")
 
 include_directories(${ONNXRUNTIME_INC_DIR}
 )# For ONNXRUNTIME code to include internal headers.

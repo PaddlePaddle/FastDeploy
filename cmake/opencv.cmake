@@ -15,7 +15,11 @@
 set(COMPRESSED_SUFFIX ".tgz")
 
 if(WIN32)
-  set(OPENCV_FILENAME "opencv-win-x64-3.4.16")
+  if(NOT CMAKE_CL_64)
+    set(OPENCV_FILENAME "opencv-win-x86-3.4.16")
+  else()
+    set(OPENCV_FILENAME "opencv-win-x64-3.4.16")
+  endif()
   set(COMPRESSED_SUFFIX ".zip")
 elseif(APPLE)
   if(CURRENT_OSX_ARCH MATCHES "arm64")
@@ -49,7 +53,7 @@ if(NOT OPENCV_FILENAME)
 endif()
 
 set(OPENCV_INSTALL_DIR ${THIRD_PARTY_PATH}/install/)
-if(ANDROID)
+if(ANDROID OR WITH_DIRECTML)
   set(OPENCV_URL_PREFIX "https://bj.bcebos.com/fastdeploy/third_libs")
 else() # TODO: use fastdeploy/third_libs instead.
   set(OPENCV_URL_PREFIX "https://bj.bcebos.com/paddle2onnx/libs")
