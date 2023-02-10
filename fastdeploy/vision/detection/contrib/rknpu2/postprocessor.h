@@ -56,7 +56,7 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
   float GetNMSThreshold() const { return nms_threshold_; }
 
   /// Set height and weight
-  void SetHeightAndWeight(int height,int width) {
+  void SetHeightAndWeight(int height, int width) {
     height_ = height;
     width_ = width;
   }
