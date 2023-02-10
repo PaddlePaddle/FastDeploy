@@ -42,8 +42,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file,
     return;
   }
   auto vis_im = fastdeploy::vision::VisMatting(im, res);
-  auto vis_im_with_bg =
-      fastdeploy::vision::SwapBackground(im, bg, res);
+  auto vis_im_with_bg = fastdeploy::vision::SwapBackground(im, bg, res);
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);
   cv::imwrite("visualized_result_fg.jpg", vis_im);
   std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
@@ -52,7 +51,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file,
 }
 
 void KunlunXinInfer(const std::string& model_dir, const std::string& image_file,
-              const std::string& background_file) {
+                    const std::string& background_file) {
   auto model_file = model_dir + sep + "model.pdmodel";
   auto params_file = model_dir + sep + "model.pdiparams";
   auto config_file = model_dir + sep + "deploy.yaml";
@@ -73,8 +72,37 @@ void KunlunXinInfer(const std::string& model_dir, const std::string& image_file,
     return;
   }
   auto vis_im = fastdeploy::vision::VisMatting(im, res);
-  auto vis_im_with_bg =
-      fastdeploy::vision::SwapBackground(im, bg, res);
+  auto vis_im_with_bg = fastdeploy::vision::SwapBackground(im, bg, res);
+  cv::imwrite("visualized_result.jpg", vis_im_with_bg);
+  cv::imwrite("visualized_result_fg.jpg", vis_im);
+  std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
+               "and ./visualized_result_fg.jpg"
+            << std::endl;
+}
+
+void AscendInfer(const std::string& model_dir, const std::string& image_file,
+                 const std::string& background_file) {
+  auto model_file = model_dir + sep + "model.pdmodel";
+  auto params_file = model_dir + sep + "model.pdiparams";
+  auto config_file = model_dir + sep + "deploy.yaml";
+  auto option = fastdeploy::RuntimeOption();
+  option.UseAscend();
+  auto model = fastdeploy::vision::matting::PPMatting(model_file, params_file,
+                                                      config_file, option);
+  if (!model.Initialized()) {
+    std::cerr << "Failed to initialize." << std::endl;
+    return;
+  }
+
+  auto im = cv::imread(image_file);
+  cv::Mat bg = cv::imread(background_file);
+  fastdeploy::vision::MattingResult res;
+  if (!model.Predict(&im, &res)) {
+    std::cerr << "Failed to predict." << std::endl;
+    return;
+  }
+  auto vis_im = fastdeploy::vision::VisMatting(im, res);
+  auto vis_im_with_bg = fastdeploy::vision::SwapBackground(im, bg, res);
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);
   cv::imwrite("visualized_result_fg.jpg", vis_im);
   std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
@@ -106,8 +134,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file,
     return;
   }
   auto vis_im = fastdeploy::vision::VisMatting(im, res);
-  auto vis_im_with_bg =
-      fastdeploy::vision::SwapBackground(im, bg, res);
+  auto vis_im_with_bg = fastdeploy::vision::SwapBackground(im, bg, res);
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);
   cv::imwrite("visualized_result_fg.jpg", vis_im);
   std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
@@ -140,8 +167,7 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file,
     return;
   }
   auto vis_im = fastdeploy::vision::VisMatting(im, res);
-  auto vis_im_with_bg =
-      fastdeploy::vision::SwapBackground(im, bg, res);
+  auto vis_im_with_bg = fastdeploy::vision::SwapBackground(im, bg, res);
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);
   cv::imwrite("visualized_result_fg.jpg", vis_im);
   std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
@@ -156,7 +182,8 @@ int main(int argc, char* argv[]) {
            "e.g ./infer_model ./PP-Matting-512 ./test.jpg ./test_bg.jpg 0"
         << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu; 2: run with gpu and use tensorrt backend, 3: run with kunlunxin."
+                 "with gpu; 2: run with gpu and use tensorrt backend, 3: run "
+                 "with kunlunxin."
               << std::endl;
     return -1;
   }
@@ -168,6 +195,8 @@ int main(int argc, char* argv[]) {
     TrtInfer(argv[1], argv[2], argv[3]);
   } else if (std::atoi(argv[4]) == 3) {
     KunlunXinInfer(argv[1], argv[2], argv[3]);
+  } else if (std::atoi(argv[4]) == 4) {
+    AscendInfer(argv[1], argv[2], argv[3]);
   }
   return 0;
 }

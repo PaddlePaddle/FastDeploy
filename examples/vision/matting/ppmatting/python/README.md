@@ -8,7 +8,7 @@ Before deployment, two steps require confirmation
 
 This directory provides examples that `infer.py`  fast finishes the deployment of PP-Matting on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
 ```bash
-# Download the deployment example code 
+# Download the deployment example code
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/matting/ppmatting/python
 
@@ -25,6 +25,8 @@ python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bg
 python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bgr.jpg --device gpu --use_trt True
 # kunlunxin XPU inference
 python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bgr.jpg --device kunlunxin
+# Ascend inference
+python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bgr.jpg --device ascend
 ```
 
 The visualized result after running is as follows
@@ -34,7 +36,7 @@ The visualized result after running is as follows
 <img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852116-cf91445b-3a67-45d9-a675-c69fe77c383a.jpg">
 <img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852554-6960659f-4fd7-4506-b33b-54e1a9dd89bf.jpg">
 </div>
-## PP-Matting Python Interface 
+## PP-Matting Python Interface
 
 ```python
 fd.vision.matting.PPMatting(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
@@ -44,7 +46,7 @@ PP-Matting model loading and initialization, among which model_file, params_file
 
 **Parameter**
 
-> * **model_file**(str): Model file path 
+> * **model_file**(str): Model file path
 > * **params_file**(str): Parameter file path
 > * **config_file**(str): Inference deployment configuration file
 > * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration

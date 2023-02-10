@@ -26,6 +26,8 @@ python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bg
 python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bgr.jpg --device gpu --use_trt True
 # 昆仑芯XPU推理
 python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bgr.jpg --device kunlunxin
+# 昇腾NPU推理
+python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bgr.jpg --device ascend
 ```
 
 运行完成可视化结果如下图所示

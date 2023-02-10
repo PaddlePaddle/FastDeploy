@@ -1,7 +1,7 @@
 English | [简体中文](README_CN.md)
 # PP-Matting C++ Deployment Example
 
-This directory provides examples that `infer.cc` fast finishes the deployment of PP-Matting on CPU/GPU and GPU accelerated by TensorRT. 
+This directory provides examples that `infer.cc` fast finishes the deployment of PP-Matting on CPU/GPU and GPU accelerated by TensorRT.
 Before deployment, two steps require confirmation
 
 - 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
@@ -12,7 +12,7 @@ Taking the PP-Matting inference on Linux as an example, the compilation test can
 ```bash
 mkdir build
 cd build
-# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy  Precompiled Library` mentioned above 
+# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy  Precompiled Library` mentioned above
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
@@ -33,6 +33,8 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 2
 # kunlunxin XPU inference
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 3
+# Ascend inference
+./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 4
 ```
 
 The visualized result after running is as follows
@@ -46,7 +48,7 @@ The visualized result after running is as follows
 The above command works for Linux or MacOS. For SDK use-pattern in Windows, refer to:
 - [How to use FastDeploy C++ SDK in Windows](../../../../../docs/en/faq/use_sdk_on_windows.md)
 
-## PP-Matting C++ Interface 
+## PP-Matting C++ Interface
 
 ### PPMatting Class
 
@@ -63,7 +65,7 @@ PP-Matting model loading and initialization, among which model_file is the expor
 
 **Parameter**
 
-> * **model_file**(str): Model file path 
+> * **model_file**(str): Model file path
 > * **params_file**(str): Parameter file path
 > * **config_file**(str): Inference deployment configuration file
 > * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration

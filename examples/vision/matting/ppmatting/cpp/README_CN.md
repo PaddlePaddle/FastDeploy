@@ -34,6 +34,8 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 2
 # 昆仑芯XPU推理
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 3
+# 昇腾NPU推理
+./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 4
 ```
 
 运行完成可视化结果如下图所示
