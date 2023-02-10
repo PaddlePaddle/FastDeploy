@@ -14,12 +14,13 @@
 
 #include "fastdeploy/vision.h"
 
-void InitAndInfer(const std::string& det_model_file,
-                  const std::string& cls_model_file,
-                  const std::string& rec_model_file,
-                  const std::string& rec_label_file,
-                  const std::string& image_file,
-                  const fastdeploy::RuntimeOption& option) {
+void InitAndInfer(const std::string &det_model_file,
+                  const std::string &cls_model_file,
+                  const std::string &rec_model_file,
+                  const std::string &rec_label_file,
+                  const std::string &image_file,
+                  const fastdeploy::RuntimeOption &option,
+                  const fastdeploy::ModelFormat &format) {
   auto det_params_file = "";
 
   auto cls_params_file = "";
@@ -30,19 +31,22 @@ void InitAndInfer(const std::string& det_model_file,
   auto cls_option = option;
   auto rec_option = option;
 
-  auto det_model = fastdeploy::vision::ocr::DBDetector(det_model_file, det_params_file, det_option);
-  auto cls_model = fastdeploy::vision::ocr::Classifier(cls_model_file, cls_params_file, cls_option);
-  auto rec_model = fastdeploy::vision::ocr::Recognizer(rec_model_file, rec_params_file, rec_label_file, rec_option);
+  auto det_model = fastdeploy::vision::ocr::DBDetector(det_model_file, det_params_file, det_option, format);
+  auto cls_model = fastdeploy::vision::ocr::Classifier(cls_model_file, cls_params_file, cls_option, format);
+  auto rec_model = fastdeploy::vision::ocr::Recognizer(rec_model_file, rec_params_file, rec_label_file, rec_option,
+                                                       format);
 
-  cls_model.GetPreprocessor().DisableNormalize();
-  cls_model.GetPreprocessor().DisablePermute();
+  if(format == fastdeploy::RKNN){
+    cls_model.GetPreprocessor().DisableNormalize();
+    cls_model.GetPreprocessor().DisablePermute();
 
-  det_model.GetPreprocessor().DisableNormalize();
-  det_model.GetPreprocessor().DisablePermute();
+    det_model.GetPreprocessor().DisableNormalize();
+    det_model.GetPreprocessor().DisablePermute();
+
+    rec_model.GetPreprocessor().DisableNormalize();
+    rec_model.GetPreprocessor().DisablePermute();
+  }
   det_model.GetPreprocessor().SetStaticShapeInfer(true);
-
-  rec_model.GetPreprocessor().DisableNormalize();
-  rec_model.GetPreprocessor().DisablePermute();
   rec_model.GetPreprocessor().SetStaticShapeInfer(true);
 
   assert(det_model.Initialized());
@@ -57,7 +61,7 @@ void InitAndInfer(const std::string& det_model_file,
   ppocr_v3.SetClsBatchSize(1);
   ppocr_v3.SetRecBatchSize(1);
 
-  if(!ppocr_v3.Initialized()){
+  if (!ppocr_v3.Initialized()) {
     std::cerr << "Failed to initialize PP-OCR." << std::endl;
     return;
   }
@@ -77,7 +81,7 @@ void InitAndInfer(const std::string& det_model_file,
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
   if (argc < 7) {
     std::cout << "Usage: infer_demo path/to/det_model path/to/cls_model "
                  "path/to/rec_model path/to/rec_label_file path/to/image "
@@ -93,12 +97,15 @@ int main(int argc, char* argv[]) {
   }
 
   fastdeploy::RuntimeOption option;
+  fastdeploy::ModelFormat format;
   int flag = std::atoi(argv[6]);
 
   if (flag == 0) {
     option.UseCpu();
+    format = fastdeploy::ONNX;
   } else if (flag == 1) {
     option.UseRKNPU2();
+    format = fastdeploy::RKNN;
   }
 
   std::string det_model_dir = argv[1];
@@ -106,6 +113,6 @@ int main(int argc, char* argv[]) {
   std::string rec_model_dir = argv[3];
   std::string rec_label_file = argv[4];
   std::string test_image = argv[5];
-  InitAndInfer(det_model_dir, cls_model_dir, rec_model_dir, rec_label_file, test_image, option);
+  InitAndInfer(det_model_dir, cls_model_dir, rec_model_dir, rec_label_file, test_image, option, format);
   return 0;
 }

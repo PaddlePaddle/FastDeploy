@@ -24,12 +24,12 @@
 
 在RKNPU2上使用PPOCR时，我们需要把Paddle静态图模型转为RKNN模型。
 
-### 静态图模型转ONNX格式模型
+### 静态图模型转RKNN格式模型
 
 rknn_toolkit2工具暂不支持直接从Paddle静态图模型直接转换为RKNN模型，因此我们需要先将Paddle静态图模型转为RKNN模型。
-以PPOCRV3为例，执行以下步骤，将Paddle静态图模型转换为ONNX模型:
 
 ```bash
+# 下载模型和字典文件
 wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_det_infer.tar
 tar -xvf ch_PP-OCRv3_det_infer.tar
 
@@ -39,43 +39,35 @@ tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar
 wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_rec_infer.tar
 tar -xvf ch_PP-OCRv3_rec_infer.tar
 
-wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
-
-wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt
-
+# 转换模型到ONNX格式的模型
 paddle2onnx --model_dir ch_PP-OCRv3_det_infer \
             --model_filename inference.pdmodel \
             --params_filename inference.pdiparams \
             --save_file ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer.onnx \
             --enable_dev_version True
-python -m paddle2onnx.optimize --input_model ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer.onnx \
-                               --output_model ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer.onnx \
-                               --input_shape_dict "{'x':[1,3,960,960]}"
-            
 paddle2onnx --model_dir ch_ppocr_mobile_v2.0_cls_infer \
             --model_filename inference.pdmodel \
             --params_filename inference.pdiparams \
             --save_file ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
             --enable_dev_version True
-python -m paddle2onnx.optimize --input_model ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
-                               --output_model ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
-                               --input_shape_dict "{'x':[1,3,48,192]}"
-            
 paddle2onnx --model_dir ch_PP-OCRv3_rec_infer \
             --model_filename inference.pdmodel \
             --params_filename inference.pdiparams \
             --save_file ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer.onnx \
             --enable_dev_version True
+
+# 固定模型的输入shape
+python -m paddle2onnx.optimize --input_model ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer.onnx \
+                               --output_model ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer.onnx \
+                               --input_shape_dict "{'x':[1,3,960,960]}"
+python -m paddle2onnx.optimize --input_model ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
+                               --output_model ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
+                               --input_shape_dict "{'x':[1,3,48,192]}"
 python -m paddle2onnx.optimize --input_model ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer.onnx \
                                --output_model ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer.onnx \
                                --input_shape_dict "{'x':[1,3,48,320]}"
-```
 
-### ONNX格式模型转RKNN模型
-
-执行以下步骤转换ONNX格式模型到RKNN模型:
-
-```bash
+# 转换ONNX模型到RKNN模型
 python tools/rknpu2/export.py --config_path tools/rknpu2/config/ppocrv3_det.yaml \
                               --target_platform rk3588
 python tools/rknpu2/export.py --config_path tools/rknpu2/config/ppocrv3_rec.yaml \
