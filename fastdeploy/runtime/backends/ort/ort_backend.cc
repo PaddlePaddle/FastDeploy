@@ -63,6 +63,7 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
       FDWARNING << "Compiled fastdeploy with onnxruntime doesn't "
                    "support DirectML, the available providers are "
                 << providers_msg << "will fallback to CPUExecutionProvider."
+                << "Please check if DirectML is installed successfully."
                 << std::endl;
       option_.device = Device::CPU;
     } else {
@@ -109,7 +110,8 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
 }
 
 bool OrtBackend::Init(const RuntimeOption& option) {
-  if (option.device != Device::CPU && option.device != Device::GPU) {
+  if (option.device != Device::CPU && option.device != Device::GPU &&
+      option.device != Device::DIRECTML) {
     FDERROR
         << "Backend::ORT only supports Device::CPU/Device::GPU, but now its "
         << option.device << "." << std::endl;

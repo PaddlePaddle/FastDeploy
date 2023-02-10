@@ -37,6 +37,8 @@ wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 ./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 3
 # Huawei Ascend Inference
 ./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 4
+# DirectML inference
+./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 5
 ```
 
 The visualized result after running is as follows

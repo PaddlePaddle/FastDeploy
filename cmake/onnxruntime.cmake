@@ -44,14 +44,20 @@ set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" "${ONNXRUNTIME_LIB_DIR}")
 set(ONNXRUNTIME_VERSION "1.12.0")
 set(ONNXRUNTIME_URL_PREFIX "https://bj.bcebos.com/paddle2onnx/libs/")
 
-if(WIN32)
+if(WIN32) #Win
   if(WITH_GPU)
     set(ONNXRUNTIME_FILENAME "onnxruntime-win-x64-gpu-${ONNXRUNTIME_VERSION}.zip")
+  elseif(WITH_DIRECTML)
+    set(ONNXRUNTIME_URL "https://bj.bcebos.com/fastdeploy/third_libs/xyy_x64.zip")
   else()
     set(ONNXRUNTIME_FILENAME "onnxruntime-win-x64-${ONNXRUNTIME_VERSION}.zip")
   endif()
   if(NOT CMAKE_CL_64)
-    set(ONNXRUNTIME_FILENAME "onnxruntime-win-x86-${ONNXRUNTIME_VERSION}.zip")
+    if(WITH_DIRECTML)
+      set(ONNXRUNTIME_URL "https://bj.bcebos.com/fastdeploy/third_libs/xyy_win32.zip")
+    else()
+      set(ONNXRUNTIME_FILENAME "onnxruntime-win-x86-${ONNXRUNTIME_VERSION}.zip")
+    endif()
   endif()
 elseif(APPLE)
   if(CURRENT_OSX_ARCH MATCHES "arm64")
@@ -75,8 +81,8 @@ else()
     endif()
   endif()
 endif()
-#set(ONNXRUNTIME_URL "${ONNXRUNTIME_URL_PREFIX}${ONNXRUNTIME_FILENAME}")
-set(ONNXRUNTIME_URL "https://bj.bcebos.com/fastdeploy/third_libs/xyy_x64.zip")
+# TO un-comment
+# set(ONNXRUNTIME_URL "${ONNXRUNTIME_URL_PREFIX}${ONNXRUNTIME_FILENAME}")
 
 include_directories(${ONNXRUNTIME_INC_DIR}
 )# For ONNXRUNTIME code to include internal headers.
