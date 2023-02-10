@@ -32,15 +32,15 @@ namespace fastdeploy{
 
 
     public void SetModelPath(string model_path,
-                      string params_path,
-                      ModelFormat format){
+                      string params_path = "",
+                      ModelFormat format = ModelFormat.PADDLE){
       FD_C_RuntimeOptionWrapperSetModelPath(fd_runtime_option_wrapper, model_path, params_path, format);
     }
 
 
     public void SetModelBuffer(string model_buffer,
-                          string params_buffer,
-                          ModelFormat format){
+                          string params_buffer = "",
+                          ModelFormat format = ModelFormat.PADDLE){
       FD_C_RuntimeOptionWrapperSetModelBuffer(fd_runtime_option_wrapper, model_buffer, params_buffer, format);
     }
 
@@ -51,15 +51,15 @@ namespace fastdeploy{
     }
 
 
-    public void UseGpu(int gpu_id){
+    public void UseGpu(int gpu_id = 0){
       FD_C_RuntimeOptionWrapperUseGpu(fd_runtime_option_wrapper, gpu_id);
     }
 
 
 
     public void UseRKNPU2(
-                    rknpu2_CpuName rknpu2_name,
-                    rknpu2_CoreMask rknpu2_core){
+                    rknpu2_CpuName rknpu2_name = rknpu2_CpuName.RK3588,
+                    rknpu2_CoreMask rknpu2_core = rknpu2_CoreMask.RKNN_NPU_CORE_0){
       FD_C_RuntimeOptionWrapperUseRKNPU2(fd_runtime_option_wrapper, rknpu2_name, rknpu2_core);
     }
 
@@ -74,12 +74,12 @@ namespace fastdeploy{
     }
 
     public void UseKunlunXin(
-                        int kunlunxin_id, int l3_workspace_size,
-                        bool locked, bool autotune,
-                        string autotune_file,
-                        string precision,
-                        bool adaptive_seqlen,
-                        bool enable_multi_stream){
+                        int kunlunxin_id= 0, int l3_workspace_size= 0xfffc00,
+                        bool locked= false, bool autotune= true,
+                        string autotune_file= "",
+                        string precision= "int16",
+                        bool adaptive_seqlen= false,
+                        bool enable_multi_stream= false){
       FD_C_RuntimeOptionWrapperUseKunlunXin(fd_runtime_option_wrapper, kunlunxin_id,
       l3_workspace_size, locked, autotune, autotune_file, precision, adaptive_seqlen, enable_multi_stream);
     }
@@ -99,7 +99,7 @@ namespace fastdeploy{
     }
 
 
-    public void SetOrtGraphOptLevel(int level){
+    public void SetOrtGraphOptLevel(int level= -1){
       FD_C_RuntimeOptionWrapperSetOrtGraphOptLevel(fd_runtime_option_wrapper, level);
     }
 
@@ -149,7 +149,7 @@ namespace fastdeploy{
     }
 
 
-    public void SetPaddleMKLDNN(bool pd_mkldnn){
+    public void SetPaddleMKLDNN(bool pd_mkldnn= true){
       FD_C_RuntimeOptionWrapperSetPaddleMKLDNN(fd_runtime_option_wrapper, pd_mkldnn);
     }
 
@@ -179,7 +179,7 @@ namespace fastdeploy{
     }
 
 
-    public void SetOpenVINODevice(string name){
+    public void SetOpenVINODevice(string name = "CPU"){
       FD_C_RuntimeOptionWrapperSetOpenVINODevice(fd_runtime_option_wrapper, name);
     }
 
@@ -282,17 +282,11 @@ namespace fastdeploy{
     }
 
 
-    public void UseIpu(int device_num, int micro_batch_size,
-                bool enable_pipelining, int batches_per_step){
+    public void UseIpu(int device_num= 1, int micro_batch_size= 1,
+                bool enable_pipelining= false, int batches_per_step= 1){
       FD_C_RuntimeOptionWrapperUseIpu(fd_runtime_option_wrapper, device_num, micro_batch_size, enable_pipelining, batches_per_step);
     }
 
-
-    public void SetIpuConfig(bool enable_fp16, int replica_num,
-                      float available_memory_proportion,
-                      bool enable_half_partial){
-      FD_C_RuntimeOptionWrapperSetIpuConfig(fd_runtime_option_wrapper, enable_fp16, replica_num, available_memory_proportion, enable_half_partial);
-    }
     
     public IntPtr GetWrapperPtr(){
       return fd_runtime_option_wrapper;
@@ -473,11 +467,6 @@ namespace fastdeploy{
     [DllImport("fastdeploy.dll", EntryPoint = "FD_C_RuntimeOptionWrapperUseIpu")]
     private static extern void FD_C_RuntimeOptionWrapperUseIpu( IntPtr fd_runtime_option_wrapper, int device_num, int micro_batch_size,
                 bool enable_pipelining, int batches_per_step);
-
-    [DllImport("fastdeploy.dll", EntryPoint = "FD_C_RuntimeOptionWrapperSetIpuConfig")]
-    private static extern void FD_C_RuntimeOptionWrapperSetIpuConfig( IntPtr fd_runtime_option_wrapper, bool enable_fp16, int replica_num,
-                      float available_memory_proportion,
-                      bool enable_half_partial);
 
 
   }
