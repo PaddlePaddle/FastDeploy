@@ -80,6 +80,10 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
     obj_class_num_ = num;
     prob_box_size_ = obj_class_num_ + 5;
   }
+  /// Get the number of class
+  int GetClassNum() {
+    return obj_class_num_;
+  }
 
  private:
   std::vector<int> anchors_ = {10, 13, 16,  30,  33, 23,  30,  61,  62,
