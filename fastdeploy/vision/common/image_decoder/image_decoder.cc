@@ -14,6 +14,8 @@
 
 #include "fastdeploy/vision/common/image_decoder/image_decoder.h"
 
+#include "opencv2/imgcodecs.hpp"
+
 namespace fastdeploy {
 namespace vision {
 
@@ -40,36 +42,47 @@ bool ImageDecoder::Decode(const std::string& img_name, FDMat* mat) {
 
 bool ImageDecoder::BatchDecode(const std::vector<std::string>& img_names,
                                std::vector<FDMat>* mats) {
+  if (lib_ == ImageDecoderLib::OPENCV) {
+    for (size_t i = 0; i < img_names.size(); ++i) {
+      cv::Mat im = cv::imread(img_names[i]);
+      (*mats)[i].SetMat(im);
+      (*mats)[i].layout = Layout::HWC;
+      (*mats)[i].SetWidth(im.cols);
+      (*mats)[i].SetHeight(im.rows);
+      (*mats)[i].SetChannels(im.channels());
+    }
+  } else if (lib_ == ImageDecoderLib::NVJPEG) {
 #ifdef WITH_GPU
-  nvjpeg_params_.batch_size = img_names.size();
-  std::vector<nvjpegImage_t> output_imgs(nvjpeg_params_.batch_size);
-  std::vector<int> widths(nvjpeg_params_.batch_size);
-  std::vector<int> heights(nvjpeg_params_.batch_size);
-  // TODO(wangxinyu): support other output format
-  nvjpeg_params_.fmt = NVJPEG_OUTPUT_BGRI;
-  double total;
-  nvjpeg_params_.stream = (*mats)[0].Stream();
+    nvjpeg_params_.batch_size = img_names.size();
+    std::vector<nvjpegImage_t> output_imgs(nvjpeg_params_.batch_size);
+    std::vector<int> widths(nvjpeg_params_.batch_size);
+    std::vector<int> heights(nvjpeg_params_.batch_size);
+    // TODO(wangxinyu): support other output format
+    nvjpeg_params_.fmt = NVJPEG_OUTPUT_BGRI;
+    double total;
+    nvjpeg_params_.stream = (*mats)[0].Stream();
 
-  std::vector<FDTensor*> output_buffers;
-  for (size_t i = 0; i < mats->size(); ++i) {
-    output_buffers.push_back((*mats)[i].output_cache);
-  }
+    std::vector<FDTensor*> output_buffers;
+    for (size_t i = 0; i < mats->size(); ++i) {
+      output_buffers.push_back((*mats)[i].output_cache);
+    }
 
-  if (nvjpeg::process_images(img_names, nvjpeg_params_, total, output_imgs,
-                             output_buffers, widths, heights)) {
-    return false;
-  }
+    if (nvjpeg::process_images(img_names, nvjpeg_params_, total, output_imgs,
+                               output_buffers, widths, heights)) {
+      return false;
+    }
 
-  for (size_t i = 0; i < mats->size(); ++i) {
-    (*mats)[i].mat_type = ProcLib::CUDA;
-    (*mats)[i].layout = Layout::HWC;
-    (*mats)[i].SetTensor(output_buffers[i]);
-  }
+    for (size_t i = 0; i < mats->size(); ++i) {
+      (*mats)[i].mat_type = ProcLib::CUDA;
+      (*mats)[i].layout = Layout::HWC;
+      (*mats)[i].SetTensor(output_buffers[i]);
+    }
 #else
-  FDASSERT(
-      false,
-      "nvJPEG requires GPU, but FastDeploy didn't compile with WITH_GPU=ON.");
+    FDASSERT(
+        false,
+        "nvJPEG requires GPU, but FastDeploy didn't compile with WITH_GPU=ON.");
 #endif
+  }
   return true;
 }
 
