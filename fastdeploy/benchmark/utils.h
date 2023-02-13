@@ -73,8 +73,8 @@ class FASTDEPLOY_DECL ResourceUsageMonitor {
   bool is_supported_ = false;
   bool stop_signal_ = false;
   const int sampling_interval_;
-  float max_cpu_mem_ = 0.0f;
-  float max_gpu_mem_ = 0.0f;
+  float max_cpu_mem_ = 0.0f;  // MB
+  float max_gpu_mem_ = 0.0f;  // MB
   float max_gpu_util_ = 0.0f;
   const int gpu_id_ = 0;
   std::unique_ptr<std::thread> check_memory_thd_ = nullptr;

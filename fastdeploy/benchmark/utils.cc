@@ -14,7 +14,8 @@
 
 #include <sys/types.h>
 #if defined(__linux__) || defined(__ANDROID__)
-#include <unistd.h>
+// #include <unistd.h>
+#include <sys/resource.h>
 #endif
 #include <cmath>
 
@@ -77,11 +78,12 @@ void ResourceUsageMonitor::Start() {
   check_memory_thd_.reset(new std::thread(([this]() {
     // Note we retrieve the memory usage at the very beginning of the thread.
     while (true) {
-      std::string cpu_mem_info = GetCurrentCpuMemoryInfo();
-      // get max_cpu_mem
-      std::vector<std::string> cpu_tokens;
-      split(cpu_mem_info, cpu_tokens, ' ');
-      max_cpu_mem_ = std::max(max_cpu_mem_, stof(cpu_tokens[3]) / 1024);
+#ifdef __linux__
+      rusage res;
+      if (getrusage(RUSAGE_SELF, &res) == 0) {
+        max_cpu_mem_ = std::max(max_cpu_mem_, res.ru_maxrss / 1024);
+      }
+#endif
 #if defined(WITH_GPU)
       std::string gpu_mem_info = GetCurrentGpuMemoryInfo(gpu_id_);
       // get max_gpu_mem and max_gpu_util
@@ -119,26 +121,6 @@ void ResourceUsageMonitor::StopInternal() {
     check_memory_thd_->join();
   }
   check_memory_thd_.reset(nullptr);
-}
-
-std::string ResourceUsageMonitor::GetCurrentCpuMemoryInfo() {
-  std::string result = "";
-#if defined(__linux__) || defined(__ANDROID__)
-  int iPid = static_cast<int>(getpid());
-  std::string command = "pmap -x " + std::to_string(iPid) + " | grep total";
-  FILE* pp = popen(command.data(), "r");
-  if (!pp) return "";
-  char tmp[1024];
-
-  while (fgets(tmp, sizeof(tmp), pp) != NULL) {
-    result += tmp;
-  }
-  pclose(pp);
-#else
-  FDASSERT(false,
-           "Currently collect cpu memory info only supports Linux and ANDROID.")
-#endif
-  return result;
 }
 
 std::string ResourceUsageMonitor::GetCurrentGpuMemoryInfo(int device_id) {
