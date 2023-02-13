@@ -25,9 +25,10 @@ int main(int argc, char* argv[]) {
     PrintUsage();
     return false;
   }
-  auto model = fastdeploy::vision::detection::YOLOv5(FLAGS_model, "", option);
+  auto model_yolov5 =
+      fastdeploy::vision::detection::YOLOv5(FLAGS_model, "", option);
   fastdeploy::vision::DetectionResult res;
-  BENCHMARK_MODEL(model, model.Predict(im, &res))
+  BENCHMARK_MODEL(model_yolov5, model_yolov5.Predict(im, &res))
   auto vis_im = fastdeploy::vision::VisDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;

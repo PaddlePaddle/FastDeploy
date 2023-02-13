@@ -34,10 +34,10 @@ int main(int argc, char* argv[]) {
   auto model_file = FLAGS_model + sep + "model.pdmodel";
   auto params_file = FLAGS_model + sep + "model.pdiparams";
   auto config_file = FLAGS_model + sep + "infer_cfg.yml";
-  auto model = fastdeploy::vision::detection::PaddleYOLOv8(
+  auto model_ppyolov8 = fastdeploy::vision::detection::PaddleYOLOv8(
       model_file, params_file, config_file, option);
   fastdeploy::vision::DetectionResult res;
-  BENCHMARK_MODEL(model, model.Predict(im, &res))
+  BENCHMARK_MODEL(model_ppyolov8, model_ppyolov8.Predict(im, &res))
   auto vis_im = fastdeploy::vision::VisDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
