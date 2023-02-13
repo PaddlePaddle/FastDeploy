@@ -54,6 +54,11 @@ struct FASTDEPLOY_DECL FDTensor {
   // other devices' data
   std::vector<int8_t> temporary_cpu_buffer;
 
+  // The number of bytes allocated so far.
+  // When resizing GPU memory, we will free and realloc the memory only if the
+  // required size is larger than this value.
+  size_t nbytes_allocated = 0;
+
   // Get data buffer pointer
   void* MutableData();
 
