@@ -302,6 +302,7 @@ FDTensor* CreateCachedGpuInputTensor(Mat* mat) {
   if (src->device == Device::GPU) {
     if (src->Data() == mat->output_cache->Data()) {
       std::swap(mat->input_cache, mat->output_cache);
+      std::swap(mat->input_cache->name, mat->output_cache->name);
     }
     return src;
   } else if (src->device == Device::CPU) {

@@ -109,6 +109,7 @@ class PaddleClasModel(FastDeployModel):
         """Classify an input image
 
         :param im: (numpy.ndarray) The input image data, a 3-D array with layout HWC, BGR format
+                   or (string) The input image file name
         :param topk: (int) Filter the topk classify result, default 1
         :return: ClassifyResult
         """
@@ -120,6 +121,7 @@ class PaddleClasModel(FastDeployModel):
         """Classify a batch of input image
 
         :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
+                   or (list of string) The input image file name list
         :return list of ClassifyResult
         """
 

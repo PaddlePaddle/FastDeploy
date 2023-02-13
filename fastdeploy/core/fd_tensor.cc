@@ -269,7 +269,6 @@ bool FDTensor::ReallocFn(size_t nbytes) {
       if (buffer_ != nullptr) {
         FDDeviceFree()(buffer_);
       }
-      std::cout << "realloc " << original_nbytes << " " << nbytes << std::endl;
       FDDeviceAllocator()(&buffer_, nbytes);
       nbytes_allocated = nbytes;
     }

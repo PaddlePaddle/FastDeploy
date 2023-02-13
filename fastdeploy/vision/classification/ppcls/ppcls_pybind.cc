@@ -89,6 +89,20 @@ void BindPaddleClas(pybind11::module& m) {
              self.BatchPredict(images, &results);
              return results;
            })
+      .def("predict",
+           [](vision::classification::PaddleClasModel& self,
+              const std::string& img_name) {
+             vision::ClassifyResult result;
+             self.Predict(img_name, &result);
+             return result;
+           })
+      .def("batch_predict",
+           [](vision::classification::PaddleClasModel& self,
+              const std::vector<std::string>& img_names) {
+             std::vector<vision::ClassifyResult> results;
+             self.BatchPredict(img_names, &results);
+             return results;
+           })
       .def_property_readonly(
           "preprocessor",
           &vision::classification::PaddleClasModel::GetPreprocessor)
