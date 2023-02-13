@@ -18,7 +18,6 @@
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/result.h"
 
-
 namespace fastdeploy {
 namespace benchmark {
 /*! @brief ResourceUsageMonitor object used when to collect memory info.
