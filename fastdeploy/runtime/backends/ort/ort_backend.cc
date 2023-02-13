@@ -47,6 +47,7 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
     session_options_.SetExecutionMode(ExecutionMode(option.execution_mode));
   }
 
+#ifdef WITH_DIRECTML
   // If use DirectML
   if (option.device == Device::DIRECTML) {
     auto all_providers = Ort::GetAvailableProviders();
@@ -79,6 +80,7 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
       ortDmlApi->SessionOptionsAppendExecutionProvider_DML(session_options_, 0);
     }
   }
+#endif
 
   // CUDA
   if (option.device == Device::GPU) {
