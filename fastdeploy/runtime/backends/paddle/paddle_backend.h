@@ -35,6 +35,9 @@ paddle_infer::PlaceType ConvertFDDeviceToPlace(Device device);
 // Share memory buffer with paddle_infer::Tensor from fastdeploy::FDTensor
 void ShareTensorFromFDTensor(paddle_infer::Tensor* tensor, FDTensor& fd_tensor);
 
+void ShareOutTensorFromFDTensor(paddle_infer::Tensor* tensor,
+                             FDTensor& fd_tensor);
+
 // convert paddle_infer::Tensor to fastdeploy::FDTensor
 // if copy_to_fd is true, copy memory data to FDTensor
 /// else share memory to FDTensor
