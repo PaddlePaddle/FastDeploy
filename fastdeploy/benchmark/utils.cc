@@ -80,7 +80,8 @@ void ResourceUsageMonitor::Start() {
 #ifdef __linux__
       rusage res;
       if (getrusage(RUSAGE_SELF, &res) == 0) {
-        max_cpu_mem_ = std::max(max_cpu_mem_, res.ru_maxrss / 1024);
+        max_cpu_mem_ =
+            std::max(max_cpu_mem_, static_cast<float>(res.ru_maxrss / 1024.0));
       }
 #endif
 #if defined(WITH_GPU)

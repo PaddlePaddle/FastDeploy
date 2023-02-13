@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "flags.h"
 #include "macros.h"
+#include "flags.h"
 #include "option.h"
 
 #ifdef WIN32

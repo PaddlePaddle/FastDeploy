@@ -62,8 +62,8 @@
     float __cpu_mem__ = __resource_moniter__.GetMaxCpuMem();                \
     float __gpu_mem__ = __resource_moniter__.GetMaxGpuMem();                \
     float __gpu_util__ = __resource_moniter__.GetMaxGpuUtil();              \
-    std::cout << "cpu_pss_mb: " << __cpu_mem__ << "MB." << std::endl;       \
-    std::cout << "gpu_pss_mb: " << __gpu_mem__ << "MB." << std::endl;       \
+    std::cout << "cpu_rss_mb: " << __cpu_mem__ << "MB." << std::endl;       \
+    std::cout << "gpu_rss_mb: " << __gpu_mem__ << "MB." << std::endl;       \
     std::cout << "gpu_util: " << __gpu_util__ << std::endl;                 \
     __resource_moniter__.Stop();                                            \
   }                                                                         \
