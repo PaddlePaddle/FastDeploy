@@ -328,18 +328,97 @@ bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
 
 bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
                                         const std::string& path) {
-  return false;
+  if (!CheckFileExists(path)) {
+    FDERROR << "Can't found file from" << path << std::endl;
+    return false;
+  }
+  auto lines = ReadLines(path);
+  std::vector<std::string> tokens;
+
+  // boxes
+  Split(lines[0], tokens, ':');
+  std::vector<std::string> boxes_tokens;
+  Split(tokens[1], boxes_tokens, ',');
+  int boxes_num = boxes_tokens.size() / 4;
+  res->Resize(boxes_num);
+  for (int i = 0; i < boxes_num; ++i) {
+    res->boxes[i][0] = std::stof(boxes_tokens[i * 4 + 0]);
+    res->boxes[i][1] = std::stof(boxes_tokens[i * 4 + 1]);
+    res->boxes[i][2] = std::stof(boxes_tokens[i * 4 + 2]);
+    res->boxes[i][3] = std::stof(boxes_tokens[i * 4 + 3]);
+  }
+  // scores
+  Split(lines[1], tokens, ':');
+  std::vector<std::string> scores_tokens;
+  Split(tokens[1], scores_tokens, ',');
+  for (int i = 0; i < scores_tokens.size(); ++i) {
+    res->scores[i] = std::stof(scores_tokens[i]);
+  }
+  // label_ids
+  Split(lines[2], tokens, ':');
+  std::vector<std::string> labels_tokens;
+  Split(tokens[1], labels_tokens, ',');
+  for (int i = 0; i < labels_tokens.size(); ++i) {
+    res->label_ids[i] = std::stoi(labels_tokens[i]);
+  }
+
+  return true;
 }
 
 TensorDiff ResultManager::CalcDiffFrom(const FDTensor& lhs,
                                        const FDTensor& rhs) {
+  if (lhs.Numel() != rhs.Numel() || lhs.Dtype() != rhs.Dtype()) {
+    FDASSERT(false, "The size and dtype of input FDTensor must be equal!");
+  }
+  FDDataType dtype = lhs.Dtype();
+  int numel = lhs.Numel();
+  if (dtype != FDDataType::FP32) {
+    FDASSERT(false, "Only support FP32 now!");
+  }
+  std::vector<float> tensor_diff(numel);
+  const float* lhs_data_ptr = static_cast<const float*>(lhs.CpuData());
+  const float* rhs_data_ptr = static_cast<const float*>(rhs.CpuData());
+  for (int i = 0; i < numel; ++i) {
+    tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
+  }
+
   TensorDiff diff;
+  CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.tensor.mean),
+                             &(diff.tensor.max), &(diff.tensor.min));
+
   return diff;
 }
 
 DetectionDiff ResultManager::CalcDiffFrom(const vision::DetectionResult& lhs,
                                           const vision::DetectionResult& rhs) {
+  if (lhs.boxes.size() != rhs.boxes.size()) {
+    FDASSERT(false, "The boxes size of input DetectionResult must be equal!");
+  }
+
+  int boxes_num = lhs.boxes.size();
+  std::vector<float> boxes_diff(boxes_num * 4);
+  std::vector<float> scores_diff(boxes_num);
+  std::vector<int32_t> labels_diff(boxes_num);
+  for (int i = 0; i < boxes_num; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      boxes_diff[i * 4 + j] = lhs.boxes[i][j] - rhs.boxes[i][j];
+    }
+    scores_diff[i] = lhs.scores[i] - rhs.scores[i];
+    labels_diff[i] = lhs.label_ids[i] - rhs.label_ids[i];
+  }
+
   DetectionDiff diff;
+
+  CalculateStatisInfo<float>(boxes_diff.data(), boxes_diff.size(),
+                             &(diff.boxes.mean), &(diff.boxes.max),
+                             &(diff.boxes.min));
+  CalculateStatisInfo<float>(scores_diff.data(), scores_diff.size(),
+                             &(diff.scores.mean), &(diff.scores.max),
+                             &(diff.scores.min));
+  CalculateStatisInfo<float>(labels_diff.data(), labels_diff.size(),
+                             &(diff.labels.mean), &(diff.labels.max),
+                             &(diff.labels.min));
+
   return diff;
 }
 

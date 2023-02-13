@@ -90,18 +90,21 @@ struct FASTDEPLOY_DECL BaseDiff {
   }
 };
 
-struct FASTDEPLOY_DECL TensorDiff: public BaseDiff {
+struct FASTDEPLOY_DECL EvalStatis {
   double mean = 0.0;
-  double std = 0.0;
   double min = 0.0;
   double max = 0.0;
+};
+
+struct FASTDEPLOY_DECL TensorDiff: public BaseDiff {
+  EvalStatis tensor;
   bool IsHasDiff() override;
 };
 
 struct FASTDEPLOY_DECL DetectionDiff: public BaseDiff {
-  bool boxes_has_diff = false;
-  bool scores_has_diff = false;
-  bool labels_has_diff = false;
+  EvalStatis boxes;
+  EvalStatis scores;
+  EvalStatis labels;
   bool IsHasDiff() override;
 };
 
