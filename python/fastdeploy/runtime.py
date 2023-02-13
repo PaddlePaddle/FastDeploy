@@ -591,7 +591,8 @@ class RuntimeOption:
                        replica_num=1,
                        available_memory_proportion=1.0,
                        enable_half_partial=False):
-        return self._option.set_ipu_config(enable_fp16, replica_num,
+        logging.warning("`RuntimeOption.set_ipu_config` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_infer_option.set_ipu_config()` instead.")
+        self._option.paddle_infer_option.set_ipu_config(enable_fp16, replica_num,
                                            available_memory_proportion,
                                            enable_half_partial)
 
