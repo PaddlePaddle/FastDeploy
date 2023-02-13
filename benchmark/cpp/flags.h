@@ -15,7 +15,6 @@
 #pragma once
 
 #include "gflags/gflags.h"
-#include "fastdeploy/utils/perf.h"
 
 DEFINE_string(model, "", "Directory of the inference model.");
 DEFINE_string(image, "", "Path of the image file.");
@@ -48,76 +47,4 @@ void PrintUsage() {
   std::cout << "Default value of device: cpu" << std::endl;
   std::cout << "Default value of backend: default" << std::endl;
   std::cout << "Default value of use_fp16: false" << std::endl;
-}
-
-bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
-  if (FLAGS_device == "gpu") {
-    option->UseGpu(FLAGS_device_id);
-    if (FLAGS_backend == "ort") {
-      option->UseOrtBackend();
-    } else if (FLAGS_backend == "paddle") {
-      option->UsePaddleInferBackend();
-    } else if (FLAGS_backend == "trt" || FLAGS_backend == "paddle_trt") {
-      option->UseTrtBackend();
-      if (FLAGS_backend == "paddle_trt") {
-        option->EnablePaddleToTrt();
-      }
-      if (FLAGS_use_fp16) {
-        option->EnableTrtFP16();
-      }
-    } else if (FLAGS_backend == "default") {
-      return true;
-    } else {
-      std::cout << "While inference with GPU, only support "
-                   "default/ort/paddle/trt/paddle_trt now, "
-                << FLAGS_backend << " is not supported." << std::endl;
-      return false;
-    }
-  } else if (FLAGS_device == "cpu") {
-    option->SetCpuThreadNum(FLAGS_cpu_thread_nums);
-    if (FLAGS_backend == "ort") {
-      option->UseOrtBackend();
-    } else if (FLAGS_backend == "ov") {
-      option->UseOpenVINOBackend();
-    } else if (FLAGS_backend == "paddle") {
-      option->UsePaddleInferBackend();
-    } else if (FLAGS_backend == "lite") {
-      option->UsePaddleLiteBackend();
-      if (FLAGS_use_fp16) {
-        option->EnableLiteFP16();
-      }
-    } else if (FLAGS_backend == "default") {
-      return true;
-    } else {
-      std::cout << "While inference with CPU, only support "
-                   "default/ort/ov/paddle/lite now, "
-                << FLAGS_backend << " is not supported." << std::endl;
-      return false;
-    }
-  } else if (FLAGS_device == "xpu") {
-    option->UseKunlunXin(FLAGS_device_id);
-    if (FLAGS_backend == "ort") {
-      option->UseOrtBackend();
-    } else if (FLAGS_backend == "paddle") {
-      option->UsePaddleInferBackend();
-    } else if (FLAGS_backend == "lite") {
-      option->UsePaddleLiteBackend();
-      if (FLAGS_use_fp16) {
-        option->EnableLiteFP16();
-      }
-    } else if (FLAGS_backend == "default") {
-      return true;
-    } else {
-      std::cout << "While inference with XPU, only support "
-                   "default/ort/paddle/lite now, "
-                << FLAGS_backend << " is not supported." << std::endl;
-      return false;
-    }
-  } else {
-    std::cerr << "Only support device CPU/GPU/XPU now, " << FLAGS_device
-              << " is not supported." << std::endl;
-    return false;
-  }
-
-  return true;
 }
