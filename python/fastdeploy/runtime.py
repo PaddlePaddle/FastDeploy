@@ -72,6 +72,14 @@ class Runtime:
         """
         self._runtime.bind_input_tensor(name, fdtensor)
 
+    def bind_output_tensor(self, name, fdtensor):
+        """Bind FDTensor by name, no copy and share output memory
+
+        :param name: (str)The name of output data.
+        :param fdtensor: (fastdeploy.FDTensor)The output FDTensor.
+        """
+        self._runtime.bind_output_tensor(name, fdtensor)
+
     def zero_copy_infer(self):
         """No params inference the model.
 
@@ -656,7 +664,8 @@ class RuntimeOption:
                 continue
             if hasattr(getattr(self._option, attr), "__call__"):
                 continue
-            message += "  {} : {}\t\n".format(attr, getattr(self._option, attr))
+            message += "  {} : {}\t\n".format(attr,
+                                              getattr(self._option, attr))
         message.strip("\n")
         message += ")"
         return message
