@@ -14,7 +14,6 @@
 
 #include <sys/types.h>
 #if defined(__linux__) || defined(__ANDROID__)
-// #include <unistd.h>
 #include <sys/resource.h>
 #endif
 #include <cmath>

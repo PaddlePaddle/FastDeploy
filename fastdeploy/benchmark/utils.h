@@ -65,8 +65,6 @@ class FASTDEPLOY_DECL ResourceUsageMonitor {
 
  private:
   void StopInternal();
-  // Get current cpu memory info
-  std::string GetCurrentCpuMemoryInfo();
   // Get current gpu memory info
   std::string GetCurrentGpuMemoryInfo(int device_id);
 
