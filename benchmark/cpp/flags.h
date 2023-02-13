@@ -37,7 +37,7 @@ DEFINE_bool(
     "and 'lite' backend");
 DEFINE_bool(
     collect_memory_info, false, "Whether to collect memory info");
-DEFINE_int32(dump_period, 100, "How often to collect memory info.");
+DEFINE_int32(sampling_interval, 50, "How often to collect memory info(ms).");
 
 void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path --device "
