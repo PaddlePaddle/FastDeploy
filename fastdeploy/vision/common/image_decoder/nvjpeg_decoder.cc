@@ -107,9 +107,14 @@ static int prepare_buffers(FileData& file_data, std::vector<size_t>& file_len,
   nvjpegChromaSubsampling_t subsampling;
 
   for (long unsigned int i = 0; i < file_data.size(); i++) {
-    CHECK_NVJPEG(nvjpegGetImageInfo(
+    nvjpegStatus_t status = nvjpegGetImageInfo(
         params.nvjpeg_handle, (unsigned char*)file_data[i].data(), file_len[i],
-        &channels, &subsampling, widths, heights));
+        &channels, &subsampling, widths, heights);
+    if (status != NVJPEG_STATUS_SUCCESS) {
+      std::cout << "NVJPEG failure: #" << status << " in nvjpegGetImageInfo."
+                << std::endl;
+      return EXIT_FAILURE;
+    }
 
     img_width[i] = widths[0];
     img_height[i] = heights[0];
@@ -303,7 +308,9 @@ double process_images(const FileNames& image_names, decode_params_t& params,
     }
   }
 
-  if (read_images(image_names, file_data, file_len)) return EXIT_FAILURE;
+  if (read_images(image_names, file_data, file_len)) {
+    return EXIT_FAILURE;
+  }
 
   if (prepare_buffers(file_data, file_len, widths, heights, iout, isz,
                       output_buffers, image_names, params)) {

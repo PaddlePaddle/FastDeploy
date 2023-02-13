@@ -35,6 +35,10 @@ class FASTDEPLOY_DECL ImageDecoder {
                    std::vector<FDMat>* mats);
 
  private:
+  bool ImplByOpenCV(const std::vector<std::string>& img_names,
+                    std::vector<FDMat>* mats);
+  bool ImplByNvJpeg(const std::vector<std::string>& img_names,
+                    std::vector<FDMat>* mats);
   ImageDecoderLib lib_ = ImageDecoderLib::OPENCV;
 #ifdef WITH_GPU
   nvjpeg::decode_params_t nvjpeg_params_;
