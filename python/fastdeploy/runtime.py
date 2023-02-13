@@ -147,7 +147,7 @@ class Runtime:
     def get_profile_time(self):
         """Get profile time of Runtime after the profile process is done.
         """
-        return self._runtime.get_profile_time()      
+        return self._runtime.get_profile_time()
 
 
 class RuntimeOption:
@@ -323,6 +323,16 @@ class RuntimeOption:
         :param level: (int)Optimization level, -1 means the default setting
         """
         return self._option.set_ort_graph_opt_level(level)
+
+    def enable_ort_fp16(self):
+        """Enable half precision inference while using ONNXRuntime backend, notice that the FP16 is only supported on GPU, in other cases, will fallback to FP32 inference.
+        """
+        return self._option.enable_ort_fp16()
+
+    def disable_trt_fp16(self):
+        """Disable half precision inference while suing ONNXRuntime backend.
+        """
+        return self._option.disable_trt_fp16()
 
     def use_paddle_backend(self):
         """Use Paddle Inference backend, support inference Paddle model on CPU/Nvidia GPU.
@@ -557,15 +567,13 @@ class RuntimeOption:
                                            available_memory_proportion,
                                            enable_half_partial)
 
-    def enable_profiling(self, 
-                         inclue_h2d_d2h=False,
-                         repeat=100, warmup=50):
+    def enable_profiling(self, inclue_h2d_d2h=False, repeat=100, warmup=50):
         """Set the profile mode as 'true'.
         :param inclue_h2d_d2h Whether to include time of H2D_D2H for time of runtime.
         :param repeat Repeat times for runtime inference.
         :param warmup Warmup times for runtime inference.
-        """                 
-        return self._option.enable_profiling(inclue_h2d_d2h, repeat, warmup)   
+        """
+        return self._option.enable_profiling(inclue_h2d_d2h, repeat, warmup)
 
     def disable_profiling(self):
         """Set the profile mode as 'false'.

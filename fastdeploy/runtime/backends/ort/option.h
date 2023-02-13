@@ -37,5 +37,6 @@ struct OrtBackendOption {
   Device device = Device::CPU;
   int device_id = 0;
   void* external_stream_ = nullptr;
+  bool ort_enable_fp16 = false;
 };
 }  // namespace fastdeploy

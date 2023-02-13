@@ -83,6 +83,7 @@ bool OrtBackend::Init(const RuntimeOption& option) {
   ort_option.device = option.device;
   ort_option.device_id = option.device_id;
   ort_option.external_stream_ = option.external_stream_;
+  ort_option.ort_enable_fp16 = option.ort_enable_fp16;
 
   if (option.model_format == ModelFormat::PADDLE) {
     if (option.model_from_memory_) {
@@ -128,12 +129,19 @@ bool OrtBackend::InitFromPaddle(const std::string& model_buffer,
   strcpy(ops[0].export_op_name, "MultiClassNMS");
   strcpy(ops[1].op_name, "pool2d");
   strcpy(ops[1].export_op_name, "AdaptivePool2d");
+  bool convert_to_fp16 = false;
+  auto all_providers = Ort::GetAvailableProviders();
+  bool support_cuda = std::find(all_providers.begin(), all_providers.end(),
+                                "CUDAExecutionProvider") != all_providers.end();
+  if (option.device == Device::GPU && support_cuda && option.ort_enable_fp16) {
+    convert_to_fp16 = true;
+  }
 
   if (!paddle2onnx::Export(
           model_buffer.c_str(), model_buffer.size(), params_buffer.c_str(),
           params_buffer.size(), &model_content_ptr, &model_content_size, 11,
           true, verbose, true, true, true, ops.data(), 2, "onnxruntime",
-          nullptr, 0, "", &save_external, true)) {
+          nullptr, 0, "", &save_external, convert_to_fp16)) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;
