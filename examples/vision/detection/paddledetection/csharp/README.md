@@ -1,7 +1,7 @@
 English | [简体中文](README_CN.md)
 # PaddleDetection C# Deployment Example
 
-This directory provides examples that `infer_xxx.cs` fast finishes the deployment of PaddleDetection models, including PPYOLOE on CPU/GPU.
+This directory provides examples that `infer_xxx.cs` to fastly finish the deployment of PaddleDetection models, including PPYOLOE on CPU/GPU.
 
 Before deployment, two steps require confirmation
 
@@ -42,7 +42,7 @@ fastdeploy.dll and related dynamic libraries are required by the program. FastDe
 ```shell
 cd D:\Download\fastdeploy-win-x64-gpu-x.x.x
 
-fastdeploy_init.bat install %cd% D:\Download\fastdeploy-win-x64-gpu-x.x.x\examples\vision\detection\paddledetection\cpp\build\Release
+fastdeploy_init.bat install %cd% D:\Download\fastdeploy-win-x64-gpu-x.x.x\examples\vision\detection\paddledetection\csharp\build\Release
 ```
 Then you can run your program and test the model with image
 
@@ -65,7 +65,7 @@ fastdeploy.vision.detection.PPYOLOE(
         fastdeploy.ModelFormat model_format = ModelFormat.PADDLE)
 ```
 
-> PaddleDetection PPYOLOE模型加载和初始化。
+> PaddleDetection PPYOLOE initialization.
 
 > **Params**
 
@@ -85,11 +85,11 @@ fastdeploy.DetectionResult Predict(OpenCvSharp.Mat im)
 >
 > **Params**
 >
->> * **im**: Input images in HWC or BGR format
+>> * **im**(Mat): Input images in HWC or BGR format
 >
 > **Return**
 >
->> * **result**: Detection result, including detection box and confidence of each box. Refer to [Vision Model Prediction Result](../../../../../docs/api/vision_results/) for DetectionResult
+>> * **result**(DetectionResult): Detection result, including detection box and confidence of each box. Refer to [Vision Model Prediction Result](../../../../../docs/api/vision_results/) for DetectionResult
 
 - [Model Description](../../)
 - [Python Deployment](../python)

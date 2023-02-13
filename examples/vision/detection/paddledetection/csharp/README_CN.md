@@ -43,7 +43,7 @@ msbuild infer_demo.sln /m:4 /p:Configuration=Release /p:Platform=x64
 ```shell
 cd D:\Download\fastdeploy-win-x64-gpu-x.x.x
 
-fastdeploy_init.bat install %cd% D:\Download\fastdeploy-win-x64-gpu-x.x.x\examples\vision\detection\paddledetection\cpp\build\Release
+fastdeploy_init.bat install %cd% D:\Download\fastdeploy-win-x64-gpu-x.x.x\examples\vision\detection\paddledetection\csharp\build\Release
 ```
 
 将dll拷贝到当前路径后，准备好模型和图片，使用如下命令运行可执行程序即可
@@ -86,11 +86,11 @@ fastdeploy.DetectionResult Predict(OpenCvSharp.Mat im)
 >
 > **参数**
 >
->> * **im**: 输入图像，注意需为HWC，BGR格式
+>> * **im**(Mat): 输入图像，注意需为HWC，BGR格式
 >
 > **返回值**
 >
->> * **result**: 检测结果，包括检测框，各个框的置信度, DetectionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+>> * **result**(DetectionResult): 检测结果，包括检测框，各个框的置信度, DetectionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 
 - [模型介绍](../../)
