@@ -119,10 +119,10 @@ class FASTDEPLOY_DECL ResultManager {
   static bool LoadDetectionResult(vision::DetectionResult* res,
                                   const std::string& path);
   /// Calculate diff value between two FDTensor results.
-  static TensorDiff CalcDiffFrom(const FDTensor& lhs, const FDTensor& rhs);
+  static TensorDiff CalculateDiffFrom(const FDTensor& lhs, const FDTensor& rhs);
   /// Calculate diff value between two basic results.
-  static DetectionDiff CalcDiffFrom(const vision::DetectionResult& lhs,
-                                    const vision::DetectionResult& rhs);
+  static DetectionDiff CalculateDiffFrom(const vision::DetectionResult& lhs,
+                                         const vision::DetectionResult& rhs);
 };
 
 }  // namespace benchmark

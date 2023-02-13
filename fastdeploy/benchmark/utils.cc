@@ -365,8 +365,8 @@ bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
   return true;
 }
 
-TensorDiff ResultManager::CalcDiffFrom(const FDTensor& lhs,
-                                       const FDTensor& rhs) {
+TensorDiff ResultManager::CalculateDiffStatis(const FDTensor& lhs,
+                                              const FDTensor& rhs) {
   if (lhs.Numel() != rhs.Numel() || lhs.Dtype() != rhs.Dtype()) {
     FDASSERT(false, "The size and dtype of input FDTensor must be equal!");
   }
@@ -389,8 +389,8 @@ TensorDiff ResultManager::CalcDiffFrom(const FDTensor& lhs,
   return diff;
 }
 
-DetectionDiff ResultManager::CalcDiffFrom(const vision::DetectionResult& lhs,
-                                          const vision::DetectionResult& rhs) {
+DetectionDiff ResultManager::CalculateDiffStatis(
+    const vision::DetectionResult& lhs, const vision::DetectionResult& rhs) {
   if (lhs.boxes.size() != rhs.boxes.size()) {
     FDASSERT(false, "The boxes size of input DetectionResult must be equal!");
   }
