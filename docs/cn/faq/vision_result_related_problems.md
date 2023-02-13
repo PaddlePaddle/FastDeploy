@@ -4,7 +4,7 @@
 ## 将视觉模型预测结果转换为numpy格式
 
 这里以[SegmentationResult](./segmentation_result_CN.md)为例，展示如何抽取SegmentationResult中的label_map或者score_map来转为numpy格式，同时也可以利用已有数据new SegmentationResult结构体
-```
+``` python
 import fastdeploy as fd
 import cv2
 import numpy as np

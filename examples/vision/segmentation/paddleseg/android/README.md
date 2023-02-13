@@ -1,5 +1,5 @@
 English | [简体中文](README_CN.md)
-# PaddleSeg Android Demo for Target Detection
+# PaddleSeg Android Demo for Image Segmentation
 
 For real-time portrait segmentation on Android, this demo has good ease of use and openness. You can run your own training model in the demo.
 
@@ -10,7 +10,7 @@ For real-time portrait segmentation on Android, this demo has good ease of use a
 
 ## Deployment Steps
 
-1. Target detection PaddleSeg Demo is located in `fastdeploy/examples/vision/segmentation/paddleseg/android` directory.
+1. Image Segmentation PaddleSeg Demo is located in `fastdeploy/examples/vision/segmentation/paddleseg/android` directory.
 2. Please use Android Studio to open paddleseg/android project.
 3. Connect your phone to your computer, turn on USB debugging and file transfer mode, and connect your own mobile device on Android Studio (your phone needs to be enabled to allow software installation from USB).
 

@@ -1,6 +1,6 @@
-# Description of Vision Results
+English | [简体中文](./vision_results_cn.md)
 
-本文档的中文版本参考[视觉模型预测结果说明](./vision_results_cn.md)
+# Description of Vision Results
 
 ## Image Classification Result
 
@@ -8,7 +8,9 @@ The ClassifyResult code is defined in `fastdeploy/vision/common/result.h`, and i
 
 ### C++ Definition
 
-`fastdeploy::vision::ClassifyResult`
+```c++
+fastdeploy::vision::ClassifyResult
+```
 
 ```c++
 struct ClassifyResult {
@@ -31,7 +33,9 @@ The SegmentationResult code is defined in `fastdeploy/vision/common/result.h`, i
 
 ### C++ Definition
 
-``fastdeploy::vision::SegmentationResult``
+```c++
+fastdeploy::vision::SegmentationResult
+```
 
 ```c++
 struct SegmentationResult {
@@ -104,7 +108,9 @@ The FaceDetectionResult code is defined in `fastdeploy/vision/common/result.h`, 
 
 ### C++ Definition
 
-``fastdeploy::vision::FaceDetectionResult``
+```c++
+fastdeploy::vision::FaceDetectionResult
+```
 
 ```c++
 struct FaceDetectionResult {
@@ -131,7 +137,9 @@ The KeyPointDetectionResult code is defined in `fastdeploy/vision/common/result.
 
 ### C++ Definition
 
-``fastdeploy::vision::KeyPointDetectionResult``
+```c++
+fastdeploy::vision::KeyPointDetectionResult
+```
 
 ```c++
 struct KeyPointDetectionResult {
@@ -161,7 +169,9 @@ struct KeyPointDetectionResult {
 The FaceRecognitionResult code is defined in `fastdeploy/vision/common/result.h`, and is used to indicate the image features embedding in the face recognition model.
 ### C++ Definition
 
-`fastdeploy::vision::FaceRecognitionResult`
+```c++
+fastdeploy::vision::FaceRecognitionResult
+```
 
 ```c++
 struct FaceRecognitionResult {
@@ -180,8 +190,9 @@ struct FaceRecognitionResult {
 The MattingResult code is defined in `fastdeploy/vision/common/result.h`, and is used to indicate the predicted value of alpha transparency predicted and the predicted foreground, etc.
 
 ### C++ Definition
-
-``fastdeploy::vision::MattingResult`''
+```c++
+fastdeploy::vision::MattingResult
+```
 
 ```c++
 struct MattingResult {
@@ -239,8 +250,9 @@ struct OCRResult {
 The FaceAlignmentResult code is defined in `fastdeploy/vision/common/result.h`, and is used to indicate face landmarks.
 
 ### C++ Definition
-
-`fastdeploy::vision::FaceAlignmentResult`
+```c++
+fastdeploy::vision::FaceAlignmentResult
+```
 
 ```c++
 struct FaceAlignmentResult {
@@ -261,7 +273,9 @@ The HeadPoseResult code is defined in `fastdeploy/vision/common/result.h`, and i
 
 ### C++ Definition
 
-``fastdeploy::vision::HeadPoseResult`''
+```c++
+fastdeploy::vision::HeadPoseResult
+```
 
 ```c++
 struct HeadPoseResult {
