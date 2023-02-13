@@ -144,11 +144,15 @@ FASTDEPLOY_DECL cv::Mat VisSegmentation(const cv::Mat& im,
  * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
  * \param[in] result the result produced by model
  * \param[in] remove_small_connected_area if remove_small_connected_area==true, the visualized result will not include the small connected areas
+ * \param[in] is_transparent if is_transparent==true, the background will with transparent color
+ * \param[in] transparent_threshold since the alpha value in MattringResult is a float between [0, 1], transparent_threshold is used to filter background pixel
  * \return cv::Mat type stores the visualized results
  */
 FASTDEPLOY_DECL cv::Mat VisMatting(const cv::Mat& im,
                                    const MattingResult& result,
-                                   bool remove_small_connected_area = false);
+                                   bool remove_small_connected_area = false,
+                                   bool is_transparent = false,
+                                   float transparent_threshold = 0.999);
 /** \brief Show the visualized results for Ocr models
  *
  * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
@@ -184,6 +188,7 @@ FASTDEPLOY_DECL cv::Mat SwapBackground(const cv::Mat& im,
                                        const cv::Mat& background,
                                        const SegmentationResult& result,
                                        int background_label);
+
 /** \brief Show the visualized results for key point detection models
  *
  * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format

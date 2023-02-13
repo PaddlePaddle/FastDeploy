@@ -19,11 +19,13 @@ namespace fastdeploy {
 namespace vision {
 
 cv::Mat VisMatting(const cv::Mat& im, const MattingResult& result,
-                   bool remove_small_connected_area) {
+                   bool remove_small_connected_area, bool is_transparent, 
+                   float transparent_threshold) {
   FDASSERT((!im.empty()), "im can't be empty!");
-  FDASSERT((im.channels() == 3), "Only support 3 channels mat!");
 
   auto vis_img = im.clone();
+  cv::Mat transparent_vis_mat;
+  int channel = 3;
   int out_h = static_cast<int>(result.shape[0]);
   int out_w = static_cast<int>(result.shape[1]);
   int height = im.rows;
@@ -42,6 +44,14 @@ cv::Mat VisMatting(const cv::Mat& im, const MattingResult& result,
   if ((vis_img).type() != CV_8UC3) {
     (vis_img).convertTo((vis_img), CV_8UC3);
   }
+  
+  if(is_transparent) {
+    if (vis_img.channels() != 4) {
+      cv::cvtColor(vis_img, transparent_vis_mat, cv::COLOR_BGR2BGRA);
+      vis_img = transparent_vis_mat;
+      channel = 4;
+    }
+  }
 
   uchar* vis_data = static_cast<uchar*>(vis_img.data);
   uchar* im_data = static_cast<uchar*>(im.data);
@@ -50,15 +60,18 @@ cv::Mat VisMatting(const cv::Mat& im, const MattingResult& result,
   for (size_t i = 0; i < height; ++i) {
     for (size_t j = 0; j < width; ++j) {
       float alpha_val = alpha_data[i * width + j];
-      vis_data[i * width * 3 + j * 3 + 0] = cv::saturate_cast<uchar>(
+      vis_data[i * width * channel + j * channel + 0] = cv::saturate_cast<uchar>(
           static_cast<float>(im_data[i * width * 3 + j * 3 + 0]) * alpha_val +
           (1.f - alpha_val) * 153.f);
-      vis_data[i * width * 3 + j * 3 + 1] = cv::saturate_cast<uchar>(
+      vis_data[i * width * channel + j * channel + 1] = cv::saturate_cast<uchar>(
           static_cast<float>(im_data[i * width * 3 + j * 3 + 1]) * alpha_val +
           (1.f - alpha_val) * 255.f);
-      vis_data[i * width * 3 + j * 3 + 2] = cv::saturate_cast<uchar>(
+      vis_data[i * width * channel + j * channel + 2] = cv::saturate_cast<uchar>(
           static_cast<float>(im_data[i * width * 3 + j * 3 + 2]) * alpha_val +
           (1.f - alpha_val) * 120.f);
+      if (is_transparent && alpha_val < transparent_threshold) {
+        vis_data[i * width * channel + j * channel + 3] = cv::saturate_cast<uchar>(0.f);
+      }
     }
   }
   return vis_img;
