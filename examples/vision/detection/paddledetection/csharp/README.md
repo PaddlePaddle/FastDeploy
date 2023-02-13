@@ -12,6 +12,7 @@ Please follow below instructions to compile and test in Windows. FastDeploy vers
 
 ## 1. Download C# package management tool nuget client
 > https://dist.nuget.org/win-x86-commandline/v6.4.0/nuget.exe
+
 Add nuget program into system variable **PATH**
 
 ## 2. Download model and image for test

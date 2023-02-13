@@ -12,6 +12,7 @@
 
 ## 1. 下载C#包管理程序nuget客户端
 > https://dist.nuget.org/win-x86-commandline/v6.4.0/nuget.exe
+
 下载完成后将该程序添加到环境变量**PATH**中
 
 ## 2. 下载模型文件和测试图片
