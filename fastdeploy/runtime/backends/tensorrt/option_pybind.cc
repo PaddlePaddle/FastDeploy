@@ -11,22 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include "fastdeploy/pybind/main.h"
+#include "fastdeploy/runtime/backends/tensorrt/option.h"
 
 namespace fastdeploy {
-void BindYOLOv5Cls(pybind11::module& m) {
-  pybind11::class_<vision::classification::YOLOv5Cls, FastDeployModel>(
-      m, "YOLOv5Cls")
-      .def(pybind11::init<std::string, std::string, RuntimeOption,
-                          ModelFormat>())
-      .def("predict",
-           [](vision::classification::YOLOv5Cls& self, pybind11::array& data,
-              int topk = 1) {
-             auto mat = PyArrayToCvMat(data);
-             vision::ClassifyResult res;
-             self.Predict(&mat, &res, topk);
-             return res;
-           })
-      .def_readwrite("size", &vision::classification::YOLOv5Cls::size);
+
+void BindTrtOption(pybind11::module& m) {
+  pybind11::class_<TrtBackendOption>(m, "TrtBackendOption")
+      .def(pybind11::init())
+      .def_readwrite("enable_fp16", &TrtBackendOption::enable_fp16)
+      .def_readwrite("max_batch_size", &TrtBackendOption::max_batch_size)
+      .def_readwrite("max_workspace_size",
+                     &TrtBackendOption::max_workspace_size)
+      .def_readwrite("serialize_file", &TrtBackendOption::serialize_file)
+      .def("set_shape", &TrtBackendOption::SetShape);
 }
+
 }  // namespace fastdeploy

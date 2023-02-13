@@ -18,7 +18,7 @@
 #include "fastdeploy/benchmark/option.h"
 #include "fastdeploy/benchmark/results.h"
 
-#ifdef ENABLE_BENCHMARK                            
+#ifdef ENABLE_BENCHMARK
   #define __RUNTIME_PROFILE_LOOP_BEGIN(option, base_loop)               \
     int __p_loop = (base_loop);                                         \
     const bool __p_enable_profile = option.enable_profile;              \
@@ -75,12 +75,12 @@
         result.time_of_runtime =                                        \
           __p_tc_duration_h / static_cast<double>(__p_repeats_h);       \
       }                                                                 \
-    }  
+    }
 #else
   #define __RUNTIME_PROFILE_LOOP_BEGIN(option, base_loop)               \
-    for (int __p_i = 0; __p_i < (base_loop); ++ __p_i) { 
+    for (int __p_i = 0; __p_i < (base_loop); ++__p_i) {
   #define __RUNTIME_PROFILE_LOOP_END(result) }
   #define __RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN(option, base_loop)       \
-    for (int __p_i_h = 0; __p_i_h < (base_loop); ++ __p_i_h) {
+    for (int __p_i_h = 0; __p_i_h < (base_loop); ++__p_i_h) {
   #define __RUNTIME_PROFILE_LOOP_H2D_D2H_END(result) }
 #endif

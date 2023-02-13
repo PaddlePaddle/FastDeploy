@@ -22,20 +22,30 @@
 #include <map>
 namespace fastdeploy {
 
+/*! @brief Option object to configure ONNX Runtime backend
+ */
 struct OrtBackendOption {
-  // -1 means default
-  // 0: ORT_DISABLE_ALL
-  // 1: ORT_ENABLE_BASIC
-  // 2: ORT_ENABLE_EXTENDED
-  // 99: ORT_ENABLE_ALL (enable some custom optimizations e.g bert)
+  /*
+   * @brief Level of graph optimization, -1: mean default(Enable all the optimization strategy)/0: disable all the optimization strategy/1: enable basic strategy/2:enable extend strategy/99: enable all
+   */
   int graph_optimization_level = -1;
+  /*
+   * @brief Number of threads to execute the operator, -1: default
+   */
   int intra_op_num_threads = -1;
+  /*
+   * @brief Number of threads to execute the graph, -1: default. This parameter only will bring effects while the `OrtBackendOption::execution_mode` set to 1.
+   */
   int inter_op_num_threads = -1;
-  // 0: ORT_SEQUENTIAL
-  // 1: ORT_PARALLEL
+  /*
+   * @brief Execution mode for the graph, -1: default(Sequential mode)/0: Sequential mode, execute the operators in graph one by one. /1: Parallel mode, execute the operators in graph parallelly.
+   */
   int execution_mode = -1;
+  /// Inference device, OrtBackend supports CPU/GPU
   Device device = Device::CPU;
+  /// Inference device id
   int device_id = 0;
+
   void* external_stream_ = nullptr;
 };
 }  // namespace fastdeploy
