@@ -63,23 +63,26 @@ void PrintBenchmarkInfo() {
   std::stringstream ss;
   ss.precision(3);
   ss << "\n======= Model Info =======\n";
-  ss << "model_name: " << model_names[-1] << std::endl;
+  ss << "model_name: " << model_names[model_names.size() - 1] << std::endl;
   ss << "profile_mode: " << FLAGS_profile_mode << std::endl;
   if (FLAGS_profile_mode == "runtime") {
     ss << "include_h2d_d2h: " << FLAGS_include_h2d_d2h << std::endl;
   }
   ss << "\n======= Backend Info =======\n";
   ss << "warmup: " << FLAGS_warmup << std::endl;
-  ss << "repeats: " << FLAGS_repeats << std::endl;
+  ss << "repeats: " << FLAGS_repeat << std::endl;
   ss << "device: " << FLAGS_device << std::endl;
-  ss << "device_id: " << FLAGS_device_id << std::endl;
+  if (FLAGS_device == "gpu") {
+    ss << "device_id: " << FLAGS_device_id << std::endl;
+  }
   ss << "backend: " << FLAGS_backend << std::endl;
   ss << "cpu_thread_nums: " << FLAGS_cpu_thread_nums << std::endl;
   ss << "use_fp16: " << FLAGS_use_fp16 << std::endl;
   ss << "collect_memory_info: " << FLAGS_collect_memory_info << std::endl;
   if (FLAGS_collect_memory_info) {
-    ss << "sampling_interval: " << to_string(FLAGS_sampling_interval)
+    ss << "sampling_interval: " << std::to_string(FLAGS_sampling_interval)
        << "ms" << std::endl;
   }
+  std::cout << ss.str() << std::endl;
   return;
 }

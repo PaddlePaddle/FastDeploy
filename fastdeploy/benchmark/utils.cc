@@ -23,7 +23,7 @@
 namespace fastdeploy {
 namespace benchmark {
 
-std::string strip(const std::string& str, char ch = ' ') {
+std::string strip(const std::string& str, char ch) {
   int i = 0;
   while (str[i] == ch) {
     i++;
@@ -36,7 +36,7 @@ std::string strip(const std::string& str, char ch = ' ') {
 }
 
 void split(const std::string& s, std::vector<std::string>& tokens,
-           char delim = ' ') {
+           char delim) {
   tokens.clear();
   size_t lastPos = s.find_first_not_of(delim, 0);
   size_t pos = s.find(delim, lastPos);
