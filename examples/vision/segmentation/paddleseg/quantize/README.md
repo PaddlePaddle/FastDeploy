@@ -12,6 +12,7 @@ FastDeploy 提供了一键模型自动化压缩工具, 能够简单地通过输�
 用户也可以直接下载下表中的量化模型进行部署.(点击模型名字即可下载)
 
 | 模型                 | 量化方式   |
+|:----- | :-- |
 | [PP-LiteSeg-T(STDC1)-cityscapes](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer_QAT_new.tar) |量化蒸馏训练 |
 
 量化后模型的Benchmark比较，请参考[量化模型 Benchmark](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/quantize.md)
