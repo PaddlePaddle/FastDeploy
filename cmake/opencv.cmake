@@ -53,8 +53,12 @@ if(NOT OPENCV_FILENAME)
 endif()
 
 set(OPENCV_INSTALL_DIR ${THIRD_PARTY_PATH}/install/)
-if(ANDROID OR WITH_DIRECTML)
+if(ANDROID)
   set(OPENCV_URL_PREFIX "https://bj.bcebos.com/fastdeploy/third_libs")
+elseif(WIN32)
+  if(NOT CMAKE_CL_64)
+    set(OPENCV_URL_PREFIX "https://bj.bcebos.com/fastdeploy/third_libs")
+  endif()
 else() # TODO: use fastdeploy/third_libs instead.
   set(OPENCV_URL_PREFIX "https://bj.bcebos.com/paddle2onnx/libs")
 endif()
