@@ -1,3 +1,5 @@
+[English](./vision_results_en.md) | 简体中文
+
 # 视觉模型预测结果说明
 
 ## ClassifyResult 图像分类结果
@@ -6,7 +8,9 @@ ClassifyResult代码定义在`fastdeploy/vision/common/result.h`中，用于表�
 
 ### C++ 定义
 
-`fastdeploy::vision::ClassifyResult`
+```c++
+fastdeploy::vision::ClassifyResult
+```
 
 ```c++
 struct ClassifyResult {
@@ -28,7 +32,9 @@ SegmentationResult代码定义在`fastdeploy/vision/common/result.h`中，用于
 
 ### C++ 定义
 
-`fastdeploy::vision::SegmentationResult`
+```c++
+fastdeploy::vision::SegmentationResult
+```
 
 ```c++
 struct SegmentationResult {
@@ -102,7 +108,9 @@ FaceAlignmentResult 代码定义在`fastdeploy/vision/common/result.h`中，用�
 
 ### C++ 定义
 
-`fastdeploy::vision::FaceAlignmentResult`
+```c++
+fastdeploy::vision::FaceAlignmentResult
+```
 
 ```c++
 struct FaceAlignmentResult {
@@ -122,7 +130,9 @@ KeyPointDetectionResult 代码定义在`fastdeploy/vision/common/result.h`中，
 
 ### C++ 定义
 
-`fastdeploy::vision::KeyPointDetectionResult`
+```c++
+fastdeploy::vision::KeyPointDetectionResult
+```
 
 ```c++
 struct KeyPointDetectionResult {
@@ -152,7 +162,9 @@ struct KeyPointDetectionResult {
 FaceRecognitionResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明人脸识别模型对图像特征的embedding。
 ### C++ 定义
 
-`fastdeploy::vision::FaceRecognitionResult`
+```c++
+fastdeploy::vision::FaceRecognitionResult
+```
 
 ```c++
 struct FaceRecognitionResult {
@@ -174,7 +186,9 @@ MattingResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表�
 
 ### C++ 定义
 
-`fastdeploy::vision::MattingResult`
+```c++
+fastdeploy::vision::MattingResult
+```
 
 ```c++
 struct MattingResult {
@@ -232,7 +246,9 @@ FaceDetectionResult 代码定义在`fastdeploy/vision/common/result.h`中，用�
 
 ### C++ 定义
 
-`fastdeploy::vision::FaceDetectionResult`
+```c++
+fastdeploy::vision::FaceDetectionResult
+```
 
 ```c++
 struct FaceDetectionResult {
@@ -258,7 +274,9 @@ HeadPoseResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表
 
 ### C++ 定义
 
-`fastdeploy::vision::HeadPoseResult`
+```c++
+fastdeploy::vision::HeadPoseResult
+```
 
 ```c++
 struct HeadPoseResult {

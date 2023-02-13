@@ -1,5 +1,5 @@
 [English](README.md) | 简体中文
-# 目标检测 PaddleSeg Android Demo 使用文档  
+# 图像分割 PaddleSeg Android Demo 使用文档  
 
 在 Android 上实现实时的人像分割功能，此 Demo 有很好的的易用性和开放性，如在 Demo 中跑自己训练好的模型等。
 
@@ -10,7 +10,7 @@
 
 ## 部署步骤
 
-1. 目标检测 PaddleSeg Demo 位于 `path/to/paddleseg/android` 目录
+1. 图像分割 PaddleSeg Demo 位于 `path/to/paddleseg/android` 目录
 2. 用 Android Studio 打开 paddleseg/android 工程
 3. 手机连接电脑，打开 USB 调试和文件传输模式，并在 Android Studio 上连接自己的手机设备（手机需要开启允许从 USB 安装软件权限）
 
