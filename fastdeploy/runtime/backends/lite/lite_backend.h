@@ -32,7 +32,7 @@ class LiteBackend : public BaseBackend {
   LiteBackend() {}
   virtual ~LiteBackend() = default;
 
-  bool Init(const RuntimeOption& option);
+  bool Init(const RuntimeOption& option) override;
 
   bool Infer(std::vector<FDTensor>& inputs,
             std::vector<FDTensor>* outputs,

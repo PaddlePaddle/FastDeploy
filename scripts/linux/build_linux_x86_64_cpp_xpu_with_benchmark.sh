@@ -7,7 +7,7 @@ set +x
 # -------------------------------------------------------------------------------
 readonly ROOT_PATH=$(pwd)
 readonly BUILD_ROOT=build/Linux
-readonly BUILD_DIR="${BUILD_ROOT}/x86_64_gpu"
+readonly BUILD_DIR="${BUILD_ROOT}/x86_64_xpu"
 
 # -------------------------------------------------------------------------------
 #                                 tasks
@@ -47,33 +47,29 @@ __check_cxx_envs() {
   fi
 }
 
-__build_fastdeploy_linux_x86_64_gpu_shared() {
+__build_fastdeploy_linux_x86_64_xpu_shared() {
 
   local FASDEPLOY_INSTALL_DIR="${ROOT_PATH}/${BUILD_DIR}/install"
   cd "${BUILD_DIR}" && echo "-- [INFO] Working Dir: ${PWD}"
 
-  cmake -DCMAKE_BUILD_TYPE=Release \
-        -DWITH_GPU=ON \
-        -DTRT_DIRECTORY=${TRT_DIRECTORY} \
-        -DCUDA_DIRECTORY=${CUDA_DIRECTORY} \
+  cmake -DWITH_KUNLUNXIN=ON \
+	-DCMAKE_BUILD_TYPE=Release \
+        -DWITH_GPU=OFF \
         -DENABLE_ORT_BACKEND=ON \
-        -DENABLE_TRT_BACKEND=ON \
         -DENABLE_PADDLE_BACKEND=ON \
-        -DENABLE_OPENVINO_BACKEND=ON \
-        -DENABLE_PADDLE2ONNX=ON \
         -DENABLE_VISION=ON \
-        -DENABLE_BENCHMARK=OFF \
-        -DBUILD_EXAMPLES=ON \
+        -DENABLE_BENCHMARK=ON \
+        -DBUILD_EXAMPLES=OFF \
         -DCMAKE_INSTALL_PREFIX=${FASDEPLOY_INSTALL_DIR} \
         -Wno-dev ../../.. && make -j8 && make install
 
-  echo "-- [INFO][built][x86_64_gpu}][${BUILD_DIR}/install]"
+  echo "-- [INFO][built][x86_64_xpu}][${BUILD_DIR}/install]"
 }
 
 main() {
   __make_build_dir
   __check_cxx_envs
-  __build_fastdeploy_linux_x86_64_gpu_shared
+  __build_fastdeploy_linux_x86_64_xpu_shared
   exit 0
 }
 
