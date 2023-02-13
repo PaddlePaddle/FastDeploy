@@ -37,8 +37,6 @@ wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/Ima
 ./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 4
 # Ascend inference
 ./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 5
-# DirectML inference
-./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 6
 ```
 
 The above command works for Linux or MacOS. Refer to

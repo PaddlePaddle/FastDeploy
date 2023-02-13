@@ -173,31 +173,6 @@ void AscendInfer(const std::string& model_dir, const std::string& image_file) {
   std::cout << res.Str() << std::endl;
 }
 
-void DirectMLInfer(const std::string& model_dir,
-                   const std::string& image_file) {
-  auto model_file = model_dir + sep + "inference.pdmodel";
-  auto params_file = model_dir + sep + "inference.pdiparams";
-  auto config_file = model_dir + sep + "inference_cls.yaml";
-
-  auto option = fastdeploy::RuntimeOption();
-  option.UseDirectML();
-
-  auto model = fastdeploy::vision::classification::PaddleClasModel(
-      model_file, params_file, config_file, option);
-
-  assert(model.Initialized());
-
-  auto im = cv::imread(image_file);
-
-  fastdeploy::vision::ClassifyResult res;
-  if (!model.Predict(&im, &res)) {
-    std::cerr << "Failed to predict." << std::endl;
-    return;
-  }
-
-  std::cout << res.Str() << std::endl;
-}
-
 int main(int argc, char* argv[]) {
   if (argc < 4) {
     std::cout << "Usage: infer_demo path/to/model path/to/image run_option, "
@@ -222,8 +197,6 @@ int main(int argc, char* argv[]) {
     KunlunXinInfer(argv[1], argv[2]);
   } else if (std::atoi(argv[3]) == 5) {
     AscendInfer(argv[1], argv[2]);
-  } else if (std::atoi(argv[3]) == 6) {
-    DirectMLInfer(argv[1], argv[2]);
   }
   return 0;
 }

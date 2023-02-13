@@ -37,8 +37,6 @@ wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/Ima
 ./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 4
 # Huawei Ascend NPU推理
 ./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 5
-# DirectML 推理
-./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 6
 ```
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
