@@ -83,7 +83,7 @@ bool OrtBackend::Init(const RuntimeOption& option) {
   ort_option.device = option.device;
   ort_option.device_id = option.device_id;
   ort_option.external_stream_ = option.external_stream_;
-  ort_option.ort_enable_fp16 = option.ort_enable_fp16;
+  // ort_option.enable_fp16 = option.enable_fp16;
 
   if (option.model_format == ModelFormat::PADDLE) {
     if (option.model_from_memory_) {
@@ -133,7 +133,7 @@ bool OrtBackend::InitFromPaddle(const std::string& model_buffer,
   auto all_providers = Ort::GetAvailableProviders();
   bool support_cuda = std::find(all_providers.begin(), all_providers.end(),
                                 "CUDAExecutionProvider") != all_providers.end();
-  if (option.device == Device::GPU && support_cuda && option.ort_enable_fp16) {
+  if (option.device == Device::GPU && support_cuda && option.enable_fp16) {
     convert_to_fp16 = true;
   }
 

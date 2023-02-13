@@ -20,6 +20,7 @@ import time
 from sympy import EX
 from tqdm import tqdm
 
+
 def parse_arguments():
     import argparse
     import ast
@@ -39,19 +40,19 @@ def parse_arguments():
         "--profile_mode",
         type=str,
         default="runtime",
-        help="runtime or end2end.")      
+        help="runtime or end2end.")
     parser.add_argument(
         "--repeat",
         required=True,
         type=int,
         default=1000,
-        help="number of repeats for profiling.")    
+        help="number of repeats for profiling.")
     parser.add_argument(
         "--warmup",
         required=True,
         type=int,
         default=50,
-        help="number of warmup for profiling.")      
+        help="number of warmup for profiling.")
     parser.add_argument(
         "--device",
         default="cpu",
@@ -70,7 +71,7 @@ def parse_arguments():
         "--enable_lite_fp16",
         type=ast.literal_eval,
         default=False,
-        help="whether enable fp16 in Paddle Lite backend")    
+        help="whether enable fp16 in Paddle Lite backend")
     parser.add_argument(
         "--enable_collect_memory_info",
         type=ast.literal_eval,
@@ -80,7 +81,7 @@ def parse_arguments():
         "--include_h2d_d2h",
         type=ast.literal_eval,
         default=False,
-        help="whether run profiling with h2d and d2h")       
+        help="whether run profiling with h2d and d2h")
     args = parser.parse_args()
     return args
 
@@ -92,7 +93,7 @@ def build_option(args):
     enable_trt_fp16 = args.enable_trt_fp16
     enable_lite_fp16 = args.enable_lite_fp16
     if args.profile_mode == "runtime":
-        option.enable_profiling(args.include_h2d_d2h, args.repeat, args.warmup)  
+        option.enable_profiling(args.include_h2d_d2h, args.repeat, args.warmup)
     option.set_cpu_thread_num(args.cpu_num_thread)
     if device == "gpu":
         option.use_gpu()
@@ -149,7 +150,7 @@ def build_option(args):
         else:
             raise Exception(
                 "While inference with CPU, only support default/ort/lite/paddle now, {} is not supported.".
-                format(backend))    
+                format(backend))
     elif device == "ascend":
         option.use_ascend()
         if backend == "lite":
@@ -161,11 +162,11 @@ def build_option(args):
         else:
             raise Exception(
                 "While inference with CPU, only support default/lite now, {} is not supported.".
-                format(backend))                
+                format(backend))
     else:
         raise Exception(
-            "Only support device CPU/GPU/Kunlunxin/Ascend now, {} is not supported.".format(
-                device))
+            "Only support device CPU/GPU/Kunlunxin/Ascend now, {} is not supported.".
+            format(device))
 
     return option
 
@@ -285,12 +286,7 @@ if __name__ == '__main__':
 
     gpu_id = args.device_id
     enable_collect_memory_info = args.enable_collect_memory_info
-    enable_record_time_of_backend = args.enable_record_time_of_backend
-    backend_repeat = args.backend_repeat
     dump_result = dict()
-    end2end_statis = list()
-    prepost_statis = list()
-    h2d_d2h_statis = list()
     cpu_mem = list()
     gpu_mem = list()
     gpu_util = list()
@@ -345,19 +341,21 @@ if __name__ == '__main__':
             result = model.predict(im_ori)
             profile_time = model.get_profile_time()
             dump_result["runtime"] = profile_time * 1000
-            f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
+            f.writelines("Runtime(ms): {} \n".format(
+                str(dump_result["runtime"])))
             print("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
         else:
             # end2end
             for i in range(args.warmup):
                 result = model.predict(im_ori)
-            
+
             start = time.time()
             for i in tqdm(range(args.repeat)):
                 result = model.predict(im_ori)
             end = time.time()
             dump_result["end2end"] = ((end - start) / args.repeat) * 1000.0
-            f.writelines("End2End(ms): {} \n".format(str(dump_result["end2end"])))
+            f.writelines("End2End(ms): {} \n".format(
+                str(dump_result["end2end"])))
             print("End2End(ms): {} \n".format(str(dump_result["end2end"])))
 
         if enable_collect_memory_info:
@@ -369,7 +367,7 @@ if __name__ == '__main__':
                 'memory.used'] if 'gpu' in mem_info else 0
             dump_result["gpu_util"] = mem_info['gpu'][
                 'utilization.gpu'] if 'gpu' in mem_info else 0
-        
+
         if enable_collect_memory_info:
             f.writelines("cpu_rss_mb: {} \n".format(
                 str(dump_result["cpu_rss_mb"])))

@@ -12,6 +12,6 @@ python eval_yolov3.py  --model_dir ./models/yolov3_darknet53_270e_coco  --image 
 python eval_yolox.py --model_dir ./models/yolox_s_300e_coco  --image None --device $TARGET_DEVICE 2>&1 | tee ./log/yolox_s_300e_coco.log
 python eval_faster_rcnn.py  --model_dir ./models/faster_rcnn_r50_vd_fpn_2x_coco  --image None --device $TARGET_DEVICE 2>&1 | tee ./log/faster_rcnn_r50_vd_fpn_2x_coco.log
 python eval_mask_rcnn.py  --model_dir ./models/mask_rcnn_r50_1x_coco  --image None --device $TARGET_DEVICE 2>&1 | tee ./log/mask_rcnn_r50_1x_coco.log
-python eval_yolov5.py  --model_dir ./models/yolov5s_infer --image None --device $TARGET_DEVICE 2>&1 | tee ./log/yolov5s_infer.log
-python eval_yolov6.py  --model_dir ./models/yolov6s_infer --image None --device $TARGET_DEVICE 2>&1 | tee ./log/yolov6s_infer.log
-python eval_yolov5.py  --model_dir ./models/yolov7_infer --image None --device $TARGET_DEVICE 2>&1 | tee ./log/yolov7_infer.log
+python eval_yolov5.py  --model ./models/yolov5s_infer --image None --device $TARGET_DEVICE 2>&1 | tee ./log/yolov5s_infer.log
+python eval_yolov6.py  --model ./models/yolov6s_infer --image None --device $TARGET_DEVICE 2>&1 | tee ./log/yolov6s_infer.log
+python eval_yolov7.py  --model ./models/yolov7_infer --image None --device $TARGET_DEVICE 2>&1 | tee ./log/yolov7_infer.log

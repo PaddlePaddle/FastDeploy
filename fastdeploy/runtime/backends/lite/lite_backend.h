@@ -22,6 +22,7 @@
 #include "paddle_api.h"  // NOLINT
 
 #include "fastdeploy/runtime/backends/backend.h"
+#include "fastdeploy/runtime/runtime_option.h"
 #include "fastdeploy/runtime/backends/lite/option.h"
 
 namespace fastdeploy {
@@ -30,11 +31,8 @@ class LiteBackend : public BaseBackend {
  public:
   LiteBackend() {}
   virtual ~LiteBackend() = default;
-  void BuildOption(const LiteBackendOption& option);
 
-  bool InitFromPaddle(const std::string& model_file,
-                      const std::string& params_file,
-                      const LiteBackendOption& option = LiteBackendOption());
+  bool Init(const RuntimeOption& option) override;
 
   bool Infer(std::vector<FDTensor>& inputs,
             std::vector<FDTensor>* outputs,
@@ -50,6 +48,8 @@ class LiteBackend : public BaseBackend {
   std::vector<TensorInfo> GetOutputInfos() override;
 
  private:
+  void BuildOption(const LiteBackendOption& option);
+
   void ConfigureCpu(const LiteBackendOption& option);
   void ConfigureTimvx(const LiteBackendOption& option);
   void ConfigureAscend(const LiteBackendOption& option);
