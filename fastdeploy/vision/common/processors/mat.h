@@ -158,6 +158,9 @@ struct FASTDEPLOY_DECL Mat {
                     FDDataType type, void* data);
   static Mat Create(int height, int width, int channels,
                     FDDataType type, void* data, ProcLib lib);
+
+  // Move assignment
+  Mat& operator=(Mat&& other);
 };
 
 typedef Mat FDMat;

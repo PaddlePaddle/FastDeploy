@@ -244,6 +244,34 @@ Mat Mat::Create(int height, int width, int channels, FDDataType type,
   return mat;
 }
 
+Mat& Mat::operator=(Mat&& other) {
+  if (&other != this) {
+    fd_tensor = std::move(other.fd_tensor);
+
+    mat_type = other.mat_type;
+    layout = other.layout;
+    device = other.device;
+    input_cache = other.input_cache;
+    output_cache = other.output_cache;
+
+    width = other.Width();
+    height = other.Height();
+    channels = other.Channels();
+
+    if (mat_type == ProcLib::OPENCV) {
+      cpu_mat = *(other.GetOpenCVMat());
+    } else if (mat_type == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+      fcv_mat = *(other.GetFlyCVMat());
+#endif
+    }
+#ifdef WITH_GPU
+    stream = other.Stream();
+#endif
+  }
+  return *this;
+}
+
 FDMat WrapMat(const cv::Mat& image) {
   FDMat mat(image);
   return mat;
