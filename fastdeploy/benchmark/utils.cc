@@ -280,7 +280,50 @@ bool ResultManager::LoadFDTensor(FDTensor* tensor, const std::string& path) {
 
 bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
                                         const std::string& path) {
-  return false;
+  if (res.boxes.empty()) {
+    FDERROR << "DetectionResult can not be empty!" << std::endl;
+    return false;
+  }
+  std::ofstream fs(path, std::ios::out);
+  if (!fs.is_open()) {
+    FDERROR << "Fail to open file:" << path << std::endl;
+    return false;
+  }
+  // boxes
+  fs << "boxes:";
+  for (int i = 0; i < res.boxes.size(); ++i) {
+    for (int j = 0; j < 4; ++j) {
+      if ((i < res.boxes.size() - 1) && (j < 3)) {
+        fs << res.boxes[i][j] << ",";
+      } else {
+        fs << res.boxes[i][j];
+      }
+    }
+  }
+  fs << "\n";
+  // scores
+  fs << "scores:";
+  for (int i = 0; i < res.scores.size(); ++i) {
+    if (i < res.scores.size() - 1) {
+      fs << res.scores[i] << ",";
+    } else {
+      fs << res.scores[i];
+    }
+  }
+  fs << "\n";
+  // label_ids
+  fs << "label_ids:";
+  for (int i = 0; i < res.label_ids.size(); ++i) {
+    if (i < res.label_ids.size() - 1) {
+      fs << res.label_ids[i] << ",";
+    } else {
+      fs << res.label_ids[i];
+    }
+  }
+  fs << "\n";
+  fs.close();
+
+  return true;
 }
 
 bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,

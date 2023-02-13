@@ -105,10 +105,6 @@ struct FASTDEPLOY_DECL DetectionDiff: public BaseDiff {
   bool IsHasDiff() override;
 };
 
-struct FASTDEPLOY_DECL ClassifyDiff: public BaseDiff {
-  bool IsHasDiff() override;
-};
-
 /// Utils for precision evaluation
 class FASTDEPLOY_DECL ResultManager {
   /// Save & Load functions for FDTensor result.
@@ -117,19 +113,13 @@ class FASTDEPLOY_DECL ResultManager {
   /// Save & Load functions for basic results.
   static bool SaveDetectionResult(const vision::DetectionResult& res,
                                   const std::string& path);
-  static bool SaveClassifyResult(const vision::ClassifyResult& res,
-                                 const std::string& path);
   static bool LoadDetectionResult(vision::DetectionResult* res,
                                   const std::string& path);
-  static bool LoadClassifyResult(vision::ClassifyResult* res,
-                                 const std::string& path);
   /// Calculate diff value between two FDTensor results.
   static TensorDiff CalcDiffFrom(const FDTensor& lhs, const FDTensor& rhs);
   /// Calculate diff value between two basic results.
   static DetectionDiff CalcDiffFrom(const vision::DetectionResult& lhs,
                                     const vision::DetectionResult& rhs);
-  static ClassifyDiff CalcDiffFrom(const vision::ClassifyResult& lhs,
-                                   const vision::ClassifyResult& rhs);
 };
 
 }  // namespace benchmark
