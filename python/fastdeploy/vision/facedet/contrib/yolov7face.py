@@ -127,7 +127,7 @@ class Yolov7FacePostprocessor:
         self._postprocessor.nms_threshold = nms_threshold
 
     @landmarks_per_face.setter
-    def nms_threshold(self, landmarks_per_face):
+    def landmarks_per_face(self, landmarks_per_face):
         assert isinstance(landmarks_per_face, float),\
             "The value to set `landmarks_per_face` must be type of int."
         self._postprocessor.landmarks_per_face = landmarks_per_face
