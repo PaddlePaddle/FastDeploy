@@ -23,8 +23,9 @@
 #include "fastdeploy/runtime/backends/backend.h"
 #include "fastdeploy/runtime/backends/ort/option.h"
 #include "onnxruntime_cxx_api.h"  // NOLINT
+#ifdef WITH_DIRECTML
 #include "dml_provider_factory.h" // NOLINT
-
+#endif
 
 namespace fastdeploy {
 

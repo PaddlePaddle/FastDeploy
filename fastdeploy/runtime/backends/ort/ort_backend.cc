@@ -71,7 +71,7 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
       session_options_.DisableMemPattern();
       session_options_.SetExecutionMode(ExecutionMode(0));
 
-      // DML session
+      // DML session_option
       OrtApi const& ortApi = Ort::GetApi();
       const OrtDmlApi* ortDmlApi;
       ortApi.GetExecutionProviderApi(

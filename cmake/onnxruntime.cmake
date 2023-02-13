@@ -44,7 +44,7 @@ set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" "${ONNXRUNTIME_LIB_DIR}")
 set(ONNXRUNTIME_VERSION "1.12.0")
 set(ONNXRUNTIME_URL_PREFIX "https://bj.bcebos.com/paddle2onnx/libs/")
 
-if(WIN32) #Win
+if(WIN32) 
   if(WITH_GPU)
     set(ONNXRUNTIME_FILENAME "onnxruntime-win-x64-gpu-${ONNXRUNTIME_VERSION}.zip")
   elseif(WITH_DIRECTML)
@@ -54,7 +54,7 @@ if(WIN32) #Win
   endif()
   if(NOT CMAKE_CL_64)
     if(WITH_DIRECTML)
-    set(ONNXRUNTIME_FILENAME "onnxruntime-directml-win-x86.zip")
+      set(ONNXRUNTIME_FILENAME "onnxruntime-directml-win-x86.zip")
     else()
       set(ONNXRUNTIME_FILENAME "onnxruntime-win-x86-${ONNXRUNTIME_VERSION}.zip")
     endif()
