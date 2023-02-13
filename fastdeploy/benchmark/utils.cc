@@ -168,17 +168,6 @@ std::string ResourceUsageMonitor::GetCurrentGpuMemoryInfo(int device_id) {
   return result;
 }
 
-/// Diff values for precision evaluation
-bool TensorDiff::IsHasDiff() {
-  // TODO(qiuyanjun) Reimplement this func
-  return has_diff && status;
-}
-
-bool DetectionDiff::IsHasDiff() {
-  // TODO(qiuyanjun) Reimplement this func
-  return has_diff && status;
-}
-
 /// Utils for precision evaluation
 static std::vector<std::string> ReadLines(const std::string& path) {
   std::ifstream fin(path);
@@ -383,8 +372,8 @@ TensorDiff ResultManager::CalculateDiffStatis(const FDTensor& lhs,
   }
 
   TensorDiff diff;
-  CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.tensor.mean),
-                             &(diff.tensor.max), &(diff.tensor.min));
+  CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.mean),
+                             &(diff.max), &(diff.min));
 
   return diff;
 }
@@ -418,6 +407,10 @@ DetectionDiff ResultManager::CalculateDiffStatis(
   CalculateStatisInfo<int32_t>(labels_diff.data(), labels_diff.size(),
                                &(diff.labels.mean), &(diff.labels.max),
                                &(diff.labels.min));
+
+  diff.mean = diff.boxes.mean;
+  diff.max = diff.boxes.max;
+  diff.min = diff.boxes.min;
 
   return diff;
 }

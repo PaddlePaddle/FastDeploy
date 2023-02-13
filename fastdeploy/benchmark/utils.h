@@ -82,13 +82,7 @@ class FASTDEPLOY_DECL ResourceUsageMonitor {
 };
 
 /// Diff values for precision evaluation
-struct FASTDEPLOY_DECL BaseDiff {
-  bool status = false;     ///< Whether the Diff is valid or not.
-  bool has_diff = false;
-  virtual bool IsHasDiff() {
-    return has_diff && status;
-  }
-};
+struct FASTDEPLOY_DECL BaseDiff {};
 
 struct FASTDEPLOY_DECL EvalStatis {
   double mean = 0.0;
@@ -96,16 +90,12 @@ struct FASTDEPLOY_DECL EvalStatis {
   double max = 0.0;
 };
 
-struct FASTDEPLOY_DECL TensorDiff: public BaseDiff {
-  EvalStatis tensor;
-  bool IsHasDiff() override;
-};
+struct FASTDEPLOY_DECL TensorDiff: public BaseDiff, public EvalStatis {};
 
-struct FASTDEPLOY_DECL DetectionDiff: public BaseDiff {
+struct FASTDEPLOY_DECL DetectionDiff: public BaseDiff, public EvalStatis {
   EvalStatis boxes;
   EvalStatis scores;
   EvalStatis labels;
-  bool IsHasDiff() override;
 };
 
 /// Utils for precision evaluation
@@ -119,10 +109,11 @@ class FASTDEPLOY_DECL ResultManager {
   static bool LoadDetectionResult(vision::DetectionResult* res,
                                   const std::string& path);
   /// Calculate diff value between two FDTensor results.
-  static TensorDiff CalculateDiffFrom(const FDTensor& lhs, const FDTensor& rhs);
+  static TensorDiff CalculateDiffStatis(const FDTensor& lhs,
+                                        const FDTensor& rhs);
   /// Calculate diff value between two basic results.
-  static DetectionDiff CalculateDiffFrom(const vision::DetectionResult& lhs,
-                                         const vision::DetectionResult& rhs);
+  static DetectionDiff CalculateDiffStatis(const vision::DetectionResult& lhs,
+                                           const vision::DetectionResult& rhs);
 };
 
 }  // namespace benchmark
