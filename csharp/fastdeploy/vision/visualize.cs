@@ -23,7 +23,7 @@ namespace fastdeploy{
   namespace vision
     {
 
-    class Visualize{
+    public  class Visualize{
 
       public static Mat VisDetection(Mat im, DetectionResult detection_result, float score_threshold = 0.0f, int line_size = 1, float font_size = 0.5f){
         FD_DetectionResult fd_detection_result = ConvertResult.ConvertDetectionResultToCResult(detection_result);

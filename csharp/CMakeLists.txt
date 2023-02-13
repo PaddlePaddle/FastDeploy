@@ -19,19 +19,20 @@ CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 
-file(GLOB_RECURSE DEPLOY_CSHARPAPI_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/*.cs)
+message("fastdeploy_csharp_SOURCE_DIR: ${fastdeploy_csharp_SOURCE_DIR}")
+file(GLOB_RECURSE DEPLOY_CSHARPAPI_SRCS ${fastdeploy_csharp_SOURCE_DIR}/fastdeploy/*.cs)
 if(NOT ENABLE_VISION)
-    file(GLOB_RECURSE DEPLOY_VISION_CSHARPAPI_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/vision/*.cs)
+    file(GLOB_RECURSE DEPLOY_VISION_CSHARPAPI_SRCS ${fastdeploy_csharp_SOURCE_DIR}/fastdeploy/vision/*.cs)
     list(REMOVE_ITEM DEPLOY_CSHARPAPI_SRCS ${DEPLOY_VISION_CSHARPAPI_SRCS})
 endif()
 
 # Define the DLL target, including all relevant project files.
-add_library(fastdeploy_csharp SHARED ${DEPLOY_CSHARPAPI_SRCS})
+add_library(${PROJECT_NAME} SHARED ${DEPLOY_CSHARPAPI_SRCS})
 
 # Set the C# language version (defaults to 3.0 if not set).
 set(CMAKE_CSharp_FLAGS "/langversion:10")
 # Add in some .NET reference libraries.
-set_property(TARGET fastdeploy_csharp PROPERTY VS_DOTNET_REFERENCES
+set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DOTNET_REFERENCES
     "Microsoft.CSharp"
     "System"
     "System.Core"
@@ -42,6 +43,16 @@ set_property(TARGET fastdeploy_csharp PROPERTY VS_DOTNET_REFERENCES
     "System.Xml"
 )
 
-set_property(TARGET fastdeploy_csharp
+
+set_property(TARGET ${PROJECT_NAME}
     PROPERTY VS_PACKAGE_REFERENCES  "OpenCvSharp4_4.7.0.20230115"
+)
+
+##################################### Installing: FastDeploy C# API #######################################
+
+install(
+    TARGETS ${PROJECT_NAME}
+    LIBRARY DESTINATION csharp_lib
+    ARCHIVE DESTINATION csharp_lib
+    RUNTIME DESTINATION csharp_lib
 )

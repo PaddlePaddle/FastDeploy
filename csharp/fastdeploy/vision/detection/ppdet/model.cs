@@ -26,8 +26,11 @@ namespace fastdeploy{
     public class PPYOLOE{
 
       public PPYOLOE(string model_file, string params_file,
-                             string config_file, RuntimeOption custom_option = RuntimeOption(),
+                             string config_file, RuntimeOption custom_option = null,
                              ModelFormat model_format = ModelFormat.PADDLE){
+        if(custom_option==null){
+          custom_option = new RuntimeOption();
+        }
         fd_ppyoloe_wrapper =  FD_C_CreatesPPYOLOEWrapper(model_file, params_file, config_file, custom_option.GetWrapperPtr(), model_format);   
       }
 
