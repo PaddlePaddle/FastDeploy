@@ -19,22 +19,27 @@ using System.Collections.Generic;
 using OpenCvSharp;
 using fastdeploy.types_internal_c;
 
-namespace fastdeploy{
-  namespace vision
-    {
+namespace fastdeploy {
+namespace vision {
 
-    public  class Visualize{
+public class Visualize {
 
-      public static Mat VisDetection(Mat im, DetectionResult detection_result, float score_threshold = 0.0f, int line_size = 1, float font_size = 0.5f){
-        FD_DetectionResult fd_detection_result = ConvertResult.ConvertDetectionResultToCResult(detection_result);
-        IntPtr result_ptr = FD_C_VisDetection(im.CvPtr, ref fd_detection_result, score_threshold, line_size, font_size);
-        return new Mat(result_ptr);
-      }
-
-      [DllImport("fastdeploy.dll", EntryPoint = "FD_C_VisDetection")]
-      private static extern IntPtr FD_C_VisDetection(IntPtr im,  ref FD_DetectionResult fd_detection_result,
-                        float score_threshold, int line_size, float font_size);
-    }
-   
+  public static Mat VisDetection(Mat im, DetectionResult detection_result,
+                                 float score_threshold = 0.0f,
+                                 int line_size = 1, float font_size = 0.5f) {
+    FD_DetectionResult fd_detection_result =
+        ConvertResult.ConvertDetectionResultToCResult(detection_result);
+    IntPtr result_ptr =
+        FD_C_VisDetection(im.CvPtr, ref fd_detection_result, score_threshold,
+                          line_size, font_size);
+    return new Mat(result_ptr);
   }
+
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_VisDetection")]
+  private static extern IntPtr
+  FD_C_VisDetection(IntPtr im, ref FD_DetectionResult fd_detection_result,
+                    float score_threshold, int line_size, float font_size);
+}
+
+}
 }
