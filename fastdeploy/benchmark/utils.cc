@@ -67,7 +67,9 @@ ResourceUsageMonitor::ResourceUsageMonitor(int sampling_interval_ms, int gpu_id)
 }
 
 void ResourceUsageMonitor::Start() {
-  if (!is_supported_) return;
+  if (!is_supported_) {
+    return;
+  }
   if (check_memory_thd_ != nullptr) {
     FDINFO << "Memory monitoring has already started!" << std::endl;
     return;
@@ -90,7 +92,9 @@ void ResourceUsageMonitor::Start() {
       max_gpu_mem_ = std::max(max_gpu_mem_, stof(gpu_tokens[6]));
       max_gpu_util_ = std::max(max_gpu_util_, stof(gpu_tokens[7]));
 #endif
-      if (stop_signal_) break;
+      if (stop_signal_) {
+        break;
+      }
       std::this_thread::sleep_for(
           std::chrono::milliseconds(sampling_interval_));
     }
@@ -161,6 +165,70 @@ std::string ResourceUsageMonitor::GetCurrentGpuMemoryInfo(int device_id) {
            "Currently collect gpu memory info only supports Linux in GPU.")
 #endif
   return result;
+}
+
+/// Diff values for precision evaluation
+bool TensorDiff::IsHasDiff() {
+  // TODO(qiuyanjun) Reimplement this func
+  return has_diff && status;
+}
+
+bool DetectionDiff::IsHasDiff() {
+  // TODO(qiuyanjun) Reimplement this func
+  return has_diff && status;
+}
+
+bool ClassifyDiff::IsHasDiff() {
+  // TODO(qiuyanjun) Reimplement this func
+  return has_diff && status;
+}
+
+/// Utils for precision evaluation
+bool ResultManager::SaveFDTensor(const FDTensor&& tensor,
+                                 const std::string& path) {
+  return false;
+}
+
+bool ResultManager::LoadFDTensor(FDTensor* tensor, const std::string& path) {
+  return false;
+}
+
+bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
+                                        const std::string& path) {
+  return false;
+}
+
+bool ResultManager::SaveClassifyResult(const vision::ClassifyResult& res,
+                                       const std::string& path) {
+  return false;
+}
+
+bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
+                                        const std::string& path) {
+  return false;
+}
+
+bool ResultManager::LoadClassifyResult(vision::ClassifyResult* res,
+                                       const std::string& path) {
+  return false;
+}
+
+TensorDiff ResultManager::CalcDiffFrom(const FDTensor& lhs,
+                                       const FDTensor& rhs) {
+  TensorDiff diff;
+  return diff;
+}
+
+DetectionDiff ResultManager::CalcDiffFrom(const vision::DetectionResult& lhs,
+                                          const vision::DetectionResult& rhs) {
+  DetectionDiff diff;
+  return diff;
+}
+
+ClassifyDiff ResultManager::CalcDiffFrom(const vision::ClassifyResult& lhs,
+                                         const vision::ClassifyResult& rhs) {
+  ClassifyDiff diff;
+  return diff;
 }
 
 }  // namespace benchmark

@@ -16,6 +16,8 @@
 #include <memory>
 #include <thread>  // NOLINT
 #include "fastdeploy/utils/utils.h"
+#include "fastdeploy/vision/common/result.h"
+
 
 namespace fastdeploy {
 namespace benchmark {
@@ -78,6 +80,57 @@ class FASTDEPLOY_DECL ResourceUsageMonitor {
   float max_gpu_util_ = 0.0f;
   const int gpu_id_ = 0;
   std::unique_ptr<std::thread> check_memory_thd_ = nullptr;
+};
+
+/// Diff values for precision evaluation
+struct FASTDEPLOY_DECL BaseDiff {
+  bool status = false;     ///< Whether the Diff is valid or not.
+  bool has_diff = false;
+  virtual bool IsHasDiff() {
+    return has_diff && status;
+  }
+};
+
+struct FASTDEPLOY_DECL TensorDiff: public BaseDiff {
+  double mean = 0.0;
+  double std = 0.0;
+  double min = 0.0;
+  double max = 0.0;
+  bool IsHasDiff() override;
+};
+
+struct FASTDEPLOY_DECL DetectionDiff: public BaseDiff {
+  bool boxes_has_diff = false;
+  bool scores_has_diff = false;
+  bool labels_has_diff = false;
+  bool IsHasDiff() override;
+};
+
+struct FASTDEPLOY_DECL ClassifyDiff: public BaseDiff {
+  bool IsHasDiff() override;
+};
+
+/// Utils for precision evaluation
+class FASTDEPLOY_DECL ResultManager {
+  /// Save & Load functions for FDTensor result.
+  static bool SaveFDTensor(const FDTensor&& tensor, const std::string& path);
+  static bool LoadFDTensor(FDTensor* tensor, const std::string& path);
+  /// Save & Load functions for basic results.
+  static bool SaveDetectionResult(const vision::DetectionResult& res,
+                                  const std::string& path);
+  static bool SaveClassifyResult(const vision::ClassifyResult& res,
+                                 const std::string& path);
+  static bool LoadDetectionResult(vision::DetectionResult* res,
+                                  const std::string& path);
+  static bool LoadClassifyResult(vision::ClassifyResult* res,
+                                 const std::string& path);
+  /// Calculate diff value between two FDTensor results.
+  static TensorDiff CalcDiffFrom(const FDTensor& lhs, const FDTensor& rhs);
+  /// Calculate diff value between two basic results.
+  static DetectionDiff CalcDiffFrom(const vision::DetectionResult& lhs,
+                                    const vision::DetectionResult& rhs);
+  static ClassifyDiff CalcDiffFrom(const vision::ClassifyResult& lhs,
+                                   const vision::ClassifyResult& rhs);
 };
 
 }  // namespace benchmark
