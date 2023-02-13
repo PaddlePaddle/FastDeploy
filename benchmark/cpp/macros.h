@@ -67,4 +67,4 @@
     std::cout << "gpu_util: " << __gpu_util__ << std::endl;                 \
     __resource_moniter__.Stop();                                            \
   }                                                                         \
-}                                                                           \
+}
