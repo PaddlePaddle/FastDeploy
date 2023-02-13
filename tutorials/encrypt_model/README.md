@@ -6,7 +6,7 @@ This directory provides `encrypt.py` to quickly complete the encryption of the m
 
 ## encryption
 ```bash
-# Download deployment example code 
+# Download deployment example code
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd  FastDeploy/tutorials/encrypt_model
 
@@ -14,7 +14,7 @@ cd  FastDeploy/tutorials/encrypt_model
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz
 tar -xvf ResNet50_vd_infer.tgz
 
-python encrypt.py --model ResNet50_vd_infer
+python encrypt.py --model_file ResNet50_vd_infer/inference.pdmodel  --params_file ResNet50_vd_infer/inference.pdiparams --encrypted_model_dir ResNet50_vd_infer_encrypt
 ```
 >> **Note** After the encryption is completed, the ResNet50_vd_infer_encrypt folder will be generated, including `__model__.encrypted`, `__params__.encrypted`, `encryption_key.txt` three files, where `encryption_key.txt` contains the encrypted key. At the same time, you need to copy the `inference_cls.yaml` configuration file in the original folder to the ResNet50_vd_infer_encrypt folder for subsequent deployment
 
