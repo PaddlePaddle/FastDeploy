@@ -37,7 +37,8 @@ ImageDecoder::~ImageDecoder() {
 }
 
 bool ImageDecoder::Decode(const std::string& img_name, FDMat* mat) {
-  std::vector<FDMat> mats;
+  std::vector<FDMat> mats(1);
+  mats[0] = std::move(*mat);
   if (!BatchDecode({img_name}, &mats)) {
     return false;
   }
