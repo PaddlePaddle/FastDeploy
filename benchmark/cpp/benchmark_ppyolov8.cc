@@ -12,15 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "macros.h"
 #include "flags.h"
+#include "macros.h"
 #include "option.h"
-
-#ifdef WIN32
-const char sep = '\\';
-#else
-const char sep = '/';
-#endif
 
 int main(int argc, char* argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
@@ -31,6 +25,7 @@ int main(int argc, char* argv[]) {
     PrintUsage();
     return false;
   }
+  PrintBenchmarkInfo();
   auto model_file = FLAGS_model + sep + "model.pdmodel";
   auto params_file = FLAGS_model + sep + "model.pdiparams";
   auto config_file = FLAGS_model + sep + "infer_cfg.yml";

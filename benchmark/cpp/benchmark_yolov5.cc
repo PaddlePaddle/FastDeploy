@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "macros.h"
 #include "flags.h"
+#include "macros.h"
 #include "option.h"
 
 int main(int argc, char* argv[]) {
@@ -25,6 +25,7 @@ int main(int argc, char* argv[]) {
     PrintUsage();
     return false;
   }
+  PrintBenchmarkInfo();
   auto model_yolov5 =
       fastdeploy::vision::detection::YOLOv5(FLAGS_model, "", option);
   fastdeploy::vision::DetectionResult res;

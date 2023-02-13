@@ -18,7 +18,6 @@
 
 #define BENCHMARK_MODEL(MODEL_NAME, BENCHMARK_FUNC)                         \
 {                                                                           \
-  std::cout << "====" << #MODEL_NAME << "====" << std::endl;                \
   if (!MODEL_NAME.Initialized()) {                                          \
     std::cerr << "Failed to initialize." << std::endl;                      \
     return 0;                                                               \

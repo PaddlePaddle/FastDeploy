@@ -23,8 +23,7 @@
 namespace fastdeploy {
 namespace benchmark {
 
-// Remove the ch characters at both ends of str
-static std::string strip(const std::string& str, char ch = ' ') {
+std::string strip(const std::string& str, char ch = ' ') {
   int i = 0;
   while (str[i] == ch) {
     i++;
@@ -36,9 +35,8 @@ static std::string strip(const std::string& str, char ch = ' ') {
   return str.substr(i, j + 1 - i);
 }
 
-// Split string
-static void split(const std::string& s, std::vector<std::string>& tokens,
-                  char delim = ' ') {
+void split(const std::string& s, std::vector<std::string>& tokens,
+           char delim = ' ') {
   tokens.clear();
   size_t lastPos = s.find_first_not_of(delim, 0);
   size_t pos = s.find(delim, lastPos);
