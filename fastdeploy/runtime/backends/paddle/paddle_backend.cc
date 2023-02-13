@@ -51,7 +51,7 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
         config_.SetOptimCacheDir(opt_cache_dir);
       }
       config_.EnableTensorRtEngine(option.trt_option.max_workspace_size,
-                                   option.trt_option.max_batch_size, 20,
+                                   option.trt_option.max_batch_size, 3,
                                    precision, use_static);
       SetTRTDynamicShapeToConfig(option);
     }
@@ -128,10 +128,9 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_buffer,
                  "file will save to the directory where paddle model saved."
               << std::endl;
           use_static = true;
-          config_.SetOptimCacheDir(option.trt_option.serialize_file);
         }
         config_.EnableTensorRtEngine(option.trt_option.max_workspace_size,
-                                     option.trt_option.max_batch_size, 20,
+                                     option.trt_option.max_batch_size, 3,
                                      paddle_infer::PrecisionType::kInt8,
                                      use_static, false);
         SetTRTDynamicShapeToConfig(option);
