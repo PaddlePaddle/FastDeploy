@@ -187,8 +187,7 @@ class RuntimeOption:
         return self._option.set_model_buffer(model_buffer, params_buffer,
                                              model_format)
 
-    def set_encryption_key(self,
-                           encryption_key):
+    def set_encryption_key(self, encryption_key):
         """When loading encrypted model, encryption_key is required to decrypte model
         :param encryption_key: (str)The key for decrypting model
         """
@@ -590,10 +589,12 @@ class RuntimeOption:
                        replica_num=1,
                        available_memory_proportion=1.0,
                        enable_half_partial=False):
-        logging.warning("`RuntimeOption.set_ipu_config` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_infer_option.set_ipu_config()` instead.")
-        self._option.paddle_infer_option.set_ipu_config(enable_fp16, replica_num,
-                                           available_memory_proportion,
-                                           enable_half_partial)
+        logging.warning(
+            "`RuntimeOption.set_ipu_config` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_infer_option.set_ipu_config()` instead."
+        )
+        self._option.paddle_infer_option.set_ipu_config(
+            enable_fp16, replica_num, available_memory_proportion,
+            enable_half_partial)
 
     @property
     def poros_option(self):
@@ -664,7 +665,8 @@ class RuntimeOption:
                 continue
             if hasattr(getattr(self._option, attr), "__call__"):
                 continue
-            message += "  {} : {}\t\n".format(attr, getattr(self._option, attr))
+            message += "  {} : {}\t\n".format(attr,
+                                              getattr(self._option, attr))
         message.strip("\n")
         message += ")"
         return message
