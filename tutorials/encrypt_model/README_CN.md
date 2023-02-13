@@ -16,7 +16,7 @@ cd  FastDeploy/tutorials/encrypt_model
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz
 tar -xvf ResNet50_vd_infer.tgz
 
-python encrypt.py --model ResNet50_vd_infer
+python encrypt.py --model_file ResNet50_vd_infer/inference.pdmodel  --params_file ResNet50_vd_infer/inference.pdiparams --encrypted_model_dir ResNet50_vd_infer_encrypt
 ```
 >> **注意** 加密完成后会生成ResNet50_vd_infer_encrypt文件夹，包含`__model__.encrypted`,`__params__.encrypted`,`encryption_key.txt`三个文件，其中`encryption_key.txt`包含加密后的秘钥，同时需要将原文件夹中的、`inference_cls.yaml`配置文件 拷贝至ResNet50_vd_infer_encrypt文件夹，以便后续部署使用
 
