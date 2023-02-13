@@ -75,6 +75,16 @@ struct PaddleBackendOption {
     delete_pass_names.push_back(pass_name);
   }
 
+  void SetIpuConfig(bool enable_fp16, int replica_num,
+                                   float available_memory_proportion,
+                                   bool enable_half_partial) {
+    ipu_option.ipu_enable_fp16 = enable_fp16;
+    ipu_option.ipu_replica_num = replica_num;
+    ipu_option.ipu_available_memory_proportion =
+        available_memory_proportion;
+    ipu_option.ipu_enable_half_partial = enable_half_partial;
+  }
+
   // The belowing parameters may be removed, please do not
   // read or write them directly
   TrtBackendOption trt_option;

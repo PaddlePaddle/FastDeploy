@@ -16,29 +16,35 @@
 #include "fastdeploy/vision.h"
 #include "flags.h"
 
-bool RunModel(std::string model_file, std::string image_file, size_t warmup,
-              size_t repeats, size_t sampling_interval) {
+#ifdef WIN32
+const char sep = '\\';
+#else
+const char sep = '/';
+#endif
+
+bool RunModel(std::string model_dir, std::string image_file, size_t warmup,
+              size_t repeats, size_t dump_period, std::string cpu_mem_file_name,
+              std::string gpu_mem_file_name) {
   // Initialization
   auto option = fastdeploy::RuntimeOption();
   if (!CreateRuntimeOption(&option)) {
     PrintUsage();
     return false;
   }
+  auto model_file = model_dir + sep + "model.pdmodel";
+  auto params_file = model_dir + sep + "model.pdiparams";
+  auto config_file = model_dir + sep + "infer_cfg.yml";
+
   if (FLAGS_profile_mode == "runtime") {
     option.EnableProfiling(FLAGS_include_h2d_d2h, repeats, warmup);
   }
-  auto model = fastdeploy::vision::detection::YOLOv5(model_file, "", option);
+  auto model = fastdeploy::vision::detection::PaddleYOLOv8(
+      model_file, params_file, config_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return false;
   }
   auto im = cv::imread(image_file);
-  // For collect memory info
-  fastdeploy::benchmark::ResourceUsageMonitor resource_moniter(
-      sampling_interval, FLAGS_device_id);
-  if (FLAGS_collect_memory_info) {
-    resource_moniter.Start();
-  }
   // For Runtime
   if (FLAGS_profile_mode == "runtime") {
     fastdeploy::vision::DetectionResult res;
@@ -62,33 +68,34 @@ bool RunModel(std::string model_file, std::string image_file, size_t warmup,
         return false;
       }
     }
+    std::vector<float> end2end_statis;
     // Step2: repeat for repeats times
     std::cout << "Counting time..." << std::endl;
-    std::cout << "Repeat " << repeats << " times..." << std::endl;
-    fastdeploy::vision::DetectionResult res;
     fastdeploy::TimeCounter tc;
-    tc.Start();
+    fastdeploy::vision::DetectionResult res;
     for (int i = 0; i < repeats; i++) {
+      if (FLAGS_collect_memory_info && i % dump_period == 0) {
+        fastdeploy::benchmark::DumpCurrentCpuMemoryUsage(cpu_mem_file_name);
+#if defined(WITH_GPU)
+        fastdeploy::benchmark::DumpCurrentGpuMemoryUsage(gpu_mem_file_name,
+                                                         FLAGS_device_id);
+#endif
+      }
+      tc.Start();
       if (!model.Predict(im, &res)) {
         std::cerr << "Failed to predict." << std::endl;
         return false;
       }
+      tc.End();
+      end2end_statis.push_back(tc.Duration() * 1000);
     }
-    tc.End();
-    double end2end = tc.Duration() / repeats * 1000;
+    float end2end = std::accumulate(end2end_statis.end() - repeats,
+                                    end2end_statis.end(), 0.f) /
+                    repeats;
     std::cout << "End2End(ms): " << end2end << "ms." << std::endl;
     auto vis_im = fastdeploy::vision::VisDetection(im, res);
     cv::imwrite("vis_result.jpg", vis_im);
     std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
-  }
-  if (FLAGS_collect_memory_info) {
-    float cpu_mem = resource_moniter.GetMaxCpuMem();
-    float gpu_mem = resource_moniter.GetMaxGpuMem();
-    float gpu_util = resource_moniter.GetMaxGpuUtil();
-    std::cout << "cpu_pss_mb: " << cpu_mem << "MB." << std::endl;
-    std::cout << "gpu_pss_mb: " << gpu_mem << "MB." << std::endl;
-    std::cout << "gpu_util: " << gpu_util << std::endl;
-    resource_moniter.Stop();
   }
 
   return true;
@@ -98,10 +105,21 @@ int main(int argc, char* argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
   int repeats = FLAGS_repeat;
   int warmup = FLAGS_warmup;
-  int sampling_interval = FLAGS_sampling_interval;
+  int dump_period = FLAGS_dump_period;
+  std::string cpu_mem_file_name = "result_cpu.txt";
+  std::string gpu_mem_file_name = "result_gpu.txt";
   // Run model
-  if (!RunModel(FLAGS_model, FLAGS_image, warmup, repeats, sampling_interval)) {
+  if (RunModel(FLAGS_model, FLAGS_image, warmup, repeats, dump_period,
+               cpu_mem_file_name, gpu_mem_file_name) != true) {
     exit(1);
+  }
+  if (FLAGS_collect_memory_info) {
+    float cpu_mem = fastdeploy::benchmark::GetCpuMemoryUsage(cpu_mem_file_name);
+    std::cout << "cpu_pss_mb: " << cpu_mem << "MB." << std::endl;
+#if defined(WITH_GPU)
+    float gpu_mem = fastdeploy::benchmark::GetGpuMemoryUsage(gpu_mem_file_name);
+    std::cout << "gpu_pss_mb: " << gpu_mem << "MB." << std::endl;
+#endif
   }
   return 0;
 }
