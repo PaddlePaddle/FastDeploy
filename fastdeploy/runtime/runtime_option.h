@@ -206,7 +206,6 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   // *** The belowing api are deprecated, will be removed in v1.2.0
   // *** Do not use it anymore
-
   void SetPaddleMKLDNN(bool pd_mkldnn = true);
   void EnablePaddleToTrt();
   void DeletePaddleBackendPass(const std::string& delete_pass_name);
