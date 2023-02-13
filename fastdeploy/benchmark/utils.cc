@@ -415,9 +415,9 @@ DetectionDiff ResultManager::CalcDiffFrom(const vision::DetectionResult& lhs,
   CalculateStatisInfo<float>(scores_diff.data(), scores_diff.size(),
                              &(diff.scores.mean), &(diff.scores.max),
                              &(diff.scores.min));
-  CalculateStatisInfo<float>(labels_diff.data(), labels_diff.size(),
-                             &(diff.labels.mean), &(diff.labels.max),
-                             &(diff.labels.min));
+  CalculateStatisInfo<int32_t>(labels_diff.data(), labels_diff.size(),
+                               &(diff.labels.mean), &(diff.labels.max),
+                               &(diff.labels.min));
 
   return diff;
 }
