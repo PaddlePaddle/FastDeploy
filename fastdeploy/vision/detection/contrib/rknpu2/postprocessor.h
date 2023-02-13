@@ -56,7 +56,7 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
   float GetNMSThreshold() const { return nms_threshold_; }
 
   /// Set height and weight
-  void SetHeightAndWeight(int height,int width) {
+  void SetHeightAndWeight(int height, int width) {
     height_ = height;
     width_ = width;
   }
@@ -79,6 +79,10 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
   void SetClassNum(int num) {
     obj_class_num_ = num;
     prob_box_size_ = obj_class_num_ + 5;
+  }
+  /// Get the number of class
+  int GetClassNum() {
+    return obj_class_num_;
   }
 
  private:
