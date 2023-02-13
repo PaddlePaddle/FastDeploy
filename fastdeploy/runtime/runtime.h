@@ -24,7 +24,7 @@
 #include "fastdeploy/runtime/runtime_option.h"
 #include "fastdeploy/utils/perf.h"
 #ifdef ENABLE_ENCRYPTION
-  #include "fastdeploy/encryption/include/decrypt.h"
+#include "fastdeploy/encryption/include/decrypt.h"
 #endif
 
 /** \brief All C++ FastDeploy APIs are defined inside this namespace
@@ -102,7 +102,7 @@ struct FASTDEPLOY_DECL Runtime {
    */
   double GetProfileTime() {
     return backend_->benchmark_result_.time_of_runtime;
-  }             
+  }
 
  private:
   void CreateOrtBackend();
