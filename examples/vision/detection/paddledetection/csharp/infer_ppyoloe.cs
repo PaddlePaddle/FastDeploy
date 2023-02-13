@@ -16,10 +16,11 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using OpenCvSharp;
+using fastdeploy;
 
-namespace fastdeploy
+namespace Test
 {
-    public class Test
+    public class TestPPYOLOE
     {
         public static void Main(string[] args)
         {
