@@ -108,11 +108,11 @@ class RKYOLOPostprocessor:
         return self._postprocessor.nms_threshold
 
     @property
-    def multi_label(self):
+    def class_num(self):
         """
-        multi_label for postprocessing, set true for eval, default is True
+        class_num for postprocessing, default is 80
         """
-        return self._postprocessor.multi_label
+        return self._postprocessor.class_num
 
     @conf_threshold.setter
     def conf_threshold(self, conf_threshold):
@@ -126,13 +126,14 @@ class RKYOLOPostprocessor:
             "The value to set `nms_threshold` must be type of float."
         self._postprocessor.nms_threshold = nms_threshold
 
-    @multi_label.setter
-    def multi_label(self, value):
-        assert isinstance(
-            value,
-            bool), "The value to set `multi_label` must be type of bool."
-        self._postprocessor.multi_label = value
-
+    @class_num.setter
+    def class_num(self, class_num):
+        """
+        class_num for postprocessing, default is 80
+        """
+        assert isinstance(class_num, int), \
+            "The value to set `nms_threshold` must be type of float."
+        self._postprocessor.class_num = class_num
 
 class RKYOLOV5(FastDeployModel):
     def __init__(self,

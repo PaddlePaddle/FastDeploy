@@ -65,7 +65,9 @@ void BindRKYOLO(pybind11::module& m) {
       .def_property("conf_threshold", &vision::detection::RKYOLOPostprocessor::GetConfThreshold,
                     &vision::detection::RKYOLOPostprocessor::SetConfThreshold)
       .def_property("nms_threshold", &vision::detection::RKYOLOPostprocessor::GetNMSThreshold,
-                    &vision::detection::RKYOLOPostprocessor::SetNMSThreshold);
+                    &vision::detection::RKYOLOPostprocessor::SetNMSThreshold)
+      .def_property("class_num", &vision::detection::RKYOLOPostprocessor::GetClassNum,
+                    &vision::detection::RKYOLOPostprocessor::SetClassNum);
 
   pybind11::class_<vision::detection::RKYOLOV5, FastDeployModel>(m, "RKYOLOV5")
       .def(pybind11::init<std::string,
