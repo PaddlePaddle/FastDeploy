@@ -29,7 +29,8 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
     } else if (FLAGS_backend == "trt" || FLAGS_backend == "paddle_trt") {
       option->UseTrtBackend();
       if (FLAGS_backend == "paddle_trt") {
-        option->EnablePaddleToTrt();
+        option->UsePaddleInferBackend();
+        option->paddle_infer_option.enable_trt = true;
       }
       if (FLAGS_use_fp16) {
         option->EnableTrtFP16();

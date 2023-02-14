@@ -26,6 +26,8 @@ int main(int argc, char* argv[]) {
     return false;
   }
   PrintBenchmarkInfo();
+  // Set max_batch_size 1 for best performance
+  option.trt_option.max_batch_size = 1;
   auto model_file = FLAGS_model + sep + "inference.pdmodel";
   auto params_file = FLAGS_model + sep + "inference.pdiparams";
   auto config_file = FLAGS_model + sep + "inference_cls.yaml";
