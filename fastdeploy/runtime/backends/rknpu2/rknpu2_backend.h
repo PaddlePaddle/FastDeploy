@@ -30,9 +30,6 @@ class RKNPU2Backend : public BaseBackend {
 
   virtual ~RKNPU2Backend();
 
-  // BaseBackend API
-  void BuildOption(const RKNPU2BackendOption& option);
-
   bool Init(const RuntimeOption& runtime_option);
 
   int NumInputs() const override {
@@ -51,6 +48,9 @@ class RKNPU2Backend : public BaseBackend {
              bool copy_to_fd = true) override;
 
  private:
+  // BaseBackend API
+  void BuildOption(const RKNPU2BackendOption& option);
+  
   // RKNN API
   bool LoadModel(void* model);
 

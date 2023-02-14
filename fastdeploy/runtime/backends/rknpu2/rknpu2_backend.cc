@@ -67,6 +67,7 @@ bool RKNPU2Backend::GetSDKAndDeviceVersion() {
  ***************************************************************/
 void RKNPU2Backend::BuildOption(const RKNPU2BackendOption& option) {
   this->option_ = option;
+
   // save cpu_name
   this->option_.cpu_name = option.cpu_name;
 
@@ -130,7 +131,7 @@ bool RKNPU2Backend::Init(const RuntimeOption& runtime_option) {
  *  @return     bool
  *  @note       Only support RK3588
  ***************************************************************/
-bool RKNPU2Backend::SetCoreMask(rknpu2::CoreMask& core_mask) const {
+bool RKNPU2Backend::SetCoreMask(const rknpu2::CoreMask& core_mask) {
   int ret = rknn_set_core_mask(ctx, static_cast<rknn_core_mask>(core_mask));
   if (ret != RKNN_SUCC) {
     FDERROR << "rknn_set_core_mask fail! ret=" << ret << std::endl;
