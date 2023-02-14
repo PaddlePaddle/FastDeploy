@@ -104,7 +104,33 @@ bool AutoSelectBackend(RuntimeOption& option) {
 
 bool Runtime::Init(const RuntimeOption& _option) {
   option = _option;
-
+  // decrypt encrypted model
+  if ("" != option.encryption_key_) {
+#ifdef ENABLE_ENCRYPTION
+    if (option.model_from_memory_) {
+      option.model_file = Decrypt(option.model_file, option.encryption_key_);
+      if (!(option.params_file.empty())) {
+        option.params_file =
+            Decrypt(option.params_file, option.encryption_key_);
+      }
+    } else {
+      std::string model_buffer = "";
+      FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
+               "Fail to read binary from model file");
+      option.model_file = Decrypt(model_buffer, option.encryption_key_);
+      if (!(option.params_file.empty())) {
+        std::string params_buffer = "";
+        FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
+                 "Fail to read binary from parameter file");
+        option.params_file = Decrypt(params_buffer, option.encryption_key_);
+      }
+      option.model_from_memory_ = true;
+    }
+#else
+    FDERROR << "The FastDeploy didn't compile with encryption function."
+            << std::endl;
+#endif
+  }
   // Choose default backend by model format and device if backend is not
   // specified
   if (option.backend == Backend::UNKNOWN) {
