@@ -60,24 +60,34 @@ cv::Mat VisMatting(const cv::Mat& im, const MattingResult& result,
   for (size_t i = 0; i < height; ++i) {
     for (size_t j = 0; j < width; ++j) {
       float alpha_val = alpha_data[i * width + j];
-      vis_data[i * width * channel + j * channel + 0] =
-          cv::saturate_cast<uchar>(
-              static_cast<float>(im_data[i * width * 3 + j * 3 + 0]) *
-                  alpha_val +
-              (1.f - alpha_val) * 153.f);
-      vis_data[i * width * channel + j * channel + 1] =
-          cv::saturate_cast<uchar>(
-              static_cast<float>(im_data[i * width * 3 + j * 3 + 1]) *
-                  alpha_val +
-              (1.f - alpha_val) * 255.f);
-      vis_data[i * width * channel + j * channel + 2] =
-          cv::saturate_cast<uchar>(
-              static_cast<float>(im_data[i * width * 3 + j * 3 + 2]) *
-                  alpha_val +
-              (1.f - alpha_val) * 120.f);
-      if (transparent_background && alpha_val < transparent_threshold) {
-        vis_data[i * width * channel + j * channel + 3] =
-            cv::saturate_cast<uchar>(0.f);
+      if (transparent_background ) {
+        if (alpha_val < transparent_threshold) {
+          vis_data[i * width * channel + j * channel + 3] =
+              cv::saturate_cast<uchar>(0.f);
+        } else {
+          vis_data[i * width * channel + j * channel + 0] =
+            cv::saturate_cast<uchar>(
+                static_cast<float>(im_data[i * width * 3 + j * 3 + 0]));
+        vis_data[i * width * channel + j * channel + 1] =
+            cv::saturate_cast<uchar>(
+                static_cast<float>(im_data[i * width * 3 + j * 3 + 1]));
+        vis_data[i * width * channel + j * channel + 2] =
+            cv::saturate_cast<uchar>(
+                static_cast<float>(im_data[i * width * 3 + j * 3 + 2]));
+        }  
+      } else {
+        vis_data[i * width * channel + j * channel + 0] =
+            cv::saturate_cast<uchar>(
+                static_cast<float>(im_data[i * width * 3 + j * 3 + 0]) *
+                    alpha_val + (1.f - alpha_val) * 153.f);
+        vis_data[i * width * channel + j * channel + 1] =
+            cv::saturate_cast<uchar>(
+                static_cast<float>(im_data[i * width * 3 + j * 3 + 1]) *
+                    alpha_val + (1.f - alpha_val) * 255.f);
+        vis_data[i * width * channel + j * channel + 2] =
+            cv::saturate_cast<uchar>(
+                static_cast<float>(im_data[i * width * 3 + j * 3 + 2]) *
+                    alpha_val + (1.f - alpha_val) * 120.f);
       }
     }
   }
