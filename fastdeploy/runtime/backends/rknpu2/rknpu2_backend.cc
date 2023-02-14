@@ -67,8 +67,6 @@ bool RKNPU2Backend::GetSDKAndDeviceVersion() {
  ***************************************************************/
 void RKNPU2Backend::BuildOption(const RKNPU2BackendOption& option) {
   this->option_ = option;
-  std::cout << "option.cpu_name is " << option.cpu_name << std::endl;
-  std::cout << "option.core_mask is " << option.core_mask << std::endl;
 
   // save cpu_name
   this->option_.cpu_name = option.cpu_name;
@@ -104,7 +102,6 @@ bool RKNPU2Backend::InitFromRKNN(const std::string& model_file,
 
   // SetCoreMask if RK3588
   if (this->option_.cpu_name == rknpu2::CpuName::RK3588) {
-    std::cout << "Device is RK3588" << std::endl;
     if (!this->SetCoreMask(option_.core_mask)) {
       FDERROR << "set core mask failed" << std::endl;
       return false;
