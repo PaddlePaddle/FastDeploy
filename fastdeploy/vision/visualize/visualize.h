@@ -151,7 +151,7 @@ FASTDEPLOY_DECL cv::Mat VisSegmentation(const cv::Mat& im,
 FASTDEPLOY_DECL cv::Mat VisMatting(const cv::Mat& im,
                                    const MattingResult& result,
                                    bool transparent_background = false,
-                                   float transparent_threshold = 0.999
+                                   float transparent_threshold = 0.999,
                                    bool remove_small_connected_area = false);
 /** \brief Show the visualized results for Ocr models
  *
