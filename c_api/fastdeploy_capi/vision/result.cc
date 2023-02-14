@@ -17,7 +17,9 @@
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy_capi/types_internal.h"
 
+#ifdef __cplusplus
 extern "C" {
+#endif
 
 // Classification Results
 
@@ -251,4 +253,7 @@ char* FD_C_DetectionResultWrapperStr(
   std::strcpy(cstr, information.c_str());
   return cstr;
 }
+
+#ifdef __cplusplus
 }
+#endif

@@ -16,7 +16,9 @@
 
 #include "fastdeploy_capi/types_internal.h"
 
+#ifdef __cplusplus
 extern "C" {
+#endif
 
 FD_C_PaddleClasModelWrapper* FD_C_CreatePaddleClasModelWrapper(
     const char* model_file, const char* params_file, const char* config_file,
@@ -99,4 +101,7 @@ FD_C_Bool FD_C_PaddleClasModelWrapperBatchPredict(
   }
   return successful;
 }
+
+#ifdef __cplusplus
 }
+#endif

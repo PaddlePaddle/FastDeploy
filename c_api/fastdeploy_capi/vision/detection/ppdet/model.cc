@@ -17,7 +17,9 @@
 #include "fastdeploy_capi/types_internal.h"
 #include "fastdeploy_capi/vision/visualize.h"
 
+#ifdef __cplusplus
 extern "C" {
+#endif
 
 FD_C_PPYOLOEWrapper* FD_C_CreatesPPYOLOEWrapper(
     const char* model_file, const char* params_file, const char* config_file,
@@ -135,4 +137,7 @@ FD_C_Bool FD_C_PPYOLOEWrapperBatchPredict(
   }
   return successful;
 }
+
+#ifdef __cplusplus
 }
+#endif
