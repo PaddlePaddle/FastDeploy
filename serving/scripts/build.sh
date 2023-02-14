@@ -58,10 +58,10 @@ if [ ! -d "./cmake-3.18.6-Linux-x86_64/" ]; then
     rm -rf cmake-3.18.6-Linux-x86_64.tar.gz
 fi
 
-if [ ! -d "./TensorRT-8.4.1.5/" ]; then
-    wget https://fastdeploy.bj.bcebos.com/third_libs/TensorRT-8.4.1.5.Linux.x86_64-gnu.cuda-11.6.cudnn8.4.tar.gz
-    tar -zxvf TensorRT-8.4.1.5.Linux.x86_64-gnu.cuda-11.6.cudnn8.4.tar.gz
-    rm -rf TensorRT-8.4.1.5.Linux.x86_64-gnu.cuda-11.6.cudnn8.4.tar.gz
+if [ ! -d "./TensorRT-8.5.2.2/" ]; then
+    wget https://fastdeploy.bj.bcebos.com/resource/TensorRT/TensorRT-8.5.2.2.Linux.x86_64-gnu.cuda-11.8.cudnn8.6.tar.gz
+    tar -zxvf TensorRT-8.5.2.2.Linux.x86_64-gnu.cuda-11.8.cudnn8.6.tar.gz
+    rm -rf TensorRT-8.5.2.2.Linux.x86_64-gnu.cuda-11.8.cudnn8.6.tar.gz
 fi
 
 nvidia-docker run -i --rm --name ${docker_name} \
