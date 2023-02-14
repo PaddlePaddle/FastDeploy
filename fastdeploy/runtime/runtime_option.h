@@ -71,9 +71,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void UseGpu(int gpu_id = 0);
   /// Use RKNPU2 e.g RK3588/RK356X to inference
   void UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name =
-                     fastdeploy::rknpu2::CpuName::RK3588,
+                     fastdeploy::rknpu2::CpuName::RK356X,
                  fastdeploy::rknpu2::CoreMask rknpu2_core =
-                     fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0);
+                     fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO);
   /// Use TimVX e.g RV1126/A311D to inference
   void UseTimVX();
   /// Use Huawei Ascend to inference
