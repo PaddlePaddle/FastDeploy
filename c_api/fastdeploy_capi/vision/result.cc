@@ -17,7 +17,9 @@
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy_capi/types_internal.h"
 
+#ifdef __cplusplus
 extern "C" {
+#endif
 
 // Classification Results
 
@@ -235,4 +237,6 @@ FD_C_DetectionResultWrapper* FD_C_CreateDetectionResultWrapperFromData(
 
   return fd_c_detection_result_wrapper;
 }
+#ifdef __cplusplus
 }
+#endif
