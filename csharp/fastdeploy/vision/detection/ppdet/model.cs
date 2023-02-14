@@ -57,6 +57,34 @@ public class PPYOLOE {
     return detection_result;
   }
 
+  public List<DetectionResult> BatchPredict(List<Mat> imgs){
+    FD_OneDimMat imgs_in = new FD_OneDimMat();
+    imgs_in.size = imgs.size;
+    // Copy data to unmanaged memory
+    IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
+    for(int i=0;i < (int)imgs.size; i++){
+      mat_ptrs[i] = imgs[i].CvPtr;
+    }
+    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    imgs_in.data = Marshal.AllocHGlobal(size);
+    Marshal.Copy(mat_ptrs, 0, imgs_in.data,
+                 mat_ptrs.Length);
+    FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
+    FD_C_PPYOLOEWrapperBatchPredict(fd_ppyoloe_wrapper, ref imgs_in, ref fd_detection_result_array);
+    List<DetectionResult> results_out = new List<DetectionResult>();
+    for(int i=0;i < (int)imgs.size; i++){
+      FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
+          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          typeof(FD_DetectionResult));
+      results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+    }
+    return results_out;
+  }
+
+  public bool Initialized() {
+    return FD_C_PPYOLOEWrapperInitialized(fd_ppyoloe_wrapper);
+  }
+
   // below are underlying C api
   private IntPtr fd_ppyoloe_wrapper;
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesPPYOLOEWrapper")]
@@ -88,6 +116,16 @@ public class PPYOLOE {
              EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
   private static extern IntPtr
   FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  [DllImport("fastdeploy.dll",
+             EntryPoint = "FD_C_PPYOLOEWrapperInitialized")]
+  private static extern bool
+  FD_C_PPYOLOEWrapperInitialized(IntPtr fd_c_ppyoloe_wrapper);
+  [DllImport("fastdeploy.dll",
+             EntryPoint = "FD_C_PPYOLOEWrapperBatchPredict")]
+  private static extern bool
+  FD_C_PPYOLOEWrapperBatchPredict(IntPtr fd_c_ppyoloe_wrapper,
+                                  ref FD_OneDimMat imgs,
+                                  ref FD_OneDimDetectionResult results);
 }
 }
 }

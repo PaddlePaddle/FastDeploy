@@ -64,11 +64,31 @@ class PaddleClasModel {
   }
 
   public List<ClassifyResult> BatchPredict(List<Mat> imgs){
-
+    FD_OneDimMat imgs_in = new FD_OneDimMat();
+    imgs_in.size = imgs.size;
+    // Copy data to unmanaged memory
+    IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
+    for(int i=0;i < (int)imgs.size; i++){
+      mat_ptrs[i] = imgs[i].CvPtr;
+    }
+    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    imgs_in.data = Marshal.AllocHGlobal(size);
+    Marshal.Copy(mat_ptrs, 0, imgs_in.data,
+                 mat_ptrs.Length);
+    FD_OneDimClassifyResult fd_classify_result_array =  new FD_OneDimClassifyResult();
+    FD_C_PaddleClasModelWrapperBatchPredict(fd_paddleclas_model_wrapper, ref imgs_in, ref fd_classify_result_array);
+    List<ClassifyResult> results_out = new List<ClassifyResult>();
+    for(int i=0;i < (int)imgs.size; i++){
+      FD_ClassifyResult fd_classify_result = (FD_ClassifyResult)Marshal.PtrToStructure(
+          fd_classify_result_array.data + i * Marshal.SizeOf(FD_ClassifyResult),
+          typeof(FD_ClassifyResult));
+      results_out.Add(ConvertResult.ConvertCResultToClassifyResult(fd_classify_result));
+    }
+    return results_out;
   }
 
   public bool Initialized() {
-
+    return FD_C_PaddleClasModelWrapperInitialized(fd_paddleclas_model_wrapper);
   }
 
   // below are underlying C api
@@ -105,6 +125,17 @@ class PaddleClasModel {
              EntryPoint = "FD_C_CreateClassifyResultWrapperFromData")]
   private static extern IntPtr
   FD_C_CreateClassifyResultWrapperFromData(IntPtr fd_classify_result);
+  [DllImport("fastdeploy.dll",
+             EntryPoint = "FD_C_PaddleClasModelWrapperInitialized")]
+  private static extern bool
+  FD_C_PaddleClasModelWrapperInitialized(IntPtr fd_paddleclas_model_wrapper);
+  [DllImport("fastdeploy.dll",
+             EntryPoint = "FD_C_PaddleClasModelWrapperBatchPredict")]
+  private static extern bool
+  FD_C_PaddleClasModelWrapperBatchPredict(IntPtr fd_paddleclas_model_wrapper,
+                                          ref FD_OneDimMat imgs,
+                                          ref FD_OneDimClassifyResult results);
+
 }
 
 }

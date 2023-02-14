@@ -46,6 +46,19 @@ public struct Mask {
     this.shape = new List<long>();
     this.type = ResultType.MASK;
   }
+  public ToString() {
+    string out = "Mask(";
+    int ndim = shape.size;
+    for (int i = 0; i < ndim; i++) {
+    if (i < ndim - 1) {
+      out += string(shape[i]) + ",";
+    } else {
+      out += string(shape[i]);
+    }
+  }
+  out += ")\n";
+  return out;
+  }
 }
 
 public struct ClassifyResult {
@@ -56,6 +69,19 @@ public struct ClassifyResult {
     this.label_ids = new List<int>();
     this.scores = new List<float>();
     this.type = ResultType.CLASSIFY;
+  }
+  public ToString() {
+    std::string out;
+    out = "ClassifyResult(\nlabel_ids: ";
+    for (int i = 0; i < label_ids.size; i++) {
+      out = out + string(label_ids[i]) + ", ";
+    }
+    out += "\nscores: ";
+    for (int i = 0; i < scores.size; i++) {
+      out = out + string(scores[i]) + ", ";
+    }
+    out += "\n)";
+    return out;
   }
 }
 
@@ -73,6 +99,29 @@ public struct DetectionResult {
     this.masks = new List<Mask>();
     this.contain_masks = false;
     this.type = ResultType.DETECTION;
+  }
+  
+  public ToString() {
+    string out;
+    if (!contain_masks) {
+      out = "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]\n";
+    } else {
+      out =
+          "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id, "
+          "mask_shape]\n";
+    }
+    for (int i = 0; i < boxes.size(); i++) {
+      out = out + string(boxes[i][0]) + "," +
+            string(boxes[i][1]) + ", " + string(boxes[i][2]) +
+            ", " + to_string(boxes[i][3]) + ", " +
+            to_string(scores[i]) + ", " + string(label_ids[i]);
+      if (!contain_masks) {
+        out += "\n";
+      } else {
+        out += ", " + masks[i].ToString();
+      }
+    }
+    return out;
   }
 }
 
@@ -266,8 +315,36 @@ public class ConvertResult {
     return detection_result;
   }
 
-  
+  public static FD_OneDimArrayCstr
+  ConvertStringArrayToCOneDimArrayCstr(string[] strs){
+    FD_OneDimArrayCstr fd_one_dim_cstr = new FD_OneDimArrayCstr();
+    fd_one_dim_cstr.size = strs.Length;
+    
+    // Copy data to unmanaged memory
+    FD_Cstr[] c_strs = new FD_Cstr[strs.Length];
+    size = Marshal.SizeOf(c_strs[0]) * c_strs.Length;
+    fd_one_dim_cstr.data = Marshal.AllocHGlobal(size);
+    for (int i = 0; i < strs.Length; i++) {
+      c_strs[i].size = strs[i].Length;
+      c_strs[i].data = strs[i];
+      Marshal.StructureToPtr(
+          c_strs[i],
+          fd_one_dim_cstr.data + i * Marshal.SizeOf(c_strs[0]), true);
+    }
+    return fd_one_dim_cstr;
+  }
 
+  public static string[]
+  ConvertCOneDimArrayCstrToStringArray(FD_OneDimArrayCstr c_strs){
+    string[] strs = new string[c_strs.size];
+    for(int i=0; i<c_strs.size; i++){
+      FD_Cstr cstr = (FD_Cstr)Marshal.PtrToStructure(
+          c_strs.data + i * Marshal.SizeOf(FD_Cstr),
+          typeof(FD_Cstr));
+      strs[i] = cstr.data;
+    }
+    return strs;
+  }
 }
 
 }

@@ -98,6 +98,13 @@ public struct FD_ClassifyResult {
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public struct FD_OneDimClassifyResult {
+  public nuint size;
+  public IntPtr data; // FD_ClassifyResult[]
+}
+
+
+[StructLayout(LayoutKind.Sequential)]
 public struct FD_Mask {
   public FD_OneDimArrayUint8 data;
   public FD_OneDimArrayInt64 shape;
@@ -119,6 +126,18 @@ public struct FD_DetectionResult {
   [MarshalAs(UnmanagedType.U1)]
   public bool contain_masks;
   public FD_ResultType type;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct FD_OneDimDetectionResult {
+  public nuint size;
+  public IntPtr data; // FD_DetectionResult[]
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct FD_OneDimMat {
+  public nuint size;
+  public IntPtr data; // Mat[]
 }
 
 }
