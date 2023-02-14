@@ -66,28 +66,34 @@ class FASTDEPLOY_DECL ResourceUsageMonitor {
 
  private:
   void StopInternal();
-  // Get current cpu memory info
-  std::string GetCurrentCpuMemoryInfo();
   // Get current gpu memory info
   std::string GetCurrentGpuMemoryInfo(int device_id);
 
   bool is_supported_ = false;
   bool stop_signal_ = false;
   const int sampling_interval_;
-  float max_cpu_mem_ = 0.0f;
-  float max_gpu_mem_ = 0.0f;
+  float max_cpu_mem_ = 0.0f;  // MB
+  float max_gpu_mem_ = 0.0f;  // MB
   float max_gpu_util_ = 0.0f;
   const int gpu_id_ = 0;
   std::unique_ptr<std::thread> check_memory_thd_ = nullptr;
 };
 
+// Remove the ch characters at both ends of str
+FASTDEPLOY_DECL std::string Strip(const std::string& str, char ch = ' ');
+
+// Split string
+FASTDEPLOY_DECL void Split(const std::string& s,
+                           std::vector<std::string>& tokens,
+                           char delim = ' ');
+
 /// Diff values for precision evaluation
 struct FASTDEPLOY_DECL BaseDiff {};
 
 struct FASTDEPLOY_DECL EvalStatis {
-  double mean = 0.0;
-  double min = 0.0;
-  double max = 0.0;
+  double mean = -1.0;
+  double min = -1.0;
+  double max = -1.0;
 };
 
 struct FASTDEPLOY_DECL TensorDiff: public BaseDiff, public EvalStatis {};
@@ -99,7 +105,7 @@ struct FASTDEPLOY_DECL DetectionDiff: public BaseDiff, public EvalStatis {
 };
 
 /// Utils for precision evaluation
-class FASTDEPLOY_DECL ResultManager {
+struct FASTDEPLOY_DECL ResultManager {
   /// Save & Load functions for FDTensor result.
   static bool SaveFDTensor(const FDTensor&& tensor, const std::string& path);
   static bool LoadFDTensor(FDTensor* tensor, const std::string& path);
@@ -113,7 +119,8 @@ class FASTDEPLOY_DECL ResultManager {
                                         const FDTensor& rhs);
   /// Calculate diff value between two basic results.
   static DetectionDiff CalculateDiffStatis(const vision::DetectionResult& lhs,
-                                           const vision::DetectionResult& rhs);
+                                           const vision::DetectionResult& rhs,
+                                           float score_threshold = 0.3f);
 };
 
 }  // namespace benchmark

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <sys/types.h>
-#if defined(__linux__) || defined(__ANDROID__)
-#include <unistd.h>
+#ifdef __linux__
+#include <sys/resource.h>
 #endif
 #include <cmath>
 
@@ -24,8 +24,7 @@
 namespace fastdeploy {
 namespace benchmark {
 
-// Remove the ch characters at both ends of str
-static std::string Strip(const std::string& str, char ch = ' ') {
+std::string Strip(const std::string& str, char ch) {
   int i = 0;
   while (str[i] == ch) {
     i++;
@@ -37,9 +36,7 @@ static std::string Strip(const std::string& str, char ch = ' ') {
   return str.substr(i, j + 1 - i);
 }
 
-// Split string
-static void Split(const std::string& s, std::vector<std::string>& tokens,
-                  char delim = ' ') {
+void Split(const std::string& s, std::vector<std::string>& tokens, char delim) {
   tokens.clear();
   size_t lastPos = s.find_first_not_of(delim, 0);
   size_t pos = s.find(delim, lastPos);
@@ -55,7 +52,7 @@ ResourceUsageMonitor::ResourceUsageMonitor(int sampling_interval_ms, int gpu_id)
     : is_supported_(false),
       sampling_interval_(sampling_interval_ms),
       gpu_id_(gpu_id) {
-#if defined(__linux__) || defined(__ANDROID__)
+#ifdef __linux__
   is_supported_ = true;
 #else
   is_supported_ = false;
@@ -80,11 +77,13 @@ void ResourceUsageMonitor::Start() {
   check_memory_thd_.reset(new std::thread(([this]() {
     // Note we retrieve the memory usage at the very beginning of the thread.
     while (true) {
-      std::string cpu_mem_info = GetCurrentCpuMemoryInfo();
-      // get max_cpu_mem
-      std::vector<std::string> cpu_tokens;
-      Split(cpu_mem_info, cpu_tokens, ' ');
-      max_cpu_mem_ = std::max(max_cpu_mem_, stof(cpu_tokens[3]) / 1024);
+#ifdef __linux__
+      rusage res;
+      if (getrusage(RUSAGE_SELF, &res) == 0) {
+        max_cpu_mem_ =
+            std::max(max_cpu_mem_, static_cast<float>(res.ru_maxrss / 1024.0));
+      }
+#endif
 #if defined(WITH_GPU)
       std::string gpu_mem_info = GetCurrentGpuMemoryInfo(gpu_id_);
       // get max_gpu_mem and max_gpu_util
@@ -126,26 +125,6 @@ void ResourceUsageMonitor::StopInternal() {
   check_memory_thd_.reset(nullptr);
 }
 
-std::string ResourceUsageMonitor::GetCurrentCpuMemoryInfo() {
-  std::string result = "";
-#if defined(__linux__) || defined(__ANDROID__)
-  int iPid = static_cast<int>(getpid());
-  std::string command = "pmap -x " + std::to_string(iPid) + " | grep total";
-  FILE* pp = popen(command.data(), "r");
-  if (!pp) return "";
-  char tmp[1024];
-
-  while (fgets(tmp, sizeof(tmp), pp) != NULL) {
-    result += tmp;
-  }
-  pclose(pp);
-#else
-  FDASSERT(false,
-           "Currently collect cpu memory info only supports Linux and ANDROID.")
-#endif
-  return result;
-}
-
 std::string ResourceUsageMonitor::GetCurrentGpuMemoryInfo(int device_id) {
   std::string result = "";
 #if defined(__linux__) && defined(WITH_GPU)
@@ -176,6 +155,7 @@ static std::vector<std::string> ReadLines(const std::string& path) {
   if (fin.is_open()) {
     while (getline(fin, line)) {
       lines.push_back(line);
+      FDINFO << line << std::endl;
     }
   } else {
     FDERROR << "Failed to open file " << path << std::endl;
@@ -194,7 +174,7 @@ bool ResultManager::SaveFDTensor(const FDTensor&& tensor,
     FDERROR << "Fail to open file:" << path << std::endl;
     return false;
   }
-  if (tensor.dtype != FDDataType::FP32) {
+  if (tensor.Dtype() != FDDataType::FP32) {
     FDERROR << "Only support FP32 now, but got " << Str(tensor.dtype)
             << std::endl;
     return false;
@@ -282,10 +262,10 @@ bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
   fs << "boxes:";
   for (int i = 0; i < res.boxes.size(); ++i) {
     for (int j = 0; j < 4; ++j) {
-      if ((i < res.boxes.size() - 1) && (j < 3)) {
-        fs << res.boxes[i][j] << ",";
-      } else {
+      if ((i == res.boxes.size() - 1) && (j == 3)) {
         fs << res.boxes[i][j];
+      } else {
+        fs << res.boxes[i][j] << ",";
       }
     }
   }
@@ -329,6 +309,8 @@ bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
   std::vector<std::string> boxes_tokens;
   Split(tokens[1], boxes_tokens, ',');
   int boxes_num = boxes_tokens.size() / 4;
+  FDINFO << "boxes_num in load: " << boxes_num
+         << ", boxes_tokens.size(): " << boxes_tokens.size() << std::endl;
   res->Resize(boxes_num);
   for (int i = 0; i < boxes_num; ++i) {
     res->boxes[i][0] = std::stof(boxes_tokens[i * 4 + 0]);
@@ -379,9 +361,18 @@ TensorDiff ResultManager::CalculateDiffStatis(const FDTensor& lhs,
 }
 
 DetectionDiff ResultManager::CalculateDiffStatis(
-    const vision::DetectionResult& lhs, const vision::DetectionResult& rhs) {
+    const vision::DetectionResult& lhs, const vision::DetectionResult& rhs,
+    float score_threshold) {
+  // lex sort
+
+  // trunc result by score
+
+  //
   if (lhs.boxes.size() != rhs.boxes.size()) {
-    FDASSERT(false, "The boxes size of input DetectionResult must be equal!");
+    FDASSERT(false,
+             "The boxes size of input DetectionResult must be equal!"
+             " But got %d != %d",
+             lhs.boxes.size(), rhs.boxes.size());
   }
 
   int boxes_num = lhs.boxes.size();

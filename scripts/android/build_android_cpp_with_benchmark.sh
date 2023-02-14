@@ -92,7 +92,7 @@ __build_fastdeploy_android_shared() {
         -DENABLE_FLYCV=ON \
         -DENABLE_TEXT=OFF \
         -DENABLE_VISION=ON \
-        -DBUILD_EXAMPLES=ON \
+        -DBUILD_EXAMPLES=OFF \
         -DENABLE_BENCHMARK=ON \
         -DWITH_OPENCV_STATIC=OFF \
         -DWITH_LITE_STATIC=OFF \
