@@ -148,7 +148,7 @@ std::string ResourceUsageMonitor::GetCurrentGpuMemoryInfo(int device_id) {
 }
 
 /// Utils for precision evaluation
-static std::vector<std::string> ReadLines(const std::string& path) {
+std::vector<std::string> ReadLines(const std::string& path) {
   std::ifstream fin(path);
   std::vector<std::string> lines;
   std::string line;
@@ -162,6 +162,18 @@ static std::vector<std::string> ReadLines(const std::string& path) {
     std::abort();
   }
   return lines;
+}
+
+std::map<std::string, std::vector<std::string>> SplitDataLine(
+    const std::string& data_line) {
+  std::map<std::string, std::vector<std::string>> dict;
+  std::vector<std::string> tokens, data_tokens;
+  Split(data_line, tokens, ':');
+  std::string key = tokens[0];
+  std::string values = tokens[1];
+  Split(values, data_tokens, ',');
+  dict[key] = data_tokens;
+  return dict;
 }
 
 bool ResultManager::SaveFDTensor(const FDTensor&& tensor,
@@ -214,34 +226,30 @@ bool ResultManager::LoadFDTensor(FDTensor* tensor, const std::string& path) {
     return false;
   }
   auto lines = ReadLines(path);
-  std::vector<std::string> tokens;
+  std::map<std::string, std::vector<std::string>> data;
   // name
-  Split(lines[0], tokens, ':');
-  tensor->name = tokens[0];
+  data = SplitDataLine(lines[0]);
+  tensor->name = data.begin()->first;
   // shape
-  Split(lines[1], tokens, ':');
-  std::vector<std::string> shape_tokens;
-  Split(tokens[1], shape_tokens, ',');
+  data = SplitDataLine(lines[1]);
   tensor->shape.clear();
-  for (const auto& s : shape_tokens) {
+  for (const auto& s : data.begin()->second) {
     tensor->shape.push_back(std::stol(s));
   }
   // dtype
-  Split(lines[2], tokens, ':');
-  if (tokens[1] != Str(FDDataType::FP32)) {
+  data = SplitDataLine(lines[2]);
+  if (data.begin()->second.at(0) != Str(FDDataType::FP32)) {
     FDERROR << "Only support FP32 now, but got " << Str(FDDataType::FP32)
             << std::endl;
     return false;
   }
   tensor->dtype = FDDataType::FP32;
   // data
-  Split(lines[3], tokens, ':');
-  std::vector<std::string> data_tokens;
-  Split(tokens[1], data_tokens, ',');
+  data = SplitDataLine(lines[3]);
   tensor->Allocate(tensor->shape, tensor->dtype, tensor->name);
   float* mutable_data_ptr = static_cast<float*>(tensor->MutableData());
-  for (int i = 0; i < data_tokens.size(); ++i) {
-    mutable_data_ptr[i] = std::stof(data_tokens[i]);
+  for (int i = 0; i < data.begin()->second.size(); ++i) {
+    mutable_data_ptr[i] = std::stof(data.begin()->second[i]);
   }
 
   return true;
@@ -302,35 +310,27 @@ bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
     return false;
   }
   auto lines = ReadLines(path);
-  std::vector<std::string> tokens;
+  std::map<std::string, std::vector<std::string>> data;
 
   // boxes
-  Split(lines[0], tokens, ':');
-  std::vector<std::string> boxes_tokens;
-  Split(tokens[1], boxes_tokens, ',');
-  int boxes_num = boxes_tokens.size() / 4;
-  FDINFO << "boxes_num in load: " << boxes_num
-         << ", boxes_tokens.size(): " << boxes_tokens.size() << std::endl;
+  data = SplitDataLine(lines[0]);
+  int boxes_num = data.begin()->second.size() / 4;
   res->Resize(boxes_num);
   for (int i = 0; i < boxes_num; ++i) {
-    res->boxes[i][0] = std::stof(boxes_tokens[i * 4 + 0]);
-    res->boxes[i][1] = std::stof(boxes_tokens[i * 4 + 1]);
-    res->boxes[i][2] = std::stof(boxes_tokens[i * 4 + 2]);
-    res->boxes[i][3] = std::stof(boxes_tokens[i * 4 + 3]);
+    res->boxes[i][0] = std::stof(data.begin()->second[i * 4 + 0]);
+    res->boxes[i][1] = std::stof(data.begin()->second[i * 4 + 1]);
+    res->boxes[i][2] = std::stof(data.begin()->second[i * 4 + 2]);
+    res->boxes[i][3] = std::stof(data.begin()->second[i * 4 + 3]);
   }
   // scores
-  Split(lines[1], tokens, ':');
-  std::vector<std::string> scores_tokens;
-  Split(tokens[1], scores_tokens, ',');
-  for (int i = 0; i < scores_tokens.size(); ++i) {
-    res->scores[i] = std::stof(scores_tokens[i]);
+  data = SplitDataLine(lines[1]);
+  for (int i = 0; i < data.begin()->second.size(); ++i) {
+    res->scores[i] = std::stof(data.begin()->second[i]);
   }
   // label_ids
-  Split(lines[2], tokens, ':');
-  std::vector<std::string> labels_tokens;
-  Split(tokens[1], labels_tokens, ',');
-  for (int i = 0; i < labels_tokens.size(); ++i) {
-    res->label_ids[i] = std::stoi(labels_tokens[i]);
+  data = SplitDataLine(lines[2]);
+  for (int i = 0; i < data.begin()->second.size(); ++i) {
+    res->label_ids[i] = std::stoi(data.begin()->second[i]);
   }
 
   return true;
