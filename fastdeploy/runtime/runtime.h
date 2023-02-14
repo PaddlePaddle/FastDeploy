@@ -23,6 +23,9 @@
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/runtime/runtime_option.h"
 #include "fastdeploy/utils/perf.h"
+#ifdef ENABLE_ENCRYPTION
+#include "fastdeploy/encryption/include/decrypt.h"
+#endif
 
 /** \brief All C++ FastDeploy APIs are defined inside this namespace
 *
@@ -72,6 +75,12 @@ struct FASTDEPLOY_DECL Runtime {
   /** \brief Bind FDTensor by name, no copy and share input memory
    */
   void BindInputTensor(const std::string& name, FDTensor& input);
+
+  /** \brief Bind FDTensor by name, no copy and share output memory.
+   *  Please make share the correctness of tensor shape of output.
+   */
+  void BindOutputTensor(const std::string& name, FDTensor& output);
+
   /** \brief Get output FDTensor by name, no copy and share backend output memory
    */
   FDTensor* GetOutputTensor(const std::string& name);
@@ -99,7 +108,7 @@ struct FASTDEPLOY_DECL Runtime {
    */
   double GetProfileTime() {
     return backend_->benchmark_result_.time_of_runtime;
-  }             
+  }
 
  private:
   void CreateOrtBackend();

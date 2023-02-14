@@ -104,7 +104,33 @@ bool AutoSelectBackend(RuntimeOption& option) {
 
 bool Runtime::Init(const RuntimeOption& _option) {
   option = _option;
-
+  // decrypt encrypted model
+  if ("" != option.encryption_key_) {
+#ifdef ENABLE_ENCRYPTION
+    if (option.model_from_memory_) {
+      option.model_file = Decrypt(option.model_file, option.encryption_key_);
+      if (!(option.params_file.empty())) {
+        option.params_file =
+            Decrypt(option.params_file, option.encryption_key_);
+      }
+    } else {
+      std::string model_buffer = "";
+      FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
+               "Fail to read binary from model file");
+      option.model_file = Decrypt(model_buffer, option.encryption_key_);
+      if (!(option.params_file.empty())) {
+        std::string params_buffer = "";
+        FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
+                 "Fail to read binary from parameter file");
+        option.params_file = Decrypt(params_buffer, option.encryption_key_);
+      }
+      option.model_from_memory_ = true;
+    }
+#else
+    FDERROR << "The FastDeploy didn't compile with encryption function."
+            << std::endl;
+#endif
+  }
   // Choose default backend by model format and device if backend is not
   // specified
   if (option.backend == Backend::UNKNOWN) {
@@ -198,6 +224,25 @@ void Runtime::BindInputTensor(const std::string& name, FDTensor& input) {
   }
 }
 
+void Runtime::BindOutputTensor(const std::string& name, FDTensor& output) {
+  bool is_exist = false;
+  for (auto& t : output_tensors_) {
+    if (t.name == name) {
+      FDINFO << "The output name [" << name << "] is exist." << std::endl;
+      is_exist = true;
+      t.SetExternalData(output.shape, output.dtype, output.MutableData(),
+                        output.device, output.device_id);
+      break;
+    }
+  }
+  if (!is_exist) {
+    FDINFO << "The output name [" << name << "] is prebinded added into output tensor list." << std::endl;
+    FDTensor new_tensor(name);
+    new_tensor.SetExternalData(output.shape, output.dtype, output.MutableData(),
+                               output.device, output.device_id);
+    output_tensors_.emplace_back(std::move(new_tensor));
+  }
+}
 FDTensor* Runtime::GetOutputTensor(const std::string& name) {
   for (auto& t : output_tensors_) {
     if (t.name == name) {
