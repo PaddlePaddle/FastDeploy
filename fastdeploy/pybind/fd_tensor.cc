@@ -15,9 +15,9 @@
 #include <dlpack/dlpack.h>
 
 #include "fastdeploy/core/fd_type.h"
-#include "fastdeploy/utils/utils.h"
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/pybind/main.h"
+#include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 
@@ -68,8 +68,8 @@ DLDataType FDToDlpackType(FDDataType fd_dtype) {
       break;
 
     default:
-      FDASSERT(false,
-              "Convert to DlPack, FDType \"%s\" is not supported.", Str(fd_dtype).c_str());
+      FDASSERT(false, "Convert to DlPack, FDType \"%s\" is not supported.",
+               Str(fd_dtype).c_str());
   }
 
   dl_dtype.code = dl_code;
@@ -77,10 +77,8 @@ DLDataType FDToDlpackType(FDDataType fd_dtype) {
   return dl_dtype;
 }
 
-FDDataType
-DlpackToFDType(const DLDataType& data_type) {
-  FDASSERT(data_type.lanes == 1,
-          "FDTensor does not support dlpack lanes != 1")
+FDDataType DlpackToFDType(const DLDataType& data_type) {
+  FDASSERT(data_type.lanes == 1, "FDTensor does not support dlpack lanes != 1")
 
   if (data_type.code == DLDataTypeCode::kDLFloat) {
     if (data_type.bits == 16) {
@@ -152,7 +150,7 @@ pybind11::capsule FDTensorToDLPack(FDTensor& fd_tensor) {
   dlpack_tensor->dl_tensor.dtype = FDToDlpackType(fd_tensor.dtype);
 
   dlpack_tensor->dl_tensor.device.device_id = fd_tensor.device_id;
-  if(fd_tensor.device == Device::GPU) {
+  if (fd_tensor.device == Device::GPU) {
     if (fd_tensor.is_pinned_memory) {
       dlpack_tensor->dl_tensor.device.device_type = DLDeviceType::kDLCUDAHost;
     } else {
@@ -162,8 +160,8 @@ pybind11::capsule FDTensorToDLPack(FDTensor& fd_tensor) {
     dlpack_tensor->dl_tensor.device.device_type = DLDeviceType::kDLCPU;
   }
 
-  return pybind11::capsule(
-      static_cast<void*>(dlpack_tensor), "dltensor", &DeleteUnusedDltensor);
+  return pybind11::capsule(static_cast<void*>(dlpack_tensor), "dltensor",
+                           &DeleteUnusedDltensor);
 }
 
 FDTensor FDTensorFromDLPack(const std::string& name,
@@ -178,9 +176,8 @@ FDTensor FDTensorFromDLPack(const std::string& name,
   int64_t* strides = dl_managed_tensor->dl_tensor.strides;
 
   int ndim = dl_managed_tensor->dl_tensor.ndim;
-  std::vector<int64_t> dims(
-      dl_managed_tensor->dl_tensor.shape,
-      dl_managed_tensor->dl_tensor.shape + ndim);
+  std::vector<int64_t> dims(dl_managed_tensor->dl_tensor.shape,
+                            dl_managed_tensor->dl_tensor.shape + ndim);
 
   // Check if the input is contiguous and in C order
   if (strides != nullptr) {
@@ -196,8 +193,8 @@ FDTensor FDTensorFromDLPack(const std::string& name,
     }
 
     FDASSERT(is_contiguous_c_order,
-        "DLPack tensor is not contiguous. Only contiguous DLPack "
-        "tensors that are stored in C-Order are supported.");
+             "DLPack tensor is not contiguous. Only contiguous DLPack "
+             "tensors that are stored in C-Order are supported.");
   }
 
   Device device;
@@ -216,21 +213,20 @@ FDTensor FDTensorFromDLPack(const std::string& name,
       is_pinned_memory = true;
       break;
     default:
-      FDASSERT(false,
+      FDASSERT(
+          false,
           ("DLDevice type " +
-          std::to_string(dl_managed_tensor->dl_tensor.device.device_type) +
-          " is not support by Python backend.").c_str());
+           std::to_string(dl_managed_tensor->dl_tensor.device.device_type) +
+           " is not support by Python backend.")
+              .c_str());
       break;
   }
 
-  FDDataType dtype =
-      DlpackToFDType(dl_managed_tensor->dl_tensor.dtype);
+  FDDataType dtype = DlpackToFDType(dl_managed_tensor->dl_tensor.dtype);
 
   PyCapsule_SetName(dlpack_tensor.ptr(), "used_dlpack");
   FDTensor fd_tensor(name);
-  fd_tensor.SetExternalData(
-    dims, dtype, memory_ptr, device, device_id
-  );
+  fd_tensor.SetExternalData(dims, dtype, memory_ptr, device, device_id);
   fd_tensor.is_pinned_memory = is_pinned_memory;
   return fd_tensor;
 }
@@ -242,15 +238,52 @@ void BindFDTensor(pybind11::module& m) {
       .def_readonly("shape", &FDTensor::shape)
       .def_readonly("dtype", &FDTensor::dtype)
       .def_readonly("device", &FDTensor::device)
-      .def("numpy", [](FDTensor& self) {
-        return TensorToPyArray(self);
-      })
+      .def("numpy", [](FDTensor& self) { return TensorToPyArray(self); })
       .def("data", &FDTensor::MutableData)
-      .def("from_numpy", [](FDTensor& self, pybind11::array& pyarray, bool share_buffer = false) {
-        PyArrayToTensor(pyarray, &self, share_buffer);
-      })
+      .def("from_numpy",
+           [](FDTensor& self, pybind11::array& pyarray,
+              bool share_buffer = false) {
+             PyArrayToTensor(pyarray, &self, share_buffer);
+           })
+      .def("from_external_data",
+           [](const std::string& name, size_t data_addr,
+              const std::vector<int64_t>& shape, const std::string& data_type,
+              const std::string& data_place, int device_id) {
+             auto fd_data_type = FDDataType::UNKNOWN1;
+             if (data_type == "FP32") {
+               fd_data_type = FDDataType::FP32;
+             } else if (data_type == "FP16") {
+               fd_data_type = FDDataType::FP16;
+             } else if (data_type == "INT32") {
+               fd_data_type = FDDataType::INT32;
+             } else if (data_type == "INT64") {
+               fd_data_type = FDDataType::INT64;
+             } else {
+               FDASSERT(false,
+                        "FDTensor.from_external_data, datatype \"%s\" is not "
+                        "supported.",
+                        data_type.c_str());
+             }
+
+             Device fd_data_place;
+             if (data_place.find("gpu") != data_place.npos) {
+               fd_data_place = Device::GPU;
+             } else {
+               FDASSERT(false,
+                        ("Device type " + data_place +
+                         " is not support by FDTensor.from_external_data.")
+                            .c_str());
+             }
+             void* data_ptr = nullptr;
+             data_ptr = reinterpret_cast<void*>(data_addr);
+             FDTensor fd_tensor(name);
+             fd_tensor.SetExternalData(shape, fd_data_type,
+                                       static_cast<void*>(data_ptr),
+                                       fd_data_place, device_id);
+             return fd_tensor;
+           })
       .def("to_dlpack", &FDTensorToDLPack)
-      .def("from_dlpack",&FDTensorFromDLPack)
+      .def("from_dlpack", &FDTensorFromDLPack)
       .def("print_info", &FDTensor::PrintInfo);
 }
 
