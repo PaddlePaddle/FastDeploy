@@ -139,8 +139,7 @@ FD_C_Bool FD_C_Imwrite(const char* savepath,  FD_C_Mat img);
 ```c
 FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
     __fd_take FD_C_PaddleClasModelWrapper* fd_c_ppclas_wrapper, FD_C_Mat img,
-    FD_C_ClassifyResultWrapper* fd_c_ppclas_result_wrapper,
-    int topk)
+    FD_C_ClassifyResultWrapper* fd_c_ppclas_result_wrapper)
 ```
 >
 > 模型预测接口，输入图像直接并生成分类结果。
@@ -148,8 +147,7 @@ FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
 > **参数**
 > * **fd_c_ppclas_wrapper**(FD_C_PaddleClasModelWrapper*): 指向PaddleClas模型的指针
 > * **img**（FD_C_Mat）: 输入图像的指针，指向cv::Mat对象，可以调用FD_C_Imread读取图像获取
-> * **result**（FD_C_ClassifyResultWrapper*): 分类结果，包括label_id，以及相应的置信度, ClassifyResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
->> * **topk**(int):返回预测概率最高的topk个分类结果
+> * **fd_c_ppclas_result_wrapper**（FD_C_ClassifyResultWrapper*): 分类结果，包括label_id，以及相应的置信度, ClassifyResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 
 #### Predict结果

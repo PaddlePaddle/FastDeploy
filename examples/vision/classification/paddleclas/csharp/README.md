@@ -80,7 +80,7 @@ fastdeploy.vision.classification.PaddleClasModel(
 #### Predict Function
 
 ```c#
-fastdeploy.ClassifyResult Predict(OpenCvSharp.Mat im, int topk = 1)
+fastdeploy.ClassifyResult Predict(OpenCvSharp.Mat im)
 ```
 
 > Model prediction interface. Input images and output results directly.
@@ -88,7 +88,6 @@ fastdeploy.ClassifyResult Predict(OpenCvSharp.Mat im, int topk = 1)
 > **Params**
 >
 >> * **im**(Mat): Input images in HWC or BGR format
->> * **topk**(int):Return the topk classification results with the highest prediction probability.
 >
 > **Return**
 >

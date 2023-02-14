@@ -81,7 +81,7 @@ fastdeploy.vision.classification.PaddleClasModel(
 #### Predict函数
 
 ```c#
-fastdeploy.ClassifyResult Predict(OpenCvSharp.Mat im, int topk = 1)
+fastdeploy.ClassifyResult Predict(OpenCvSharp.Mat im)
 ```
 
 > 模型预测接口，输入图像直接输出检测结果。
@@ -89,7 +89,6 @@ fastdeploy.ClassifyResult Predict(OpenCvSharp.Mat im, int topk = 1)
 > **参数**
 >
 >> * **im**(Mat): 输入图像，注意需为HWC，BGR格式
->> * * **topk**(int):返回预测概率最高的topk个分类结果，默认为1
 >>
 > **返回值**
 >

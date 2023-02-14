@@ -136,8 +136,7 @@ FD_C_Bool FD_C_Imwrite(const char* savepath,  FD_C_Mat img);
 ```c
 FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
     __fd_take FD_C_PaddleClasModelWrapper* fd_c_ppclas_wrapper, FD_C_Mat img,
-    FD_C_ClassifyResultWrapper* fd_c_ppclas_result_wrapper,
-    int topk)
+    FD_C_ClassifyResultWrapper* fd_c_ppclas_result_wrapper)
 ```
 >
 > Predict an image, and generate classification result.
@@ -146,7 +145,6 @@ FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
 > * **fd_c_ppclas_wrapper**(FD_C_PaddleClasModelWrapper*): pointer to manipulate PaddleClas object
 > * **img**（FD_C_Mat）: pointer to cv::Mat object, which can be obained by FD_C_Imread interface
 > * **result**（FD_C_ClassifyResultWrapper*): The classification result, including label_id, and the corresponding confidence. Refer to [Visual Model Prediction Results](../../../../../docs/api/vision_results/) for the description of ClassifyResult
->> * **topk**(int):Return the topk classification results with the highest prediction probability.
 
 
 #### Result
