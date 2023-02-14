@@ -28,6 +28,10 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
       config_.SetExecStream(option_.external_stream_);
     }
     if (option.enable_trt) {
+      if (!option.trt_option.enable_fp16) {
+        FDINFO << "Will try to use tensorrt inference with Paddle Backend."
+               << std::endl;
+      }
       config_.Exp_DisableTensorRtOPs(option.trt_disabled_ops_);
       auto precision = paddle_infer::PrecisionType::kFloat32;
       if (option.trt_option.enable_fp16) {
