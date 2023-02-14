@@ -72,6 +72,14 @@ class Runtime:
         """
         self._runtime.bind_input_tensor(name, fdtensor)
 
+    def bind_output_tensor(self, name, fdtensor):
+        """Bind FDTensor by name, no copy and share output memory
+
+        :param name: (str)The name of output data.
+        :param fdtensor: (fastdeploy.FDTensor)The output FDTensor.
+        """
+        self._runtime.bind_output_tensor(name, fdtensor)
+
     def zero_copy_infer(self):
         """No params inference the model.
 
@@ -186,6 +194,12 @@ class RuntimeOption:
         """
         return self._option.set_model_buffer(model_buffer, params_buffer,
                                              model_format)
+
+    def set_encryption_key(self, encryption_key):
+        """When loading encrypted model, encryption_key is required to decrypte model
+        :param encryption_key: (str)The key for decrypting model
+        """
+        return self._option.set_encryption_key(encryption_key)
 
     def use_gpu(self, device_id=0):
         """Inference with Nvidia GPU
@@ -518,9 +532,10 @@ class RuntimeOption:
         logging.warning("    option = fd.RuntimeOption()")
         logging.warning("    option.use_gpu(0)")
         logging.warning("    option.use_paddle_infer_backend()")
-        logging.warning("    option.paddle_infer_option.enabel_trt = True")
+        logging.warning("    option.paddle_infer_option.enable_trt = True")
         logging.warning("    ==============================================")
-        return self._option.enable_paddle_to_trt()
+        self._option.use_paddle_backend()
+        self._option.paddle_infer_option.enable_trt = True
 
     def set_trt_max_workspace_size(self, trt_max_workspace_size):
         """Set max workspace size while using TensorRT backend.
@@ -583,10 +598,12 @@ class RuntimeOption:
                        replica_num=1,
                        available_memory_proportion=1.0,
                        enable_half_partial=False):
-        logging.warning("`RuntimeOption.set_ipu_config` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_infer_option.set_ipu_config()` instead.")
-        self._option.paddle_infer_option.set_ipu_config(enable_fp16, replica_num,
-                                           available_memory_proportion,
-                                           enable_half_partial)
+        logging.warning(
+            "`RuntimeOption.set_ipu_config` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_infer_option.set_ipu_config()` instead."
+        )
+        self._option.paddle_infer_option.set_ipu_config(
+            enable_fp16, replica_num, available_memory_proportion,
+            enable_half_partial)
 
     @property
     def poros_option(self):
@@ -649,6 +666,11 @@ class RuntimeOption:
         """
         return self._option.disable_profiling()
 
+    def set_external_raw_stream(self, cuda_stream):
+        """Set the external raw stream used by fastdeploy runtime.
+        """
+        self._option.set_external_raw_stream(cuda_stream)
+
     def __repr__(self):
         attrs = dir(self._option)
         message = "RuntimeOption(\n"
@@ -657,7 +679,8 @@ class RuntimeOption:
                 continue
             if hasattr(getattr(self._option, attr), "__call__"):
                 continue
-            message += "  {} : {}\t\n".format(attr, getattr(self._option, attr))
+            message += "  {} : {}\t\n".format(attr,
+                                              getattr(self._option, attr))
         message.strip("\n")
         message += ")"
         return message
