@@ -60,7 +60,8 @@ void BindYOLOv7Face(pybind11::module& m) {
         return results;
       })
       .def_property("conf_threshold", &vision::facedet::Yolov7FacePostprocessor::GetConfThreshold, &vision::facedet::Yolov7FacePostprocessor::SetConfThreshold)
-      .def_property("nms_threshold", &vision::facedet::Yolov7FacePostprocessor::GetNMSThreshold, &vision::facedet::Yolov7FacePostprocessor::SetNMSThreshold);
+      .def_property("nms_threshold", &vision::facedet::Yolov7FacePostprocessor::GetNMSThreshold, &vision::facedet::Yolov7FacePostprocessor::SetNMSThreshold)
+      .def_property("landmarks_per_face", &vision::facedet::Yolov7FacePostprocessor::GetLandmarksPerFace, &vision::facedet::Yolov7FacePostprocessor::SetLandmarksPerFace);
     
   pybind11::class_<vision::facedet::YOLOv7Face, FastDeployModel>(m, "YOLOv7Face")
       .def(pybind11::init<std::string, std::string, RuntimeOption,
