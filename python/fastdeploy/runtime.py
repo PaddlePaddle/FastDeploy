@@ -591,10 +591,12 @@ class RuntimeOption:
                        replica_num=1,
                        available_memory_proportion=1.0,
                        enable_half_partial=False):
-        logging.warning("`RuntimeOption.set_ipu_config` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_infer_option.set_ipu_config()` instead.")
-        self._option.paddle_infer_option.set_ipu_config(enable_fp16, replica_num,
-                                           available_memory_proportion,
-                                           enable_half_partial)
+        logging.warning(
+            "`RuntimeOption.set_ipu_config` will be deprecated in v1.2.0, please use `RuntimeOption.paddle_infer_option.set_ipu_config()` instead."
+        )
+        self._option.paddle_infer_option.set_ipu_config(
+            enable_fp16, replica_num, available_memory_proportion,
+            enable_half_partial)
 
     @property
     def poros_option(self):
@@ -656,6 +658,11 @@ class RuntimeOption:
         """Set the profile mode as 'false'.
         """
         return self._option.disable_profiling()
+
+    def set_external_raw_stream(self, cuda_stream):
+        """Set the external raw stream used by fastdeploy runtime.
+        """
+        self._option.set_external_raw_stream(cuda_stream)
 
     def __repr__(self):
         attrs = dir(self._option)
