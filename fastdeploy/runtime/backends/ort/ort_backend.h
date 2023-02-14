@@ -41,7 +41,7 @@ class OrtBackend : public BaseBackend {
   OrtBackend() {}
   virtual ~OrtBackend() = default;
 
-  void BuildOption(const OrtBackendOption& option);
+  bool BuildOption(const OrtBackendOption& option);
 
   bool Init(const RuntimeOption& option);
 
