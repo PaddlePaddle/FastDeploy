@@ -532,9 +532,10 @@ class RuntimeOption:
         logging.warning("    option = fd.RuntimeOption()")
         logging.warning("    option.use_gpu(0)")
         logging.warning("    option.use_paddle_infer_backend()")
-        logging.warning("    option.paddle_infer_option.enabel_trt = True")
+        logging.warning("    option.paddle_infer_option.enable_trt = True")
         logging.warning("    ==============================================")
-        return self._option.enable_paddle_to_trt()
+        self._option.use_paddle_backend()
+        self._option.paddle_infer_option.enable_trt = True
 
     def set_trt_max_workspace_size(self, trt_max_workspace_size):
         """Set max workspace size while using TensorRT backend.
