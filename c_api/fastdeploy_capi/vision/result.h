@@ -121,6 +121,16 @@ FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_ClassifyResultWrapper*
 FD_C_CreateClassifyResultWrapperFromData(
     __fd_keep FD_C_ClassifyResult* fd_c_classify_result);
 
+/** \brief Print ClassifyResult formated information
+ *
+ * \param[in] fd_c_classify_result_wrapper pointer to FD_C_ClassifyResultWrapper object
+ * \return Return a string pointer
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern __fd_give char*
+FD_C_ClassifyResultWrapperStr(
+    __fd_keep FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper);
+
 // Detection Results
 
 /** \brief Create a new FD_C_DetectionResultWrapper object
@@ -165,6 +175,16 @@ FD_C_DetectionResultWrapperGetData(
 FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_DetectionResultWrapper*
 FD_C_CreateDetectionResultWrapperFromData(
     __fd_keep FD_C_DetectionResult* fd_c_detection_result);
+
+/** \brief Print DetectionResult formated information
+ *
+ * \param[in] fd_c_detection_result_wrapper pointer to FD_C_DetectionResultWrapper object
+ * \return Return a string pointer
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern __fd_give char*
+FD_C_DetectionResultWrapperStr(
+    __fd_keep FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper);
 
 #ifdef __cplusplus
 }  // extern "C"
