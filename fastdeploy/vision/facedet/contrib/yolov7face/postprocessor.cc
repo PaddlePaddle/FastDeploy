@@ -24,7 +24,7 @@ namespace facedet {
 Yolov7FacePostprocessor::Yolov7FacePostprocessor() {
   conf_threshold_ = 0.5;
   nms_threshold_ = 0.45;
-  max_wh_ = 7680.0;
+  landmarks_per_face_ = 5;
 }
 
 bool Yolov7FacePostprocessor::Run(const std::vector<FDTensor>& infer_result,
@@ -36,6 +36,8 @@ bool Yolov7FacePostprocessor::Run(const std::vector<FDTensor>& infer_result,
 
   for (size_t bs = 0; bs < batch; ++bs) {
     (*results)[bs].Clear();
+    // must be setup landmarks_per_face before reserve
+    (*results)[bs].landmarks_per_face = landmarks_per_face_;
     (*results)[bs].Reserve(infer_result[0].shape[1]);
     if (infer_result[0].dtype != FDDataType::FP32) {
       FDERROR << "Only support post process with float32 data." << std::endl;
@@ -61,6 +63,15 @@ bool Yolov7FacePostprocessor::Run(const std::vector<FDTensor>& infer_result,
       (*results)[bs].boxes.emplace_back(std::array<float, 4>{
           (x - w / 2.f), (y - h / 2.f), (x + w / 2.f), (y + h / 2.f)});
       (*results)[bs].scores.push_back(confidence);
+
+      // decode landmarks (default 5 landmarks)
+      if (landmarks_per_face_ > 0) {
+        float* landmarks_ptr = const_cast<float*>(reg_cls_ptr + 6);
+        for (size_t j = 0; j < landmarks_per_face_ * 3; j += 3) {
+          (*results)[bs].landmarks.emplace_back(
+              std::array<float, 2>{landmarks_ptr[j], landmarks_ptr[j + 1]});
+        }
+      }
     }
 
     if ((*results)[bs].boxes.size() == 0) {
@@ -79,9 +90,9 @@ bool Yolov7FacePostprocessor::Run(const std::vector<FDTensor>& infer_result,
     float ipt_h = iter_ipt->second[0];
     float ipt_w = iter_ipt->second[1];
     float scale = std::min(out_h / ipt_h, out_w / ipt_w);
+    float pad_h = (out_h - ipt_h * scale) / 2;
+    float pad_w = (out_w - ipt_w * scale) / 2;
     for (size_t i = 0; i < (*results)[bs].boxes.size(); ++i) {
-      float pad_h = (out_h - ipt_h * scale) / 2;
-      float pad_w = (out_w - ipt_w * scale) / 2;
       // clip box
       (*results)[bs].boxes[i][0] = std::max(((*results)[bs].boxes[i][0] - pad_w) / scale, 0.0f);
       (*results)[bs].boxes[i][1] = std::max(((*results)[bs].boxes[i][1] - pad_h) / scale, 0.0f);
@@ -91,6 +102,16 @@ bool Yolov7FacePostprocessor::Run(const std::vector<FDTensor>& infer_result,
       (*results)[bs].boxes[i][1] = std::min((*results)[bs].boxes[i][1], ipt_h - 1.0f);
       (*results)[bs].boxes[i][2] = std::min((*results)[bs].boxes[i][2], ipt_w - 1.0f);
       (*results)[bs].boxes[i][3] = std::min((*results)[bs].boxes[i][3], ipt_h - 1.0f);
+    }
+    		
+    // scale and clip landmarks
+    for (size_t i = 0; i < (*results)[bs].landmarks.size(); ++i) {
+      (*results)[bs].landmarks[i][0] =
+          std::max(((*results)[bs].landmarks[i][0] - pad_w) / scale, 0.0f);
+      (*results)[bs].landmarks[i][1] =
+          std::max(((*results)[bs].landmarks[i][1] - pad_h) / scale, 0.0f);
+      (*results)[bs].landmarks[i][0] = std::min((*results)[bs].landmarks[i][0], ipt_w - 1.0f);
+      (*results)[bs].landmarks[i][1] = std::min((*results)[bs].landmarks[i][1], ipt_h - 1.0f);
     }
   }
   return true;
