@@ -79,10 +79,10 @@ class FASTDEPLOY_DECL ResourceUsageMonitor {
 };
 
 // Remove the ch characters at both ends of str
-FASTDEPLOY_DECL std::string strip(const std::string& str, char ch = ' ');
+FASTDEPLOY_DECL std::string Strip(const std::string& str, char ch = ' ');
 
 // Split string
-FASTDEPLOY_DECL void split(const std::string& s,
+FASTDEPLOY_DECL void Split(const std::string& s,
                            std::vector<std::string>& tokens,
                            char delim = ' ');
 

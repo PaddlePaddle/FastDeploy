@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <sys/types.h>
-#if defined(__linux__) || defined(__ANDROID__)
+#ifdef __linux__
 #include <sys/resource.h>
 #endif
 #include <cmath>
@@ -23,7 +23,7 @@
 namespace fastdeploy {
 namespace benchmark {
 
-std::string strip(const std::string& str, char ch) {
+std::string Strip(const std::string& str, char ch) {
   int i = 0;
   while (str[i] == ch) {
     i++;
@@ -35,7 +35,7 @@ std::string strip(const std::string& str, char ch) {
   return str.substr(i, j + 1 - i);
 }
 
-void split(const std::string& s, std::vector<std::string>& tokens,
+void Split(const std::string& s, std::vector<std::string>& tokens,
            char delim) {
   tokens.clear();
   size_t lastPos = s.find_first_not_of(delim, 0);
@@ -52,7 +52,7 @@ ResourceUsageMonitor::ResourceUsageMonitor(int sampling_interval_ms, int gpu_id)
     : is_supported_(false),
       sampling_interval_(sampling_interval_ms),
       gpu_id_(gpu_id) {
-#if defined(__linux__) || defined(__ANDROID__)
+#ifdef __linux__
   is_supported_ = true;
 #else
   is_supported_ = false;
@@ -65,7 +65,9 @@ ResourceUsageMonitor::ResourceUsageMonitor(int sampling_interval_ms, int gpu_id)
 }
 
 void ResourceUsageMonitor::Start() {
-  if (!is_supported_) return;
+  if (!is_supported_) {
+    return;
+  }
   if (check_memory_thd_ != nullptr) {
     FDINFO << "Memory monitoring has already started!" << std::endl;
     return;
@@ -86,11 +88,13 @@ void ResourceUsageMonitor::Start() {
       std::string gpu_mem_info = GetCurrentGpuMemoryInfo(gpu_id_);
       // get max_gpu_mem and max_gpu_util
       std::vector<std::string> gpu_tokens;
-      split(gpu_mem_info, gpu_tokens, ',');
+      Split(gpu_mem_info, gpu_tokens, ',');
       max_gpu_mem_ = std::max(max_gpu_mem_, stof(gpu_tokens[6]));
       max_gpu_util_ = std::max(max_gpu_util_, stof(gpu_tokens[7]));
 #endif
-      if (stop_signal_) break;
+      if (stop_signal_) {
+        break;
+      }
       std::this_thread::sleep_for(
           std::chrono::milliseconds(sampling_interval_));
     }

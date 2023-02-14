@@ -58,7 +58,7 @@ void PrintUsage() {
 void PrintBenchmarkInfo() {
   // Get model name
   std::vector<std::string> model_names;
-  fastdeploy::benchmark::split(FLAGS_model, model_names, sep);
+  fastdeploy::benchmark::Split(FLAGS_model, model_names, sep);
   // Save benchmark info
   std::stringstream ss;
   ss.precision(3);
