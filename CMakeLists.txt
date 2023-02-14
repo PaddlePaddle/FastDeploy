@@ -721,6 +721,16 @@ if(WITH_ASCEND)
   )
 endif()
 
+if(WITH_CAPI)
+  install(
+    DIRECTORY ${PROJECT_SOURCE_DIR}/c_api/fastdeploy_capi
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+    FILES_MATCHING
+    PATTERN "*.h"
+    PATTERN "*/types_internal.h" EXCLUDE
+  )
+endif()
+
 include(${PROJECT_SOURCE_DIR}/cmake/config_cpack.cmake)
 
 ############################### Building: FastDeploy Python Wheel #############################
