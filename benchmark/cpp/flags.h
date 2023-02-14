@@ -76,7 +76,9 @@ void PrintBenchmarkInfo() {
     ss << "device_id: " << FLAGS_device_id << std::endl;
   }
   ss << "backend: " << FLAGS_backend << std::endl;
-  ss << "cpu_thread_nums: " << FLAGS_cpu_thread_nums << std::endl;
+  if (FLAGS_device == "cpu") {
+    ss << "cpu_thread_nums: " << FLAGS_cpu_thread_nums << std::endl;
+  }
   ss << "use_fp16: " << FLAGS_use_fp16 << std::endl;
   ss << "collect_memory_info: " << FLAGS_collect_memory_info << std::endl;
   if (FLAGS_collect_memory_info) {
