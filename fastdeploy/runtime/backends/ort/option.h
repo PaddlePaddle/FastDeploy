@@ -15,6 +15,7 @@
 #pragma once
 
 #include "fastdeploy/core/fd_type.h"
+#include "fastdeploy/runtime/enum_variables.h"
 #include <iostream>
 #include <memory>
 #include <string>
