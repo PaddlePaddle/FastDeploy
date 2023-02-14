@@ -65,3 +65,8 @@ typedef struct FD_C_TwoDimArrayFloat {
 } FD_C_TwoDimArrayFloat;  // std::vector<std::vector<float>>
 
 typedef void* FD_C_Mat;
+
+typedef struct FD_C_OneDimMat {
+  size_t size;
+  FD_C_Mat* data;
+} FD_C_OneDimMat;

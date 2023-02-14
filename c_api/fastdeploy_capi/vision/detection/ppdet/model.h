@@ -62,6 +62,33 @@ FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PPYOLOEWrapperPredict(
     __fd_take FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper, FD_C_Mat img,
     FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper);
 
+
+/** \brief Check if the model is initialized successfully
+ *
+ * \param[in] fd_c_ppyoloe_wrapper pointer to FD_C_PPYOLOEWrapper object
+ *
+ * \return Return a bool of value true if initialized successfully
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PPYOLOEWrapperInitialized(
+    __fd_keep FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper);
+
+
+/** \brief Predict the detection results for a batch of input images
+   *
+   * \param[in] fd_c_ppyoloe_wrapper pointer to FD_C_PPYOLOEWrapper object
+   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] results The output detection result list
+   *
+   * \return true if the prediction successed, otherwise false
+   */
+FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PPYOLOEWrapperBatchPredict(
+                            __fd_keep FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper,
+                            FD_C_OneDimMat imgs,
+                            FD_C_OneDimDetectionResult* results);
+
+
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

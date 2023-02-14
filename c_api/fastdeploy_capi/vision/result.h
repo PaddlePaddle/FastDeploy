@@ -46,6 +46,11 @@ typedef struct FD_C_ClassifyResult {
   FD_C_ResultType type;
 } FD_C_ClassifyResult;
 
+typedef struct FD_C_OneDimClassifyResult {
+  size_t size;
+  FD_C_ClassifyResult* data;
+} FD_C_OneDimClassifyResult;
+
 typedef struct FD_C_Mask {
   FD_C_OneDimArrayUint8 data;
   FD_C_OneDimArrayInt64 shape;
@@ -65,6 +70,11 @@ typedef struct FD_C_DetectionResult {
   FD_C_Bool contain_masks;
   FD_C_ResultType type;
 } FD_C_DetectionResult;
+
+typedef struct FD_C_OneDimDetectionResult {
+  size_t size;
+  FD_C_DetectionResult* data;
+} FD_C_OneDimDetectionResult;
 
 // Classification Results
 
