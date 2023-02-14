@@ -15,13 +15,12 @@
 #pragma once
 
 #include "gflags/gflags.h"
-#include "fastdeploy/utils/perf.h"
 
 DEFINE_string(model, "", "Directory of the inference model.");
 DEFINE_string(image, "", "Path of the image file.");
 DEFINE_string(device, "cpu",
-              "Type of inference device, support 'cpu' or 'gpu'.");
-DEFINE_int32(device_id, 0, "device(gpu) id.");
+              "Type of inference device, support 'cpu/gpu/xpu'.");
+DEFINE_int32(device_id, 0, "device(gpu/xpu/...) id.");
 DEFINE_int32(warmup, 200, "Number of warmup for profiling.");
 DEFINE_int32(repeat, 1000, "Number of repeats for profiling.");
 DEFINE_string(profile_mode, "runtime", "runtime or end2end.");
@@ -37,68 +36,15 @@ DEFINE_bool(
     "and 'lite' backend");
 DEFINE_bool(
     collect_memory_info, false, "Whether to collect memory info");
-DEFINE_int32(dump_period, 100, "How often to collect memory info.");
+DEFINE_int32(sampling_interval, 50, "How often to collect memory info(ms).");
 
 void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path --device "
-               "[cpu|gpu] --backend "
-               "[default|ort|paddle|ov|trt|paddle_trt] "
+               "[cpu|gpu|xpu] --backend "
+               "[default|ort|paddle|ov|trt|paddle_trt|lite] "
                "--use_fp16 false"
             << std::endl;
   std::cout << "Default value of device: cpu" << std::endl;
   std::cout << "Default value of backend: default" << std::endl;
   std::cout << "Default value of use_fp16: false" << std::endl;
-}
-
-bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
-  if (FLAGS_device == "gpu") {
-    option->UseGpu();
-    if (FLAGS_backend == "ort") {
-      option->UseOrtBackend();
-    } else if (FLAGS_backend == "paddle") {
-      option->UsePaddleInferBackend();
-    } else if (FLAGS_backend == "trt" || FLAGS_backend == "paddle_trt") {
-      option->UseTrtBackend();
-      if (FLAGS_backend == "paddle_trt") {
-        option->EnablePaddleToTrt();
-      }
-      if (FLAGS_use_fp16) {
-        option->EnableTrtFP16();
-      }
-    } else if (FLAGS_backend == "default") {
-      return true;
-    } else {
-      std::cout << "While inference with GPU, only support "
-                   "default/ort/paddle/trt/paddle_trt now, "
-                << FLAGS_backend << " is not supported." << std::endl;
-      return false;
-    }
-  } else if (FLAGS_device == "cpu") {
-    option->SetCpuThreadNum(FLAGS_cpu_thread_nums);
-    if (FLAGS_backend == "ort") {
-      option->UseOrtBackend();
-    } else if (FLAGS_backend == "ov") {
-      option->UseOpenVINOBackend();
-    } else if (FLAGS_backend == "paddle") {
-      option->UsePaddleInferBackend();
-    } else if (FLAGS_backend == "lite") {
-      option->UsePaddleLiteBackend();
-      if (FLAGS_use_fp16) {
-        option->EnableLiteFP16();
-      }
-    } else if (FLAGS_backend == "default") {
-      return true;
-    } else {
-      std::cout << "While inference with CPU, only support "
-                   "default/ort/ov/paddle/lite now, "
-                << FLAGS_backend << " is not supported." << std::endl;
-      return false;
-    }
-  } else {
-    std::cerr << "Only support device CPU/GPU now, " << FLAGS_device
-              << " is not supported." << std::endl;
-    return false;
-  }
-
-  return true;
 }

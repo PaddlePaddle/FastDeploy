@@ -59,6 +59,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
                       const std::string& params_buffer = "",
                       const ModelFormat& format = ModelFormat::PADDLE);
 
+  /** \brief When loading encrypted model, encryption_key is required to decrypte model
+   *
+   * \param[in] encryption_key The key for decrypting model
+   */
+  void SetEncryptionKey(const std::string& encryption_key);
+
   /// Use cpu to inference, the runtime will inference on CPU by default
   void UseCpu();
   /// Use Nvidia GPU to inference
@@ -178,6 +184,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// format of input model
   ModelFormat model_format = ModelFormat::PADDLE;
 
+  std::string encryption_key_ = "";
+
   // for cpu inference
   // default will let the backend choose their own default value
   int cpu_thread_num = -1;
@@ -198,8 +206,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   // *** The belowing api are deprecated, will be removed in v1.2.0
   // *** Do not use it anymore
-
-  void SetPaddleMKLDNN(bool pd_mkldnn = true); 
+  void SetPaddleMKLDNN(bool pd_mkldnn = true);
   void EnablePaddleToTrt();
   void DeletePaddleBackendPass(const std::string& delete_pass_name);
   void EnablePaddleLogInfo();
