@@ -56,7 +56,7 @@ class RKNPU2Backend : public BaseBackend {
 
   bool GetSDKAndDeviceVersion();
 
-  bool SetCoreMask(rknpu2::CoreMask& core_mask) const;
+  bool SetCoreMask(const rknpu2::CoreMask& core_mask) const;
 
   bool GetModelInputOutputInfos();
 

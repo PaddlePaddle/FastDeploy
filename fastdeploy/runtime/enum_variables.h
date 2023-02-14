@@ -103,7 +103,7 @@ inline bool Supported(ModelFormat format, Backend backend) {
     return false;
   }
   for (size_t i = 0; i < iter->second.size(); ++i) {
-    if (iter->second[i] == format) {
+    if (iter->second[i] == backend) {
       return true;
     }
   }
@@ -119,7 +119,7 @@ inline bool Supported(Device device, Backend backend) {
     return false;
   }
   for (size_t i = 0; i < iter->second.size(); ++i) {
-    if (iter->second[i] == device) {
+    if (iter->second[i] == backend) {
       return true;
     }
   }
