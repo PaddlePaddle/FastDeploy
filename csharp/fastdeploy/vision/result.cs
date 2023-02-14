@@ -265,6 +265,9 @@ public class ConvertResult {
     detection_result.type = (ResultType)fd_detection_result.type;
     return detection_result;
   }
+
+  
+
 }
 
 }

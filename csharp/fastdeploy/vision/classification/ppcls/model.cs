@@ -40,6 +40,10 @@ class PaddleClasModel {
     FD_C_DestroyPaddleClasModelWrapper(fd_paddleclas_model_wrapper);
   }
 
+  public string ModelName() {
+    return "PaddleClas/Model";
+  }
+
   public ClassifyResult Predict(Mat img) {
     IntPtr fd_classify_result_wrapper_ptr = FD_C_CreateClassifyResultWrapper();
     FD_C_PaddleClasModelWrapperPredict(
@@ -57,6 +61,14 @@ class PaddleClasModel {
     FD_C_DestroyClassifyResult(
         fd_classify_result_ptr);  // free fd_classify_result_ptr
     return classify_result;
+  }
+
+  public List<ClassifyResult> BatchPredict(List<Mat> imgs){
+
+  }
+
+  public bool Initialized() {
+
   }
 
   // below are underlying C api
