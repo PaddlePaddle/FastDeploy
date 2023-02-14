@@ -72,6 +72,14 @@ class Runtime:
         """
         self._runtime.bind_input_tensor(name, fdtensor)
 
+    def bind_output_tensor(self, name, fdtensor):
+        """Bind FDTensor by name, no copy and share output memory
+
+        :param name: (str)The name of output data.
+        :param fdtensor: (fastdeploy.FDTensor)The output FDTensor.
+        """
+        self._runtime.bind_output_tensor(name, fdtensor)
+
     def zero_copy_infer(self):
         """No params inference the model.
 
@@ -656,6 +664,11 @@ class RuntimeOption:
         """Set the profile mode as 'false'.
         """
         return self._option.disable_profiling()
+
+    def set_external_raw_stream(self, cuda_stream):
+        """Set the external raw stream used by fastdeploy runtime.
+        """
+        self._option.set_external_raw_stream(cuda_stream)
 
     def __repr__(self):
         attrs = dir(self._option)
