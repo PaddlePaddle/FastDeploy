@@ -17,12 +17,25 @@
 namespace fd = fastdeploy;
 
 int main(int argc, char* argv[]) {
+  // create option
+  fd::RuntimeOption runtime_option;
+
+  // model and param files
   std::string model_file = "mobilenetv2/inference.pdmodel";
   std::string params_file = "mobilenetv2/inference.pdiparams";
 
-  // setup option
-  fd::RuntimeOption runtime_option;
-  runtime_option.SetModelPath(model_file, params_file, fd::ModelFormat::PADDLE);
+  // read model From disk.
+  // runtime_option.SetModelPath(model_file, params_file,
+  // fd::ModelFormat::PADDLE);
+
+  // read model from buffer
+  std::string model_buffer, params_buffer;
+  fd::ReadBinaryFromFile(model_file, &model_buffer);
+  fd::ReadBinaryFromFile(params_file, &params_buffer);
+  runtime_option.SetModelBuffer(model_buffer, params_buffer,
+                                fd::ModelFormat::PADDLE);
+
+  // setup other option
   runtime_option.SetCpuThreadNum(12);
   // use ONNX Runtime DirectML
   runtime_option.UseOrtBackend();
