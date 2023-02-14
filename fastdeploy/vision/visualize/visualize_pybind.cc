@@ -102,7 +102,7 @@ void BindVisualize(pybind11::module& m) {
            })
       .def("vis_matting",
            [](pybind11::array& im_data, vision::MattingResult& result,
-              bool transparent_background, bool transparent_threshold,
+              bool transparent_background, float transparent_threshold,
               bool remove_small_connected_area) {
              cv::Mat im = PyArrayToCvMat(im_data);
              auto vis_im = vision::VisMatting(
