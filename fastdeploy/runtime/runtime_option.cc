@@ -36,6 +36,15 @@ void RuntimeOption::SetModelBuffer(const std::string& model_buffer,
   model_from_memory_ = true;
 }
 
+void RuntimeOption::SetEncryptionKey(const std::string& encryption_key) {
+#ifdef ENABLE_ENCRYPTION
+  encryption_key_ = encryption_key;
+#else
+  FDERROR << "The FastDeploy didn't compile with encryption function."
+          << std::endl;
+#endif
+}
+
 void RuntimeOption::UseGpu(int gpu_id) {
 #ifdef WITH_GPU
   device = Device::GPU;

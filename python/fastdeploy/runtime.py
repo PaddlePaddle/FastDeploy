@@ -187,6 +187,12 @@ class RuntimeOption:
         return self._option.set_model_buffer(model_buffer, params_buffer,
                                              model_format)
 
+    def set_encryption_key(self, encryption_key):
+        """When loading encrypted model, encryption_key is required to decrypte model
+        :param encryption_key: (str)The key for decrypting model
+        """
+        return self._option.set_encryption_key(encryption_key)
+
     def use_gpu(self, device_id=0):
         """Inference with Nvidia GPU
 

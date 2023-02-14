@@ -35,6 +35,7 @@ void BindOption(pybind11::module& m) {
       .def(pybind11::init())
       .def("set_model_path", &RuntimeOption::SetModelPath)
       .def("set_model_buffer", &RuntimeOption::SetModelBuffer)
+      .def("set_encryption_key", &RuntimeOption::SetEncryptionKey)
       .def("use_gpu", &RuntimeOption::UseGpu)
       .def("use_cpu", &RuntimeOption::UseCpu)
       .def("use_rknpu2", &RuntimeOption::UseRKNPU2)
