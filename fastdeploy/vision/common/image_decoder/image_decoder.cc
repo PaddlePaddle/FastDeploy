@@ -21,7 +21,7 @@ namespace vision {
 
 ImageDecoder::ImageDecoder(ImageDecoderLib lib) {
   if (lib == ImageDecoderLib::NVJPEG) {
-#ifdef WITH_GPU
+#ifdef ENABLE_NVJPEG
     nvjpeg::init_decoder(nvjpeg_params_);
 #endif
   }
@@ -30,7 +30,7 @@ ImageDecoder::ImageDecoder(ImageDecoderLib lib) {
 
 ImageDecoder::~ImageDecoder() {
   if (lib_ == ImageDecoderLib::NVJPEG) {
-#ifdef WITH_GPU
+#ifdef ENABLE_NVJPEG
     nvjpeg::destroy_decoder(nvjpeg_params_);
 #endif
   }
@@ -71,7 +71,7 @@ bool ImageDecoder::ImplByOpenCV(const std::vector<std::string>& img_names,
 
 bool ImageDecoder::ImplByNvJpeg(const std::vector<std::string>& img_names,
                                 std::vector<FDMat>* mats) {
-#ifdef WITH_GPU
+#ifdef ENABLE_NVJPEG
   nvjpeg_params_.batch_size = img_names.size();
   std::vector<nvjpegImage_t> output_imgs(nvjpeg_params_.batch_size);
   std::vector<int> widths(nvjpeg_params_.batch_size);
@@ -101,9 +101,7 @@ bool ImageDecoder::ImplByNvJpeg(const std::vector<std::string>& img_names,
     (*mats)[i].SetTensor(output_buffers[i]);
   }
 #else
-  FDASSERT(
-      false,
-      "nvJPEG requires GPU, but FastDeploy didn't compile with WITH_GPU=ON.");
+  FDASSERT(false, "FastDeploy didn't compile with NVJPEG.");
 #endif
   return true;
 }

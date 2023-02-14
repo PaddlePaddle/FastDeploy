@@ -22,7 +22,7 @@
 
 #pragma once
 
-#ifdef WITH_GPU
+#ifdef ENABLE_NVJPEG
 #include "fastdeploy/core/fd_tensor.h"
 
 #include <cuda_runtime_api.h>
@@ -66,4 +66,4 @@ double process_images(const FileNames& image_names, decode_params_t& params,
 }  // namespace vision
 }  // namespace fastdeploy
 
-#endif  // WITH_GPU
+#endif  // ENABLE_NVJPEG

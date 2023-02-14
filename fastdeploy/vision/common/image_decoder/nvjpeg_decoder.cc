@@ -20,7 +20,7 @@
 // \brief
 // \author NVIDIA
 
-#ifdef WITH_GPU
+#ifdef ENABLE_NVJPEG
 #include "fastdeploy/vision/common/image_decoder/nvjpeg_decoder.h"
 
 namespace fastdeploy {
@@ -360,4 +360,4 @@ void destroy_decoder(decode_params_t& params) {
 }  // namespace vision
 }  // namespace fastdeploy
 
-#endif  // WITH_GPU
+#endif  // ENABLE_NVJPEG
