@@ -169,6 +169,7 @@ bool Runtime::Init(const RuntimeOption& _option) {
             << std::endl;
     return false;
   }
+  backend_->benchmark_option_ = option.benchmark_option;
   return true;
 }
 
@@ -263,7 +264,6 @@ void Runtime::CreatePaddleBackend() {
   option.paddle_infer_option.trt_option.gpu_id = option.device_id;
   backend_ = utils::make_unique<PaddleBackend>();
   auto casted_backend = dynamic_cast<PaddleBackend*>(backend_.get());
-  casted_backend->benchmark_option_ = option.benchmark_option;
 
   if (option.model_from_memory_) {
     FDASSERT(
@@ -294,7 +294,6 @@ void Runtime::CreatePaddleBackend() {
 void Runtime::CreateOpenVINOBackend() {
 #ifdef ENABLE_OPENVINO_BACKEND
   backend_ = utils::make_unique<OpenVINOBackend>();
-  backend_->benchmark_option_ = option.benchmark_option;
   FDASSERT(backend_->Init(option), "Failed to initialize OpenVINOBackend.");
 #else
   FDASSERT(false,
@@ -308,7 +307,6 @@ void Runtime::CreateOpenVINOBackend() {
 void Runtime::CreateOrtBackend() {
 #ifdef ENABLE_ORT_BACKEND
   backend_ = utils::make_unique<OrtBackend>();
-  backend_->benchmark_option_ = option.benchmark_option;
 
   FDASSERT(backend_->Init(option), "Failed to initialize Backend::ORT.");
 #else
@@ -329,7 +327,6 @@ void Runtime::CreateTrtBackend() {
   option.trt_option.enable_pinned_memory = option.enable_pinned_memory;
   option.trt_option.external_stream_ = option.external_stream_;
   backend_ = utils::make_unique<TrtBackend>();
-  backend_->benchmark_option_ = option.benchmark_option;
   FDASSERT(backend_->Init(option), "Failed to initialize TensorRT backend.");
 #else
   FDASSERT(false,
@@ -343,7 +340,6 @@ void Runtime::CreateTrtBackend() {
 void Runtime::CreateLiteBackend() {
 #ifdef ENABLE_LITE_BACKEND
   backend_ = utils::make_unique<LiteBackend>();
-  backend_->benchmark_option_ = option.benchmark_option;
 
   FDASSERT(backend_->Init(option),
            "Load model from nb file failed while initializing LiteBackend.");
@@ -357,20 +353,9 @@ void Runtime::CreateLiteBackend() {
 }
 
 void Runtime::CreateRKNPU2Backend() {
-  FDASSERT(option.model_from_memory_ == false,
-           "RKNPU2Backend don't support to load model from memory");
-  FDASSERT(option.device == Device::RKNPU,
-           "Backend::RKNPU2 only supports Device::RKNPU2");
-  FDASSERT(option.model_format == ModelFormat::RKNN,
-           "RKNPU2Backend only support model format of ModelFormat::RKNN");
 #ifdef ENABLE_RKNPU2_BACKEND
-  auto rknpu2_option = RKNPU2BackendOption();
-  rknpu2_option.cpu_name = option.rknpu2_cpu_name_;
-  rknpu2_option.core_mask = option.rknpu2_core_mask_;
   backend_ = utils::make_unique<RKNPU2Backend>();
-  auto casted_backend = dynamic_cast<RKNPU2Backend*>(backend_.get());
-  FDASSERT(casted_backend->InitFromRKNN(option.model_file, rknpu2_option),
-           "Load model from nb file failed while initializing LiteBackend.");
+  FDASSERT(backend_->Init(option), "Failed to initialize RKNPU2 backend.");
 #else
   FDASSERT(false,
            "RKNPU2Backend is not available, please compiled with "

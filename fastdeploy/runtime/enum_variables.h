@@ -96,6 +96,37 @@ static std::map<Device, std::vector<Backend>>
   {Device::SOPHGOTPUD, {Backend::SOPHGOTPU}}
 };
 
+inline bool Supported(ModelFormat format, Backend backend) {
+  auto iter = s_default_backends_by_format.find(format);
+  if (iter == s_default_backends_by_format.end()) {
+    FDERROR << "Didn't find format is registered in s_default_backends_by_format." << std::endl;
+    return false;
+  }
+  for (size_t i = 0; i < iter->second.size(); ++i) {
+    if (iter->second[i] == format) {
+      return true;
+    }
+  }
+  std::string msg = Str(iter->second); 
+  FDERROR << backend << " only supports " << msg << ", but now it's " << format << "." << std::endl;
+  return false;
+}
+
+inline bool Supported(Device device, Backend backend) {
+  auto iter = s_default_backends_by_device.find(device);
+  if (iter == s_default_backends_by_device.end()) {
+    FDERROR << "Didn't find device is registered in s_default_backends_by_device." << std::endl;
+    return false;
+  }
+  for (size_t i = 0; i < iter->second.size(); ++i) {
+    if (iter->second[i] == device) {
+      return true;
+    }
+  }
+  std::string msg = Str(iter->second); 
+  FDERROR << backend << " only supports " << msg << ", but now it's " << device << "." << std::endl;
+  return false;
+}
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const Backend& b);
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const Device& d);
