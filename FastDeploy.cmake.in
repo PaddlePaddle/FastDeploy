@@ -33,6 +33,7 @@ set(ORT_DIRECTORY "@ORT_DIRECTORY@")
 set(OPENVINO_DIRECTORY "@OPENVINO_DIRECTORY@")
 set(RKNN2_TARGET_SOC "@RKNN2_TARGET_SOC@")
 set(WITH_KUNLUNXIN @WITH_KUNLUNXIN@)
+set(WITH_CAPI @WITH_CAPI@)
 # Whether to use FastDeploy static lib. The default
 # value for this option is determined by the SDK
 # build-time options.
@@ -361,6 +362,7 @@ message(STATUS "  CMAKE_INSTALL_PREFIX      : ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "  CMAKE_MODULE_PATH         : ${CMAKE_MODULE_PATH}")
 message(STATUS "")
 message(STATUS "  WITH_GPU                  : ${WITH_GPU}")
+message(STATUS "  WITH_CAPI                  : ${WITH_CAPI}")
 message(STATUS "  ENABLE_ORT_BACKEND        : ${ENABLE_ORT_BACKEND}")
 message(STATUS "  ENABLE_RKNPU2_BACKEND     : ${ENABLE_RKNPU2_BACKEND}")
 message(STATUS "  ENABLE_SOPHGO_BACKEND     : ${ENABLE_SOPHGO_BACKEND}")
@@ -369,6 +371,7 @@ message(STATUS "  ENABLE_POROS_BACKEND      : ${ENABLE_POROS_BACKEND}")
 message(STATUS "  ENABLE_OPENVINO_BACKEND   : ${ENABLE_OPENVINO_BACKEND}")
 message(STATUS "  ENABLE_TRT_BACKEND        : ${ENABLE_TRT_BACKEND}")
 message(STATUS "  ENABLE_LITE_BACKEND       : ${ENABLE_LITE_BACKEND}")
+
 if(ENABLE_PADDLE_BACKEND)
   message(STATUS "  Paddle Inference version  : ${PADDLEINFERENCE_VERSION}")
 endif()

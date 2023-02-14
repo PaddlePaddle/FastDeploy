@@ -24,22 +24,6 @@ typedef struct FD_C_DetectionResultWrapper FD_C_DetectionResultWrapper;
 extern "C" {
 #endif
 
-FD_ENUM(FD_C_ResultType){
-    UNKNOWN_RESULT,
-    CLASSIFY,
-    DETECTION,
-    SEGMENTATION,
-    OCR,
-    MOT,
-    FACE_DETECTION,
-    FACE_ALIGNMENT,
-    FACE_RECOGNITION,
-    MATTING,
-    MASK,
-    KEYPOINT_DETECTION,
-    HEADPOSE,
-};
-
 typedef struct FD_C_ClassifyResult {
   FD_C_OneDimArrayInt32 label_ids;
   FD_C_OneDimArrayFloat scores;
