@@ -1,4 +1,4 @@
-// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,18 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#pragma once
 
 namespace fastdeploy {
-namespace rknpu2 {
-typedef enum _rknpu2_cpu_name {
+
+public enum ModelFormat {
+  AUTOREC,      ///< Auto recognize the model format by model file name
+  PADDLE,       ///< Model with paddlepaddle format
+  ONNX,         ///< Model with ONNX format
+  RKNN,         ///< Model with RKNN format
+  TORCHSCRIPT,  ///< Model with TorchScript format
+  SOPHGO,       ///< Model with SOPHGO format
+}
+
+public enum rknpu2_CpuName {
   RK356X = 0, /* run on RK356X. */
   RK3588 = 1, /* default,run on RK3588. */
   UNDEFINED,
-} CpuName;
+}
 
-/*! RKNPU2 core mask for mobile device. */
-typedef enum _rknpu2_core_mask {
+public enum rknpu2_CoreMask {
   RKNN_NPU_CORE_AUTO = 0,  //< default, run on NPU core randomly.
   RKNN_NPU_CORE_0 = 1,     //< run on NPU core 0.
   RKNN_NPU_CORE_1 = 2,     //< run on NPU core 1.
@@ -32,21 +39,15 @@ typedef enum _rknpu2_core_mask {
   RKNN_NPU_CORE_0_1_2 =
       RKNN_NPU_CORE_0_1 | RKNN_NPU_CORE_2,  //< run on NPU core 1 and core 2.
   RKNN_NPU_CORE_UNDEFINED,
-} CoreMask;
-}  // namespace rknpu2
+}
 
-struct RKNPU2BackendOption {
-  rknpu2::CpuName cpu_name = rknpu2::CpuName::RK3588;
+public enum LitePowerMode {
+  LITE_POWER_HIGH = 0,       ///< Use Lite Backend with high power mode
+  LITE_POWER_LOW = 1,        ///< Use Lite Backend with low power mode
+  LITE_POWER_FULL = 2,       ///< Use Lite Backend with full power mode
+  LITE_POWER_NO_BIND = 3,    ///< Use Lite Backend with no bind power mode
+  LITE_POWER_RAND_HIGH = 4,  ///< Use Lite Backend with rand high mode
+  LITE_POWER_RAND_LOW = 5    ///< Use Lite Backend with rand low power mode
+}
 
-  // The specification of NPU core setting.It has the following choices :
-  // RKNN_NPU_CORE_AUTO : Referring to automatic mode, meaning that it will
-  // select the idle core inside the NPU.
-  // RKNN_NPU_CORE_0 : Running on the NPU0 core
-  // RKNN_NPU_CORE_1: Runing on the NPU1 core
-  // RKNN_NPU_CORE_2: Runing on the NPU2 core
-  // RKNN_NPU_CORE_0_1: Running on both NPU0 and NPU1 core simultaneously.
-  // RKNN_NPU_CORE_0_1_2: Running on both NPU0, NPU1 and NPU2 simultaneously.
-  rknpu2::CoreMask core_mask = rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
-};
-
-}  // namespace fastdeploy
+}

@@ -207,7 +207,7 @@ template <typename T>
 std::string Str(const std::vector<T>& shape) {
   std::ostringstream oss;
   oss << "[ " << shape[0];
-  for (int i = 1; i < shape.size(); ++i) {
+  for (size_t i = 1; i < shape.size(); ++i) {
     oss << " ," << shape[i];
   }
   oss << " ]";
