@@ -58,6 +58,8 @@ if(ANDROID)
 elseif(WIN32)
   if(NOT CMAKE_CL_64)
     set(OPENCV_URL_PREFIX "https://bj.bcebos.com/fastdeploy/third_libs")
+  else()
+    set(OPENCV_URL_PREFIX "https://bj.bcebos.com/paddle2onnx/libs")
   endif()
 else() # TODO: use fastdeploy/third_libs instead.
   set(OPENCV_URL_PREFIX "https://bj.bcebos.com/paddle2onnx/libs")
