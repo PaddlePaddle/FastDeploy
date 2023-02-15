@@ -19,11 +19,13 @@ namespace fastdeploy {
 namespace vision {
 
 cv::Mat VisMatting(const cv::Mat& im, const MattingResult& result,
+                   bool transparent_background, float transparent_threshold,
                    bool remove_small_connected_area) {
   FDASSERT((!im.empty()), "im can't be empty!");
   FDASSERT((im.channels() == 3), "Only support 3 channels mat!");
-
   auto vis_img = im.clone();
+  cv::Mat transparent_vis_mat;
+  int channel = im.channels();
   int out_h = static_cast<int>(result.shape[0]);
   int out_w = static_cast<int>(result.shape[1]);
   int height = im.rows;
@@ -43,6 +45,14 @@ cv::Mat VisMatting(const cv::Mat& im, const MattingResult& result,
     (vis_img).convertTo((vis_img), CV_8UC3);
   }
 
+  if (transparent_background) {
+    if (vis_img.channels() != 4) {
+      cv::cvtColor(vis_img, transparent_vis_mat, cv::COLOR_BGR2BGRA);
+      vis_img = transparent_vis_mat;
+      channel = 4;
+    }
+  }
+
   uchar* vis_data = static_cast<uchar*>(vis_img.data);
   uchar* im_data = static_cast<uchar*>(im.data);
   float* alpha_data = reinterpret_cast<float*>(alpha.data);
@@ -50,15 +60,35 @@ cv::Mat VisMatting(const cv::Mat& im, const MattingResult& result,
   for (size_t i = 0; i < height; ++i) {
     for (size_t j = 0; j < width; ++j) {
       float alpha_val = alpha_data[i * width + j];
-      vis_data[i * width * 3 + j * 3 + 0] = cv::saturate_cast<uchar>(
-          static_cast<float>(im_data[i * width * 3 + j * 3 + 0]) * alpha_val +
-          (1.f - alpha_val) * 153.f);
-      vis_data[i * width * 3 + j * 3 + 1] = cv::saturate_cast<uchar>(
-          static_cast<float>(im_data[i * width * 3 + j * 3 + 1]) * alpha_val +
-          (1.f - alpha_val) * 255.f);
-      vis_data[i * width * 3 + j * 3 + 2] = cv::saturate_cast<uchar>(
-          static_cast<float>(im_data[i * width * 3 + j * 3 + 2]) * alpha_val +
-          (1.f - alpha_val) * 120.f);
+      if (transparent_background ) {
+        if (alpha_val < transparent_threshold) {
+          vis_data[i * width * channel + j * channel + 3] =
+              cv::saturate_cast<uchar>(0.f);
+        } else {
+          vis_data[i * width * channel + j * channel + 0] =
+            cv::saturate_cast<uchar>(
+                static_cast<float>(im_data[i * width * 3 + j * 3 + 0]));
+          vis_data[i * width * channel + j * channel + 1] =
+              cv::saturate_cast<uchar>(
+                  static_cast<float>(im_data[i * width * 3 + j * 3 + 1]));
+          vis_data[i * width * channel + j * channel + 2] =
+              cv::saturate_cast<uchar>(
+                  static_cast<float>(im_data[i * width * 3 + j * 3 + 2]));
+        }  
+      } else {
+        vis_data[i * width * channel + j * channel + 0] =
+            cv::saturate_cast<uchar>(
+                static_cast<float>(im_data[i * width * 3 + j * 3 + 0]) *
+                    alpha_val + (1.f - alpha_val) * 153.f);
+        vis_data[i * width * channel + j * channel + 1] =
+            cv::saturate_cast<uchar>(
+                static_cast<float>(im_data[i * width * 3 + j * 3 + 1]) *
+                    alpha_val + (1.f - alpha_val) * 255.f);
+        vis_data[i * width * channel + j * channel + 2] =
+            cv::saturate_cast<uchar>(
+                static_cast<float>(im_data[i * width * 3 + j * 3 + 2]) *
+                    alpha_val + (1.f - alpha_val) * 120.f);
+      }
     }
   }
   return vis_img;

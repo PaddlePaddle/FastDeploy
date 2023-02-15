@@ -95,15 +95,22 @@ def vis_matting_alpha(im_data,
                                 remove_small_connected_area)
 
 
-def vis_matting(im_data, matting_result, remove_small_connected_area=False):
+def vis_matting(im_data,
+                matting_result,
+                transparent_background=False,
+                transparent_threshold=0.99,
+                remove_small_connected_area=False):
     """Show the visualized results for matting models
 
     :param im_data: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
     :param matting_result: the result produced by model
+    :param transparent_background: whether visulizing matting result with transparent background
+    :param transparent_threshold: since the alpha value in MattringResult is a float between [0, 1], transparent_threshold is used to filter background pixel
     :param remove_small_connected_area: (bool) if remove_small_connected_area==True, the visualized result will not include the small connected areas
     :return: (numpy.ndarray) image with visualized results
     """
     return C.vision.vis_matting(im_data, matting_result,
+                                transparent_background, transparent_threshold,
                                 remove_small_connected_area)
 
 
