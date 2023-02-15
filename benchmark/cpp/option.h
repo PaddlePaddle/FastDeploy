@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include "benchmark/cpp/flags.h"
 #include "fastdeploy/vision.h"
 
 static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,

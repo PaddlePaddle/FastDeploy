@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "flags.h"
 #include "macros.h"
 #include "option.h"
 
 int main(int argc, char* argv[]) {
-  auto im = cv::imread(FLAGS_image);
   // Initialization
   auto option = fastdeploy::RuntimeOption();
-  if (!CreateRuntimeOption(&option, &argc, &argv, true)) {
+  if (!CreateRuntimeOption(&option, argc, argv, true)) {
     return false;
   }
+  auto im = cv::imread(FLAGS_image);
   auto model_file = FLAGS_model + sep + "model.pdmodel";
   auto params_file = FLAGS_model + sep + "model.pdiparams";
   auto config_file = FLAGS_model + sep + "infer_cfg.yml";
