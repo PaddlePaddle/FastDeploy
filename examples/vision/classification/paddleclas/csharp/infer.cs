@@ -47,7 +47,7 @@ namespace Test
             vision.classification.PaddleClasModel model = new vision.classification.PaddleClasModel(model_file, params_file, config_file, runtimeoption, ModelFormat.PADDLE);
             Mat image = Cv2.ImRead(image_path);
             vision.ClassifyResult res = model.Predict(image);
-
+            Console.WriteLine(res);
         }
 
     }

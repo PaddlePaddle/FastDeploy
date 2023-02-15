@@ -51,6 +51,8 @@ void CpuInfer(const char* model_dir, const char* image_file) {
   FD_C_ClassifyResult* result =
       FD_C_ClassifyResultWrapperGetData(result_wrapper);
 
+  // print res
+  printf("%s", FD_C_ClassifyResultWrapperStr(result_wrapper));
   FD_C_DestroyRuntimeOptionWrapper(option);
   FD_C_DestroyPaddleClasModelWrapper(model);
   FD_C_DestroyClassifyResultWrapper(result_wrapper);
@@ -85,7 +87,8 @@ void GpuInfer(const char* model_dir, const char* image_file) {
 
   FD_C_ClassifyResult* result =
       FD_C_ClassifyResultWrapperGetData(result_wrapper);
-
+  // print res
+  printf("%s", FD_C_ClassifyResultWrapperStr(result_wrapper));
   FD_C_DestroyRuntimeOptionWrapper(option);
   FD_C_DestroyPaddleClasModelWrapper(model);
   FD_C_DestroyClassifyResultWrapper(result_wrapper);
