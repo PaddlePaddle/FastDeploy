@@ -30,7 +30,7 @@ namespace keypointdetection {
  */
 class FASTDEPLOY_DECL PPTinyPose : public FastDeployModel {
  public:
- /** \brief Set path of model file and configuration file, and the configuration of runtime
+  /** \brief Set path of model file and configuration file, and the configuration of runtime
    *
    * \param[in] model_file Path of model file, e.g pptinypose/model.pdmodel
    * \param[in] params_file Path of parameter file, e.g pptinypose/model.pdiparams, if the model format is ONNX, this parameter will be ignored
@@ -68,6 +68,18 @@ class FASTDEPLOY_DECL PPTinyPose : public FastDeployModel {
    */
   bool use_dark = true;
 
+  /// This function will disable normalize in preprocessing step.
+  void DisableNormalize() {
+    disable_normalize_ = true;
+    BuildPreprocessPipelineFromConfig();
+  }
+
+  /// This function will disable hwc2chw in preprocessing step.
+  void DisablePermute() {
+    disable_permute_ = true;
+    BuildPreprocessPipelineFromConfig();
+  }
+
  protected:
   bool Initialize();
   /// Build the preprocess pipeline from the loaded model
@@ -84,6 +96,10 @@ class FASTDEPLOY_DECL PPTinyPose : public FastDeployModel {
  private:
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;
+  // for recording the switch of hwc2chw
+  bool disable_permute_ = false;
+  // for recording the switch of normalize
+  bool disable_normalize_ = false;
 };
 }  // namespace keypointdetection
 }  // namespace vision
