@@ -21,40 +21,29 @@
 extern "C" {
 #endif
 
+// PPYOLOE
+
 FD_C_PPYOLOEWrapper* FD_C_CreatesPPYOLOEWrapper(
     const char* model_file, const char* params_file, const char* config_file,
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     const FD_C_ModelFormat model_format) {
-  auto& runtime_option = CHECK_AND_CONVERT_FD_TYPE(RuntimeOptionWrapper,
-                                                   fd_c_runtime_option_wrapper);
-  FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper = new FD_C_PPYOLOEWrapper();
-  fd_c_ppyoloe_wrapper->ppyoloe_model =
-      std::unique_ptr<fastdeploy::vision::detection::PPYOLOE>(
-          new fastdeploy::vision::detection::PPYOLOE(
-              std::string(model_file), std::string(params_file),
-              std::string(config_file), *runtime_option,
-              static_cast<fastdeploy::ModelFormat>(model_format)));
-  return fd_c_ppyoloe_wrapper;
+  IMPLEMENT_CREATE_WRAPPER_FUNCTION(PPYOLOE);
 }
 
-void FD_C_DestroyPPYOLOEWrapper(FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper) {
-  delete fd_c_ppyoloe_wrapper;
+void FD_C_DestroyPPYOLOEWrapper(
+    __fd_take FD_C_PPYOLOEWrapper* fd_ppyoloe_wrapper) {
+  IMPLEMENT_DESTROY_WRAPPER_FUNCTION(PPYOLOE, fd_ppyoloe_wrapper);
 }
 
 FD_C_Bool FD_C_PPYOLOEWrapperPredict(
-    FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper, FD_C_Mat img,
+    FD_C_PPYOLOEWrapper* fd_ppyoloe_wrapper, FD_C_Mat img,
     FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper) {
-  cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
-  auto& ppyoloe_model =
-      CHECK_AND_CONVERT_FD_TYPE(PPYOLOEWrapper, fd_c_ppyoloe_wrapper);
-  auto& detection_result = CHECK_AND_CONVERT_FD_TYPE(
-      DetectionResultWrapper, fd_c_detection_result_wrapper);
-  return ppyoloe_model->Predict(im, detection_result.get());
+  IMPLEMENT_PREDICT_FUNCTION(PPYOLOE, fd_ppyoloe_wrapper);
 }
 
 FD_C_Bool FD_C_PPYOLOEWrapperInitialized(
-    FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper) {
-  return fd_c_ppyoloe_wrapper->Initialized();
+    FD_C_PPYOLOEWrapper* fd_ppyoloe_wrapper) {
+  IMPLEMENT_INITIALIZED_FUNCTION(PPYOLOE, fd_ppyoloe_wrapper);
 }
 
 FD_C_DetectionResult* FD_C_DetectionResultToC(
@@ -119,24 +108,167 @@ FD_C_DetectionResult* FD_C_DetectionResultToC(
 }
 
 FD_C_Bool FD_C_PPYOLOEWrapperBatchPredict(
-    FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper, FD_C_OneDimMat imgs,
+    FD_C_PPYOLOEWrapper* fd_ppyoloe_wrapper, FD_C_OneDimMat imgs,
     FD_C_OneDimDetectionResult* results) {
-  std::vector<cv::Mat> imgs_vec;
-  std::vector<fastdeploy::vision::DetectionResult> results_out;
-  for (int i = 0; i < imgs.size; i++) {
-    imgs_vec.push_back(*(reinterpret_cast<cv::Mat*>(imgs.data[i])));
-  }
-  bool successful = fd_c_ppyoloe_wrapper->BatchPredict(imgs_vec, &results_out);
-  if (successful) {
-    // copy results back to FD_C_OneDimClassifyResult
-    results->size = results_out.size();
-    results->data = new FD_C_DetectionResult[results->size];
-    for (int i = 0; i < results_out.size(); i++) {
-      results->data[i] = FD_C_DetectionResultToC(&results_out[i]);
-    }
-  }
-  return successful;
+  IMPLEMENT_BATCH_PREDICT_FUNCTION(PPYOLOE, fd_ppyoloe_wrapper);
 }
+
+// PicoDet
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(PicoDet)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(PicoDet, fd_picodet_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(PicoDet, fd_picodet_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(PicoDet, fd_picodet_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(PicoDet, fd_picodet_wrapper)
+
+// PPYOLO
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(PPYOLO)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(PPYOLO, fd_ppyolo_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(PPYOLO, fd_ppyolo_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(PPYOLO, fd_ppyolo_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(PPYOLO, fd_ppyolo_wrapper)
+
+// YOLOv3
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(YOLOv3)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(YOLOv3, fd_yolov3_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(YOLOv3, fd_yolov3_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(YOLOv3, fd_yolov3_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(YOLOv3, fd_yolov3_wrapper)
+
+// PaddleYOLOX
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(PaddleYOLOX)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(PaddleYOLOX,
+                                               fd_paddleyolox_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(PaddleYOLOX, fd_paddleyolox_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(PaddleYOLOX, fd_paddleyolox_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(PaddleYOLOX,
+                                             fd_paddleyolox_wrapper)
+
+// FasterRCNN
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(FasterRCNN)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(FasterRCNN,
+                                               fd_fasterrcnn_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(FasterRCNN, fd_fasterrcnn_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(FasterRCNN, fd_fasterrcnn_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(FasterRCNN, fd_fasterrcnn_wrapper)
+
+// MaskRCNN
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(MaskRCNN)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(MaskRCNN, fd_maskrcnn_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(MaskRCNN, fd_maskrcnn_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(MaskRCNN, fd_maskrcnn_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(MaskRCNN, fd_maskrcnn_wrapper)
+
+// SSD
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(SSD)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(SSD, fd_ssd_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(SSD, fd_ssd_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(SSD, fd_ssd_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(SSD, fd_ssd_wrapper)
+
+// PaddleYOLOv5
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(PaddleYOLOv5)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(PaddleYOLOv5,
+                                               fd_paddleyolov5_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(PaddleYOLOv5, fd_paddleyolov5_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(PaddleYOLOv5,
+                                           fd_paddleyolov5_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(PaddleYOLOv5,
+                                             fd_paddleyolov5_wrapper)
+
+// PaddleYOLOv6
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(PaddleYOLOv6)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(PaddleYOLOv6,
+                                               fd_paddleyolov6_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(PaddleYOLOv6, fd_paddleyolov6_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(PaddleYOLOv6,
+                                           fd_paddleyolov6_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(PaddleYOLOv6,
+                                             fd_paddleyolov6_wrapper)
+
+// PaddleYOLOv7
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(PaddleYOLOv7)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(PaddleYOLOv7,
+                                               fd_paddleyolov7_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(PaddleYOLOv7, fd_paddleyolov7_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(PaddleYOLOv7,
+                                           fd_paddleyolov7_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(PaddleYOLOv7,
+                                             fd_paddleyolov7_wrapper)
+
+// PaddleYOLOv8
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(PaddleYOLOv8)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(PaddleYOLOv8,
+                                               fd_paddleyolov8_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(PaddleYOLOv8, fd_paddleyolov8_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(PaddleYOLOv8,
+                                           fd_paddleyolov8_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(PaddleYOLOv8,
+                                             fd_paddleyolov8_wrapper)
+
+// RTMDet
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(RTMDet)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(RTMDet, fd_rtmdet_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(RTMDet, fd_rtmdet_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(RTMDet, fd_rtmdet_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(RTMDet, fd_rtmdet_wrapper)
+
+// CascadeRCNN
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(CascadeRCNN)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(CascadeRCNN,
+                                               fd_cascadercnn_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(CascadeRCNN, fd_cascadercnn_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(CascadeRCNN, fd_cascadercnn_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(CascadeRCNN,
+                                             fd_cascadercnn_wrapper)
+
+// PSSDet
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(PSSDet)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(PSSDet, fd_pssdet_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(PSSDet, fd_pssdet_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(PSSDet, fd_pssdet_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(PSSDet, fd_pssdet_wrapper)
+
+// RetinaNet
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(RetinaNet)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(RetinaNet, fd_retinanet_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(RetinaNet, fd_retinanet_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(RetinaNet, fd_retinanet_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(RetinaNet, fd_retinanet_wrapper)
+
+// TTFNetSOD
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(TTFNetSOD)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(TTFNetSOD, fd_ttfnetsod_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(TTFNetSOD, fd_ttfnetsod_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(TTFNetSOD, fd_ttfnetsod_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(TTFNetSOD, fd_ttfnetsod_wrapper)
+
+// FCOS
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(FCOS)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(FCOS, fd_fcos_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(FCOS, fd_fcos_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(FCOS, fd_fcos_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(FCOS, fd_fcos_wrapper)
+
+// TTFNet
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(TTFNet)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(TTFNet, fd_ttfnet_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(TTFNet, fd_ttfnet_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(TTFNet, fd_ttfnet_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(TTFNet, fd_ttfnet_wrapper)
+
+// TOOD
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(TOOD)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(TOOD, fd_tood_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(TOOD, fd_tood_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(TOOD, fd_tood_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(TOOD, fd_tood_wrapper)
+
+// GFL
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(GFL)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(GFL, fd_gfl_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(GFL, fd_gfl_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(GFL, fd_gfl_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(GFL, fd_gfl_wrapper)
 
 #ifdef __cplusplus
 }
