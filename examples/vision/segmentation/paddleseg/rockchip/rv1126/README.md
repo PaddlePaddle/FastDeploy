@@ -1,6 +1,18 @@
 [English](README.md) | 简体中文
-# PaddleSeg在瑞芯微 RV1126上通过FastDeploy部署模型
-瑞芯微 RV1126 是一款编解码芯片，专门面相人工智能的机器视觉领域。PaddleSeg支持通过FastDeploy在RV1126上基于Paddle-Lite部署相关Segmentation模型
+# PaddleSeg在瑞芯微NPU上通过FastDeploy部署模型
+
+## PaddleSeg支持部署的瑞芯微的芯片型号
+支持如下芯片的部署
+- Rockchip RV1109
+- Rockchip RV1126
+- Rockchip RK1808
+
+>> **注意**：需要注意的是，芯原（verisilicon）作为 IP 设计厂商，本身并不提供实体SoC产品，而是授权其 IP 给芯片厂商，如：晶晨（Amlogic），瑞芯微（Rockchip）等。因此本文是适用于被芯原授权了 NPU IP 的芯片产品。只要芯片产品没有大副修改芯原的底层库，则该芯片就可以使用本文档作为 Paddle Lite 推理部署的参考和教程。在本文中，晶晨 SoC 中的 NPU 和 瑞芯微 SoC 中的 NPU 统称为芯原 NPU。
+瑞芯微 RV1126 是一款编解码芯片，专门面相人工智能的机器视觉领域。
+
+本示例基于RV1126来介绍如何使用FastDeploy部署PaddleSeg模型
+
+PaddleSeg支持通过FastDeploy在RV1126上基于Paddle-Lite部署相关Segmentation模型
 
 ## 瑞芯微 RV1126支持的PaddleSeg模型
 
