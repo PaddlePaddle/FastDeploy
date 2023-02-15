@@ -15,6 +15,13 @@
 #pragma once
 
 #include "gflags/gflags.h"
+#include "fastdeploy/benchmark/utils.h"
+
+#ifdef WIN32
+static const char sep = '\\';
+#else
+static const char sep = '/';
+#endif
 
 DEFINE_string(model, "", "Directory of the inference model.");
 DEFINE_string(image, "", "Path of the image file.");
@@ -38,7 +45,7 @@ DEFINE_bool(
     collect_memory_info, false, "Whether to collect memory info");
 DEFINE_int32(sampling_interval, 50, "How often to collect memory info(ms).");
 
-void PrintUsage() {
+static void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path --device "
                "[cpu|gpu|xpu] --backend "
                "[default|ort|paddle|ov|trt|paddle_trt|lite] "
@@ -47,4 +54,38 @@ void PrintUsage() {
   std::cout << "Default value of device: cpu" << std::endl;
   std::cout << "Default value of backend: default" << std::endl;
   std::cout << "Default value of use_fp16: false" << std::endl;
+}
+
+static void PrintBenchmarkInfo() {
+  // Get model name
+  std::vector<std::string> model_names;
+  fastdeploy::benchmark::Split(FLAGS_model, model_names, sep);
+  // Save benchmark info
+  std::stringstream ss;
+  ss.precision(3);
+  ss << "\n======= Model Info =======\n";
+  ss << "model_name: " << model_names[model_names.size() - 1] << std::endl;
+  ss << "profile_mode: " << FLAGS_profile_mode << std::endl;
+  if (FLAGS_profile_mode == "runtime") {
+    ss << "include_h2d_d2h: " << FLAGS_include_h2d_d2h << std::endl;
+  }
+  ss << "\n======= Backend Info =======\n";
+  ss << "warmup: " << FLAGS_warmup << std::endl;
+  ss << "repeats: " << FLAGS_repeat << std::endl;
+  ss << "device: " << FLAGS_device << std::endl;
+  if (FLAGS_device == "gpu") {
+    ss << "device_id: " << FLAGS_device_id << std::endl;
+  }
+  ss << "backend: " << FLAGS_backend << std::endl;
+  if (FLAGS_device == "cpu") {
+    ss << "cpu_thread_nums: " << FLAGS_cpu_thread_nums << std::endl;
+  }
+  ss << "use_fp16: " << FLAGS_use_fp16 << std::endl;
+  ss << "collect_memory_info: " << FLAGS_collect_memory_info << std::endl;
+  if (FLAGS_collect_memory_info) {
+    ss << "sampling_interval: " << std::to_string(FLAGS_sampling_interval)
+       << "ms" << std::endl;
+  }
+  std::cout << ss.str() << std::endl;
+  return;
 }

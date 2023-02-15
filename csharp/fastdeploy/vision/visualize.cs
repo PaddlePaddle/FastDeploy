@@ -35,6 +35,7 @@ public class Visualize {
     return new Mat(result_ptr);
   }
 
+
   public static Mat VisDetection(Mat im, DetectionResult detection_result,
                                  string[] labels, 
                                  float score_threshold = 0.0f,
@@ -49,16 +50,19 @@ public class Visualize {
     return new Mat(result_ptr);
   }
 
+
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_VisDetection")]
   private static extern IntPtr
   FD_C_VisDetection(IntPtr im, ref FD_DetectionResult fd_detection_result,
                     float score_threshold, int line_size, float font_size);
+
   
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_VisDetectionWithLabel")]
   private static extern IntPtr
   FD_C_VisDetectionWithLabel(IntPtr im, ref FD_DetectionResult fd_detection_result,
                     ref FD_OneDimArrayCstr labels,
                     float score_threshold, int line_size, float font_size);
+
 }
 
 }

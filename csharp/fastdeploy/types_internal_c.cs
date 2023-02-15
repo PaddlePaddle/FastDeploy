@@ -128,6 +128,7 @@ public struct FD_DetectionResult {
   public FD_ResultType type;
 }
 
+
 [StructLayout(LayoutKind.Sequential)]
 public struct FD_OneDimDetectionResult {
   public nuint size;

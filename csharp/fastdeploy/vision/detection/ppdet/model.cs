@@ -116,6 +116,7 @@ public class PPYOLOE {
              EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
   private static extern IntPtr
   FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_PPYOLOEWrapperInitialized")]
   private static extern bool

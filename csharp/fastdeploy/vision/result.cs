@@ -46,6 +46,7 @@ public struct Mask {
     this.shape = new List<long>();
     this.type = ResultType.MASK;
   }
+
   public ToString() {
     string out = "Mask(";
     int ndim = shape.size;
@@ -59,6 +60,7 @@ public struct Mask {
   out += ")\n";
   return out;
   }
+
 }
 
 public struct ClassifyResult {
@@ -70,6 +72,7 @@ public struct ClassifyResult {
     this.scores = new List<float>();
     this.type = ResultType.CLASSIFY;
   }
+
   public ToString() {
     std::string out;
     out = "ClassifyResult(\nlabel_ids: ";
@@ -83,6 +86,7 @@ public struct ClassifyResult {
     out += "\n)";
     return out;
   }
+
 }
 
 public struct DetectionResult {
@@ -100,6 +104,7 @@ public struct DetectionResult {
     this.contain_masks = false;
     this.type = ResultType.DETECTION;
   }
+
   
   public ToString() {
     string out;
@@ -123,6 +128,7 @@ public struct DetectionResult {
     }
     return out;
   }
+
 }
 
 public class ConvertResult {
@@ -315,6 +321,7 @@ public class ConvertResult {
     return detection_result;
   }
 
+
   public static FD_OneDimArrayCstr
   ConvertStringArrayToCOneDimArrayCstr(string[] strs){
     FD_OneDimArrayCstr fd_one_dim_cstr = new FD_OneDimArrayCstr();
@@ -345,6 +352,7 @@ public class ConvertResult {
     }
     return strs;
   }
+
 }
 
 }

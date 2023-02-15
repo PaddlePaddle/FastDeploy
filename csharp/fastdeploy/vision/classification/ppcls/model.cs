@@ -40,6 +40,7 @@ class PaddleClasModel {
     FD_C_DestroyPaddleClasModelWrapper(fd_paddleclas_model_wrapper);
   }
 
+
   public string ModelName() {
     return "PaddleClas/Model";
   }
@@ -125,6 +126,7 @@ class PaddleClasModel {
              EntryPoint = "FD_C_CreateClassifyResultWrapperFromData")]
   private static extern IntPtr
   FD_C_CreateClassifyResultWrapperFromData(IntPtr fd_classify_result);
+
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_PaddleClasModelWrapperInitialized")]
   private static extern bool
