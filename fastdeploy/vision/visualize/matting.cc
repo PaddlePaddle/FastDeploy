@@ -22,10 +22,10 @@ cv::Mat VisMatting(const cv::Mat& im, const MattingResult& result,
                    bool transparent_background, float transparent_threshold,
                    bool remove_small_connected_area) {
   FDASSERT((!im.empty()), "im can't be empty!");
-
+  FDASSERT((im.channels() == 3), "Only support 3 channels mat!");
   auto vis_img = im.clone();
   cv::Mat transparent_vis_mat;
-  int channel = 3;
+  int channel = im.channels();
   int out_h = static_cast<int>(result.shape[0]);
   int out_w = static_cast<int>(result.shape[1]);
   int height = im.rows;
@@ -68,12 +68,12 @@ cv::Mat VisMatting(const cv::Mat& im, const MattingResult& result,
           vis_data[i * width * channel + j * channel + 0] =
             cv::saturate_cast<uchar>(
                 static_cast<float>(im_data[i * width * 3 + j * 3 + 0]));
-        vis_data[i * width * channel + j * channel + 1] =
-            cv::saturate_cast<uchar>(
-                static_cast<float>(im_data[i * width * 3 + j * 3 + 1]));
-        vis_data[i * width * channel + j * channel + 2] =
-            cv::saturate_cast<uchar>(
-                static_cast<float>(im_data[i * width * 3 + j * 3 + 2]));
+          vis_data[i * width * channel + j * channel + 1] =
+              cv::saturate_cast<uchar>(
+                  static_cast<float>(im_data[i * width * 3 + j * 3 + 1]));
+          vis_data[i * width * channel + j * channel + 2] =
+              cv::saturate_cast<uchar>(
+                  static_cast<float>(im_data[i * width * 3 + j * 3 + 2]));
         }  
       } else {
         vis_data[i * width * channel + j * channel + 0] =
