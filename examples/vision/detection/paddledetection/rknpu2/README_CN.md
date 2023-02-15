@@ -50,7 +50,7 @@ paddle2onnx --model_dir picodet_s_416_coco_lcnet \
 # 固定shape
 python -m paddle2onnx.optimize --input_model picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet.onnx \
                                 --output_model picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet.onnx \
-                                --input_shape_dict "{'image':[1,3,416,416]}"
+                                --input_shape_dict "{'image':[1,3,416,416], 'scale_factor':[1,2]}"
 ```
 
 ### 编写yaml文件
