@@ -12,7 +12,7 @@
 以上步骤请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)实现
 
 ```bash
-以picodet为例进行推理部署
+# 以picodet为例进行推理部署
 
 mkdir build
 cd build
