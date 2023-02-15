@@ -13,23 +13,78 @@
 // limitations under the License.
 #pragma once
 
+#include <memory>
+#include <thread>  // NOLINT
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace benchmark {
+/*! @brief ResourceUsageMonitor object used when to collect memory info.
+ */
+class FASTDEPLOY_DECL ResourceUsageMonitor {
+ public:
+   /** \brief  Set sampling_interval_ms and gpu_id for ResourceUsageMonitor.
+   *
+   * \param[in] sampling_interval_ms How often to collect memory info(ms).
+   * \param[in] gpu_id Device(gpu) id, default 0.
+   */
+  explicit ResourceUsageMonitor(int sampling_interval_ms, int gpu_id = 0);
 
-// Record current cpu memory usage into file
-FASTDEPLOY_DECL void DumpCurrentCpuMemoryUsage(const std::string& name);
+  ~ResourceUsageMonitor() { StopInternal(); }
 
-// Record current gpu memory usage into file
-FASTDEPLOY_DECL void DumpCurrentGpuMemoryUsage(const std::string& name,
-                                               int device_id);
+  /// Start memory info collect
+  void Start();
+  /// Stop memory info collect
+  void Stop();
+  /// Get maximum cpu memory usage
+  float GetMaxCpuMem() const {
+    if (!is_supported_ || check_memory_thd_ == nullptr) {
+      return -1.0f;
+    }
+    return max_cpu_mem_;
+  }
+  /// Get maximum gpu memory usage
+  float GetMaxGpuMem() const {
+    if (!is_supported_ || check_memory_thd_ == nullptr) {
+      return -1.0f;
+    }
+    return max_gpu_mem_;
+  }
+  /// Get maximum gpu util
+  float GetMaxGpuUtil() const {
+    if (!is_supported_ || check_memory_thd_ == nullptr) {
+      return -1.0f;
+    }
+    return max_gpu_util_;
+  }
 
-// Get Max cpu memory usage
-FASTDEPLOY_DECL float GetCpuMemoryUsage(const std::string& name);
+  ResourceUsageMonitor(ResourceUsageMonitor&) = delete;
+  ResourceUsageMonitor& operator=(const ResourceUsageMonitor&) = delete;
+  ResourceUsageMonitor(ResourceUsageMonitor&&) = delete;
+  ResourceUsageMonitor& operator=(const ResourceUsageMonitor&&) = delete;
 
-// Get Max gpu memory usage
-FASTDEPLOY_DECL float GetGpuMemoryUsage(const std::string& name);
+ private:
+  void StopInternal();
+  // Get current gpu memory info
+  std::string GetCurrentGpuMemoryInfo(int device_id);
+
+  bool is_supported_ = false;
+  bool stop_signal_ = false;
+  const int sampling_interval_;
+  float max_cpu_mem_ = 0.0f;  // MB
+  float max_gpu_mem_ = 0.0f;  // MB
+  float max_gpu_util_ = 0.0f;
+  const int gpu_id_ = 0;
+  std::unique_ptr<std::thread> check_memory_thd_ = nullptr;
+};
+
+// Remove the ch characters at both ends of str
+FASTDEPLOY_DECL std::string Strip(const std::string& str, char ch = ' ');
+
+// Split string
+FASTDEPLOY_DECL void Split(const std::string& s,
+                           std::vector<std::string>& tokens,
+                           char delim = ' ');
 
 }  // namespace benchmark
 }  // namespace fastdeploy

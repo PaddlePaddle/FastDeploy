@@ -62,7 +62,7 @@ __build_fastdeploy_linux_x86_64_gpu_shared() {
         -DENABLE_OPENVINO_BACKEND=ON \
         -DENABLE_PADDLE2ONNX=ON \
         -DENABLE_VISION=ON \
-        -DENABLE_BENCHMARK=ON \
+        -DENABLE_BENCHMARK=OFF \
         -DBUILD_EXAMPLES=ON \
         -DCMAKE_INSTALL_PREFIX=${FASDEPLOY_INSTALL_DIR} \
         -Wno-dev ../../.. && make -j8 && make install
