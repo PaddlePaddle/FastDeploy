@@ -96,8 +96,9 @@ def build_option(args):
                 option.set_trt_input_shape("x", [1, 3, 192, 192],
                                            [1, 3, 192, 192], [1, 3, 192, 192])
             if backend == "paddle_trt":
-                option.enable_paddle_trt_collect_shape()
-                option.enable_paddle_to_trt()
+                option.paddle_infer_option.collect_trt_shape = True
+                option.use_paddle_infer_backend()
+                option.paddle_infer_option.enable_trt = True
             if enable_trt_fp16:
                 option.enable_trt_fp16()
         elif backend == "default":
