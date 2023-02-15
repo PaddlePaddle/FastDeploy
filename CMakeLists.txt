@@ -73,7 +73,8 @@ option(WITH_ASCEND "Whether to compile for Huawei Ascend deploy." OFF)
 option(WITH_TIMVX "Whether to compile for TIMVX deploy." OFF)
 option(WITH_KUNLUNXIN "Whether to compile for KunlunXin XPU deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
-
+option(WITH_CAPI "Whether to compile with c api." OFF)
+option(WITH_CSHARPAPI "Whether to compile with c# api" OFF)
 ############################# Options for Android cross compiling #########################
 if(ANDROID)
   option(WITH_OPENCV_STATIC "Whether to use OpenCV static lib for Android." OFF)
@@ -416,7 +417,22 @@ if(ENABLE_PADDLE2ONNX)
   list(APPEND DEPEND_LIBS external_paddle2onnx)
 endif(ENABLE_PADDLE2ONNX)
 
+if(WITH_CAPI)
+  include(${PROJECT_SOURCE_DIR}/c_api/CMakeLists.txt)
+  if(MSVC)
+  add_definitions(-DFD_CAPI)
+  endif()
+endif()
+
+if(WITH_CSHARPAPI)
+  if(MSVC)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/csharp)
+  endif()
+endif()
+
+
 configure_file(${PROJECT_SOURCE_DIR}/FastDeploy.cmake.in ${PROJECT_SOURCE_DIR}/FastDeploy.cmake @ONLY)
+configure_file(${PROJECT_SOURCE_DIR}/FastDeployCSharp.cmake.in ${PROJECT_SOURCE_DIR}/FastDeployCSharp.cmake @ONLY)
 configure_file(${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py.in ${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py)
 configure_file(${PROJECT_SOURCE_DIR}/python/scripts/process_libraries.py.in ${PROJECT_SOURCE_DIR}/python/scripts/process_libraries.py)
 
@@ -669,6 +685,7 @@ install(
   ${PROJECT_SOURCE_DIR}/ThirdPartyNotices.txt
   ${PROJECT_SOURCE_DIR}/VERSION_NUMBER
   ${PROJECT_SOURCE_DIR}/FastDeploy.cmake
+  ${PROJECT_SOURCE_DIR}/FastDeployCSharp.cmake
   ${PROJECT_SOURCE_DIR}/cmake/FastDeployConfig.cmake
   ${PROJECT_SOURCE_DIR}/cmake/utils.cmake
   ${PROJECT_SOURCE_DIR}/cmake/openmp.cmake
@@ -703,6 +720,16 @@ if(WITH_ASCEND)
   install(
     FILES ${PROJECT_SOURCE_DIR}/scripts/ascend_init.sh
     DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
+endif()
+
+if(WITH_CAPI)
+  install(
+    DIRECTORY ${PROJECT_SOURCE_DIR}/c_api/fastdeploy_capi
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+    FILES_MATCHING
+    PATTERN "*.h"
+    PATTERN "*/types_internal.h" EXCLUDE
   )
 endif()
 

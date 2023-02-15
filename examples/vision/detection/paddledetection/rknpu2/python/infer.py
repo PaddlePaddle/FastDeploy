@@ -45,15 +45,16 @@ if __name__ == "__main__":
 
     # 配置runtime，加载模型
     runtime_option = fd.RuntimeOption()
-    runtime_option.use_cpu()
+    runtime_option.use_rknpu2()
 
     model = fd.vision.detection.PPYOLOE(
         model_file,
         params_file,
         config_file,
         runtime_option=runtime_option,
-        model_format=fd.ModelFormat.ONNX)
-
+        model_format=fd.ModelFormat.RKNN)
+    model.preprocessor.disable_normalize()
+    model.preprocessor.disable_permute()
     model.postprocessor.apply_decode_and_nms()
 
     # 预测图片分割结果

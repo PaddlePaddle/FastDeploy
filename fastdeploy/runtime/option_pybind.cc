@@ -20,6 +20,7 @@ void BindLiteOption(pybind11::module& m);
 void BindOpenVINOOption(pybind11::module& m);
 void BindOrtOption(pybind11::module& m);
 void BindTrtOption(pybind11::module& m);
+void BindPaddleOption(pybind11::module& m);
 void BindPorosOption(pybind11::module& m);
 
 void BindOption(pybind11::module& m) {
@@ -27,12 +28,14 @@ void BindOption(pybind11::module& m) {
   BindOpenVINOOption(m);
   BindOrtOption(m);
   BindTrtOption(m);
+  BindPaddleOption(m);
   BindPorosOption(m);
 
   pybind11::class_<RuntimeOption>(m, "RuntimeOption")
       .def(pybind11::init())
       .def("set_model_path", &RuntimeOption::SetModelPath)
       .def("set_model_buffer", &RuntimeOption::SetModelBuffer)
+      .def("set_encryption_key", &RuntimeOption::SetEncryptionKey)
       .def("use_gpu", &RuntimeOption::UseGpu)
       .def("use_cpu", &RuntimeOption::UseCpu)
       .def("use_rknpu2", &RuntimeOption::UseRKNPU2)
@@ -44,7 +47,12 @@ void BindOption(pybind11::module& m) {
       .def_readwrite("ort_option", &RuntimeOption::ort_option)
       .def_readwrite("trt_option", &RuntimeOption::trt_option)
       .def_readwrite("poros_option", &RuntimeOption::poros_option)
+      .def_readwrite("paddle_infer_option", &RuntimeOption::paddle_infer_option)
       .def("set_external_stream", &RuntimeOption::SetExternalStream)
+      .def("set_external_raw_stream",
+           [](RuntimeOption& self, size_t external_stream) {
+             self.SetExternalStream(reinterpret_cast<void*>(external_stream));
+           })
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
       .def("use_paddle_backend", &RuntimeOption::UsePaddleBackend)
       .def("use_poros_backend", &RuntimeOption::UsePorosBackend)
@@ -52,25 +60,11 @@ void BindOption(pybind11::module& m) {
       .def("use_trt_backend", &RuntimeOption::UseTrtBackend)
       .def("use_openvino_backend", &RuntimeOption::UseOpenVINOBackend)
       .def("use_lite_backend", &RuntimeOption::UseLiteBackend)
-      .def("set_paddle_mkldnn", &RuntimeOption::SetPaddleMKLDNN)
-      .def("enable_paddle_log_info", &RuntimeOption::EnablePaddleLogInfo)
-      .def("disable_paddle_log_info", &RuntimeOption::DisablePaddleLogInfo)
-      .def("set_paddle_mkldnn_cache_size",
-           &RuntimeOption::SetPaddleMKLDNNCacheSize)
-      .def("enable_paddle_to_trt", &RuntimeOption::EnablePaddleToTrt)
       .def("enable_pinned_memory", &RuntimeOption::EnablePinnedMemory)
       .def("disable_pinned_memory", &RuntimeOption::DisablePinnedMemory)
-      .def("enable_paddle_trt_collect_shape",
-           &RuntimeOption::EnablePaddleTrtCollectShape)
-      .def("disable_paddle_trt_collect_shape",
-           &RuntimeOption::DisablePaddleTrtCollectShape)
       .def("use_ipu", &RuntimeOption::UseIpu)
-      .def("set_ipu_config", &RuntimeOption::SetIpuConfig)
-      .def("delete_paddle_backend_pass",
-           &RuntimeOption::DeletePaddleBackendPass)
       .def("enable_profiling", &RuntimeOption::EnableProfiling)
       .def("disable_profiling", &RuntimeOption::DisableProfiling)
-      .def("disable_paddle_trt_ops", &RuntimeOption::DisablePaddleTrtOPs)
       .def_readwrite("model_file", &RuntimeOption::model_file)
       .def_readwrite("params_file", &RuntimeOption::params_file)
       .def_readwrite("model_format", &RuntimeOption::model_format)
@@ -79,19 +73,6 @@ void BindOption(pybind11::module& m) {
       .def_readwrite("model_from_memory", &RuntimeOption::model_from_memory_)
       .def_readwrite("cpu_thread_num", &RuntimeOption::cpu_thread_num)
       .def_readwrite("device_id", &RuntimeOption::device_id)
-      .def_readwrite("device", &RuntimeOption::device)
-      .def_readwrite("ipu_device_num", &RuntimeOption::ipu_device_num)
-      .def_readwrite("ipu_micro_batch_size",
-                     &RuntimeOption::ipu_micro_batch_size)
-      .def_readwrite("ipu_enable_pipelining",
-                     &RuntimeOption::ipu_enable_pipelining)
-      .def_readwrite("ipu_batches_per_step",
-                     &RuntimeOption::ipu_batches_per_step)
-      .def_readwrite("ipu_enable_fp16", &RuntimeOption::ipu_enable_fp16)
-      .def_readwrite("ipu_replica_num", &RuntimeOption::ipu_replica_num)
-      .def_readwrite("ipu_available_memory_proportion",
-                     &RuntimeOption::ipu_available_memory_proportion)
-      .def_readwrite("ipu_enable_half_partial",
-                     &RuntimeOption::ipu_enable_half_partial);
+      .def_readwrite("device", &RuntimeOption::device);
 }
 }  // namespace fastdeploy
