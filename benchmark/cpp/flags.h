@@ -14,12 +14,15 @@
 
 #pragma once
 
+#include <iostream>
 #include "gflags/gflags.h"
+#include "fastdeploy/benchmark/utils.h"
+#include "fastdeploy/utils/path.h"
 
 #ifdef WIN32
-const char sep = '\\';
+static const char sep = '\\';
 #else
-const char sep = '/';
+static const char sep = '/';
 #endif
 
 DEFINE_string(model, "", "Directory of the inference model.");

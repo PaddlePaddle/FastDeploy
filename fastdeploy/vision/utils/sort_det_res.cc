@@ -79,25 +79,27 @@ void SortDetectionResult(DetectionResult* result) {
 
 bool LexSortByXYCompare(const std::array<float, 4>& box_a,
                         const std::array<float, 4>& box_b) {
+  // WARN: The status shoule be false if (a==b).
+  // https://blog.csdn.net/xxxwrq/article/details/83080640
+  auto is_fp32_equal = [](const float& a, const float& b) -> bool {
+    return std::abs(a - b) < 1e-6f;
+  };
   const float& x0_a = box_a[0];
   const float& y0_a = box_a[1];
   const float& x0_b = box_b[0];
   const float& y0_b = box_b[1];
-  const float& x1_a = box_a[0];
-  const float& y1_a = box_a[1];
-  const float& x1_b = box_b[0];
-  const float& y1_b = box_b[1];
-  // compare x(w) first, then y(h).
-  bool ret = x0_a > x0_b ? true : y0_a > y0_b;
-  return ret ? true : (x1_a > x1_b ? true : y1_a > y1_b);
+  if (is_fp32_equal(x0_a, x0_b)) {
+    return is_fp32_equal(y0_a, y0_b) ? false : y0_a > y0_b;
+  }
+  return x0_a > x0_b;
 }
 
 void ReorderDetectionResultByIndices(DetectionResult* result,
                                      const std::vector<size_t>& indices) {
   // reorder boxes, scores, label_ids, masks
   DetectionResult backup = (*result);  // move
-  const bool contain_masks = result->contain_masks;
-  const int boxes_num = result->boxes.size();
+  const bool contain_masks = backup.contain_masks;
+  const int boxes_num = backup.boxes.size();
   result->Clear();
   result->Resize(boxes_num);
   // boxes, scores, labels_ids

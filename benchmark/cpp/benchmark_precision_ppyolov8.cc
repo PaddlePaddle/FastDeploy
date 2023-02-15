@@ -16,12 +16,6 @@
 #include "macros.h"
 #include "option.h"
 
-#ifdef WIN32
-const char sep = '\\';
-#else
-const char sep = '/';
-#endif
-
 namespace vision = fastdeploy::vision;
 namespace benchmark = fastdeploy::benchmark;
 
@@ -32,7 +26,7 @@ int main(int argc, char* argv[]) {
   auto option = fastdeploy::RuntimeOption();
   if (!CreateRuntimeOption(&option)) {
     PrintUsage();
-    return false;
+    return -1;
   }
   auto model_file = FLAGS_model + sep + "model.pdmodel";
   auto params_file = FLAGS_model + sep + "model.pdiparams";

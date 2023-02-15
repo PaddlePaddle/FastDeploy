@@ -156,7 +156,6 @@ std::vector<std::string> ReadLines(const std::string& path) {
   if (fin.is_open()) {
     while (getline(fin, line)) {
       lines.push_back(line);
-      FDINFO << line << std::endl;
     }
   } else {
     FDERROR << "Failed to open file " << path << std::endl;
@@ -189,7 +188,7 @@ bool ResultManager::SaveFDTensor(const FDTensor&& tensor,
     FDERROR << "Fail to open file:" << path << std::endl;
     return false;
   }
-  fs.precision(7);
+  fs.precision(15);
   if (tensor.Dtype() != FDDataType::FP32 &&
       tensor.Dtype() != FDDataType::INT32 &&
       tensor.Dtype() != FDDataType::INT64) {
@@ -301,7 +300,7 @@ bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
     FDERROR << "Fail to open file:" << path << std::endl;
     return false;
   }
-  fs.precision(7);  // float -> 7 double -> 15
+  fs.precision(15);
   // boxes
   fs << "boxes:";
   for (int i = 0; i < res.boxes.size(); ++i) {
@@ -425,11 +424,6 @@ DetectionDiff ResultManager::CalculateDiffStatis(vision::DetectionResult* lhs,
   // lex sort by x(w) & y(h)
   vision::utils::LexSortDetectionResultByXY(lhs);
   vision::utils::LexSortDetectionResultByXY(rhs);
-  // debug code (TODO: remove)
-  FDINFO << "lhs DetectionResult after lex sort:\n"
-         << lhs->Str() << "\n"
-         << "rhs DetectionResult after lex sort:\n"
-         << rhs->Str() << std::endl;
   // get value diff & trunc it by score_threshold
   const int boxes_num = std::min(lhs->boxes.size(), rhs->boxes.size());
   std::vector<float> boxes_diff;
