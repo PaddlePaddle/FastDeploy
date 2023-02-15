@@ -1,6 +1,16 @@
 [English](README.md) | 简体中文
 
-# PaddleSeg模型高性能全场景部署方案-FastDeploy
+# PaddleSeg利用FastDeploy在昆仑芯上部署模型
+
+## PaddleSeg支持部署的昆仑芯的芯片型号
+支持如下芯片的部署
+- 昆仑 818-100（推理芯片）
+- 昆仑 818-300（训练芯片）
+
+支持如下芯片的设备
+- K100/K200 昆仑 AI 加速卡
+- R200 昆仑芯 AI 加速卡
+
 
 PaddleSeg支持利用FastDeploy在昆仑芯片上部署Segmentation模型
 
