@@ -83,6 +83,8 @@ bool ImageDecoder::ImplByNvJpeg(const std::vector<std::string>& img_names,
 
   std::vector<FDTensor*> output_buffers;
   for (size_t i = 0; i < mats->size(); ++i) {
+    FDASSERT((*mats)[i].output_cache != nullptr,
+             "The output_cache of FDMat was not set.");
     output_buffers.push_back((*mats)[i].output_cache);
   }
 

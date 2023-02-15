@@ -37,6 +37,10 @@ class FASTDEPLOY_DECL ProcessorManager {
 
   bool CudaUsed();
 
+#ifdef WITH_GPU
+  cudaStream_t Stream() const { return stream_; }
+#endif
+
   void SetStream(FDMat* mat) {
 #ifdef WITH_GPU
     mat->SetStream(stream_);

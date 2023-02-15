@@ -44,7 +44,7 @@ struct FASTDEPLOY_DECL FDMatBatch {
 #ifdef WITH_GPU
   cudaStream_t stream = nullptr;
 #endif
-  FDTensor fd_tensor;
+  std::shared_ptr<FDTensor> fd_tensor = std::make_shared<FDTensor>();
 
  public:
   // When using CV-CUDA/CUDA, please set input/output cache,

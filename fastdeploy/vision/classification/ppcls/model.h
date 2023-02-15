@@ -75,6 +75,23 @@ class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
   virtual bool BatchPredict(const std::vector<cv::Mat>& imgs,
                             std::vector<ClassifyResult>* results);
 
+  /** \brief Predict the classification result for an input image
+   *
+   * \param[in] mat The input mat
+   * \param[in] result The output classification result
+   * \return true if the prediction successed, otherwise false
+   */
+  virtual bool Predict(const FDMat& mat, ClassifyResult* result);
+
+  /** \brief Predict the classification results for a batch of input images
+   *
+   * \param[in] mats, The input mat list
+   * \param[in] results The output classification result list
+   * \return true if the prediction successed, otherwise false
+   */
+  virtual bool BatchPredict(const std::vector<FDMat>& mats,
+                            std::vector<ClassifyResult>* results);
+
     /** \brief Predict the classification result for an input image
    *
    * \param[in] img_name The input image file name

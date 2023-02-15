@@ -83,6 +83,16 @@ bool ProcessorManager::Run(std::vector<FDMat>* images,
     }
     (*images)[i].input_cache = &input_caches_[i];
     (*images)[i].output_cache = &output_caches_[i];
+    if ((*images)[i].mat_type == ProcLib::CUDA) {
+      // Make a copy of the input data ptr, so that the original data ptr of
+      // FDMat won't be modified.
+      auto fd_tensor = std::make_shared<FDTensor>();
+      fd_tensor->SetExternalData(
+          (*images)[i].Tensor()->shape, (*images)[i].Tensor()->Dtype(),
+          (*images)[i].Tensor()->Data(), (*images)[i].Tensor()->device,
+          (*images)[i].Tensor()->device_id);
+      (*images)[i].SetTensor(fd_tensor);
+    }
   }
 
   bool ret = Apply(&image_batch, outputs);

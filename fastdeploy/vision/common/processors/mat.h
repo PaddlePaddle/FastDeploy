@@ -49,7 +49,6 @@ struct FASTDEPLOY_DECL Mat {
 #endif
 
   Mat(const Mat& mat) = default;
-  // Move assignment
   Mat& operator=(const Mat& mat) = default;
 
   // Move constructor
@@ -96,6 +95,8 @@ struct FASTDEPLOY_DECL Mat {
   // Set fd_tensor
   void SetTensor(FDTensor* tensor);
 
+  void SetTensor(std::shared_ptr<FDTensor>& tensor);
+
  private:
   int channels;
   int height;
@@ -109,7 +110,7 @@ struct FASTDEPLOY_DECL Mat {
 #endif
   // Currently, fd_tensor is only used by CUDA and CV-CUDA,
   // OpenCV and FlyCV are not using it.
-  FDTensor fd_tensor;
+  std::shared_ptr<FDTensor> fd_tensor = std::make_shared<FDTensor>();
 
  public:
   FDDataType Type();
@@ -158,9 +159,6 @@ struct FASTDEPLOY_DECL Mat {
                     FDDataType type, void* data);
   static Mat Create(int height, int width, int channels,
                     FDDataType type, void* data, ProcLib lib);
-
-  // Move assignment
-  Mat& operator=(Mat&& other);
 };
 
 typedef Mat FDMat;
