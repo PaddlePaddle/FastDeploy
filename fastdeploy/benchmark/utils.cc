@@ -149,6 +149,9 @@ std::string ResourceUsageMonitor::GetCurrentGpuMemoryInfo(int device_id) {
 }
 
 /// Utils for precision evaluation
+static const char KEY_VALUE_SEP = '#';
+static const char VALUE_SEP = ',';
+
 std::vector<std::string> ReadLines(const std::string& path) {
   std::ifstream fin(path);
   std::vector<std::string> lines;
@@ -169,15 +172,15 @@ std::map<std::string, std::vector<std::string>> SplitDataLine(
     const std::string& data_line) {
   std::map<std::string, std::vector<std::string>> dict;
   std::vector<std::string> tokens, value_tokens;
-  Split(data_line, tokens, ':');
+  Split(data_line, tokens, KEY_VALUE_SEP);
   std::string key = tokens[0];
   std::string value = tokens[1];
-  Split(value, value_tokens, ',');
+  Split(value, value_tokens, VALUE_SEP);
   dict[key] = value_tokens;
   return dict;
 }
 
-bool ResultManager::SaveFDTensor(const FDTensor&& tensor,
+bool ResultManager::SaveFDTensor(const FDTensor& tensor,
                                  const std::string& path) {
   if (tensor.CpuData() == nullptr || tensor.Numel() <= 0) {
     FDERROR << "Input tensor is empty!" << std::endl;
@@ -188,7 +191,7 @@ bool ResultManager::SaveFDTensor(const FDTensor&& tensor,
     FDERROR << "Fail to open file:" << path << std::endl;
     return false;
   }
-  fs.precision(15);
+  fs.precision(20);
   if (tensor.Dtype() != FDDataType::FP32 &&
       tensor.Dtype() != FDDataType::INT32 &&
       tensor.Dtype() != FDDataType::INT64) {
@@ -197,37 +200,38 @@ bool ResultManager::SaveFDTensor(const FDTensor&& tensor,
     return false;
   }
   // name
-  fs << "name:" << tensor.name << "\n";
+  fs << "name" << KEY_VALUE_SEP << tensor.name << "\n";
   // shape
-  fs << "shape:";
+  fs << "shape" << KEY_VALUE_SEP;
   for (int i = 0; i < tensor.shape.size(); ++i) {
     if (i < tensor.shape.size() - 1) {
-      fs << i << ",";
+      fs << tensor.shape[i] << VALUE_SEP;
     } else {
-      fs << i;
+      fs << tensor.shape[i];
     }
   }
   fs << "\n";
   // dtype
-  fs << "dtype:" << Str(tensor.dtype) << "\n";
+  fs << "dtype" << KEY_VALUE_SEP << Str(tensor.dtype) << "\n";
   // data
+  fs << "data" << KEY_VALUE_SEP;
   const void* data_ptr = tensor.CpuData();
   for (int i = 0; i < tensor.Numel(); ++i) {
     if (tensor.Dtype() == FDDataType::INT64) {
       if (i < tensor.Numel() - 1) {
-        fs << (static_cast<const int64_t*>(data_ptr))[i] << ",";
+        fs << (static_cast<const int64_t*>(data_ptr))[i] << VALUE_SEP;
       } else {
         fs << (static_cast<const int64_t*>(data_ptr))[i];
       }
     } else if (tensor.Dtype() == FDDataType::INT32) {
       if (i < tensor.Numel() - 1) {
-        fs << (static_cast<const int32_t*>(data_ptr))[i] << ",";
+        fs << (static_cast<const int32_t*>(data_ptr))[i] << VALUE_SEP;
       } else {
         fs << (static_cast<const int32_t*>(data_ptr))[i];
       }
     } else {  // FP32
       if (i < tensor.Numel() - 1) {
-        fs << (static_cast<const float*>(data_ptr))[i] << ",";
+        fs << (static_cast<const float*>(data_ptr))[i] << VALUE_SEP;
       } else {
         fs << (static_cast<const float*>(data_ptr))[i];
       }
@@ -300,34 +304,34 @@ bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
     FDERROR << "Fail to open file:" << path << std::endl;
     return false;
   }
-  fs.precision(15);
+  fs.precision(20);
   // boxes
-  fs << "boxes:";
+  fs << "boxes" << KEY_VALUE_SEP;
   for (int i = 0; i < res.boxes.size(); ++i) {
     for (int j = 0; j < 4; ++j) {
       if ((i == res.boxes.size() - 1) && (j == 3)) {
         fs << res.boxes[i][j];
       } else {
-        fs << res.boxes[i][j] << ",";
+        fs << res.boxes[i][j] << VALUE_SEP;
       }
     }
   }
   fs << "\n";
   // scores
-  fs << "scores:";
+  fs << "scores" << KEY_VALUE_SEP;
   for (int i = 0; i < res.scores.size(); ++i) {
     if (i < res.scores.size() - 1) {
-      fs << res.scores[i] << ",";
+      fs << res.scores[i] << VALUE_SEP;
     } else {
       fs << res.scores[i];
     }
   }
   fs << "\n";
   // label_ids
-  fs << "label_ids:";
+  fs << "label_ids" << KEY_VALUE_SEP;
   for (int i = 0; i < res.label_ids.size(); ++i) {
     if (i < res.label_ids.size() - 1) {
-      fs << res.label_ids[i] << ",";
+      fs << res.label_ids[i] << VALUE_SEP;
     } else {
       fs << res.label_ids[i];
     }
@@ -373,7 +377,11 @@ bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
 
 TensorDiff ResultManager::CalculateDiffStatis(FDTensor* lhs, FDTensor* rhs) {
   if (lhs->Numel() != rhs->Numel() || lhs->Dtype() != rhs->Dtype()) {
-    FDASSERT(false, "The size and dtype of input FDTensor must be equal!")
+    FDASSERT(false,
+             "The size and dtype of input FDTensor must be equal!"
+             " But got size %d, %d, dtype %s, %s",
+             lhs->Numel(), rhs->Numel(), Str(lhs->Dtype()).c_str(),
+             Str(rhs->Dtype()).c_str())
   }
   FDDataType dtype = lhs->Dtype();
   int numel = lhs->Numel();

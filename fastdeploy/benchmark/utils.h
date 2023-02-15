@@ -107,7 +107,7 @@ struct FASTDEPLOY_DECL DetectionDiff: public BaseDiff, public EvalStatis {
 /// Utils for precision evaluation
 struct FASTDEPLOY_DECL ResultManager {
   /// Save & Load functions for FDTensor result.
-  static bool SaveFDTensor(const FDTensor&& tensor, const std::string& path);
+  static bool SaveFDTensor(const FDTensor& tensor, const std::string& path);
   static bool LoadFDTensor(FDTensor* tensor, const std::string& path);
   /// Save & Load functions for basic results.
   static bool SaveDetectionResult(const vision::DetectionResult& res,

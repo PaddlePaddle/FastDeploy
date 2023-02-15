@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
   // Run once at least
   model_ppyolov8.Predict(im, &res);
   // 1. Test result diff
-  std::cout << "=============== Test result Diff =================\n";
+  std::cout << "=============== Test result diff =================\n";
   // Save result to -> disk.
   std::string det_result_path = "ppyolov8_result.txt";
   benchmark::ResultManager::SaveDetectionResult(res, det_result_path);
@@ -49,7 +49,32 @@ int main(int argc, char* argv[]) {
             << ",min=" << det_diff.min << std::endl;
   // 2. Test tensor diff
   std::cout << "=============== Test tensor diff =================\n";
+  std::vector<vision::DetectionResult> bacth_res;
+  std::vector<fastdeploy::FDTensor> input_tensors, output_tensors;
+  std::vector<cv::Mat> imgs;
+  imgs.push_back(im);
+  std::vector<vision::FDMat> fd_images = vision::WrapMat(imgs);
 
+  model_ppyolov8.GetPreprocessor().Run(&fd_images, &input_tensors);
+  input_tensors[0].name = "image";
+  input_tensors[1].name = "scale_factor";
+  input_tensors[2].name = "im_shape";
+  input_tensors.pop_back();
+  model_ppyolov8.Infer(input_tensors, &output_tensors);
+  model_ppyolov8.GetPostprocessor().Run(output_tensors, &bacth_res);
+  // Save tensor to -> disk.
+  auto& tensor_dump = output_tensors[0];
+  std::string det_tensor_path = "ppyolov8_tensor.txt";
+  benchmark::ResultManager::SaveFDTensor(tensor_dump, det_tensor_path);
+  // Load tensor from <- disk.
+  fastdeploy::FDTensor tensor_loaded;
+  benchmark::ResultManager::LoadFDTensor(&tensor_loaded, det_tensor_path);
+  // Calculate diff between two tensors.
+  auto det_tensor_diff = benchmark::ResultManager::CalculateDiffStatis(
+      &tensor_dump, &tensor_loaded);
+  std::cout << "diff: mean=" << det_tensor_diff.mean
+            << ",max=" << det_tensor_diff.max << ",min=" << det_tensor_diff.min
+            << std::endl;
   // 3. Run profiling
   BENCHMARK_MODEL(model_ppyolov8, model_ppyolov8.Predict(im, &res))
   auto vis_im = vision::VisDetection(im, res);
