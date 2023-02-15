@@ -115,11 +115,11 @@ struct FASTDEPLOY_DECL ResultManager {
   static bool LoadDetectionResult(vision::DetectionResult* res,
                                   const std::string& path);
   /// Calculate diff value between two FDTensor results.
-  static TensorDiff CalculateDiffStatis(const FDTensor& lhs,
-                                        const FDTensor& rhs);
+  static TensorDiff CalculateDiffStatis(FDTensor* lhs,
+                                        FDTensor* rhs);
   /// Calculate diff value between two basic results.
-  static DetectionDiff CalculateDiffStatis(const vision::DetectionResult& lhs,
-                                           const vision::DetectionResult& rhs,
+  static DetectionDiff CalculateDiffStatis(vision::DetectionResult* lhs,
+                                           vision::DetectionResult* rhs,
                                            float score_threshold = 0.3f);
 };
 

@@ -163,25 +163,25 @@ std::vector<std::string> ReadLines(const std::string& path) {
     std::abort();
   }
   fin.close();
-
   return lines;
 }
 
 std::map<std::string, std::vector<std::string>> SplitDataLine(
     const std::string& data_line) {
   std::map<std::string, std::vector<std::string>> dict;
-  std::vector<std::string> tokens, data_tokens;
+  std::vector<std::string> tokens, value_tokens;
   Split(data_line, tokens, ':');
   std::string key = tokens[0];
-  std::string values = tokens[1];
-  Split(values, data_tokens, ',');
-  dict[key] = data_tokens;
+  std::string value = tokens[1];
+  Split(value, value_tokens, ',');
+  dict[key] = value_tokens;
   return dict;
 }
 
 bool ResultManager::SaveFDTensor(const FDTensor&& tensor,
                                  const std::string& path) {
   if (tensor.CpuData() == nullptr || tensor.Numel() <= 0) {
+    FDERROR << "Input tensor is empty!" << std::endl;
     return false;
   }
   std::ofstream fs(path, std::ios::out);
@@ -234,10 +234,8 @@ bool ResultManager::SaveFDTensor(const FDTensor&& tensor,
       }
     }
   }
-
   fs << "\n";
   fs.close();
-
   return true;
 }
 
@@ -267,7 +265,7 @@ bool ResultManager::LoadFDTensor(FDTensor* tensor, const std::string& path) {
     tensor->dtype = FDDataType::FP32;
   } else {
     FDERROR << "Only support FP32/INT64/INT32 now, but got "
-            << Str(FDDataType::FP32) << std::endl;
+            << data.begin()->second.at(0) << std::endl;
     return false;
   }
   // data
@@ -289,7 +287,6 @@ bool ResultManager::LoadFDTensor(FDTensor* tensor, const std::string& path) {
       mutable_data_ptr[i] = std::stof(data.begin()->second[i]);
     }
   }
-
   return true;
 }
 
@@ -339,7 +336,6 @@ bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
   fs << "\n";
   // TODO(qiuyanjun): dump masks
   fs.close();
-
   return true;
 }
 
@@ -376,21 +372,21 @@ bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
   return true;
 }
 
-TensorDiff ResultManager::CalculateDiffStatis(const FDTensor& lhs,
-                                              const FDTensor& rhs) {
-  if (lhs.Numel() != rhs.Numel() || lhs.Dtype() != rhs.Dtype()) {
-    FDASSERT(false, "The size and dtype of input FDTensor must be equal!");
+TensorDiff ResultManager::CalculateDiffStatis(FDTensor* lhs, FDTensor* rhs) {
+  if (lhs->Numel() != rhs->Numel() || lhs->Dtype() != rhs->Dtype()) {
+    FDASSERT(false, "The size and dtype of input FDTensor must be equal!")
   }
-  FDDataType dtype = lhs.Dtype();
-  int numel = lhs.Numel();
+  FDDataType dtype = lhs->Dtype();
+  int numel = lhs->Numel();
   if (dtype != FDDataType::FP32 && dtype != FDDataType::INT64 &&
       dtype != FDDataType::INT32) {
-    FDASSERT(false, "Only support FP32/INT64/INT32 now!");
+    FDASSERT(false, "Only support FP32/INT64/INT32 now, but got %s",
+             Str(dtype).c_str())
   }
   if (dtype == FDDataType::INT64) {
     std::vector<int64_t> tensor_diff(numel);
-    const int64_t* lhs_data_ptr = static_cast<const int64_t*>(lhs.CpuData());
-    const int64_t* rhs_data_ptr = static_cast<const int64_t*>(rhs.CpuData());
+    const int64_t* lhs_data_ptr = static_cast<const int64_t*>(lhs->CpuData());
+    const int64_t* rhs_data_ptr = static_cast<const int64_t*>(rhs->CpuData());
     for (int i = 0; i < numel; ++i) {
       tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
     }
@@ -400,8 +396,8 @@ TensorDiff ResultManager::CalculateDiffStatis(const FDTensor& lhs,
     return diff;
   } else if (dtype == FDDataType::INT32) {
     std::vector<int32_t> tensor_diff(numel);
-    const int32_t* lhs_data_ptr = static_cast<const int32_t*>(lhs.CpuData());
-    const int32_t* rhs_data_ptr = static_cast<const int32_t*>(rhs.CpuData());
+    const int32_t* lhs_data_ptr = static_cast<const int32_t*>(lhs->CpuData());
+    const int32_t* rhs_data_ptr = static_cast<const int32_t*>(rhs->CpuData());
     for (int i = 0; i < numel; ++i) {
       tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
     }
@@ -411,8 +407,8 @@ TensorDiff ResultManager::CalculateDiffStatis(const FDTensor& lhs,
     return diff;
   } else {  // FP32
     std::vector<float> tensor_diff(numel);
-    const float* lhs_data_ptr = static_cast<const float*>(lhs.CpuData());
-    const float* rhs_data_ptr = static_cast<const float*>(rhs.CpuData());
+    const float* lhs_data_ptr = static_cast<const float*>(lhs->CpuData());
+    const float* rhs_data_ptr = static_cast<const float*>(rhs->CpuData());
     for (int i = 0; i < numel; ++i) {
       tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
     }
@@ -423,32 +419,37 @@ TensorDiff ResultManager::CalculateDiffStatis(const FDTensor& lhs,
   }
 }
 
-DetectionDiff ResultManager::CalculateDiffStatis(
-    const vision::DetectionResult& lhs, const vision::DetectionResult& rhs,
-    float score_threshold) {
+DetectionDiff ResultManager::CalculateDiffStatis(vision::DetectionResult* lhs,
+                                                 vision::DetectionResult* rhs,
+                                                 float score_threshold) {
   // lex sort by x(w) & y(h)
   vision::utils::LexSortDetectionResultByXY(lhs);
   vision::utils::LexSortDetectionResultByXY(rhs);
+  // debug code (TODO: remove)
+  FDINFO << "lhs DetectionResult after lex sort:\n"
+         << lhs->Str() << "\n"
+         << "rhs DetectionResult after lex sort:\n"
+         << rhs->Str() << std::endl;
   // get value diff & trunc it by score_threshold
-  const int boxes_num = std::min(lhs.boxes.size(), rhs.boxes.size());
-  std::vector<float> boxes_diff(boxes_num * 4);
-  std::vector<float> scores_diff(boxes_num);
-  std::vector<int32_t> labels_diff(boxes_num);
+  const int boxes_num = std::min(lhs->boxes.size(), rhs->boxes.size());
+  std::vector<float> boxes_diff;
+  std::vector<float> scores_diff;
+  std::vector<int32_t> labels_diff;
   // TODO(qiuyanjun): process the diff of masks.
   for (int i = 0; i < boxes_num; ++i) {
-    if (lhs.scores[i] > score_threshold && rhs.scores[i] > score_threshold) {
-      scores_diff[i] = lhs.scores[i] - rhs.scores[i];
-      labels_diff[i] = lhs.label_ids[i] - rhs.label_ids[i];
-      boxes_diff[i * 4 + 0] = lhs.boxes[i][0] - rhs.boxes[i][0];
-      boxes_diff[i * 4 + 1] = lhs.boxes[i][1] - rhs.boxes[i][1];
-      boxes_diff[i * 4 + 2] = lhs.boxes[i][2] - rhs.boxes[i][3];
-      boxes_diff[i * 4 + 3] = lhs.boxes[i][3] - rhs.boxes[i][3];
+    if (lhs->scores[i] > score_threshold && rhs->scores[i] > score_threshold) {
+      scores_diff.push_back(lhs->scores[i] - rhs->scores[i]);
+      labels_diff.push_back(lhs->label_ids[i] - rhs->label_ids[i]);
+      boxes_diff.push_back(lhs->boxes[i][0] - rhs->boxes[i][0]);
+      boxes_diff.push_back(lhs->boxes[i][1] - rhs->boxes[i][1]);
+      boxes_diff.push_back(lhs->boxes[i][2] - rhs->boxes[i][2]);
+      boxes_diff.push_back(lhs->boxes[i][3] - rhs->boxes[i][3]);
     }
   }
   FDASSERT(boxes_diff.size() > 0,
            "Can't get any valid boxes while score_threshold is %f, "
            "The boxes.size of lhs is %d, the boxes.size of rhs is %d",
-           score_threshold, lhs.boxes.size(), rhs.boxes.size())
+           score_threshold, lhs->boxes.size(), rhs->boxes.size())
 
   DetectionDiff diff;
   CalculateStatisInfo<float>(boxes_diff.data(), boxes_diff.size(),

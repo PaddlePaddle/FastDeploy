@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
   benchmark::ResultManager::LoadDetectionResult(&res_loaded, det_result_path);
   // Calculate diff between two results.
   auto det_diff =
-      benchmark::ResultManager::CalculateDiffStatis(res, res_loaded);
+      benchmark::ResultManager::CalculateDiffStatis(&res, &res_loaded);
   std::cout << "diff: mean=" << det_diff.mean << ",max=" << det_diff.max
             << ",min=" << det_diff.min << std::endl;
   BENCHMARK_MODEL(model_ppyolov8, model_ppyolov8.Predict(im, &res))
