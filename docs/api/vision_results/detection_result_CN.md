@@ -67,6 +67,10 @@ fastdeploy.vision.Mask
 
 ## C# 定义
 
+```c#
+fastdeploy.vision.DetectionResult
+```  
+
 ```C#
 public struct DetectionResult {
   public List<float[]> boxes;
@@ -93,9 +97,9 @@ public struct Mask {
 - **data**: 成员变量，表示检测到的一个mask
 - **shape**: 成员变量，表示mask的shape，如 (h,w)
 
-# C定义
+## C定义
 
-`c
+```c
 typedef struct FD_C_DetectionResult {
   FD_C_TwoDimArrayFloat boxes;
   FD_C_OneDimArrayFloat scores;
@@ -103,7 +107,7 @@ typedef struct FD_C_DetectionResult {
   FD_C_OneDimMask masks;
   FD_C_Bool contain_masks;
 } FD_C_DetectionResult;
-`
+```
 
 - **boxes**(FD_C_TwoDimArrayFloat): 成员变量，表示单张图片检测出来的所有目标框坐标。boxes是一个list，其每个元素为一个长度为4的数组， 表示为一个框，每个框以4个float数值依次表示xmin, ymin, xmax, ymax， 即左上角和右下角坐标。FD_C_TwoDimArrayFloat表示一个二维数组，size表示所包含的一维数组的个数，data表示FD_C_OneDimArrayFloat的一维数组。
 

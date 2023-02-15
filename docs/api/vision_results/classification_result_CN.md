@@ -30,6 +30,8 @@ struct ClassifyResult {
 
 ## C# 定义
 
+`fastdeploy.vision.ClassifyResult`
+
 ```C#
 public struct ClassifyResult {
   public List<int> label_ids;
@@ -40,14 +42,14 @@ public struct ClassifyResult {
 - **label_ids**(list of int): 成员变量，表示单张图片的分类结果，其个数根据在使用分类模型时传入的topk决定，例如可以返回top 5的分类结果
 - **scores**(list of float): 成员变量，表示单张图片在相应分类结果上的置信度，其个数根据在使用分类模型时传入的topk决定，例如可以返回top 5的分类置信度
 
-# C定义
+## C定义
 
-`c
+```c
 typedef struct FD_C_ClassifyResult {
   FD_C_OneDimArrayInt32 label_ids;
   FD_C_OneDimArrayFloat scores;
 } FD_C_ClassifyResult;
-`
+```
 
 - **label_ids**(FD_C_OneDimArrayInt32): 成员变量，表示单张图片的分类结果，其个数根据在使用分类模型时传入的topk决定，例如可以返回top 5的分类结果。FD_C_OneDimArrayInt32包含两个字段，size和data，其中size表示数组的大小，data表示存储结果的数组。
 

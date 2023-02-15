@@ -67,6 +67,10 @@ fastdeploy.vision.Mask
 
 ## C# Definition
 
+```c#
+fastdeploy.vision.DetectionResult
+```  
+
 ```C#
 public struct DetectionResult {
   public List<float[]> boxes;
@@ -93,9 +97,9 @@ public struct Mask {
 - **data**: Member variable which indicates a detected mask.
 - **shape**: Member variable which indicates the shape of the mask, e.g. (h,w).
 
-# C Definition
+## C Definition
 
-`c
+```c
 typedef struct FD_C_DetectionResult {
   FD_C_TwoDimArrayFloat boxes;
   FD_C_OneDimArrayFloat scores;
@@ -103,7 +107,7 @@ typedef struct FD_C_DetectionResult {
   FD_C_OneDimMask masks;
   FD_C_Bool contain_masks;
 } FD_C_DetectionResult;
-`
+```
 
 - **boxes**(FD_C_TwoDimArrayFloat): Member variable which indicates the coordinates of all detected target boxes in a single frame. It is a list, and each element in it is also a list of length 4, representing a box with 4 float values representing xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner. FD_C_TwoDimArrayFloat includes two fields，i.e. size and data，in which size represents the number of elements，and data is the array to store elements of type FD_C_OneDimArrayFloat.
 

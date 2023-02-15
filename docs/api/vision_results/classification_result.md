@@ -30,6 +30,8 @@ struct ClassifyResult {
 
 ## C# Definition
 
+`fastdeploy.vision.ClassifyResult`
+
 ```C#
 public struct ClassifyResult {
   public List<int> label_ids;
@@ -40,14 +42,14 @@ public struct ClassifyResult {
 - **label_ids**(list of int): Member variable which indicates the classification results of a single image. Its number is determined by the topk passed in when using the classification model, e.g. it can return the top 5 classification results.
 - **scores**(list of float): Member variable which indicates the confidence level of a single image on the corresponding classification result. Its number is determined by the topk passed in when using the classification model, e.g. it can return the top 5 classification confidence level.
 
-# C Definition
+## C Definition
 
-`c
+```c
 typedef struct FD_C_ClassifyResult {
   FD_C_OneDimArrayInt32 label_ids;
   FD_C_OneDimArrayFloat scores;
 } FD_C_ClassifyResult;
-`
+```
 
 - **label_ids**(FD_C_OneDimArrayInt32): Member variable which indicates the classification results of a single image. Its number is determined by the topk passed in when using the classification model, e.g. it can return the top 5 classification results.FD_C_OneDimArrayInt32 includes two fields，i.e. size and data，in which size represents the number of elements，and data is the array to store elements.
 
