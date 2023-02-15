@@ -34,9 +34,9 @@ namespace Test
             }
             string model_dir = args[0];
             string image_path = args[1];
-            string model_file = model_dir + "\\" + "model.pdmodel";
-            string params_file = model_dir + "\\" + "model.pdiparams";
-            string config_file = model_dir + "\\" + "infer_cfg.yml";
+            string model_file = model_dir + "\\" + "inference.pdmodel";
+            string params_file = model_dir + "\\" + "inference.pdiparams";
+            string config_file = model_dir + "\\" + "inference_cls.yaml";
             RuntimeOption runtimeoption = new RuntimeOption();
             int device_option = Int32.Parse(args[2]);
             if(device_option==0){

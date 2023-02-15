@@ -28,9 +28,11 @@ void CpuInfer(const char* model_dir, const char* image_file) {
   char params_file[100];
   char config_file[100];
   int max_size = 99;
-  snprintf(model_file, max_size, "%s%c%s", model_dir, sep, "model.pdmodel");
-  snprintf(params_file, max_size, "%s%c%s", model_dir, sep, "model.pdiparams");
-  snprintf(config_file, max_size, "%s%c%s", model_dir, sep, "infer_cfg.yml");
+  snprintf(model_file, max_size, "%s%c%s", model_dir, sep, "inference.pdmodel");
+  snprintf(params_file, max_size, "%s%c%s", model_dir, sep,
+           "inference.pdiparams");
+  snprintf(config_file, max_size, "%s%c%s", model_dir, sep,
+           "inference_cls.yaml");
 
   FD_C_RuntimeOptionWrapper* option = FD_C_CreateRuntimeOptionWrapper();
   FD_C_RuntimeOptionWrapperUseCpu(option);
@@ -65,9 +67,11 @@ void GpuInfer(const char* model_dir, const char* image_file) {
   char params_file[100];
   char config_file[100];
   int max_size = 99;
-  snprintf(model_file, max_size, "%s%c%s", model_dir, sep, "model.pdmodel");
-  snprintf(params_file, max_size, "%s%c%s", model_dir, sep, "model.pdiparams");
-  snprintf(config_file, max_size, "%s%c%s", model_dir, sep, "infer_cfg.yml");
+  snprintf(model_file, max_size, "%s%c%s", model_dir, sep, "inference.pdmodel");
+  snprintf(params_file, max_size, "%s%c%s", model_dir, sep,
+           "inference.pdiparams");
+  snprintf(config_file, max_size, "%s%c%s", model_dir, sep,
+           "inference_cls.yaml");
 
   FD_C_RuntimeOptionWrapper* option = FD_C_CreateRuntimeOptionWrapper();
   FD_C_RuntimeOptionWrapperUseGpu(option, 0);
@@ -78,7 +82,7 @@ void GpuInfer(const char* model_dir, const char* image_file) {
   FD_C_Mat im = FD_C_Imread(image_file);
 
   FD_C_ClassifyResultWrapper* result_wrapper =
-      FD_C_CreateClassifyResultWrapperFromData();
+      FD_C_CreateClassifyResultWrapper();
 
   if (!FD_C_PaddleClasModelWrapperPredict(model, im, result_wrapper)) {
     printf("Failed to predict.\n");
