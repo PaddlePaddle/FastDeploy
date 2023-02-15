@@ -135,10 +135,12 @@ bool PPTinyPose::Postprocess(std::vector<FDTensor>& infer_result,
                              KeyPointDetectionResult* result,
                              const std::vector<float>& center,
                              const std::vector<float>& scale) {
-  FDASSERT(infer_result[1].shape[0] == 1,
+  FDASSERT(infer_result[0].shape[0] == 1,
            "Only support batch = 1 in FastDeploy now.");
   result->Clear();
 
+  std::cout << "Postprocess" << std::endl;
+  std::cout << "infer_result.size() is " << infer_result.size() << std::endl;
   if (infer_result.size() == 1) {
     FDTensor result_copy = infer_result[0];
     std::cout << "Reshape result_copy!" << std::endl;
@@ -206,12 +208,14 @@ bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result) {
             << ModelName() << "." << std::endl;
     return false;
   }
+
   std::vector<FDTensor> infer_result;
   if (!Infer(processed_data, &infer_result)) {
     FDERROR << "Failed to inference while using model:" << ModelName() << "."
             << std::endl;
     return false;
   }
+
   if (!Postprocess(infer_result, result, center, scale)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;

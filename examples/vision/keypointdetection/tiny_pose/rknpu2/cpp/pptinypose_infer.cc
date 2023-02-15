@@ -18,6 +18,7 @@ void RKNPU2Infer(const std::string& tinypose_model_dir,
                  const std::string& image_file) {
   auto tinypose_model_file =
       tinypose_model_dir + "/PP_TinyPose_256x192_infer_rk3588_unquantized.rknn";
+  std::cout << tinypose_model_file << std::endl;
   auto tinypose_params_file = "";
   auto tinypose_config_file = tinypose_model_dir + "/infer_cfg.yml";
   auto option = fastdeploy::RuntimeOption();
