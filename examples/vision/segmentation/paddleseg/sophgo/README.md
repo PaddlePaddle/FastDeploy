@@ -1,5 +1,10 @@
 [English](README.md) | 简体中文
 # PaddleSeg在算能（Sophgo）硬件上通过FastDeploy部署模型
+
+## PaddleSeg支持部署的Sophgo的芯片型号
+支持如下芯片的部署
+- Sophgo 1684X
+
 PaddleSeg支持通过FastDeploy在算能TPU上部署相关Segmentation模型
 
 ## 算能硬件支持的PaddleSeg模型

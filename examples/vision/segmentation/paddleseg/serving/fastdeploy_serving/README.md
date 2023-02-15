@@ -1,5 +1,9 @@
 English | [简体中文](README_CN.md)
-# PaddleSegmentation Serving Deployment Demo
+# PaddleSeg Serving Deployment Demo
+
+The PaddleSeg serving deployment Demo is built with FastDeploy Serving. FastDeploy Serving is a service-oriented deployment framework suitable for high-concurrency and high-throughput requests encapsulated based on the Triton Inference Server framework. It is a complete and high-performance service-oriented deployment framework that can be used in actual production. If you don’t need high-concurrency and high-throughput scenarios, and just want to quickly test the feasibility of online deployment of the model, please refer to [fastdeploy_serving](../simple_serving/)
+
+## Environment
 
 Before serving deployment, it is necessary to confirm the hardware and software environment requirements of the service image and the image pull command, please refer to [FastDeploy service deployment](https://github.com/PaddlePaddle/FastDeploy/blob/develop/serving/README.md)
 

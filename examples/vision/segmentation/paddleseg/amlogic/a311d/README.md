@@ -1,7 +1,18 @@
 [English](README.md) | 简体中文
 
-# PaddleSeg在晶晨A311D上通过FastDeploy部署模型
+# PaddleSeg在晶晨NPU上通过FastDeploy部署模型
+
+## PaddleSeg支持部署的晶晨芯片型号
+支持如下芯片的部署
+- Amlogic A311D
+- Amlogic C308X
+- Amlogic S905D3
+
+本示例基于晶晨A311D来介绍如何使用FastDeploy部署PaddleSeg模型
+
 晶晨A311D是一款先进的AI应用处理器。PaddleSeg支持通过FastDeploy在A311D上基于Paddle-Lite部署相关Segmentation模型
+
+>> **注意**：需要注意的是，芯原（verisilicon）作为 IP 设计厂商，本身并不提供实体SoC产品，而是授权其 IP 给芯片厂商，如：晶晨（Amlogic），瑞芯微（Rockchip）等。因此本文是适用于被芯原授权了 NPU IP 的芯片产品。只要芯片产品没有大副修改芯原的底层库，则该芯片就可以使用本文档作为 Paddle Lite 推理部署的参考和教程。在本文中，晶晨 SoC 中的 NPU 和 瑞芯微 SoC 中的 NPU 统称为芯原 NPU。
 
 ## 晶晨A311D支持的PaddleSeg模型
 

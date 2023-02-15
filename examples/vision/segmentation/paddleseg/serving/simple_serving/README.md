@@ -1,7 +1,8 @@
 English | [简体中文](README_CN.md)
 
-# PaddleSegmentation Python Simple Serving Demo
+# PaddleSeg Python Simple Serving Demo
 
+PaddleSeg Python Simple serving is an example of serving deployment built by FastDeploy based on the Flask framework that can quickly verify the feasibility of online model deployment. It completes AI inference tasks based on http requests, and is suitable for simple scenarios without concurrent inference task. For high concurrency and high throughput scenarios, please refer to [fastdeploy_serving](../fastdeploy_serving/)
 
 ## Environment
 

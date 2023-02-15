@@ -2,6 +2,8 @@
 
 # PaddleSeg Python轻量服务化部署示例
 
+PaddleSeg Python轻量服务化部署是FastDeploy基于Flask框架搭建的可快速验证线上模型部署可行性的服务化部署示例，基于http请求完成AI推理任务，适用于无并发推理的简单场景，如有高并发，高吞吐场景的需求请参考[fastdeploy_serving](../fastdeploy_serving/)
+
 ## 部署环境准备
 
 在部署前，需确认软硬件环境，同时下载预编译python wheel 包，参考文档[FastDeploy预编译库安装](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install#FastDeploy预编译库安装)
