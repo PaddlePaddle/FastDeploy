@@ -21,6 +21,7 @@ PPTinyPose::PPTinyPose(const std::string& model_file,
                         Backend::LITE};
   valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   valid_kunlunxin_backends = {Backend::LITE};
+  valid_rknpu_backends = {Backend::RKNPU2};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -66,14 +67,18 @@ bool PPTinyPose::BuildPreprocessPipelineFromConfig() {
   for (const auto& op : cfg["Preprocess"]) {
     std::string op_name = op["type"].as<std::string>();
     if (op_name == "NormalizeImage") {
-      auto mean = op["mean"].as<std::vector<float>>();
-      auto std = op["std"].as<std::vector<float>>();
-      bool is_scale = op["is_scale"].as<bool>();
-      processors_.push_back(std::make_shared<Normalize>(mean, std, is_scale));
+      if (!disable_normalize_) {
+        auto mean = op["mean"].as<std::vector<float>>();
+        auto std = op["std"].as<std::vector<float>>();
+        bool is_scale = op["is_scale"].as<bool>();
+        processors_.push_back(std::make_shared<Normalize>(mean, std, is_scale));
+      }
     } else if (op_name == "Permute") {
-      // permute = cast<float> + HWC2CHW
-      processors_.push_back(std::make_shared<Cast>("float"));
-      processors_.push_back(std::make_shared<HWC2CHW>());
+      if (!disable_permute_) {
+        // permute = cast<float> + HWC2CHW
+        processors_.push_back(std::make_shared<Cast>("float"));
+        processors_.push_back(std::make_shared<HWC2CHW>());
+      }
     } else if (op_name == "TopDownEvalAffine") {
       auto trainsize = op["trainsize"].as<std::vector<int>>();
       int height = trainsize[1];
