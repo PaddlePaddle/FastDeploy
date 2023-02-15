@@ -155,6 +155,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   OpenVINOBackendOption openvino_option;
   /// Option to configure Paddle Lite backend
   LiteBackendOption paddle_lite_option;
+  /// Option to configure RKNPU2 backend
+  RKNPU2BackendOption rknpu2_option;
 
   /** \brief Set the profile mode as 'true'.
    *
@@ -202,12 +204,6 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void* external_stream_ = nullptr;
 
   bool enable_pinned_memory = false;
-
-  // ======Only for RKNPU2 Backend=======
-  fastdeploy::rknpu2::CpuName rknpu2_cpu_name_ =
-      fastdeploy::rknpu2::CpuName::RK3588;
-  fastdeploy::rknpu2::CoreMask rknpu2_core_mask_ =
-      fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
 
   // *** The belowing api are deprecated, will be removed in v1.2.0
   // *** Do not use it anymore
