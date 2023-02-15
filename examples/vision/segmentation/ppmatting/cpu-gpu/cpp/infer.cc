@@ -106,9 +106,9 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file,
   auto vis_im = fastdeploy::vision::VisMatting(im, res);
   auto vis_im_with_bg = fastdeploy::vision::SwapBackground(im, bg, res);
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);
-  cv::imwrite("visualized_result_fg.jpg", vis_im);
+  cv::imwrite("visualized_result_fg.png", vis_im);
   std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
-               "and ./visualized_result_fg.jpg"
+               "and ./visualized_result_fg.png"
             << std::endl;
 }
 
