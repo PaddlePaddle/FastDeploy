@@ -288,7 +288,7 @@ FD_C_CheckAndConvert##typename##Wrapper( \
 FD_C_CheckAndConvert##typename##Wrapper( \
     FD_C_##typename##Wrapper* var_wrapper_name) { \
   FDASSERT(var_wrapper_name != nullptr, \
-           "The pointer of var_wrapper_name shouldn't be nullptr."); \
+           "The pointer of " #var_wrapper_name " shouldn't be nullptr."); \
   return var_wrapper_name->var_ptr_name; \
 }
 
@@ -296,6 +296,6 @@ FD_C_CheckAndConvert##typename##Wrapper( \
 FD_C_CheckAndConvert##typename##Wrapper( \
     FD_C_##typename##Wrapper* var_wrapper_name) { \
   FDASSERT(var_wrapper_name != nullptr, \
-           "The pointer of var_wrapper_name shouldn't be nullptr."); \
+           "The pointer of " #var_wrapper_name " shouldn't be nullptr."); \
   return var_wrapper_name->var_ptr_name; \
 }
