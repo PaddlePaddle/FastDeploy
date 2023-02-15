@@ -17,7 +17,9 @@
 #include "fastdeploy/vision/visualize/visualize.h"
 #include "fastdeploy_capi/types_internal.h"
 
+#ifdef __cplusplus
 extern "C" {
+#endif
 
 FD_C_Mat FD_C_VisDetection(FD_C_Mat im,
                            FD_C_DetectionResult* fd_c_detection_result,
@@ -32,4 +34,6 @@ FD_C_Mat FD_C_VisDetection(FD_C_Mat im,
       line_size, font_size);
   return new cv::Mat(result);
 }
+#ifdef __cplusplus
 }
+#endif
