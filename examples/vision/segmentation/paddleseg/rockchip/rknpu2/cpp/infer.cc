@@ -16,8 +16,7 @@
 #include "fastdeploy/vision.h"
 
 void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
-  std::string model_file =
-      model_dir + "/Portrait_PP_HumanSegV2_Lite_256x144_infer.onnx";
+  std::string model_file = model_dir + "/Portrait_PP_HumanSegV2_Lite_256x144_infer.onnx";
   std::string params_file;
   std::string config_file = model_dir + "/deploy.yaml";
   auto option = fastdeploy::RuntimeOption();
@@ -44,12 +43,13 @@ void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
   tc.PrintInfo("PPSeg in ONNX");
 
   cv::imwrite("infer_onnx.jpg", vis_im);
-  std::cout << "Visualized result saved in ./infer_onnx.jpg" << std::endl;
+  std::cout
+      << "Visualized result saved in ./infer_onnx.jpg"
+      << std::endl;
 }
 
 void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
-  std::string model_file =
-      model_dir + "/Portrait_PP_HumanSegV2_Lite_256x144_infer_rk3588.rknn";
+  std::string model_file = model_dir + "/Portrait_PP_HumanSegV2_Lite_256x144_infer_rk3588.rknn";
   std::string params_file;
   std::string config_file = model_dir + "/deploy.yaml";
   auto option = fastdeploy::RuntimeOption();
@@ -78,7 +78,9 @@ void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
   tc.PrintInfo("PPSeg in RKNPU2");
 
   cv::imwrite("infer_rknn.jpg", vis_im);
-  std::cout << "Visualized result saved in ./infer_rknn.jpg" << std::endl;
+  std::cout
+      << "Visualized result saved in ./infer_rknn.jpg"
+      << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -90,7 +92,11 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  RKNPU2Infer(argv[1], argv[2]);
-  //  ONNXInfer(argv[1], argv[2]);
+  if (std::atoi(argv[3]) == 0) {
+    ONNXInfer(argv[1], argv[2]);
+  } else if (std::atoi(argv[3]) == 1) {
+    RKNPU2Infer(argv[1], argv[2]);
+  }
   return 0;
 }
+
