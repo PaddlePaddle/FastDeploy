@@ -81,15 +81,15 @@ bool LexSortByXYCompare(const std::array<float, 4>& box_a,
                         const std::array<float, 4>& box_b) {
   // WARN: The status shoule be false if (a==b).
   // https://blog.csdn.net/xxxwrq/article/details/83080640
-  auto is_fp32_equal = [](const float& a, const float& b) -> bool {
+  auto is_equal = [](const float& a, const float& b) -> bool {
     return std::abs(a - b) < 1e-6f;
   };
   const float& x0_a = box_a[0];
   const float& y0_a = box_a[1];
   const float& x0_b = box_b[0];
   const float& y0_b = box_b[1];
-  if (is_fp32_equal(x0_a, x0_b)) {
-    return is_fp32_equal(y0_a, y0_b) ? false : y0_a > y0_b;
+  if (is_equal(x0_a, x0_b)) {
+    return is_equal(y0_a, y0_b) ? false : y0_a > y0_b;
   }
   return x0_a > x0_b;
 }
