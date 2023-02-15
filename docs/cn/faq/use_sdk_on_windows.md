@@ -2,7 +2,7 @@
 
 # 在 Windows 使用 FastDeploy C++ SDK
 
-【**注意**】**编译只支持Release模型，不支持Debug模型**
+【**注意**】**编译只支持Release模式，不支持Debug模式**
 
 ## 1. 准备环境和Windows部署库
 <div id="Environment"></div>  
