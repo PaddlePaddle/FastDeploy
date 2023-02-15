@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
   // Initialization
   auto option = fastdeploy::RuntimeOption();
   if (!CreateRuntimeOption(&option, argc, argv, true)) {
-    return false;
+    return -1;
   }
   auto im = cv::imread(FLAGS_image);
   // Set max_batch_size 1 for best performance

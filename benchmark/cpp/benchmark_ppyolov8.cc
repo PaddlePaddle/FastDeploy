@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
   // Initialization
   auto option = fastdeploy::RuntimeOption();
   if (!CreateRuntimeOption(&option, argc, argv, true)) {
-    return false;
+    return -1;
   }
   auto im = cv::imread(FLAGS_image);
   auto model_file = FLAGS_model + sep + "model.pdmodel";

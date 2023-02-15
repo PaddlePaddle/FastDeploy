@@ -18,9 +18,9 @@
 #include "fastdeploy/benchmark/utils.h"
 
 #ifdef WIN32
-const char sep = '\\';
+static const char sep = '\\';
 #else
-const char sep = '/';
+static const char sep = '/';
 #endif
 
 DEFINE_string(model, "", "Directory of the inference model.");
@@ -45,7 +45,7 @@ DEFINE_bool(
     collect_memory_info, false, "Whether to collect memory info");
 DEFINE_int32(sampling_interval, 50, "How often to collect memory info(ms).");
 
-void PrintUsage() {
+static void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path --device "
                "[cpu|gpu|xpu] --backend "
                "[default|ort|paddle|ov|trt|paddle_trt|lite] "
@@ -56,7 +56,7 @@ void PrintUsage() {
   std::cout << "Default value of use_fp16: false" << std::endl;
 }
 
-void PrintBenchmarkInfo() {
+static void PrintBenchmarkInfo() {
   // Get model name
   std::vector<std::string> model_names;
   fastdeploy::benchmark::Split(FLAGS_model, model_names, sep);
