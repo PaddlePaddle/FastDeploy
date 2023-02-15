@@ -51,5 +51,5 @@ python tools/rknpu2/export.py --config_path tools/rknpu2/config/PP_TinyPose_256x
 ## 详细部署文档
 
 - [模型详细介绍](../README_CN.md)
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python部署](./python)
+- [C++部署](./cpp)

@@ -139,18 +139,12 @@ bool PPTinyPose::Postprocess(std::vector<FDTensor>& infer_result,
            "Only support batch = 1 in FastDeploy now.");
   result->Clear();
 
-  std::cout << "Postprocess" << std::endl;
-  std::cout << "infer_result.size() is " << infer_result.size() << std::endl;
   if (infer_result.size() == 1) {
     FDTensor result_copy = infer_result[0];
-    std::cout << "Reshape result_copy!" << std::endl;
     result_copy.Reshape({result_copy.shape[0], result_copy.shape[1],
                          result_copy.shape[2] * result_copy.shape[3]});
-    std::cout << "Resize infer_result!" << std::endl;
     infer_result.resize(2);
-    std::cout << "Do ArgMax!" << std::endl;
     function::ArgMax(result_copy,&infer_result[1],-1);
-    std::cout << "Done!" << std::endl;
   }
 
   // Calculate output length
