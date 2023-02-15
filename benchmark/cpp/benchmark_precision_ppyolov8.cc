@@ -34,8 +34,11 @@ int main(int argc, char* argv[]) {
   auto model_ppyolov8 = vision::detection::PaddleYOLOv8(model_file, params_file,
                                                         config_file, option);
   vision::DetectionResult res;
-  // Save result to -> disk.
+  // Run once at least
   model_ppyolov8.Predict(im, &res);
+  // 1. Test result diff
+  std::cout << "=============== Test Result Diff =================\n";
+  // Save result to -> disk.
   std::string det_result_path = "ppyolov8_result.txt";
   benchmark::ResultManager::SaveDetectionResult(res, det_result_path);
   // Load result from <- disk.
@@ -46,6 +49,8 @@ int main(int argc, char* argv[]) {
       benchmark::ResultManager::CalculateDiffStatis(&res, &res_loaded);
   std::cout << "diff: mean=" << det_diff.mean << ",max=" << det_diff.max
             << ",min=" << det_diff.min << std::endl;
+  // 2. Test tensor diff
+
   BENCHMARK_MODEL(model_ppyolov8, model_ppyolov8.Predict(im, &res))
   auto vis_im = vision::VisDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);

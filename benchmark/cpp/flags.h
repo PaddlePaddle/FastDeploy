@@ -17,7 +17,6 @@
 #include <iostream>
 #include "gflags/gflags.h"
 #include "fastdeploy/benchmark/utils.h"
-#include "fastdeploy/utils/path.h"
 
 #ifdef WIN32
 static const char sep = '\\';
