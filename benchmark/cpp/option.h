@@ -14,9 +14,12 @@
 
 #pragma once
 
+#include "benchmark/cpp/flags.h"
 #include "fastdeploy/vision.h"
 
-static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
+static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
+                        int argc, char* argv[], bool remove_flags) {
+  google::ParseCommandLineFlags(&argc, &argv, remove_flags);
   if (FLAGS_profile_mode == "runtime") {
     option->EnableProfiling(FLAGS_include_h2d_d2h, FLAGS_repeat, FLAGS_warmup);
   }
@@ -33,7 +36,7 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
         option->paddle_infer_option.enable_trt = true;
       }
       if (FLAGS_use_fp16) {
-        option->EnableTrtFP16();
+        option->trt_option.enable_fp16 = true;
       }
     } else if (FLAGS_backend == "default") {
       return true;
@@ -41,6 +44,7 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
       std::cout << "While inference with GPU, only support "
                    "default/ort/paddle/trt/paddle_trt now, "
                 << FLAGS_backend << " is not supported." << std::endl;
+      PrintUsage();
       return false;
     }
   } else if (FLAGS_device == "cpu") {
@@ -54,7 +58,7 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
     } else if (FLAGS_backend == "lite") {
       option->UsePaddleLiteBackend();
       if (FLAGS_use_fp16) {
-        option->EnableLiteFP16();
+        option->paddle_lite_option.enable_fp16 = true;
       }
     } else if (FLAGS_backend == "default") {
       return true;
@@ -62,6 +66,7 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
       std::cout << "While inference with CPU, only support "
                    "default/ort/ov/paddle/lite now, "
                 << FLAGS_backend << " is not supported." << std::endl;
+      PrintUsage();
       return false;
     }
   } else if (FLAGS_device == "xpu") {
@@ -73,7 +78,7 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
     } else if (FLAGS_backend == "lite") {
       option->UsePaddleLiteBackend();
       if (FLAGS_use_fp16) {
-        option->EnableLiteFP16();
+        option->paddle_lite_option.enable_fp16 = true;
       }
     } else if (FLAGS_backend == "default") {
       return true;
@@ -81,13 +86,15 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
       std::cout << "While inference with XPU, only support "
                    "default/ort/paddle/lite now, "
                 << FLAGS_backend << " is not supported." << std::endl;
+      PrintUsage();
       return false;
     }
   } else {
     std::cerr << "Only support device CPU/GPU/XPU now, " << FLAGS_device
               << " is not supported." << std::endl;
+    PrintUsage();
     return false;
   }
-
+  PrintBenchmarkInfo();
   return true;
 }

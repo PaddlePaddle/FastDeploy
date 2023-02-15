@@ -13,19 +13,15 @@
 // limitations under the License.
 
 #include "macros.h"
-#include "flags.h"
 #include "option.h"
 
 int main(int argc, char* argv[]) {
-  google::ParseCommandLineFlags(&argc, &argv, true);
   auto im = cv::imread(FLAGS_image);
   // Initialization
   auto option = fastdeploy::RuntimeOption();
-  if (!CreateRuntimeOption(&option)) {
-    PrintUsage();
+  if (!CreateRuntimeOption(&option, &argc, &argv, true)) {
     return false;
   }
-  PrintBenchmarkInfo();
   // Set max_batch_size 1 for best performance
   option.trt_option.max_batch_size = 1;
   auto model_file = FLAGS_model + sep + "inference.pdmodel";
