@@ -1,37 +1,27 @@
-English | [简体中文](README_CN.md)
-# PaddleSeg Quantized Model Deployment
-FastDeploy already supports the deployment of quantitative models and provides a tool to automatically compress model with just one click.
-You can use the one-click automatical model compression tool to quantify and deploy the models, or directly download the quantified models provided by FastDeploy for deployment.
+[English](README.md) | 简体中文
+# PaddleSeg 量化模型部署
+FastDeploy已支持部署量化模型,并提供一键模型自动化压缩的工具.
+用户可以使用一键模型自动化压缩工具,自行对模型量化后部署, 也可以直接下载FastDeploy提供的量化模型进行部署.
 
-## FastDeploy One-Click Automation Model Compression Tool
-FastDeploy provides an one-click automatical model compression tool that can quantify a model simply by entering configuration file. 
-For details, please refer to [one-click automatical compression tool](../../../../../tools/common_tools/auto_compression/).
-Note: The quantized classification model still needs the deploy.yaml file in the FP32 model folder. Self-quantized model folder does not contain this yaml file, you can copy it from the FP32 model folder to the quantized model folder.
+## FastDeploy一键模型自动化压缩工具
+FastDeploy 提供了一键模型自动化压缩工具, 能够简单地通过输入一个配置文件, 对模型进行量化.
+详细教程请见: [一键模型自动化压缩工具](https://github.com/PaddlePaddle/FastDeploy/tree/develop/tools/common_tools/auto_compression)
+>> **注意**: 推理量化后的分类模型仍然需要FP32模型文件夹下的deploy.yaml文件, 自行量化的模型文件夹内不包含此yaml文件, 用户从FP32模型文件夹下复制此yaml文件到量化后的模型文件夹内即可。
 
-## Download the Quantized PaddleSeg Model
-You can also directly download the quantized models in the following table for deployment (click model name to download).
+## 量化完成的PaddleSeg模型
+用户也可以直接下载下表中的量化模型进行部署.(点击模型名字即可下载)
 
-Note:
-- Runtime latency is the inference latency of the model on various Runtimes, including CPU->GPU data copy, GPU inference, and GPU->CPU data copy time. It does not include the respective pre and post processing time of the models.
-- The end-to-end latency is the latency of the model in the actual inference scenario, including the pre and post processing of the model.
-- The measured latencies are averaged over 1000 inferences, in milliseconds.
-- INT8 + FP16 is to enable the FP16 inference option for Runtime while inferring the INT8 quantization model.
-- INT8 + FP16 + PM is the option to use Pinned Memory while inferring INT8 quantization model and turning on FP16, which can speed up the GPU->CPU data copy speed.
-- The maximum speedup ratio is obtained by dividing the FP32 latency by the fastest INT8 inference latency.
-- The strategy is quantitative distillation training, using a small number of unlabeled data sets to train the quantitative model, and verify the accuracy on the full validation set, INT8 accuracy does not represent the highest INT8 accuracy.
-- The CPU is Intel(R) Xeon(R) Gold 6271C with a fixed CPU thread count of 1 in all tests. The GPU is Tesla T4, TensorRT version 8.4.15.
+| 模型                 | 量化方式   |
+|:----- | :-- |
+| [PP-LiteSeg-T(STDC1)-cityscapes](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer_QAT_new.tar) |量化蒸馏训练 |
 
-#### Runtime Benchmark
-| Model                 |Inference Backends            | Hardware    | FP32 Runtime Latency   | INT8 Runtime Latency | INT8 + FP16 Runtime Latency  | INT8+FP16+PM Runtime Latency  |  Max Speedup    | FP32 mIoU | INT8 mIoU |  Method   |
-| ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |----- |----- |
-| [PP-LiteSeg-T(STDC1)-cityscapes](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer_QAT_new.tar)  | Paddle Inference |    CPU    |     1138.04|   602.62 |None|None     |      1.89      |77.37 | 71.62 |Quantaware Distillation Training |
+量化后模型的Benchmark比较，请参考[量化模型 Benchmark](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/quantize.md)
 
-#### End to End Benchmark
-| Model                 |Inference Backends             | Hardware    | FP32 End2End Latency   | INT8 End2End Latency | INT8 + FP16 End2End Latency  | INT8+FP16+PM End2End Latency  | Max Speedup   | FP32 mIoU | INT8 mIoU |   Method  |
-| ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |----- |----- |
-| [PP-LiteSeg-T(STDC1)-cityscapes](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer_QAT_new.tar)  | Paddle Inference |    CPU    |     4726.65|   4134.91|None|None     |      1.14      |77.37 | 71.62 |Quantaware Distillation Training|
+## 支持部署量化模型的硬件
+FastDeploy 量化模型部署的过程大致都与FP32模型类似，只是模型量化与非量化的区别，如果硬件在量化模型部署过程有特殊处理，也会在文档中特别标明，因此量化模型部署可以参考如下硬件的链接
 
-## Detailed Deployment Documents
-
-- [Python Deployment](python)
-- [C++ Deployment](cpp)
+| 硬件支持列表 |  |   |   |
+|:----- | :-- | :-- | :-- |
+| [NVIDIA GPU](cpu-gpu) | [X86 CPU](cpu-gpu)| [飞腾CPU](cpu-gpu) | [ARM CPU](cpu-gpu) |
+| [Intel GPU(独立显卡/集成显卡)](cpu-gpu) | [昆仑](kunlun) | [昇腾](ascend) | [瑞芯微](rockchip) |
+| [晶晨](amlogic) | [算能](sophgo) |
