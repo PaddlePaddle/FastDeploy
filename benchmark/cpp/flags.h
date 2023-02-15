@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <iostream>
 #include "gflags/gflags.h"
 #include "fastdeploy/benchmark/utils.h"
 
@@ -46,7 +45,7 @@ DEFINE_bool(
     collect_memory_info, false, "Whether to collect memory info");
 DEFINE_int32(sampling_interval, 50, "How often to collect memory info(ms).");
 
-void PrintUsage() {
+static void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path --device "
                "[cpu|gpu|xpu] --backend "
                "[default|ort|paddle|ov|trt|paddle_trt|lite] "
@@ -57,7 +56,7 @@ void PrintUsage() {
   std::cout << "Default value of use_fp16: false" << std::endl;
 }
 
-void PrintBenchmarkInfo() {
+static void PrintBenchmarkInfo() {
   // Get model name
   std::vector<std::string> model_names;
   fastdeploy::benchmark::Split(FLAGS_model, model_names, sep);
@@ -78,7 +77,9 @@ void PrintBenchmarkInfo() {
     ss << "device_id: " << FLAGS_device_id << std::endl;
   }
   ss << "backend: " << FLAGS_backend << std::endl;
-  ss << "cpu_thread_nums: " << FLAGS_cpu_thread_nums << std::endl;
+  if (FLAGS_device == "cpu") {
+    ss << "cpu_thread_nums: " << FLAGS_cpu_thread_nums << std::endl;
+  }
   ss << "use_fp16: " << FLAGS_use_fp16 << std::endl;
   ss << "collect_memory_info: " << FLAGS_collect_memory_info << std::endl;
   if (FLAGS_collect_memory_info) {

@@ -20,14 +20,12 @@ namespace vision = fastdeploy::vision;
 namespace benchmark = fastdeploy::benchmark;
 
 int main(int argc, char* argv[]) {
-  google::ParseCommandLineFlags(&argc, &argv, true);
-  auto im = cv::imread(FLAGS_image);
   // Initialization
   auto option = fastdeploy::RuntimeOption();
-  if (!CreateRuntimeOption(&option)) {
-    PrintUsage();
+  if (!CreateRuntimeOption(&option, argc, argv, true)) {
     return -1;
   }
+  auto im = cv::imread(FLAGS_image);
   auto model_file = FLAGS_model + sep + "model.pdmodel";
   auto params_file = FLAGS_model + sep + "model.pdiparams";
   auto config_file = FLAGS_model + sep + "infer_cfg.yml";
@@ -37,7 +35,7 @@ int main(int argc, char* argv[]) {
   // Run once at least
   model_ppyolov8.Predict(im, &res);
   // 1. Test result diff
-  std::cout << "=============== Test Result Diff =================\n";
+  std::cout << "=============== Test result Diff =================\n";
   // Save result to -> disk.
   std::string det_result_path = "ppyolov8_result.txt";
   benchmark::ResultManager::SaveDetectionResult(res, det_result_path);
@@ -50,7 +48,9 @@ int main(int argc, char* argv[]) {
   std::cout << "diff: mean=" << det_diff.mean << ",max=" << det_diff.max
             << ",min=" << det_diff.min << std::endl;
   // 2. Test tensor diff
+  std::cout << "=============== Test tensor diff =================\n";
 
+  // 3. Run profiling
   BENCHMARK_MODEL(model_ppyolov8, model_ppyolov8.Predict(im, &res))
   auto vis_im = vision::VisDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);

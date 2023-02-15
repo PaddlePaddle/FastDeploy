@@ -17,15 +17,12 @@
 #include "option.h"
 
 int main(int argc, char* argv[]) {
-  google::ParseCommandLineFlags(&argc, &argv, true);
-  auto im = cv::imread(FLAGS_image);
   // Initialization
   auto option = fastdeploy::RuntimeOption();
-  if (!CreateRuntimeOption(&option)) {
-    PrintUsage();
+  if (!CreateRuntimeOption(&option, argc, argv, true)) {
     return -1;
   }
-  PrintBenchmarkInfo();
+  auto im = cv::imread(FLAGS_image);
   auto model_yolov5 =
       fastdeploy::vision::detection::YOLOv5(FLAGS_model, "", option);
   fastdeploy::vision::DetectionResult res;
