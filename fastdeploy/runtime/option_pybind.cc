@@ -35,6 +35,7 @@ void BindOption(pybind11::module& m) {
       .def(pybind11::init())
       .def("set_model_path", &RuntimeOption::SetModelPath)
       .def("set_model_buffer", &RuntimeOption::SetModelBuffer)
+      .def("set_encryption_key", &RuntimeOption::SetEncryptionKey)
       .def("use_gpu", &RuntimeOption::UseGpu)
       .def("use_cpu", &RuntimeOption::UseCpu)
       .def("use_rknpu2", &RuntimeOption::UseRKNPU2)
@@ -48,6 +49,10 @@ void BindOption(pybind11::module& m) {
       .def_readwrite("poros_option", &RuntimeOption::poros_option)
       .def_readwrite("paddle_infer_option", &RuntimeOption::paddle_infer_option)
       .def("set_external_stream", &RuntimeOption::SetExternalStream)
+      .def("set_external_raw_stream",
+           [](RuntimeOption& self, size_t external_stream) {
+             self.SetExternalStream(reinterpret_cast<void*>(external_stream));
+           })
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
       .def("use_paddle_backend", &RuntimeOption::UsePaddleBackend)
       .def("use_poros_backend", &RuntimeOption::UsePorosBackend)

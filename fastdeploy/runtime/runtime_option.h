@@ -59,15 +59,21 @@ struct FASTDEPLOY_DECL RuntimeOption {
                       const std::string& params_buffer = "",
                       const ModelFormat& format = ModelFormat::PADDLE);
 
+  /** \brief When loading encrypted model, encryption_key is required to decrypte model
+   *
+   * \param[in] encryption_key The key for decrypting model
+   */
+  void SetEncryptionKey(const std::string& encryption_key);
+
   /// Use cpu to inference, the runtime will inference on CPU by default
   void UseCpu();
   /// Use Nvidia GPU to inference
   void UseGpu(int gpu_id = 0);
   /// Use RKNPU2 e.g RK3588/RK356X to inference
   void UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name =
-                     fastdeploy::rknpu2::CpuName::RK3588,
+                     fastdeploy::rknpu2::CpuName::RK356X,
                  fastdeploy::rknpu2::CoreMask rknpu2_core =
-                     fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0);
+                     fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO);
   /// Use TimVX e.g RV1126/A311D to inference
   void UseTimVX();
   /// Use Huawei Ascend to inference
@@ -104,6 +110,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
                     bool enable_multi_stream = false);
 
   void SetExternalStream(void* external_stream);
+
   /*
    * @brief Set number of cpu threads while inference on CPU, by default it will decided by the different backends
    */
@@ -178,6 +185,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// format of input model
   ModelFormat model_format = ModelFormat::PADDLE;
 
+  std::string encryption_key_ = "";
+
   // for cpu inference
   // default will let the backend choose their own default value
   int cpu_thread_num = -1;
@@ -198,8 +207,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   // *** The belowing api are deprecated, will be removed in v1.2.0
   // *** Do not use it anymore
-
-  void SetPaddleMKLDNN(bool pd_mkldnn = true); 
+  void SetPaddleMKLDNN(bool pd_mkldnn = true);
   void EnablePaddleToTrt();
   void DeletePaddleBackendPass(const std::string& delete_pass_name);
   void EnablePaddleLogInfo();

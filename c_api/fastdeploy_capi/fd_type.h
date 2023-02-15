@@ -17,7 +17,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "fastdeploy_capi/fd_common.h"  // NOLINT
+#include "fastdeploy_capi/enum_variables.h"
+#include "fastdeploy_capi/fd_common.h"
 
 typedef struct FD_C_OneDimArrayUint8 {
   size_t size;
@@ -65,3 +66,19 @@ typedef struct FD_C_TwoDimArrayFloat {
 } FD_C_TwoDimArrayFloat;  // std::vector<std::vector<float>>
 
 typedef void* FD_C_Mat;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat
+FD_C_Imread(const char* imgpath);
+
+FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_Imwrite(const char* savepath,
+                                                     __fd_keep FD_C_Mat);
+
+FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroyMat(__fd_take FD_C_Mat mat);
+
+#ifdef __cplusplus
+}
+#endif
