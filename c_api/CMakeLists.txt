@@ -19,6 +19,7 @@ if(NOT WITH_CAPI)
   return()
 endif()
 
+configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/c_api/fastdeploy_capi/config.h.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/c_api/fastdeploy_capi/config.h)
 file(GLOB_RECURSE DEPLOY_CAPI_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/c_api/fastdeploy_capi/*.cc)
 if(NOT ENABLE_VISION)
     file(GLOB_RECURSE DEPLOY_VISION_CAPI_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/c_api/fastdeploy_capi/vision/*.cc)

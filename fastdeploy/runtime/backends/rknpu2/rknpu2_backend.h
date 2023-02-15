@@ -25,7 +25,7 @@
 
 namespace fastdeploy {
 struct RKNPU2BackendOption {
-  rknpu2::CpuName cpu_name = rknpu2::CpuName::RK3588;
+  rknpu2::CpuName cpu_name = rknpu2::CpuName::RK356X;
 
   // The specification of NPU core setting.It has the following choices :
   // RKNN_NPU_CORE_AUTO : Referring to automatic mode, meaning that it will
@@ -49,7 +49,7 @@ class RKNPU2Backend : public BaseBackend {
 
   bool GetSDKAndDeviceVersion();
 
-  bool SetCoreMask(rknpu2::CoreMask& core_mask) const;
+  bool SetCoreMask(const rknpu2::CoreMask& core_mask);
 
   bool GetModelInputOutputInfos();
 
