@@ -23,12 +23,14 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   auto im = cv::imread(FLAGS_image);
-  auto model_yolov5 =
-      fastdeploy::vision::detection::YOLOv5(FLAGS_model, "", option);
-  fastdeploy::vision::DetectionResult res;
-  BENCHMARK_MODEL(model_yolov5, model_yolov5.Predict(im, &res))
-  auto vis_im = fastdeploy::vision::VisDetection(im, res);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  // Set max_batch_size 1 for best performance
+  option.trt_option.max_batch_size = 1;
+  auto model_file = FLAGS_model + sep + "inference.pdmodel";
+  auto params_file = FLAGS_model + sep + "inference.pdiparams";
+  auto config_file = FLAGS_model + sep + "inference_cls.yaml";
+  auto model_ppcls = fastdeploy::vision::classification::PaddleClasModel(
+      model_file, params_file, config_file, option);
+  fastdeploy::vision::ClassifyResult res;
+  BENCHMARK_MODEL(model_ppcls, model_ppcls.Predict(im, &res))
   return 0;
 }
