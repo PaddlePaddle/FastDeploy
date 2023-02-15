@@ -15,9 +15,7 @@
 ```bash
 mkdir build
 cd build
-# 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
-tar xvf fastdeploy-linux-x64-x.x.x.tgz
+
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
@@ -27,8 +25,8 @@ tar -xvf PP_TinyPose_256x192_infer.tgz
 wget https://bj.bcebos.com/paddlehub/fastdeploy/hrnet_demo.jpg
 
 
-# CPU推理
-./infer_tinypose_demo PP_TinyPose_256x192_infer hrnet_demo.jpg
+# NPU推理
+sudo ./infer_tinypose_demo ./PP_TinyPose_256x192_infer ./hrnet_demo.jpg
 ```
 
 运行完成可视化结果如下图所示
@@ -79,7 +77,7 @@ PPTinyPose模型加载和初始化，其中model_file为导出的Paddle模型格
 #### 后处理参数
 > > * **use_dark**(bool): 是否使用DARK进行后处理[参考论文](https://arxiv.org/abs/1910.06278)
 
-- [模型介绍](../../)
-- [Python部署](../python)
-- [视觉模型预测结果](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [模型介绍](../../../)
+- [Python部署](../../python)
+- [视觉模型预测结果](../../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../../../docs/cn/faq/how_to_change_backend.md)
