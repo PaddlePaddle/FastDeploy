@@ -14,9 +14,7 @@
 
 #pragma once
 
-#include <memory>
-
-#include "fastdeploy_capi/fd_common.h"
+#include "fastdeploy_capi/fd_type.h"
 
 typedef struct FD_C_RuntimeOptionWrapper FD_C_RuntimeOptionWrapper;
 
@@ -498,19 +496,6 @@ FASTDEPLOY_CAPI_EXPORT extern void FD_C_RuntimeOptionWrapperUseIpu(
     __fd_keep FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     int device_num, int micro_batch_size, FD_C_Bool enable_pipelining,
     int batches_per_step);
-
-/** \brief Set IPU config.
- *
- * \param[in] fd_c_runtime_option_wrapper pointer to FD_C_RuntimeOptionWrapper object
- * \param[in] enable_fp16 enable fp16.
- * \param[in] replica_num the number of graph replication.
- * \param[in] available_memory_proportion the available memory proportion for matmul/conv.
- * \param[in] enable_half_partial enable fp16 partial for matmul, only work with fp16.
- */
-FASTDEPLOY_CAPI_EXPORT extern void FD_C_RuntimeOptionWrapperSetIpuConfig(
-    __fd_keep FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
-    FD_C_Bool enable_fp16, int replica_num, float available_memory_proportion,
-    FD_C_Bool enable_half_partial);
 
 #ifdef __cplusplus
 }  // extern "C"
