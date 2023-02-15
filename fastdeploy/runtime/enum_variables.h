@@ -99,7 +99,6 @@ static std::map<Device, std::vector<Backend>>
   {Device::DIRECTML, {Backend::ORT}}
 };
 
-
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const Backend& b);
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const Device& d);
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const ModelFormat& f);
