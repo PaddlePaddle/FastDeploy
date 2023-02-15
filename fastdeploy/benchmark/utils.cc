@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <sys/types.h>
-#if defined(__linux__) || defined(__ANDROID__)
-#include <unistd.h>
+#ifdef __linux__
+#include <sys/resource.h>
 #endif
 #include <cmath>
 
@@ -23,8 +23,7 @@
 namespace fastdeploy {
 namespace benchmark {
 
-// Remove the ch characters at both ends of str
-static std::string strip(const std::string& str, char ch = ' ') {
+std::string Strip(const std::string& str, char ch) {
   int i = 0;
   while (str[i] == ch) {
     i++;
@@ -36,9 +35,8 @@ static std::string strip(const std::string& str, char ch = ' ') {
   return str.substr(i, j + 1 - i);
 }
 
-// Split string
-static void split(const std::string& s, std::vector<std::string>& tokens,
-                  char delim = ' ') {
+void Split(const std::string& s, std::vector<std::string>& tokens,
+           char delim) {
   tokens.clear();
   size_t lastPos = s.find_first_not_of(delim, 0);
   size_t pos = s.find(delim, lastPos);
@@ -54,7 +52,7 @@ ResourceUsageMonitor::ResourceUsageMonitor(int sampling_interval_ms, int gpu_id)
     : is_supported_(false),
       sampling_interval_(sampling_interval_ms),
       gpu_id_(gpu_id) {
-#if defined(__linux__) || defined(__ANDROID__)
+#ifdef __linux__
   is_supported_ = true;
 #else
   is_supported_ = false;
@@ -67,7 +65,9 @@ ResourceUsageMonitor::ResourceUsageMonitor(int sampling_interval_ms, int gpu_id)
 }
 
 void ResourceUsageMonitor::Start() {
-  if (!is_supported_) return;
+  if (!is_supported_) {
+    return;
+  }
   if (check_memory_thd_ != nullptr) {
     FDINFO << "Memory monitoring has already started!" << std::endl;
     return;
@@ -77,20 +77,24 @@ void ResourceUsageMonitor::Start() {
   check_memory_thd_.reset(new std::thread(([this]() {
     // Note we retrieve the memory usage at the very beginning of the thread.
     while (true) {
-      std::string cpu_mem_info = GetCurrentCpuMemoryInfo();
-      // get max_cpu_mem
-      std::vector<std::string> cpu_tokens;
-      split(cpu_mem_info, cpu_tokens, ' ');
-      max_cpu_mem_ = std::max(max_cpu_mem_, stof(cpu_tokens[3]) / 1024);
+#ifdef __linux__
+      rusage res;
+      if (getrusage(RUSAGE_SELF, &res) == 0) {
+        max_cpu_mem_ =
+            std::max(max_cpu_mem_, static_cast<float>(res.ru_maxrss / 1024.0));
+      }
+#endif
 #if defined(WITH_GPU)
       std::string gpu_mem_info = GetCurrentGpuMemoryInfo(gpu_id_);
       // get max_gpu_mem and max_gpu_util
       std::vector<std::string> gpu_tokens;
-      split(gpu_mem_info, gpu_tokens, ',');
+      Split(gpu_mem_info, gpu_tokens, ',');
       max_gpu_mem_ = std::max(max_gpu_mem_, stof(gpu_tokens[6]));
       max_gpu_util_ = std::max(max_gpu_util_, stof(gpu_tokens[7]));
 #endif
-      if (stop_signal_) break;
+      if (stop_signal_) {
+        break;
+      }
       std::this_thread::sleep_for(
           std::chrono::milliseconds(sampling_interval_));
     }
@@ -119,26 +123,6 @@ void ResourceUsageMonitor::StopInternal() {
     check_memory_thd_->join();
   }
   check_memory_thd_.reset(nullptr);
-}
-
-std::string ResourceUsageMonitor::GetCurrentCpuMemoryInfo() {
-  std::string result = "";
-#if defined(__linux__) || defined(__ANDROID__)
-  int iPid = static_cast<int>(getpid());
-  std::string command = "pmap -x " + std::to_string(iPid) + " | grep total";
-  FILE* pp = popen(command.data(), "r");
-  if (!pp) return "";
-  char tmp[1024];
-
-  while (fgets(tmp, sizeof(tmp), pp) != NULL) {
-    result += tmp;
-  }
-  pclose(pp);
-#else
-  FDASSERT(false,
-           "Currently collect cpu memory info only supports Linux and ANDROID.")
-#endif
-  return result;
 }
 
 std::string ResourceUsageMonitor::GetCurrentGpuMemoryInfo(int device_id) {
