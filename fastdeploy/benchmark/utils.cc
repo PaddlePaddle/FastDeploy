@@ -20,6 +20,7 @@
 
 #include "fastdeploy/benchmark/utils.h"
 #include "fastdeploy/utils/path.h"
+#include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
 namespace benchmark {
@@ -161,6 +162,8 @@ std::vector<std::string> ReadLines(const std::string& path) {
     FDERROR << "Failed to open file " << path << std::endl;
     std::abort();
   }
+  fin.close();
+
   return lines;
 }
 
@@ -186,9 +189,12 @@ bool ResultManager::SaveFDTensor(const FDTensor&& tensor,
     FDERROR << "Fail to open file:" << path << std::endl;
     return false;
   }
-  if (tensor.Dtype() != FDDataType::FP32) {
-    FDERROR << "Only support FP32 now, but got " << Str(tensor.dtype)
-            << std::endl;
+  fs.precision(7);
+  if (tensor.Dtype() != FDDataType::FP32 &&
+      tensor.Dtype() != FDDataType::INT32 &&
+      tensor.Dtype() != FDDataType::INT64) {
+    FDERROR << "Only support FP32/INT32/INT64 now, but got "
+            << Str(tensor.dtype) << std::endl;
     return false;
   }
   // name
@@ -206,14 +212,29 @@ bool ResultManager::SaveFDTensor(const FDTensor&& tensor,
   // dtype
   fs << "dtype:" << Str(tensor.dtype) << "\n";
   // data
-  const float* data_ptr = static_cast<const float*>(tensor.CpuData());
+  const void* data_ptr = tensor.CpuData();
   for (int i = 0; i < tensor.Numel(); ++i) {
-    if (i < tensor.Numel() - 1) {
-      fs << data_ptr[i] << ",";
-    } else {
-      fs << data_ptr[i];
+    if (tensor.Dtype() == FDDataType::INT64) {
+      if (i < tensor.Numel() - 1) {
+        fs << (static_cast<const int64_t*>(data_ptr))[i] << ",";
+      } else {
+        fs << (static_cast<const int64_t*>(data_ptr))[i];
+      }
+    } else if (tensor.Dtype() == FDDataType::INT32) {
+      if (i < tensor.Numel() - 1) {
+        fs << (static_cast<const int32_t*>(data_ptr))[i] << ",";
+      } else {
+        fs << (static_cast<const int32_t*>(data_ptr))[i];
+      }
+    } else {  // FP32
+      if (i < tensor.Numel() - 1) {
+        fs << (static_cast<const float*>(data_ptr))[i] << ",";
+      } else {
+        fs << (static_cast<const float*>(data_ptr))[i];
+      }
     }
   }
+
   fs << "\n";
   fs.close();
 
@@ -238,18 +259,35 @@ bool ResultManager::LoadFDTensor(FDTensor* tensor, const std::string& path) {
   }
   // dtype
   data = SplitDataLine(lines[2]);
-  if (data.begin()->second.at(0) != Str(FDDataType::FP32)) {
-    FDERROR << "Only support FP32 now, but got " << Str(FDDataType::FP32)
-            << std::endl;
+  if (data.begin()->second.at(0) == Str(FDDataType::INT64)) {
+    tensor->dtype = FDDataType::INT64;
+  } else if (data.begin()->second.at(0) == Str(FDDataType::INT32)) {
+    tensor->dtype = FDDataType::INT32;
+  } else if (data.begin()->second.at(0) == Str(FDDataType::FP32)) {
+    tensor->dtype = FDDataType::FP32;
+  } else {
+    FDERROR << "Only support FP32/INT64/INT32 now, but got "
+            << Str(FDDataType::FP32) << std::endl;
     return false;
   }
-  tensor->dtype = FDDataType::FP32;
   // data
   data = SplitDataLine(lines[3]);
   tensor->Allocate(tensor->shape, tensor->dtype, tensor->name);
-  float* mutable_data_ptr = static_cast<float*>(tensor->MutableData());
-  for (int i = 0; i < data.begin()->second.size(); ++i) {
-    mutable_data_ptr[i] = std::stof(data.begin()->second[i]);
+  if (tensor->dtype == FDDataType::INT64) {
+    int64_t* mutable_data_ptr = static_cast<int64_t*>(tensor->MutableData());
+    for (int i = 0; i < data.begin()->second.size(); ++i) {
+      mutable_data_ptr[i] = std::stol(data.begin()->second[i]);
+    }
+  } else if (tensor->dtype == FDDataType::INT32) {
+    int32_t* mutable_data_ptr = static_cast<int32_t*>(tensor->MutableData());
+    for (int i = 0; i < data.begin()->second.size(); ++i) {
+      mutable_data_ptr[i] = std::stoi(data.begin()->second[i]);
+    }
+  } else {  // FP32
+    float* mutable_data_ptr = static_cast<float*>(tensor->MutableData());
+    for (int i = 0; i < data.begin()->second.size(); ++i) {
+      mutable_data_ptr[i] = std::stof(data.begin()->second[i]);
+    }
   }
 
   return true;
@@ -266,6 +304,7 @@ bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
     FDERROR << "Fail to open file:" << path << std::endl;
     return false;
   }
+  fs.precision(7);  // float -> 7 double -> 15
   // boxes
   fs << "boxes:";
   for (int i = 0; i < res.boxes.size(); ++i) {
@@ -298,6 +337,7 @@ bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
     }
   }
   fs << "\n";
+  // TODO(qiuyanjun): dump masks
   fs.close();
 
   return true;
@@ -332,7 +372,7 @@ bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
   for (int i = 0; i < data.begin()->second.size(); ++i) {
     res->label_ids[i] = std::stoi(data.begin()->second[i]);
   }
-
+  // TODO(qiuyanjun): load masks
   return true;
 }
 
@@ -343,52 +383,74 @@ TensorDiff ResultManager::CalculateDiffStatis(const FDTensor& lhs,
   }
   FDDataType dtype = lhs.Dtype();
   int numel = lhs.Numel();
-  if (dtype != FDDataType::FP32) {
-    FDASSERT(false, "Only support FP32 now!");
+  if (dtype != FDDataType::FP32 && dtype != FDDataType::INT64 &&
+      dtype != FDDataType::INT32) {
+    FDASSERT(false, "Only support FP32/INT64/INT32 now!");
   }
-  std::vector<float> tensor_diff(numel);
-  const float* lhs_data_ptr = static_cast<const float*>(lhs.CpuData());
-  const float* rhs_data_ptr = static_cast<const float*>(rhs.CpuData());
-  for (int i = 0; i < numel; ++i) {
-    tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
+  if (dtype == FDDataType::INT64) {
+    std::vector<int64_t> tensor_diff(numel);
+    const int64_t* lhs_data_ptr = static_cast<const int64_t*>(lhs.CpuData());
+    const int64_t* rhs_data_ptr = static_cast<const int64_t*>(rhs.CpuData());
+    for (int i = 0; i < numel; ++i) {
+      tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
+    }
+    TensorDiff diff;
+    CalculateStatisInfo<int64_t>(tensor_diff.data(), numel, &(diff.mean),
+                                 &(diff.max), &(diff.min));
+    return diff;
+  } else if (dtype == FDDataType::INT32) {
+    std::vector<int32_t> tensor_diff(numel);
+    const int32_t* lhs_data_ptr = static_cast<const int32_t*>(lhs.CpuData());
+    const int32_t* rhs_data_ptr = static_cast<const int32_t*>(rhs.CpuData());
+    for (int i = 0; i < numel; ++i) {
+      tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
+    }
+    TensorDiff diff;
+    CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.mean),
+                               &(diff.max), &(diff.min));
+    return diff;
+  } else {  // FP32
+    std::vector<float> tensor_diff(numel);
+    const float* lhs_data_ptr = static_cast<const float*>(lhs.CpuData());
+    const float* rhs_data_ptr = static_cast<const float*>(rhs.CpuData());
+    for (int i = 0; i < numel; ++i) {
+      tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
+    }
+    TensorDiff diff;
+    CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.mean),
+                               &(diff.max), &(diff.min));
+    return diff;
   }
-
-  TensorDiff diff;
-  CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.mean),
-                             &(diff.max), &(diff.min));
-
-  return diff;
 }
 
 DetectionDiff ResultManager::CalculateDiffStatis(
     const vision::DetectionResult& lhs, const vision::DetectionResult& rhs,
     float score_threshold) {
-  // lex sort
-
-  // trunc result by score
-
-  //
-  if (lhs.boxes.size() != rhs.boxes.size()) {
-    FDASSERT(false,
-             "The boxes size of input DetectionResult must be equal!"
-             " But got %d != %d",
-             lhs.boxes.size(), rhs.boxes.size());
-  }
-
-  int boxes_num = lhs.boxes.size();
+  // lex sort by x(w) & y(h)
+  vision::utils::LexSortDetectionResultByXY(lhs);
+  vision::utils::LexSortDetectionResultByXY(rhs);
+  // get value diff & trunc it by score_threshold
+  const int boxes_num = std::min(lhs.boxes.size(), rhs.boxes.size());
   std::vector<float> boxes_diff(boxes_num * 4);
   std::vector<float> scores_diff(boxes_num);
   std::vector<int32_t> labels_diff(boxes_num);
+  // TODO(qiuyanjun): process the diff of masks.
   for (int i = 0; i < boxes_num; ++i) {
-    for (int j = 0; j < 4; ++j) {
-      boxes_diff[i * 4 + j] = lhs.boxes[i][j] - rhs.boxes[i][j];
+    if (lhs.scores[i] > score_threshold && rhs.scores[i] > score_threshold) {
+      scores_diff[i] = lhs.scores[i] - rhs.scores[i];
+      labels_diff[i] = lhs.label_ids[i] - rhs.label_ids[i];
+      boxes_diff[i * 4 + 0] = lhs.boxes[i][0] - rhs.boxes[i][0];
+      boxes_diff[i * 4 + 1] = lhs.boxes[i][1] - rhs.boxes[i][1];
+      boxes_diff[i * 4 + 2] = lhs.boxes[i][2] - rhs.boxes[i][3];
+      boxes_diff[i * 4 + 3] = lhs.boxes[i][3] - rhs.boxes[i][3];
     }
-    scores_diff[i] = lhs.scores[i] - rhs.scores[i];
-    labels_diff[i] = lhs.label_ids[i] - rhs.label_ids[i];
   }
+  FDASSERT(boxes_diff.size() > 0,
+           "Can't get any valid boxes while score_threshold is %f, "
+           "The boxes.size of lhs is %d, the boxes.size of rhs is %d",
+           score_threshold, lhs.boxes.size(), rhs.boxes.size())
 
   DetectionDiff diff;
-
   CalculateStatisInfo<float>(boxes_diff.data(), boxes_diff.size(),
                              &(diff.boxes.mean), &(diff.boxes.max),
                              &(diff.boxes.min));
@@ -398,11 +460,9 @@ DetectionDiff ResultManager::CalculateDiffStatis(
   CalculateStatisInfo<int32_t>(labels_diff.data(), labels_diff.size(),
                                &(diff.labels.mean), &(diff.labels.max),
                                &(diff.labels.min));
-
   diff.mean = diff.boxes.mean;
   diff.max = diff.boxes.max;
   diff.min = diff.boxes.min;
-
   return diff;
 }
 
