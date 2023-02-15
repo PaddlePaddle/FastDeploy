@@ -73,11 +73,12 @@ std:
 ```
 
 **修改outputs参数**
+
 由于Paddle2ONNX版本的不同，转换模型的输出节点名称也有所不同，请使用[Netron](https://netron.app)对模型进行可视化，并找到以下蓝色方框标记的NonMaxSuppression节点，红色方框的节点名称即为目标名称。
 
 例如，使用Netron可视化后，得到以下图片:
 
-![](https://user-images.githubusercontent.com/58363586/212599781-e1952da7-6eae-4951-8ca7-bab7e6940692.png)
+![](https://ai-studio-static-online.cdn.bcebos.com/8bce6b904a6b479e8b30da9f7c719fad57517ffb2f234aeca3b8ace0761754d5)
 
 找到蓝色方框标记的NonMaxSuppression节点，可以看到红色方框标记的两个节点名称为p2o.Div.79和p2o.Concat.9,因此需要修改outputs参数，修改后如下:
 
