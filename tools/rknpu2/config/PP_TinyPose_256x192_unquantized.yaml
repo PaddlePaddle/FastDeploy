@@ -1,0 +1,15 @@
+mean:
+  -
+    - 123.675
+    - 116.28
+    - 103.53
+std:
+  -
+    - 58.395
+    - 57.12
+    - 57.375
+model_path: ./PP_TinyPose_256x192_infer/PP_TinyPose_256x192_infer.onnx
+outputs_nodes: ['conv2d_441.tmp_1']
+do_quantization: False
+dataset:
+output_folder: "./PP_TinyPose_256x192_infer"
