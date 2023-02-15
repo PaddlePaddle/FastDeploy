@@ -17,13 +17,14 @@
 void RKNPU2Infer(const std::string& tinypose_model_dir,
                  const std::string& image_file) {
   auto tinypose_model_file =
-      tinypose_model_dir + "/picodet_s_416_coco_lcnet_rk3588.rknn";
+      tinypose_model_dir + "/PP_TinyPose_256x192_infer_rk3588_unquantized.rknn";
   auto tinypose_params_file = "";
-  auto tinypose_config_file = tinypose_model_dir + "infer_cfg.yml";
+  auto tinypose_config_file = tinypose_model_dir + "/infer_cfg.yml";
   auto option = fastdeploy::RuntimeOption();
   option.UseRKNPU2();
   auto tinypose_model = fastdeploy::vision::keypointdetection::PPTinyPose(
-      tinypose_model_file, tinypose_params_file, tinypose_config_file, option);
+      tinypose_model_file, tinypose_params_file, tinypose_config_file, option,
+      fastdeploy::RKNN);
 
   if (!tinypose_model.Initialized()) {
     std::cerr << "TinyPose Model Failed to initialize." << std::endl;
@@ -51,20 +52,14 @@ void RKNPU2Infer(const std::string& tinypose_model_dir,
 }
 
 int main(int argc, char* argv[]) {
-  if (argc < 4) {
+  if (argc < 3) {
     std::cout << "Usage: infer_demo path/to/pptinypose_model_dir path/to/image "
                  "run_option, "
-                 "e.g ./infer_model ./pptinypose_model_dir ./test.jpeg 0"
-              << std::endl;
-    std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu; 2: run with gpu and use tensorrt backend; 3: run "
-                 "with kunlunxin."
+                 "e.g ./infer_model ./pptinypose_model_dir ./test.jpeg"
               << std::endl;
     return -1;
   }
 
-  if (std::atoi(argv[3]) == 0) {
-    RKNPU2Infer(argv[1], argv[2]);
-  }
+  RKNPU2Infer(argv[1], argv[2]);
   return 0;
 }
