@@ -55,7 +55,9 @@ FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
 
 FD_C_Bool FD_C_PaddleClasModelWrapperInitialized(
     FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper) {
-  return fd_c_paddleclas_model_wrapper->Initialized();
+  auto& paddleclas_model = CHECK_AND_CONVERT_FD_TYPE(
+      PaddleClasModelWrapper, fd_c_paddleclas_model_wrapper);
+  return paddleclas_model->Initialized();
 }
 
 FD_C_ClassifyResult* FD_C_ClassifyResultToC(
@@ -89,14 +91,15 @@ FD_C_Bool FD_C_PaddleClasModelWrapperBatchPredict(
   for (int i = 0; i < imgs.size; i++) {
     imgs_vec.push_back(*(reinterpret_cast<cv::Mat*>(imgs.data[i])));
   }
-  bool successful =
-      fd_c_paddleclas_model_wrapper->BatchPredict(imgs_vec, &results_out);
+  auto& paddleclas_model = CHECK_AND_CONVERT_FD_TYPE(
+      PaddleClasModelWrapper, fd_c_paddleclas_model_wrapper);
+  bool successful = paddleclas_model->BatchPredict(imgs_vec, &results_out);
   if (successful) {
     // copy results back to FD_C_OneDimClassifyResult
     results->size = results_out.size();
     results->data = new FD_C_ClassifyResult[results->size];
     for (int i = 0; i < results_out.size(); i++) {
-      results->data[i] = FD_C_ClassifyResultToC(&results_out[i]);
+      results->data[i] = *FD_C_ClassifyResultToC(&results_out[i]);
     }
   }
   return successful;

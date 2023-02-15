@@ -106,8 +106,6 @@ DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(PSSDet, pssdet_model);
 // RetinaNet
 DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(RetinaNet, retinanet_model);
 
-// TTFNetSOD
-DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(TTFNetSOD, ttfnetsod_model);
 
 // FCOS
 DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(FCOS, fcos_model);
@@ -239,11 +237,6 @@ DECLARE_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(PSSDet,
 DECLARE_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(RetinaNet,
                                                       fd_retinanet_wrapper);
 
-// TTFNetSOD
-
-DECLARE_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(TTFNetSOD,
-                                                      fd_ttfnetsod_wrapper);
-
 // FCOS
 
 DECLARE_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(FCOS,
@@ -287,7 +280,7 @@ FD_C_CheckAndConvertRuntimeOptionWrapper(
 FD_C_CheckAndConvert##typename##Wrapper( \
     FD_C_##typename##Wrapper* var_wrapper_name) { \
   FDASSERT(var_wrapper_name != nullptr, \
-           "The pointer of var_wrapper_name shouldn't be nullptr."); \
+           "The pointer of " #var_wrapper_name " shouldn't be nullptr."); \
   return var_wrapper_name->var_ptr_name; \
 }
 

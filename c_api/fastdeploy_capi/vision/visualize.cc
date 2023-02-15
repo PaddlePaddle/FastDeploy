@@ -42,7 +42,7 @@ FD_C_Mat FD_C_VisDetectionWithLabel(FD_C_Mat im,
                                     float font_size) {
   std::vector<std::string> labels_in;
   for (int i = 0; i < labels->size; i++) {
-    labels_in.embrace_back(labels->data[i].data);
+    labels_in.emplace_back(labels->data[i].data);
   }
   FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper =
       FD_C_CreateDetectionResultWrapperFromData(fd_c_detection_result);

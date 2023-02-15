@@ -20,7 +20,6 @@
 #include "fastdeploy_capi/vision/result.h"
 #include "fastdeploy_capi/vision/detection/ppdet/base_define.h"
 
-typedef struct FD_C_TTFNetWrapper FD_C_TTFNetWrapper;
 typedef struct FD_C_RuntimeOptionWrapper FD_C_RuntimeOptionWrapper;
 
 #ifdef __cplusplus
@@ -28,6 +27,8 @@ extern "C" {
 #endif
 
 // PPYOLOE
+
+typedef struct FD_C_PPYOLOEWrapper FD_C_PPYOLOEWrapper;
 
 /** \brief Create a new FD_C_PPYOLOEWrapper object
  *
@@ -79,6 +80,8 @@ DECLARE_INITIALIZED_FUNCTION(PPYOLOE, fd_c_ppyoloe_wrapper);
 DECLARE_BATCH_PREDICT_FUNCTION(PPYOLOE, fd_c_ppyoloe_wrapper);
 
 // PicoDet
+
+typedef struct FD_C_PicoDetWrapper FD_C_PicoDetWrapper;
 
 /** \brief Create a new FD_C_PicoDetWrapper object
  *
@@ -132,6 +135,8 @@ DECLARE_BATCH_PREDICT_FUNCTION(PicoDet, fd_c_picodet_wrapper);
 
 // PPYOLO
 
+typedef struct FD_C_PPYOLOWrapper FD_C_PPYOLOWrapper;
+
 /** \brief Create a new FD_C_PPYOLOWrapper object
  *
  * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
@@ -182,6 +187,8 @@ DECLARE_INITIALIZED_FUNCTION(PPYOLO, fd_c_ppyolo_wrapper);
 DECLARE_BATCH_PREDICT_FUNCTION(PPYOLO, fd_c_ppyolo_wrapper);
 
 // YOLOv3
+
+typedef struct FD_C_YOLOv3Wrapper FD_C_YOLOv3Wrapper;
 
 /** \brief Create a new FD_C_YOLOv3Wrapper object
  *
@@ -234,6 +241,8 @@ DECLARE_BATCH_PREDICT_FUNCTION(YOLOv3, fd_c_yolov3_wrapper);
 
 // PaddleYOLOX
 
+typedef struct FD_C_PaddleYOLOXWrapper FD_C_PaddleYOLOXWrapper;
+
 /** \brief Create a new FD_C_PaddleYOLOXWrapper object
  *
  * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
@@ -284,6 +293,8 @@ DECLARE_INITIALIZED_FUNCTION(PaddleYOLOX, fd_c_paddleyolox_wrapper);
 DECLARE_BATCH_PREDICT_FUNCTION(PaddleYOLOX, fd_c_paddleyolox_wrapper);
 
 // FasterRCNN
+
+typedef struct FD_C_FasterRCNNWrapper FD_C_FasterRCNNWrapper;
 
 /** \brief Create a new FD_C_FasterRCNNWrapper object
  *
@@ -336,6 +347,8 @@ DECLARE_BATCH_PREDICT_FUNCTION(FasterRCNN, fd_c_fasterrcnn_wrapper);
 
 // MaskRCNN
 
+typedef struct FD_C_MaskRCNNWrapper FD_C_MaskRCNNWrapper;
+
 /** \brief Create a new FD_C_MaskRCNNWrapper object
  *
  * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
@@ -386,6 +399,8 @@ DECLARE_INITIALIZED_FUNCTION(MaskRCNN, fd_c_maskrcnn_wrapper);
 DECLARE_BATCH_PREDICT_FUNCTION(MaskRCNN, fd_c_maskrcnn_wrapper);
 
 // SSD
+
+typedef struct FD_C_SSDWrapper FD_C_SSDWrapper;
 
 /** \brief Create a new FD_C_SSDWrapper object
  *
@@ -438,6 +453,8 @@ DECLARE_BATCH_PREDICT_FUNCTION(SSD, fd_c_ssd_wrapper);
 
 // PaddleYOLOv5
 
+typedef struct FD_C_PaddleYOLOv5Wrapper FD_C_PaddleYOLOv5Wrapper;
+
 /** \brief Create a new FD_C_PaddleYOLOv5Wrapper object
  *
  * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
@@ -488,6 +505,8 @@ DECLARE_INITIALIZED_FUNCTION(PaddleYOLOv5, fd_c_paddleyolov5_wrapper);
 DECLARE_BATCH_PREDICT_FUNCTION(PaddleYOLOv5, fd_c_paddleyolov5_wrapper);
 
 // PaddleYOLOv6
+
+typedef struct FD_C_PaddleYOLOv6Wrapper FD_C_PaddleYOLOv6Wrapper;
 
 /** \brief Create a new FD_C_PaddleYOLOv6Wrapper object
  *
@@ -540,6 +559,8 @@ DECLARE_BATCH_PREDICT_FUNCTION(PaddleYOLOv6, fd_c_paddleyolov6_wrapper);
 
 // PaddleYOLOv7
 
+typedef struct FD_C_PaddleYOLOv7Wrapper FD_C_PaddleYOLOv7Wrapper;
+
 /** \brief Create a new FD_C_PaddleYOLOv7Wrapper object
  *
  * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
@@ -590,6 +611,8 @@ DECLARE_INITIALIZED_FUNCTION(PaddleYOLOv7, fd_c_paddleyolov7_wrapper);
 DECLARE_BATCH_PREDICT_FUNCTION(PaddleYOLOv7, fd_c_paddleyolov7_wrapper);
 
 // PaddleYOLOv8
+
+typedef struct FD_C_PaddleYOLOv8Wrapper FD_C_PaddleYOLOv8Wrapper;
 
 /** \brief Create a new FD_C_PaddleYOLOv8Wrapper object
  *
@@ -642,6 +665,8 @@ DECLARE_BATCH_PREDICT_FUNCTION(PaddleYOLOv8, fd_c_paddleyolov8_wrapper);
 
 // RTMDet
 
+typedef struct FD_C_RTMDetWrapper FD_C_RTMDetWrapper;
+
 /** \brief Create a new FD_C_RTMDetWrapper object
  *
  * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
@@ -692,6 +717,8 @@ DECLARE_INITIALIZED_FUNCTION(RTMDet, fd_c_rtmdet_wrapper);
 DECLARE_BATCH_PREDICT_FUNCTION(RTMDet, fd_c_rtmdet_wrapper);
 
 // CascadeRCNN
+
+typedef struct FD_C_CascadeRCNNWrapper FD_C_CascadeRCNNWrapper;
 
 /** \brief Create a new FD_C_CascadeRCNNWrapper object
  *
@@ -744,6 +771,8 @@ DECLARE_BATCH_PREDICT_FUNCTION(CascadeRCNN, fd_c_cascadercnn_wrapper);
 
 // PSSDet
 
+typedef struct FD_C_PSSDetWrapper FD_C_PSSDetWrapper;
+
 /** \brief Create a new FD_C_PSSDetWrapper object
  *
  * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
@@ -795,6 +824,8 @@ DECLARE_BATCH_PREDICT_FUNCTION(PSSDet, fd_c_pssdet_wrapper);
 
 // RetinaNet
 
+typedef struct FD_C_RetinaNetWrapper FD_C_RetinaNetWrapper;
+
 /** \brief Create a new FD_C_RetinaNetWrapper object
  *
  * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
@@ -844,58 +875,9 @@ DECLARE_INITIALIZED_FUNCTION(RetinaNet, fd_c_retinanet_wrapper);
 
 DECLARE_BATCH_PREDICT_FUNCTION(RetinaNet, fd_c_retinanet_wrapper);
 
-// TTFNetSOD
-
-/** \brief Create a new FD_C_TTFNetSODWrapper object
- *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
- * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
- * \param[in] model_format Model format of the loaded model, default is Paddle format
- *
- * \return Return a pointer to FD_C_TTFNetSODWrapper object
- */
-
-DECLARE_CREATE_WRAPPER_FUNCTION(TTFNetSOD);
-
-/** \brief Destroy a FD_C_TTFNetSODWrapper object
- *
- * \param[in] fd_c_paddleyolov5sod_wrapper pointer to FD_C_TTFNetSODWrapper object
- */
-
-DECLARE_DESTROY_WRAPPER_FUNCTION(TTFNetSOD, fd_c_paddleyolov5sod_wrapper);
-
-/** \brief Predict the detection result for an input image
- *
- * \param[in] fd_c_paddleyolov5sod_wrapper pointer to FD_C_TTFNetSODWrapper object
- * \param[in] img pointer to cv::Mat image
- * \param[in] fd_c_detection_result_wrapper pointer to FD_C_DetectionResultWrapper object, which stores the result.
- */
-
-DECLARE_PREDICT_FUNCTION(TTFNetSOD, fd_c_paddleyolov5sod_wrapper);
-
-/** \brief Check if the model is initialized successfully
- *
- * \param[in] fd_c_paddleyolov5sod_wrapper pointer to FD_C_TTFNetSODWrapper object
- *
- * \return Return a bool of value true if initialized successfully
- */
-
-DECLARE_INITIALIZED_FUNCTION(TTFNetSOD, fd_c_paddleyolov5sod_wrapper);
-
-/** \brief Predict the detection results for a batch of input images
-   *
-   * \param[in] fd_c_paddleyolov5sod_wrapper pointer to FD_C_TTFNetSODWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
-   * \param[in] results The output detection result list
-   *
-   * \return true if the prediction successed, otherwise false
-   */
-
-DECLARE_BATCH_PREDICT_FUNCTION(TTFNetSOD, fd_c_paddleyolov5sod_wrapper);
-
 // FCOS
+
+typedef struct FD_C_FCOSWrapper FD_C_FCOSWrapper;
 
 /** \brief Create a new FD_C_FCOSWrapper object
  *
@@ -948,6 +930,8 @@ DECLARE_BATCH_PREDICT_FUNCTION(FCOS, fd_c_fcos_wrapper);
 
 // TTFNet
 
+typedef struct FD_C_TTFNetWrapper FD_C_TTFNetWrapper;
+
 /** \brief Create a new FD_C_TTFNetWrapper object
  *
  * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
@@ -999,6 +983,8 @@ DECLARE_BATCH_PREDICT_FUNCTION(TTFNet, fd_c_ttfnet_wrapper);
 
 // TOOD
 
+typedef struct FD_C_TOODWrapper FD_C_TOODWrapper;
+
 /** \brief Create a new FD_C_TOODWrapper object
  *
  * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
@@ -1049,6 +1035,8 @@ DECLARE_INITIALIZED_FUNCTION(TOOD, fd_c_tood_wrapper);
 DECLARE_BATCH_PREDICT_FUNCTION(TOOD, fd_c_tood_wrapper);
 
 // GFL
+
+typedef struct FD_C_GFLWrapper FD_C_GFLWrapper;
 
 /** \brief Create a new FD_C_GFLWrapper object
  *

@@ -92,7 +92,9 @@ FD_C_ClassifyResultWrapper* FD_C_CreateClassifyResultWrapperFromData(
 
 char* FD_C_ClassifyResultWrapperStr(
     FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper) {
-  std::string information = fd_c_classify_result_wrapper->Str();
+  auto& classify_result = CHECK_AND_CONVERT_FD_TYPE(
+      ClassifyResultWrapper, fd_c_classify_result_wrapper);
+  std::string information = classify_result->Str();
   char* cstr = new char[information.length() + 1];
   std::strcpy(cstr, information.c_str());
   return cstr;
@@ -248,7 +250,9 @@ FD_C_DetectionResultWrapper* FD_C_CreateDetectionResultWrapperFromData(
 
 char* FD_C_DetectionResultWrapperStr(
     FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper) {
-  std::string information = fd_c_detection_result_wrapper->Str();
+  auto& detection_result = CHECK_AND_CONVERT_FD_TYPE(
+      DetectionResultWrapper, fd_c_detection_result_wrapper);
+  std::string information = detection_result->Str();
   char* cstr = new char[information.length() + 1];
   std::strcpy(cstr, information.c_str());
   return cstr;
