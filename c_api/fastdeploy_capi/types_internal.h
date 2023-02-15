@@ -46,6 +46,9 @@ DEFINE_RESULT_WRAPPER_STRUCT(ClassifyResult, classify_result);
 // DetectionResult
 DEFINE_RESULT_WRAPPER_STRUCT(DetectionResult, detection_result);
 
+// OCRResult
+DEFINE_RESULT_WRAPPER_STRUCT(OCRResult, ocr_result);
+
 
 // Models:
 
@@ -119,6 +122,22 @@ DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(TOOD, tood_model);
 // GFL
 DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(GFL, gfl_model);
 
+// OCR models
+
+// Recognizer
+DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(Recognizer, recognizer_model);
+
+// DBDetector
+DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(DBDetector, dbdetector_model);
+
+// Classifier
+DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(Classifier, classifier_model);
+
+// PPOCRv2
+DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(PPOCRv2, ppocrv2_model);
+
+// PPOCRv3
+DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(PPOCRv3, ppocrv3_model);
 
 // -------------  belows are function declaration for get ptr from wrapper --------------------- //
 
@@ -134,6 +153,14 @@ FD_C_CheckAndConvert##typename##Wrapper( \
 FD_C_CheckAndConvert##typename##Wrapper( \
     FD_C_##typename##Wrapper* varname)
 
+#define DECLARE_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(typename, varname) std::unique_ptr<fastdeploy::vision::ocr::typename>& \
+FD_C_CheckAndConvert##typename##Wrapper( \
+    FD_C_##typename##Wrapper* varname)
+
+#define DECLARE_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(typename, varname) std::unique_ptr<fastdeploy::pipeline::typename>& \
+FD_C_CheckAndConvert##typename##Wrapper( \
+    FD_C_##typename##Wrapper* varname)
+
 namespace fastdeploy {
 
 // results:
@@ -144,6 +171,10 @@ DECLARE_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(ClassifyResult,
 // DetectionResult
 DECLARE_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(DetectionResult,
                                              fd_detection_result_wrapper);
+
+// OCRResult
+DECLARE_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(OCRResult,
+                                             fd_ocr_result_wrapper);
 
 // Models:
 
@@ -257,6 +288,23 @@ DECLARE_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(TOOD,
 DECLARE_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(GFL,
                                                       fd_gfl_wrapper);
 
+// OCR models
+
+// Recognizer
+DECLARE_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(Recognizer, fd_recognizer_wrapper);
+
+// DBDetector
+DECLARE_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(DBDetector, fd_dbdetector_wrapper);
+
+// Classifier
+DECLARE_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(Classifier, fd_classifier_wrapper);
+
+// PPOCRv2
+DECLARE_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(PPOCRv2, fd_ppocrv2_wrapper);
+
+// PPOCRv3
+DECLARE_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(PPOCRv3, fd_ppocrv3_wrapper);
+
 }  // namespace fastdeploy
 
 #endif
@@ -288,7 +336,7 @@ FD_C_CheckAndConvert##typename##Wrapper( \
 FD_C_CheckAndConvert##typename##Wrapper( \
     FD_C_##typename##Wrapper* var_wrapper_name) { \
   FDASSERT(var_wrapper_name != nullptr, \
-           "The pointer of var_wrapper_name shouldn't be nullptr."); \
+           "The pointer of " #var_wrapper_name " shouldn't be nullptr."); \
   return var_wrapper_name->var_ptr_name; \
 }
 
@@ -296,6 +344,22 @@ FD_C_CheckAndConvert##typename##Wrapper( \
 FD_C_CheckAndConvert##typename##Wrapper( \
     FD_C_##typename##Wrapper* var_wrapper_name) { \
   FDASSERT(var_wrapper_name != nullptr, \
-           "The pointer of var_wrapper_name shouldn't be nullptr."); \
+           "The pointer of " #var_wrapper_name " shouldn't be nullptr."); \
+  return var_wrapper_name->var_ptr_name; \
+}
+
+#define DECL_AND_IMPLEMENT_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(typename, var_wrapper_name, var_ptr_name) std::unique_ptr<fastdeploy::vision::ocr::typename>& \
+FD_C_CheckAndConvert##typename##Wrapper( \
+    FD_C_##typename##Wrapper* var_wrapper_name) { \
+  FDASSERT(var_wrapper_name != nullptr, \
+           "The pointer of " #var_wrapper_name " shouldn't be nullptr."); \
+  return var_wrapper_name->var_ptr_name; \
+}
+
+#define DECL_AND_IMPLEMENT_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(typename, var_wrapper_name, var_ptr_name) std::unique_ptr<fastdeploy::pipeline::typename>& \
+FD_C_CheckAndConvert##typename##Wrapper( \
+    FD_C_##typename##Wrapper* var_wrapper_name) { \
+  FDASSERT(var_wrapper_name != nullptr, \
+           "The pointer of " #var_wrapper_name " shouldn't be nullptr."); \
   return var_wrapper_name->var_ptr_name; \
 }
