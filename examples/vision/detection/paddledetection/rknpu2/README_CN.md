@@ -97,6 +97,16 @@ python tools/rknpu2/export.py --config_path tools/rknpu2/config/picodet_s_416_co
                               --target_platform rk3588
 ```
 
+## RKNN模型列表
+
+为了方便大家测试，我们提供picodet和ppyoloe两个模型，解压后即可使用:
+
+| 模型名称                        | 下载地址                                                                              |
+|-----------------------------|-----------------------------------------------------------------------------------|
+| picodet_s_416_coco_lcnet    | https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/picodet_s_416_coco_lcnet.zip    |
+| ppyoloe_plus_crn_s_80e_coco | https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/ppyoloe_plus_crn_s_80e_coco.zip |
+
+
 
 ## 其他链接
 
