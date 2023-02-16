@@ -141,7 +141,7 @@ FD_C_Bool FD_C_Imwrite(const char* savepath,  FD_C_Mat img);
 ```c
 FD_C_Bool FD_C_PPYOLOEWrapperPredict(
     __fd_take FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper, FD_C_Mat img,
-    FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper)
+    FD_C_DetectionResult* fd_c_detection_result)
 ```
 >
 > 模型预测接口，输入图像直接并生成检测结果。
@@ -149,36 +149,10 @@ FD_C_Bool FD_C_PPYOLOEWrapperPredict(
 > **参数**
 > * **fd_c_ppyoloe_wrapper**(FD_C_PPYOLOEWrapper*): 指向PPYOLOE模型的指针
 > * **img**（FD_C_Mat）: 输入图像的指针，指向cv::Mat对象，可以调用FD_C_Imread读取图像获取
-> * **result**（FD_C_DetectionResultWrapper*): 指向检测结果的指针，检测结果包括检测框，各个框的置信度, DetectionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> * **fd_c_detection_result**FD_C_DetectionResult*): 指向检测结果的指针，检测结果包括检测框，各个框的置信度, DetectionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 
 #### Predict结果
-
-```c
-FD_C_DetectionResultWrapper* FD_C_CreateDetectionResultWrapper();
-```
->
-> 创建一个DetectionResult对象，用来保存推理的结果，并返回所创建的DetectionResult对象的指针。
->
-> **返回**
-> * **fd_c_detection_result_wrapper**(FD_C_DetectionResultWrapper*): 指向DetectionResult对象的指针
-
-
-
-```c
-FD_C_DetectionResult* FD_C_DetectionResultWrapperGetData(
-     FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper)
-```
->
-> 从DetectionResult对象中提取纯C结构的DetectionResult结果，并返回结构指针，通过该指针可直接返回结构中的字段。
->
-> **参数**
-> * **fd_c_detection_result_wrapper**(FD_C_DetectionResultWrapper*): 指向DetectionResult对象的指针
->
-> **返回**
-> * **fd_c_detection_result**(FD_C_DetectionResult*): 指向纯C结构的DetectionResult的指针
-
-
 
 ```c
 FD_C_Mat FD_C_VisDetection(FD_C_Mat im, FD_C_DetectionResult* fd_detection_result,
@@ -189,7 +163,7 @@ FD_C_Mat FD_C_VisDetection(FD_C_Mat im, FD_C_DetectionResult* fd_detection_resul
 >
 > **参数**
 > * **im**(FD_C_Mat): 指向输入图像的指针
-> * **fd_detection_result**(FD_C_DetectionResult*): 指向纯C结构DetectionResult的指针
+> * **fd_detection_result**(FD_C_DetectionResult*): 指向FD_C_DetectionResult结构的指针
 > * **score_threshold**(float): 检测阈值
 > * **line_size**(int): 检测框线大小
 > * **font_size**(float): 检测框字体大小

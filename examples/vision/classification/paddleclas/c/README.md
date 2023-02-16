@@ -136,7 +136,7 @@ FD_C_Bool FD_C_Imwrite(const char* savepath,  FD_C_Mat img);
 ```c
 FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
     __fd_take FD_C_PaddleClasModelWrapper* fd_c_ppclas_wrapper, FD_C_Mat img,
-    FD_C_ClassifyResultWrapper* fd_c_ppclas_result_wrapper)
+    FD_C_ClassifyResult* fd_c_ppclas_result)
 ```
 >
 > Predict an image, and generate classification result.
@@ -144,34 +144,37 @@ FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
 > **Params**
 > * **fd_c_ppclas_wrapper**(FD_C_PaddleClasModelWrapper*): pointer to manipulate PaddleClas object
 > * **img**（FD_C_Mat）: pointer to cv::Mat object, which can be obained by FD_C_Imread interface
-> * **result**（FD_C_ClassifyResultWrapper*): The classification result, including label_id, and the corresponding confidence. Refer to [Visual Model Prediction Results](../../../../../docs/api/vision_results/) for the description of ClassifyResult
+> * **fd_c_ppclas_result** (FD_C_ClassifyResult*): The classification result, including label_id, and the corresponding confidence. Refer to [Visual Model Prediction Results](../../../../../docs/api/vision_results/) for the description of ClassifyResult
 
 
 #### Result
 
 ```c
-FD_C_ClassifyResultWrapper* FD_C_CreateClassifyResultWrapper();
+FD_C_ClassifyResultWrapper* FD_C_CreateClassifyResultWrapperFromData(
+    FD_C_ClassifyResult* fd_c_classify_result)
 ```
 >
-> Create a ClassifyResult object to keep the classification result，return a pointer to manipulate it.
+> Create a pointer to FD_C_ClassifyResultWrapper structure, which contains `fastdeploy::vision::ClassifyResult` object in C++. You can call methods in C++ ClassifyResult object by C API with this pointer.
+>
+> **Params**
+> * **fd_c_classify_result**(FD_C_ClassifyResult*): pointer to FD_C_ClassifyResult structure
 >
 > **Return**
-> * **fd_c_classify_result_wrapper**(FD_C_ClassifyResultWrapper*): pointer to manipulate ClassifyResult object
-
+> * **fd_c_classify_result_wrapper**(FD_C_ClassifyResultWrapper*): pointer to FD_C_ClassifyResultWrapper structure
 
 
 ```c
-FD_C_ClassifyResult* FD_C_ClassifyResultWrapperGetData(
-     FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper)
+char* FD_C_ClassifyResultWrapperStr(
+    FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper);
 ```
 >
->
+> Call Str() methods in `fastdeploy::vision::ClassifyResult` object contained in FD_C_ClassifyResultWrapper structure，and return a string to describe information in result.
 >
 > **Params**
-> * **fd_c_classify_result_wrapper**(FD_C_ClassifyResultWrapper*): pointer to manipulate ClassifyResult object
+> * **fd_c_classify_result_wrapper**(FD_C_ClassifyResultWrapper*): pointer to FD_C_ClassifyResultWrapper structure
 >
 > **Return**
-> * **fd_c_classify_result**(FD_C_ClassifyResult*): pointer to C ClassifyResult structure
+> * **str**(char*): a string to describe information in result
 
 
 - [Model Description](../../)

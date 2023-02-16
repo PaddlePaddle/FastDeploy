@@ -159,7 +159,6 @@ FD_C_ClassifyResultWrapper* FD_C_CreateClassifyResultWrapperFromData(
 >
 > 创建一个FD_C_ClassifyResultWrapper对象的指针，FD_C_ClassifyResultWrapper中包含了C++的`fastdeploy::vision::ClassifyResult`对象，通过该指针，使用C API可以访问调用对应C++中的函数。
 >
-> **返回**
 >
 > **参数**
 > * **fd_c_classify_result**(FD_C_ClassifyResult*): 指向FD_C_ClassifyResult对象的指针
