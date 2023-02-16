@@ -16,9 +16,15 @@
 #include <memory>
 #include <thread>  // NOLINT
 #include "fastdeploy/utils/utils.h"
+#include "fastdeploy/core/fd_tensor.h"
+#if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
+#include "fastdeploy/vision/common/result.h"
+#endif
 
 namespace fastdeploy {
 namespace benchmark {
+
+#if defined(ENABLE_BENCHMARK)
 /*! @brief ResourceUsageMonitor object used when to collect memory info.
  */
 class FASTDEPLOY_DECL ResourceUsageMonitor {
@@ -85,6 +91,49 @@ FASTDEPLOY_DECL std::string Strip(const std::string& str, char ch = ' ');
 FASTDEPLOY_DECL void Split(const std::string& s,
                            std::vector<std::string>& tokens,
                            char delim = ' ');
+
+/// Diff values for precision evaluation
+struct FASTDEPLOY_DECL BaseDiff {};
+
+struct FASTDEPLOY_DECL EvalStatis {
+  double mean = -1.0;
+  double min = -1.0;
+  double max = -1.0;
+};
+
+struct FASTDEPLOY_DECL TensorDiff: public BaseDiff, public EvalStatis {};
+
+#if defined(ENABLE_VISION)
+struct FASTDEPLOY_DECL DetectionDiff: public BaseDiff, public EvalStatis {
+  EvalStatis boxes;
+  EvalStatis scores;
+  EvalStatis labels;
+};
+#endif  // ENABLE_VISION
+#endif  // ENABLE_BENCHMARK
+
+/// Utils for precision evaluation
+struct FASTDEPLOY_DECL ResultManager {
+#if defined(ENABLE_BENCHMARK)
+  /// Save & Load functions for FDTensor result.
+  static bool SaveFDTensor(const FDTensor& tensor, const std::string& path);
+  static bool LoadFDTensor(FDTensor* tensor, const std::string& path);
+  /// Calculate diff value between two FDTensor results.
+  static TensorDiff CalculateDiffStatis(FDTensor* lhs,
+                                        FDTensor* rhs);
+#if defined(ENABLE_VISION)
+  /// Save & Load functions for basic results.
+  static bool SaveDetectionResult(const vision::DetectionResult& res,
+                                  const std::string& path);
+  static bool LoadDetectionResult(vision::DetectionResult* res,
+                                  const std::string& path);
+  /// Calculate diff value between two basic results.
+  static DetectionDiff CalculateDiffStatis(vision::DetectionResult* lhs,
+                                           vision::DetectionResult* rhs,
+                                           float score_threshold = 0.3f);
+#endif  // ENABLE_VISION
+#endif  // ENABLE_BENCHMARK
+};
 
 }  // namespace benchmark
 }  // namespace fastdeploy
