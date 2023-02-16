@@ -280,15 +280,17 @@ void FD_C_DestroyOCRResult(__fd_take FD_C_OCRResult* fd_c_ocr_result) {
     delete[] fd_c_ocr_result->boxes.data[i].data;
   }
   delete[] fd_c_ocr_result->boxes.data;
-  // delete scores
-  delete[] fd_c_ocr_result->scores.data;
-  // delete label_ids
-  delete[] fd_c_ocr_result->label_ids.data;
-  // delete masks
-  for (size_t i = 0; i < fd_c_ocr_result->masks.size; i++) {
-    delete[] fd_c_ocr_result->masks.data[i].data.data;
-    delete[] fd_c_ocr_result->masks.data[i].shape.data;
+  // delete text
+  for (size_t i = 0; i < fd_c_ocr_result->text.size; i++) {
+    delete[] fd_c_ocr_result->text.data[i].data;
   }
+  delete[] fd_c_ocr_result->text.data;
+  // delete rec_scores
+  delete[] fd_c_ocr_result->rec_scores.data;
+  // delete cls_scores
+  delete[] fd_c_ocr_result->cls_scores.data;
+  // delete cls_labels
+  delete[] fd_c_ocr_result->cls_labels.data;
   delete fd_c_ocr_result;
 }
 
@@ -298,51 +300,47 @@ FD_C_OCRResult* FD_C_OCRResultWrapperGetData(
       CHECK_AND_CONVERT_FD_TYPE(OCRResultWrapper, fd_c_ocr_result_wrapper);
   FD_C_OCRResult* fd_c_ocr_result = new FD_C_OCRResult();
   // copy boxes
-  const int boxes_coordinate_dim = 4;
+  const int boxes_coordinate_dim = 8;
   fd_c_ocr_result->boxes.size = ocr_result->boxes.size();
   fd_c_ocr_result->boxes.data =
       new FD_C_OneDimArrayFloat[fd_c_ocr_result->boxes.size];
   for (size_t i = 0; i < ocr_result->boxes.size(); i++) {
     fd_c_ocr_result->boxes.data[i].size = boxes_coordinate_dim;
-    fd_c_ocr_result->boxes.data[i].data = new float[boxes_coordinate_dim];
+    fd_c_ocr_result->boxes.data[i].data = new int[boxes_coordinate_dim];
     for (size_t j = 0; j < boxes_coordinate_dim; j++) {
       fd_c_ocr_result->boxes.data[i].data[j] = ocr_result->boxes[i][j];
     }
   }
-  // copy scores
-  fd_c_ocr_result->scores.size = ocr_result->scores.size();
-  fd_c_ocr_result->scores.data = new float[fd_c_ocr_result->scores.size];
-  memcpy(fd_c_ocr_result->scores.data, ocr_result->scores.data(),
-         sizeof(float) * fd_c_ocr_result->scores.size);
-  // copy label_ids
-  fd_c_ocr_result->label_ids.size = ocr_result->label_ids.size();
-  fd_c_ocr_result->label_ids.data =
-      new int32_t[fd_c_ocr_result->label_ids.size];
-  memcpy(fd_c_ocr_result->label_ids.data, ocr_result->label_ids.data(),
-         sizeof(int32_t) * fd_c_ocr_result->label_ids.size);
-  // copy masks
-  fd_c_ocr_result->masks.size = ocr_result->masks.size();
-  fd_c_ocr_result->masks.data = new FD_C_Mask[fd_c_ocr_result->masks.size];
-  for (size_t i = 0; i < ocr_result->masks.size(); i++) {
-    // copy data in mask
-    fd_c_ocr_result->masks.data[i].data.size = ocr_result->masks[i].data.size();
-    fd_c_ocr_result->masks.data[i].data.data =
-        new uint8_t[ocr_result->masks[i].data.size()];
-    memcpy(fd_c_ocr_result->masks.data[i].data.data,
-           ocr_result->masks[i].data.data(),
-           sizeof(uint8_t) * ocr_result->masks[i].data.size());
-    // copy shape in mask
-    fd_c_ocr_result->masks.data[i].shape.size =
-        ocr_result->masks[i].shape.size();
-    fd_c_ocr_result->masks.data[i].shape.data =
-        new int64_t[ocr_result->masks[i].shape.size()];
-    memcpy(fd_c_ocr_result->masks.data[i].shape.data,
-           ocr_result->masks[i].shape.data(),
-           sizeof(int64_t) * ocr_result->masks[i].shape.size());
-    fd_c_ocr_result->masks.data[i].type =
-        static_cast<FD_C_ResultType>(ocr_result->masks[i].type);
+  // copy text
+  fd_c_ocr_result->text.size = ocr_result->text.size();
+  fd_c_ocr_result->text.data = new FD_C_Cstr[fd_c_ocr_result->text.size];
+  for (size_t i = 0; i < ocr_result->text.size(); i++) {
+    fd_c_ocr_result->text.data[i].size = ocr_result->text[i].length();
+    fd_c_ocr_result->text.data[i].data =
+        new char[ocr_result->text[i].length() + 1];
+    strncpy(fd_c_ocr_result->text.data[i].data, ocr_result->text[i].c_str(),
+            ocr_result->text[i].length());
   }
-  fd_c_ocr_result->contain_masks = ocr_result->contain_masks;
+
+  // copy rec_scores
+  fd_c_ocr_result->rec_scores.size = ocr_result->rec_scores.size();
+  fd_c_ocr_result->rec_scores.data =
+      new float[fd_c_ocr_result->rec_scores.size];
+  memcpy(fd_c_ocr_result->rec_scores.data, ocr_result->rec_scores.data(),
+         sizeof(float) * fd_c_ocr_result->rec_scores.size);
+  // copy cls_scores
+  fd_c_ocr_result->cls_scores.size = ocr_result->cls_scores.size();
+  fd_c_ocr_result->cls_scores.data =
+      new float[fd_c_ocr_result->cls_scores.size];
+  memcpy(fd_c_ocr_result->cls_scores.data, ocr_result->cls_scores.data(),
+         sizeof(float) * fd_c_ocr_result->cls_scores.size);
+  // copy cls_labels
+  fd_c_ocr_result->cls_labels.size = ocr_result->cls_labels.size();
+  fd_c_ocr_result->cls_labels.data =
+      new int32_t[fd_c_ocr_result->cls_labels.size];
+  memcpy(fd_c_ocr_result->cls_labels.data, ocr_result->cls_labels.data(),
+         sizeof(int32_t) * fd_c_ocr_result->cls_labels.size);
+  // copy type
   fd_c_ocr_result->type = static_cast<FD_C_ResultType>(ocr_result->type);
   return fd_c_ocr_result;
 }
@@ -355,39 +353,36 @@ FD_C_OCRResultWrapper* FD_C_CreateOCRResultWrapperFromData(
       CHECK_AND_CONVERT_FD_TYPE(OCRResultWrapper, fd_c_ocr_result_wrapper);
 
   // copy boxes
-  const int boxes_coordinate_dim = 4;
+  const int boxes_coordinate_dim = 8;
   ocr_result->boxes.resize(fd_c_ocr_result->boxes.size);
   for (size_t i = 0; i < fd_c_ocr_result->boxes.size; i++) {
     for (size_t j = 0; j < boxes_coordinate_dim; j++) {
       ocr_result->boxes[i][j] = fd_c_ocr_result->boxes.data[i].data[j];
     }
   }
-  // copy scores
-  ocr_result->scores.resize(fd_c_ocr_result->scores.size);
-  memcpy(ocr_result->scores.data(), fd_c_ocr_result->scores.data,
-         sizeof(float) * fd_c_ocr_result->scores.size);
-  // copy label_ids
-  ocr_result->label_ids.resize(fd_c_ocr_result->label_ids.size);
-  memcpy(ocr_result->label_ids.data(), fd_c_ocr_result->label_ids.data,
-         sizeof(int32_t) * fd_c_ocr_result->label_ids.size);
-  // copy masks
-  ocr_result->masks.resize(fd_c_ocr_result->masks.size);
-  for (size_t i = 0; i < fd_c_ocr_result->masks.size; i++) {
-    // copy data in mask
-    ocr_result->masks[i].data.resize(fd_c_ocr_result->masks.data[i].data.size);
-    memcpy(ocr_result->masks[i].data.data(),
-           fd_c_ocr_result->masks.data[i].data.data,
-           sizeof(uint8_t) * fd_c_ocr_result->masks.data[i].data.size);
-    // copy shape in mask
-    ocr_result->masks[i].shape.resize(
-        fd_c_ocr_result->masks.data[i].shape.size);
-    memcpy(ocr_result->masks[i].shape.data(),
-           fd_c_ocr_result->masks.data[i].shape.data,
-           sizeof(int64_t) * fd_c_ocr_result->masks.data[i].shape.size);
-    ocr_result->masks[i].type = static_cast<fastdeploy::vision::ResultType>(
-        fd_c_ocr_result->masks.data[i].type);
+
+  // copy text
+  ocr_result->text.resize(fd_c_ocr_result->text.size);
+  for (size_t i = 0; i < ocr_result->text.size(); i++) {
+    ocr_result->text[i] = std::string(fd_c_ocr_result->text.data[i].data);
   }
-  ocr_result->contain_masks = fd_c_ocr_result->contain_masks;
+
+  // copy rec_scores
+  ocr_result->rec_scores.resize(fd_c_ocr_result->rec_scores.size);
+  memcpy(ocr_result->rec_scores.data(), fd_c_ocr_result->rec_scores.data,
+         sizeof(float) * fd_c_ocr_result->rec_scores.size);
+
+  // copy cls_scores
+  ocr_result->cls_scores.resize(fd_c_ocr_result->cls_scores.size);
+  memcpy(ocr_result->cls_scores.data(), fd_c_ocr_result->cls_scores.data,
+         sizeof(float) * fd_c_ocr_result->cls_scores.size);
+
+  // copy cls_labels
+  ocr_result->cls_labels.resize(fd_c_ocr_result->cls_labels.size);
+  memcpy(ocr_result->cls_labels.data(), fd_c_ocr_result->cls_labels.data,
+         sizeof(int32_t) * fd_c_ocr_result->cls_labels.size);
+
+  // copy type
   ocr_result->type =
       static_cast<fastdeploy::vision::ResultType>(fd_c_ocr_result->type);
 

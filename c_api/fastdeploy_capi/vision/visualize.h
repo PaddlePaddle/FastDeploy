@@ -79,7 +79,7 @@ FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat VisClassification(
  */
 FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat VisClassificationWithLabel(
   FD_C_Mat im, FD_C_ClassifyResult* result,
-  FD_C_OneDimArrayCstr* labels,, int top_k,
+  FD_C_OneDimArrayCstr* labels, int top_k,
   float score_threshold, float font_size);
 
 

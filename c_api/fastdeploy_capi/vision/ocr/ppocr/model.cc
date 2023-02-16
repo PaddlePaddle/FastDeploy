@@ -40,14 +40,38 @@ extern "C" {
 FD_C_RecognizerWrapper* FD_C_CreatesRecognizerWrapper(
     const char* model_file, const char* params_file, const char* label_path,
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
-    const FD_C_ModelFormat model_format) {}
+    const FD_C_ModelFormat model_format) {
+  auto& runtime_option = CHECK_AND_CONVERT_FD_TYPE(RuntimeOptionWrapper,
+                                                   fd_c_runtime_option_wrapper);
+  FD_C_RecognizerWrapper* fd_c_recognizer_wrapper =
+      new FD_C_RecognizerWrapper();
+  fd_c_recognizer_wrapper->recognizer_model =
+      std::unique_ptr<fastdeploy::vision::ocr::Recognizer>(
+          new fastdeploy::vision::ocr::Recognizer(
+              std::string(model_file), std::string(params_file),
+              std::string(label_path), *runtime_option,
+              static_cast<fastdeploy::ModelFormat>(model_format)));
+  return fd_c_recognizer_wrapper;
+}
 
 OCR_DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(Recognizer,
                                                    fd_c_recognizer_wrapper)
 
 FD_C_RecognizerWrapperPredict(FD_C_RecognizerWrapper* fd_c_recognizer_wrapper,
                               FD_C_Mat img, FD_C_Cstr* text, float* rec_score) {
+  cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
+  auto& model =
+      CHECK_AND_CONVERT_FD_TYPE(RecognizerWrapper, fd_c_recognizer_wrapper);
 
+  std::string res_string;
+
+  bool successful = model->Predict(*im, &res_string, rec_score);
+  if (successful) {
+    text->size = res_string.size();
+    text->data = new char[res_string.size() + 1];
+    strcpy(text->data, res_string.c_str());
+  }
+  return successful;
 }
 
 OCR_DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(Recognizer,
