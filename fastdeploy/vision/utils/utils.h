@@ -64,12 +64,13 @@ void NMS(DetectionResult* output, float iou_threshold = 0.5,
 
 void NMS(FaceDetectionResult* result, float iou_threshold = 0.5);
 
-// MergeSort
-void SortDetectionResult(DetectionResult* output);
+/// Sort DetectionResult/FaceDetectionResult by score
+FASTDEPLOY_DECL void SortDetectionResult(DetectionResult* result);
+FASTDEPLOY_DECL void SortDetectionResult(FaceDetectionResult* result);
+/// Lex Sort DetectionResult/FaceDetectionResult by x(w) & y(h) axis
+FASTDEPLOY_DECL void LexSortDetectionResultByXY(DetectionResult* result);
 
-void SortDetectionResult(FaceDetectionResult* result);
-
-// L2 Norm / cosine similarity  (for face recognition, ...)
+/// L2 Norm / cosine similarity  (for face recognition, ...)
 FASTDEPLOY_DECL std::vector<float>
 L2Normalize(const std::vector<float>& values);
 
