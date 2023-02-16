@@ -49,6 +49,7 @@ DEFINE_string(det_model, "", "Path of Detection model of PPOCR.");
 DEFINE_string(cls_model, "", "Path of Classification model of PPOCR.");
 DEFINE_string(rec_model, "", "Path of Recognization model of PPOCR.");
 DEFINE_string(rec_label_file, "", "Path of Recognization label file of PPOCR.");
+DEFINE_string(image_rec, "", "Path of Recognization img file of PPOCR.");
 
 static void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path --device "

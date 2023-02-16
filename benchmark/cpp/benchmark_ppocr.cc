@@ -23,6 +23,7 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   auto im = cv::imread(FLAGS_image);
+  auto im_rec = cv::imread(FLAGS_image_rec);
   // Detection Model
   auto det_model_file = FLAGS_det_model + sep + "inference.pdmodel";
   auto det_params_file = FLAGS_det_model + sep + "inference.pdiparams";
@@ -54,10 +55,27 @@ int main(int argc, char* argv[]) {
       cls_model_file, cls_params_file, cls_option);
   auto rec_model = fastdeploy::vision::ocr::Recognizer(
       rec_model_file, rec_params_file, rec_label_file, rec_option);
+  // Only for runtime
+  if (FLAGS_profile_mode == "runtime") {
+    std::vector<std::array<int, 8>> boxes_result;
+    std::cout << "====Detection model====" << std::endl;
+    BENCHMARK_MODEL(det_model, det_model.Predict(im, &boxes_result));
+    int32_t cls_label;
+    float cls_score;
+    std::cout << "====Classification model====" << std::endl;
+    BENCHMARK_MODEL(cls_model,
+                    cls_model.Predict(im_rec, &cls_label, &cls_score));
+    std::string text;
+    float rec_score;
+    std::cout << "====Recognization model====" << std::endl;
+    BENCHMARK_MODEL(rec_model, rec_model.Predict(im_rec, &text, &rec_score));
+  }
   auto model_ppocrv3 =
       fastdeploy::pipeline::PPOCRv3(&det_model, &cls_model, &rec_model);
   fastdeploy::vision::OCRResult res;
-  BENCHMARK_MODEL(model_ppocrv3, model_ppocrv3.Predict(im, &res))
+  if (FLAGS_profile_mode == "end2end") {
+    BENCHMARK_MODEL(model_ppocrv3, model_ppocrv3.Predict(im, &res))
+  }
   auto vis_im = fastdeploy::vision::VisOcr(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
