@@ -211,25 +211,6 @@ bool FDTensor::Reshape(const std::vector<int64_t>& new_shape) {
   return true;
 }
 
-template <typename T>
-void CalculateStatisInfo(const void* src_ptr, int size, double* mean,
-                         double* max, double* min) {
-  const T* ptr = static_cast<const T*>(src_ptr);
-  *mean = 0;
-  *max = -99999999;
-  *min = 99999999;
-  for (int i = 0; i < size; ++i) {
-    if (*(ptr + i) > *max) {
-      *max = *(ptr + i);
-    }
-    if (*(ptr + i) < *min) {
-      *min = *(ptr + i);
-    }
-    *mean += *(ptr + i);
-  }
-  *mean = *mean / size;
-}
-
 void FDTensor::PrintInfo(const std::string& prefix) const {
   double mean = 0;
   double max = -99999999;
