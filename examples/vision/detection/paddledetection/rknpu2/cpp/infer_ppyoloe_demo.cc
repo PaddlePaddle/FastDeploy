@@ -11,80 +11,74 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <iostream>
-#include <string>
+
 #include "fastdeploy/vision.h"
 
 void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
-  std::string model_file = model_dir + "/Portrait_PP_HumanSegV2_Lite_256x144_infer.onnx";
+  std::string model_file = model_dir + "/yolov8_n_500e_coco.onnx";
   std::string params_file;
-  std::string config_file = model_dir + "/deploy.yaml";
+  std::string config_file = model_dir + "/infer_cfg.yml";
   auto option = fastdeploy::RuntimeOption();
   option.UseCpu();
   auto format = fastdeploy::ModelFormat::ONNX;
 
-  auto model = fastdeploy::vision::segmentation::PaddleSegModel(
+  auto model = fastdeploy::vision::detection::PPYOLOE(
       model_file, params_file, config_file, option, format);
-  if (!model.Initialized()) {
-    std::cerr << "Failed to initialize." << std::endl;
-    return;
-  }
 
   fastdeploy::TimeCounter tc;
   tc.Start();
   auto im = cv::imread(image_file);
-  fastdeploy::vision::SegmentationResult res;
+  fastdeploy::vision::DetectionResult res;
   if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  auto vis_im = fastdeploy::vision::VisSegmentation(im, res);
+  auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.5);
   tc.End();
-  tc.PrintInfo("PPSeg in ONNX");
+  tc.PrintInfo("PPDet in ONNX");
 
+  std::cout << res.Str() << std::endl;
   cv::imwrite("infer_onnx.jpg", vis_im);
-  std::cout
-      << "Visualized result saved in ./infer_onnx.jpg"
-      << std::endl;
+  std::cout << "Visualized result saved in ./infer_onnx.jpg" << std::endl;
 }
 
 void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
-  std::string model_file = model_dir + "/Portrait_PP_HumanSegV2_Lite_256x144_infer_rk3588.rknn";
-  std::string params_file;
-  std::string config_file = model_dir + "/deploy.yaml";
+  auto model_file = model_dir + "/ppyoloe_plus_crn_s_80e_coco_rk3588_quantized.rknn";
+  auto params_file = "";
+  auto config_file = model_dir + "/infer_cfg.yml";
+
   auto option = fastdeploy::RuntimeOption();
   option.UseRKNPU2();
+
   auto format = fastdeploy::ModelFormat::RKNN;
 
-  auto model = fastdeploy::vision::segmentation::PaddleSegModel(
+  auto model = fastdeploy::vision::detection::PPYOLOE(
       model_file, params_file, config_file, option, format);
-  if (!model.Initialized()) {
-    std::cerr << "Failed to initialize." << std::endl;
-    return;
-  }
+
   model.GetPreprocessor().DisablePermute();
   model.GetPreprocessor().DisableNormalize();
+  model.GetPostprocessor().ApplyDecodeAndNMS();
 
+  auto im = cv::imread(image_file);
+
+  fastdeploy::vision::DetectionResult res;
   fastdeploy::TimeCounter tc;
   tc.Start();
-  auto im = cv::imread(image_file);
-  fastdeploy::vision::SegmentationResult res;
-  if (!model.Predict(im, &res)) {
+  if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  auto vis_im = fastdeploy::vision::VisSegmentation(im, res);
   tc.End();
-  tc.PrintInfo("PPSeg in RKNPU2");
+  tc.PrintInfo("PPDet in RKNPU2");
 
-  cv::imwrite("infer_rknn.jpg", vis_im);
-  std::cout
-      << "Visualized result saved in ./infer_rknn.jpg"
-      << std::endl;
+  std::cout << res.Str() << std::endl;
+  auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.5);
+  cv::imwrite("infer_rknpu2.jpg", vis_im);
+  std::cout << "Visualized result saved in ./infer_rknpu2.jpg" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
-  if (argc < 3) {
+  if (argc < 4) {
     std::cout
         << "Usage: infer_demo path/to/model_dir path/to/image run_option, "
            "e.g ./infer_model ./picodet_model_dir ./test.jpeg"
@@ -99,4 +93,3 @@ int main(int argc, char* argv[]) {
   }
   return 0;
 }
-
