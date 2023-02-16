@@ -44,13 +44,14 @@ namespace Test
             }else{
                 runtimeoption.UseGpu();
             }
-            vision.classification.PaddleClasModel model = new vision.classification.PaddleClasModel(model_file, params_file, config_file, runtimeoption, ModelFormat.PADDLE);
+            fastdeploy.vision.classification.PaddleClasModel model = new fastdeploy.vision.classification.PaddleClasModel(model_file, params_file, config_file, runtimeoption, ModelFormat.PADDLE);
             if(!model.Initialized()){
                 Console.WriteLine("Failed to initialize.\n");
             }
             Mat image = Cv2.ImRead(image_path);
-            vision.ClassifyResult res = model.Predict(image);
-            Console.WriteLine(res);
+            fastdeploy.vision.ClassifyResult res = model.Predict(image);
+            Console.WriteLine(res.ToString());
+
         }
 
     }
