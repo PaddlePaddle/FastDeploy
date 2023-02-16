@@ -23,7 +23,7 @@ namespace fastdeploy {
 namespace vision {
 namespace classification {
 
-class PaddleClasModel {
+public class PaddleClasModel {
 
   public PaddleClasModel(string model_file, string params_file,
                          string config_file, RuntimeOption custom_option = null,
@@ -60,13 +60,13 @@ class PaddleClasModel {
 
   public List<ClassifyResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -75,9 +75,9 @@ class PaddleClasModel {
       return null;
     }
     List<ClassifyResult> results_out = new List<ClassifyResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_ClassifyResult fd_classify_result = (FD_ClassifyResult)Marshal.PtrToStructure(
-          fd_classify_result_array.data + i * Marshal.SizeOf(FD_ClassifyResult),
+          fd_classify_result_array.data + i * Marshal.SizeOf(new FD_ClassifyResult()),
           typeof(FD_ClassifyResult));
       results_out.Add(ConvertResult.ConvertCResultToClassifyResult(fd_classify_result));
     }

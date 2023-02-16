@@ -54,13 +54,13 @@ public class PPYOLOE {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -69,9 +69,9 @@ public class PPYOLOE {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -157,13 +157,13 @@ public class PicoDet {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -172,9 +172,9 @@ public class PicoDet {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -262,13 +262,13 @@ public class PPYOLO {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -277,9 +277,9 @@ public class PPYOLO {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -366,13 +366,13 @@ public class YOLOv3 {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -381,9 +381,9 @@ public class YOLOv3 {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -470,13 +470,13 @@ public class PaddleYOLOX {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -485,9 +485,9 @@ public class PaddleYOLOX {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -574,13 +574,13 @@ public class FasterRCNN {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -589,9 +589,9 @@ public class FasterRCNN {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -678,13 +678,13 @@ public class MaskRCNN {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -693,9 +693,9 @@ public class MaskRCNN {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -782,13 +782,13 @@ public class SSD {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -797,9 +797,9 @@ public class SSD {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -886,13 +886,13 @@ public class PaddleYOLOv5 {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -901,9 +901,9 @@ public class PaddleYOLOv5 {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -990,13 +990,13 @@ public class PaddleYOLOv6 {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -1005,9 +1005,9 @@ public class PaddleYOLOv6 {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -1094,13 +1094,13 @@ public class PaddleYOLOv7 {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -1109,9 +1109,9 @@ public class PaddleYOLOv7 {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -1198,13 +1198,13 @@ public class PaddleYOLOv8 {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -1213,9 +1213,9 @@ public class PaddleYOLOv8 {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -1302,13 +1302,13 @@ public class RTMDet {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -1317,9 +1317,9 @@ public class RTMDet {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -1406,13 +1406,13 @@ public class CascadeRCNN {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -1421,9 +1421,9 @@ public class CascadeRCNN {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -1510,13 +1510,13 @@ public class PSSDet {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -1525,9 +1525,9 @@ public class PSSDet {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -1614,13 +1614,13 @@ public class RetinaNet {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -1629,9 +1629,9 @@ public class RetinaNet {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -1718,13 +1718,13 @@ public class FCOS {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -1733,9 +1733,9 @@ public class FCOS {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -1822,13 +1822,13 @@ public class TTFNet {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -1837,9 +1837,9 @@ public class TTFNet {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -1926,13 +1926,13 @@ public class TOOD {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -1941,9 +1941,9 @@ public class TOOD {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }
@@ -2030,13 +2030,13 @@ public class GFL {
 
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = imgs.size;
+    imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
     IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       mat_ptrs[i] = imgs[i].CvPtr;
     }
-    int size = Marshal.SizeOf(IntPtr) * imgs_in.size;
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
     imgs_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
@@ -2045,9 +2045,9 @@ public class GFL {
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
-    for(int i=0;i < (int)imgs.size; i++){
+    for(int i=0;i < (int)imgs.Count; i++){
       FD_DetectionResult fd_detection_result = (FD_DetectionResult)Marshal.PtrToStructure(
-          fd_detection_result_array.data + i * Marshal.SizeOf(FD_DetectionResult),
+          fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
     }

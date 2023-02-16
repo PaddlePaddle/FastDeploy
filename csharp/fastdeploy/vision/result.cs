@@ -37,7 +37,7 @@ public enum ResultType {
   HEADPOSE
 }
 
-public struct Mask {
+public class Mask {
   public List<byte> data;
   public List<long> shape;
   public ResultType type;
@@ -47,23 +47,23 @@ public struct Mask {
     this.type = ResultType.MASK;
   }
 
-  public ToString() {
-    string out = "Mask(";
-    int ndim = shape.size;
+  public override string ToString() {
+    string information = "Mask(" ;
+    int ndim = this.shape.Count;
     for (int i = 0; i < ndim; i++) {
     if (i < ndim - 1) {
-      out += string(shape[i]) + ",";
+      information += this.shape[i].ToString() + ",";
     } else {
-      out += string(shape[i]);
+      information += this.shape[i].ToString();
     }
   }
-  out += ")\n";
-  return out;
+    information += ")\n";
+    return information;
   }
 
 }
 
-public struct ClassifyResult {
+public class ClassifyResult {
   public List<int> label_ids;
   public List<float> scores;
   public ResultType type;
@@ -73,23 +73,23 @@ public struct ClassifyResult {
     this.type = ResultType.CLASSIFY;
   }
 
-  public ToString() {
-    std::string out;
-    out = "ClassifyResult(\nlabel_ids: ";
-    for (int i = 0; i < label_ids.size; i++) {
-      out = out + string(label_ids[i]) + ", ";
+  public string ToString() {  
+    string information;
+    information = "ClassifyResult(\nlabel_ids: ";
+    for (int i = 0; i < label_ids.Count; i++) {
+      information = information + label_ids[i].ToString() + ", ";
     }
-    out += "\nscores: ";
-    for (int i = 0; i < scores.size; i++) {
-      out = out + string(scores[i]) + ", ";
+    information += "\nscores: ";
+    for (int i = 0; i < scores.Count; i++) {
+      information = information + scores[i].ToString() + ", ";
     }
-    out += "\n)";
-    return out;
+    information += "\n)";
+    return information;
+  
   }
-
 }
 
-public struct DetectionResult {
+public class DetectionResult {
   public List<float[]> boxes;
   public List<float> scores;
   public List<int> label_ids;
@@ -106,27 +106,26 @@ public struct DetectionResult {
   }
 
   
-  public ToString() {
-    string out;
+  public string ToString() {
+    string information;
     if (!contain_masks) {
-      out = "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]\n";
+      information = "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]\n";
     } else {
-      out =
-          "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id, "
-          "mask_shape]\n";
+      information =
+          "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id, mask_shape]\n";
     }
-    for (int i = 0; i < boxes.size(); i++) {
-      out = out + string(boxes[i][0]) + "," +
-            string(boxes[i][1]) + ", " + string(boxes[i][2]) +
-            ", " + to_string(boxes[i][3]) + ", " +
-            to_string(scores[i]) + ", " + string(label_ids[i]);
+    for (int i = 0; i < boxes.Count; i++) {
+      information = information + boxes[i][0].ToString() + "," +
+            boxes[i][1].ToString() + ", " + boxes[i][2].ToString() +
+            ", " + boxes[i][3].ToString() + ", " +
+            scores[i].ToString() + ", " + label_ids[i].ToString();
       if (!contain_masks) {
-        out += "\n";
+        information += "\n";
       } else {
-        out += ", " + masks[i].ToString();
+        information += ", " + masks[i].ToString();
       }
     }
-    return out;
+    return information;
   }
 
 }
@@ -325,14 +324,14 @@ public class ConvertResult {
   public static FD_OneDimArrayCstr
   ConvertStringArrayToCOneDimArrayCstr(string[] strs){
     FD_OneDimArrayCstr fd_one_dim_cstr = new FD_OneDimArrayCstr();
-    fd_one_dim_cstr.size = strs.Length;
+    fd_one_dim_cstr.size = (nuint)strs.Length;
     
     // Copy data to unmanaged memory
     FD_Cstr[] c_strs = new FD_Cstr[strs.Length];
-    size = Marshal.SizeOf(c_strs[0]) * c_strs.Length;
+    int size = Marshal.SizeOf(c_strs[0]) * c_strs.Length;
     fd_one_dim_cstr.data = Marshal.AllocHGlobal(size);
     for (int i = 0; i < strs.Length; i++) {
-      c_strs[i].size = strs[i].Length;
+      c_strs[i].size = (nuint)strs[i].Length;
       c_strs[i].data = strs[i];
       Marshal.StructureToPtr(
           c_strs[i],
@@ -344,9 +343,9 @@ public class ConvertResult {
   public static string[]
   ConvertCOneDimArrayCstrToStringArray(FD_OneDimArrayCstr c_strs){
     string[] strs = new string[c_strs.size];
-    for(int i=0; i<c_strs.size; i++){
+    for(int i=0; i<(int)c_strs.size; i++){
       FD_Cstr cstr = (FD_Cstr)Marshal.PtrToStructure(
-          c_strs.data + i * Marshal.SizeOf(FD_Cstr),
+          c_strs.data + i * Marshal.SizeOf(new FD_Cstr()),
           typeof(FD_Cstr));
       strs[i] = cstr.data;
     }

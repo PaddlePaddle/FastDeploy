@@ -44,7 +44,7 @@ public class Visualize {
         ConvertResult.ConvertDetectionResultToCResult(detection_result);
     FD_OneDimArrayCstr labels_in = ConvertResult.ConvertStringArrayToCOneDimArrayCstr(labels);
     IntPtr result_ptr = 
-        FD_C_VisDetection(im.CvPtr, ref fd_detection_result, 
+        FD_C_VisDetectionWithLabel(im.CvPtr, ref fd_detection_result, 
                           ref labels_in, score_threshold,
                           line_size, font_size);
     return new Mat(result_ptr);
