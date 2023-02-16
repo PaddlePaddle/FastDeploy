@@ -54,6 +54,15 @@ FD_C_Mat FD_C_VisDetectionWithLabel(FD_C_Mat im,
   return new cv::Mat(result);
 }
 
+FD_C_Mat VisClassification(FD_C_Mat im, FD_C_ClassifyResult* result, int top_k,
+                           float score_threshold, float font_size) {}
+
+FD_C_Mat VisClassificationWithLabel(FD_C_Mat im, FD_C_ClassifyResult* result,
+                                    FD_C_OneDimArrayCstr* labels, , int top_k,
+                                    float score_threshold, float font_size) {}
+
+FD_C_Mat VisOcr(FD_C_Mat im, FD_C_OCRResult* ocr_result) {}
+
 #ifdef __cplusplus
 }
 #endif
