@@ -38,6 +38,11 @@ void CpuInfer(const char* model_dir, const char* image_file) {
   FD_C_PPYOLOEWrapper* model = FD_C_CreatesPPYOLOEWrapper(
       model_file, params_file, config_file, option, PADDLE);
 
+  if (!FD_C_PPYOLOEWrapperInitialized(model)) {
+    printf("Failed to initialize.\n");
+    return;
+  }
+
   FD_C_Mat im = FD_C_Imread(image_file);
 
   FD_C_DetectionResult* result =
@@ -74,6 +79,11 @@ void GpuInfer(const char* model_dir, const char* image_file) {
 
   FD_C_PPYOLOEWrapper* model = FD_C_CreatesPPYOLOEWrapper(
       model_file, params_file, config_file, option, PADDLE);
+
+  if (!FD_C_PPYOLOEWrapperInitialized(model)) {
+    printf("Failed to initialize.\n");
+    return;
+  }
 
   FD_C_Mat im = FD_C_Imread(image_file);
 
