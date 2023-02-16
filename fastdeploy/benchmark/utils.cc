@@ -20,11 +20,14 @@
 
 #include "fastdeploy/benchmark/utils.h"
 #include "fastdeploy/utils/path.h"
+#if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
 #include "fastdeploy/vision/utils/utils.h"
+#endif
 
 namespace fastdeploy {
 namespace benchmark {
 
+#if defined(ENABLE_BENCHMARK)
 std::string Strip(const std::string& str, char ch) {
   int i = 0;
   while (str[i] == ch) {
@@ -147,8 +150,10 @@ std::string ResourceUsageMonitor::GetCurrentGpuMemoryInfo(int device_id) {
 #endif
   return result;
 }
+#endif  // ENABLE_BENCHMARK
 
 /// Utils for precision evaluation
+#if defined(ENABLE_BENCHMARK)
 static const char KEY_VALUE_SEP = '#';
 static const char VALUE_SEP = ',';
 
@@ -293,6 +298,58 @@ bool ResultManager::LoadFDTensor(FDTensor* tensor, const std::string& path) {
   return true;
 }
 
+TensorDiff ResultManager::CalculateDiffStatis(FDTensor* lhs, FDTensor* rhs) {
+  if (lhs->Numel() != rhs->Numel() || lhs->Dtype() != rhs->Dtype()) {
+    FDASSERT(false,
+             "The size and dtype of input FDTensor must be equal!"
+             " But got size %d, %d, dtype %s, %s",
+             lhs->Numel(), rhs->Numel(), Str(lhs->Dtype()).c_str(),
+             Str(rhs->Dtype()).c_str())
+  }
+  FDDataType dtype = lhs->Dtype();
+  int numel = lhs->Numel();
+  if (dtype != FDDataType::FP32 && dtype != FDDataType::INT64 &&
+      dtype != FDDataType::INT32) {
+    FDASSERT(false, "Only support FP32/INT64/INT32 now, but got %s",
+             Str(dtype).c_str())
+  }
+  if (dtype == FDDataType::INT64) {
+    std::vector<int64_t> tensor_diff(numel);
+    const int64_t* lhs_data_ptr = static_cast<const int64_t*>(lhs->CpuData());
+    const int64_t* rhs_data_ptr = static_cast<const int64_t*>(rhs->CpuData());
+    for (int i = 0; i < numel; ++i) {
+      tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
+    }
+    TensorDiff diff;
+    CalculateStatisInfo<int64_t>(tensor_diff.data(), numel, &(diff.mean),
+                                 &(diff.max), &(diff.min));
+    return diff;
+  } else if (dtype == FDDataType::INT32) {
+    std::vector<int32_t> tensor_diff(numel);
+    const int32_t* lhs_data_ptr = static_cast<const int32_t*>(lhs->CpuData());
+    const int32_t* rhs_data_ptr = static_cast<const int32_t*>(rhs->CpuData());
+    for (int i = 0; i < numel; ++i) {
+      tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
+    }
+    TensorDiff diff;
+    CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.mean),
+                               &(diff.max), &(diff.min));
+    return diff;
+  } else {  // FP32
+    std::vector<float> tensor_diff(numel);
+    const float* lhs_data_ptr = static_cast<const float*>(lhs->CpuData());
+    const float* rhs_data_ptr = static_cast<const float*>(rhs->CpuData());
+    for (int i = 0; i < numel; ++i) {
+      tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
+    }
+    TensorDiff diff;
+    CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.mean),
+                               &(diff.max), &(diff.min));
+    return diff;
+  }
+}
+
+#if defined(ENABLE_VISION)
 bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
                                         const std::string& path) {
   if (res.boxes.empty()) {
@@ -375,57 +432,6 @@ bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
   return true;
 }
 
-TensorDiff ResultManager::CalculateDiffStatis(FDTensor* lhs, FDTensor* rhs) {
-  if (lhs->Numel() != rhs->Numel() || lhs->Dtype() != rhs->Dtype()) {
-    FDASSERT(false,
-             "The size and dtype of input FDTensor must be equal!"
-             " But got size %d, %d, dtype %s, %s",
-             lhs->Numel(), rhs->Numel(), Str(lhs->Dtype()).c_str(),
-             Str(rhs->Dtype()).c_str())
-  }
-  FDDataType dtype = lhs->Dtype();
-  int numel = lhs->Numel();
-  if (dtype != FDDataType::FP32 && dtype != FDDataType::INT64 &&
-      dtype != FDDataType::INT32) {
-    FDASSERT(false, "Only support FP32/INT64/INT32 now, but got %s",
-             Str(dtype).c_str())
-  }
-  if (dtype == FDDataType::INT64) {
-    std::vector<int64_t> tensor_diff(numel);
-    const int64_t* lhs_data_ptr = static_cast<const int64_t*>(lhs->CpuData());
-    const int64_t* rhs_data_ptr = static_cast<const int64_t*>(rhs->CpuData());
-    for (int i = 0; i < numel; ++i) {
-      tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
-    }
-    TensorDiff diff;
-    CalculateStatisInfo<int64_t>(tensor_diff.data(), numel, &(diff.mean),
-                                 &(diff.max), &(diff.min));
-    return diff;
-  } else if (dtype == FDDataType::INT32) {
-    std::vector<int32_t> tensor_diff(numel);
-    const int32_t* lhs_data_ptr = static_cast<const int32_t*>(lhs->CpuData());
-    const int32_t* rhs_data_ptr = static_cast<const int32_t*>(rhs->CpuData());
-    for (int i = 0; i < numel; ++i) {
-      tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
-    }
-    TensorDiff diff;
-    CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.mean),
-                               &(diff.max), &(diff.min));
-    return diff;
-  } else {  // FP32
-    std::vector<float> tensor_diff(numel);
-    const float* lhs_data_ptr = static_cast<const float*>(lhs->CpuData());
-    const float* rhs_data_ptr = static_cast<const float*>(rhs->CpuData());
-    for (int i = 0; i < numel; ++i) {
-      tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
-    }
-    TensorDiff diff;
-    CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.mean),
-                               &(diff.max), &(diff.min));
-    return diff;
-  }
-}
-
 DetectionDiff ResultManager::CalculateDiffStatis(vision::DetectionResult* lhs,
                                                  vision::DetectionResult* rhs,
                                                  float score_threshold) {
@@ -468,6 +474,8 @@ DetectionDiff ResultManager::CalculateDiffStatis(vision::DetectionResult* lhs,
   diff.min = diff.boxes.min;
   return diff;
 }
+#endif  // ENABLE_VISION
+#endif  // ENABLE_BENCHMARK
 
 }  // namespace benchmark
 }  // namespace fastdeploy

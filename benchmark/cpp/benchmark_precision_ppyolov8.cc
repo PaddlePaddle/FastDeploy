@@ -20,6 +20,7 @@ namespace vision = fastdeploy::vision;
 namespace benchmark = fastdeploy::benchmark;
 
 int main(int argc, char* argv[]) {
+#if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Initialization
   auto option = fastdeploy::RuntimeOption();
   if (!CreateRuntimeOption(&option, argc, argv, true)) {
@@ -80,5 +81,7 @@ int main(int argc, char* argv[]) {
   auto vis_im = vision::VisDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+#endif
+
   return 0;
 }
