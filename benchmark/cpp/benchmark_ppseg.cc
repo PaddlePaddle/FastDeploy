@@ -23,16 +23,15 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   auto im = cv::imread(FLAGS_image);
-  // Set max_batch_size 1 for best performance
+  auto model_file = FLAGS_model + sep + "model.pdmodel";
+  auto params_file = FLAGS_model + sep + "model.pdiparams";
+  auto config_file = FLAGS_model + sep + "deploy.yaml";
   if (FLAGS_backend == "paddle_trt") {
-    option.trt_option.max_batch_size = 1;
+    option.paddle_infer_option.collect_trt_shape = true;
   }
-  auto model_file = FLAGS_model + sep + "inference.pdmodel";
-  auto params_file = FLAGS_model + sep + "inference.pdiparams";
-  auto config_file = FLAGS_model + sep + "inference_cls.yaml";
-  auto model_ppcls = fastdeploy::vision::classification::PaddleClasModel(
+  auto model_ppseg = fastdeploy::vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option);
-  fastdeploy::vision::ClassifyResult res;
-  BENCHMARK_MODEL(model_ppcls, model_ppcls.Predict(im, &res))
+  fastdeploy::vision::SegmentationResult res;
+  BENCHMARK_MODEL(model_ppseg, model_ppseg.Predict(im, &res))
   return 0;
 }

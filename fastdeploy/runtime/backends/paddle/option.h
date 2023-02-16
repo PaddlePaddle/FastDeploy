@@ -60,7 +60,7 @@ struct PaddleBackendOption {
    */
   IpuOption ipu_option;
 
-  /// Collect shape for model while enabel_trt is true
+  /// Collect shape for model while enable_trt is true
   bool collect_trt_shape = false;
   /// Cache input shape for mkldnn while the input data will change dynamiclly
   int mkldnn_cache_size = -1;
