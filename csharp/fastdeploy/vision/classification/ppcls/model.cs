@@ -46,21 +46,15 @@ class PaddleClasModel {
   }
 
   public ClassifyResult Predict(Mat img) {
-    IntPtr fd_classify_result_wrapper_ptr = FD_C_CreateClassifyResultWrapper();
-    FD_C_PaddleClasModelWrapperPredict(
+    FD_ClassifyResult fd_classify_result = new FD_ClassifyResult();
+    if(! FD_C_PaddleClasModelWrapperPredict(
         fd_paddleclas_model_wrapper, img.CvPtr,
-        fd_classify_result_wrapper_ptr);  // predict
-    IntPtr fd_classify_result_ptr = FD_C_ClassifyResultWrapperGetData(
-        fd_classify_result_wrapper_ptr);  // get result from wrapper
-    FD_ClassifyResult fd_classify_result =
-        (FD_ClassifyResult)Marshal.PtrToStructure(fd_classify_result_ptr,
-                                                  typeof(FD_ClassifyResult));
+        ref fd_classify_result))
+    {
+      return null;
+    } // predict
     ClassifyResult classify_result =
         ConvertResult.ConvertCResultToClassifyResult(fd_classify_result);
-    FD_C_DestroyClassifyResultWrapper(
-        fd_classify_result_wrapper_ptr);  // free fd_classify_result_wrapper_ptr
-    FD_C_DestroyClassifyResult(
-        fd_classify_result_ptr);  // free fd_classify_result_ptr
     return classify_result;
   }
 
@@ -77,7 +71,9 @@ class PaddleClasModel {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimClassifyResult fd_classify_result_array =  new FD_OneDimClassifyResult();
-    FD_C_PaddleClasModelWrapperBatchPredict(fd_paddleclas_model_wrapper, ref imgs_in, ref fd_classify_result_array);
+    if (!FD_C_PaddleClasModelWrapperBatchPredict(fd_paddleclas_model_wrapper, ref imgs_in, ref fd_classify_result_array)){
+      return null;
+    }
     List<ClassifyResult> results_out = new List<ClassifyResult>();
     for(int i=0;i < (int)imgs.size; i++){
       FD_ClassifyResult fd_classify_result = (FD_ClassifyResult)Marshal.PtrToStructure(
@@ -108,7 +104,7 @@ class PaddleClasModel {
   private static extern bool
   FD_C_PaddleClasModelWrapperPredict(IntPtr fd_paddleclas_model_wrapper,
                                      IntPtr img,
-                                     IntPtr fd_classify_result_wrapper);
+                                     ref FD_ClassifyResult fd_classify_result);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreateClassifyResultWrapper")]
   private static extern IntPtr FD_C_CreateClassifyResultWrapper();
   [DllImport("fastdeploy.dll",
