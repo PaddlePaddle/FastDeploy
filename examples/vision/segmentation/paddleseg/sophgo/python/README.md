@@ -16,7 +16,7 @@ cd path/to/paddleseg/sophgo/python
 wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 
 # PaddleSeg模型转换为bmodel模型
-将Paddle模型转换为SOPHGO bmodel模型，转换步骤参考[文档](../README_CN.md#将paddleseg推理模型转换为bmodel模型步骤)
+将Paddle模型转换为SOPHGO bmodel模型，转换步骤参考[文档](../README.md#将paddleseg推理模型转换为bmodel模型步骤)
 
 # 推理
 python3 infer.py --model_file ./bmodel/pp_liteseg_1684x_f32.bmodel --config_file ./bmodel/deploy.yaml --image cityscapes_demo.png

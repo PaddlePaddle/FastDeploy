@@ -36,6 +36,14 @@ void BindPPTinyPose(pybind11::module& m) {
             self.Predict(&mat, &res, detection_result);
             return res;
           })
+      .def("disable_normalize",
+           [](vision::keypointdetection::PPTinyPose& self) {
+             self.DisableNormalize();
+           })
+      .def("disable_permute",
+           [](vision::keypointdetection::PPTinyPose& self) {
+             self.DisablePermute();
+           })
       .def_readwrite("use_dark",
                      &vision::keypointdetection::PPTinyPose::use_dark);
 }

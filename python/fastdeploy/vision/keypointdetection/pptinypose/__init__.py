@@ -71,3 +71,15 @@ class PPTinyPose(FastDeployModel):
         assert isinstance(
             value, bool), "The value to set `use_dark` must be type of bool."
         self._model.use_dark = value
+
+    def disable_normalize(self):
+        """
+        This function will disable normalize in preprocessing step.
+        """
+        self.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self.disable_permute()
