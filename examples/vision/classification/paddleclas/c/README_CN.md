@@ -139,7 +139,7 @@ FD_C_Bool FD_C_Imwrite(const char* savepath,  FD_C_Mat img);
 ```c
 FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
     __fd_take FD_C_PaddleClasModelWrapper* fd_c_ppclas_wrapper, FD_C_Mat img,
-    FD_C_ClassifyResultWrapper* fd_c_ppclas_result_wrapper)
+    FD_C_ClassifyResult* fd_c_ppclas_result)
 ```
 >
 > 模型预测接口，输入图像直接并生成分类结果。
@@ -147,34 +147,41 @@ FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
 > **参数**
 > * **fd_c_ppclas_wrapper**(FD_C_PaddleClasModelWrapper*): 指向PaddleClas模型的指针
 > * **img**（FD_C_Mat）: 输入图像的指针，指向cv::Mat对象，可以调用FD_C_Imread读取图像获取
-> * **fd_c_ppclas_result_wrapper**（FD_C_ClassifyResultWrapper*): 分类结果，包括label_id，以及相应的置信度, ClassifyResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> * **fd_c_ppclas_result**（FD_C_ClassifyResult*): 分类结果，包括label_id，以及相应的置信度, ClassifyResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 
 #### Predict结果
 
 ```c
-FD_C_ClassifyResultWrapper* FD_C_CreateClassifyResultWrapper();
+FD_C_ClassifyResultWrapper* FD_C_CreateClassifyResultWrapperFromData(
+    FD_C_ClassifyResult* fd_c_classify_result)
 ```
 >
-> 创建一个ClassifyResult对象，用来保存推理的结果，并返回所创建的ClassifyResult对象的指针。
+> 创建一个FD_C_ClassifyResultWrapper对象的指针，FD_C_ClassifyResultWrapper中包含了C++的`fastdeploy::vision::ClassifyResult`对象，通过该指针，使用C API可以访问调用对应C++中的函数。
 >
 > **返回**
-> * **fd_c_classify_result_wrapper**(FD_C_ClassifyResultWrapper*): 指向ClassifyResult对象的指针
-
+>
+> **参数**
+> * **fd_c_classify_result**(FD_C_ClassifyResult*): 指向FD_C_ClassifyResult对象的指针
+>
+> **返回**
+> * **fd_c_classify_result_wrapper**(FD_C_ClassifyResultWrapper*): 指向FD_C_ClassifyResultWrapper的指针
 
 
 ```c
-FD_C_ClassifyResult* FD_C_ClassifyResultWrapperGetData(
-     FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper)
+char* FD_C_ClassifyResultWrapperStr(
+    FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper);
 ```
 >
-> 从ClassifyResult对象中提取纯C结构的ClassifyResult结果，并返回结构指针，通过该指针可直接返回结构中的字段。
+> 调用FD_C_ClassifyResultWrapper所包含的`fastdeploy::vision::ClassifyResult`对象的Str()方法，返回相关结果内数据信息的字符串。
 >
 > **参数**
-> * **fd_c_classify_result_wrapper**(FD_C_ClassifyResultWrapper*): 指向ClassifyResult对象的指针
+> * **fd_c_classify_result_wrapper**(FD_C_ClassifyResultWrapper*): 指向FD_C_ClassifyResultWrapper对象的指针
 >
 > **返回**
-> * **fd_c_classify_result**(FD_C_ClassifyResult*): 指向纯C结构的FD_C_ClassifyResult的指针
+> * **str**(char*): 表示结果数据信息的字符串
+
+
 
 
 - [模型介绍](../../)
