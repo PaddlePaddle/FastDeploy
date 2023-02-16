@@ -144,7 +144,7 @@ bool PPTinyPose::Postprocess(std::vector<FDTensor>& infer_result,
     result_copy.Reshape({result_copy.shape[0], result_copy.shape[1],
                          result_copy.shape[2] * result_copy.shape[3]});
     infer_result.resize(2);
-    function::ArgMax(result_copy,&infer_result[1],-1);
+    function::ArgMax(result_copy, &infer_result[1], -1);
   }
 
   // Calculate output length
