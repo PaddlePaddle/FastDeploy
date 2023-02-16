@@ -44,13 +44,22 @@ void FD_C_DestroyPaddleClasModelWrapper(
 
 FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
     FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper, FD_C_Mat img,
-    FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper) {
+    FD_C_ClassifyResult* fd_c_classify_result) {
   cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
   auto& paddleclas_model = CHECK_AND_CONVERT_FD_TYPE(
       PaddleClasModelWrapper, fd_c_paddleclas_model_wrapper);
+  FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper =
+      FD_C_CreateClassifyResultWrapper();
   auto& classify_result = CHECK_AND_CONVERT_FD_TYPE(
       ClassifyResultWrapper, fd_c_classify_result_wrapper);
-  return paddleclas_model->Predict(im, classify_result.get());
+
+  bool successful = paddleclas_model->Predict(im, classify_result.get());
+  if (successful) {
+    FD_C_ClassifyResult* res =
+        FD_C_ClassifyResultWrapperGetData(fd_c_classify_result_wrapper);
+    *fd_c_classify_result = *res;
+  }
+  return successful;
 }
 
 FD_C_Bool FD_C_PaddleClasModelWrapperInitialized(

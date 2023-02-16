@@ -37,7 +37,7 @@ void FD_C_DestroyPPYOLOEWrapper(
 
 FD_C_Bool FD_C_PPYOLOEWrapperPredict(
     FD_C_PPYOLOEWrapper* fd_ppyoloe_wrapper, FD_C_Mat img,
-    FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper) {
+    FD_C_DetectionResult* fd_c_detection_result) {
   IMPLEMENT_PREDICT_FUNCTION(PPYOLOE, fd_ppyoloe_wrapper);
 }
 

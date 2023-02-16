@@ -54,12 +54,12 @@ FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroyPaddleClasModelWrapper(
  *
  * \param[in] fd_c_paddleclas_model_wrapper pointer to FD_C_PaddleClasModelWrapper object
  * \param[in] img pointer to cv::Mat image
- * \param[in] fd_c_classify_result_wrapper pointer to FD_C_PaddleClasModelWrapper object, which stores the result.
+ * \param[in] fd_c_classify_result pointer to FD_C_ClassifyResult object, which stores the result.
  */
 
 FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
     __fd_keep FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper,
-    FD_C_Mat img, FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper);
+    FD_C_Mat img, FD_C_ClassifyResult* fd_c_classify_result_wrapper);
 
 /** \brief Check if the model is initialized successfully
  *
