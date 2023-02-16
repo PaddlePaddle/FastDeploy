@@ -69,6 +69,11 @@ typedef struct FD_C_OCRResult {
   FD_C_ResultType type;
 } FD_C_OCRResult;
 
+typedef struct FD_C_OneDimOCRResult {
+  size_t size;
+  FD_C_OCRResult* data;
+} FD_C_OneDimOCRResult;
+
 // Classification Results
 
 /** \brief Create a new FD_C_ClassifyResultWrapper object
