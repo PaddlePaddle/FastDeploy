@@ -17,14 +17,12 @@
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/processors/mat.h"
 #include "fastdeploy/vision/common/processors/mat_batch.h"
-#include "fastdeploy/vision/common/image_decoder/image_decoder.h"
 
 namespace fastdeploy {
 namespace vision {
 
 class FASTDEPLOY_DECL ProcessorManager {
  public:
-  ProcessorManager();
   ~ProcessorManager();
 
   /** \brief Use CUDA to boost the performance of processors
@@ -70,15 +68,6 @@ class FASTDEPLOY_DECL ProcessorManager {
    */
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
 
-  /** \brief Process the input images and prepare input tensors for runtime
-   *
-   * \param[in] img_names The input image file name list
-   * \param[in] outputs The output tensors which will feed in runtime
-   * \return true if the preprocess successed, otherwise false
-   */
-  bool Run(const std::vector<std::string>& img_names,
-           std::vector<FDTensor>* outputs);
-
   /** \brief Apply() is the body of Run() function, it needs to be implemented by a derived class
    *
    * \param[in] image_batch The input image batch
@@ -101,8 +90,6 @@ class FASTDEPLOY_DECL ProcessorManager {
   std::vector<FDTensor> output_caches_;
   FDTensor batch_input_cache_;
   FDTensor batch_output_cache_;
-
-  std::shared_ptr<ImageDecoder> img_decoder_;
 };
 
 }  // namespace vision
