@@ -29,11 +29,31 @@ FD_C_Mat FD_C_VisDetection(FD_C_Mat im,
       FD_C_CreateDetectionResultWrapperFromData(fd_c_detection_result);
   auto& detection_result = CHECK_AND_CONVERT_FD_TYPE(
       DetectionResultWrapper, fd_c_detection_result_wrapper);
-  cv::Mat result = fastdeploy::vision::Visualize::VisDetection(
+  cv::Mat result = fastdeploy::vision::VisDetection(
       *(reinterpret_cast<cv::Mat*>(im)), *detection_result, score_threshold,
       line_size, font_size);
   return new cv::Mat(result);
 }
+
+FD_C_Mat FD_C_VisDetectionWithLabel(FD_C_Mat im,
+                                    FD_C_DetectionResult* fd_c_detection_result,
+                                    FD_C_OneDimArrayCstr* labels,
+                                    float score_threshold, int line_size,
+                                    float font_size) {
+  std::vector<std::string> labels_in;
+  for (int i = 0; i < labels->size; i++) {
+    labels_in.emplace_back(labels->data[i].data);
+  }
+  FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper =
+      FD_C_CreateDetectionResultWrapperFromData(fd_c_detection_result);
+  auto& detection_result = CHECK_AND_CONVERT_FD_TYPE(
+      DetectionResultWrapper, fd_c_detection_result_wrapper);
+  cv::Mat result = fastdeploy::vision::VisDetection(
+      *(reinterpret_cast<cv::Mat*>(im)), *detection_result, labels_in,
+      score_threshold, line_size, font_size);
+  return new cv::Mat(result);
+}
+
 #ifdef __cplusplus
 }
 #endif

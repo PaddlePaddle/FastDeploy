@@ -22,14 +22,36 @@
 extern "C" {
 #endif
 
-/** \brief Visualize Detection
+/** \brief Show the visualized results for detection models
  *
- * \return Return a pointer to cv::Mat object
+ * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+ * \param[in] result the result produced by model
+ * \param[in] score_threshold threshold for result scores, the bounding box will not be shown if the score is less than score_threshold
+ * \param[in] line_size line size for bounding boxes
+ * \param[in] font_size font size for text
+ * \return cv::Mat type stores the visualized results
  */
 
 FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat
 FD_C_VisDetection(FD_C_Mat im, FD_C_DetectionResult* fd_detection_result,
                   float score_threshold, int line_size, float font_size);
+
+/** \brief Show the visualized results with custom labels for detection models
+ *
+ * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+ * \param[in] result the result produced by model
+ * \param[in] labels the visualized result will show the bounding box contain class label
+ * \param[in] score_threshold threshold for result scores, the bounding box will not be shown if the score is less than score_threshold
+ * \param[in] line_size line size for bounding boxes
+ * \param[in] font_size font size for text
+ * \return cv::Mat type stores the visualized results
+ */
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat FD_C_VisDetectionWithLabel(
+                                     FD_C_Mat im,
+                                     FD_C_DetectionResult* fd_detection_result,
+                                     FD_C_OneDimArrayCstr* labels,
+                                     float score_threshold,
+                                     int line_size, float font_size);
 
 #ifdef __cplusplus
 }  // extern "C"
