@@ -233,7 +233,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
               bool use_paddle_log;
               THROW_IF_BACKEND_MODEL_ERROR(
                   ParseBoolValue(value_string, &use_paddle_log));
-              if (use_paddle_log) runtime_options_->EnablePaddleLogInfo();
+              runtime_options_->paddle_infer_option.enable_log_info = use_paddle_log;
             } else if (param_key == "num_streams") {
               int num_streams;
               THROW_IF_BACKEND_MODEL_ERROR(
@@ -320,7 +320,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 bool use_paddle_log;
                 THROW_IF_BACKEND_MODEL_ERROR(
                     ParseBoolValue(value_string, &use_paddle_log));
-                if (use_paddle_log) runtime_options_->EnablePaddleLogInfo();
+                runtime_options_->paddle_infer_option.enable_log_info = use_paddle_log;
               } else if (param_key == "is_clone") {
                 THROW_IF_BACKEND_MODEL_ERROR(
                     ParseBoolValue(value_string, &is_clone_));
