@@ -58,6 +58,15 @@ if [ -z $trt_version ]; then
     trt_version="8.5.2.2"
 fi
 
+if [ $trt_version == "8.5.2.2" ]
+then
+    cuda_version="11.8"
+    cudnn_version="8.6"
+else
+    cuda_version="11.6"
+    cudnn_version="8.4"
+fi
+
 echo "start build FD GPU library"
 
 if [ ! -d "./cmake-3.18.6-Linux-x86_64/" ]; then
@@ -67,9 +76,9 @@ if [ ! -d "./cmake-3.18.6-Linux-x86_64/" ]; then
 fi
 
 if [ ! -d "./TensorRT-${trt_version}/" ]; then
-    wget https://fastdeploy.bj.bcebos.com/resource/TensorRT/TensorRT-${trt_version}.Linux.x86_64-gnu.cuda-11.8.cudnn8.6.tar.gz
-    tar -zxvf TensorRT-${trt_version}.Linux.x86_64-gnu.cuda-11.8.cudnn8.6.tar.gz
-    rm -rf TensorRT-${trt_version}.Linux.x86_64-gnu.cuda-11.8.cudnn8.6.tar.gz
+    wget https://fastdeploy.bj.bcebos.com/resource/TensorRT/TensorRT-${trt_version}.Linux.x86_64-gnu.cuda-${cuda_version}.cudnn${cudnn_version}.tar.gz
+    tar -zxvf TensorRT-${trt_version}.Linux.x86_64-gnu.cuda-${cuda_version}.cudnn${cudnn_version}.tar.gz
+    rm -rf TensorRT-${trt_version}.Linux.x86_64-gnu.cuda-${cuda_version}.cudnn${cudnn_version}.tar.gz
 fi
 
 nvidia-docker run -i --rm --name ${docker_name} \
