@@ -67,6 +67,11 @@ typedef struct FD_C_TwoDimArrayFloat {
 
 typedef void* FD_C_Mat;
 
+typedef struct FD_C_OneDimMat {
+  size_t size;
+  FD_C_Mat* data;
+} FD_C_OneDimMat;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
