@@ -61,6 +61,9 @@ std::ostream& operator<<(std::ostream& out, const Device& d) {
     case Device::ASCEND:
       out << "Device::ASCEND";
       break;
+    case Device::DIRECTML:
+      out << "Device::DIRECTML";
+      break;
     default:
       out << "Device::UNKOWN";
   }

@@ -49,7 +49,6 @@ struct FASTDEPLOY_DECL Mat {
 #endif
 
   Mat(const Mat& mat) = default;
-  // Move assignment
   Mat& operator=(const Mat& mat) = default;
 
   // Move constructor
@@ -96,6 +95,8 @@ struct FASTDEPLOY_DECL Mat {
   // Set fd_tensor
   void SetTensor(FDTensor* tensor);
 
+  void SetTensor(std::shared_ptr<FDTensor>& tensor);
+
  private:
   int channels;
   int height;
@@ -109,7 +110,7 @@ struct FASTDEPLOY_DECL Mat {
 #endif
   // Currently, fd_tensor is only used by CUDA and CV-CUDA,
   // OpenCV and FlyCV are not using it.
-  FDTensor fd_tensor;
+  std::shared_ptr<FDTensor> fd_tensor = std::make_shared<FDTensor>();
 
  public:
   FDDataType Type();
@@ -119,6 +120,11 @@ struct FASTDEPLOY_DECL Mat {
   void SetChannels(int s) { channels = s; }
   void SetWidth(int w) { width = w; }
   void SetHeight(int h) { height = h; }
+
+  // When using CV-CUDA/CUDA, please set input/output cache,
+  // refer to manager.cc
+  FDTensor* input_cache = nullptr;
+  FDTensor* output_cache = nullptr;
 #ifdef WITH_GPU
   cudaStream_t Stream() const { return stream; }
   void SetStream(cudaStream_t s) { stream = s; }
@@ -165,5 +171,12 @@ FASTDEPLOY_DECL FDMat WrapMat(const cv::Mat& image);
  */
 FASTDEPLOY_DECL std::vector<FDMat> WrapMat(const std::vector<cv::Mat>& images);
 
+bool CheckShapeConsistency(std::vector<Mat>* mats);
+
+// Create an input tensor on GPU and save into input_cache.
+// If the Mat is on GPU, return the mat->Tensor() directly.
+// If the Mat is on CPU, then update the input cache tensor and copy the mat's
+// CPU tensor to this new GPU input cache tensor.
+FDTensor* CreateCachedGpuInputTensor(Mat* mat);
 }  // namespace vision
 }  // namespace fastdeploy

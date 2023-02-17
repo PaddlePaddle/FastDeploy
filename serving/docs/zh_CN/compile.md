@@ -15,7 +15,17 @@ bash scripts/build.sh
 # 退出到FastDeploy主目录，制作镜像
 # x.y.z为FastDeploy版本号，可根据情况自己确定。比如: 1.0.3
 cd ../
-docker build -t paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 -f serving/Dockerfile .
+docker build -t paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.5-21.10 -f serving/Dockerfile .
+```
+
+目前默认 TensorRT 版本为 8.5.2.2，如果需要切换 TensorRT 版本，则可执行以下编译命令：
+
+```
+cd serving
+bash scripts/build.sh -tv 8.4.1.5
+
+cd ../
+docker build -t paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.5-21.10 -f serving/Dockerfile_CUDA_11_4_TRT_8_4 .
 ```
 
 比如在ubuntu 20.04，cuda11.2环境下制作基于FastDeploy v1.0.3的GPU镜像

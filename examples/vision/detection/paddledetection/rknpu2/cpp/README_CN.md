@@ -12,7 +12,7 @@
 以上步骤请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)实现
 
 ```bash
-以picodet为例进行推理部署
+# 以picodet为例进行推理部署
 
 mkdir build
 cd build
@@ -23,19 +23,14 @@ cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
 # 下载PPYOLOE模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/picodet_s_416_coco_lcnet.zip
+unzip picodet_s_416_coco_lcnet.zip
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 # CPU推理
 ./infer_picodet_demo ./picodet_s_416_coco_lcnet 000000014439.jpg 0
 # RKNPU2推理
 ./infer_picodet_demo ./picodet_s_416_coco_lcnet 000000014439.jpg 1
-```
-
-## 运行例程
-
-```bash
-cd ./build/install
-./infer_picodet model/picodet_s_416_coco_lcnet images/000000014439.jpg
 ```
 
 ## 文档导航

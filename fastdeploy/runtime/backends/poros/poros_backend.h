@@ -51,13 +51,6 @@ class PorosBackend : public BaseBackend {
 
   void BuildOption(const PorosBackendOption& option);
 
-  bool
-  InitFromTorchScript(const std::string& model_file,
-                      const PorosBackendOption& option = PorosBackendOption());
-
-  bool InitFromPoros(const std::string& model_file,
-                     const PorosBackendOption& option = PorosBackendOption());
-
   bool Compile(const std::string& model_file,
                std::vector<std::vector<FDTensor>>& prewarm_tensors,
                const PorosBackendOption& option = PorosBackendOption());
