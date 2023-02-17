@@ -70,6 +70,7 @@ option(ENABLE_CVCUDA "Whether to enable NVIDIA CV-CUDA to boost image preprocess
 option(ENABLE_ENCRYPTION "Whether to enable ENCRYPTION." OFF)
 option(ENABLE_BENCHMARK "Whether to enable Benchmark mode." OFF)
 option(WITH_ASCEND "Whether to compile for Huawei Ascend deploy." OFF)
+option(WITH_DIRECTML "Whether to compile for onnxruntime DirectML deploy." OFF)
 option(WITH_TIMVX "Whether to compile for TIMVX deploy." OFF)
 option(WITH_KUNLUNXIN "Whether to compile for KunlunXin XPU deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
