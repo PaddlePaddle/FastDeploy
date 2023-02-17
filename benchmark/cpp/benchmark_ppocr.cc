@@ -25,14 +25,20 @@ int main(int argc, char* argv[]) {
   auto im = cv::imread(FLAGS_image);
   auto im_rec = cv::imread(FLAGS_image_rec);
   // Detection Model
-  auto det_model_file = FLAGS_det_model + sep + "inference.pdmodel";
-  auto det_params_file = FLAGS_det_model + sep + "inference.pdiparams";
+  auto det_model_file =
+      FLAGS_model + sep + FLAGS_det_model + sep + "inference.pdmodel";
+  auto det_params_file =
+      FLAGS_model + sep + FLAGS_det_model + sep + "inference.pdiparams";
   // Classification Model
-  auto cls_model_file = FLAGS_cls_model + sep + "inference.pdmodel";
-  auto cls_params_file = FLAGS_cls_model + sep + "inference.pdiparams";
+  auto cls_model_file =
+      FLAGS_model + sep + FLAGS_cls_model + sep + "inference.pdmodel";
+  auto cls_params_file =
+      FLAGS_model + sep + FLAGS_cls_model + sep + "inference.pdiparams";
   // Recognition Model
-  auto rec_model_file = FLAGS_rec_model + sep + "inference.pdmodel";
-  auto rec_params_file = FLAGS_rec_model + sep + "inference.pdiparams";
+  auto rec_model_file =
+      FLAGS_model + sep + FLAGS_rec_model + sep + "inference.pdmodel";
+  auto rec_params_file =
+      FLAGS_model + sep + FLAGS_rec_model + sep + "inference.pdiparams";
   auto rec_label_file = FLAGS_rec_label_file;
   if (FLAGS_backend == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
@@ -40,7 +46,6 @@ int main(int argc, char* argv[]) {
   auto det_option = option;
   auto cls_option = option;
   auto rec_option = option;
-
   if (FLAGS_backend == "paddle_trt" || FLAGS_backend == "trt") {
     det_option.trt_option.SetShape("x", {1, 3, 64, 64}, {1, 3, 640, 640},
                                    {1, 3, 960, 960});

@@ -66,6 +66,10 @@ static void PrintBenchmarkInfo() {
   // Get model name
   std::vector<std::string> model_names;
   fastdeploy::benchmark::Split(FLAGS_model, model_names, sep);
+  if (model_names.empty()) {
+    std::cout << "Directory of the inference model is invalid!!!" << std::endl;
+    return;
+  }
   // Save benchmark info
   std::stringstream ss;
   ss.precision(3);
