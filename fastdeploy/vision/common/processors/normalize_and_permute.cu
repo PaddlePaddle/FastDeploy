@@ -81,7 +81,7 @@ bool NormalizeAndPermute::ImplByCuda(FDMatBatch* mat_batch) {
 
   // Prepare output tensor
   mat_batch->output_cache->Resize(src->Shape(), FDDataType::FP32,
-                                  "output_cache", Device::GPU);
+                                  "batch_output_cache", Device::GPU);
   // NHWC -> NCHW
   std::swap(mat_batch->output_cache->shape[1],
             mat_batch->output_cache->shape[3]);
