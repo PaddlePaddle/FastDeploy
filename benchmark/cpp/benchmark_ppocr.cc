@@ -49,10 +49,10 @@ int main(int argc, char* argv[]) {
   if (FLAGS_backend == "paddle_trt" || FLAGS_backend == "trt") {
     det_option.trt_option.SetShape("x", {1, 3, 64, 64}, {1, 3, 640, 640},
                                    {1, 3, 960, 960});
-    cls_option.trt_option.SetShape("x", {1, 3, 64, 64}, {1, 3, 640, 640},
-                                   {1, 3, 960, 960});
-    rec_option.trt_option.SetShape("x", {1, 3, 64, 64}, {1, 3, 640, 640},
-                                   {1, 3, 960, 960});
+    cls_option.trt_option.SetShape("x", {1, 3, 48, 10}, {4, 3, 48, 320},
+                                   {8, 3, 48, 1024});
+    rec_option.trt_option.SetShape("x", {1, 3, 48, 10}, {4, 3, 48, 320},
+                                   {8, 3, 48, 2304});
   }
   auto det_model = fastdeploy::vision::ocr::DBDetector(
       det_model_file, det_params_file, det_option);
