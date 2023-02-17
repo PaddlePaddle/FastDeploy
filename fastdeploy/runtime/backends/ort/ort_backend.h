@@ -24,6 +24,10 @@
 #include "fastdeploy/runtime/backends/ort/option.h"
 #include "onnxruntime_cxx_api.h"  // NOLINT
 
+#ifdef WITH_DIRECTML
+#include "dml_provider_factory.h" // NOLINT
+#endif
+
 namespace fastdeploy {
 
 struct OrtValueInfo {
@@ -37,7 +41,7 @@ class OrtBackend : public BaseBackend {
   OrtBackend() {}
   virtual ~OrtBackend() = default;
 
-  void BuildOption(const OrtBackendOption& option);
+  bool BuildOption(const OrtBackendOption& option);
 
   bool Init(const RuntimeOption& option);
 
@@ -54,7 +58,7 @@ class OrtBackend : public BaseBackend {
   std::vector<TensorInfo> GetOutputInfos() override;
   static std::vector<OrtCustomOp*> custom_operators_;
   void InitCustomOperators();
-  
+
  private:
   bool InitFromPaddle(const std::string& model_buffer,
                       const std::string& params_buffer,

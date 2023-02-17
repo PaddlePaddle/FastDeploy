@@ -22,11 +22,11 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model_file",
-        default="./picodet_s_416_coco_lcnet_non_postprocess/picodet_xs_416_coco_lcnet.onnx",
+        default="./picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet_rk3588_unquantized.rknn",
         help="Path of rknn model.")
     parser.add_argument(
         "--config_file",
-        default="./picodet_s_416_coco_lcnet_non_postprocess/infer_cfg.yml",
+        default="./picodet_s_416_coco_lcnet/infer_cfg.yml",
         help="Path of config.")
     parser.add_argument(
         "--image",

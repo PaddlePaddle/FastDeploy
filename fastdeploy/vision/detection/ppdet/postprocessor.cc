@@ -82,6 +82,7 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
     const auto* data = static_cast<const int64_t*>(tensors[1].CpuData());
     for (size_t i = 0; i < tensors[1].shape[0]; ++i) {
       num_boxes[i] = static_cast<int>(data[i]);
+      total_num_boxes += num_boxes[i];
     }
   }
 

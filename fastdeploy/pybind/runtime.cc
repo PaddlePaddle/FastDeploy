@@ -51,7 +51,7 @@ void BindRuntime(pybind11::module& m) {
                         warm_datas[i][j].nbytes());
                }
              }
-             return self.Compile(warm_tensors, _option);
+             return self.Compile(warm_tensors);
            })
       .def("infer",
            [](Runtime& self, std::map<std::string, pybind11::array>& data) {
