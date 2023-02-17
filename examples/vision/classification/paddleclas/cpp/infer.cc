@@ -96,7 +96,8 @@ void IpuInfer(const std::string& model_dir, const std::string& image_file) {
   std::cout << res.Str() << std::endl;
 }
 
-void KunlunXinInfer(const std::string& model_dir, const std::string& image_file) {
+void KunlunXinInfer(const std::string& model_dir,
+                    const std::string& image_file) {
   auto model_file = model_dir + sep + "inference.pdmodel";
   auto params_file = model_dir + sep + "inference.pdiparams";
   auto config_file = model_dir + sep + "inference_cls.yaml";
@@ -152,7 +153,7 @@ void AscendInfer(const std::string& model_dir, const std::string& image_file) {
   auto model_file = model_dir + sep + "inference.pdmodel";
   auto params_file = model_dir + sep + "inference.pdiparams";
   auto config_file = model_dir + sep + "inference_cls.yaml";
-  
+
   auto option = fastdeploy::RuntimeOption();
   option.UseAscend();
 
@@ -172,14 +173,14 @@ void AscendInfer(const std::string& model_dir, const std::string& image_file) {
   std::cout << res.Str() << std::endl;
 }
 
-
 int main(int argc, char* argv[]) {
   if (argc < 4) {
     std::cout << "Usage: infer_demo path/to/model path/to/image run_option, "
                  "e.g ./infer_demo ./ResNet50_vd ./test.jpeg 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu; 2: run with gpu and use tensorrt backend; 3: run with ipu; 4: run with kunlunxin."
+                 "with gpu; 2: run with gpu and use tensorrt backend; 3: run "
+                 "with ipu; 4: run with kunlunxin."
               << std::endl;
     return -1;
   }
