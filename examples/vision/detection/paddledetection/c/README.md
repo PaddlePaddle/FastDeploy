@@ -78,7 +78,7 @@ void FD_C_RuntimeOptionWrapperUseGpu(
 
 ```c
 
-FD_C_PPYOLOEWrapper* FD_C_CreatesPPYOLOEWrapper(
+FD_C_PPYOLOEWrapper* FD_C_CreatePPYOLOEWrapper(
     const char* model_file, const char* params_file, const char* config_file,
     FD_C_RuntimeOptionWrapper* runtime_option,
     const FD_C_ModelFormat model_format)
