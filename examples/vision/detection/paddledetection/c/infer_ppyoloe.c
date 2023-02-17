@@ -35,7 +35,7 @@ void CpuInfer(const char* model_dir, const char* image_file) {
   FD_C_RuntimeOptionWrapper* option = FD_C_CreateRuntimeOptionWrapper();
   FD_C_RuntimeOptionWrapperUseCpu(option);
 
-  FD_C_PPYOLOEWrapper* model = FD_C_CreatesPPYOLOEWrapper(
+  FD_C_PPYOLOEWrapper* model = FD_C_CreatePPYOLOEWrapper(
       model_file, params_file, config_file, option, PADDLE);
 
   if (!FD_C_PPYOLOEWrapperInitialized(model)) {
@@ -83,7 +83,7 @@ void GpuInfer(const char* model_dir, const char* image_file) {
   FD_C_RuntimeOptionWrapper* option = FD_C_CreateRuntimeOptionWrapper();
   FD_C_RuntimeOptionWrapperUseGpu(option, 0);
 
-  FD_C_PPYOLOEWrapper* model = FD_C_CreatesPPYOLOEWrapper(
+  FD_C_PPYOLOEWrapper* model = FD_C_CreatePPYOLOEWrapper(
       model_file, params_file, config_file, option, PADDLE);
 
   if (!FD_C_PPYOLOEWrapperInitialized(model)) {
