@@ -61,7 +61,7 @@ typedef struct FD_C_OneDimDetectionResult {
 } FD_C_OneDimDetectionResult;
 
 typedef struct FD_C_OCRResult {
-  FD_C_TwoDimArrayInt8 boxes;
+  FD_C_TwoDimArrayInt32 boxes;
   FD_C_OneDimArrayCstr text;
   FD_C_OneDimArrayFloat rec_scores;
   FD_C_OneDimArrayFloat cls_scores;

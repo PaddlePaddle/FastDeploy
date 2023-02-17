@@ -303,7 +303,7 @@ FD_C_OCRResult* FD_C_OCRResultWrapperGetData(
   const int boxes_coordinate_dim = 8;
   fd_c_ocr_result->boxes.size = ocr_result->boxes.size();
   fd_c_ocr_result->boxes.data =
-      new FD_C_OneDimArrayFloat[fd_c_ocr_result->boxes.size];
+      new FD_C_OneDimArrayInt32[fd_c_ocr_result->boxes.size];
   for (size_t i = 0; i < ocr_result->boxes.size(); i++) {
     fd_c_ocr_result->boxes.data[i].size = boxes_coordinate_dim;
     fd_c_ocr_result->boxes.data[i].data = new int[boxes_coordinate_dim];
