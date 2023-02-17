@@ -50,7 +50,7 @@ class Vad : public fastdeploy::FastDeployModel {
  private:
   bool Initialize();
 
-  bool Preprocess(std::vector<float> audioWindowData);
+  bool Preprocess(std::vector<float>& audioWindowData);
 
   bool Postprocess();
 
