@@ -75,18 +75,30 @@ bool PaddleClasModel::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
 }
 
 bool PaddleClasModel::Predict(const cv::Mat& im, ClassifyResult* result) {
+  FDMat mat = WrapMat(im);
+  return Predict(mat, result);
+}
+
+bool PaddleClasModel::BatchPredict(const std::vector<cv::Mat>& images,
+                                   std::vector<ClassifyResult>* results) {
+  std::vector<FDMat> mats = WrapMat(images);
+  return BatchPredict(mats, results);
+}
+
+bool PaddleClasModel::Predict(const FDMat& mat, ClassifyResult* result) {
   std::vector<ClassifyResult> results;
-  if (!BatchPredict({im}, &results)) {
+  std::vector<FDMat> mats = {mat};
+  if (!BatchPredict(mats, &results)) {
     return false;
   }
   *result = std::move(results[0]);
   return true;
 }
 
-bool PaddleClasModel::BatchPredict(const std::vector<cv::Mat>& images,
+bool PaddleClasModel::BatchPredict(const std::vector<FDMat>& mats,
                                    std::vector<ClassifyResult>* results) {
-  std::vector<FDMat> fd_images = WrapMat(images);
-  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
+  std::vector<FDMat> fd_mats = mats;
+  if (!preprocessor_.Run(&fd_mats, &reused_input_tensors_)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
   }

@@ -245,12 +245,13 @@ void FDTensor::PrintInfo(const std::string& prefix) const {
 bool FDTensor::ReallocFn(size_t nbytes) {
   if (device == Device::GPU) {
 #ifdef WITH_GPU
-    size_t original_nbytes = Nbytes();
+    size_t original_nbytes = nbytes_allocated;
     if (nbytes > original_nbytes) {
       if (buffer_ != nullptr) {
         FDDeviceFree()(buffer_);
       }
       FDDeviceAllocator()(&buffer_, nbytes);
+      nbytes_allocated = nbytes;
     }
     return buffer_ != nullptr;
 #else
@@ -262,12 +263,13 @@ bool FDTensor::ReallocFn(size_t nbytes) {
   } else {
     if (is_pinned_memory) {
 #ifdef WITH_GPU
-      size_t original_nbytes = Nbytes();
+      size_t original_nbytes = nbytes_allocated;
       if (nbytes > original_nbytes) {
         if (buffer_ != nullptr) {
           FDDeviceHostFree()(buffer_);
         }
         FDDeviceHostAllocator()(&buffer_, nbytes);
+        nbytes_allocated = nbytes;
       }
       return buffer_ != nullptr;
 #else
@@ -278,6 +280,7 @@ bool FDTensor::ReallocFn(size_t nbytes) {
 #endif
     }
     buffer_ = realloc(buffer_, nbytes);
+    nbytes_allocated = nbytes;
     return buffer_ != nullptr;
   }
 }
@@ -299,6 +302,7 @@ void FDTensor::FreeFn() {
       }
     }
     buffer_ = nullptr;
+    nbytes_allocated = 0;
   }
 }
 
@@ -380,7 +384,7 @@ FDTensor::FDTensor(const FDTensor& other)
       device_id(other.device_id) {
   // Copy buffer
   if (other.buffer_ == nullptr) {
-    buffer_ = nullptr;
+    FreeFn();
   } else {
     size_t nbytes = Nbytes();
     FDASSERT(ReallocFn(nbytes),
@@ -396,7 +400,8 @@ FDTensor::FDTensor(FDTensor&& other)
       dtype(other.dtype),
       external_data_ptr(other.external_data_ptr),
       device(other.device),
-      device_id(other.device_id) {
+      device_id(other.device_id),
+      nbytes_allocated(other.nbytes_allocated) {
   other.name = "";
   // Note(zhoushunjie): Avoid double free.
   other.buffer_ = nullptr;
@@ -435,6 +440,7 @@ FDTensor& FDTensor::operator=(FDTensor&& other) {
     dtype = other.dtype;
     device = other.device;
     device_id = other.device_id;
+    nbytes_allocated = other.nbytes_allocated;
 
     other.name = "";
     // Note(zhoushunjie): Avoid double free.
