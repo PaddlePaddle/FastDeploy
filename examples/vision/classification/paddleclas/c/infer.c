@@ -1,4 +1,4 @@
-// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,17 +28,19 @@ void CpuInfer(const char* model_dir, const char* image_file) {
   char params_file[100];
   char config_file[100];
   int max_size = 99;
-  snprintf(model_file, max_size, "%s%c%s", model_dir, sep, "model.pdmodel");
-  snprintf(params_file, max_size, "%s%c%s", model_dir, sep, "model.pdiparams");
-  snprintf(config_file, max_size, "%s%c%s", model_dir, sep, "infer_cfg.yml");
+  snprintf(model_file, max_size, "%s%c%s", model_dir, sep, "inference.pdmodel");
+  snprintf(params_file, max_size, "%s%c%s", model_dir, sep,
+           "inference.pdiparams");
+  snprintf(config_file, max_size, "%s%c%s", model_dir, sep,
+           "inference_cls.yaml");
 
   FD_C_RuntimeOptionWrapper* option = FD_C_CreateRuntimeOptionWrapper();
   FD_C_RuntimeOptionWrapperUseCpu(option);
 
-  FD_C_PPYOLOEWrapper* model = FD_C_CreatePPYOLOEWrapper(
+  FD_C_PaddleClasModelWrapper* model = FD_C_CreatePaddleClasModelWrapper(
       model_file, params_file, config_file, option, PADDLE);
 
-  if (!FD_C_PPYOLOEWrapperInitialized(model)) {
+  if (!FD_C_PaddleClasModelWrapperInitialized(model)) {
     printf("Failed to initialize.\n");
     FD_C_DestroyRuntimeOptionWrapper(option);
     FD_C_DestroyPaddleClasModelWrapper(model);
@@ -47,10 +49,10 @@ void CpuInfer(const char* model_dir, const char* image_file) {
 
   FD_C_Mat im = FD_C_Imread(image_file);
 
-  FD_C_DetectionResult* result =
-      (FD_C_DetectionResult*)malloc(sizeof(FD_C_DetectionResult));
+  FD_C_ClassifyResult* result =
+      (FD_C_ClassifyResult*)malloc(sizeof(FD_C_ClassifyResult));
 
-  if (!FD_C_PPYOLOEWrapperPredict(model, im, result)) {
+  if (!FD_C_PaddleClasModelWrapperPredict(model, im, result)) {
     printf("Failed to predict.\n");
     FD_C_DestroyRuntimeOptionWrapper(option);
     FD_C_DestroyPaddleClasModelWrapper(model);
@@ -59,16 +61,22 @@ void CpuInfer(const char* model_dir, const char* image_file) {
     return;
   }
 
-  FD_C_Mat vis_im = FD_C_VisDetection(im, result, 0.5, 1, 0.5);
-
-  FD_C_Imwrite("vis_result.jpg", vis_im);
-  printf("Visualized result saved in ./vis_result.jpg\n");
-
+  // print res
+  // You can directly access fields in FD_C_ClassifyResult and print it refer to
+  // ClassifyResult API Doc Or you can wrap it using
+  // FD_C_ClassifyResult_Wrapper, which containes C++ structure
+  // fastdeploy::vision::ClassifyResult, and using C API
+  // FD_C_ClassifyResultWrapperStr to call
+  // fastdeploy::vision::ClassifyResult::Str() in it. For convenience, we choose
+  // this method to print it.
+  FD_C_ClassifyResultWrapper* result_wrapper =
+      FD_C_CreateClassifyResultWrapperFromData(result);
+  printf("%s", FD_C_ClassifyResultWrapperStr(result_wrapper));
   FD_C_DestroyRuntimeOptionWrapper(option);
-  FD_C_DestroyPPYOLOEWrapper(model);
-  FD_C_DestroyDetectionResult(result);
+  FD_C_DestroyPaddleClasModelWrapper(model);
+  FD_C_DestroyClassifyResultWrapper(result_wrapper);
+  FD_C_DestroyClassifyResult(result);
   FD_C_DestroyMat(im);
-  FD_C_DestroyMat(vis_im);
 }
 
 void GpuInfer(const char* model_dir, const char* image_file) {
@@ -76,17 +84,19 @@ void GpuInfer(const char* model_dir, const char* image_file) {
   char params_file[100];
   char config_file[100];
   int max_size = 99;
-  snprintf(model_file, max_size, "%s%c%s", model_dir, sep, "model.pdmodel");
-  snprintf(params_file, max_size, "%s%c%s", model_dir, sep, "model.pdiparams");
-  snprintf(config_file, max_size, "%s%c%s", model_dir, sep, "infer_cfg.yml");
+  snprintf(model_file, max_size, "%s%c%s", model_dir, sep, "inference.pdmodel");
+  snprintf(params_file, max_size, "%s%c%s", model_dir, sep,
+           "inference.pdiparams");
+  snprintf(config_file, max_size, "%s%c%s", model_dir, sep,
+           "inference_cls.yaml");
 
   FD_C_RuntimeOptionWrapper* option = FD_C_CreateRuntimeOptionWrapper();
   FD_C_RuntimeOptionWrapperUseGpu(option, 0);
 
-  FD_C_PPYOLOEWrapper* model = FD_C_CreatePPYOLOEWrapper(
+  FD_C_PaddleClasModelWrapper* model = FD_C_CreatePaddleClasModelWrapper(
       model_file, params_file, config_file, option, PADDLE);
 
-  if (!FD_C_PPYOLOEWrapperInitialized(model)) {
+  if (!FD_C_PaddleClasModelWrapperInitialized(model)) {
     printf("Failed to initialize.\n");
     FD_C_DestroyRuntimeOptionWrapper(option);
     FD_C_DestroyPaddleClasModelWrapper(model);
@@ -95,10 +105,10 @@ void GpuInfer(const char* model_dir, const char* image_file) {
 
   FD_C_Mat im = FD_C_Imread(image_file);
 
-  FD_C_DetectionResult* result =
-      (FD_C_DetectionResult*)malloc(sizeof(FD_C_DetectionResult));
+  FD_C_ClassifyResult* result =
+      (FD_C_ClassifyResult*)malloc(sizeof(FD_C_ClassifyResult));
 
-  if (!FD_C_PPYOLOEWrapperPredict(model, im, result)) {
+  if (!FD_C_PaddleClasModelWrapperPredict(model, im, result)) {
     printf("Failed to predict.\n");
     FD_C_DestroyRuntimeOptionWrapper(option);
     FD_C_DestroyPaddleClasModelWrapper(model);
@@ -107,16 +117,22 @@ void GpuInfer(const char* model_dir, const char* image_file) {
     return;
   }
 
-  FD_C_Mat vis_im = FD_C_VisDetection(im, result, 0.5, 1, 0.5);
-
-  FD_C_Imwrite("vis_result.jpg", vis_im);
-  printf("Visualized result saved in ./vis_result.jpg\n");
-
+  // print res
+  // You can directly access fields in FD_C_ClassifyResult and print it refer to
+  // ClassifyResult API Doc Or you can wrap it using
+  // FD_C_ClassifyResult_Wrapper, which containes C++ structure
+  // fastdeploy::vision::ClassifyResult, and using C API
+  // FD_C_ClassifyResultWrapperStr to call
+  // fastdeploy::vision::ClassifyResult::Str() in it. For convenience, we choose
+  // this method to print it.
+  FD_C_ClassifyResultWrapper* result_wrapper =
+      FD_C_CreateClassifyResultWrapperFromData(result);
+  printf("%s", FD_C_ClassifyResultWrapperStr(result_wrapper));
   FD_C_DestroyRuntimeOptionWrapper(option);
-  FD_C_DestroyPPYOLOEWrapper(model);
-  FD_C_DestroyDetectionResult(result);
+  FD_C_DestroyPaddleClasModelWrapper(model);
+  FD_C_DestroyClassifyResultWrapper(result_wrapper);
+  FD_C_DestroyClassifyResult(result);
   FD_C_DestroyMat(im);
-  FD_C_DestroyMat(vis_im);
 }
 
 int main(int argc, char* argv[]) {
