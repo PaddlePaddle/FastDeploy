@@ -417,25 +417,28 @@ Runtime* Runtime::Clone(void* stream, int device_id) {
   return runtime;
 }
 
-// only for poros backend
-bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
-                      const RuntimeOption& _option) {
+void Runtime::CreatePorosBackend() {
 #ifdef ENABLE_POROS_BACKEND
-  FDASSERT(
-      option.model_format == ModelFormat::TORCHSCRIPT,
-      "PorosBackend only support model format of ModelFormat::TORCHSCRIPT.");
-  if (option.device != Device::CPU && option.device != Device::GPU) {
-    FDERROR << "PorosBackend only supports CPU/GPU, but now its "
-            << option.device << "." << std::endl;
-    return false;
-  }
+  backend_ = utils::make_unique<PorosBackend>();
+  FDASSERT(backend_->Init(option), "Failed to initialize Poros backend.");
+#else
+  FDASSERT(false,
+           "PorosBackend is not available, please compiled with "
+           "ENABLE_POROS_BACKEND=ON.");
+#endif
+  FDINFO << "Runtime initialized with Backend::POROS in " << option.device
+         << "." << std::endl;
+}
+
+// only for poros backend
+bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors) {
+#ifdef ENABLE_POROS_BACKEND
   option.poros_option.device = option.device;
   option.poros_option.device_id = option.device_id;
   option.poros_option.enable_fp16 = option.trt_option.enable_fp16;
   option.poros_option.max_batch_size = option.trt_option.max_batch_size;
   option.poros_option.max_workspace_size = option.trt_option.max_workspace_size;
 
-  backend_ = utils::make_unique<PorosBackend>();
   auto casted_backend = dynamic_cast<PorosBackend*>(backend_.get());
   FDASSERT(
       casted_backend->Compile(option.model_file, prewarm_tensors,
