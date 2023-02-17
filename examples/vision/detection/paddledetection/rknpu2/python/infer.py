@@ -22,11 +22,11 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model_file",
-        default="./picodet_s_416_coco_lcnet_non_postprocess/picodet_xs_416_coco_lcnet.onnx",
+        default="./picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet_rk3588_unquantized.rknn",
         help="Path of rknn model.")
     parser.add_argument(
         "--config_file",
-        default="./picodet_s_416_coco_lcnet_non_postprocess/infer_cfg.yml",
+        default="./picodet_s_416_coco_lcnet/infer_cfg.yml",
         help="Path of config.")
     parser.add_argument(
         "--image",
@@ -45,15 +45,16 @@ if __name__ == "__main__":
 
     # 配置runtime，加载模型
     runtime_option = fd.RuntimeOption()
-    runtime_option.use_cpu()
+    runtime_option.use_rknpu2()
 
     model = fd.vision.detection.PPYOLOE(
         model_file,
         params_file,
         config_file,
         runtime_option=runtime_option,
-        model_format=fd.ModelFormat.ONNX)
-
+        model_format=fd.ModelFormat.RKNN)
+    model.preprocessor.disable_normalize()
+    model.preprocessor.disable_permute()
     model.postprocessor.apply_decode_and_nms()
 
     # 预测图片分割结果

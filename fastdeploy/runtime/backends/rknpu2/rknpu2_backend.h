@@ -24,40 +24,13 @@
 #include <vector>
 
 namespace fastdeploy {
-struct RKNPU2BackendOption {
-  rknpu2::CpuName cpu_name = rknpu2::CpuName::RK3588;
-
-  // The specification of NPU core setting.It has the following choices :
-  // RKNN_NPU_CORE_AUTO : Referring to automatic mode, meaning that it will
-  // select the idle core inside the NPU.
-  // RKNN_NPU_CORE_0 : Running on the NPU0 core
-  // RKNN_NPU_CORE_1: Runing on the NPU1 core
-  // RKNN_NPU_CORE_2: Runing on the NPU2 core
-  // RKNN_NPU_CORE_0_1: Running on both NPU0 and NPU1 core simultaneously.
-  // RKNN_NPU_CORE_0_1_2: Running on both NPU0, NPU1 and NPU2 simultaneously.
-  rknpu2::CoreMask core_mask = rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
-};
-
 class RKNPU2Backend : public BaseBackend {
  public:
   RKNPU2Backend() = default;
 
   virtual ~RKNPU2Backend();
 
-  // RKNN API
-  bool LoadModel(void* model);
-
-  bool GetSDKAndDeviceVersion();
-
-  bool SetCoreMask(rknpu2::CoreMask& core_mask) const;
-
-  bool GetModelInputOutputInfos();
-
-  // BaseBackend API
-  void BuildOption(const RKNPU2BackendOption& option);
-
-  bool InitFromRKNN(const std::string& model_file,
-                    const RKNPU2BackendOption& option = RKNPU2BackendOption());
+  bool Init(const RuntimeOption& runtime_option);
 
   int NumInputs() const override {
     return static_cast<int>(inputs_desc_.size());
@@ -75,6 +48,18 @@ class RKNPU2Backend : public BaseBackend {
              bool copy_to_fd = true) override;
 
  private:
+  // BaseBackend API
+  void BuildOption(const RKNPU2BackendOption& option);
+  
+  // RKNN API
+  bool LoadModel(void* model);
+
+  bool GetSDKAndDeviceVersion();
+
+  bool SetCoreMask(const rknpu2::CoreMask& core_mask) const;
+
+  bool GetModelInputOutputInfos();
+
   // The object of rknn context.
   rknn_context ctx{};
   // The structure rknn_sdk_version is used to indicate the version
