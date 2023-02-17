@@ -26,7 +26,7 @@ FD_C_Destroy##model_type##Wrapper(__fd_take FD_C_##model_type##Wrapper* wrapper_
 
 #define DECLARE_PREDICT_FUNCTION(model_type, wrapper_var_name) FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_##model_type##WrapperPredict( \
     __fd_take FD_C_##model_type##Wrapper* wrapper_var_name, FD_C_Mat img, \
-    FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper)
+    FD_C_DetectionResult* fd_c_detection_result)
 
 #define DECLARE_INITIALIZED_FUNCTION(model_type, wrapper_var_name)  FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_##model_type##WrapperInitialized( \
     __fd_keep FD_C_##model_type##Wrapper* wrapper_var_name)
@@ -51,13 +51,22 @@ FD_C_Destroy##model_type##Wrapper(__fd_take FD_C_##model_type##Wrapper* wrapper_
 
 #define IMPLEMENT_DESTROY_WRAPPER_FUNCTION(model_type, wrapper_var_name) delete wrapper_var_name
 
-#define IMPLEMENT_PREDICT_FUNCTION(model_type, wrapper_var_name) \
-  cv::Mat* im = reinterpret_cast<cv::Mat*>(img); \
-  auto& model = \
-      CHECK_AND_CONVERT_FD_TYPE(model_type##Wrapper, wrapper_var_name); \
-  auto& detection_result = CHECK_AND_CONVERT_FD_TYPE( \
-      DetectionResultWrapper, fd_c_detection_result_wrapper); \
-  return model->Predict(im, detection_result.get())
+#define IMPLEMENT_PREDICT_FUNCTION(model_type, wrapper_var_name)               \
+  cv::Mat* im = reinterpret_cast<cv::Mat*>(img);                               \
+  auto& model =                                                                \
+      CHECK_AND_CONVERT_FD_TYPE(model_type##Wrapper, wrapper_var_name);        \
+  FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper =                 \
+      FD_C_CreateDetectionResultWrapper();                                     \
+  auto& detection_result = CHECK_AND_CONVERT_FD_TYPE(                          \
+      DetectionResultWrapper, fd_c_detection_result_wrapper);                  \
+  bool successful = model->Predict(im, detection_result.get());                \
+  if (successful) {                                                            \
+    FD_C_DetectionResult* res =                                                \
+        FD_C_DetectionResultWrapperGetData(fd_c_detection_result_wrapper);     \
+    *fd_c_detection_result = *res;                                             \
+  }                                                                            \
+  return successful
+
 
 #define IMPLEMENT_INITIALIZED_FUNCTION(model_type, wrapper_var_name)   auto& model = \
       CHECK_AND_CONVERT_FD_TYPE(model_type##Wrapper, wrapper_var_name); \
@@ -95,7 +104,7 @@ return model->Initialized();
 
 #define DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(model_type, wrapper_var_name) FD_C_Bool FD_C_##model_type##WrapperPredict( \
     FD_C_##model_type##Wrapper* wrapper_var_name, FD_C_Mat img, \
-    FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper) { \
+    FD_C_DetectionResult* fd_c_detection_result) { \
   IMPLEMENT_PREDICT_FUNCTION(model_type, wrapper_var_name); \
 }
 

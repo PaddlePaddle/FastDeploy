@@ -53,8 +53,6 @@ FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat FD_C_VisDetectionWithLabel(
                                      float score_threshold,
                                      int line_size, float font_size);
 
-
-
 /** \brief Show the visualized results for classification models
  *
  * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
@@ -90,7 +88,6 @@ FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat VisClassificationWithLabel(
  * \return cv::Mat type stores the visualized results
  */
 FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat VisOcr(FD_C_Mat im, FD_C_OCRResult* ocr_result);
-
 
 
 #ifdef __cplusplus

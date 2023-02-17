@@ -46,6 +46,7 @@ DEFINE_RESULT_WRAPPER_STRUCT(ClassifyResult, classify_result);
 // DetectionResult
 DEFINE_RESULT_WRAPPER_STRUCT(DetectionResult, detection_result);
 
+
 // OCRResult
 DEFINE_RESULT_WRAPPER_STRUCT(OCRResult, ocr_result);
 
@@ -139,6 +140,7 @@ DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(PPOCRv2, ppocrv2_model);
 // PPOCRv3
 DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(PPOCRv3, ppocrv3_model);
 
+
 // -------------  belows are function declaration for get ptr from wrapper --------------------- //
 
 #define DECLARE_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(typename, varname) std::unique_ptr<fastdeploy::vision::typename>& \
@@ -153,6 +155,7 @@ FD_C_CheckAndConvert##typename##Wrapper( \
 FD_C_CheckAndConvert##typename##Wrapper( \
     FD_C_##typename##Wrapper* varname)
 
+
 #define DECLARE_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(typename, varname) std::unique_ptr<fastdeploy::vision::ocr::typename>& \
 FD_C_CheckAndConvert##typename##Wrapper( \
     FD_C_##typename##Wrapper* varname)
@@ -160,6 +163,7 @@ FD_C_CheckAndConvert##typename##Wrapper( \
 #define DECLARE_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(typename, varname) std::unique_ptr<fastdeploy::pipeline::typename>& \
 FD_C_CheckAndConvert##typename##Wrapper( \
     FD_C_##typename##Wrapper* varname)
+
 
 namespace fastdeploy {
 
@@ -172,9 +176,11 @@ DECLARE_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(ClassifyResult,
 DECLARE_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(DetectionResult,
                                              fd_detection_result_wrapper);
 
+
 // OCRResult
 DECLARE_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(OCRResult,
                                              fd_ocr_result_wrapper);
+
 
 // Models:
 
@@ -347,6 +353,7 @@ FD_C_CheckAndConvert##typename##Wrapper( \
            "The pointer of " #var_wrapper_name " shouldn't be nullptr."); \
   return var_wrapper_name->var_ptr_name; \
 }
+
 
 #define DECL_AND_IMPLEMENT_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(typename, var_wrapper_name, var_ptr_name) std::unique_ptr<fastdeploy::vision::ocr::typename>& \
 FD_C_CheckAndConvert##typename##Wrapper( \

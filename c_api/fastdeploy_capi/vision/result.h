@@ -60,6 +60,7 @@ typedef struct FD_C_OneDimDetectionResult {
   FD_C_DetectionResult* data;
 } FD_C_OneDimDetectionResult;
 
+
 typedef struct FD_C_OCRResult {
   FD_C_TwoDimArrayInt32 boxes;
   FD_C_OneDimArrayCstr text;
@@ -184,6 +185,7 @@ FASTDEPLOY_CAPI_EXPORT extern __fd_give char*
 FD_C_DetectionResultWrapperStr(
     __fd_keep FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper);
 
+
 // OCR Results
 
 /** \brief Create a new FD_C_OCRResultWrapper object
@@ -238,6 +240,7 @@ FD_C_CreateOCRResultWrapperFromData(
 FASTDEPLOY_CAPI_EXPORT extern __fd_give char*
 FD_C_OCRResultWrapperStr(
     __fd_keep FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper);
+
 
 #ifdef __cplusplus
 }  // extern "C"

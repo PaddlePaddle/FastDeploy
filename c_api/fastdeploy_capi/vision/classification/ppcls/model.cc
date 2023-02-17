@@ -44,13 +44,74 @@ void FD_C_DestroyPaddleClasModelWrapper(
 
 FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
     FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper, FD_C_Mat img,
-    FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper) {
+    FD_C_ClassifyResult* fd_c_classify_result) {
   cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
   auto& paddleclas_model = CHECK_AND_CONVERT_FD_TYPE(
       PaddleClasModelWrapper, fd_c_paddleclas_model_wrapper);
+  FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper =
+      FD_C_CreateClassifyResultWrapper();
   auto& classify_result = CHECK_AND_CONVERT_FD_TYPE(
       ClassifyResultWrapper, fd_c_classify_result_wrapper);
-  return paddleclas_model->Predict(im, classify_result.get());
+
+  bool successful = paddleclas_model->Predict(im, classify_result.get());
+  if (successful) {
+    FD_C_ClassifyResult* res =
+        FD_C_ClassifyResultWrapperGetData(fd_c_classify_result_wrapper);
+    *fd_c_classify_result = *res;
+  }
+  return successful;
+}
+
+FD_C_Bool FD_C_PaddleClasModelWrapperInitialized(
+    FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper) {
+  auto& paddleclas_model = CHECK_AND_CONVERT_FD_TYPE(
+      PaddleClasModelWrapper, fd_c_paddleclas_model_wrapper);
+  return paddleclas_model->Initialized();
+}
+
+FD_C_ClassifyResult* FD_C_ClassifyResultToC(
+    fastdeploy::vision::ClassifyResult* classify_result) {
+  // Internal use, transfer fastdeploy::vision::ClassifyResult to
+  // FD_C_ClassifyResult
+  FD_C_ClassifyResult* fd_c_classify_result_data = new FD_C_ClassifyResult();
+  // copy label_ids
+  fd_c_classify_result_data->label_ids.size = classify_result->label_ids.size();
+  fd_c_classify_result_data->label_ids.data =
+      new int32_t[fd_c_classify_result_data->label_ids.size];
+  memcpy(fd_c_classify_result_data->label_ids.data,
+         classify_result->label_ids.data(),
+         sizeof(int32_t) * fd_c_classify_result_data->label_ids.size);
+  // copy scores
+  fd_c_classify_result_data->scores.size = classify_result->scores.size();
+  fd_c_classify_result_data->scores.data =
+      new float[fd_c_classify_result_data->scores.size];
+  memcpy(fd_c_classify_result_data->scores.data, classify_result->scores.data(),
+         sizeof(float) * fd_c_classify_result_data->scores.size);
+  fd_c_classify_result_data->type =
+      static_cast<FD_C_ResultType>(classify_result->type);
+  return fd_c_classify_result_data;
+}
+
+FD_C_Bool FD_C_PaddleClasModelWrapperBatchPredict(
+    FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper,
+    FD_C_OneDimMat imgs, FD_C_OneDimClassifyResult* results) {
+  std::vector<cv::Mat> imgs_vec;
+  std::vector<fastdeploy::vision::ClassifyResult> results_out;
+  for (int i = 0; i < imgs.size; i++) {
+    imgs_vec.push_back(*(reinterpret_cast<cv::Mat*>(imgs.data[i])));
+  }
+  auto& paddleclas_model = CHECK_AND_CONVERT_FD_TYPE(
+      PaddleClasModelWrapper, fd_c_paddleclas_model_wrapper);
+  bool successful = paddleclas_model->BatchPredict(imgs_vec, &results_out);
+  if (successful) {
+    // copy results back to FD_C_OneDimClassifyResult
+    results->size = results_out.size();
+    results->data = new FD_C_ClassifyResult[results->size];
+    for (int i = 0; i < results_out.size(); i++) {
+      results->data[i] = *FD_C_ClassifyResultToC(&results_out[i]);
+    }
+  }
+  return successful;
 }
 
 FD_C_Bool FD_C_PaddleClasModelWrapperInitialized(
