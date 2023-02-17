@@ -77,9 +77,6 @@ class FASTDEPLOY_DECL ProcessorManager {
   virtual bool Apply(FDMatBatch* image_batch,
                      std::vector<FDTensor>* outputs) = 0;
 
- protected:
-  bool initialized_ = false;
-
  private:
 #ifdef WITH_GPU
   cudaStream_t stream_ = nullptr;

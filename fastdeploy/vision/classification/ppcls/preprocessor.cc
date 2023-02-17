@@ -102,6 +102,10 @@ void PaddleClasPreprocessor::DisablePermute() {
 
 bool PaddleClasPreprocessor::Apply(FDMatBatch* image_batch,
                                    std::vector<FDTensor>* outputs) {
+  if (!initialized_) {
+    FDERROR << "The preprocessor is not initialized." << std::endl;
+    return false;
+  }
   for (size_t j = 0; j < processors_.size(); ++j) {
     ProcLib lib = ProcLib::DEFAULT;
     if (initial_resize_on_cpu_ && j == 0 &&
