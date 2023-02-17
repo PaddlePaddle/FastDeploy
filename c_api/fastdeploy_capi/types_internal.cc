@@ -18,38 +18,135 @@ namespace fastdeploy {
 
 #ifdef ENABLE_VISION
 
-std::unique_ptr<fastdeploy::vision::classification::PaddleClasModel>&
-FD_C_CheckAndConvertPaddleClasModelWrapper(
-    FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper) {
-  FDASSERT(
-      fd_c_paddleclas_model_wrapper != nullptr,
-      "The pointer of fd_c_paddleclas_model_wrapper shouldn't be nullptr.");
-  return fd_c_paddleclas_model_wrapper->paddleclas_model;
-}
+// results:
 
-std::unique_ptr<fastdeploy::vision::detection::PPYOLOE>&
-FD_C_CheckAndConvertPPYOLOEWrapper(FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper) {
-  FDASSERT(fd_c_ppyoloe_wrapper != nullptr,
-           "The pointer of fd_c_ppyoloe_wrapper shouldn't be nullptr.");
-  return fd_c_ppyoloe_wrapper->ppyoloe_model;
-}
+// ClassifyResult
+DECL_AND_IMPLEMENT_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    ClassifyResult, fd_classify_result_wrapper, classify_result)
+// DetectionResult
+DECL_AND_IMPLEMENT_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    DetectionResult, fd_detection_result_wrapper, detection_result)
 
-std::unique_ptr<fastdeploy::vision::ClassifyResult>&
-FD_C_CheckAndConvertClassifyResultWrapper(
-    FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper) {
-  FDASSERT(fd_c_classify_result_wrapper != nullptr,
-           "The pointer of fd_c_classify_result_wrapper shouldn't be nullptr.");
-  return fd_c_classify_result_wrapper->classify_result;
-}
+// OCRResult
+DECL_AND_IMPLEMENT_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(OCRResult,
+                                                        fd_ocr_result_wrapper,
+                                                        ocr_result)
 
-std::unique_ptr<fastdeploy::vision::DetectionResult>&
-FD_C_CheckAndConvertDetectionResultWrapper(
-    FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper) {
-  FDASSERT(
-      fd_c_detection_result_wrapper != nullptr,
-      "The pointer of fd_c_detection_result_wrapper shouldn't be nullptr.");
-  return fd_c_detection_result_wrapper->detection_result;
-}
+// Models:
+
+// Classification
+
+// PaddleClasModel
+DECL_AND_IMPLEMENT_CLASSIFICATION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PaddleClasModel, fd_paddleclas_model_wrapper, paddleclas_model)
+
+// detection models:
+
+// PPYOLOE
+
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PPYOLOE, fd_ppyoloe_wrapper, ppyoloe_model)
+
+// PicoDet
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PicoDet, fd_picodet_wrapper, picodet_model)
+
+// PPYOLO
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PPYOLO, fd_ppyolo_wrapper, ppyolo_model)
+
+// YOLOv3
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    YOLOv3, fd_yolov3_wrapper, yolov3_model)
+
+// PaddleYOLOX
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PaddleYOLOX, fd_paddleyolox_wrapper, paddleyolox_model)
+
+// FasterRCNN
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    FasterRCNN, fd_fasterrcnn_wrapper, fasterrcnn_model)
+
+// MaskRCNN
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    MaskRCNN, fd_maskrcnn_wrapper, maskrcnn_model)
+
+// SSD
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(SSD,
+                                                                 fd_ssd_wrapper,
+                                                                 ssd_model)
+
+// PaddleYOLOv5
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PaddleYOLOv5, fd_paddleyolov5_wrapper, paddleyolov5_model)
+
+// PaddleYOLOv6
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PaddleYOLOv6, fd_paddleyolov6_wrapper, paddleyolov6_model)
+
+// PaddleYOLOv7
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PaddleYOLOv7, fd_paddleyolov7_wrapper, paddleyolov7_model)
+
+// PaddleYOLOv8
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PaddleYOLOv8, fd_paddleyolov8_wrapper, paddleyolov8_model)
+
+// RTMDet
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    RTMDet, fd_rtmdet_wrapper, rtmdet_model)
+
+// CascadeRCNN
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    CascadeRCNN, fd_cascadercnn_wrapper, cascadercnn_model)
+
+// PSSDet
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PSSDet, fd_pssdet_wrapper, pssdet_model)
+
+// RetinaNet
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    RetinaNet, fd_retinanet_wrapper, retinanet_model)
+
+// FCOS
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    FCOS, fd_fcos_wrapper, fcos_model)
+
+// TTFNet
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    TTFNet, fd_ttfnet_wrapper, ttfnet_model)
+
+// TOOD
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    TOOD, fd_tood_wrapper, tood_model)
+
+// GFL
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(GFL,
+                                                                 fd_gfl_wrapper,
+                                                                 gfl_model)
+
+// OCR models
+
+// Recognizer
+DECL_AND_IMPLEMENT_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    Recognizer, fd_recognizer_wrapper, recognizer_model);
+
+// DBDetector
+DECL_AND_IMPLEMENT_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    DBDetector, fd_dbdetector_wrapper, dbdetector_model);
+
+// Classifier
+DECL_AND_IMPLEMENT_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    Classifier, fd_classifier_wrapper, classifier_model);
+
+// PPOCRv2
+DECL_AND_IMPLEMENT_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PPOCRv2, fd_ppocrv2_wrapper, ppocrv2_model);
+
+// PPOCRv3
+DECL_AND_IMPLEMENT_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PPOCRv3, fd_ppocrv3_wrapper, ppocrv3_model);
+
 #endif
 
 std::unique_ptr<fastdeploy::RuntimeOption>&

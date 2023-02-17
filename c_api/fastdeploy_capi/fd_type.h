@@ -23,7 +23,12 @@
 typedef struct FD_C_OneDimArrayUint8 {
   size_t size;
   uint8_t* data;
-} FD_C_OneDimArrayUint8;  // std::vector<int32_t>
+} FD_C_OneDimArrayUint8;  // std::vector<uint8>
+
+typedef struct FD_C_OneDimArrayInt8 {
+  size_t size;
+  int8_t* data;
+} FD_C_OneDimArrayInt8;  // std::vector<int8>
 
 typedef struct FD_C_OneDimArrayInt32 {
   size_t size;
@@ -60,12 +65,32 @@ typedef struct FD_C_TwoDimArraySize {
   FD_C_OneDimArraySize* data;
 } FD_C_TwoDimArraySize;  // std::vector<std::vector<size_t>>
 
+typedef struct FD_C_TwoDimArrayInt8 {
+  size_t size;
+  FD_C_OneDimArrayInt8* data;
+} FD_C_TwoDimArrayInt8;  // std::vector<std::vector<int8>>
+
+typedef struct FD_C_TwoDimArrayInt32 {
+  size_t size;
+  FD_C_OneDimArrayInt32* data;
+} FD_C_TwoDimArrayInt32;  // std::vector<std::vector<int32_t>>
+
+typedef struct FD_C_ThreeDimArrayInt32 {
+  size_t size;
+  FD_C_TwoDimArrayInt32* data;
+} FD_C_ThreeDimArrayInt32;  // std::vector<std::vector<std::vector<int32_t>>>
+
 typedef struct FD_C_TwoDimArrayFloat {
   size_t size;
   FD_C_OneDimArrayFloat* data;
 } FD_C_TwoDimArrayFloat;  // std::vector<std::vector<float>>
 
 typedef void* FD_C_Mat;
+
+typedef struct FD_C_OneDimMat {
+  size_t size;
+  FD_C_Mat* data;
+} FD_C_OneDimMat;
 
 #ifdef __cplusplus
 extern "C" {
