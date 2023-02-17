@@ -4,6 +4,7 @@
 
 ## FastDeploy预编译库安装
 - [FastDeploy预编译库下载安装](download_prebuilt_libraries.md)
+>> **注意**：FastDeploy目前只提供部分环境的预编译库，其他环境需要参考下方文档自行编译
 
 ## 自行编译安装
 - [NVIDIA GPU部署环境](gpu.md)
