@@ -18,6 +18,16 @@ cd ../
 docker build -t paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 -f serving/Dockerfile .
 ```
 
+The default version of TensorRT is 8.5.2.2. If you need to change the version, you can run the following commands.
+
+```
+cd serving
+bash scripts/build.sh -tv 8.4.1.5
+
+cd ../
+docker build -t paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.5-21.10 -f serving/Dockerfile_CUDA_11_4_TRT_8_4 .
+```
+
 For example, create an GPU image based on FastDeploy v1.0.3 and ubuntu 20.04，cuda11.2 environment
 ```
 # Enter the serving directory and execute the script to compile the FastDeploy and serving backend

@@ -35,6 +35,10 @@ class FASTDEPLOY_DECL ProcessorManager {
 
   bool CudaUsed();
 
+#ifdef WITH_GPU
+  cudaStream_t Stream() const { return stream_; }
+#endif
+
   void SetStream(FDMat* mat) {
 #ifdef WITH_GPU
     mat->SetStream(stream_);
@@ -56,7 +60,7 @@ class FASTDEPLOY_DECL ProcessorManager {
 
   int DeviceId() { return device_id_; }
 
-  /** \brief Process the input image and prepare input tensors for runtime
+  /** \brief Process the input images and prepare input tensors for runtime
    *
    * \param[in] images The input image data list, all the elements are returned by cv::imread()
    * \param[in] outputs The output tensors which will feed in runtime
