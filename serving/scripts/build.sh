@@ -33,6 +33,9 @@ do
         -hs|--https_proxy)
                 https_proxy="$2"
                 shift;;
+        -tv|--trt_version)
+                trt_version="$2"
+                shift;;
         --)
                 shift
                 break;;
@@ -50,6 +53,11 @@ fi
 
 if [ $WITH_GPU == "ON" ]; then
 
+if [ -z $trt_version ]; then
+    # The optional value of trt_version: ["8.4.1.5", "8.5.2.2"]
+    trt_version="8.5.2.2"
+fi
+
 echo "start build FD GPU library"
 
 if [ ! -d "./cmake-3.18.6-Linux-x86_64/" ]; then
@@ -58,10 +66,10 @@ if [ ! -d "./cmake-3.18.6-Linux-x86_64/" ]; then
     rm -rf cmake-3.18.6-Linux-x86_64.tar.gz
 fi
 
-if [ ! -d "./TensorRT-8.5.2.2/" ]; then
-    wget https://fastdeploy.bj.bcebos.com/resource/TensorRT/TensorRT-8.5.2.2.Linux.x86_64-gnu.cuda-11.8.cudnn8.6.tar.gz
-    tar -zxvf TensorRT-8.5.2.2.Linux.x86_64-gnu.cuda-11.8.cudnn8.6.tar.gz
-    rm -rf TensorRT-8.5.2.2.Linux.x86_64-gnu.cuda-11.8.cudnn8.6.tar.gz
+if [ ! -d "./TensorRT-${trt_version}/" ]; then
+    wget https://fastdeploy.bj.bcebos.com/resource/TensorRT/TensorRT-${trt_version}.Linux.x86_64-gnu.cuda-11.8.cudnn8.6.tar.gz
+    tar -zxvf TensorRT-${trt_version}.Linux.x86_64-gnu.cuda-11.8.cudnn8.6.tar.gz
+    rm -rf TensorRT-${trt_version}.Linux.x86_64-gnu.cuda-11.8.cudnn8.6.tar.gz
 fi
 
 nvidia-docker run -i --rm --name ${docker_name} \
@@ -78,7 +86,7 @@ nvidia-docker run -i --rm --name ${docker_name} \
             export PATH=/workspace/fastdeploy/serving/cmake-3.18.6-Linux-x86_64/bin:$PATH;
             export WITH_GPU=ON;
             export ENABLE_TRT_BACKEND=OFF;
-            export TRT_DIRECTORY=/workspace/fastdeploy/serving/TensorRT-8.4.1.5/;
+            export TRT_DIRECTORY=/workspace/fastdeploy/serving/TensorRT-${trt_version}/;
             export ENABLE_ORT_BACKEND=OFF;
             export ENABLE_PADDLE_BACKEND=OFF;
             export ENABLE_OPENVINO_BACKEND=OFF;
@@ -88,7 +96,7 @@ nvidia-docker run -i --rm --name ${docker_name} \
             python setup.py bdist_wheel;
             cd /workspace/fastdeploy;
             rm -rf build; mkdir -p build;cd build;
-            cmake .. -DENABLE_TRT_BACKEND=ON -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy_install -DWITH_GPU=ON -DTRT_DIRECTORY=/workspace/fastdeploy/serving/TensorRT-8.4.1.5/ -DENABLE_PADDLE_BACKEND=ON -DENABLE_ORT_BACKEND=ON -DENABLE_OPENVINO_BACKEND=ON -DENABLE_VISION=OFF -DBUILD_FASTDEPLOY_PYTHON=OFF -DENABLE_PADDLE2ONNX=ON -DENABLE_TEXT=OFF -DLIBRARY_NAME=fastdeploy_runtime;
+            cmake .. -DENABLE_TRT_BACKEND=ON -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy_install -DWITH_GPU=ON -DTRT_DIRECTORY=/workspace/fastdeploy/serving/TensorRT-${trt_version}/ -DENABLE_PADDLE_BACKEND=ON -DENABLE_ORT_BACKEND=ON -DENABLE_OPENVINO_BACKEND=ON -DENABLE_VISION=OFF -DBUILD_FASTDEPLOY_PYTHON=OFF -DENABLE_PADDLE2ONNX=ON -DENABLE_TEXT=OFF -DLIBRARY_NAME=fastdeploy_runtime;
             make -j`nproc`;
             make install;
             cd /workspace/fastdeploy/serving;
