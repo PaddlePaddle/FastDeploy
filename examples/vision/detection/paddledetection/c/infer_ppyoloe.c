@@ -41,7 +41,7 @@ void CpuInfer(const char* model_dir, const char* image_file) {
   if (!FD_C_PPYOLOEWrapperInitialized(model)) {
     printf("Failed to initialize.\n");
     FD_C_DestroyRuntimeOptionWrapper(option);
-    FD_C_DestroyPaddleClasModelWrapper(model);
+    FD_C_DestroyPPYOLOEWrapper(model);
     return;
   }
 
@@ -53,7 +53,7 @@ void CpuInfer(const char* model_dir, const char* image_file) {
   if (!FD_C_PPYOLOEWrapperPredict(model, im, result)) {
     printf("Failed to predict.\n");
     FD_C_DestroyRuntimeOptionWrapper(option);
-    FD_C_DestroyPaddleClasModelWrapper(model);
+    FD_C_DestroyPPYOLOEWrapper(model);
     FD_C_DestroyMat(im);
     free(result);
     return;
@@ -89,7 +89,7 @@ void GpuInfer(const char* model_dir, const char* image_file) {
   if (!FD_C_PPYOLOEWrapperInitialized(model)) {
     printf("Failed to initialize.\n");
     FD_C_DestroyRuntimeOptionWrapper(option);
-    FD_C_DestroyPaddleClasModelWrapper(model);
+    FD_C_DestroyPPYOLOEWrapper(model);
     return;
   }
 
@@ -101,7 +101,7 @@ void GpuInfer(const char* model_dir, const char* image_file) {
   if (!FD_C_PPYOLOEWrapperPredict(model, im, result)) {
     printf("Failed to predict.\n");
     FD_C_DestroyRuntimeOptionWrapper(option);
-    FD_C_DestroyPaddleClasModelWrapper(model);
+    FD_C_DestroyPPYOLOEWrapper(model);
     FD_C_DestroyMat(im);
     free(result);
     return;
