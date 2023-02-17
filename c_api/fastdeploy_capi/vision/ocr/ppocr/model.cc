@@ -341,101 +341,159 @@ PIPELINE_DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(PPOCRv2,
                                                         fd_c_ppocrv2_wrapper)
 
 FD_C_Bool FD_C_PPOCRv2WrapperPredict(FD_C_PPOCRv2Wrapper* fd_c_ppocrv2_wrapper,
-                                     FD_C_Mat img, FD_C_OCRResult* result) {
+                                     FD_C_Mat img,
+                                     FD_C_OCRResult* fd_c_ocr_result) {
   cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
   auto& model = CHECK_AND_CONVERT_FD_TYPE(PPOCRv2Wrapper, fd_c_ppocrv2_wrapper);
-  auto& classify_result = CHECK_AND_CONVERT_FD_TYPE(
-      ClassifyResultWrapper, fd_c_classify_result_wrapper);
-  model->Predict(im, classify_result.get());
+  FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper =
+      FD_C_CreateOCRResultWrapper();
+  auto& ocr_result =
+      CHECK_AND_CONVERT_FD_TYPE(OCRResultWrapper, fd_c_ocr_result_wrapper);
+
+  bool successful = model->Predict(im, ocr_result.get());
+  if (successful) {
+    FD_C_OCRResult* res = FD_C_OCRResultWrapperGetData(fd_c_ocr_result_wrapper);
+    *fd_c_ocr_result = *res;
+  }
+  return successful;
 }
 
 PIPELINE_DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(PPOCRv2,
                                                     fd_c_ppocrv2_wrapper)
 
-FD_C_DetectionResult* FD_C_OCRResultToC(
-    fastdeploy::vision::OCRResult* ocr_result) {
+FD_C_OCRResult* FD_C_OCRResultToC(fastdeploy::vision::OCRResult* ocr_result) {
   // Internal use, transfer fastdeploy::vision::OCRResult to
   // FD_C_OCRResult
-  // FD_C_DetectionResult* fd_c_detection_result = new FD_C_DetectionResult();
-  // // copy boxes
-  // const int boxes_coordinate_dim = 4;
-  // fd_c_detection_result->boxes.size = detection_result->boxes.size();
-  // fd_c_detection_result->boxes.data =
-  //     new FD_C_OneDimArrayFloat[fd_c_detection_result->boxes.size];
-  // for (size_t i = 0; i < detection_result->boxes.size(); i++) {
-  //   fd_c_detection_result->boxes.data[i].size = boxes_coordinate_dim;
-  //   fd_c_detection_result->boxes.data[i].data = new
-  //   float[boxes_coordinate_dim]; for (size_t j = 0; j < boxes_coordinate_dim;
-  //   j++) {
-  //     fd_c_detection_result->boxes.data[i].data[j] =
-  //         detection_result->boxes[i][j];
-  //   }
-  // }
-  // // copy scores
-  // fd_c_detection_result->scores.size = detection_result->scores.size();
-  // fd_c_detection_result->scores.data =
-  //     new float[fd_c_detection_result->scores.size];
-  // memcpy(fd_c_detection_result->scores.data, detection_result->scores.data(),
-  //        sizeof(float) * fd_c_detection_result->scores.size);
-  // // copy label_ids
-  // fd_c_detection_result->label_ids.size = detection_result->label_ids.size();
-  // fd_c_detection_result->label_ids.data =
-  //     new int32_t[fd_c_detection_result->label_ids.size];
-  // memcpy(fd_c_detection_result->label_ids.data,
-  //        detection_result->label_ids.data(),
-  //        sizeof(int32_t) * fd_c_detection_result->label_ids.size);
-  // // copy masks
-  // fd_c_detection_result->masks.size = detection_result->masks.size();
-  // fd_c_detection_result->masks.data =
-  //     new FD_C_Mask[fd_c_detection_result->masks.size];
-  // for (size_t i = 0; i < detection_result->masks.size(); i++) {
-  //   // copy data in mask
-  //   fd_c_detection_result->masks.data[i].data.size =
-  //       detection_result->masks[i].data.size();
-  //   fd_c_detection_result->masks.data[i].data.data =
-  //       new uint8_t[detection_result->masks[i].data.size()];
-  //   memcpy(fd_c_detection_result->masks.data[i].data.data,
-  //          detection_result->masks[i].data.data(),
-  //          sizeof(uint8_t) * detection_result->masks[i].data.size());
-  //   // copy shape in mask
-  //   fd_c_detection_result->masks.data[i].shape.size =
-  //       detection_result->masks[i].shape.size();
-  //   fd_c_detection_result->masks.data[i].shape.data =
-  //       new int64_t[detection_result->masks[i].shape.size()];
-  //   memcpy(fd_c_detection_result->masks.data[i].shape.data,
-  //          detection_result->masks[i].shape.data(),
-  //          sizeof(int64_t) * detection_result->masks[i].shape.size());
-  //   fd_c_detection_result->masks.data[i].type =
-  //       static_cast<FD_C_ResultType>(detection_result->masks[i].type);
-  // }
-  // fd_c_detection_result->contain_masks = detection_result->contain_masks;
-  // fd_c_detection_result->type =
-  //     static_cast<FD_C_ResultType>(detection_result->type);
-  // return fd_c_detection_result;
+  FD_C_OCRResult* fd_c_ocr_result = new FD_C_OCRResult();
+  // copy boxes
+  const int boxes_coordinate_dim = 8;
+  fd_c_ocr_result->boxes.size = ocr_result->boxes.size();
+  fd_c_ocr_result->boxes.data =
+      new FD_C_OneDimArrayInt32[fd_c_ocr_result->boxes.size];
+  for (size_t i = 0; i < ocr_result->boxes.size(); i++) {
+    fd_c_ocr_result->boxes.data[i].size = boxes_coordinate_dim;
+    fd_c_ocr_result->boxes.data[i].data = new int[boxes_coordinate_dim];
+    for (size_t j = 0; j < boxes_coordinate_dim; j++) {
+      fd_c_ocr_result->boxes.data[i].data[j] = ocr_result->boxes[i][j];
+    }
+  }
+  // copy text
+  fd_c_ocr_result->text.size = ocr_result->text.size();
+  fd_c_ocr_result->text.data = new FD_C_Cstr[fd_c_ocr_result->text.size];
+  for (size_t i = 0; i < ocr_result->text.size(); i++) {
+    fd_c_ocr_result->text.data[i].size = ocr_result->text[i].length();
+    fd_c_ocr_result->text.data[i].data =
+        new char[ocr_result->text[i].length() + 1];
+    strncpy(fd_c_ocr_result->text.data[i].data, ocr_result->text[i].c_str(),
+            ocr_result->text[i].length());
+  }
+
+  // copy rec_scores
+  fd_c_ocr_result->rec_scores.size = ocr_result->rec_scores.size();
+  fd_c_ocr_result->rec_scores.data =
+      new float[fd_c_ocr_result->rec_scores.size];
+  memcpy(fd_c_ocr_result->rec_scores.data, ocr_result->rec_scores.data(),
+         sizeof(float) * fd_c_ocr_result->rec_scores.size);
+  // copy cls_scores
+  fd_c_ocr_result->cls_scores.size = ocr_result->cls_scores.size();
+  fd_c_ocr_result->cls_scores.data =
+      new float[fd_c_ocr_result->cls_scores.size];
+  memcpy(fd_c_ocr_result->cls_scores.data, ocr_result->cls_scores.data(),
+         sizeof(float) * fd_c_ocr_result->cls_scores.size);
+  // copy cls_labels
+  fd_c_ocr_result->cls_labels.size = ocr_result->cls_labels.size();
+  fd_c_ocr_result->cls_labels.data =
+      new int32_t[fd_c_ocr_result->cls_labels.size];
+  memcpy(fd_c_ocr_result->cls_labels.data, ocr_result->cls_labels.data(),
+         sizeof(int32_t) * fd_c_ocr_result->cls_labels.size);
+  // copy type
+  fd_c_ocr_result->type = static_cast<FD_C_ResultType>(ocr_result->type);
+  return fd_c_ocr_result;
 }
 
 FD_C_Bool FD_C_PPOCRv2WrapperBatchPredict(
     FD_C_PPOCRv2Wrapper* fd_c_ppocrv2_wrapper, FD_C_OneDimMat imgs,
-    FD_C_OneDimOCRResult* batch_result) {}
+    FD_C_OneDimOCRResult* results) {
+  std::vector<cv::Mat> imgs_vec;
+  std::vector<fastdeploy::vision::OCRResult> results_out;
+  for (int i = 0; i < imgs.size; i++) {
+    imgs_vec.push_back(*(reinterpret_cast<cv::Mat*>(imgs.data[i])));
+  }
+  auto& model = CHECK_AND_CONVERT_FD_TYPE(PPOCRv2Wrapper, fd_c_ppocrv2_wrapper);
+  bool successful = model->BatchPredict(imgs_vec, &results_out);
+  if (successful) {
+    // copy results back to FD_C_OneDimOCRResult
+    results->size = results_out.size();
+    results->data = new FD_C_OCRResult[results->size];
+    for (int i = 0; i < results_out.size(); i++) {
+      results->data[i] = *FD_C_OCRResultToC(&results_out[i]);
+    }
+  }
+  return successful;
+}
 
 // PPOCRv3
 
 FD_C_PPOCRv3Wrapper* FD_C_CreatesPPOCRv3Wrapper(
     FD_C_DBDetectorWrapper* det_model, FD_C_ClassifierWrapper* cls_model,
-    FD_C_RecognizerWrapper* rec_model) {}
+    FD_C_RecognizerWrapper* rec_model) {
+  FD_C_PPOCRv3Wrapper* fd_c_ppocrv3_wrapper = new FD_C_PPOCRv3Wrapper();
+  auto& det_model =
+      CHECK_AND_CONVERT_FD_TYPE(DBDetectorWrapper, fd_c_det_model_wrapper);
+  auto& cls_model =
+      CHECK_AND_CONVERT_FD_TYPE(ClassifierWrapper, fd_c_cls_model_wrapper);
+  auto& rec_model =
+      CHECK_AND_CONVERT_FD_TYPE(RecognizerWrapper, fd_c_rec_model_wrapper);
+  fd_c_ppocrv3_wrapper->ocr_model =
+      std::unique_ptr<fastdeploy::vision::ocr::PPOCRv3>(
+          new fastdeploy::vision::ocr::PPOCRv3(det_model.get(), cls_model.get(),
+                                               rec_model.get()));
+  return fd_c_ppocrv3_wrapper;
+}
 
 PIPELINE_DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(PPOCRv3,
                                                         fd_c_ppocrv3_wrapper)
 
 FD_C_Bool FD_C_PPOCRv3WrapperPredict(FD_C_PPOCRv3Wrapper* fd_c_ppocrv3_wrapper,
-                                     FD_C_Mat img, FD_C_OCRResult* result) {}
+                                     FD_C_Mat img, FD_C_OCRResult* result) {
+  cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
+  auto& model = CHECK_AND_CONVERT_FD_TYPE(PPOCRv3Wrapper, fd_c_ppocrv3_wrapper);
+  FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper =
+      FD_C_CreateOCRResultWrapper();
+  auto& ocr_result =
+      CHECK_AND_CONVERT_FD_TYPE(OCRResultWrapper, fd_c_ocr_result_wrapper);
+
+  bool successful = model->Predict(im, ocr_result.get());
+  if (successful) {
+    FD_C_OCRResult* res = FD_C_OCRResultWrapperGetData(fd_c_ocr_result_wrapper);
+    *fd_c_ocr_result = *res;
+  }
+  return successful;
+}
 
 PIPELINE_DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(PPOCRv3,
                                                     fd_c_ppocrv3_wrapper)
 
 FD_C_Bool FD_C_PPOCRv3WrapperBatchPredict(
     FD_C_PPOCRv3Wrapper* fd_c_ppocrv3_wrapper, FD_C_OneDimMat imgs,
-    FD_C_OneDimOCRResult* batch_result) {}
+    FD_C_OneDimOCRResult* batch_result) {
+  std::vector<cv::Mat> imgs_vec;
+  std::vector<fastdeploy::vision::OCRResult> results_out;
+  for (int i = 0; i < imgs.size; i++) {
+    imgs_vec.push_back(*(reinterpret_cast<cv::Mat*>(imgs.data[i])));
+  }
+  auto& model = CHECK_AND_CONVERT_FD_TYPE(PPOCRv3Wrapper, fd_c_ppocrv3_wrapper);
+  bool successful = model->BatchPredict(imgs_vec, &results_out);
+  if (successful) {
+    // copy results back to FD_C_OneDimOCRResult
+    results->size = results_out.size();
+    results->data = new FD_C_OCRResult[results->size];
+    for (int i = 0; i < results_out.size(); i++) {
+      results->data[i] = *FD_C_OCRResultToC(&results_out[i]);
+    }
+  }
+  return successful;
+}
 
 #ifdef __cplusplus
 }
