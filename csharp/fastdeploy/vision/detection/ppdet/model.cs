@@ -33,7 +33,7 @@ public class PPYOLOE {
       custom_option = new RuntimeOption();
     }
     fd_ppyoloe_wrapper =
-        FD_C_CreatesPPYOLOEWrapper(model_file, params_file, config_file,
+        FD_C_CreatePPYOLOEWrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -84,8 +84,8 @@ public class PPYOLOE {
 
   // below are underlying C api
   private IntPtr fd_ppyoloe_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesPPYOLOEWrapper")]
-  private static extern IntPtr FD_C_CreatesPPYOLOEWrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatePPYOLOEWrapper")]
+  private static extern IntPtr FD_C_CreatePPYOLOEWrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyPPYOLOEWrapper")]
@@ -136,7 +136,7 @@ public class PicoDet {
       custom_option = new RuntimeOption();
     }
     fd_picodet_wrapper =
-        FD_C_CreatesPicoDetWrapper(model_file, params_file, config_file,
+        FD_C_CreatePicoDetWrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -187,8 +187,8 @@ public class PicoDet {
 
   // below are underlying C api
   private IntPtr fd_picodet_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesPicoDetWrapper")]
-  private static extern IntPtr FD_C_CreatesPicoDetWrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatePicoDetWrapper")]
+  private static extern IntPtr FD_C_CreatePicoDetWrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyPicoDetWrapper")]
@@ -241,7 +241,7 @@ public class PPYOLO {
       custom_option = new RuntimeOption();
     }
     fd_ppyolo_wrapper =
-        FD_C_CreatesPPYOLOWrapper(model_file, params_file, config_file,
+        FD_C_CreatePPYOLOWrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -292,8 +292,8 @@ public class PPYOLO {
 
   // below are underlying C api
   private IntPtr fd_ppyolo_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesPPYOLOWrapper")]
-  private static extern IntPtr FD_C_CreatesPPYOLOWrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatePPYOLOWrapper")]
+  private static extern IntPtr FD_C_CreatePPYOLOWrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyPPYOLOWrapper")]
@@ -345,7 +345,7 @@ public class YOLOv3 {
       custom_option = new RuntimeOption();
     }
     fd_yolov3_wrapper =
-        FD_C_CreatesYOLOv3Wrapper(model_file, params_file, config_file,
+        FD_C_CreateYOLOv3Wrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -396,8 +396,8 @@ public class YOLOv3 {
 
   // below are underlying C api
   private IntPtr fd_yolov3_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesYOLOv3Wrapper")]
-  private static extern IntPtr FD_C_CreatesYOLOv3Wrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreateYOLOv3Wrapper")]
+  private static extern IntPtr FD_C_CreateYOLOv3Wrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyYOLOv3Wrapper")]
@@ -449,7 +449,7 @@ public class PaddleYOLOX {
       custom_option = new RuntimeOption();
     }
     fd_paddleyolox_wrapper =
-        FD_C_CreatesPaddleYOLOXWrapper(model_file, params_file, config_file,
+        FD_C_CreatePaddleYOLOXWrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -500,8 +500,8 @@ public class PaddleYOLOX {
 
   // below are underlying C api
   private IntPtr fd_paddleyolox_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesPaddleYOLOXWrapper")]
-  private static extern IntPtr FD_C_CreatesPaddleYOLOXWrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatePaddleYOLOXWrapper")]
+  private static extern IntPtr FD_C_CreatePaddleYOLOXWrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyPaddleYOLOXWrapper")]
@@ -553,7 +553,7 @@ public class FasterRCNN {
       custom_option = new RuntimeOption();
     }
     fd_fasterrcnn_wrapper =
-        FD_C_CreatesFasterRCNNWrapper(model_file, params_file, config_file,
+        FD_C_CreateFasterRCNNWrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -604,8 +604,8 @@ public class FasterRCNN {
 
   // below are underlying C api
   private IntPtr fd_fasterrcnn_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesFasterRCNNWrapper")]
-  private static extern IntPtr FD_C_CreatesFasterRCNNWrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreateFasterRCNNWrapper")]
+  private static extern IntPtr FD_C_CreateFasterRCNNWrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyFasterRCNNWrapper")]
@@ -657,7 +657,7 @@ public class MaskRCNN {
       custom_option = new RuntimeOption();
     }
     fd_maskrcnn_wrapper =
-        FD_C_CreatesMaskRCNNWrapper(model_file, params_file, config_file,
+        FD_C_CreateMaskRCNNWrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -708,8 +708,8 @@ public class MaskRCNN {
 
   // below are underlying C api
   private IntPtr fd_maskrcnn_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesMaskRCNNWrapper")]
-  private static extern IntPtr FD_C_CreatesMaskRCNNWrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreateMaskRCNNWrapper")]
+  private static extern IntPtr FD_C_CreateMaskRCNNWrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyMaskRCNNWrapper")]
@@ -761,7 +761,7 @@ public class SSD {
       custom_option = new RuntimeOption();
     }
     fd_ssd_wrapper =
-        FD_C_CreatesSSDWrapper(model_file, params_file, config_file,
+        FD_C_CreateSSDWrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -812,8 +812,8 @@ public class SSD {
 
   // below are underlying C api
   private IntPtr fd_ssd_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesSSDWrapper")]
-  private static extern IntPtr FD_C_CreatesSSDWrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreateSSDWrapper")]
+  private static extern IntPtr FD_C_CreateSSDWrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroySSDWrapper")]
@@ -865,7 +865,7 @@ public class PaddleYOLOv5 {
       custom_option = new RuntimeOption();
     }
     fd_paddleyolov5_wrapper =
-        FD_C_CreatesPaddleYOLOv5Wrapper(model_file, params_file, config_file,
+        FD_C_CreatePaddleYOLOv5Wrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -916,8 +916,8 @@ public class PaddleYOLOv5 {
 
   // below are underlying C api
   private IntPtr fd_paddleyolov5_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesPaddleYOLOv5Wrapper")]
-  private static extern IntPtr FD_C_CreatesPaddleYOLOv5Wrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatePaddleYOLOv5Wrapper")]
+  private static extern IntPtr FD_C_CreatePaddleYOLOv5Wrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyPaddleYOLOv5Wrapper")]
@@ -969,7 +969,7 @@ public class PaddleYOLOv6 {
       custom_option = new RuntimeOption();
     }
     fd_paddleyolov6_wrapper =
-        FD_C_CreatesPaddleYOLOv6Wrapper(model_file, params_file, config_file,
+        FD_C_CreatePaddleYOLOv6Wrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -1020,8 +1020,8 @@ public class PaddleYOLOv6 {
 
   // below are underlying C api
   private IntPtr fd_paddleyolov6_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesPaddleYOLOv6Wrapper")]
-  private static extern IntPtr FD_C_CreatesPaddleYOLOv6Wrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatePaddleYOLOv6Wrapper")]
+  private static extern IntPtr FD_C_CreatePaddleYOLOv6Wrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyPaddleYOLOv6Wrapper")]
@@ -1073,7 +1073,7 @@ public class PaddleYOLOv7 {
       custom_option = new RuntimeOption();
     }
     fd_paddleyolov7_wrapper =
-        FD_C_CreatesPaddleYOLOv7Wrapper(model_file, params_file, config_file,
+        FD_C_CreatePaddleYOLOv7Wrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -1124,8 +1124,8 @@ public class PaddleYOLOv7 {
 
   // below are underlying C api
   private IntPtr fd_paddleyolov7_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesPaddleYOLOv7Wrapper")]
-  private static extern IntPtr FD_C_CreatesPaddleYOLOv7Wrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatePaddleYOLOv7Wrapper")]
+  private static extern IntPtr FD_C_CreatePaddleYOLOv7Wrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyPaddleYOLOv7Wrapper")]
@@ -1177,7 +1177,7 @@ public class PaddleYOLOv8 {
       custom_option = new RuntimeOption();
     }
     fd_paddleyolov8_wrapper =
-        FD_C_CreatesPaddleYOLOv8Wrapper(model_file, params_file, config_file,
+        FD_C_CreatePaddleYOLOv8Wrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -1228,8 +1228,8 @@ public class PaddleYOLOv8 {
 
   // below are underlying C api
   private IntPtr fd_paddleyolov8_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesPaddleYOLOv8Wrapper")]
-  private static extern IntPtr FD_C_CreatesPaddleYOLOv8Wrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatePaddleYOLOv8Wrapper")]
+  private static extern IntPtr FD_C_CreatePaddleYOLOv8Wrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyPaddleYOLOv8Wrapper")]
@@ -1281,7 +1281,7 @@ public class RTMDet {
       custom_option = new RuntimeOption();
     }
     fd_rtmdet_wrapper =
-        FD_C_CreatesRTMDetWrapper(model_file, params_file, config_file,
+        FD_C_CreateRTMDetWrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -1332,8 +1332,8 @@ public class RTMDet {
 
   // below are underlying C api
   private IntPtr fd_rtmdet_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesRTMDetWrapper")]
-  private static extern IntPtr FD_C_CreatesRTMDetWrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreateRTMDetWrapper")]
+  private static extern IntPtr FD_C_CreateRTMDetWrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyRTMDetWrapper")]
@@ -1385,7 +1385,7 @@ public class CascadeRCNN {
       custom_option = new RuntimeOption();
     }
     fd_cascadercnn_wrapper =
-        FD_C_CreatesCascadeRCNNWrapper(model_file, params_file, config_file,
+        FD_C_CreateCascadeRCNNWrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -1436,8 +1436,8 @@ public class CascadeRCNN {
 
   // below are underlying C api
   private IntPtr fd_cascadercnn_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesCascadeRCNNWrapper")]
-  private static extern IntPtr FD_C_CreatesCascadeRCNNWrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreateCascadeRCNNWrapper")]
+  private static extern IntPtr FD_C_CreateCascadeRCNNWrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyCascadeRCNNWrapper")]
@@ -1489,7 +1489,7 @@ public class PSSDet {
       custom_option = new RuntimeOption();
     }
     fd_pssdet_wrapper =
-        FD_C_CreatesPSSDetWrapper(model_file, params_file, config_file,
+        FD_C_CreatePSSDetWrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -1540,8 +1540,8 @@ public class PSSDet {
 
   // below are underlying C api
   private IntPtr fd_pssdet_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesPSSDetWrapper")]
-  private static extern IntPtr FD_C_CreatesPSSDetWrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatePSSDetWrapper")]
+  private static extern IntPtr FD_C_CreatePSSDetWrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyPSSDetWrapper")]
@@ -1593,7 +1593,7 @@ public class RetinaNet {
       custom_option = new RuntimeOption();
     }
     fd_retinanet_wrapper =
-        FD_C_CreatesRetinaNetWrapper(model_file, params_file, config_file,
+        FD_C_CreateRetinaNetWrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -1644,8 +1644,8 @@ public class RetinaNet {
 
   // below are underlying C api
   private IntPtr fd_retinanet_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesRetinaNetWrapper")]
-  private static extern IntPtr FD_C_CreatesRetinaNetWrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreateRetinaNetWrapper")]
+  private static extern IntPtr FD_C_CreateRetinaNetWrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyRetinaNetWrapper")]
@@ -1697,7 +1697,7 @@ public class FCOS {
       custom_option = new RuntimeOption();
     }
     fd_fcos_wrapper =
-        FD_C_CreatesFCOSWrapper(model_file, params_file, config_file,
+        FD_C_CreateFCOSWrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -1748,8 +1748,8 @@ public class FCOS {
 
   // below are underlying C api
   private IntPtr fd_fcos_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesFCOSWrapper")]
-  private static extern IntPtr FD_C_CreatesFCOSWrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreateFCOSWrapper")]
+  private static extern IntPtr FD_C_CreateFCOSWrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyFCOSWrapper")]
@@ -1801,7 +1801,7 @@ public class TTFNet {
       custom_option = new RuntimeOption();
     }
     fd_ttfnet_wrapper =
-        FD_C_CreatesTTFNetWrapper(model_file, params_file, config_file,
+        FD_C_CreateTTFNetWrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -1852,8 +1852,8 @@ public class TTFNet {
 
   // below are underlying C api
   private IntPtr fd_ttfnet_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesTTFNetWrapper")]
-  private static extern IntPtr FD_C_CreatesTTFNetWrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreateTTFNetWrapper")]
+  private static extern IntPtr FD_C_CreateTTFNetWrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyTTFNetWrapper")]
@@ -1905,7 +1905,7 @@ public class TOOD {
       custom_option = new RuntimeOption();
     }
     fd_tood_wrapper =
-        FD_C_CreatesTOODWrapper(model_file, params_file, config_file,
+        FD_C_CreateTOODWrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -1956,8 +1956,8 @@ public class TOOD {
 
   // below are underlying C api
   private IntPtr fd_tood_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesTOODWrapper")]
-  private static extern IntPtr FD_C_CreatesTOODWrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreateTOODWrapper")]
+  private static extern IntPtr FD_C_CreateTOODWrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyTOODWrapper")]
@@ -2009,7 +2009,7 @@ public class GFL {
       custom_option = new RuntimeOption();
     }
     fd_gfl_wrapper =
-        FD_C_CreatesGFLWrapper(model_file, params_file, config_file,
+        FD_C_CreateGFLWrapper(model_file, params_file, config_file,
                                    custom_option.GetWrapperPtr(), model_format);
   }
 
@@ -2060,8 +2060,8 @@ public class GFL {
 
   // below are underlying C api
   private IntPtr fd_gfl_wrapper;
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreatesGFLWrapper")]
-  private static extern IntPtr FD_C_CreatesGFLWrapper(
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreateGFLWrapper")]
+  private static extern IntPtr FD_C_CreateGFLWrapper(
       string model_file, string params_file, string config_file,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyGFLWrapper")]
