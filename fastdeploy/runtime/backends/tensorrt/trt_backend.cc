@@ -157,7 +157,7 @@ bool TrtBackend::Init(const RuntimeOption& runtime_option) {
       std::string model_buffer;
       FDASSERT(ReadBinaryFromFile(runtime_option.model_file, &model_buffer),
                "Failed to read model file %s.",
-               model_file.c_str());
+               runtime_option.model_file.c_str());
       return InitFromOnnx(model_buffer, trt_option);
     }
   }

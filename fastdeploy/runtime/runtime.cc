@@ -156,7 +156,7 @@ bool Runtime::Init(const RuntimeOption& _option) {
   } else if (option.backend == Backend::POROS) {
     CreatePorosBackend();
   } else {
-    std::string msg = Str(GetAvaiableBackends());
+    std::string msg = Str(GetAvailableBackends());
     FDERROR << "The compiled FastDeploy only supports " << msg << ", " << option.backend << " is not supported now." << std::endl;
     return false;
   }
