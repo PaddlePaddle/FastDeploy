@@ -67,7 +67,6 @@ FD_C_Destroy##model_type##Wrapper(__fd_take FD_C_##model_type##Wrapper* wrapper_
   }                                                                            \
   return successful
 
-
 #define IMPLEMENT_INITIALIZED_FUNCTION(model_type, wrapper_var_name)   auto& model = \
       CHECK_AND_CONVERT_FD_TYPE(model_type##Wrapper, wrapper_var_name); \
 return model->Initialized();

@@ -68,7 +68,7 @@ typedef struct FD_C_TwoDimArraySize {
 typedef struct FD_C_TwoDimArrayInt8 {
   size_t size;
   FD_C_OneDimArrayInt8* data;
-} FD_C_TwoDimArrayFloat;  // std::vector<std::vector<int8>>
+} FD_C_TwoDimArrayInt8;  // std::vector<std::vector<int8>>
 
 typedef struct FD_C_TwoDimArrayInt32 {
   size_t size;
