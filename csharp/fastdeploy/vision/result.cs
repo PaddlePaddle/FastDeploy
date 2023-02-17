@@ -37,7 +37,7 @@ public enum ResultType {
   HEADPOSE
 }
 
-public struct Mask {
+public class Mask {
   public List<byte> data;
   public List<long> shape;
   public ResultType type;
@@ -46,9 +46,24 @@ public struct Mask {
     this.shape = new List<long>();
     this.type = ResultType.MASK;
   }
+
+  public override string ToString() {
+    string information = "Mask(" ;
+    int ndim = this.shape.Count;
+    for (int i = 0; i < ndim; i++) {
+    if (i < ndim - 1) {
+      information += this.shape[i].ToString() + ",";
+    } else {
+      information += this.shape[i].ToString();
+    }
+  }
+    information += ")\n";
+    return information;
+  }
+
 }
 
-public struct ClassifyResult {
+public class ClassifyResult {
   public List<int> label_ids;
   public List<float> scores;
   public ResultType type;
@@ -57,9 +72,24 @@ public struct ClassifyResult {
     this.scores = new List<float>();
     this.type = ResultType.CLASSIFY;
   }
+
+  public string ToString() {  
+    string information;
+    information = "ClassifyResult(\nlabel_ids: ";
+    for (int i = 0; i < label_ids.Count; i++) {
+      information = information + label_ids[i].ToString() + ", ";
+    }
+    information += "\nscores: ";
+    for (int i = 0; i < scores.Count; i++) {
+      information = information + scores[i].ToString() + ", ";
+    }
+    information += "\n)";
+    return information;
+  
+  }
 }
 
-public struct DetectionResult {
+public class DetectionResult {
   public List<float[]> boxes;
   public List<float> scores;
   public List<int> label_ids;
@@ -74,6 +104,30 @@ public struct DetectionResult {
     this.contain_masks = false;
     this.type = ResultType.DETECTION;
   }
+
+  
+  public string ToString() {
+    string information;
+    if (!contain_masks) {
+      information = "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]\n";
+    } else {
+      information =
+          "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id, mask_shape]\n";
+    }
+    for (int i = 0; i < boxes.Count; i++) {
+      information = information + boxes[i][0].ToString() + "," +
+            boxes[i][1].ToString() + ", " + boxes[i][2].ToString() +
+            ", " + boxes[i][3].ToString() + ", " +
+            scores[i].ToString() + ", " + label_ids[i].ToString();
+      if (!contain_masks) {
+        information += "\n";
+      } else {
+        information += ", " + masks[i].ToString();
+      }
+    }
+    return information;
+  }
+
 }
 
 public class ConvertResult {
@@ -265,6 +319,39 @@ public class ConvertResult {
     detection_result.type = (ResultType)fd_detection_result.type;
     return detection_result;
   }
+
+
+  public static FD_OneDimArrayCstr
+  ConvertStringArrayToCOneDimArrayCstr(string[] strs){
+    FD_OneDimArrayCstr fd_one_dim_cstr = new FD_OneDimArrayCstr();
+    fd_one_dim_cstr.size = (nuint)strs.Length;
+    
+    // Copy data to unmanaged memory
+    FD_Cstr[] c_strs = new FD_Cstr[strs.Length];
+    int size = Marshal.SizeOf(c_strs[0]) * c_strs.Length;
+    fd_one_dim_cstr.data = Marshal.AllocHGlobal(size);
+    for (int i = 0; i < strs.Length; i++) {
+      c_strs[i].size = (nuint)strs[i].Length;
+      c_strs[i].data = strs[i];
+      Marshal.StructureToPtr(
+          c_strs[i],
+          fd_one_dim_cstr.data + i * Marshal.SizeOf(c_strs[0]), true);
+    }
+    return fd_one_dim_cstr;
+  }
+
+  public static string[]
+  ConvertCOneDimArrayCstrToStringArray(FD_OneDimArrayCstr c_strs){
+    string[] strs = new string[c_strs.size];
+    for(int i=0; i<(int)c_strs.size; i++){
+      FD_Cstr cstr = (FD_Cstr)Marshal.PtrToStructure(
+          c_strs.data + i * Marshal.SizeOf(new FD_Cstr()),
+          typeof(FD_Cstr));
+      strs[i] = cstr.data;
+    }
+    return strs;
+  }
+
 }
 
 }
