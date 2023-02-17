@@ -85,7 +85,6 @@ FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PaddleClasModelWrapperBatchPredict(
             FD_C_OneDimClassifyResult* results);
 
 
-
 #ifdef __cplusplus
 }  // extern "C"
 #endif

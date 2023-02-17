@@ -61,7 +61,7 @@ FD_C_Mat VisClassification(FD_C_Mat im,
       FD_C_CreateClassifyResultWrapperFromData(fd_c_classify_result);
   auto& classify_result = CHECK_AND_CONVERT_FD_TYPE(
       ClassifyResultWrapper, fd_c_classify_result_wrapper);
-  cv::Mat result = fastdeploy::vision::VisDetection(
+  cv::Mat result = fastdeploy::vision::VisClassification(
       *(reinterpret_cast<cv::Mat*>(im)), *classify_result, top_k,
       score_threshold, font_size);
   return new cv::Mat(result);
@@ -79,7 +79,7 @@ FD_C_Mat VisClassificationWithLabel(FD_C_Mat im,
       FD_C_CreateClassifyResultWrapperFromData(fd_c_classify_result);
   auto& classify_result = CHECK_AND_CONVERT_FD_TYPE(
       ClassifyResultWrapper, fd_c_classify_result_wrapper);
-  cv::Mat result = fastdeploy::vision::VisDetection(
+  cv::Mat result = fastdeploy::vision::VisClassification(
       *(reinterpret_cast<cv::Mat*>(im)), *classify_result, labels_in, top_k,
       score_threshold, font_size);
   return new cv::Mat(result);
@@ -90,8 +90,8 @@ FD_C_Mat VisOcr(FD_C_Mat im, FD_C_OCRResult* fd_c_ocr_result) {
       FD_C_CreateOCRResultWrapperFromData(fd_c_ocr_result);
   auto& ocr_result =
       CHECK_AND_CONVERT_FD_TYPE(OCRResultWrapper, fd_c_ocr_result_wrapper);
-  cv::Mat result = fastdeploy::vision::VisDetection(
-      *(reinterpret_cast<cv::Mat*>(im)), *ocr_result);
+  cv::Mat result = fastdeploy::vision::VisOcr(*(reinterpret_cast<cv::Mat*>(im)),
+                                              *ocr_result);
   return new cv::Mat(result);
 }
 

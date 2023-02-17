@@ -22,6 +22,11 @@
 #include "fastdeploy/vision/classification/ppcls/model.h"
 #include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/detection/ppdet/model.h"
+#include "fastdeploy/vision/ocr/ppocr/classifier.h"
+#include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
+#include "fastdeploy/vision/ocr/ppocr/recognizer.h"
+#include "fastdeploy/vision/ocr/ppocr/ppocr_v2.h"
+#include "fastdeploy/vision/ocr/ppocr/ppocr_v3.h"
 
 #define DEFINE_RESULT_WRAPPER_STRUCT(typename, varname) typedef struct FD_C_##typename##Wrapper { \
   std::unique_ptr<fastdeploy::vision::typename> varname; \
@@ -34,6 +39,14 @@
 
 #define DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(typename, varname)  typedef struct FD_C_##typename##Wrapper { \
   std::unique_ptr<fastdeploy::vision::detection::typename> varname; \
+} FD_C_##typename##Wrapper
+
+#define DEFINE_OCR_MODEL_WRAPPER_STRUCT(typename, varname)  typedef struct FD_C_##typename##Wrapper { \
+  std::unique_ptr<fastdeploy::vision::ocr::typename> varname; \
+} FD_C_##typename##Wrapper
+
+#define DEFINE_PIPELINE_MODEL_WRAPPER_STRUCT(typename, varname)  typedef struct FD_C_##typename##Wrapper { \
+  std::unique_ptr<fastdeploy::pipeline::typename> varname; \
 } FD_C_##typename##Wrapper
 
 // -------------  belows are wrapper struct define --------------------- //
@@ -126,19 +139,19 @@ DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(GFL, gfl_model);
 // OCR models
 
 // Recognizer
-DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(Recognizer, recognizer_model);
+DEFINE_OCR_MODEL_WRAPPER_STRUCT(Recognizer, recognizer_model);
 
 // DBDetector
-DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(DBDetector, dbdetector_model);
+DEFINE_OCR_MODEL_WRAPPER_STRUCT(DBDetector, dbdetector_model);
 
 // Classifier
-DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(Classifier, classifier_model);
+DEFINE_OCR_MODEL_WRAPPER_STRUCT(Classifier, classifier_model);
 
 // PPOCRv2
-DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(PPOCRv2, ppocrv2_model);
+DEFINE_PIPELINE_MODEL_WRAPPER_STRUCT(PPOCRv2, ppocrv2_model);
 
 // PPOCRv3
-DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(PPOCRv3, ppocrv3_model);
+DEFINE_PIPELINE_MODEL_WRAPPER_STRUCT(PPOCRv3, ppocrv3_model);
 
 
 // -------------  belows are function declaration for get ptr from wrapper --------------------- //

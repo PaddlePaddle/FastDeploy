@@ -19,6 +19,7 @@
 
 typedef struct FD_C_ClassifyResultWrapper FD_C_ClassifyResultWrapper;
 typedef struct FD_C_DetectionResultWrapper FD_C_DetectionResultWrapper;
+typedef struct FD_C_OCRResultWrapper FD_C_OCRResultWrapper;
 
 #ifdef __cplusplus
 extern "C" {

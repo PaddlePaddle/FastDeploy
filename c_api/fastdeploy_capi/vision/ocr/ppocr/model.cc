@@ -26,7 +26,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy_capi/vision/detection/ppdet/model.h"
+#include "fastdeploy_capi/vision/ocr/ppocr/model.h"
 
 #include "fastdeploy_capi/types_internal.h"
 #include "fastdeploy_capi/vision/visualize.h"
@@ -57,8 +57,9 @@ FD_C_RecognizerWrapper* FD_C_CreatesRecognizerWrapper(
 OCR_DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(Recognizer,
                                                    fd_c_recognizer_wrapper)
 
-FD_C_RecognizerWrapperPredict(FD_C_RecognizerWrapper* fd_c_recognizer_wrapper,
-                              FD_C_Mat img, FD_C_Cstr* text, float* rec_score) {
+FD_C_Bool FD_C_RecognizerWrapperPredict(
+    FD_C_RecognizerWrapper* fd_c_recognizer_wrapper, FD_C_Mat img,
+    FD_C_Cstr* text, float* rec_score) {
   cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
   auto& model =
       CHECK_AND_CONVERT_FD_TYPE(RecognizerWrapper, fd_c_recognizer_wrapper);
@@ -101,7 +102,7 @@ FD_C_Bool FD_C_RecognizerWrapperBatchPredict(
 
     rec_scores->size = rec_scores_out.size();
     rec_scores->data = new float[rec_scores->size];
-    memcpy(rec_scores.data, rec_scores_out.data(),
+    memcpy(rec_scores->data, rec_scores_out.data(),
            sizeof(float) * rec_scores->size);
   }
   return successful;
@@ -119,7 +120,7 @@ FD_C_Bool FD_C_RecognizerWrapperBatchPredictWithIndex(
     imgs_vec.push_back(*(reinterpret_cast<cv::Mat*>(imgs.data[i])));
   }
   for (int i = 0; i < indices.size; i++) {
-    indices.push_back(indices.data[i]);
+    indices_in.push_back(indices.data[i]);
   }
   auto& model =
       CHECK_AND_CONVERT_FD_TYPE(RecognizerWrapper, fd_c_recognizer_wrapper);
@@ -137,7 +138,7 @@ FD_C_Bool FD_C_RecognizerWrapperBatchPredictWithIndex(
 
     rec_scores->size = rec_scores_out.size();
     rec_scores->data = new float[rec_scores->size];
-    memcpy(rec_scores.data, rec_scores_out.data(),
+    memcpy(rec_scores->data, rec_scores_out.data(),
            sizeof(float) * rec_scores->size);
   }
   return successful;
@@ -153,7 +154,7 @@ FD_C_ClassifierWrapper* FD_C_CreatesClassifierWrapper(
                                                    fd_c_runtime_option_wrapper);
   FD_C_ClassifierWrapper* fd_c_classifier_wrapper =
       new FD_C_ClassifierWrapper();
-  fd_c_classifier_wrapper->recognizer_model =
+  fd_c_classifier_wrapper->classifier_model =
       std::unique_ptr<fastdeploy::vision::ocr::Classifier>(
           new fastdeploy::vision::ocr::Classifier(
               std::string(model_file), std::string(params_file),
@@ -165,9 +166,9 @@ FD_C_ClassifierWrapper* FD_C_CreatesClassifierWrapper(
 OCR_DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(Classifier,
                                                    fd_c_classifier_wrapper)
 
-FD_C_ClassifierWrapperPredict(FD_C_ClassifierWrapper* fd_c_classifier_wrapper,
-                              FD_C_Mat img, int32_t* cls_label,
-                              float* cls_score) {
+FD_C_Bool FD_C_ClassifierWrapperPredict(
+    FD_C_ClassifierWrapper* fd_c_classifier_wrapper, FD_C_Mat img,
+    int32_t* cls_label, float* cls_score) {
   cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
   auto& model =
       CHECK_AND_CONVERT_FD_TYPE(ClassifierWrapper, fd_c_classifier_wrapper);
@@ -178,7 +179,7 @@ FD_C_ClassifierWrapperPredict(FD_C_ClassifierWrapper* fd_c_classifier_wrapper,
 OCR_DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(Classifier,
                                                fd_c_classifier_wrapper)
 
-FD_C_ClassifierWrapperBatchPredict(
+FD_C_Bool FD_C_ClassifierWrapperBatchPredict(
     FD_C_ClassifierWrapper* fd_c_classifier_wrapper, FD_C_OneDimMat imgs,
     FD_C_OneDimArrayInt32* cls_labels, FD_C_OneDimArrayFloat* cls_scores) {
   std::vector<cv::Mat> imgs_vec;
@@ -194,13 +195,13 @@ FD_C_ClassifierWrapperBatchPredict(
   if (successful) {
     // copy results back to FD_C_OneDimArrayInt32 and FD_C_OneDimArrayFloat
     cls_labels->size = cls_labels_out.size();
-    cls_labels->data = new float[cls_labels->size];
-    memcpy(cls_labels.data, cls_labels_out.data(),
+    cls_labels->data = new int[cls_labels->size];
+    memcpy(cls_labels->data, cls_labels_out.data(),
            sizeof(int) * cls_labels->size);
 
     cls_scores->size = cls_scores_out.size();
     cls_scores->data = new float[cls_scores->size];
-    memcpy(cls_scores.data, cls_scores_out.data(),
+    memcpy(cls_scores->data, cls_scores_out.data(),
            sizeof(int) * cls_scores->size);
   }
   return successful;
@@ -223,13 +224,13 @@ FD_C_Bool FD_C_ClassifierWrapperBatchPredictWithIndex(
   if (successful) {
     // copy results back to FD_C_OneDimArrayInt32 and FD_C_OneDimArrayFloat
     cls_labels->size = cls_labels_out.size();
-    cls_labels->data = new float[cls_labels->size];
-    memcpy(cls_labels.data, cls_labels_out.data(),
+    cls_labels->data = new int[cls_labels->size];
+    memcpy(cls_labels->data, cls_labels_out.data(),
            sizeof(int) * cls_labels->size);
 
     cls_scores->size = cls_scores_out.size();
     cls_scores->data = new float[cls_scores->size];
-    memcpy(cls_scores.data, cls_scores_out.data(),
+    memcpy(cls_scores->data, cls_scores_out.data(),
            sizeof(int) * cls_scores->size);
   }
   return successful;
@@ -244,7 +245,7 @@ FD_C_DBDetectorWrapper* FD_C_CreatesDBDetectorWrapper(
                                                    fd_c_runtime_option_wrapper);
   FD_C_DBDetectorWrapper* fd_c_dbdetector_wrapper =
       new FD_C_DBDetectorWrapper();
-  fd_c_dbdetector_wrapper->recognizer_model =
+  fd_c_dbdetector_wrapper->dbdetector_model =
       std::unique_ptr<fastdeploy::vision::ocr::DBDetector>(
           new fastdeploy::vision::ocr::DBDetector(
               std::string(model_file), std::string(params_file),
@@ -267,13 +268,13 @@ FD_C_Bool FD_C_DBDetectorWrapperPredict(
   if (successful) {
     // copy boxes
     const int boxes_coordinate_dim = 8;
-    boxes_result.size = boxes_result_out.size();
-    boxes_result.data = new FD_C_OneDimArrayInt32[boxes_result.size];
+    boxes_result->size = boxes_result_out.size();
+    boxes_result->data = new FD_C_OneDimArrayInt32[boxes_result->size];
     for (size_t i = 0; i < boxes_result_out.size(); i++) {
-      boxes_result.data[i].size = boxes_coordinate_dim;
-      boxes_result.data[i].data = new int[boxes_coordinate_dim];
+      boxes_result->data[i].size = boxes_coordinate_dim;
+      boxes_result->data[i].data = new int[boxes_coordinate_dim];
       for (size_t j = 0; j < boxes_coordinate_dim; j++) {
-        boxes_result.data[i].data[j] = boxes_result_out[i][j];
+        boxes_result->data[i].data[j] = boxes_result_out[i][j];
       }
     }
   }
@@ -330,10 +331,10 @@ FD_C_PPOCRv2Wrapper* FD_C_CreatesPPOCRv2Wrapper(
       CHECK_AND_CONVERT_FD_TYPE(ClassifierWrapper, fd_c_cls_model_wrapper);
   auto& rec_model =
       CHECK_AND_CONVERT_FD_TYPE(RecognizerWrapper, fd_c_rec_model_wrapper);
-  fd_c_ppocrv2_wrapper->ocr_model =
-      std::unique_ptr<fastdeploy::vision::ocr::PPOCRv2>(
-          new fastdeploy::vision::ocr::PPOCRv2(det_model.get(), cls_model.get(),
-                                               rec_model.get()));
+  fd_c_ppocrv2_wrapper->ppocrv2_model =
+      std::unique_ptr<fastdeploy::pipeline::PPOCRv2>(
+          new fastdeploy::pipeline::PPOCRv2(det_model.get(), cls_model.get(),
+                                            rec_model.get()));
   return fd_c_ppocrv2_wrapper;
 }
 
@@ -435,8 +436,9 @@ FD_C_Bool FD_C_PPOCRv2WrapperBatchPredict(
 // PPOCRv3
 
 FD_C_PPOCRv3Wrapper* FD_C_CreatesPPOCRv3Wrapper(
-    FD_C_DBDetectorWrapper* det_model, FD_C_ClassifierWrapper* cls_model,
-    FD_C_RecognizerWrapper* rec_model) {
+    FD_C_DBDetectorWrapper* fd_c_det_model_wrapper,
+    FD_C_ClassifierWrapper* fd_c_cls_model_wrapper,
+    FD_C_RecognizerWrapper* fd_c_rec_model_wrapper) {
   FD_C_PPOCRv3Wrapper* fd_c_ppocrv3_wrapper = new FD_C_PPOCRv3Wrapper();
   auto& det_model =
       CHECK_AND_CONVERT_FD_TYPE(DBDetectorWrapper, fd_c_det_model_wrapper);
@@ -444,10 +446,10 @@ FD_C_PPOCRv3Wrapper* FD_C_CreatesPPOCRv3Wrapper(
       CHECK_AND_CONVERT_FD_TYPE(ClassifierWrapper, fd_c_cls_model_wrapper);
   auto& rec_model =
       CHECK_AND_CONVERT_FD_TYPE(RecognizerWrapper, fd_c_rec_model_wrapper);
-  fd_c_ppocrv3_wrapper->ocr_model =
-      std::unique_ptr<fastdeploy::vision::ocr::PPOCRv3>(
-          new fastdeploy::vision::ocr::PPOCRv3(det_model.get(), cls_model.get(),
-                                               rec_model.get()));
+  fd_c_ppocrv3_wrapper->ppocrv3_model =
+      std::unique_ptr<fastdeploy::pipeline::PPOCRv3>(
+          new fastdeploy::pipeline::PPOCRv3(det_model.get(), cls_model.get(),
+                                            rec_model.get()));
   return fd_c_ppocrv3_wrapper;
 }
 
@@ -455,7 +457,8 @@ PIPELINE_DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(PPOCRv3,
                                                         fd_c_ppocrv3_wrapper)
 
 FD_C_Bool FD_C_PPOCRv3WrapperPredict(FD_C_PPOCRv3Wrapper* fd_c_ppocrv3_wrapper,
-                                     FD_C_Mat img, FD_C_OCRResult* result) {
+                                     FD_C_Mat img,
+                                     FD_C_OCRResult* fd_c_ocr_result) {
   cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
   auto& model = CHECK_AND_CONVERT_FD_TYPE(PPOCRv3Wrapper, fd_c_ppocrv3_wrapper);
   FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper =
@@ -476,7 +479,7 @@ PIPELINE_DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(PPOCRv3,
 
 FD_C_Bool FD_C_PPOCRv3WrapperBatchPredict(
     FD_C_PPOCRv3Wrapper* fd_c_ppocrv3_wrapper, FD_C_OneDimMat imgs,
-    FD_C_OneDimOCRResult* batch_result) {
+    FD_C_OneDimOCRResult* results) {
   std::vector<cv::Mat> imgs_vec;
   std::vector<fastdeploy::vision::OCRResult> results_out;
   for (int i = 0; i < imgs.size; i++) {
