@@ -154,19 +154,10 @@ bool Runtime::Init(const RuntimeOption& _option) {
   } else if (option.backend == Backend::SOPHGOTPU) {
     CreateSophgoNPUBackend();
   } else if (option.backend == Backend::POROS) {
-    FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
-             "Backend::POROS only supports Device::CPU/Device::GPU.");
-    FDASSERT(option.model_format == ModelFormat::TORCHSCRIPT,
-             "Backend::POROS only supports model format of "
-             "ModelFormat::TORCHSCRIPT.");
-    FDINFO << "Runtime initialized with Backend::POROS in " << option.device
-           << "." << std::endl;
-    return true;
+    CreatePorosBackend();
   } else {
-    FDERROR << "Runtime only support "
-               "Backend::ORT/Backend::TRT/Backend::PDINFER/Backend::POROS as "
-               "backend now."
-            << std::endl;
+    std::string msg = Str(GetAvaiableBackends());
+    FDERROR << "The compiled FastDeploy only supports " << msg << ", " << option.backend << " is not supported now." << std::endl;
     return false;
   }
   backend_->benchmark_option_ = option.benchmark_option;
@@ -264,43 +255,9 @@ void Runtime::ReleaseModelMemoryBuffer() {
 }
 
 void Runtime::CreatePaddleBackend() {
-  FDASSERT(
-      option.device == Device::CPU || option.device == Device::GPU ||
-          option.device == Device::IPU,
-      "Backend::PDINFER only supports Device::CPU/Device::GPU/Device::IPU.");
-  FDASSERT(
-      option.model_format == ModelFormat::PADDLE,
-      "Backend::PDINFER only supports model format of ModelFormat::PADDLE.");
 #ifdef ENABLE_PADDLE_BACKEND
-  option.paddle_infer_option.model_file = option.model_file;
-  option.paddle_infer_option.params_file = option.params_file;
-  option.paddle_infer_option.model_from_memory_ = option.model_from_memory_;
-  option.paddle_infer_option.device = option.device;
-  option.paddle_infer_option.device_id = option.device_id;
-  option.paddle_infer_option.enable_pinned_memory = option.enable_pinned_memory;
-  option.paddle_infer_option.external_stream_ = option.external_stream_;
-  option.paddle_infer_option.trt_option = option.trt_option;
-  option.paddle_infer_option.trt_option.gpu_id = option.device_id;
   backend_ = utils::make_unique<PaddleBackend>();
-  auto casted_backend = dynamic_cast<PaddleBackend*>(backend_.get());
-
-  if (option.model_from_memory_) {
-    FDASSERT(
-        casted_backend->InitFromPaddle(option.model_file, option.params_file,
-                                       option.paddle_infer_option),
-        "Load model from Paddle failed while initliazing PaddleBackend.");
-    ReleaseModelMemoryBuffer();
-  } else {
-    std::string model_buffer = "";
-    std::string params_buffer = "";
-    FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
-             "Fail to read binary from model file");
-    FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
-             "Fail to read binary from parameter file");
-    FDASSERT(casted_backend->InitFromPaddle(model_buffer, params_buffer,
-                                            option.paddle_infer_option),
-             "Load model from Paddle failed while initliazing PaddleBackend.");
-  }
+  FDASSERT(backend_->Init(option), "Failed to initialized Paddle Inference backend.");
 #else
   FDASSERT(false,
            "PaddleBackend is not available, please compiled with "
@@ -339,12 +296,6 @@ void Runtime::CreateOrtBackend() {
 
 void Runtime::CreateTrtBackend() {
 #ifdef ENABLE_TRT_BACKEND
-  option.trt_option.model_file = option.model_file;
-  option.trt_option.params_file = option.params_file;
-  option.trt_option.model_format = option.model_format;
-  option.trt_option.gpu_id = option.device_id;
-  option.trt_option.enable_pinned_memory = option.enable_pinned_memory;
-  option.trt_option.external_stream_ = option.external_stream_;
   backend_ = utils::make_unique<TrtBackend>();
   FDASSERT(backend_->Init(option), "Failed to initialize TensorRT backend.");
 #else
