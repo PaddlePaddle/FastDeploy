@@ -14,6 +14,7 @@
 
 #pragma once
 #include "fastdeploy/vision/common/processors/transform.h"
+#include "fastdeploy/vision/common/processors/manager.h"
 #include "fastdeploy/vision/common/result.h"
 
 namespace fastdeploy {
@@ -22,17 +23,15 @@ namespace vision {
 namespace ocr {
 /*! @brief Preprocessor object for DBDetector serials model.
  */
-class FASTDEPLOY_DECL DBDetectorPreprocessor {
+class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
  public:
   /** \brief Process the input image and prepare input tensors for runtime
    *
-   * \param[in] images The input data list, all the elements are FDMat
+   * \param[in] image_batch The input image batch
    * \param[in] outputs The output tensors which will feed in runtime
-   * \param[in] batch_det_img_info_ptr The output of preprocess
    * \return true if the preprocess successed, otherwise false
    */
-  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
-           std::vector<std::array<int, 4>>* batch_det_img_info_ptr);
+  virtual bool Apply(FDMatBatch* image_batch, std::vector<FDTensor>* outputs);
 
   /// Set max_side_len for the detection preprocess, default is 960
   void SetMaxSideLen(int max_side_len) { max_side_len_ = max_side_len; }
@@ -54,11 +53,16 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
   /// Get is_scale of the image normalization in detection preprocess
   bool GetIsScale() const { return is_scale_; }
 
+  const std::vector<std::array<int, 4>>* GetBatchImgInfo() {
+    return &batch_det_img_info_;
+  }
+
  private:
   int max_side_len_ = 960;
   std::vector<float> mean_ = {0.485f, 0.456f, 0.406f};
   std::vector<float> scale_ = {0.229f, 0.224f, 0.225f};
   bool is_scale_ = true;
+  std::vector<std::array<int, 4>> batch_det_img_info_;
 };
 
 }  // namespace ocr
