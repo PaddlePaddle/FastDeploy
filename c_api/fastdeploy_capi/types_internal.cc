@@ -27,6 +27,11 @@ DECL_AND_IMPLEMENT_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(
 DECL_AND_IMPLEMENT_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(
     DetectionResult, fd_detection_result_wrapper, detection_result)
 
+// OCRResult
+DECL_AND_IMPLEMENT_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(OCRResult,
+                                                        fd_ocr_result_wrapper,
+                                                        ocr_result)
+
 // Models:
 
 // Classification

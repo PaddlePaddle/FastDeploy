@@ -62,7 +62,7 @@ FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat FD_C_VisDetectionWithLabel(
  * \param[in] font_size font size
  * \return cv::Mat type stores the visualized results
  */
-FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat VisClassification(
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat FD_C_VisClassification(
   FD_C_Mat im, FD_C_ClassifyResult* result, int top_k,
   float score_threshold, float font_size);
 /** \brief Show the visualized results with custom labels for classification models
@@ -75,7 +75,7 @@ FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat VisClassification(
  * \param[in] font_size font size
  * \return cv::Mat type stores the visualized results
  */
-FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat VisClassificationWithLabel(
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat FD_C_VisClassificationWithLabel(
   FD_C_Mat im, FD_C_ClassifyResult* result,
   FD_C_OneDimArrayCstr* labels, int top_k,
   float score_threshold, float font_size);
@@ -87,7 +87,7 @@ FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat VisClassificationWithLabel(
  * \param[in] result the result produced by model
  * \return cv::Mat type stores the visualized results
  */
-FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat VisOcr(FD_C_Mat im, FD_C_OCRResult* ocr_result);
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat FD_C_VisOcr(FD_C_Mat im, FD_C_OCRResult* ocr_result);
 
 
 #ifdef __cplusplus

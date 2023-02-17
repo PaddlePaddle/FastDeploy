@@ -37,7 +37,7 @@ extern "C" {
 
 // Recognizer
 
-FD_C_RecognizerWrapper* FD_C_CreatesRecognizerWrapper(
+FD_C_RecognizerWrapper* FD_C_CreateRecognizerWrapper(
     const char* model_file, const char* params_file, const char* label_path,
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     const FD_C_ModelFormat model_format) {
@@ -146,7 +146,7 @@ FD_C_Bool FD_C_RecognizerWrapperBatchPredictWithIndex(
 
 // Classifier
 
-FD_C_ClassifierWrapper* FD_C_CreatesClassifierWrapper(
+FD_C_ClassifierWrapper* FD_C_CreateClassifierWrapper(
     const char* model_file, const char* params_file,
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     const FD_C_ModelFormat model_format) {
@@ -237,7 +237,7 @@ FD_C_Bool FD_C_ClassifierWrapperBatchPredictWithIndex(
 }
 
 // DBDetector
-FD_C_DBDetectorWrapper* FD_C_CreatesDBDetectorWrapper(
+FD_C_DBDetectorWrapper* FD_C_CreateDBDetectorWrapper(
     const char* model_file, const char* params_file,
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     const FD_C_ModelFormat model_format) {
@@ -320,7 +320,7 @@ FD_C_Bool FD_C_DBDetectorWrapperBatchPredict(
 
 // PPOCRv2
 
-FD_C_PPOCRv2Wrapper* FD_C_CreatesPPOCRv2Wrapper(
+FD_C_PPOCRv2Wrapper* FD_C_CreatePPOCRv2Wrapper(
     FD_C_DBDetectorWrapper* fd_c_det_model_wrapper,
     FD_C_ClassifierWrapper* fd_c_cls_model_wrapper,
     FD_C_RecognizerWrapper* fd_c_rec_model_wrapper) {
@@ -435,7 +435,7 @@ FD_C_Bool FD_C_PPOCRv2WrapperBatchPredict(
 
 // PPOCRv3
 
-FD_C_PPOCRv3Wrapper* FD_C_CreatesPPOCRv3Wrapper(
+FD_C_PPOCRv3Wrapper* FD_C_CreatePPOCRv3Wrapper(
     FD_C_DBDetectorWrapper* fd_c_det_model_wrapper,
     FD_C_ClassifierWrapper* fd_c_cls_model_wrapper,
     FD_C_RecognizerWrapper* fd_c_rec_model_wrapper) {

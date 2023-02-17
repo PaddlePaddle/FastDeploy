@@ -40,7 +40,7 @@ typedef struct FD_C_RecognizerWrapper FD_C_RecognizerWrapper;
  */
 
 FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_RecognizerWrapper*
-FD_C_CreatesRecognizerWrapper(
+FD_C_CreateRecognizerWrapper(
     const char* model_file, const char* params_file, const char* label_path,
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     const FD_C_ModelFormat model_format);
@@ -110,7 +110,7 @@ typedef struct FD_C_ClassifierWrapper FD_C_ClassifierWrapper;
  */
 
 FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_ClassifierWrapper*
-FD_C_CreatesClassifierWrapper(
+FD_C_CreateClassifierWrapper(
     const char* model_file, const char* params_file,
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     const FD_C_ModelFormat model_format);
@@ -178,7 +178,7 @@ typedef struct FD_C_DBDetectorWrapper FD_C_DBDetectorWrapper;
  */
 
 FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_DBDetectorWrapper*
-FD_C_CreatesDBDetectorWrapper(
+FD_C_CreateDBDetectorWrapper(
     const char* model_file, const char* params_file,
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     const FD_C_ModelFormat model_format);
@@ -238,7 +238,7 @@ typedef struct FD_C_PPOCRv2Wrapper FD_C_PPOCRv2Wrapper;
  */
 
 FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_PPOCRv2Wrapper*
-FD_C_CreatesPPOCRv2Wrapper(
+FD_C_CreatePPOCRv2Wrapper(
     FD_C_DBDetectorWrapper* det_model,
     FD_C_ClassifierWrapper* cls_model,
     FD_C_RecognizerWrapper* rec_model);
@@ -297,7 +297,7 @@ typedef struct FD_C_PPOCRv3Wrapper FD_C_PPOCRv3Wrapper;
  */
 
 FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_PPOCRv3Wrapper*
-FD_C_CreatesPPOCRv3Wrapper(
+FD_C_CreatePPOCRv3Wrapper(
     FD_C_DBDetectorWrapper* det_model,
     FD_C_ClassifierWrapper* cls_model,
     FD_C_RecognizerWrapper* rec_model);

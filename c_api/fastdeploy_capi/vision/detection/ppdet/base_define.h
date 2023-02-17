@@ -15,7 +15,7 @@
 #pragma once
 
 #define DECLARE_CREATE_WRAPPER_FUNCTION(model_type) FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_##model_type##Wrapper* \
-FD_C_Creates##model_type##Wrapper( \
+FD_C_Create##model_type##Wrapper( \
     const char* model_file, const char* params_file, const char* config_file, \
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper, \
     const FD_C_ModelFormat model_format)
@@ -88,7 +88,7 @@ return model->Initialized();
   } \
   return successful;
 
-#define DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(model_type, var_name) FD_C_##model_type##Wrapper* FD_C_Creates##model_type##Wrapper(\
+#define DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(model_type, var_name) FD_C_##model_type##Wrapper* FD_C_Create##model_type##Wrapper(\
     const char* model_file, const char* params_file, const char* config_file, \
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper, \
     const FD_C_ModelFormat model_format) { \
