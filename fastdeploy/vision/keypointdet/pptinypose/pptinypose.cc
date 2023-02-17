@@ -21,6 +21,7 @@ PPTinyPose::PPTinyPose(const std::string& model_file,
                         Backend::LITE};
   valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   valid_kunlunxin_backends = {Backend::LITE};
+  valid_rknpu_backends = {Backend::RKNPU2};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -66,14 +67,18 @@ bool PPTinyPose::BuildPreprocessPipelineFromConfig() {
   for (const auto& op : cfg["Preprocess"]) {
     std::string op_name = op["type"].as<std::string>();
     if (op_name == "NormalizeImage") {
-      auto mean = op["mean"].as<std::vector<float>>();
-      auto std = op["std"].as<std::vector<float>>();
-      bool is_scale = op["is_scale"].as<bool>();
-      processors_.push_back(std::make_shared<Normalize>(mean, std, is_scale));
+      if (!disable_normalize_) {
+        auto mean = op["mean"].as<std::vector<float>>();
+        auto std = op["std"].as<std::vector<float>>();
+        bool is_scale = op["is_scale"].as<bool>();
+        processors_.push_back(std::make_shared<Normalize>(mean, std, is_scale));
+      }
     } else if (op_name == "Permute") {
-      // permute = cast<float> + HWC2CHW
-      processors_.push_back(std::make_shared<Cast>("float"));
-      processors_.push_back(std::make_shared<HWC2CHW>());
+      if (!disable_permute_) {
+        // permute = cast<float> + HWC2CHW
+        processors_.push_back(std::make_shared<Cast>("float"));
+        processors_.push_back(std::make_shared<HWC2CHW>());
+      }
     } else if (op_name == "TopDownEvalAffine") {
       auto trainsize = op["trainsize"].as<std::vector<int>>();
       int height = trainsize[1];
@@ -130,9 +135,17 @@ bool PPTinyPose::Postprocess(std::vector<FDTensor>& infer_result,
                              KeyPointDetectionResult* result,
                              const std::vector<float>& center,
                              const std::vector<float>& scale) {
-  FDASSERT(infer_result[1].shape[0] == 1,
+  FDASSERT(infer_result[0].shape[0] == 1,
            "Only support batch = 1 in FastDeploy now.");
   result->Clear();
+
+  if (infer_result.size() == 1) {
+    FDTensor result_copy = infer_result[0];
+    result_copy.Reshape({result_copy.shape[0], result_copy.shape[1],
+                         result_copy.shape[2] * result_copy.shape[3]});
+    infer_result.resize(2);
+    function::ArgMax(result_copy, &infer_result[1], -1);
+  }
 
   // Calculate output length
   int outdata_size =
@@ -189,12 +202,14 @@ bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result) {
             << ModelName() << "." << std::endl;
     return false;
   }
+
   std::vector<FDTensor> infer_result;
   if (!Infer(processed_data, &infer_result)) {
     FDERROR << "Failed to inference while using model:" << ModelName() << "."
             << std::endl;
     return false;
   }
+
   if (!Postprocess(infer_result, result, center, scale)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;

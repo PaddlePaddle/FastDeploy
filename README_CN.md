@@ -70,7 +70,7 @@
     - **微信**：扫描二维码，填写问卷加入技术社区，与社区开发者交流部署产业落地痛点问题
 
 <div align="center">
-    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "150" height = "150" />
+    <img src="https://user-images.githubusercontent.com/54695910/216615983-bbb78319-0231-4635-86d1-f2ebf9eac85d.jpg" width = "150" height = "150" />
 </div>
 
 

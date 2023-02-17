@@ -97,6 +97,33 @@ void OpenVINOBackend::InitTensorInfo(
   }
 }
 
+bool OpenVINOBackend::Init(const RuntimeOption& option) {
+  if (option.model_from_memory_) {
+    FDERROR << "OpenVINOBackend doesn't support load model from memory, please "
+               "load model from disk."
+            << std::endl;
+    return false;
+  }
+  if (option.device != Device::CPU) {
+    FDERROR << "OpenVINOBackend only supports Device::CPU, but now its "
+            << option.device << "." << std::endl;
+    return false;
+  }
+
+  if (option.model_format == ModelFormat::PADDLE) {
+    return InitFromPaddle(option.model_file, option.params_file,
+                          option.openvino_option);
+  } else if (option.model_format == ModelFormat::ONNX) {
+    return InitFromOnnx(option.model_file, option.openvino_option);
+  } else {
+    FDERROR << "OpenVINOBackend only supports model format Paddle/ONNX, but "
+               "now its "
+            << option.model_format << std::endl;
+    return false;
+  }
+  return false;
+}
+
 bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
                                      const std::string& params_file,
                                      const OpenVINOBackendOption& option) {
@@ -348,6 +375,7 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
     return false;
   }
 
+  RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
   for (size_t i = 0; i < inputs.size(); ++i) {
     ov::Shape shape(inputs[i].shape.begin(), inputs[i].shape.end());
     ov::Tensor ov_tensor(FDDataTypeToOV(inputs[i].dtype), shape,
@@ -355,7 +383,9 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
     request_.set_tensor(inputs[i].name, ov_tensor);
   }
 
+  RUNTIME_PROFILE_LOOP_BEGIN(1)
   request_.infer();
+  RUNTIME_PROFILE_LOOP_END
 
   outputs->resize(output_infos_.size());
   for (size_t i = 0; i < output_infos_.size(); ++i) {
@@ -376,6 +406,7 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
           out_tensor.data(), Device::CPU);
     }
   }
+  RUNTIME_PROFILE_LOOP_H2D_D2H_END
   return true;
 }
 

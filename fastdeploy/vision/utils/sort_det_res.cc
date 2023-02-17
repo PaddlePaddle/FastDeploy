@@ -28,6 +28,7 @@ void Merge(DetectionResult* result, size_t low, size_t mid, size_t high) {
   size_t i = low;
   size_t j = mid + 1;
   size_t k = i;
+  // TODO(qiuyanjun): add masks process
   for (; i <= mid && j <= high; k++) {
     if (temp_scores[i] >= temp_scores[j]) {
       scores[k] = temp_scores[i];
@@ -70,10 +71,71 @@ void SortDetectionResult(DetectionResult* result) {
   size_t low = 0;
   size_t high = result->scores.size();
   if (high == 0) {
-      return;
+    return;
   }
   high = high - 1;
   MergeSort(result, low, high);
+}
+
+bool LexSortByXYCompare(const std::array<float, 4>& box_a,
+                        const std::array<float, 4>& box_b) {
+  // WARN: The status shoule be false if (a==b).
+  // https://blog.csdn.net/xxxwrq/article/details/83080640
+  auto is_equal = [](const float& a, const float& b) -> bool {
+    return std::abs(a - b) < 1e-6f;
+  };
+  const float& x0_a = box_a[0];
+  const float& y0_a = box_a[1];
+  const float& x0_b = box_b[0];
+  const float& y0_b = box_b[1];
+  if (is_equal(x0_a, x0_b)) {
+    return is_equal(y0_a, y0_b) ? false : y0_a > y0_b;
+  }
+  return x0_a > x0_b;
+}
+
+void ReorderDetectionResultByIndices(DetectionResult* result,
+                                     const std::vector<size_t>& indices) {
+  // reorder boxes, scores, label_ids, masks
+  DetectionResult backup = (*result);  // move
+  const bool contain_masks = backup.contain_masks;
+  const int boxes_num = backup.boxes.size();
+  result->Clear();
+  result->Resize(boxes_num);
+  // boxes, scores, labels_ids
+  for (int i = 0; i < boxes_num; ++i) {
+    result->boxes[i] = backup.boxes[indices[i]];
+    result->scores[i] = backup.scores[indices[i]];
+    result->label_ids[i] = backup.label_ids[indices[i]];
+  }
+  if (contain_masks) {
+    result->contain_masks = true;
+    for (int i = 0; i < boxes_num; ++i) {
+      const auto& shape = backup.masks[indices[i]].shape;
+      const int mask_numel = shape[0] * shape[1];
+      result->masks[i].shape = shape;
+      result->masks[i].Resize(mask_numel);
+      std::memcpy(result->masks[i].Data(), backup.masks[indices[i]].Data(),
+                  mask_numel * sizeof(uint8_t));
+    }
+  }
+}
+
+void LexSortDetectionResultByXY(DetectionResult* result) {
+  if (result->boxes.size() == 0) {
+    return;
+  }
+  std::vector<size_t> indices;
+  indices.resize(result->boxes.size());
+  for (size_t i = 0; i < result->boxes.size(); ++i) {
+    indices[i] = i;
+  }
+  // lex sort by x(w) then y(h)
+  auto& boxes = result->boxes;
+  std::sort(indices.begin(), indices.end(), [&boxes](size_t a, size_t b) {
+    return LexSortByXYCompare(boxes[a], boxes[b]);
+  });
+  ReorderDetectionResultByIndices(result, indices);
 }
 
 }  // namespace utils

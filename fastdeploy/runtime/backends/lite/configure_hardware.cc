@@ -13,23 +13,6 @@
 // limitations under the License.
 
 #include "fastdeploy/runtime/backends/lite/lite_backend.h"
-// https://github.com/PaddlePaddle/Paddle-Lite/issues/8290
-// When compiling the FastDeploy dynamic library, namely,
-// WITH_STATIC_LIB=OFF, and depending on the Paddle Lite
-// static library, you need to include the fake registration
-// codes of Paddle Lite. When you compile the FastDeploy static
-// library and depends on the Paddle Lite static library,
-// WITH_STATIC_LIB=ON, you do not need to include the fake
-// registration codes for Paddle Lite, but wait until you
-// use the FastDeploy static library.
-#if (defined(WITH_LITE_STATIC) && (!defined(WITH_STATIC_LIB)))
-#warning You are compiling the FastDeploy dynamic library with \
-Paddle Lite static lib We will automatically add some registration \
-codes for ops, kernels and passes for Paddle Lite.
-#include "paddle_use_kernels.h"  // NOLINT
-#include "paddle_use_ops.h"      // NOLINT
-#include "paddle_use_passes.h"   // NOLINT
-#endif
 
 #include <cstring>
 
@@ -68,8 +51,9 @@ void LiteBackend::ConfigureCpu(const LiteBackendOption& option) {
 
 void LiteBackend::ConfigureKunlunXin(const LiteBackendOption& option) {
   std::vector<paddle::lite_api::Place> valid_places;
-  valid_places.push_back(
-      paddle::lite_api::Place{TARGET(kXPU), PRECISION(kInt8)});
+  // TODO(yeliang): Placing kInt8 first may cause accuracy issues of some model
+  // valid_places.push_back(
+  //     paddle::lite_api::Place{TARGET(kXPU), PRECISION(kInt8)});
   if (option.enable_fp16) {
     valid_places.push_back(
         paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFP16)});
@@ -156,4 +140,5 @@ void LiteBackend::ConfigureNNAdapter(const LiteBackendOption& option) {
 
   config_.set_nnadapter_dynamic_shape_info(option.nnadapter_dynamic_shape_info);
 }
+
 }  // namespace fastdeploy

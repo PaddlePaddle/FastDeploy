@@ -1,7 +1,7 @@
 English | [简体中文](README_CN.md)
 # PPOCRv3 C++ Deployment Example
 
-This directory provides examples that `infer.cc` fast finishes the deployment of PPOCRv3 on CPU/GPU and GPU accelerated by TensorRT. 
+This directory provides examples that `infer.cc` fast finishes the deployment of PPOCRv3 on CPU/GPU and GPU accelerated by TensorRT.
 
 Two steps before deployment
 
@@ -13,7 +13,7 @@ Taking the CPU inference on Linux as an example, the compilation test can be com
 ```
 mkdir build
 cd build
-# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above 
+# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
@@ -44,6 +44,8 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_
 ./infer_demo ./ch_PP-OCRv3_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv3_rec_infer ./ppocr_keys_v1.txt ./12.jpg 3
 # KunlunXin XPU inference
 ./infer_demo ./ch_PP-OCRv3_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv3_rec_infer ./ppocr_keys_v1.txt ./12.jpg 4
+# Huawei Ascend inference, need to use the infer_static_shape_demo, if the user needs to predict the image continuously, the input image size needs to be prepared as a uniform size.
+./infer_static_shape_demo ./ch_PP-OCRv3_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv3_rec_infer ./ppocr_keys_v1.txt ./12.jpg 1
 ```
 
 The above command works for Linux or MacOS. For SDK in Windows, refer to:

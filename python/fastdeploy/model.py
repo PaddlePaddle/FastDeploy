@@ -54,6 +54,11 @@ class FastDeployModel:
     def print_statis_info_of_runtime(self):
         return self._model.print_statis_info_of_runtime()
 
+    def get_profile_time(self):
+        """Get profile time of Runtime after the profile process is done.
+        """
+        return self._model.get_profile_time()    
+
     @property
     def runtime_option(self):
         return self._model.runtime_option if self._model is not None else None

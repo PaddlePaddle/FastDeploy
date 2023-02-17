@@ -61,7 +61,7 @@ endif(WIN32)
 message("FASTTOKENIZER_COMPILE_LIB = ${FASTTOKENIZER_COMPILE_LIB}")
 
 set(FASTTOKENIZER_URL_BASE "https://bj.bcebos.com/paddlenlp/fast_tokenizer/")
-set(FASTTOKENIZER_VERSION "1.0.1")
+set(FASTTOKENIZER_VERSION "1.0.2")
 
 # Set download url
 if(WIN32)
@@ -83,7 +83,8 @@ elseif(ANDROID)
   if(NOT ANDROID_TOOLCHAIN MATCHES "clang")
      message(FATAL_ERROR "Currently, only support clang toolchain while cross compiling FastDeploy for Android with FastTokenizer, but found ${ANDROID_TOOLCHAIN}.")
   endif()    
-  set(FASTTOKENIZER_FILE "fast_tokenizer-android-${ANDROID_ABI}-${FASTTOKENIZER_VERSION}.tgz")
+  # set(FASTTOKENIZER_FILE "fast_tokenizer-android-${ANDROID_ABI}-${FASTTOKENIZER_VERSION}.tgz")
+  set(FASTTOKENIZER_FILE "fast_tokenizer-lite-android-${ANDROID_ABI}-${FASTTOKENIZER_VERSION}.tgz")
 else()
   if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
     set(FASTTOKENIZER_FILE "fast_tokenizer-linux-aarch64-${FASTTOKENIZER_VERSION}.tgz")

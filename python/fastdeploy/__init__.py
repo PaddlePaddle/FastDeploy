@@ -39,3 +39,5 @@ from . import text
 from . import encryption
 from .download import download, download_and_decompress, download_model, get_model_list
 from . import serving
+from .code_version import version, git_version
+__version__ = version

@@ -13,6 +13,10 @@
 # limitations under the License.
 include(ExternalProject)
 
+if(NOT ENABLE_TRT_BACKEND)
+  message(FATAL_ERROR "While ENABLE_POROS_BACKEND, requires ENABLE_TRT_BACKEND=ON, but now its OFF.")
+endif()
+
 set(POROS_PROJECT "extern_poros")
 set(POROS_PREFIX_DIR ${THIRD_PARTY_PATH}/poros)
 set(POROS_SOURCE_DIR
@@ -48,9 +52,10 @@ else()
   if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
     message(FATAL_ERROR "Poros Backend doesn't support linux aarch64 now.")
   else()
-    message(FATAL_ERROR "Poros currently only provides precompiled packages for the GPU version.")
     if(WITH_GPU)
         set(POROS_FILE "poros_manylinux_torch1.12.1_cu116_trt8.4_gcc82-${POROS_VERSION}.tar.gz")
+    else()
+      message(FATAL_ERROR "Poros currently only provides precompiled packages for the GPU version.")
     endif()
   endif()
 endif()
@@ -77,7 +82,7 @@ add_dependencies(external_poros ${POROS_PROJECT})
 # Download libtorch.so with ABI=1
 set(TORCH_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
 set(TORCH_FILE "libtorch-cxx11-abi-shared-with-deps-1.12.1-cu116.zip")
-set(TROCH_URL "${TORCH_URL_BASE}${TORCH_FILE}")
+set(TORCH_URL "${TORCH_URL_BASE}${TORCH_FILE}")
 message(STATUS "Use the default Torch lib from: ${TORCH_URL}")
 download_and_decompress(${TORCH_URL} ${CMAKE_CURRENT_BINARY_DIR}/${TORCH_FILE} ${THIRD_PARTY_PATH}/install)
 if(EXISTS ${THIRD_PARTY_PATH}/install/torch)

@@ -62,13 +62,34 @@ bool ProcessorManager::Run(std::vector<FDMat>* images,
     return false;
   }
 
+  if (images->size() > input_caches_.size()) {
+    input_caches_.resize(images->size());
+    output_caches_.resize(images->size());
+  }
+
+  FDMatBatch image_batch(images);
+  image_batch.input_cache = &batch_input_cache_;
+  image_batch.output_cache = &batch_output_cache_;
+
   for (size_t i = 0; i < images->size(); ++i) {
     if (CudaUsed()) {
-      SetStream(&((*images)[i]));
+      SetStream(&image_batch);
+    }
+    (*images)[i].input_cache = &input_caches_[i];
+    (*images)[i].output_cache = &output_caches_[i];
+    if ((*images)[i].mat_type == ProcLib::CUDA) {
+      // Make a copy of the input data ptr, so that the original data ptr of
+      // FDMat won't be modified.
+      auto fd_tensor = std::make_shared<FDTensor>();
+      fd_tensor->SetExternalData(
+          (*images)[i].Tensor()->shape, (*images)[i].Tensor()->Dtype(),
+          (*images)[i].Tensor()->Data(), (*images)[i].Tensor()->device,
+          (*images)[i].Tensor()->device_id);
+      (*images)[i].SetTensor(fd_tensor);
     }
   }
 
-  bool ret = Apply(images, outputs);
+  bool ret = Apply(&image_batch, outputs);
 
   if (CudaUsed()) {
     SyncStream();

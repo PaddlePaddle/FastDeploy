@@ -1,7 +1,7 @@
 English | [简体中文](README_CN.md)
 # PaddleClas C++ Deployment Example
 
-This directory provides examples that `infer.cc` fast finishes the deployment of PaddleClas models on CPU/GPU and GPU accelerated by TensorRT. 
+This directory provides examples that `infer.cc` fast finishes the deployment of PaddleClas models on CPU/GPU and GPU accelerated by TensorRT.
 
 Before deployment, two steps require confirmation.
 
@@ -13,13 +13,13 @@ Taking ResNet50_vd inference on Linux as an example, the compilation test can be
 ```bash
 mkdir build
 cd build
-# Download FastDeploy precompiled library. Users can choose your appropriate version in the`FastDeploy Precompiled Library` mentioned above 
+# Download FastDeploy precompiled library. Users can choose your appropriate version in the`FastDeploy Precompiled Library` mentioned above
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
-# Download ResNet50_vd model file and test images 
+# Download ResNet50_vd model file and test images
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz
 tar -xvf ResNet50_vd_infer.tgz
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
@@ -35,12 +35,14 @@ wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/Ima
 ./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 3
 # KunlunXin XPU inference
 ./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 4
+# Ascend inference
+./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 5
 ```
 
-The above command works for Linux or MacOS. Refer to 
+The above command works for Linux or MacOS. Refer to
 - [How to use FastDeploy C++ SDK in Windows](../../../../../docs/cn/faq/use_sdk_on_windows.md) for SDK use-pattern in Windows
 
-## PaddleClas C++ Interface 
+## PaddleClas C++ Interface
 
 ### PaddleClas Class
 
@@ -57,8 +59,8 @@ PaddleClas model loading and initialization, where model_file and params_file ar
 
 **Parameter**
 
-> * **model_file**(str): Model file path 
-> * **params_file**(str): Parameter file path 
+> * **model_file**(str): Model file path
+> * **params_file**(str): Parameter file path
 > * **config_file**(str): Inference deployment configuration file
 > * **runtime_option**(RuntimeOption): Backend inference configuration. None by default. (use the default configuration)
 > * **model_format**(ModelFormat): Model format. Paddle format by default

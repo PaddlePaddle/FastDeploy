@@ -18,18 +18,78 @@ from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
+class YOLOv5ClsPreprocessor:
+    def __init__(self):
+        """Create a preprocessor for YOLOv5Cls
+        """
+        self._preprocessor = C.vision.classification.YOLOv5ClsPreprocessor()
+
+    def run(self, input_ims):
+        """Preprocess input images for YOLOv5Cls
+
+        :param: input_ims: (list of numpy.ndarray)The input image
+        :return: list of FDTensor
+        """
+        return self._preprocessor.run(input_ims)
+
+    @property
+    def size(self):
+        """
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default size = [224, 224]
+        """
+        return self._preprocessor.size
+
+    @size.setter
+    def size(self, wh):
+        assert isinstance(wh, (list, tuple)),\
+            "The value to set `size` must be type of tuple or list."
+        assert len(wh) == 2,\
+            "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
+            len(wh))
+        self._preprocessor.size = wh
+
+
+class YOLOv5ClsPostprocessor:
+    def __init__(self):
+        """Create a postprocessor for YOLOv5Cls
+        """
+        self._postprocessor = C.vision.classification.YOLOv5ClsPostprocessor()
+
+    def run(self, runtime_results, ims_info):
+        """Postprocess the runtime results for YOLOv5Cls
+
+        :param: runtime_results: (list of FDTensor)The output FDTensor results from runtime
+        :param: ims_info: (list of dict)Record input_shape and output_shape
+        :return: list of ClassifyResult(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
+        """
+        return self._postprocessor.run(runtime_results, ims_info)
+
+    @property
+    def topk(self):
+        """
+        topk for postprocessing, default is 1
+        """
+        return self._postprocessor.topk
+
+    @topk.setter
+    def topk(self, topk):
+        assert isinstance(topk, int),\
+            "The value to set `top k` must be type of int."
+        self._postprocessor.topk = topk
+
+
 class YOLOv5Cls(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
-        """Load a image classification model exported by YOLOv5.
+        """Load a YOLOv5Cls model exported by YOLOv5Cls.
 
-        :param model_file: (str)Path of model file, e.g yolov5cls/yolov5n-cls.onnx
-        :param params_file: (str)Path of parameters file, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param model_file: (str)Path of model file, e.g ./YOLOv5Cls.onnx
+        :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
-        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model, default is ONNX
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
 
         super(YOLOv5Cls, self).__init__(runtime_option)
@@ -37,33 +97,39 @@ class YOLOv5Cls(FastDeployModel):
         assert model_format == ModelFormat.ONNX, "YOLOv5Cls only support model format of ModelFormat.ONNX now."
         self._model = C.vision.classification.YOLOv5Cls(
             model_file, params_file, self._runtime_option, model_format)
+
         assert self.initialized, "YOLOv5Cls initialize failed."
 
-    def predict(self, input_image, topk=1):
+    def predict(self, input_image):
         """Classify an input image
 
-        :param im: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
-        :param topk: (int)The topk result by the classify confidence score, default 1
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
         :return: ClassifyResult
         """
+        assert input_image is not None, "Input image is None."
+        return self._model.predict(input_image)
 
-        return self._model.predict(input_image, topk)
+    def batch_predict(self, images):
+        """Classify a batch of input image
+
+        :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
+        :return list of ClassifyResult
+        """
+
+        return self._model.batch_predict(images)
 
     @property
-    def size(self):
-        """
-        Returns the preprocess image size, default is (224, 224)
-        """
-        return self._model.size
+    def preprocessor(self):
+        """Get YOLOv5ClsPreprocessor object of the loaded model
 
-    @size.setter
-    def size(self, wh):
+        :return YOLOv5ClsPreprocessor
         """
-        Set the preprocess image size
+        return self._model.preprocessor
+
+    @property
+    def postprocessor(self):
+        """Get YOLOv5ClsPostprocessor object of the loaded model
+
+        :return YOLOv5ClsPostprocessor
         """
-        assert isinstance(wh, (list, tuple)),\
-            "The value to set `size` must be type of tuple or list."
-        assert len(wh) == 2,\
-            "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
-            len(wh))
-        self._model.size = wh
+        return self._model.postprocessor

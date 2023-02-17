@@ -1,7 +1,7 @@
 English | [简体中文](README_CN.md)
 # YOLOv7 C++ Deployment Example
 
-This directory provides examples that `infer.cc` fast finishes the deployment of YOLOv7 on CPU/GPU and GPU accelerated by TensorRT. 
+This directory provides examples that `infer.cc` fast finishes the deployment of YOLOv7 on CPU/GPU and GPU accelerated by TensorRT.
 
 Before deployment, two steps require confirmation
 
@@ -13,7 +13,7 @@ Taking the CPU inference on Linux as an example, the compilation test can be com
 ```bash
 mkdir build
 cd build
-# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy  Precompiled Library` mentioned above 
+# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy  Precompiled Library` mentioned above
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
@@ -29,10 +29,12 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 ./infer_paddle_model_demo yolov7_infer 000000014439.jpg 1
 # KunlunXin XPU inference
 ./infer_paddle_model_demo yolov7_infer 000000014439.jpg 2
+# Huawei Ascend inference
+./infer_paddle_model_demo yolov7_infer 000000014439.jpg 3
 ```
 If you want to verify the inference of ONNX models, refer to the following command:
 ```bash
-# Download the official converted yolov7 ONNX model files and test images 
+# Download the official converted yolov7 ONNX model files and test images
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
@@ -52,7 +54,7 @@ The visualized result after running is as follows
 The above command works for Linux or MacOS. For SDK use-pattern in Windows, refer to:
 - [How to use FastDeploy C++ SDK in Windows](../../../../../docs/en/faq/use_sdk_on_windows.md)
 
-## YOLOv7 C++ Interface 
+## YOLOv7 C++ Interface
 
 ### YOLOv7 Class
 
@@ -68,7 +70,7 @@ YOLOv7 model loading and initialization, among which model_file is the exported 
 
 **Parameter**
 
-> * **model_file**(str): Model file path 
+> * **model_file**(str): Model file path
 > * **params_file**(str): Parameter file path. Merely passing an empty string when the model is in ONNX format
 > * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
 > * **model_format**(ModelFormat): Model format. ONNX format by default
@@ -86,7 +88,7 @@ YOLOv7 model loading and initialization, among which model_file is the exported 
 > **Parameter**
 >
 > > * **im**: Input images in HWC or BGR format
-> > * **result**: Detection results, including detection box and confidence of each box. Refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for DetectionResult 
+> > * **result**: Detection results, including detection box and confidence of each box. Refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for DetectionResult
 > > * **conf_threshold**: Filtering threshold of detection box confidence
 > > * **nms_iou_threshold**: iou threshold during NMS processing
 

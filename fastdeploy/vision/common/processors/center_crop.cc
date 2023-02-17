@@ -23,7 +23,7 @@
 namespace fastdeploy {
 namespace vision {
 
-bool CenterCrop::ImplByOpenCV(Mat* mat) {
+bool CenterCrop::ImplByOpenCV(FDMat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
   int height = static_cast<int>(im->rows);
   int width = static_cast<int>(im->cols);
@@ -42,7 +42,7 @@ bool CenterCrop::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool CenterCrop::ImplByFlyCV(Mat* mat) {
+bool CenterCrop::ImplByFlyCV(FDMat* mat) {
   fcv::Mat* im = mat->GetFlyCVMat();
   int height = static_cast<int>(im->height());
   int width = static_cast<int>(im->width());
@@ -63,18 +63,15 @@ bool CenterCrop::ImplByFlyCV(Mat* mat) {
 #endif
 
 #ifdef ENABLE_CVCUDA
-bool CenterCrop::ImplByCvCuda(Mat* mat) {
+bool CenterCrop::ImplByCvCuda(FDMat* mat) {
   // Prepare input tensor
-  std::string tensor_name = Name() + "_cvcuda_src";
-  FDTensor* src = CreateCachedGpuInputTensor(mat, tensor_name);
+  FDTensor* src = CreateCachedGpuInputTensor(mat);
   auto src_tensor = CreateCvCudaTensorWrapData(*src);
 
   // Prepare output tensor
-  tensor_name = Name() + "_cvcuda_dst";
-  FDTensor* dst =
-      UpdateAndGetCachedTensor({height_, width_, mat->Channels()}, src->Dtype(),
-                               tensor_name, Device::GPU);
-  auto dst_tensor = CreateCvCudaTensorWrapData(*dst);
+  mat->output_cache->Resize({height_, width_, mat->Channels()}, src->Dtype(),
+                            "output_cache", Device::GPU);
+  auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
 
   int offset_x = static_cast<int>((mat->Width() - width_) / 2);
   int offset_y = static_cast<int>((mat->Height() - height_) / 2);
@@ -82,16 +79,27 @@ bool CenterCrop::ImplByCvCuda(Mat* mat) {
   NVCVRectI crop_roi = {offset_x, offset_y, width_, height_};
   crop_op(mat->Stream(), src_tensor, dst_tensor, crop_roi);
 
-  mat->SetTensor(dst);
+  mat->SetTensor(mat->output_cache);
   mat->SetWidth(width_);
   mat->SetHeight(height_);
   mat->device = Device::GPU;
   mat->mat_type = ProcLib::CVCUDA;
   return true;
 }
+
+bool CenterCrop::ImplByCvCuda(FDMatBatch* mat_batch) {
+  for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+    if (ImplByCvCuda(&((*(mat_batch->mats))[i])) != true) {
+      return false;
+    }
+  }
+  mat_batch->device = Device::GPU;
+  mat_batch->mat_type = ProcLib::CVCUDA;
+  return true;
+}
 #endif
 
-bool CenterCrop::Run(Mat* mat, const int& width, const int& height,
+bool CenterCrop::Run(FDMat* mat, const int& width, const int& height,
                      ProcLib lib) {
   auto c = CenterCrop(width, height);
   return c(mat, lib);

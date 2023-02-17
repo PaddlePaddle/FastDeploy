@@ -56,7 +56,7 @@ NormalizeAndPermute::NormalizeAndPermute(const std::vector<float>& mean,
   swap_rb_ = swap_rb;
 }
 
-bool NormalizeAndPermute::ImplByOpenCV(Mat* mat) {
+bool NormalizeAndPermute::ImplByOpenCV(FDMat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
@@ -79,7 +79,7 @@ bool NormalizeAndPermute::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool NormalizeAndPermute::ImplByFlyCV(Mat* mat) {
+bool NormalizeAndPermute::ImplByFlyCV(FDMat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "Only supports input with HWC layout." << std::endl;
     return false;
@@ -109,7 +109,7 @@ bool NormalizeAndPermute::ImplByFlyCV(Mat* mat) {
 }
 #endif
 
-bool NormalizeAndPermute::Run(Mat* mat, const std::vector<float>& mean,
+bool NormalizeAndPermute::Run(FDMat* mat, const std::vector<float>& mean,
                               const std::vector<float>& std, bool is_scale,
                               const std::vector<float>& min,
                               const std::vector<float>& max, ProcLib lib,

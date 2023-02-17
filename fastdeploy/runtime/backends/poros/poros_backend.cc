@@ -43,11 +43,12 @@ std::vector<TensorInfo> PorosBackend::GetOutputInfos() {
 }
 
 void PorosBackend::BuildOption(const PorosBackendOption& option) {
-  _options.device = option.use_gpu ? baidu::mirana::poros::Device::GPU
-                                   : baidu::mirana::poros::Device::CPU;
+  _options.device = (option.device == Device::GPU)
+                        ? baidu::mirana::poros::Device::GPU
+                        : baidu::mirana::poros::Device::CPU;
   _options.long_to_int = option.long_to_int;
   _options.use_nvidia_tf32 = option.use_nvidia_tf32;
-  _options.device_id = option.gpu_id;
+  _options.device_id = option.device_id;
   _options.unconst_ops_thres = option.unconst_ops_thres;
   _options.is_dynamic = option.is_dynamic;
   _options.max_workspace_size = option.max_workspace_size;
@@ -67,7 +68,7 @@ bool PorosBackend::Compile(const std::string& model_file,
   torch::jit::Module mod;
   mod = torch::jit::load(model_file);
   mod.eval();
-  if (option.use_gpu) {
+  if (option.device == Device::GPU) {
     mod.to(at::kCUDA);
   } else {
     mod.to(at::kCPU);
@@ -79,7 +80,7 @@ bool PorosBackend::Compile(const std::string& model_file,
   _numinputs = inputs.size() - 1;
   // FDTensor to at::Tensor
   std::vector<std::vector<c10::IValue>> prewarm_datas;
-  bool is_backend_cuda = option.use_gpu ? true : false;
+  bool is_backend_cuda = (option.device == Device::GPU);
   for (size_t i = 0; i < prewarm_tensors.size(); ++i) {
     std::vector<c10::IValue> prewarm_data;
     for (size_t j = 0; j < prewarm_tensors[i].size(); ++j) {
@@ -117,73 +118,6 @@ bool PorosBackend::Compile(const std::string& model_file,
             << std::endl;
     return false;
   }
-  initialized_ = true;
-  return true;
-}
-
-bool PorosBackend::InitFromTorchScript(const std::string& model_file,
-                                       const PorosBackendOption& option) {
-  if (initialized_) {
-    FDERROR << "PorosBackend is already initlized, cannot initialize again."
-            << std::endl;
-    return false;
-  }
-  if (option.poros_file != "") {
-    std::ifstream fin(option.poros_file, std::ios::binary | std::ios::in);
-    if (fin) {
-      FDINFO << "Detect compiled Poros file in " << option.poros_file
-             << ", will load it directly." << std::endl;
-      fin.close();
-      return InitFromPoros(option.poros_file, option);
-    }
-  }
-  BuildOption(option);
-  torch::jit::Module mod;
-  mod = torch::jit::load(model_file);
-  mod.eval();
-  if (option.use_gpu) {
-    mod.to(at::kCUDA);
-  } else {
-    mod.to(at::kCPU);
-  }
-  // get inputs_nums and outputs_nums
-  auto graph = mod.get_method("forward").graph();
-  auto inputs = graph->inputs();
-  // remove self node
-  _numinputs = inputs.size() - 1;
-  auto outputs = graph->outputs();
-  _numoutputs = outputs.size();
-  _poros_module = baidu::mirana::poros::Compile(mod, _prewarm_datas, _options);
-  if (_poros_module == nullptr) {
-    FDERROR << "PorosBackend initlize Failed, try initialize again."
-            << std::endl;
-    return false;
-  }
-  initialized_ = true;
-  return true;
-}
-
-bool PorosBackend::InitFromPoros(const std::string& model_file,
-                                 const PorosBackendOption& option) {
-  if (initialized_) {
-    FDERROR << "PorosBackend is already initlized, cannot initialize again."
-            << std::endl;
-    return false;
-  }
-  BuildOption(option);
-  _poros_module = baidu::mirana::poros::Load(model_file, _options);
-  if (_poros_module == nullptr) {
-    FDERROR << "PorosBackend initlize Failed, try initialize again."
-            << std::endl;
-    return false;
-  }
-  // get inputs_nums and outputs_nums
-  auto graph = _poros_module->get_method("forward").graph();
-  auto inputs = graph->inputs();
-  // remove self node
-  _numinputs = inputs.size() - 1;
-  auto outputs = graph->outputs();
-  _numoutputs = outputs.size();
   initialized_ = true;
   return true;
 }
