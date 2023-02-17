@@ -7,3 +7,4 @@
 
 - Intel独立显卡/集成显卡部署 [见intel_gpu](intel_gpu)
 - 模型多线程调用 [见multi_thread](multi_thread)
+- 图片解码（含nvJPEG硬解码） [见image_decoder](image_decoder)

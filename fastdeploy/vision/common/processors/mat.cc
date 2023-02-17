@@ -37,7 +37,7 @@ cv::Mat* Mat::GetOpenCVMat() {
 #ifdef WITH_GPU
     FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
              "[ERROR] Error occurs while sync cuda stream.");
-    cpu_mat = CreateZeroCopyOpenCVMatFromTensor(fd_tensor);
+    cpu_mat = CreateZeroCopyOpenCVMatFromTensor(*fd_tensor);
     mat_type = ProcLib::OPENCV;
     device = Device::CPU;
     return &cpu_mat;
@@ -59,29 +59,53 @@ void* Mat::Data() {
              "fcv::Mat.");
 #endif
   } else if (device == Device::GPU) {
-    return fd_tensor.Data();
+    return fd_tensor->Data();
   }
   return cpu_mat.ptr();
 }
 
 FDTensor* Mat::Tensor() {
   if (mat_type == ProcLib::OPENCV) {
-    ShareWithTensor(&fd_tensor);
+    ShareWithTensor(fd_tensor.get());
   } else if (mat_type == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV
     cpu_mat = ConvertFlyCVMatToOpenCV(fcv_mat);
     mat_type = ProcLib::OPENCV;
-    ShareWithTensor(&fd_tensor);
+    ShareWithTensor(fd_tensor.get());
 #else
     FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
 #endif
   }
-  return &fd_tensor;
+  return fd_tensor.get();
 }
 
 void Mat::SetTensor(FDTensor* tensor) {
-  fd_tensor.SetExternalData(tensor->Shape(), tensor->Dtype(), tensor->Data(),
-                            tensor->device, tensor->device_id);
+  fd_tensor->SetExternalData(tensor->Shape(), tensor->Dtype(), tensor->Data(),
+                             tensor->device, tensor->device_id);
+  device = tensor->device;
+  if (layout == Layout::HWC) {
+    height = tensor->Shape()[0];
+    width = tensor->Shape()[1];
+    channels = tensor->Shape()[2];
+  } else if (layout == Layout::CHW) {
+    channels = tensor->Shape()[0];
+    height = tensor->Shape()[1];
+    width = tensor->Shape()[2];
+  }
+}
+
+void Mat::SetTensor(std::shared_ptr<FDTensor>& tensor) {
+  fd_tensor = tensor;
+  device = tensor->device;
+  if (layout == Layout::HWC) {
+    height = tensor->Shape()[0];
+    width = tensor->Shape()[1];
+    channels = tensor->Shape()[2];
+  } else if (layout == Layout::CHW) {
+    channels = tensor->Shape()[0];
+    height = tensor->Shape()[1];
+    width = tensor->Shape()[2];
+  }
 }
 
 void Mat::ShareWithTensor(FDTensor* tensor) {
@@ -134,7 +158,7 @@ void Mat::PrintInfo(const std::string& flag) {
 #ifdef WITH_GPU
     FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
              "[ERROR] Error occurs while sync cuda stream.");
-    cv::Mat tmp_mat = CreateZeroCopyOpenCVMatFromTensor(fd_tensor);
+    cv::Mat tmp_mat = CreateZeroCopyOpenCVMatFromTensor(*fd_tensor);
     cv::Scalar mean = cv::mean(tmp_mat);
     for (int i = 0; i < Channels(); ++i) {
       std::cout << mean[i] << " ";
@@ -157,7 +181,7 @@ FDDataType Mat::Type() {
              "fcv::Mat.");
 #endif
   } else if (mat_type == ProcLib::CUDA || mat_type == ProcLib::CVCUDA) {
-    return fd_tensor.Dtype();
+    return fd_tensor->Dtype();
   }
   return OpenCVDataTypeToFD(cpu_mat.type());
 }
@@ -262,6 +286,10 @@ FDTensor* CreateCachedGpuInputTensor(Mat* mat) {
 #ifdef WITH_GPU
   FDTensor* src = mat->Tensor();
   if (src->device == Device::GPU) {
+    if (src->Data() == mat->output_cache->Data()) {
+      std::swap(mat->input_cache, mat->output_cache);
+      std::swap(mat->input_cache->name, mat->output_cache->name);
+    }
     return src;
   } else if (src->device == Device::CPU) {
     // Mats on CPU, we need copy these tensors from CPU to GPU

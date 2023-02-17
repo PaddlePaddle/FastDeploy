@@ -27,7 +27,7 @@ void FDMatBatch::SetStream(cudaStream_t s) {
 
 FDTensor* FDMatBatch::Tensor() {
   if (has_batched_tensor) {
-    return &fd_tensor;
+    return fd_tensor.get();
   }
   FDASSERT(CheckShapeConsistency(mats), "Mats shapes are not consistent.")
   // Each mat has its own tensor,
@@ -45,12 +45,12 @@ FDTensor* FDMatBatch::Tensor() {
                          num_bytes, device, false);
   }
   SetTensor(input_cache);
-  return &fd_tensor;
+  return fd_tensor.get();
 }
 
 void FDMatBatch::SetTensor(FDTensor* tensor) {
-  fd_tensor.SetExternalData(tensor->Shape(), tensor->Dtype(), tensor->Data(),
-                            tensor->device, tensor->device_id);
+  fd_tensor->SetExternalData(tensor->Shape(), tensor->Dtype(), tensor->Data(),
+                             tensor->device, tensor->device_id);
   has_batched_tensor = true;
 }
 
