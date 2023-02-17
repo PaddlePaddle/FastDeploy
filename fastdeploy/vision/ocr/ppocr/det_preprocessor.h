@@ -25,6 +25,7 @@ namespace ocr {
  */
 class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
  public:
+  DBDetectorPreprocessor::DBDetectorPreprocessor();
   /** \brief Process the input image and prepare input tensors for runtime
    *
    * \param[in] image_batch The input image batch
@@ -63,6 +64,10 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
   std::vector<float> scale_ = {0.229f, 0.224f, 0.225f};
   bool is_scale_ = true;
   std::vector<std::array<int, 4>> batch_det_img_info_;
+
+  std::shared_ptr<Resize> resize_op_;
+  std::shared_ptr<Pad> pad_op_;
+  std::shared_ptr<NormalizeAndPermute> resize_op_;
 };
 
 }  // namespace ocr

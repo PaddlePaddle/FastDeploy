@@ -54,6 +54,16 @@ bool OcrDetectorResizeImage(FDMat* img, int resize_w, int resize_h,
   return true;
 }
 
+DBDetectorPreprocessor::DBDetectorPreprocessor() {
+  resize_op_ = std::make_shared<Resize>(-1, -1);
+  pad_op_ = std::make_shared<Pad>(0, 0, 0, 0, {0, 0, 0});
+  std::vector<float> mean = {0.485f, 0.456f, 0.406f};
+  std::vector<float> scale = {0.229f, 0.224f, 0.225f};
+  bool is_scale = true;
+  normalize_permute_op_ =
+      std::make_shared<NormalizeAndPermute>(mean, scale, is_scale);
+}
+
 bool DBDetectorPreprocessor::Apply(FDMatBatch* image_batch,
                                    std::vector<FDTensor>* outputs) {
   int max_resize_w = 0;
