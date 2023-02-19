@@ -64,9 +64,15 @@ elseif(ANDROID)
     CACHE FILEPATH "flycv compile library." FORCE)  
   endif()  
 else()
-  set(FLYCV_COMPILE_LIB
+  if(WITH_FLYCV_STATIC)
+    set(FLYCV_COMPILE_LIB
+        "${FLYCV_INSTALL_DIR}/lib/libflycv_static.a"
+        CACHE FILEPATH "flycv compile library." FORCE)
+  else()
+    set(FLYCV_COMPILE_LIB
       "${FLYCV_INSTALL_DIR}/lib/libflycv_shared.so"
       CACHE FILEPATH "flycv compile library." FORCE)
+  endif()
 endif(WIN32)
 
 set(FLYCV_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
@@ -93,7 +99,8 @@ else()
     elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
       set(FLYCV_FILE "flycv-linux-armhf-${FLYCV_VERSION}.tgz")
     else()
-      set(FLYCV_FILE "flycv-linux-x64-${FLYCV_VERSION}.tgz")
+      # set(FLYCV_FILE "flycv-linux-x64-${FLYCV_VERSION}.tgz")
+      set(FLYCV_FILE "flycv-linux-x64-1.1.0-dev.tgz")
     endif()
   endif()
 endif()
@@ -142,20 +149,44 @@ set_property(TARGET external_flycv PROPERTY IMPORTED_LOCATION
 add_dependencies(external_flycv ${FLYCV_PROJECT})
 
 set(FLYCV_LIBRARIES external_flycv)
-if(ANDROID AND WITH_FLYCV_STATIC)
-  add_library(external_flycv_png16 STATIC IMPORTED GLOBAL)
-  add_library(external_flycv_turbojpeg STATIC IMPORTED GLOBAL)
-  add_library(external_flycv_z STATIC IMPORTED GLOBAL)
-  set_property(TARGET external_flycv_png16 PROPERTY IMPORTED_LOCATION
-              "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libpng16.a")
-  set_property(TARGET external_flycv_turbojpeg PROPERTY IMPORTED_LOCATION
-              "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libturbojpeg.a") 
-  set_property(TARGET external_flycv_z PROPERTY IMPORTED_LOCATION
-              "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libz.a")  
-  add_dependencies(external_flycv_png16 ${FLYCV_PROJECT})      
-  add_dependencies(external_flycv_turbojpeg ${FLYCV_PROJECT})
-  add_dependencies(external_flycv_z ${FLYCV_PROJECT})  
-  list(APPEND FLYCV_LIBRARIES external_flycv_png16) 
-  list(APPEND FLYCV_LIBRARIES external_flycv_turbojpeg) 
-  list(APPEND FLYCV_LIBRARIES external_flycv_z)                           
+if(WITH_FLYCV_STATIC)
+  if (ANDROID)
+    add_library(external_flycv_png16 STATIC IMPORTED GLOBAL)
+    add_library(external_flycv_turbojpeg STATIC IMPORTED GLOBAL)
+    add_library(external_flycv_z STATIC IMPORTED GLOBAL)
+    set_property(TARGET external_flycv_png16 PROPERTY IMPORTED_LOCATION
+                "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libpng16.a")
+    set_property(TARGET external_flycv_turbojpeg PROPERTY IMPORTED_LOCATION
+                "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libturbojpeg.a") 
+    set_property(TARGET external_flycv_z PROPERTY IMPORTED_LOCATION
+                "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libz.a")  
+    add_dependencies(external_flycv_png16 ${FLYCV_PROJECT})      
+    add_dependencies(external_flycv_turbojpeg ${FLYCV_PROJECT})
+    add_dependencies(external_flycv_z ${FLYCV_PROJECT})  
+    list(APPEND FLYCV_LIBRARIES external_flycv_png16) 
+    list(APPEND FLYCV_LIBRARIES external_flycv_turbojpeg) 
+    list(APPEND FLYCV_LIBRARIES external_flycv_z)   
+  elseif(APPLE OR WIN32)
+    message(FATAL_ERROR "Not support FlyCV static lib for APPLE/WIN32 now!")  
+  else()
+    if((CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64") OR (CMAKE_SYSTEM_PROCESSOR MATCHES "arm"))
+      message(FATAL_ERROR "Not support FlyCV static lib for aarch64/arm linux now!") 
+    else()
+      add_library(external_flycv_png16 STATIC IMPORTED GLOBAL)
+      add_library(external_flycv_turbojpeg STATIC IMPORTED GLOBAL)
+      add_library(external_flycv_z STATIC IMPORTED GLOBAL)
+      set_property(TARGET external_flycv_png16 PROPERTY IMPORTED_LOCATION
+                  "${FLYCV_INSTALL_DIR}/lib/libpng16.a")
+      set_property(TARGET external_flycv_turbojpeg PROPERTY IMPORTED_LOCATION
+                  "${FLYCV_INSTALL_DIR}/lib/libturbojpeg.a") 
+      set_property(TARGET external_flycv_z PROPERTY IMPORTED_LOCATION
+                  "${FLYCV_INSTALL_DIR}/lib/libz.a")  
+      add_dependencies(external_flycv_png16 ${FLYCV_PROJECT})      
+      add_dependencies(external_flycv_turbojpeg ${FLYCV_PROJECT})
+      add_dependencies(external_flycv_z ${FLYCV_PROJECT})  
+      list(APPEND FLYCV_LIBRARIES external_flycv_png16) 
+      list(APPEND FLYCV_LIBRARIES external_flycv_turbojpeg) 
+      list(APPEND FLYCV_LIBRARIES external_flycv_z)   
+    endif()
+  endif()                      
 endif()

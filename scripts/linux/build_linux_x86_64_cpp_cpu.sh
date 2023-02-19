@@ -58,6 +58,8 @@ __build_fastdeploy_linux_x86_64_shared() {
         -DENABLE_PADDLE_BACKEND=ON \
         -DENABLE_OPENVINO_BACKEND=ON \
         -DENABLE_PADDLE2ONNX=ON \
+        -DENABLE_FLYCV=OFF \
+        -DWITH_FLYCV_STATIC=OFF \
         -DENABLE_VISION=ON \
         -DENABLE_BENCHMARK=ON \
         -DBUILD_EXAMPLES=ON \
