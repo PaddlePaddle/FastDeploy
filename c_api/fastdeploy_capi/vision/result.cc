@@ -258,6 +258,146 @@ char* FD_C_DetectionResultWrapperStr(
   return cstr;
 }
 
+// OCR Results
+
+FD_C_OCRResultWrapper* FD_C_CreateOCRResultWrapper() {
+  FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper = new FD_C_OCRResultWrapper();
+  fd_c_ocr_result_wrapper->ocr_result =
+      std::unique_ptr<fastdeploy::vision::OCRResult>(
+          new fastdeploy::vision::OCRResult());
+  return fd_c_ocr_result_wrapper;
+}
+
+void FD_C_DestroyOCRResultWrapper(
+    __fd_take FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper) {
+  delete fd_c_ocr_result_wrapper;
+}
+
+void FD_C_DestroyOCRResult(__fd_take FD_C_OCRResult* fd_c_ocr_result) {
+  if (fd_c_ocr_result == nullptr) return;
+  // delete boxes
+  for (size_t i = 0; i < fd_c_ocr_result->boxes.size; i++) {
+    delete[] fd_c_ocr_result->boxes.data[i].data;
+  }
+  delete[] fd_c_ocr_result->boxes.data;
+  // delete text
+  for (size_t i = 0; i < fd_c_ocr_result->text.size; i++) {
+    delete[] fd_c_ocr_result->text.data[i].data;
+  }
+  delete[] fd_c_ocr_result->text.data;
+  // delete rec_scores
+  delete[] fd_c_ocr_result->rec_scores.data;
+  // delete cls_scores
+  delete[] fd_c_ocr_result->cls_scores.data;
+  // delete cls_labels
+  delete[] fd_c_ocr_result->cls_labels.data;
+  delete fd_c_ocr_result;
+}
+
+FD_C_OCRResult* FD_C_OCRResultWrapperGetData(
+    __fd_keep FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper) {
+  auto& ocr_result =
+      CHECK_AND_CONVERT_FD_TYPE(OCRResultWrapper, fd_c_ocr_result_wrapper);
+  FD_C_OCRResult* fd_c_ocr_result = new FD_C_OCRResult();
+  // copy boxes
+  const int boxes_coordinate_dim = 8;
+  fd_c_ocr_result->boxes.size = ocr_result->boxes.size();
+  fd_c_ocr_result->boxes.data =
+      new FD_C_OneDimArrayInt32[fd_c_ocr_result->boxes.size];
+  for (size_t i = 0; i < ocr_result->boxes.size(); i++) {
+    fd_c_ocr_result->boxes.data[i].size = boxes_coordinate_dim;
+    fd_c_ocr_result->boxes.data[i].data = new int[boxes_coordinate_dim];
+    for (size_t j = 0; j < boxes_coordinate_dim; j++) {
+      fd_c_ocr_result->boxes.data[i].data[j] = ocr_result->boxes[i][j];
+    }
+  }
+  // copy text
+  fd_c_ocr_result->text.size = ocr_result->text.size();
+  fd_c_ocr_result->text.data = new FD_C_Cstr[fd_c_ocr_result->text.size];
+  for (size_t i = 0; i < ocr_result->text.size(); i++) {
+    fd_c_ocr_result->text.data[i].size = ocr_result->text[i].length();
+    fd_c_ocr_result->text.data[i].data =
+        new char[ocr_result->text[i].length() + 1];
+    strncpy(fd_c_ocr_result->text.data[i].data, ocr_result->text[i].c_str(),
+            ocr_result->text[i].length());
+  }
+
+  // copy rec_scores
+  fd_c_ocr_result->rec_scores.size = ocr_result->rec_scores.size();
+  fd_c_ocr_result->rec_scores.data =
+      new float[fd_c_ocr_result->rec_scores.size];
+  memcpy(fd_c_ocr_result->rec_scores.data, ocr_result->rec_scores.data(),
+         sizeof(float) * fd_c_ocr_result->rec_scores.size);
+  // copy cls_scores
+  fd_c_ocr_result->cls_scores.size = ocr_result->cls_scores.size();
+  fd_c_ocr_result->cls_scores.data =
+      new float[fd_c_ocr_result->cls_scores.size];
+  memcpy(fd_c_ocr_result->cls_scores.data, ocr_result->cls_scores.data(),
+         sizeof(float) * fd_c_ocr_result->cls_scores.size);
+  // copy cls_labels
+  fd_c_ocr_result->cls_labels.size = ocr_result->cls_labels.size();
+  fd_c_ocr_result->cls_labels.data =
+      new int32_t[fd_c_ocr_result->cls_labels.size];
+  memcpy(fd_c_ocr_result->cls_labels.data, ocr_result->cls_labels.data(),
+         sizeof(int32_t) * fd_c_ocr_result->cls_labels.size);
+  // copy type
+  fd_c_ocr_result->type = static_cast<FD_C_ResultType>(ocr_result->type);
+  return fd_c_ocr_result;
+}
+
+FD_C_OCRResultWrapper* FD_C_CreateOCRResultWrapperFromData(
+    __fd_keep FD_C_OCRResult* fd_c_ocr_result) {
+  FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper =
+      FD_C_CreateOCRResultWrapper();
+  auto& ocr_result =
+      CHECK_AND_CONVERT_FD_TYPE(OCRResultWrapper, fd_c_ocr_result_wrapper);
+
+  // copy boxes
+  const int boxes_coordinate_dim = 8;
+  ocr_result->boxes.resize(fd_c_ocr_result->boxes.size);
+  for (size_t i = 0; i < fd_c_ocr_result->boxes.size; i++) {
+    for (size_t j = 0; j < boxes_coordinate_dim; j++) {
+      ocr_result->boxes[i][j] = fd_c_ocr_result->boxes.data[i].data[j];
+    }
+  }
+
+  // copy text
+  ocr_result->text.resize(fd_c_ocr_result->text.size);
+  for (size_t i = 0; i < ocr_result->text.size(); i++) {
+    ocr_result->text[i] = std::string(fd_c_ocr_result->text.data[i].data);
+  }
+
+  // copy rec_scores
+  ocr_result->rec_scores.resize(fd_c_ocr_result->rec_scores.size);
+  memcpy(ocr_result->rec_scores.data(), fd_c_ocr_result->rec_scores.data,
+         sizeof(float) * fd_c_ocr_result->rec_scores.size);
+
+  // copy cls_scores
+  ocr_result->cls_scores.resize(fd_c_ocr_result->cls_scores.size);
+  memcpy(ocr_result->cls_scores.data(), fd_c_ocr_result->cls_scores.data,
+         sizeof(float) * fd_c_ocr_result->cls_scores.size);
+
+  // copy cls_labels
+  ocr_result->cls_labels.resize(fd_c_ocr_result->cls_labels.size);
+  memcpy(ocr_result->cls_labels.data(), fd_c_ocr_result->cls_labels.data,
+         sizeof(int32_t) * fd_c_ocr_result->cls_labels.size);
+
+  // copy type
+  ocr_result->type =
+      static_cast<fastdeploy::vision::ResultType>(fd_c_ocr_result->type);
+
+  return fd_c_ocr_result_wrapper;
+}
+
+char* FD_C_OCRResultWrapperStr(FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper) {
+  auto& ocr_result =
+      CHECK_AND_CONVERT_FD_TYPE(OCRResultWrapper, fd_c_ocr_result_wrapper);
+  std::string information = ocr_result->Str();
+  char* cstr = new char[information.length() + 1];
+  std::strcpy(cstr, information.c_str());
+  return cstr;
+}
+
 #ifdef __cplusplus
 }
 #endif

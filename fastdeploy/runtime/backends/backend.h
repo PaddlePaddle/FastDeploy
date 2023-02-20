@@ -58,7 +58,10 @@ class BaseBackend {
   virtual bool Initialized() const { return initialized_; }
 
   virtual bool Init(const RuntimeOption& option) {
-    FDERROR << "Not Implement Yet." << std::endl;
+    FDERROR << "Not Implement for "
+            << option.backend << " in "
+            << option.device << "."
+            << std::endl;
     return false;
   }
 
@@ -89,59 +92,59 @@ class BaseBackend {
     return nullptr;
   }
 
-  benchmark::BenchmarkOption benchmark_option_;  
-  benchmark::BenchmarkResult benchmark_result_; 
+  benchmark::BenchmarkOption benchmark_option_;
+  benchmark::BenchmarkResult benchmark_result_;
 };
 
-/** \brief Macros for Runtime benchmark profiling. 
- * The param 'base_loop' for 'RUNTIME_PROFILE_LOOP_BEGIN' 
- * indicates that the least number of times the loop 
+/** \brief Macros for Runtime benchmark profiling.
+ * The param 'base_loop' for 'RUNTIME_PROFILE_LOOP_BEGIN'
+ * indicates that the least number of times the loop
  * will repeat when profiling mode is not enabled.
- * In most cases, the value should be 1, i.e., results are 
- * obtained by running the inference process once, when 
- * the profile mode is turned off, such as ONNX Runtime, 
- * OpenVINO, TensorRT, Paddle Inference, Paddle Lite, 
- * RKNPU2, SOPHGO etc. 
- * 
+ * In most cases, the value should be 1, i.e., results are
+ * obtained by running the inference process once, when
+ * the profile mode is turned off, such as ONNX Runtime,
+ * OpenVINO, TensorRT, Paddle Inference, Paddle Lite,
+ * RKNPU2, SOPHGO etc.
+ *
  * example code @code
- * // OpenVINOBackend::Infer 
+ * // OpenVINOBackend::Infer
  * RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
- * // do something .... 
+ * // do something ....
  * RUNTIME_PROFILE_LOOP_BEGIN(1)
- * // The codes which wrapped by 'BEGIN(1) ~ END' scope 
+ * // The codes which wrapped by 'BEGIN(1) ~ END' scope
  * // will only run once when profiling mode is not enabled.
- * request_.infer();  
+ * request_.infer();
  * RUNTIME_PROFILE_LOOP_END
- * // do something .... 
+ * // do something ....
  * RUNTIME_PROFILE_LOOP_H2D_D2H_END
- * 
+ *
  * @endcode In this case, No global variables inside a function
- * are wrapped by BEGIN and END, which may be required for 
+ * are wrapped by BEGIN and END, which may be required for
  * subsequent tasks. But, some times we need to set 'base_loop'
  * as 0, such as POROS.
- * 
+ *
  * * example code @code
  * // PorosBackend::Infer
  * RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
- * // do something .... 
+ * // do something ....
  * RUNTIME_PROFILE_LOOP_BEGIN(0) // set 'base_loop' as 0
- * // The codes which wrapped by 'BEGIN(0) ~ END' scope 
+ * // The codes which wrapped by 'BEGIN(0) ~ END' scope
  * // will not run when profiling mode is not enabled.
- * auto poros_outputs = _poros_module->forward(poros_inputs); 
+ * auto poros_outputs = _poros_module->forward(poros_inputs);
  * RUNTIME_PROFILE_LOOP_END
  * // Run another inference beyond the scope of 'BEGIN ~ END'
  * // to get valid outputs for subsequent tasks.
- * auto poros_outputs = _poros_module->forward(poros_inputs); 
+ * auto poros_outputs = _poros_module->forward(poros_inputs);
  * // do something .... will use 'poros_outputs' ...
  * if (poros_outputs.isTensor()) {
  * // ...
  * }
  * RUNTIME_PROFILE_LOOP_H2D_D2H_END
- * 
+ *
  * @endcode In this case, 'poros_outputs' inside a function
- * are wrapped by BEGIN and END, which may be required for 
+ * are wrapped by BEGIN and END, which may be required for
  * subsequent tasks. So, we set 'base_loop' as 0 and lanuch
- * another infer to get the valid outputs beyond the scope 
+ * another infer to get the valid outputs beyond the scope
  * of 'BEGIN ~ END' for subsequent tasks.
  */
 
