@@ -532,6 +532,9 @@ void TrtBackend::AllocateOutputsBuffer(std::vector<FDTensor>* outputs,
 }
 
 bool TrtBackend::BuildTrtEngine() {
+  if (option_.enable_log_info) {
+    FDTrtLogger::Get()->SetLog(true, true);
+  }
   auto config =
       FDUniquePtr<nvinfer1::IBuilderConfig>(builder_->createBuilderConfig());
   if (!config) {
