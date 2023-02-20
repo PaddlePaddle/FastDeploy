@@ -84,11 +84,13 @@ int main(int argc, char* argv[]) {
   runtime_option.SetModelPath(model_file, "", fd::ModelFormat::TORCHSCRIPT);
   runtime_option.UsePorosBackend();
   runtime_option.UseGpu(0);
-  runtime_option.is_dynamic = true;
 
   // Compile runtime
   std::unique_ptr<fd::Runtime> runtime =
       std::unique_ptr<fd::Runtime>(new fd::Runtime());
+
+  runtime->Init(runtime_option);
+
   if (!runtime->Compile(prewarm_datas, runtime_option)) {
     std::cerr << "--- Init FastDeploy Runitme Failed! "
               << "\n--- Model:  " << model_file << std::endl;

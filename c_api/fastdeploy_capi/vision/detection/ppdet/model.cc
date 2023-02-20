@@ -23,7 +23,7 @@ extern "C" {
 
 // PPYOLOE
 
-FD_C_PPYOLOEWrapper* FD_C_CreatesPPYOLOEWrapper(
+FD_C_PPYOLOEWrapper* FD_C_CreatePPYOLOEWrapper(
     const char* model_file, const char* params_file, const char* config_file,
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     const FD_C_ModelFormat model_format) {

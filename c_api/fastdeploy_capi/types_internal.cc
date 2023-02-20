@@ -27,6 +27,11 @@ DECL_AND_IMPLEMENT_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(
 DECL_AND_IMPLEMENT_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(
     DetectionResult, fd_detection_result_wrapper, detection_result)
 
+// OCRResult
+DECL_AND_IMPLEMENT_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(OCRResult,
+                                                        fd_ocr_result_wrapper,
+                                                        ocr_result)
+
 // Models:
 
 // Classification
@@ -119,6 +124,28 @@ DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
 DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(GFL,
                                                                  fd_gfl_wrapper,
                                                                  gfl_model)
+
+// OCR models
+
+// Recognizer
+DECL_AND_IMPLEMENT_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    Recognizer, fd_recognizer_wrapper, recognizer_model);
+
+// DBDetector
+DECL_AND_IMPLEMENT_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    DBDetector, fd_dbdetector_wrapper, dbdetector_model);
+
+// Classifier
+DECL_AND_IMPLEMENT_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    Classifier, fd_classifier_wrapper, classifier_model);
+
+// PPOCRv2
+DECL_AND_IMPLEMENT_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PPOCRv2, fd_ppocrv2_wrapper, ppocrv2_model);
+
+// PPOCRv3
+DECL_AND_IMPLEMENT_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PPOCRv3, fd_ppocrv3_wrapper, ppocrv3_model);
 
 #endif
 
