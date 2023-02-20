@@ -18,6 +18,7 @@
 #ifdef ENABLE_VISION
 #include "fastdeploy_capi/vision/classification/ppcls/model.h"
 #include "fastdeploy_capi/vision/detection/ppdet/model.h"
+#include "fastdeploy_capi/vision/ocr/ppocr/model.h"
 #include "fastdeploy_capi/vision/result.h"
 #include "fastdeploy_capi/vision/visualize.h"
 #endif
