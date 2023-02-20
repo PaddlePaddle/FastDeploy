@@ -271,10 +271,75 @@ bool MaxMinConverter::converter(TensorrtEngine* engine, const torch::jit::Node *
     return true;
 }
 
+/*
+"aten::argmax(Tensor self, int? dim=None, bool keepdim=False) -> (Tensor)"*/
+bool ArgmaxArgminConverter::converter(TensorrtEngine* engine, const torch::jit::Node *node) {
+    at::ArrayRef<const torch::jit::Value*> inputs = node->inputs();
+    POROS_CHECK_TRUE((inputs[0]->type()->isSubtypeOf(c10::TensorType::get())), 
+        "input[0] for ArgmaxArgminConverter is not Tensor as expected");
+
+    // TODO: to imp dim=None
+    POROS_CHECK_TRUE((inputs[1]->type()->isSubtypeOf(c10::IntType::get())), 
+        "input[1] for ArgmaxArgminConverter is not int as expected");
+
+    //extract self
+    auto in_tensor = engine->context().get_tensor(inputs[0]);
+    POROS_CHECK_TRUE((in_tensor != nullptr), "Unable to init input tensor for node: " << *node);
+    auto in_dims = nvdim_to_sizes(in_tensor->getDimensions());
+
+    bool is_dynamic = check_nvtensor_is_dynamic(in_tensor);
+
+    POROS_CHECK_TRUE((in_dims.size() > 1), 
+        "Converter aten::argmax error: At least 2 dimensions are required for input[0].");
+    nvinfer1::ITensor* output_indices = nullptr;
+
+    int64_t dim = 0;
+    dim = engine->context().get_constant(inputs[1]).toInt();
+    dim = dim < 0 ? in_dims.size() + dim : dim;
+    bool keep_dim = engine->context().get_constant(inputs[2]).toBool();
+    uint32_t shiftDim = 1 << dim;
+
+    // nvinfer1::TopKOperation noly support kFLOAT, so this is transfer kINT32 to kFLOAT
+    if (in_tensor->getType() == nvinfer1::DataType::kINT32) {
+        auto id_layer = engine->network()->addIdentity(*in_tensor);
+        id_layer->setOutputType(0, nvinfer1::DataType::kFLOAT);
+        id_layer->setName((layer_info(node) + "_IIdentityLayer_int32_to_float").c_str());
+        in_tensor = id_layer->getOutput(0);
+    }
+
+    nvinfer1::TopKOperation topk_option = (node->kind() == torch::jit::aten::argmax) ?
+                                            nvinfer1::TopKOperation::kMAX : 
+                                            nvinfer1::TopKOperation::kMIN;
+    nvinfer1::ITopKLayer* topk_layer =  engine->network()->addTopK(*in_tensor, topk_option, 1, shiftDim);
+    POROS_CHECK(topk_layer, "Unable to create TopK layer from node: " << *node);
+    topk_layer->setName((layer_info(node) + "_ITopKLayer").c_str());
+    output_indices = topk_layer->getOutput(1);
+
+    // squeeze output dim
+    if (in_tensor->getDimensions().nbDims > 1 && !keep_dim) {
+        auto shuffle_layer = engine->network()->addShuffle(*output_indices);
+        if (is_dynamic) {
+            nvinfer1::ITensor* self_shape_tensor = engine->network()->addShape(*in_tensor)->getOutput(0);
+            nvinfer1::ITensor* squeeze_output_shape = squeeze_nv_shapetensor(engine, self_shape_tensor, dim);
+            shuffle_layer->setInput(1, *squeeze_output_shape);
+        } else {
+            in_dims.erase(in_dims.begin() + dim);
+            nvinfer1::Dims squeeze_output_dims = sizes_to_nvdim(in_dims);
+            shuffle_layer->setReshapeDimensions(squeeze_output_dims);
+        }
+        output_indices = shuffle_layer->getOutput(0);
+    }
+    engine->context().set_tensor(node->outputs()[0], output_indices);
+    LOG(INFO) << "Output tensor shape: " << output_indices->getDimensions();
+    return true;
+}
+
+
 POROS_REGISTER_CONVERTER(TensorrtEngine, MeanConverter);
 POROS_REGISTER_CONVERTER(TensorrtEngine, SumConverter);
 POROS_REGISTER_CONVERTER(TensorrtEngine, ProdConverter);
 POROS_REGISTER_CONVERTER(TensorrtEngine, MaxMinConverter);
+POROS_REGISTER_CONVERTER(TensorrtEngine, ArgmaxArgminConverter);
 
 }  // namespace poros 
 }  // namespace mirana

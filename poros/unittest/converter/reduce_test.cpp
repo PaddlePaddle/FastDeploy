@@ -29,9 +29,16 @@ static void reduce_test_helper(const std::string& graph_IR,
                             std::vector<int64_t> shape1,
                             bool single_input = true,
                             std::vector<int64_t> shape2 = {4, 4},
-                            bool single_output = true){
+                            bool single_output = true,
+                            bool int_flag = false){
     std::vector<at::Tensor> input_data;
-    input_data.push_back(at::randn(shape1, {at::kCUDA}));
+
+    if(int_flag) {
+        auto options_pyt_long = torch::TensorOptions().device(torch::kCUDA, 0).dtype(torch::kLong);
+        input_data.push_back(at::randint(1000, shape1, options_pyt_long));
+    } else {
+        input_data.push_back(at::randn(shape1, {at::kCUDA}));
+    }
 
     if (!single_input){
         input_data.push_back(at::randn(shape2, {at::kCUDA}));
@@ -88,6 +95,24 @@ static std::string gen_min_max_dim_graph(const std::string& op, const std::strin
         %2 : bool = prim::Constant[value=0]()
         %3 : Tensor, %4 : Tensor = aten::)IR" + op + R"IR((%0, %1, %2)
         return (%3, %4))IR";
+}
+
+static std::string gen_argmin_argmax_graph(const std::string& op, const std::string& dim, const std::string& keepdim) {
+    return R"IR(
+      graph(%0 : Tensor):
+        %1 : int = prim::Constant[value=)IR" + dim + R"IR(]()
+        %2 : bool = prim::Constant[value=)IR" + keepdim + R"IR(]()
+        %3 : Tensor = aten::)IR" + op + R"IR((%0, %1, %2)
+        return (%3))IR";
+}
+
+static std::string gen_argmin_argmax_dim_none_graph(const std::string& op, const std::string& keepdim) {
+    return R"IR(
+      graph(%0 : Tensor):
+        %1 : None = prim::Constant()
+        %2 : bool = prim::Constant[value=)IR" + keepdim + R"IR(]()
+        %3 : Tensor = aten::)IR" + op + R"IR((%0, %1, %2)
+        return (%3))IR";
 }
 
 static std::string gen_mean_sum_dim_graph(const std::string& op, const std::string& dim, const std::string& keepdim) {
@@ -360,3 +385,67 @@ TEST(Converters, ATenMinDimDynamicConvertsCorrectly) {
     ASSERT_TRUE(baidu::mirana::poros::testutil::almost_equal(graph_output[0], poros_output[0], 2e-6));
     ASSERT_TRUE(baidu::mirana::poros::testutil::almost_equal(graph_output[1], poros_output[1], 2e-6));
 }
+
+TEST(Converters, ArgmaxConvertersCorrectly) {
+    // aten::argmax(Tensor self, int? dim=None, bool keepdim=False) -> (Tensor)
+    baidu::mirana::poros::ArgmaxArgminConverter argmaxargminconverter;
+
+    const auto graph_IR1 = gen_argmin_argmax_graph("argmax", "0", "0");
+    reduce_test_helper(graph_IR1, &argmaxargminconverter, {4, 4}, true, {}, true);
+    const auto graph_IR2 = gen_argmin_argmax_graph("argmax", "1", "0");
+    reduce_test_helper(graph_IR2, &argmaxargminconverter, {4, 4}, true, {}, true);
+    const auto graph_IR3 = gen_argmin_argmax_graph("argmax", "2", "0");
+    reduce_test_helper(graph_IR3, &argmaxargminconverter, {4, 4, 6}, true, {}, true);
+    const auto graph_IR4 = gen_argmin_argmax_graph("argmax", "3", "0");
+    reduce_test_helper(graph_IR4, &argmaxargminconverter, {4, 4, 6, 8}, true, {}, true);
+
+    const auto graph_IR5 = gen_argmin_argmax_graph("argmax", "0", "1");
+    reduce_test_helper(graph_IR5, &argmaxargminconverter, {4, 4}, true, {}, true);
+    const auto graph_IR6 = gen_argmin_argmax_graph("argmax", "1", "1");
+    reduce_test_helper(graph_IR6, &argmaxargminconverter, {4, 4}, true, {}, true);
+    const auto graph_IR7 = gen_argmin_argmax_graph("argmax", "-1", "1");
+    reduce_test_helper(graph_IR7, &argmaxargminconverter, {4, 4}, true, {}, true);
+    const auto graph_IR8 = gen_argmin_argmax_graph("argmax", "-1", "0");
+    reduce_test_helper(graph_IR8, &argmaxargminconverter, {4, 4}, true, {}, true);
+
+    // test input tensor of int type
+    const auto graph_IR9 = gen_argmin_argmax_graph("argmax", "1", "0");
+    reduce_test_helper(graph_IR9, &argmaxargminconverter, {4, 4}, true, {}, true, true);
+    const auto graph_IR10 = gen_argmin_argmax_graph("argmax", "-1", "0");
+    reduce_test_helper(graph_IR10, &argmaxargminconverter, {4, 4}, true, {}, true, true);
+}
+
+TEST(Converters, ArgminConvertersCorrectly) {
+    // aten::argmin(Tensor self, int? dim=None, bool keepdim=False) -> (Tensor)
+    baidu::mirana::poros::ArgmaxArgminConverter argmaxargminconverter;
+
+    const auto graph_IR1 = gen_argmin_argmax_graph("argmin", "0", "0");
+    reduce_test_helper(graph_IR1, &argmaxargminconverter, {4, 4}, true, {}, true);
+    const auto graph_IR2 = gen_argmin_argmax_graph("argmin", "1", "0");
+    reduce_test_helper(graph_IR2, &argmaxargminconverter, {4, 4}, true, {}, true);
+    const auto graph_IR3 = gen_argmin_argmax_graph("argmin", "2", "0");
+    reduce_test_helper(graph_IR3, &argmaxargminconverter, {4, 4, 6}, true, {}, true);
+    const auto graph_IR4 = gen_argmin_argmax_graph("argmin", "3", "0");
+    reduce_test_helper(graph_IR4, &argmaxargminconverter, {4, 4, 6, 8}, true, {}, true);
+
+    const auto graph_IR5 = gen_argmin_argmax_graph("argmin", "0", "1");
+    reduce_test_helper(graph_IR5, &argmaxargminconverter, {4, 4}, true, {}, true);
+    const auto graph_IR6 = gen_argmin_argmax_graph("argmin", "1", "1");
+    reduce_test_helper(graph_IR6, &argmaxargminconverter, {4, 4}, true, {}, true);
+    const auto graph_IR7 = gen_argmin_argmax_graph("argmin", "-1", "1");
+    reduce_test_helper(graph_IR7, &argmaxargminconverter, {4, 4}, true, {}, true);
+
+    // test input tensor of int type
+    const auto graph_IR9 = gen_argmin_argmax_graph("argmin", "1", "0");
+    reduce_test_helper(graph_IR9, &argmaxargminconverter, {4, 4}, true, {}, true, true);
+    const auto graph_IR10 = gen_argmin_argmax_graph("argmin", "-1", "0");
+    reduce_test_helper(graph_IR10, &argmaxargminconverter, {4, 4}, true, {}, true, true);
+}
+
+// TODO: to imp dim=None
+// TEST(Converters, ArgmaxNoneDimConvertersCorrectly) {
+//     // aten::argmax(Tensor self, int? dim=None, bool keepdim=False) -> (Tensor)
+//     baidu::mirana::poros::ArgmaxArgminConverter argmaxargminconverter;
+//     const auto graph_IR1 = gen_argmin_argmax_dim_none_graph("argmax", "0");
+//     reduce_test_helper(graph_IR1, &argmaxargminconverter, {4, 4}, true, {}, true);
+// }
