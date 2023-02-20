@@ -56,16 +56,20 @@ DBDetectorPreprocessor::DBDetectorPreprocessor() {
   bool is_scale = true;
   normalize_permute_op_ =
       std::make_shared<NormalizeAndPermute>(mean, scale, is_scale);
+
+  RegisterProcessor(resize_op_.get());
+  RegisterProcessor(pad_op_.get());
+  RegisterProcessor(normalize_permute_op_.get());
 }
 
 bool DBDetectorPreprocessor::ResizeImage(FDMat* img, int resize_w, int resize_h,
                                          int max_resize_w, int max_resize_h) {
   resize_op_->SetWidthAndHeight(resize_w, resize_h);
-  (*resize_op_)(img, proc_lib_);
+  (*resize_op_)(img);
 
   pad_op_->SetPaddingSize(0, max_resize_h - resize_h, 0,
                           max_resize_w - resize_w);
-  (*pad_op_)(img, proc_lib_);
+  (*pad_op_)(img);
   return true;
 }
 
@@ -86,7 +90,7 @@ bool DBDetectorPreprocessor::Apply(FDMatBatch* image_batch,
     ResizeImage(mat, batch_det_img_info_[i][2], batch_det_img_info_[i][3],
                 max_resize_w, max_resize_h);
   }
-  (*normalize_permute_op_)(image_batch, proc_lib_);
+  (*normalize_permute_op_)(image_batch);
 
   outputs->resize(1);
   FDTensor* tensor = image_batch->Tensor();

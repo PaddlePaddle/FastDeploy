@@ -23,7 +23,11 @@ namespace vision {
 bool Processor::operator()(FDMat* mat, ProcLib lib) {
   ProcLib target = lib;
   if (lib == ProcLib::DEFAULT) {
-    target = DefaultProcLib::default_lib;
+    if (proc_lib_ == ProcLib::DEFAULT) {
+      target = DefaultProcLib::default_lib;
+    } else {
+      target = proc_lib_;
+    }
   }
   if (target == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV
@@ -55,7 +59,11 @@ bool Processor::operator()(FDMat* mat, ProcLib lib) {
 bool Processor::operator()(FDMatBatch* mat_batch, ProcLib lib) {
   ProcLib target = lib;
   if (lib == ProcLib::DEFAULT) {
-    target = DefaultProcLib::default_lib;
+    if (proc_lib_ == ProcLib::DEFAULT) {
+      target = DefaultProcLib::default_lib;
+    } else {
+      target = proc_lib_;
+    }
   }
   if (target == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV

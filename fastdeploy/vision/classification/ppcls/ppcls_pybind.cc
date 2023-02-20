@@ -25,10 +25,6 @@ void BindPaddleClas(pybind11::module& m) {
       .def("disable_permute",
            [](vision::classification::PaddleClasPreprocessor& self) {
              self.DisablePermute();
-           })
-      .def("initial_resize_on_cpu",
-           [](vision::classification::PaddleClasPreprocessor& self, bool v) {
-             self.InitialResizeOnCpu(v);
            });
 
   pybind11::class_<vision::classification::PaddleClasPostprocessor>(

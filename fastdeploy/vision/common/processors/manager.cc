@@ -43,10 +43,22 @@ void ProcessorManager::UseCuda(bool enable_cv_cuda, int gpu_id) {
     FDASSERT(false, "FastDeploy didn't compile with CV-CUDA.");
 #endif
   }
+  for (size_t i = 0; i < processors_.size(); ++i) {
+    processors_[i]->SetProcLib(proc_lib_);
+  }
 }
 
 bool ProcessorManager::CudaUsed() {
   return (proc_lib_ == ProcLib::CUDA || proc_lib_ == ProcLib::CVCUDA);
+}
+
+void ProcessorManager::InitialResizeOnCpu() {
+  if (processors_[0]->Name().find("Resize") == 0) {
+    processors_[0]->SetProcLib(ProcLib::OPENCV);
+  } else {
+    FDERROR << "InitialResizeOnCpu won't take effect, "
+            << "since the first processor is not Resize" << std::endl;
+  }
 }
 
 bool ProcessorManager::Run(std::vector<FDMat>* images,

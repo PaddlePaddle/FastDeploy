@@ -17,6 +17,7 @@
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/processors/mat.h"
 #include "fastdeploy/vision/common/processors/mat_batch.h"
+#include "fastdeploy/vision/common/processors/base.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -60,6 +61,12 @@ class FASTDEPLOY_DECL ProcessorManager {
 
   int DeviceId() { return device_id_; }
 
+  /** \brief When the initial operator is Resize, and input image size is large,
+   *     maybe it's better to run resize on CPU, because the HostToDevice memcpy
+   *     is time consuming. Call this API to run the initial resize on CPU.
+   */
+  void InitialResizeOnCpu();
+
   /** \brief Process the input images and prepare input tensors for runtime
    *
    * \param[in] images The input image data list, all the elements are returned by cv::imread()
@@ -78,7 +85,9 @@ class FASTDEPLOY_DECL ProcessorManager {
                      std::vector<FDTensor>* outputs) = 0;
 
  protected:
-  ProcLib proc_lib_ = ProcLib::DEFAULT;
+  void RegisterProcessor(Processor* p) {
+    processors_.push_back(p);
+  }
 
  private:
 #ifdef WITH_GPU
@@ -90,6 +99,9 @@ class FASTDEPLOY_DECL ProcessorManager {
   std::vector<FDTensor> output_caches_;
   FDTensor batch_input_cache_;
   FDTensor batch_output_cache_;
+
+  std::vector<Processor*> processors_;
+  ProcLib proc_lib_ = ProcLib::DEFAULT;
 };
 
 }  // namespace vision

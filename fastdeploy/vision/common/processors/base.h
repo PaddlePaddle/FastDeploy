@@ -104,6 +104,13 @@ class FASTDEPLOY_DECL Processor {
 
   virtual bool operator()(FDMatBatch* mat_batch,
                           ProcLib lib = ProcLib::DEFAULT);
+
+  void SetProcLib(ProcLib lib) {
+    proc_lib_ = lib;
+  }
+
+ protected:
+  ProcLib proc_lib_ = ProcLib::DEFAULT;
 };
 
 }  // namespace vision

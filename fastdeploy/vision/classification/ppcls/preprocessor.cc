@@ -78,6 +78,10 @@ bool PaddleClasPreprocessor::BuildPreprocessPipelineFromConfig() {
 
   // Fusion will improve performance
   FuseTransforms(&processors_);
+
+  for (size_t i = 0; i < processors_.size(); ++i) {
+    RegisterProcessor(processors_[i].get());
+  }
   return true;
 }
 
@@ -107,12 +111,7 @@ bool PaddleClasPreprocessor::Apply(FDMatBatch* image_batch,
     return false;
   }
   for (size_t j = 0; j < processors_.size(); ++j) {
-    ProcLib lib = ProcLib::DEFAULT;
-    if (initial_resize_on_cpu_ && j == 0 &&
-        processors_[j]->Name().find("Resize") == 0) {
-      lib = ProcLib::OPENCV;
-    }
-    if (!(*(processors_[j].get()))(image_batch, lib)) {
+    if (!(*(processors_[j].get()))(image_batch)) {
       FDERROR << "Failed to processs image in " << processors_[j]->Name() << "."
               << std::endl;
       return false;
