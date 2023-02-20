@@ -46,22 +46,27 @@ std::array<int, 4> OcrDetectorGetInfo(FDMat* img, int max_size_len) {
    *ratio_w = float(resize_w) / float(w);
    */
 }
-bool OcrDetectorResizeImage(FDMat* img, int resize_w, int resize_h,
-                            int max_resize_w, int max_resize_h) {
-  Resize::Run(img, resize_w, resize_h);
-  std::vector<float> value = {0, 0, 0};
-  Pad::Run(img, 0, max_resize_h - resize_h, 0, max_resize_w - resize_w, value);
-  return true;
-}
 
 DBDetectorPreprocessor::DBDetectorPreprocessor() {
   resize_op_ = std::make_shared<Resize>(-1, -1);
-  pad_op_ = std::make_shared<Pad>(0, 0, 0, 0, {0, 0, 0});
+  std::vector<float> value = {0, 0, 0};
+  pad_op_ = std::make_shared<Pad>(0, 0, 0, 0, value);
   std::vector<float> mean = {0.485f, 0.456f, 0.406f};
   std::vector<float> scale = {0.229f, 0.224f, 0.225f};
   bool is_scale = true;
   normalize_permute_op_ =
       std::make_shared<NormalizeAndPermute>(mean, scale, is_scale);
+}
+
+bool DBDetectorPreprocessor::ResizeImage(FDMat* img, int resize_w, int resize_h,
+                                         int max_resize_w, int max_resize_h) {
+  resize_op_->SetWidthAndHeight(resize_w, resize_h);
+  (*resize_op_)(img, proc_lib_);
+
+  pad_op_->SetPaddingSize(0, max_resize_h - resize_h, 0,
+                          max_resize_w - resize_w);
+  (*pad_op_)(img, proc_lib_);
+  return true;
 }
 
 bool DBDetectorPreprocessor::Apply(FDMatBatch* image_batch,
@@ -78,15 +83,16 @@ bool DBDetectorPreprocessor::Apply(FDMatBatch* image_batch,
   }
   for (size_t i = 0; i < image_batch->mats->size(); ++i) {
     FDMat* mat = &(image_batch->mats->at(i));
-    OcrDetectorResizeImage(mat, batch_det_img_info_[i][2],
-                           batch_det_img_info_[i][3], max_resize_w,
-                           max_resize_h);
-    NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
+    ResizeImage(mat, batch_det_img_info_[i][2], batch_det_img_info_[i][3],
+                max_resize_w, max_resize_h);
   }
+  (*normalize_permute_op_)(image_batch, proc_lib_);
 
   outputs->resize(1);
-  (*outputs)[0] = std::move(*(image_batch->Tensor()));
-  (*outputs)[0].device_id = DeviceId();
+  FDTensor* tensor = image_batch->Tensor();
+  (*outputs)[0].SetExternalData(tensor->Shape(), tensor->Dtype(),
+                                tensor->Data(), tensor->device,
+                                tensor->device_id);
   return true;
 }
 

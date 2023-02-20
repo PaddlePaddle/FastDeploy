@@ -39,6 +39,14 @@ class FASTDEPLOY_DECL Pad : public Processor {
                   const int& right, const std::vector<float>& value,
                   ProcLib lib = ProcLib::DEFAULT);
 
+  bool SetPaddingSize(int top, int bottom, int left, int right) {
+    top_ = top;
+    bottom_ = bottom;
+    left_ = left;
+    right_ = right;
+    return true;
+  }
+
  private:
   int top_;
   int bottom_;

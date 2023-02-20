@@ -25,7 +25,7 @@ namespace ocr {
  */
 class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
  public:
-  DBDetectorPreprocessor::DBDetectorPreprocessor();
+  DBDetectorPreprocessor();
   /** \brief Process the input image and prepare input tensors for runtime
    *
    * \param[in] image_batch The input image batch
@@ -59,6 +59,8 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
   }
 
  private:
+  bool ResizeImage(FDMat* img, int resize_w, int resize_h, int max_resize_w,
+                   int max_resize_h);
   int max_side_len_ = 960;
   std::vector<float> mean_ = {0.485f, 0.456f, 0.406f};
   std::vector<float> scale_ = {0.229f, 0.224f, 0.225f};
@@ -67,7 +69,7 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
 
   std::shared_ptr<Resize> resize_op_;
   std::shared_ptr<Pad> pad_op_;
-  std::shared_ptr<NormalizeAndPermute> resize_op_;
+  std::shared_ptr<NormalizeAndPermute> normalize_permute_op_;
 };
 
 }  // namespace ocr

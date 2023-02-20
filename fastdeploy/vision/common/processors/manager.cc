@@ -31,14 +31,14 @@ void ProcessorManager::UseCuda(bool enable_cv_cuda, int gpu_id) {
   }
   FDASSERT(cudaStreamCreate(&stream_) == cudaSuccess,
            "[ERROR] Error occurs while creating cuda stream.");
-  DefaultProcLib::default_lib = ProcLib::CUDA;
+  proc_lib_ = ProcLib::CUDA;
 #else
   FDASSERT(false, "FastDeploy didn't compile with WITH_GPU.");
 #endif
 
   if (enable_cv_cuda) {
 #ifdef ENABLE_CVCUDA
-    DefaultProcLib::default_lib = ProcLib::CVCUDA;
+    proc_lib_ = ProcLib::CVCUDA;
 #else
     FDASSERT(false, "FastDeploy didn't compile with CV-CUDA.");
 #endif
@@ -46,8 +46,7 @@ void ProcessorManager::UseCuda(bool enable_cv_cuda, int gpu_id) {
 }
 
 bool ProcessorManager::CudaUsed() {
-  return (DefaultProcLib::default_lib == ProcLib::CUDA ||
-          DefaultProcLib::default_lib == ProcLib::CVCUDA);
+  return (proc_lib_ == ProcLib::CUDA || proc_lib_ == ProcLib::CVCUDA);
 }
 
 bool ProcessorManager::Run(std::vector<FDMat>* images,
