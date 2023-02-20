@@ -73,7 +73,7 @@ def compile(module, prewarm_inputs, poros_options):
     Args:
         module (torch.nn.Module / torch.jit.ScriptModule): Source module
         input (list of tensor input): prewarmed data.
-        poros_options(PorosOptions / Dict of settings): compile settings for poros
+        poros_options(PorosOptions): compile settings for poros
     Returns:
         PorosModule: Compiled Module of poros, 
                     when run it will partially execute via inlined engine (which is TensorRT)

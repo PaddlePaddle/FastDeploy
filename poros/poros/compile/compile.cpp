@@ -150,14 +150,14 @@ int Compiler::compile(const torch::jit::Module& origin_module,
         opt_graph = graph_and_ivalues.first;
     }
 
-    //cpu的话 过了预处理就返回
-    if (_options.device == Device::CPU) {
-        merge_graph_to_module(opt_graph, *optimized_module, true);
-        return 0;
-    }
-
     std::shared_ptr<torch::jit::Graph> prewarm_graph = graph_prewarm(opt_graph, prewarm_datas);
     GRAPH_DUMP("prewarmed_module graph:", prewarm_graph);
+
+    //cpu的话，预热后就返回
+    if (_options.device == Device::CPU) {
+        merge_graph_to_module(prewarm_graph, *optimized_module, true);
+        return 0;
+    }
 
     //step2: try to find segments in unfold module
     //划分完子图的模型
