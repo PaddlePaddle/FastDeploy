@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARGS=`getopt -a -o w:n:h:hs -l WITH_GPU:,docker_name:,http_proxy:,https_proxy: -- "$@"`
+ARGS=`getopt -a -o w:n:h:hs:tv -l WITH_GPU:,docker_name:,http_proxy:,https_proxy:,trt_version: -- "$@"`
 
 eval set -- "${ARGS}"
 echo "parse start"
