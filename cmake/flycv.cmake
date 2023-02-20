@@ -35,6 +35,8 @@ set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}"
 
 include_directories(${FLYCV_INC_DIR})
 
+option(WITH_FLYCV_STATIC "Whether to use FlyCV static lib for Android/Linux." OFF)
+
 # ABI check
 if(ANDROID)
   if((NOT ANDROID_ABI MATCHES "armeabi-v7a") AND (NOT ANDROID_ABI MATCHES "arm64-v8a"))

@@ -84,7 +84,6 @@ if(ANDROID)
   option(WITH_JAVA "Whether to build JNI lib for Android." OFF)
   option(WITH_STATIC_LIB "Whether to build FastDeploy static lib." OFF)
 endif()
-option(WITH_FLYCV_STATIC "Whether to use FlyCV static lib for Android/Linux." OFF)
 
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
 option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
