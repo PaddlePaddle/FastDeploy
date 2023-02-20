@@ -34,6 +34,25 @@ int main(int argc, char* argv[]) {
   auto model_ppcls = fastdeploy::vision::classification::PaddleClasModel(
       model_file, params_file, config_file, option);
   fastdeploy::vision::ClassifyResult res;
+  // Run once at least
+  model_ppcls.Predict(im, &res);
+  // 1. Test result diff
+  std::cout << "=============== Test result diff =================\n";
+  // Save result to -> disk.
+  std::string cls_result_path = "ppcls_result.txt";
+  benchmark::ResultManager::SaveClassifyResult(res, cls_result_path);
+  // Load result from <- disk.
+  vision::ClassifyResult res_loaded;
+  benchmark::ResultManager::LoadClassifyResult(&res_loaded, cls_result_path);
+  // Calculate diff between two results.
+  auto cls_diff =
+      benchmark::ResultManager::CalculateDiffStatis(&res, &res_loaded);
+  std::cout << "Labels diff: mean=" << cls_diff.labels.mean
+            << ", max=" << cls_diff.labels.max
+            << ", min=" << cls_diff.labels.min << std::endl;
+  std::cout << "Scores diff: mean=" << cls_diff.scores.mean
+            << ", max=" << cls_diff.scores.max
+            << ", min=" << cls_diff.scores.min << std::endl;
   BENCHMARK_MODEL(model_ppcls, model_ppcls.Predict(im, &res))
 #endif
   return 0;
