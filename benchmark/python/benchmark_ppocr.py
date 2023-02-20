@@ -38,7 +38,7 @@ def parse_arguments():
     parser.add_argument(
         "--rec_label_file",
         required=True,
-        help="Path of Recognization model of PPOCR.")
+        help="Path of Recognization label file of PPOCR.")
     parser.add_argument(
         "--image", type=str, required=False, help="Path of test image file.")
     parser.add_argument(
@@ -272,19 +272,19 @@ if __name__ == '__main__':
         if "OCRv2" in args.model_dir:
             det_option = option
             if args.backend in ["trt", "paddle_trt"]:
-                det_option.set_trt_input_shape(
+                det_option.trt_option.set_shape(
                     "x", [1, 3, 64, 64], [1, 3, 640, 640], [1, 3, 960, 960])
             det_model = fd.vision.ocr.DBDetector(
                 det_model_file, det_params_file, runtime_option=det_option)
             cls_option = option
             if args.backend in ["trt", "paddle_trt"]:
-                cls_option.set_trt_input_shape(
+                cls_option.trt_option.set_shape(
                     "x", [1, 3, 48, 10], [10, 3, 48, 320], [64, 3, 48, 1024])
             cls_model = fd.vision.ocr.Classifier(
                 cls_model_file, cls_params_file, runtime_option=cls_option)
             rec_option = option
             if args.backend in ["trt", "paddle_trt"]:
-                rec_option.set_trt_input_shape(
+                rec_option.trt_option.set_shape(
                     "x", [1, 3, 32, 10], [10, 3, 32, 320], [32, 3, 32, 2304])
             rec_model = fd.vision.ocr.Recognizer(
                 rec_model_file,
@@ -296,19 +296,19 @@ if __name__ == '__main__':
         elif "OCRv3" in args.model_dir:
             det_option = option
             if args.backend in ["trt", "paddle_trt"]:
-                det_option.set_trt_input_shape(
+                det_option.trt_option.set_shape(
                     "x", [1, 3, 64, 64], [1, 3, 640, 640], [1, 3, 960, 960])
             det_model = fd.vision.ocr.DBDetector(
                 det_model_file, det_params_file, runtime_option=det_option)
             cls_option = option
             if args.backend in ["trt", "paddle_trt"]:
-                cls_option.set_trt_input_shape(
+                cls_option.trt_option.set_shape(
                     "x", [1, 3, 48, 10], [10, 3, 48, 320], [64, 3, 48, 1024])
             cls_model = fd.vision.ocr.Classifier(
                 cls_model_file, cls_params_file, runtime_option=cls_option)
             rec_option = option
             if args.backend in ["trt", "paddle_trt"]:
-                rec_option.set_trt_input_shape(
+                rec_option.trt_option.set_shape(
                     "x", [1, 3, 48, 10], [10, 3, 48, 320], [64, 3, 48, 2304])
             rec_model = fd.vision.ocr.Recognizer(
                 rec_model_file,
