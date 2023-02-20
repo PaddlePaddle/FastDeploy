@@ -29,6 +29,10 @@ int main(int argc, char* argv[]) {
   if (FLAGS_backend == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
   }
+  if (FLAGS_backend == "paddle_trt" || FLAGS_backend == "trt") {
+    option.trt_option.SetShape("x", {1, 3, 192, 192}, {1, 3, 192, 192},
+                               {1, 3, 192, 192});
+  }
   auto model_ppseg = fastdeploy::vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option);
   fastdeploy::vision::SegmentationResult res;
