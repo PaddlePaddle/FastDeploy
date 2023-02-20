@@ -156,6 +156,8 @@ PYBIND11_MODULE(@PY_LIBRARY_NAME@, m) {
       "Make programer easier to deploy deeplearning model, save time to save "
       "the world!";
 
+  m.def("set_logger", &SetLogger);
+
   BindFDTensor(m);
   BindRuntime(m);
   BindFDModel(m);
