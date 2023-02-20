@@ -29,11 +29,73 @@ FD_C_Mat FD_C_VisDetection(FD_C_Mat im,
       FD_C_CreateDetectionResultWrapperFromData(fd_c_detection_result);
   auto& detection_result = CHECK_AND_CONVERT_FD_TYPE(
       DetectionResultWrapper, fd_c_detection_result_wrapper);
-  cv::Mat result = fastdeploy::vision::Visualize::VisDetection(
+  cv::Mat result = fastdeploy::vision::VisDetection(
       *(reinterpret_cast<cv::Mat*>(im)), *detection_result, score_threshold,
       line_size, font_size);
   return new cv::Mat(result);
 }
+
+FD_C_Mat FD_C_VisDetectionWithLabel(FD_C_Mat im,
+                                    FD_C_DetectionResult* fd_c_detection_result,
+                                    FD_C_OneDimArrayCstr* labels,
+                                    float score_threshold, int line_size,
+                                    float font_size) {
+  std::vector<std::string> labels_in;
+  for (int i = 0; i < labels->size; i++) {
+    labels_in.emplace_back(labels->data[i].data);
+  }
+  FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper =
+      FD_C_CreateDetectionResultWrapperFromData(fd_c_detection_result);
+  auto& detection_result = CHECK_AND_CONVERT_FD_TYPE(
+      DetectionResultWrapper, fd_c_detection_result_wrapper);
+  cv::Mat result = fastdeploy::vision::VisDetection(
+      *(reinterpret_cast<cv::Mat*>(im)), *detection_result, labels_in,
+      score_threshold, line_size, font_size);
+  return new cv::Mat(result);
+}
+
+FD_C_Mat FD_C_VisClassification(FD_C_Mat im,
+                                FD_C_ClassifyResult* fd_c_classify_result,
+                                int top_k, float score_threshold,
+                                float font_size) {
+  FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper =
+      FD_C_CreateClassifyResultWrapperFromData(fd_c_classify_result);
+  auto& classify_result = CHECK_AND_CONVERT_FD_TYPE(
+      ClassifyResultWrapper, fd_c_classify_result_wrapper);
+  cv::Mat result = fastdeploy::vision::VisClassification(
+      *(reinterpret_cast<cv::Mat*>(im)), *classify_result, top_k,
+      score_threshold, font_size);
+  return new cv::Mat(result);
+}
+
+FD_C_Mat FD_C_VisClassificationWithLabel(
+    FD_C_Mat im, FD_C_ClassifyResult* fd_c_classify_result,
+    FD_C_OneDimArrayCstr* labels, int top_k, float score_threshold,
+    float font_size) {
+  std::vector<std::string> labels_in;
+  for (int i = 0; i < labels->size; i++) {
+    labels_in.emplace_back(labels->data[i].data);
+  }
+  FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper =
+      FD_C_CreateClassifyResultWrapperFromData(fd_c_classify_result);
+  auto& classify_result = CHECK_AND_CONVERT_FD_TYPE(
+      ClassifyResultWrapper, fd_c_classify_result_wrapper);
+  cv::Mat result = fastdeploy::vision::VisClassification(
+      *(reinterpret_cast<cv::Mat*>(im)), *classify_result, labels_in, top_k,
+      score_threshold, font_size);
+  return new cv::Mat(result);
+}
+
+FD_C_Mat FD_C_VisOcr(FD_C_Mat im, FD_C_OCRResult* fd_c_ocr_result) {
+  FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper =
+      FD_C_CreateOCRResultWrapperFromData(fd_c_ocr_result);
+  auto& ocr_result =
+      CHECK_AND_CONVERT_FD_TYPE(OCRResultWrapper, fd_c_ocr_result_wrapper);
+  cv::Mat result = fastdeploy::vision::VisOcr(*(reinterpret_cast<cv::Mat*>(im)),
+                                              *ocr_result);
+  return new cv::Mat(result);
+}
+
 #ifdef __cplusplus
 }
 #endif

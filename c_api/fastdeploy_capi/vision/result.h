@@ -19,6 +19,7 @@
 
 typedef struct FD_C_ClassifyResultWrapper FD_C_ClassifyResultWrapper;
 typedef struct FD_C_DetectionResultWrapper FD_C_DetectionResultWrapper;
+typedef struct FD_C_OCRResultWrapper FD_C_OCRResultWrapper;
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,6 +30,11 @@ typedef struct FD_C_ClassifyResult {
   FD_C_OneDimArrayFloat scores;
   FD_C_ResultType type;
 } FD_C_ClassifyResult;
+
+typedef struct FD_C_OneDimClassifyResult {
+  size_t size;
+  FD_C_ClassifyResult* data;
+} FD_C_OneDimClassifyResult;
 
 typedef struct FD_C_Mask {
   FD_C_OneDimArrayUint8 data;
@@ -49,6 +55,26 @@ typedef struct FD_C_DetectionResult {
   FD_C_Bool contain_masks;
   FD_C_ResultType type;
 } FD_C_DetectionResult;
+
+typedef struct FD_C_OneDimDetectionResult {
+  size_t size;
+  FD_C_DetectionResult* data;
+} FD_C_OneDimDetectionResult;
+
+
+typedef struct FD_C_OCRResult {
+  FD_C_TwoDimArrayInt32 boxes;
+  FD_C_OneDimArrayCstr text;
+  FD_C_OneDimArrayFloat rec_scores;
+  FD_C_OneDimArrayFloat cls_scores;
+  FD_C_OneDimArrayInt32 cls_labels;
+  FD_C_ResultType type;
+} FD_C_OCRResult;
+
+typedef struct FD_C_OneDimOCRResult {
+  size_t size;
+  FD_C_OCRResult* data;
+} FD_C_OneDimOCRResult;
 
 // Classification Results
 
@@ -95,6 +121,16 @@ FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_ClassifyResultWrapper*
 FD_C_CreateClassifyResultWrapperFromData(
     __fd_keep FD_C_ClassifyResult* fd_c_classify_result);
 
+/** \brief Print ClassifyResult formated information
+ *
+ * \param[in] fd_c_classify_result_wrapper pointer to FD_C_ClassifyResultWrapper object
+ * \return Return a string pointer
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern __fd_give char*
+FD_C_ClassifyResultWrapperStr(
+    __fd_keep FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper);
+
 // Detection Results
 
 /** \brief Create a new FD_C_DetectionResultWrapper object
@@ -139,6 +175,73 @@ FD_C_DetectionResultWrapperGetData(
 FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_DetectionResultWrapper*
 FD_C_CreateDetectionResultWrapperFromData(
     __fd_keep FD_C_DetectionResult* fd_c_detection_result);
+
+/** \brief Print DetectionResult formated information
+ *
+ * \param[in] fd_c_detection_result_wrapper pointer to FD_C_DetectionResultWrapper object
+ * \return Return a string pointer
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern __fd_give char*
+FD_C_DetectionResultWrapperStr(
+    __fd_keep FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper);
+
+
+// OCR Results
+
+/** \brief Create a new FD_C_OCRResultWrapper object
+ *
+ * \return Return a pointer to FD_C_OCRResultWrapper object
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_OCRResultWrapper*
+FD_C_CreateOCRResultWrapper();
+
+/** \brief Destroy a FD_C_OCRResultWrapper object
+ *
+ * \param[in] fd_c_ocr_result_wrapper pointer to FD_C_OCRResultWrapper object
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroyOCRResultWrapper(
+    __fd_take FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper);
+
+/** \brief Destroy a FD_C_OCRResult object
+ *
+ * \param[in] fd_c_ocr_result pointer to FD_C_OCRResult object
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroyOCRResult(
+    __fd_take FD_C_OCRResult* fd_c_ocr_result);
+
+/** \brief Get a FD_C_OCRResult object from FD_C_OCRResultWrapper object
+ *
+ * \param[in] fd_c_ocr_result_wrapper pointer to FD_C_OCRResultWrapper object
+ * \return Return a pointer to FD_C_OCRResult object
+ */
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_OCRResult*
+FD_C_OCRResultWrapperGetData(
+    __fd_keep FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper);
+
+/** \brief Create a new FD_C_OCRResultWrapper object from FD_C_OCRResult object
+ *
+ * \param[in] fd_c_ocr_result pointer to FD_C_OCRResult object
+ * \return Return a pointer to FD_C_OCRResultWrapper object
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_OCRResultWrapper*
+FD_C_CreateOCRResultWrapperFromData(
+    __fd_keep FD_C_OCRResult* fd_c_ocr_result);
+
+/** \brief Print OCRResult formated information
+ *
+ * \param[in] fd_c_ocr_result_wrapper pointer to FD_C_OCRResultWrapper object
+ * \return Return a string pointer
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern __fd_give char*
+FD_C_OCRResultWrapperStr(
+    __fd_keep FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper);
+
 
 #ifdef __cplusplus
 }  // extern "C"

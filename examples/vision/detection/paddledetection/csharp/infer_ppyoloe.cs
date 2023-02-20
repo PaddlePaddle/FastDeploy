@@ -44,13 +44,16 @@ namespace Test
             }else{
                 runtimeoption.UseGpu();
             }
-            vision.detection.PPYOLOE model = new vision.detection.PPYOLOE(model_file, params_file, config_file, runtimeoption, ModelFormat.PADDLE);
+            fastdeploy.vision.detection.PPYOLOE model = new fastdeploy.vision.detection.PPYOLOE(model_file, params_file, config_file, runtimeoption, ModelFormat.PADDLE);
+            if(!model.Initialized()){
+                Console.WriteLine("Failed to initialize.\n");
+            }
             Mat image = Cv2.ImRead(image_path);
-            vision.DetectionResult res = model.Predict(image);
-            Mat res_img = vision.Visualize.VisDetection(image, res, 0, 1, 0.5f);
+            fastdeploy.vision.DetectionResult res = model.Predict(image);
+            Console.WriteLine(res.ToString());
+            Mat res_img = fastdeploy.vision.Visualize.VisDetection(image, res, 0, 1, 0.5f);
             Cv2.ImShow("result.png", res_img);
             Cv2.WaitKey(0);
-
         }
 
     }
