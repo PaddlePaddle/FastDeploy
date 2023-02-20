@@ -23,10 +23,11 @@ def sort_boxes(boxes):
 
 
 class DBDetectorPreprocessor:
-    def __init__(self):
+    def __init__(self, mean=[0.485, 0.456, 0.406],
+                 scale=[0.229, 0.224, 0.225]):
         """Create a preprocessor for DBDetectorModel
         """
-        self._preprocessor = C.vision.ocr.DBDetectorPreprocessor()
+        self._preprocessor = C.vision.ocr.DBDetectorPreprocessor(mean, scale)
 
     def run(self, input_ims):
         """Preprocess input images for DBDetectorModel
@@ -44,36 +45,6 @@ class DBDetectorPreprocessor:
         assert isinstance(
             value, int), "The value to set `max_side_len` must be type of int."
         self._preprocessor.max_side_len = value
-
-    @property
-    def is_scale(self):
-        return self._preprocessor.is_scale
-
-    @is_scale.setter
-    def is_scale(self, value):
-        assert isinstance(
-            value, bool), "The value to set `is_scale` must be type of bool."
-        self._preprocessor.is_scale = value
-
-    @property
-    def scale(self):
-        return self._preprocessor.scale
-
-    @scale.setter
-    def scale(self, value):
-        assert isinstance(
-            value, list), "The value to set `scale` must be type of list."
-        self._preprocessor.scale = value
-
-    @property
-    def mean(self):
-        return self._preprocessor.mean
-
-    @mean.setter
-    def mean(self, value):
-        assert isinstance(
-            value, list), "The value to set `mean` must be type of list."
-        self._preprocessor.mean = value
 
 
 class DBDetectorPostprocessor:
@@ -174,6 +145,7 @@ class DBDetector(FastDeployModel):
         """Clone OCR detection model object
         :return: a new OCR detection model object
         """
+
         class DBDetectorClone(DBDetector):
             def __init__(self, model):
                 self._model = model
@@ -421,6 +393,7 @@ class Classifier(FastDeployModel):
         """Clone OCR classification model object
         :return: a new OCR classification model object
         """
+
         class ClassifierClone(Classifier):
             def __init__(self, model):
                 self._model = model
@@ -629,6 +602,7 @@ class Recognizer(FastDeployModel):
         """Clone OCR recognition model object
         :return: a new OCR recognition model object
         """
+
         class RecognizerClone(Recognizer):
             def __init__(self, model):
                 self._model = model
@@ -734,7 +708,7 @@ class PPOCRv3(FastDeployModel):
         assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None."
         if cls_model is None:
             self.system_ = C.vision.ocr.PPOCRv3(det_model._model,
-                                               rec_model._model)
+                                                rec_model._model)
         else:
             self.system_ = C.vision.ocr.PPOCRv3(
                 det_model._model, cls_model._model, rec_model._model)
@@ -743,6 +717,7 @@ class PPOCRv3(FastDeployModel):
         """Clone PPOCRv3 pipeline object
         :return: a new PPOCRv3 pipeline object
         """
+
         class PPOCRv3Clone(PPOCRv3):
             def __init__(self, system):
                 self.system_ = system
@@ -809,7 +784,7 @@ class PPOCRv2(FastDeployModel):
         assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None."
         if cls_model is None:
             self.system_ = C.vision.ocr.PPOCRv2(det_model._model,
-                                               rec_model._model)
+                                                rec_model._model)
         else:
             self.system_ = C.vision.ocr.PPOCRv2(
                 det_model._model, cls_model._model, rec_model._model)
@@ -818,6 +793,7 @@ class PPOCRv2(FastDeployModel):
         """Clone PPOCRv3 pipeline object
         :return: a new PPOCRv3 pipeline object
         """
+
         class PPOCRv2Clone(PPOCRv2):
             def __init__(self, system):
                 self.system_ = system

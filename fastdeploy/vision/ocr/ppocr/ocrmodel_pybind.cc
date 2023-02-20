@@ -25,17 +25,10 @@ void BindPPOCRModel(pybind11::module& m) {
   // DBDetector
   pybind11::class_<vision::ocr::DBDetectorPreprocessor>(
       m, "DBDetectorPreprocessor")
-      .def(pybind11::init<>())
+      .def(pybind11::init<std::vector<float>, std::vector<float>>())
       .def_property("max_side_len",
                     &vision::ocr::DBDetectorPreprocessor::GetMaxSideLen,
                     &vision::ocr::DBDetectorPreprocessor::SetMaxSideLen)
-      .def_property("mean", &vision::ocr::DBDetectorPreprocessor::GetMean,
-                    &vision::ocr::DBDetectorPreprocessor::SetMean)
-      .def_property("scale", &vision::ocr::DBDetectorPreprocessor::GetScale,
-                    &vision::ocr::DBDetectorPreprocessor::SetScale)
-      .def_property("is_scale",
-                    &vision::ocr::DBDetectorPreprocessor::GetIsScale,
-                    &vision::ocr::DBDetectorPreprocessor::SetIsScale)
       .def("run", [](vision::ocr::DBDetectorPreprocessor& self,
                      std::vector<pybind11::array>& im_list) {
         std::vector<vision::FDMat> images;

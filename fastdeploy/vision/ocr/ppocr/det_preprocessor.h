@@ -25,7 +25,9 @@ namespace ocr {
  */
 class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
  public:
-  DBDetectorPreprocessor();
+  DBDetectorPreprocessor(
+      const std::vector<float>& mean = {0.485f, 0.456f, 0.406f},
+      const std::vector<float>& std = {0.229f, 0.224f, 0.225f});
   /** \brief Process the input image and prepare input tensors for runtime
    *
    * \param[in] image_batch The input image batch
@@ -39,21 +41,6 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
   /// Get max_side_len of the detection preprocess
   int GetMaxSideLen() const { return max_side_len_; }
 
-  /// Set mean value for the image normalization in detection preprocess
-  void SetMean(const std::vector<float>& mean) { mean_ = mean; }
-  /// Get mean value of the image normalization in detection preprocess
-  std::vector<float> GetMean() const { return mean_; }
-
-  /// Set scale value for the image normalization in detection preprocess
-  void SetScale(const std::vector<float>& scale) { scale_ = scale; }
-  /// Get scale value of the image normalization in detection preprocess
-  std::vector<float> GetScale() const { return scale_; }
-
-  /// Set is_scale for the image normalization in detection preprocess
-  void SetIsScale(bool is_scale) { is_scale_ = is_scale; }
-  /// Get is_scale of the image normalization in detection preprocess
-  bool GetIsScale() const { return is_scale_; }
-
   const std::vector<std::array<int, 4>>* GetBatchImgInfo() {
     return &batch_det_img_info_;
   }
@@ -62,11 +49,7 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
   bool ResizeImage(FDMat* img, int resize_w, int resize_h, int max_resize_w,
                    int max_resize_h);
   int max_side_len_ = 960;
-  std::vector<float> mean_ = {0.485f, 0.456f, 0.406f};
-  std::vector<float> scale_ = {0.229f, 0.224f, 0.225f};
-  bool is_scale_ = true;
   std::vector<std::array<int, 4>> batch_det_img_info_;
-
   std::shared_ptr<Resize> resize_op_;
   std::shared_ptr<Pad> pad_op_;
   std::shared_ptr<NormalizeAndPermute> normalize_permute_op_;
