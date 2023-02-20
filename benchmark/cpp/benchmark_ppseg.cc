@@ -26,12 +26,19 @@ int main(int argc, char* argv[]) {
   auto im = cv::imread(FLAGS_image);
   auto model_file = FLAGS_model + sep + "model.pdmodel";
   auto params_file = FLAGS_model + sep + "model.pdiparams";
-  auto config_file = FLAGS_model + sep + "infer_cfg.yml";
-  auto model_ppyolov8 = fastdeploy::vision::detection::PaddleYOLOv8(
+  auto config_file = FLAGS_model + sep + "deploy.yaml";
+  if (FLAGS_backend == "paddle_trt") {
+    option.paddle_infer_option.collect_trt_shape = true;
+  }
+  if (FLAGS_backend == "paddle_trt" || FLAGS_backend == "trt") {
+    option.trt_option.SetShape("x", {1, 3, 192, 192}, {1, 3, 192, 192},
+                               {1, 3, 192, 192});
+  }
+  auto model_ppseg = fastdeploy::vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option);
-  fastdeploy::vision::DetectionResult res;
-  BENCHMARK_MODEL(model_ppyolov8, model_ppyolov8.Predict(im, &res))
-  auto vis_im = fastdeploy::vision::VisDetection(im, res);
+  fastdeploy::vision::SegmentationResult res;
+  BENCHMARK_MODEL(model_ppseg, model_ppseg.Predict(im, &res))
+  auto vis_im = fastdeploy::vision::VisSegmentation(im, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 #endif

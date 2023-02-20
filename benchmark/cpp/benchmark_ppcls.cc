@@ -17,6 +17,7 @@
 #include "option.h"
 
 int main(int argc, char* argv[]) {
+#if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Initialization
   auto option = fastdeploy::RuntimeOption();
   if (!CreateRuntimeOption(&option, argc, argv, true)) {
@@ -24,7 +25,9 @@ int main(int argc, char* argv[]) {
   }
   auto im = cv::imread(FLAGS_image);
   // Set max_batch_size 1 for best performance
-  option.trt_option.max_batch_size = 1;
+  if (FLAGS_backend == "paddle_trt") {
+    option.trt_option.max_batch_size = 1;
+  }
   auto model_file = FLAGS_model + sep + "inference.pdmodel";
   auto params_file = FLAGS_model + sep + "inference.pdiparams";
   auto config_file = FLAGS_model + sep + "inference_cls.yaml";
@@ -32,5 +35,6 @@ int main(int argc, char* argv[]) {
       model_file, params_file, config_file, option);
   fastdeploy::vision::ClassifyResult res;
   BENCHMARK_MODEL(model_ppcls, model_ppcls.Predict(im, &res))
+#endif
   return 0;
 }
