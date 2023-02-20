@@ -17,6 +17,7 @@
 #include "option.h"
 
 int main(int argc, char* argv[]) {
+#if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Initialization
   auto option = fastdeploy::RuntimeOption();
   if (!CreateRuntimeOption(&option, argc, argv, true)) {
@@ -34,5 +35,6 @@ int main(int argc, char* argv[]) {
       model_file, params_file, config_file, option);
   fastdeploy::vision::ClassifyResult res;
   BENCHMARK_MODEL(model_ppcls, model_ppcls.Predict(im, &res))
+#endif
   return 0;
 }

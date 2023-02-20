@@ -17,6 +17,7 @@
 #include "option.h"
 
 int main(int argc, char* argv[]) {
+#if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Initialization
   auto option = fastdeploy::RuntimeOption();
   if (!CreateRuntimeOption(&option, argc, argv, true)) {
@@ -37,5 +38,9 @@ int main(int argc, char* argv[]) {
       model_file, params_file, config_file, option);
   fastdeploy::vision::SegmentationResult res;
   BENCHMARK_MODEL(model_ppseg, model_ppseg.Predict(im, &res))
+  auto vis_im = fastdeploy::vision::VisSegmentation(im, res, 0.5);
+  cv::imwrite("vis_result.jpg", vis_im);
+  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+#endif
   return 0;
 }
