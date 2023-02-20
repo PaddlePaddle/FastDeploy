@@ -20,7 +20,7 @@ using fastdeploy;
 
 namespace Test
 {
-    public class TestPPYOLOE
+    public class TestPaddleClas
     {
         public static void Main(string[] args)
         {
@@ -34,9 +34,9 @@ namespace Test
             }
             string model_dir = args[0];
             string image_path = args[1];
-            string model_file = model_dir + "\\" + "model.pdmodel";
-            string params_file = model_dir + "\\" + "model.pdiparams";
-            string config_file = model_dir + "\\" + "infer_cfg.yml";
+            string model_file = model_dir + "\\" + "inference.pdmodel";
+            string params_file = model_dir + "\\" + "inference.pdiparams";
+            string config_file = model_dir + "\\" + "inference_cls.yaml";
             RuntimeOption runtimeoption = new RuntimeOption();
             int device_option = Int32.Parse(args[2]);
             if(device_option==0){
@@ -44,16 +44,14 @@ namespace Test
             }else{
                 runtimeoption.UseGpu();
             }
-            fastdeploy.vision.detection.PPYOLOE model = new fastdeploy.vision.detection.PPYOLOE(model_file, params_file, config_file, runtimeoption, ModelFormat.PADDLE);
+            fastdeploy.vision.classification.PaddleClasModel model = new fastdeploy.vision.classification.PaddleClasModel(model_file, params_file, config_file, runtimeoption, ModelFormat.PADDLE);
             if(!model.Initialized()){
                 Console.WriteLine("Failed to initialize.\n");
             }
             Mat image = Cv2.ImRead(image_path);
-            fastdeploy.vision.DetectionResult res = model.Predict(image);
+            fastdeploy.vision.ClassifyResult res = model.Predict(image);
             Console.WriteLine(res.ToString());
-            Mat res_img = fastdeploy.vision.Visualize.VisDetection(image, res, 0, 1, 0.5f);
-            Cv2.ImShow("result.png", res_img);
-            Cv2.WaitKey(0);
+
         }
 
     }
