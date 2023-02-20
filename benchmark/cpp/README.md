@@ -70,7 +70,6 @@ make install
 cd ..  
 export FD_GPU_SDK=${PWD}/build/compiled_fastdeploy_sdk
 ```  
-
 ### 3.3 编译 Benchmark 示例  
 ```bash  
 cd benchmark/cpp
@@ -93,37 +92,42 @@ tar -zxvf yolov8_s_500e_coco.tgz
 - 运行 yolov8 benchmark 示例  
 
 ```bash  
+
+# 统计性能  
 # CPU
 # Paddle Inference
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device cpu --cpu_thread_nums 8 --backend paddle --profile_mode runtime --collect_memory_info
+./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device cpu --cpu_thread_nums 8 --backend paddle --profile_mode runtime
 
 # ONNX Runtime
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device cpu --cpu_thread_nums 8 --backend ort --profile_mode runtime --collect_memory_info
+./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device cpu --cpu_thread_nums 8 --backend ort --profile_mode runtime
 
 # OpenVINO
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device cpu --cpu_thread_nums 8 --backend ov --profile_mode runtime --collect_memory_info
+./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device cpu --cpu_thread_nums 8 --backend ov --profile_mode runtime
 
 # GPU
 # Paddle Inference
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend paddle --profile_mode runtime --warmup 200 --repeat 2000 --collect_memory_info
+./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend paddle --profile_mode runtime --warmup 200 --repeat 2000
 
 # Paddle Inference + TensorRT
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend paddle_trt --profile_mode runtime --warmup 200 --repeat 2000 --collect_memory_info
+./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend paddle_trt --profile_mode runtime --warmup 200 --repeat 2000
 
 # Paddle Inference + TensorRT + FP16
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend paddle --profile_mode runtime --warmup 200 --repeat 2000 --collect_memory_info --use_fp16
+./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend paddle --profile_mode runtime --warmup 200 --repeat 2000 --use_fp16
 
 # ONNX Runtime
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend ort --profile_mode runtime --warmup 200 --repeat 2000 --collect_memory_info
+./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend ort --profile_mode runtime --warmup 200 --repeat 2000
 
 # TensorRT
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend paddle --profile_mode runtime --warmup 200 --repeat 2000 --collect_memory_info
+./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend paddle --profile_mode runtime --warmup 200 --repeat 2000
 
 # TensorRT + FP16
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend trt --profile_mode runtime --warmup 200 --repeat 2000 --collect_memory_info --use_fp16
+./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend trt --profile_mode runtime --warmup 200 --repeat 2000 --use_fp16
 
+# 统计内存显存占用  
+# 增加--collect_memory_info选项
+./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device cpu --cpu_thread_nums 8 --backend paddle --profile_mode runtime --collect_memory_info
 ```
-更多参数设置，请参考[参数设置说明](#参数设置说明)
+注意，为避免对性能统计产生影响，测试性能时，最好不要开启内存显存统计的功能，当指定--collect_memory_info参数时，只有内存显存参数是稳定可靠的。更多参数设置，请参考[参数设置说明](#参数设置说明)
 
 
 ## 4. ARM CPU 环境下运行 Benchmark
