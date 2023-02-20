@@ -13,18 +13,27 @@
 // limitations under the License.
 
 #include "fastdeploy/utils/utils.h"
+
 #include <sstream>
 
 namespace fastdeploy {
 
+bool FDLogger::enable_info = true;
+bool FDLogger::enable_warning = true;
+
+void SetLogger(bool enable_info, bool enable_warning) {
+  FDLogger::enable_info = enable_info;
+  FDLogger::enable_warning = enable_warning;
+}
+
 FDLogger::FDLogger(bool verbose, const std::string& prefix) {
   verbose_ = verbose;
   line_ = "";
-#ifdef __ANDROID__  
+#ifdef __ANDROID__
   prefix_ = std::string("[FastDeploy]") + prefix;
 #else
   prefix_ = prefix;
-#endif  
+#endif
 }
 
 FDLogger& FDLogger::operator<<(std::ostream& (*os)(std::ostream&)) {
