@@ -93,11 +93,11 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
       << __REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
 
 #define FDWARNING                                                              \
-  FDLogger(FDLogger::enable_warning, "[WARNING]")                              \
+  FDLogger(fastdeploy::FDLogger::enable_warning, "[WARNING]")                  \
       << __REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
 
 #define FDINFO                                                                 \
-  FDLogger(FDLogger::enable_info, "[INFO]")                                    \
+  FDLogger(fastdeploy::FDLogger::enable_info, "[INFO]")                        \
                            << __REL_FILE__ << "(" << __LINE__                  \
                            << ")::" << __FUNCTION__ << "\t"
 
