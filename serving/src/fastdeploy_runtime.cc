@@ -230,7 +230,10 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                   ParseBoolValue(value_string, &pd_enable_mkldnn));
               runtime_options_->SetPaddleMKLDNN(pd_enable_mkldnn);
             } else if (param_key == "use_paddle_log") {
-              runtime_options_->EnablePaddleLogInfo();
+              bool use_paddle_log;
+              THROW_IF_BACKEND_MODEL_ERROR(
+                  ParseBoolValue(value_string, &use_paddle_log));
+              runtime_options_->paddle_infer_option.enable_log_info = use_paddle_log;
             } else if (param_key == "num_streams") {
               int num_streams;
               THROW_IF_BACKEND_MODEL_ERROR(
@@ -241,6 +244,8 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                   ParseBoolValue(value_string, &is_clone_));
             } else if (param_key == "use_ipu") {
               // runtime_options_->UseIpu();
+            } else if (param_key == "encryption_key") {
+              runtime_options_->SetEncryptionKey(value_string);
             }
           }
         }
@@ -312,10 +317,15 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
               } else if (param_key == "use_paddle") {
                 runtime_options_->EnablePaddleToTrt();
               } else if (param_key == "use_paddle_log") {
-                runtime_options_->EnablePaddleLogInfo();
+                bool use_paddle_log;
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &use_paddle_log));
+                runtime_options_->paddle_infer_option.enable_log_info = use_paddle_log;
               } else if (param_key == "is_clone") {
                 THROW_IF_BACKEND_MODEL_ERROR(
                     ParseBoolValue(value_string, &is_clone_));
+              } else if (param_key == "encryption_key") {
+                runtime_options_->SetEncryptionKey(value_string);
               }
             }
           }

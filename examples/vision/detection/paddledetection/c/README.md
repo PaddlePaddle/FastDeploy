@@ -78,7 +78,7 @@ void FD_C_RuntimeOptionWrapperUseGpu(
 
 ```c
 
-FD_C_PPYOLOEWrapper* FD_C_CreatesPPYOLOEWrapper(
+FD_C_PPYOLOEWrapper* FD_C_CreatePPYOLOEWrapper(
     const char* model_file, const char* params_file, const char* config_file,
     FD_C_RuntimeOptionWrapper* runtime_option,
     const FD_C_ModelFormat model_format)
@@ -137,7 +137,7 @@ FD_C_Bool FD_C_Imwrite(const char* savepath,  FD_C_Mat img);
 ```c
 FD_C_Bool FD_C_PPYOLOEWrapperPredict(
     __fd_take FD_C_PPYOLOEWrapper* fd_c_ppyoloe_wrapper, FD_C_Mat img,
-    FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper)
+    FD_C_DetectionResult* fd_c_detection_result)
 ```
 >
 > Predict an image, and generate detection result.
@@ -145,36 +145,10 @@ FD_C_Bool FD_C_PPYOLOEWrapperPredict(
 > **Params**
 > * **fd_c_ppyoloe_wrapper**(FD_C_PPYOLOEWrapper*): pointer to manipulate PPYOLOE object
 > * **img**（FD_C_Mat）: pointer to cv::Mat object, which can be obained by FD_C_Imread interface
-> * **result**（FD_C_DetectionResultWrapper*): Detection result, including detection box and confidence of each box. Refer to [Vision Model Prediction Result](../../../../../docs/api/vision_results/) for DetectionResult
+> * **fd_c_detection_result**FD_C_DetectionResult*): Detection result, including detection box and confidence of each box. Refer to [Vision Model Prediction Result](../../../../../docs/api/vision_results/) for DetectionResult
 
 
 #### Result
-
-```c
-FD_C_DetectionResultWrapper* FD_C_CreateDetectionResultWrapper();
-```
->
-> Create a DetectionResult object to keep the detection result，return a pointer to manipulate it.
->
-> **Return**
-> * **fd_c_detection_result_wrapper**(FD_C_DetectionResultWrapper*): pointer to manipulate DetectionResult object
-
-
-
-```c
-FD_C_DetectionResult* FD_C_DetectionResultWrapperGetData(
-     FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper)
-```
->
-> Get the C DetectionResult structure from FD_C_DetectionResultWrapper, which can access the fileds directly.
->
-> **Params**
-> * **fd_c_detection_result_wrapper**(FD_C_DetectionResultWrapper*): pointer to manipulate DetectionResult object
->
-> **Return**
-> * **fd_c_detection_result**(FD_C_DetectionResult*): pointer to C DetectionResult structure
-
-
 
 ```c
 FD_C_Mat FD_C_VisDetection(FD_C_Mat im, FD_C_DetectionResult* fd_detection_result,
