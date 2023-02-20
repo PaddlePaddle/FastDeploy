@@ -69,36 +69,17 @@ FD_C_Bool FD_C_PaddleClasModelWrapperInitialized(
   return paddleclas_model->Initialized();
 }
 
-FD_C_ClassifyResult* FD_C_ClassifyResultToC(
-    fastdeploy::vision::ClassifyResult* classify_result) {
-  // Internal use, transfer fastdeploy::vision::ClassifyResult to
-  // FD_C_ClassifyResult
-  FD_C_ClassifyResult* fd_c_classify_result_data = new FD_C_ClassifyResult();
-  // copy label_ids
-  fd_c_classify_result_data->label_ids.size = classify_result->label_ids.size();
-  fd_c_classify_result_data->label_ids.data =
-      new int32_t[fd_c_classify_result_data->label_ids.size];
-  memcpy(fd_c_classify_result_data->label_ids.data,
-         classify_result->label_ids.data(),
-         sizeof(int32_t) * fd_c_classify_result_data->label_ids.size);
-  // copy scores
-  fd_c_classify_result_data->scores.size = classify_result->scores.size();
-  fd_c_classify_result_data->scores.data =
-      new float[fd_c_classify_result_data->scores.size];
-  memcpy(fd_c_classify_result_data->scores.data, classify_result->scores.data(),
-         sizeof(float) * fd_c_classify_result_data->scores.size);
-  fd_c_classify_result_data->type =
-      static_cast<FD_C_ResultType>(classify_result->type);
-  return fd_c_classify_result_data;
-}
-
 FD_C_Bool FD_C_PaddleClasModelWrapperBatchPredict(
     FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper,
     FD_C_OneDimMat imgs, FD_C_OneDimClassifyResult* results) {
   std::vector<cv::Mat> imgs_vec;
+  std::vector<FD_C_ClassifyResultWrapper*> results_wrapper_out;
   std::vector<fastdeploy::vision::ClassifyResult> results_out;
   for (int i = 0; i < imgs.size; i++) {
     imgs_vec.push_back(*(reinterpret_cast<cv::Mat*>(imgs.data[i])));
+    FD_C_ClassifyResultWrapper* fd_classify_result_wrapper =
+        FD_C_CreateClassifyResultWrapper();
+    results_wrapper_out.push_back(fd_classify_result_wrapper);
   }
   auto& paddleclas_model = CHECK_AND_CONVERT_FD_TYPE(
       PaddleClasModelWrapper, fd_c_paddleclas_model_wrapper);
@@ -108,7 +89,12 @@ FD_C_Bool FD_C_PaddleClasModelWrapperBatchPredict(
     results->size = results_out.size();
     results->data = new FD_C_ClassifyResult[results->size];
     for (int i = 0; i < results_out.size(); i++) {
-      results->data[i] = *FD_C_ClassifyResultToC(&results_out[i]);
+      (*CHECK_AND_CONVERT_FD_TYPE(ClassifyResultWrapper,
+                                  results_wrapper_out[i])) =
+          std::move(results_out[i]);
+      results->data[i] =
+          *(FD_C_ClassifyResultWrapperGetData(results_wrapper_out[i]));
+      FD_C_DestroyClassifyResultWrapper(results_wrapper_out[i]);
     }
   }
   return successful;

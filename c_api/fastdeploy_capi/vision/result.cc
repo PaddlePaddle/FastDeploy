@@ -398,6 +398,122 @@ char* FD_C_OCRResultWrapperStr(FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper) {
   return cstr;
 }
 
+// Segmentation Results
+
+FD_C_SegmentationResultWrapper* FD_C_CreateSegmentationResultWrapper() {
+  FD_C_SegmentationResultWrapper* fd_c_segmentation_result_wrapper =
+      new FD_C_SegmentationResultWrapper();
+  fd_c_segmentation_result_wrapper->segmentation_result =
+      std::unique_ptr<fastdeploy::vision::SegmentationResult>(
+          new fastdeploy::vision::SegmentationResult());
+  return fd_c_segmentation_result_wrapper;
+}
+
+void FD_C_DestroySegmentationResultWrapper(
+    __fd_take FD_C_SegmentationResultWrapper*
+        fd_c_segmentation_result_wrapper) {
+  delete fd_c_segmentation_result_wrapper;
+}
+
+void FD_C_DestroySegmentationResult(
+    __fd_take FD_C_SegmentationResult* fd_c_segmentation_result) {
+  if (fd_c_segmentation_result == nullptr) return;
+  // delete label_map
+  delete[] fd_c_segmentation_result->label_map.data;
+  // delete score_map
+  delete[] fd_c_segmentation_result->score_map.data;
+  // delete shape
+  delete[] fd_c_segmentation_result->shape.data;
+  delete fd_c_segmentation_result;
+}
+
+FD_C_SegmentationResult* FD_C_SegmentationResultWrapperGetData(
+    __fd_keep FD_C_SegmentationResultWrapper*
+        fd_c_segmentation_result_wrapper) {
+  auto& segmentation_result = CHECK_AND_CONVERT_FD_TYPE(
+      SegmentationResultWrapper, fd_c_segmentation_result_wrapper);
+  FD_C_SegmentationResult* fd_c_segmentation_result =
+      new FD_C_SegmentationResult();
+
+  // copy label_map
+  fd_c_segmentation_result->label_map.size =
+      segmentation_result->label_map.size();
+  fd_c_segmentation_result->label_map.data =
+      new uint8_t[fd_c_segmentation_result->label_map.size];
+  memcpy(fd_c_segmentation_result->label_map.data,
+         segmentation_result->label_map.data(),
+         sizeof(uint8_t) * fd_c_segmentation_result->label_map.size);
+  // copy score_map
+  fd_c_segmentation_result->score_map.size =
+      segmentation_result->score_map.size();
+  fd_c_segmentation_result->score_map.data =
+      new float[fd_c_segmentation_result->score_map.size];
+  memcpy(fd_c_segmentation_result->score_map.data,
+         segmentation_result->score_map.data(),
+         sizeof(float) * fd_c_segmentation_result->score_map.size);
+  // copy shape
+  fd_c_segmentation_result->shape.size = segmentation_result->shape.size();
+  fd_c_segmentation_result->shape.data =
+      new int64_t[fd_c_segmentation_result->shape.size];
+  memcpy(fd_c_segmentation_result->shape.data,
+         segmentation_result->shape.data(),
+         sizeof(int64_t) * fd_c_segmentation_result->shape.size);
+  // copy contain_score_map
+  fd_c_segmentation_result->contain_score_map =
+      segmentation_result->contain_score_map;
+  // copy type
+  fd_c_segmentation_result->type =
+      static_cast<FD_C_ResultType>(segmentation_result->type);
+  return fd_c_segmentation_result;
+}
+
+FD_C_SegmentationResultWrapper* FD_C_CreateSegmentationResultWrapperFromData(
+    __fd_keep FD_C_SegmentationResult* fd_c_segmentation_result) {
+  FD_C_SegmentationResultWrapper* fd_c_segmentation_result_wrapper =
+      FD_C_CreateSegmentationResultWrapper();
+  auto& segmentation_result = CHECK_AND_CONVERT_FD_TYPE(
+      SegmentationResultWrapper, fd_c_segmentation_result_wrapper);
+
+  // copy label_map
+  segmentation_result->label_map.resize(
+      fd_c_segmentation_result->label_map.size);
+  memcpy(segmentation_result->label_map.data(),
+         fd_c_segmentation_result->label_map.data,
+         sizeof(uint8_t) * fd_c_segmentation_result->label_map.size);
+
+  // copy score_map
+  segmentation_result->score_map.resize(
+      fd_c_segmentation_result->score_map.size);
+  memcpy(segmentation_result->score_map.data(),
+         fd_c_segmentation_result->score_map.data,
+         sizeof(float) * fd_c_segmentation_result->score_map.size);
+
+  // copy shape
+  segmentation_result->shape.resize(fd_c_segmentation_result->shape.size);
+  memcpy(segmentation_result->shape.data(),
+         fd_c_segmentation_result->shape.data,
+         sizeof(int64_t) * fd_c_segmentation_result->shape.size);
+
+  // copy contain_score_map
+  segmentation_result->contain_score_map =
+      fd_c_segmentation_result->contain_score_map;
+  // copy type
+  segmentation_result->type = static_cast<fastdeploy::vision::ResultType>(
+      fd_c_segmentation_result->type);
+
+  return fd_c_segmentation_result_wrapper;
+}
+
+char* FD_C_SegmentationResultWrapperStr(
+    FD_C_SegmentationResultWrapper* fd_c_segmentation_result_wrapper) {
+  auto& segmentation_result = CHECK_AND_CONVERT_FD_TYPE(
+      SegmentationResultWrapper, fd_c_segmentation_result_wrapper);
+  std::string information = segmentation_result->Str();
+  char* cstr = new char[information.length() + 1];
+  std::strcpy(cstr, information.c_str());
+  return cstr;
+}
+
 #ifdef __cplusplus
 }
 #endif

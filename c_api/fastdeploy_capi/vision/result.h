@@ -20,6 +20,7 @@
 typedef struct FD_C_ClassifyResultWrapper FD_C_ClassifyResultWrapper;
 typedef struct FD_C_DetectionResultWrapper FD_C_DetectionResultWrapper;
 typedef struct FD_C_OCRResultWrapper FD_C_OCRResultWrapper;
+typedef struct FD_C_SegmentationResultWrapper FD_C_SegmentationResultWrapper;
 
 #ifdef __cplusplus
 extern "C" {
@@ -76,6 +77,20 @@ typedef struct FD_C_OneDimOCRResult {
   FD_C_OCRResult* data;
 } FD_C_OneDimOCRResult;
 
+typedef struct FD_C_SegmentationResult {
+  FD_C_OneDimArrayUint8 label_map;
+  FD_C_OneDimArrayFloat score_map;
+  FD_C_OneDimArrayInt64 shape;
+  FD_C_Bool contain_score_map;
+  FD_C_ResultType type;
+} FD_C_SegmentationResult;
+
+typedef struct FD_C_OneDimSegmentationResult {
+  size_t size;
+  FD_C_SegmentationResult* data;
+} FD_C_OneDimSegmentationResult;
+
+
 // Classification Results
 
 /** \brief Create a new FD_C_ClassifyResultWrapper object
@@ -110,6 +125,16 @@ FD_C_DestroyClassifyResult(__fd_take FD_C_ClassifyResult* fd_c_classify_result);
 FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_ClassifyResult*
 FD_C_ClassifyResultWrapperGetData(
     __fd_keep FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper);
+
+/** \brief Get a FD_C_ClassifyResult object from FD_C_ClassifyResultWrapper object
+ *
+ * \param[in] fd_c_classify_result_wrapper pointer to FD_C_ClassifyResultWrapper object
+ * \return Return a pointer to FD_C_ClassifyResult object
+ */
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_ClassifyResult*
+FD_C_ClassifyResultWrapperGetData(
+    __fd_keep FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper);
+
 
 /** \brief Create a new FD_C_ClassifyResultWrapper object from FD_C_ClassifyResult object
  *
@@ -241,6 +266,63 @@ FD_C_CreateOCRResultWrapperFromData(
 FASTDEPLOY_CAPI_EXPORT extern __fd_give char*
 FD_C_OCRResultWrapperStr(
     __fd_keep FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper);
+
+
+// Segmentation Results
+
+/** \brief Create a new FD_C_SegmentationResultWrapper object
+ *
+ * \return Return a pointer to FD_C_SegmentationResultWrapper object
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_SegmentationResultWrapper*
+FD_C_CreateSegmentationResultWrapper();
+
+/** \brief Destroy a FD_C_SegmentationResultWrapper object
+ *
+ * \param[in] fd_c_segmentation_result_wrapper pointer to FD_C_SegmentationResultWrapper object
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroySegmentationResultWrapper(
+    __fd_take FD_C_SegmentationResultWrapper* fd_c_segmentation_result_wrapper);
+
+/** \brief Destroy a FD_C_SegmentationResult object
+ *
+ * \param[in] fd_c_segmentation_result pointer to FD_C_SegmentationResult object
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroySegmentationResult(
+    __fd_take FD_C_SegmentationResult* fd_c_segmentation_result);
+
+/** \brief Get a FD_C_SegmentationResult object from FD_C_SegmentationResultWrapper object
+ *
+ * \param[in] fd_c_segmentation_result_wrapper pointer to FD_C_SegmentationResultWrapper object
+ * \return Return a pointer to FD_C_SegmentationResult object
+ */
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_SegmentationResult*
+FD_C_SegmentationResultWrapperGetData(
+    __fd_keep FD_C_SegmentationResultWrapper* fd_c_segmentation_result_wrapper);
+
+/** \brief Create a new FD_C_SegmentationResultWrapper object from FD_C_SegmentationResult object
+ *
+ * \param[in] fd_c_segmentation_result pointer to FD_C_SegmentationResult object
+ * \return Return a pointer to FD_C_SegmentationResultWrapper object
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_SegmentationResultWrapper*
+FD_C_CreateSegmentationResultWrapperFromData(
+    __fd_keep FD_C_SegmentationResult* fd_c_segmentation_result);
+
+/** \brief Print SegmentationResult formated information
+ *
+ * \param[in] fd_c_segmentation_result_wrapper pointer to FD_C_SegmentationResultWrapper object
+ * \return Return a string pointer
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern __fd_give char*
+FD_C_SegmentationResultWrapperStr(
+    __fd_keep FD_C_SegmentationResultWrapper* fd_c_segmentation_result_wrapper);
+
 
 
 #ifdef __cplusplus

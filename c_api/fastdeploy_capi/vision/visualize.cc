@@ -96,6 +96,18 @@ FD_C_Mat FD_C_VisOcr(FD_C_Mat im, FD_C_OCRResult* fd_c_ocr_result) {
   return new cv::Mat(result);
 }
 
+FD_C_Mat FD_C_VisSegmentation(FD_C_Mat im,
+                              FD_C_SegmentationResult* fd_c_segmenation_result,
+                              float weight) {
+  FD_C_SegmentationResultWrapper* fd_c_segmentation_result_wrapper =
+      FD_C_CreateSegmentationResultWrapperFromData(fd_c_segmenation_result);
+  auto& segmentation_result = CHECK_AND_CONVERT_FD_TYPE(
+      SegmentationResultWrapper, fd_c_segmentation_result_wrapper);
+  cv::Mat result = fastdeploy::vision::VisSegmentation(
+      *(reinterpret_cast<cv::Mat*>(im)), *segmentation_result, weight);
+  return new cv::Mat(result);
+}
+
 #ifdef __cplusplus
 }
 #endif
