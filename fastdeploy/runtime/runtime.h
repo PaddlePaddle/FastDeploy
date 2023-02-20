@@ -99,11 +99,9 @@ struct FASTDEPLOY_DECL Runtime {
   /** \brief Compile TorchScript Module, only for Poros backend
    *
    * \param[in] prewarm_tensors Prewarm datas for compile
-   * \param[in] _option Runtime option
    * \return true if compile successed, otherwise false
    */
-  bool Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
-               const RuntimeOption& _option);
+  bool Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors);
   /** \brief Get profile time of Runtime after the profile process is done.
    */
   double GetProfileTime() {
@@ -118,6 +116,7 @@ struct FASTDEPLOY_DECL Runtime {
   void CreateLiteBackend();
   void CreateRKNPU2Backend();
   void CreateSophgoNPUBackend();
+  void CreatePorosBackend();
   std::unique_ptr<BaseBackend> backend_;
   std::vector<FDTensor> input_tensors_;
   std::vector<FDTensor> output_tensors_;
