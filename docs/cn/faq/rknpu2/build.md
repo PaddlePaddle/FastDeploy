@@ -76,6 +76,8 @@ cd python
 export ENABLE_ORT_BACKEND=ON
 export ENABLE_RKNPU2_BACKEND=ON
 export ENABLE_VISION=ON
+
+# 请根据你的开发版的不同，选择RK3588和RK356X
 export RKNN2_TARGET_SOC=RK3588
 
 # 如果你的核心板的运行内存大于等于8G，我们建议您执行以下命令进行编译。
