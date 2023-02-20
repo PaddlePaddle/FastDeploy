@@ -44,7 +44,7 @@
 </div>
 
 
- **⚡️FastDeploy**是一款**全场景**、**易用灵活**、**极致高效**的AI推理部署工具， 支持**云边端**部署。提供超过 🔥160+ **Text**，**Vision**， **Speech**和**跨模态**模型📦**开箱即用**的部署体验，并实现🔚**端到端**的推理性能优化。包括 [物体检测](./examples/vision/detection)、[字符识别（OCR）](./examples/vision/ocr)、[人脸](./examples/vision/facedet)、[人像扣图](./examples/vision/matting)、[多目标跟踪系统](./examples/vision/tracking/pptracking)、[NLP](./examples/text)、[Stable Difussion文图生成](./examples/multimodal/stable_diffusion)、[TTS](./examples/audio/pp-tts) 等几十种任务场景，满足开发者**多场景、多硬件、多平台**的产业部署需求。
+ **⚡️FastDeploy**是一款**全场景**、**易用灵活**、**极致高效**的AI推理部署工具， 支持**云边端**部署。提供超过 🔥160+ **Text**，**Vision**， **Speech**和**跨模态**模型📦**开箱即用**的部署体验，并实现🔚**端到端**的推理性能优化。包括 [物体检测](./examples/vision/detection)、[字符识别（OCR）](./examples/vision/ocr)、[人脸](./examples/vision/facedet)、[人像扣图](./examples/vision/matting)、[多目标跟踪系统](./examples/vision/tracking/pptracking)、[NLP](./examples/text)、[Stable Diffusion文图生成](./examples/multimodal/stable_diffusion)、[TTS](./examples/audio/pp-tts) 等几十种任务场景，满足开发者**多场景、多硬件、多平台**的产业部署需求。
 
 <div align="center">
     

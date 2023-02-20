@@ -41,7 +41,7 @@ English | [简体中文](README_CN.md) | [हिन्दी](./docs/docs_i18n/R
 </div>
 
 **⚡️FastDeploy** is an **Easy-to-use** and **High Performance** AI model deployment toolkit for Cloud, Mobile and Edge with 📦**out-of-the-box and unified experience**, 🔚**end-to-end optimization** for over **🔥160+ Text, Vision, Speech and Cross-modal AI models**.
-Including [image classification](examples/vision/classification), [object detection](examples/vision/detection), [OCR](./examples/vision/ocr), [face detection](./examples/vision/facedet), [matting](./examples/vision/matting), [pp-tracking](./examples/vision/tracking/pptracking), [NLP](./examples/text), [stable difussion](./examples/multimodal/stable_diffusion), [TTS](./examples/audio/pp-tts) and other tasks to meet developers' industrial deployment needs for **multi-scenario**, **multi-hardware** and **multi-platform**.
+Including [image classification](examples/vision/classification), [object detection](examples/vision/detection), [OCR](./examples/vision/ocr), [face detection](./examples/vision/facedet), [matting](./examples/vision/matting), [pp-tracking](./examples/vision/tracking/pptracking), [NLP](./examples/text), [stable diffusion](./examples/multimodal/stable_diffusion), [TTS](./examples/audio/pp-tts) and other tasks to meet developers' industrial deployment needs for **multi-scenario**, **multi-hardware** and **multi-platform**.
 
 <div align="center">
     
