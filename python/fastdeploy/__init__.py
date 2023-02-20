@@ -30,6 +30,17 @@ from .c_lib_wrap import (
     is_built_with_trt,
     get_default_cuda_directory, )
 
+
+def set_logger(enable_info=True, enable_warning=True):
+    """Set behaviour of logger while using FastDeploy
+
+    :param enable_info: (boolean)Whether to print out log level of INFO
+    :param enable_warning: (boolean)Whether to print out log level of WARNING, recommend to set to True
+    """
+    from .c_lib_wrap import set_logger
+    set_logger(enable_info, enable_warning)
+
+
 from .runtime import Runtime, RuntimeOption
 from .model import FastDeployModel
 from . import c_lib_wrap as C

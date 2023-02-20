@@ -43,6 +43,9 @@ namespace fastdeploy {
 
 class FASTDEPLOY_DECL FDLogger {
  public:
+  static bool enable_info;
+  static bool enable_warning;
+
   FDLogger() {
     line_ = "";
     prefix_ = "[FastDeploy]";
@@ -90,11 +93,12 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
       << __REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
 
 #define FDWARNING                                                              \
-  FDLogger(true, "[WARNING]")                                                  \
+  FDLogger(fastdeploy::FDLogger::enable_warning, "[WARNING]")                  \
       << __REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
 
 #define FDINFO                                                                 \
-  FDLogger(true, "[INFO]") << __REL_FILE__ << "(" << __LINE__                  \
+  FDLogger(fastdeploy::FDLogger::enable_info, "[INFO]")                        \
+                           << __REL_FILE__ << "(" << __LINE__                  \
                            << ")::" << __FUNCTION__ << "\t"
 
 #define FDASSERT(condition, format, ...)                                       \
@@ -213,6 +217,10 @@ std::string Str(const std::vector<T>& shape) {
   oss << " ]";
   return oss.str();
 }
+
+/// Set behaviour of logging while using FastDeploy
+FASTDEPLOY_DECL void SetLogger(bool enable_info = true,
+                               bool enable_warning = true);
 
 template <typename T>
 void CalculateStatisInfo(const void* src_ptr, int size, double* mean,
