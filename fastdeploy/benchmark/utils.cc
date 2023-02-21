@@ -451,9 +451,9 @@ bool ResultManager::SaveSegmentationResult(
   fs << "label_map" << KEY_VALUE_SEP;
   for (int i = 0; i < res.label_map.size(); ++i) {
     if (i < res.label_map.size() - 1) {
-      fs << res.label_map[i] << VALUE_SEP;
+      fs << static_cast<int32_t>(res.label_map[i]) << VALUE_SEP;
     } else {
-      fs << res.label_map[i];
+      fs << static_cast<int32_t>(res.label_map[i]);
     }
   }
   fs << "\n";

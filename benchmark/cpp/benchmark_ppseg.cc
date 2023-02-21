@@ -45,15 +45,15 @@ int main(int argc, char* argv[]) {
   // 1. Test result diff
   std::cout << "=============== Test result diff =================\n";
   // Save result to -> disk.
-  std::string cls_result_path = "ppcls_result.txt";
-  benchmark::ResultManager::SaveSegmentationResult(res, cls_result_path);
+  std::string seg_result_path = "ppseg_result.txt";
+  benchmark::ResultManager::SaveSegmentationResult(res, seg_result_path);
   // Load result from <- disk.
   vision::SegmentationResult res_loaded;
   benchmark::ResultManager::LoadSegmentationResult(&res_loaded,
-                                                   cls_result_path);
+                                                   seg_result_path);
   // Calculate diff between two results.
   auto seg_diff =
-      benchmark::ResultManager::CalculateDiffStatis(&res, &res_loaded);
+      benchmark::ResultManager::CalculateDiffStatis(res, res_loaded);
   std::cout << "Labels diff: mean=" << seg_diff.labels.mean
             << ", max=" << seg_diff.labels.max
             << ", min=" << seg_diff.labels.min << std::endl;

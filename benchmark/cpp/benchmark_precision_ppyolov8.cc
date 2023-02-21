@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
   benchmark::ResultManager::LoadDetectionResult(&res_loaded, det_result_path);
   // Calculate diff between two results.
   auto det_diff =
-      benchmark::ResultManager::CalculateDiffStatis(&res, &res_loaded);
+      benchmark::ResultManager::CalculateDiffStatis(res, res_loaded);
   std::cout << "Boxes diff: mean=" << det_diff.boxes.mean
             << ", max=" << det_diff.boxes.max << ", min=" << det_diff.boxes.min
             << std::endl;
