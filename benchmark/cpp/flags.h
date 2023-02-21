@@ -63,6 +63,7 @@ static void PrintUsage() {
 }
 
 static void PrintBenchmarkInfo() {
+#if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Get model name
   std::vector<std::string> model_names;
   fastdeploy::benchmark::Split(FLAGS_model, model_names, sep);
@@ -97,5 +98,6 @@ static void PrintBenchmarkInfo() {
        << "ms" << std::endl;
   }
   std::cout << ss.str() << std::endl;
+#endif
   return;
 }
