@@ -70,19 +70,21 @@ option(ENABLE_CVCUDA "Whether to enable NVIDIA CV-CUDA to boost image preprocess
 option(ENABLE_ENCRYPTION "Whether to enable ENCRYPTION." OFF)
 option(ENABLE_BENCHMARK "Whether to enable Benchmark mode." OFF)
 option(WITH_ASCEND "Whether to compile for Huawei Ascend deploy." OFF)
+option(WITH_DIRECTML "Whether to compile for onnxruntime DirectML deploy." OFF)
 option(WITH_TIMVX "Whether to compile for TIMVX deploy." OFF)
 option(WITH_KUNLUNXIN "Whether to compile for KunlunXin XPU deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
-
+option(WITH_CAPI "Whether to compile with c api." OFF)
+option(WITH_CSHARPAPI "Whether to compile with c# api" OFF)
 ############################# Options for Android cross compiling #########################
 if(ANDROID)
   option(WITH_OPENCV_STATIC "Whether to use OpenCV static lib for Android." OFF)
-  option(WITH_LITE_STATIC "Whether to use OpenCV Paddle Lite static lib for Android." OFF)
-  option(WITH_FLYCV_STATIC "Whether to use OpenCV FlyCV static lib for Android." OFF)
-  option(WITH_OPENMP "Whether to use OpenCV OpenMP support for Android." OFF)
-  option(WITH_JAVA "Whether to build jni lib for Android." OFF)
+  option(WITH_LITE_STATIC "Whether to use Paddle Lite static lib for Android." OFF)
+  option(WITH_OPENMP "Whether to use OpenMP support for Android." OFF)
+  option(WITH_JAVA "Whether to build JNI lib for Android." OFF)
   option(WITH_STATIC_LIB "Whether to build FastDeploy static lib." OFF)
 endif()
+
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
 option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
 
@@ -299,10 +301,16 @@ if(WITH_GPU)
   include_directories(${CUDA_DIRECTORY}/include)
   if(WIN32)
     find_library(CUDA_LIB cudart ${CUDA_DIRECTORY}/lib/x64)
+    find_library(NVJPEG_LIB nvjpeg ${CUDA_DIRECTORY}/lib/x64)
+    add_definitions(-DENABLE_NVJPEG)
   else()
     find_library(CUDA_LIB cudart ${CUDA_DIRECTORY}/lib64)
+    if(NOT BUILD_ON_JETSON)
+      find_library(NVJPEG_LIB nvjpeg ${CUDA_DIRECTORY}/lib64)
+      add_definitions(-DENABLE_NVJPEG)
+    endif()
   endif()
-  list(APPEND DEPEND_LIBS ${CUDA_LIB})
+  list(APPEND DEPEND_LIBS ${CUDA_LIB} ${NVJPEG_LIB})
 
   # build CUDA source files in fastdeploy, CUDA source files include CUDA preprocessing, TRT plugins, etc.
   enable_language(CUDA)
@@ -416,7 +424,22 @@ if(ENABLE_PADDLE2ONNX)
   list(APPEND DEPEND_LIBS external_paddle2onnx)
 endif(ENABLE_PADDLE2ONNX)
 
+if(WITH_CAPI)
+  include(${PROJECT_SOURCE_DIR}/c_api/CMakeLists.txt)
+  if(MSVC)
+  add_definitions(-DFD_CAPI)
+  endif()
+endif()
+
+if(WITH_CSHARPAPI)
+  if(MSVC)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/csharp)
+  endif()
+endif()
+
+
 configure_file(${PROJECT_SOURCE_DIR}/FastDeploy.cmake.in ${PROJECT_SOURCE_DIR}/FastDeploy.cmake @ONLY)
+configure_file(${PROJECT_SOURCE_DIR}/FastDeployCSharp.cmake.in ${PROJECT_SOURCE_DIR}/FastDeployCSharp.cmake @ONLY)
 configure_file(${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py.in ${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py)
 configure_file(${PROJECT_SOURCE_DIR}/python/scripts/process_libraries.py.in ${PROJECT_SOURCE_DIR}/python/scripts/process_libraries.py)
 
@@ -669,6 +692,7 @@ install(
   ${PROJECT_SOURCE_DIR}/ThirdPartyNotices.txt
   ${PROJECT_SOURCE_DIR}/VERSION_NUMBER
   ${PROJECT_SOURCE_DIR}/FastDeploy.cmake
+  ${PROJECT_SOURCE_DIR}/FastDeployCSharp.cmake
   ${PROJECT_SOURCE_DIR}/cmake/FastDeployConfig.cmake
   ${PROJECT_SOURCE_DIR}/cmake/utils.cmake
   ${PROJECT_SOURCE_DIR}/cmake/openmp.cmake
@@ -703,6 +727,16 @@ if(WITH_ASCEND)
   install(
     FILES ${PROJECT_SOURCE_DIR}/scripts/ascend_init.sh
     DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
+endif()
+
+if(WITH_CAPI)
+  install(
+    DIRECTORY ${PROJECT_SOURCE_DIR}/c_api/fastdeploy_capi
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+    FILES_MATCHING
+    PATTERN "*.h"
+    PATTERN "*/types_internal.h" EXCLUDE
   )
 endif()
 

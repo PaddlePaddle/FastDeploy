@@ -1,0 +1,17 @@
+mean:
+  -
+    - 0
+    - 0
+    - 0
+std:
+  -
+    - 255
+    - 255
+    - 255
+model_path: ./ppyoloe_plus_crn_s_80e_coco/ppyoloe_plus_crn_s_80e_coco.onnx
+outputs_nodes:
+  - 'p2o.Mul.224'
+  - 'p2o.Concat.29'
+do_quantization: True
+dataset: "./ppyoloe_plus_crn_s_80e_coco/dataset.txt"
+output_folder: "./ppyoloe_plus_crn_s_80e_coco"

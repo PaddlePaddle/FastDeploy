@@ -1,5 +1,5 @@
 [English](README.md) | 简体中文
-# 目标检测 PaddleSeg Android Demo 使用文档  
+# 图像分割 PaddleSeg Android Demo 使用文档  
 
 在 Android 上实现实时的人像分割功能，此 Demo 有很好的的易用性和开放性，如在 Demo 中跑自己训练好的模型等。
 
@@ -10,7 +10,7 @@
 
 ## 部署步骤
 
-1. 目标检测 PaddleSeg Demo 位于 `fastdeploy/examples/vision/segmentation/paddleseg/android` 目录
+1. 图像分割 PaddleSeg Demo 位于 `path/to/paddleseg/android` 目录
 2. 用 Android Studio 打开 paddleseg/android 工程
 3. 手机连接电脑，打开 USB 调试和文件传输模式，并在 Android Studio 上连接自己的手机设备（手机需要开启允许从 USB 安装软件权限）
 
@@ -161,7 +161,7 @@ model.init(modelFile, paramFile, configFile, option);
 ## 替换 FastDeploy SDK和模型  
 替换FastDeploy预测库和模型的步骤非常简单。预测库所在的位置为 `app/libs/fastdeploy-android-sdk-xxx.aar`，其中 `xxx` 表示当前您使用的预测库版本号。模型所在的位置为，`app/src/main/assets/models/portrait_pp_humansegv2_lite_256x144_inference_model`。  
 - 替换FastDeploy Android SDK: 下载或编译最新的FastDeploy Android SDK，解压缩后放在 `app/libs` 目录下；详细配置文档可参考:  
-     - [在 Android 中使用 FastDeploy Java SDK](../../../../../java/android/)
+     - [在 Android 中使用 FastDeploy Java SDK](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android)
 
 - 替换PaddleSeg模型的步骤：  
   - 将您的PaddleSeg模型放在 `app/src/main/assets/models` 目录下；  
@@ -173,5 +173,5 @@ model.init(modelFile, paramFile, configFile, option);
 
 ## 更多参考文档
 如果您想知道更多的FastDeploy Java API文档以及如何通过JNI来接入FastDeploy C++ API感兴趣，可以参考以下内容:  
-- [在 Android 中使用 FastDeploy Java SDK](../../../../../java/android/)
-- [在 Android 中使用 FastDeploy C++ SDK](../../../../../docs/cn/faq/use_cpp_sdk_on_android.md)  
+- [在 Android 中使用 FastDeploy Java SDK](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android)
+- [在 Android 中使用 FastDeploy C++ SDK](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/use_cpp_sdk_on_android.md)  

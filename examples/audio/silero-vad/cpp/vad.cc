@@ -93,7 +93,7 @@ void Vad::setAudioCofig(int sr, int frame_ms, float threshold,
     Vad::speech_pad_ms_ = speech_pad_ms;
 }
 
-bool Vad::Preprocess(std::vector<float> audioWindowData) {
+bool Vad::Preprocess(std::vector<float>& audioWindowData) {
     inputTensors_.resize(4);
     inputTensors_[0].name = "input";
     inputTensors_[0].SetExternalData(input_node_dims_, fastdeploy::FDDataType::FP32,
