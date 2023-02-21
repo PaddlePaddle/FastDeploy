@@ -16,8 +16,8 @@
 | ENABLE_TEXT             | Linux(x64)/Windows(x64) | 默认OFF，是否编译集成文本NLP模型的部署模块                                                  |
 | CUDA_DIRECTORY         | Linux(x64)/Windows(x64) | 默认/usr/local/cuda，要求CUDA>=11.2 |
 | TRT_DIRECTORY | Linux(x64)/Windows(x64) | 默认为空，要求TensorRT>=8.4， 指定路径如/Download/TensorRT-8.5 |
-| ENABLE_CAPI             | Linux(x64)/Windows(x64)/Mac OSX(x86) | 默认OFF，是否编译集成C API  |
-| ENABLE_CSHARPAPI        | Windows(x64) | 默认OFF，是否编译集成C# API  |
+| WITH_CAPI             | Linux(x64)/Windows(x64)/Mac OSX(x86) | 默认OFF，是否编译集成C API  |
+| WITH_CSHARPAPI        | Windows(x64) | 默认OFF，是否编译集成C# API  |
 
 第三方库依赖指定（不设定如下参数，会自动下载预编译库）
 | 选项                     | 说明                                                                                           |
