@@ -101,14 +101,27 @@ struct FASTDEPLOY_DECL EvalStatis {
   double max = -1.0;
 };
 
-struct FASTDEPLOY_DECL TensorDiff: public BaseDiff, public EvalStatis {};
+struct FASTDEPLOY_DECL TensorDiff: public BaseDiff {
+  EvalStatis data;
+};
 
 #if defined(ENABLE_VISION)
-struct FASTDEPLOY_DECL DetectionDiff: public BaseDiff, public EvalStatis {
+struct FASTDEPLOY_DECL DetectionDiff: public BaseDiff {
   EvalStatis boxes;
   EvalStatis scores;
   EvalStatis labels;
 };
+
+struct FASTDEPLOY_DECL ClassifyDiff: public BaseDiff {
+  EvalStatis scores;
+  EvalStatis labels;
+};
+
+struct FASTDEPLOY_DECL SegmentationDiff: public BaseDiff {
+  EvalStatis scores;
+  EvalStatis labels;
+};
+
 #endif  // ENABLE_VISION
 #endif  // ENABLE_BENCHMARK
 
@@ -127,10 +140,22 @@ struct FASTDEPLOY_DECL ResultManager {
                                   const std::string& path);
   static bool LoadDetectionResult(vision::DetectionResult* res,
                                   const std::string& path);
+  static bool SaveClassifyResult(const vision::ClassifyResult& res,
+                                 const std::string& path);
+  static bool LoadClassifyResult(vision::ClassifyResult* res,
+                                 const std::string& path);
+  static bool SaveSegmentationResult(const vision::SegmentationResult& res,
+                                     const std::string& path);
+  static bool LoadSegmentationResult(vision::SegmentationResult* res,
+                                     const std::string& path);
   /// Calculate diff value between two basic results.
   static DetectionDiff CalculateDiffStatis(vision::DetectionResult* lhs,
                                            vision::DetectionResult* rhs,
                                            float score_threshold = 0.3f);
+  static ClassifyDiff CalculateDiffStatis(vision::ClassifyResult* lhs,
+                                          vision::ClassifyResult* rhs);
+  static SegmentationDiff CalculateDiffStatis(const vision::SegmentationResult& lhs, //NOLINT
+                                              const vision::SegmentationResult& rhs); //NOLINT
 #endif  // ENABLE_VISION
 #endif  // ENABLE_BENCHMARK
 };
