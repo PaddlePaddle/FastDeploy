@@ -10,6 +10,7 @@ download_and_decompress(${RKNPU2_URL} ${CMAKE_CURRENT_BINARY_DIR}/${RKNPU2_FILE}
 # set path
 set(RKNPU_RUNTIME_PATH ${THIRD_PARTY_PATH}/install/rknpu2_runtime)
 
+# include lib
 if (EXISTS ${RKNPU_RUNTIME_PATH})
     set(RKNN_RT_LIB ${RKNPU_RUNTIME_PATH}/lib/librknnrt.so)
     include_directories(${RKNPU_RUNTIME_PATH}/include)
