@@ -58,5 +58,5 @@ python3 infer_static_shape.py \
 - [Python API文档查阅](https://baidu-paddle.github.io/fastdeploy-api/python/html/)
 - [PPOCR 系列模型介绍](../../)
 - [PPOCRv3 C++部署](../cpp)
-- [模型预测结果说明](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [模型预测结果说明](../../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../../../docs/cn/faq/how_to_change_backend.md)
