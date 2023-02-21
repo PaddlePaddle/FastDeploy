@@ -47,11 +47,11 @@ int main(int argc, char* argv[]) {
   auto det_diff =
       benchmark::ResultManager::CalculateDiffStatis(&res, &res_loaded);
   std::cout << "Boxes diff: mean=" << det_diff.boxes.mean
-            << ",max=" << det_diff.boxes.max << ",min=" << det_diff.boxes.min
+            << ", max=" << det_diff.boxes.max << ", min=" << det_diff.boxes.min
             << std::endl;
   std::cout << "Label_ids diff: mean=" << det_diff.labels.mean
-            << ",max=" << det_diff.labels.max << ",min=" << det_diff.labels.min
-            << std::endl;
+            << ", max=" << det_diff.labels.max
+            << ", min=" << det_diff.labels.min << std::endl;
   // 2. Test tensor diff
   std::cout << "=============== Test tensor diff =================\n";
   std::vector<vision::DetectionResult> batch_res;
@@ -78,8 +78,8 @@ int main(int argc, char* argv[]) {
   auto det_tensor_diff = benchmark::ResultManager::CalculateDiffStatis(
       &tensor_dump, &tensor_loaded);
   std::cout << "Tensor diff: mean=" << det_tensor_diff.data.mean
-            << ",max=" << det_tensor_diff.data.max
-            << ",min=" << det_tensor_diff.data.min << std::endl;
+            << ", max=" << det_tensor_diff.data.max
+            << ", min=" << det_tensor_diff.data.min << std::endl;
   // 3. Run profiling
   BENCHMARK_MODEL(model_ppyolov8, model_ppyolov8.Predict(im, &res))
   auto vis_im = vision::VisDetection(im, res);

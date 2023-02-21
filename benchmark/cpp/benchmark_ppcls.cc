@@ -16,6 +16,9 @@
 #include "macros.h"
 #include "option.h"
 
+namespace vision = fastdeploy::vision;
+namespace benchmark = fastdeploy::benchmark;
+
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Initialization
@@ -31,9 +34,9 @@ int main(int argc, char* argv[]) {
   auto model_file = FLAGS_model + sep + "inference.pdmodel";
   auto params_file = FLAGS_model + sep + "inference.pdiparams";
   auto config_file = FLAGS_model + sep + "inference_cls.yaml";
-  auto model_ppcls = fastdeploy::vision::classification::PaddleClasModel(
+  auto model_ppcls = vision::classification::PaddleClasModel(
       model_file, params_file, config_file, option);
-  fastdeploy::vision::ClassifyResult res;
+  vision::ClassifyResult res;
   // Run once at least
   model_ppcls.Predict(im, &res);
   // 1. Test result diff

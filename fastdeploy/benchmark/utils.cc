@@ -413,7 +413,7 @@ bool ResultManager::SaveClassifyResult(const vision::ClassifyResult& res,
   fs.precision(20);
   // label_ids
   fs << "label_ids" << KEY_VALUE_SEP;
-  for (int i = 0; i < res.boxes.size(); ++i) {
+  for (int i = 0; i < res.label_ids.size(); ++i) {
     if (i < res.label_ids.size() - 1) {
       fs << res.label_ids[i] << VALUE_SEP;
     } else {
@@ -479,6 +479,7 @@ bool ResultManager::LoadClassifyResult(vision::ClassifyResult* res,
   std::map<std::string, std::vector<std::string>> data;
   // label_ids
   data = SplitDataLine(lines[0]);
+  res->Resize(data.begin()->second.size());
   for (int i = 0; i < data.begin()->second.size(); ++i) {
     res->label_ids[i] = std::stoi(data.begin()->second[i]);
   }
