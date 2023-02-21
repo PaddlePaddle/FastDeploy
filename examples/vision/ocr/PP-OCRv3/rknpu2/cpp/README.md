@@ -26,7 +26,7 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_
 # CPU推理
 ./infer_static_shape_demo ./ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer.onnx \
                           ./ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
-                          ./ch_PP-OCRv3_rec_infer\ch_PP-OCRv3_rec_infer.onnx \
+                          ./ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer.onnx \
                           ./ppocr_keys_v1.txt \
                           ./12.jpg \
                           0

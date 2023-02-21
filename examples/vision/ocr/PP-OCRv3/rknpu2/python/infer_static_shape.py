@@ -110,12 +110,17 @@ rec_model = fd.vision.ocr.Recognizer(
     runtime_option=rec_option,
     model_format=rec_format)
 
-# Rec模型启用静态shape推理
+# Det,Rec模型启用静态shape推理
 det_model.preprocessor.static_shape_infer = True
 rec_model.preprocessor.static_shape_infer = True
 
 if args.device == "npu":
-    det_model.preprocessor.disable_
+    det_model.preprocessor.disable_normalize()
+    det_model.preprocessor.disable_permute()
+    cls_model.preprocessor.disable_normalize()
+    cls_model.preprocessor.disable_permute()
+    rec_model.preprocessor.disable_normalize()
+    rec_model.preprocessor.disable_permute()
 
 # 创建PP-OCR，串联3个模型，其中cls_model可选，如无需求，可设置为None
 ppocr_v3 = fd.vision.ocr.PPOCRv3(

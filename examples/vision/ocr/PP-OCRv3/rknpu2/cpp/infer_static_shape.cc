@@ -29,6 +29,10 @@ void InitAndInfer(const std::string &det_model_file,
   auto cls_option = option;
   auto rec_option = option;
 
+  if (format == fastdeploy::ONNX) {
+    std::cout << "ONNX Model" << std::endl;
+  }
+
   auto det_model = fastdeploy::vision::ocr::DBDetector(
       det_model_file, det_params_file, det_option, format);
   auto cls_model = fastdeploy::vision::ocr::Classifier(
