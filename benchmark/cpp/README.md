@@ -20,7 +20,7 @@
 | -------------------- | ------------------------------------------ |
 | --model              | 模型路径                                     |
 | --image              | 图片路径    |
-| --device             | 选择 CPU 还是 GPU，默认为 CPU  |
+| --device             | 选择 CPU/GPU/XPU，默认为 CPU  |
 | --cpu_thread_nums     | CPU 线程数，默认为 8      |
 | --device_id          | GPU/XPU 卡号，默认为 0 |
 | --warmup           | 跑benchmark的warmup次数，默认为 200 |
