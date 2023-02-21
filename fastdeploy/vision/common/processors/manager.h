@@ -22,6 +22,12 @@
 namespace fastdeploy {
 namespace vision {
 
+#define CREATE_AND_REGISTER_PROCESSOR(cls_name, ...) [&] {\
+  auto x = std::make_shared<cls_name>(__VA_ARGS__);\
+  RegisterProcessor(x.get());\
+  return x;\
+}()\
+
 class FASTDEPLOY_DECL ProcessorManager {
  public:
   ~ProcessorManager();
