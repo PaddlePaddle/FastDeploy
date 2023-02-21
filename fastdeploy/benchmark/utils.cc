@@ -321,8 +321,8 @@ TensorDiff ResultManager::CalculateDiffStatis(FDTensor* lhs, FDTensor* rhs) {
       tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
     }
     TensorDiff diff;
-    CalculateStatisInfo<int64_t>(tensor_diff.data(), numel, &(diff.mean),
-                                 &(diff.max), &(diff.min));
+    CalculateStatisInfo<int64_t>(tensor_diff.data(), numel, &(diff.data.mean),
+                                 &(diff.data.max), &(diff.data.min));
     return diff;
   } else if (dtype == FDDataType::INT32) {
     std::vector<int32_t> tensor_diff(numel);
@@ -332,8 +332,8 @@ TensorDiff ResultManager::CalculateDiffStatis(FDTensor* lhs, FDTensor* rhs) {
       tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
     }
     TensorDiff diff;
-    CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.mean),
-                               &(diff.max), &(diff.min));
+    CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.data.mean),
+                               &(diff.data.max), &(diff.data.min));
     return diff;
   } else {  // FP32
     std::vector<float> tensor_diff(numel);
@@ -343,8 +343,8 @@ TensorDiff ResultManager::CalculateDiffStatis(FDTensor* lhs, FDTensor* rhs) {
       tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
     }
     TensorDiff diff;
-    CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.mean),
-                               &(diff.max), &(diff.min));
+    CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.data.mean),
+                               &(diff.data.max), &(diff.data.min));
     return diff;
   }
 }
@@ -399,6 +399,42 @@ bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
   return true;
 }
 
+bool ResultManager::SaveClassifyResult(const vision::ClassifyResult& res,
+                                       const std::string& path) {
+  if (res.label_ids.empty()) {
+    FDERROR << "ClassifyResult can not be empty!" << std::endl;
+    return false;
+  }
+  std::ofstream fs(path, std::ios::out);
+  if (!fs.is_open()) {
+    FDERROR << "Fail to open file:" << path << std::endl;
+    return false;
+  }
+  fs.precision(20);
+  // label_ids
+  fs << "label_ids" << KEY_VALUE_SEP;
+  for (int i = 0; i < res.label_ids.size(); ++i) {
+    if (i < res.label_ids.size() - 1) {
+      fs << res.label_ids[i] << VALUE_SEP;
+    } else {
+      fs << res.label_ids[i];
+    }
+  }
+  fs << "\n";
+  // scores
+  fs << "scores" << KEY_VALUE_SEP;
+  for (int i = 0; i < res.scores.size(); ++i) {
+    if (i < res.scores.size() - 1) {
+      fs << res.scores[i] << VALUE_SEP;
+    } else {
+      fs << res.scores[i];
+    }
+  }
+  fs << "\n";
+  fs.close();
+  return true;
+}
+
 bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
                                         const std::string& path) {
   if (!CheckFileExists(path)) {
@@ -429,6 +465,28 @@ bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
     res->label_ids[i] = std::stoi(data.begin()->second[i]);
   }
   // TODO(qiuyanjun): load masks
+  return true;
+}
+
+bool ResultManager::LoadClassifyResult(vision::ClassifyResult* res,
+                                       const std::string& path) {
+  if (!CheckFileExists(path)) {
+    FDERROR << "Can't found file from" << path << std::endl;
+    return false;
+  }
+  auto lines = ReadLines(path);
+  std::map<std::string, std::vector<std::string>> data;
+  // label_ids
+  data = SplitDataLine(lines[0]);
+  res->Resize(data.begin()->second.size());
+  for (int i = 0; i < data.begin()->second.size(); ++i) {
+    res->label_ids[i] = std::stoi(data.begin()->second[i]);
+  }
+  // scores
+  data = SplitDataLine(lines[1]);
+  for (int i = 0; i < data.begin()->second.size(); ++i) {
+    res->scores[i] = std::stof(data.begin()->second[i]);
+  }
   return true;
 }
 
@@ -469,11 +527,29 @@ DetectionDiff ResultManager::CalculateDiffStatis(vision::DetectionResult* lhs,
   CalculateStatisInfo<int32_t>(labels_diff.data(), labels_diff.size(),
                                &(diff.labels.mean), &(diff.labels.max),
                                &(diff.labels.min));
-  diff.mean = diff.boxes.mean;
-  diff.max = diff.boxes.max;
-  diff.min = diff.boxes.min;
   return diff;
 }
+
+ClassifyDiff ResultManager::CalculateDiffStatis(vision::ClassifyResult* lhs,
+                                                vision::ClassifyResult* rhs) {
+  const int class_nums = std::min(lhs->label_ids.size(), rhs->label_ids.size());
+  std::vector<float> scores_diff;
+  std::vector<int32_t> labels_diff;
+  for (int i = 0; i < class_nums; ++i) {
+    scores_diff.push_back(lhs->scores[i] - rhs->scores[i]);
+    labels_diff.push_back(lhs->label_ids[i] - rhs->label_ids[i]);
+  }
+
+  ClassifyDiff diff;
+  CalculateStatisInfo<float>(scores_diff.data(), scores_diff.size(),
+                             &(diff.scores.mean), &(diff.scores.max),
+                             &(diff.scores.min));
+  CalculateStatisInfo<int32_t>(labels_diff.data(), labels_diff.size(),
+                               &(diff.labels.mean), &(diff.labels.max),
+                               &(diff.labels.min));
+  return diff;
+}
+
 #endif  // ENABLE_VISION
 #endif  // ENABLE_BENCHMARK
 
