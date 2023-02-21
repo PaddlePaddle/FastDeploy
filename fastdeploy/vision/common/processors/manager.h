@@ -67,12 +67,6 @@ class FASTDEPLOY_DECL ProcessorManager {
 
   int DeviceId() { return device_id_; }
 
-  /** \brief When the initial operator is Resize, and input image size is large,
-   *     maybe it's better to run resize on CPU, because the HostToDevice memcpy
-   *     is time consuming. Call this API to run the initial resize on CPU.
-   */
-  void InitialResizeOnCpu();
-
   /** \brief Process the input images and prepare input tensors for runtime
    *
    * \param[in] images The input image data list, all the elements are returned by cv::imread()
@@ -90,11 +84,6 @@ class FASTDEPLOY_DECL ProcessorManager {
   virtual bool Apply(FDMatBatch* image_batch,
                      std::vector<FDTensor>* outputs) = 0;
 
- protected:
-  void RegisterProcessor(Processor* p) {
-    processors_.push_back(p);
-  }
-
  private:
 #ifdef WITH_GPU
   cudaStream_t stream_ = nullptr;
@@ -106,7 +95,6 @@ class FASTDEPLOY_DECL ProcessorManager {
   FDTensor batch_input_cache_;
   FDTensor batch_output_cache_;
 
-  std::vector<Processor*> processors_;
   ProcLib proc_lib_ = ProcLib::DEFAULT;
 };
 

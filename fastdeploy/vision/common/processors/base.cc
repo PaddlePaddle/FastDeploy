@@ -20,14 +20,10 @@
 namespace fastdeploy {
 namespace vision {
 
-bool Processor::operator()(FDMat* mat, ProcLib lib) {
-  ProcLib target = lib;
-  if (lib == ProcLib::DEFAULT) {
-    if (proc_lib_ == ProcLib::DEFAULT) {
-      target = DefaultProcLib::default_lib;
-    } else {
-      target = proc_lib_;
-    }
+bool Processor::operator()(FDMat* mat) {
+  ProcLib target = mat->proc_lib;
+  if (mat->proc_lib == ProcLib::DEFAULT) {
+    target = DefaultProcLib::default_lib;
   }
   if (target == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV
@@ -56,14 +52,15 @@ bool Processor::operator()(FDMat* mat, ProcLib lib) {
   return ImplByOpenCV(mat);
 }
 
-bool Processor::operator()(FDMatBatch* mat_batch, ProcLib lib) {
-  ProcLib target = lib;
-  if (lib == ProcLib::DEFAULT) {
-    if (proc_lib_ == ProcLib::DEFAULT) {
-      target = DefaultProcLib::default_lib;
-    } else {
-      target = proc_lib_;
-    }
+bool Processor::operator()(FDMat* mat, ProcLib lib) {
+  mat->proc_lib = lib;
+  return operator()(mat);
+}
+
+bool Processor::operator()(FDMatBatch* mat_batch) {
+  ProcLib target = mat_batch->proc_lib;
+  if (mat_batch->proc_lib == ProcLib::DEFAULT) {
+    target = DefaultProcLib::default_lib;
   }
   if (target == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV

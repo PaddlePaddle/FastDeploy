@@ -78,10 +78,6 @@ bool PaddleClasPreprocessor::BuildPreprocessPipelineFromConfig() {
 
   // Fusion will improve performance
   FuseTransforms(&processors_);
-
-  for (size_t i = 0; i < processors_.size(); ++i) {
-    RegisterProcessor(processors_[i].get());
-  }
   return true;
 }
 

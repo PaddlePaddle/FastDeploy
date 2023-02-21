@@ -45,6 +45,14 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor : public ProcessorManager {
   /// This function will disable hwc2chw in preprocessing step.
   void DisablePermute();
 
+  /** \brief When the initial operator is Resize, and input image size is large,
+   *     maybe it's better to run resize on CPU, because the HostToDevice memcpy
+   *     is time consuming. Set this true to run the initial resize on CPU.
+   *
+   * \param[in] v ture or false
+   */
+  void InitialResizeOnCpu(bool v) { initial_resize_on_cpu_ = v; }
+
  private:
   bool BuildPreprocessPipelineFromConfig();
   bool initialized_ = false;

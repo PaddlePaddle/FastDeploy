@@ -100,10 +100,13 @@ class FASTDEPLOY_DECL Processor {
     return true;
   }
 
-  virtual bool operator()(FDMat* mat, ProcLib lib = ProcLib::DEFAULT);
+  virtual bool operator()(FDMat* mat);
 
-  virtual bool operator()(FDMatBatch* mat_batch,
-                          ProcLib lib = ProcLib::DEFAULT);
+  // This function is for backward compatibility, will be removed in the near
+  // future, please use operator()(FDMat* mat) instead and set proc_lib in mat.
+  virtual bool operator()(FDMat* mat, ProcLib lib);
+
+  virtual bool operator()(FDMatBatch* mat_batch);
 
   void SetProcLib(ProcLib lib) {
     proc_lib_ = lib;
