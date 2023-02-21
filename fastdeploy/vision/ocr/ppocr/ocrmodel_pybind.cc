@@ -271,10 +271,10 @@ void BindPPOCRModel(pybind11::module& m) {
              return outputs;
            })
       .def("disable_normalize",
-           [](vision::ocr::ClassifierPreprocessor& self) {
+           [](vision::ocr::RecognizerPreprocessor& self) {
              self.DisableNormalize();
            })
-      .def("disable_permute", [](vision::ocr::ClassifierPreprocessor& self) {
+      .def("disable_permute", [](vision::ocr::RecognizerPreprocessor& self) {
         self.DisablePermute();
       });
 
