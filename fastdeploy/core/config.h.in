@@ -41,6 +41,10 @@
 #cmakedefine WITH_GPU
 #endif
 
+#ifndef WITH_DIRECTML
+#cmakedefine WITH_DIRECTML
+#endif
+
 #ifndef ENABLE_TRT_BACKEND
 #cmakedefine ENABLE_TRT_BACKEND
 #endif
@@ -55,4 +59,8 @@
 
 #ifndef ENABLE_TEXT
 #cmakedefine ENABLE_TEXT
+#endif
+
+#ifndef ENABLE_BENCHMARK
+#cmakedefine ENABLE_BENCHMARK
 #endif

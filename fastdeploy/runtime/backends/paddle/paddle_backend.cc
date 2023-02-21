@@ -22,12 +22,17 @@ namespace fastdeploy {
 
 void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   option_ = option;
-  if (option.use_gpu) {
-    config_.EnableUseGpu(option.gpu_mem_init_size, option.gpu_id);
+  if (option.device == Device::GPU) {
+    config_.EnableUseGpu(option.gpu_mem_init_size, option.device_id);
     if (option_.external_stream_) {
+      FDINFO << "Will use external stream for Paddle Backend." << std::endl;
       config_.SetExecStream(option_.external_stream_);
     }
     if (option.enable_trt) {
+      if (!option.trt_option.enable_fp16) {
+        FDINFO << "Will try to use tensorrt inference with Paddle Backend."
+               << std::endl;
+      }
       config_.Exp_DisableTensorRtOPs(option.trt_disabled_ops_);
       auto precision = paddle_infer::PrecisionType::kFloat32;
       if (option.trt_option.enable_fp16) {
@@ -44,13 +49,17 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
                "file will save to the directory where paddle model saved."
             << std::endl;
         use_static = true;
+        std::string opt_cache_dir =
+            GetDirFromPath(option.trt_option.serialize_file);
+
+        config_.SetOptimCacheDir(opt_cache_dir);
       }
       config_.EnableTensorRtEngine(option.trt_option.max_workspace_size,
                                    option.trt_option.max_batch_size, 3,
                                    precision, use_static);
       SetTRTDynamicShapeToConfig(option);
     }
-  } else if (option.use_ipu) {
+  } else if (option.device == Device::IPU) {
 #ifdef WITH_IPU
     config_.EnableIpu(option.ipu_option.ipu_device_num,
                       option.ipu_option.ipu_micro_batch_size,
@@ -92,27 +101,24 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
 bool PaddleBackend::InitFromPaddle(const std::string& model_buffer,
                                    const std::string& params_buffer,
                                    const PaddleBackendOption& option) {
-  // bool PaddleBackend::InitFromPaddle(const std::string& contents) {
   if (initialized_) {
     FDERROR << "PaddleBackend is already initlized, cannot initialize again."
             << std::endl;
     return false;
   }
+  config_.SetModelBuffer(model_buffer.c_str(), model_buffer.size(),
+                         params_buffer.c_str(), params_buffer.size());
+  config_.EnableMemoryOptim();
+  BuildOption(option);
 
   // The input/output information get from predictor is not right, use
   // PaddleReader instead now
-  std::string contents;
-
-  config_.SetModelBuffer(model_buffer.c_str(), model_buffer.size(),
-                         params_buffer.c_str(), params_buffer.size());
-  contents = model_buffer;
-  config_.EnableMemoryOptim();
-  BuildOption(option);
-  auto reader = paddle2onnx::PaddleReader(contents.c_str(), contents.size());
+  auto reader =
+      paddle2onnx::PaddleReader(model_buffer.c_str(), model_buffer.size());
   // If it's a quantized model, and use cpu with mkldnn, automaticaly switch to
   // int8 mode
   if (reader.is_quantize_model) {
-    if (option.use_gpu) {
+    if (option.device == Device::GPU) {
       FDWARNING << "The loaded model is a quantized model, while inference on "
                    "GPU, please use TensorRT backend to get better performance."
                 << std::endl;
@@ -162,7 +168,7 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_buffer,
     outputs_desc_[i].shape.assign(shape.begin(), shape.end());
     outputs_desc_[i].dtype = ReaderDataTypeToFD(reader.outputs[i].dtype);
   }
-  if (option.collect_shape) {
+  if (option.collect_trt_shape) {
     // Set the shape info file.
     std::string curr_model_dir = "./";
     if (!option.model_from_memory_) {
@@ -225,26 +231,54 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
             << inputs_desc_.size() << ")." << std::endl;
     return false;
   }
+  // output share backend memory only support CPU or GPU
+  if (option_.device == Device::IPU) {
+    copy_to_fd = true;
+  }
 
+  RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
   for (size_t i = 0; i < inputs.size(); ++i) {
     auto handle = predictor_->GetInputHandle(inputs[i].name);
     ShareTensorFromFDTensor(handle.get(), inputs[i]);
   }
-
-  predictor_->Run();
-
-  // output share backend memory only support CPU or GPU
-  if (option_.use_ipu) {
-    copy_to_fd = true;
+  std::unordered_set<std::string> prebinded_output_name;
+  // prebinded output only support for GPU
+  if (!copy_to_fd) {
+    for (size_t i = 0; i < (*outputs).size(); ++i) {
+      auto output_name = (*outputs)[i].name;
+      // if a output is not prebinded,
+      // the name of output is expected to be empty.
+      // We skip here
+      if (output_name.empty()) {
+        continue;
+      }
+      // Record the prebinded output_name.
+      // Those outputs do not need PaddleTensorToFDTensor
+      // after predictor_.Run()
+      prebinded_output_name.insert(output_name);
+      auto handle = predictor_->GetOutputHandle(output_name);
+      ShareOutTensorFromFDTensor(handle.get(), (*outputs)[i]);
+    }
   }
+
+  RUNTIME_PROFILE_LOOP_BEGIN(1)
+  predictor_->Run();
+  RUNTIME_PROFILE_LOOP_END
+
   outputs->resize(outputs_desc_.size());
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
+    // skip prebinded output
+    if (copy_to_fd == false &&
+        prebinded_output_name.count(outputs_desc_[i].name)) {
+      continue;
+    }
     auto handle = predictor_->GetOutputHandle(outputs_desc_[i].name);
     if (copy_to_fd) {
       (*outputs)[i].is_pinned_memory = option_.enable_pinned_memory;
     }
     PaddleTensorToFDTensor(handle, &((*outputs)[i]), copy_to_fd);
   }
+  RUNTIME_PROFILE_LOOP_H2D_D2H_END
   return true;
 }
 
@@ -253,9 +287,10 @@ std::unique_ptr<BaseBackend> PaddleBackend::Clone(RuntimeOption& runtime_option,
   std::unique_ptr<BaseBackend> new_backend =
       utils::make_unique<PaddleBackend>();
   auto casted_backend = dynamic_cast<PaddleBackend*>(new_backend.get());
-  if (device_id > 0 && option_.use_gpu == true && device_id != option_.gpu_id) {
+  if (device_id > 0 && (option_.device == Device::GPU) &&
+      device_id != option_.device_id) {
     auto clone_option = option_;
-    clone_option.gpu_id = device_id;
+    clone_option.device_id = device_id;
     clone_option.external_stream_ = stream;
     if (runtime_option.model_from_memory_) {
       FDASSERT(
@@ -279,7 +314,7 @@ std::unique_ptr<BaseBackend> PaddleBackend::Clone(RuntimeOption& runtime_option,
     }
 
     FDWARNING << "The target device id:" << device_id
-              << " is different from current device id:" << option_.gpu_id
+              << " is different from current device id:" << option_.device_id
               << ", cannot share memory with current engine." << std::endl;
     return new_backend;
   }
@@ -347,10 +382,13 @@ void PaddleBackend::CollectShapeRun(
     const std::map<std::string, std::vector<int>>& shape) const {
   auto input_names = predictor->GetInputNames();
   auto input_type = predictor->GetInputTypes();
-  for (auto name : input_names) {
+  for (const auto& name : input_names) {
     FDASSERT(shape.find(name) != shape.end() &&
                  input_type.find(name) != input_type.end(),
-             "Paddle Input name [%s] is not one of the trt dynamic shape.",
+             "When collect_trt_shape is true, please define max/opt/min shape "
+             "for model's input:[\"%s\"] by "
+             "(C++)RuntimeOption.trt_option.SetShape/"
+             "(Python)RuntimeOption.trt_option.set_shape.",
              name.c_str());
     auto tensor = predictor->GetInputHandle(name);
     auto shape_value = shape.at(name);

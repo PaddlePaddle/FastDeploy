@@ -19,7 +19,12 @@ const char sep = '\\';
 const char sep = '/';
 #endif
 
-void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model_dir, const std::string& rec_model_dir, const std::string& rec_label_file, const std::string& image_file, const fastdeploy::RuntimeOption& option) {
+void InitAndInfer(const std::string& det_model_dir,
+                  const std::string& cls_model_dir,
+                  const std::string& rec_model_dir,
+                  const std::string& rec_label_file,
+                  const std::string& image_file,
+                  const fastdeploy::RuntimeOption& option) {
   auto det_model_file = det_model_dir + sep + "inference.pdmodel";
   auto det_params_file = det_model_dir + sep + "inference.pdiparams";
 
@@ -33,33 +38,40 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   auto cls_option = option;
   auto rec_option = option;
 
-  auto det_model = fastdeploy::vision::ocr::DBDetector(det_model_file, det_params_file, det_option);
-  auto cls_model = fastdeploy::vision::ocr::Classifier(cls_model_file, cls_params_file, cls_option);
-  auto rec_model = fastdeploy::vision::ocr::Recognizer(rec_model_file, rec_params_file, rec_label_file, rec_option);
+  auto det_model = fastdeploy::vision::ocr::DBDetector(
+      det_model_file, det_params_file, det_option);
+  auto cls_model = fastdeploy::vision::ocr::Classifier(
+      cls_model_file, cls_params_file, cls_option);
+  auto rec_model = fastdeploy::vision::ocr::Recognizer(
+      rec_model_file, rec_params_file, rec_label_file, rec_option);
 
-  // Users could enable static shape infer for rec model when deploy PP-OCR on hardware 
-  // which can not support dynamic shape infer well, like Huawei Ascend series. 
+  // Users could enable static shape infer for rec model when deploy PP-OCR on
+  // hardware
+  // which can not support dynamic shape infer well, like Huawei Ascend series.
   rec_model.GetPreprocessor().SetStaticShapeInfer(true);
 
   assert(det_model.Initialized());
   assert(cls_model.Initialized());
   assert(rec_model.Initialized());
 
-  // The classification model is optional, so the PP-OCR can also be connected in series as follows
+  // The classification model is optional, so the PP-OCR can also be connected
+  // in series as follows
   // auto ppocr_v2 = fastdeploy::pipeline::PPOCRv2(&det_model, &rec_model);
-  auto ppocr_v2 = fastdeploy::pipeline::PPOCRv2(&det_model, &cls_model, &rec_model);
+  auto ppocr_v2 =
+      fastdeploy::pipeline::PPOCRv2(&det_model, &cls_model, &rec_model);
 
-  // When users enable static shape infer for rec model, the batch size of cls and rec model must to be set to 1.
+  // When users enable static shape infer for rec model, the batch size of cls
+  // and rec model must to be set to 1.
   ppocr_v2.SetClsBatchSize(1);
-  ppocr_v2.SetRecBatchSize(1); 
+  ppocr_v2.SetRecBatchSize(1);
 
-  if(!ppocr_v2.Initialized()){
+  if (!ppocr_v2.Initialized()) {
     std::cerr << "Failed to initialize PP-OCR." << std::endl;
     return;
   }
 
   auto im = cv::imread(image_file);
-  
+
   fastdeploy::vision::OCRResult result;
   if (!ppocr_v2.Predict(im, &result)) {
     std::cerr << "Failed to predict." << std::endl;
@@ -92,7 +104,7 @@ int main(int argc, char* argv[]) {
   int flag = std::atoi(argv[6]);
 
   if (flag == 0) {
-    option.UseCpu(); 
+    option.UseCpu();
   } else if (flag == 1) {
     option.UseAscend();
   }
@@ -102,6 +114,7 @@ int main(int argc, char* argv[]) {
   std::string rec_model_dir = argv[3];
   std::string rec_label_file = argv[4];
   std::string test_image = argv[5];
-  InitAndInfer(det_model_dir, cls_model_dir, rec_model_dir, rec_label_file, test_image, option);
+  InitAndInfer(det_model_dir, cls_model_dir, rec_model_dir, rec_label_file,
+               test_image, option);
   return 0;
 }

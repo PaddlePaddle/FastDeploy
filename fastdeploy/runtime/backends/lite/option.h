@@ -17,13 +17,11 @@
 #include "fastdeploy/core/fd_type.h"
 // https://github.com/PaddlePaddle/Paddle-Lite/issues/8290
 #if (defined(WITH_LITE_STATIC) && defined(WITH_STATIC_LIB))
-// Whether to output some warning messages when using the 
+// Whether to output some warning messages when using the
 // FastDepoy static library, default OFF. These messages
 // are only reserve for debugging.
 #if defined(WITH_STATIC_WARNING)
-#warning You are using the FastDeploy static library. \
-We will automatically add some registration codes for \
-ops, kernels and passes for Paddle Lite.
+#warning You are using the FastDeploy static library. We will automatically add some registration codes for ops, kernels and passes for Paddle Lite. // NOLINT
 #endif
 #if !defined(WITH_STATIC_LIB_AT_COMPILING)
 #include "paddle_use_ops.h"       // NOLINT
@@ -36,7 +34,7 @@ ops, kernels and passes for Paddle Lite.
 #include <memory>
 #include <string>
 #include <vector>
-#include <map>  
+#include <map>
 
 namespace fastdeploy {
 
@@ -50,25 +48,30 @@ enum LitePowerMode {
   LITE_POWER_RAND_LOW = 5    ///< Use Lite Backend with rand low power mode
 };
 
+/*! @brief Option object to configure Paddle Lite backend
+ */
 struct LiteBackendOption {
-  // cpu num threads
-  int threads = 1;
-  // lite power mode
-  // 0: LITE_POWER_HIGH
-  // 1: LITE_POWER_LOW
-  // 2: LITE_POWER_FULL
-  // 3: LITE_POWER_NO_BIND
-  // 4: LITE_POWER_RAND_HIGH
-  // 5: LITE_POWER_RAND_LOW
+  /// Paddle Lite power mode for mobile device.
   int power_mode = 3;
-  // enable fp16
+  /// Number of threads while use CPU
+  int cpu_threads = 1;
+  /// Enable use half precision
   bool enable_fp16 = false;
-  // enable int8
-  bool enable_int8 = false;
-  // optimized model dir for CxxConfig
+  /// Inference device, Paddle Lite support CPU/KUNLUNXIN/TIMVX/ASCEND
+  Device device = Device::CPU;
+  /// Index of inference device
+  int device_id = 0;
+
+  int kunlunxin_l3_workspace_size = 0xfffc00;
+  bool kunlunxin_locked = false;
+  bool kunlunxin_autotune = true;
+  std::string kunlunxin_autotune_file = "";
+  std::string kunlunxin_precision = "int16";
+  bool kunlunxin_adaptive_seqlen = false;
+  bool kunlunxin_enable_multi_stream = false;
+
+  /// Optimized model dir for CxxConfig
   std::string optimized_model_dir = "";
-  // TODO(qiuyanjun): support more options for lite backend.
-  // Such as fp16, different device target (kARM/kXPU/kNPU/...)
   std::string nnadapter_subgraph_partition_config_path = "";
   std::string nnadapter_subgraph_partition_config_buffer = "";
   std::string nnadapter_context_properties = "";
@@ -77,16 +80,5 @@ struct LiteBackendOption {
   std::map<std::string, std::vector<std::vector<int64_t>>>
     nnadapter_dynamic_shape_info = {{"", {{0}}}};
   std::vector<std::string> nnadapter_device_names = {};
-  bool enable_timvx = false;
-  bool enable_ascend = false;
-  bool enable_kunlunxin = false;
-  int device_id = 0;
-  int kunlunxin_l3_workspace_size = 0xfffc00;
-  bool kunlunxin_locked = false;
-  bool kunlunxin_autotune = true;
-  std::string kunlunxin_autotune_file = "";
-  std::string kunlunxin_precision = "int16";
-  bool kunlunxin_adaptive_seqlen = false;
-  bool kunlunxin_enable_multi_stream = false;
 };
 }  // namespace fastdeploy

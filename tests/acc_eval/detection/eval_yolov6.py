@@ -52,8 +52,8 @@ model = fd.vision.detection.YOLOv6(
     runtime_option=runtime_option,
     model_format=fd.ModelFormat.PADDLE)
 
-image_file_path = "/xieyunyao/Project/coco/val2017"
-annotation_file_path = "/xieyunyao/Project/coco/annotations/instances_val2017.json"
+image_file_path = "../dataset/coco/val2017"
+annotation_file_path = "../dataset/coco/annotations/instances_val2017.json"
 
 res = fd.vision.evaluation.eval_detection(model, image_file_path,
                                           annotation_file_path, 0.001, 0.65)
