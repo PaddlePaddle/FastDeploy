@@ -39,10 +39,21 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_
                               1
 ```
 
-
-运行完成可视化结果如下图所示
+运行完成可视化结果如下图所示:
 
 <img width="640" src="https://user-images.githubusercontent.com/109218879/185826024-f7593a0c-1bd2-4a60-b76c-15588484fa08.jpg">
+
+结果输出如下:
+
+```text
+det boxes: [[276,174],[285,173],[285,178],[276,179]]rec text:  rec score:0.000000 cls label: 1 cls score: 0.766602
+det boxes: [[43,408],[483,390],[483,431],[44,449]]rec text: 上海斯格威铂尔曼大酒店 rec score:0.888450 cls label: 0 cls score: 1.000000
+det boxes: [[186,456],[399,448],[399,480],[186,488]]rec text: 打浦路15号 rec score:0.988769 cls label: 0 cls score: 1.000000
+det boxes: [[18,501],[513,485],[514,537],[18,554]]rec text: 绿洲仕格维花园公寓 rec score:0.992730 cls label: 0 cls score: 1.000000
+det boxes: [[78,553],[404,541],[404,573],[78,585]]rec text: 打浦路252935号 rec score:0.983545 cls label: 0 cls score: 1.000000
+Visualized result saved in ./vis_result.jpg
+```
+
 
 ## 其它文档
 
