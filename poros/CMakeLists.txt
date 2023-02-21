@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(poros)
 set(CMAKE_CXX_STANDARD 14)
-add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
-
 
 option(BUILD_STATIC "build lib${PROJECT_NAME}.a static lib" OFF)
 option(BUILD_KERNEL "build lib${PROJECT_NAME}-kernel.so shared lib" OFF)
@@ -11,7 +9,17 @@ option(BUILD_TOOL "build ${PROJECT_NAME}-tool, an executable binary output" OFF)
 option(TEST "build for test. copy '.so' to site-packages automatically after compile" OFF)
 option(DEBUG "build for debug. add '-g' flag to gcc for detailed debug information" ON)
 option(UT "build for unit test" OFF)
+option(ABI "build ${PROJECT_NAME} with application binary interface (ABI) is on" OFF)
 
+# abi configuration
+if (NOT ABI)
+    add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
+else ()
+    if (BUILD_TOOL OR UT)
+        message(FATAL_ERROR "${PROJECT_NAME}-tool or unit test are not supported when abi is on.")
+    endif()
+    add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
+endif ()
 
 # minimum requirements
 set(PYTHON_MINIMUM_VERSION 3.6)
@@ -49,33 +57,33 @@ find_package(CUDNN ${CUDNN_MINIMUM_VERSION} REQUIRED)
 
 ## release headers
 # engine
-file(GLOB headers "${PROJECT_SOURCE_DIR}/src/poros/engine/iengine.h" "${PROJECT_SOURCE_DIR}/src/poros/engine/engine_context.h")
+file(GLOB headers "${PROJECT_SOURCE_DIR}/poros/engine/iengine.h" "${PROJECT_SOURCE_DIR}/poros/engine/engine_context.h")
 file(COPY ${headers} DESTINATION "${PROJECT_SOURCE_DIR}/build/include/poros/engine")
 # compile
-file(GLOB headers "${PROJECT_SOURCE_DIR}/src/poros/compile/poros_module.h")
+file(GLOB headers "${PROJECT_SOURCE_DIR}/poros/compile/poros_module.h")
 file(COPY ${headers} DESTINATION "${PROJECT_SOURCE_DIR}/build/include/poros/compile")
-file(GLOB headers "${PROJECT_SOURCE_DIR}/src/poros/compile/compile.h")
+file(GLOB headers "${PROJECT_SOURCE_DIR}/poros/compile/compile.h")
 file(COPY ${headers} DESTINATION "${PROJECT_SOURCE_DIR}/build/include/poros/compile")
 # converter
-file(GLOB headers "${PROJECT_SOURCE_DIR}/src/poros/converter/iconverter.h")
+file(GLOB headers "${PROJECT_SOURCE_DIR}/poros/converter/iconverter.h")
 file(COPY ${headers} DESTINATION "${PROJECT_SOURCE_DIR}/build/include/poros/converter")
 # iplugin
-file(GLOB headers "${PROJECT_SOURCE_DIR}/src/poros/iplugin/*.h")
+file(GLOB headers "${PROJECT_SOURCE_DIR}/poros/iplugin/*.h")
 file(COPY ${headers} DESTINATION "${PROJECT_SOURCE_DIR}/build/include/poros/iplugin")
 ## context
-file(GLOB headers "${PROJECT_SOURCE_DIR}/src/poros/context/*.h")
+file(GLOB headers "${PROJECT_SOURCE_DIR}/poros/context/*.h")
 file(COPY ${headers} DESTINATION "${PROJECT_SOURCE_DIR}/build/include/poros/context")
 ## context
-file(GLOB headers "${PROJECT_SOURCE_DIR}/src/poros/context/*.h")
+file(GLOB headers "${PROJECT_SOURCE_DIR}/poros/context/*.h")
 file(COPY ${headers} DESTINATION "${PROJECT_SOURCE_DIR}/build/include/poros/context")
 ## lowering
-file(GLOB headers "${PROJECT_SOURCE_DIR}/src/poros/lowering/*.h")
+file(GLOB headers "${PROJECT_SOURCE_DIR}/poros/lowering/*.h")
 file(COPY ${headers} DESTINATION "${PROJECT_SOURCE_DIR}/build/include/poros/lowering")
 ## util
-file(GLOB headers "${PROJECT_SOURCE_DIR}/src/poros/util/*.h")
+file(GLOB headers "${PROJECT_SOURCE_DIR}/poros/util/*.h")
 file(COPY ${headers} DESTINATION "${PROJECT_SOURCE_DIR}/build/include/poros/util")
 ## log
-file(GLOB headers "${PROJECT_SOURCE_DIR}/src/poros/log/*.h")
+file(GLOB headers "${PROJECT_SOURCE_DIR}/poros/log/*.h")
 file(COPY ${headers} DESTINATION "${PROJECT_SOURCE_DIR}/build/include/poros/log")
 
 
@@ -83,8 +91,8 @@ include_directories(${TORCH_INCLUDE_DIRS})
 include_directories(${TensorRT_INCLUDE_DIRS})
 include_directories(${CUDA_INCLUDE_DIRS})
 include_directories(${CUDNN_INCLUDE_PATH})
-include_directories(src)
-include_directories(src/poros/compile)
+include_directories(${PROJECT_SOURCE_DIR})
+include_directories(poros/compile)
 
 
 add_compile_options(-D__const__= -D_GNU_SOURCE)
@@ -109,9 +117,9 @@ add_compile_options(
 
 file(
         GLOB POROS_CPP_FILES
-        "./src/poros/*/*.cpp"
-        "./src/poros/converter/*/*.cpp"
-        "./src/poros/converter/gpu/plugins/*.cpp"
+        "./poros/*/*.cpp"
+        "./poros/converter/*/*.cpp"
+        "./poros/converter/gpu/plugins/*.cpp"
 )
 
 
@@ -183,13 +191,13 @@ endif ()
 # kernel
 file(
         GLOB POROS_KERNEL_CPP_FILES
-        ./src/poros/compile/*.cpp
-        ./src/poros/context/*.cpp
-        ./src/poros/iplugin/*.cpp
-        ./src/poros/log/*.cpp
-        ./src/poros/lowering/*.cpp
-        ./src/poros/util/*.cpp
-        ./src/poros/engine/engine.cpp
+        ./poros/compile/*.cpp
+        ./poros/context/*.cpp
+        ./poros/iplugin/*.cpp
+        ./poros/log/*.cpp
+        ./poros/lowering/*.cpp
+        ./poros/util/*.cpp
+        ./poros/engine/engine.cpp
 )
 
 # kernel SHARED

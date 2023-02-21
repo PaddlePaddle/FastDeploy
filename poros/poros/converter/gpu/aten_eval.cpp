@@ -66,6 +66,8 @@ bool AppendConverter::converter(TensorrtEngine* engine, const torch::jit::Node *
 bool GetitemConverter::converter(TensorrtEngine* engine, const torch::jit::Node *node) {
     at::ArrayRef<const torch::jit::Value*> inputs = node->inputs();
     POROS_CHECK_TRUE((inputs.size() == 2), "invaid inputs size for GetitemConverter");
+    POROS_CHECK_TRUE((inputs[1]->node()->kind() == torch::jit::prim::Constant),
+        "inputs[1] for GetitemConverter is not come from prim::Constant as expected");
 
     if (node->outputs()[0]->type()->str() == "Tensor") {
         //extract list
@@ -126,6 +128,8 @@ bool GetitemConverter::converter(TensorrtEngine* engine, const torch::jit::Node 
 bool SetitemConverter::converter(TensorrtEngine* engine, const torch::jit::Node *node) {
     at::ArrayRef<const torch::jit::Value*> inputs = node->inputs();
     POROS_CHECK_TRUE((inputs.size() == 3), "invaid inputs size for SetitemConverter");
+    POROS_CHECK_TRUE((inputs[1]->node()->kind() == torch::jit::prim::Constant),
+        "inputs[1] for SetitemConverter is not come from prim::Constant as expected");
 
     size_t idx = engine->context().get_constant(inputs[1]).toInt();
 

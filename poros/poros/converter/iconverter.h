@@ -360,6 +360,9 @@ public:
     void init_unsupport_op_set() {
         try {
             std::vector<std::string> unsupport_op_vec = PorosGlobalContext::instance().get_poros_options().unsupport_op_list;
+            // 每次设置unsupport_op_list时刷新schema和nodekind set，避免用户下次编译想重新设置还保留之前不支持的op
+            _unsupport_schema_set.clear();
+            _unsupport_nodekind_set.clear();
             for (size_t i = 0; i < unsupport_op_vec.size(); i++) {
                 std::string line = unsupport_op_vec[i];
                 if (line.size() == 0) {
