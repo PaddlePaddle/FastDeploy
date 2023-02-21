@@ -72,6 +72,28 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
   }
 }
 
+bool OrtBackend::use_fp16() {
+  bool support_cuda = false;
+  auto all_providers = Ort::GetAvailableProviders();
+  std::string providers_msg = "";
+  for (size_t i = 0; i < all_providers.size(); ++i) {
+    providers_msg = providers_msg + all_providers[i] + ", ";
+    if (all_providers[i] == "CUDAExecutionProvider") {
+      support_cuda = true;
+    }
+  }
+  if (support_cuda) {
+    convert_to_fp16 = true;
+  } else {
+    convert_to_fp16 = false;
+    FDWARNING << "FP16 only support on CPU, while the compiled fastdeploy with "
+                 "onnxruntime doesn't "
+                 "support GPU, the available providers are "
+              << providers_msg << ". Will use FP32 to infer." << std::endl;
+  }
+  return convert_to_fp16;
+}
+
 bool OrtBackend::Init(const RuntimeOption& option) {
   if (option.device != Device::CPU && option.device != Device::GPU) {
     FDERROR
@@ -129,14 +151,10 @@ bool OrtBackend::InitFromPaddle(const std::string& model_buffer,
   strcpy(ops[0].export_op_name, "MultiClassNMS");
   strcpy(ops[1].op_name, "pool2d");
   strcpy(ops[1].export_op_name, "AdaptivePool2d");
-  bool convert_to_fp16 = false;
-  auto all_providers = Ort::GetAvailableProviders();
-  bool support_cuda = std::find(all_providers.begin(), all_providers.end(),
-                                "CUDAExecutionProvider") != all_providers.end();
-  if (option.device == Device::GPU && support_cuda && option.enable_fp16) {
-    convert_to_fp16 = true;
-  }
 
+  if (option.device == Device::GPU && option.enable_fp16) {
+    use_fp16();
+  }
   if (!paddle2onnx::Export(
           model_buffer.c_str(), model_buffer.size(), params_buffer.c_str(),
           params_buffer.size(), &model_content_ptr, &model_content_size, 11,
@@ -146,13 +164,12 @@ bool OrtBackend::InitFromPaddle(const std::string& model_buffer,
             << std::endl;
     return false;
   }
-
   std::string onnx_model_proto(model_content_ptr,
                                model_content_ptr + model_content_size);
   delete[] model_content_ptr;
   model_content_ptr = nullptr;
   if (save_external) {
-    std::string model_file_name = "model.onnx";
+    model_file_name = "model.onnx";
     std::fstream f(model_file_name, std::ios::out);
     FDASSERT(f.is_open(), "Can not open file: %s to save model.",
              model_file_name.c_str());
@@ -175,10 +192,28 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
             << std::endl;
     return false;
   }
-
+  std::string onnx_model_buffer;
+  if (option.device == Device::GPU && option.enable_fp16 && !convert_to_fp16 &&
+      use_fp16()) {
+    char* model_content_ptr;
+    int model_content_size = 0;
+    paddle2onnx::ConvertFP32ToFP16(model_file.c_str(), model_file.size(),
+                                   &model_content_ptr, &model_content_size);
+    std::string onnx_model_proto(model_content_ptr,
+                                 model_content_ptr + model_content_size);
+    onnx_model_buffer = onnx_model_proto;
+  } else {
+    onnx_model_buffer = model_file;
+  }
   BuildOption(option);
   InitCustomOperators();
-  session_ = {env_, model_file.data(), model_file.size(), session_options_};
+  if (model_file_name.size()) {
+    session_ = {env_, model_file_name.c_str(), session_options_};
+  } else {
+    session_ = {env_, onnx_model_buffer.data(), onnx_model_buffer.size(),
+                session_options_};
+  }
+
   binding_ = std::make_shared<Ort::IoBinding>(session_);
 
   Ort::MemoryInfo memory_info("Cpu", OrtDeviceAllocator, 0, OrtMemTypeDefault);
