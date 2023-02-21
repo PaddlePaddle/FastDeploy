@@ -135,6 +135,26 @@ public:
     }
 };
 
+class ArgmaxArgminConverter : public GpuConverter {
+public:
+    ArgmaxArgminConverter() {}
+    virtual ~ArgmaxArgminConverter() {}
+
+    bool converter(TensorrtEngine* engine, const torch::jit::Node *node);
+
+    const std::vector<std::string> schema_string() {
+        return {"aten::argmax(Tensor self, int dim, bool keepdim=False) -> (Tensor)",
+                "aten::argmax(Tensor self, int? dim=None, bool keepdim=False) -> (Tensor)",
+                "aten::argmin(Tensor self, int dim, bool keepdim=False) -> (Tensor)",
+                };
+    }
+
+    const std::vector<torch::jit::NodeKind> node_kind() {
+        return {torch::jit::aten::argmax,
+                torch::jit::aten::argmin};
+    }
+};
+
 }  // namespace poros 
 }  // namespace mirana
 }  // namespace baidu
