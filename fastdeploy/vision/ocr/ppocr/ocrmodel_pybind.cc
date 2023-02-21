@@ -99,6 +99,11 @@ void BindPPOCRModel(pybind11::module& m) {
                              &vision::ocr::DBDetector::GetPreprocessor)
       .def_property_readonly("postprocessor",
                              &vision::ocr::DBDetector::GetPostprocessor)
+      .def("set_preprocessor",
+           [](vision::ocr::DBDetector& self,
+              vision::ocr::DBDetectorPreprocessor& obj) {
+             self.SetPreprocessor(obj);
+           })
       .def("predict",
            [](vision::ocr::DBDetector& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);

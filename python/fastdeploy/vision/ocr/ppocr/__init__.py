@@ -23,11 +23,10 @@ def sort_boxes(boxes):
 
 
 class DBDetectorPreprocessor:
-    def __init__(self, mean=[0.485, 0.456, 0.406],
-                 scale=[0.229, 0.224, 0.225]):
+    def __init__(self, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
         """Create a preprocessor for DBDetectorModel
         """
-        self._preprocessor = C.vision.ocr.DBDetectorPreprocessor(mean, scale)
+        self._preprocessor = C.vision.ocr.DBDetectorPreprocessor(mean, std)
 
     def run(self, input_ims):
         """Preprocess input images for DBDetectorModel
@@ -175,17 +174,15 @@ class DBDetector(FastDeployModel):
     def preprocessor(self):
         return self._model.preprocessor
 
-    @preprocessor.setter
-    def preprocessor(self, value):
-        self._model.preprocessor = value
+    def set_preprocessor(self, p):
+        """Set the preprocessor with custom mean and std parameters
+        :p: (DBDetectorPreprocessor) the preprocessor object
+        """
+        self._model.set_preprocessor(p._preprocessor)
 
     @property
     def postprocessor(self):
         return self._model.postprocessor
-
-    @postprocessor.setter
-    def postprocessor(self, value):
-        self._model.postprocessor = value
 
     # Det Preprocessor Property
     @property
@@ -197,36 +194,6 @@ class DBDetector(FastDeployModel):
         assert isinstance(
             value, int), "The value to set `max_side_len` must be type of int."
         self._model.preprocessor.max_side_len = value
-
-    @property
-    def is_scale(self):
-        return self._model.preprocessor.is_scale
-
-    @is_scale.setter
-    def is_scale(self, value):
-        assert isinstance(
-            value, bool), "The value to set `is_scale` must be type of bool."
-        self._model.preprocessor.is_scale = value
-
-    @property
-    def scale(self):
-        return self._model.preprocessor.scale
-
-    @scale.setter
-    def scale(self, value):
-        assert isinstance(
-            value, list), "The value to set `scale` must be type of list."
-        self._model.preprocessor.scale = value
-
-    @property
-    def mean(self):
-        return self._model.preprocessor.mean
-
-    @mean.setter
-    def mean(self, value):
-        assert isinstance(
-            value, list), "The value to set `mean` must be type of list."
-        self._model.preprocessor.mean = value
 
     # Det Ppstprocessor Property
     @property

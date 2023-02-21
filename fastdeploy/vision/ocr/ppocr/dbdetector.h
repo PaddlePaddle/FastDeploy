@@ -76,6 +76,11 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
     return preprocessor_;
   }
 
+  /// Set DBDetectorPreprocessor
+  void SetPreprocessor(DBDetectorPreprocessor& obj) {
+    preprocessor_ = obj;
+  }
+
   /// Get postprocessor reference of DBDetectorPostprocessor
   virtual DBDetectorPostprocessor& GetPostprocessor() {
     return postprocessor_;
