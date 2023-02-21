@@ -22,12 +22,6 @@
 namespace fastdeploy {
 namespace vision {
 
-#define CREATE_AND_REGISTER_PROCESSOR(cls_name, ...) [&] {\
-  auto x = std::make_shared<cls_name>(__VA_ARGS__);\
-  RegisterProcessor(x.get());\
-  return x;\
-}()\
-
 class FASTDEPLOY_DECL ProcessorManager {
  public:
   ~ProcessorManager();
@@ -84,6 +78,9 @@ class FASTDEPLOY_DECL ProcessorManager {
   virtual bool Apply(FDMatBatch* image_batch,
                      std::vector<FDTensor>* outputs) = 0;
 
+ protected:
+  ProcLib proc_lib_ = ProcLib::DEFAULT;
+
  private:
 #ifdef WITH_GPU
   cudaStream_t stream_ = nullptr;
@@ -94,8 +91,6 @@ class FASTDEPLOY_DECL ProcessorManager {
   std::vector<FDTensor> output_caches_;
   FDTensor batch_input_cache_;
   FDTensor batch_output_cache_;
-
-  ProcLib proc_lib_ = ProcLib::DEFAULT;
 };
 
 }  // namespace vision

@@ -107,6 +107,11 @@ bool PaddleClasPreprocessor::Apply(FDMatBatch* image_batch,
     return false;
   }
   for (size_t j = 0; j < processors_.size(); ++j) {
+    image_batch->proc_lib = proc_lib_;
+    if (initial_resize_on_cpu_ && j == 0 &&
+        processors_[j]->Name().find("Resize") == 0) {
+      image_batch->proc_lib = ProcLib::OPENCV;
+    }
     if (!(*(processors_[j].get()))(image_batch)) {
       FDERROR << "Failed to processs image in " << processors_[j]->Name() << "."
               << std::endl;
