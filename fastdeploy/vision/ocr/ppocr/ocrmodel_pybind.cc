@@ -25,10 +25,14 @@ void BindPPOCRModel(pybind11::module& m) {
   // DBDetector
   pybind11::class_<vision::ocr::DBDetectorPreprocessor>(
       m, "DBDetectorPreprocessor")
-      .def(pybind11::init<std::vector<float>, std::vector<float>>())
+      .def(pybind11::init<>())
       .def_property("max_side_len",
                     &vision::ocr::DBDetectorPreprocessor::GetMaxSideLen,
                     &vision::ocr::DBDetectorPreprocessor::SetMaxSideLen)
+      .def("set_normalize",
+           [](vision::ocr::DBDetectorPreprocessor& self,
+              const std::vector<float>& mean, const std::vector<float>& std,
+              bool is_scale) { self.SetNormalize(mean, std, is_scale); })
       .def("run", [](vision::ocr::DBDetectorPreprocessor& self,
                      std::vector<pybind11::array>& im_list) {
         std::vector<vision::FDMat> images;
@@ -99,11 +103,6 @@ void BindPPOCRModel(pybind11::module& m) {
                              &vision::ocr::DBDetector::GetPreprocessor)
       .def_property_readonly("postprocessor",
                              &vision::ocr::DBDetector::GetPostprocessor)
-      .def("set_preprocessor",
-           [](vision::ocr::DBDetector& self,
-              vision::ocr::DBDetectorPreprocessor& obj) {
-             self.SetPreprocessor(obj);
-           })
       .def("predict",
            [](vision::ocr::DBDetector& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);

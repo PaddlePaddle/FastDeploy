@@ -25,9 +25,7 @@ namespace ocr {
  */
 class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
  public:
-  DBDetectorPreprocessor(
-      const std::vector<float>& mean = {0.485f, 0.456f, 0.406f},
-      const std::vector<float>& std = {0.229f, 0.224f, 0.225f});
+  DBDetectorPreprocessor();
   /** \brief Process the input image and prepare input tensors for runtime
    *
    * \param[in] image_batch The input image batch
@@ -40,6 +38,13 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
   void SetMaxSideLen(int max_side_len) { max_side_len_ = max_side_len; }
   /// Get max_side_len of the detection preprocess
   int GetMaxSideLen() const { return max_side_len_; }
+
+  void SetNormalize(const std::vector<float>& mean = {0.485f, 0.456f, 0.406f},
+                    const std::vector<float>& std = {0.229f, 0.224f, 0.225f},
+                    bool is_scale = true) {
+    normalize_permute_op_ =
+        std::make_shared<NormalizeAndPermute>(mean, std, is_scale);
+  }
 
   const std::vector<std::array<int, 4>>* GetBatchImgInfo() {
     return &batch_det_img_info_;

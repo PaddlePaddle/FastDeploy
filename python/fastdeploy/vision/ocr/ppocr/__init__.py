@@ -45,6 +45,12 @@ class DBDetectorPreprocessor:
             value, int), "The value to set `max_side_len` must be type of int."
         self._preprocessor.max_side_len = value
 
+    def set_normalize(self,
+                      mean=[0.485, 0.456, 0.406],
+                      std=[0.229, 0.224, 0.225],
+                      is_scale=True):
+        self._preprocessor.set_normalize(mean, std, is_scale)
+
 
 class DBDetectorPostprocessor:
     def __init__(self):
@@ -173,12 +179,6 @@ class DBDetector(FastDeployModel):
     @property
     def preprocessor(self):
         return self._model.preprocessor
-
-    def set_preprocessor(self, p):
-        """Set the preprocessor with custom mean and std parameters
-        :p: (DBDetectorPreprocessor) the preprocessor object
-        """
-        self._model.set_preprocessor(p._preprocessor)
 
     @property
     def postprocessor(self):

@@ -47,13 +47,17 @@ std::array<int, 4> OcrDetectorGetInfo(FDMat* img, int max_size_len) {
    */
 }
 
-DBDetectorPreprocessor::DBDetectorPreprocessor(const std::vector<float>& mean,
-                                               const std::vector<float>& std) {
+DBDetectorPreprocessor::DBDetectorPreprocessor() {
   resize_op_ = std::make_shared<Resize>(-1, -1);
+
   std::vector<float> value = {0, 0, 0};
   pad_op_ = std::make_shared<Pad>(0, 0, 0, 0, value);
+
+  std::vector<float> mean = {0.485f, 0.456f, 0.406f};
+  std::vector<float> std = {0.229f, 0.224f, 0.225f};
+  bool is_scale = true;
   normalize_permute_op_ =
-      std::make_shared<NormalizeAndPermute>(mean, std, true);
+      std::make_shared<NormalizeAndPermute>(mean, std, is_scale);
 }
 
 bool DBDetectorPreprocessor::ResizeImage(FDMat* img, int resize_w, int resize_h,

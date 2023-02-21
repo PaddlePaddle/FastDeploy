@@ -14,7 +14,6 @@
 
 #include "fastdeploy/vision/classification/ppcls/preprocessor.h"
 
-#include "fastdeploy/function/concat.h"
 #include "yaml-cpp/yaml.h"
 
 namespace fastdeploy {
