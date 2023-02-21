@@ -431,7 +431,6 @@ bool ResultManager::SaveClassifyResult(const vision::ClassifyResult& res,
     }
   }
   fs << "\n";
-  fs << "\n";
   fs.close();
   return true;
 }
