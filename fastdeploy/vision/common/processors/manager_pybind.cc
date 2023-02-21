@@ -12,10 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/pybind/main.h"
+#include "fastdeploy/vision/common/processors/mat.h"
+#include "fastdeploy/vision/common/processors/mat_batch.h"
+
+namespace vision {
+class FASTDEPLOY_DECL PyProcessorManager : public ProcessorManager {
+  public:
+    using ProcessorManager::ProcessorManager;
+    using ProcessorManager::initialized_;
+    bool Apply(FDMatBatch* image_batch, std::vector<FDTensor>* outputs) override {
+      PYBIND11_OVERRIDE_PURE(bool,
+                             ProcessorManager,
+                             Apply,
+                             image_batch,
+                             outputs
+      );
+    }
+};
+} // namespace vision
 
 namespace fastdeploy {
 void BindProcessorManager(pybind11::module& m) {
-  pybind11::class_<vision::ProcessorManager>(m, "ProcessorManager")
+  pybind11::class_<vision::ProcessorManager, vision::PyProcessorManager>(m, "ProcessorManager")
+      .def(pybind11::init<>())
       .def("run",
            [](vision::ProcessorManager& self,
               std::vector<pybind11::array>& im_list) {
@@ -36,6 +55,7 @@ void BindProcessorManager(pybind11::module& m) {
            })
       .def("use_cuda",
            [](vision::ProcessorManager& self, bool enable_cv_cuda = false,
-              int gpu_id = -1) { self.UseCuda(enable_cv_cuda, gpu_id); });
+              int gpu_id = -1) { self.UseCuda(enable_cv_cuda, gpu_id); })
+      .def("Apply", &vision::ProcessorManager::Apply);
 }
 }  // namespace fastdeploy

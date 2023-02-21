@@ -16,6 +16,7 @@
 
 namespace fastdeploy {
 
+void BindFDMatBatch(pybind11::module& m);
 void BindProcessorManager(pybind11::module& m);
 void BindDetection(pybind11::module& m);
 void BindClassification(pybind11::module& m);
@@ -205,6 +206,7 @@ void BindVision(pybind11::module& m) {
   m.def("disable_flycv", &vision::DisableFlyCV,
         "Disable image preprocessing by FlyCV, change to use OpenCV.");
 
+  BindFDMatBatch(m);
   BindProcessorManager(m);
   BindDetection(m);
   BindClassification(m);

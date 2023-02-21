@@ -52,10 +52,10 @@ bool ProcessorManager::CudaUsed() {
 
 bool ProcessorManager::Run(std::vector<FDMat>* images,
                            std::vector<FDTensor>* outputs) {
-  if (!initialized_) {
-    FDERROR << "The preprocessor is not initialized." << std::endl;
-    return false;
-  }
+  // if (!initialized_) {
+  //   FDERROR << "The preprocessor is not initialized." << std::endl;
+  //   return false;
+  // }
   if (images->size() == 0) {
     FDERROR << "The size of input images should be greater than 0."
             << std::endl;
