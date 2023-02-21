@@ -75,6 +75,29 @@ class DBDetectorPreprocessor:
             value, list), "The value to set `mean` must be type of list."
         self._preprocessor.mean = value
 
+    @property
+    def static_shape_infer(self):
+        return self._preprocessor.static_shape_infer
+
+    @static_shape_infer.setter
+    def static_shape_infer(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `static_shape_infer` must be type of bool."
+        self._preprocessor.static_shape_infer = value
+
+    def disable_normalize(self):
+        """
+        This function will disable normalize in preprocessing step.
+        """
+        self._preprocessor.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self._preprocessor.disable_permute()
+
 
 class DBDetectorPostprocessor:
     def __init__(self):
@@ -174,6 +197,7 @@ class DBDetector(FastDeployModel):
         """Clone OCR detection model object
         :return: a new OCR detection model object
         """
+
         class DBDetectorClone(DBDetector):
             def __init__(self, model):
                 self._model = model
@@ -367,6 +391,18 @@ class ClassifierPreprocessor:
             list), "The value to set `cls_image_shape` must be type of list."
         self._preprocessor.cls_image_shape = value
 
+    def disable_normalize(self):
+        """
+        This function will disable normalize in preprocessing step.
+        """
+        self._preprocessor.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self._preprocessor.disable_permute()
+
 
 class ClassifierPostprocessor:
     def __init__(self):
@@ -421,6 +457,7 @@ class Classifier(FastDeployModel):
         """Clone OCR classification model object
         :return: a new OCR classification model object
         """
+
         class ClassifierClone(Classifier):
             def __init__(self, model):
                 self._model = model
@@ -582,6 +619,18 @@ class RecognizerPreprocessor:
             list), "The value to set `rec_image_shape` must be type of list."
         self._preprocessor.rec_image_shape = value
 
+    def disable_normalize(self):
+        """
+        This function will disable normalize in preprocessing step.
+        """
+        self._preprocessor.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self._preprocessor.disable_permute()
+
 
 class RecognizerPostprocessor:
     def __init__(self, label_path):
@@ -629,6 +678,7 @@ class Recognizer(FastDeployModel):
         """Clone OCR recognition model object
         :return: a new OCR recognition model object
         """
+
         class RecognizerClone(Recognizer):
             def __init__(self, model):
                 self._model = model
@@ -734,7 +784,7 @@ class PPOCRv3(FastDeployModel):
         assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None."
         if cls_model is None:
             self.system_ = C.vision.ocr.PPOCRv3(det_model._model,
-                                               rec_model._model)
+                                                rec_model._model)
         else:
             self.system_ = C.vision.ocr.PPOCRv3(
                 det_model._model, cls_model._model, rec_model._model)
@@ -743,6 +793,7 @@ class PPOCRv3(FastDeployModel):
         """Clone PPOCRv3 pipeline object
         :return: a new PPOCRv3 pipeline object
         """
+
         class PPOCRv3Clone(PPOCRv3):
             def __init__(self, system):
                 self.system_ = system
@@ -809,7 +860,7 @@ class PPOCRv2(FastDeployModel):
         assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None."
         if cls_model is None:
             self.system_ = C.vision.ocr.PPOCRv2(det_model._model,
-                                               rec_model._model)
+                                                rec_model._model)
         else:
             self.system_ = C.vision.ocr.PPOCRv2(
                 det_model._model, cls_model._model, rec_model._model)
@@ -818,6 +869,7 @@ class PPOCRv2(FastDeployModel):
         """Clone PPOCRv3 pipeline object
         :return: a new PPOCRv3 pipeline object
         """
+
         class PPOCRv2Clone(PPOCRv2):
             def __init__(self, system):
                 self.system_ = system
