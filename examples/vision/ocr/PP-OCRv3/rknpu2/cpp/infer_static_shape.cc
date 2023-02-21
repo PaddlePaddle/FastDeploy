@@ -22,21 +22,21 @@ void InitAndInfer(const std::string &det_model_file,
                   const fastdeploy::RuntimeOption &option,
                   const fastdeploy::ModelFormat &format) {
   auto det_params_file = "";
-
   auto cls_params_file = "";
-
   auto rec_params_file = "";
 
   auto det_option = option;
   auto cls_option = option;
   auto rec_option = option;
 
-  auto det_model = fastdeploy::vision::ocr::DBDetector(det_model_file, det_params_file, det_option, format);
-  auto cls_model = fastdeploy::vision::ocr::Classifier(cls_model_file, cls_params_file, cls_option, format);
-  auto rec_model = fastdeploy::vision::ocr::Recognizer(rec_model_file, rec_params_file, rec_label_file, rec_option,
-                                                       format);
+  auto det_model = fastdeploy::vision::ocr::DBDetector(
+      det_model_file, det_params_file, det_option, format);
+  auto cls_model = fastdeploy::vision::ocr::Classifier(
+      cls_model_file, cls_params_file, cls_option, format);
+  auto rec_model = fastdeploy::vision::ocr::Recognizer(
+      rec_model_file, rec_params_file, rec_label_file, rec_option, format);
 
-  if(format == fastdeploy::RKNN){
+  if (format == fastdeploy::RKNN) {
     cls_model.GetPreprocessor().DisableNormalize();
     cls_model.GetPreprocessor().DisablePermute();
 
@@ -53,11 +53,14 @@ void InitAndInfer(const std::string &det_model_file,
   assert(cls_model.Initialized());
   assert(rec_model.Initialized());
 
-  // The classification model is optional, so the PP-OCR can also be connected in series as follows
-  // auto ppocr_v3 = fastdeploy::pipeline::PPOCRv3(&det_model, &rec_model);
-  auto ppocr_v3 = fastdeploy::pipeline::PPOCRv3(&det_model, &cls_model, &rec_model);
+  // The classification model is optional, so the PP-OCR can also be connected
+  // in series as follows auto ppocr_v3 =
+  // fastdeploy::pipeline::PPOCRv3(&det_model, &rec_model);
+  auto ppocr_v3 =
+      fastdeploy::pipeline::PPOCRv3(&det_model, &cls_model, &rec_model);
 
-  // When users enable static shape infer for rec model, the batch size of cls and rec model must to be set to 1.
+  // When users enable static shape infer for rec model, the batch size of cls
+  // and rec model must to be set to 1.
   ppocr_v3.SetClsBatchSize(1);
   ppocr_v3.SetRecBatchSize(1);
 
@@ -113,6 +116,7 @@ int main(int argc, char *argv[]) {
   std::string rec_model_dir = argv[3];
   std::string rec_label_file = argv[4];
   std::string test_image = argv[5];
-  InitAndInfer(det_model_dir, cls_model_dir, rec_model_dir, rec_label_file, test_image, option, format);
+  InitAndInfer(det_model_dir, cls_model_dir, rec_model_dir, rec_label_file,
+               test_image, option, format);
   return 0;
 }
