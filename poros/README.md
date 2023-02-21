@@ -43,7 +43,7 @@ get Poros source code:
 ```shell
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd poros
-git submodule update --init --recursive --jobs 0 -f
+git submodule update --init --recursive
 ```
 
 We strongly recommend you to prepare the building environment with anaconda3:
