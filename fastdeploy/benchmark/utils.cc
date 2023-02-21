@@ -555,32 +555,35 @@ bool ResultManager::LoadSegmentationResult(vision::SegmentationResult* res,
   return true;
 }
 
-DetectionDiff ResultManager::CalculateDiffStatis(vision::DetectionResult* lhs,
-                                                 vision::DetectionResult* rhs,
-                                                 float score_threshold) {
+DetectionDiff ResultManager::CalculateDiffStatis(
+    const vision::DetectionResult& lhs, const vision::DetectionResult& rhs,
+    const float& score_threshold) {
+  vision::DetectionResult lhs_sort = lhs;
+  vision::DetectionResult rhs_sort = rhs;
   // lex sort by x(w) & y(h)
-  vision::utils::LexSortDetectionResultByXY(lhs);
-  vision::utils::LexSortDetectionResultByXY(rhs);
+  vision::utils::LexSortDetectionResultByXY(&lhs_sort);
+  vision::utils::LexSortDetectionResultByXY(&rhs_sort);
   // get value diff & trunc it by score_threshold
-  const int boxes_num = std::min(lhs->boxes.size(), rhs->boxes.size());
+  const int boxes_num = std::min(lhs_sort.boxes.size(), rhs_sort.boxes.size());
   std::vector<float> boxes_diff;
   std::vector<float> scores_diff;
   std::vector<int32_t> labels_diff;
   // TODO(qiuyanjun): process the diff of masks.
   for (int i = 0; i < boxes_num; ++i) {
-    if (lhs->scores[i] > score_threshold && rhs->scores[i] > score_threshold) {
-      scores_diff.push_back(lhs->scores[i] - rhs->scores[i]);
-      labels_diff.push_back(lhs->label_ids[i] - rhs->label_ids[i]);
-      boxes_diff.push_back(lhs->boxes[i][0] - rhs->boxes[i][0]);
-      boxes_diff.push_back(lhs->boxes[i][1] - rhs->boxes[i][1]);
-      boxes_diff.push_back(lhs->boxes[i][2] - rhs->boxes[i][2]);
-      boxes_diff.push_back(lhs->boxes[i][3] - rhs->boxes[i][3]);
+    if (lhs_sort.scores[i] > score_threshold &&
+        rhs_sort.scores[i] > score_threshold) {
+      scores_diff.push_back(lhs_sort.scores[i] - rhs_sort.scores[i]);
+      labels_diff.push_back(lhs_sort.label_ids[i] - rhs_sort.label_ids[i]);
+      boxes_diff.push_back(lhs_sort.boxes[i][0] - rhs_sort.boxes[i][0]);
+      boxes_diff.push_back(lhs_sort.boxes[i][1] - rhs_sort.boxes[i][1]);
+      boxes_diff.push_back(lhs_sort.boxes[i][2] - rhs_sort.boxes[i][2]);
+      boxes_diff.push_back(lhs_sort.boxes[i][3] - rhs_sort.boxes[i][3]);
     }
   }
   FDASSERT(boxes_diff.size() > 0,
            "Can't get any valid boxes while score_threshold is %f, "
            "The boxes.size of lhs is %d, the boxes.size of rhs is %d",
-           score_threshold, lhs->boxes.size(), rhs->boxes.size())
+           score_threshold, lhs_sort.boxes.size(), rhs_sort.boxes.size())
 
   DetectionDiff diff;
   CalculateStatisInfo<float>(boxes_diff.data(), boxes_diff.size(),
@@ -595,14 +598,14 @@ DetectionDiff ResultManager::CalculateDiffStatis(vision::DetectionResult* lhs,
   return diff;
 }
 
-ClassifyDiff ResultManager::CalculateDiffStatis(vision::ClassifyResult* lhs,
-                                                vision::ClassifyResult* rhs) {
-  const int class_nums = std::min(lhs->label_ids.size(), rhs->label_ids.size());
+ClassifyDiff ResultManager::CalculateDiffStatis(
+    const vision::ClassifyResult& lhs, const vision::ClassifyResult& rhs) {
+  const int class_nums = std::min(lhs.label_ids.size(), rhs.label_ids.size());
   std::vector<float> scores_diff;
   std::vector<int32_t> labels_diff;
   for (int i = 0; i < class_nums; ++i) {
-    scores_diff.push_back(lhs->scores[i] - rhs->scores[i]);
-    labels_diff.push_back(lhs->label_ids[i] - rhs->label_ids[i]);
+    scores_diff.push_back(lhs.scores[i] - rhs.scores[i]);
+    labels_diff.push_back(lhs.label_ids[i] - rhs.label_ids[i]);
   }
 
   ClassifyDiff diff;

@@ -149,13 +149,14 @@ struct FASTDEPLOY_DECL ResultManager {
   static bool LoadSegmentationResult(vision::SegmentationResult* res,
                                      const std::string& path);
   /// Calculate diff value between two basic results.
-  static DetectionDiff CalculateDiffStatis(vision::DetectionResult* lhs,
-                                           vision::DetectionResult* rhs,
-                                           float score_threshold = 0.3f);
-  static ClassifyDiff CalculateDiffStatis(vision::ClassifyResult* lhs,
-                                          vision::ClassifyResult* rhs);
-  static SegmentationDiff CalculateDiffStatis(const vision::SegmentationResult& lhs, //NOLINT
-                                              const vision::SegmentationResult& rhs); //NOLINT
+  static DetectionDiff CalculateDiffStatis(const vision::DetectionResult& lhs,
+                                           const vision::DetectionResult& rhs,
+                                           const float& score_threshold = 0.3f);
+  static ClassifyDiff CalculateDiffStatis(const vision::ClassifyResult& lhs,
+                                          const vision::ClassifyResult& rhs);
+  static SegmentationDiff CalculateDiffStatis(
+      const vision::SegmentationResult& lhs,
+      const vision::SegmentationResult& rhs);
 #endif  // ENABLE_VISION
 #endif  // ENABLE_BENCHMARK
 };
