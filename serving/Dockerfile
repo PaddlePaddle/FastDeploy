@@ -51,7 +51,7 @@ RUN python3 -m pip install  /opt/fastdeploy/*.whl \
 # ENV http_proxy=
 # ENV https_proxy=
 # RUN python3 -m pip install paddlepaddle-gpu==2.4.1.post112 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
-RUN python3 -m pip install paddlepaddle-gpu==2.4.1.post112
+RUN python3 -m pip install paddlepaddle-gpu==2.4.1
 
 COPY serving/build/libtriton_fastdeploy.so /opt/tritonserver/backends/fastdeploy/
 COPY build/fastdeploy_install /opt/fastdeploy/
