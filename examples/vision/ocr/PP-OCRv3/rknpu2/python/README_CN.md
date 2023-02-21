@@ -32,7 +32,7 @@ cd examples/vision/ocr/PP-OCRv3/python/
 python3 infer_static_shape.py \
                 --det_model ./ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer.onnx \
                 --cls_model ./ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
-                --rec_model ./ch_PP-OCRv3_rec_infer\ch_PP-OCRv3_rec_infer.onnx \
+                --rec_model ./ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer.onnx \
                 --rec_label_file ./ppocr_keys_v1.txt \
                 --image 12.jpg \
                 --device cpu

@@ -81,10 +81,10 @@ args = parse_arguments()
 det_model_file = args.det_model
 det_params_file = ""
 # Classification模型，方向分类，可选
-cls_model_file = args.det_model
+cls_model_file = args.cls_model
 cls_params_file = ""
 # Recognition模型，文字识别模型
-rec_model_file = args.det_model
+rec_model_file = args.rec_model
 rec_params_file = ""
 rec_label_file = args.rec_label_file
 
