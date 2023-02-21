@@ -15,6 +15,7 @@
 #include "fastdeploy/vision/common/processors/mat.h"
 #include "fastdeploy/vision/common/processors/mat_batch.h"
 
+namespace fastdeploy {
 namespace vision {
 class FASTDEPLOY_DECL PyProcessorManager : public ProcessorManager {
   public:
@@ -31,7 +32,6 @@ class FASTDEPLOY_DECL PyProcessorManager : public ProcessorManager {
 };
 } // namespace vision
 
-namespace fastdeploy {
 void BindProcessorManager(pybind11::module& m) {
   pybind11::class_<vision::ProcessorManager, vision::PyProcessorManager>(m, "ProcessorManager")
       .def(pybind11::init<>())
