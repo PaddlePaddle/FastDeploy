@@ -9,7 +9,7 @@
 | ENABLE_VISION     | ON | 默认OFF，是否编译集成视觉模型的部署模块 |
 | ENABLE_TEXT       | ON | 默认OFF，是否编译集成文本NLP模型的部署模块 |  
 
-运行FastDeploy C++ Benchmark，需先准备好相应的环境，并在ENABLE_BENCHMARK=ON模式下从源码编译FastDeploy C++ SDK. 以下将按照硬件维度，来说明相应的系统环境要求。不同环境下的详细要求，请参考[FastDeploy环境要求](../docs/cn/build_and_install)  
+运行FastDeploy C++ Benchmark，需先准备好相应的环境，并在ENABLE_BENCHMARK=ON模式下从源码编译FastDeploy C++ SDK. 以下将按照硬件维度，来说明相应的系统环境要求。不同环境下的详细要求，请参考[FastDeploy环境要求](../../docs/cn/build_and_install)  
 
 ## 2. Benchmark 参数设置说明  
 
@@ -27,7 +27,7 @@
 | --repeat           | 跑benchmark的循环次数，默认为 1000 |  
 | --profile_mode      | 指定需要测试性能的模式，可选值为`[runtime, end2end]`，默认为 runtime |  
 | --include_h2d_d2h   | 是否把H2D+D2H的耗时统计在内，该参数只在profile_mode为runtime时有效，默认为 false |  
-| --backend            | 指定后端类型，有default, ort, ov, trt, paddle, paddle_trt, lite 等，为default时，会根据当前的硬件和输入的模型格式自动选择后端，推荐设置为显式设置明确的backend。默认为 default   |
+| --backend            | 指定后端类型，有default, ort, ov, trt, paddle, paddle_trt, lite 等，为default时，会自动选择最优后端，推荐设置为显式设置明确的backend。默认为 default   |
 | --use_fp16    | 是否开启fp16，当前只对 trt, paddle-trt, lite后端有效，默认为 false |
 | --collect_memory_info    | 是否记录 cpu/gpu memory信息，默认 false  |
 | --sampling_interval    | 记录 cpu/gpu memory信息采样时间间隔，单位ms，默认为 50  |  
