@@ -46,11 +46,15 @@ int main(int argc, char* argv[]) {
   // Calculate diff between two results.
   auto det_diff =
       benchmark::ResultManager::CalculateDiffStatis(&res, &res_loaded);
-  std::cout << "diff: mean=" << det_diff.mean << ",max=" << det_diff.max
-            << ",min=" << det_diff.min << std::endl;
+  std::cout << "Boxes diff: mean=" << det_diff.boxes.mean
+            << ", max=" << det_diff.boxes.max << ", min=" << det_diff.boxes.min
+            << std::endl;
+  std::cout << "Label_ids diff: mean=" << det_diff.labels.mean
+            << ", max=" << det_diff.labels.max
+            << ", min=" << det_diff.labels.min << std::endl;
   // 2. Test tensor diff
   std::cout << "=============== Test tensor diff =================\n";
-  std::vector<vision::DetectionResult> bacth_res;
+  std::vector<vision::DetectionResult> batch_res;
   std::vector<fastdeploy::FDTensor> input_tensors, output_tensors;
   std::vector<cv::Mat> imgs;
   imgs.push_back(im);
@@ -62,7 +66,7 @@ int main(int argc, char* argv[]) {
   input_tensors[2].name = "im_shape";
   input_tensors.pop_back();
   model_ppyolov8.Infer(input_tensors, &output_tensors);
-  model_ppyolov8.GetPostprocessor().Run(output_tensors, &bacth_res);
+  model_ppyolov8.GetPostprocessor().Run(output_tensors, &batch_res);
   // Save tensor to -> disk.
   auto& tensor_dump = output_tensors[0];
   std::string det_tensor_path = "ppyolov8_tensor.txt";
@@ -73,9 +77,9 @@ int main(int argc, char* argv[]) {
   // Calculate diff between two tensors.
   auto det_tensor_diff = benchmark::ResultManager::CalculateDiffStatis(
       &tensor_dump, &tensor_loaded);
-  std::cout << "diff: mean=" << det_tensor_diff.mean
-            << ",max=" << det_tensor_diff.max << ",min=" << det_tensor_diff.min
-            << std::endl;
+  std::cout << "Tensor diff: mean=" << det_tensor_diff.data.mean
+            << ", max=" << det_tensor_diff.data.max
+            << ", min=" << det_tensor_diff.data.min << std::endl;
   // 3. Run profiling
   BENCHMARK_MODEL(model_ppyolov8, model_ppyolov8.Predict(im, &res))
   auto vis_im = vision::VisDetection(im, res);

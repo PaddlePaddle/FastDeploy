@@ -51,6 +51,9 @@ struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
   std::vector<float> scores;
   ResultType type = ResultType::CLASSIFY;
 
+  /// Resize ClassifyResult data buffer
+  void Resize(int size);
+
   /// Clear ClassifyResult
   void Clear();
 

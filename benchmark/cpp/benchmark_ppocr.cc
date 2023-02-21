@@ -16,6 +16,13 @@
 #include "macros.h"
 #include "option.h"
 
+// Only for ppocr
+DEFINE_string(det_model, "", "Path of Detection model of PPOCR.");
+DEFINE_string(cls_model, "", "Path of Classification model of PPOCR.");
+DEFINE_string(rec_model, "", "Path of Recognization model of PPOCR.");
+DEFINE_string(rec_label_file, "", "Path of Recognization label file of PPOCR.");
+DEFINE_string(image_rec, "", "Path of Recognization img file of PPOCR.");
+
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Initialization
