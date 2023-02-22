@@ -63,6 +63,7 @@ option(ENABLE_OPENVINO_BACKEND "Whether to enable openvino backend." OFF)
 option(ENABLE_RKNPU2_BACKEND "Whether to enable RKNPU2 backend." OFF)
 option(ENABLE_SOPHGO_BACKEND "Whether to enable SOPHON backend." OFF)
 option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
+option(ENABLE_MNN_BACKEND "Whether to enable MNN backend." OFF)
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
@@ -170,6 +171,7 @@ file(GLOB_RECURSE DEPLOY_OPENVINO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/f
 file(GLOB_RECURSE DEPLOY_RKNPU2_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/rknpu2/*.cc)
 file(GLOB_RECURSE DEPLOY_SOPHGO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/sophgo/*.cc)
 file(GLOB_RECURSE DEPLOY_LITE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/lite/*.cc)
+file(GLOB_RECURSE DEPLOY_MNN_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/mnn/*.cc)
 file(GLOB_RECURSE DEPLOY_VISION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cc)
 file(GLOB_RECURSE DEPLOY_ENCRYPTION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/encryption/*.cc)
 file(GLOB_RECURSE DEPLOY_PIPELINE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pipeline/*.cc)
@@ -183,7 +185,7 @@ if(WITH_GPU)
   file(GLOB_RECURSE DEPLOY_TEXT_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/text/*.cu)
   list(APPEND DEPLOY_TEXT_SRCS ${DEPLOY_TEXT_CUDA_SRCS})
 endif()
-list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_POROS_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_OPENVINO_SRCS} ${DEPLOY_LITE_SRCS} ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS} ${DEPLOY_PIPELINE_SRCS} ${DEPLOY_RKNPU2_SRCS} ${DEPLOY_SOPHGO_SRCS} ${DEPLOY_ENCRYPTION_SRCS})
+list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_POROS_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_OPENVINO_SRCS} ${DEPLOY_LITE_SRCS} ${DEPLOY_MNN_SRCS} ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS} ${DEPLOY_PIPELINE_SRCS} ${DEPLOY_RKNPU2_SRCS} ${DEPLOY_SOPHGO_SRCS} ${DEPLOY_ENCRYPTION_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -252,6 +254,13 @@ if(ENABLE_SOPHGO_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_SOPHGO_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/sophgo.cmake)
   list(APPEND DEPEND_LIBS ${SOPHGO_RT_LIB})
+endif()
+
+if(ENABLE_MNN_BACKEND)
+  add_definitions(-DENABLE_MNN_BACKEND)
+  include(${PROJECT_SOURCE_DIR}/cmake/mnn.cmake)
+  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_MNN_SRCS})
+  list(APPEND DEPEND_LIBS external_mnn external_mnn_expr)
 endif()
 
 if(ENABLE_POROS_BACKEND)
@@ -670,6 +679,12 @@ else()
         DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
       )
     endif()
+  endif()
+  if(ENABLE_MNN_BACKEND)
+    install(
+      DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/mnn
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
+    )
   endif()
 endif()
 

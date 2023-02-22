@@ -37,16 +37,24 @@
 #cmakedefine ENABLE_OPENVINO_BACKEND
 #endif
 
+#ifndef ENABLE_TRT_BACKEND
+#cmakedefine ENABLE_TRT_BACKEND
+#endif
+
+#ifndef ENABLE_LITE_BACKEND
+#cmakedefine ENABLE_LITE_BACKEND
+#endif
+
+#ifndef ENABLE_MNN_BACKEND
+#cmakedefine ENABLE_MNN_BACKEND
+#endif
+
 #ifndef WITH_GPU
 #cmakedefine WITH_GPU
 #endif
 
 #ifndef WITH_DIRECTML
 #cmakedefine WITH_DIRECTML
-#endif
-
-#ifndef ENABLE_TRT_BACKEND
-#cmakedefine ENABLE_TRT_BACKEND
 #endif
 
 #ifndef ENABLE_VISION
