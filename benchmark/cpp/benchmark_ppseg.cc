@@ -16,6 +16,9 @@
 #include "macros.h"
 #include "option.h"
 
+namespace vision = fastdeploy::vision;
+namespace benchmark = fastdeploy::benchmark;
+
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Initialization
@@ -34,11 +37,33 @@ int main(int argc, char* argv[]) {
     option.trt_option.SetShape("x", {1, 3, 192, 192}, {1, 3, 192, 192},
                                {1, 3, 192, 192});
   }
-  auto model_ppseg = fastdeploy::vision::segmentation::PaddleSegModel(
+  auto model_ppseg = vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option);
-  fastdeploy::vision::SegmentationResult res;
+  vision::SegmentationResult res;
+  // Run once at least
+  model_ppseg.Predict(im, &res);
+  // 1. Test result diff
+  std::cout << "=============== Test result diff =================\n";
+  // Save result to -> disk.
+  std::string seg_result_path = "ppseg_result.txt";
+  benchmark::ResultManager::SaveSegmentationResult(res, seg_result_path);
+  // Load result from <- disk.
+  vision::SegmentationResult res_loaded;
+  benchmark::ResultManager::LoadSegmentationResult(&res_loaded,
+                                                   seg_result_path);
+  // Calculate diff between two results.
+  auto seg_diff =
+      benchmark::ResultManager::CalculateDiffStatis(res, res_loaded);
+  std::cout << "Labels diff: mean=" << seg_diff.labels.mean
+            << ", max=" << seg_diff.labels.max
+            << ", min=" << seg_diff.labels.min << std::endl;
+  if (res_loaded.contain_score_map) {
+    std::cout << "Scores diff: mean=" << seg_diff.scores.mean
+              << ", max=" << seg_diff.scores.max
+              << ", min=" << seg_diff.scores.min << std::endl;
+  }
   BENCHMARK_MODEL(model_ppseg, model_ppseg.Predict(im, &res))
-  auto vis_im = fastdeploy::vision::VisSegmentation(im, res, 0.5);
+  auto vis_im = vision::VisSegmentation(im, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 #endif
