@@ -13,3 +13,34 @@
 // limitations under the License.
 
 #pragma once
+
+#include "fastdeploy/core/fd_type.h"
+#include "MNN/Interpreter.hpp"
+#include "MNN/MNNDefine.h"
+#include "MNN/Tensor.hpp"
+#include "MNN/ImageProcess.hpp"
+
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+#include <map>
+
+namespace fastdeploy {
+
+enum MNNPowerMode {
+  MNN_POWER_NORMAL = 0,
+  MNN_POWER_HIGH,
+  MNN_POWER_LOW
+};
+
+enum MNNPrecisionMode {
+  MNN_PRECISION_Normal = 0,  ///< Automatically select int8/fp32
+  MNN_PRECISION_HIGH,        ///< Inference in fp32(cpu)
+  MNN_PRECISION_LOW,         ///< Inference in fp16(cpu)
+  MNN_PRECISION_LOW_BF16     ///< Inference in bf16(cpu)
+};
+
+struct MNNBackendOption {};
+
+}  // namespace fastdeploy
