@@ -44,7 +44,7 @@ class DBDetectorPreprocessor:
     @max_side_len.setter
     def max_side_len(self, value):
         """Set max_side_len value.
-        :param: value: (int) max_side_len valye
+        :param: value: (int) max_side_len value
         """
         assert isinstance(
             value, int), "The value to set `max_side_len` must be type of int."
