@@ -14,12 +14,6 @@
 
 #include "fastdeploy/vision/common/processors/resize.h"
 
-#ifdef ENABLE_CVCUDA
-#include <cvcuda/OpResize.hpp>
-
-#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
-#endif
-
 namespace fastdeploy {
 namespace vision {
 
@@ -152,9 +146,8 @@ bool Resize::ImplByCvCuda(FDMat* mat) {
   auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
 
   // CV-CUDA Interp value is compatible with OpenCV
-  cvcuda::Resize resize_op;
-  resize_op(mat->Stream(), src_tensor, dst_tensor,
-            NVCVInterpolationType(interp_));
+  cvcuda_resize_op_(mat->Stream(), src_tensor, dst_tensor,
+                    NVCVInterpolationType(interp_));
 
   mat->SetTensor(mat->output_cache);
   mat->SetWidth(width_);
