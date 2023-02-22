@@ -39,18 +39,19 @@ int main(int argc, char* argv[]) {
   int32_t res_label;
   float res_score;
   // Run once at least
-  model_ppocr_cls.Predict(im_rec, &res_label, &res_score);
+  model_ppocr_cls.Predict(im, &res_label, &res_score);
   // 1. Test result diff
   std::cout << "=============== Test result diff =================\n";
-  int32_t res_label_reloaded = 0;
-  float res_score_reloaded = 1;
+  int32_t res_label_expect = 0;
+  float res_score_expect = 1.0;
   // Calculate diff between two results.
-  auto ppocr_cls_label_diff = res_label - res_label_reloaded;
-  auto ppocr_cls_score_diff = res_label - res_score_reloaded;
+  auto ppocr_cls_label_diff = res_label - res_label_expect;
+  auto ppocr_cls_score_diff = res_score - res_score_expect;
   std::cout << "PPOCR Cls label diff: " << ppocr_cls_label_diff << std::endl;
-  std::cout << "PPOCR Cls score diff: " << ppocr_cls_score_diff << std::endl;
+  std::cout << "PPOCR Cls score diff: " << abs(ppocr_cls_score_diff)
+            << std::endl;
   BENCHMARK_MODEL(model_ppocr_cls,
-                  model_ppocr_cls.Predict(im_rec, &res_label, &res_score));
+                  model_ppocr_cls.Predict(im, &res_label, &res_score));
 #endif
   return 0;
 }

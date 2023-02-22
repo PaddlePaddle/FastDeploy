@@ -44,13 +44,14 @@ int main(int argc, char* argv[]) {
   model_ppocr_rec.Predict(im, &text, &rec_score);
   // 1. Test result diff
   std::cout << "=============== Test result diff =================\n";
-  std::string text_reloaded = "asdascdcd";
-  float res_score_reloaded = 0.5;
+  std::string text_expect = "上海斯格威铂尔大酒店";
+  float res_score_expect = 0.993308;
   // Calculate diff between two results.
-  auto ppocr_rec_text_diff = text - res_label_reloaded;
-  auto ppocr_rec_score_diff = rec_score - res_score_reloaded;
+  auto ppocr_rec_text_diff = text.compare(text_expect);
+  auto ppocr_rec_score_diff = rec_score - res_score_expect;
   std::cout << "PPOCR Rec text diff: " << ppocr_rec_text_diff << std::endl;
-  std::cout << "PPOCR Rec score diff: " << ppocr_rec_score_diff << std::endl;
+  std::cout << "PPOCR Rec score diff: " << abs(ppocr_rec_score_diff)
+            << std::endl;
   BENCHMARK_MODEL(model_ppocr_rec,
                   model_ppocr_rec.Predict(im, &text, &rec_score));
 #endif

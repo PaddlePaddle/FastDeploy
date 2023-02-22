@@ -16,6 +16,9 @@
 #include "macros.h"
 #include "option.h"
 
+namespace vision = fastdeploy::vision;
+namespace benchmark = fastdeploy::benchmark;
+
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Initialization
@@ -34,8 +37,8 @@ int main(int argc, char* argv[]) {
     option.trt_option.SetShape("x", {1, 3, 64, 64}, {1, 3, 640, 640},
                                {1, 3, 960, 960});
   }
-  auto model_ppocr_det = fastdeploy::vision::ocr::DBDetector(
-      det_model_file, det_params_file, option);
+  auto model_ppocr_det =
+      vision::ocr::DBDetector(det_model_file, det_params_file, option);
   std::vector<std::array<int, 8>> res;
   // Run once at least
   model_ppocr_det.Predict(im, &res);
@@ -54,7 +57,7 @@ int main(int argc, char* argv[]) {
   std::cout << "PPOCR Boxes diff: mean=" << ppocr_det_diff.boxes.mean
             << ", max=" << ppocr_det_diff.boxes.max
             << ", min=" << ppocr_det_diff.boxes.min << std::endl;
-  BENCHMARK_MODEL(model_ppocr_det, model_ppocr_det.Predict(im, &boxes_result));
+  BENCHMARK_MODEL(model_ppocr_det, model_ppocr_det.Predict(im, &res));
 #endif
   return 0;
 }

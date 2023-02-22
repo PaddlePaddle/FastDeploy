@@ -598,7 +598,7 @@ bool ResultManager::LoadOCRDetResult(std::vector<std::array<int, 8>>* res,
   res->resize(boxes_num);
   for (int i = 0; i < boxes_num; ++i) {
     for (int j = 0; j < 8; ++j) {
-      res[i][j] = std::stof(data.begin()->second[i * 8 + j]);
+      (*res)[i][j] = std::stoi(data.begin()->second[i * 8 + j]);
     }
   }
   return true;

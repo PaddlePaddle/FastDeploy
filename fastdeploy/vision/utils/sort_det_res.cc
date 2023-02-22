@@ -82,7 +82,7 @@ static bool LexSortByXYCompare(const std::array<T, 4>& box_a,
                                const std::array<T, 4>& box_b) {
   // WARN: The status shoule be false if (a==b).
   // https://blog.csdn.net/xxxwrq/article/details/83080640
-  auto is_equal = [](const T& a, const TimeCounter& b) -> bool {
+  auto is_equal = [](const T& a, const T& b) -> bool {
     return std::abs(a - b) < 1e-6f;
   };
   const T& x0_a = box_a[0];
@@ -140,17 +140,18 @@ void LexSortDetectionResultByXY(DetectionResult* result) {
 }
 
 void LexSortOCRDetResultByXY(std::vector<std::array<int, 8>>* result) {
-  if (result.empty()) {
+  if (result->empty()) {
     return;
   }
   std::vector<size_t> indices;
-  indices.resize(result.size());
+  indices.resize(result->size());
   std::vector<std::array<int, 4>> boxes;
-  boxes.resize(result.size());
-  for (size_t i = 0; i < result.size(); ++i) {
+  boxes.resize(result->size());
+  for (size_t i = 0; i < result->size(); ++i) {
     indices[i] = i;
     // 4 points to 2 points for LexSort
-    boxes[i] = {result[i][0], result[i][1], result[i][6], result[i][7]};
+    boxes[i] = {(*result)[i][0], (*result)[i][1], (*result)[i][6],
+                (*result)[i][7]};
   }
   // lex sort by x(w) then y(h)
   std::sort(indices.begin(), indices.end(), [&boxes](size_t a, size_t b) {
