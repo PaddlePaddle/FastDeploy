@@ -28,6 +28,7 @@ namespace ocr {
 class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
  public:
   DBDetectorPreprocessor();
+
   /** \brief Process the input image and prepare input tensors for runtime
    *
    * \param[in] image_batch The input image batch
@@ -38,9 +39,13 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
 
   /// Set max_side_len for the detection preprocess, default is 960
   void SetMaxSideLen(int max_side_len) { max_side_len_ = max_side_len; }
+
   /// Get max_side_len of the detection preprocess
   int GetMaxSideLen() const { return max_side_len_; }
 
+  /// Set preprocess normalize parameters, please call this API if you have
+  /// custom normalize parameters, otherwise it will use tbe default normalize
+  /// parameters.
   void SetNormalize(const std::vector<float>& mean = {0.485f, 0.456f, 0.406f},
                     const std::vector<float>& std = {0.229f, 0.224f, 0.225f},
                     bool is_scale = true) {
@@ -48,6 +53,8 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
         std::make_shared<NormalizeAndPermute>(mean, std, is_scale);
   }
 
+  /// Get the image info of the last batch, return a list of array
+  /// {image width, image height, resize width, resize height}
   const std::vector<std::array<int, 4>>* GetBatchImgInfo() {
     return &batch_det_img_info_;
   }

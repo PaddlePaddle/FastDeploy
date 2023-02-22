@@ -37,10 +37,15 @@ class DBDetectorPreprocessor:
 
     @property
     def max_side_len(self):
+        """Get max_side_len value.
+        """
         return self._preprocessor.max_side_len
 
     @max_side_len.setter
     def max_side_len(self, value):
+        """Set max_side_len value.
+        :param: value: (int) max_side_len valye
+        """
         assert isinstance(
             value, int), "The value to set `max_side_len` must be type of int."
         self._preprocessor.max_side_len = value
@@ -49,6 +54,13 @@ class DBDetectorPreprocessor:
                       mean=[0.485, 0.456, 0.406],
                       std=[0.229, 0.224, 0.225],
                       is_scale=True):
+        """Set preprocess normalize parameters, please call this API if you have
+           custom normalize parameters, otherwise it will use tbe default
+           normalize parameters.
+        :param: mean: (list of float) mean values
+        :param: std: (list of float) std values
+        :param: is_scale: (boolean) whether to scale
+        """
         self._preprocessor.set_normalize(mean, std, is_scale)
 
 
