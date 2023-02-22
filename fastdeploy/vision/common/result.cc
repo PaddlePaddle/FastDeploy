@@ -26,6 +26,11 @@ void ClassifyResult::Clear() {
   scores.clear();
 }
 
+void ClassifyResult::Resize(int size) {
+  label_ids.resize(size);
+  scores.resize(size);
+}
+
 std::string ClassifyResult::Str() {
   std::string out;
   out = "ClassifyResult(\nlabel_ids: ";
