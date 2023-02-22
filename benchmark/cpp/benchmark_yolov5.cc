@@ -27,6 +27,25 @@ int main(int argc, char* argv[]) {
   auto model_yolov5 =
       fastdeploy::vision::detection::YOLOv5(FLAGS_model, "", option);
   fastdeploy::vision::DetectionResult res;
+  // Run once at least
+  model_yolov5.Predict(im, &res);
+  // 1. Test result diff
+  std::cout << "=============== Test result diff =================\n";
+  // Save result to -> disk.
+  std::string det_result_path = "yolov5_result.txt";
+  benchmark::ResultManager::SaveDetectionResult(res, det_result_path);
+  // Load result from <- disk.
+  vision::DetectionResult res_loaded;
+  benchmark::ResultManager::LoadDetectionResult(&res_loaded, det_result_path);
+  // Calculate diff between two results.
+  auto det_diff =
+      benchmark::ResultManager::CalculateDiffStatis(res, res_loaded);
+  std::cout << "Boxes diff: mean=" << det_diff.boxes.mean
+            << ", max=" << det_diff.boxes.max << ", min=" << det_diff.boxes.min
+            << std::endl;
+  std::cout << "Label_ids diff: mean=" << det_diff.labels.mean
+            << ", max=" << det_diff.labels.max
+            << ", min=" << det_diff.labels.min << std::endl;
   BENCHMARK_MODEL(model_yolov5, model_yolov5.Predict(im, &res))
   auto vis_im = fastdeploy::vision::VisDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
