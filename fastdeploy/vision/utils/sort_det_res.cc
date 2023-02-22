@@ -77,17 +77,18 @@ void SortDetectionResult(DetectionResult* result) {
   MergeSort(result, low, high);
 }
 
-bool LexSortByXYCompare(const std::array<float, 4>& box_a,
-                        const std::array<float, 4>& box_b) {
+template <typename T>
+static bool LexSortByXYCompare(const std::array<T, 4>& box_a,
+                               const std::array<T, 4>& box_b) {
   // WARN: The status shoule be false if (a==b).
   // https://blog.csdn.net/xxxwrq/article/details/83080640
-  auto is_equal = [](const float& a, const float& b) -> bool {
+  auto is_equal = [](const T& a, const TimeCounter& b) -> bool {
     return std::abs(a - b) < 1e-6f;
   };
-  const float& x0_a = box_a[0];
-  const float& y0_a = box_a[1];
-  const float& x0_b = box_b[0];
-  const float& y0_b = box_b[1];
+  const T& x0_a = box_a[0];
+  const T& y0_a = box_a[1];
+  const T& x0_b = box_b[0];
+  const T& y0_b = box_b[1];
   if (is_equal(x0_a, x0_b)) {
     return is_equal(y0_a, y0_b) ? false : y0_a > y0_b;
   }
@@ -97,7 +98,7 @@ bool LexSortByXYCompare(const std::array<float, 4>& box_a,
 void ReorderDetectionResultByIndices(DetectionResult* result,
                                      const std::vector<size_t>& indices) {
   // reorder boxes, scores, label_ids, masks
-  DetectionResult backup = (*result);  // move
+  DetectionResult backup = (*result);
   const bool contain_masks = backup.contain_masks;
   const int boxes_num = backup.boxes.size();
   result->Clear();
@@ -122,7 +123,7 @@ void ReorderDetectionResultByIndices(DetectionResult* result,
 }
 
 void LexSortDetectionResultByXY(DetectionResult* result) {
-  if (result->boxes.size() == 0) {
+  if (result->boxes.empty()) {
     return;
   }
   std::vector<size_t> indices;
@@ -136,6 +137,35 @@ void LexSortDetectionResultByXY(DetectionResult* result) {
     return LexSortByXYCompare(boxes[a], boxes[b]);
   });
   ReorderDetectionResultByIndices(result, indices);
+}
+
+void LexSortOCRDetResultByXY(std::vector<std::array<int, 8>>* result) {
+  if (result.empty()) {
+    return;
+  }
+  std::vector<size_t> indices;
+  indices.resize(result.size());
+  std::vector<std::array<int, 4>> boxes;
+  boxes.resize(result.size());
+  for (size_t i = 0; i < result.size(); ++i) {
+    indices[i] = i;
+    // 4 points to 2 points for LexSort
+    boxes[i] = {result[i][0], result[i][1], result[i][6], result[i][7]};
+  }
+  // lex sort by x(w) then y(h)
+  std::sort(indices.begin(), indices.end(), [&boxes](size_t a, size_t b) {
+    return LexSortByXYCompare(boxes[a], boxes[b]);
+  });
+  // reorder boxes
+  std::vector<std::array<int, 8>> backup = (*result);
+  const int boxes_num = backup.size();
+  result->clear();
+  result->resize(boxes_num);
+  // boxes
+  for (int i = 0; i < boxes_num; ++i) {
+    (*result)[i] = backup[indices[i]];
+  }
+  return;
 }
 
 }  // namespace utils
