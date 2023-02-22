@@ -14,8 +14,6 @@
 
 #include "fastdeploy/vision/ocr/ppocr/det_preprocessor.h"
 
-#include "fastdeploy/function/concat.h"
-#include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
 namespace fastdeploy {

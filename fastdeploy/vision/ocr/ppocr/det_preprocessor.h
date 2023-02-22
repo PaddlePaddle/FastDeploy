@@ -13,8 +13,10 @@
 // limitations under the License.
 
 #pragma once
-#include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/processors/manager.h"
+#include "fastdeploy/vision/common/processors/resize.h"
+#include "fastdeploy/vision/common/processors/pad.h"
+#include "fastdeploy/vision/common/processors/normalize_and_permute.h"
 #include "fastdeploy/vision/common/result.h"
 
 namespace fastdeploy {
