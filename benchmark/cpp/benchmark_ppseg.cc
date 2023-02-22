@@ -57,9 +57,11 @@ int main(int argc, char* argv[]) {
   std::cout << "Labels diff: mean=" << seg_diff.labels.mean
             << ", max=" << seg_diff.labels.max
             << ", min=" << seg_diff.labels.min << std::endl;
-  std::cout << "Scores diff: mean=" << seg_diff.scores.mean
-            << ", max=" << seg_diff.scores.max
-            << ", min=" << seg_diff.scores.min << std::endl;
+  if (res_loaded.contain_score_map) {
+    std::cout << "Scores diff: mean=" << seg_diff.scores.mean
+              << ", max=" << seg_diff.scores.max
+              << ", min=" << seg_diff.scores.min << std::endl;
+  }
   BENCHMARK_MODEL(model_ppseg, model_ppseg.Predict(im, &res))
   auto vis_im = vision::VisSegmentation(im, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);

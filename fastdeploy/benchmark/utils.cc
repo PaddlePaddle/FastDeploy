@@ -298,16 +298,17 @@ bool ResultManager::LoadFDTensor(FDTensor* tensor, const std::string& path) {
   return true;
 }
 
-TensorDiff ResultManager::CalculateDiffStatis(FDTensor* lhs, FDTensor* rhs) {
-  if (lhs->Numel() != rhs->Numel() || lhs->Dtype() != rhs->Dtype()) {
+TensorDiff ResultManager::CalculateDiffStatis(const FDTensor& lhs,
+                                              const FDTensor& rhs) {
+  if (lhs.Numel() != rhs.Numel() || lhs.Dtype() != rhs.Dtype()) {
     FDASSERT(false,
              "The size and dtype of input FDTensor must be equal!"
              " But got size %d, %d, dtype %s, %s",
-             lhs->Numel(), rhs->Numel(), Str(lhs->Dtype()).c_str(),
-             Str(rhs->Dtype()).c_str())
+             lhs.Numel(), rhs.Numel(), Str(lhs.Dtype()).c_str(),
+             Str(rhs.Dtype()).c_str())
   }
-  FDDataType dtype = lhs->Dtype();
-  int numel = lhs->Numel();
+  FDDataType dtype = lhs.Dtype();
+  int numel = lhs.Numel();
   if (dtype != FDDataType::FP32 && dtype != FDDataType::INT64 &&
       dtype != FDDataType::INT32) {
     FDASSERT(false, "Only support FP32/INT64/INT32 now, but got %s",
@@ -315,8 +316,8 @@ TensorDiff ResultManager::CalculateDiffStatis(FDTensor* lhs, FDTensor* rhs) {
   }
   if (dtype == FDDataType::INT64) {
     std::vector<int64_t> tensor_diff(numel);
-    const int64_t* lhs_data_ptr = static_cast<const int64_t*>(lhs->CpuData());
-    const int64_t* rhs_data_ptr = static_cast<const int64_t*>(rhs->CpuData());
+    const int64_t* lhs_data_ptr = static_cast<const int64_t*>(lhs.CpuData());
+    const int64_t* rhs_data_ptr = static_cast<const int64_t*>(rhs.CpuData());
     for (int i = 0; i < numel; ++i) {
       tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
     }
@@ -326,8 +327,8 @@ TensorDiff ResultManager::CalculateDiffStatis(FDTensor* lhs, FDTensor* rhs) {
     return diff;
   } else if (dtype == FDDataType::INT32) {
     std::vector<int32_t> tensor_diff(numel);
-    const int32_t* lhs_data_ptr = static_cast<const int32_t*>(lhs->CpuData());
-    const int32_t* rhs_data_ptr = static_cast<const int32_t*>(rhs->CpuData());
+    const int32_t* lhs_data_ptr = static_cast<const int32_t*>(lhs.CpuData());
+    const int32_t* rhs_data_ptr = static_cast<const int32_t*>(rhs.CpuData());
     for (int i = 0; i < numel; ++i) {
       tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
     }
@@ -337,8 +338,8 @@ TensorDiff ResultManager::CalculateDiffStatis(FDTensor* lhs, FDTensor* rhs) {
     return diff;
   } else {  // FP32
     std::vector<float> tensor_diff(numel);
-    const float* lhs_data_ptr = static_cast<const float*>(lhs->CpuData());
-    const float* rhs_data_ptr = static_cast<const float*>(rhs->CpuData());
+    const float* lhs_data_ptr = static_cast<const float*>(lhs.CpuData());
+    const float* rhs_data_ptr = static_cast<const float*>(rhs.CpuData());
     for (int i = 0; i < numel; ++i) {
       tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
     }
