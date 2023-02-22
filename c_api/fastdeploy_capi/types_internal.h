@@ -22,6 +22,7 @@
 #include "fastdeploy/vision/classification/ppcls/model.h"
 #include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/detection/ppdet/model.h"
+#include "fastdeploy/vision/detection/contrib/model.h"
 #include "fastdeploy/vision/ocr/ppocr/classifier.h"
 #include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
 #include "fastdeploy/vision/ocr/ppocr/recognizer.h"
@@ -135,6 +136,24 @@ DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(TOOD, tood_model);
 
 // GFL
 DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(GFL, gfl_model);
+
+// YOLOv5
+DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(YOLOv5, yolov5_model);
+
+// YOLOv7
+DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(YOLOv7, yolov7_model);
+
+// YOLOv8
+DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(YOLOv8, yolov8_model);
+
+// YOLOv6
+DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(YOLOv6, yolov6_model);
+
+// YOLOR
+DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(YOLOR, yolor_model);
+
+// YOLOX
+DEFINE_DETECTION_MODEL_WRAPPER_STRUCT(YOLOX, yolox_model);
 
 // OCR models
 
@@ -306,6 +325,30 @@ DECLARE_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(TOOD,
 
 DECLARE_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(GFL,
                                                       fd_gfl_wrapper);
+
+// YOLOv5
+DECLARE_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(YOLOv5, fd_yolov5_wrapper);
+
+// YOLOv7
+DECLARE_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(YOLOv7,
+                                                      fd_yolov7_wrapper);
+
+// YOLOv8
+DECLARE_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(YOLOv8,
+                                                      fd_yolov8_wrapper);
+
+// YOLOv6
+DECLARE_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(YOLOv6,
+                                                      fd_yolov6_wrapper);
+
+// YOLOR
+DECLARE_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(YOLOR,
+                                                      fd_yolor_wrapper);
+
+// YOLOX
+DECLARE_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(YOLOX,
+                                                      fd_yolox_wrapper);
+
 
 // OCR models
 

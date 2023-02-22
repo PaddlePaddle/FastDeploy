@@ -125,6 +125,30 @@ DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(GFL,
                                                                  fd_gfl_wrapper,
                                                                  gfl_model)
 
+// YOLOv5
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    GFL, fd_yolov5_wrapper, yolov5_model)
+
+// YOLOv7
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    GFL, fd_yolov7_wrapper, yolov7_model)
+
+// YOLOv8
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    GFL, fd_yolov8_wrapper, yolov8_model)
+
+// YOLOv6
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    GFL, fd_yolov6_wrapper, yolov6_model)
+
+// YOLOR
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    GFL, fd_yolor_wrapper, yolor_model)
+
+// YOLOX
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    GFL, fd_yolox_wrapper, yolox_model)
+
 // OCR models
 
 // Recognizer
