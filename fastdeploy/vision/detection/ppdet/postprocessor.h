@@ -16,7 +16,6 @@
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
-#include "fastdeploy/vision/detection/ppdet/ppdet_decode.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -31,8 +30,7 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
    *
    * \param[in] config_file Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
    */
-  explicit PaddleDetPostprocessor(const std::string& config_file)
-      : ppdet_decoder_(config_file) {}
+  explicit PaddleDetPostprocessor(const std::string& config_file) {}
 
   /** \brief Process the result of runtime and fill to ClassifyResult structure
    *
@@ -45,9 +43,9 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
 
   /// Apply box decoding and nms step for the outputs for the model.This is
   /// only available for those model exported without box decoding and nms.
-  void ApplyDecodeAndNMS(const NMSOption& option = NMSOption()) {
-    apply_decode_and_nms_ = true;
-    ppdet_decoder_.SetNMSOption(option);
+  void ApplyNMS(const NMSOption& option = NMSOption()) {
+    with_nms_ = false;
+    nms_option_ = option;
   }
 
   // Set scale_factor_ value.This is only available for those model exported
@@ -57,14 +55,25 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   }
 
  private:
-  // for model without decode and nms.
-  bool apply_decode_and_nms_ = false;
-  bool DecodeAndNMSApplied() const { return apply_decode_and_nms_; }
-  bool ProcessUnDecodeResults(const std::vector<FDTensor>& tensors,
-                              std::vector<DetectionResult>* results);
-  PPDetDecode ppdet_decoder_;
   std::vector<float> scale_factor_{0.0, 0.0};
   std::vector<float> GetScaleFactor() { return scale_factor_; }
+
+  // for model without nms.
+  bool with_nms_ = true;
+  NMSOption nms_option_{};
+  PaddleMultiClassNMS multi_class_nms_;
+
+  // Process General tensor for General Detection
+  bool ProcessWithoutNMS(const std::vector<FDTensor>& tensors,
+                         std::vector<DetectionResult>* results);
+  bool ProcessWithNMS(const std::vector<FDTensor>& tensors,
+                      std::vector<DetectionResult>* results);
+  bool ProcessGeneral(const std::vector<FDTensor>& tensors,
+                      std::vector<DetectionResult>* results);
+  // Process Solov2
+  bool ProcessSolov2(const std::vector<FDTensor>& tensors,
+                     std::vector<DetectionResult>* results);
+
   // Process mask tensor for MaskRCNN
   bool ProcessMask(const FDTensor& tensor,
                    std::vector<DetectionResult>* results);

@@ -14,6 +14,7 @@
 
 #include "fastdeploy/vision/detection/ppdet/postprocessor.h"
 
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
@@ -63,12 +64,9 @@ bool PaddleDetPostprocessor::ProcessMask(
   return true;
 }
 
-bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
-                                 std::vector<DetectionResult>* results) {
-  if (DecodeAndNMSApplied()) {
-    return ProcessUnDecodeResults(tensors, results);
-  }
-
+bool PaddleDetPostprocessor::ProcessWithNMS(
+    const std::vector<FDTensor>& tensors,
+    std::vector<DetectionResult>* results) {
   // Get number of boxes for each input image
   std::vector<int> num_boxes(tensors[1].shape[0]);
   int total_num_boxes = 0;
@@ -127,31 +125,66 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
       offset += static_cast<int>(num_boxes[i] * 6);
     }
   }
+  return true;
+}
 
-  // Only detection
-  if (tensors.size() <= 2) {
-    return true;
-  }
-
-  if (tensors[2].Shape()[0] != num_output_boxes) {
-    FDERROR << "The first dimension of output mask tensor:"
-            << tensors[2].Shape()[0]
-            << " is not equal to the first dimension of output boxes tensor:"
-            << num_output_boxes << "." << std::endl;
+bool PaddleDetPostprocessor::ProcessWithoutNMS(
+    const std::vector<FDTensor>& tensors,
+    std::vector<DetectionResult>* results) {
+  int boxes_index = 0;
+  int scores_index = 1;
+  if (tensors[0].shape[1] == tensors[1].shape[2]) {
+    boxes_index = 0;
+    scores_index = 1;
+  } else if (tensors[0].shape[2] == tensors[1].shape[1]) {
+    boxes_index = 1;
+    scores_index = 0;
+  } else {
+    FDERROR << "The shape of boxes and scores should be [batch, boxes_num, "
+               "4], [batch, classes_num, boxes_num]"
+            << std::endl;
     return false;
   }
 
-  // process for maskrcnn
-  return ProcessMask(tensors[2], results);
+  multi_class_nms_.Compute(
+      static_cast<const float*>(tensors[boxes_index].Data()),
+      static_cast<const float*>(tensors[scores_index].Data()),
+      tensors[boxes_index].shape, tensors[scores_index].shape);
+  auto num_boxes = multi_class_nms_.out_num_rois_data;
+  auto box_data =
+      static_cast<const float*>(multi_class_nms_.out_box_data.data());
+  // Get boxes for each input image
+  results->resize(num_boxes.size());
+  int offset = 0;
+  for (size_t i = 0; i < num_boxes.size(); ++i) {
+    const float* ptr = box_data + offset;
+    (*results)[i].Reserve(num_boxes[i]);
+    for (size_t j = 0; j < num_boxes[i]; ++j) {
+      (*results)[i].label_ids.push_back(
+          static_cast<int32_t>(round(ptr[j * 6])));
+      (*results)[i].scores.push_back(ptr[j * 6 + 1]);
+      (*results)[i].boxes.emplace_back(std::array<float, 4>(
+          {ptr[j * 6 + 2], ptr[j * 6 + 3], ptr[j * 6 + 4], ptr[j * 6 + 5]}));
+    }
+    offset += (num_boxes[i] * 6);
+  }
+  return true;
 }
 
-bool PaddleDetPostprocessor::ProcessUnDecodeResults(
+bool PaddleDetPostprocessor::ProcessGeneral(
     const std::vector<FDTensor>& tensors,
     std::vector<DetectionResult>* results) {
-  results->resize(tensors[0].Shape()[0]);
-
-  // do decode and nms
-  ppdet_decoder_.DecodeAndNMS(tensors, results);
+  // Carry out corresponding post-processing according to the presence or
+  // absence of NMS.
+  if (with_nms_) {
+    if (!ProcessWithNMS(tensors, results)) {
+      return false;
+    }
+  } else {
+    if (!ProcessWithoutNMS(tensors, results)) {
+      return false;
+    }
+  }
 
   // do scale
   if (GetScaleFactor()[0] != 0) {
@@ -164,7 +197,28 @@ bool PaddleDetPostprocessor::ProcessUnDecodeResults(
       }
     }
   }
+
   return true;
+}
+
+bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
+                                 std::vector<DetectionResult>* results) {
+  // For Solov2
+
+  // Only detection
+  if (tensors.size() <= 2) {
+    return ProcessGeneral(tensors, results);
+  }
+
+  // process for maskrcnn
+  if (tensors[2].Shape()[0] != tensors[0].Shape()[0]) {
+    FDERROR << "The first dimension of output mask tensor:"
+            << tensors[2].Shape()[0]
+            << " is not equal to the first dimension of output boxes tensor:"
+            << tensors[0].Shape()[0] << "." << std::endl;
+    return false;
+  }
+  return ProcessMask(tensors[2], results);
 }
 }  // namespace detection
 }  // namespace vision
