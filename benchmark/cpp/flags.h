@@ -44,6 +44,12 @@ DEFINE_bool(
 DEFINE_bool(
     collect_memory_info, false, "Whether to collect memory info");
 DEFINE_int32(sampling_interval, 50, "How often to collect memory info(ms).");
+// Only for ppocr
+DEFINE_string(det_model, "", "Path of Detection model of PPOCR.");
+DEFINE_string(cls_model, "", "Path of Classification model of PPOCR.");
+DEFINE_string(rec_model, "", "Path of Recognization model of PPOCR.");
+DEFINE_string(rec_label_file, "", "Path of Recognization label file of PPOCR.");
+DEFINE_string(image_rec, "", "Path of Recognization img file of PPOCR.");
 
 static void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path --device "
