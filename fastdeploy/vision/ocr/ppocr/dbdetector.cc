@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
+
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
@@ -26,11 +27,11 @@ DBDetector::DBDetector(const std::string& model_file,
                        const RuntimeOption& custom_option,
                        const ModelFormat& model_format) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::ORT,
-                          Backend::OPENVINO};  
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};  
+    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {
-    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO, Backend::LITE};
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO,
+                          Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
     valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE};
@@ -54,7 +55,8 @@ bool DBDetector::Initialize() {
 }
 
 std::unique_ptr<DBDetector> DBDetector::Clone() const {
-  std::unique_ptr<DBDetector> clone_model = utils::make_unique<DBDetector>(DBDetector(*this));
+  std::unique_ptr<DBDetector> clone_model =
+      utils::make_unique<DBDetector>(DBDetector(*this));
   clone_model->SetRuntime(clone_model->CloneRuntime());
   return clone_model;
 }
@@ -69,14 +71,15 @@ bool DBDetector::Predict(const cv::Mat& img,
   return true;
 }
 
-bool DBDetector::BatchPredict(const std::vector<cv::Mat>& images,
-                              std::vector<std::vector<std::array<int, 8>>>* det_results) {
+bool DBDetector::BatchPredict(
+    const std::vector<cv::Mat>& images,
+    std::vector<std::vector<std::array<int, 8>>>* det_results) {
   std::vector<FDMat> fd_images = WrapMat(images);
-  std::vector<std::array<int, 4>> batch_det_img_info;
-  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, &batch_det_img_info)) {
+  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
   }
+  auto batch_det_img_info = preprocessor_.GetBatchImgInfo();
 
   reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
   if (!Infer(reused_input_tensors_, &reused_output_tensors_)) {
@@ -84,13 +87,15 @@ bool DBDetector::BatchPredict(const std::vector<cv::Mat>& images,
     return false;
   }
 
-  if (!postprocessor_.Run(reused_output_tensors_, det_results, batch_det_img_info)) {
-    FDERROR << "Failed to postprocess the inference cls_results by runtime." << std::endl;
+  if (!postprocessor_.Run(reused_output_tensors_, det_results,
+                          *batch_det_img_info)) {
+    FDERROR << "Failed to postprocess the inference cls_results by runtime."
+            << std::endl;
     return false;
   }
   return true;
 }
 
-}  // namesapce ocr
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy

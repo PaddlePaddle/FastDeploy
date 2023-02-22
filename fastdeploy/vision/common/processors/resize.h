@@ -15,6 +15,11 @@
 #pragma once
 
 #include "fastdeploy/vision/common/processors/base.h"
+#ifdef ENABLE_CVCUDA
+#include <cvcuda/OpResize.hpp>
+
+#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
+#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -61,6 +66,9 @@ class FASTDEPLOY_DECL Resize : public Processor {
   float scale_h_ = -1.0;
   int interp_ = 1;
   bool use_scale_ = false;
+#ifdef ENABLE_CVCUDA
+  cvcuda::Resize cvcuda_resize_op_;
+#endif
 };
 }  // namespace vision
 }  // namespace fastdeploy

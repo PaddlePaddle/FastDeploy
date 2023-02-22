@@ -14,12 +14,6 @@
 
 #include "fastdeploy/vision/common/processors/center_crop.h"
 
-#ifdef ENABLE_CVCUDA
-#include <cvcuda/OpCustomCrop.hpp>
-
-#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
-#endif
-
 namespace fastdeploy {
 namespace vision {
 
@@ -75,9 +69,8 @@ bool CenterCrop::ImplByCvCuda(FDMat* mat) {
 
   int offset_x = static_cast<int>((mat->Width() - width_) / 2);
   int offset_y = static_cast<int>((mat->Height() - height_) / 2);
-  cvcuda::CustomCrop crop_op;
   NVCVRectI crop_roi = {offset_x, offset_y, width_, height_};
-  crop_op(mat->Stream(), src_tensor, dst_tensor, crop_roi);
+  cvcuda_crop_op_(mat->Stream(), src_tensor, dst_tensor, crop_roi);
 
   mat->SetTensor(mat->output_cache);
   mat->SetWidth(width_);

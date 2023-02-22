@@ -60,6 +60,7 @@ struct FASTDEPLOY_DECL FDMatBatch {
   ProcLib mat_type = ProcLib::OPENCV;
   FDMatBatchLayout layout = FDMatBatchLayout::NHWC;
   Device device = Device::CPU;
+  ProcLib proc_lib = ProcLib::DEFAULT;
 
   // False: the data is stored in the mats separately
   // True: the data is stored in the fd_tensor continuously in 4 dimensions

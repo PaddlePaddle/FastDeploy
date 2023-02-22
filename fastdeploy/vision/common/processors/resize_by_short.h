@@ -15,6 +15,11 @@
 #pragma once
 
 #include "fastdeploy/vision/common/processors/base.h"
+#ifdef ENABLE_CVCUDA
+#include <cvcuda/OpResize.hpp>
+
+#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
+#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -49,6 +54,9 @@ class FASTDEPLOY_DECL ResizeByShort : public Processor {
   std::vector<int> max_hw_;
   int interp_;
   bool use_scale_;
+#ifdef ENABLE_CVCUDA
+  cvcuda::Resize cvcuda_resize_op_;
+#endif
 };
 }  // namespace vision
 }  // namespace fastdeploy
