@@ -52,7 +52,7 @@ public class Visualize {
 
   public static Mat VisSegmentation(Mat im,
                                     SegmentationResult segmentation_result,
-                                    float weight = 0.5){
+                                    float weight = 0.5f){
     FD_SegmentationResult fd_segmentation_result =
         ConvertResult.ConvertSegmentationResultToCResult(segmentation_result);
     IntPtr result_ptr = 

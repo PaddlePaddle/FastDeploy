@@ -71,7 +71,7 @@ public class PaddleClasModel {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimClassifyResult fd_classify_result_array =  new FD_OneDimClassifyResult();
-    if (!FD_C_PaddleClasModelWrapperBatchPredict(fd_paddleclas_model_wrapper, ref imgs_in, ref fd_classify_result_array)){
+    if (!FD_C_PaddleClasModelWrapperBatchPredict(fd_paddleclas_model_wrapper, imgs_in, ref fd_classify_result_array)){
       return null;
     }
     List<ClassifyResult> results_out = new List<ClassifyResult>();
@@ -131,7 +131,7 @@ public class PaddleClasModel {
              EntryPoint = "FD_C_PaddleClasModelWrapperBatchPredict")]
   private static extern bool
   FD_C_PaddleClasModelWrapperBatchPredict(IntPtr fd_paddleclas_model_wrapper,
-                                          ref FD_OneDimMat imgs,
+                                          FD_OneDimMat imgs,
                                           ref FD_OneDimClassifyResult results);
 
 }

@@ -26,8 +26,8 @@ namespace Test
         {
             if (args.Length < 3) {
                 Console.WriteLine(
-                    "Usage: infer_demo path/to/model_dir path/to/image run_option, "
-                    "e.g ./infer_model ./ppseg_model_dir ./test.jpeg 0"
+                    "Usage: infer_demo path/to/model_dir path/to/image run_option" +
+                     "e.g ./infer_model ./ppseg_model_dir ./test.jpeg 0"
                 );
                 Console.WriteLine( "The data type of run_option is int, 0: run with cpu; 1: run with gpu");
                 return;

@@ -71,7 +71,7 @@ public class PaddleSegModel {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimSegmentationResult fd_segmentation_result_array =  new FD_OneDimSegmentationResult();
-    if (!FD_C_PaddleSegModelWrapperBatchPredict(fd_paddleseg_model_wrapper, ref imgs_in, ref fd_segmentation_result_array)){
+    if (!FD_C_PaddleSegModelWrapperBatchPredict(fd_paddleseg_model_wrapper, imgs_in, ref fd_segmentation_result_array)){
       return null;
     }
     List<SegmentationResult> results_out = new List<SegmentationResult>();
@@ -131,8 +131,8 @@ public class PaddleSegModel {
              EntryPoint = "FD_C_PaddleSegModelWrapperBatchPredict")]
   private static extern bool
   FD_C_PaddleSegModelWrapperBatchPredict(IntPtr fd_paddleseg_model_wrapper,
-                                          ref FD_OneDimMat imgs,
-                                          ref FD_OneDimSegmentationResult results);
+                                         FD_OneDimMat imgs,
+                                         ref FD_OneDimSegmentationResult results);
 
 }
 

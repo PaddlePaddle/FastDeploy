@@ -148,9 +148,9 @@ public class SegmentationResult{
   public string ToString() {
     string information;
     information = "SegmentationResult Image masks 10 rows x 10 cols: \n";
-    for (size_t i = 0; i < 10; ++i) {
+    for (int i = 0; i < 10; ++i) {
       information += "[";
-      for (size_t j = 0; j < 10; ++j) {
+      for (int j = 0; j < 10; ++j) {
         information = information + label_map[i * 10 + j].ToString() + ", ";
       }
       information += ".....]\n";
@@ -158,9 +158,9 @@ public class SegmentationResult{
     information += "...........\n";
     if (contain_score_map) {
       information += "SegmentationResult Score map 10 rows x 10 cols: \n";
-      for (size_t i = 0; i < 10; ++i) {
+      for (int i = 0; i < 10; ++i) {
         information += "[";
-        for (size_t j = 0; j < 10; ++j) {
+        for (int j = 0; j < 10; ++j) {
           information = information + score_map[i * 10 + j].ToString() + ", ";
         }
         information += ".....]\n";
@@ -393,30 +393,34 @@ public class ConvertResult {
   }
   public static FD_SegmentationResult
   ConvertSegmentationResultToCResult(SegmentationResult segmentation_result){
+    FD_SegmentationResult fd_segmentation_result = new FD_SegmentationResult();
     // copy label_map
     // Create a managed array
     fd_segmentation_result.label_map.size = (uint)segmentation_result.label_map.Count;
     byte[] label_map = new byte[fd_segmentation_result.label_map.size];
     // Copy data from Link to Array
     segmentation_result.label_map.CopyTo(label_map);
+
     // Copy data to unmanaged memory
     int size = Marshal.SizeOf(label_map[0]) * label_map.Length;
     fd_segmentation_result.label_map.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(label_map, 0, fd_segmentation_result.label_map.data,
                  label_map.Length);
-
+    
     // copy score_map
     // Create a managed array
     fd_segmentation_result.score_map.size = (uint)segmentation_result.score_map.Count;
+    if(fd_segmentation_result.score_map.size != 0){
     float[] score_map = new float[fd_segmentation_result.score_map.size];
     // Copy data from Link to Array
     segmentation_result.score_map.CopyTo(score_map);
     // Copy data to unmanaged memory
-    int size = Marshal.SizeOf(score_map[0]) * score_map.Length;
+    size = Marshal.SizeOf(score_map[0]) * score_map.Length;
     fd_segmentation_result.score_map.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(score_map, 0, fd_segmentation_result.score_map.data,
                  score_map.Length);
-
+    }
+    
     // copy shape
     // Create a managed array
     fd_segmentation_result.shape.size = (uint)segmentation_result.shape.Count;
@@ -424,7 +428,7 @@ public class ConvertResult {
     // Copy data from Link to Array
     segmentation_result.shape.CopyTo(shape);
     // Copy data to unmanaged memory
-    int size = Marshal.SizeOf(shape[0]) * shape.Length;
+    size = Marshal.SizeOf(shape[0]) * shape.Length;
     fd_segmentation_result.shape.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(shape, 0, fd_segmentation_result.shape.data,
                  shape.Length);

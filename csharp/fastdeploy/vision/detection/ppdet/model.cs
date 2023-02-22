@@ -65,7 +65,7 @@ public class PPYOLOE {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_PPYOLOEWrapperBatchPredict(fd_ppyoloe_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_PPYOLOEWrapperBatchPredict(fd_ppyoloe_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -122,7 +122,7 @@ public class PPYOLOE {
              EntryPoint = "FD_C_PPYOLOEWrapperBatchPredict")]
   private static extern bool
   FD_C_PPYOLOEWrapperBatchPredict(IntPtr fd_c_ppyoloe_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -168,7 +168,7 @@ public class PicoDet {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_PicoDetWrapperBatchPredict(fd_picodet_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_PicoDetWrapperBatchPredict(fd_picodet_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -225,7 +225,7 @@ public class PicoDet {
              EntryPoint = "FD_C_PicoDetWrapperBatchPredict")]
   private static extern bool
   FD_C_PicoDetWrapperBatchPredict(IntPtr fd_c_picodet_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -273,7 +273,7 @@ public class PPYOLO {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_PPYOLOWrapperBatchPredict(fd_ppyolo_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_PPYOLOWrapperBatchPredict(fd_ppyolo_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -330,7 +330,7 @@ public class PPYOLO {
              EntryPoint = "FD_C_PPYOLOWrapperBatchPredict")]
   private static extern bool
   FD_C_PPYOLOWrapperBatchPredict(IntPtr fd_c_ppyolo_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -377,7 +377,7 @@ public class YOLOv3 {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_YOLOv3WrapperBatchPredict(fd_yolov3_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_YOLOv3WrapperBatchPredict(fd_yolov3_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -434,7 +434,7 @@ public class YOLOv3 {
              EntryPoint = "FD_C_YOLOv3WrapperBatchPredict")]
   private static extern bool
   FD_C_YOLOv3WrapperBatchPredict(IntPtr fd_c_yolov3_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -481,7 +481,7 @@ public class PaddleYOLOX {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_PaddleYOLOXWrapperBatchPredict(fd_paddleyolox_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_PaddleYOLOXWrapperBatchPredict(fd_paddleyolox_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -538,7 +538,7 @@ public class PaddleYOLOX {
              EntryPoint = "FD_C_PaddleYOLOXWrapperBatchPredict")]
   private static extern bool
   FD_C_PaddleYOLOXWrapperBatchPredict(IntPtr fd_c_paddleyolox_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -585,7 +585,7 @@ public class FasterRCNN {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_FasterRCNNWrapperBatchPredict(fd_fasterrcnn_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_FasterRCNNWrapperBatchPredict(fd_fasterrcnn_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -642,7 +642,7 @@ public class FasterRCNN {
              EntryPoint = "FD_C_FasterRCNNWrapperBatchPredict")]
   private static extern bool
   FD_C_FasterRCNNWrapperBatchPredict(IntPtr fd_c_fasterrcnn_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -689,7 +689,7 @@ public class MaskRCNN {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_MaskRCNNWrapperBatchPredict(fd_maskrcnn_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_MaskRCNNWrapperBatchPredict(fd_maskrcnn_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -746,7 +746,7 @@ public class MaskRCNN {
              EntryPoint = "FD_C_MaskRCNNWrapperBatchPredict")]
   private static extern bool
   FD_C_MaskRCNNWrapperBatchPredict(IntPtr fd_c_maskrcnn_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -793,7 +793,7 @@ public class SSD {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_SSDWrapperBatchPredict(fd_ssd_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_SSDWrapperBatchPredict(fd_ssd_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -850,7 +850,7 @@ public class SSD {
              EntryPoint = "FD_C_SSDWrapperBatchPredict")]
   private static extern bool
   FD_C_SSDWrapperBatchPredict(IntPtr fd_c_ssd_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -897,7 +897,7 @@ public class PaddleYOLOv5 {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_PaddleYOLOv5WrapperBatchPredict(fd_paddleyolov5_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_PaddleYOLOv5WrapperBatchPredict(fd_paddleyolov5_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -954,7 +954,7 @@ public class PaddleYOLOv5 {
              EntryPoint = "FD_C_PaddleYOLOv5WrapperBatchPredict")]
   private static extern bool
   FD_C_PaddleYOLOv5WrapperBatchPredict(IntPtr fd_c_paddleyolov5_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -1001,7 +1001,7 @@ public class PaddleYOLOv6 {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_PaddleYOLOv6WrapperBatchPredict(fd_paddleyolov6_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_PaddleYOLOv6WrapperBatchPredict(fd_paddleyolov6_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -1058,7 +1058,7 @@ public class PaddleYOLOv6 {
              EntryPoint = "FD_C_PaddleYOLOv6WrapperBatchPredict")]
   private static extern bool
   FD_C_PaddleYOLOv6WrapperBatchPredict(IntPtr fd_c_paddleyolov6_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -1105,7 +1105,7 @@ public class PaddleYOLOv7 {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_PaddleYOLOv7WrapperBatchPredict(fd_paddleyolov7_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_PaddleYOLOv7WrapperBatchPredict(fd_paddleyolov7_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -1162,7 +1162,7 @@ public class PaddleYOLOv7 {
              EntryPoint = "FD_C_PaddleYOLOv7WrapperBatchPredict")]
   private static extern bool
   FD_C_PaddleYOLOv7WrapperBatchPredict(IntPtr fd_c_paddleyolov7_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -1209,7 +1209,7 @@ public class PaddleYOLOv8 {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_PaddleYOLOv8WrapperBatchPredict(fd_paddleyolov8_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_PaddleYOLOv8WrapperBatchPredict(fd_paddleyolov8_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -1266,7 +1266,7 @@ public class PaddleYOLOv8 {
              EntryPoint = "FD_C_PaddleYOLOv8WrapperBatchPredict")]
   private static extern bool
   FD_C_PaddleYOLOv8WrapperBatchPredict(IntPtr fd_c_paddleyolov8_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -1313,7 +1313,7 @@ public class RTMDet {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_RTMDetWrapperBatchPredict(fd_rtmdet_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_RTMDetWrapperBatchPredict(fd_rtmdet_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -1370,7 +1370,7 @@ public class RTMDet {
              EntryPoint = "FD_C_RTMDetWrapperBatchPredict")]
   private static extern bool
   FD_C_RTMDetWrapperBatchPredict(IntPtr fd_c_rtmdet_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -1417,7 +1417,7 @@ public class CascadeRCNN {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_CascadeRCNNWrapperBatchPredict(fd_cascadercnn_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_CascadeRCNNWrapperBatchPredict(fd_cascadercnn_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -1474,7 +1474,7 @@ public class CascadeRCNN {
              EntryPoint = "FD_C_CascadeRCNNWrapperBatchPredict")]
   private static extern bool
   FD_C_CascadeRCNNWrapperBatchPredict(IntPtr fd_c_cascadercnn_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -1521,7 +1521,7 @@ public class PSSDet {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_PSSDetWrapperBatchPredict(fd_pssdet_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_PSSDetWrapperBatchPredict(fd_pssdet_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -1578,7 +1578,7 @@ public class PSSDet {
              EntryPoint = "FD_C_PSSDetWrapperBatchPredict")]
   private static extern bool
   FD_C_PSSDetWrapperBatchPredict(IntPtr fd_c_pssdet_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -1625,7 +1625,7 @@ public class RetinaNet {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_RetinaNetWrapperBatchPredict(fd_retinanet_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_RetinaNetWrapperBatchPredict(fd_retinanet_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -1682,7 +1682,7 @@ public class RetinaNet {
              EntryPoint = "FD_C_RetinaNetWrapperBatchPredict")]
   private static extern bool
   FD_C_RetinaNetWrapperBatchPredict(IntPtr fd_c_retinanet_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -1729,7 +1729,7 @@ public class FCOS {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_FCOSWrapperBatchPredict(fd_fcos_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_FCOSWrapperBatchPredict(fd_fcos_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -1786,7 +1786,7 @@ public class FCOS {
              EntryPoint = "FD_C_FCOSWrapperBatchPredict")]
   private static extern bool
   FD_C_FCOSWrapperBatchPredict(IntPtr fd_c_fcos_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -1833,7 +1833,7 @@ public class TTFNet {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_TTFNetWrapperBatchPredict(fd_ttfnet_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_TTFNetWrapperBatchPredict(fd_ttfnet_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -1890,7 +1890,7 @@ public class TTFNet {
              EntryPoint = "FD_C_TTFNetWrapperBatchPredict")]
   private static extern bool
   FD_C_TTFNetWrapperBatchPredict(IntPtr fd_c_ttfnet_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -1937,7 +1937,7 @@ public class TOOD {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_TOODWrapperBatchPredict(fd_tood_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_TOODWrapperBatchPredict(fd_tood_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -1994,7 +1994,7 @@ public class TOOD {
              EntryPoint = "FD_C_TOODWrapperBatchPredict")]
   private static extern bool
   FD_C_TOODWrapperBatchPredict(IntPtr fd_c_tood_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
@@ -2041,7 +2041,7 @@ public class GFL {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimDetectionResult fd_detection_result_array =  new FD_OneDimDetectionResult();
-    if(!FD_C_GFLWrapperBatchPredict(fd_gfl_wrapper, ref imgs_in, ref fd_detection_result_array)){
+    if(!FD_C_GFLWrapperBatchPredict(fd_gfl_wrapper, imgs_in, ref fd_detection_result_array)){
       return null;
     }
     List<DetectionResult> results_out = new List<DetectionResult>();
@@ -2098,7 +2098,7 @@ public class GFL {
              EntryPoint = "FD_C_GFLWrapperBatchPredict")]
   private static extern bool
   FD_C_GFLWrapperBatchPredict(IntPtr fd_c_gfl_wrapper,
-                                  ref FD_OneDimMat imgs,
+                                  FD_OneDimMat imgs,
                                   ref FD_OneDimDetectionResult results);
 }
 
