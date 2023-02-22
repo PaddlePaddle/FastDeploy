@@ -74,6 +74,14 @@ public struct FD_TwoDimArrayFloat {
   public IntPtr data;  // FD_OneDimArrayFloat[]
 }
 
+
+
+[StructLayout(LayoutKind.Sequential)]
+public struct FD_TwoDimArrayInt32 {
+  public nuint size;
+  public IntPtr data;  // FD_OneDimArrayInt32[]
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public struct FD_ThreeDimArrayInt32 {
   public nuint size;

@@ -26,11 +26,11 @@ namespace Test
         {
             if (args.Length < 6) {
                 Console.WriteLine(
-                    "Usage: infer_demo path/to/det_model path/to/cls_model "
-                    "path/to/rec_model path/to/rec_label_file path/to/image "
-                    "run_option, "
-                    "e.g ./infer_demo ./ch_PP-OCRv2_det_infer "
-                    "./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv2_rec_infer "
+                    "Usage: infer_demo path/to/det_model path/to/cls_model " +
+                    "path/to/rec_model path/to/rec_label_file path/to/image " +
+                    "run_option, " +
+                    "e.g ./infer_demo ./ch_PP-OCRv2_det_infer " +
+                    "./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv2_rec_infer " +
                     "./ppocr_keys_v1.txt ./12.jpg 0"
                 );
                 Console.WriteLine( "The data type of run_option is int, 0: run with cpu; 1: run with gpu");
@@ -38,9 +38,9 @@ namespace Test
             }
             string det_model_dir = args[0];
             string cls_model_dir = args[1];
-            string rec_model_dir = args[2]
+            string rec_model_dir = args[2];
             string rec_label_file = args[3];
-            string test_image = args[4];
+            string image_path = args[4];
             RuntimeOption runtimeoption = new RuntimeOption();
             int device_option = Int32.Parse(args[5]);
             if(device_option==0){
@@ -48,7 +48,7 @@ namespace Test
             }else{
                 runtimeoption.UseGpu();
             }
-            sep = '\\'
+            string sep = "\\";
             string det_model_file = det_model_dir + sep + "inference.pdmodel";
             string det_params_file = det_model_dir + sep + "inference.pdiparams";
 
@@ -70,6 +70,7 @@ namespace Test
             Console.WriteLine(res.ToString());
             Mat res_img = fastdeploy.vision.Visualize.VisOcr(image, res);
             Cv2.ImShow("result.png", res_img);
+            Cv2.ImWrite("result.png", res_img);
             Cv2.WaitKey(0);
 
         }

@@ -18,6 +18,8 @@ using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using OpenCvSharp;
 using fastdeploy.types_internal_c;
+using fastdeploy.vision;
+using fastdeploy.vision.ocr;
 
 namespace fastdeploy {
 namespace vision {
@@ -116,11 +118,11 @@ public class Recognizer {
     int[] indices_array = new int[indices_in.size];
     indices.CopyTo(indices_array);
     // Copy data to unmanaged memory
-    int size = Marshal.SizeOf(indices_array[0]) * indices_array.Length;
+    size = Marshal.SizeOf(indices_array[0]) * indices_array.Length;
     indices_in.data = Marshal.AllocHGlobal(size);
     Marshal.Copy(indices_array, 0, indices_in.data,
                  indices_array.Length);
-    if (!FD_C_RecognizerWrapperBatchPredictWithIndex(fd_recognizer_model_wrapper, imgs_in, ref fd_texts_list, ref fd_rec_scores_list, indices_in)){
+    if (!FD_C_RecognizerWrapperBatchPredictWithIndex(fd_recognizer_model_wrapper, imgs_in, ref fd_texts_list, ref fd_rec_scores_list, start_index, end_index,  indices_in)){
       return null;
     }
 
@@ -155,7 +157,7 @@ public class Recognizer {
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_CreateRecognizerWrapper")]
   private static extern IntPtr FD_C_CreateRecognizerWrapper(
-      string model_file, string params_file,
+      string model_file, string params_file,string label_path,
       IntPtr fd_runtime_option_wrapper, ModelFormat model_format);
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_DestroyRecognizerWrapper")]
@@ -166,7 +168,7 @@ public class Recognizer {
   private static extern bool
   FD_C_RecognizerWrapperPredict(IntPtr fd_recognizer_model_wrapper,
                                 IntPtr img,
-                                ref FD_C_Cstr text,
+                                ref FD_Cstr text,
                                 ref float rec_score);
 
   [DllImport("fastdeploy.dll",
@@ -217,8 +219,8 @@ public class Classifier {
     return "ppocr/ocr_cls";
   }
 
-  public OCRClassifyResult Predict(Mat img) {
-    OCRClassifyResult ocr_classify_result = new OCRClassifyResult();
+  public OCRClassifierResult Predict(Mat img) {
+    OCRClassifierResult ocr_classify_result = new OCRClassifierResult();
     if(! FD_C_ClassifierWrapperPredict(
         fd_classifier_model_wrapper, img.CvPtr,
         ref ocr_classify_result.cls_label, ref ocr_classify_result.cls_score))
@@ -228,45 +230,7 @@ public class Classifier {
     return ocr_classify_result;
   }
 
-  public List<OCRClassifyResult> BatchPredict(List<Mat> imgs){
-    FD_OneDimMat imgs_in = new FD_OneDimMat();
-    imgs_in.size = (nuint)imgs.Count;
-    // Copy data to unmanaged memory
-    IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
-    for(int i=0;i < (int)imgs.Count; i++){
-      mat_ptrs[i] = imgs[i].CvPtr;
-    }
-    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
-    imgs_in.data = Marshal.AllocHGlobal(size);
-    Marshal.Copy(mat_ptrs, 0, imgs_in.data,
-                 mat_ptrs.Length);
-    FD_C_OneDimArrayInt32 fd_cls_labels_list =  new FD_C_OneDimArrayInt32();
-    FD_C_OneDimArrayFloat fd_cls_scores_list = new FD_C_OneDimArrayFloat();
-    if (!FD_C_ClassifierWrapperBatchPredict(fd_classifier_model_wrapper, imgs_in, ref cls_labels_list, ref cls_scores_list)){
-      return null;
-    }
-
-    // copy cls_labels
-    int[] cls_labels = new int[fd_cls_labels_list.size];
-    Marshal.Copy(fd_cls_labels_list.data, cls_labels, 0,
-                 cls_labels.Length);
-    // copy cls_scores
-    float[] cls_scores = new float[fd_cls_scores_list.size];
-    Marshal.Copy(fd_cls_scores_list.data, cls_scores, 0,
-                 cls_scores.Length);
-
-    List<OCRClassifyResult> results_out = new List<OCRClassifyResult>();
-    
-    for(int i=0;i < (int)imgs.Count; i++){
-    OCRClassifyResult result = new OCRClassifyResult();
-    result.cls_label = cls_labels[i];
-    result.cls_score = cls_scores[i];
-    results_out.Add(result);
-    }
-    return results_out;
-  }
-
-    public List<OCRClassifyResult> BatchPredict(List<Mat> imgs, int start_index, int end_index){
+  public List<OCRClassifierResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
     // Copy data to unmanaged memory
@@ -280,7 +244,7 @@ public class Classifier {
                  mat_ptrs.Length);
     FD_OneDimArrayInt32 fd_cls_labels_list =  new FD_OneDimArrayInt32();
     FD_OneDimArrayFloat fd_cls_scores_list = new FD_OneDimArrayFloat();
-    if (!FD_C_ClassifierWrapperBatchPredictWithIndex(fd_classifier_model_wrapper, imgs_in, ref cls_labels_list, ref cls_scores_list, start_index, end_index)){
+    if (!FD_C_ClassifierWrapperBatchPredict(fd_classifier_model_wrapper, imgs_in, ref fd_cls_labels_list, ref fd_cls_scores_list)){
       return null;
     }
 
@@ -293,10 +257,48 @@ public class Classifier {
     Marshal.Copy(fd_cls_scores_list.data, cls_scores, 0,
                  cls_scores.Length);
 
-    List<OCRClassifyResult> results_out = new List<OCRClassifyResult>();
+    List<OCRClassifierResult> results_out = new List<OCRClassifierResult>();
     
     for(int i=0;i < (int)imgs.Count; i++){
-    OCRClassifyResult result = new OCRClassifyResult();
+    OCRClassifierResult result = new OCRClassifierResult();
+    result.cls_label = cls_labels[i];
+    result.cls_score = cls_scores[i];
+    results_out.Add(result);
+    }
+    return results_out;
+  }
+
+    public List<OCRClassifierResult> BatchPredict(List<Mat> imgs, int start_index, int end_index){
+    FD_OneDimMat imgs_in = new FD_OneDimMat();
+    imgs_in.size = (nuint)imgs.Count;
+    // Copy data to unmanaged memory
+    IntPtr[] mat_ptrs = new IntPtr[imgs_in.size];
+    for(int i=0;i < (int)imgs.Count; i++){
+      mat_ptrs[i] = imgs[i].CvPtr;
+    }
+    int size = Marshal.SizeOf(new IntPtr()) * (int)imgs_in.size;
+    imgs_in.data = Marshal.AllocHGlobal(size);
+    Marshal.Copy(mat_ptrs, 0, imgs_in.data,
+                 mat_ptrs.Length);
+    FD_OneDimArrayInt32 fd_cls_labels_list =  new FD_OneDimArrayInt32();
+    FD_OneDimArrayFloat fd_cls_scores_list = new FD_OneDimArrayFloat();
+    if (!FD_C_ClassifierWrapperBatchPredictWithIndex(fd_classifier_model_wrapper, imgs_in, ref fd_cls_labels_list, ref fd_cls_scores_list, start_index, end_index)){
+      return null;
+    }
+
+    // copy cls_labels
+    int[] cls_labels = new int[fd_cls_labels_list.size];
+    Marshal.Copy(fd_cls_labels_list.data, cls_labels, 0,
+                 cls_labels.Length);
+    // copy cls_scores
+    float[] cls_scores = new float[fd_cls_scores_list.size];
+    Marshal.Copy(fd_cls_scores_list.data, cls_scores, 0,
+                 cls_scores.Length);
+
+    List<OCRClassifierResult> results_out = new List<OCRClassifierResult>();
+    
+    for(int i=0;i < (int)imgs.Count; i++){
+    OCRClassifierResult result = new OCRClassifierResult();
     result.cls_label = cls_labels[i];
     result.cls_score = cls_scores[i];
     results_out.Add(result);
@@ -420,7 +422,7 @@ public class DBDetector {
     
     List<OCRDBDetectorResult> results_out = new List<OCRDBDetectorResult>();
     FD_TwoDimArrayInt32[] batch_boxes =
-        new FD_OneDimArrayInt32[fd_det_results_list.size];
+        new FD_TwoDimArrayInt32[fd_det_results_list.size];
     for(int i=0;i < (int)imgs.Count; i++){
     OCRDBDetectorResult result = new OCRDBDetectorResult();
     result.boxes = new List<int[]>();
@@ -509,7 +511,7 @@ public class PPOCRv2 {
   public OCRResult Predict(Mat img) {
     FD_OCRResult fd_ocr_result = new FD_OCRResult();
     if(! FD_C_PPOCRv2WrapperPredict(
-        fd_ppocrv2_model_wrapper, img.CvPtr,
+        fd_ppocrv2_wrapper, img.CvPtr,
         ref fd_ocr_result))
     {
       return null;
@@ -531,7 +533,7 @@ public class PPOCRv2 {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimOCRResult fd_ocr_result_array =  new FD_OneDimOCRResult();
-    if (!FD_C_PaddleClasModelWrapperBatchPredict(fd_paddleclas_model_wrapper, ref imgs_in, ref fd_ocr_result_array)){
+    if (!FD_C_PPOCRv2WrapperBatchPredict(fd_ppocrv2_wrapper, imgs_in, ref fd_ocr_result_array)){
       return null;
     }
     List<OCRResult> results_out = new List<OCRResult>();
@@ -545,7 +547,7 @@ public class PPOCRv2 {
   }
 
   public bool Initialized() {
-    return FD_C_PPOCRv2WrapperInitialized(fd_ppocrv2_model_wrapper);
+    return FD_C_PPOCRv2WrapperInitialized(fd_ppocrv2_wrapper);
   }
 
   // below are underlying C api
@@ -603,7 +605,7 @@ public class PPOCRv3 {
   public OCRResult Predict(Mat img) {
     FD_OCRResult fd_ocr_result = new FD_OCRResult();
     if(! FD_C_PPOCRv3WrapperPredict(
-        fd_ppocrv3_model_wrapper, img.CvPtr,
+        fd_ppocrv3_wrapper, img.CvPtr,
         ref fd_ocr_result))
     {
       return null;
@@ -625,7 +627,7 @@ public class PPOCRv3 {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimOCRResult fd_ocr_result_array =  new FD_OneDimOCRResult();
-    if (!FD_C_PaddleClasModelWrapperBatchPredict(fd_paddleclas_model_wrapper, ref imgs_in, ref fd_ocr_result_array)){
+    if (!FD_C_PPOCRv3WrapperBatchPredict(fd_ppocrv3_wrapper, imgs_in, ref fd_ocr_result_array)){
       return null;
     }
     List<OCRResult> results_out = new List<OCRResult>();
@@ -639,7 +641,7 @@ public class PPOCRv3 {
   }
 
   public bool Initialized() {
-    return FD_C_PPOCRv3WrapperInitialized(fd_ppocrv3_model_wrapper);
+    return FD_C_PPOCRv3WrapperInitialized(fd_ppocrv3_wrapper);
   }
 
   // below are underlying C api

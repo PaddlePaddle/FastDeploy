@@ -149,10 +149,10 @@ public class OCRResult {
 
   
   public string ToString() {
-  string no_result;
-  if (boxes.size() > 0) {
-    string information;
-    for (int n = 0; n < boxes.size(); n++) {
+  string no_result = "";
+  if (boxes.Count > 0) {
+    string information = "";
+    for (int n = 0; n < boxes.Count; n++) {
       information = information + "det boxes: [";
       for (int i = 0; i < 4; i++) {
         information = information + "[" + boxes[n][i * 2].ToString() + "," +
@@ -164,11 +164,11 @@ public class OCRResult {
       }
       information = information + "]";
 
-      if (rec_scores.size() > 0) {
+      if (rec_scores.Count > 0) {
         information = information + "rec text: " + text[n] + " rec score:" +
               rec_scores[n].ToString() + " ";
       }
-      if (cls_labels.size() > 0) {
+      if (cls_labels.Count > 0) {
         information = information + "cls label: " + cls_labels[n].ToString() +
               " cls score: " + cls_scores[n].ToString();
       }
@@ -176,10 +176,10 @@ public class OCRResult {
     }
     return information;
 
-  } else if (boxes.size() == 0 && rec_scores.size() > 0 &&
-             cls_scores.size() > 0) {
-    string information;
-    for (int i = 0; i < rec_scores.size(); i++) {
+  } else if (boxes.Count == 0 && rec_scores.Count > 0 &&
+             cls_scores.Count > 0) {
+    string information="";
+    for (int i = 0; i < rec_scores.Count; i++) {
       information = information + "rec text: " + text[i] + " rec score:" +
             rec_scores[i].ToString() + " ";
       information = information + "cls label: " + cls_labels[i].ToString() +
@@ -187,19 +187,19 @@ public class OCRResult {
       information = information + "\n";
     }
     return information;
-  } else if (boxes.size() == 0 && rec_scores.size() == 0 &&
-             cls_scores.size() > 0) {
-    string information;
-    for (int i = 0; i < cls_scores.size(); i++) {
+  } else if (boxes.Count == 0 && rec_scores.Count == 0 &&
+             cls_scores.Count > 0) {
+    string information="";
+    for (int i = 0; i < cls_scores.Count; i++) {
       information = information + "cls label: " + cls_labels[i].ToString() +
             " cls score: " + cls_scores[i].ToString();
       information = information + "\n";
     }
     return information;
-  } else if (boxes.size() == 0 && rec_scores.size() > 0 &&
-             cls_scores.size() == 0) {
-    string information;
-    for (int i = 0; i < rec_scores.size(); i++) {
+  } else if (boxes.Count == 0 && rec_scores.Count > 0 &&
+             cls_scores.Count == 0) {
+    string information="";
+    for (int i = 0; i < rec_scores.Count; i++) {
       information = information + "rec text: " + text[i] + " rec score:" +
             rec_scores[i].ToString() + " ";
       information = information + "\n";
