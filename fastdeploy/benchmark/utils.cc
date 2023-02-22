@@ -597,14 +597,9 @@ bool ResultManager::LoadOCRDetResult(std::vector<std::array<int, 8>>* res,
   int boxes_num = data.begin()->second.size() / 8;
   res->resize(boxes_num);
   for (int i = 0; i < boxes_num; ++i) {
-    res[i][0] = std::stof(data.begin()->second[i * 8 + 0]);
-    res[i][1] = std::stof(data.begin()->second[i * 8 + 1]);
-    res[i][2] = std::stof(data.begin()->second[i * 8 + 2]);
-    res[i][3] = std::stof(data.begin()->second[i * 8 + 3]);
-    res[i][4] = std::stof(data.begin()->second[i * 8 + 4]);
-    res[i][5] = std::stof(data.begin()->second[i * 8 + 5]);
-    res[i][6] = std::stof(data.begin()->second[i * 8 + 6]);
-    res[i][7] = std::stof(data.begin()->second[i * 8 + 7]);
+    for (int j = 0; j < 8; ++j) {
+      res[i][j] = std::stof(data.begin()->second[i * 8 + j]);
+    }
   }
   return true;
 }
