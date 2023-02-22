@@ -53,8 +53,9 @@ cmake ..  -DCMAKE_C_COMPILER=/home/zbc/opt/gcc-linaro-6.3.1-2017.05-x86_64_aarch
           -DENABLE_ORT_BACKEND=OFF \
 	      -DENABLE_RKNPU2_BACKEND=ON \
 	      -DENABLE_VISION=ON \
-	      -DRKNN2_TARGET_SOC=RK356X \
-          -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.0
+	      -DRKNN2_TARGET_SOC=RK3568 \
+          -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.0 \
+          -DOPENCV_DIRECTORY=${PWD}/opencv \
 make -j8
 make install
 ```

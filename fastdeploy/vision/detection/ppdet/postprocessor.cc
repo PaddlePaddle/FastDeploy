@@ -16,10 +16,72 @@
 
 #include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 #include "fastdeploy/vision/utils/utils.h"
+#include "yaml-cpp/yaml.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace detection {
+
+bool PaddleDetPostprocessor::ReadPostprocessConfigFromYaml() {
+  YAML::Node config;
+  try {
+    config = YAML::LoadFile(config_file_);
+  } catch (YAML::BadFile& e) {
+    FDERROR << "Failed to load yaml file " << config_file_
+            << ", maybe you should check this file." << std::endl;
+    return false;
+  }
+
+  if (config["arch"].IsDefined()) {
+    arch_ = config["arch"].as<std::string>();
+  } else {
+    FDERROR << "Please set model arch,"
+            << "support value : YOLO, SSD, RetinaNet, RCNN, Face." << std::endl;
+    return false;
+  }
+
+  if (config["fpn_stride"].IsDefined()) {
+    fpn_stride_ = config["fpn_stride"].as<std::vector<int>>();
+  }
+
+  if (config["NMS"].IsDefined()) {
+    for (const auto& op : config["NMS"]) {
+      if (config["background_label"].IsDefined()) {
+        multi_class_nms_.background_label =
+            op["background_label"].as<int64_t>();
+      }
+      if (config["keep_top_k"].IsDefined()) {
+        multi_class_nms_.keep_top_k = op["keep_top_k"].as<int64_t>();
+      }
+      if (config["nms_eta"].IsDefined()) {
+        multi_class_nms_.nms_eta = op["nms_eta"].as<float>();
+      }
+      if (config["nms_threshold"].IsDefined()) {
+        multi_class_nms_.nms_threshold = op["nms_threshold"].as<float>();
+      }
+      if (config["nms_top_k"].IsDefined()) {
+        multi_class_nms_.nms_top_k = op["nms_top_k"].as<int64_t>();
+      }
+      if (config["normalized"].IsDefined()) {
+        multi_class_nms_.normalized = op["normalized"].as<bool>();
+      }
+      if (config["score_threshold"].IsDefined()) {
+        multi_class_nms_.score_threshold = op["score_threshold"].as<float>();
+      }
+    }
+  }
+
+  if (config["Preprocess"].IsDefined()) {
+    for (const auto& op : config["Preprocess"]) {
+      std::string op_name = op["type"].as<std::string>();
+      if (op_name == "Resize") {
+        im_shape_ = op["target_size"].as<std::vector<float>>();
+      }
+    }
+  }
+
+  return true;
+}
 
 bool PaddleDetPostprocessor::ProcessMask(
     const FDTensor& tensor, std::vector<DetectionResult>* results) {
@@ -133,6 +195,8 @@ bool PaddleDetPostprocessor::ProcessWithoutNMS(
     std::vector<DetectionResult>* results) {
   int boxes_index = 0;
   int scores_index = 1;
+
+  // Judge the index of the input Tensor
   if (tensors[0].shape[1] == tensors[1].shape[2]) {
     boxes_index = 0;
     scores_index = 1;
@@ -146,6 +210,7 @@ bool PaddleDetPostprocessor::ProcessWithoutNMS(
     return false;
   }
 
+  // do multi class nms
   multi_class_nms_.Compute(
       static_cast<const float*>(tensors[boxes_index].Data()),
       static_cast<const float*>(tensors[scores_index].Data()),
@@ -153,6 +218,7 @@ bool PaddleDetPostprocessor::ProcessWithoutNMS(
   auto num_boxes = multi_class_nms_.out_num_rois_data;
   auto box_data =
       static_cast<const float*>(multi_class_nms_.out_box_data.data());
+
   // Get boxes for each input image
   results->resize(num_boxes.size());
   int offset = 0;
@@ -168,23 +234,6 @@ bool PaddleDetPostprocessor::ProcessWithoutNMS(
     }
     offset += (num_boxes[i] * 6);
   }
-  return true;
-}
-
-bool PaddleDetPostprocessor::ProcessGeneral(
-    const std::vector<FDTensor>& tensors,
-    std::vector<DetectionResult>* results) {
-  // Carry out corresponding post-processing according to the presence or
-  // absence of NMS.
-  if (with_nms_) {
-    if (!ProcessWithNMS(tensors, results)) {
-      return false;
-    }
-  } else {
-    if (!ProcessWithoutNMS(tensors, results)) {
-      return false;
-    }
-  }
 
   // do scale
   if (GetScaleFactor()[0] != 0) {
@@ -197,13 +246,37 @@ bool PaddleDetPostprocessor::ProcessGeneral(
       }
     }
   }
+  return true;
+}
 
+bool PaddleDetPostprocessor::ProcessGeneral(
+    const std::vector<FDTensor>& tensors,
+    std::vector<DetectionResult>* results) {
+  // Do process according to whether NMS exists.
+  if (with_nms_) {
+    if (!ProcessWithNMS(tensors, results)) {
+      return false;
+    }
+  } else {
+    if (!ProcessWithoutNMS(tensors, results)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool PaddleDetPostprocessor::ProcessSolov2(
+    const std::vector<FDTensor>& tensors,
+    std::vector<DetectionResult>* results) {
   return true;
 }
 
 bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                  std::vector<DetectionResult>* results) {
   // For Solov2
+  if (false) {
+    return ProcessSolov2(tensors, results);
+  }
 
   // Only detection
   if (tensors.size() <= 2) {
@@ -211,6 +284,7 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
   }
 
   // process for maskrcnn
+  ProcessGeneral(tensors, results);
   if (tensors[2].Shape()[0] != tensors[0].Shape()[0]) {
     FDERROR << "The first dimension of output mask tensor:"
             << tensors[2].Shape()[0]

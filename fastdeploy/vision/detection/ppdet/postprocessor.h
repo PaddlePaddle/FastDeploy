@@ -24,13 +24,24 @@ namespace detection {
  */
 class FASTDEPLOY_DECL PaddleDetPostprocessor {
  public:
-  PaddleDetPostprocessor() = default;
+  PaddleDetPostprocessor() {
+    // There may be no NMS config in the yaml file,
+    // so we need to give a initial value to multi_class_nms_.
+    multi_class_nms_.SetNMSOption(NMSOption());
+  }
 
   /** \brief Create a preprocessor instance for PaddleDet serials model
    *
    * \param[in] config_file Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
    */
-  explicit PaddleDetPostprocessor(const std::string& config_file) {}
+  explicit PaddleDetPostprocessor(const std::string& config_file) {
+    // There may be no NMS config in the yaml file,
+    // so we need to give a initial value to multi_class_nms_.
+    multi_class_nms_.SetNMSOption(NMSOption());
+
+    config_file_ = config_file;
+    ReadPostprocessConfigFromYaml();
+  }
 
   /** \brief Process the result of runtime and fill to ClassifyResult structure
    *
@@ -43,13 +54,16 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
 
   /// Apply box decoding and nms step for the outputs for the model.This is
   /// only available for those model exported without box decoding and nms.
-  void ApplyNMS(const NMSOption& option = NMSOption()) {
-    with_nms_ = false;
-    nms_option_ = option;
+  void ApplyNMS() { with_nms_ = false; }
+
+  /// If you do not want to modify the Yaml configuration file,
+  /// you can use this function to set NMS parameters.
+  void SetNMSOption(const NMSOption& option) {
+    multi_class_nms_.SetNMSOption(option);
   }
 
   // Set scale_factor_ value.This is only available for those model exported
-  // without box decoding and nms.
+  // without nms.
   void SetScaleFactor(const std::vector<float>& scale_factor_value) {
     scale_factor_ = scale_factor_value;
   }
@@ -60,16 +74,27 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
 
   // for model without nms.
   bool with_nms_ = true;
-  NMSOption nms_option_{};
-  PaddleMultiClassNMS multi_class_nms_;
 
-  // Process General tensor for General Detection
+  // for yaml config
+  std::string config_file_{};
+  bool ReadPostprocessConfigFromYaml();
+  std::string arch_{};
+  std::vector<int> fpn_stride_{};
+  std::vector<float> im_shape_{};
+  PaddleMultiClassNMS multi_class_nms_{};
+
+  // Process for General tensor without nms.
   bool ProcessWithoutNMS(const std::vector<FDTensor>& tensors,
                          std::vector<DetectionResult>* results);
+
+  // Process for General tensor with nms.
   bool ProcessWithNMS(const std::vector<FDTensor>& tensors,
                       std::vector<DetectionResult>* results);
+
+  // Process for General tensor. Call ProcessWithoutNMS or ProcessWithNMS.
   bool ProcessGeneral(const std::vector<FDTensor>& tensors,
                       std::vector<DetectionResult>* results);
+
   // Process Solov2
   bool ProcessSolov2(const std::vector<FDTensor>& tensors,
                      std::vector<DetectionResult>* results);
