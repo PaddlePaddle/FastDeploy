@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
   benchmark::ResultManager::LoadClassifyResult(&res_loaded, cls_result_path);
   // Calculate diff between two results.
   auto cls_diff =
-      benchmark::ResultManager::CalculateDiffStatis(&res, &res_loaded);
+      benchmark::ResultManager::CalculateDiffStatis(res, res_loaded);
   std::cout << "Labels diff: mean=" << cls_diff.labels.mean
             << ", max=" << cls_diff.labels.max
             << ", min=" << cls_diff.labels.min << std::endl;

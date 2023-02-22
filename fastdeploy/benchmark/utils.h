@@ -116,6 +116,12 @@ struct FASTDEPLOY_DECL ClassifyDiff: public BaseDiff {
   EvalStatis scores;
   EvalStatis labels;
 };
+
+struct FASTDEPLOY_DECL SegmentationDiff: public BaseDiff {
+  EvalStatis scores;
+  EvalStatis labels;
+};
+
 #endif  // ENABLE_VISION
 #endif  // ENABLE_BENCHMARK
 
@@ -126,8 +132,8 @@ struct FASTDEPLOY_DECL ResultManager {
   static bool SaveFDTensor(const FDTensor& tensor, const std::string& path);
   static bool LoadFDTensor(FDTensor* tensor, const std::string& path);
   /// Calculate diff value between two FDTensor results.
-  static TensorDiff CalculateDiffStatis(FDTensor* lhs,
-                                        FDTensor* rhs);
+  static TensorDiff CalculateDiffStatis(const FDTensor& lhs,
+                                        const FDTensor& rhs);
 #if defined(ENABLE_VISION)
   /// Save & Load functions for basic results.
   static bool SaveDetectionResult(const vision::DetectionResult& res,
@@ -138,12 +144,19 @@ struct FASTDEPLOY_DECL ResultManager {
                                  const std::string& path);
   static bool LoadClassifyResult(vision::ClassifyResult* res,
                                  const std::string& path);
+  static bool SaveSegmentationResult(const vision::SegmentationResult& res,
+                                     const std::string& path);
+  static bool LoadSegmentationResult(vision::SegmentationResult* res,
+                                     const std::string& path);
   /// Calculate diff value between two basic results.
-  static DetectionDiff CalculateDiffStatis(vision::DetectionResult* lhs,
-                                           vision::DetectionResult* rhs,
-                                           float score_threshold = 0.3f);
-  static ClassifyDiff CalculateDiffStatis(vision::ClassifyResult* lhs,
-                                          vision::ClassifyResult* rhs);
+  static DetectionDiff CalculateDiffStatis(const vision::DetectionResult& lhs,
+                                           const vision::DetectionResult& rhs,
+                                           const float& score_threshold = 0.3f);
+  static ClassifyDiff CalculateDiffStatis(const vision::ClassifyResult& lhs,
+                                          const vision::ClassifyResult& rhs);
+  static SegmentationDiff CalculateDiffStatis(
+      const vision::SegmentationResult& lhs,
+      const vision::SegmentationResult& rhs);
 #endif  // ENABLE_VISION
 #endif  // ENABLE_BENCHMARK
 };

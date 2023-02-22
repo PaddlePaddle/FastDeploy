@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
   benchmark::ResultManager::LoadDetectionResult(&res_loaded, det_result_path);
   // Calculate diff between two results.
   auto det_diff =
-      benchmark::ResultManager::CalculateDiffStatis(&res, &res_loaded);
+      benchmark::ResultManager::CalculateDiffStatis(res, res_loaded);
   std::cout << "Boxes diff: mean=" << det_diff.boxes.mean
             << ", max=" << det_diff.boxes.max << ", min=" << det_diff.boxes.min
             << std::endl;
@@ -75,8 +75,8 @@ int main(int argc, char* argv[]) {
   fastdeploy::FDTensor tensor_loaded;
   benchmark::ResultManager::LoadFDTensor(&tensor_loaded, det_tensor_path);
   // Calculate diff between two tensors.
-  auto det_tensor_diff = benchmark::ResultManager::CalculateDiffStatis(
-      &tensor_dump, &tensor_loaded);
+  auto det_tensor_diff =
+      benchmark::ResultManager::CalculateDiffStatis(tensor_dump, tensor_loaded);
   std::cout << "Tensor diff: mean=" << det_tensor_diff.data.mean
             << ", max=" << det_tensor_diff.data.max
             << ", min=" << det_tensor_diff.data.min << std::endl;
