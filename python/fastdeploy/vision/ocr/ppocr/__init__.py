@@ -23,10 +23,10 @@ def sort_boxes(boxes):
 
 
 class DBDetectorPreprocessor:
-    def __init__(self, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+    def __init__(self):
         """Create a preprocessor for DBDetectorModel
         """
-        self._preprocessor = C.vision.ocr.DBDetectorPreprocessor(mean, std)
+        self._preprocessor = C.vision.ocr.DBDetectorPreprocessor()
 
     def run(self, input_ims):
         """Preprocess input images for DBDetectorModel
