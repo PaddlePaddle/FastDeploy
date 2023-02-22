@@ -59,7 +59,9 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
   /// This function will disable hwc2chw in preprocessing step.
   void DisablePermute() { disable_normalize_ = true; }
 
-  /// Set det_image_shape for the classification preprocess
+  /// Set det_image_shape for the detection preprocess.
+  /// This api is usually used when you retrain the model.
+  /// Generally, you do not need to use it.
   void SetDetImageShape(const std::vector<int>& det_image_shape) {
     det_image_shape_ = det_image_shape;
   }
