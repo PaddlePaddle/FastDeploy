@@ -16,6 +16,9 @@
 #include "macros.h"
 #include "option.h"
 
+namespace vision = fastdeploy::vision;
+namespace benchmark = fastdeploy::benchmark;
+
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Initialization
@@ -24,9 +27,8 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   auto im = cv::imread(FLAGS_image);
-  auto model_yolov5 =
-      fastdeploy::vision::detection::YOLOv5(FLAGS_model, "", option);
-  fastdeploy::vision::DetectionResult res;
+  auto model_yolov5 = vision::detection::YOLOv5(FLAGS_model, "", option);
+  vision::DetectionResult res;
   // Run once at least
   model_yolov5.Predict(im, &res);
   // 1. Test result diff
@@ -47,7 +49,7 @@ int main(int argc, char* argv[]) {
             << ", max=" << det_diff.labels.max
             << ", min=" << det_diff.labels.min << std::endl;
   BENCHMARK_MODEL(model_yolov5, model_yolov5.Predict(im, &res))
-  auto vis_im = fastdeploy::vision::VisDetection(im, res);
+  auto vis_im = vision::VisDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 #endif
