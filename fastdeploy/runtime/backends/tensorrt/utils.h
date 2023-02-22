@@ -241,6 +241,7 @@ class FDTrtLogger : public nvinfer1::ILogger {
       FDASSERT(false, "%s", msg);
     }
   }
+
  private:
   bool enable_info_ = false;
   bool enable_warning_ = false;
