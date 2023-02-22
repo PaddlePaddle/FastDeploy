@@ -43,8 +43,8 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
   /// Get max_side_len of the detection preprocess
   int GetMaxSideLen() const { return max_side_len_; }
 
-  /// Set preprocess normalize parameters, please call this API if you have
-  /// custom normalize parameters, otherwise it will use tbe default normalize
+  /// Set preprocess normalize parameters, please call this API to customize
+  /// the normalize parameters, otherwise it will use the default normalize
   /// parameters.
   void SetNormalize(const std::vector<float>& mean = {0.485f, 0.456f, 0.406f},
                     const std::vector<float>& std = {0.229f, 0.224f, 0.225f},

@@ -54,8 +54,8 @@ class DBDetectorPreprocessor:
                       mean=[0.485, 0.456, 0.406],
                       std=[0.229, 0.224, 0.225],
                       is_scale=True):
-        """Set preprocess normalize parameters, please call this API if you have
-           custom normalize parameters, otherwise it will use tbe default
+        """Set preprocess normalize parameters, please call this API to
+           customize the normalize parameters, otherwise it will use the default
            normalize parameters.
         :param: mean: (list of float) mean values
         :param: std: (list of float) std values
