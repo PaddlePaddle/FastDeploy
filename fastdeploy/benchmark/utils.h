@@ -122,6 +122,10 @@ struct FASTDEPLOY_DECL SegmentationDiff: public BaseDiff {
   EvalStatis labels;
 };
 
+struct FASTDEPLOY_DECL OCRDetDiff: public BaseDiff {
+  EvalStatis boxes;
+};
+
 #endif  // ENABLE_VISION
 #endif  // ENABLE_BENCHMARK
 
@@ -148,6 +152,10 @@ struct FASTDEPLOY_DECL ResultManager {
                                      const std::string& path);
   static bool LoadSegmentationResult(vision::SegmentationResult* res,
                                      const std::string& path);
+  static bool SaveOCRDetResult(const std::vector<std::array<int, 8>>& res,
+                               const std::string& path);
+  static bool LoadOCRDetResult(std::vector<std::array<int, 8>>* res,
+                               const std::string& path);
   /// Calculate diff value between two basic results.
   static DetectionDiff CalculateDiffStatis(const vision::DetectionResult& lhs,
                                            const vision::DetectionResult& rhs,
@@ -157,6 +165,9 @@ struct FASTDEPLOY_DECL ResultManager {
   static SegmentationDiff CalculateDiffStatis(
       const vision::SegmentationResult& lhs,
       const vision::SegmentationResult& rhs);
+  static OCRDetDiff CalculateDiffStatis(
+      const std::vector<std::array<int, 8>>& lhs,
+      const std::vector<std::array<int, 8>>& rhs);
 #endif  // ENABLE_VISION
 #endif  // ENABLE_BENCHMARK
 };

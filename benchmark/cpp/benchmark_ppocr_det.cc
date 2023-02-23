@@ -27,31 +27,37 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   auto im = cv::imread(FLAGS_image);
-  auto model_yolov5 = vision::detection::YOLOv5(FLAGS_model, "", option);
-  vision::DetectionResult res;
+  // Detection Model
+  auto det_model_file = FLAGS_model + sep + "inference.pdmodel";
+  auto det_params_file = FLAGS_model + sep + "inference.pdiparams";
+  if (FLAGS_backend == "paddle_trt") {
+    option.paddle_infer_option.collect_trt_shape = true;
+  }
+  if (FLAGS_backend == "paddle_trt" || FLAGS_backend == "trt") {
+    option.trt_option.SetShape("x", {1, 3, 64, 64}, {1, 3, 640, 640},
+                               {1, 3, 960, 960});
+  }
+  auto model_ppocr_det =
+      vision::ocr::DBDetector(det_model_file, det_params_file, option);
+  std::vector<std::array<int, 8>> res;
   // Run once at least
-  model_yolov5.Predict(im, &res);
+  model_ppocr_det.Predict(im, &res);
   // 1. Test result diff
   std::cout << "=============== Test result diff =================\n";
   // Save result to -> disk.
-  std::string det_result_path = "yolov5_result.txt";
-  benchmark::ResultManager::SaveDetectionResult(res, det_result_path);
+  std::string ppocr_det_result_path = "ppocr_det_result.txt";
+  benchmark::ResultManager::SaveOCRDetResult(res, ppocr_det_result_path);
   // Load result from <- disk.
-  vision::DetectionResult res_loaded;
-  benchmark::ResultManager::LoadDetectionResult(&res_loaded, det_result_path);
+  std::vector<std::array<int, 8>> res_loaded;
+  benchmark::ResultManager::LoadOCRDetResult(&res_loaded,
+                                             ppocr_det_result_path);
   // Calculate diff between two results.
-  auto det_diff =
+  auto ppocr_det_diff =
       benchmark::ResultManager::CalculateDiffStatis(res, res_loaded);
-  std::cout << "Boxes diff: mean=" << det_diff.boxes.mean
-            << ", max=" << det_diff.boxes.max << ", min=" << det_diff.boxes.min
-            << std::endl;
-  std::cout << "Label_ids diff: mean=" << det_diff.labels.mean
-            << ", max=" << det_diff.labels.max
-            << ", min=" << det_diff.labels.min << std::endl;
-  BENCHMARK_MODEL(model_yolov5, model_yolov5.Predict(im, &res))
-  auto vis_im = vision::VisDetection(im, res);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  std::cout << "PPOCR Boxes diff: mean=" << ppocr_det_diff.boxes.mean
+            << ", max=" << ppocr_det_diff.boxes.max
+            << ", min=" << ppocr_det_diff.boxes.min << std::endl;
+  BENCHMARK_MODEL(model_ppocr_det, model_ppocr_det.Predict(im, &res));
 #endif
   return 0;
 }
