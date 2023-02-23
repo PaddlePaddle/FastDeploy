@@ -42,7 +42,7 @@ namespace Test
             }else{
                 runtimeoption.UseGpu();
             }
-            fastdeploy.vision.detection.YOLOv5 model = new fastdeploy.vision.detection.YOLOv5(model_path, "", runtimeoption, ModelFormat.PADDLE);
+            fastdeploy.vision.detection.YOLOv5 model = new fastdeploy.vision.detection.YOLOv5(model_path, "", runtimeoption, ModelFormat.ONNX);
             if(!model.Initialized()){
                 Console.WriteLine("Failed to initialize.\n");
             }
