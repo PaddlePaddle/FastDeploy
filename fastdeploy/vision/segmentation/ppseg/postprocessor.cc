@@ -163,16 +163,16 @@ bool PaddleSegPostprocessor::FDTensorCast2Uint8(FDTensor* infer_result,
     // cv::resize don't support `CV_8S` or `CV_32S`
     // refer to https://github.com/opencv/opencv/issues/20991
     // https://github.com/opencv/opencv/issues/7862
-    uint8_result_buffer = new std::vector<uint8_t>(
-        infer_result_buffer, infer_result_buffer + offset);
+    uint8_result_buffer->resize(offset * sizeof(int64_t));
+    memcpy(uint8_result_buffer->data(), infer_result_buffer, offset * sizeof(int64_t));
   } else if (infer_result_dtype == FDDataType::INT32) {
     const int32_t* infer_result_buffer =
         reinterpret_cast<const int32_t*>(infer_result->CpuData());
     // cv::resize don't support `CV_8S` or `CV_32S`
     // refer to https://github.com/opencv/opencv/issues/20991
     // https://github.com/opencv/opencv/issues/7862
-    uint8_result_buffer = new std::vector<uint8_t>(
-        infer_result_buffer, infer_result_buffer + offset);
+    uint8_result_buffer->resize(offset * sizeof(int32_t));
+    memcpy(uint8_result_buffer->data(), infer_result_buffer, offset * sizeof(int32_t));
   } else {
     FDASSERT(false, 
              "Require the data type for casting uint8 is int64, int32, but now "
