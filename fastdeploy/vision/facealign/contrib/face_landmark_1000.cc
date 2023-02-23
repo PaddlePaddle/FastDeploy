@@ -70,7 +70,7 @@ bool FaceLandmark1000::Preprocess(
   HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
   mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  output->shape.insert(output->shape.begin(), 1);  // reshape to n, c, h, w
   return true;
 }
 

@@ -117,8 +117,8 @@ NanoDetPlus::NanoDetPlus(const std::string& model_file,
                          const RuntimeOption& custom_option,
                          const ModelFormat& model_format) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::ORT}; 
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};  
+    valid_cpu_backends = {Backend::ORT};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
@@ -182,7 +182,7 @@ bool NanoDetPlus::Preprocess(
   HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
   mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  output->shape.insert(output->shape.begin(), 1);  // reshape to n, c, h, w
   return true;
 }
 

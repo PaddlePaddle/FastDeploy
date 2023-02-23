@@ -16,9 +16,6 @@
 #include "macros.h"
 #include "option.h"
 
-namespace vision = fastdeploy::vision;
-namespace benchmark = fastdeploy::benchmark;
-
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Initialization
@@ -27,31 +24,34 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   auto im = cv::imread(FLAGS_image);
-  auto model_yolov5 = vision::detection::YOLOv5(FLAGS_model, "", option);
-  vision::DetectionResult res;
+  // Classification Model
+  auto cls_model_file = FLAGS_model + sep + "inference.pdmodel";
+  auto cls_params_file = FLAGS_model + sep + "inference.pdiparams";
+  if (FLAGS_backend == "paddle_trt") {
+    option.paddle_infer_option.collect_trt_shape = true;
+  }
+  if (FLAGS_backend == "paddle_trt" || FLAGS_backend == "trt") {
+    option.trt_option.SetShape("x", {1, 3, 48, 10}, {4, 3, 48, 320},
+                               {8, 3, 48, 1024});
+  }
+  auto model_ppocr_cls = fastdeploy::vision::ocr::Classifier(
+      cls_model_file, cls_params_file, option);
+  int32_t res_label;
+  float res_score;
   // Run once at least
-  model_yolov5.Predict(im, &res);
+  model_ppocr_cls.Predict(im, &res_label, &res_score);
   // 1. Test result diff
   std::cout << "=============== Test result diff =================\n";
-  // Save result to -> disk.
-  std::string det_result_path = "yolov5_result.txt";
-  benchmark::ResultManager::SaveDetectionResult(res, det_result_path);
-  // Load result from <- disk.
-  vision::DetectionResult res_loaded;
-  benchmark::ResultManager::LoadDetectionResult(&res_loaded, det_result_path);
+  int32_t res_label_expect = 0;
+  float res_score_expect = 1.0;
   // Calculate diff between two results.
-  auto det_diff =
-      benchmark::ResultManager::CalculateDiffStatis(res, res_loaded);
-  std::cout << "Boxes diff: mean=" << det_diff.boxes.mean
-            << ", max=" << det_diff.boxes.max << ", min=" << det_diff.boxes.min
+  auto ppocr_cls_label_diff = res_label - res_label_expect;
+  auto ppocr_cls_score_diff = res_score - res_score_expect;
+  std::cout << "PPOCR Cls label diff: " << ppocr_cls_label_diff << std::endl;
+  std::cout << "PPOCR Cls score diff: " << abs(ppocr_cls_score_diff)
             << std::endl;
-  std::cout << "Label_ids diff: mean=" << det_diff.labels.mean
-            << ", max=" << det_diff.labels.max
-            << ", min=" << det_diff.labels.min << std::endl;
-  BENCHMARK_MODEL(model_yolov5, model_yolov5.Predict(im, &res))
-  auto vis_im = vision::VisDetection(im, res);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  BENCHMARK_MODEL(model_ppocr_cls,
+                  model_ppocr_cls.Predict(im, &res_label, &res_score));
 #endif
   return 0;
 }

@@ -50,7 +50,7 @@ bool InsightFaceRecognitionPreprocessor::Preprocess(FDMat* mat,
   }
 
   mat->ShareWithTensor(output);
-  output->ExpandDim(0);  // reshape to n, h, w, c
+  output->ExpandDim(0);  // reshape to n, c, h, w
   return true;
 }
 
