@@ -55,6 +55,7 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor : public ProcessorManager {
 
  private:
   bool BuildPreprocessPipelineFromConfig();
+  bool initialized_ = false;
   std::vector<std::shared_ptr<Processor>> processors_;
   // for recording the switch of hwc2chw
   bool disable_permute_ = false;
