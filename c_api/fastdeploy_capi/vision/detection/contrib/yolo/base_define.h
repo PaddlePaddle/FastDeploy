@@ -95,8 +95,11 @@ return model->Initialized();
 
 #define YOLO_IMPLEMENT_BATCH_PREDICT_FUNCTION(model_type, wrapper_var_name) std::vector<cv::Mat> imgs_vec; \
   std::vector<fastdeploy::vision::DetectionResult> results_out; \
+  std::vector<FD_C_DetectionResultWrapper*> results_wrapper_out; \
   for (int i = 0; i < imgs.size; i++) { \
     imgs_vec.push_back(*(reinterpret_cast<cv::Mat*>(imgs.data[i]))); \
+    FD_C_DetectionResultWrapper* fd_detection_result_wrapper = FD_C_CreateDetectionResultWrapper(); \
+    results_wrapper_out.push_back(fd_detection_result_wrapper); \
   } \
   auto& model = \
       CHECK_AND_CONVERT_FD_TYPE(model_type##Wrapper, wrapper_var_name); \
@@ -105,7 +108,10 @@ return model->Initialized();
     results->size = results_out.size(); \
     results->data = new FD_C_DetectionResult[results->size]; \
     for (int i = 0; i < results_out.size(); i++) { \
-      results->data[i] = *FD_C_DetectionResultToC(&results_out[i]); \
+      (*CHECK_AND_CONVERT_FD_TYPE(DetectionResultWrapper, \
+                                  results_wrapper_out[i])) = std::move(results_out[i]); \
+      results->data[i] = *(FD_C_DetectionResultWrapperGetData(results_wrapper_out[i])); \
+      FD_C_DestroyDetectionResultWrapper(results_wrapper_out[i]); \
     } \
   } \
   return successful;
