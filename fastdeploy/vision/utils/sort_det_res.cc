@@ -95,6 +95,19 @@ static bool LexSortByXYCompare(const std::array<T, 4>& box_a,
   return x0_a > x0_b;
 }
 
+// Only for int dtype
+static bool LexSortByXYCompare(const std::array<int, 4>& box_a,
+                               const std::array<int, 4>& box_b) {
+  const int& x0_a = box_a[0];
+  const int& y0_a = box_a[1];
+  const int& x0_b = box_b[0];
+  const int& y0_b = box_b[1];
+  if (x0_a - x0_b == 0) {
+    return y0_a - y0_b == 0 ? false : y0_a > y0_b;
+  }
+  return x0_a > x0_b;
+}
+
 void ReorderDetectionResultByIndices(DetectionResult* result,
                                      const std::vector<size_t>& indices) {
   // reorder boxes, scores, label_ids, masks
@@ -166,7 +179,6 @@ void LexSortOCRDetResultByXY(std::vector<std::array<int, 8>>* result) {
   for (int i = 0; i < boxes_num; ++i) {
     (*result)[i] = backup[indices[i]];
   }
-  return;
 }
 
 }  // namespace utils
