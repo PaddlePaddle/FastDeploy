@@ -78,8 +78,8 @@ void SortDetectionResult(DetectionResult* result) {
 }
 
 template <typename T>
-static bool LexSortByXYCompare(const std::array<T, 4>& box_a,
-                               const std::array<T, 4>& box_b) {
+bool LexSortByXYCompare(const std::array<T, 4>& box_a,
+                        const std::array<T, 4>& box_b) {
   // WARN: The status shoule be false if (a==b).
   // https://blog.csdn.net/xxxwrq/article/details/83080640
   auto is_equal = [](const T& a, const T& b) -> bool {
@@ -97,8 +97,8 @@ static bool LexSortByXYCompare(const std::array<T, 4>& box_a,
 
 // Only for int dtype
 template <>
-static bool LexSortByXYCompare(const std::array<int, 4>& box_a,
-                               const std::array<int, 4>& box_b) {
+bool LexSortByXYCompare(const std::array<int, 4>& box_a,
+                        const std::array<int, 4>& box_b) {
   const int& x0_a = box_a[0];
   const int& y0_a = box_a[1];
   const int& x0_b = box_b[0];
