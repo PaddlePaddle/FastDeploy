@@ -247,7 +247,6 @@ bool PaddleSegPostprocessor::Run(
     }
 
     FDMat mat;
-    std::vector<uint8_t> uint8_result_buffer;
     // Resize interpration 
     int interpolation = cv::INTER_LINEAR;
     if (is_resized) {
