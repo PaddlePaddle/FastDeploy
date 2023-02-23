@@ -26,8 +26,7 @@ AdaFacePreprocessor::AdaFacePreprocessor() {
   permute_ = true;
 }
 
-bool AdaFacePreprocessor::Preprocess(FDMat * mat, FDTensor* output) {
-
+bool AdaFacePreprocessor::Preprocess(FDMat* mat, FDTensor* output) {
   // face recognition model's preprocess steps in insightface
   // reference: insightface/recognition/arcface_torch/inference.py
   // 1. Resize
@@ -48,14 +47,15 @@ bool AdaFacePreprocessor::Preprocess(FDMat * mat, FDTensor* output) {
   Cast::Run(mat, "float");
 
   mat->ShareWithTensor(output);
-  output->ExpandDim(0);  // reshape to n, h, w, c
+  output->ExpandDim(0);  // reshape to n, c, h, w
   return true;
 }
 
 bool AdaFacePreprocessor::Run(std::vector<FDMat>* images,
                               std::vector<FDTensor>* outputs) {
   if (images->empty()) {
-    FDERROR << "The size of input images should be greater than 0." << std::endl;
+    FDERROR << "The size of input images should be greater than 0."
+            << std::endl;
     return false;
   }
   FDASSERT(images->size() == 1, "Only support batch = 1 now.");

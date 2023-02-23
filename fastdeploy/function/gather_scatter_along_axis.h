@@ -26,7 +26,8 @@ namespace function {
     @param out The output tensor which stores the result.
     @param axis Axis which will be gathered.
 */
-void GatherAlongAxis(const FDTensor& x, const FDTensor& index, FDTensor* result,
+FASTDEPLOY_DECL void GatherAlongAxis(const FDTensor& x,
+                    const FDTensor& index, FDTensor* result,
                      int axis);
 
 }  // namespace function

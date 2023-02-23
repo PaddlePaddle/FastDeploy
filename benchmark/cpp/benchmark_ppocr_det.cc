@@ -27,45 +27,37 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   auto im = cv::imread(FLAGS_image);
-  auto model_file = FLAGS_model + sep + "model.pdmodel";
-  auto params_file = FLAGS_model + sep + "model.pdiparams";
-  auto config_file = FLAGS_model + sep + "deploy.yaml";
+  // Detection Model
+  auto det_model_file = FLAGS_model + sep + "inference.pdmodel";
+  auto det_params_file = FLAGS_model + sep + "inference.pdiparams";
   if (FLAGS_backend == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
   }
   if (FLAGS_backend == "paddle_trt" || FLAGS_backend == "trt") {
-    option.trt_option.SetShape("x", {1, 3, 192, 192}, {1, 3, 192, 192},
-                               {1, 3, 192, 192});
+    option.trt_option.SetShape("x", {1, 3, 64, 64}, {1, 3, 640, 640},
+                               {1, 3, 960, 960});
   }
-  auto model_ppseg = vision::segmentation::PaddleSegModel(
-      model_file, params_file, config_file, option);
-  vision::SegmentationResult res;
+  auto model_ppocr_det =
+      vision::ocr::DBDetector(det_model_file, det_params_file, option);
+  std::vector<std::array<int, 8>> res;
   // Run once at least
-  model_ppseg.Predict(im, &res);
+  model_ppocr_det.Predict(im, &res);
   // 1. Test result diff
   std::cout << "=============== Test result diff =================\n";
   // Save result to -> disk.
-  std::string seg_result_path = "ppseg_result.txt";
-  benchmark::ResultManager::SaveSegmentationResult(res, seg_result_path);
+  std::string ppocr_det_result_path = "ppocr_det_result.txt";
+  benchmark::ResultManager::SaveOCRDetResult(res, ppocr_det_result_path);
   // Load result from <- disk.
-  vision::SegmentationResult res_loaded;
-  benchmark::ResultManager::LoadSegmentationResult(&res_loaded,
-                                                   seg_result_path);
+  std::vector<std::array<int, 8>> res_loaded;
+  benchmark::ResultManager::LoadOCRDetResult(&res_loaded,
+                                             ppocr_det_result_path);
   // Calculate diff between two results.
-  auto seg_diff =
+  auto ppocr_det_diff =
       benchmark::ResultManager::CalculateDiffStatis(res, res_loaded);
-  std::cout << "Labels diff: mean=" << seg_diff.labels.mean
-            << ", max=" << seg_diff.labels.max
-            << ", min=" << seg_diff.labels.min << std::endl;
-  if (res_loaded.contain_score_map) {
-    std::cout << "Scores diff: mean=" << seg_diff.scores.mean
-              << ", max=" << seg_diff.scores.max
-              << ", min=" << seg_diff.scores.min << std::endl;
-  }
-  BENCHMARK_MODEL(model_ppseg, model_ppseg.Predict(im, &res))
-  auto vis_im = vision::VisSegmentation(im, res, 0.5);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  std::cout << "PPOCR Boxes diff: mean=" << ppocr_det_diff.boxes.mean
+            << ", max=" << ppocr_det_diff.boxes.max
+            << ", min=" << ppocr_det_diff.boxes.min << std::endl;
+  BENCHMARK_MODEL(model_ppocr_det, model_ppocr_det.Predict(im, &res));
 #endif
   return 0;
 }

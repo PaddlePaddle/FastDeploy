@@ -4,6 +4,8 @@
 
 FastDeploy当前在Jetson仅支持ONNX Runtime CPU和TensorRT GPU/Paddle Inference三种后端推理
 
+- 如若编译过程，出现错误提示`Could not find a package configuration file provided by "Python" with any of the following names: PythonConfig.cmake python-config.cmake`，请尝试将[cmake升级至3.25或最新版本](https://cmake.org/download/)解决。
+
 ## C++ SDK编译安装
 
 编译需满足

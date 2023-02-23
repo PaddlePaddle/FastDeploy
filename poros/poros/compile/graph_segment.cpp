@@ -102,6 +102,24 @@ struct PorosGraphSegment {
             }
         }
 
+        // aten::__getitem__ idx参数不支持非constant类型
+        if (node->kind() == torch::jit::aten::__getitem__) {
+            if (node->inputs().size() == 2 && 
+                node->input(1)->node()->kind() != torch::jit::prim::Constant) {
+                LOG(WARNING) << "The index input of aten::__getitem__ is not supported as non-constant type.";
+                return false;
+            }
+        }
+
+        // aten::_set_item idx参数不支持非constant类型
+        if (node->kind() == torch::jit::aten::_set_item) {
+            if (node->inputs().size() == 3 && 
+                node->input(1)->node()->kind() != torch::jit::prim::Constant) {
+                LOG(WARNING) << "The index input of aten::_set_item is not supported as non-constant type.";
+                return false;
+            }
+        }
+
         if (node->kind() == kind_ || engine_->is_node_supported(node)) {
             return true;
         }

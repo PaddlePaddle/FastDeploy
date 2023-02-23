@@ -30,6 +30,9 @@ struct TrtBackendOption {
   /// `max_workspace_size` for TensorRT
   size_t max_workspace_size = 1 << 30;
 
+  /// Enable log while converting onnx model to tensorrt
+  bool enable_log_info = false;
+
   /*
    * @brief Enable half precison inference, on some device not support half precision, it will fallback to float32 mode
    */

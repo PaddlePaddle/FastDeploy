@@ -10,11 +10,11 @@ set(GRAPHTEST "graph_test"  )
 file(
         GLOB UT_FILES
         "./op_fuser/*.cpp"
-        "../src/poros/lowering/fuse_*.cpp"
+        "../poros/lowering/fuse_*.cpp"
 )
 list(APPEND UT_FILES
-        "../src/poros/lowering/op_fuse_pass.cpp"
-        "../src/poros/util/graph_test_helper.cpp")
+        "../poros/lowering/op_fuse_pass.cpp"
+        "../poros/util/graph_test_helper.cpp")
 
 add_executable(${GRAPHTEST} ${UT_FILES})
 target_link_libraries(${GRAPHTEST} gtest_main)
@@ -28,8 +28,8 @@ set(UNITTEST "unit_test"  )
 
 file(
         GLOB UT_FILES
-        "../src/poros/*/*.cpp"
-        "../src/poros/converter/*/*.cpp"
+        "../poros/*/*.cpp"
+        "../poros/converter/*/*.cpp"
         "./converter/*.cpp"
 )
 

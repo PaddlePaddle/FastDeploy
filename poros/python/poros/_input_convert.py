@@ -61,6 +61,8 @@ def convert_prewarm_inputs(prewarm_inputs):
     else:
         raise TypeError("prewarm_inputs for poros should be torch.Tensor or wraped as tuple or inputs-lists, fix it")
     return wraped_prewarm_inputs     
+    # info = poros._C.PreWarmDatas()
+    # info.set_data(prewarm_inputs)
 
 def convert_poros_option(poros_option):
     # type: Dict[str, Any] -> poros._C.PorosOptions
@@ -70,39 +72,6 @@ def convert_poros_option(poros_option):
     option = poros._C.PorosOptions()
     if poros_option is None:
         #default situation. if user do not set the poros_option
-        return option
-    elif isinstance(poros_option, dict):
-        if "debug" in poros_option:
-            assert isinstance(poros_option["debug"], bool)
-            option.debug = poros_option["debug"]
-
-        if "use_fp16" in poros_option:
-            assert isinstance(poros_option["use_fp16"], bool)
-            option.use_fp16 = poros_option["use_fp16"]
-        
-        if "max_workspace_size" in poros_option:
-            assert type(poros_option["max_workspace_size"]) is int
-            option.max_workspace_size = poros_option["max_workspace_size"]
-
-        if "device" in poros_option:
-            option.device = _parse_device(poros_option["device"])
-        
-        if "is_dynamic" in poros_option:
-            assert isinstance(poros_option["is_dynamic"], bool)
-            option.is_dynamic = poros_option["is_dynamic"]
-
-        if "long_to_int" in poros_option:
-            assert isinstance(poros_option["long_to_int"], bool)
-            option.long_to_int = poros_option["long_to_int"]
-        
-        if "device_id" in poros_option:
-            assert type(poros_option["device_id"]) is int
-            option.device_id = poros_option["device_id"]
-
-        if "preprocess_mode" in poros_option:
-            assert type(poros_option["preprocess_mode"]) is int
-            option.preprocess_mode= poros_option["preprocess_mode"]
-
         return option
     elif isinstance(poros_option, PorosOptions):
         return poros_option.to_internal()

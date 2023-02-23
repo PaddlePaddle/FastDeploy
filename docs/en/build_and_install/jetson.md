@@ -4,6 +4,8 @@ English | [中文](../../cn/build_and_install/jetson.md)
 
 FastDeploy supports CPU inference with ONNX Runtime and GPU inference with Nvidia TensorRT/Paddle Inference on Nvidia Jetson platform
 
+- If there's error occurs, shows `Could not find a package configuration file provided by "Python" with any of the following names: PythonConfig.cmake python-config.cmake`, please try to [upgrade cmake to 3.25 or newer version](https://cmake.org/download/) to solve the problem.
+- 
 ## How to Build and Install FastDeploy C++ Library
 
 Prerequisite for Compiling on NVIDIA Jetson:

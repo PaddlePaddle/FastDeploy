@@ -39,50 +39,31 @@ class DBDetectorPreprocessor:
 
     @property
     def max_side_len(self):
-        """
-        Return the max_side_len of DBDetectorPreprocessor
+        """Get max_side_len value.
         """
         return self._preprocessor.max_side_len
 
     @max_side_len.setter
     def max_side_len(self, value):
-        """Set the max_side_len for DBDetectorPreprocessor
-
-        :param: value : the max_side_len value
+        """Set max_side_len value.
+        :param: value: (int) max_side_len value
         """
         assert isinstance(
             value, int), "The value to set `max_side_len` must be type of int."
         self._preprocessor.max_side_len = value
 
-    @property
-    def is_scale(self):
-        return self._preprocessor.is_scale
-
-    @is_scale.setter
-    def is_scale(self, value):
-        assert isinstance(
-            value, bool), "The value to set `is_scale` must be type of bool."
-        self._preprocessor.is_scale = value
-
-    @property
-    def scale(self):
-        return self._preprocessor.scale
-
-    @scale.setter
-    def scale(self, value):
-        assert isinstance(
-            value, list), "The value to set `scale` must be type of list."
-        self._preprocessor.scale = value
-
-    @property
-    def mean(self):
-        return self._preprocessor.mean
-
-    @mean.setter
-    def mean(self, value):
-        assert isinstance(
-            value, list), "The value to set `mean` must be type of list."
-        self._preprocessor.mean = value
+    def set_normalize(self,
+                      mean=[0.485, 0.456, 0.406],
+                      std=[0.229, 0.224, 0.225],
+                      is_scale=True):
+        """Set preprocess normalize parameters, please call this API to
+           customize the normalize parameters, otherwise it will use the default
+           normalize parameters.
+        :param: mean: (list of float) mean values
+        :param: std: (list of float) std values
+        :param: is_scale: (boolean) whether to scale
+        """
+        self._preprocessor.set_normalize(mean, std, is_scale)
 
 
 class DBDetectorPostprocessor:
@@ -251,17 +232,9 @@ class DBDetector(FastDeployModel):
     def preprocessor(self):
         return self._model.preprocessor
 
-    @preprocessor.setter
-    def preprocessor(self, value):
-        self._model.preprocessor = value
-
     @property
     def postprocessor(self):
         return self._model.postprocessor
-
-    @postprocessor.setter
-    def postprocessor(self, value):
-        self._model.postprocessor = value
 
     # Det Preprocessor Property
     @property
@@ -273,36 +246,6 @@ class DBDetector(FastDeployModel):
         assert isinstance(
             value, int), "The value to set `max_side_len` must be type of int."
         self._model.preprocessor.max_side_len = value
-
-    @property
-    def is_scale(self):
-        return self._model.preprocessor.is_scale
-
-    @is_scale.setter
-    def is_scale(self, value):
-        assert isinstance(
-            value, bool), "The value to set `is_scale` must be type of bool."
-        self._model.preprocessor.is_scale = value
-
-    @property
-    def scale(self):
-        return self._model.preprocessor.scale
-
-    @scale.setter
-    def scale(self, value):
-        assert isinstance(
-            value, list), "The value to set `scale` must be type of list."
-        self._model.preprocessor.scale = value
-
-    @property
-    def mean(self):
-        return self._model.preprocessor.mean
-
-    @mean.setter
-    def mean(self, value):
-        assert isinstance(
-            value, list), "The value to set `mean` must be type of list."
-        self._model.preprocessor.mean = value
 
     # Det Ppstprocessor Property
     @property
