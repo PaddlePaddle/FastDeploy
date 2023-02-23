@@ -14,7 +14,6 @@
 
 #include "fastdeploy/vision/classification/ppcls/preprocessor.h"
 
-#include "fastdeploy/function/concat.h"
 #include "yaml-cpp/yaml.h"
 
 namespace fastdeploy {
@@ -102,13 +101,17 @@ void PaddleClasPreprocessor::DisablePermute() {
 
 bool PaddleClasPreprocessor::Apply(FDMatBatch* image_batch,
                                    std::vector<FDTensor>* outputs) {
+  if (!initialized_) {
+    FDERROR << "The preprocessor is not initialized." << std::endl;
+    return false;
+  }
   for (size_t j = 0; j < processors_.size(); ++j) {
-    ProcLib lib = ProcLib::DEFAULT;
+    image_batch->proc_lib = proc_lib_;
     if (initial_resize_on_cpu_ && j == 0 &&
         processors_[j]->Name().find("Resize") == 0) {
-      lib = ProcLib::OPENCV;
+      image_batch->proc_lib = ProcLib::OPENCV;
     }
-    if (!(*(processors_[j].get()))(image_batch, lib)) {
+    if (!(*(processors_[j].get()))(image_batch)) {
       FDERROR << "Failed to processs image in " << processors_[j]->Name() << "."
               << std::endl;
       return false;
