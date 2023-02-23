@@ -274,7 +274,7 @@ bool PaddleDetPostprocessor::ProcessSolov2(
 bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                  std::vector<DetectionResult>* results) {
   // For Solov2
-  if (false) {
+  if (arch_ ==) {
     return ProcessSolov2(tensors, results);
   }
 
