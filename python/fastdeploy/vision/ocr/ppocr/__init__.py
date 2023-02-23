@@ -374,10 +374,17 @@ class ClassifierPostprocessor:
 
     @property
     def cls_thresh(self):
+        """
+        Return the cls_thresh of ClassifierPostprocessor
+        """
         return self._postprocessor.cls_thresh
 
     @cls_thresh.setter
     def cls_thresh(self, value):
+        """Set the cls_thresh for ClassifierPostprocessor
+
+        :param: value: the value of cls_thresh
+        """
         assert isinstance(
             value,
             float), "The value to set `cls_thresh` must be type of float."
