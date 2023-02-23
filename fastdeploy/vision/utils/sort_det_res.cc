@@ -96,6 +96,7 @@ static bool LexSortByXYCompare(const std::array<T, 4>& box_a,
 }
 
 // Only for int dtype
+template <>
 static bool LexSortByXYCompare(const std::array<int, 4>& box_a,
                                const std::array<int, 4>& box_b) {
   const int& x0_a = box_a[0];
