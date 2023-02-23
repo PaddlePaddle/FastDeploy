@@ -24,12 +24,14 @@ def sort_boxes(boxes):
 
 class DBDetectorPreprocessor:
     def __init__(self):
-        """Create a preprocessor for DBDetectorModel
+        """
+        Create a preprocessor for DBDetectorModel
         """
         self._preprocessor = C.vision.ocr.DBDetectorPreprocessor()
 
     def run(self, input_ims):
         """Preprocess input images for DBDetectorModel
+
         :param: input_ims: (list of numpy.ndarray) The input image
         :return: pair(list of FDTensor, list of std::array<int, 4>)
         """
@@ -37,10 +39,17 @@ class DBDetectorPreprocessor:
 
     @property
     def max_side_len(self):
+        """
+        Return the max_side_len of DBDetectorPreprocessor
+        """
         return self._preprocessor.max_side_len
 
     @max_side_len.setter
     def max_side_len(self, value):
+        """Set the max_side_len for DBDetectorPreprocessor
+
+        :param: value : the max_side_len value
+        """
         assert isinstance(
             value, int), "The value to set `max_side_len` must be type of int."
         self._preprocessor.max_side_len = value
@@ -78,12 +87,14 @@ class DBDetectorPreprocessor:
 
 class DBDetectorPostprocessor:
     def __init__(self):
-        """Create a postprocessor for DBDetectorModel
+        """
+        Create a postprocessor for DBDetectorModel
         """
         self._postprocessor = C.vision.ocr.DBDetectorPostprocessor()
 
     def run(self, runtime_results, batch_det_img_info):
         """Postprocess the runtime results for DBDetectorModel
+
         :param: runtime_results: (list of FDTensor or list of pyArray)The output FDTensor results from runtime
         :param: batch_det_img_info: (list of std::array<int, 4>)The output of det_preprocessor
         :return: list of Result(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
@@ -92,10 +103,17 @@ class DBDetectorPostprocessor:
 
     @property
     def det_db_thresh(self):
+        """
+        Return the det_db_thresh of DBDetectorPostprocessor
+        """
         return self._postprocessor.det_db_thresh
 
     @det_db_thresh.setter
     def det_db_thresh(self, value):
+        """Set the det_db_thresh for DBDetectorPostprocessor
+
+        :param: value : the det_db_thresh value
+        """
         assert isinstance(
             value,
             float), "The value to set `det_db_thresh` must be type of float."
@@ -103,10 +121,17 @@ class DBDetectorPostprocessor:
 
     @property
     def det_db_box_thresh(self):
+        """
+        Return the det_db_box_thresh of DBDetectorPostprocessor
+        """
         return self._postprocessor.det_db_box_thresh
 
     @det_db_box_thresh.setter
     def det_db_box_thresh(self, value):
+        """Set the det_db_box_thresh for DBDetectorPostprocessor
+
+        :param: value : the det_db_box_thresh value
+        """
         assert isinstance(
             value, float
         ), "The value to set `det_db_box_thresh` must be type of float."
@@ -114,10 +139,17 @@ class DBDetectorPostprocessor:
 
     @property
     def det_db_unclip_ratio(self):
+        """
+        Return the det_db_unclip_ratio of DBDetectorPostprocessor
+        """
         return self._postprocessor.det_db_unclip_ratio
 
     @det_db_unclip_ratio.setter
     def det_db_unclip_ratio(self, value):
+        """Set the det_db_unclip_ratio for DBDetectorPostprocessor
+
+        :param: value : the det_db_unclip_ratio value
+        """
         assert isinstance(
             value, float
         ), "The value to set `det_db_unclip_ratio` must be type of float."
@@ -125,10 +157,17 @@ class DBDetectorPostprocessor:
 
     @property
     def det_db_score_mode(self):
+        """
+        Return the det_db_score_mode of DBDetectorPostprocessor
+        """
         return self._postprocessor.det_db_score_mode
 
     @det_db_score_mode.setter
     def det_db_score_mode(self, value):
+        """Set the det_db_score_mode for DBDetectorPostprocessor
+
+        :param: value : the det_db_score_mode value
+        """
         assert isinstance(
             value,
             str), "The value to set `det_db_score_mode` must be type of str."
@@ -136,10 +175,17 @@ class DBDetectorPostprocessor:
 
     @property
     def use_dilation(self):
+        """
+        Return the use_dilation of DBDetectorPostprocessor
+        """
         return self._postprocessor.use_dilation
 
     @use_dilation.setter
     def use_dilation(self, value):
+        """Set the use_dilation for DBDetectorPostprocessor
+
+        :param: value : the use_dilation value
+        """
         assert isinstance(
             value,
             bool), "The value to set `use_dilation` must be type of bool."
@@ -172,8 +218,10 @@ class DBDetector(FastDeployModel):
 
     def clone(self):
         """Clone OCR detection model object
+
         :return: a new OCR detection model object
         """
+
         class DBDetectorClone(DBDetector):
             def __init__(self, model):
                 self._model = model
@@ -421,6 +469,7 @@ class Classifier(FastDeployModel):
         """Clone OCR classification model object
         :return: a new OCR classification model object
         """
+
         class ClassifierClone(Classifier):
             def __init__(self, model):
                 self._model = model
@@ -629,6 +678,7 @@ class Recognizer(FastDeployModel):
         """Clone OCR recognition model object
         :return: a new OCR recognition model object
         """
+
         class RecognizerClone(Recognizer):
             def __init__(self, model):
                 self._model = model
@@ -734,7 +784,7 @@ class PPOCRv3(FastDeployModel):
         assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None."
         if cls_model is None:
             self.system_ = C.vision.ocr.PPOCRv3(det_model._model,
-                                               rec_model._model)
+                                                rec_model._model)
         else:
             self.system_ = C.vision.ocr.PPOCRv3(
                 det_model._model, cls_model._model, rec_model._model)
@@ -743,6 +793,7 @@ class PPOCRv3(FastDeployModel):
         """Clone PPOCRv3 pipeline object
         :return: a new PPOCRv3 pipeline object
         """
+
         class PPOCRv3Clone(PPOCRv3):
             def __init__(self, system):
                 self.system_ = system
@@ -809,7 +860,7 @@ class PPOCRv2(FastDeployModel):
         assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None."
         if cls_model is None:
             self.system_ = C.vision.ocr.PPOCRv2(det_model._model,
-                                               rec_model._model)
+                                                rec_model._model)
         else:
             self.system_ = C.vision.ocr.PPOCRv2(
                 det_model._model, cls_model._model, rec_model._model)
@@ -818,6 +869,7 @@ class PPOCRv2(FastDeployModel):
         """Clone PPOCRv3 pipeline object
         :return: a new PPOCRv3 pipeline object
         """
+
         class PPOCRv2Clone(PPOCRv2):
             def __init__(self, system):
                 self.system_ = system
