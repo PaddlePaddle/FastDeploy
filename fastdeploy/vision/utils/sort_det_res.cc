@@ -103,8 +103,8 @@ bool LexSortByXYCompare(const std::array<int, 4>& box_a,
   const int& y0_a = box_a[1];
   const int& x0_b = box_b[0];
   const int& y0_b = box_b[1];
-  if (x0_a - x0_b == 0) {
-    return y0_a - y0_b == 0 ? false : y0_a > y0_b;
+  if (x0_a == x0_b) {
+    return y0_a == y0_b ? false : y0_a > y0_b;
   }
   return x0_a > x0_b;
 }
