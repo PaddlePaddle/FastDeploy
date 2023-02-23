@@ -67,8 +67,11 @@ void NMS(FaceDetectionResult* result, float iou_threshold = 0.5);
 /// Sort DetectionResult/FaceDetectionResult by score
 FASTDEPLOY_DECL void SortDetectionResult(DetectionResult* result);
 FASTDEPLOY_DECL void SortDetectionResult(FaceDetectionResult* result);
-/// Lex Sort DetectionResult/FaceDetectionResult by x(w) & y(h) axis
+/// Lex Sort DetectionResult by x(w) & y(h) axis
 FASTDEPLOY_DECL void LexSortDetectionResultByXY(DetectionResult* result);
+/// Lex Sort OCRDet Result by x(w) & y(h) axis
+FASTDEPLOY_DECL void LexSortOCRDetResultByXY(
+                     std::vector<std::array<int, 8>>* result);
 
 /// L2 Norm / cosine similarity  (for face recognition, ...)
 FASTDEPLOY_DECL std::vector<float>
