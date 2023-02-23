@@ -13,7 +13,7 @@ cd serving
 bash scripts/build.sh
 
 # 退出到FastDeploy主目录，制作镜像
-# x.y.z为FastDeploy版本号，可根据情况自己确定。比如: 1.0.3
+# x.y.z为FastDeploy版本号，可根据情况自己确定。比如: 1.0.4
 cd ../
 docker build -t paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.5-21.10 -f serving/Dockerfile .
 ```
@@ -28,7 +28,7 @@ cd ../
 docker build -t paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.5-21.10 -f serving/Dockerfile_CUDA_11_4_TRT_8_4 .
 ```
 
-比如在ubuntu 20.04，cuda11.2环境下制作基于FastDeploy v1.0.3的GPU镜像
+比如在ubuntu 20.04，cuda11.2环境下制作基于FastDeploy v1.0.4的GPU镜像
 ```
 # 进入serving目录执行脚本编译fastdeploy和服务化的backend
 cd serving
@@ -36,7 +36,7 @@ bash scripts/build_fd_cuda_11_2.sh
 
 # 退出到FastDeploy主目录，制作镜像
 cd ../
-docker build -t paddlepaddle/fastdeploy:1.0.3-gpu-cuda11.2-trt8.4-21.10 -f serving/Dockerfile_CUDA_11_2 .
+docker build -t paddlepaddle/fastdeploy:1.0.4-gpu-cuda11.2-trt8.4-21.10 -f serving/Dockerfile_CUDA_11_2 .
 ```
 
 ## 制作CPU镜像
@@ -47,7 +47,7 @@ cd serving
 bash scripts/build.sh OFF
 
 # 退出到FastDeploy主目录，制作镜像
-# x.y.z为FastDeploy版本号，可根据情况自己确定。比如: 1.0.3
+# x.y.z为FastDeploy版本号，可根据情况自己确定。比如: 1.0.4
 cd ../
 docker build -t paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10 -f serving/Dockerfile_cpu .
 ```
@@ -60,7 +60,7 @@ cd serving
 bash scripts/build_fd_ipu.sh
 
 # 退出到FastDeploy主目录，制作镜像
-# x.y.z为FastDeploy版本号，可根据情况自己确定。比如: 1.0.3
+# x.y.z为FastDeploy版本号，可根据情况自己确定。比如: 1.0.4
 cd ../
 docker build -t paddlepaddle/fastdeploy:x.y.z-ipu-only-21.10 -f serving/Dockerfile_ipu .
 ```
