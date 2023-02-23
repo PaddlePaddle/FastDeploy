@@ -65,7 +65,7 @@ FD_C_Destroy##model_type##Wrapper(__fd_take FD_C_##model_type##Wrapper* wrapper_
       FD_C_CreateDetectionResultWrapper();                                     \
   auto& detection_result = CHECK_AND_CONVERT_FD_TYPE(                          \
       DetectionResultWrapper, fd_c_detection_result_wrapper);                  \
-  bool successful = model->Predict(im, detection_result.get());                \
+  bool successful = model->Predict(*im, detection_result.get());                \
   if (successful) {                                                            \
     FD_C_DetectionResult* res =                                                \
         FD_C_DetectionResultWrapperGetData(fd_c_detection_result_wrapper);     \
