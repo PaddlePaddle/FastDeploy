@@ -80,10 +80,6 @@ class FASTDEPLOY_DECL PaddleSegPostprocessor {
                                       const int64_t& out_num,
                                       SegmentationResult* result);
 
-  virtual bool FDTensorCast2Uint8(FDTensor* infer_result,
-                                  const int64_t& offset,
-                                  std::vector<uint8_t>* uint8_result_buffer);
-
   bool is_with_softmax_ = false;
 
   bool is_with_argmax_ = true;
