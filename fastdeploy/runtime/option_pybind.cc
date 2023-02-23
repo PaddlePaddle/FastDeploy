@@ -48,6 +48,7 @@ void BindOption(pybind11::module& m) {
       .def_readwrite("trt_option", &RuntimeOption::trt_option)
       .def_readwrite("poros_option", &RuntimeOption::poros_option)
       .def_readwrite("paddle_infer_option", &RuntimeOption::paddle_infer_option)
+      .def_readwrite("mnn_option", &RuntimeOption::mnn_option)
       .def("set_external_stream", &RuntimeOption::SetExternalStream)
       .def("set_external_raw_stream",
            [](RuntimeOption& self, size_t external_stream) {
@@ -60,6 +61,7 @@ void BindOption(pybind11::module& m) {
       .def("use_trt_backend", &RuntimeOption::UseTrtBackend)
       .def("use_openvino_backend", &RuntimeOption::UseOpenVINOBackend)
       .def("use_lite_backend", &RuntimeOption::UseLiteBackend)
+      .def("use_mnn_backend", &RuntimeOption::UseMNNBackend)
       .def("enable_pinned_memory", &RuntimeOption::EnablePinnedMemory)
       .def("disable_pinned_memory", &RuntimeOption::DisablePinnedMemory)
       .def("use_ipu", &RuntimeOption::UseIpu)

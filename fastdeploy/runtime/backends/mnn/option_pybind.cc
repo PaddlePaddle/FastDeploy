@@ -11,3 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+#include "fastdeploy/pybind/main.h"
+#include "fastdeploy/runtime/backends/mnn/option.h"
+
+namespace fastdeploy {
+
+void BindLiteOption(pybind11::module& m) {
+  pybind11::class_<MNNBackendOption>(m, "MNNBackendOption")
+      .def(pybind11::init())
+      .def_readwrite("power_mode", &MNNBackendOption::power_mode)
+      .def_readwrite("cpu_threads", &MNNBackendOption::cpu_threads)
+      .def_readwrite("enable_fp16", &MNNBackendOption::enable_fp16)
+      .def_readwrite("device_id", &MNNBackendOption::device_id)
+      .def_readwrite("custom_input_orders", &MNNBackendOption::custom_input_orders)
+      .def_readwrite("custom_output_orders", &MNNBackendOption::custom_output_orders);
+}
+
+}  // namespace fastdeploy

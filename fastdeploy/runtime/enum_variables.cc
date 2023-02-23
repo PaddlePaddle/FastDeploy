@@ -32,6 +32,8 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
     out << "Backend::POROS";
   } else if (backend == Backend::LITE) {
     out << "Backend::PDLITE";
+  } else if (backend == Backend::MNN) {
+    out << "Backend::MNN";
   } else {
     out << "UNKNOWN-Backend";
   }
@@ -81,6 +83,8 @@ std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
     out << "ModelFormat::SOPHGO";
   } else if (format == ModelFormat::TORCHSCRIPT) {
     out << "ModelFormat::TORCHSCRIPT";
+  } else if (format == ModelFormat::MNN_MODEL) {
+    out << "ModelFormat::MNN_MODEL";
   } else {
     out << "UNKNOWN-ModelFormat";
   }
@@ -112,6 +116,9 @@ std::vector<Backend> GetAvailableBackends() {
 #endif
 #ifdef ENABLE_SOPHGO_BACKEND
   backends.push_back(Backend::SOPHGOTPU);
+#endif
+#ifdef ENABLE_MNN_BACKEND
+  backends.push_back(Backend::MNN);
 #endif
   return backends;
 }

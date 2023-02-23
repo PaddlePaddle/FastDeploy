@@ -49,6 +49,10 @@
 #include "fastdeploy/runtime/backends/sophgo/sophgo_backend.h"
 #endif
 
+#ifdef ENABLE_MNN_BACKEND
+#include "fastdeploy/runtime/backends/mnn/mnn_backend.h"
+#endif
+
 namespace fastdeploy {
 
 bool AutoSelectBackend(RuntimeOption& option) {
@@ -155,6 +159,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     CreateSophgoNPUBackend();
   } else if (option.backend == Backend::POROS) {
     CreatePorosBackend();
+  } else if (option.backend == Backend::MNN) {
+    CreateMNNBackend();
   } else {
     std::string msg = Str(GetAvailableBackends());
     FDERROR << "The compiled FastDeploy only supports " << msg << ", " << option.backend << " is not supported now." << std::endl;
@@ -401,6 +407,21 @@ bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors) {
            "ENABLE_POROS_BACKEND=ON.");
 #endif
   return true;
+}
+
+void Runtime::CreateMNNBackend() {
+#ifdef ENABLE_MNN_BACKEND
+  backend_ = utils::make_unique<MNNBackend>();
+
+  FDASSERT(backend_->Init(option),
+           "Load model from mnn file failed while initializing MNNBackend.");
+#else
+  FDASSERT(false,
+           "MNNBackend is not available, please compiled with "
+           "ENABLE_MNN_BACKEND=ON.");
+#endif
+  FDINFO << "Runtime initialized with Backend::MNN in " << option.device
+         << "." << std::endl;
 }
 
 }  // namespace fastdeploy

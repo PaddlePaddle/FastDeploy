@@ -111,6 +111,7 @@ void RuntimeOption::SetCpuThreadNum(int thread_num) {
   ort_option.intra_op_num_threads = thread_num;
   openvino_option.cpu_thread_num = thread_num;
   paddle_infer_option.cpu_thread_num = thread_num;
+  mnn_option.cpu_threads = thread_num;
 }
 
 void RuntimeOption::SetOrtGraphOptLevel(int level) {
@@ -182,6 +183,14 @@ void RuntimeOption::UseLiteBackend() {
   backend = Backend::LITE;
 #else
   FDASSERT(false, "The FastDeploy didn't compile with Paddle Lite.");
+#endif
+}
+
+void RuntimeOption::UseMNNBackend() {
+#ifdef ENABLE_MNN_BACKEND
+  backend = Backend::MNN;
+#else
+  FDASSERT(false, "The FastDeploy didn't compile with MNN.");
 #endif
 }
 

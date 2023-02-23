@@ -15,10 +15,7 @@
 #pragma once
 
 #include "fastdeploy/core/fd_type.h"
-#include "MNN/Interpreter.hpp"
-#include "MNN/MNNDefine.h"
-#include "MNN/Tensor.hpp"
-#include "MNN/ImageProcess.hpp"
+#include "fastdeploy/runtime/enum_variables.h"
 
 #include <iostream>
 #include <memory>
@@ -28,12 +25,13 @@
 
 namespace fastdeploy {
 
+/*! Power mode for MNN BackendConfig. */
 enum MNNPowerMode {
   MNN_POWER_NORMAL = 0,
   MNN_POWER_HIGH,
   MNN_POWER_LOW
 };
-
+/*! Precisio mode for MNN BackendConfig. */
 enum MNNPrecisionMode {
   MNN_PRECISION_Normal = 0,  ///< Automatically select int8/fp32
   MNN_PRECISION_HIGH,        ///< Inference in fp32(cpu)
@@ -41,6 +39,20 @@ enum MNNPrecisionMode {
   MNN_PRECISION_LOW_BF16     ///< Inference in bf16(cpu)
 };
 
-struct MNNBackendOption {};
-
+struct MNNBackendOption {
+  /// MNN power mode for mobile device.
+  MNNPowerMode power_mode = MNN_POWER_NORMAL;
+  /// Number of threads while use CPU
+  int cpu_threads = 1;
+  /// Enable use half precision
+  bool enable_fp16 = false;
+  /// Inference device, MNN support CPU/GPU
+  Device device = Device::CPU;
+  /// Index of inference device
+  int device_id = 0;
+  /// Custom orders of input tensors
+  std::map<std::string, int> custom_input_orders{};
+  /// Custom orders of output tensors
+  std::map<std::string, int> custom_output_orders{};
+};
 }  // namespace fastdeploy
