@@ -58,7 +58,7 @@
     :inherited-members:
 ```
 
-## fastdeploy.vision.ocr.ClassifierPostprocessor
+## fastdeploy.vision.ocr.RecognizerPostprocessor
 
 ```{eval-rst}
 .. autoclass:: fastdeploy.vision.ocr.RecognizerPostprocessor
