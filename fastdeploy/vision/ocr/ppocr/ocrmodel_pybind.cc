@@ -32,13 +32,10 @@ void BindPPOCRModel(pybind11::module& m) {
       .def_property("max_side_len",
                     &vision::ocr::DBDetectorPreprocessor::GetMaxSideLen,
                     &vision::ocr::DBDetectorPreprocessor::SetMaxSideLen)
-      .def_property("mean", &vision::ocr::DBDetectorPreprocessor::GetMean,
-                    &vision::ocr::DBDetectorPreprocessor::SetMean)
-      .def_property("scale", &vision::ocr::DBDetectorPreprocessor::GetScale,
-                    &vision::ocr::DBDetectorPreprocessor::SetScale)
-      .def_property("is_scale",
-                    &vision::ocr::DBDetectorPreprocessor::GetIsScale,
-                    &vision::ocr::DBDetectorPreprocessor::SetIsScale)
+      .def("set_normalize",
+           [](vision::ocr::DBDetectorPreprocessor& self,
+              const std::vector<float>& mean, const std::vector<float>& std,
+              bool is_scale) { self.SetNormalize(mean, std, is_scale); })
       .def("run",
            [](vision::ocr::DBDetectorPreprocessor& self,
               std::vector<pybind11::array>& im_list) {
@@ -47,12 +44,12 @@ void BindPPOCRModel(pybind11::module& m) {
                images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
              }
              std::vector<FDTensor> outputs;
-             std::vector<std::array<int, 4>> batch_det_img_info;
-             self.Run(&images, &outputs, &batch_det_img_info);
+             self.Run(&images, &outputs);
+             auto batch_det_img_info = self.GetBatchImgInfo();
              for (size_t i = 0; i < outputs.size(); ++i) {
                outputs[i].StopSharing();
              }
-             return std::make_pair(outputs, batch_det_img_info);
+             return std::make_pair(outputs, *batch_det_img_info);
            })
       .def("disable_normalize",
            [](vision::ocr::DBDetectorPreprocessor& self) {
