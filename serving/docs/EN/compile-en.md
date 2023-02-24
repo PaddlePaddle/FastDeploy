@@ -1,9 +1,9 @@
 English | [中文](../zh_CN/compile.md)
-# FastDeploy Serving Deployment Image Compilation
+# FastDeploy Serving Deployment Compilation
 
-This document is about how to create a FastDploy image.
+## Compilation with Docker containers
 
-## GPU Image
+### GPU Image
 
 The GPU images published by FastDploy are based on version 21.10 of [Triton Inference Server](https://github.com/triton-inference-server/server). If developers need to use other CUDA versions, please refer to [ NVIDIA official website](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html) to modify the scripts in Dockerfile and scripts.
 
@@ -39,7 +39,7 @@ cd ../
 docker build -t paddlepaddle/fastdeploy:1.0.3-gpu-cuda11.2-trt8.4-21.10 -f serving/Dockerfile_CUDA_11_2 .
 ```
 
-## CPU Image
+### CPU Image
 
 ```shell
 # Enter the serving directory and execute the script to compile the FastDeploy and serving backend
@@ -53,7 +53,7 @@ cd ../
 docker build -t paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10 -f serving/Dockerfile_cpu .
 ```
 
-## IPU Image
+### IPU Image
 
 ```shell
 # Enter the serving directory and execute the script to compile the FastDeploy and serving backend
@@ -65,3 +65,5 @@ bash scripts/build_fd_ipu.sh
 cd ../
 docker build -t paddlepaddle/fastdeploy:x.y.z-ipu-only-21.10 -f serving/Dockerfile_ipu .
 ```
+
+## Compilation without Docker containers
