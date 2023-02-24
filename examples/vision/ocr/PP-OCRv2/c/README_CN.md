@@ -215,43 +215,28 @@ FD_C_Bool FD_C_PPOCRv2WrapperPredict(
     FD_C_OCRResult* result)
 ```
 >
-> 模型预测接口，输入图像直接并生成分类结果。
+> 模型预测接口，输入图像直接并生成结果。
 >
 > **参数**
 > * **fd_c_ppocrv2_wrapper**(FD_C_PPOCRv2Wrapper*): 指向PPOCRv2模型的指针
 > * **img**（FD_C_Mat）: 输入图像的指针，指向cv::Mat对象，可以调用FD_C_Imread读取图像获取
-> * **result**FD_C_OCRResult*): OCR预测结果,包括由检测模型输出的检测框位置,分类模型输出的方向分类,以及识别模型输出的识别结果, OCRResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> * **result**(FD_C_OCRResult*): OCR预测结果,包括由检测模型输出的检测框位置,分类模型输出的方向分类,以及识别模型输出的识别结果, OCRResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 
 #### Predict结果
 
 ```c
-FD_C_OCRResultWrapper* FD_C_CreateOCRResultWrapperFromData(
-    FD_C_OCRResult* fd_c_ocr_result)
+FD_C_Mat FD_C_VisOcr(FD_C_Mat im, FD_C_OCRResult* ocr_result)
 ```
 >
-> 创建一个FD_C_OCRResultWrapper对象的指针，FD_C_OCRResultWrapper中包含了C++的`fastdeploy::vision::OCRResult`对象，通过该指针，使用C API可以访问调用对应C++中的函数。
->
->
-> **参数**
-> * **fd_c_ocr_result**(FD_C_OCRResult*): 指向FD_C_OCRResult对象的指针
->
-> **返回**
-> * **fd_c_ocr_result_wrapper**(FD_C_OCRResultWrapper*): 指向FD_C_OCRResultWrapper的指针
-
-
-```c
-char* FD_C_OCRResultWrapperStr(
-    FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper);
-```
->
-> 调用FD_C_OCRResultWrapper所包含的`fastdeploy::vision::OCRResult`对象的Str()方法，返回相关结果内数据信息的字符串。
+> 对结果进行可视化，返回可视化的图像。
 >
 > **参数**
-> * **fd_c_ocr_result_wrapper**(FD_C_OCRResultWrapper*): 指向FD_C_OCRResultWrapper对象的指针
+> * **im**(FD_C_Mat): 指向输入图像的指针
+> * **ocr_result**(FD_C_OCRResult*): 指向 FD_C_OCRResult结构的指针
 >
 > **返回**
-> * **str**(char*): 表示结果数据信息的字符串
+> * **vis_im**(FD_C_Mat): 指向可视化图像的指针
 
 
 

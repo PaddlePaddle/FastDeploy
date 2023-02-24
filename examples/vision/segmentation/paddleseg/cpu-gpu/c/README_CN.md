@@ -160,32 +160,20 @@ FD_C_Bool FD_C_PaddleSegWrapperPredict(
 #### Predict结果
 
 ```c
-FD_C_SegmentationResultWrapper* FD_C_CreateSegmentationResultWrapperFromData(
-    FD_C_SegmentationResult* fd_c_segmentation_result)
+FD_C_Mat FD_C_VisSegmentation(FD_C_Mat im,
+                              FD_C_SegmentationResult* result,
+                              float weight)
 ```
 >
-> 创建一个FD_C_SegmentationResultWrapper对象的指针，FD_C_SegmentationResultWrapper中包含了C++的`fastdeploy::vision::SegmentationResult`对象，通过该指针，使用C API可以访问调用对应C++中的函数。
->
->
-> **参数**
-> * **fd_c_segmentation_result**(FD_C_SegmentationResult*): 指向FD_C_SegmentationResult对象的指针
->
-> **返回**
-> * **fd_c_segmentation_result_wrapper**(FD_C_SegmentationResultWrapper*): 指向FD_C_SegmentationResultWrapper的指针
-
-
-```c
-char* FD_C_SegmentationResultWrapperStr(
-    FD_C_SegmentationResultWrapper* fd_c_segmentation_result_wrapper);
-```
->
-> 调用FD_C_SegmentationResultWrapper所包含的`fastdeploy::vision::SegmentationResult`对象的Str()方法，返回相关结果内数据信息的字符串。
+> 对结果进行可视化，返回可视化的图像。
 >
 > **参数**
-> * **fd_c_segmentation_result_wrapper**(FD_C_SegmentationResultWrapper*): 指向FD_C_SegmentationResultWrapper对象的指针
+> * **im**(FD_C_Mat): 指向输入图像的指针
+> * **segmentation_result**(FD_C_SegmentationResult*): 指向 FD_C_SegmentationResult结构的指针
+> * **weight**(float): 透明度权重
 >
 > **返回**
-> * **str**(char*): 表示结果数据信息的字符串
+> * **vis_im**(FD_C_Mat): 指向可视化图像的指针
 
 
 ## 其它文档
