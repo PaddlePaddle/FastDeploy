@@ -268,13 +268,18 @@ bool PaddleDetPostprocessor::ProcessGeneral(
 bool PaddleDetPostprocessor::ProcessSolov2(
     const std::vector<FDTensor>& tensors,
     std::vector<DetectionResult>* results) {
-  return true;
+  if (tensors.size() != 4) {
+    FDERROR << "The size of tensors for solov2 must be 4." << std::endl;
+    return false;
+  }
+
+  if () return true;
 }
 
 bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                  std::vector<DetectionResult>* results) {
   // For Solov2
-  if (arch_ ==) {
+  if (arch_ == "SOLOv2") {
     return ProcessSolov2(tensors, results);
   }
 
