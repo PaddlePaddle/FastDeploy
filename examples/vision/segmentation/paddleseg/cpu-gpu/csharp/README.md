@@ -1,4 +1,4 @@
-[English](README.md) | 简体中文
+English | [简体中文](README_CN.md)
 # PaddleSeg C# Deployment Example
 
 This directory provides `infer.cs` to finish the deployment of PaddleSeg on CPU/GPU.
