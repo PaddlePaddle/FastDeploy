@@ -10,7 +10,7 @@ Before deployment, two steps require confirmation
 
 Taking inference on Linux as an example, the compilation test can be completed by executing the following command in this directory. FastDeploy version 1.0.4 or above (x.x.x>=1.0.4) is required to support this model.
 
-```
+```bash
 mkdir build
 cd build
 # Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above
@@ -83,11 +83,13 @@ void FD_C_RuntimeOptionWrapperUseGpu(
 
 ### Model
 
+```c
 FD_C_PaddleSegWrapper* FD_C_CreatePaddleSegWrapper(
     const char* model_file, const char* params_file, const char* config_file,
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     const FD_C_ModelFormat model_format
 )
+```
 
 > Create a PaddleSeg model object, and return a pointer to manipulate it.
 >

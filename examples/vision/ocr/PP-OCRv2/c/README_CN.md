@@ -10,7 +10,7 @@
 
 以Linux上推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本1.0.4以上(x.x.x>=1.0.4)
 
-```
+```bash
 mkdir build
 cd build
 # 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
@@ -114,12 +114,13 @@ FD_C_DBDetectorWrapper* FD_C_CreateDBDetectorWrapper(
 > **返回**
 > * **fd_c_dbdetector_wrapper**(FD_C_DBDetectorWrapper*): 指向DBDetector模型对象的指针
 
+```c
 FD_C_ClassifierWrapper* FD_C_CreateClassifierWrapper(
     const char* model_file, const char* params_file,
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     const FD_C_ModelFormat model_format
 )
-
+```
 > 创建一个Classifier的模型，并且返回操作它的指针。
 >
 > **参数**
@@ -133,12 +134,13 @@ FD_C_ClassifierWrapper* FD_C_CreateClassifierWrapper(
 >
 > * **fd_c_classifier_wrapper**(FD_C_ClassifierWrapper*): 指向Classifier模型对象的指针
 
+```c
 FD_C_RecognizerWrapper* FD_C_CreateRecognizerWrapper(
     const char* model_file, const char* params_file, const char* label_path,
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     const FD_C_ModelFormat model_format
 )
-
+```
 > 创建一个Recognizer的模型，并且返回操作它的指针。
 >
 > **参数**
@@ -152,13 +154,13 @@ FD_C_RecognizerWrapper* FD_C_CreateRecognizerWrapper(
 > **返回**
 > * **fd_c_recognizer_wrapper**(FD_C_RecognizerWrapper*): 指向Recognizer模型对象的指针
 
-
+```c
 FD_C_PPOCRv2Wrapper* FD_C_CreatePPOCRv2Wrapper(
     FD_C_DBDetectorWrapper* det_model,
     FD_C_ClassifierWrapper* cls_model,
     FD_C_RecognizerWrapper* rec_model
 )
-
+```
 > 创建一个PPOCRv2的模型，并且返回操作它的指针。
 >
 > **参数**

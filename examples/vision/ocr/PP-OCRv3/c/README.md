@@ -114,12 +114,13 @@ FD_C_DBDetectorWrapper* FD_C_CreateDBDetectorWrapper(
 > **Return**
 > * **fd_c_dbdetector_wrapper**(FD_C_DBDetectorWrapper*): Pointer to manipulate DBDetector object.
 
+```c
 FD_C_ClassifierWrapper* FD_C_CreateClassifierWrapper(
     const char* model_file, const char* params_file,
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     const FD_C_ModelFormat model_format
 )
-
+```
 > Create a Classifier model object, and return a pointer to manipulate it.
 >
 > **Params**
@@ -133,12 +134,13 @@ FD_C_ClassifierWrapper* FD_C_CreateClassifierWrapper(
 >
 > * **fd_c_classifier_wrapper**(FD_C_ClassifierWrapper*): Pointer to manipulate Classifier object.
 
+```c
 FD_C_RecognizerWrapper* FD_C_CreateRecognizerWrapper(
     const char* model_file, const char* params_file, const char* label_path,
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     const FD_C_ModelFormat model_format
 )
-
+```
 > Create a Recognizer model object, and return a pointer to manipulate it.
 >
 > **Params**
@@ -152,13 +154,13 @@ FD_C_RecognizerWrapper* FD_C_CreateRecognizerWrapper(
 > **Return**
 > * **fd_c_recognizer_wrapper**(FD_C_RecognizerWrapper*): Pointer to manipulate Recognizer object.
 
-
+```c
 FD_C_PPOCRv3Wrapper* FD_C_CreatePPOCRv3Wrapper(
     FD_C_DBDetectorWrapper* det_model,
     FD_C_ClassifierWrapper* cls_model,
     FD_C_RecognizerWrapper* rec_model
 )
-
+```
 > Create a PPOCRv3 model object, and return a pointer to manipulate it.
 >
 > **Params**

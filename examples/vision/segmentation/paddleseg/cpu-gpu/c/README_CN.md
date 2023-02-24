@@ -10,7 +10,7 @@
 
 以Linux上推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本1.0.4以上(x.x.x>=1.0.4)
 
-```
+```bash
 mkdir build
 cd build
 # 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
@@ -85,12 +85,13 @@ void FD_C_RuntimeOptionWrapperUseGpu(
 
 ### 模型
 
+```c
 FD_C_PaddleSegWrapper* FD_C_CreatePaddleSegWrapper(
     const char* model_file, const char* params_file, const char* config_file,
     FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     const FD_C_ModelFormat model_format
 )
-
+```
 > 创建一个PaddleSeg的模型，并且返回操作它的指针。
 >
 > **参数**
