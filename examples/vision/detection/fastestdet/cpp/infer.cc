@@ -15,7 +15,14 @@
 #include "fastdeploy/vision.h"
 
 void CpuInfer(const std::string& model_file, const std::string& image_file) {
-  auto model = fastdeploy::vision::detection::FastestDet(model_file);
+  std::string params_file = "";
+  std::string config_file = "";
+  auto option = fastdeploy::RuntimeOption();
+  option.UseOpenVINOBackend();
+  auto model = fastdeploy::vision::detection::FastestDet(model_file,
+                                                          params_file = "",
+                                                          option,
+                                                          fastdeploy::ModelFormat::ONNX);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
