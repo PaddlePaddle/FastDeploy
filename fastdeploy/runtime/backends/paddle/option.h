@@ -66,6 +66,8 @@ struct PaddleBackendOption {
   int mkldnn_cache_size = -1;
   /// initialize memory size(MB) for GPU
   int gpu_mem_init_size = 100;
+  /// The option to enable fixed size optimization for transformer model
+  bool enable_fixed_size_opt = false;
 
   /// Disable type of operators run on TensorRT
   void DisableTrtOps(const std::vector<std::string>& ops) {
