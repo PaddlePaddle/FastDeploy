@@ -1,4 +1,4 @@
-[English](../../en/faq/develop_c_api_for_a_new_model.md) | 中文
+[English](../../en/faq/develop_c_sharp_api_for_a_new_model.md) | 中文
 
 # FastDeploy给模型新增C# API
 
