@@ -22,6 +22,9 @@ namespace vision {
 
 cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
                      float score_threshold, int line_size, float font_size) {
+  if (result.boxes.empty()) {
+    return im;
+  }
   if (result.contain_masks) {
     FDASSERT(result.boxes.size() == result.masks.size(),
              "The size of masks must be equal to the size of boxes, but now "
@@ -106,6 +109,9 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
 cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
                      const std::vector<std::string>& labels,
                      float score_threshold, int line_size, float font_size) {
+  if (result.boxes.empty()) {
+    return im;
+  }
   if (result.contain_masks) {
     FDASSERT(result.boxes.size() == result.masks.size(),
              "The size of masks must be equal to the size of boxes, but now "
@@ -203,6 +209,9 @@ cv::Mat Visualize::VisDetection(const cv::Mat& im,
                                 const DetectionResult& result,
                                 float score_threshold, int line_size,
                                 float font_size) {
+  if (result.boxes.empty()) {
+    return im;
+  }
   FDWARNING << "DEPRECATED: fastdeploy::vision::Visualize::VisDetection is "
                "deprecated, please use fastdeploy::vision:VisDetection "
                "function instead."
