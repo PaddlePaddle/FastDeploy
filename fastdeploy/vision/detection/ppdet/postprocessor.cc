@@ -44,6 +44,11 @@ bool PaddleDetPostprocessor::ReadPostprocessConfigFromYaml() {
     fpn_stride_ = config["fpn_stride"].as<std::vector<int>>();
   }
 
+  // for solov2
+  if (config["draw_threshold"].IsDefined()) {
+    draw_threshold_ = config["draw_threshold"].as<float>();
+  }
+
   if (config["NMS"].IsDefined()) {
     for (const auto& op : config["NMS"]) {
       if (config["background_label"].IsDefined()) {
@@ -273,7 +278,89 @@ bool PaddleDetPostprocessor::ProcessSolov2(
     return false;
   }
 
-  if () return true;
+  if (tensors[0].shape[0] != 1) {
+    return false;
+  }
+
+  results->clear();
+  results->resize(1);
+
+  //  (*results)[0].contain_masks = true;
+
+  // tensor[0] means bbox data
+  const auto bbox_data = static_cast<const int*>(tensors[0].CpuData());
+  // tensor[1] means label data
+  const auto label_data_ = static_cast<const int64_t*>(tensors[1].CpuData());
+  // tensor[2] means score data
+  const auto score_data_ = static_cast<const float*>(tensors[2].CpuData());
+  // tensor[3] is mask data and its shape is the same as that of the image.
+  const auto mask_data_ = static_cast<const uint8_t*>(tensors[3].CpuData());
+
+  int rows = tensors[3].shape[1];
+  int cols = tensors[3].shape[2];
+
+  for (int bbox_id = 0; bbox_id < bbox_data[0]; ++bbox_id) {
+    if (score_data_[bbox_id] >= draw_threshold_) {
+      DetectionResult& result_item = (*results)[0];
+      result_item.label_ids.emplace_back(label_data_[bbox_id]);
+      result_item.scores.emplace_back(score_data_[bbox_id]);
+
+      std::vector<int> global_mask;
+
+      for (int k = 0; k < rows * cols; ++k) {
+        global_mask.push_back(
+            static_cast<int>(mask_data_[k + bbox_id * rows * cols]));
+      }
+
+      // find minimize bounding box from mask
+      cv::Mat mask(rows, cols, CV_32SC1);
+
+      std::memcpy(mask.data, global_mask.data(),
+                  global_mask.size() * sizeof(int));
+
+      cv::Mat mask_fp;
+      mask.convertTo(mask_fp, CV_32FC1);
+
+      cv::Mat rowSum;
+      cv::Mat colSum;
+      std::vector<float> sum_of_row(rows);
+      std::vector<float> sum_of_col(cols);
+      cv::reduce(mask_fp, colSum, 0, CV_REDUCE_SUM, CV_32FC1);
+      cv::reduce(mask_fp, rowSum, 1, CV_REDUCE_SUM, CV_32FC1);
+
+      for (int row_id = 0; row_id < rows; ++row_id) {
+        sum_of_row[row_id] = rowSum.at<float>(row_id, 0);
+      }
+      for (int col_id = 0; col_id < cols; ++col_id) {
+        sum_of_col[col_id] = colSum.at<float>(0, col_id);
+      }
+
+      auto it = std::find_if(sum_of_row.begin(), sum_of_row.end(),
+                             [](int x) { return x > 0.5; });
+      float y1 = std::distance(sum_of_row.begin(), it);
+      auto it2 = std::find_if(sum_of_col.begin(), sum_of_col.end(),
+                              [](int x) { return x > 0.5; });
+      float x1 = std::distance(sum_of_col.begin(), it2);
+      auto rit = std::find_if(sum_of_row.rbegin(), sum_of_row.rend(),
+                              [](int x) { return x > 0.5; });
+      float y2 = std::distance(rit, sum_of_row.rend());
+      auto rit2 = std::find_if(sum_of_col.rbegin(), sum_of_col.rend(),
+                               [](int x) { return x > 0.5; });
+      float x2 = std::distance(rit2, sum_of_col.rend());
+      result_item.boxes.emplace_back(std::array<float, 4>({x1, y1, x2, y2}));
+
+      //      Mask temp_mask;
+      //      int keep_mask_numel = rows * cols;
+      //      temp_mask.Resize(keep_mask_numel);
+      //      temp_mask.shape = {rows, cols};
+      //      auto* keep_mask_ptr = temp_mask.Data();
+      //      std::memcpy(keep_mask_ptr, mask_data_, rows * cols * sizeof(int));
+      //      result_item.masks.emplace_back(temp_mask);
+    }
+  }
+  std::cout << "result_item.boxes.size() is " << (*results)[0].boxes.size()
+            << std::endl;
+  return true;
 }
 
 bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,

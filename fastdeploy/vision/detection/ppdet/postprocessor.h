@@ -82,6 +82,7 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   std::vector<int> fpn_stride_{};
   std::vector<float> im_shape_{};
   PaddleMultiClassNMS multi_class_nms_{};
+  float draw_threshold_ = 0.0;
 
   // Process for General tensor without nms.
   bool ProcessWithoutNMS(const std::vector<FDTensor>& tensors,
