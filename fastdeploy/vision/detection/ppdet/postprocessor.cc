@@ -14,7 +14,6 @@
 
 #include "fastdeploy/vision/detection/ppdet/postprocessor.h"
 
-#include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
 
@@ -38,10 +37,6 @@ bool PaddleDetPostprocessor::ReadPostprocessConfigFromYaml() {
     FDERROR << "Please set model arch,"
             << "support value : YOLO, SSD, RetinaNet, RCNN, Face." << std::endl;
     return false;
-  }
-
-  if (config["fpn_stride"].IsDefined()) {
-    fpn_stride_ = config["fpn_stride"].as<std::vector<int>>();
   }
 
   // for solov2
@@ -76,27 +71,12 @@ bool PaddleDetPostprocessor::ReadPostprocessConfigFromYaml() {
     }
   }
 
-  if (config["Preprocess"].IsDefined()) {
-    for (const auto& op : config["Preprocess"]) {
-      std::string op_name = op["type"].as<std::string>();
-      if (op_name == "Resize") {
-        im_shape_ = op["target_size"].as<std::vector<float>>();
-      }
-    }
-  }
-
   return true;
 }
 
 bool PaddleDetPostprocessor::ProcessMask(
     const FDTensor& tensor, std::vector<DetectionResult>* results) {
   auto shape = tensor.Shape();
-  if (tensor.Dtype() != FDDataType::INT32) {
-    FDERROR << "The data type of out mask tensor should be INT32, but now it's "
-            << tensor.Dtype() << std::endl;
-    return false;
-  }
-  int64_t out_mask_h = shape[1];
   int64_t out_mask_w = shape[2];
   int64_t out_mask_numel = shape[1] * shape[2];
   const auto* data = reinterpret_cast<const uint8_t*>(tensor.CpuData());
@@ -285,7 +265,7 @@ bool PaddleDetPostprocessor::ProcessSolov2(
   results->clear();
   results->resize(1);
 
-  //  (*results)[0].contain_masks = true;
+  (*results)[0].contain_masks = true;
 
   // tensor[0] means bbox data
   const auto bbox_data = static_cast<const int*>(tensors[0].CpuData());
@@ -298,9 +278,9 @@ bool PaddleDetPostprocessor::ProcessSolov2(
 
   int rows = tensors[3].shape[1];
   int cols = tensors[3].shape[2];
-
+  const auto* data = reinterpret_cast<const uint8_t*>(tensors[3].CpuData());
   for (int bbox_id = 0; bbox_id < bbox_data[0]; ++bbox_id) {
-    if (score_data_[bbox_id] >= draw_threshold_) {
+    if (score_data_[bbox_id] >= multi_class_nms_.score_threshold) {
       DetectionResult& result_item = (*results)[0];
       result_item.label_ids.emplace_back(label_data_[bbox_id]);
       result_item.scores.emplace_back(score_data_[bbox_id]);
@@ -348,43 +328,36 @@ bool PaddleDetPostprocessor::ProcessSolov2(
                                [](int x) { return x > 0.5; });
       float x2 = std::distance(rit2, sum_of_col.rend());
       result_item.boxes.emplace_back(std::array<float, 4>({x1, y1, x2, y2}));
-
-      //      Mask temp_mask;
-      //      int keep_mask_numel = rows * cols;
-      //      temp_mask.Resize(keep_mask_numel);
-      //      temp_mask.shape = {rows, cols};
-      //      auto* keep_mask_ptr = temp_mask.Data();
-      //      std::memcpy(keep_mask_ptr, mask_data_, rows * cols * sizeof(int));
-      //      result_item.masks.emplace_back(temp_mask);
     }
   }
-  std::cout << "result_item.boxes.size() is " << (*results)[0].boxes.size()
-            << std::endl;
   return true;
 }
 
 bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                  std::vector<DetectionResult>* results) {
-  // For Solov2
-  if (arch_ == "SOLOv2") {
-    return ProcessSolov2(tensors, results);
-  }
-
   // Only detection
   if (tensors.size() <= 2) {
     return ProcessGeneral(tensors, results);
   }
 
-  // process for maskrcnn
-  ProcessGeneral(tensors, results);
-  if (tensors[2].Shape()[0] != tensors[0].Shape()[0]) {
-    FDERROR << "The first dimension of output mask tensor:"
-            << tensors[2].Shape()[0]
-            << " is not equal to the first dimension of output boxes tensor:"
-            << tensors[0].Shape()[0] << "." << std::endl;
-    return false;
+  if (arch_ == "SOLOv2") {
+    // process for Solov2
+    ProcessSolov2(tensors, results);
+    // The fourth output of solov2 is mask
+    return ProcessMask(tensors[3], results);
+  } else {
+    // process for maskrcnn
+    ProcessGeneral(tensors, results);
+    if (tensors[2].Shape()[0] != tensors[0].Shape()[0]) {
+      FDERROR << "The first dimension of output mask tensor:"
+              << tensors[2].Shape()[0]
+              << " is not equal to the first dimension of output boxes tensor:"
+              << tensors[0].Shape()[0] << "." << std::endl;
+      return false;
+    }
+    // The third output of mask-rcnn is mask
+    return ProcessMask(tensors[2], results);
   }
-  return ProcessMask(tensors[2], results);
 }
 }  // namespace detection
 }  // namespace vision

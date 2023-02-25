@@ -79,8 +79,6 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   std::string config_file_{};
   bool ReadPostprocessConfigFromYaml();
   std::string arch_{};
-  std::vector<int> fpn_stride_{};
-  std::vector<float> im_shape_{};
   PaddleMultiClassNMS multi_class_nms_{};
   float draw_threshold_ = 0.0;
 
