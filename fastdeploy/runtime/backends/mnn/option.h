@@ -51,8 +51,14 @@ struct MNNBackendOption {
   /// Index of inference device
   int device_id = 0;
   /// Custom orders of input tensors
-  std::map<std::string, int> custom_input_orders{};
+  std::map<std::string, int> in_orders{};
   /// Custom orders of output tensors
-  std::map<std::string, int> custom_output_orders{};
+  std::map<std::string, int> out_orders{};
+  /// Custom fixed shape for input tensors
+  std::map<std::string, std::vector<int>> in_shapes{};
+  /// Custom tensors to keep to avoid memory reuse
+  /// Useful for benchmark profile to keep the values of
+  /// input tensors.
+  std::vector<std::string> save_tensors{};
 };
 }  // namespace fastdeploy

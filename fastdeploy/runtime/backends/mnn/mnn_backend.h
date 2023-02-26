@@ -52,13 +52,14 @@ class MNNBackend : public BaseBackend {
 
  private:
   void BuildOption(const MNNBackendOption& option);
+  bool UpdateInputShapeAndDesc(const std::vector<FDTensor>& inputs);
 
   std::vector<TensorInfo> inputs_desc_;
   std::vector<TensorInfo> outputs_desc_;
   std::map<std::string, int> inputs_order_;
   std::map<std::string, int> outputs_order_;
   MNNBackendOption option_;
-  
+
   // MNN Interpreter and Session
   std::shared_ptr<MNN::Interpreter> interpreter_;
   MNN::Session* session_{nullptr};
