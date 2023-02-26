@@ -395,10 +395,9 @@ bool MNNBackend::Infer(std::vector<FDTensor>& inputs,
     // Update the shape in desc
     outputs_desc_[i].dtype = tensor_dtype;
     outputs_desc_[i].shape = device_tensor->shape();
-    // From device -> host, NCHW
+    // From device -> host, NCHW -> FDTensor
     MNN::Tensor host_tensor(device_tensor, device_tensor->getDimensionType());
     device_tensor->copyToHostTensor(&host_tensor);
-    // From host -> FDTensor
     (*outputs)[i].Resize(GetFDShape(host_tensor.shape()),
                          outputs_desc_[i].dtype, outputs_desc_[i].name);
     std::memcpy((*outputs)[i].MutableData(), host_tensor.host<void>(),
