@@ -49,7 +49,7 @@ class FASTDEPLOY_DECL PicoDet : public PPDetBase {
   virtual std::string ModelName() const { return "PicoDet"; }
 };
 
-class FASTDEPLOY_DECL Solov2 : public PPDetBase {
+class FASTDEPLOY_DECL SOLOv2 : public PPDetBase {
  public:
   /** \brief Set path of model file and configuration file, and the configuration of runtime
    *
@@ -59,7 +59,7 @@ class FASTDEPLOY_DECL Solov2 : public PPDetBase {
    * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
    * \param[in] model_format Model format of the loaded model, default is Paddle format
    */
-  Solov2(const std::string& model_file, const std::string& params_file,
+  SOLOv2(const std::string& model_file, const std::string& params_file,
           const std::string& config_file,
           const RuntimeOption& custom_option = RuntimeOption(),
           const ModelFormat& model_format = ModelFormat::PADDLE)
@@ -70,7 +70,7 @@ class FASTDEPLOY_DECL Solov2 : public PPDetBase {
     initialized = Initialize();
   }
 
-  virtual std::string ModelName() const { return "PicoDet"; }
+  virtual std::string ModelName() const { return "SOLOv2"; }
 };
 
 class FASTDEPLOY_DECL PPYOLOE : public PPDetBase {

@@ -73,14 +73,15 @@ void BindPPDet(pybind11::module& m) {
              }
              return results;
            })
-      .def(
-          "apply_decode_and_nms",
-          [](vision::detection::PaddleDetPostprocessor& self,
-             vision::detection::NMSOption option) {
-            self.ApplyDecodeAndNMS(option);
-          },
-          "A function which adds two numbers",
-          pybind11::arg("option") = vision::detection::NMSOption())
+      .def("set_nms_option",
+           [](vision::detection::PaddleDetPostprocessor& self,
+              vision::detection::NMSOption option) {
+             self.SetNMSOption(option);
+           })
+      .def("apply_nms",
+           [](vision::detection::PaddleDetPostprocessor& self) {
+             self.ApplyNMS();
+           })
       .def("run", [](vision::detection::PaddleDetPostprocessor& self,
                      std::vector<pybind11::array>& input_array) {
         std::vector<vision::DetectionResult> results;
@@ -228,6 +229,11 @@ void BindPPDet(pybind11::module& m) {
 
   pybind11::class_<vision::detection::GFL, vision::detection::PPDetBase>(m,
                                                                          "GFL")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+
+  pybind11::class_<vision::detection::SOLOv2, vision::detection::PPDetBase>(
+      m, "SOLOv2")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>());
 }

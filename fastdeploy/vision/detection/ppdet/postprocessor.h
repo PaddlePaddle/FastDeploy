@@ -94,7 +94,7 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   bool ProcessGeneral(const std::vector<FDTensor>& tensors,
                       std::vector<DetectionResult>* results);
 
-  // Process Solov2
+  // Process SOLOv2
   bool ProcessSolov2(const std::vector<FDTensor>& tensors,
                      std::vector<DetectionResult>* results);
 

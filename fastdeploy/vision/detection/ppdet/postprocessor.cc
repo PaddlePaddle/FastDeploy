@@ -341,7 +341,7 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
   }
 
   if (arch_ == "SOLOv2") {
-    // process for Solov2
+    // process for SOLOv2
     ProcessSolov2(tensors, results);
     // The fourth output of solov2 is mask
     return ProcessMask(tensors[3], results);
