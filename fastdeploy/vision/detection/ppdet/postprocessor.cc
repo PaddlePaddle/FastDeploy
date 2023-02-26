@@ -305,8 +305,8 @@ bool PaddleDetPostprocessor::ProcessSolov2(
       cv::Mat colSum;
       std::vector<float> sum_of_row(rows);
       std::vector<float> sum_of_col(cols);
-      cv::reduce(mask_fp, colSum, 0, CV_REDUCE_SUM, CV_32FC1);
-      cv::reduce(mask_fp, rowSum, 1, CV_REDUCE_SUM, CV_32FC1);
+      cv::reduce(mask_fp, colSum, 0, cv::REDUCE_SUM, CV_32FC1);
+      cv::reduce(mask_fp, rowSum, 1, cv::REDUCE_SUM, CV_32FC1);
 
       for (int row_id = 0; row_id < rows; ++row_id) {
         sum_of_row[row_id] = rowSum.at<float>(row_id, 0);
