@@ -343,6 +343,44 @@ class YOLOv3(PPYOLOE):
         return clone_model
 
 
+class SOLOv2(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load a SOLOv2 model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g yolov3/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g yolov3/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == ModelFormat.PADDLE, "YOLOv3 model only support model format of ModelFormat.Paddle now."
+        self._model = C.vision.detection.YOLOv3(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "YOLOv3 model initialize failed."
+
+    def clone(self):
+        """Clone SOLOv2 object
+
+        :return: a new SOLOv2 object
+        """
+
+        class SOLOv2Clone(YOLOv3):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = SOLOv2Clone(self._model.clone())
+        return clone_model
+
+
 class MaskRCNN(PPYOLOE):
     def __init__(self,
                  model_file,
