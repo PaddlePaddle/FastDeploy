@@ -124,9 +124,6 @@ void BindPPDet(pybind11::module& m) {
       .def_property_readonly("postprocessor",
                              &vision::detection::PPDetBase::GetPostprocessor);
 
-  pybind11::class_<vision::detection::PPDetDecode>(m, "PPDetDecode")
-      .def(pybind11::init<std::string>());
-
   pybind11::class_<vision::detection::PPYOLO, vision::detection::PPDetBase>(
       m, "PPYOLO")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
