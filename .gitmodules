@@ -1,0 +1,6 @@
+[submodule "poros/third_party/googletest"]
+	path = poros/third_party/googletest
+	url = https://github.com/google/googletest.git
+[submodule "poros/third_party/gflags"]
+	path = poros/third_party/gflags
+	url = https://github.com/gflags/gflags.git
