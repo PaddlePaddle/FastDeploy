@@ -28,8 +28,8 @@ void BindPPTracking(pybind11::module &m) {
          [](vision::tracking::PPTracking &self,
             pybind11::array &data) {
              auto mat = PyArrayToCvMat(data);
-             vision::MOTResult *res = new vision::MOTResult();
-             self.Predict(&mat, res);
+             vision::MOTResult res;
+             self.Predict(&mat, &res);
              return res;
          })
     .def("bind_recorder", &vision::tracking::PPTracking::BindRecorder)

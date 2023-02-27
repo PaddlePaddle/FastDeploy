@@ -298,16 +298,17 @@ bool ResultManager::LoadFDTensor(FDTensor* tensor, const std::string& path) {
   return true;
 }
 
-TensorDiff ResultManager::CalculateDiffStatis(FDTensor* lhs, FDTensor* rhs) {
-  if (lhs->Numel() != rhs->Numel() || lhs->Dtype() != rhs->Dtype()) {
+TensorDiff ResultManager::CalculateDiffStatis(const FDTensor& lhs,
+                                              const FDTensor& rhs) {
+  if (lhs.Numel() != rhs.Numel() || lhs.Dtype() != rhs.Dtype()) {
     FDASSERT(false,
              "The size and dtype of input FDTensor must be equal!"
              " But got size %d, %d, dtype %s, %s",
-             lhs->Numel(), rhs->Numel(), Str(lhs->Dtype()).c_str(),
-             Str(rhs->Dtype()).c_str())
+             lhs.Numel(), rhs.Numel(), Str(lhs.Dtype()).c_str(),
+             Str(rhs.Dtype()).c_str())
   }
-  FDDataType dtype = lhs->Dtype();
-  int numel = lhs->Numel();
+  FDDataType dtype = lhs.Dtype();
+  int numel = lhs.Numel();
   if (dtype != FDDataType::FP32 && dtype != FDDataType::INT64 &&
       dtype != FDDataType::INT32) {
     FDASSERT(false, "Only support FP32/INT64/INT32 now, but got %s",
@@ -315,36 +316,36 @@ TensorDiff ResultManager::CalculateDiffStatis(FDTensor* lhs, FDTensor* rhs) {
   }
   if (dtype == FDDataType::INT64) {
     std::vector<int64_t> tensor_diff(numel);
-    const int64_t* lhs_data_ptr = static_cast<const int64_t*>(lhs->CpuData());
-    const int64_t* rhs_data_ptr = static_cast<const int64_t*>(rhs->CpuData());
+    const int64_t* lhs_data_ptr = static_cast<const int64_t*>(lhs.CpuData());
+    const int64_t* rhs_data_ptr = static_cast<const int64_t*>(rhs.CpuData());
     for (int i = 0; i < numel; ++i) {
       tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
     }
     TensorDiff diff;
-    CalculateStatisInfo<int64_t>(tensor_diff.data(), numel, &(diff.mean),
-                                 &(diff.max), &(diff.min));
+    CalculateStatisInfo<int64_t>(tensor_diff.data(), numel, &(diff.data.mean),
+                                 &(diff.data.max), &(diff.data.min));
     return diff;
   } else if (dtype == FDDataType::INT32) {
     std::vector<int32_t> tensor_diff(numel);
-    const int32_t* lhs_data_ptr = static_cast<const int32_t*>(lhs->CpuData());
-    const int32_t* rhs_data_ptr = static_cast<const int32_t*>(rhs->CpuData());
+    const int32_t* lhs_data_ptr = static_cast<const int32_t*>(lhs.CpuData());
+    const int32_t* rhs_data_ptr = static_cast<const int32_t*>(rhs.CpuData());
     for (int i = 0; i < numel; ++i) {
       tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
     }
     TensorDiff diff;
-    CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.mean),
-                               &(diff.max), &(diff.min));
+    CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.data.mean),
+                               &(diff.data.max), &(diff.data.min));
     return diff;
   } else {  // FP32
     std::vector<float> tensor_diff(numel);
-    const float* lhs_data_ptr = static_cast<const float*>(lhs->CpuData());
-    const float* rhs_data_ptr = static_cast<const float*>(rhs->CpuData());
+    const float* lhs_data_ptr = static_cast<const float*>(lhs.CpuData());
+    const float* rhs_data_ptr = static_cast<const float*>(rhs.CpuData());
     for (int i = 0; i < numel; ++i) {
       tensor_diff[i] = lhs_data_ptr[i] - rhs_data_ptr[i];
     }
     TensorDiff diff;
-    CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.mean),
-                               &(diff.max), &(diff.min));
+    CalculateStatisInfo<float>(tensor_diff.data(), numel, &(diff.data.mean),
+                               &(diff.data.max), &(diff.data.min));
     return diff;
   }
 }
@@ -399,6 +400,108 @@ bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
   return true;
 }
 
+bool ResultManager::SaveClassifyResult(const vision::ClassifyResult& res,
+                                       const std::string& path) {
+  if (res.label_ids.empty()) {
+    FDERROR << "ClassifyResult can not be empty!" << std::endl;
+    return false;
+  }
+  std::ofstream fs(path, std::ios::out);
+  if (!fs.is_open()) {
+    FDERROR << "Fail to open file:" << path << std::endl;
+    return false;
+  }
+  fs.precision(20);
+  // label_ids
+  fs << "label_ids" << KEY_VALUE_SEP;
+  for (int i = 0; i < res.label_ids.size(); ++i) {
+    if (i < res.label_ids.size() - 1) {
+      fs << res.label_ids[i] << VALUE_SEP;
+    } else {
+      fs << res.label_ids[i];
+    }
+  }
+  fs << "\n";
+  // scores
+  fs << "scores" << KEY_VALUE_SEP;
+  for (int i = 0; i < res.scores.size(); ++i) {
+    if (i < res.scores.size() - 1) {
+      fs << res.scores[i] << VALUE_SEP;
+    } else {
+      fs << res.scores[i];
+    }
+  }
+  fs << "\n";
+  fs.close();
+  return true;
+}
+
+bool ResultManager::SaveSegmentationResult(
+    const vision::SegmentationResult& res, const std::string& path) {
+  if (res.label_map.empty()) {
+    FDERROR << "SegmentationResult can not be empty!" << std::endl;
+    return false;
+  }
+  std::ofstream fs(path, std::ios::out);
+  if (!fs.is_open()) {
+    FDERROR << "Fail to open file:" << path << std::endl;
+    return false;
+  }
+  fs.precision(20);
+  // label_map
+  fs << "label_map" << KEY_VALUE_SEP;
+  for (int i = 0; i < res.label_map.size(); ++i) {
+    if (i < res.label_map.size() - 1) {
+      fs << static_cast<int32_t>(res.label_map[i]) << VALUE_SEP;
+    } else {
+      fs << static_cast<int32_t>(res.label_map[i]);
+    }
+  }
+  fs << "\n";
+  // score_map
+  if (res.contain_score_map) {
+    fs << "score_map" << KEY_VALUE_SEP;
+    for (int i = 0; i < res.score_map.size(); ++i) {
+      if (i < res.score_map.size() - 1) {
+        fs << res.score_map[i] << VALUE_SEP;
+      } else {
+        fs << res.score_map[i];
+      }
+    }
+    fs << "\n";
+  }
+  fs.close();
+  return true;
+}
+
+bool ResultManager::SaveOCRDetResult(const std::vector<std::array<int, 8>>& res,
+                                     const std::string& path) {
+  if (res.empty()) {
+    FDERROR << "OCRDetResult can not be empty!" << std::endl;
+    return false;
+  }
+  std::ofstream fs(path, std::ios::out);
+  if (!fs.is_open()) {
+    FDERROR << "Fail to open file:" << path << std::endl;
+    return false;
+  }
+  fs.precision(20);
+  // boxes
+  fs << "boxes" << KEY_VALUE_SEP;
+  for (int i = 0; i < res.size(); ++i) {
+    for (int j = 0; j < 8; ++j) {
+      if ((i == res.size() - 1) && (j == 7)) {
+        fs << res[i][j];
+      } else {
+        fs << res[i][j] << VALUE_SEP;
+      }
+    }
+  }
+  fs << "\n";
+  fs.close();
+  return true;
+}
+
 bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
                                         const std::string& path) {
   if (!CheckFileExists(path)) {
@@ -432,32 +535,104 @@ bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
   return true;
 }
 
-DetectionDiff ResultManager::CalculateDiffStatis(vision::DetectionResult* lhs,
-                                                 vision::DetectionResult* rhs,
-                                                 float score_threshold) {
+bool ResultManager::LoadClassifyResult(vision::ClassifyResult* res,
+                                       const std::string& path) {
+  if (!CheckFileExists(path)) {
+    FDERROR << "Can't found file from" << path << std::endl;
+    return false;
+  }
+  auto lines = ReadLines(path);
+  std::map<std::string, std::vector<std::string>> data;
+  // label_ids
+  data = SplitDataLine(lines[0]);
+  res->Resize(data.begin()->second.size());
+  for (int i = 0; i < data.begin()->second.size(); ++i) {
+    res->label_ids[i] = std::stoi(data.begin()->second[i]);
+  }
+  // scores
+  data = SplitDataLine(lines[1]);
+  for (int i = 0; i < data.begin()->second.size(); ++i) {
+    res->scores[i] = std::stof(data.begin()->second[i]);
+  }
+  return true;
+}
+
+bool ResultManager::LoadSegmentationResult(vision::SegmentationResult* res,
+                                           const std::string& path) {
+  if (!CheckFileExists(path)) {
+    FDERROR << "Can't found file from" << path << std::endl;
+    return false;
+  }
+  auto lines = ReadLines(path);
+  if (lines.size() > 1) {
+    res->contain_score_map = true;
+  }
+  std::map<std::string, std::vector<std::string>> data;
+  // label_map
+  data = SplitDataLine(lines[0]);
+  res->Resize(data.begin()->second.size());
+  for (int i = 0; i < data.begin()->second.size(); ++i) {
+    res->label_map[i] = std::stoi(data.begin()->second[i]);
+  }
+  // score_map
+  if (lines.size() > 1) {
+    data = SplitDataLine(lines[1]);
+    for (int i = 0; i < data.begin()->second.size(); ++i) {
+      res->score_map[i] = std::stof(data.begin()->second[i]);
+    }
+  }
+  return true;
+}
+
+bool ResultManager::LoadOCRDetResult(std::vector<std::array<int, 8>>* res,
+                                     const std::string& path) {
+  if (!CheckFileExists(path)) {
+    FDERROR << "Can't found file from" << path << std::endl;
+    return false;
+  }
+  auto lines = ReadLines(path);
+  std::map<std::string, std::vector<std::string>> data;
+  // boxes
+  data = SplitDataLine(lines[0]);
+  int boxes_num = data.begin()->second.size() / 8;
+  res->resize(boxes_num);
+  for (int i = 0; i < boxes_num; ++i) {
+    for (int j = 0; j < 8; ++j) {
+      (*res)[i][j] = std::stoi(data.begin()->second[i * 8 + j]);
+    }
+  }
+  return true;
+}
+
+DetectionDiff ResultManager::CalculateDiffStatis(
+    const vision::DetectionResult& lhs, const vision::DetectionResult& rhs,
+    const float& score_threshold) {
+  vision::DetectionResult lhs_sort = lhs;
+  vision::DetectionResult rhs_sort = rhs;
   // lex sort by x(w) & y(h)
-  vision::utils::LexSortDetectionResultByXY(lhs);
-  vision::utils::LexSortDetectionResultByXY(rhs);
+  vision::utils::LexSortDetectionResultByXY(&lhs_sort);
+  vision::utils::LexSortDetectionResultByXY(&rhs_sort);
   // get value diff & trunc it by score_threshold
-  const int boxes_num = std::min(lhs->boxes.size(), rhs->boxes.size());
+  const int boxes_num = std::min(lhs_sort.boxes.size(), rhs_sort.boxes.size());
   std::vector<float> boxes_diff;
   std::vector<float> scores_diff;
   std::vector<int32_t> labels_diff;
   // TODO(qiuyanjun): process the diff of masks.
   for (int i = 0; i < boxes_num; ++i) {
-    if (lhs->scores[i] > score_threshold && rhs->scores[i] > score_threshold) {
-      scores_diff.push_back(lhs->scores[i] - rhs->scores[i]);
-      labels_diff.push_back(lhs->label_ids[i] - rhs->label_ids[i]);
-      boxes_diff.push_back(lhs->boxes[i][0] - rhs->boxes[i][0]);
-      boxes_diff.push_back(lhs->boxes[i][1] - rhs->boxes[i][1]);
-      boxes_diff.push_back(lhs->boxes[i][2] - rhs->boxes[i][2]);
-      boxes_diff.push_back(lhs->boxes[i][3] - rhs->boxes[i][3]);
+    if (lhs_sort.scores[i] > score_threshold &&
+        rhs_sort.scores[i] > score_threshold) {
+      scores_diff.push_back(lhs_sort.scores[i] - rhs_sort.scores[i]);
+      labels_diff.push_back(lhs_sort.label_ids[i] - rhs_sort.label_ids[i]);
+      boxes_diff.push_back(lhs_sort.boxes[i][0] - rhs_sort.boxes[i][0]);
+      boxes_diff.push_back(lhs_sort.boxes[i][1] - rhs_sort.boxes[i][1]);
+      boxes_diff.push_back(lhs_sort.boxes[i][2] - rhs_sort.boxes[i][2]);
+      boxes_diff.push_back(lhs_sort.boxes[i][3] - rhs_sort.boxes[i][3]);
     }
   }
   FDASSERT(boxes_diff.size() > 0,
            "Can't get any valid boxes while score_threshold is %f, "
            "The boxes.size of lhs is %d, the boxes.size of rhs is %d",
-           score_threshold, lhs->boxes.size(), rhs->boxes.size())
+           score_threshold, lhs_sort.boxes.size(), rhs_sort.boxes.size())
 
   DetectionDiff diff;
   CalculateStatisInfo<float>(boxes_diff.data(), boxes_diff.size(),
@@ -469,11 +644,78 @@ DetectionDiff ResultManager::CalculateDiffStatis(vision::DetectionResult* lhs,
   CalculateStatisInfo<int32_t>(labels_diff.data(), labels_diff.size(),
                                &(diff.labels.mean), &(diff.labels.max),
                                &(diff.labels.min));
-  diff.mean = diff.boxes.mean;
-  diff.max = diff.boxes.max;
-  diff.min = diff.boxes.min;
   return diff;
 }
+
+ClassifyDiff ResultManager::CalculateDiffStatis(
+    const vision::ClassifyResult& lhs, const vision::ClassifyResult& rhs) {
+  const int class_nums = std::min(lhs.label_ids.size(), rhs.label_ids.size());
+  std::vector<float> scores_diff;
+  std::vector<int32_t> labels_diff;
+  for (int i = 0; i < class_nums; ++i) {
+    scores_diff.push_back(lhs.scores[i] - rhs.scores[i]);
+    labels_diff.push_back(lhs.label_ids[i] - rhs.label_ids[i]);
+  }
+
+  ClassifyDiff diff;
+  CalculateStatisInfo<float>(scores_diff.data(), scores_diff.size(),
+                             &(diff.scores.mean), &(diff.scores.max),
+                             &(diff.scores.min));
+  CalculateStatisInfo<int32_t>(labels_diff.data(), labels_diff.size(),
+                               &(diff.labels.mean), &(diff.labels.max),
+                               &(diff.labels.min));
+  return diff;
+}
+
+SegmentationDiff ResultManager::CalculateDiffStatis(
+    const vision::SegmentationResult& lhs,
+    const vision::SegmentationResult& rhs) {
+  const int pixel_nums = std::min(lhs.label_map.size(), rhs.label_map.size());
+  std::vector<int32_t> labels_diff;
+  std::vector<float> scores_diff;
+  for (int i = 0; i < pixel_nums; ++i) {
+    labels_diff.push_back(lhs.label_map[i] - rhs.label_map[i]);
+    if (lhs.contain_score_map && rhs.contain_score_map) {
+      scores_diff.push_back(lhs.score_map[i] - rhs.score_map[i]);
+    }
+  }
+  SegmentationDiff diff;
+  CalculateStatisInfo<int32_t>(labels_diff.data(), labels_diff.size(),
+                               &(diff.labels.mean), &(diff.labels.max),
+                               &(diff.labels.min));
+  if (lhs.contain_score_map && rhs.contain_score_map) {
+    CalculateStatisInfo<float>(scores_diff.data(), scores_diff.size(),
+                               &(diff.scores.mean), &(diff.scores.max),
+                               &(diff.scores.min));
+  }
+  return diff;
+}
+
+OCRDetDiff ResultManager::CalculateDiffStatis(
+    const std::vector<std::array<int, 8>>& lhs,
+    const std::vector<std::array<int, 8>>& rhs) {
+  const int boxes_nums = std::min(lhs.size(), rhs.size());
+  std::vector<std::array<int, 8>> lhs_sort = lhs;
+  std::vector<std::array<int, 8>> rhs_sort = rhs;
+  // lex sort by x(w) & y(h)
+  vision::utils::LexSortOCRDetResultByXY(&lhs_sort);
+  vision::utils::LexSortOCRDetResultByXY(&rhs_sort);
+  // get value diff
+  const int boxes_num = std::min(lhs_sort.size(), rhs_sort.size());
+  std::vector<float> boxes_diff;
+  for (int i = 0; i < boxes_num; ++i) {
+    for (int j = 0; j < 8; ++j) {
+      boxes_diff.push_back(lhs_sort[i][j] - rhs_sort[i][j]);
+    }
+  }
+
+  OCRDetDiff diff;
+  CalculateStatisInfo<float>(boxes_diff.data(), boxes_diff.size(),
+                             &(diff.boxes.mean), &(diff.boxes.max),
+                             &(diff.boxes.min));
+  return diff;
+}
+
 #endif  // ENABLE_VISION
 #endif  // ENABLE_BENCHMARK
 

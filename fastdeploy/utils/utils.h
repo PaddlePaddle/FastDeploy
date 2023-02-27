@@ -43,6 +43,9 @@ namespace fastdeploy {
 
 class FASTDEPLOY_DECL FDLogger {
  public:
+  static bool enable_info;
+  static bool enable_warning;
+
   FDLogger() {
     line_ = "";
     prefix_ = "[FastDeploy]";
@@ -118,20 +121,20 @@ void CalculateStatisInfo(const void* src_ptr, int size, double* mean,
 
 
 
-#ifndef __PD_REL_FILE__
-#define __PD_REL_FILE__ __FILE__
+#ifndef __FD_REL_FILE__
+#define __FD_REL_FILE__ __FILE__
 #endif
 
 #define FDERROR                                                                \
   ::fastdeploy::FDLogger(true, "[ERROR]")                                                    \
-      << __PD_REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
+      << __FD_REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
 
 #define FDWARNING                                                              \
   ::fastdeploy::FDLogger(true, "[WARNING]")                                                  \
-      << __PD_REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
+      << __FD_REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
 
 #define FDINFO                                                                 \
-  ::fastdeploy::FDLogger(true, "[INFO]") << __PD_REL_FILE__ << "(" << __LINE__                  \
+  ::fastdeploy::FDLogger(true, "[INFO]") << __FD_REL_FILE__ << "(" << __LINE__                  \
                            << ")::" << __FUNCTION__ << "\t"
 
 #define FDASSERT(condition, format, ...)                                       \
