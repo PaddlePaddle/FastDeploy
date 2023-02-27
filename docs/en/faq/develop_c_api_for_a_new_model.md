@@ -77,12 +77,13 @@ Then you need to define two functions that convert between fastdeploy::Segmentat
 
 ```c
 FASTDEPLOY_CAPI_EXPORT extern FD_C_SegmentationResultWrapper*
-FD_C_CreateSegmentationResultWrapperFromData(
+FD_C_CreateSegmentationResultWrapperFromCResult(
      FD_C_SegmentationResult* fd_c_segmentation_result);
 
-FASTDEPLOY_CAPI_EXPORT extern FD_C_SegmentationResult*
-FD_C_SegmentationResultWrapperGetData(
-     FD_C_SegmentationResultWrapper* fd_c_segmentation_result_wrapper);
+FASTDEPLOY_CAPI_EXPORT extern void
+FD_C_SegmentationResultWrapperToCResult(
+     FD_C_SegmentationResultWrapper* fd_c_segmentation_result_wrapper,
+     FD_C_SegmentationResult* fd_c_segmentation_result);
 ```
 
 There are also other API functions for creating and destroying structures that can be implemented by referring to the sample code.

@@ -71,12 +71,13 @@ typedef struct FD_C_SegmentationResult {
 之后需要定义两个函数，用来从fastdeploy::SegmentationResult和FD_C_SegmentationResult之间进行相互转化。由于对C++的结构使用了对应的Wrapper结构进行包裹，所以实际定义的是FD_C_SegmentationResultWrapper和FD_C_SegmentationResult之间的转化，对应下面两个函数。
 ```c
 FASTDEPLOY_CAPI_EXPORT extern FD_C_SegmentationResultWrapper*
-FD_C_CreateSegmentationResultWrapperFromData(
+FD_C_CreateSegmentationResultWrapperFromCResult(
      FD_C_SegmentationResult* fd_c_segmentation_result);
 
-FASTDEPLOY_CAPI_EXPORT extern FD_C_SegmentationResult*
-FD_C_SegmentationResultWrapperGetData(
-     FD_C_SegmentationResultWrapper* fd_c_segmentation_result_wrapper);
+FASTDEPLOY_CAPI_EXPORT extern void
+FD_C_SegmentationResultWrapperToCResult(
+     FD_C_SegmentationResultWrapper* fd_c_segmentation_result_wrapper,
+     FD_C_SegmentationResult* fd_c_segmentation_result);
 ```
 还有其它的几个创建和销毁结构的API函数可以参考示例代码进行补充实现。
 
