@@ -93,7 +93,7 @@ The implementation of various Results in C API is located at c_api/fastdeploy_ca
 For declaring various Wrapper structures, refer to file c_api/fastdeploy_capi/internal/types_internal.h .
 
 2. Provide C API for model interface
-Open file fastdeploy/vision/segmentation/ppseg/model.h, which defines the C++ interface for segmentation model, i.e. fastdeploy::vision::segmentation::PaddleSegModel class. Create a Wrapper in C to represent this class. For convenience of quick definition and implementation of models of the same category in the future, c_api/fastdeploy_capi/types_internal.h defines macros to quickly create Wrapper and extract the wrapped class object from Wrapper. For example, define a macro to create a Wrapper for segmentation model as
+Open file fastdeploy/vision/segmentation/ppseg/model.h, which defines the C++ interface for segmentation model, i.e. fastdeploy::vision::segmentation::PaddleSegModel class. Create a Wrapper in C to represent this class. For convenience of quick definition and implementation of models of the same category in the future, c_api/fastdeploy_capi/internal/types_internal.h defines macros to quickly create Wrapper and extract the wrapped class object from Wrapper. For example, define a macro to create a Wrapper for segmentation model as
 
 ```c
 #define DEFINE_SEGMENTATION_MODEL_WRAPPER_STRUCT(typename, varname)  typedef struct FD_C_##typename##Wrapper { \
