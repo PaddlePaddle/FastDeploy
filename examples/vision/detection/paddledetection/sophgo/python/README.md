@@ -19,7 +19,7 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 python3 infer_ppyoloe.py --model_file model/ppyoloe_crn_s_300e_coco_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
 
 #picodet推理示例
-python3 infer_solov2.py --model_file model/picodet_s_416_coco_lcnet_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
+python3 infer_picodet.py --model_file model/picodet_s_416_coco_lcnet_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
 
 #yolov8推理示例
 python3 infer_yolov8.py --model_file model/yolov8s_s_300e_coco_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
