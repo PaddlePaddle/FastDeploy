@@ -73,11 +73,12 @@ void CpuInfer(const char* det_model_dir, const char* cls_model_dir,
   FD_C_RuntimeOptionWrapperUseCpu(rec_option);
 
   FD_C_DBDetectorWrapper* det_model = FD_C_CreateDBDetectorWrapper(
-      det_model_file, det_params_file, det_option, PADDLE);
+      det_model_file, det_params_file, det_option, FD_C_ModelFormat_PADDLE);
   FD_C_ClassifierWrapper* cls_model = FD_C_CreateClassifierWrapper(
-      cls_model_file, cls_params_file, cls_option, PADDLE);
+      cls_model_file, cls_params_file, cls_option, FD_C_ModelFormat_PADDLE);
   FD_C_RecognizerWrapper* rec_model = FD_C_CreateRecognizerWrapper(
-      rec_model_file, rec_params_file, rec_label_file, rec_option, PADDLE);
+      rec_model_file, rec_params_file, rec_label_file, rec_option,
+      FD_C_ModelFormat_PADDLE);
 
   FD_C_PPOCRv3Wrapper* ppocr_v3 =
       FD_C_CreatePPOCRv3Wrapper(det_model, cls_model, rec_model);
@@ -167,11 +168,12 @@ void GpuInfer(const char* det_model_dir, const char* cls_model_dir,
   FD_C_RuntimeOptionWrapperUseGpu(rec_option, 0);
 
   FD_C_DBDetectorWrapper* det_model = FD_C_CreateDBDetectorWrapper(
-      det_model_file, det_params_file, det_option, PADDLE);
+      det_model_file, det_params_file, det_option, FD_C_ModelFormat_PADDLE);
   FD_C_ClassifierWrapper* cls_model = FD_C_CreateClassifierWrapper(
-      cls_model_file, cls_params_file, cls_option, PADDLE);
+      cls_model_file, cls_params_file, cls_option, FD_C_ModelFormat_PADDLE);
   FD_C_RecognizerWrapper* rec_model = FD_C_CreateRecognizerWrapper(
-      rec_model_file, rec_params_file, rec_label_file, rec_option, PADDLE);
+      rec_model_file, rec_params_file, rec_label_file, rec_option,
+      FD_C_ModelFormat_PADDLE);
 
   FD_C_PPOCRv3Wrapper* ppocr_v3 =
       FD_C_CreatePPOCRv3Wrapper(det_model, cls_model, rec_model);
