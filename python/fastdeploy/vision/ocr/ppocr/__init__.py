@@ -65,6 +65,29 @@ class DBDetectorPreprocessor:
         """
         self._preprocessor.set_normalize(mean, std, is_scale)
 
+    @property
+    def static_shape_infer(self):
+        return self._preprocessor.static_shape_infer
+
+    @static_shape_infer.setter
+    def static_shape_infer(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `static_shape_infer` must be type of bool."
+        self._preprocessor.static_shape_infer = value
+
+    def disable_normalize(self):
+        """
+        This function will disable normalize in preprocessing step.
+        """
+        self._preprocessor.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self._preprocessor.disable_permute()
+
 
 class DBDetectorPostprocessor:
     def __init__(self):
@@ -358,6 +381,18 @@ class ClassifierPreprocessor:
             list), "The value to set `cls_image_shape` must be type of list."
         self._preprocessor.cls_image_shape = value
 
+    def disable_normalize(self):
+        """
+        This function will disable normalize in preprocessing step.
+        """
+        self._preprocessor.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self._preprocessor.disable_permute()
+
 
 class ClassifierPostprocessor:
     def __init__(self):
@@ -580,6 +615,18 @@ class RecognizerPreprocessor:
             value,
             list), "The value to set `rec_image_shape` must be type of list."
         self._preprocessor.rec_image_shape = value
+
+    def disable_normalize(self):
+        """
+        This function will disable normalize in preprocessing step.
+        """
+        self._preprocessor.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self._preprocessor.disable_permute()
 
 
 class RecognizerPostprocessor:

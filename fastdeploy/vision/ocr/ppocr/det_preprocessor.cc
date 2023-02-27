@@ -20,9 +20,13 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-std::array<int, 4> OcrDetectorGetInfo(FDMat* img, int max_size_len) {
+std::array<int, 4> DBDetectorPreprocessor::OcrDetectorGetInfo(
+    FDMat* img, int max_size_len) {
   int w = img->Width();
   int h = img->Height();
+  if (static_shape_infer_) {
+    return {w, h, det_image_shape_[2], det_image_shape_[1]};
+  }
 
   float ratio = 1.f;
   int max_wh = w >= h ? w : h;
@@ -86,7 +90,10 @@ bool DBDetectorPreprocessor::Apply(FDMatBatch* image_batch,
     ResizeImage(mat, batch_det_img_info_[i][2], batch_det_img_info_[i][3],
                 max_resize_w, max_resize_h);
   }
-  (*normalize_permute_op_)(image_batch);
+
+  if (!disable_normalize_ && !disable_permute_) {
+    (*normalize_permute_op_)(image_batch);
+  }
 
   outputs->resize(1);
   FDTensor* tensor = image_batch->Tensor();
