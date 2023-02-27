@@ -85,6 +85,7 @@ nvidia-docker run -i --rm --name ${docker_name} \
            -v`pwd`/..:/workspace/fastdeploy \
            -e "http_proxy=${http_proxy}" \
            -e "https_proxy=${https_proxy}" \
+           -e "trt_version=${trt_version}"\
            nvcr.io/nvidia/tritonserver:21.10-py3-min \
            bash -c \
            'cd /workspace/fastdeploy/python;
