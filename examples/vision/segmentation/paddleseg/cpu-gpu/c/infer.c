@@ -28,34 +28,32 @@ void CpuInfer(const char* model_dir, const char* image_file) {
   char params_file[100];
   char config_file[100];
   int max_size = 99;
-  snprintf(model_file, max_size, "%s%c%s", model_dir, sep, "inference.pdmodel");
-  snprintf(params_file, max_size, "%s%c%s", model_dir, sep,
-           "inference.pdiparams");
-  snprintf(config_file, max_size, "%s%c%s", model_dir, sep,
-           "inference_cls.yaml");
+  snprintf(model_file, max_size, "%s%c%s", model_dir, sep, "model.pdmodel");
+  snprintf(params_file, max_size, "%s%c%s", model_dir, sep, "model.pdiparams");
+  snprintf(config_file, max_size, "%s%c%s", model_dir, sep, "deploy.yaml");
 
   FD_C_RuntimeOptionWrapper* option = FD_C_CreateRuntimeOptionWrapper();
   FD_C_RuntimeOptionWrapperUseCpu(option);
 
-  FD_C_PaddleClasModelWrapper* model = FD_C_CreatePaddleClasModelWrapper(
+  FD_C_PaddleSegModelWrapper* model = FD_C_CreatePaddleSegModelWrapper(
       model_file, params_file, config_file, option, PADDLE);
 
-  if (!FD_C_PaddleClasModelWrapperInitialized(model)) {
+  if (!FD_C_PaddleSegModelWrapperInitialized(model)) {
     printf("Failed to initialize.\n");
     FD_C_DestroyRuntimeOptionWrapper(option);
-    FD_C_DestroyPaddleClasModelWrapper(model);
+    FD_C_DestroyPaddleSegModelWrapper(model);
     return;
   }
 
   FD_C_Mat im = FD_C_Imread(image_file);
 
-  FD_C_ClassifyResult* result =
-      (FD_C_ClassifyResult*)malloc(sizeof(FD_C_ClassifyResult));
+  FD_C_SegmentationResult* result =
+      (FD_C_SegmentationResult*)malloc(sizeof(FD_C_SegmentationResult));
 
-  if (!FD_C_PaddleClasModelWrapperPredict(model, im, result)) {
+  if (!FD_C_PaddleSegModelWrapperPredict(model, im, result)) {
     printf("Failed to predict.\n");
     FD_C_DestroyRuntimeOptionWrapper(option);
-    FD_C_DestroyPaddleClasModelWrapper(model);
+    FD_C_DestroyPaddleSegModelWrapper(model);
     FD_C_DestroyMat(im);
     free(result);
     return;
@@ -63,12 +61,18 @@ void CpuInfer(const char* model_dir, const char* image_file) {
 
   // print res
   char res[2000];
-  FD_C_ClassifyResultStr(result, res);
+  FD_C_SegmentationResultStr(result, res);
   printf("%s", res);
+
+  FD_C_Mat vis_im = FD_C_VisSegmentation(im, result, 0.5);
+
+  FD_C_Imwrite("vis_result.jpg", vis_im);
+  printf("Visualized result saved in ./vis_result.jpg\n");
   FD_C_DestroyRuntimeOptionWrapper(option);
-  FD_C_DestroyPaddleClasModelWrapper(model);
-  FD_C_DestroyClassifyResult(result);
+  FD_C_DestroyPaddleSegModelWrapper(model);
+  FD_C_DestroySegmentationResult(result);
   FD_C_DestroyMat(im);
+  FD_C_DestroyMat(vis_im);
 }
 
 void GpuInfer(const char* model_dir, const char* image_file) {
@@ -76,34 +80,32 @@ void GpuInfer(const char* model_dir, const char* image_file) {
   char params_file[100];
   char config_file[100];
   int max_size = 99;
-  snprintf(model_file, max_size, "%s%c%s", model_dir, sep, "inference.pdmodel");
-  snprintf(params_file, max_size, "%s%c%s", model_dir, sep,
-           "inference.pdiparams");
-  snprintf(config_file, max_size, "%s%c%s", model_dir, sep,
-           "inference_cls.yaml");
+  snprintf(model_file, max_size, "%s%c%s", model_dir, sep, "model.pdmodel");
+  snprintf(params_file, max_size, "%s%c%s", model_dir, sep, "model.pdiparams");
+  snprintf(config_file, max_size, "%s%c%s", model_dir, sep, "deploy.yaml");
 
   FD_C_RuntimeOptionWrapper* option = FD_C_CreateRuntimeOptionWrapper();
   FD_C_RuntimeOptionWrapperUseGpu(option, 0);
 
-  FD_C_PaddleClasModelWrapper* model = FD_C_CreatePaddleClasModelWrapper(
+  FD_C_PaddleSegModelWrapper* model = FD_C_CreatePaddleSegModelWrapper(
       model_file, params_file, config_file, option, PADDLE);
 
-  if (!FD_C_PaddleClasModelWrapperInitialized(model)) {
+  if (!FD_C_PaddleSegModelWrapperInitialized(model)) {
     printf("Failed to initialize.\n");
     FD_C_DestroyRuntimeOptionWrapper(option);
-    FD_C_DestroyPaddleClasModelWrapper(model);
+    FD_C_DestroyPaddleSegModelWrapper(model);
     return;
   }
 
   FD_C_Mat im = FD_C_Imread(image_file);
 
-  FD_C_ClassifyResult* result =
-      (FD_C_ClassifyResult*)malloc(sizeof(FD_C_ClassifyResult));
+  FD_C_SegmentationResult* result =
+      (FD_C_SegmentationResult*)malloc(sizeof(FD_C_SegmentationResult));
 
-  if (!FD_C_PaddleClasModelWrapperPredict(model, im, result)) {
+  if (!FD_C_PaddleSegModelWrapperPredict(model, im, result)) {
     printf("Failed to predict.\n");
     FD_C_DestroyRuntimeOptionWrapper(option);
-    FD_C_DestroyPaddleClasModelWrapper(model);
+    FD_C_DestroyPaddleSegModelWrapper(model);
     FD_C_DestroyMat(im);
     free(result);
     return;
@@ -111,19 +113,25 @@ void GpuInfer(const char* model_dir, const char* image_file) {
 
   // print res
   char res[2000];
-  FD_C_ClassifyResultStr(result, res);
+  FD_C_SegmentationResultStr(result, res);
   printf("%s", res);
+
+  FD_C_Mat vis_im = FD_C_VisSegmentation(im, result, 0.5);
+
+  FD_C_Imwrite("vis_result.jpg", vis_im);
+  printf("Visualized result saved in ./vis_result.jpg\n");
   FD_C_DestroyRuntimeOptionWrapper(option);
-  FD_C_DestroyPaddleClasModelWrapper(model);
-  FD_C_DestroyClassifyResult(result);
+  FD_C_DestroyPaddleSegModelWrapper(model);
+  FD_C_DestroySegmentationResult(result);
   FD_C_DestroyMat(im);
+  FD_C_DestroyMat(vis_im);
 }
 
 int main(int argc, char* argv[]) {
   if (argc < 4) {
     printf(
         "Usage: infer_demo path/to/model_dir path/to/image run_option, "
-        "e.g ./infer_model ./ppyoloe_model_dir ./test.jpeg 0"
+        "e.g ./infer_model ./ppseg_model_dir ./test.jpeg 0"
         "\n");
     printf(
         "The data type of run_option is int, 0: run with cpu; 1: run with gpu"
