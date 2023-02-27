@@ -14,7 +14,7 @@
 
 #include "fastdeploy_capi/vision/segmentation/ppseg/model.h"
 
-#include "fastdeploy_capi/types_internal.h"
+#include "fastdeploy_capi/internal/types_internal.h"
 
 #ifdef __cplusplus
 extern "C" {
