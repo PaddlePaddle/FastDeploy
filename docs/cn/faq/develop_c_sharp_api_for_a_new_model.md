@@ -115,23 +115,10 @@ public class PaddleSegModel {
   FD_C_PaddleSegModelWrapperPredict(IntPtr fd_paddleseg_model_wrapper,
                                      IntPtr img,
                                      ref FD_SegmentationResult fd_segmentation_result);
-  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_CreateSegmentationResultWrapper")]
-  private static extern IntPtr FD_C_CreateSegmentationResultWrapper();
-  [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DestroySegmentationResultWrapper")]
-  private static extern void
-  FD_C_DestroySegmentationResultWrapper(IntPtr fd_segmentation_result_wrapper);
+
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroySegmentationResult")]
   private static extern void
-  FD_C_DestroySegmentationResult(IntPtr fd_segmentation_result);
-  [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_SegmentationResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_SegmentationResultWrapperGetData(IntPtr fd_segmentation_result_wrapper);
-  [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateSegmentationResultWrapperFromData")]
-  private static extern IntPtr
-  FD_C_CreateSegmentationResultWrapperFromData(IntPtr fd_segmentation_result);
+  FD_C_DestroySegmentationResult(ref FD_SegmentationResult fd_segmentation_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_PaddleSegModelWrapperInitialized")]
@@ -146,6 +133,8 @@ public class PaddleSegModel {
 
 }
 ```
+
+
 具体实现可以参考文件 csharp/fastdeploy/vision/segmentation/model.cs 。
 
 3. 提供可视化函数C# API
