@@ -13,7 +13,7 @@
 // limitations under the License.
 #pragma once
 
-#include "fastdeploy_capi/config.h"
+#include "fastdeploy_capi/core/config.h"
 
 #ifdef ENABLE_VISION
 #include "fastdeploy_capi/vision/classification/ppcls/model.h"
@@ -24,5 +24,5 @@
 #include "fastdeploy_capi/vision/visualize.h"
 #endif
 
-#include "fastdeploy_capi/fd_type.h"
-#include "fastdeploy_capi/runtime_option.h"
+#include "fastdeploy_capi/core/fd_type.h"
+#include "fastdeploy_capi/runtime/runtime_option.h"
