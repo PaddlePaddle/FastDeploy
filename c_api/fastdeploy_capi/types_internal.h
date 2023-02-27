@@ -27,6 +27,7 @@
 #include "fastdeploy/vision/ocr/ppocr/recognizer.h"
 #include "fastdeploy/vision/ocr/ppocr/ppocr_v2.h"
 #include "fastdeploy/vision/ocr/ppocr/ppocr_v3.h"
+#include "fastdeploy/vision/segmentation/ppseg/model.h"
 
 #define DEFINE_RESULT_WRAPPER_STRUCT(typename, varname) typedef struct FD_C_##typename##Wrapper { \
   std::unique_ptr<fastdeploy::vision::typename> varname; \
@@ -49,6 +50,10 @@
   std::unique_ptr<fastdeploy::pipeline::typename> varname; \
 } FD_C_##typename##Wrapper
 
+#define DEFINE_SEGMENTATION_MODEL_WRAPPER_STRUCT(typename, varname)  typedef struct FD_C_##typename##Wrapper { \
+  std::unique_ptr<fastdeploy::vision::segmentation::typename> varname; \
+} FD_C_##typename##Wrapper
+
 // -------------  belows are wrapper struct define --------------------- //
 
 // Results:
@@ -63,6 +68,8 @@ DEFINE_RESULT_WRAPPER_STRUCT(DetectionResult, detection_result);
 // OCRResult
 DEFINE_RESULT_WRAPPER_STRUCT(OCRResult, ocr_result);
 
+// Segmentation Result
+DEFINE_RESULT_WRAPPER_STRUCT(SegmentationResult, segmentation_result);
 
 // Models:
 
@@ -153,6 +160,10 @@ DEFINE_PIPELINE_MODEL_WRAPPER_STRUCT(PPOCRv2, ppocrv2_model);
 // PPOCRv3
 DEFINE_PIPELINE_MODEL_WRAPPER_STRUCT(PPOCRv3, ppocrv3_model);
 
+// Segmentation models
+
+// PaddleSegModel
+DEFINE_SEGMENTATION_MODEL_WRAPPER_STRUCT(PaddleSegModel, segmentation_model);
 
 // -------------  belows are function declaration for get ptr from wrapper --------------------- //
 
@@ -177,6 +188,10 @@ FD_C_CheckAndConvert##typename##Wrapper( \
 FD_C_CheckAndConvert##typename##Wrapper( \
     FD_C_##typename##Wrapper* varname)
 
+#define DECLARE_SEGMENTATION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(typename, varname) std::unique_ptr<fastdeploy::vision::segmentation::typename>& \
+FD_C_CheckAndConvert##typename##Wrapper( \
+    FD_C_##typename##Wrapper* varname)
+
 
 namespace fastdeploy {
 
@@ -193,6 +208,10 @@ DECLARE_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(DetectionResult,
 // OCRResult
 DECLARE_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(OCRResult,
                                              fd_ocr_result_wrapper);
+
+// SegementationResult
+DECLARE_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(SegmentationResult,
+                                             fd_segmentation_result_wrapper);
 
 
 // Models:
@@ -324,6 +343,12 @@ DECLARE_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(PPOCRv2, fd_ppocrv2_wrapper
 // PPOCRv3
 DECLARE_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(PPOCRv3, fd_ppocrv3_wrapper);
 
+// Segmentation models
+
+// PaddleSegModel
+DECLARE_SEGMENTATION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PaddleSegModel, fd_paddleseg_model_wrapper);
+
 }  // namespace fastdeploy
 
 #endif
@@ -377,6 +402,14 @@ FD_C_CheckAndConvert##typename##Wrapper( \
 }
 
 #define DECL_AND_IMPLEMENT_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(typename, var_wrapper_name, var_ptr_name) std::unique_ptr<fastdeploy::pipeline::typename>& \
+FD_C_CheckAndConvert##typename##Wrapper( \
+    FD_C_##typename##Wrapper* var_wrapper_name) { \
+  FDASSERT(var_wrapper_name != nullptr, \
+           "The pointer of " #var_wrapper_name " shouldn't be nullptr."); \
+  return var_wrapper_name->var_ptr_name; \
+}
+
+#define DECL_AND_IMPLEMENT_SEGMENTATION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(typename, var_wrapper_name, var_ptr_name) std::unique_ptr<fastdeploy::vision::segmentation::typename>& \
 FD_C_CheckAndConvert##typename##Wrapper( \
     FD_C_##typename##Wrapper* var_wrapper_name) { \
   FDASSERT(var_wrapper_name != nullptr, \
