@@ -16,7 +16,9 @@ import logging
 import os
 import sys
 
-# Note(zhoushunjie): Fix the paddle and fastdeploy import order
+# Note(zhoushunjie): Fix the import order of paddle and fastdeploy library.
+# This solution will be removed it when the confilct of paddle and
+# fastdeploy is fixed.
 try:
     import paddle
 except:
