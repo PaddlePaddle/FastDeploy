@@ -67,3 +67,5 @@ docker build -t paddlepaddle/fastdeploy:x.y.z-ipu-only-21.10 -f serving/Dockerfi
 ```
 
 ## Compilation without Docker containers
+
+- [FastDeploy Serving CentOS Compilation Tutorial](./compile_without_docker_centos-en.md)
