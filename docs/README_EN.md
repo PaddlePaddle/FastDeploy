@@ -41,6 +41,7 @@
 - [3. How to Use FastDeploy C++ SDK on Android Platform](en/faq/use_cpp_sdk_on_android.md)
 - [4. Tricks of TensorRT](en/faq/tensorrt_tricks.md)
 - [5. How to Develop a New Model](en/faq/develop_a_new_model.md)
+- [6. How to Develop C API for a New Model](en/faq/develop_c_api_for_a_new_model.md)
 
 ## More FastDeploy Deployment Module
 
