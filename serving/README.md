@@ -6,6 +6,8 @@
 
 FastDeploy builds an end-to-end serving deployment based on [Triton Inference Server](https://github.com/triton-inference-server/server). The underlying backend uses the FastDeploy high-performance Runtime module and integrates the FastDeploy pre- and post-processing modules to achieve end-to-end serving deployment. It can achieve fast deployment with easy-to-use process and excellent performance.
 
+FastDeploy provides an easy-to-use Python service deployment method, refer [PaddleSeg deployment example](../examples/vision/segmentation/paddleseg/serving/simple_serving) for its usage.
+
 ## Prepare the environment
 
 ### Environment requirements
