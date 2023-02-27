@@ -81,20 +81,57 @@ class FASTDEPLOY_DECL FDLogger {
 FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
                                         std::string* contents);
 
-#ifndef __REL_FILE__
-#define __REL_FILE__ __FILE__
+FASTDEPLOY_DECL std::vector<int64_t>
+GetStride(const std::vector<int64_t>& dims);
+
+template <typename T>
+std::string Str(const std::vector<T>& shape) {
+  std::ostringstream oss;
+  oss << "[ " << shape[0];
+  for (size_t i = 1; i < shape.size(); ++i) {
+    oss << " ," << shape[i];
+  }
+  oss << " ]";
+  return oss.str();
+}
+
+template <typename T>
+void CalculateStatisInfo(const void* src_ptr, int size, double* mean,
+                         double* max, double* min) {
+  const T* ptr = static_cast<const T*>(src_ptr);
+  *mean = static_cast<double>(0);
+  *max = static_cast<double>(-99999999);
+  *min = static_cast<double>(99999999);
+  for (int i = 0; i < size; ++i) {
+    if (*(ptr + i) > *max) {
+      *max = *(ptr + i);
+    }
+    if (*(ptr + i) < *min) {
+      *min = *(ptr + i);
+    }
+    *mean += *(ptr + i);
+  }
+  *mean = *mean / size;
+}
+
+}  // namespace fastdeploy
+
+
+
+#ifndef __PD_REL_FILE__
+#define __PD_REL_FILE__ __FILE__
 #endif
 
 #define FDERROR                                                                \
-  FDLogger(true, "[ERROR]")                                                    \
-      << __REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
+  ::fastdeploy::FDLogger(true, "[ERROR]")                                                    \
+      << __PD_REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
 
 #define FDWARNING                                                              \
-  FDLogger(true, "[WARNING]")                                                  \
-      << __REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
+  ::fastdeploy::FDLogger(true, "[WARNING]")                                                  \
+      << __PD_REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
 
 #define FDINFO                                                                 \
-  FDLogger(true, "[INFO]") << __REL_FILE__ << "(" << __LINE__                  \
+  ::fastdeploy::FDLogger(true, "[INFO]") << __PD_REL_FILE__ << "(" << __LINE__                  \
                            << ")::" << __FUNCTION__ << "\t"
 
 #define FDASSERT(condition, format, ...)                                       \
@@ -199,39 +236,3 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
                Str(__dtype__).c_str());                                        \
     }                                                                          \
   }()
-
-FASTDEPLOY_DECL std::vector<int64_t>
-GetStride(const std::vector<int64_t>& dims);
-
-template <typename T>
-std::string Str(const std::vector<T>& shape) {
-  std::ostringstream oss;
-  oss << "[ " << shape[0];
-  for (size_t i = 1; i < shape.size(); ++i) {
-    oss << " ," << shape[i];
-  }
-  oss << " ]";
-  return oss.str();
-}
-
-template <typename T>
-void CalculateStatisInfo(const void* src_ptr, int size, double* mean,
-                         double* max, double* min) {
-  const T* ptr = static_cast<const T*>(src_ptr);
-  *mean = static_cast<double>(0);
-  *max = static_cast<double>(-99999999);
-  *min = static_cast<double>(99999999);
-  for (int i = 0; i < size; ++i) {
-    if (*(ptr + i) > *max) {
-      *max = *(ptr + i);
-    }
-    if (*(ptr + i) < *min) {
-      *min = *(ptr + i);
-    }
-    *mean += *(ptr + i);
-  }
-  *mean = *mean / size;
-}
-
-
-}  // namespace fastdeploy
