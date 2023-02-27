@@ -183,9 +183,21 @@ struct FASTDEPLOY_DECL RuntimeOption {
     benchmark_option.enable_profile = false;
   }
 
+  /** \brief Enable to check if current backend set by user can be found at valid_xxx_backend.
+   */
+  void EnableValidBackendCheck() {
+    enable_valid_backend_check = true;
+  }
+  /** \brief Disable to check if current backend set by user can be found at valid_xxx_backend.
+   */
+  void DisableValidBackendCheck() {
+    enable_valid_backend_check = false;
+  }
 
   /// Benchmark option
   benchmark::BenchmarkOption benchmark_option;
+  // enable the check for valid backend, default true.
+  bool enable_valid_backend_check = true;
 
   // If model_from_memory is true, the model_file and params_file is
   // binary stream in memory;
