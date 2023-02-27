@@ -44,6 +44,7 @@ DEFINE_bool(
 DEFINE_bool(
     collect_memory_info, false, "Whether to collect memory info");
 DEFINE_int32(sampling_interval, 50, "How often to collect memory info(ms).");
+DEFINE_string(result_path, "benchmark.txt", "Path of benchmark result file.");
 
 static void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path --device "
@@ -92,6 +93,8 @@ static void PrintBenchmarkInfo() {
        << "ms" << std::endl;
   }
   std::cout << ss.str() << std::endl;
+  // Save benchmark info
+  benchmark::ResultManager::SaveBenchmarkResult(ss.str(), FLAGS_result_path);
 #endif
   return;
 }
