@@ -83,7 +83,7 @@ bool YOLOv8Preprocessor::Preprocess(
                                 static_cast<float>(mat->Width())};
 
   mat->ShareWithTensor(output);
-  output->ExpandDim(0);  // reshape to n, h, w, c
+  output->ExpandDim(0);  // reshape to n, c, h, w
   return true;
 }
 

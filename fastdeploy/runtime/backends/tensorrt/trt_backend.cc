@@ -114,6 +114,13 @@ bool TrtBackend::LoadTrtCache(const std::string& trt_engine_file) {
 }
 
 bool TrtBackend::Init(const RuntimeOption& runtime_option) {
+  auto trt_option = runtime_option.trt_option;
+  trt_option.model_file = runtime_option.model_file;
+  trt_option.params_file = runtime_option.params_file;
+  trt_option.model_format = runtime_option.model_format;
+  trt_option.gpu_id = runtime_option.device_id;
+  trt_option.enable_pinned_memory = runtime_option.enable_pinned_memory;
+  trt_option.external_stream_ = runtime_option.external_stream_;
   if (runtime_option.device != Device::GPU) {
     FDERROR << "TrtBackend only supports Device::GPU, but now it's "
             << runtime_option.device << "." << std::endl;
@@ -130,7 +137,7 @@ bool TrtBackend::Init(const RuntimeOption& runtime_option) {
     if (runtime_option.model_from_memory_) {
       return InitFromPaddle(runtime_option.model_file,
                             runtime_option.params_file,
-                            runtime_option.trt_option);
+                            trt_option);
     } else {
       std::string model_buffer;
       std::string params_buffer;
@@ -141,17 +148,17 @@ bool TrtBackend::Init(const RuntimeOption& runtime_option) {
                "Failed to read parameters file %s.",
                runtime_option.params_file.c_str());
       return InitFromPaddle(model_buffer, params_buffer,
-                            runtime_option.trt_option);
+                            trt_option);
     }
   } else {
     if (runtime_option.model_from_memory_) {
-      return InitFromOnnx(runtime_option.model_file, runtime_option.trt_option);
+      return InitFromOnnx(runtime_option.model_file, trt_option);
     } else {
       std::string model_buffer;
       FDASSERT(ReadBinaryFromFile(runtime_option.model_file, &model_buffer),
                "Failed to read model file %s.",
                runtime_option.model_file.c_str());
-      return InitFromOnnx(model_buffer, runtime_option.trt_option);
+      return InitFromOnnx(model_buffer, trt_option);
     }
   }
   return true;
@@ -525,6 +532,9 @@ void TrtBackend::AllocateOutputsBuffer(std::vector<FDTensor>* outputs,
 }
 
 bool TrtBackend::BuildTrtEngine() {
+  if (option_.enable_log_info) {
+    FDTrtLogger::Get()->SetLog(true, true);
+  }
   auto config =
       FDUniquePtr<nvinfer1::IBuilderConfig>(builder_->createBuilderConfig());
   if (!config) {

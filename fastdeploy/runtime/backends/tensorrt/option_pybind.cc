@@ -21,6 +21,7 @@ void BindTrtOption(pybind11::module& m) {
   pybind11::class_<TrtBackendOption>(m, "TrtBackendOption")
       .def(pybind11::init())
       .def_readwrite("enable_fp16", &TrtBackendOption::enable_fp16)
+      .def_readwrite("enable_log_info", &TrtBackendOption::enable_log_info)
       .def_readwrite("max_batch_size", &TrtBackendOption::max_batch_size)
       .def_readwrite("max_workspace_size",
                      &TrtBackendOption::max_workspace_size)
