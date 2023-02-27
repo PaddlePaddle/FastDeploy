@@ -71,7 +71,7 @@ typedef struct FD_C_SegmentationResult {
 } FD_C_SegmentationResult;
 ```
 
-For representations such as FD_C_OneDimArrayUint8, refer to file c_api/fastdeploy_capi/fd_type.h.
+For representations such as FD_C_OneDimArrayUint8, refer to file c_api/fastdeploy_capi/core/fd_type.h.
 
 Then you need to define two functions that convert between fastdeploy::SegmentationResult and FD_C_SegmentationResult. Since a corresponding Wrapper structure in C is used for wrapping C++ structures, what is actually defined is conversion between FD_C_SegmentationResultWrapper and FD_C_SegmentationResult, corresponding to the following two functions.
 
@@ -90,7 +90,7 @@ There are also other API functions for creating and destroying structures that c
 
 The implementation of various Results in C API is located at c_api/fastdeploy_capi/vision/result.cc.
 
-For declaring various Wrapper structures, refer to file c_api/fastdeploy_capi/types_internal.h .
+For declaring various Wrapper structures, refer to file c_api/fastdeploy_capi/internal/types_internal.h .
 
 2. Provide C API for model interface
 Open file fastdeploy/vision/segmentation/ppseg/model.h, which defines the C++ interface for segmentation model, i.e. fastdeploy::vision::segmentation::PaddleSegModel class. Create a Wrapper in C to represent this class. For convenience of quick definition and implementation of models of the same category in the future, c_api/fastdeploy_capi/types_internal.h defines macros to quickly create Wrapper and extract the wrapped class object from Wrapper. For example, define a macro to create a Wrapper for segmentation model as
