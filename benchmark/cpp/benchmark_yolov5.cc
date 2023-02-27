@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include "flags.h"
-#include "macros.h"  // NOLINT
+#include "macros.h"
 #include "option.h"
 
 namespace vision = fastdeploy::vision;
