@@ -67,6 +67,7 @@ FDTensor* CreateCachedGpuInputTensor(FDMatBatch* mat_batch) {
       FDTensor* tensor = CreateCachedGpuInputTensor(&(*mats)[i]);
       (*mats)[i].SetTensor(tensor);
     }
+    mat_batch->device = Device::GPU;
     return mat_batch->Tensor();
   } else {
     FDASSERT(false, "FDMat is on unsupported device: %d", src->device);

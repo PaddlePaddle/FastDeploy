@@ -632,7 +632,7 @@ bool PIPNet::Preprocess(Mat* mat, FDTensor* output,
   HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
   mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  output->shape.insert(output->shape.begin(), 1);  // reshape to n, c, h, w
   return true;
 }
 
