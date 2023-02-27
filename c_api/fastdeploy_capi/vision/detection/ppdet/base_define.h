@@ -61,11 +61,10 @@ FD_C_Destroy##model_type##Wrapper(__fd_take FD_C_##model_type##Wrapper* wrapper_
       DetectionResultWrapper, fd_c_detection_result_wrapper);                  \
   bool successful = model->Predict(im, detection_result.get());                \
   if (successful) {                                                            \
-    FD_C_DetectionResult* res =                                                \
-        FD_C_DetectionResultWrapperGetData(fd_c_detection_result_wrapper);     \
-    *fd_c_detection_result = *res;                                             \
-  }                                                                            \
-  return successful
+        FD_C_DetectionResultWrapperToCResult(fd_c_detection_result_wrapper, fd_c_detection_result); \
+  } \
+FD_C_DestroyDetectionResultWrapper(fd_c_detection_result_wrapper); \
+return successful
 
 #define IMPLEMENT_INITIALIZED_FUNCTION(model_type, wrapper_var_name)   auto& model = \
       CHECK_AND_CONVERT_FD_TYPE(model_type##Wrapper, wrapper_var_name); \
@@ -88,10 +87,12 @@ return model->Initialized();
     for (int i = 0; i < results_out.size(); i++) { \
       (*CHECK_AND_CONVERT_FD_TYPE(DetectionResultWrapper, \
                                   results_wrapper_out[i])) = std::move(results_out[i]); \
-      results->data[i] = *(FD_C_DetectionResultWrapperGetData(results_wrapper_out[i])); \
-      FD_C_DestroyDetectionResultWrapper(results_wrapper_out[i]); \
+      FD_C_DetectionResultWrapperToCResult(results_wrapper_out[i], &results->data[i]); \
     } \
   } \
+  for (int i = 0; i < results_out.size(); i++) { \
+    FD_C_DestroyDetectionResultWrapper(results_wrapper_out[i]); \
+  }\
   return successful;
 
 #define DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(model_type, var_name) FD_C_##model_type##Wrapper* FD_C_Create##model_type##Wrapper(\

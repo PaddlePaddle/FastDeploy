@@ -112,16 +112,9 @@ void CpuInfer(const char* det_model_dir, const char* cls_model_dir,
   }
 
   // print res
-  // You can directly access fields in FD_C_OCRResult and print it refer to
-  // OCRResult API Doc Or you can wrap it using
-  // FD_C_OCRResult_Wrapper, which containes C++ structure
-  // fastdeploy::vision::OCRResult, and using C API
-  // FD_C_OCRResultWrapperStr to call
-  // fastdeploy::vision::OCRResult::Str() in it. For convenience, we choose
-  // this method to print it.
-  FD_C_OCRResultWrapper* result_wrapper =
-      FD_C_CreateOCRResultWrapperFromData(result);
-  printf("%s", FD_C_OCRResultWrapperStr(result_wrapper));
+  char res[2000];
+  FD_C_OCRResultStr(result, res);
+  printf("%s", res);
   FD_C_Mat vis_im = FD_C_VisOcr(im, result);
   FD_C_Imwrite("vis_result.jpg", vis_im);
   printf("Visualized result saved in ./vis_result.jpg\n");
@@ -133,9 +126,9 @@ void CpuInfer(const char* det_model_dir, const char* cls_model_dir,
   FD_C_DestroyDBDetectorWrapper(det_model);
   FD_C_DestroyRecognizerWrapper(rec_model);
   FD_C_DestroyPPOCRv2Wrapper(ppocr_v2);
-  FD_C_DestroyOCRResultWrapper(result_wrapper);
   FD_C_DestroyOCRResult(result);
   FD_C_DestroyMat(im);
+  FD_C_DestroyMat(vis_im);
 }
 
 void GpuInfer(const char* det_model_dir, const char* cls_model_dir,
@@ -213,16 +206,9 @@ void GpuInfer(const char* det_model_dir, const char* cls_model_dir,
   }
 
   // print res
-  // You can directly access fields in FD_C_OCRResult and print it refer to
-  // OCRResult API Doc Or you can wrap it using
-  // FD_C_OCRResult_Wrapper, which containes C++ structure
-  // fastdeploy::vision::OCRResult, and using C API
-  // FD_C_OCRResultWrapperStr to call
-  // fastdeploy::vision::OCRResult::Str() in it. For convenience, we choose
-  // this method to print it.
-  FD_C_OCRResultWrapper* result_wrapper =
-      FD_C_CreateOCRResultWrapperFromData(result);
-  printf("%s", FD_C_OCRResultWrapperStr(result_wrapper));
+  char res[2000];
+  FD_C_OCRResultStr(result, res);
+  printf("%s", res);
   FD_C_Mat vis_im = FD_C_VisOcr(im, result);
   FD_C_Imwrite("vis_result.jpg", vis_im);
   printf("Visualized result saved in ./vis_result.jpg\n");
@@ -234,9 +220,9 @@ void GpuInfer(const char* det_model_dir, const char* cls_model_dir,
   FD_C_DestroyDBDetectorWrapper(det_model);
   FD_C_DestroyRecognizerWrapper(rec_model);
   FD_C_DestroyPPOCRv2Wrapper(ppocr_v2);
-  FD_C_DestroyOCRResultWrapper(result_wrapper);
   FD_C_DestroyOCRResult(result);
   FD_C_DestroyMat(im);
+  FD_C_DestroyMat(vis_im);
 }
 int main(int argc, char* argv[]) {
   if (argc < 7) {

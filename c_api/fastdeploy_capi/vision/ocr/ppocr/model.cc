@@ -353,9 +353,9 @@ FD_C_Bool FD_C_PPOCRv2WrapperPredict(FD_C_PPOCRv2Wrapper* fd_c_ppocrv2_wrapper,
 
   bool successful = model->Predict(im, ocr_result.get());
   if (successful) {
-    FD_C_OCRResult* res = FD_C_OCRResultWrapperGetData(fd_c_ocr_result_wrapper);
-    *fd_c_ocr_result = *res;
+    FD_C_OCRResultWrapperToCResult(fd_c_ocr_result_wrapper, fd_c_ocr_result);
   }
+  FD_C_DestroyOCRResultWrapper(fd_c_ocr_result_wrapper);
   return successful;
 }
 
@@ -383,10 +383,11 @@ FD_C_Bool FD_C_PPOCRv2WrapperBatchPredict(
     for (int i = 0; i < results_out.size(); i++) {
       (*CHECK_AND_CONVERT_FD_TYPE(OCRResultWrapper, results_wrapper_out[i])) =
           std::move(results_out[i]);
-      results->data[i] =
-          *(FD_C_OCRResultWrapperGetData(results_wrapper_out[i]));
-      FD_C_DestroyOCRResultWrapper(results_wrapper_out[i]);
+      FD_C_OCRResultWrapperToCResult(results_wrapper_out[i], &results->data[i]);
     }
+  }
+  for (int i = 0; i < results_out.size(); i++) {
+    FD_C_DestroyOCRResultWrapper(results_wrapper_out[i]);
   }
   return successful;
 }
@@ -426,9 +427,9 @@ FD_C_Bool FD_C_PPOCRv3WrapperPredict(FD_C_PPOCRv3Wrapper* fd_c_ppocrv3_wrapper,
 
   bool successful = model->Predict(im, ocr_result.get());
   if (successful) {
-    FD_C_OCRResult* res = FD_C_OCRResultWrapperGetData(fd_c_ocr_result_wrapper);
-    *fd_c_ocr_result = *res;
+    FD_C_OCRResultWrapperToCResult(fd_c_ocr_result_wrapper, fd_c_ocr_result);
   }
+  FD_C_DestroyOCRResultWrapper(fd_c_ocr_result_wrapper);
   return successful;
 }
 
@@ -456,10 +457,11 @@ FD_C_Bool FD_C_PPOCRv3WrapperBatchPredict(
     for (int i = 0; i < results_out.size(); i++) {
       (*CHECK_AND_CONVERT_FD_TYPE(OCRResultWrapper, results_wrapper_out[i])) =
           std::move(results_out[i]);
-      results->data[i] =
-          *(FD_C_OCRResultWrapperGetData(results_wrapper_out[i]));
-      FD_C_DestroyOCRResultWrapper(results_wrapper_out[i]);
+      FD_C_OCRResultWrapperToCResult(results_wrapper_out[i], &results->data[i]);
     }
+  }
+  for (int i = 0; i < results_out.size(); i++) {
+    FD_C_DestroyOCRResultWrapper(results_wrapper_out[i]);
   }
   return successful;
 }

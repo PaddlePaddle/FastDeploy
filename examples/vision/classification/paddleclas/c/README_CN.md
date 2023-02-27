@@ -153,32 +153,15 @@ FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
 #### Predict结果
 
 ```c
-FD_C_ClassifyResultWrapper* FD_C_CreateClassifyResultWrapperFromData(
-    FD_C_ClassifyResult* fd_c_classify_result)
+void FD_C_ClassifyResultStr(
+    FD_C_ClassifyResult* fd_c_classify_result， char* str_buffer);
 ```
 >
-> 创建一个FD_C_ClassifyResultWrapper对象的指针，FD_C_ClassifyResultWrapper中包含了C++的`fastdeploy::vision::ClassifyResult`对象，通过该指针，使用C API可以访问调用对应C++中的函数。
->
+> 打印结果
 >
 > **参数**
 > * **fd_c_classify_result**(FD_C_ClassifyResult*): 指向FD_C_ClassifyResult对象的指针
->
-> **返回**
-> * **fd_c_classify_result_wrapper**(FD_C_ClassifyResultWrapper*): 指向FD_C_ClassifyResultWrapper的指针
-
-
-```c
-char* FD_C_ClassifyResultWrapperStr(
-    FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper);
-```
->
-> 调用FD_C_ClassifyResultWrapper所包含的`fastdeploy::vision::ClassifyResult`对象的Str()方法，返回相关结果内数据信息的字符串。
->
-> **参数**
-> * **fd_c_classify_result_wrapper**(FD_C_ClassifyResultWrapper*): 指向FD_C_ClassifyResultWrapper对象的指针
->
-> **返回**
-> * **str**(char*): 表示结果数据信息的字符串
+> * **str_buffer**(char*): 保存结果数据信息的字符串
 
 
 

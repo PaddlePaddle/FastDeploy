@@ -60,16 +60,9 @@ void CpuInfer(const char* model_dir, const char* image_file) {
   }
 
   // print res
-  // You can directly access fields in FD_C_SegmentationResult and print it
-  // refer to SegmentationResult API Doc Or you can wrap it using
-  // FD_C_SegmentationResult_Wrapper, which containes C++ structure
-  // fastdeploy::vision::SegmentationResult, and using C API
-  // FD_C_SegmentationResultWrapperStr to call
-  // fastdeploy::vision::SegmentationResult::Str() in it. For convenience, we
-  // choose this method to print it.
-  FD_C_SegmentationResultWrapper* result_wrapper =
-      FD_C_CreateSegmentationResultWrapperFromData(result);
-  printf("%s", FD_C_SegmentationResultWrapperStr(result_wrapper));
+  char res[2000];
+  FD_C_SegmentationResultStr(result, res);
+  printf("%s", res);
 
   FD_C_Mat vis_im = FD_C_VisSegmentation(im, result, 0.5);
 
@@ -77,9 +70,9 @@ void CpuInfer(const char* model_dir, const char* image_file) {
   printf("Visualized result saved in ./vis_result.jpg\n");
   FD_C_DestroyRuntimeOptionWrapper(option);
   FD_C_DestroyPaddleSegModelWrapper(model);
-  FD_C_DestroySegmentationResultWrapper(result_wrapper);
   FD_C_DestroySegmentationResult(result);
   FD_C_DestroyMat(im);
+  FD_C_DestroyMat(vis_im);
 }
 
 void GpuInfer(const char* model_dir, const char* image_file) {
@@ -119,16 +112,9 @@ void GpuInfer(const char* model_dir, const char* image_file) {
   }
 
   // print res
-  // You can directly access fields in FD_C_SegmentationResult and print it
-  // refer to SegmentationResult API Doc Or you can wrap it using
-  // FD_C_SegmentationResult_Wrapper, which containes C++ structure
-  // fastdeploy::vision::SegmentationResult, and using C API
-  // FD_C_SegmentationResultWrapperStr to call
-  // fastdeploy::vision::SegmentationResult::Str() in it. For convenience, we
-  // choose this method to print it.
-  FD_C_SegmentationResultWrapper* result_wrapper =
-      FD_C_CreateSegmentationResultWrapperFromData(result);
-  printf("%s", FD_C_SegmentationResultWrapperStr(result_wrapper));
+  char res[2000];
+  FD_C_SegmentationResultStr(result, res);
+  printf("%s", res);
 
   FD_C_Mat vis_im = FD_C_VisSegmentation(im, result, 0.5);
 
@@ -136,9 +122,9 @@ void GpuInfer(const char* model_dir, const char* image_file) {
   printf("Visualized result saved in ./vis_result.jpg\n");
   FD_C_DestroyRuntimeOptionWrapper(option);
   FD_C_DestroyPaddleSegModelWrapper(model);
-  FD_C_DestroySegmentationResultWrapper(result_wrapper);
   FD_C_DestroySegmentationResult(result);
   FD_C_DestroyMat(im);
+  FD_C_DestroyMat(vis_im);
 }
 
 int main(int argc, char* argv[]) {

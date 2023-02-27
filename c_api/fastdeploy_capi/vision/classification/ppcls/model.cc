@@ -55,10 +55,10 @@ FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
 
   bool successful = paddleclas_model->Predict(im, classify_result.get());
   if (successful) {
-    FD_C_ClassifyResult* res =
-        FD_C_ClassifyResultWrapperGetData(fd_c_classify_result_wrapper);
-    *fd_c_classify_result = *res;
+    FD_C_ClassifyResultWrapperToCResult(fd_c_classify_result_wrapper,
+                                        fd_c_classify_result);
   }
+  FD_C_DestroyClassifyResultWrapper(fd_c_classify_result_wrapper);
   return successful;
 }
 
@@ -92,10 +92,12 @@ FD_C_Bool FD_C_PaddleClasModelWrapperBatchPredict(
       (*CHECK_AND_CONVERT_FD_TYPE(ClassifyResultWrapper,
                                   results_wrapper_out[i])) =
           std::move(results_out[i]);
-      results->data[i] =
-          *(FD_C_ClassifyResultWrapperGetData(results_wrapper_out[i]));
-      FD_C_DestroyClassifyResultWrapper(results_wrapper_out[i]);
+      FD_C_ClassifyResultWrapperToCResult(results_wrapper_out[i],
+                                          &results->data[i]);
     }
+  }
+  for (int i = 0; i < results_out.size(); i++) {
+    FD_C_DestroyClassifyResultWrapper(results_wrapper_out[i]);
   }
   return successful;
 }

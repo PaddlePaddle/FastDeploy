@@ -55,10 +55,10 @@ FD_C_Bool FD_C_PaddleSegModelWrapperPredict(
 
   bool successful = paddleseg_model->Predict(im, segmentation_result.get());
   if (successful) {
-    FD_C_SegmentationResult* res =
-        FD_C_SegmentationResultWrapperGetData(fd_c_segmentation_result_wrapper);
-    *fd_c_segmentation_result = *res;
+    FD_C_SegmentationResultWrapperToCResult(fd_c_segmentation_result_wrapper,
+                                            fd_c_segmentation_result);
   }
+  FD_C_DestroySegmentationResultWrapper(fd_c_segmentation_result_wrapper);
   return successful;
 }
 
@@ -92,10 +92,12 @@ FD_C_Bool FD_C_PaddleSegModelWrapperBatchPredict(
       (*CHECK_AND_CONVERT_FD_TYPE(SegmentationResultWrapper,
                                   results_wrapper_out[i])) =
           std::move(results_out[i]);
-      results->data[i] =
-          *(FD_C_SegmentationResultWrapperGetData(results_wrapper_out[i]));
-      FD_C_DestroySegmentationResultWrapper(results_wrapper_out[i]);
+      FD_C_SegmentationResultWrapperToCResult(results_wrapper_out[i],
+                                              &results->data[i]);
     }
+  }
+  for (int i = 0; i < results_out.size(); i++) {
+    FD_C_DestroySegmentationResultWrapper(results_wrapper_out[i]);
   }
   return successful;
 }
