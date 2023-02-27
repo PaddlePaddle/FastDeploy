@@ -24,7 +24,7 @@
   }                                                                         \
   auto __im__ = cv::imread(FLAGS_image);                                    \
   std::stringstream __ss__;                                                 \
-  __ss__.precision(20);                                                     \
+  __ss__.precision(3);                                                      \
   fastdeploy::benchmark::ResourceUsageMonitor __resource_moniter__(         \
       FLAGS_sampling_interval, FLAGS_device_id);                            \
   if (FLAGS_collect_memory_info) {                                          \
@@ -73,6 +73,6 @@
     __ss__ << "gpu_rss_mb: " << __gpu_mem__ << "MB." << std::endl;          \
     __resource_moniter__.Stop();                                            \
   }                                                                         \
-  benchmark::ResultManager::SaveBenchmarkResult(__ss__.str(),               \
+  fastdeploy::benchmark::ResultManager::SaveBenchmarkResult(__ss__.str(),   \
                                           FLAGS_result_path);               \
 }

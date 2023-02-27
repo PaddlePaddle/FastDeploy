@@ -94,7 +94,8 @@ static void PrintBenchmarkInfo() {
   }
   std::cout << ss.str() << std::endl;
   // Save benchmark info
-  benchmark::ResultManager::SaveBenchmarkResult(ss.str(), FLAGS_result_path);
+  fastdeploy::benchmark::ResultManager::SaveBenchmarkResult(ss.str(),
+                                                  FLAGS_result_path);
 #endif
   return;
 }
