@@ -24,7 +24,7 @@
   }                                                                         \
   auto __im__ = cv::imread(FLAGS_image);                                    \
   std::stringstream __ss__;                                                 \
-  __ss__.precision(3);                                                      \
+  __ss__.precision(6);                                                      \
   fastdeploy::benchmark::ResourceUsageMonitor __resource_moniter__(         \
       FLAGS_sampling_interval, FLAGS_device_id);                            \
   if (FLAGS_collect_memory_info) {                                          \
