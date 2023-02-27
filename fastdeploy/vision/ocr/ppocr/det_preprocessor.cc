@@ -58,7 +58,6 @@ DBDetectorPreprocessor::DBDetectorPreprocessor() {
   std::vector<float> mean = {0.485f, 0.456f, 0.406f};
   std::vector<float> std = {0.229f, 0.224f, 0.225f};
   bool is_scale = true;
-
   normalize_permute_op_ =
       std::make_shared<NormalizeAndPermute>(mean, std, is_scale);
 }

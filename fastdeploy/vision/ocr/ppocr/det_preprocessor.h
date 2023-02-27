@@ -94,9 +94,6 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
   std::shared_ptr<Resize> resize_op_;
   std::shared_ptr<Pad> pad_op_;
   std::shared_ptr<NormalizeAndPermute> normalize_permute_op_;
-  std::vector<float> mean_ = {0.485f, 0.456f, 0.406f};
-  std::vector<float> scale_ = {0.229f, 0.224f, 0.225f};
-  bool is_scale_ = true;
   std::vector<int> det_image_shape_ = {3, 960, 960};
   bool static_shape_infer_ = false;
   std::array<int, 4> OcrDetectorGetInfo(FDMat* img, int max_size_len);
