@@ -89,6 +89,17 @@ FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat FD_C_VisClassificationWithLabel
  */
 FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat FD_C_VisOcr(FD_C_Mat im, FD_C_OCRResult* ocr_result);
 
+/** \brief Show the visualized results for segmentation models
+ *
+ * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+ * \param[in] result the result produced by model
+ * \param[in] weight transparent weight of visualized result image
+ * \return cv::Mat type stores the visualized results
+ */
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat FD_C_VisSegmentation(FD_C_Mat im,
+                                        FD_C_SegmentationResult* result,
+                                        float weight);
+
 
 #ifdef __cplusplus
 }  // extern "C"
