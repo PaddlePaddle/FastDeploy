@@ -6,6 +6,7 @@
 
 FastDeploy基于[Triton Inference Server](https://github.com/triton-inference-server/server)搭建了端到端的服务化部署。底层后端使用FastDeploy高性能Runtime模块，并串联FastDeploy前后处理模块实现端到端的服务化部署。具有快速部署、使用简单、性能卓越的特性。
 
+> FastDeploy同时还提供了基于Python搭建的服务化部署能力，只需要通过Python即可启动服务，可参考[PaddleSeg部署示例](../examples/vision/segmentation/paddleseg/serving/simple_serving)了解其用法。
 ## 准备环境
 
 ### 环境要求
