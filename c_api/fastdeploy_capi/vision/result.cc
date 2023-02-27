@@ -44,7 +44,6 @@ void FD_C_DestroyClassifyResult(
   delete[] fd_c_classify_result->label_ids.data;
   // delete scores
   delete[] fd_c_classify_result->scores.data;
-  delete fd_c_classify_result;
 }
 
 void FD_C_ClassifyResultWrapperToCResult(
@@ -135,7 +134,6 @@ void FD_C_DestroyDetectionResult(
     delete[] fd_c_detection_result->masks.data[i].data.data;
     delete[] fd_c_detection_result->masks.data[i].shape.data;
   }
-  delete fd_c_detection_result;
 }
 
 void FD_C_DetectionResultWrapperToCResult(
@@ -295,7 +293,6 @@ void FD_C_DestroyOCRResult(__fd_take FD_C_OCRResult* fd_c_ocr_result) {
   delete[] fd_c_ocr_result->cls_scores.data;
   // delete cls_labels
   delete[] fd_c_ocr_result->cls_labels.data;
-  delete fd_c_ocr_result;
 }
 
 void FD_C_OCRResultWrapperToCResult(
@@ -430,7 +427,6 @@ void FD_C_DestroySegmentationResult(
   delete[] fd_c_segmentation_result->score_map.data;
   // delete shape
   delete[] fd_c_segmentation_result->shape.data;
-  delete fd_c_segmentation_result;
 }
 
 void FD_C_SegmentationResultWrapperToCResult(
