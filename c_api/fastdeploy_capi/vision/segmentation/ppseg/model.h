@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include "fastdeploy_capi/fd_common.h"
-#include "fastdeploy_capi/fd_type.h"
-#include "fastdeploy_capi/runtime_option.h"
+#include "fastdeploy_capi/core/fd_common.h"
+#include "fastdeploy_capi/core/fd_type.h"
+#include "fastdeploy_capi/runtime/runtime_option.h"
 #include "fastdeploy_capi/vision/result.h"
 
 typedef struct FD_C_PaddleSegModelWrapper FD_C_PaddleSegModelWrapper;

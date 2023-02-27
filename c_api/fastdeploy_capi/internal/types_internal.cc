@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy_capi/types_internal.h"
+#include "fastdeploy_capi/internal/types_internal.h"
 
 namespace fastdeploy {
 

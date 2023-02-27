@@ -15,7 +15,7 @@
 #pragma once
 
 #include "fastdeploy/runtime/runtime_option.h"
-#include "fastdeploy_capi/fd_type.h"
+#include "fastdeploy_capi/core/fd_type.h"
 #include <memory>
 
 #ifdef ENABLE_VISION

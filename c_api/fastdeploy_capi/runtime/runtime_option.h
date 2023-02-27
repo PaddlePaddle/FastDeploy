@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include "fastdeploy_capi/fd_type.h"
+#include "fastdeploy_capi/core/fd_type.h"
 
 typedef struct FD_C_RuntimeOptionWrapper FD_C_RuntimeOptionWrapper;
 

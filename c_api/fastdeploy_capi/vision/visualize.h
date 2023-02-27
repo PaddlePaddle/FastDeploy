@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include "fastdeploy_capi/fd_common.h"
-#include "fastdeploy_capi/fd_type.h"
+#include "fastdeploy_capi/core/fd_common.h"
+#include "fastdeploy_capi/core/fd_type.h"
 #include "fastdeploy_capi/vision/result.h"
 
 #ifdef __cplusplus

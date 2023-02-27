@@ -28,7 +28,7 @@
 
 #include "fastdeploy_capi/vision/ocr/ppocr/model.h"
 
-#include "fastdeploy_capi/types_internal.h"
+#include "fastdeploy_capi/internal/types_internal.h"
 #include "fastdeploy_capi/vision/visualize.h"
 
 #ifdef __cplusplus

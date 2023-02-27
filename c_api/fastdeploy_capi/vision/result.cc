@@ -15,7 +15,7 @@
 #include "fastdeploy_capi/vision/result.h"
 
 #include "fastdeploy/utils/utils.h"
-#include "fastdeploy_capi/types_internal.h"
+#include "fastdeploy_capi/internal/types_internal.h"
 
 #ifdef __cplusplus
 extern "C" {

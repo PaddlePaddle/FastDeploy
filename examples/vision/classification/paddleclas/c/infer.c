@@ -38,7 +38,7 @@ void CpuInfer(const char* model_dir, const char* image_file) {
   FD_C_RuntimeOptionWrapperUseCpu(option);
 
   FD_C_PaddleClasModelWrapper* model = FD_C_CreatePaddleClasModelWrapper(
-      model_file, params_file, config_file, option, PADDLE);
+      model_file, params_file, config_file, option, FD_C_ModelFormat_PADDLE);
 
   if (!FD_C_PaddleClasModelWrapperInitialized(model)) {
     printf("Failed to initialize.\n");
@@ -86,7 +86,7 @@ void GpuInfer(const char* model_dir, const char* image_file) {
   FD_C_RuntimeOptionWrapperUseGpu(option, 0);
 
   FD_C_PaddleClasModelWrapper* model = FD_C_CreatePaddleClasModelWrapper(
-      model_file, params_file, config_file, option, PADDLE);
+      model_file, params_file, config_file, option, FD_C_ModelFormat_PADDLE);
 
   if (!FD_C_PaddleClasModelWrapperInitialized(model)) {
     printf("Failed to initialize.\n");
