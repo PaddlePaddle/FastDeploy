@@ -20,7 +20,6 @@ namespace vision {
 class FASTDEPLOY_DECL PyProcessorManager : public ProcessorManager {
   public:
     using ProcessorManager::ProcessorManager;
-    using ProcessorManager::initialized_;
     bool Apply(FDMatBatch* image_batch, std::vector<FDTensor>* outputs) override {
       PYBIND11_OVERRIDE_PURE(bool,
                              ProcessorManager,
