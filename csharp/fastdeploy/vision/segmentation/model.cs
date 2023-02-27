@@ -55,6 +55,7 @@ public class PaddleSegModel {
     } // predict
     SegmentationResult segmentation_result =
         ConvertResult.ConvertCResultToSegmentationResult(fd_segmentation_result);
+    FD_C_DestroySegmentationResult(ref fd_segmentation_result);
     return segmentation_result;
   }
 
@@ -80,6 +81,7 @@ public class PaddleSegModel {
           fd_segmentation_result_array.data + i * Marshal.SizeOf(new FD_SegmentationResult()),
           typeof(FD_SegmentationResult));
       results_out.Add(ConvertResult.ConvertCResultToSegmentationResult(fd_segmentation_result));
+      FD_C_DestroySegmentationResult(ref fd_segmentation_result);
     }
     return results_out;
   }
@@ -113,15 +115,15 @@ public class PaddleSegModel {
   FD_C_DestroySegmentationResultWrapper(IntPtr fd_segmentation_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroySegmentationResult")]
   private static extern void
-  FD_C_DestroySegmentationResult(IntPtr fd_segmentation_result);
+  FD_C_DestroySegmentationResult(ref FD_SegmentationResult fd_segmentation_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_SegmentationResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_SegmentationResultWrapperGetData(IntPtr fd_segmentation_result_wrapper);
+             EntryPoint = "FD_C_SegmentationResultWrapperToCResult")]
+  private static extern void
+  FD_C_SegmentationResultWrapperToCResult(IntPtr fd_segmentation_result_wrapper, ref FD_SegmentationResult fd_segmentation_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateSegmentationResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateSegmentationResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateSegmentationResultWrapperFromData(IntPtr fd_segmentation_result);
+  FD_C_CreateSegmentationResultWrapperFromCResult(ref FD_SegmentationResult fd_segmentation_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_PaddleSegModelWrapperInitialized")]

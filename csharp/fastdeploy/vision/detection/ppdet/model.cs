@@ -49,6 +49,7 @@ public class PPYOLOE {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -74,6 +75,7 @@ public class PPYOLOE {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -104,15 +106,15 @@ public class PPYOLOE {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_PPYOLOEWrapperInitialized")]
@@ -152,6 +154,7 @@ public class PicoDet {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -177,6 +180,7 @@ public class PicoDet {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -207,15 +211,15 @@ public class PicoDet {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_PicoDetWrapperInitialized")]
@@ -257,6 +261,7 @@ public class PPYOLO {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -282,6 +287,7 @@ public class PPYOLO {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -312,15 +318,15 @@ public class PPYOLO {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_PPYOLOWrapperInitialized")]
@@ -361,6 +367,7 @@ public class YOLOv3 {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -386,6 +393,7 @@ public class YOLOv3 {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -416,15 +424,15 @@ public class YOLOv3 {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_YOLOv3WrapperInitialized")]
@@ -465,6 +473,7 @@ public class PaddleYOLOX {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -490,6 +499,7 @@ public class PaddleYOLOX {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -520,15 +530,15 @@ public class PaddleYOLOX {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_PaddleYOLOXWrapperInitialized")]
@@ -569,6 +579,7 @@ public class FasterRCNN {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -594,6 +605,7 @@ public class FasterRCNN {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -624,15 +636,15 @@ public class FasterRCNN {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_FasterRCNNWrapperInitialized")]
@@ -673,6 +685,7 @@ public class MaskRCNN {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -698,6 +711,7 @@ public class MaskRCNN {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -728,15 +742,15 @@ public class MaskRCNN {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_MaskRCNNWrapperInitialized")]
@@ -777,6 +791,7 @@ public class SSD {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -802,6 +817,7 @@ public class SSD {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -832,15 +848,15 @@ public class SSD {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_SSDWrapperInitialized")]
@@ -881,6 +897,7 @@ public class PaddleYOLOv5 {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -906,6 +923,7 @@ public class PaddleYOLOv5 {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -936,15 +954,15 @@ public class PaddleYOLOv5 {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_PaddleYOLOv5WrapperInitialized")]
@@ -985,6 +1003,7 @@ public class PaddleYOLOv6 {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -1010,6 +1029,7 @@ public class PaddleYOLOv6 {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -1040,15 +1060,15 @@ public class PaddleYOLOv6 {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_PaddleYOLOv6WrapperInitialized")]
@@ -1089,6 +1109,7 @@ public class PaddleYOLOv7 {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -1114,6 +1135,7 @@ public class PaddleYOLOv7 {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -1144,15 +1166,15 @@ public class PaddleYOLOv7 {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_PaddleYOLOv7WrapperInitialized")]
@@ -1193,6 +1215,7 @@ public class PaddleYOLOv8 {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -1218,6 +1241,7 @@ public class PaddleYOLOv8 {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -1248,15 +1272,15 @@ public class PaddleYOLOv8 {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_PaddleYOLOv8WrapperInitialized")]
@@ -1297,6 +1321,7 @@ public class RTMDet {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -1322,6 +1347,7 @@ public class RTMDet {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -1352,15 +1378,15 @@ public class RTMDet {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_RTMDetWrapperInitialized")]
@@ -1401,6 +1427,7 @@ public class CascadeRCNN {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -1426,6 +1453,7 @@ public class CascadeRCNN {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -1456,15 +1484,15 @@ public class CascadeRCNN {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_CascadeRCNNWrapperInitialized")]
@@ -1505,6 +1533,7 @@ public class PSSDet {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -1530,6 +1559,7 @@ public class PSSDet {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -1560,15 +1590,15 @@ public class PSSDet {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_PSSDetWrapperInitialized")]
@@ -1609,6 +1639,7 @@ public class RetinaNet {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -1634,6 +1665,7 @@ public class RetinaNet {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -1664,15 +1696,15 @@ public class RetinaNet {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_RetinaNetWrapperInitialized")]
@@ -1713,6 +1745,7 @@ public class FCOS {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -1738,6 +1771,7 @@ public class FCOS {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -1768,15 +1802,15 @@ public class FCOS {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_FCOSWrapperInitialized")]
@@ -1817,6 +1851,7 @@ public class TTFNet {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -1842,6 +1877,7 @@ public class TTFNet {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -1872,15 +1908,15 @@ public class TTFNet {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_TTFNetWrapperInitialized")]
@@ -1921,6 +1957,7 @@ public class TOOD {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -1946,6 +1983,7 @@ public class TOOD {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -1976,15 +2014,15 @@ public class TOOD {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_TOODWrapperInitialized")]
@@ -2025,6 +2063,7 @@ public class GFL {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -2050,6 +2089,7 @@ public class GFL {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -2080,15 +2120,15 @@ public class GFL {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
+             EntryPoint = "FD_C_DetectionResultWrapperToCResult")]
+  private static extern void
+  FD_C_DetectionResultWrapperToCResult(IntPtr fd_detection_result_wrapper, ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateDetectionResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_CreateDetectionResultWrapperFromCResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_GFLWrapperInitialized")]
