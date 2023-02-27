@@ -58,6 +58,10 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
                                    option.trt_option.max_batch_size, 3,
                                    precision, use_static);
       SetTRTDynamicShapeToConfig(option);
+      if (option_.enable_fixed_size_opt) {
+        paddle_infer::experimental::InternalUtils::SetTransformerMaskid(
+            &config_, "opt");
+      }
     }
   } else if (option.device == Device::IPU) {
 #ifdef WITH_IPU
@@ -99,28 +103,36 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
 }
 
 bool PaddleBackend::Init(const RuntimeOption& runtime_option) {
-  if (!(Supported(runtime_option.model_format, Backend::PDINFER) && Supported(runtime_option.device, Backend::PDINFER))) {
+  if (!(Supported(runtime_option.model_format, Backend::PDINFER) &&
+        Supported(runtime_option.device, Backend::PDINFER))) {
     return false;
   }
 
   auto option = runtime_option;
   option.paddle_infer_option.model_file = runtime_option.model_file;
   option.paddle_infer_option.params_file = runtime_option.params_file;
-  option.paddle_infer_option.model_from_memory_ = runtime_option.model_from_memory_;
+  option.paddle_infer_option.model_from_memory_ =
+      runtime_option.model_from_memory_;
   option.paddle_infer_option.device = runtime_option.device;
   option.paddle_infer_option.device_id = runtime_option.device_id;
-  option.paddle_infer_option.enable_pinned_memory = runtime_option.enable_pinned_memory;
+  option.paddle_infer_option.enable_pinned_memory =
+      runtime_option.enable_pinned_memory;
   option.paddle_infer_option.external_stream_ = runtime_option.external_stream_;
   option.paddle_infer_option.trt_option = runtime_option.trt_option;
   option.paddle_infer_option.trt_option.gpu_id = runtime_option.device_id;
   if (option.model_from_memory_) {
-    return InitFromPaddle(option.model_file, option.params_file, option.paddle_infer_option);
+    return InitFromPaddle(option.model_file, option.params_file,
+                          option.paddle_infer_option);
   } else {
     std::string model_buffer = "";
     std::string params_buffer = "";
-    FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer), "Failed to read model file from %s.", option.model_file.c_str());
-    FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer), "Failed to read parameters file from %s.", option.params_file.c_str());
-    return InitFromPaddle(model_buffer, params_buffer, option.paddle_infer_option);
+    FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
+             "Failed to read model file from %s.", option.model_file.c_str());
+    FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
+             "Failed to read parameters file from %s.",
+             option.params_file.c_str());
+    return InitFromPaddle(model_buffer, params_buffer,
+                          option.paddle_infer_option);
   }
   return false;
 }
