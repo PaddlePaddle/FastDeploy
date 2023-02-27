@@ -66,7 +66,7 @@ typedef struct FD_C_SegmentationResult {
   FD_C_ResultType type;
 } FD_C_SegmentationResult;
 ```
-关于FD_C_OneDimArrayUint8之类的表示，可以参考文件c_api/fastdeploy_capi/fd_type.h。
+关于FD_C_OneDimArrayUint8之类的表示，可以参考文件c_api/fastdeploy_capi/core/fd_type.h。
 
 之后需要定义两个函数，用来从fastdeploy::SegmentationResult和FD_C_SegmentationResult之间进行相互转化。由于对C++的结构使用了对应的Wrapper结构进行包裹，所以实际定义的是FD_C_SegmentationResultWrapper和FD_C_SegmentationResult之间的转化，对应下面两个函数。
 ```c
@@ -83,11 +83,11 @@ FD_C_SegmentationResultWrapperToCResult(
 
 关于各种Result在C API中的实现位置为c_api/fastdeploy_capi/vision/result.cc。
 
-关于声明各种Wrapper的结构可以参考文件c_api/fastdeploy_capi/types_internal.h 。
+关于声明各种Wrapper的结构可以参考文件c_api/fastdeploy_capi/internal/types_internal.h 。
 
 2. 提供模型接口的C API
 
-打开文件fastdeploy/vision/segmentation/ppseg/model.h，里面定义了分割模型的C++接口，即fastdeploy::vision::segmentation::PaddleSegModel类。在C中创建一个Wrapper来表示这个类，为了方便后续对同一类别的模型进行快速定义和实现，c_api/fastdeploy_capi/types_internal.h中定义了宏来快速创建Wrapper，以及从Wrapper中取出所包裹的类的对象。例如定义创建分割类模型的Wrapper的宏为
+打开文件fastdeploy/vision/segmentation/ppseg/model.h，里面定义了分割模型的C++接口，即fastdeploy::vision::segmentation::PaddleSegModel类。在C中创建一个Wrapper来表示这个类，为了方便后续对同一类别的模型进行快速定义和实现，c_api/fastdeploy_capi/internal/types_internal.h中定义了宏来快速创建Wrapper，以及从Wrapper中取出所包裹的类的对象。例如定义创建分割类模型的Wrapper的宏为
 ```c
 #define DEFINE_SEGMENTATION_MODEL_WRAPPER_STRUCT(typename, varname)  typedef struct FD_C_##typename##Wrapper { \
   std::unique_ptr<fastdeploy::vision::segmentation::typename> varname; \
