@@ -16,6 +16,12 @@ import logging
 import os
 import sys
 
+# Note(zhoushunjie): Fix the paddle and fastdeploy import order
+try:
+    import paddle
+except:
+    pass
+
 from .c_lib_wrap import (
     ModelFormat,
     Backend,
