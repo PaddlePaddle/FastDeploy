@@ -67,3 +67,4 @@ docker build -t paddlepaddle/fastdeploy:x.y.z-ipu-only-21.10 -f serving/Dockerfi
 
 ## 非镜像方式编译
 
+- [FastDeploy Serving CentOS编译教程](./compile_without_docker_centos.md)
