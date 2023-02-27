@@ -182,7 +182,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool enable_record_time_of_runtime_ = false;
   std::vector<double> time_of_runtime_;
 #ifdef ENABLE_BENCHMARK
-  // skip the check for valid backend, default true.
+  // enable the check for valid backend, default true.
   bool enable_valid_backend_check_ = true;
 #endif
 };
