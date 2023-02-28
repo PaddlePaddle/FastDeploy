@@ -60,6 +60,7 @@ public class Recognizer {
       return null;
     } // predict
     ocr_recognizer_result.text = text.data;
+    FD_C_DestroyCstr(ref text);
     return ocr_recognizer_result;
   }
 
@@ -96,6 +97,9 @@ public class Recognizer {
     result.rec_score = rec_scores[i];
     results_out.Add(result);
     }
+    FD_C_DestroyOneDimArrayCstr(ref fd_texts_list);
+    FD_C_DestroyOneDimArrayFloat(ref fd_rec_scores_list);
+    Marshal.FreeHGlobal(imgs_in.data);
     return results_out;
   }
 
@@ -141,6 +145,10 @@ public class Recognizer {
     result.rec_score = rec_scores[i];
     results_out.Add(result);
     }
+    FD_C_DestroyOneDimArrayCstr(ref fd_texts_list);
+    FD_C_DestroyOneDimArrayFloat(ref fd_rec_scores_list);
+    Marshal.FreeHGlobal(imgs_in.data);
+    Marshal.FreeHGlobal(indices_in.data);
     return results_out;
   }
 
@@ -170,6 +178,20 @@ public class Recognizer {
                                 IntPtr img,
                                 ref FD_Cstr text,
                                 ref float rec_score);
+  [DllImport("fastdeploy.dll",
+             EntryPoint = "FD_C_DestroyCstr")]
+  private static extern void
+  FD_C_DestroyCstr(ref FD_Cstr fd_cstr);
+
+  [DllImport("fastdeploy.dll",
+             EntryPoint = "FD_C_DestroyOneDimArrayCstr")]
+  private static extern void
+  FD_C_DestroyOneDimArrayCstr(ref FD_OneDimArrayCstr fd_onedim_cstr);
+
+  [DllImport("fastdeploy.dll",
+             EntryPoint = "FD_C_DestroyOneDimArrayFloat")]
+  private static extern void
+  FD_C_DestroyOneDimArrayFloat(ref FD_OneDimArrayFloat fd_onedim_float);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_RecognizerWrapperInitialized")]
@@ -265,6 +287,9 @@ public class Classifier {
     result.cls_score = cls_scores[i];
     results_out.Add(result);
     }
+    FD_C_DestroyOneDimArrayInt32(ref fd_cls_labels_list);
+    FD_C_DestroyOneDimArrayFloat(ref fd_cls_scores_list);
+    Marshal.FreeHGlobal(imgs_in.data);
     return results_out;
   }
 
@@ -303,6 +328,9 @@ public class Classifier {
     result.cls_score = cls_scores[i];
     results_out.Add(result);
     }
+    FD_C_DestroyOneDimArrayInt32(ref fd_cls_labels_list);
+    FD_C_DestroyOneDimArrayFloat(ref fd_cls_scores_list);
+    Marshal.FreeHGlobal(imgs_in.data);
     return results_out;
   }
 
@@ -353,6 +381,15 @@ public class Classifier {
                                      ref FD_OneDimArrayFloat cls_scores,
                                      int start_index,
                                      int end_index);
+  [DllImport("fastdeploy.dll",
+             EntryPoint = "FD_C_DestroyOneDimArrayFloat")]
+  private static extern void
+  FD_C_DestroyOneDimArrayFloat(ref FD_OneDimArrayFloat fd_onedim_float);
+
+  [DllImport("fastdeploy.dll",
+             EntryPoint = "FD_C_DestroyOneDimArrayInt32")]
+  private static extern void
+  FD_C_DestroyOneDimArrayInt32(ref FD_OneDimArrayInt32 fd_onedim_int32);
 
 }
 
@@ -400,6 +437,7 @@ public class DBDetector {
       Marshal.Copy(boxes[i].data, box_i, 0, box_i.Length);
       ocr_detector_result.boxes.Add(box_i);
     }
+    FD_C_DestroyTwoDimArrayInt32(ref fd_box_result);
     return ocr_detector_result;
   }
 
@@ -441,6 +479,8 @@ public class DBDetector {
     }
     results_out.Add(result);
     }
+    FD_C_DestroyThreeDimArrayInt32(ref fd_det_results_list);
+    Marshal.FreeHGlobal(imgs_in.data);
     return results_out;
   }
 
@@ -480,6 +520,18 @@ public class DBDetector {
   FD_C_DBDetectorWrapperBatchPredict(IntPtr fd_dbdetector_model_wrapper,
                                      FD_OneDimMat imgs,
                                      ref FD_ThreeDimArrayInt32 det_results);
+  [DllImport("fastdeploy.dll",
+             EntryPoint = "FD_C_DestroyOneDimArrayInt32")]
+  private static extern void
+  FD_C_DestroyOneDimArrayInt32(ref FD_OneDimArrayInt32 fd_onedim_int32);
+  [DllImport("fastdeploy.dll",
+             EntryPoint = "FD_C_DestroyTwoDimArrayInt32")]
+  private static extern void
+  FD_C_DestroyTwoDimArrayInt32(ref FD_TwoDimArrayInt32 fd_twodim_int32);
+  [DllImport("fastdeploy.dll",
+             EntryPoint = "FD_C_DestroyThreeDimArrayInt32")]
+  private static extern void
+  FD_C_DestroyThreeDimArrayInt32(ref FD_ThreeDimArrayInt32 fd_threedim_int32);
 
 }
 }
@@ -517,6 +569,7 @@ public class PPOCRv2 {
       return null;
     } // predict
     OCRResult ocr_detector_result = ConvertResult.ConvertCResultToOCRResult(fd_ocr_result);
+    FD_C_DestroyOCRResult(fd_ocr_result);
     return ocr_detector_result;
   }
 
@@ -542,7 +595,9 @@ public class PPOCRv2 {
           fd_ocr_result_array.data + i * Marshal.SizeOf(new FD_OCRResult()),
           typeof(FD_OCRResult));
       results_out.Add(ConvertResult.ConvertCResultToOCRResult(fd_ocr_result));
+      FD_C_DestroyOCRResult(ref fd_ocr_result);
     }
+    Marshal.FreeHGlobal(imgs_in.data);
     return results_out;
   }
 
@@ -578,6 +633,11 @@ public class PPOCRv2 {
   FD_C_PPOCRv2WrapperBatchPredict(IntPtr fd_ppocrv2_model_wrapper,
                                      FD_OneDimMat imgs,
                                      ref FD_OneDimOCRResult batch_result);
+  
+  [DllImport("fastdeploy.dll",
+             EntryPoint = "FD_C_DestroyOCRResult")]
+  private static extern void
+  FD_C_DestroyOCRResult(ref FD_OCRResult fd_ocr_result);
 
 }
 
@@ -611,6 +671,7 @@ public class PPOCRv3 {
       return null;
     } // predict
     OCRResult ocr_detector_result = ConvertResult.ConvertCResultToOCRResult(fd_ocr_result);
+    FD_C_DestroyOCRResult(fd_ocr_result);
     return ocr_detector_result;
   }
 
@@ -636,7 +697,9 @@ public class PPOCRv3 {
           fd_ocr_result_array.data + i * Marshal.SizeOf(new FD_OCRResult()),
           typeof(FD_OCRResult));
       results_out.Add(ConvertResult.ConvertCResultToOCRResult(fd_ocr_result));
+      FD_C_DestroyOCRResult(fd_ocr_result);
     }
+    Marshal.FreeHGlobal(imgs_in.data);
     return results_out;
   }
 
@@ -672,6 +735,11 @@ public class PPOCRv3 {
   FD_C_PPOCRv3WrapperBatchPredict(IntPtr fd_ppocrv3_model_wrapper,
                                      FD_OneDimMat imgs,
                                      ref FD_OneDimOCRResult batch_result);
+  
+  [DllImport("fastdeploy.dll",
+             EntryPoint = "FD_C_DestroyOCRResult")]
+  private static extern void
+  FD_C_DestroyOCRResult(ref FD_OCRResult fd_ocr_result);
 
 }
 

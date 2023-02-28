@@ -22,6 +22,35 @@
 extern "C" {
 #endif
 
+// FD_C_OneDimArrayUint8
+IMPLEMENT_FD_TYPE_ONEDIMARRAY(OneDimArrayUint8)
+// FD_C_OneDimArrayInt8
+IMPLEMENT_FD_TYPE_ONEDIMARRAY(OneDimArrayInt8)
+// FD_C_OneDimArrayInt32
+IMPLEMENT_FD_TYPE_ONEDIMARRAY(OneDimArrayInt32)
+// FD_C_OneDimArraySize
+IMPLEMENT_FD_TYPE_ONEDIMARRAY(OneDimArraySize)
+// FD_C_OneDimArrayInt64
+IMPLEMENT_FD_TYPE_ONEDIMARRAY(OneDimArrayInt64)
+// FD_C_OneDimArrayFloat
+IMPLEMENT_FD_TYPE_ONEDIMARRAY(OneDimArrayFloat)
+// FD_C_Cstr
+IMPLEMENT_FD_TYPE_ONEDIMARRAY(Cstr)
+// FD_C_OneDimArrayCstr
+IMPLEMENT_FD_TYPE_TWODIMARRAY(OneDimArrayCstr, Cstr)
+// FD_C_TwoDimArraySize
+IMPLEMENT_FD_TYPE_TWODIMARRAY(TwoDimArraySize, OneDimArraySize)
+// FD_C_TwoDimArrayInt8
+IMPLEMENT_FD_TYPE_TWODIMARRAY(TwoDimArrayInt8, OneDimArrayInt8)
+// FD_C_TwoDimArrayInt32
+IMPLEMENT_FD_TYPE_TWODIMARRAY(TwoDimArrayInt32, OneDimArrayInt32)
+// FD_C_ThreeDimArrayInt32
+IMPLEMENT_FD_TYPE_THREEDIMARRAY(ThreeDimArrayInt32, TwoDimArrayInt32)
+// FD_C_TwoDimArrayFloat
+IMPLEMENT_FD_TYPE_TWODIMARRAY(TwoDimArrayFloat, OneDimArrayFloat)
+// FD_C_OneDimMat
+IMPLEMENT_FD_TYPE_TWODIMARRAY(OneDimMat, Mat)
+
 FD_C_Mat FD_C_Imread(const char* imgpath) {
   cv::Mat image = cv::imread(imgpath);
   return new cv::Mat(image);
