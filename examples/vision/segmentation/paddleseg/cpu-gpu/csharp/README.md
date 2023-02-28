@@ -1,7 +1,7 @@
 English | [简体中文](README_CN.md)
-# PaddleClas C# Deployment Example
+# PaddleSeg C# Deployment Example
 
-This directory provides example `infer.cs` to fastly finish the deployment of PaddleClas models on CPU/GPU.
+This directory provides `infer.cs` to finish the deployment of PaddleSeg on CPU/GPU.
 
 Before deployment, two steps require confirmation
 
@@ -16,15 +16,16 @@ Please follow below instructions to compile and test in Windows. FastDeploy vers
 Add nuget program into system variable **PATH**
 
 ## 2. Download model and image for test
-> https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz # (下载后解压缩)
-> https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
+> https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.tgz # (Decompress it)
+> https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
+
 
 ## 3. Compile example code
 
 Open `x64 Native Tools Command Prompt for VS 2019` command tool on Windows, cd to the demo path of ppyoloe and execute commands
 
 ```shell
-cd D:\Download\fastdeploy-win-x64-gpu-x.x.x\examples\vision\classification\paddleclas\csharp
+cd D:\Download\fastdeploy-win-x64-gpu-x.x.x\examples\vision\segmentation\paddleseg\cpu-gpu\csharp
 
 mkdir build && cd build
 cmake .. -G "Visual Studio 16 2019" -A x64 -DFASTDEPLOY_INSTALL_DIR=D:\Download\fastdeploy-win-x64-gpu-x.x.x -DCUDA_DIRECTORY="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2"
@@ -37,50 +38,51 @@ For more information about how to use FastDeploy SDK to compile a project with V
 - [Using the FastDeploy C++ SDK on Windows Platform](../../../../../docs/en/faq/use_sdk_on_windows.md)
 
 ## 4. Execute compiled program
+
 fastdeploy.dll and related dynamic libraries are required by the program. FastDeploy provide a script to copy all required dll to your program path.
 
 ```shell
 cd D:\Download\fastdeploy-win-x64-gpu-x.x.x
 
-fastdeploy_init.bat install %cd% D:\Download\fastdeploy-win-x64-gpu-x.x.x\examples\vision\classification\paddleclas\csharp\build\Release
+fastdeploy_init.bat install %cd% D:\Download\fastdeploy-win-x64-gpu-x.x.x\examples\vision\segmentation\paddleseg\cpu-gpu\csharp\build\Release
 ```
-Then you can run your program and test the model with image
 
+Then you can run your program and test the model with image
 ```shell
 cd Release
 # CPU inference
-infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 0
+infer_demo PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer cityscapes_demo.png 0
 # GPU inference
-infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 1
+infer_demo PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer cityscapes_demo.png 1
 ```
 
-## PaddleClas C# Interface
+## PaddleSeg C# Interface
 
 ### Model Class
 
 ```c#
-fastdeploy.vision.classification.PaddleClasModel(
+fastdeploy.vision.segmentation.PaddleSeg(
         string model_file,
         string params_file,
-        string config_file
+        string config_file,
         fastdeploy.RuntimeOption runtime_option = null,
         fastdeploy.ModelFormat model_format = ModelFormat.PADDLE)
 ```
 
-> PaddleClasModel initilization.
+> PaddleSeg initialization
 
 > **Params**
 
 >> * **model_file**(str): Model file path
 >> * **params_file**(str): Parameter file path
->> * **config_file**(str): Configuration file path, which is the deployment yaml file exported by PaddleClas
+>> * **config_file**(str): Config file path
 >> * **runtime_option**(RuntimeOption): Backend inference configuration. null by default, which is the default configuration
->> * **model_format**(ModelFormat): Model format. Paddle format by default
+>> * **model_format**(ModelFormat): Model format.
 
 #### Predict Function
 
 ```c#
-fastdeploy.ClassifyResult Predict(OpenCvSharp.Mat im)
+fastdeploy.SegmentationResult Predict(OpenCvSharp.Mat im)
 ```
 
 > Model prediction interface. Input images and output results directly.
@@ -88,12 +90,15 @@ fastdeploy.ClassifyResult Predict(OpenCvSharp.Mat im)
 > **Params**
 >
 >> * **im**(Mat): Input images in HWC or BGR format
->
+>>
 > **Return**
 >
->> * **result**(ClassifyResult): The classification result, including label_id, and the corresponding confidence. Refer to [Visual Model Prediction Results](../../../../../docs/api/vision_results/) for the description of ClassifyResult
+>> * **result**: Segmentation prediction results, refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for SegmentationResult
 
-- [Model Description](../../)
-- [Python Deployment](../python)
-- [Vision Model prediction results](../../../../../docs/api/vision_results/)
-- [How to switch the model inference backend engine](../../../../../docs/en/faq/how_to_change_backend.md)
+
+## Other Documents
+
+- [PPSegmentation Model Description](../../)
+- [PaddleSeg Python Deployment](../python)
+- [Model Prediction Results](../../../../../docs/api/vision_results/)
+- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
