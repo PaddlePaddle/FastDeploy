@@ -27,13 +27,17 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   auto im = cv::imread(FLAGS_image);
+  std::unordered_map<std::string, std::string> config_info;
+  benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
+                                                &config_info);
   // Detection Model
   auto det_model_file = FLAGS_model + sep + "inference.pdmodel";
   auto det_params_file = FLAGS_model + sep + "inference.pdiparams";
-  if (FLAGS_backend == "paddle_trt") {
+  if (config_info["backend"] == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
   }
-  if (FLAGS_backend == "paddle_trt" || FLAGS_backend == "trt") {
+  if (config_info["backend"] == "paddle_trt" ||
+      config_info["backend"] == "trt") {
     option.trt_option.SetShape("x", {1, 3, 64, 64}, {1, 3, 640, 640},
                                {1, 3, 960, 960});
   }

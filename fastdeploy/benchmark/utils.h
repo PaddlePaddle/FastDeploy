@@ -141,6 +141,9 @@ struct FASTDEPLOY_DECL ResultManager {
   /// Save Benchmark data
   static void SaveBenchmarkResult(const std::string& res,
                                   const std::string& path);
+  /// Load Benchmark config
+  static bool LoadBenchmarkConfig(const std::string& path,
+             std::unordered_map<std::string, std::string>* config_info);
 #if defined(ENABLE_VISION)
   /// Save & Load functions for basic results.
   static bool SaveDetectionResult(const vision::DetectionResult& res,

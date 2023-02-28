@@ -27,8 +27,11 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   auto im = cv::imread(FLAGS_image);
+  std::unordered_map<std::string, std::string> config_info;
+  benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
+                                                &config_info);
   // Set max_batch_size 1 for best performance
-  if (FLAGS_backend == "paddle_trt") {
+  if (config_info["backend"] == "paddle_trt") {
     option.trt_option.max_batch_size = 1;
   }
   auto model_file = FLAGS_model + sep + "inference.pdmodel";

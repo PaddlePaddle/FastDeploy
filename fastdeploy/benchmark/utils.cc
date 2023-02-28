@@ -365,6 +365,22 @@ void ResultManager::SaveBenchmarkResult(const std::string& res,
   fs.close();
 }
 
+bool ResultManager::LoadBenchmarkConfig(
+    const std::string& path,
+    std::unordered_map<std::string, std::string>* config_info) {
+  if (!CheckFileExists(path)) {
+    FDERROR << "Can't found file from" << path << std::endl;
+    return false;
+  }
+  auto lines = ReadLines(path);
+  for (auto line : lines) {
+    std::vector<std::string> tokens;
+    Split(line, tokens, ': ');
+    (*config_info)[tokens[0]] = tokens[1];
+  }
+  return true;
+}
+
 #if defined(ENABLE_VISION)
 bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
                                         const std::string& path) {
