@@ -29,8 +29,8 @@
   std::stringstream __ss__;                                                 \
   __ss__.precision(6);                                                      \
   fastdeploy::benchmark::ResourceUsageMonitor __resource_moniter__(         \
-                          stoi(__config_info__["sampling_interval"]),       \
-                          stoi(__config_info__["device_id"]));              \
+                     std::stoi(__config_info__["sampling_interval"]),       \
+                     std::stoi(__config_info__["device_id"]));              \
   if (__config_info__["collect_memory_info"] == "true") {                   \
     __resource_moniter__.Start();                                           \
   }                                                                         \
@@ -46,7 +46,8 @@
     std::cout << "Warmup "                                                  \
               << __config_info__["warmup"]                                  \
               << " times..." << std::endl;                                  \
-    for (int __i__ = 0; __i__ < stoi(__config_info__["warmup"]); __i__++) { \
+    int __warmup__ = std::stoi(__config_info__["warmup"]);                  \
+    for (int __i__ = 0; __i__ < __warmup__; __i__++) {                      \
       if (!BENCHMARK_FUNC) {                                                \
         std::cerr << "Failed to predict." << std::endl;                     \
         return 0;                                                           \
@@ -58,7 +59,7 @@
               << " times..." << std::endl;                                  \
     fastdeploy::TimeCounter __tc__;                                         \
     __tc__.Start();                                                         \
-    int __repeat__ = stoi(__config_info__["repeat"]);                       \
+    int __repeat__ = std::stoi(__config_info__["repeat"]);                  \
     for (int __i__ = 0; __i__ < __repeat__; __i__++) {                      \
       if (!BENCHMARK_FUNC) {                                                \
         std::cerr << "Failed to predict." << std::endl;                     \

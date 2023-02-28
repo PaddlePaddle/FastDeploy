@@ -1,7 +1,7 @@
 device: cpu
 device_id: 0
 warmup: 200
-repeatp: 1000
+repeat: 1000
 profile_mode: runtime
 backend: paddle
 cpu_thread_nums: 8

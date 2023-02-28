@@ -16,6 +16,9 @@
 #include "macros.h"
 #include "option.h"
 
+namespace vision = fastdeploy::vision;
+namespace benchmark = fastdeploy::benchmark;
+
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Initialization
@@ -25,8 +28,8 @@ int main(int argc, char* argv[]) {
   }
   auto im = cv::imread(FLAGS_image);
   std::unordered_map<std::string, std::string> config_info;
-  fastdeploy::benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
-                                                            &config_info);
+  benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
+                                                &config_info);
   // Classification Model
   auto cls_model_file = FLAGS_model + sep + "inference.pdmodel";
   auto cls_params_file = FLAGS_model + sep + "inference.pdiparams";
@@ -38,8 +41,8 @@ int main(int argc, char* argv[]) {
     option.trt_option.SetShape("x", {1, 3, 48, 10}, {4, 3, 48, 320},
                                {8, 3, 48, 1024});
   }
-  auto model_ppocr_cls = fastdeploy::vision::ocr::Classifier(
-      cls_model_file, cls_params_file, option);
+  auto model_ppocr_cls =
+      vision::ocr::Classifier(cls_model_file, cls_params_file, option);
   int32_t res_label;
   float res_score;
   // Run once at least

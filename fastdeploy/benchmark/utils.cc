@@ -249,7 +249,7 @@ bool ResultManager::SaveFDTensor(const FDTensor& tensor,
 
 bool ResultManager::LoadFDTensor(FDTensor* tensor, const std::string& path) {
   if (!CheckFileExists(path)) {
-    FDERROR << "Can't found file from" << path << std::endl;
+    FDERROR << "Can't found file from " << path << std::endl;
     return false;
   }
   auto lines = ReadLines(path);
@@ -369,7 +369,7 @@ bool ResultManager::LoadBenchmarkConfig(
     const std::string& path,
     std::unordered_map<std::string, std::string>* config_info) {
   if (!CheckFileExists(path)) {
-    FDERROR << "Can't found file from" << path << std::endl;
+    FDERROR << "Can't found file from " << path << std::endl;
     return false;
   }
   auto lines = ReadLines(path);
@@ -536,7 +536,7 @@ bool ResultManager::SaveOCRDetResult(const std::vector<std::array<int, 8>>& res,
 bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
                                         const std::string& path) {
   if (!CheckFileExists(path)) {
-    FDERROR << "Can't found file from" << path << std::endl;
+    FDERROR << "Can't found file from " << path << std::endl;
     return false;
   }
   auto lines = ReadLines(path);
@@ -569,7 +569,7 @@ bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
 bool ResultManager::LoadClassifyResult(vision::ClassifyResult* res,
                                        const std::string& path) {
   if (!CheckFileExists(path)) {
-    FDERROR << "Can't found file from" << path << std::endl;
+    FDERROR << "Can't found file from " << path << std::endl;
     return false;
   }
   auto lines = ReadLines(path);
@@ -591,7 +591,7 @@ bool ResultManager::LoadClassifyResult(vision::ClassifyResult* res,
 bool ResultManager::LoadSegmentationResult(vision::SegmentationResult* res,
                                            const std::string& path) {
   if (!CheckFileExists(path)) {
-    FDERROR << "Can't found file from" << path << std::endl;
+    FDERROR << "Can't found file from " << path << std::endl;
     return false;
   }
   auto lines = ReadLines(path);
@@ -618,7 +618,7 @@ bool ResultManager::LoadSegmentationResult(vision::SegmentationResult* res,
 bool ResultManager::LoadOCRDetResult(std::vector<std::array<int, 8>>* res,
                                      const std::string& path) {
   if (!CheckFileExists(path)) {
-    FDERROR << "Can't found file from" << path << std::endl;
+    FDERROR << "Can't found file from " << path << std::endl;
     return false;
   }
   auto lines = ReadLines(path);

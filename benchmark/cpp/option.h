@@ -25,11 +25,11 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
                             FLAGS_config_path, &config_info);
   if (config_info["profile_mode"] == "runtime") {
     option->EnableProfiling(config_info["include_h2d_d2h"] == "true",
-                            stoi(config_info["repeat"]),
-                            stoi(config_info["warmup"]));
+                            std::stoi(config_info["repeat"]),
+                            std::stoi(config_info["warmup"]));
   }
   if (config_info["device"] == "gpu") {
-    option->UseGpu(stoi(config_info["device_id"]));
+    option->UseGpu(std::stoi(config_info["device_id"]));
     if (config_info["backend"] == "ort") {
       option->UseOrtBackend();
     } else if (config_info["backend"] == "paddle") {
@@ -54,7 +54,7 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
       return false;
     }
   } else if (config_info["device"] == "cpu") {
-    option->SetCpuThreadNum(stoi(config_info["cpu_thread_nums"]));
+    option->SetCpuThreadNum(std::stoi(config_info["cpu_thread_nums"]));
     if (config_info["backend"] == "ort") {
       option->UseOrtBackend();
     } else if (config_info["backend"] == "ov") {
@@ -76,7 +76,7 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
       return false;
     }
   } else if (config_info["device"] == "xpu") {
-    option->UseKunlunXin(stoi(config_info["device_id"]));
+    option->UseKunlunXin(std::stoi(config_info["device_id"]));
     if (config_info["backend"] == "ort") {
       option->UseOrtBackend();
     } else if (config_info["backend"] == "paddle") {

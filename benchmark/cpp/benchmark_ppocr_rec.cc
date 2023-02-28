@@ -16,6 +16,9 @@
 #include "macros.h"
 #include "option.h"
 
+namespace vision = fastdeploy::vision;
+namespace benchmark = fastdeploy::benchmark;
+
 DEFINE_string(rec_label_file, "", "Path of Recognization label file of PPOCR.");
 
 int main(int argc, char* argv[]) {
@@ -40,7 +43,7 @@ int main(int argc, char* argv[]) {
     option.trt_option.SetShape("x", {1, 3, 48, 10}, {4, 3, 48, 320},
                                {8, 3, 48, 2304});
   }
-  auto model_ppocr_rec = fastdeploy::vision::ocr::Recognizer(
+  auto model_ppocr_rec = vision::ocr::Recognizer(
       rec_model_file, rec_params_file, FLAGS_rec_label_file, option);
   std::string text;
   float rec_score;
