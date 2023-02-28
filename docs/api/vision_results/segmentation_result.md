@@ -31,3 +31,63 @@ struct SegmentationResult {
 - **label_map**(list of int): Member variable which indicates the segmentation category of each pixel in a single image.
 - **score_map**(list of float): Member variable which indicates the predicted segmentation category probability value corresponding to the label_map one-to-one, the member variable is not empty only when `--output_op none` is specified when exporting the PaddleSeg model, otherwise the member variable is empty.
 - **shape**(list of int): Member variable which indicates the shape of the output image as H\*W.
+
+
+## C# Definition
+
+`fastdeploy.vision.SegmentationResult`
+
+```C#
+public class SegmentationResult{
+  public List<byte> label_map;
+  public List<float> score_map;
+  public List<long> shape;
+  public bool contain_score_map;
+  public ResultType type;
+}
+```
+
+- **label_map**(list of int): Member variable which indicates the segmentation category of each pixel in a single image.
+- **score_map**(list of float): Member variable which indicates the predicted segmentation category probability value corresponding to the label_map one-to-one, the member variable is not empty only when `--output_op none` is specified when exporting the PaddleSeg model, otherwise the member variable is empty.
+- **shape**(list of int): Member variable which indicates the shape of the output image as H\*W.
+
+
+
+## C Definition
+
+```c
+struct FD_C_SegmentationResult {
+  FD_C_OneDimArrayUint8 label_map;
+  FD_C_OneDimArrayFloat score_map;
+  FD_C_OneDimArrayInt64 shape;
+  FD_C_Bool contain_score_map;
+  FD_C_ResultType type;
+};
+```
+
+- **label_map**(FD_C_OneDimArrayUint8): Member variable which indicates the segmentation category of each pixel in a single image.
+
+```c
+struct FD_C_OneDimArrayUint8 {
+  size_t size;
+  uint8_t* data;
+};
+```
+
+- **score_map**(FD_C_OneDimArrayFloat): Member variable which indicates the predicted segmentation category probability value corresponding to the label_map one-to-one, the member variable is not empty only when `--output_op none` is specified when exporting the PaddleSeg model, otherwise the member variable is empty.
+
+```c
+struct FD_C_OneDimArrayFloat {
+  size_t size;
+  float* data;
+};
+```
+
+- **shape**(FD_C_OneDimArrayInt64): Member variable which indicates the shape of the output image as H\*W.
+
+```c
+struct FD_C_OneDimArrayInt64 {
+  size_t size;
+  int64_t* data;
+};
+```
