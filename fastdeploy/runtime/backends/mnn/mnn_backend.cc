@@ -113,7 +113,7 @@ bool SetTensorInfoByCustomOrder(
       if (it.second == i) {
         auto iter = tensors_info.find(it.first);
         if (iter == tensors_info.end()) {
-          FDERROR << "Cannot find name:" << it.first << " from MNN model."
+          FDERROR << "Cannot find name:[" << it.first << "] from MNN model."
                   << std::endl;
           return false;
         }
