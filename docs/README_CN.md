@@ -43,6 +43,7 @@
 - [4. TensorRT使用中的一些技巧](cn/faq/tensorrt_tricks.md)
 - [5. 如何增加新的模型](cn/faq/develop_a_new_model.md)
 - [6. 如何给新模型增加C API](cn/faq/develop_c_api_for_a_new_model.md)
+- [7. 如何给新模型增加C# API](cn/faq/develop_c_sharp_api_for_a_new_model.md)
 
 ## 更多FastDeploy部署模块
 
