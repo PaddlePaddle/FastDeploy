@@ -25,6 +25,7 @@ namespace ocr {
  */
 class FASTDEPLOY_DECL RecognizerPreprocessor : public ProcessorManager {
  public:
+  RecognizerPreprocessor();
   /** \brief Process the input image and prepare input tensors for runtime
    *
    * \param[in] images The input data list, all the elements are FDMat
@@ -77,11 +78,17 @@ class FASTDEPLOY_DECL RecognizerPreprocessor : public ProcessorManager {
   std::vector<int> GetRecImageShape() { return rec_image_shape_; }
 
  private:
+  void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
+                              const std::vector<int>& rec_image_shape,
+                              bool static_shape_infer);
   std::vector<int> rec_image_shape_ = {3, 48, 320};
   std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
   std::vector<float> scale_ = {0.5f, 0.5f, 0.5f};
   bool is_scale_ = true;
   bool static_shape_infer_ = false;
+  std::shared_ptr<Resize> resize_op_;
+  std::shared_ptr<Pad> pad_op_;
+  std::shared_ptr<NormalizeAndPermute> normalize_permute_op_;
 };
 
 }  // namespace ocr
