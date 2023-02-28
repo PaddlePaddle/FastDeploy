@@ -49,6 +49,7 @@ public class YOLOv5 {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -74,6 +75,7 @@ public class YOLOv5 {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -104,15 +106,7 @@ public class YOLOv5 {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
-  [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
-  [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
-  private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_YOLOv5WrapperInitialized")]
@@ -154,6 +148,7 @@ public class YOLOv7 {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -179,6 +174,7 @@ public class YOLOv7 {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -209,16 +205,7 @@ public class YOLOv7 {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
-  [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
-  [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
-  private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
-
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_YOLOv7WrapperInitialized")]
   private static extern bool
@@ -259,6 +246,7 @@ public class YOLOv8 {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -284,6 +272,7 @@ public class YOLOv8 {
           fd_detection_result_array.data + i * Marshal.SizeOf(new FD_DetectionResult()),
           typeof(FD_DetectionResult));
       results_out.Add(ConvertResult.ConvertCResultToDetectionResult(fd_detection_result));
+      FD_C_DestroyDetectionResult(ref fd_detection_result);
     }
     return results_out;
   }
@@ -314,15 +303,7 @@ public class YOLOv8 {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
-  [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
-  [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
-  private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_YOLOv8WrapperInitialized")]
@@ -367,6 +348,7 @@ public class YOLOv6 {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -398,16 +380,7 @@ public class YOLOv6 {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
-  [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
-  [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
-  private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
-
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_YOLOv6WrapperInitialized")]
   private static extern bool
@@ -444,6 +417,7 @@ public class YOLOR {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -475,16 +449,7 @@ public class YOLOR {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
-  [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
-  [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
-  private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
-
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_YOLORWrapperInitialized")]
   private static extern bool
@@ -522,6 +487,7 @@ public class YOLOX {
     
     DetectionResult detection_result =
         ConvertResult.ConvertCResultToDetectionResult(fd_detection_result);
+    FD_C_DestroyDetectionResult(ref fd_detection_result);
     return detection_result;
   }
 
@@ -553,16 +519,7 @@ public class YOLOX {
   FD_C_DestroyDetectionResultWrapper(IntPtr fd_detection_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyDetectionResult")]
   private static extern void
-  FD_C_DestroyDetectionResult(IntPtr fd_detection_result);
-  [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_DetectionResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_DetectionResultWrapperGetData(IntPtr fd_detection_result_wrapper);
-  [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateDetectionResultWrapperFromData")]
-  private static extern IntPtr
-  FD_C_CreateDetectionResultWrapperFromData(IntPtr fd_detection_result);
-
+  FD_C_DestroyDetectionResult(ref FD_DetectionResult fd_detection_result);
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_YOLOXWrapperInitialized")]
   private static extern bool
