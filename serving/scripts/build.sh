@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARGS=`getopt -a -o w:n:h:hs -l WITH_GPU:,docker_name:,http_proxy:,https_proxy: -- "$@"`
+ARGS=`getopt -a -o w:n:h:hs:tv -l WITH_GPU:,docker_name:,http_proxy:,https_proxy:,trt_version: -- "$@"`
 
 eval set -- "${ARGS}"
 echo "parse start"
@@ -85,6 +85,7 @@ nvidia-docker run -i --rm --name ${docker_name} \
            -v`pwd`/..:/workspace/fastdeploy \
            -e "http_proxy=${http_proxy}" \
            -e "https_proxy=${https_proxy}" \
+           -e "trt_version=${trt_version}"\
            nvcr.io/nvidia/tritonserver:21.10-py3-min \
            bash -c \
            'cd /workspace/fastdeploy/python;

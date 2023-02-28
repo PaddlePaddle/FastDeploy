@@ -1,6 +1,6 @@
 English | [中文](README_CN.md)
 
-# Example of PaddleClas models Python Deployment
+# Example of PaddleClas models C++ Deployment
 
 This directory provides example file `multi_thread.cc` to fast deploy PaddleClas models on CPU/GPU and GPU accelerated by TensorRT.
 

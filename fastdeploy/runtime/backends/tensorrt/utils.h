@@ -220,20 +220,31 @@ class FDTrtLogger : public nvinfer1::ILogger {
     logger = new FDTrtLogger();
     return logger;
   }
+  void SetLog(bool enable_info = false, bool enable_warning = false) {
+    enable_info_ = enable_info;
+    enable_warning_ = enable_warning;
+  }
+
   void log(nvinfer1::ILogger::Severity severity,
            const char* msg) noexcept override {
     if (severity == nvinfer1::ILogger::Severity::kINFO) {
-      // Disable this log
-      //      FDINFO << msg << std::endl;
+      if (enable_info_) {
+        FDINFO << msg << std::endl;
+      }
     } else if (severity == nvinfer1::ILogger::Severity::kWARNING) {
-      // Disable this log
-      //      FDWARNING << msg << std::endl;
+      if (enable_warning_) {
+        FDWARNING << msg << std::endl;
+      }
     } else if (severity == nvinfer1::ILogger::Severity::kERROR) {
       FDERROR << msg << std::endl;
     } else if (severity == nvinfer1::ILogger::Severity::kINTERNAL_ERROR) {
       FDASSERT(false, "%s", msg);
     }
   }
+
+ private:
+  bool enable_info_ = false;
+  bool enable_warning_ = false;
 };
 
 struct ShapeRangeInfo {
