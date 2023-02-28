@@ -671,7 +671,7 @@ public class PPOCRv3 {
       return null;
     } // predict
     OCRResult ocr_detector_result = ConvertResult.ConvertCResultToOCRResult(fd_ocr_result);
-    FD_C_DestroyOCRResult(fd_ocr_result);
+    FD_C_DestroyOCRResult(ref fd_ocr_result);
     return ocr_detector_result;
   }
 
@@ -697,7 +697,7 @@ public class PPOCRv3 {
           fd_ocr_result_array.data + i * Marshal.SizeOf(new FD_OCRResult()),
           typeof(FD_OCRResult));
       results_out.Add(ConvertResult.ConvertCResultToOCRResult(fd_ocr_result));
-      FD_C_DestroyOCRResult(fd_ocr_result);
+      FD_C_DestroyOCRResult(ref fd_ocr_result);
     }
     Marshal.FreeHGlobal(imgs_in.data);
     return results_out;
