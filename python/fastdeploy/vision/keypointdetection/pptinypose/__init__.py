@@ -76,10 +76,10 @@ class PPTinyPose(FastDeployModel):
         """
         This function will disable normalize in preprocessing step.
         """
-        self.disable_normalize()
+        self._model.disable_normalize()
 
     def disable_permute(self):
         """
         This function will disable hwc2chw in preprocessing step.
         """
-        self.disable_permute()
+        self._model.disable_permute()

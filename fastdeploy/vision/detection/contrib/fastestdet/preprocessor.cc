@@ -20,26 +20,27 @@ namespace vision {
 namespace detection {
 
 FastestDetPreprocessor::FastestDetPreprocessor() {
-  size_ = {352, 352}; //{h,w}
+  size_ = {352, 352};  //{h,w}
 }
 
-bool FastestDetPreprocessor::Preprocess(FDMat* mat, FDTensor* output,
-            std::map<std::string, std::array<float, 2>>* im_info) {
+bool FastestDetPreprocessor::Preprocess(
+    FDMat* mat, FDTensor* output,
+    std::map<std::string, std::array<float, 2>>* im_info) {
   // Record the shape of image and the shape of preprocessed image
   (*im_info)["input_shape"] = {static_cast<float>(mat->Height()),
                                static_cast<float>(mat->Width())};
 
   // process after image load
   double ratio = (size_[0] * 1.0) / std::max(static_cast<float>(mat->Height()),
-                                            static_cast<float>(mat->Width()));
+                                             static_cast<float>(mat->Width()));
 
   // fastestdet's preprocess steps
   // 1. resize
   // 2. convert_and_permute(swap_rb=false)
-  Resize::Run(mat, size_[0], size_[1]); //resize
+  Resize::Run(mat, size_[0], size_[1]);  // resize
   std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
   std::vector<float> beta = {0.0f, 0.0f, 0.0f};
-  //convert to float and HWC2CHW
+  // convert to float and HWC2CHW
   ConvertAndPermute::Run(mat, alpha, beta, false);
 
   // Record output shape of preprocessed image
@@ -47,20 +48,22 @@ bool FastestDetPreprocessor::Preprocess(FDMat* mat, FDTensor* output,
                                 static_cast<float>(mat->Width())};
 
   mat->ShareWithTensor(output);
-  output->ExpandDim(0);  // reshape to n, h, w, c
+  output->ExpandDim(0);  // reshape to n, c, h, w
   return true;
 }
 
-bool FastestDetPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
-                             std::vector<std::map<std::string, std::array<float, 2>>>* ims_info) {
+bool FastestDetPreprocessor::Run(
+    std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
+    std::vector<std::map<std::string, std::array<float, 2>>>* ims_info) {
   if (images->size() == 0) {
-    FDERROR << "The size of input images should be greater than 0." << std::endl;
+    FDERROR << "The size of input images should be greater than 0."
+            << std::endl;
     return false;
   }
   ims_info->resize(images->size());
   outputs->resize(1);
   // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> tensors(images->size()); 
+  std::vector<FDTensor> tensors(images->size());
   for (size_t i = 0; i < images->size(); ++i) {
     if (!Preprocess(&(*images)[i], &tensors[i], &(*ims_info)[i])) {
       FDERROR << "Failed to preprocess input image." << std::endl;

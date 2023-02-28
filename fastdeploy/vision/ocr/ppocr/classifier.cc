@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/ocr/ppocr/classifier.h"
+
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
@@ -35,6 +36,7 @@ Classifier::Classifier(const std::string& model_file,
     valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE};
     valid_sophgonpu_backends = {Backend::SOPHGOTPU};
+    valid_rknpu_backends = {Backend::RKNPU2};
   }
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -121,6 +123,6 @@ bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
   return true;
 }
 
-}  // namesapce ocr
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy

@@ -60,17 +60,21 @@ struct PaddleBackendOption {
    */
   IpuOption ipu_option;
 
-  /// Collect shape for model while enabel_trt is true
+  /// Collect shape for model while enable_trt is true
   bool collect_trt_shape = false;
   /// Cache input shape for mkldnn while the input data will change dynamiclly
   int mkldnn_cache_size = -1;
   /// initialize memory size(MB) for GPU
   int gpu_mem_init_size = 100;
+  /// The option to enable fixed size optimization for transformer model
+  bool enable_fixed_size_opt = false;
 
+  /// Disable type of operators run on TensorRT
   void DisableTrtOps(const std::vector<std::string>& ops) {
     trt_disabled_ops_.insert(trt_disabled_ops_.end(), ops.begin(), ops.end());
   }
 
+  /// Delete pass by name
   void DeletePass(const std::string& pass_name) {
     delete_pass_names.push_back(pass_name);
   }

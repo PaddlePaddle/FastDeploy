@@ -15,7 +15,7 @@
 #include "fastdeploy_capi/vision/visualize.h"
 
 #include "fastdeploy/vision/visualize/visualize.h"
-#include "fastdeploy_capi/types_internal.h"
+#include "fastdeploy_capi/internal/types_internal.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,12 +26,13 @@ FD_C_Mat FD_C_VisDetection(FD_C_Mat im,
                            float score_threshold, int line_size,
                            float font_size) {
   FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper =
-      FD_C_CreateDetectionResultWrapperFromData(fd_c_detection_result);
+      FD_C_CreateDetectionResultWrapperFromCResult(fd_c_detection_result);
   auto& detection_result = CHECK_AND_CONVERT_FD_TYPE(
       DetectionResultWrapper, fd_c_detection_result_wrapper);
   cv::Mat result = fastdeploy::vision::VisDetection(
       *(reinterpret_cast<cv::Mat*>(im)), *detection_result, score_threshold,
       line_size, font_size);
+  FD_C_DestroyDetectionResultWrapper(fd_c_detection_result_wrapper);
   return new cv::Mat(result);
 }
 
@@ -45,12 +46,13 @@ FD_C_Mat FD_C_VisDetectionWithLabel(FD_C_Mat im,
     labels_in.emplace_back(labels->data[i].data);
   }
   FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper =
-      FD_C_CreateDetectionResultWrapperFromData(fd_c_detection_result);
+      FD_C_CreateDetectionResultWrapperFromCResult(fd_c_detection_result);
   auto& detection_result = CHECK_AND_CONVERT_FD_TYPE(
       DetectionResultWrapper, fd_c_detection_result_wrapper);
   cv::Mat result = fastdeploy::vision::VisDetection(
       *(reinterpret_cast<cv::Mat*>(im)), *detection_result, labels_in,
       score_threshold, line_size, font_size);
+  FD_C_DestroyDetectionResultWrapper(fd_c_detection_result_wrapper);
   return new cv::Mat(result);
 }
 
@@ -59,12 +61,13 @@ FD_C_Mat FD_C_VisClassification(FD_C_Mat im,
                                 int top_k, float score_threshold,
                                 float font_size) {
   FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper =
-      FD_C_CreateClassifyResultWrapperFromData(fd_c_classify_result);
+      FD_C_CreateClassifyResultWrapperFromCResult(fd_c_classify_result);
   auto& classify_result = CHECK_AND_CONVERT_FD_TYPE(
       ClassifyResultWrapper, fd_c_classify_result_wrapper);
   cv::Mat result = fastdeploy::vision::VisClassification(
       *(reinterpret_cast<cv::Mat*>(im)), *classify_result, top_k,
       score_threshold, font_size);
+  FD_C_DestroyClassifyResultWrapper(fd_c_classify_result_wrapper);
   return new cv::Mat(result);
 }
 
@@ -77,22 +80,37 @@ FD_C_Mat FD_C_VisClassificationWithLabel(
     labels_in.emplace_back(labels->data[i].data);
   }
   FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper =
-      FD_C_CreateClassifyResultWrapperFromData(fd_c_classify_result);
+      FD_C_CreateClassifyResultWrapperFromCResult(fd_c_classify_result);
   auto& classify_result = CHECK_AND_CONVERT_FD_TYPE(
       ClassifyResultWrapper, fd_c_classify_result_wrapper);
   cv::Mat result = fastdeploy::vision::VisClassification(
       *(reinterpret_cast<cv::Mat*>(im)), *classify_result, labels_in, top_k,
       score_threshold, font_size);
+  FD_C_DestroyClassifyResultWrapper(fd_c_classify_result_wrapper);
   return new cv::Mat(result);
 }
 
 FD_C_Mat FD_C_VisOcr(FD_C_Mat im, FD_C_OCRResult* fd_c_ocr_result) {
   FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper =
-      FD_C_CreateOCRResultWrapperFromData(fd_c_ocr_result);
+      FD_C_CreateOCRResultWrapperFromCResult(fd_c_ocr_result);
   auto& ocr_result =
       CHECK_AND_CONVERT_FD_TYPE(OCRResultWrapper, fd_c_ocr_result_wrapper);
   cv::Mat result = fastdeploy::vision::VisOcr(*(reinterpret_cast<cv::Mat*>(im)),
                                               *ocr_result);
+  FD_C_DestroyOCRResultWrapper(fd_c_ocr_result_wrapper);
+  return new cv::Mat(result);
+}
+
+FD_C_Mat FD_C_VisSegmentation(FD_C_Mat im,
+                              FD_C_SegmentationResult* fd_c_segmenation_result,
+                              float weight) {
+  FD_C_SegmentationResultWrapper* fd_c_segmentation_result_wrapper =
+      FD_C_CreateSegmentationResultWrapperFromCResult(fd_c_segmenation_result);
+  auto& segmentation_result = CHECK_AND_CONVERT_FD_TYPE(
+      SegmentationResultWrapper, fd_c_segmentation_result_wrapper);
+  cv::Mat result = fastdeploy::vision::VisSegmentation(
+      *(reinterpret_cast<cv::Mat*>(im)), *segmentation_result, weight);
+  FD_C_DestroySegmentationResultWrapper(fd_c_segmentation_result_wrapper);
   return new cv::Mat(result);
 }
 

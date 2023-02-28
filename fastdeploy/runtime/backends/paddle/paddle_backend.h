@@ -54,12 +54,7 @@ class PaddleBackend : public BaseBackend {
  public:
   PaddleBackend() {}
   virtual ~PaddleBackend() = default;
-  void BuildOption(const PaddleBackendOption& option);
-
-  bool InitFromPaddle(const std::string& model_buffer,
-                     const std::string& params_buffer,
-                     const PaddleBackendOption& option = PaddleBackendOption());
-
+  bool Init(const RuntimeOption& option);
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
 
@@ -77,6 +72,12 @@ class PaddleBackend : public BaseBackend {
   std::vector<TensorInfo> GetOutputInfos() override;
 
  private:
+  void BuildOption(const PaddleBackendOption& option);
+
+  bool InitFromPaddle(const std::string& model_buffer,
+                     const std::string& params_buffer,
+                     const PaddleBackendOption& option = PaddleBackendOption());
+
   void
   CollectShapeRun(paddle_infer::Predictor* predictor,
                   const std::map<std::string, std::vector<int>>& shape) const;
