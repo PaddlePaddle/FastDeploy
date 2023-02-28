@@ -14,6 +14,7 @@
 
 #pragma once
 #include "fastdeploy/vision/common/processors/transform.h"
+#include "fastdeploy/vision/common/processors/manager.h"
 #include "fastdeploy/vision/common/result.h"
 
 namespace fastdeploy {
@@ -22,17 +23,27 @@ namespace vision {
 namespace ocr {
 /*! @brief Preprocessor object for Classifier serials model.
  */
-class FASTDEPLOY_DECL ClassifierPreprocessor {
+class FASTDEPLOY_DECL ClassifierPreprocessor : public ProcessorManager {
  public:
+  ClassifierPreprocessor();
   /** \brief Process the input image and prepare input tensors for runtime
    *
    * \param[in] images The input data list, all the elements are FDMat
    * \param[in] outputs The output tensors which will be fed into runtime
    * \return true if the preprocess successed, otherwise false
    */
-  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
            size_t start_index, size_t end_index);
+
+  /** \brief Implement the virtual function of ProcessorManager, Apply() is the
+   *  body of Run(). Apply() contains the main logic of preprocessing, Run() is
+   *  called by users to execute preprocessing
+   *
+   * \param[in] image_batch The input image batch
+   * \param[in] outputs The output tensors which will feed in runtime
+   * \return true if the preprocess successed, otherwise false
+   */
+  virtual bool Apply(FDMatBatch* image_batch, std::vector<FDTensor>* outputs);
 
   /// Set mean value for the image normalization in classification preprocess
   void SetMean(const std::vector<float>& mean) { mean_ = mean; }
@@ -57,10 +68,16 @@ class FASTDEPLOY_DECL ClassifierPreprocessor {
   std::vector<int> GetClsImageShape() const { return cls_image_shape_; }
 
  private:
+  void OcrClassifierResizeImage(FDMat* mat,
+                              const std::vector<int>& cls_image_shape);
   std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
   std::vector<float> scale_ = {0.5f, 0.5f, 0.5f};
   bool is_scale_ = true;
   std::vector<int> cls_image_shape_ = {3, 48, 192};
+
+  std::shared_ptr<Resize> resize_op_;
+  std::shared_ptr<Pad> pad_op_;
+  std::shared_ptr<Normalize> normalize_op_;
 };
 
 }  // namespace ocr
