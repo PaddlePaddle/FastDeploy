@@ -25,8 +25,8 @@ int main(int argc, char* argv[]) {
   }
   auto im = cv::imread(FLAGS_image);
   std::unordered_map<std::string, std::string> config_info;
-  benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
-                                                &config_info);
+  fastdeploy::benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
+                                                            &config_info);
   // Classification Model
   auto cls_model_file = FLAGS_model + sep + "inference.pdmodel";
   auto cls_params_file = FLAGS_model + sep + "inference.pdiparams";

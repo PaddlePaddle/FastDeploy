@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <unordered_map>
 #include "gflags/gflags.h"
 #include "fastdeploy/benchmark/utils.h"
 
@@ -22,9 +23,6 @@ static const char sep = '\\';
 #else
 static const char sep = '/';
 #endif
-
-namespace vision = fastdeploy::vision;
-namespace benchmark = fastdeploy::benchmark;
 
 DEFINE_string(model, "", "Directory of the inference model.");
 DEFINE_string(image, "", "Path of the image file.");
@@ -39,12 +37,12 @@ static void PrintUsage() {
   std::cout << "Default value of use_fp16: false" << std::endl;
 }
 
-static void PrintBenchmarkInfo(const std::unordered_map<std::string,
-                               std::string>& config_info) {
+static void PrintBenchmarkInfo(std::unordered_map<std::string,
+                               std::string> config_info) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Get model name
   std::vector<std::string> model_names;
-  benchmark::Split(FLAGS_model, model_names, sep);
+  fastdeploy::benchmark::Split(FLAGS_model, model_names, sep);
   if (model_names.empty()) {
     std::cout << "Directory of the inference model is invalid!!!" << std::endl;
     return;
@@ -62,14 +60,14 @@ static void PrintBenchmarkInfo(const std::unordered_map<std::string,
   ss << "warmup: " << config_info["warmup"] << std::endl;
   ss << "repeats: " << config_info["repeat"] << std::endl;
   ss << "device: " << config_info["device"] << std::endl;
-  if (config_info["device"]) {
+  if (config_info["device"] == "gpu") {
     ss << "device_id: " << config_info["device_id"] << std::endl;
+    ss << "use_fp16: " << config_info["use_fp16"] << std::endl;
   }
   ss << "backend: " << config_info["backend"] << std::endl;
   if (config_info["device"] == "cpu") {
     ss << "cpu_thread_nums: " << config_info["cpu_thread_nums"] << std::endl;
   }
-  ss << "use_fp16: " << config_info["use_fp16"] << std::endl;
   ss << "collect_memory_info: "
      << config_info["collect_memory_info"] << std::endl;
   if (config_info["collect_memory_info"] == "true") {
@@ -78,7 +76,7 @@ static void PrintBenchmarkInfo(const std::unordered_map<std::string,
   }
   std::cout << ss.str() << std::endl;
   // Save benchmark info
-  benchmark::ResultManager::SaveBenchmarkResult(ss.str(),
+  fastdeploy::benchmark::ResultManager::SaveBenchmarkResult(ss.str(),
                                         config_info["result_path"]);
 #endif
   return;

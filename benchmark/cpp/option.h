@@ -21,8 +21,8 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
   google::ParseCommandLineFlags(&argc, &argv, remove_flags);
   option->DisableValidBackendCheck();
   std::unordered_map<std::string, std::string> config_info;
-  benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
-                                                &config_info);
+  fastdeploy::benchmark::ResultManager::LoadBenchmarkConfig(
+                            FLAGS_config_path, &config_info);
   if (config_info["profile_mode"] == "runtime") {
     option->EnableProfiling(config_info["include_h2d_d2h"] == "true",
                             stoi(config_info["repeat"]),
@@ -76,7 +76,7 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
       return false;
     }
   } else if (config_info["device"] == "xpu") {
-    option->UseKunlunXin(config_info["device"]_id);
+    option->UseKunlunXin(stoi(config_info["device_id"]));
     if (config_info["backend"] == "ort") {
       option->UseOrtBackend();
     } else if (config_info["backend"] == "paddle") {

@@ -24,8 +24,8 @@
   }                                                                         \
   auto __im__ = cv::imread(FLAGS_image);                                    \
   std::unordered_map<std::string, std::string> __config_info__;             \
-  benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,          \
-                                                &__config_info__);          \
+  fastdeploy::benchmark::ResultManager::LoadBenchmarkConfig(                \
+                             FLAGS_config_path, &__config_info__);          \
   std::stringstream __ss__;                                                 \
   __ss__.precision(6);                                                      \
   fastdeploy::benchmark::ResourceUsageMonitor __resource_moniter__(         \
