@@ -8,4 +8,4 @@
 - Intel独立显卡/集成显卡部署 [见intel_gpu](intel_gpu)
 - 模型多线程调用 [见multi_thread](multi_thread)
 - 图片解码（含nvJPEG硬解码） [见image_decoder](image_decoder)
-- 使用C和C# API进行模型部署 [见use_c_csharp_sdk](use_c_sharp_sdk)
+- 使用C或C# API进行模型部署 [见use_c_csharp_sdk](use_c_sharp_sdk)
