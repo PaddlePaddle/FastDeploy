@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <pybind11/stl.h>
+
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
@@ -25,29 +26,37 @@ void BindPPOCRModel(pybind11::module& m) {
   pybind11::class_<vision::ocr::DBDetectorPreprocessor>(
       m, "DBDetectorPreprocessor")
       .def(pybind11::init<>())
+      .def_property("static_shape_infer",
+                    &vision::ocr::DBDetectorPreprocessor::GetStaticShapeInfer,
+                    &vision::ocr::DBDetectorPreprocessor::SetStaticShapeInfer)
       .def_property("max_side_len",
                     &vision::ocr::DBDetectorPreprocessor::GetMaxSideLen,
                     &vision::ocr::DBDetectorPreprocessor::SetMaxSideLen)
-      .def_property("mean", &vision::ocr::DBDetectorPreprocessor::GetMean,
-                    &vision::ocr::DBDetectorPreprocessor::SetMean)
-      .def_property("scale", &vision::ocr::DBDetectorPreprocessor::GetScale,
-                    &vision::ocr::DBDetectorPreprocessor::SetScale)
-      .def_property("is_scale",
-                    &vision::ocr::DBDetectorPreprocessor::GetIsScale,
-                    &vision::ocr::DBDetectorPreprocessor::SetIsScale)
-      .def("run", [](vision::ocr::DBDetectorPreprocessor& self,
-                     std::vector<pybind11::array>& im_list) {
-        std::vector<vision::FDMat> images;
-        for (size_t i = 0; i < im_list.size(); ++i) {
-          images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
-        }
-        std::vector<FDTensor> outputs;
-        std::vector<std::array<int, 4>> batch_det_img_info;
-        self.Run(&images, &outputs, &batch_det_img_info);
-        for (size_t i = 0; i < outputs.size(); ++i) {
-          outputs[i].StopSharing();
-        }
-        return std::make_pair(outputs, batch_det_img_info);
+      .def("set_normalize",
+           [](vision::ocr::DBDetectorPreprocessor& self,
+              const std::vector<float>& mean, const std::vector<float>& std,
+              bool is_scale) { self.SetNormalize(mean, std, is_scale); })
+      .def("run",
+           [](vision::ocr::DBDetectorPreprocessor& self,
+              std::vector<pybind11::array>& im_list) {
+             std::vector<vision::FDMat> images;
+             for (size_t i = 0; i < im_list.size(); ++i) {
+               images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
+             }
+             std::vector<FDTensor> outputs;
+             self.Run(&images, &outputs);
+             auto batch_det_img_info = self.GetBatchImgInfo();
+             for (size_t i = 0; i < outputs.size(); ++i) {
+               outputs[i].StopSharing();
+             }
+             return std::make_pair(outputs, *batch_det_img_info);
+           })
+      .def("disable_normalize",
+           [](vision::ocr::DBDetectorPreprocessor& self) {
+             self.DisableNormalize();
+           })
+      .def("disable_permute", [](vision::ocr::DBDetectorPreprocessor& self) {
+        self.DisablePermute();
       });
 
   pybind11::class_<vision::ocr::DBDetectorPostprocessor>(
@@ -137,21 +146,30 @@ void BindPPOCRModel(pybind11::module& m) {
       .def_property("is_scale",
                     &vision::ocr::ClassifierPreprocessor::GetIsScale,
                     &vision::ocr::ClassifierPreprocessor::SetIsScale)
-      .def("run", [](vision::ocr::ClassifierPreprocessor& self,
-                     std::vector<pybind11::array>& im_list) {
-        std::vector<vision::FDMat> images;
-        for (size_t i = 0; i < im_list.size(); ++i) {
-          images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
-        }
-        std::vector<FDTensor> outputs;
-        if (!self.Run(&images, &outputs)) {
-          throw std::runtime_error(
-              "Failed to preprocess the input data in ClassifierPreprocessor.");
-        }
-        for (size_t i = 0; i < outputs.size(); ++i) {
-          outputs[i].StopSharing();
-        }
-        return outputs;
+      .def("run",
+           [](vision::ocr::ClassifierPreprocessor& self,
+              std::vector<pybind11::array>& im_list) {
+             std::vector<vision::FDMat> images;
+             for (size_t i = 0; i < im_list.size(); ++i) {
+               images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
+             }
+             std::vector<FDTensor> outputs;
+             if (!self.Run(&images, &outputs)) {
+               throw std::runtime_error(
+                   "Failed to preprocess the input data in "
+                   "ClassifierPreprocessor.");
+             }
+             for (size_t i = 0; i < outputs.size(); ++i) {
+               outputs[i].StopSharing();
+             }
+             return outputs;
+           })
+      .def("disable_normalize",
+           [](vision::ocr::ClassifierPreprocessor& self) {
+             self.DisableNormalize();
+           })
+      .def("disable_permute", [](vision::ocr::ClassifierPreprocessor& self) {
+        self.DisablePermute();
       });
 
   pybind11::class_<vision::ocr::ClassifierPostprocessor>(
@@ -229,21 +247,30 @@ void BindPPOCRModel(pybind11::module& m) {
       .def_property("is_scale",
                     &vision::ocr::RecognizerPreprocessor::GetIsScale,
                     &vision::ocr::RecognizerPreprocessor::SetIsScale)
-      .def("run", [](vision::ocr::RecognizerPreprocessor& self,
-                     std::vector<pybind11::array>& im_list) {
-        std::vector<vision::FDMat> images;
-        for (size_t i = 0; i < im_list.size(); ++i) {
-          images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
-        }
-        std::vector<FDTensor> outputs;
-        if (!self.Run(&images, &outputs)) {
-          throw std::runtime_error(
-              "Failed to preprocess the input data in RecognizerPreprocessor.");
-        }
-        for (size_t i = 0; i < outputs.size(); ++i) {
-          outputs[i].StopSharing();
-        }
-        return outputs;
+      .def("run",
+           [](vision::ocr::RecognizerPreprocessor& self,
+              std::vector<pybind11::array>& im_list) {
+             std::vector<vision::FDMat> images;
+             for (size_t i = 0; i < im_list.size(); ++i) {
+               images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
+             }
+             std::vector<FDTensor> outputs;
+             if (!self.Run(&images, &outputs)) {
+               throw std::runtime_error(
+                   "Failed to preprocess the input data in "
+                   "RecognizerPreprocessor.");
+             }
+             for (size_t i = 0; i < outputs.size(); ++i) {
+               outputs[i].StopSharing();
+             }
+             return outputs;
+           })
+      .def("disable_normalize",
+           [](vision::ocr::RecognizerPreprocessor& self) {
+             self.DisableNormalize();
+           })
+      .def("disable_permute", [](vision::ocr::RecognizerPreprocessor& self) {
+        self.DisablePermute();
       });
 
   pybind11::class_<vision::ocr::RecognizerPostprocessor>(

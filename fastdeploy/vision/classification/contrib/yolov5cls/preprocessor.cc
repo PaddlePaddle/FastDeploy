@@ -20,18 +20,19 @@ namespace vision {
 namespace classification {
 
 YOLOv5ClsPreprocessor::YOLOv5ClsPreprocessor() {
-  size_ = {224, 224}; //{h,w}
+  size_ = {224, 224};  //{h,w}
 }
 
-bool YOLOv5ClsPreprocessor::Preprocess(FDMat* mat, FDTensor* output,
-            std::map<std::string, std::array<float, 2>>* im_info) {
+bool YOLOv5ClsPreprocessor::Preprocess(
+    FDMat* mat, FDTensor* output,
+    std::map<std::string, std::array<float, 2>>* im_info) {
   // Record the shape of image and the shape of preprocessed image
   (*im_info)["input_shape"] = {static_cast<float>(mat->Height()),
                                static_cast<float>(mat->Width())};
 
   // process after image load
   double ratio = (size_[0] * 1.0) / std::max(static_cast<float>(mat->Height()),
-                                            static_cast<float>(mat->Width()));
+                                             static_cast<float>(mat->Width()));
 
   // yolov5cls's preprocess steps
   // 1. CenterCrop
@@ -54,20 +55,22 @@ bool YOLOv5ClsPreprocessor::Preprocess(FDMat* mat, FDTensor* output,
                                 static_cast<float>(mat->Width())};
 
   mat->ShareWithTensor(output);
-  output->ExpandDim(0);  // reshape to n, h, w, c
+  output->ExpandDim(0);  // reshape to n, c, h, w
   return true;
 }
 
-bool YOLOv5ClsPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
-                             std::vector<std::map<std::string, std::array<float, 2>>>* ims_info) {
+bool YOLOv5ClsPreprocessor::Run(
+    std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
+    std::vector<std::map<std::string, std::array<float, 2>>>* ims_info) {
   if (images->size() == 0) {
-    FDERROR << "The size of input images should be greater than 0." << std::endl;
+    FDERROR << "The size of input images should be greater than 0."
+            << std::endl;
     return false;
   }
   ims_info->resize(images->size());
   outputs->resize(1);
   // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> tensors(images->size()); 
+  std::vector<FDTensor> tensors(images->size());
   for (size_t i = 0; i < images->size(); ++i) {
     if (!Preprocess(&(*images)[i], &tensors[i], &(*ims_info)[i])) {
       FDERROR << "Failed to preprocess input image." << std::endl;

@@ -44,6 +44,7 @@ DEFINE_bool(
 DEFINE_bool(
     collect_memory_info, false, "Whether to collect memory info");
 DEFINE_int32(sampling_interval, 50, "How often to collect memory info(ms).");
+DEFINE_string(result_path, "benchmark.txt", "Path of benchmark result file.");
 
 static void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path --device "
@@ -57,9 +58,14 @@ static void PrintUsage() {
 }
 
 static void PrintBenchmarkInfo() {
+#if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Get model name
   std::vector<std::string> model_names;
   fastdeploy::benchmark::Split(FLAGS_model, model_names, sep);
+  if (model_names.empty()) {
+    std::cout << "Directory of the inference model is invalid!!!" << std::endl;
+    return;
+  }
   // Save benchmark info
   std::stringstream ss;
   ss.precision(3);
@@ -87,5 +93,9 @@ static void PrintBenchmarkInfo() {
        << "ms" << std::endl;
   }
   std::cout << ss.str() << std::endl;
+  // Save benchmark info
+  fastdeploy::benchmark::ResultManager::SaveBenchmarkResult(ss.str(),
+                                                  FLAGS_result_path);
+#endif
   return;
 }

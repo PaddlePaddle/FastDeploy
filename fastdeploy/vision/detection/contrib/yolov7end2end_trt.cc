@@ -169,7 +169,7 @@ bool YOLOv7End2EndTRT::Preprocess(
   HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
   mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  output->shape.insert(output->shape.begin(), 1);  // reshape to n, c, h, w
   return true;
 }
 
@@ -227,7 +227,7 @@ bool YOLOv7End2EndTRT::CudaPreprocess(
   output->SetExternalData({mat->Channels(), size[0], size[1]}, FDDataType::FP32,
                           input_tensor_cuda_buffer_device_);
   output->device = Device::GPU;
-  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  output->shape.insert(output->shape.begin(), 1);  // reshape to n, c, h, w
   return true;
 #else
   FDERROR << "CUDA src code was not enabled." << std::endl;

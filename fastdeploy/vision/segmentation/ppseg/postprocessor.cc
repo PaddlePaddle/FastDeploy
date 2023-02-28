@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/vision/segmentation/ppseg/postprocessor.h"
+#include "fastdeploy/function/cast.h"
 #include "yaml-cpp/yaml.h"
 
 namespace fastdeploy {
@@ -153,39 +154,6 @@ bool PaddleSegPostprocessor::ProcessWithLabelResult(const FDTensor& infer_result
   return true;
 }
 
-bool PaddleSegPostprocessor::FDTensorCast2Uint8(FDTensor* infer_result,
-                                                const int64_t& offset, 
-                                                std::vector<uint8_t>* uint8_result_buffer) {
-  FDDataType infer_result_dtype = infer_result->dtype;
-  if (infer_result_dtype == FDDataType::INT64) {
-    const int64_t* infer_result_buffer =
-        reinterpret_cast<const int64_t*>(infer_result->CpuData());
-    // cv::resize don't support `CV_8S` or `CV_32S`
-    // refer to https://github.com/opencv/opencv/issues/20991
-    // https://github.com/opencv/opencv/issues/7862
-    uint8_result_buffer = new std::vector<uint8_t>(
-        infer_result_buffer, infer_result_buffer + offset);
-  } else if (infer_result_dtype == FDDataType::INT32) {
-    const int32_t* infer_result_buffer =
-        reinterpret_cast<const int32_t*>(infer_result->CpuData());
-    // cv::resize don't support `CV_8S` or `CV_32S`
-    // refer to https://github.com/opencv/opencv/issues/20991
-    // https://github.com/opencv/opencv/issues/7862
-    uint8_result_buffer = new std::vector<uint8_t>(
-        infer_result_buffer, infer_result_buffer + offset);
-  } else {
-    FDASSERT(false, 
-             "Require the data type for casting uint8 is int64, int32, but now "
-             "it's %s.",
-             Str(infer_result_dtype).c_str());
-    return false;
-  }
-  infer_result->SetExternalData(
-      infer_result->shape, FDDataType::UINT8,
-      reinterpret_cast<void*>(uint8_result_buffer->data()));
-  return true;
-}
-
 bool PaddleSegPostprocessor::Run(
     const std::vector<FDTensor>& infer_results,
     std::vector<SegmentationResult>* results,
@@ -279,13 +247,12 @@ bool PaddleSegPostprocessor::Run(
     }
 
     FDMat mat;
-    std::vector<uint8_t> uint8_result_buffer;
     // Resize interpration 
     int interpolation = cv::INTER_LINEAR;
     if (is_resized) {
       if (infer_results_dtype == FDDataType::INT64 ||
           infer_results_dtype == FDDataType::INT32 ){
-        FDTensorCast2Uint8(&infer_result, infer_chw, &uint8_result_buffer);
+        function::Cast(infer_result, &infer_result, FDDataType::UINT8);
         // label map resize with nearest interpolation
         interpolation = cv::INTER_NEAREST;
       }

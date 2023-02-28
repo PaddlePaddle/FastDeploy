@@ -92,7 +92,7 @@ FD_C_PaddleClasModelWrapper* FD_C_CreatePaddleClasModelWrapper(
 > * **params_file**(const char*): Parameter file path
 > * **config_file**(const char*): Configuration file path, which is the deployment yaml file exported by PaddleClas.
 > * **runtime_option**(FD_C_RuntimeOptionWrapper*): Backend inference configuration. None by default, which is the default configuration
-> * **model_format**(FD_C_ModelFormat): Model format. Paddle format by default
+> * **model_format**(FD_C_ModelFormat): Model format. FD_C_ModelFormat_PADDLE format by default
 >
 > **Return**
 > * **fd_c_ppclas_wrapper**(FD_C_PaddleClasModelWrapper*): Pointer to manipulate PaddleClas object.
@@ -150,31 +150,16 @@ FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
 #### Result
 
 ```c
-FD_C_ClassifyResultWrapper* FD_C_CreateClassifyResultWrapperFromData(
-    FD_C_ClassifyResult* fd_c_classify_result)
+void FD_C_ClassifyResultStr(
+    FD_C_ClassifyResult* fd_c_classify_result,
+    char* str_buffer);
 ```
 >
-> Create a pointer to FD_C_ClassifyResultWrapper structure, which contains `fastdeploy::vision::ClassifyResult` object in C++. You can call methods in C++ ClassifyResult object by C API with this pointer.
+> print result
 >
 > **Params**
 > * **fd_c_classify_result**(FD_C_ClassifyResult*): pointer to FD_C_ClassifyResult structure
->
-> **Return**
-> * **fd_c_classify_result_wrapper**(FD_C_ClassifyResultWrapper*): pointer to FD_C_ClassifyResultWrapper structure
-
-
-```c
-char* FD_C_ClassifyResultWrapperStr(
-    FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper);
-```
->
-> Call Str() methods in `fastdeploy::vision::ClassifyResult` object contained in FD_C_ClassifyResultWrapper structure，and return a string to describe information in result.
->
-> **Params**
-> * **fd_c_classify_result_wrapper**(FD_C_ClassifyResultWrapper*): pointer to FD_C_ClassifyResultWrapper structure
->
-> **Return**
-> * **str**(char*): a string to describe information in result
+> * **str_buffer**(char*): used to store result string
 
 
 - [Model Description](../../)

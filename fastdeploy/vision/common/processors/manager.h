@@ -17,6 +17,7 @@
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/processors/mat.h"
 #include "fastdeploy/vision/common/processors/mat_batch.h"
+#include "fastdeploy/vision/common/processors/base.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -78,7 +79,7 @@ class FASTDEPLOY_DECL ProcessorManager {
                      std::vector<FDTensor>* outputs) = 0;
 
  protected:
-  bool initialized_ = false;
+  ProcLib proc_lib_ = ProcLib::DEFAULT;
 
  private:
 #ifdef WITH_GPU

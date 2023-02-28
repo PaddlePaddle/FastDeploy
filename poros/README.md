@@ -1,10 +1,10 @@
-# Poros AI Inference Accelerator
+# Poros AI Compiler
 
 ## Description
 
-Poros is an AI Inference Accelerator for deep learning framework. It can provide significantly lower inference latency comparing with original model, and provide much flexibility for dynamic graphs.
-Poros mainly works on the TorchScript IR currently, that means it supports the models from PyTorch, ONNX, TensorFlow and any other framework that can be converted to TorchScript. also, we are planting to support more IRs in the future.
-Poros is designed to supports multiple hardware backends conveniently, For now, Poros supports GPU and XPU (BAIDU-Kunlun) Device, It's welcomed to add additional devices.
+Poros is an AI Compiler for deep learning framework. It can provide significantly lower inference latency comparing with original model, and provide much flexibility for dynamic graphs.
+Poros mainly works on the TorchScript IR currently, that means it supports the models from PyTorch, ONNX, TensorFlow and any other framework that can be converted to TorchScript. Also, we are planning to support more IRs in the future.
+Poros is designed to supports multiple hardware backends conveniently. For now, Poros has supported GPU and XPU (BAIDU-Kunlun) Device. It's welcomed to add additional devices.
 
 ## How It Works
 
@@ -43,7 +43,7 @@ get Poros source code:
 ```shell
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd poros
-git submodule update --init --recursive --jobs 0 -f
+git submodule update --init --recursive
 ```
 
 We strongly recommend you to prepare the building environment with anaconda3:

@@ -85,6 +85,8 @@ bool NormalizeAndPermute::ImplByCuda(FDMatBatch* mat_batch) {
   // NHWC -> NCHW
   std::swap(mat_batch->output_cache->shape[1],
             mat_batch->output_cache->shape[3]);
+  std::swap(mat_batch->output_cache->shape[2],
+            mat_batch->output_cache->shape[3]);
 
   // Copy alpha and beta to GPU
   gpu_alpha_.Resize({1, 1, static_cast<int>(alpha_.size())}, FDDataType::FP32,

@@ -38,7 +38,7 @@ void CpuInfer(const char* model_dir, const char* image_file) {
   FD_C_RuntimeOptionWrapperUseCpu(option);
 
   FD_C_PaddleClasModelWrapper* model = FD_C_CreatePaddleClasModelWrapper(
-      model_file, params_file, config_file, option, PADDLE);
+      model_file, params_file, config_file, option, FD_C_ModelFormat_PADDLE);
 
   if (!FD_C_PaddleClasModelWrapperInitialized(model)) {
     printf("Failed to initialize.\n");
@@ -62,19 +62,11 @@ void CpuInfer(const char* model_dir, const char* image_file) {
   }
 
   // print res
-  // You can directly access fields in FD_C_ClassifyResult and print it refer to
-  // ClassifyResult API Doc Or you can wrap it using
-  // FD_C_ClassifyResult_Wrapper, which containes C++ structure
-  // fastdeploy::vision::ClassifyResult, and using C API
-  // FD_C_ClassifyResultWrapperStr to call
-  // fastdeploy::vision::ClassifyResult::Str() in it. For convenience, we choose
-  // this method to print it.
-  FD_C_ClassifyResultWrapper* result_wrapper =
-      FD_C_CreateClassifyResultWrapperFromData(result);
-  printf("%s", FD_C_ClassifyResultWrapperStr(result_wrapper));
+  char res[2000];
+  FD_C_ClassifyResultStr(result, res);
+  printf("%s", res);
   FD_C_DestroyRuntimeOptionWrapper(option);
   FD_C_DestroyPaddleClasModelWrapper(model);
-  FD_C_DestroyClassifyResultWrapper(result_wrapper);
   FD_C_DestroyClassifyResult(result);
   FD_C_DestroyMat(im);
 }
@@ -94,7 +86,7 @@ void GpuInfer(const char* model_dir, const char* image_file) {
   FD_C_RuntimeOptionWrapperUseGpu(option, 0);
 
   FD_C_PaddleClasModelWrapper* model = FD_C_CreatePaddleClasModelWrapper(
-      model_file, params_file, config_file, option, PADDLE);
+      model_file, params_file, config_file, option, FD_C_ModelFormat_PADDLE);
 
   if (!FD_C_PaddleClasModelWrapperInitialized(model)) {
     printf("Failed to initialize.\n");
@@ -118,19 +110,11 @@ void GpuInfer(const char* model_dir, const char* image_file) {
   }
 
   // print res
-  // You can directly access fields in FD_C_ClassifyResult and print it refer to
-  // ClassifyResult API Doc Or you can wrap it using
-  // FD_C_ClassifyResult_Wrapper, which containes C++ structure
-  // fastdeploy::vision::ClassifyResult, and using C API
-  // FD_C_ClassifyResultWrapperStr to call
-  // fastdeploy::vision::ClassifyResult::Str() in it. For convenience, we choose
-  // this method to print it.
-  FD_C_ClassifyResultWrapper* result_wrapper =
-      FD_C_CreateClassifyResultWrapperFromData(result);
-  printf("%s", FD_C_ClassifyResultWrapperStr(result_wrapper));
+  char res[2000];
+  FD_C_ClassifyResultStr(result, res);
+  printf("%s", res);
   FD_C_DestroyRuntimeOptionWrapper(option);
   FD_C_DestroyPaddleClasModelWrapper(model);
-  FD_C_DestroyClassifyResultWrapper(result_wrapper);
   FD_C_DestroyClassifyResult(result);
   FD_C_DestroyMat(im);
 }

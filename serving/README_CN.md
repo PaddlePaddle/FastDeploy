@@ -6,6 +6,7 @@
 
 FastDeploy基于[Triton Inference Server](https://github.com/triton-inference-server/server)搭建了端到端的服务化部署。底层后端使用FastDeploy高性能Runtime模块，并串联FastDeploy前后处理模块实现端到端的服务化部署。具有快速部署、使用简单、性能卓越的特性。
 
+> FastDeploy同时还提供了基于Python搭建的服务化部署能力，只需要通过Python即可启动服务，可参考[PaddleSeg部署示例](../examples/vision/segmentation/paddleseg/serving/simple_serving)了解其用法。
 ## 准备环境
 
 ### 环境要求
@@ -17,13 +18,13 @@ FastDeploy基于[Triton Inference Server](https://github.com/triton-inference-se
 #### CPU镜像
 CPU镜像仅支持Paddle/ONNX模型在CPU上进行服务化部署，支持的推理后端包括OpenVINO、Paddle Inference和ONNX Runtime
 ``` shell
-docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.2-cpu-only-21.10
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.4-cpu-only-21.10
 ```
 
 #### GPU镜像
 GPU镜像支持Paddle/ONNX模型在GPU/CPU上进行服务化部署，支持的推理后端包括OpenVINO、TensorRT、Paddle Inference和ONNX Runtime
 ```
-docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.2-gpu-cuda11.4-trt8.4-21.10
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.4-gpu-cuda11.4-trt8.5-21.10
 ```
 
 用户也可根据自身需求，参考如下文档自行编译镜像

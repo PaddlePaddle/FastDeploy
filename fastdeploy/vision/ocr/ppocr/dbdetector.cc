@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
+
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
@@ -35,6 +36,7 @@ DBDetector::DBDetector(const std::string& model_file,
     valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE};
     valid_sophgonpu_backends = {Backend::SOPHGOTPU};
+    valid_rknpu_backends = {Backend::RKNPU2};
   }
 
   runtime_option = custom_option;
@@ -94,12 +96,11 @@ bool DBDetector::BatchPredict(
     const std::vector<cv::Mat>& images,
     std::vector<std::vector<std::array<int, 8>>>* det_results) {
   std::vector<FDMat> fd_images = WrapMat(images);
-  std::vector<std::array<int, 4>> batch_det_img_info;
-  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_,
-                         &batch_det_img_info)) {
+  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
   }
+  auto batch_det_img_info = preprocessor_.GetBatchImgInfo();
 
   reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
   if (!Infer(reused_input_tensors_, &reused_output_tensors_)) {
@@ -108,7 +109,7 @@ bool DBDetector::BatchPredict(
   }
 
   if (!postprocessor_.Run(reused_output_tensors_, det_results,
-                          batch_det_img_info)) {
+                          *batch_det_img_info)) {
     FDERROR << "Failed to postprocess the inference cls_results by runtime."
             << std::endl;
     return false;
@@ -116,6 +117,6 @@ bool DBDetector::BatchPredict(
   return true;
 }
 
-}  // namesapce ocr
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy
