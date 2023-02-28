@@ -569,7 +569,7 @@ public class PPOCRv2 {
       return null;
     } // predict
     OCRResult ocr_detector_result = ConvertResult.ConvertCResultToOCRResult(fd_ocr_result);
-    FD_C_DestroyOCRResult(fd_ocr_result);
+    FD_C_DestroyOCRResult(ref fd_ocr_result);
     return ocr_detector_result;
   }
 
