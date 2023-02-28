@@ -28,7 +28,7 @@ void CpuInfer(const char* model_file, const char* image_file) {
   FD_C_RuntimeOptionWrapperUseCpu(option);
 
   FD_C_YOLOv5Wrapper* model =
-      FD_C_CreateYOLOv5Wrapper(model_file, "", option, PADDLE);
+      FD_C_CreateYOLOv5Wrapper(model_file, "", option, FD_C_ModelFormat_ONNX);
 
   if (!FD_C_YOLOv5WrapperInitialized(model)) {
     printf("Failed to initialize.\n");
@@ -68,7 +68,7 @@ void GpuInfer(const char* model_file, const char* image_file) {
   FD_C_RuntimeOptionWrapperUseGpu(option, 0);
 
   FD_C_YOLOv5Wrapper* model =
-      FD_C_CreateYOLOv5Wrapper(model_file, "", option, PADDLE);
+      FD_C_CreateYOLOv5Wrapper(model_file, "", option, FD_C_ModelFormat_ONNX);
 
   if (!FD_C_YOLOv5WrapperInitialized(model)) {
     printf("Failed to initialize.\n");

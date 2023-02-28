@@ -43,7 +43,10 @@ FD_C_Destroy##model_type##Wrapper(__fd_take FD_C_##model_type##Wrapper* wrapper_
                             FD_C_OneDimMat imgs, \
                             FD_C_OneDimDetectionResult* results)
 
-#define YOLO_IMPLEMENT_CREATE_WRAPPER_FUNCTION(model_type, var_name)  \
+#define YOLO_DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(model_type, var_name) FD_C_##model_type##Wrapper* FD_C_Create##model_type##Wrapper(\
+    const char* model_file, const char* params_file,  \
+    FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper, \
+    const FD_C_ModelFormat model_format) { \
   auto& runtime_option = CHECK_AND_CONVERT_FD_TYPE(RuntimeOptionWrapper, \
                                                    fd_c_runtime_option_wrapper); \
   FD_C_##model_type##Wrapper* fd_c_##model_type##_wrapper = new FD_C_##model_type##Wrapper(); \
@@ -53,11 +56,18 @@ FD_C_Destroy##model_type##Wrapper(__fd_take FD_C_##model_type##Wrapper* wrapper_
               std::string(model_file), std::string(params_file), \
               *runtime_option, \
               static_cast<fastdeploy::ModelFormat>(model_format))); \
-  return fd_c_##model_type##_wrapper
+  return fd_c_##model_type##_wrapper; \
+}
 
-#define YOLO_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(model_type, wrapper_var_name) delete wrapper_var_name
+#define YOLO_DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(model_type, wrapper_var_name) void FD_C_Destroy##model_type##Wrapper( \
+    __fd_take FD_C_##model_type##Wrapper* wrapper_var_name) { \
+  delete wrapper_var_name; \
+}
 
-#define YOLO_IMPLEMENT_PREDICT_FUNCTION(model_type, wrapper_var_name)               \
+
+#define YOLO_DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(model_type, wrapper_var_name) FD_C_Bool FD_C_##model_type##WrapperPredict( \
+    FD_C_##model_type##Wrapper* wrapper_var_name, FD_C_Mat img, \
+    FD_C_DetectionResult* fd_c_detection_result) { \
   cv::Mat* im = reinterpret_cast<cv::Mat*>(img);                               \
   auto& model =                                                                \
       CHECK_AND_CONVERT_FD_TYPE(model_type##Wrapper, wrapper_var_name);        \
@@ -67,13 +77,16 @@ FD_C_Destroy##model_type##Wrapper(__fd_take FD_C_##model_type##Wrapper* wrapper_
       DetectionResultWrapper, fd_c_detection_result_wrapper);                  \
   bool successful = model->Predict(*im, detection_result.get());                \
   if (successful) {                                                            \
-    FD_C_DetectionResult* res =                                                \
-        FD_C_DetectionResultWrapperGetData(fd_c_detection_result_wrapper);     \
-    *fd_c_detection_result = *res;                                             \
-  }                                                                            \
-  return successful
+    FD_C_DetectionResultWrapperToCResult(fd_c_detection_result_wrapper, fd_c_detection_result);  \
+  }\
+  FD_C_DestroyDetectionResultWrapper(fd_c_detection_result_wrapper); \
+  return successful; \
+}
 
-#define YOLO_IMPLEMENT_PREDICT_FUNCTION_WITH_THREASHOLD(model_type, wrapper_var_name)   \
+#define YOLO_DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION_WITH_THREASHOLD(model_type, wrapper_var_name) FD_C_Bool FD_C_##model_type##WrapperPredict( \
+    FD_C_##model_type##Wrapper* wrapper_var_name, FD_C_Mat img, \
+    FD_C_DetectionResult* fd_c_detection_result, float conf_threshold, \
+                       float nms_threshold) { \
   cv::Mat* im = reinterpret_cast<cv::Mat*>(img);                               \
   auto& model =                                                                \
       CHECK_AND_CONVERT_FD_TYPE(model_type##Wrapper, wrapper_var_name);        \
@@ -83,17 +96,23 @@ FD_C_Destroy##model_type##Wrapper(__fd_take FD_C_##model_type##Wrapper* wrapper_
       DetectionResultWrapper, fd_c_detection_result_wrapper);                  \
   bool successful = model->Predict(im, detection_result.get(), conf_threshold, nms_threshold); \
   if (successful) {                                                            \
-    FD_C_DetectionResult* res =                                                \
-        FD_C_DetectionResultWrapperGetData(fd_c_detection_result_wrapper);     \
-    *fd_c_detection_result = *res;                                             \
-  }                                                                            \
-  return successful
+    FD_C_DetectionResultWrapperToCResult(fd_c_detection_result_wrapper, fd_c_detection_result); \
+  }             \
+  FD_C_DestroyDetectionResultWrapper(fd_c_detection_result_wrapper); \
+  return successful; \
+}
 
-#define YOLO_IMPLEMENT_INITIALIZED_FUNCTION(model_type, wrapper_var_name)   auto& model = \
+#define YOLO_DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(model_type, wrapper_var_name)  FD_C_Bool FD_C_##model_type##WrapperInitialized( \
+    FD_C_##model_type##Wrapper* wrapper_var_name) { \
+  auto& model = \
       CHECK_AND_CONVERT_FD_TYPE(model_type##Wrapper, wrapper_var_name); \
-return model->Initialized();
+  return model->Initialized(); \
+}
 
-#define YOLO_IMPLEMENT_BATCH_PREDICT_FUNCTION(model_type, wrapper_var_name) std::vector<cv::Mat> imgs_vec; \
+#define YOLO_DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(model_type, wrapper_var_name) FD_C_Bool FD_C_##model_type##WrapperBatchPredict( \
+    FD_C_##model_type##Wrapper* wrapper_var_name, FD_C_OneDimMat imgs, \
+    FD_C_OneDimDetectionResult* results) { \
+  std::vector<cv::Mat> imgs_vec; \
   std::vector<fastdeploy::vision::DetectionResult> results_out; \
   std::vector<FD_C_DetectionResultWrapper*> results_wrapper_out; \
   for (int i = 0; i < imgs.size; i++) { \
@@ -110,45 +129,11 @@ return model->Initialized();
     for (int i = 0; i < results_out.size(); i++) { \
       (*CHECK_AND_CONVERT_FD_TYPE(DetectionResultWrapper, \
                                   results_wrapper_out[i])) = std::move(results_out[i]); \
-      results->data[i] = *(FD_C_DetectionResultWrapperGetData(results_wrapper_out[i])); \
-      FD_C_DestroyDetectionResultWrapper(results_wrapper_out[i]); \
+      FD_C_DetectionResultWrapperToCResult(results_wrapper_out[i], &results->data[i]); \
     } \
   } \
-  return successful;
-
-#define YOLO_DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(model_type, var_name) FD_C_##model_type##Wrapper* FD_C_Create##model_type##Wrapper(\
-    const char* model_file, const char* params_file,  \
-    FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper, \
-    const FD_C_ModelFormat model_format) { \
-  YOLO_IMPLEMENT_CREATE_WRAPPER_FUNCTION(model_type, var_name); \
-}
-
-#define YOLO_DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(model_type, wrapper_var_name) void FD_C_Destroy##model_type##Wrapper( \
-    __fd_take FD_C_##model_type##Wrapper* wrapper_var_name) { \
-  YOLO_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(model_type, wrapper_var_name); \
-}
-
-
-#define YOLO_DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(model_type, wrapper_var_name) FD_C_Bool FD_C_##model_type##WrapperPredict( \
-    FD_C_##model_type##Wrapper* wrapper_var_name, FD_C_Mat img, \
-    FD_C_DetectionResult* fd_c_detection_result) { \
-  YOLO_IMPLEMENT_PREDICT_FUNCTION(model_type, wrapper_var_name); \
-}
-
-#define YOLO_DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION_WITH_THREASHOLD(model_type, wrapper_var_name) FD_C_Bool FD_C_##model_type##WrapperPredict( \
-    FD_C_##model_type##Wrapper* wrapper_var_name, FD_C_Mat img, \
-    FD_C_DetectionResult* fd_c_detection_result, float conf_threshold, \
-                       float nms_threshold) { \
-  YOLO_IMPLEMENT_PREDICT_FUNCTION_WITH_THREASHOLD(model_type, wrapper_var_name); \
-}
-
-#define YOLO_DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(model_type, wrapper_var_name)  FD_C_Bool FD_C_##model_type##WrapperInitialized( \
-    FD_C_##model_type##Wrapper* wrapper_var_name) { \
-  YOLO_IMPLEMENT_INITIALIZED_FUNCTION(model_type, wrapper_var_name); \
-}
-
-#define YOLO_DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(model_type, wrapper_var_name) FD_C_Bool FD_C_##model_type##WrapperBatchPredict( \
-    FD_C_##model_type##Wrapper* wrapper_var_name, FD_C_OneDimMat imgs, \
-    FD_C_OneDimDetectionResult* results) { \
-      YOLO_IMPLEMENT_BATCH_PREDICT_FUNCTION(model_type, wrapper_var_name); \
+  for (int i = 0; i < results_out.size(); i++) { \
+    FD_C_DestroyDetectionResultWrapper(results_wrapper_out[i]); \
+  }\
+  return successful; \
 }
