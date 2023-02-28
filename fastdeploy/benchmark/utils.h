@@ -15,6 +15,7 @@
 
 #include <memory>
 #include <thread>  // NOLINT
+#include <unordered_map>
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/core/fd_tensor.h"
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)

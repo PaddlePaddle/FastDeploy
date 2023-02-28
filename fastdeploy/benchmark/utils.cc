@@ -375,8 +375,8 @@ bool ResultManager::LoadBenchmarkConfig(
   auto lines = ReadLines(path);
   for (auto line : lines) {
     std::vector<std::string> tokens;
-    Split(line, tokens, ': ');
-    (*config_info)[tokens[0]] = tokens[1];
+    Split(line, tokens, ':');
+    (*config_info)[tokens[0]] = Strip(tokens[1], ' ');
   }
   return true;
 }
