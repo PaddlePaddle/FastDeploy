@@ -121,16 +121,6 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual double GetProfileTime() {
     return runtime_->GetProfileTime();
   }
-  /** \brief Enable to check if current backend set by user can be found at valid_xxx_backend.
-   */
-  virtual void EnableValidBackendCheck() {
-    enable_valid_backend_check_ = true;
-  }
-  /** \brief Disable to check if current backend set by user can be found at valid_xxx_backend.
-   */
-  virtual void DisableValidBackendCheck() {
-    enable_valid_backend_check_ = false;
-  }
   /** \brief Release reused input/output buffers
   */
   virtual void ReleaseReusedBuffer() {
@@ -179,8 +169,6 @@ class FASTDEPLOY_DECL FastDeployModel {
   // whether to record inference time
   bool enable_record_time_of_runtime_ = false;
   std::vector<double> time_of_runtime_;
-  // enable the check for valid backend, default true.
-  bool enable_valid_backend_check_ = true;
 };
 
 }  // namespace fastdeploy
