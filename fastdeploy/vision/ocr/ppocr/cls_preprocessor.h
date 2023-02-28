@@ -78,6 +78,7 @@ class FASTDEPLOY_DECL ClassifierPreprocessor : public ProcessorManager {
   std::shared_ptr<Resize> resize_op_;
   std::shared_ptr<Pad> pad_op_;
   std::shared_ptr<Normalize> normalize_op_;
+  std::shared_ptr<HWC2CHW> hwc2chw_op_;
 };
 
 }  // namespace ocr

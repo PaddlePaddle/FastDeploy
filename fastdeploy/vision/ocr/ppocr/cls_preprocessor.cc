@@ -32,6 +32,8 @@ ClassifierPreprocessor::ClassifierPreprocessor() {
   std::vector<float> scale = {0.5f, 0.5f, 0.5f};
   bool is_scale = true;
   normalize_op_ = std::make_shared<Normalize>(mean, scale, is_scale);
+
+  hwc2chw_op_ = std::make_shared<HWC2CHW>();
 }
 
 void ClassifierPreprocessor::OcrClassifierResizeImage(
@@ -48,7 +50,6 @@ void ClassifierPreprocessor::OcrClassifierResizeImage(
   else
     resize_w = int(ceilf(img_h * ratio));
 
-  // Resize::Run(mat, resize_w, img_h);
   resize_op_->SetWidthAndHeight(resize_w, img_h);
   (*resize_op_)(mat);
 }
@@ -76,16 +77,13 @@ bool ClassifierPreprocessor::Apply(FDMatBatch* image_batch,
   for (size_t i = 0; i < image_batch->mats->size(); ++i) {
     FDMat* mat = &(image_batch->mats->at(i));
     OcrClassifierResizeImage(mat, cls_image_shape_);
-    // Normalize::Run(mat, mean_, scale_, is_scale_);
     (*normalize_op_)(mat);
     std::vector<float> value = {0, 0, 0};
     if (mat->Width() < cls_image_shape_[2]) {
-      // Pad::Run(mat, 0, 0, 0, cls_image_shape_[2] - mat->Width(), value);
       pad_op_->SetPaddingSize(0, 0, 0, cls_image_shape_[2] - mat->Width());
       (*pad_op_)(mat);
     }
-    HWC2CHW::Run(mat);
-    Cast::Run(mat, "float");
+    (*hwc2chw_op_)(mat);
   }
   // Only have 1 output tensor.
   outputs->resize(1);
