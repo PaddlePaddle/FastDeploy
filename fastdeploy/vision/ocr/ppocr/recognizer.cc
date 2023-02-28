@@ -26,16 +26,17 @@ Recognizer::Recognizer(const std::string& model_file,
                        const std::string& params_file,
                        const std::string& label_path,
                        const RuntimeOption& custom_option,
-                       const ModelFormat& model_format):postprocessor_(label_path) {
+                       const ModelFormat& model_format)
+    : postprocessor_(label_path) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::ORT,
-                          Backend::OPENVINO};  
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};  
+    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {
-    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO, Backend::LITE};
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO,
+                          Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
     valid_kunlunxin_backends = {Backend::LITE};
-    valid_ascend_backends = {Backend::LITE}; 
+    valid_ascend_backends = {Backend::LITE};
     valid_sophgonpu_backends = {Backend::SOPHGOTPU};
   }
 
@@ -57,12 +58,14 @@ bool Recognizer::Initialize() {
 }
 
 std::unique_ptr<Recognizer> Recognizer::Clone() const {
-  std::unique_ptr<Recognizer> clone_model = utils::make_unique<Recognizer>(Recognizer(*this));
+  std::unique_ptr<Recognizer> clone_model =
+      utils::make_unique<Recognizer>(Recognizer(*this));
   clone_model->SetRuntime(clone_model->CloneRuntime());
   return clone_model;
 }
 
-bool Recognizer::Predict(const cv::Mat& img, std::string* text, float* rec_score) {
+bool Recognizer::Predict(const cv::Mat& img, std::string* text,
+                         float* rec_score) {
   std::vector<std::string> texts(1);
   std::vector<float> rec_scores(1);
   bool success = BatchPredict({img}, &texts, &rec_scores);
@@ -74,21 +77,39 @@ bool Recognizer::Predict(const cv::Mat& img, std::string* text, float* rec_score
   return true;
 }
 
+bool Recognizer::Predict(const cv::Mat& img, vision::OCRResult* ocr_result) {
+  ocr_result->text.resize(1);
+  ocr_result->rec_scores.resize(1);
+  if (!Predict(img, &(ocr_result->text[0]), &(ocr_result->rec_scores[0]))) {
+    return false;
+  }
+  return true;
+}
+
 bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
-                              std::vector<std::string>* texts, std::vector<float>* rec_scores) {
+                              std::vector<std::string>* texts,
+                              std::vector<float>* rec_scores) {
   return BatchPredict(images, texts, rec_scores, 0, images.size(), {});
 }
 
 bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
-                              std::vector<std::string>* texts, std::vector<float>* rec_scores,
-                              size_t start_index, size_t end_index, const std::vector<int>& indices) {
+                              vision::OCRResult* ocr_result) {
+  return BatchPredict(images, &(ocr_result->text), &(ocr_result->rec_scores));
+}
+
+bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
+                              std::vector<std::string>* texts,
+                              std::vector<float>* rec_scores,
+                              size_t start_index, size_t end_index,
+                              const std::vector<int>& indices) {
   size_t total_size = images.size();
   if (indices.size() != 0 && indices.size() != total_size) {
     FDERROR << "indices.size() should be 0 or images.size()." << std::endl;
     return false;
   }
   std::vector<FDMat> fd_images = WrapMat(images);
-  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, start_index, end_index, indices)) {
+  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, start_index,
+                         end_index, indices)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
   }
@@ -99,8 +120,10 @@ bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
     return false;
   }
 
-  if (!postprocessor_.Run(reused_output_tensors_, texts, rec_scores, start_index, total_size, indices)) {
-    FDERROR << "Failed to postprocess the inference cls_results by runtime." << std::endl;
+  if (!postprocessor_.Run(reused_output_tensors_, texts, rec_scores,
+                          start_index, total_size, indices)) {
+    FDERROR << "Failed to postprocess the inference cls_results by runtime."
+            << std::endl;
     return false;
   }
   return true;
