@@ -72,3 +72,27 @@ fastdeploy convert --framework onnx --model yolov5s.onnx --save_dir pd_model
 ```
 
 For more details, please refer to[X2Paddle](https://github.com/PaddlePaddle/X2Paddle)
+
+## paddle2coreml tool
+
+FastDeploy provides users with a model conversion tool based on paddle2coreml, which allows users to easily migrate PaddlePaddle models to Apple computers and mobile devices with a single command.
+
+### Environment Preparation
+
+1. PaddlePaddle installation, please refer to the following document for quick installation:
+```
+https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html
+```
+2. paddle2coreml installation
+
+paddle2coreml can be installed using pip:
+```shell
+pip install paddle2coreml
+```
+3. Usage
+
+After successfully installing as described above, you can use the FastDeploy paddle2coreml one-click conversion tool, as shown below:
+
+```bash
+fastdeploy paddle2coreml --p2c_paddle_model_dir path/to/paddle_model --p2c_coreml_model_dir path/to/coreml_model --p2c_input_names "input1 input2" --p2c_input_shapes "1,3,224,224 1,4,64,64" --p2c_input_dtypes "float32 int32" --p2c_output_names "output1 output2" 
+```
