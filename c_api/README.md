@@ -1,4 +1,4 @@
-# C API implementation
+# C API tutorial
 
 This directory is the implementation of FastDeploy C SDK, which provides solutions for scenarios where users need C API.
 
