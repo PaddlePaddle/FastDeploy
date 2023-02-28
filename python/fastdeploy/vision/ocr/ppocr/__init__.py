@@ -24,12 +24,14 @@ def sort_boxes(boxes):
 
 class DBDetectorPreprocessor:
     def __init__(self):
-        """Create a preprocessor for DBDetectorModel
+        """
+        Create a preprocessor for DBDetectorModel
         """
         self._preprocessor = C.vision.ocr.DBDetectorPreprocessor()
 
     def run(self, input_ims):
         """Preprocess input images for DBDetectorModel
+
         :param: input_ims: (list of numpy.ndarray) The input image
         :return: pair(list of FDTensor, list of std::array<int, 4>)
         """
@@ -63,15 +65,40 @@ class DBDetectorPreprocessor:
         """
         self._preprocessor.set_normalize(mean, std, is_scale)
 
+    @property
+    def static_shape_infer(self):
+        return self._preprocessor.static_shape_infer
+
+    @static_shape_infer.setter
+    def static_shape_infer(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `static_shape_infer` must be type of bool."
+        self._preprocessor.static_shape_infer = value
+
+    def disable_normalize(self):
+        """
+        This function will disable normalize in preprocessing step.
+        """
+        self._preprocessor.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self._preprocessor.disable_permute()
+
 
 class DBDetectorPostprocessor:
     def __init__(self):
-        """Create a postprocessor for DBDetectorModel
+        """
+        Create a postprocessor for DBDetectorModel
         """
         self._postprocessor = C.vision.ocr.DBDetectorPostprocessor()
 
     def run(self, runtime_results, batch_det_img_info):
         """Postprocess the runtime results for DBDetectorModel
+
         :param: runtime_results: (list of FDTensor or list of pyArray)The output FDTensor results from runtime
         :param: batch_det_img_info: (list of std::array<int, 4>)The output of det_preprocessor
         :return: list of Result(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
@@ -80,10 +107,17 @@ class DBDetectorPostprocessor:
 
     @property
     def det_db_thresh(self):
+        """
+        Return the det_db_thresh of DBDetectorPostprocessor
+        """
         return self._postprocessor.det_db_thresh
 
     @det_db_thresh.setter
     def det_db_thresh(self, value):
+        """Set the det_db_thresh for DBDetectorPostprocessor
+
+        :param: value : the det_db_thresh value
+        """
         assert isinstance(
             value,
             float), "The value to set `det_db_thresh` must be type of float."
@@ -91,10 +125,17 @@ class DBDetectorPostprocessor:
 
     @property
     def det_db_box_thresh(self):
+        """
+        Return the det_db_box_thresh of DBDetectorPostprocessor
+        """
         return self._postprocessor.det_db_box_thresh
 
     @det_db_box_thresh.setter
     def det_db_box_thresh(self, value):
+        """Set the det_db_box_thresh for DBDetectorPostprocessor
+
+        :param: value : the det_db_box_thresh value
+        """
         assert isinstance(
             value, float
         ), "The value to set `det_db_box_thresh` must be type of float."
@@ -102,10 +143,17 @@ class DBDetectorPostprocessor:
 
     @property
     def det_db_unclip_ratio(self):
+        """
+        Return the det_db_unclip_ratio of DBDetectorPostprocessor
+        """
         return self._postprocessor.det_db_unclip_ratio
 
     @det_db_unclip_ratio.setter
     def det_db_unclip_ratio(self, value):
+        """Set the det_db_unclip_ratio for DBDetectorPostprocessor
+
+        :param: value : the det_db_unclip_ratio value
+        """
         assert isinstance(
             value, float
         ), "The value to set `det_db_unclip_ratio` must be type of float."
@@ -113,10 +161,17 @@ class DBDetectorPostprocessor:
 
     @property
     def det_db_score_mode(self):
+        """
+        Return the det_db_score_mode of DBDetectorPostprocessor
+        """
         return self._postprocessor.det_db_score_mode
 
     @det_db_score_mode.setter
     def det_db_score_mode(self, value):
+        """Set the det_db_score_mode for DBDetectorPostprocessor
+
+        :param: value : the det_db_score_mode value
+        """
         assert isinstance(
             value,
             str), "The value to set `det_db_score_mode` must be type of str."
@@ -124,10 +179,17 @@ class DBDetectorPostprocessor:
 
     @property
     def use_dilation(self):
+        """
+        Return the use_dilation of DBDetectorPostprocessor
+        """
         return self._postprocessor.use_dilation
 
     @use_dilation.setter
     def use_dilation(self, value):
+        """Set the use_dilation for DBDetectorPostprocessor
+
+        :param: value : the use_dilation value
+        """
         assert isinstance(
             value,
             bool), "The value to set `use_dilation` must be type of bool."
@@ -160,6 +222,7 @@ class DBDetector(FastDeployModel):
 
     def clone(self):
         """Clone OCR detection model object
+
         :return: a new OCR detection model object
         """
 
@@ -318,6 +381,18 @@ class ClassifierPreprocessor:
             list), "The value to set `cls_image_shape` must be type of list."
         self._preprocessor.cls_image_shape = value
 
+    def disable_normalize(self):
+        """
+        This function will disable normalize in preprocessing step.
+        """
+        self._preprocessor.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self._preprocessor.disable_permute()
+
 
 class ClassifierPostprocessor:
     def __init__(self):
@@ -334,10 +409,17 @@ class ClassifierPostprocessor:
 
     @property
     def cls_thresh(self):
+        """
+        Return the cls_thresh of ClassifierPostprocessor
+        """
         return self._postprocessor.cls_thresh
 
     @cls_thresh.setter
     def cls_thresh(self, value):
+        """Set the cls_thresh for ClassifierPostprocessor
+
+        :param: value: the value of cls_thresh
+        """
         assert isinstance(
             value,
             float), "The value to set `cls_thresh` must be type of float."
@@ -533,6 +615,18 @@ class RecognizerPreprocessor:
             value,
             list), "The value to set `rec_image_shape` must be type of list."
         self._preprocessor.rec_image_shape = value
+
+    def disable_normalize(self):
+        """
+        This function will disable normalize in preprocessing step.
+        """
+        self._preprocessor.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self._preprocessor.disable_permute()
 
 
 class RecognizerPostprocessor:

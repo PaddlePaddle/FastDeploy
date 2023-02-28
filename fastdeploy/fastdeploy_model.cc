@@ -49,9 +49,20 @@ bool FastDeployModel::IsSupported(const std::vector<Backend>& backends,
               << "the backend [" << backend
               << "] is supported for current model!" << std::endl;
     return true;
+  } else if (!runtime_option.enable_valid_backend_check) {
+    FDWARNING << "Checking for valid backend is disable, we don't"
+              << " check to see if the backend [" << backend
+              << "] is supported for current model!" << std::endl;
+    return true;
   }
   return CheckBackendSupported(backends, backend);
 #else
+  if (!runtime_option.enable_valid_backend_check) {
+    FDWARNING << "Checking for valid backend is disable, we don't"
+              << " check to see if the backend [" << backend
+              << "] is supported for current model!" << std::endl;
+    return true;
+  }
   return CheckBackendSupported(backends, backend);
 #endif
 }
