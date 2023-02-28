@@ -23,6 +23,8 @@
     return 0;                                                               \
   }                                                                         \
   auto __im__ = cv::imread(FLAGS_image);                                    \
+  std::stringstream __ss__;                                                 \
+  __ss__.precision(6);                                                      \
   fastdeploy::benchmark::ResourceUsageMonitor __resource_moniter__(         \
       FLAGS_sampling_interval, FLAGS_device_id);                            \
   if (FLAGS_collect_memory_info) {                                          \
@@ -35,6 +37,7 @@
     }                                                                       \
     double __profile_time__ = MODEL_NAME.GetProfileTime() * 1000;           \
     std::cout << "Runtime(ms): " << __profile_time__ << "ms." << std::endl; \
+    __ss__ << "Runtime(ms): " << __profile_time__ << "ms." << std::endl;    \
   } else {                                                                  \
     std::cout << "Warmup " << FLAGS_warmup << " times..." << std::endl;     \
     for (int __i__ = 0; __i__ < FLAGS_warmup; __i__++) {                    \
@@ -56,14 +59,20 @@
     __tc__.End();                                                           \
     double __end2end__ = __tc__.Duration() / FLAGS_repeat * 1000;           \
     std::cout << "End2End(ms): " << __end2end__ << "ms." << std::endl;      \
+    __ss__ << "End2End(ms): " << __end2end__ << "ms." << std::endl;         \
   }                                                                         \
   if (FLAGS_collect_memory_info) {                                          \
     float __cpu_mem__ = __resource_moniter__.GetMaxCpuMem();                \
     float __gpu_mem__ = __resource_moniter__.GetMaxGpuMem();                \
     float __gpu_util__ = __resource_moniter__.GetMaxGpuUtil();              \
     std::cout << "cpu_rss_mb: " << __cpu_mem__ << "MB." << std::endl;       \
+    __ss__ << "cpu_rss_mb: " << __cpu_mem__ << "MB." << std::endl;          \
     std::cout << "gpu_rss_mb: " << __gpu_mem__ << "MB." << std::endl;       \
+    __ss__ << "gpu_rss_mb: " << __gpu_mem__ << "MB." << std::endl;          \
     std::cout << "gpu_util: " << __gpu_util__ << std::endl;                 \
+    __ss__ << "gpu_rss_mb: " << __gpu_mem__ << "MB." << std::endl;          \
     __resource_moniter__.Stop();                                            \
   }                                                                         \
+  fastdeploy::benchmark::ResultManager::SaveBenchmarkResult(__ss__.str(),   \
+                                          FLAGS_result_path);               \
 }

@@ -350,6 +350,21 @@ TensorDiff ResultManager::CalculateDiffStatis(const FDTensor& lhs,
   }
 }
 
+void ResultManager::SaveBenchmarkResult(const std::string& res,
+                                        const std::string& path) {
+  if (path.empty()) {
+    FDERROR << "Benchmark data path can not be empty!" << std::endl;
+    return;
+  }
+  auto openmode = std::ios::app;
+  std::ofstream fs(path, openmode);
+  if (!fs.is_open()) {
+    FDERROR << "Fail to open result file: " << path << std::endl;
+  }
+  fs << res;
+  fs.close();
+}
+
 #if defined(ENABLE_VISION)
 bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
                                         const std::string& path) {

@@ -36,4 +36,7 @@ else()
   target_link_libraries(benchmark_ppocr_cls ${FASTDEPLOY_LIBS} gflags)
   target_link_libraries(benchmark_ppocr_rec ${FASTDEPLOY_LIBS} gflags)
 endif()
-install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR})
+# only for Android ADB test
+if(ANDROID)
+  install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR})
+endif()
