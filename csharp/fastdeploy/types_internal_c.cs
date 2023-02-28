@@ -143,7 +143,6 @@ public struct FD_DetectionResult {
   public FD_ResultType type;
 }
 
-
 [StructLayout(LayoutKind.Sequential)]
 public struct FD_OneDimDetectionResult {
   public nuint size;
@@ -165,6 +164,20 @@ public struct FD_OCRResult {
 public struct FD_OneDimOCRResult {
   public nuint size;
   public IntPtr data; // FD_OCRResult[]
+
+public struct FD_SegmentationResult {
+  public FD_OneDimArrayUint8 label_map;
+  public FD_OneDimArrayFloat score_map;
+  public FD_OneDimArrayInt64 shape;
+  [MarshalAs(UnmanagedType.U1)]
+  public bool contain_score_map;
+  public FD_ResultType type;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct FD_OneDimSegmentationResult {
+  public nuint size;
+  public IntPtr data; // FD_SegmentationResult[]
 }
 
 [StructLayout(LayoutKind.Sequential)]

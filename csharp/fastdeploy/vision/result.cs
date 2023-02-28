@@ -146,8 +146,6 @@ public class OCRResult {
     this.cls_labels = new List<int>();
     this.type = ResultType.OCR;
   }
-
-  
   public string ToString() {
   string no_result = "";
   if (boxes.Count > 0) {
@@ -226,6 +224,49 @@ public class OCRRecognizerResult{
   public string text;
   public float rec_score;
 }
+
+public class SegmentationResult{
+  public List<byte> label_map;
+  public List<float> score_map;
+  public List<long> shape;
+  public bool contain_score_map;
+  public ResultType type;
+  public SegmentationResult() {
+    this.label_map = new List<byte>();
+    this.score_map = new List<float>();
+    this.shape = new List<long>();
+    this.contain_score_map = false;
+    this.type = ResultType.SEGMENTATION;
+  }
+
+  public string ToString() {
+    string information;
+    information = "SegmentationResult Image masks 10 rows x 10 cols: \n";
+    for (int i = 0; i < 10; ++i) {
+      information += "[";
+      for (int j = 0; j < 10; ++j) {
+        information = information + label_map[i * 10 + j].ToString() + ", ";
+      }
+      information += ".....]\n";
+    }
+    information += "...........\n";
+    if (contain_score_map) {
+      information += "SegmentationResult Score map 10 rows x 10 cols: \n";
+      for (int i = 0; i < 10; ++i) {
+        information += "[";
+        for (int j = 0; j < 10; ++j) {
+          information = information + score_map[i * 10 + j].ToString() + ", ";
+        }
+        information += ".....]\n";
+      }
+      information += "...........\n";
+    }
+    information += "result shape is: [" + shape[0].ToString() + " " +
+          shape[1].ToString() + "]";
+    return information;
+    }
+}
+
 
 public class ConvertResult {
 
@@ -524,6 +565,81 @@ public class ConvertResult {
 
     ocr_result.type = (ResultType)fd_ocr_result.type;
     return ocr_result;
+  }
+
+  public static SegmentationResult
+  ConvertCResultToSegmentationResult(FD_SegmentationResult fd_segmentation_result){
+    SegmentationResult segmentation_result = new SegmentationResult();
+
+    // copy label_map
+    byte[] label_map = new byte[fd_segmentation_result.label_map.size];
+    Marshal.Copy(fd_segmentation_result.label_map.data, label_map, 0,
+                 label_map.Length);
+    segmentation_result.label_map = new List<byte>(label_map);
+
+    // copy score_map
+    float[] score_map = new float[fd_segmentation_result.score_map.size];
+    Marshal.Copy(fd_segmentation_result.score_map.data, score_map, 0,
+                 score_map.Length);
+    segmentation_result.score_map = new List<float>(score_map);
+
+    // copy shape
+    long[] shape = new long[fd_segmentation_result.shape.size];
+    Marshal.Copy(fd_segmentation_result.shape.data, shape, 0,
+                 shape.Length);
+    segmentation_result.shape = new List<long>(shape);
+
+    segmentation_result.contain_score_map = fd_segmentation_result.contain_score_map;
+    segmentation_result.type = (ResultType)fd_segmentation_result.type;
+    return segmentation_result;
+
+  }
+  public static FD_SegmentationResult
+  ConvertSegmentationResultToCResult(SegmentationResult segmentation_result){
+    FD_SegmentationResult fd_segmentation_result = new FD_SegmentationResult();
+    // copy label_map
+    // Create a managed array
+    fd_segmentation_result.label_map.size = (uint)segmentation_result.label_map.Count;
+    byte[] label_map = new byte[fd_segmentation_result.label_map.size];
+    // Copy data from Link to Array
+    segmentation_result.label_map.CopyTo(label_map);
+
+    // Copy data to unmanaged memory
+    int size = Marshal.SizeOf(label_map[0]) * label_map.Length;
+    fd_segmentation_result.label_map.data = Marshal.AllocHGlobal(size);
+    Marshal.Copy(label_map, 0, fd_segmentation_result.label_map.data,
+                 label_map.Length);
+    
+    // copy score_map
+    // Create a managed array
+    fd_segmentation_result.score_map.size = (uint)segmentation_result.score_map.Count;
+    if(fd_segmentation_result.score_map.size != 0){
+    float[] score_map = new float[fd_segmentation_result.score_map.size];
+    // Copy data from Link to Array
+    segmentation_result.score_map.CopyTo(score_map);
+    // Copy data to unmanaged memory
+    size = Marshal.SizeOf(score_map[0]) * score_map.Length;
+    fd_segmentation_result.score_map.data = Marshal.AllocHGlobal(size);
+    Marshal.Copy(score_map, 0, fd_segmentation_result.score_map.data,
+                 score_map.Length);
+    }
+    
+    // copy shape
+    // Create a managed array
+    fd_segmentation_result.shape.size = (uint)segmentation_result.shape.Count;
+    long[] shape = new long[fd_segmentation_result.shape.size];
+    // Copy data from Link to Array
+    segmentation_result.shape.CopyTo(shape);
+    // Copy data to unmanaged memory
+    size = Marshal.SizeOf(shape[0]) * shape.Length;
+    fd_segmentation_result.shape.data = Marshal.AllocHGlobal(size);
+    Marshal.Copy(shape, 0, fd_segmentation_result.shape.data,
+                 shape.Length);
+
+    fd_segmentation_result.contain_score_map = segmentation_result.contain_score_map;
+    fd_segmentation_result.type = (FD_ResultType)segmentation_result.type;
+
+    return fd_segmentation_result;
   }
 
 
