@@ -26,11 +26,11 @@ Classifier::Classifier(const std::string& model_file,
                        const RuntimeOption& custom_option,
                        const ModelFormat& model_format) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::ORT,
-                          Backend::OPENVINO}; 
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};  
+    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {
-    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO, Backend::LITE};
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO,
+                          Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
     valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE};
@@ -54,16 +54,18 @@ bool Classifier::Initialize() {
 }
 
 std::unique_ptr<Classifier> Classifier::Clone() const {
-  std::unique_ptr<Classifier> clone_model = utils::make_unique<Classifier>(Classifier(*this));
+  std::unique_ptr<Classifier> clone_model =
+      utils::make_unique<Classifier>(Classifier(*this));
   clone_model->SetRuntime(clone_model->CloneRuntime());
   return clone_model;
 }
 
-bool Classifier::Predict(const cv::Mat& img, int32_t* cls_label, float* cls_score) {
+bool Classifier::Predict(const cv::Mat& img, int32_t* cls_label,
+                         float* cls_score) {
   std::vector<int32_t> cls_labels(1);
   std::vector<float> cls_scores(1);
   bool success = BatchPredict({img}, &cls_labels, &cls_scores);
-  if(!success){
+  if (!success) {
     return success;
   }
   *cls_label = cls_labels[0];
@@ -71,17 +73,36 @@ bool Classifier::Predict(const cv::Mat& img, int32_t* cls_label, float* cls_scor
   return true;
 }
 
+bool Classifier::Predict(const cv::Mat& img, vision::OCRResult* ocr_result) {
+  ocr_result->cls_labels.resize(1);
+  ocr_result->cls_scores.resize(1);
+  if (!Predict(img, &(ocr_result->cls_labels[0]),
+               &(ocr_result->cls_scores[0]))) {
+    return false;
+  }
+  return true;
+}
+
 bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
-                              std::vector<int32_t>* cls_labels, std::vector<float>* cls_scores) {
+                              vision::OCRResult* ocr_result) {
+  return BatchPredict(images, &(ocr_result->cls_labels),
+                      &(ocr_result->cls_scores));
+}
+
+bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
+                              std::vector<int32_t>* cls_labels,
+                              std::vector<float>* cls_scores) {
   return BatchPredict(images, cls_labels, cls_scores, 0, images.size());
 }
 
 bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
-                              std::vector<int32_t>* cls_labels, std::vector<float>* cls_scores,
+                              std::vector<int32_t>* cls_labels,
+                              std::vector<float>* cls_scores,
                               size_t start_index, size_t end_index) {
   size_t total_size = images.size();
   std::vector<FDMat> fd_images = WrapMat(images);
-  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, start_index, end_index)) {
+  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, start_index,
+                         end_index)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
   }
@@ -91,8 +112,10 @@ bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
     return false;
   }
 
-  if (!postprocessor_.Run(reused_output_tensors_, cls_labels, cls_scores, start_index, total_size)) {
-    FDERROR << "Failed to postprocess the inference cls_results by runtime." << std::endl;
+  if (!postprocessor_.Run(reused_output_tensors_, cls_labels, cls_scores,
+                          start_index, total_size)) {
+    FDERROR << "Failed to postprocess the inference cls_results by runtime."
+            << std::endl;
     return false;
   }
   return true;
