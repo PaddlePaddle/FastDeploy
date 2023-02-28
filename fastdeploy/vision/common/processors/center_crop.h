@@ -15,6 +15,11 @@
 #pragma once
 
 #include "fastdeploy/vision/common/processors/base.h"
+#ifdef ENABLE_CVCUDA
+#include <cvcuda/OpCustomCrop.hpp>
+
+#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
+#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -38,6 +43,9 @@ class FASTDEPLOY_DECL CenterCrop : public Processor {
  private:
   int height_;
   int width_;
+#ifdef ENABLE_CVCUDA
+  cvcuda::CustomCrop cvcuda_crop_op_;
+#endif
 };
 
 }  // namespace vision

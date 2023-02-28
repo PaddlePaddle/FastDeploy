@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy_capi/fd_type.h"
+#include "fastdeploy_capi/core/fd_type.h"
 
 #include <opencv2/imgcodecs.hpp>
 
-#include "fastdeploy_capi/fd_common.h"
+#include "fastdeploy_capi/core/fd_common.h"
 
 #ifdef __cplusplus
 extern "C" {

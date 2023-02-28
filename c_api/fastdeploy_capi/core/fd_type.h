@@ -17,8 +17,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "fastdeploy_capi/enum_variables.h"
-#include "fastdeploy_capi/fd_common.h"
+#include "fastdeploy_capi/runtime/enum_variables.h"
+#include "fastdeploy_capi/core/fd_common.h"
 
 typedef struct FD_C_OneDimArrayUint8 {
   size_t size;

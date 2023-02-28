@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy_capi/types_internal.h"
+#include "fastdeploy_capi/internal/types_internal.h"
 
 namespace fastdeploy {
 
@@ -31,6 +31,9 @@ DECL_AND_IMPLEMENT_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(
 DECL_AND_IMPLEMENT_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(OCRResult,
                                                         fd_ocr_result_wrapper,
                                                         ocr_result)
+// SegmentationResult
+DECL_AND_IMPLEMENT_RESULT_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    SegmentationResult, fd_segmentation_result_wrapper, segmentation_result)
 
 // Models:
 
@@ -170,6 +173,12 @@ DECL_AND_IMPLEMENT_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
 // PPOCRv3
 DECL_AND_IMPLEMENT_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
     PPOCRv3, fd_ppocrv3_wrapper, ppocrv3_model);
+
+// Segmentation models
+
+// PaddleSegModel
+DECL_AND_IMPLEMENT_SEGMENTATION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PaddleSegModel, fd_paddleseg_model_wrapper, segmentation_model);
 
 #endif
 

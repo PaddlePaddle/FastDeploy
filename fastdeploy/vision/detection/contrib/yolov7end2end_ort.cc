@@ -137,7 +137,7 @@ bool YOLOv7End2EndORT::Preprocess(
   HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
   mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  output->shape.insert(output->shape.begin(), 1);  // reshape to n, c, h, w
   return true;
 }
 
@@ -235,7 +235,8 @@ bool YOLOv7End2EndORT::Predict(cv::Mat* im, DetectionResult* result,
     return false;
   }
 
-  if (!Postprocess(reused_output_tensors_[0], result, im_info, conf_threshold)) {
+  if (!Postprocess(reused_output_tensors_[0], result, im_info,
+                   conf_threshold)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }
