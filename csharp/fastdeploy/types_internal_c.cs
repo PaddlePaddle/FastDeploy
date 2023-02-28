@@ -164,6 +164,7 @@ public struct FD_OCRResult {
 public struct FD_OneDimOCRResult {
   public nuint size;
   public IntPtr data; // FD_OCRResult[]
+}
 
 public struct FD_SegmentationResult {
   public FD_OneDimArrayUint8 label_map;

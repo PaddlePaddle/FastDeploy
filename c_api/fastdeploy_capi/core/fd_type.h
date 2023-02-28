@@ -97,12 +97,12 @@ extern "C" {
 #endif
 
 #define DECLARE_DESTROY_FD_TYPE_FUNCTION(typename) FASTDEPLOY_CAPI_EXPORT extern void FD_C_Destroy##typename (__fd_take FD_C_##typename *)
-#define IMPLEMENT_FD_TYPE_ONEDIMARRAY(typename) void FD_C_Destroy##typename (__fd_take FD_C_##typename * ptr) \
+#define DECLARE_AND_IMPLEMENT_FD_TYPE_ONEDIMARRAY(typename) void FD_C_Destroy##typename (__fd_take FD_C_##typename * ptr) \
   { \
      delete[] ptr->data; \
   }
 
-#define IMPLEMENT_FD_TYPE_TWODIMARRAY(typename, one_dim_type) void FD_C_Destroy##typename (__fd_take FD_C_##typename * ptr) \
+#define DECLARE_AND_IMPLEMENT_FD_TYPE_TWODIMARRAY(typename, one_dim_type) void FD_C_Destroy##typename (__fd_take FD_C_##typename * ptr) \
   { \
      for(int i=0; i< ptr->size; i++) { \
         FD_C_Destroy##one_dim_type(ptr->data + i); \
@@ -110,7 +110,7 @@ extern "C" {
      delete[] ptr->data; \
   }
 
-#define IMPLEMENT_FD_TYPE_THREEDIMARRAY(typename, two_dim_type) void FD_C_Destroy##typename (__fd_take FD_C_##typename * ptr) \
+#define DECLARE_AND_IMPLEMENT_FD_TYPE_THREEDIMARRAY(typename, two_dim_type) void FD_C_Destroy##typename (__fd_take FD_C_##typename * ptr) \
   { \
      for(int i=0; i< ptr->size; i++) { \
         FD_C_Destroy##two_dim_type(ptr->data + i); \
