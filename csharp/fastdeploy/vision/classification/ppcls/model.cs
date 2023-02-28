@@ -55,6 +55,7 @@ public class PaddleClasModel {
     } // predict
     ClassifyResult classify_result =
         ConvertResult.ConvertCResultToClassifyResult(fd_classify_result);
+    FD_C_DestroyClassifyResult(ref fd_classify_result);
     return classify_result;
   }
 
@@ -71,7 +72,7 @@ public class PaddleClasModel {
     Marshal.Copy(mat_ptrs, 0, imgs_in.data,
                  mat_ptrs.Length);
     FD_OneDimClassifyResult fd_classify_result_array =  new FD_OneDimClassifyResult();
-    if (!FD_C_PaddleClasModelWrapperBatchPredict(fd_paddleclas_model_wrapper, ref imgs_in, ref fd_classify_result_array)){
+    if (!FD_C_PaddleClasModelWrapperBatchPredict(fd_paddleclas_model_wrapper, imgs_in, ref fd_classify_result_array)){
       return null;
     }
     List<ClassifyResult> results_out = new List<ClassifyResult>();
@@ -80,6 +81,7 @@ public class PaddleClasModel {
           fd_classify_result_array.data + i * Marshal.SizeOf(new FD_ClassifyResult()),
           typeof(FD_ClassifyResult));
       results_out.Add(ConvertResult.ConvertCResultToClassifyResult(fd_classify_result));
+      FD_C_DestroyClassifyResult(ref fd_classify_result);
     }
     return results_out;
   }
@@ -113,15 +115,15 @@ public class PaddleClasModel {
   FD_C_DestroyClassifyResultWrapper(IntPtr fd_classify_result_wrapper);
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_DestroyClassifyResult")]
   private static extern void
-  FD_C_DestroyClassifyResult(IntPtr fd_classify_result);
+  FD_C_DestroyClassifyResult(ref FD_ClassifyResult fd_classify_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_ClassifyResultWrapperGetData")]
-  private static extern IntPtr
-  FD_C_ClassifyResultWrapperGetData(IntPtr fd_classify_result_wrapper);
+             EntryPoint = "FD_C_ClassifyResultWrapperToCResult")]
+  private static extern void
+  FD_C_ClassifyResultWrapperToCResult(IntPtr fd_classify_result_wrapper, ref FD_ClassifyResult fd_classify_result);
   [DllImport("fastdeploy.dll",
-             EntryPoint = "FD_C_CreateClassifyResultWrapperFromData")]
+             EntryPoint = "FD_C_CreateClassifyResultWrapperFromCResult")]
   private static extern IntPtr
-  FD_C_CreateClassifyResultWrapperFromData(IntPtr fd_classify_result);
+  FD_C_CreateClassifyResultWrapperFromCResult(ref FD_ClassifyResult fd_classify_result);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_PaddleClasModelWrapperInitialized")]
@@ -131,7 +133,7 @@ public class PaddleClasModel {
              EntryPoint = "FD_C_PaddleClasModelWrapperBatchPredict")]
   private static extern bool
   FD_C_PaddleClasModelWrapperBatchPredict(IntPtr fd_paddleclas_model_wrapper,
-                                          ref FD_OneDimMat imgs,
+                                          FD_OneDimMat imgs,
                                           ref FD_OneDimClassifyResult results);
 
 }

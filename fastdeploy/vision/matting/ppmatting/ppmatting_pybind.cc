@@ -21,8 +21,8 @@ void BindPPMatting(pybind11::module& m) {
       .def("predict",
            [](vision::matting::PPMatting& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);
-             vision::MattingResult* res = new vision::MattingResult();
-             self.Predict(&mat, res);
+             vision::MattingResult res;
+             self.Predict(&mat, &res);
              return res;
            });
 }
