@@ -70,7 +70,7 @@ cmake .. -G "Visual Studio 16 2019" -A x64 ^
          -DENABLE_VISION=ON ^
          -DENABLE_TEXT=ON ^
          -DCMAKE_INSTALL_PREFIX="D:\Paddle\compiled_fastdeploy"
-% nuget restore  （please execute it when ENABLE_CSHARPAPI to prepare dependencies in C#)
+% nuget restore  （please execute it when WITH_CSHARPAPI=ON to prepare dependencies in C#)
 msbuild fastdeploy.sln /m /p:Configuration=Release /p:Platform=x64
 msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 ```
