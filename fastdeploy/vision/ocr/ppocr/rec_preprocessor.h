@@ -14,6 +14,7 @@
 
 #pragma once
 #include "fastdeploy/vision/common/processors/transform.h"
+#include "fastdeploy/vision/common/processors/manager.h"
 #include "fastdeploy/vision/common/result.h"
 
 namespace fastdeploy {
@@ -22,7 +23,7 @@ namespace vision {
 namespace ocr {
 /*! @brief Preprocessor object for PaddleClas serials model.
  */
-class FASTDEPLOY_DECL RecognizerPreprocessor {
+class FASTDEPLOY_DECL RecognizerPreprocessor : public ProcessorManager {
  public:
   /** \brief Process the input image and prepare input tensors for runtime
    *
@@ -30,10 +31,19 @@ class FASTDEPLOY_DECL RecognizerPreprocessor {
    * \param[in] outputs The output tensors which will be fed into runtime
    * \return true if the preprocess successed, otherwise false
    */
-  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
            size_t start_index, size_t end_index,
            const std::vector<int>& indices);
+
+  /** \brief Implement the virtual function of ProcessorManager, Apply() is the
+   *  body of Run(). Apply() contains the main logic of preprocessing, Run() is
+   *  called by users to execute preprocessing
+   *
+   * \param[in] image_batch The input image batch
+   * \param[in] outputs The output tensors which will feed in runtime
+   * \return true if the preprocess successed, otherwise false
+   */
+  virtual bool Apply(FDMatBatch* image_batch, std::vector<FDTensor>* outputs);
 
   /// Set static_shape_infer is true or not. When deploy PP-OCR
   /// on hardware which can not support dynamic input shape very well,

@@ -13,22 +13,23 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/ocr/ppocr/rec_preprocessor.h"
+
+#include "fastdeploy/function/concat.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
-#include "fastdeploy/function/concat.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
 void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
-                              const std::vector<int>& rec_image_shape, bool static_shape_infer) {
+                              const std::vector<int>& rec_image_shape,
+                              bool static_shape_infer) {
   int img_h, img_w;
   img_h = rec_image_shape[1];
   img_w = rec_image_shape[2];
 
   if (!static_shape_infer) {
-
     img_w = int(img_h * max_wh_ratio);
     float ratio = float(mat->Width()) / float(mat->Height());
 
@@ -43,69 +44,64 @@ void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
 
   } else {
     if (mat->Width() >= img_w) {
-      Resize::Run(mat, img_w, img_h); // Reszie W to 320
+      Resize::Run(mat, img_w, img_h);  // Reszie W to 320
     } else {
       Resize::Run(mat, mat->Width(), img_h);
       Pad::Run(mat, 0, 0, 0, int(img_w - mat->Width()), {127, 127, 127});
       // Pad to 320
-    } 
+    }
   }
 }
 
-bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs) {
-  return Run(images, outputs, 0, images->size(), {});
-}
-
-bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
-                                 size_t start_index, size_t end_index, const std::vector<int>& indices) {
-  if (images->size() == 0 || end_index <= start_index || end_index > images->size()) {
-    FDERROR << "images->size() or index error. Correct is: 0 <= start_index < end_index <= images->size()" << std::endl;
+bool RecognizerPreprocessor::Run(std::vector<FDMat>* images,
+                                 std::vector<FDTensor>* outputs,
+                                 size_t start_index, size_t end_index,
+                                 const std::vector<int>& indices) {
+  if (images->size() == 0 || end_index <= start_index ||
+      end_index > images->size()) {
+    FDERROR << "images->size() or index error. Correct is: 0 <= start_index < "
+               "end_index <= images->size()"
+            << std::endl;
     return false;
   }
 
+  std::vector<FDMat> mats(end_index - start_index);
+  for (size_t i = start_index; i < end_index; ++i) {
+    size_t real_index = i;
+    if (indices.size() != 0) {
+      real_index = indices[i];
+    }
+    mats[i - start_index] = images->at(real_index);
+  }
+  return ProcessorManager::Run(&mats, outputs);
+}
+
+bool RecognizerPreprocessor::Apply(FDMatBatch* image_batch,
+                                   std::vector<FDTensor>* outputs) {
   int img_h = rec_image_shape_[1];
   int img_w = rec_image_shape_[2];
   float max_wh_ratio = img_w * 1.0 / img_h;
   float ori_wh_ratio;
-  
-  for (size_t i = start_index; i < end_index; ++i) {
-    size_t real_index = i;
-    if (indices.size() != 0) {
-      real_index = indices[i];
-    }
-    FDMat* mat = &(images->at(real_index));
+
+  for (size_t i = 0; i < image_batch->mats->size(); ++i) {
+    FDMat* mat = &(image_batch->mats->at(i));
     ori_wh_ratio = mat->Width() * 1.0 / mat->Height();
     max_wh_ratio = std::max(max_wh_ratio, ori_wh_ratio);
   }
 
-  for (size_t i = start_index; i < end_index; ++i) {
-    size_t real_index = i;
-    if (indices.size() != 0) {
-      real_index = indices[i];
-    }
-    FDMat* mat = &(images->at(real_index));
-    OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_, static_shape_infer_);
+  for (size_t i = 0; i < image_batch->mats->size(); ++i) {
+    FDMat* mat = &(image_batch->mats->at(i));
+    OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_,
+                             static_shape_infer_);
     NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
   }
   // Only have 1 output Tensor.
   outputs->resize(1);
-  size_t tensor_size = end_index-start_index;
-  // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> tensors(tensor_size); 
-  for (size_t i = 0; i < tensor_size; ++i) {
-    size_t real_index = i + start_index;
-    if (indices.size() != 0) {
-      real_index = indices[i + start_index];
-    }
-    
-    (*images)[real_index].ShareWithTensor(&(tensors[i]));
-    tensors[i].ExpandDim(0);
-  }
-  if (tensors.size() == 1) {
-    (*outputs)[0] = std::move(tensors[0]);
-  } else {
-    function::Concat(tensors, &((*outputs)[0]), 0);
-  }
+  // Get the NCHW tensor
+  FDTensor* tensor = image_batch->Tensor();
+  (*outputs)[0].SetExternalData(tensor->Shape(), tensor->Dtype(),
+                                tensor->Data(), tensor->device,
+                                tensor->device_id);
   return true;
 }
 
