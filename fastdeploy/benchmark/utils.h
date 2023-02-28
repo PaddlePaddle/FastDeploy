@@ -138,6 +138,9 @@ struct FASTDEPLOY_DECL ResultManager {
   /// Calculate diff value between two FDTensor results.
   static TensorDiff CalculateDiffStatis(const FDTensor& lhs,
                                         const FDTensor& rhs);
+  /// Save Benchmark data
+  static void SaveBenchmarkResult(const std::string& res,
+                                  const std::string& path);
 #if defined(ENABLE_VISION)
   /// Save & Load functions for basic results.
   static bool SaveDetectionResult(const vision::DetectionResult& res,
