@@ -33,3 +33,61 @@ struct SegmentationResult {
 - **label_map**(list of int): 成员变量，表示单张图片每个像素点的分割类别
 - **score_map**(list of float): 成员变量，与label_map一一对应的所预测的分割类别概率值，只有导出PaddleSeg模型时指定`--output_op none`时，该成员变量才不为空，否则该成员变量为空
 - **shape**(list of int): 成员变量，表示输出图片的shape，为H\*W
+
+## C# 定义
+
+`fastdeploy.vision.SegmentationResult`
+
+```C#
+public class SegmentationResult{
+  public List<byte> label_map;
+  public List<float> score_map;
+  public List<long> shape;
+  public bool contain_score_map;
+  public ResultType type;
+}
+```
+
+- **label_map**(list of byte): 成员变量，表示单张图片每个像素点的分割类别
+- **score_map**(list of float): 成员变量，与label_map一一对应的所预测的分割类别概率值，只有导出PaddleSeg模型时指定`--output_op none`时，该成员变量才不为空，否则该成员变量为空
+- **shape**(list of long): 成员变量，表示输出图片的shape，为H\*W
+
+
+## C定义
+
+```c
+struct FD_C_SegmentationResult {
+  FD_C_OneDimArrayUint8 label_map;
+  FD_C_OneDimArrayFloat score_map;
+  FD_C_OneDimArrayInt64 shape;
+  FD_C_Bool contain_score_map;
+  FD_C_ResultType type;
+};
+```
+
+- **label_map**(FD_C_OneDimArrayUint8): 成员变量，表示单张图片每个像素点的分割类别
+
+```c
+struct FD_C_OneDimArrayUint8 {
+  size_t size;
+  uint8_t* data;
+};
+```
+
+- **score_map**(FD_C_OneDimArrayFloat): 成员变量，与label_map一一对应的所预测的分割类别概率值，只有导出PaddleSeg模型时指定`--output_op none`时，该成员变量才不为空，否则该成员变量为空
+
+```c
+struct FD_C_OneDimArrayFloat {
+  size_t size;
+  float* data;
+};
+```
+
+- **shape**(FD_C_OneDimArrayInt64): 成员变量，表示输出图片的shape，为H\*W
+
+```c
+struct FD_C_OneDimArrayInt64 {
+  size_t size;
+  int64_t* data;
+};
+```

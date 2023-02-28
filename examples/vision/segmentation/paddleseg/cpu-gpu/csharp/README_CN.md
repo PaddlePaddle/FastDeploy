@@ -1,7 +1,7 @@
 [English](README.md) | 简体中文
-# PaddleClas C#部署示例
+# PaddleSeg C#部署示例
 
-本目录下提供`infer.cs`来调用C# API快速完成PaddleClas系列模型在CPU/GPU上部署的示例。
+本目录下提供`infer.cs`来调用C# API快速完成PaddleSeg模型在CPU/GPU上部署的示例。
 
 在部署前，需确认以下两个步骤
 
@@ -16,15 +16,16 @@
 下载完成后将该程序添加到环境变量**PATH**中
 
 ## 2. 下载模型文件和测试图片
-> https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz # (下载后解压缩)
-> https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
+> https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.tgz # (下载后解压缩)
+> https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
+
 
 ## 3. 编译示例代码
 
 本文档编译的示例代码可在解压的库中找到，编译工具依赖VS 2019的安装，**Windows打开x64 Native Tools Command Prompt for VS 2019命令工具**，通过如下命令开始编译
 
 ```shell
-cd D:\Download\fastdeploy-win-x64-gpu-x.x.x\examples\vision\classification\paddleclas\csharp
+cd D:\Download\fastdeploy-win-x64-gpu-x.x.x\examples\vision\segmentation\paddleseg\cpu-gpu\csharp
 
 mkdir build && cd build
 cmake .. -G "Visual Studio 16 2019" -A x64 -DFASTDEPLOY_INSTALL_DIR=D:\Download\fastdeploy-win-x64-gpu-x.x.x -DCUDA_DIRECTORY="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2"
@@ -43,24 +44,24 @@ msbuild infer_demo.sln /m:4 /p:Configuration=Release /p:Platform=x64
 ```shell
 cd D:\Download\fastdeploy-win-x64-gpu-x.x.x
 
-fastdeploy_init.bat install %cd% D:\Download\fastdeploy-win-x64-gpu-x.x.x\examples\vision\classification\paddleclas\csharp\build\Release
+fastdeploy_init.bat install %cd% D:\Download\fastdeploy-win-x64-gpu-x.x.x\examples\vision\segmentation\paddleseg\cpu-gpu\csharp\build\Release
 ```
 
 将dll拷贝到当前路径后，准备好模型和图片，使用如下命令运行可执行程序即可
 ```shell
 cd Release
 # CPU推理
-infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 0
+infer_demo PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer cityscapes_demo.png 0
 # GPU推理
-infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 1
+infer_demo PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer cityscapes_demo.png 1
 ```
 
-## PaddleClas C#接口
+## PaddleSeg C#接口
 
 ### 模型
 
 ```c#
-fastdeploy.vision.classification.PaddleClasModel(
+fastdeploy.vision.segmentation.PaddleSeg(
         string model_file,
         string params_file,
         string config_file,
@@ -68,23 +69,23 @@ fastdeploy.vision.classification.PaddleClasModel(
         fastdeploy.ModelFormat model_format = ModelFormat.PADDLE)
 ```
 
-> PaddleClasModel模型加载和初始化。
+> PaddleSeg模型加载和初始化。
 
 > **参数**
 
 >> * **model_file**(str): 模型文件路径
 >> * **params_file**(str): 参数文件路径
->> * **config_file**(str): 配置文件路径，即PaddleClas导出的部署yaml文件
+>> * **config_file**(str): 配置文件路径
 >> * **runtime_option**(RuntimeOption): 后端推理配置，默认为null，即采用默认配置
 >> * **model_format**(ModelFormat): 模型格式，默认为PADDLE格式
 
 #### Predict函数
 
 ```c#
-fastdeploy.ClassifyResult Predict(OpenCvSharp.Mat im)
+fastdeploy.SegmentationResult Predict(OpenCvSharp.Mat im)
 ```
 
-> 模型预测接口，输入图像直接输出检测结果。
+> 模型预测接口，输入图像直接输出结果。
 >
 > **参数**
 >
@@ -92,7 +93,7 @@ fastdeploy.ClassifyResult Predict(OpenCvSharp.Mat im)
 >>
 > **返回值**
 >
->> * **result**: 分类结果，包括label_id，以及相应的置信度, ClassifyResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+>> * **result**: Segmentation检测结果，SegmentationResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 
 - [模型介绍](../../)
