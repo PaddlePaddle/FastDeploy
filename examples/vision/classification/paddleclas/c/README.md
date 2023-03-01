@@ -92,7 +92,7 @@ FD_C_PaddleClasModelWrapper* FD_C_CreatePaddleClasModelWrapper(
 > * **params_file**(const char*): Parameter file path
 > * **config_file**(const char*): Configuration file path, which is the deployment yaml file exported by PaddleClas.
 > * **runtime_option**(FD_C_RuntimeOptionWrapper*): Backend inference configuration. None by default, which is the default configuration
-> * **model_format**(FD_C_ModelFormat): Model format. Paddle format by default
+> * **model_format**(FD_C_ModelFormat): Model format. FD_C_ModelFormat_PADDLE format by default
 >
 > **Return**
 > * **fd_c_ppclas_wrapper**(FD_C_PaddleClasModelWrapper*): Pointer to manipulate PaddleClas object.

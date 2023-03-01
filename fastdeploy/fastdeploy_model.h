@@ -121,7 +121,6 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual double GetProfileTime() {
     return runtime_->GetProfileTime();
   }
-
   /** \brief Release reused input/output buffers
   */
   virtual void ReleaseReusedBuffer() {
