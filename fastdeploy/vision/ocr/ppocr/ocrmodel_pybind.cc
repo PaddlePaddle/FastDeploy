@@ -23,8 +23,8 @@ void BindPPOCRModel(pybind11::module& m) {
   });
 
   // DBDetector
-  pybind11::class_<vision::ocr::DBDetectorPreprocessor>(
-      m, "DBDetectorPreprocessor")
+  pybind11::class_<vision::ocr::DBDetectorPreprocessor,
+                   vision::ProcessorManager>(m, "DBDetectorPreprocessor")
       .def(pybind11::init<>())
       .def_property("static_shape_infer",
                     &vision::ocr::DBDetectorPreprocessor::GetStaticShapeInfer,
@@ -133,8 +133,8 @@ void BindPPOCRModel(pybind11::module& m) {
       });
 
   // Classifier
-  pybind11::class_<vision::ocr::ClassifierPreprocessor>(
-      m, "ClassifierPreprocessor")
+  pybind11::class_<vision::ocr::ClassifierPreprocessor,
+                   vision::ProcessorManager>(m, "ClassifierPreprocessor")
       .def(pybind11::init<>())
       .def_property("cls_image_shape",
                     &vision::ocr::ClassifierPreprocessor::GetClsImageShape,
@@ -230,8 +230,8 @@ void BindPPOCRModel(pybind11::module& m) {
       });
 
   // Recognizer
-  pybind11::class_<vision::ocr::RecognizerPreprocessor>(
-      m, "RecognizerPreprocessor")
+  pybind11::class_<vision::ocr::RecognizerPreprocessor,
+                   vision::ProcessorManager>(m, "RecognizerPreprocessor")
       .def(pybind11::init<>())
       .def_property("static_shape_infer",
                     &vision::ocr::RecognizerPreprocessor::GetStaticShapeInfer,

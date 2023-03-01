@@ -28,10 +28,7 @@ ClassifierPreprocessor::ClassifierPreprocessor() {
   std::vector<float> value = {0, 0, 0};
   pad_op_ = std::make_shared<Pad>(0, 0, 0, 0, value);
 
-  std::vector<float> mean = {0.5f, 0.5f, 0.5f};
-  std::vector<float> std = {0.5f, 0.5f, 0.5f};
-  bool is_scale = true;
-  normalize_op_ = std::make_shared<Normalize>(mean, std, is_scale);
+  SetNormalize();
 
   hwc2chw_op_ = std::make_shared<HWC2CHW>();
 }
@@ -69,7 +66,7 @@ bool ClassifierPreprocessor::Run(std::vector<FDMat>* images,
   for (size_t i = start_index; i < end_index; ++i) {
     mats[i - start_index] = images->at(i);
   }
-  return ProcessorManager::Run(&mats, outputs);
+  return Run(&mats, outputs);
 }
 
 bool ClassifierPreprocessor::Apply(FDMatBatch* image_batch,

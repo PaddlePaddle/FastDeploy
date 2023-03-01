@@ -26,6 +26,7 @@ namespace ocr {
 class FASTDEPLOY_DECL ClassifierPreprocessor : public ProcessorManager {
  public:
   ClassifierPreprocessor();
+  using ProcessorManager::Run;
   /** \brief Process the input image and prepare input tensors for runtime
    *
    * \param[in] images The input data list, all the elements are FDMat

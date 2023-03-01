@@ -28,12 +28,7 @@ RecognizerPreprocessor::RecognizerPreprocessor() {
   std::vector<float> value = {127, 127, 127};
   pad_op_ = std::make_shared<Pad>(0, 0, 0, 0, value);
 
-  std::vector<float> mean = {0.5f, 0.5f, 0.5f};
-  std::vector<float> std = {0.5f, 0.5f, 0.5f};
-  bool is_scale = true;
-  normalize_permute_op_ =
-      std::make_shared<NormalizeAndPermute>(mean, std, is_scale);
-  normalize_op_ = std::make_shared<Normalize>(mean, std, is_scale);
+  SetNormalize();
   hwc2chw_op_ = std::make_shared<HWC2CHW>();
   cast_op_ = std::make_shared<Cast>("float");
 }
@@ -94,7 +89,7 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images,
     }
     mats[i - start_index] = images->at(real_index);
   }
-  return ProcessorManager::Run(&mats, outputs);
+  return Run(&mats, outputs);
 }
 
 bool RecognizerPreprocessor::Apply(FDMatBatch* image_batch,
