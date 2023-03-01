@@ -78,6 +78,10 @@ class FASTDEPLOY_DECL ProcessorManager {
   virtual bool Apply(FDMatBatch* image_batch,
                      std::vector<FDTensor>* outputs) = 0;
 
+  bool PreApply(FDMatBatch* image_batch);
+
+  bool PostApply();
+  
  protected:
   ProcLib proc_lib_ = ProcLib::DEFAULT;
 

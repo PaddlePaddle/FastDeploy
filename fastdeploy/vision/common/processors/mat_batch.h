@@ -57,6 +57,7 @@ struct FASTDEPLOY_DECL FDMatBatch {
 #endif
 
   std::vector<FDMat>* mats;
+  std::vector<FDMat> mats_holder;
   ProcLib mat_type = ProcLib::OPENCV;
   FDMatBatchLayout layout = FDMatBatchLayout::NHWC;
   Device device = Device::CPU;

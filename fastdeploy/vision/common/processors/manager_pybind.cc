@@ -52,6 +52,8 @@ void BindProcessorManager(pybind11::module& m) {
              }
              return outputs;
            })
+      .def("pre_apply", &vision::ProcessorManager::PreApply)
+      .def("post_apply", &vision::ProcessorManager::PostApply)
       .def("use_cuda",
            [](vision::ProcessorManager& self, bool enable_cv_cuda = false,
               int gpu_id = -1) { self.UseCuda(enable_cv_cuda, gpu_id); })

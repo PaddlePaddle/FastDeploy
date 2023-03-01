@@ -20,6 +20,7 @@ void BindFDMat(pybind11::module& m);
 void BindResizeByShort(pybind11::module& m);
 void BindFDMatBatch(pybind11::module& m);
 void BindProcessorManager(pybind11::module& m);
+void BindProcessor(pybind11::module& m);
 void BindDetection(pybind11::module& m);
 void BindClassification(pybind11::module& m);
 void BindSegmentation(pybind11::module& m);

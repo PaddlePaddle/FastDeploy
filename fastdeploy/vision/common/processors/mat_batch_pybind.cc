@@ -17,10 +17,14 @@ namespace fastdeploy {
 void BindFDMatBatch(pybind11::module& m) {
   pybind11::class_<vision::FDMatBatch>(m, "MatBatch")
       .def(pybind11::init<>(), "Default constructor")
-      .def(pybind11::init<std::vector<vision::FDMat>*>(), "constructor")
       .def_readwrite("input_cache", &vision::FDMatBatch::input_cache)
       .def_readwrite("output_cache", &vision::FDMatBatch::output_cache)
-      .def_readwrite("mats", &vision::FDMatBatch::mats);
+      .def_readwrite("mats", &vision::FDMatBatch::mats)
+      .def("from_mats",
+             [](vision::FDMatBatch& self, std::vector<vision::FDMat>& _mats) {
+                  self.mats_holder = _mats;
+                  self.mats = &(self.mats_holder);
+             });
 }
 
 }  // namespace fastdeploy
