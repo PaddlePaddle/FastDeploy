@@ -93,7 +93,7 @@ FD_C_PPYOLOEWrapper* FD_C_CreatePPYOLOEWrapper(
 > * **params_file**(const char*): Parameter file path
 > * **config_file**(const char*): Configuration file path, which is the deployment yaml file exported by PaddleDetection
 > * **runtime_option**(FD_C_RuntimeOptionWrapper*): Backend inference configuration. None by default, which is the default configuration
-> * **model_format**(FD_C_ModelFormat): Model format. Paddle format by default
+> * **model_format**(FD_C_ModelFormat): Model format. FD_C_ModelFormat_PADDLE format by default
 >
 > **Return**
 > * **fd_c_ppyoloe_wrapper**(FD_C_PPYOLOEWrapper*): Pointer to manipulate PPYOLOE object.

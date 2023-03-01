@@ -14,7 +14,7 @@
 
 #include "fastdeploy_capi/vision/detection/ppdet/model.h"
 
-#include "fastdeploy_capi/types_internal.h"
+#include "fastdeploy_capi/internal/types_internal.h"
 #include "fastdeploy_capi/vision/visualize.h"
 
 #ifdef __cplusplus
@@ -23,34 +23,11 @@ extern "C" {
 
 // PPYOLOE
 
-FD_C_PPYOLOEWrapper* FD_C_CreatePPYOLOEWrapper(
-    const char* model_file, const char* params_file, const char* config_file,
-    FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
-    const FD_C_ModelFormat model_format) {
-  IMPLEMENT_CREATE_WRAPPER_FUNCTION(PPYOLOE, ppyoloe_model);
-}
-
-void FD_C_DestroyPPYOLOEWrapper(
-    __fd_take FD_C_PPYOLOEWrapper* fd_ppyoloe_wrapper) {
-  IMPLEMENT_DESTROY_WRAPPER_FUNCTION(PPYOLOE, fd_ppyoloe_wrapper);
-}
-
-FD_C_Bool FD_C_PPYOLOEWrapperPredict(
-    FD_C_PPYOLOEWrapper* fd_ppyoloe_wrapper, FD_C_Mat img,
-    FD_C_DetectionResult* fd_c_detection_result) {
-  IMPLEMENT_PREDICT_FUNCTION(PPYOLOE, fd_ppyoloe_wrapper);
-}
-
-FD_C_Bool FD_C_PPYOLOEWrapperInitialized(
-    FD_C_PPYOLOEWrapper* fd_ppyoloe_wrapper) {
-  IMPLEMENT_INITIALIZED_FUNCTION(PPYOLOE, fd_ppyoloe_wrapper);
-}
-
-FD_C_Bool FD_C_PPYOLOEWrapperBatchPredict(
-    FD_C_PPYOLOEWrapper* fd_ppyoloe_wrapper, FD_C_OneDimMat imgs,
-    FD_C_OneDimDetectionResult* results) {
-  IMPLEMENT_BATCH_PREDICT_FUNCTION(PPYOLOE, fd_ppyoloe_wrapper);
-}
+DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(PPYOLOE, ppyoloe_model)
+DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(PPYOLOE, fd_ppyoloe_wrapper)
+DECLARE_AND_IMPLEMENT_PREDICT_FUNCTION(PPYOLOE, fd_ppyoloe_wrapper)
+DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(PPYOLOE, fd_ppyoloe_wrapper)
+DECLARE_AND_IMPLEMENT_BATCH_PREDICT_FUNCTION(PPYOLOE, fd_ppyoloe_wrapper)
 
 // PicoDet
 DECLARE_AND_IMPLEMENT_CREATE_WRAPPER_FUNCTION(PicoDet, picodet_model)
