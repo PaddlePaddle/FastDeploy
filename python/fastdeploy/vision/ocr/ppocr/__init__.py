@@ -340,35 +340,18 @@ class ClassifierPreprocessor:
         """
         return self._preprocessor.run(input_ims)
 
-    @property
-    def is_scale(self):
-        return self._preprocessor.is_scale
-
-    @is_scale.setter
-    def is_scale(self, value):
-        assert isinstance(
-            value, bool), "The value to set `is_scale` must be type of bool."
-        self._preprocessor.is_scale = value
-
-    @property
-    def scale(self):
-        return self._preprocessor.scale
-
-    @scale.setter
-    def scale(self, value):
-        assert isinstance(
-            value, list), "The value to set `scale` must be type of list."
-        self._preprocessor.scale = value
-
-    @property
-    def mean(self):
-        return self._preprocessor.mean
-
-    @mean.setter
-    def mean(self, value):
-        assert isinstance(
-            value, list), "The value to set `mean` must be type of list."
-        self._preprocessor.mean = value
+    def set_normalize(self,
+                      mean=[0.5, 0.5, 0.5],
+                      std=[0.5, 0.5, 0.5],
+                      is_scale=True):
+        """Set preprocess normalize parameters, please call this API to
+           customize the normalize parameters, otherwise it will use the default
+           normalize parameters.
+        :param: mean: (list of float) mean values
+        :param: std: (list of float) std values
+        :param: is_scale: (boolean) whether to scale
+        """
+        self._preprocessor.set_normalize(mean, std, is_scale)
 
     @property
     def cls_image_shape(self):
@@ -496,37 +479,6 @@ class Classifier(FastDeployModel):
     def postprocessor(self, value):
         self._model.postprocessor = value
 
-    # Cls Preprocessor Property
-    @property
-    def is_scale(self):
-        return self._model.preprocessor.is_scale
-
-    @is_scale.setter
-    def is_scale(self, value):
-        assert isinstance(
-            value, bool), "The value to set `is_scale` must be type of bool."
-        self._model.preprocessor.is_scale = value
-
-    @property
-    def scale(self):
-        return self._model.preprocessor.scale
-
-    @scale.setter
-    def scale(self, value):
-        assert isinstance(
-            value, list), "The value to set `scale` must be type of list."
-        self._model.preprocessor.scale = value
-
-    @property
-    def mean(self):
-        return self._model.preprocessor.mean
-
-    @mean.setter
-    def mean(self, value):
-        assert isinstance(
-            value, list), "The value to set `mean` must be type of list."
-        self._model.preprocessor.mean = value
-
     @property
     def cls_image_shape(self):
         return self._model.preprocessor.cls_image_shape
@@ -575,35 +527,18 @@ class RecognizerPreprocessor:
             bool), "The value to set `static_shape_infer` must be type of bool."
         self._preprocessor.static_shape_infer = value
 
-    @property
-    def is_scale(self):
-        return self._preprocessor.is_scale
-
-    @is_scale.setter
-    def is_scale(self, value):
-        assert isinstance(
-            value, bool), "The value to set `is_scale` must be type of bool."
-        self._preprocessor.is_scale = value
-
-    @property
-    def scale(self):
-        return self._preprocessor.scale
-
-    @scale.setter
-    def scale(self, value):
-        assert isinstance(
-            value, list), "The value to set `scale` must be type of list."
-        self._preprocessor.scale = value
-
-    @property
-    def mean(self):
-        return self._preprocessor.mean
-
-    @mean.setter
-    def mean(self, value):
-        assert isinstance(
-            value, list), "The value to set `mean` must be type of list."
-        self._preprocessor.mean = value
+    def set_normalize(self,
+                      mean=[0.5, 0.5, 0.5],
+                      std=[0.5, 0.5, 0.5],
+                      is_scale=True):
+        """Set preprocess normalize parameters, please call this API to
+           customize the normalize parameters, otherwise it will use the default
+           normalize parameters.
+        :param: mean: (list of float) mean values
+        :param: std: (list of float) std values
+        :param: is_scale: (boolean) whether to scale
+        """
+        self._preprocessor.set_normalize(mean, std, is_scale)
 
     @property
     def rec_image_shape(self):
@@ -727,36 +662,6 @@ class Recognizer(FastDeployModel):
             value,
             bool), "The value to set `static_shape_infer` must be type of bool."
         self._model.preprocessor.static_shape_infer = value
-
-    @property
-    def is_scale(self):
-        return self._model.preprocessor.is_scale
-
-    @is_scale.setter
-    def is_scale(self, value):
-        assert isinstance(
-            value, bool), "The value to set `is_scale` must be type of bool."
-        self._model.preprocessor.is_scale = value
-
-    @property
-    def scale(self):
-        return self._model.preprocessor.scale
-
-    @scale.setter
-    def scale(self, value):
-        assert isinstance(
-            value, list), "The value to set `scale` must be type of list."
-        self._model.preprocessor.scale = value
-
-    @property
-    def mean(self):
-        return self._model.preprocessor.mean
-
-    @mean.setter
-    def mean(self, value):
-        assert isinstance(
-            value, list), "The value to set `mean` must be type of list."
-        self._model.preprocessor.mean = value
 
     @property
     def rec_image_shape(self):

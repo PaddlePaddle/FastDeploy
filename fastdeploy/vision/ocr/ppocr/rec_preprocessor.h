@@ -55,20 +55,16 @@ class FASTDEPLOY_DECL RecognizerPreprocessor : public ProcessorManager {
   /// Get static_shape_infer of the recognition preprocess
   bool GetStaticShapeInfer() const { return static_shape_infer_; }
 
-  /// Set mean value for the image normalization in recognition preprocess
-  void SetMean(const std::vector<float>& mean) { mean_ = mean; }
-  /// Get mean value of the image normalization in recognition preprocess
-  std::vector<float> GetMean() const { return mean_; }
-
-  /// Set scale value for the image normalization in recognition preprocess
-  void SetScale(const std::vector<float>& scale) { scale_ = scale; }
-  /// Get scale value of the image normalization in recognition preprocess
-  std::vector<float> GetScale() const { return scale_; }
-
-  /// Set is_scale for the image normalization in recognition preprocess
-  void SetIsScale(bool is_scale) { is_scale_ = is_scale; }
-  /// Get is_scale of the image normalization in recognition preprocess
-  bool GetIsScale() const { return is_scale_; }
+  /// Set preprocess normalize parameters, please call this API to customize
+  /// the normalize parameters, otherwise it will use the default normalize
+  /// parameters.
+  void SetNormalize(const std::vector<float>& mean = {0.5f, 0.5f, 0.5f},
+                    const std::vector<float>& std = {0.5f, 0.5f, 0.5f},
+                    bool is_scale = true) {
+    normalize_permute_op_ =
+        std::make_shared<NormalizeAndPermute>(mean, std, is_scale);
+    normalize_op_ = std::make_shared<Normalize>(mean, std, is_scale);
+  }
 
   /// Set rec_image_shape for the recognition preprocess
   void SetRecImageShape(const std::vector<int>& rec_image_shape) {
@@ -91,9 +87,6 @@ class FASTDEPLOY_DECL RecognizerPreprocessor : public ProcessorManager {
   // for recording the switch of normalize
   bool disable_normalize_ = false;
   std::vector<int> rec_image_shape_ = {3, 48, 320};
-  std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
-  std::vector<float> scale_ = {0.5f, 0.5f, 0.5f};
-  bool is_scale_ = true;
   bool static_shape_infer_ = false;
   std::shared_ptr<Resize> resize_op_;
   std::shared_ptr<Pad> pad_op_;

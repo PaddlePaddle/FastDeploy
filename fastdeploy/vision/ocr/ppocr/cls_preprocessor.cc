@@ -29,9 +29,9 @@ ClassifierPreprocessor::ClassifierPreprocessor() {
   pad_op_ = std::make_shared<Pad>(0, 0, 0, 0, value);
 
   std::vector<float> mean = {0.5f, 0.5f, 0.5f};
-  std::vector<float> scale = {0.5f, 0.5f, 0.5f};
+  std::vector<float> std = {0.5f, 0.5f, 0.5f};
   bool is_scale = true;
-  normalize_op_ = std::make_shared<Normalize>(mean, scale, is_scale);
+  normalize_op_ = std::make_shared<Normalize>(mean, std, is_scale);
 
   hwc2chw_op_ = std::make_shared<HWC2CHW>();
 }
