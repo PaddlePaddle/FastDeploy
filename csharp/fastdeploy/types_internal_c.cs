@@ -74,6 +74,21 @@ public struct FD_TwoDimArrayFloat {
   public IntPtr data;  // FD_OneDimArrayFloat[]
 }
 
+
+
+[StructLayout(LayoutKind.Sequential)]
+public struct FD_TwoDimArrayInt32 {
+  public nuint size;
+  public IntPtr data;  // FD_OneDimArrayInt32[]
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct FD_ThreeDimArrayInt32 {
+  public nuint size;
+  public IntPtr data;  // FD_TwoDimArrayInt32[]
+}
+
+
 public enum FD_ResultType {
   UNKNOWN_RESULT,
   CLASSIFY,
@@ -135,6 +150,22 @@ public struct FD_OneDimDetectionResult {
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public struct FD_OCRResult {
+  public FD_TwoDimArrayInt32 boxes;
+  public FD_OneDimArrayCstr text;
+  public FD_OneDimArrayFloat rec_scores;
+  public FD_OneDimArrayFloat cls_scores;
+  public FD_OneDimArrayInt32 cls_labels;
+  public FD_ResultType type;
+}
+
+
+[StructLayout(LayoutKind.Sequential)]
+public struct FD_OneDimOCRResult {
+  public nuint size;
+  public IntPtr data; // FD_OCRResult[]
+}
+
 public struct FD_SegmentationResult {
   public FD_OneDimArrayUint8 label_map;
   public FD_OneDimArrayFloat score_map;
