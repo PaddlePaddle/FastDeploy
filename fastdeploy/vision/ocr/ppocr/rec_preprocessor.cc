@@ -52,26 +52,19 @@ void RecognizerPreprocessor::OcrRecognizerResizeImage(
     } else {
       resize_w = int(ceilf(img_h * ratio));
     }
-    // Resize::Run(mat, resize_w, img_h);
     resize_op_->SetWidthAndHeight(resize_w, img_h);
     (*resize_op_)(mat);
-
-    // Pad::Run(mat, 0, 0, 0, int(img_w - mat->Width()), {127, 127, 127});
     pad_op_->SetPaddingSize(0, 0, 0, int(img_w - mat->Width()));
     (*pad_op_)(mat);
   } else {
     if (mat->Width() >= img_w) {
-      // Resize::Run(mat, img_w, img_h);  // Reszie W to 320
+      // Reszie W to 320
       resize_op_->SetWidthAndHeight(img_w, img_h);
       (*resize_op_)(mat);
     } else {
-      // Resize::Run(mat, mat->Width(), img_h);
-      // Pad::Run(mat, 0, 0, 0, int(img_w - mat->Width()), {127, 127, 127});
-      // // Pad to 320
-
       resize_op_->SetWidthAndHeight(mat->Width(), img_h);
       (*resize_op_)(mat);
-
+      // Pad to 320
       pad_op_->SetPaddingSize(0, 0, 0, int(img_w - mat->Width()));
       (*pad_op_)(mat);
     }
@@ -118,7 +111,6 @@ bool RecognizerPreprocessor::Apply(FDMatBatch* image_batch,
     FDMat* mat = &(image_batch->mats->at(i));
     OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_,
                              static_shape_infer_);
-    // NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
   }
   (*normalize_permute_op_)(image_batch);
   // Only have 1 output Tensor.
