@@ -84,11 +84,14 @@ void RKNPU2Backend::BuildOption(const RKNPU2BackendOption& option) {
  *  @note       None
  ***************************************************************/
 bool RKNPU2Backend::Init(const RuntimeOption& runtime_option) {
-  if (!(Supported(runtime_option.model_format, Backend::RKNPU2) && Supported(runtime_option.device, Backend::RKNPU2))) {
+  if (!(Supported(runtime_option.model_format, Backend::RKNPU2) &&
+        Supported(runtime_option.device, Backend::RKNPU2))) {
     return false;
   }
   if (runtime_option.model_from_memory_) {
-    FDERROR << "RKNPU2 backend doesn't support load model from memory, please load model from disk." << std::endl;
+    FDERROR << "RKNPU2 backend doesn't support load model from memory, please "
+               "load model from disk."
+            << std::endl;
     return false;
   }
 
@@ -329,14 +332,8 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
 
       // Create input tensor memory
       input_attrs_[i].type = input_type;
-      input_attrs_[i].size = inputs[0].Nbytes();
-      input_attrs_[i].size_with_stride = inputs[0].Nbytes();
-      if (input_attrs_[i].type == RKNN_TENSOR_FLOAT16 ||
-          input_attrs_[i].type == RKNN_TENSOR_FLOAT32) {
-        FDINFO << "The input model is not a quantitative model. "
-                  "Close the normalize operation."
-               << std::endl;
-      }
+      input_attrs_[i].size = inputs[i].Nbytes();
+      input_attrs_[i].size_with_stride = inputs[i].Nbytes();
 
       input_mems_[i] = rknn_create_mem(ctx, inputs[i].Nbytes());
       if (input_mems_[i] == nullptr) {
