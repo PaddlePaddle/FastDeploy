@@ -50,6 +50,14 @@ public class Visualize {
     return new Mat(result_ptr);
   }
 
+  public static Mat VisOcr(Mat im, OCRResult ocr_result){
+    FD_OCRResult fd_ocr_result =
+        ConvertResult.ConvertOCRResultToCResult(ocr_result);
+    IntPtr result_ptr = 
+        FD_C_VisOcr(im.CvPtr, ref fd_ocr_result);
+    return new Mat(result_ptr);
+  }
+  
   public static Mat VisSegmentation(Mat im,
                                     SegmentationResult segmentation_result,
                                     float weight = 0.5f){
@@ -74,6 +82,10 @@ public class Visualize {
                     ref FD_OneDimArrayCstr labels,
                     float score_threshold, int line_size, float font_size);
   
+  [DllImport("fastdeploy.dll", EntryPoint = "FD_C_VisOcr")]
+  private static extern IntPtr
+  FD_C_VisOcr(IntPtr im, ref FD_OCRResult fd_ocr_result);
+
   [DllImport("fastdeploy.dll", EntryPoint = "FD_C_VisSegmentation")]
   private static extern IntPtr
   FD_C_VisSegmentation(IntPtr im, ref FD_SegmentationResult fd_segmentation_result, float weight);
