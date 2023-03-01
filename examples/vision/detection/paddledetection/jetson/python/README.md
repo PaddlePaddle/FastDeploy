@@ -50,6 +50,15 @@ fastdeploy.vision.detection.PaddleYOLOv5(model_file, params_file, config_file, r
 fastdeploy.vision.detection.PaddleYOLOv6(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 fastdeploy.vision.detection.PaddleYOLOv7(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 fastdeploy.vision.detection.RTMDet(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.CascadeRCNN(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.PSSDet(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.RetinaNet(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.PPYOLOESOD(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.FCOS(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.TTFNet(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.TOOD(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.GFL(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.SOLOv2(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
 PaddleDetection model loading and initialization, among which model_file and params_file are the exported Paddle model format. config_file is the configuration yaml file exported by PaddleDetection simultaneously
