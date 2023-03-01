@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy_capi/runtime_option.h"
+#include "fastdeploy_capi/runtime/runtime_option.h"
 
 #include "fastdeploy/utils/utils.h"
-#include "fastdeploy_capi/types_internal.h"
+#include "fastdeploy_capi/internal/types_internal.h"
 
 #ifdef __cplusplus
 extern "C" {

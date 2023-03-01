@@ -49,9 +49,9 @@ Then you can run your program and test the model with image
 ```shell
 cd Release
 # CPU inference
-./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 0
+infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 0
 # GPU inference
-./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 1
+infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 1
 ```
 
 ## PaddleClas C# Interface
