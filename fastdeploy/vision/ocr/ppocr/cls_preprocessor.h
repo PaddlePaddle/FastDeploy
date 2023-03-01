@@ -49,9 +49,9 @@ class FASTDEPLOY_DECL ClassifierPreprocessor : public ProcessorManager {
   /// Set preprocess normalize parameters, please call this API to customize
   /// the normalize parameters, otherwise it will use the default normalize
   /// parameters.
-  void SetNormalize(const std::vector<float>& mean = {0.5f, 0.5f, 0.5f},
-                    const std::vector<float>& std = {0.5f, 0.5f, 0.5f},
-                    bool is_scale = true) {
+  void SetNormalize(const std::vector<float>& mean,
+                    const std::vector<float>& std,
+                    bool is_scale) {
     normalize_op_ = std::make_shared<Normalize>(mean, std, is_scale);
   }
 

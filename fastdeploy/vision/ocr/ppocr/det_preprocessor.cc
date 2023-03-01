@@ -55,7 +55,9 @@ DBDetectorPreprocessor::DBDetectorPreprocessor() {
   std::vector<float> value = {0, 0, 0};
   pad_op_ = std::make_shared<Pad>(0, 0, 0, 0, value);
 
-  SetNormalize();
+  normalize_permute_op_ = std::make_shared<NormalizeAndPermute>(
+      std::vector<float>({0.485f, 0.456f, 0.406f}),
+      std::vector<float>({0.229f, 0.224f, 0.225f}), true);
 }
 
 bool DBDetectorPreprocessor::ResizeImage(FDMat* img, int resize_w, int resize_h,

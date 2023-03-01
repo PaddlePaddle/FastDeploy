@@ -52,10 +52,7 @@ class DBDetectorPreprocessor:
             value, int), "The value to set `max_side_len` must be type of int."
         self._preprocessor.max_side_len = value
 
-    def set_normalize(self,
-                      mean=[0.485, 0.456, 0.406],
-                      std=[0.229, 0.224, 0.225],
-                      is_scale=True):
+    def set_normalize(self, mean, std, is_scale):
         """Set preprocess normalize parameters, please call this API to
            customize the normalize parameters, otherwise it will use the default
            normalize parameters.
@@ -340,10 +337,7 @@ class ClassifierPreprocessor:
         """
         return self._preprocessor.run(input_ims)
 
-    def set_normalize(self,
-                      mean=[0.5, 0.5, 0.5],
-                      std=[0.5, 0.5, 0.5],
-                      is_scale=True):
+    def set_normalize(self, mean, std, is_scale):
         """Set preprocess normalize parameters, please call this API to
            customize the normalize parameters, otherwise it will use the default
            normalize parameters.
@@ -527,10 +521,7 @@ class RecognizerPreprocessor:
             bool), "The value to set `static_shape_infer` must be type of bool."
         self._preprocessor.static_shape_infer = value
 
-    def set_normalize(self,
-                      mean=[0.5, 0.5, 0.5],
-                      std=[0.5, 0.5, 0.5],
-                      is_scale=True):
+    def set_normalize(self, mean, std, is_scale):
         """Set preprocess normalize parameters, please call this API to
            customize the normalize parameters, otherwise it will use the default
            normalize parameters.

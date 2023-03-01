@@ -28,7 +28,11 @@ RecognizerPreprocessor::RecognizerPreprocessor() {
   std::vector<float> value = {127, 127, 127};
   pad_op_ = std::make_shared<Pad>(0, 0, 0, 0, value);
 
-  SetNormalize();
+  std::vector<float> mean = {0.5f, 0.5f, 0.5f};
+  std::vector<float> std = {0.5f, 0.5f, 0.5f};
+  normalize_permute_op_ =
+      std::make_shared<NormalizeAndPermute>(mean, std, true);
+  normalize_op_ = std::make_shared<Normalize>(mean, std, true);
   hwc2chw_op_ = std::make_shared<HWC2CHW>();
   cast_op_ = std::make_shared<Cast>("float");
 }
