@@ -77,13 +77,17 @@ bool ClassifierPreprocessor::Apply(FDMatBatch* image_batch,
   for (size_t i = 0; i < image_batch->mats->size(); ++i) {
     FDMat* mat = &(image_batch->mats->at(i));
     OcrClassifierResizeImage(mat, cls_image_shape_);
-    (*normalize_op_)(mat);
+    if (!disable_normalize_) {
+      (*normalize_op_)(mat);
+    }
     std::vector<float> value = {0, 0, 0};
     if (mat->Width() < cls_image_shape_[2]) {
       pad_op_->SetPaddingSize(0, 0, 0, cls_image_shape_[2] - mat->Width());
       (*pad_op_)(mat);
     }
-    (*hwc2chw_op_)(mat);
+    if (!disable_permute_) {
+      (*hwc2chw_op_)(mat);
+    }
   }
   // Only have 1 output tensor.
   outputs->resize(1);

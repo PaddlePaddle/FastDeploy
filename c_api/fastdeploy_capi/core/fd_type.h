@@ -17,8 +17,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "fastdeploy_capi/enum_variables.h"
-#include "fastdeploy_capi/fd_common.h"
+#include "fastdeploy_capi/runtime/enum_variables.h"
+#include "fastdeploy_capi/core/fd_common.h"
 
 typedef struct FD_C_OneDimArrayUint8 {
   size_t size;
@@ -95,6 +95,57 @@ typedef struct FD_C_OneDimMat {
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define DECLARE_DESTROY_FD_TYPE_FUNCTION(typename) FASTDEPLOY_CAPI_EXPORT extern void FD_C_Destroy##typename (__fd_take FD_C_##typename *)
+#define DECLARE_AND_IMPLEMENT_FD_TYPE_ONEDIMARRAY(typename) void FD_C_Destroy##typename (__fd_take FD_C_##typename * ptr) \
+  { \
+     delete[] ptr->data; \
+  }
+
+#define DECLARE_AND_IMPLEMENT_FD_TYPE_TWODIMARRAY(typename, one_dim_type) void FD_C_Destroy##typename (__fd_take FD_C_##typename * ptr) \
+  { \
+     for(int i=0; i< ptr->size; i++) { \
+        FD_C_Destroy##one_dim_type(ptr->data + i); \
+     } \
+     delete[] ptr->data; \
+  }
+
+#define DECLARE_AND_IMPLEMENT_FD_TYPE_THREEDIMARRAY(typename, two_dim_type) void FD_C_Destroy##typename (__fd_take FD_C_##typename * ptr) \
+  { \
+     for(int i=0; i< ptr->size; i++) { \
+        FD_C_Destroy##two_dim_type(ptr->data + i); \
+     } \
+     delete[] ptr->data; \
+  }
+
+// FD_C_OneDimArrayUint8
+DECLARE_DESTROY_FD_TYPE_FUNCTION(OneDimArrayUint8);
+// FD_C_OneDimArrayInt8
+DECLARE_DESTROY_FD_TYPE_FUNCTION(OneDimArrayInt8);
+// FD_C_OneDimArrayInt32
+DECLARE_DESTROY_FD_TYPE_FUNCTION(OneDimArrayInt32);
+// FD_C_OneDimArraySize
+DECLARE_DESTROY_FD_TYPE_FUNCTION(OneDimArraySize);
+// FD_C_OneDimArrayInt64
+DECLARE_DESTROY_FD_TYPE_FUNCTION(OneDimArrayInt64);
+// FD_C_OneDimArrayFloat
+DECLARE_DESTROY_FD_TYPE_FUNCTION(OneDimArrayFloat);
+// FD_C_Cstr
+DECLARE_DESTROY_FD_TYPE_FUNCTION(Cstr);
+// FD_C_OneDimArrayCstr
+DECLARE_DESTROY_FD_TYPE_FUNCTION(OneDimArrayCstr);
+// FD_C_TwoDimArraySize
+DECLARE_DESTROY_FD_TYPE_FUNCTION(TwoDimArraySize);
+// FD_C_TwoDimArrayInt8
+DECLARE_DESTROY_FD_TYPE_FUNCTION(TwoDimArrayInt8);
+// FD_C_TwoDimArrayInt32
+DECLARE_DESTROY_FD_TYPE_FUNCTION(TwoDimArrayInt32);
+// FD_C_ThreeDimArrayInt32
+DECLARE_DESTROY_FD_TYPE_FUNCTION(ThreeDimArrayInt32);
+// FD_C_TwoDimArrayFloat
+DECLARE_DESTROY_FD_TYPE_FUNCTION(TwoDimArrayFloat);
+// FD_C_OneDimMat
+DECLARE_DESTROY_FD_TYPE_FUNCTION(OneDimMat);
 
 FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_Mat
 FD_C_Imread(const char* imgpath);

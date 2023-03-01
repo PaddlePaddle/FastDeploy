@@ -33,6 +33,9 @@ RecognizerPreprocessor::RecognizerPreprocessor() {
   bool is_scale = true;
   normalize_permute_op_ =
       std::make_shared<NormalizeAndPermute>(mean, std, is_scale);
+  normalize_op_ = std::make_shared<Normalize>(mean, std, is_scale);
+  hwc2chw_op_ = std::make_shared<HWC2CHW>();
+  cast_op_ = std::make_shared<Cast>("float");
 }
 
 void RecognizerPreprocessor::OcrRecognizerResizeImage(
@@ -112,7 +115,19 @@ bool RecognizerPreprocessor::Apply(FDMatBatch* image_batch,
     OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_,
                              static_shape_infer_);
   }
-  (*normalize_permute_op_)(image_batch);
+
+  if (!disable_normalize_ && !disable_permute_) {
+    (*normalize_permute_op_)(image_batch);
+  } else {
+    if (!disable_normalize_) {
+      (*normalize_op_)(image_batch);
+    }
+    if (!disable_permute_) {
+      (*hwc2chw_op_)(image_batch);
+      (*cast_op_)(image_batch);
+    }
+  }
+
   // Only have 1 output Tensor.
   outputs->resize(1);
   // Get the NCHW tensor

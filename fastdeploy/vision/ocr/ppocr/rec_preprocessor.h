@@ -77,10 +77,19 @@ class FASTDEPLOY_DECL RecognizerPreprocessor : public ProcessorManager {
   /// Get rec_image_shape for the recognition preprocess
   std::vector<int> GetRecImageShape() { return rec_image_shape_; }
 
+  /// This function will disable normalize in preprocessing step.
+  void DisableNormalize() { disable_permute_ = true; }
+  /// This function will disable hwc2chw in preprocessing step.
+  void DisablePermute() { disable_normalize_ = true; }
+
  private:
   void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
                               const std::vector<int>& rec_image_shape,
                               bool static_shape_infer);
+  // for recording the switch of hwc2chw
+  bool disable_permute_ = false;
+  // for recording the switch of normalize
+  bool disable_normalize_ = false;
   std::vector<int> rec_image_shape_ = {3, 48, 320};
   std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
   std::vector<float> scale_ = {0.5f, 0.5f, 0.5f};
@@ -89,6 +98,9 @@ class FASTDEPLOY_DECL RecognizerPreprocessor : public ProcessorManager {
   std::shared_ptr<Resize> resize_op_;
   std::shared_ptr<Pad> pad_op_;
   std::shared_ptr<NormalizeAndPermute> normalize_permute_op_;
+  std::shared_ptr<Normalize> normalize_op_;
+  std::shared_ptr<HWC2CHW> hwc2chw_op_;
+  std::shared_ptr<Cast> cast_op_;
 };
 
 }  // namespace ocr

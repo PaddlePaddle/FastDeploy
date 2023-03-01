@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy_capi/types_internal.h"
+#include "fastdeploy_capi/vision/types_internal.h"
 
 namespace fastdeploy {
 
@@ -128,6 +128,30 @@ DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(GFL,
                                                                  fd_gfl_wrapper,
                                                                  gfl_model)
 
+// YOLOv5
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    YOLOv5, fd_yolov5_wrapper, yolov5_model)
+
+// YOLOv7
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    YOLOv7, fd_yolov7_wrapper, yolov7_model)
+
+// YOLOv8
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    YOLOv8, fd_yolov8_wrapper, yolov8_model)
+
+// YOLOv6
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    YOLOv6, fd_yolov6_wrapper, yolov6_model)
+
+// YOLOR
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    YOLOR, fd_yolor_wrapper, yolor_model)
+
+// YOLOX
+DECL_AND_IMPLEMENT_DETECTION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    YOLOX, fd_yolox_wrapper, yolox_model)
+
 // OCR models
 
 // Recognizer
@@ -157,13 +181,5 @@ DECL_AND_IMPLEMENT_SEGMENTATION_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
     PaddleSegModel, fd_paddleseg_model_wrapper, segmentation_model);
 
 #endif
-
-std::unique_ptr<fastdeploy::RuntimeOption>&
-FD_C_CheckAndConvertRuntimeOptionWrapper(
-    FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper) {
-  FDASSERT(fd_c_runtime_option_wrapper != nullptr,
-           "The pointer of fd_c_runtime_option_wrapper shouldn't be nullptr.");
-  return fd_c_runtime_option_wrapper->runtime_option;
-}
 
 }  // namespace fastdeploy
