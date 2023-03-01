@@ -49,11 +49,11 @@ bool PPTracking::BuildPreprocessPipelineFromConfig() {
     return false;
   }
 
-  // Get draw_threshold_ for visualization
-  if (cfg["draw_threshold_"].IsDefined()) {
-    draw_threshold_ = cfg["draw_threshold_"].as<float>();
+  // Get draw_threshold for visualization
+  if (cfg["draw_threshold"].IsDefined()) {
+    draw_threshold_ = cfg["draw_threshold"].as<float>();
   } else {
-    FDERROR << "Please set draw_threshold_." << std::endl;
+    FDERROR << "Please set draw_threshold." << std::endl;
     return false;
   }
   // Get config for tracker
