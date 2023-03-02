@@ -23,8 +23,8 @@ void BindPPOCRModel(pybind11::module& m) {
   });
 
   // DBDetector
-  pybind11::class_<vision::ocr::DBDetectorPreprocessor>(
-      m, "DBDetectorPreprocessor")
+  pybind11::class_<vision::ocr::DBDetectorPreprocessor,
+                   vision::ProcessorManager>(m, "DBDetectorPreprocessor")
       .def(pybind11::init<>())
       .def_property("static_shape_infer",
                     &vision::ocr::DBDetectorPreprocessor::GetStaticShapeInfer,
@@ -133,19 +133,16 @@ void BindPPOCRModel(pybind11::module& m) {
       });
 
   // Classifier
-  pybind11::class_<vision::ocr::ClassifierPreprocessor>(
-      m, "ClassifierPreprocessor")
+  pybind11::class_<vision::ocr::ClassifierPreprocessor,
+                   vision::ProcessorManager>(m, "ClassifierPreprocessor")
       .def(pybind11::init<>())
       .def_property("cls_image_shape",
                     &vision::ocr::ClassifierPreprocessor::GetClsImageShape,
                     &vision::ocr::ClassifierPreprocessor::SetClsImageShape)
-      .def_property("mean", &vision::ocr::ClassifierPreprocessor::GetMean,
-                    &vision::ocr::ClassifierPreprocessor::SetMean)
-      .def_property("scale", &vision::ocr::ClassifierPreprocessor::GetScale,
-                    &vision::ocr::ClassifierPreprocessor::SetScale)
-      .def_property("is_scale",
-                    &vision::ocr::ClassifierPreprocessor::GetIsScale,
-                    &vision::ocr::ClassifierPreprocessor::SetIsScale)
+      .def("set_normalize",
+           [](vision::ocr::ClassifierPreprocessor& self,
+              const std::vector<float>& mean, const std::vector<float>& std,
+              bool is_scale) { self.SetNormalize(mean, std, is_scale); })
       .def("run",
            [](vision::ocr::ClassifierPreprocessor& self,
               std::vector<pybind11::array>& im_list) {
@@ -233,8 +230,8 @@ void BindPPOCRModel(pybind11::module& m) {
       });
 
   // Recognizer
-  pybind11::class_<vision::ocr::RecognizerPreprocessor>(
-      m, "RecognizerPreprocessor")
+  pybind11::class_<vision::ocr::RecognizerPreprocessor,
+                   vision::ProcessorManager>(m, "RecognizerPreprocessor")
       .def(pybind11::init<>())
       .def_property("static_shape_infer",
                     &vision::ocr::RecognizerPreprocessor::GetStaticShapeInfer,
@@ -242,13 +239,10 @@ void BindPPOCRModel(pybind11::module& m) {
       .def_property("rec_image_shape",
                     &vision::ocr::RecognizerPreprocessor::GetRecImageShape,
                     &vision::ocr::RecognizerPreprocessor::SetRecImageShape)
-      .def_property("mean", &vision::ocr::RecognizerPreprocessor::GetMean,
-                    &vision::ocr::RecognizerPreprocessor::SetMean)
-      .def_property("scale", &vision::ocr::RecognizerPreprocessor::GetScale,
-                    &vision::ocr::RecognizerPreprocessor::SetScale)
-      .def_property("is_scale",
-                    &vision::ocr::RecognizerPreprocessor::GetIsScale,
-                    &vision::ocr::RecognizerPreprocessor::SetIsScale)
+      .def("set_normalize",
+           [](vision::ocr::RecognizerPreprocessor& self,
+              const std::vector<float>& mean, const std::vector<float>& std,
+              bool is_scale) { self.SetNormalize(mean, std, is_scale); })
       .def("run",
            [](vision::ocr::RecognizerPreprocessor& self,
               std::vector<pybind11::array>& im_list) {

@@ -112,7 +112,7 @@ Develop版本（Nightly build）
 | Windows x64 | [fastdeploy-win-x64-0.0.0.zip](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-win-x64-0.0.0.zip) | Visual Studio 16 2019编译产出 |
 | Mac OSX x64 | [fastdeploy-osx-x86_64-0.0.0.tgz](https://bj.bcebos.com/fastdeploy/dev/cpp/fastdeploy-osx-x86_64-0.0.0.tgz) | - |
 | Mac OSX arm64 | [fastdeploy-osx-arm64-0.0.0.tgz](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-osx-arm64-0.0.0.tgz) | clang++ 13.0.0编译产出 |
-| Linux aarch64 | - | - |  
+| Linux aarch64 | [fastdeploy-linux-aarch64-0.0.0.tgz](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-linux-aarch64-0.0.0.tgz) | - |  
 | Android armv7&v8 | [fastdeploy-android-0.0.0-shared.tgz](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-0.0.0-shared.tgz) | CV API，NDK 25及clang++编译产出, 支持arm64-v8a及armeabi-v7a |
 | Android armv7&v8 | [fastdeploy-android-with-text-0.0.0-shared.tgz](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-with-text-0.0.0-shared.tgz) | 包含 FastTokenizer、UIE 等 Text API，CV API，NDK 25及clang++编译产出, 支持arm64-v8a及armeabi-v7a |
 | Android armv7&v8 | [fastdeploy-android-with-text-only-0.0.0-shared.tgz](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-with-text-only-0.0.0-shared.tgz) | 仅包含 FastTokenizer、UIE 等 Text API，NDK 25及clang++编译产出，不包含 OpenCV 等 CV API。 支持arm64-v8a及armeabi-v7a |

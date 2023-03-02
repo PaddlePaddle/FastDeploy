@@ -272,6 +272,9 @@ std::vector<FDMat> WrapMat(const std::vector<cv::Mat>& images) {
 }
 
 bool CheckShapeConsistency(std::vector<Mat>* mats) {
+  if (mats == nullptr) {
+    return true;
+  }
   for (size_t i = 1; i < mats->size(); ++i) {
     if ((*mats)[i].Channels() != (*mats)[0].Channels() ||
         (*mats)[i].Width() != (*mats)[0].Width() ||
@@ -285,21 +288,24 @@ bool CheckShapeConsistency(std::vector<Mat>* mats) {
 FDTensor* CreateCachedGpuInputTensor(Mat* mat) {
 #ifdef WITH_GPU
   FDTensor* src = mat->Tensor();
+  // Need to make sure the tensor is pointed to the input_cache.
+  if (src->Data() == mat->output_cache->Data()) {
+    std::swap(mat->input_cache, mat->output_cache);
+    std::swap(mat->input_cache->name, mat->output_cache->name);
+  }
   if (src->device == Device::GPU) {
-    if (src->Data() == mat->output_cache->Data()) {
-      std::swap(mat->input_cache, mat->output_cache);
-      std::swap(mat->input_cache->name, mat->output_cache->name);
-    }
     return src;
   } else if (src->device == Device::CPU) {
-    // Mats on CPU, we need copy these tensors from CPU to GPU
+    // Tensor on CPU, we need copy it from CPU to GPU
     FDASSERT(src->Shape().size() == 3, "The CPU tensor must has 3 dims.")
-    mat->input_cache->Resize(src->Shape(), src->Dtype(), "input_cache",
-                             Device::GPU);
+    mat->output_cache->Resize(src->Shape(), src->Dtype(), "output_cache",
+                              Device::GPU);
     FDASSERT(
-        cudaMemcpyAsync(mat->input_cache->Data(), src->Data(), src->Nbytes(),
+        cudaMemcpyAsync(mat->output_cache->Data(), src->Data(), src->Nbytes(),
                         cudaMemcpyHostToDevice, mat->Stream()) == 0,
         "[ERROR] Error occurs while copy memory from CPU to GPU.");
+    std::swap(mat->input_cache, mat->output_cache);
+    std::swap(mat->input_cache->name, mat->output_cache->name);
     return mat->input_cache;
   } else {
     FDASSERT(false, "FDMat is on unsupported device: %d", src->device);

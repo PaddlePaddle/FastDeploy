@@ -29,6 +29,14 @@ class FASTDEPLOY_DECL Normalize : public Processor {
 #ifdef ENABLE_FLYCV
   bool ImplByFlyCV(Mat* mat);
 #endif
+#ifdef WITH_GPU
+  bool ImplByCuda(FDMat* mat);
+  bool ImplByCuda(FDMatBatch* mat_batch);
+#endif
+#ifdef ENABLE_CVCUDA
+  bool ImplByCvCuda(FDMat* mat);
+  bool ImplByCvCuda(FDMatBatch* mat_batch);
+#endif
   std::string Name() { return "Normalize"; }
 
   // While use normalize, it is more recommend not use this function
@@ -61,6 +69,8 @@ class FASTDEPLOY_DECL Normalize : public Processor {
  private:
   std::vector<float> alpha_;
   std::vector<float> beta_;
+  FDTensor gpu_alpha_;
+  FDTensor gpu_beta_;
   bool swap_rb_;
 };
 }  // namespace vision
