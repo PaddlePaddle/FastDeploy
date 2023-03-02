@@ -22,9 +22,24 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
-                              const std::vector<int>& rec_image_shape,
-                              bool static_shape_infer) {
+RecognizerPreprocessor::RecognizerPreprocessor() {
+  resize_op_ = std::make_shared<Resize>(-1, -1);
+
+  std::vector<float> value = {127, 127, 127};
+  pad_op_ = std::make_shared<Pad>(0, 0, 0, 0, value);
+
+  std::vector<float> mean = {0.5f, 0.5f, 0.5f};
+  std::vector<float> std = {0.5f, 0.5f, 0.5f};
+  normalize_permute_op_ =
+      std::make_shared<NormalizeAndPermute>(mean, std, true);
+  normalize_op_ = std::make_shared<Normalize>(mean, std, true);
+  hwc2chw_op_ = std::make_shared<HWC2CHW>();
+  cast_op_ = std::make_shared<Cast>("float");
+}
+
+void RecognizerPreprocessor::OcrRecognizerResizeImage(
+    FDMat* mat, float max_wh_ratio, const std::vector<int>& rec_image_shape,
+    bool static_shape_infer) {
   int img_h, img_w;
   img_h = rec_image_shape[1];
   img_w = rec_image_shape[2];
@@ -39,23 +54,23 @@ void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
     } else {
       resize_w = int(ceilf(img_h * ratio));
     }
-    Resize::Run(mat, resize_w, img_h);
-    Pad::Run(mat, 0, 0, 0, int(img_w - mat->Width()), {127, 127, 127});
-
+    resize_op_->SetWidthAndHeight(resize_w, img_h);
+    (*resize_op_)(mat);
+    pad_op_->SetPaddingSize(0, 0, 0, int(img_w - mat->Width()));
+    (*pad_op_)(mat);
   } else {
     if (mat->Width() >= img_w) {
-      Resize::Run(mat, img_w, img_h);  // Reszie W to 320
+      // Reszie W to 320
+      resize_op_->SetWidthAndHeight(img_w, img_h);
+      (*resize_op_)(mat);
     } else {
-      Resize::Run(mat, mat->Width(), img_h);
-      Pad::Run(mat, 0, 0, 0, int(img_w - mat->Width()), {127, 127, 127});
+      resize_op_->SetWidthAndHeight(mat->Width(), img_h);
+      (*resize_op_)(mat);
       // Pad to 320
+      pad_op_->SetPaddingSize(0, 0, 0, int(img_w - mat->Width()));
+      (*pad_op_)(mat);
     }
   }
-}
-
-bool RecognizerPreprocessor::Run(std::vector<FDMat>* images,
-                                 std::vector<FDTensor>* outputs) {
-  return Run(images, outputs, 0, images->size(), {});
 }
 
 bool RecognizerPreprocessor::Run(std::vector<FDMat>* images,
@@ -70,60 +85,55 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images,
     return false;
   }
 
+  std::vector<FDMat> mats(end_index - start_index);
+  for (size_t i = start_index; i < end_index; ++i) {
+    size_t real_index = i;
+    if (indices.size() != 0) {
+      real_index = indices[i];
+    }
+    mats[i - start_index] = images->at(real_index);
+  }
+  return Run(&mats, outputs);
+}
+
+bool RecognizerPreprocessor::Apply(FDMatBatch* image_batch,
+                                   std::vector<FDTensor>* outputs) {
   int img_h = rec_image_shape_[1];
   int img_w = rec_image_shape_[2];
   float max_wh_ratio = img_w * 1.0 / img_h;
   float ori_wh_ratio;
 
-  for (size_t i = start_index; i < end_index; ++i) {
-    size_t real_index = i;
-    if (indices.size() != 0) {
-      real_index = indices[i];
-    }
-    FDMat* mat = &(images->at(real_index));
+  for (size_t i = 0; i < image_batch->mats->size(); ++i) {
+    FDMat* mat = &(image_batch->mats->at(i));
     ori_wh_ratio = mat->Width() * 1.0 / mat->Height();
     max_wh_ratio = std::max(max_wh_ratio, ori_wh_ratio);
   }
 
-  for (size_t i = start_index; i < end_index; ++i) {
-    size_t real_index = i;
-    if (indices.size() != 0) {
-      real_index = indices[i];
-    }
-    FDMat* mat = &(images->at(real_index));
+  for (size_t i = 0; i < image_batch->mats->size(); ++i) {
+    FDMat* mat = &(image_batch->mats->at(i));
     OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_,
                              static_shape_infer_);
-    if (!disable_normalize_ && !disable_permute_) {
-      NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
-    } else {
-      if (!disable_normalize_) {
-        Normalize::Run(mat, mean_, scale_, is_scale_);
-      }
-      if (!disable_permute_) {
-        HWC2CHW::Run(mat);
-        Cast::Run(mat, "float");
-      }
+  }
+
+  if (!disable_normalize_ && !disable_permute_) {
+    (*normalize_permute_op_)(image_batch);
+  } else {
+    if (!disable_normalize_) {
+      (*normalize_op_)(image_batch);
+    }
+    if (!disable_permute_) {
+      (*hwc2chw_op_)(image_batch);
+      (*cast_op_)(image_batch);
     }
   }
+
   // Only have 1 output Tensor.
   outputs->resize(1);
-  size_t tensor_size = end_index - start_index;
-  // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> tensors(tensor_size);
-  for (size_t i = 0; i < tensor_size; ++i) {
-    size_t real_index = i + start_index;
-    if (indices.size() != 0) {
-      real_index = indices[i + start_index];
-    }
-
-    (*images)[real_index].ShareWithTensor(&(tensors[i]));
-    tensors[i].ExpandDim(0);
-  }
-  if (tensors.size() == 1) {
-    (*outputs)[0] = std::move(tensors[0]);
-  } else {
-    function::Concat(tensors, &((*outputs)[0]), 0);
-  }
+  // Get the NCHW tensor
+  FDTensor* tensor = image_batch->Tensor();
+  (*outputs)[0].SetExternalData(tensor->Shape(), tensor->Dtype(),
+                                tensor->Data(), tensor->device,
+                                tensor->device_id);
   return true;
 }
 
