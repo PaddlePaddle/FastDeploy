@@ -96,7 +96,7 @@ Install the released version（Latest 1.0.4 for now, Android is 1.0.4）
 | Windows x64 | [fastdeploy-win-x64-1.0.4.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-1.0.4.zip) | Visual Studio 16 2019 |
 | Mac OSX x64 | [fastdeploy-osx-x86_64-1.0.4.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-x86_64-1.0.4.tgz) | clang++ 10.0.0|
 | Mac OSX arm64 | [fastdeploy-osx-arm64-1.0.4.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-arm64-1.0.4.tgz) | clang++ 13.0.0 |
-| Linux aarch64 | [fastdeploy-linux-aarch64-1.0.4.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-1.0.4.tgz) | gcc 6.3编译产出 |  
+| Linux aarch64 | [fastdeploy-linux-aarch64-1.0.4.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-1.0.4.tgz) | gcc 6.3 |  
 | Android armv7&v8 | [fastdeploy-android-1.0.4-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-1.0.4-shared.tgz) | CV API, NDK 25, clang++, support arm64-v8a and armeabi-v7a  |
 | Android armv7&v8 | [fastdeploy-android-with-text-1.0.4-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-with-text-1.0.4-shared.tgz) | contains Text API, such as FastTokenizer and UIE, CV API, NDK 25, clang++, support arm64-v8a and armeabi-v7a  |
 | Android armv7&v8 | [fastdeploy-android-with-text-only-1.0.4-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-with-text-only-1.0.4-shared.tgz) | only contains Text API, such as FastTokenizer and UIE, NDK 25, clang++, does not contain CV API, support arm64-v8a and armeabi-v7a  |
