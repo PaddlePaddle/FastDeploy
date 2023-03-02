@@ -75,6 +75,22 @@ bool Classifier::Predict(const cv::Mat& img, int32_t* cls_label,
   return true;
 }
 
+bool Classifier::Predict(const cv::Mat& img, vision::OCRResult* ocr_result) {
+  ocr_result->cls_labels.resize(1);
+  ocr_result->cls_scores.resize(1);
+  if (!Predict(img, &(ocr_result->cls_labels[0]),
+               &(ocr_result->cls_scores[0]))) {
+    return false;
+  }
+  return true;
+}
+
+bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
+                              vision::OCRResult* ocr_result) {
+  return BatchPredict(images, &(ocr_result->cls_labels),
+                      &(ocr_result->cls_scores));
+}
+
 bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
                               std::vector<int32_t>* cls_labels,
                               std::vector<float>* cls_scores) {
