@@ -49,6 +49,14 @@
 #cmakedefine ENABLE_MNN_BACKEND
 #endif
 
+#ifndef ENABLE_NCNN_BACKEND
+#cmakedefine ENABLE_NCNN_BACKEND
+#endif
+
+#ifndef ENABLE_TNN_BACKEND
+#cmakedefine ENABLE_TNN_BACKEND
+#endif
+
 #ifndef WITH_GPU
 #cmakedefine WITH_GPU
 #endif

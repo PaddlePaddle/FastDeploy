@@ -64,6 +64,8 @@ option(ENABLE_RKNPU2_BACKEND "Whether to enable RKNPU2 backend." OFF)
 option(ENABLE_SOPHGO_BACKEND "Whether to enable SOPHON backend." OFF)
 option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
 option(ENABLE_MNN_BACKEND "Whether to enable MNN backend." OFF)
+option(ENABLE_NCNN_BACKEND "Whether to enable NCNN backend." OFF)
+option(ENABLE_TNN_BACKEND "Whether to enable TNN backend." OFF)
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
@@ -172,6 +174,8 @@ file(GLOB_RECURSE DEPLOY_RKNPU2_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fas
 file(GLOB_RECURSE DEPLOY_SOPHGO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/sophgo/*.cc)
 file(GLOB_RECURSE DEPLOY_LITE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/lite/*.cc)
 file(GLOB_RECURSE DEPLOY_MNN_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/mnn/*.cc)
+file(GLOB_RECURSE DEPLOY_NCNN_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/ncnn/*.cc)
+file(GLOB_RECURSE DEPLOY_TNN_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/tnn/*.cc)
 file(GLOB_RECURSE DEPLOY_VISION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cc)
 file(GLOB_RECURSE DEPLOY_ENCRYPTION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/encryption/*.cc)
 file(GLOB_RECURSE DEPLOY_PIPELINE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pipeline/*.cc)
@@ -261,6 +265,20 @@ if(ENABLE_MNN_BACKEND)
   include(${PROJECT_SOURCE_DIR}/cmake/mnn.cmake)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_MNN_SRCS})
   list(APPEND DEPEND_LIBS external_mnn external_mnn_expr)
+endif()
+
+if(ENABLE_NCNN_BACKEND)
+  add_definitions(-DENABLE_NCNN_BACKEND)
+  include(${PROJECT_SOURCE_DIR}/cmake/ncnn.cmake)
+  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_NCNN_SRCS})
+  list(APPEND DEPEND_LIBS external_ncnn)
+endif()
+
+if(ENABLE_TNN_BACKEND)
+  add_definitions(-DENABLE_TNN_BACKEND)
+  include(${PROJECT_SOURCE_DIR}/cmake/tnn.cmake)
+  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TNN_SRCS})
+  list(APPEND DEPEND_LIBS external_tnn)
 endif()
 
 if(ENABLE_POROS_BACKEND)
@@ -683,6 +701,18 @@ else()
   if(ENABLE_MNN_BACKEND)
     install(
       DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/mnn
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
+    )
+  endif()
+  if(ENABLE_NCNN_BACKEND)
+    install(
+      DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/ncnn
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
+    )
+  endif()
+  if(ENABLE_TNN_BACKEND)
+    install(
+      DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tnn
       DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install
     )
   endif()

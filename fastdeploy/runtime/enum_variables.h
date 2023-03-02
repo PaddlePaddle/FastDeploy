@@ -38,7 +38,9 @@ enum Backend {
   LITE,       ///< Paddle Lite, support Paddle format model, ARM CPU only
   RKNPU2,     ///< RKNPU2, support RKNN format model, Rockchip NPU only
   SOPHGOTPU,  ///< SOPHGOTPU, support SOPHGO format model, Sophgo TPU only
-  MNN,  ///< MNN, support MNN format model, ARM CPU only
+  MNN,  ///< MNN, support MNN_MODEL format model, ARM CPU only
+  NCNN,  ///< NCNN, support NCNN_MODEL format model, ARM CPU only
+  TNN,  ///< TNN, support TNN_MODEL format model, ARM CPU only
 };
 
 /**
@@ -73,6 +75,8 @@ enum ModelFormat {
   TORCHSCRIPT,  ///< Model with TorchScript format
   SOPHGO,       ///< Model with SOPHGO format
   MNN_MODEL,    ///< Model with MNN format
+  NCNN_MODEL,    ///< Model with NCNN format
+  TNN_MODEL,    ///< Model with TNN format
 };
 
 /// Describle all the supported backends for specified model format
@@ -84,14 +88,17 @@ static std::map<ModelFormat, std::vector<Backend>>
   {ModelFormat::RKNN, {Backend::RKNPU2}},
   {ModelFormat::TORCHSCRIPT, {Backend::POROS}},
   {ModelFormat::SOPHGO, {Backend::SOPHGOTPU}},
-  {ModelFormat::MNN_MODEL, {Backend::MNN}}
+  {ModelFormat::MNN_MODEL, {Backend::MNN}},
+  {ModelFormat::NCNN_MODEL, {Backend::NCNN}},
+  {ModelFormat::TNN_MODEL, {Backend::TNN}},
 };
 
 /// Describle all the supported backends for specified device
 static std::map<Device, std::vector<Backend>>
     s_default_backends_by_device = {
   {Device::CPU, {Backend::LITE, Backend::PDINFER, Backend::ORT,
-                Backend::OPENVINO, Backend::POROS, Backend::MNN}},
+                 Backend::OPENVINO, Backend::POROS, Backend::MNN,
+                 Backend::NCNN, Backend::TNN}},
   {Device::GPU, {Backend::PDINFER, Backend::ORT, Backend::TRT, Backend::POROS}},
   {Device::RKNPU, {Backend::RKNPU2}},
   {Device::IPU, {Backend::PDINFER}},

@@ -53,6 +53,10 @@
 #include "fastdeploy/runtime/backends/mnn/mnn_backend.h"
 #endif
 
+#ifdef ENABLE_NCNN_BACKEND
+#include "fastdeploy/runtime/backends/ncnn/ncnn_backend.h"
+#endif
+
 namespace fastdeploy {
 
 bool AutoSelectBackend(RuntimeOption& option) {
@@ -163,7 +167,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     CreateMNNBackend();
   } else {
     std::string msg = Str(GetAvailableBackends());
-    FDERROR << "The compiled FastDeploy only supports " << msg << ", " << option.backend << " is not supported now." << std::endl;
+    FDERROR << "The compiled FastDeploy only supports " << msg << ", "
+            << option.backend << " is not supported now." << std::endl;
     return false;
   }
   backend_->benchmark_option_ = option.benchmark_option;
@@ -234,7 +239,8 @@ void Runtime::BindOutputTensor(const std::string& name, FDTensor& output) {
     }
   }
   if (!is_exist) {
-    FDINFO << "The output name [" << name << "] is prebinded added into output tensor list." << std::endl;
+    FDINFO << "The output name [" << name
+           << "] is prebinded added into output tensor list." << std::endl;
     FDTensor new_tensor(name);
     new_tensor.SetExternalData(output.shape, output.dtype, output.MutableData(),
                                output.device, output.device_id);
@@ -263,7 +269,8 @@ void Runtime::ReleaseModelMemoryBuffer() {
 void Runtime::CreatePaddleBackend() {
 #ifdef ENABLE_PADDLE_BACKEND
   backend_ = utils::make_unique<PaddleBackend>();
-  FDASSERT(backend_->Init(option), "Failed to initialized Paddle Inference backend.");
+  FDASSERT(backend_->Init(option),
+           "Failed to initialized Paddle Inference backend.");
 #else
   FDASSERT(false,
            "PaddleBackend is not available, please compiled with "
@@ -420,8 +427,23 @@ void Runtime::CreateMNNBackend() {
            "MNNBackend is not available, please compiled with "
            "ENABLE_MNN_BACKEND=ON.");
 #endif
-  FDINFO << "Runtime initialized with Backend::MNN in " << option.device
-         << "." << std::endl;
+  FDINFO << "Runtime initialized with Backend::MNN in " << option.device << "."
+         << std::endl;
+}
+
+void Runtime::CreateNCNNBackend() {
+#ifdef ENABLE_NCNN_BACKEND
+  backend_ = utils::make_unique<NCNNBackend>();
+
+  FDASSERT(backend_->Init(option),
+           "Load model from mnn file failed while initializing NCNNBackend.");
+#else
+  FDASSERT(false,
+           "NCNNBackend is not available, please compiled with "
+           "ENABLE_NCNN_BACKEND=ON.");
+#endif
+  FDINFO << "Runtime initialized with Backend::NCNN in " << option.device << "."
+         << std::endl;
 }
 
 }  // namespace fastdeploy

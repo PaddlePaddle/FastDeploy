@@ -19,21 +19,19 @@
 #include <string>
 #include <vector>
 
-#include "MNN/Interpreter.hpp"
-#include "MNN/MNNDefine.h"
-#include "MNN/Tensor.hpp"
-#include "MNN/ImageProcess.hpp"
+#include "ncnn/net.h"
+#include "ncnn/layer.h"
+#include "ncnn/cpu.h"
 
 #include "fastdeploy/runtime/backends/backend.h"
 #include "fastdeploy/runtime/runtime_option.h"
-#include "fastdeploy/runtime/backends/mnn/option.h"
+#include "fastdeploy/runtime/backends/ncnn/option.h"
 
 namespace fastdeploy {
 
-class MNNBackend : public BaseBackend {
+class NCNNBackend : public BaseBackend {
  public:
-  MNNBackend() {}
-  ~MNNBackend() override;
+  NCNNBackend() {}
 
   bool Init(const RuntimeOption& runtime_option) override;
 
@@ -51,35 +49,46 @@ class MNNBackend : public BaseBackend {
   std::vector<TensorInfo> GetOutputInfos() override;
 
  private:
-  void BuildOption(const MNNBackendOption& option);
+  void BuildOption(const NCNNBackendOption& option);
   bool UpdateInputShapeAndDesc(const std::vector<FDTensor>& inputs);
   bool SetTensorInfoByCustomOrder(
     const std::map<std::string, int>& custom_orders,
-    const std::map<std::string, MNN::Tensor*>& tensors_info,
-    std::vector<TensorInfo>* desc, std::map<std::string, int>* order);
-  bool SetTensorInfo(const std::map<std::string, MNN::Tensor*>& tensors_info,
-                    std::vector<TensorInfo>* desc,
-                    std::map<std::string, int>* order);
-  std::vector<int> GetMNNShape(const std::vector<int64_t>& shape);
+    const std::vector<const char*>& tensor_names,
+    const std::vector<int>& tensor_indexes,
+    std::vector<TensorInfo>* desc,
+    std::map<std::string, int>* order);
+  bool SetTensorInfo(const std::vector<const char*>& tensor_names,
+                     const std::vector<int>& tensor_indexes,
+                     std::vector<TensorInfo>* desc,
+                     std::map<std::string, int>* order);
+  std::vector<int> GetNCNNShape(const std::vector<int64_t>& shape);
   std::vector<int64_t> GetFDShape(const std::vector<int>& shape);
-  bool IsTensorShapeDirty(const std::vector<int>& old_tensor_shape,
-                          const std::vector<int>& new_data_shape);
   std::string ShapeStr(const std::vector<int>& shape);
+  std::vector<int> GetMatShapeByBlob(int id, size_t* elemsize);
+  std::vector<int> GetMatShape(const ncnn::Mat& mat, size_t* elemsize);
 
   std::vector<TensorInfo> inputs_desc_;
   std::vector<TensorInfo> outputs_desc_;
   std::map<std::string, int> inputs_order_;
   std::map<std::string, int> outputs_order_;
-  MNNBackendOption option_;
+  NCNNBackendOption option_;
 
-  // MNN Interpreter and Session
-  std::shared_ptr<MNN::Interpreter> interpreter_;
-  MNN::Session* session_{nullptr};
-  MNN::ScheduleConfig schedule_config_;
-  MNN::BackendConfig backend_config_;
+  std::shared_ptr<ncnn::Net> net_;
+  ncnn::Option opt_;
+  std::vector<int> input_indexes_;
+  std::vector<int> output_indexes_;
+  std::vector<const char*> input_names_;
+  std::vector<const char*> output_names_;
 };
 
-// Convert data type from MNN to fastdeploy
-FDDataType MNNDataTypeToFD(const halide_type_t& dtype);
+/// Convert data type from NCNN to FastDeploy
+/// element size in bytes
+/// 4 = float32/int32
+/// 2 = float16
+/// 1 = int8/uint8
+/// 0 = empty
+/// size_t elemsize;
+/// Only support float32/int32 in FastDeploy now.
+FDDataType NCNNDataTypeToFD(size_t elemsize, bool integer = false);
 
 }  // namespace fastdeploy

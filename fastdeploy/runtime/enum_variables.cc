@@ -34,6 +34,10 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
     out << "Backend::PDLITE";
   } else if (backend == Backend::MNN) {
     out << "Backend::MNN";
+  } else if (backend == Backend::NCNN) {
+    out << "Backend::NCNN";
+  } else if (backend == Backend::TNN) {
+    out << "Backend::TNN";
   } else {
     out << "UNKNOWN-Backend";
   }
@@ -85,6 +89,10 @@ std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
     out << "ModelFormat::TORCHSCRIPT";
   } else if (format == ModelFormat::MNN_MODEL) {
     out << "ModelFormat::MNN_MODEL";
+  } else if (format == ModelFormat::NCNN_MODEL) {
+    out << "ModelFormat::NCNN_MODEL";
+  } else if (format == ModelFormat::TNN_MODEL) {
+    out << "ModelFormat::TNN_MODEL";
   } else {
     out << "UNKNOWN-ModelFormat";
   }
@@ -119,6 +127,12 @@ std::vector<Backend> GetAvailableBackends() {
 #endif
 #ifdef ENABLE_MNN_BACKEND
   backends.push_back(Backend::MNN);
+#endif
+#ifdef ENABLE_NCNN_BACKEND
+  backends.push_back(Backend::NCNN);
+#endif
+#ifdef ENABLE_TNN_BACKEND
+  backends.push_back(Backend::TNN);
 #endif
   return backends;
 }

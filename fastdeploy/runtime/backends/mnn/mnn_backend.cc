@@ -101,7 +101,7 @@ void MNNBackend::BuildOption(const MNNBackendOption& option) {
   }
 }
 
-bool SetTensorInfoByCustomOrder(
+bool MNNBackend::SetTensorInfoByCustomOrder(
     const std::map<std::string, int>& custom_orders,
     const std::map<std::string, MNN::Tensor*>& tensors_info,
     std::vector<TensorInfo>* desc, std::map<std::string, int>* order) {
@@ -136,9 +136,9 @@ bool SetTensorInfoByCustomOrder(
   return true;
 }
 
-bool SetTensorInfo(const std::map<std::string, MNN::Tensor*>& tensors_info,
-                   std::vector<TensorInfo>* desc,
-                   std::map<std::string, int>* order) {
+bool MNNBackend::SetTensorInfo(
+    const std::map<std::string, MNN::Tensor*>& tensors_info,
+    std::vector<TensorInfo>* desc, std::map<std::string, int>* order) {
   desc->clear();
   order->clear();
   int i = 0;
@@ -198,14 +198,16 @@ bool MNNBackend::Init(const RuntimeOption& runtime_option) {
     FDASSERT(option_.in_orders.size() == inputs_info.size(),
              "The size of custom input orders must be equal the size of"
              " inputs info, but got %d != %d now!",
-             option_.in_orders.size(), inputs_info.size())
+             static_cast<int>(option_.in_orders.size()),
+             static_cast<int>(inputs_info.size()))
   }
   if (!option_.out_orders.empty()) {
     int saved_size = option_.save_tensors.size();
     FDASSERT(option_.out_orders.size() == outputs_info.size() - saved_size,
              "The size of custom output orders must be equal the size of"
              " outputs info, but got %d != %d now!",
-             option_.out_orders.size(), outputs_info.size() - saved_size)
+             static_cast<int>(option_.out_orders.size()),
+             static_cast<int>(outputs_info.size()) - saved_size)
   }
   // Check the name in custom inputs/outputs orders and reorder
   if (!option_.save_tensors.empty()) {
@@ -232,7 +234,7 @@ bool MNNBackend::Init(const RuntimeOption& runtime_option) {
   return true;
 }
 
-inline std::vector<int> GetMNNShape(const std::vector<int64_t>& shape) {
+std::vector<int> MNNBackend::GetMNNShape(const std::vector<int64_t>& shape) {
   std::vector<int> new_shape;
   new_shape.resize(shape.size());
   for (int i = 0; i < shape.size(); ++i) {
@@ -241,7 +243,7 @@ inline std::vector<int> GetMNNShape(const std::vector<int64_t>& shape) {
   return new_shape;
 }
 
-inline std::vector<int64_t> GetFDShape(const std::vector<int>& shape) {
+std::vector<int64_t> MNNBackend::GetFDShape(const std::vector<int>& shape) {
   std::vector<int64_t> new_shape;
   new_shape.resize(shape.size());
   for (int i = 0; i < shape.size(); ++i) {
@@ -250,8 +252,8 @@ inline std::vector<int64_t> GetFDShape(const std::vector<int>& shape) {
   return new_shape;
 }
 
-inline bool IsTensorShapeDirty(const std::vector<int>& old_tensor_shape,
-                               const std::vector<int>& new_data_shape) {
+bool MNNBackend::IsTensorShapeDirty(const std::vector<int>& old_tensor_shape,
+                                    const std::vector<int>& new_data_shape) {
   if (old_tensor_shape.size() != new_data_shape.size()) {
     return true;
   }
@@ -263,7 +265,7 @@ inline bool IsTensorShapeDirty(const std::vector<int>& old_tensor_shape,
   return false;
 }
 
-inline std::string ShapeStr(const std::vector<int>& shape) {
+std::string MNNBackend::ShapeStr(const std::vector<int>& shape) {
   std::string str = "[";
   for (int j = 0; j < shape.size(); ++j) {
     str += std::to_string(shape[j]);
@@ -323,8 +325,8 @@ bool MNNBackend::Infer(std::vector<FDTensor>& inputs,
                        std::vector<FDTensor>* outputs, bool copy_to_fd) {
   if (benchmark_option_.enable_profile) {
     FDWARNING << "Backend::MNN change the input tensor's values "
-              << "according to it's memory reuse policy. So, the "
-              << "output tensors will tend to be randomly after "
+              << "according to it's memory reuse policy. So, the " << std::endl;
+    FDWARNING << "output tensors will tend to be randomly after "
               << "the first inference of the profile loop." << std::endl;
   }
   if (inputs.size() != inputs_desc_.size()) {

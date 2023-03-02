@@ -33,6 +33,7 @@
 #include "fastdeploy/runtime/backends/sophgo/option.h"
 #include "fastdeploy/runtime/backends/tensorrt/option.h"
 #include "fastdeploy/runtime/backends/mnn/option.h"
+#include "fastdeploy/runtime/backends/ncnn/option.h"
 #include "fastdeploy/benchmark/option.h"
 
 namespace fastdeploy {
@@ -136,6 +137,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void UsePaddleLiteBackend() { return UseLiteBackend(); }
   /// Set MNN as inference backend, only support arm cpu
   void UseMNNBackend();
+  /// Set NCNN as inference backend, only support arm cpu
+  void UseNCNNBackend();
   /** \Use Graphcore IPU to inference.
    *
    * \param[in] device_num the number of IPUs.
@@ -162,6 +165,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   RKNPU2BackendOption rknpu2_option;
   /// Option to configure MNN backend
   MNNBackendOption mnn_option;
+  /// Option to configure NCNN backend
+  NCNNBackendOption ncnn_option;
 
   /** \brief Set the profile mode as 'true'.
    *
