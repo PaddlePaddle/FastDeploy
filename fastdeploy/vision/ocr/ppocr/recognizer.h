@@ -44,7 +44,7 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
              const std::string& label_path = "",
              const RuntimeOption& custom_option = RuntimeOption(),
              const ModelFormat& model_format = ModelFormat::PADDLE);
-  
+
   /// Get model's name
   std::string ModelName() const { return "ppocr/ocr_rec"; }
 
@@ -63,6 +63,23 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
    */
   virtual bool Predict(const cv::Mat& img, std::string* text, float* rec_score);
 
+  /** \brief Predict the input image and get OCR recognition model result.
+   *
+   * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * \param[in] ocr_result The output of OCR recognition model result will be writen to this structure.
+   * \return true if the prediction is successed, otherwise false.
+   */
+  virtual bool Predict(const cv::Mat& img, vision::OCRResult* ocr_result);
+
+  /** \brief BatchPredict the input image and get OCR recognition model result.
+   *
+   * \param[in] images The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * \param[in] ocr_result The output of OCR recognition model result will be writen to this structure.
+   * \return true if the prediction is successed, otherwise false.
+   */
+  virtual bool BatchPredict(const std::vector<cv::Mat>& images,
+                                        vision::OCRResult* ocr_result);
+
   /** \brief BatchPredict the input image and get OCR recognition model result.
    *
    * \param[in] images The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
@@ -72,7 +89,7 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
    */
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
                std::vector<std::string>* texts, std::vector<float>* rec_scores);
-  
+
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
                std::vector<std::string>* texts, std::vector<float>* rec_scores,
                size_t start_index, size_t end_index,
