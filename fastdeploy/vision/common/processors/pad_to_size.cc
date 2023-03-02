@@ -21,22 +21,6 @@ static bool PadHWCByOpenCV(FDMat* mat, int width, int height,
                            const std::vector<float>& value) {
   int origin_w = mat->Width();
   int origin_h = mat->Height();
-  if (origin_w > width) {
-    FDERROR << "PadToSize: the input width:" << origin_w
-            << " is greater than the target width: " << width << "."
-            << std::endl;
-    return false;
-  }
-  if (origin_h > height) {
-    FDERROR << "PadToSize: the input height:" << origin_h
-            << " is greater than the target height: " << height << "."
-            << std::endl;
-    return false;
-  }
-  if (origin_w == width && origin_h == height) {
-    return true;
-  }
-
   cv::Mat* im = mat->GetOpenCVMat();
   cv::Scalar scalar;
   if (value.size() == 1) {
@@ -123,14 +107,58 @@ bool PadToSize::ImplByOpenCV(FDMat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
+static bool PadHWCByFlyCV(FDMat* mat, int width, int height,
+                          const std::vector<float>& value) {
+  fcv::Mat* im = mat->GetFlyCVMat();
+  fcv::Scalar value;
+  if (value.size() == 1) {
+    scalar = fcv::Scalar(value[0]);
+  } else if (value.size() == 2) {
+    scalar = fcv::Scalar(value[0], value[1]);
+  } else if (value.size() == 3) {
+    scalar = fcv::Scalar(value[0], value[1], value[2]);
+  } else {
+    scalar = fcv::Scalar(value[0], value[1], value[2], value[3]);
+  }
+  fcv::Mat new_im;
+  // top, bottom, left, right
+  fcv::copy_make_border(*im, new_im, 0, height - origin_h, 0, width - origin_w,
+                        fcv::BorderType::BORDER_CONSTANT, scalar);
+  mat->SetMat(new_im);
+  mat->SetHeight(height);
+  mat->SetWidth(width);
+  return true;
+}
+
+static bool PadCHWByFlyCV(FDMat* mat, int width, int height,
+                          const std::vector<float>& value) {
+  int origin_w = mat->Width();
+  int origin_h = mat->Height();
+  fcv::Mat new_im(height, width,
+                  CreateFlyCVDataType(mat->Type(), mat->Channels()));
+  for (int i = 0; i < mat->Channels(); ++i) {
+    uint8_t* src_data = reinterpret_cast<uint8_t*>(mat->Data()) +
+                        i * origin_w * origin_h * FDDataTypeSize(mat->Type());
+    fcv::Mat src(origin_h, origin_w, CreateFlyCVDataType(mat->Type(), 1),
+                 src_data);
+
+    uint8_t* dst_data =
+        new_im.ptr() + i * width * height * FDDataTypeSize(mat->Type());
+    fcv::Mat dst(height, width, CreateFlyCVDataType(mat->Type(), 1), dst_data);
+
+    fcv::copy_make_border(src, dst, 0, height - origin_h, 0, width - origin_w,
+                          fcv::BorderType::BORDER_CONSTANT,
+                          fcv::Scalar(value[i]));
+  }
+  mat->SetMat(new_im);
+  mat->SetHeight(height);
+  mat->SetWidth(width);
+  return true;
+}
+
 bool PadToSize::ImplByFlyCV(Mat* mat) {
   if (width_ == -1 || height_ == -1) {
     return true;
-  }
-  if (mat->layout != Layout::HWC) {
-    FDERROR << "PadToSize: The input data must be Layout::HWC format!"
-            << std::endl;
-    return false;
   }
   if (mat->Channels() > 4) {
     FDERROR << "PadToSize: Only support channels <= 4." << std::endl;
@@ -162,26 +190,12 @@ bool PadToSize::ImplByFlyCV(Mat* mat) {
     return true;
   }
 
-  fcv::Mat* im = mat->GetFlyCVMat();
-  fcv::Scalar value;
-  if (value_.size() == 1) {
-    value = fcv::Scalar(value_[0]);
-  } else if (value_.size() == 2) {
-    value = fcv::Scalar(value_[0], value_[1]);
-  } else if (value_.size() == 3) {
-    value = fcv::Scalar(value_[0], value_[1], value_[2]);
-  } else {
-    value = fcv::Scalar(value_[0], value_[1], value_[2], value_[3]);
+  if (mat->layout == Layout::HWC) {
+    return PadHWCByFlyCV(mat, width_, height_, value_);
+  } else if (mat->layout == Layout::CHW) {
+    return PadCHWByFlyCV(mat, width_, height_, value_);
   }
-  fcv::Mat new_im;
-  // top, bottom, left, right
-  fcv::copy_make_border(*im, new_im, 0, height_ - origin_h, 0,
-                        width_ - origin_w, fcv::BorderType::BORDER_CONSTANT,
-                        value);
-  mat->SetMat(new_im);
-  mat->SetHeight(height_);
-  mat->SetWidth(width_);
-  return true;
+  return false;
 }
 #endif
 
