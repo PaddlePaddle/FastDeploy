@@ -27,6 +27,9 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   auto im = cv::imread(FLAGS_image);
+  std::unordered_map<std::string, std::string> config_info;
+  benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
+                                                &config_info);
   auto model_yolov5 = vision::detection::YOLOv5(FLAGS_model, "", option);
   vision::DetectionResult res;
   if (config_info["precision_compare"] == "true") {

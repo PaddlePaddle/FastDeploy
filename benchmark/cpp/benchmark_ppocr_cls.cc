@@ -20,8 +20,8 @@ namespace vision = fastdeploy::vision;
 namespace benchmark = fastdeploy::benchmark;
 
 DEFINE_string(trt_shape, "1,3,48,10:4,3,48,320:8,3,48,1024",
-                        "Set min/opt/max shape for trt/paddle_trt backend.
-                        eg:--trt_shape 1,3,48,10:4,3,48,320:8,3,48,1024");
+              "Set min/opt/max shape for trt/paddle_trt backend."
+              "eg:--trt_shape 1,3,48,10:4,3,48,320:8,3,48,1024");
 
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)

@@ -21,8 +21,8 @@ namespace benchmark = fastdeploy::benchmark;
 
 DEFINE_string(rec_label_file, "", "Path of Recognization label file of PPOCR.");
 DEFINE_string(trt_shape, "1,3,48,10:4,3,48,320:8,3,48,2304",
-                          "Set min/opt/max shape for trt/paddle_trt backend.
-                          eg:--trt_shape 1,3,48,10:4,3,48,320:8,3,48,2304");
+              "Set min/opt/max shape for trt/paddle_trt backend."
+              "eg:--trt_shape 1,3,48,10:4,3,48,320:8,3,48,2304");
 
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)

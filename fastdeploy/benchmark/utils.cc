@@ -381,7 +381,7 @@ bool ResultManager::LoadBenchmarkConfig(
   return true;
 }
 
-std::vector<std::vector<int32_t>> GetInputShapes(
+std::vector<std::vector<int32_t>> ResultManager::GetInputShapes(
     const std::string& raw_shapes) {
   std::vector<std::vector<int32_t>> shapes;
   std::vector<std::string> shape_tokens;
