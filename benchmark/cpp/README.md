@@ -11,26 +11,36 @@
 
 运行FastDeploy C++ Benchmark，需先准备好相应的环境，并在ENABLE_BENCHMARK=ON模式下从源码编译FastDeploy C++ SDK. 以下将按照硬件维度，来说明相应的系统环境要求。不同环境下的详细要求，请参考[FastDeploy环境要求](../../docs/cn/build_and_install)  
 
-## 2. Benchmark 参数设置说明  
+## 2. Benchmark 设置说明  
 
-<div id="参数设置说明"></div>  
+具体flags.h提供选项如下:
 
+<div id="选项设置说明"></div>  
 
-| 参数                 | 作用                                        |
+| 选项                 | 作用                                        |
 | -------------------- | ------------------------------------------ |
 | --model              | 模型路径                                     |
 | --image              | 图片路径    |
-| --device             | 选择 CPU/GPU/XPU，默认为 CPU  |
-| --cpu_thread_nums     | CPU 线程数，默认为 8      |
-| --device_id          | GPU/XPU 卡号，默认为 0 |
-| --warmup           | 跑benchmark的warmup次数，默认为 200 |
-| --repeat           | 跑benchmark的循环次数，默认为 1000 |  
-| --profile_mode      | 指定需要测试性能的模式，可选值为`[runtime, end2end]`，默认为 runtime |  
-| --include_h2d_d2h   | 是否把H2D+D2H的耗时统计在内，该参数只在profile_mode为runtime时有效，默认为 false |  
-| --backend            | 指定后端类型，有default, ort, ov, trt, paddle, paddle_trt, lite 等，为default时，会自动选择最优后端，推荐设置为显式设置明确的backend。默认为 default   |
-| --use_fp16    | 是否开启fp16，当前只对 trt, paddle-trt, lite后端有效，默认为 false |
-| --collect_memory_info    | 是否记录 cpu/gpu memory信息，默认 false  |
-| --sampling_interval    | 记录 cpu/gpu memory信息采样时间间隔，单位ms，默认为 50  |  
+| --config_path        | config.txt路径，包含具体设备、后端等信息  |
+
+具体config.txt包含信息含义如下:
+
+<div id="参数设置说明"></div>  
+
+| 参数                 | 作用                                        |
+| device             | 选择 CPU/GPU/XPU，默认为 CPU  |
+| device_id          | GPU/XPU 卡号，默认为 0 |
+| cpu_thread_nums     | CPU 线程数，默认为 1      |
+| warmup           | 跑benchmark的warmup次数，默认为 200 |
+| repeat           | 跑benchmark的循环次数，默认为 1000 |
+| backend            | 指定后端类型，有default, ort, ov, trt, paddle, paddle_trt, lite 等，为default时，会自动选择最优后端，推荐设置为显式设置明确的backend。默认为 default   |
+| profile_mode      | 指定需要测试性能的模式，可选值为`[runtime, end2end]`，默认为 runtime |
+| include_h2d_d2h   | 是否把H2D+D2H的耗时统计在内，该参数只在profile_mode为runtime时有效，默认为 false |  
+| use_fp16    | 是否开启fp16，当前只对 trt, paddle-trt, lite后端有效，默认为 false |
+| collect_memory_info    | 是否记录 cpu/gpu memory信息，默认 false  |
+| sampling_interval    | 记录 cpu/gpu memory信息采样时间间隔，单位ms，默认为 50  |
+| precision_compare    | 是否进行精度比较，默认为 false  |  
+| result_path    | 记录 Benchmark 数据的 txt 文件路径  |  
 
 ## 3. X86_64 CPU 和 NVIDIA GPU 环境下运行 Benchmark
 
@@ -93,41 +103,11 @@ tar -zxvf yolov8_s_500e_coco.tgz
 
 ```bash  
 
-# 统计性能  
-# CPU
-# Paddle Inference
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device cpu --cpu_thread_nums 8 --backend paddle --profile_mode runtime
-
-# ONNX Runtime
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device cpu --cpu_thread_nums 8 --backend ort --profile_mode runtime
-
-# OpenVINO
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device cpu --cpu_thread_nums 8 --backend ov --profile_mode runtime
-
-# GPU
-# Paddle Inference
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend paddle --profile_mode runtime --warmup 200 --repeat 2000
-
-# Paddle Inference + TensorRT
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend paddle_trt --profile_mode runtime --warmup 200 --repeat 2000
-
-# Paddle Inference + TensorRT + FP16
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend paddle --profile_mode runtime --warmup 200 --repeat 2000 --use_fp16
-
-# ONNX Runtime
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend ort --profile_mode runtime --warmup 200 --repeat 2000
-
-# TensorRT
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend paddle --profile_mode runtime --warmup 200 --repeat 2000
-
-# TensorRT + FP16
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device gpu --device_id 0 --backend trt --profile_mode runtime --warmup 200 --repeat 2000 --use_fp16
-
-# 统计内存显存占用  
-# 增加--collect_memory_info选项
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --device cpu --cpu_thread_nums 8 --backend paddle --profile_mode runtime --collect_memory_info
+# 统计性能，用户根据需求修改config.txt文件，具体含义参考上表
+# eg：如果想测paddle gpu backend，将device改为gpu，backend修改为paddle即可
+./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --config_path config.txt
 ```
-注意，为避免对性能统计产生影响，测试性能时，最好不要开启内存显存统计的功能，当指定--collect_memory_info参数时，只有内存显存参数是稳定可靠的。更多参数设置，请参考[参数设置说明](#参数设置说明)
+注意，为避免对性能统计产生影响，测试性能时，最好不要开启内存显存统计的功能，当把collect_memory_info参数设置为true时，只有内存显存参数是稳定可靠的。更多参数设置，请参考[参数设置说明](#参数设置说明)
 
 
 ## 4. ARM CPU 环境下运行 Benchmark

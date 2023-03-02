@@ -22,7 +22,6 @@
     std::cerr << "Failed to initialize." << std::endl;                      \
     return 0;                                                               \
   }                                                                         \
-  auto __im__ = cv::imread(FLAGS_image);                                    \
   std::unordered_map<std::string, std::string> __config_info__;             \
   fastdeploy::benchmark::ResultManager::LoadBenchmarkConfig(                \
                              FLAGS_config_path, &__config_info__);          \

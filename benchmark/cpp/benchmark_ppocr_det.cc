@@ -19,6 +19,10 @@
 namespace vision = fastdeploy::vision;
 namespace benchmark = fastdeploy::benchmark;
 
+DEFINE_string(trt_shape, "1,3,64,64:1,3,640,640:1,3,960,960",
+                        "Set min/opt/max shape for trt/paddle_trt backend.
+                        eg:--trt_shape 1,3,64,64:1,3,640,640:1,3,960,960");
+
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Initialization
@@ -38,29 +42,33 @@ int main(int argc, char* argv[]) {
   }
   if (config_info["backend"] == "paddle_trt" ||
       config_info["backend"] == "trt") {
-    option.trt_option.SetShape("x", {1, 3, 64, 64}, {1, 3, 640, 640},
-                               {1, 3, 960, 960});
+    std::vector<std::vector<int32_t>> trt_shapes =
+        benchmark::ResultManager::GetInputShapes(FLAGS_trt_shape);
+    option.trt_option.SetShape("x", trt_shapes[0], trt_shapes[1],
+                               trt_shapes[2]);
   }
   auto model_ppocr_det =
       vision::ocr::DBDetector(det_model_file, det_params_file, option);
   std::vector<std::array<int, 8>> res;
-  // Run once at least
-  model_ppocr_det.Predict(im, &res);
-  // 1. Test result diff
-  std::cout << "=============== Test result diff =================\n";
-  // Save result to -> disk.
-  std::string ppocr_det_result_path = "ppocr_det_result.txt";
-  benchmark::ResultManager::SaveOCRDetResult(res, ppocr_det_result_path);
-  // Load result from <- disk.
-  std::vector<std::array<int, 8>> res_loaded;
-  benchmark::ResultManager::LoadOCRDetResult(&res_loaded,
-                                             ppocr_det_result_path);
-  // Calculate diff between two results.
-  auto ppocr_det_diff =
-      benchmark::ResultManager::CalculateDiffStatis(res, res_loaded);
-  std::cout << "PPOCR Boxes diff: mean=" << ppocr_det_diff.boxes.mean
-            << ", max=" << ppocr_det_diff.boxes.max
-            << ", min=" << ppocr_det_diff.boxes.min << std::endl;
+  if (config_info["precision_compare"] == "true") {
+    // Run once at least
+    model_ppocr_det.Predict(im, &res);
+    // 1. Test result diff
+    std::cout << "=============== Test result diff =================\n";
+    // Save result to -> disk.
+    std::string ppocr_det_result_path = "ppocr_det_result.txt";
+    benchmark::ResultManager::SaveOCRDetResult(res, ppocr_det_result_path);
+    // Load result from <- disk.
+    std::vector<std::array<int, 8>> res_loaded;
+    benchmark::ResultManager::LoadOCRDetResult(&res_loaded,
+                                               ppocr_det_result_path);
+    // Calculate diff between two results.
+    auto ppocr_det_diff =
+        benchmark::ResultManager::CalculateDiffStatis(res, res_loaded);
+    std::cout << "PPOCR Boxes diff: mean=" << ppocr_det_diff.boxes.mean
+              << ", max=" << ppocr_det_diff.boxes.max
+              << ", min=" << ppocr_det_diff.boxes.min << std::endl;
+  }
   BENCHMARK_MODEL(model_ppocr_det, model_ppocr_det.Predict(im, &res));
 #endif
   return 0;

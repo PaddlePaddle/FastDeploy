@@ -19,6 +19,10 @@
 namespace vision = fastdeploy::vision;
 namespace benchmark = fastdeploy::benchmark;
 
+DEFINE_string(trt_shape, "1,3,48,10:4,3,48,320:8,3,48,1024",
+                        "Set min/opt/max shape for trt/paddle_trt backend.
+                        eg:--trt_shape 1,3,48,10:4,3,48,320:8,3,48,1024");
+
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
   // Initialization
@@ -38,25 +42,29 @@ int main(int argc, char* argv[]) {
   }
   if (config_info["backend"] == "paddle_trt" ||
       config_info["backend"] == "trt") {
-    option.trt_option.SetShape("x", {1, 3, 48, 10}, {4, 3, 48, 320},
-                               {8, 3, 48, 1024});
+    std::vector<std::vector<int32_t>> trt_shapes =
+        benchmark::ResultManager::GetInputShapes(FLAGS_trt_shape);
+    option.trt_option.SetShape("x", trt_shapes[0], trt_shapes[1],
+                               trt_shapes[2]);
   }
   auto model_ppocr_cls =
       vision::ocr::Classifier(cls_model_file, cls_params_file, option);
   int32_t res_label;
   float res_score;
-  // Run once at least
-  model_ppocr_cls.Predict(im, &res_label, &res_score);
-  // 1. Test result diff
-  std::cout << "=============== Test result diff =================\n";
-  int32_t res_label_expect = 0;
-  float res_score_expect = 1.0;
-  // Calculate diff between two results.
-  auto ppocr_cls_label_diff = res_label - res_label_expect;
-  auto ppocr_cls_score_diff = res_score - res_score_expect;
-  std::cout << "PPOCR Cls label diff: " << ppocr_cls_label_diff << std::endl;
-  std::cout << "PPOCR Cls score diff: " << abs(ppocr_cls_score_diff)
-            << std::endl;
+  if (config_info["precision_compare"] == "true") {
+    // Run once at least
+    model_ppocr_cls.Predict(im, &res_label, &res_score);
+    // 1. Test result diff
+    std::cout << "=============== Test result diff =================\n";
+    int32_t res_label_expect = 0;
+    float res_score_expect = 1.0;
+    // Calculate diff between two results.
+    auto ppocr_cls_label_diff = res_label - res_label_expect;
+    auto ppocr_cls_score_diff = res_score - res_score_expect;
+    std::cout << "PPOCR Cls label diff: " << ppocr_cls_label_diff << std::endl;
+    std::cout << "PPOCR Cls score diff: " << abs(ppocr_cls_score_diff)
+              << std::endl;
+  }
   BENCHMARK_MODEL(model_ppocr_cls,
                   model_ppocr_cls.Predict(im, &res_label, &res_score));
 #endif

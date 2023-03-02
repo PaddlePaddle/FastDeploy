@@ -20,6 +20,9 @@ namespace vision = fastdeploy::vision;
 namespace benchmark = fastdeploy::benchmark;
 
 DEFINE_string(rec_label_file, "", "Path of Recognization label file of PPOCR.");
+DEFINE_string(trt_shape, "1,3,48,10:4,3,48,320:8,3,48,2304",
+                          "Set min/opt/max shape for trt/paddle_trt backend.
+                          eg:--trt_shape 1,3,48,10:4,3,48,320:8,3,48,2304");
 
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
@@ -40,25 +43,29 @@ int main(int argc, char* argv[]) {
   }
   if (config_info["backend"] == "paddle_trt" ||
       config_info["backend"] == "trt") {
-    option.trt_option.SetShape("x", {1, 3, 48, 10}, {4, 3, 48, 320},
-                               {8, 3, 48, 2304});
+    std::vector<std::vector<int32_t>> trt_shapes =
+        benchmark::ResultManager::GetInputShapes(FLAGS_trt_shape);
+    option.trt_option.SetShape("x", trt_shapes[0], trt_shapes[1],
+                               trt_shapes[2]);
   }
   auto model_ppocr_rec = vision::ocr::Recognizer(
       rec_model_file, rec_params_file, FLAGS_rec_label_file, option);
   std::string text;
   float rec_score;
-  // Run once at least
-  model_ppocr_rec.Predict(im, &text, &rec_score);
-  // 1. Test result diff
-  std::cout << "=============== Test result diff =================\n";
-  std::string text_expect = "上海斯格威铂尔大酒店";
-  float res_score_expect = 0.993308;
-  // Calculate diff between two results.
-  auto ppocr_rec_text_diff = text.compare(text_expect);
-  auto ppocr_rec_score_diff = rec_score - res_score_expect;
-  std::cout << "PPOCR Rec text diff: " << ppocr_rec_text_diff << std::endl;
-  std::cout << "PPOCR Rec score diff: " << abs(ppocr_rec_score_diff)
-            << std::endl;
+  if (config_info["precision_compare"] == "true") {
+    // Run once at least
+    model_ppocr_rec.Predict(im, &text, &rec_score);
+    // 1. Test result diff
+    std::cout << "=============== Test result diff =================\n";
+    std::string text_expect = "上海斯格威铂尔大酒店";
+    float res_score_expect = 0.993308;
+    // Calculate diff between two results.
+    auto ppocr_rec_text_diff = text.compare(text_expect);
+    auto ppocr_rec_score_diff = rec_score - res_score_expect;
+    std::cout << "PPOCR Rec text diff: " << ppocr_rec_text_diff << std::endl;
+    std::cout << "PPOCR Rec score diff: " << abs(ppocr_rec_score_diff)
+              << std::endl;
+  }
   BENCHMARK_MODEL(model_ppocr_rec,
                   model_ppocr_rec.Predict(im, &text, &rec_score));
 #endif

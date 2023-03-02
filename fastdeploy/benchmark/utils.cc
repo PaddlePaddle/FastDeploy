@@ -381,6 +381,29 @@ bool ResultManager::LoadBenchmarkConfig(
   return true;
 }
 
+std::vector<std::vector<int32_t>> GetInputShapes(
+    const std::string& raw_shapes) {
+  std::vector<std::vector<int32_t>> shapes;
+  std::vector<std::string> shape_tokens;
+  Split(raw_shapes, shape_tokens, ':');
+  for (auto str_shape : shape_tokens) {
+    std::vector<int32_t> shape;
+    std::string tmp_str = str_shape;
+    while (!tmp_str.empty()) {
+      int dim = atoi(tmp_str.data());
+      shape.push_back(dim);
+      size_t next_offset = tmp_str.find(",");
+      if (next_offset == std::string::npos) {
+        break;
+      } else {
+        tmp_str = tmp_str.substr(next_offset + 1);
+      }
+    }
+    shapes.push_back(shape);
+  }
+  return shapes;
+}
+
 #if defined(ENABLE_VISION)
 bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
                                         const std::string& path) {

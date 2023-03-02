@@ -145,6 +145,9 @@ struct FASTDEPLOY_DECL ResultManager {
   /// Load Benchmark config
   static bool LoadBenchmarkConfig(const std::string& path,
              std::unordered_map<std::string, std::string>* config_info);
+  /// Get Input Shapes
+  static std::vector<std::vector<int32_t>> GetInputShapes(
+                                      const std::string& raw_shapes);
 #if defined(ENABLE_VISION)
   /// Save & Load functions for basic results.
   static bool SaveDetectionResult(const vision::DetectionResult& res,

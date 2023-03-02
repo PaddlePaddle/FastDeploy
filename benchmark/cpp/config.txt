@@ -1,12 +1,13 @@
 device: cpu
 device_id: 0
+cpu_thread_nums: 1
 warmup: 200
 repeat: 1000
+backend: default
 profile_mode: runtime
-backend: paddle
-cpu_thread_nums: 1
 include_h2d_d2h: true
+use_fp16: false
 collect_memory_info: false
 sampling_interval: 1
-use_fp16: false
+precision_compare: false
 result_path: benchmark_cpu.txt
