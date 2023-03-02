@@ -32,9 +32,9 @@ typedef struct FD_C_PPYOLOEWrapper FD_C_PPYOLOEWrapper;
 
 /** \brief Create a new FD_C_PPYOLOEWrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -71,7 +71,7 @@ DECLARE_INITIALIZED_FUNCTION(PPYOLOE, fd_c_ppyoloe_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_ppyoloe_wrapper pointer to FD_C_PPYOLOEWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -85,9 +85,9 @@ typedef struct FD_C_PicoDetWrapper FD_C_PicoDetWrapper;
 
 /** \brief Create a new FD_C_PicoDetWrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -124,7 +124,7 @@ DECLARE_INITIALIZED_FUNCTION(PicoDet, fd_c_picodet_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_picodet_wrapper pointer to FD_C_PicoDetWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -139,9 +139,9 @@ typedef struct FD_C_PPYOLOWrapper FD_C_PPYOLOWrapper;
 
 /** \brief Create a new FD_C_PPYOLOWrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -178,7 +178,7 @@ DECLARE_INITIALIZED_FUNCTION(PPYOLO, fd_c_ppyolo_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_ppyolo_wrapper pointer to FD_C_PPYOLOWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -192,9 +192,9 @@ typedef struct FD_C_YOLOv3Wrapper FD_C_YOLOv3Wrapper;
 
 /** \brief Create a new FD_C_YOLOv3Wrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -231,7 +231,7 @@ DECLARE_INITIALIZED_FUNCTION(YOLOv3, fd_c_yolov3_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_yolov3_wrapper pointer to FD_C_YOLOv3Wrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -245,9 +245,9 @@ typedef struct FD_C_PaddleYOLOXWrapper FD_C_PaddleYOLOXWrapper;
 
 /** \brief Create a new FD_C_PaddleYOLOXWrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -284,7 +284,7 @@ DECLARE_INITIALIZED_FUNCTION(PaddleYOLOX, fd_c_paddleyolox_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_paddleyolox_wrapper pointer to FD_C_PaddleYOLOXWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -298,9 +298,9 @@ typedef struct FD_C_FasterRCNNWrapper FD_C_FasterRCNNWrapper;
 
 /** \brief Create a new FD_C_FasterRCNNWrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -337,7 +337,7 @@ DECLARE_INITIALIZED_FUNCTION(FasterRCNN, fd_c_fasterrcnn_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_fasterrcnn_wrapper pointer to FD_C_FasterRCNNWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -351,9 +351,9 @@ typedef struct FD_C_MaskRCNNWrapper FD_C_MaskRCNNWrapper;
 
 /** \brief Create a new FD_C_MaskRCNNWrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -390,7 +390,7 @@ DECLARE_INITIALIZED_FUNCTION(MaskRCNN, fd_c_maskrcnn_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_maskrcnn_wrapper pointer to FD_C_MaskRCNNWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -404,9 +404,9 @@ typedef struct FD_C_SSDWrapper FD_C_SSDWrapper;
 
 /** \brief Create a new FD_C_SSDWrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -443,7 +443,7 @@ DECLARE_INITIALIZED_FUNCTION(SSD, fd_c_ssd_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_ssd_wrapper pointer to FD_C_SSDWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -457,9 +457,9 @@ typedef struct FD_C_PaddleYOLOv5Wrapper FD_C_PaddleYOLOv5Wrapper;
 
 /** \brief Create a new FD_C_PaddleYOLOv5Wrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -496,7 +496,7 @@ DECLARE_INITIALIZED_FUNCTION(PaddleYOLOv5, fd_c_paddleyolov5_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_paddleyolov5_wrapper pointer to FD_C_PaddleYOLOv5Wrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -510,9 +510,9 @@ typedef struct FD_C_PaddleYOLOv6Wrapper FD_C_PaddleYOLOv6Wrapper;
 
 /** \brief Create a new FD_C_PaddleYOLOv6Wrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -549,7 +549,7 @@ DECLARE_INITIALIZED_FUNCTION(PaddleYOLOv6, fd_c_paddleyolov6_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_paddleyolov6_wrapper pointer to FD_C_PaddleYOLOv6Wrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -563,9 +563,9 @@ typedef struct FD_C_PaddleYOLOv7Wrapper FD_C_PaddleYOLOv7Wrapper;
 
 /** \brief Create a new FD_C_PaddleYOLOv7Wrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -602,7 +602,7 @@ DECLARE_INITIALIZED_FUNCTION(PaddleYOLOv7, fd_c_paddleyolov7_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_paddleyolov7_wrapper pointer to FD_C_PaddleYOLOv7Wrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -616,9 +616,9 @@ typedef struct FD_C_PaddleYOLOv8Wrapper FD_C_PaddleYOLOv8Wrapper;
 
 /** \brief Create a new FD_C_PaddleYOLOv8Wrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -655,7 +655,7 @@ DECLARE_INITIALIZED_FUNCTION(PaddleYOLOv8, fd_c_paddleyolov8_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_paddleyolov8_wrapper pointer to FD_C_PaddleYOLOv8Wrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -669,9 +669,9 @@ typedef struct FD_C_RTMDetWrapper FD_C_RTMDetWrapper;
 
 /** \brief Create a new FD_C_RTMDetWrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -708,7 +708,7 @@ DECLARE_INITIALIZED_FUNCTION(RTMDet, fd_c_rtmdet_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_rtmdet_wrapper pointer to FD_C_RTMDetWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -722,9 +722,9 @@ typedef struct FD_C_CascadeRCNNWrapper FD_C_CascadeRCNNWrapper;
 
 /** \brief Create a new FD_C_CascadeRCNNWrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -761,7 +761,7 @@ DECLARE_INITIALIZED_FUNCTION(CascadeRCNN, fd_c_cascadercnn_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_cascadercnn_wrapper pointer to FD_C_CascadeRCNNWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -775,9 +775,9 @@ typedef struct FD_C_PSSDetWrapper FD_C_PSSDetWrapper;
 
 /** \brief Create a new FD_C_PSSDetWrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -814,7 +814,7 @@ DECLARE_INITIALIZED_FUNCTION(PSSDet, fd_c_pssdet_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_pssdet_wrapper pointer to FD_C_PSSDetWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -828,9 +828,9 @@ typedef struct FD_C_RetinaNetWrapper FD_C_RetinaNetWrapper;
 
 /** \brief Create a new FD_C_RetinaNetWrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -867,7 +867,7 @@ DECLARE_INITIALIZED_FUNCTION(RetinaNet, fd_c_retinanet_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_retinanet_wrapper pointer to FD_C_RetinaNetWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -881,9 +881,9 @@ typedef struct FD_C_FCOSWrapper FD_C_FCOSWrapper;
 
 /** \brief Create a new FD_C_FCOSWrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -920,7 +920,7 @@ DECLARE_INITIALIZED_FUNCTION(FCOS, fd_c_fcos_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_fcos_wrapper pointer to FD_C_FCOSWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -934,9 +934,9 @@ typedef struct FD_C_TTFNetWrapper FD_C_TTFNetWrapper;
 
 /** \brief Create a new FD_C_TTFNetWrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -973,7 +973,7 @@ DECLARE_INITIALIZED_FUNCTION(TTFNet, fd_c_ttfnet_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_ttfnet_wrapper pointer to FD_C_TTFNetWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -987,9 +987,9 @@ typedef struct FD_C_TOODWrapper FD_C_TOODWrapper;
 
 /** \brief Create a new FD_C_TOODWrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -1026,7 +1026,7 @@ DECLARE_INITIALIZED_FUNCTION(TOOD, fd_c_tood_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_tood_wrapper pointer to FD_C_TOODWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false
@@ -1040,9 +1040,9 @@ typedef struct FD_C_GFLWrapper FD_C_GFLWrapper;
 
 /** \brief Create a new FD_C_GFLWrapper object
  *
- * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
- * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
- * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+ * \param[in] model_file Path of model file, e.g model.pdmodel
+ * \param[in] params_file Path of parameter file, e.g model.pdiparams, if the model format is ONNX, this parameter will be ignored
+ * \param[in] config_file Path of configuration file for deployment, e.g infer_cfg.yml
  * \param[in] fd_c_runtime_option_wrapper RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
  * \param[in] model_format Model format of the loaded model, default is Paddle format
  *
@@ -1079,7 +1079,7 @@ DECLARE_INITIALIZED_FUNCTION(GFL, fd_c_gfl_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_gfl_wrapper pointer to FD_C_GFLWrapper object
-   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] imgs The input image list, each element comes from cv::imread()
    * \param[in] results The output detection result list
    *
    * \return true if the prediction successed, otherwise false

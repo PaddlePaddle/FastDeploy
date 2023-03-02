@@ -104,12 +104,9 @@ FASTDEPLOY_CAPI_EXPORT extern void FD_C_RuntimeOptionWrapperUseAscend(
 ///
 /// \brief Turn on KunlunXin XPU.
 ///
-/// \param[in] fd_c_runtime_option_wrapper pointer to \
-                    FD_C_RuntimeOptionWrapper object
-/// \param[in] kunlunxin_id the KunlunXin XPU card to use\
-                    (default is 0).
-/// \param[in] l3_workspace_size The size of the video memory allocated\
-///         by the l3 cache, the maximum is 16M.
+/// \param[in] fd_c_runtime_option_wrapper pointer to FD_C_RuntimeOptionWrapper object
+/// \param[in] kunlunxin_id the KunlunXin XPU card to use (default is 0).
+/// \param[in] l3_workspace_size The size of the video memory allocated by the l3 cache, the maximum is 16M.
 /// \param[in] locked Whether the allocated L3 cache can be locked. If false,
 ///       it means that the L3 cache is not locked, and the allocated L3
 ///       cache can be shared by multiple models, and multiple models
@@ -139,6 +136,8 @@ FASTDEPLOY_CAPI_EXPORT extern void FD_C_RuntimeOptionWrapperUseKunlunXin(
  */
 FASTDEPLOY_CAPI_EXPORT extern void FD_C_RuntimeOptionWrapperUseSophgo(
     __fd_keep FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper);
+
+
 
 FASTDEPLOY_CAPI_EXPORT extern void FD_C_RuntimeOptionWrapperSetExternalStream(
     __fd_keep FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
