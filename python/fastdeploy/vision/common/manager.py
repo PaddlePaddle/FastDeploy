@@ -13,6 +13,9 @@
 # limitations under the License.
 
 from __future__ import absolute_import
+from abc import ABC, abstractmethod
+from ... import c_lib_wrap as C
+import typing
 
 
 class ProcessorManager:
@@ -34,3 +37,27 @@ class ProcessorManager:
         :param: gpu_id: GPU device id
         """
         return self._manager.use_cuda(enable_cv_cuda, gpu_id)
+
+class PyProcessorManager(ABC):
+    def __init__(self):
+        self._manager = C.vision.ProcessorManager()
+
+    def use_cuda(self, enable_cv_cuda=False, gpu_id=-1):
+        """Use CUDA processors
+
+        :param: enable_cv_cuda: Ture: use CV-CUDA, False: use CUDA only
+        :param: gpu_id: GPU device id
+        """
+        return self._manager.use_cuda(enable_cv_cuda, gpu_id)
+
+    def __call__(self, images: typing.List[C.vision.FDMat], outputs: typing.List[C.FDTensor]):
+        image_batch = C.vision.FDMatBatch()
+        image_batch.from_mats(images)
+
+        self._manager.pre_apply(image_batch)
+        self.apply(image_batch, outputs)
+        self._manager.post_apply()
+
+    @abstractmethod
+    def apply(self, image_batch, outputs):
+        pass
