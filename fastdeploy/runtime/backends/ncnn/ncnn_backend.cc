@@ -80,18 +80,19 @@ std::vector<int> NCNNBackend::GetMatShape(const ncnn::Mat& mat,
   int dims = mat.dims;
   // Only support batch=1
   shape.resize(dims + 1);
-  shape[0] = 1;  // batch
-  if (dims == 3) {
+  shape[0] = 1;  // batch always 1
+  dims += 1;     // + batch dim
+  if (dims == 4) {
     shape[1] = mat.c;  // channel
     shape[2] = mat.h;  // h
     shape[3] = mat.w;  // w
-  } else if (dims == 2) {
+  } else if (dims == 3) {
     shape[1] = mat.h;  // h
     shape[2] = mat.w;  // w
-  } else if (dims == 1) {
+  } else if (dims == 2) {
     shape[1] = mat.w;  // w
   } else {
-    FDASSERT(false, "Not support %d dims", dims + 1)
+    FDASSERT(false, "Not support %d dims", dims)
   }
   *elemsize = mat.elemsize;
   return shape;
