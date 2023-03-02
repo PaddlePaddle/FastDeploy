@@ -109,8 +109,10 @@ bool PadToSize::ImplByOpenCV(FDMat* mat) {
 #ifdef ENABLE_FLYCV
 static bool PadHWCByFlyCV(FDMat* mat, int width, int height,
                           const std::vector<float>& value) {
+  int origin_w = mat->Width();
+  int origin_h = mat->Height();
   fcv::Mat* im = mat->GetFlyCVMat();
-  fcv::Scalar value;
+  fcv::Scalar scalar;
   if (value.size() == 1) {
     scalar = fcv::Scalar(value[0]);
   } else if (value.size() == 2) {
@@ -142,8 +144,8 @@ static bool PadCHWByFlyCV(FDMat* mat, int width, int height,
     fcv::Mat src(origin_h, origin_w, CreateFlyCVDataType(mat->Type(), 1),
                  src_data);
 
-    uint8_t* dst_data =
-        new_im.ptr() + i * width * height * FDDataTypeSize(mat->Type());
+    uint8_t* dst_data = reinterpret_cast<uint8_t*>(new_im.data()) +
+                        i * width * height * FDDataTypeSize(mat->Type());
     fcv::Mat dst(height, width, CreateFlyCVDataType(mat->Type(), 1), dst_data);
 
     fcv::copy_make_border(src, dst, 0, height - origin_h, 0, width - origin_w,
