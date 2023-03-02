@@ -175,39 +175,20 @@ bool PaddleDetPreprocessor::Apply(FDMatBatch* image_batch,
     im_shape_ptr[2 * i + 1] = max_hw[1];
   }
 
-  // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> im_tensors(batch);
+  // if the size of image less than max_hw, pad to max_hw
   for (size_t i = 0; i < image_batch->mats->size(); ++i) {
     FDMat* mat = &(image_batch->mats->at(i));
-    std::cout << i << " " << mat->layout << " " << Layout::CHW << std::endl;
     if (mat->Height() < max_hw[0] || mat->Width() < max_hw[1]) {
-      // if the size of image less than max_hw, pad to max_hw
-      FDTensor tensor;
-      mat->ShareWithTensor(&tensor);
-      function::Pad(tensor, &(im_tensors[i]),
-                    {0, 0, max_hw[0] - mat->Height(), max_hw[1] - mat->Width()},
-                    0);
-      std::cout << i << " " << mat->layout << " " << Layout::CHW << std::endl;
-      // pad_op_->SetPaddingSize(0, max_resize_h - resize_h, 0,
-      //                     max_resize_w - resize_w);
-      // (*pad_op_)(img);
-    } else {
-      // No need pad
-      mat->ShareWithTensor(&(im_tensors[i]));
+      pad_op_->SetWidthHeight(max_hw[1], max_hw[0]);
+      (*pad_op_)(mat);
     }
-    // Reshape to 1xCxHxW
-    im_tensors[i].ExpandDim(0);
   }
 
-  if (im_tensors.size() == 1) {
-    // If there's only 1 input, no need to concat
-    // skip memory copy
-    (*outputs)[0] = std::move(im_tensors[0]);
-  } else {
-    // Else concat the im tensor for each input image
-    // compose a batched input tensor
-    function::Concat(im_tensors, &((*outputs)[0]), 0);
-  }
+  // Get the NCHW tensor
+  FDTensor* tensor = image_batch->Tensor();
+  (*outputs)[0].SetExternalData(tensor->Shape(), tensor->Dtype(),
+                                tensor->Data(), tensor->device,
+                                tensor->device_id);
 
   return true;
 }

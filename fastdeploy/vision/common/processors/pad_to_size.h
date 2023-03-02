@@ -37,6 +37,11 @@ class FASTDEPLOY_DECL PadToSize : public Processor {
                   const std::vector<float>& value,
                   ProcLib lib = ProcLib::DEFAULT);
 
+  void SetWidthHeight(int width, int height) {
+    width_ = width;
+    height_ = height;
+  }
+
  private:
   int width_;
   int height_;

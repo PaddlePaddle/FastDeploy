@@ -119,8 +119,10 @@ bool PaddleClasPreprocessor::Apply(FDMatBatch* image_batch,
   }
 
   outputs->resize(1);
-  (*outputs)[0] = std::move(*(image_batch->Tensor()));
-  (*outputs)[0].device_id = DeviceId();
+  FDTensor* tensor = image_batch->Tensor();
+  (*outputs)[0].SetExternalData(tensor->Shape(), tensor->Dtype(),
+                                tensor->Data(), tensor->device,
+                                tensor->device_id);
   return true;
 }
 

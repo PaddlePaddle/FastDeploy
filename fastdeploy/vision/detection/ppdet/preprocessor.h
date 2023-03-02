@@ -51,6 +51,8 @@ class FASTDEPLOY_DECL PaddleDetPreprocessor : public ProcessorManager {
  private:
   bool BuildPreprocessPipelineFromConfig();
   std::vector<std::shared_ptr<Processor>> processors_;
+  std::shared_ptr<PadToSize> pad_op_ =
+      std::make_shared<PadToSize>(0, 0, std::vector<float>(3, 0));
   bool initialized_ = false;
   // for recording the switch of hwc2chw
   bool disable_permute_ = false;
