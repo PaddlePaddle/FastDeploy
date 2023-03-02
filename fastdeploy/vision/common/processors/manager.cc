@@ -73,6 +73,7 @@ bool ProcessorManager::Run(std::vector<FDMat>* images,
     }
     (*images)[i].input_cache = &input_caches_[i];
     (*images)[i].output_cache = &output_caches_[i];
+    (*images)[i].proc_lib = proc_lib_;
     if ((*images)[i].mat_type == ProcLib::CUDA) {
       // Make a copy of the input data ptr, so that the original data ptr of
       // FDMat won't be modified.

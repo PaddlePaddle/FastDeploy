@@ -63,6 +63,26 @@ bool HWC2CHW::ImplByFlyCV(Mat* mat) {
 }
 #endif
 
+#ifdef ENABLE_CVCUDA
+bool HWC2CHW::ImplByCvCuda(FDMat* mat) {
+  // Prepare input tensor
+  FDTensor* src = CreateCachedGpuInputTensor(mat);
+  auto src_tensor = CreateCvCudaTensorWrapData(*src);
+
+  // Prepare output tensor
+  mat->output_cache->Resize({mat->Channels(), mat->Height(), mat->Width()},
+                            src->Dtype(), "output_cache", Device::GPU);
+  auto dst_tensor =
+      CreateCvCudaTensorWrapData(*(mat->output_cache), Layout::CHW);
+
+  cvcuda_reformat_op_(mat->Stream(), src_tensor, dst_tensor);
+
+  mat->SetTensor(mat->output_cache);
+  mat->mat_type = ProcLib::CVCUDA;
+  return true;
+}
+#endif
+
 bool HWC2CHW::Run(Mat* mat, ProcLib lib) {
   auto h = HWC2CHW();
   return h(mat, lib);
