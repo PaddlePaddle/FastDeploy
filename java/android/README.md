@@ -1,7 +1,7 @@
 English | [简体中文](README_CN.md)
 
 # FastDeploy Android AAR Package  
-Currently FastDeploy Android SDK supports image classification, target detection, OCR text recognition, semantic segmentation and face detection. More AI tasks will be added in the future. The following is the API documents for each task. To use the models integrated in FastDeploy on Android, you only need to take the following steps.  
+Currently FastDeploy Android SDK supports image classification, object detection, OCR text recognition, semantic segmentation and face detection. More AI tasks will be added in the future. The following is the API documents for each task. To use the models integrated in FastDeploy on Android, you only need to take the following steps.  
 - Model initialization  
 - Calling the `predict` interface  
 - Visualization validation (optional)
@@ -32,7 +32,7 @@ The release version is as follows (Java SDK currently supports Android only):
 
 | Platform | File | Description |
 | :--- | :--- | :---- |
-| Android Java SDK | [fastdeploy-android-sdk-0.0.0.aar](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-sdk-0.0.0.aar) | NDK 20 compiles, minSdkVersion 15,targetSdkVersion 28 |
+| Android Java SDK | [fastdeploy-android-sdk-0.0.0.aar](https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-sdk-0.0.0.aar) | NDK 20 compiles, minSdkVersion 15,Object SdkVersion 28 |
 
 For more information for pre-compile library, please refer to: [download_prebuilt_libraries.md](../../docs/cn/build_and_install/download_prebuilt_libraries.md).
 
@@ -94,7 +94,7 @@ public boolean release(); // Release native resources.
 public boolean initialized(); // Check if initialization is successful.
 ```
 
-## Target Detection API
+## Object Detection API
 
 <div id="Detection"></div>  
 
@@ -290,7 +290,7 @@ public class ClassifyResult {
 ```  
 Other reference: C++/Python corresponding ClassifyResult description: [api/vision_results/classification_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/classification_result.md)
 
-- Target detection result description
+- Object detection result description
 ```java
 public class DetectionResult {
   public float[][] mBoxes; // [n,4] Detecting box (x1,y1,x2,y2).
@@ -304,7 +304,7 @@ Other reference: C++/Python corresponding DetectionResult description:  [api/vis
 - OCR text recognition result description
 ```java
 public class OCRResult {
-  public int[][] mBoxes;  // [n,8] indicates the coordinates of all target boxes detected in a single image. Each box is 8 int values representing the 4 coordinate points of the box, in the order of lower left, lower right, upper right, upper left.
+  public int[][] mBoxes;  // [n,8] indicates the coordinates of all Object boxes detected in a single image. Each box is 8 int values representing the 4 coordinate points of the box, in the order of lower left, lower right, upper right, upper left.
   public String[] mText;  // [n] indicates the content recognized in multiple text boxes. 
   public float[] mRecScores;  // [n] indicates the confidence level of the text recognized in the text box.
   public float[] mClsScores;  // [n] indicates the confidence level of the classification result of the text.
@@ -448,7 +448,7 @@ model.init(modelFile, paramFile, configFile, option);
 FastDeploy provides some sample projects in the java/android/app directory. Since the java/android directory also contains JNI projects, users who want to use the sample projects also need to configure the NDK. If you only want to use the Java API and don't want to configure the NDK, you can jump to the detailed case links below.
 
 - [App sample project of image classification](../../examples/vision/classification/paddleclas/android)  
-- [App sample project of target detection](../../examples/vision/detection/paddledetection/android)  
+- [App sample project of Object detection](../../examples/vision/detection/paddledetection/android)  
 - [App sample project of OCR text detection](../../examples/vision/ocr/PP-OCRv2/android)  
 - [App sample project of portrait segmentation](../../examples/vision/segmentation/paddleseg/android)  
 - [App sample project of face detection](../../examples/vision/facedet/scrfd/android)  
