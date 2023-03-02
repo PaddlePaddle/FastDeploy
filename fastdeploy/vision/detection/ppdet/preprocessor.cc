@@ -119,13 +119,13 @@ bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig() {
   return true;
 }
 
-bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images,
-                                std::vector<FDTensor>* outputs) {
+bool PaddleDetPreprocessor::Apply(FDMatBatch* image_batch,
+                                  std::vector<FDTensor>* outputs) {
   if (!initialized_) {
     FDERROR << "The preprocessor is not initialized." << std::endl;
     return false;
   }
-  if (images->empty()) {
+  if (image_batch->mats->empty()) {
     FDERROR << "The size of input images should be greater than 0."
             << std::endl;
     return false;
@@ -136,7 +136,7 @@ bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images,
   // So preprocessor will output the 3 FDTensors, and how to use `im_shape`
   // is decided by the model itself
   outputs->resize(3);
-  int batch = static_cast<int>(images->size());
+  int batch = static_cast<int>(image_batch->mats->size());
   // Allocate memory for scale_factor
   (*outputs)[1].Resize({batch, 2}, FDDataType::FP32);
   // Allocate memory for im_shape
@@ -148,46 +148,52 @@ bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images,
   auto* scale_factor_ptr =
       reinterpret_cast<float*>((*outputs)[1].MutableData());
   auto* im_shape_ptr = reinterpret_cast<float*>((*outputs)[2].MutableData());
-  for (size_t i = 0; i < images->size(); ++i) {
-    int origin_w = (*images)[i].Width();
-    int origin_h = (*images)[i].Height();
+  for (size_t i = 0; i < image_batch->mats->size(); ++i) {
+    FDMat* mat = &(image_batch->mats->at(i));
+    int origin_w = mat->Width();
+    int origin_h = mat->Height();
     scale_factor_ptr[2 * i] = 1.0;
     scale_factor_ptr[2 * i + 1] = 1.0;
     for (size_t j = 0; j < processors_.size(); ++j) {
-      if (!(*(processors_[j].get()))(&((*images)[i]))) {
+      if (!(*(processors_[j].get()))(mat)) {
         FDERROR << "Failed to processs image:" << i << " in "
-                << processors_[i]->Name() << "." << std::endl;
+                << processors_[j]->Name() << "." << std::endl;
         return false;
       }
       if (processors_[j]->Name().find("Resize") != std::string::npos) {
-        scale_factor_ptr[2 * i] = (*images)[i].Height() * 1.0 / origin_h;
-        scale_factor_ptr[2 * i + 1] = (*images)[i].Width() * 1.0 / origin_w;
+        scale_factor_ptr[2 * i] = mat->Height() * 1.0 / origin_h;
+        scale_factor_ptr[2 * i + 1] = mat->Width() * 1.0 / origin_w;
       }
     }
-    if ((*images)[i].Height() > max_hw[0]) {
-      max_hw[0] = (*images)[i].Height();
+    if (mat->Height() > max_hw[0]) {
+      max_hw[0] = mat->Height();
     }
-    if ((*images)[i].Width() > max_hw[1]) {
-      max_hw[1] = (*images)[i].Width();
+    if (mat->Width() > max_hw[1]) {
+      max_hw[1] = mat->Width();
     }
     im_shape_ptr[2 * i] = max_hw[0];
     im_shape_ptr[2 * i + 1] = max_hw[1];
   }
 
   // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> im_tensors(images->size());
-  for (size_t i = 0; i < images->size(); ++i) {
-    if ((*images)[i].Height() < max_hw[0] || (*images)[i].Width() < max_hw[1]) {
+  std::vector<FDTensor> im_tensors(batch);
+  for (size_t i = 0; i < image_batch->mats->size(); ++i) {
+    FDMat* mat = &(image_batch->mats->at(i));
+    std::cout << i << " " << mat->layout << " " << Layout::CHW << std::endl;
+    if (mat->Height() < max_hw[0] || mat->Width() < max_hw[1]) {
       // if the size of image less than max_hw, pad to max_hw
       FDTensor tensor;
-      (*images)[i].ShareWithTensor(&tensor);
+      mat->ShareWithTensor(&tensor);
       function::Pad(tensor, &(im_tensors[i]),
-                    {0, 0, max_hw[0] - (*images)[i].Height(),
-                     max_hw[1] - (*images)[i].Width()},
+                    {0, 0, max_hw[0] - mat->Height(), max_hw[1] - mat->Width()},
                     0);
+      std::cout << i << " " << mat->layout << " " << Layout::CHW << std::endl;
+      // pad_op_->SetPaddingSize(0, max_resize_h - resize_h, 0,
+      //                     max_resize_w - resize_w);
+      // (*pad_op_)(img);
     } else {
       // No need pad
-      (*images)[i].ShareWithTensor(&(im_tensors[i]));
+      mat->ShareWithTensor(&(im_tensors[i]));
     }
     // Reshape to 1xCxHxW
     im_tensors[i].ExpandDim(0);
@@ -205,6 +211,7 @@ bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images,
 
   return true;
 }
+
 void PaddleDetPreprocessor::DisableNormalize() {
   this->disable_normalize_ = true;
   // the DisableNormalize function will be invalid if the configuration file is
@@ -214,6 +221,7 @@ void PaddleDetPreprocessor::DisableNormalize() {
             << std::endl;
   }
 }
+
 void PaddleDetPreprocessor::DisablePermute() {
   this->disable_permute_ = true;
   // the DisablePermute function will be invalid if the configuration file is
