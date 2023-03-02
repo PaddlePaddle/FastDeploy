@@ -506,7 +506,7 @@ App sample project only needs to switch between different Activity in AndroidMan
     </application>
 </manifest>
 ```  
-- Target detection scenario
+- Object detection scenario
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.baidu.paddle.fastdeploy.app.examples">
