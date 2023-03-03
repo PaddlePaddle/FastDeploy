@@ -40,7 +40,7 @@ class ProcessorManager:
 
 class PyProcessorManager(ABC):
     def __init__(self):
-        self._manager = C.vision.ProcessorManager()
+        self._manager = C.vision.processors.ProcessorManager()
 
     def use_cuda(self, enable_cv_cuda=False, gpu_id=-1):
         """Use CUDA processors
