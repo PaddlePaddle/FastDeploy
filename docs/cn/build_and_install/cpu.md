@@ -9,6 +9,7 @@
 |:------------------------|:------- | :--------------------------------------------------------------------------|
 | ENABLE_ORT_BACKEND      | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | 默认OFF, 是否编译集成ONNX Runtime后端    |
 | ENABLE_PADDLE_BACKEND   | Linux(x64)/Windows(x64) | 默认OFF，是否编译集成Paddle Inference后端                             |  
+| ENABLE_LITE_BACKEND   | Linux(aarch64) | 默认OFF，是否编译集成Paddle Lite后端                             |  
 | ENABLE_OPENVINO_BACKEND | Linux(x64)/Windows(x64)/Mac OSX(x86) | 默认OFF，是否编译集成OpenVINO后端       |
 | ENABLE_VISION           | Linux(x64)/Windows(x64)/Mac OSX(x86) |  默认OFF，是否编译集成视觉模型的部署模块                                                    |
 | ENABLE_TEXT             | Linux(x64)/Windows(x64)/Mac OSX(x86) | 默认OFF，是否编译集成文本NLP模型的部署模块                                                  |
