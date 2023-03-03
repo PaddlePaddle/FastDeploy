@@ -21,59 +21,6 @@ namespace fastdeploy {
 namespace vision {
 namespace detection {
 
-bool PaddleDetPostprocessor::ReadPostprocessConfigFromYaml() {
-  YAML::Node config;
-  try {
-    config = YAML::LoadFile(config_file_);
-  } catch (YAML::BadFile& e) {
-    FDERROR << "Failed to load yaml file " << config_file_
-            << ", maybe you should check this file." << std::endl;
-    return false;
-  }
-
-  if (config["arch"].IsDefined()) {
-    arch_ = config["arch"].as<std::string>();
-  } else {
-    FDERROR << "Please set model arch,"
-            << "support value : YOLO, SSD, RetinaNet, RCNN, Face." << std::endl;
-    return false;
-  }
-
-  // for solov2
-  if (config["draw_threshold"].IsDefined()) {
-    draw_threshold_ = config["draw_threshold"].as<float>();
-  }
-
-  if (config["NMS"].IsDefined()) {
-    for (const auto& op : config["NMS"]) {
-      if (config["background_label"].IsDefined()) {
-        multi_class_nms_.background_label =
-            op["background_label"].as<int64_t>();
-      }
-      if (config["keep_top_k"].IsDefined()) {
-        multi_class_nms_.keep_top_k = op["keep_top_k"].as<int64_t>();
-      }
-      if (config["nms_eta"].IsDefined()) {
-        multi_class_nms_.nms_eta = op["nms_eta"].as<float>();
-      }
-      if (config["nms_threshold"].IsDefined()) {
-        multi_class_nms_.nms_threshold = op["nms_threshold"].as<float>();
-      }
-      if (config["nms_top_k"].IsDefined()) {
-        multi_class_nms_.nms_top_k = op["nms_top_k"].as<int64_t>();
-      }
-      if (config["normalized"].IsDefined()) {
-        multi_class_nms_.normalized = op["normalized"].as<bool>();
-      }
-      if (config["score_threshold"].IsDefined()) {
-        multi_class_nms_.score_threshold = op["score_threshold"].as<float>();
-      }
-    }
-  }
-
-  return true;
-}
-
 bool PaddleDetPostprocessor::ProcessMask(
     const FDTensor& tensor, std::vector<DetectionResult>* results) {
   auto shape = tensor.Shape();
@@ -234,22 +181,6 @@ bool PaddleDetPostprocessor::ProcessWithoutNMS(
   return true;
 }
 
-bool PaddleDetPostprocessor::ProcessGeneral(
-    const std::vector<FDTensor>& tensors,
-    std::vector<DetectionResult>* results) {
-  // Do process according to whether NMS exists.
-  if (with_nms_) {
-    if (!ProcessWithNMS(tensors, results)) {
-      return false;
-    }
-  } else {
-    if (!ProcessWithoutNMS(tensors, results)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 bool PaddleDetPostprocessor::ProcessSolov2(
     const std::vector<FDTensor>& tensors,
     std::vector<DetectionResult>* results) {
@@ -259,6 +190,7 @@ bool PaddleDetPostprocessor::ProcessSolov2(
   }
 
   if (tensors[0].shape[0] != 1) {
+    FDERROR << "SOLOv2 temporarily only supports batch size is 1." << std::endl;
     return false;
   }
 
@@ -276,9 +208,8 @@ bool PaddleDetPostprocessor::ProcessSolov2(
   // tensor[3] is mask data and its shape is the same as that of the image.
   const auto mask_data_ = static_cast<const uint8_t*>(tensors[3].CpuData());
 
-  int rows = tensors[3].shape[1];
-  int cols = tensors[3].shape[2];
-  const auto* data = reinterpret_cast<const uint8_t*>(tensors[3].CpuData());
+  int rows = static_cast<int>(tensors[3].shape[1]);
+  int cols = static_cast<int>(tensors[3].shape[2]);
   for (int bbox_id = 0; bbox_id < bbox_data[0]; ++bbox_id) {
     if (score_data_[bbox_id] >= multi_class_nms_.score_threshold) {
       DetectionResult& result_item = (*results)[0];
@@ -335,19 +266,29 @@ bool PaddleDetPostprocessor::ProcessSolov2(
 
 bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                  std::vector<DetectionResult>* results) {
-  // Only detection
-  if (tensors.size() <= 2) {
-    return ProcessGeneral(tensors, results);
-  }
-
   if (arch_ == "SOLOv2") {
     // process for SOLOv2
     ProcessSolov2(tensors, results);
     // The fourth output of solov2 is mask
     return ProcessMask(tensors[3], results);
   } else {
-    // process for maskrcnn
-    ProcessGeneral(tensors, results);
+    // Do process according to whether NMS exists.
+    if (with_nms_) {
+      if (!ProcessWithNMS(tensors, results)) {
+        return false;
+      }
+    } else {
+      if (!ProcessWithoutNMS(tensors, results)) {
+        return false;
+      }
+    }
+
+    // for only detection
+    if (tensors.size() <= 2) {
+      return true;
+    }
+
+    // for maskrcnn
     if (tensors[2].Shape()[0] != tensors[0].Shape()[0]) {
       FDERROR << "The first dimension of output mask tensor:"
               << tensors[2].Shape()[0]
@@ -355,6 +296,7 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
               << tensors[0].Shape()[0] << "." << std::endl;
       return false;
     }
+
     // The third output of mask-rcnn is mask
     return ProcessMask(tensors[2], results);
   }

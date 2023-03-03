@@ -34,13 +34,12 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
    *
    * \param[in] config_file Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
    */
-  explicit PaddleDetPostprocessor(const std::string& config_file) {
+  explicit PaddleDetPostprocessor(const std::string& arch) {
+    // Used to differentiate models
+    arch_ = arch;
     // There may be no NMS config in the yaml file,
     // so we need to give a initial value to multi_class_nms_.
     multi_class_nms_.SetNMSOption(NMSOption());
-
-    config_file_ = config_file;
-    ReadPostprocessConfigFromYaml();
   }
 
   /** \brief Process the result of runtime and fill to ClassifyResult structure
@@ -75,12 +74,10 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   // for model without nms.
   bool with_nms_ = true;
 
-  // for yaml config
-  std::string config_file_{};
-  bool ReadPostprocessConfigFromYaml();
-  std::string arch_{};
+  // Used to differentiate models
+  std::string arch_;
+
   PaddleMultiClassNMS multi_class_nms_{};
-  float draw_threshold_ = 0.0;
 
   // Process for General tensor without nms.
   bool ProcessWithoutNMS(const std::vector<FDTensor>& tensors,
@@ -88,10 +85,6 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
 
   // Process for General tensor with nms.
   bool ProcessWithNMS(const std::vector<FDTensor>& tensors,
-                      std::vector<DetectionResult>* results);
-
-  // Process for General tensor. Call ProcessWithoutNMS or ProcessWithNMS.
-  bool ProcessGeneral(const std::vector<FDTensor>& tensors,
                       std::vector<DetectionResult>* results);
 
   // Process SOLOv2

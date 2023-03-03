@@ -40,6 +40,16 @@ bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig() {
     return false;
   }
 
+  // read for postprocess
+  if (cfg["arch"].IsDefined()) {
+    arch_ = cfg["arch"].as<std::string>();
+  } else {
+    FDERROR << "Please set model arch,"
+            << "support value : YOLO, SSD, RetinaNet, RCNN, Face." << std::endl;
+    return false;
+  }
+
+  // read for preprocess
   processors_.push_back(std::make_shared<BGR2RGB>());
 
   bool has_permute = false;
