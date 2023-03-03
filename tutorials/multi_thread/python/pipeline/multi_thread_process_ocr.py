@@ -267,7 +267,7 @@ if __name__ == '__main__':
                     predict,
                     args=(ppocr_v3.clone(),
                           imgs_list[i * image_num_each_thread:(i + 1) *
-                                    image_num_each_thread - 1], args.topk))
+                                    image_num_each_thread - 1]))
             threads.append(t)
             t.start()
 

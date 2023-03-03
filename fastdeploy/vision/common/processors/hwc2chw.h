@@ -15,6 +15,11 @@
 #pragma once
 
 #include "fastdeploy/vision/common/processors/base.h"
+#ifdef ENABLE_CVCUDA
+#include <cvcuda/OpReformat.hpp>
+
+#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
+#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -25,9 +30,16 @@ class FASTDEPLOY_DECL HWC2CHW : public Processor {
 #ifdef ENABLE_FLYCV
   bool ImplByFlyCV(Mat* mat);
 #endif
+#ifdef ENABLE_CVCUDA
+  bool ImplByCvCuda(FDMat* mat);
+#endif
   std::string Name() { return "HWC2CHW"; }
 
   static bool Run(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
+ private:
+#ifdef ENABLE_CVCUDA
+  cvcuda::Reformat cvcuda_reformat_op_;
+#endif
 };
 }  // namespace vision
 }  // namespace fastdeploy
