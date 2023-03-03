@@ -37,6 +37,8 @@ cv::Mat* Mat::GetOpenCVMat() {
 #ifdef WITH_GPU
     FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
              "[ERROR] Error occurs while sync cuda stream.");
+    FDASSERT(layout == Layout::HWC,
+             "Only HWC tensor can be converted to cv::Mat for now");
     cpu_mat = CreateZeroCopyOpenCVMatFromTensor(*fd_tensor);
     mat_type = ProcLib::OPENCV;
     device = Device::CPU;

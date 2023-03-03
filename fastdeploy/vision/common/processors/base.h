@@ -75,6 +75,10 @@ class FASTDEPLOY_DECL Processor {
   }
 
   virtual bool ImplByCuda(FDMat* mat) {
+    FDWARNING << Name()
+              << " is not implemented with CUDA, will fallback to OpenCV."
+              << std::endl;
+    mat->GetOpenCVMat();
     return ImplByOpenCV(mat);
   }
 
@@ -88,6 +92,10 @@ class FASTDEPLOY_DECL Processor {
   }
 
   virtual bool ImplByCvCuda(FDMat* mat) {
+    FDWARNING << Name()
+              << " is not implemented with CV-CUDA, will fallback to OpenCV."
+              << std::endl;
+    mat->GetOpenCVMat();
     return ImplByOpenCV(mat);
   }
 
