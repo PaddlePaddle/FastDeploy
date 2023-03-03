@@ -68,8 +68,10 @@ bool ProcessorManager::PreApply(FDMatBatch* image_batch) {
     if (CudaUsed()) {
       SetStream(image_batch);
     }
+
     (*(image_batch->mats))[i].input_cache = &input_caches_[i];
     (*(image_batch->mats))[i].output_cache = &output_caches_[i];
+    (*(image_batch->mats))[i].proc_lib = proc_lib_;
     if ((*(image_batch->mats))[i].mat_type == ProcLib::CUDA) {
       // Make a copy of the input data ptr, so that the original data ptr of
       // FDMat won't be modified.
