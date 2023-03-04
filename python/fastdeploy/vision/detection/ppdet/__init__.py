@@ -361,8 +361,8 @@ class SOLOv2(PPYOLOE):
 
         super(PPYOLOE, self).__init__(runtime_option)
 
-        assert model_format == ModelFormat.PADDLE, "YOLOv3 model only support model format of ModelFormat.Paddle now."
-        self._model = C.vision.detection.YOLOv3(
+        assert model_format == ModelFormat.PADDLE, "SOLOv2 model only support model format of ModelFormat.Paddle now."
+        self._model = C.vision.detection.SOLOv2(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
         assert self.initialized, "YOLOv3 model initialize failed."

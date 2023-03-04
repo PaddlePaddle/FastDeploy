@@ -45,7 +45,7 @@ bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig() {
     arch_ = cfg["arch"].as<std::string>();
   } else {
     FDERROR << "Please set model arch,"
-            << "support value : YOLO, SSD, RetinaNet, RCNN, Face." << std::endl;
+            << "support value : SOLOv2 YOLO, SSD, RetinaNet, RCNN, Face." << std::endl;
     return false;
   }
 
