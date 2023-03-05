@@ -352,9 +352,9 @@ class SOLOv2(PPYOLOE):
                  model_format=ModelFormat.PADDLE):
         """Load a SOLOv2 model exported by PaddleDetection.
 
-        :param model_file: (str)Path of model file, e.g yolov3/model.pdmodel
-        :param params_file: (str)Path of parameters file, e.g yolov3/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
-        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param model_file: (str)Path of model file, e.g solov2/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g solov2/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g solov2/infer_cfg.yml
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
