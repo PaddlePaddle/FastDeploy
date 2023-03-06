@@ -27,7 +27,7 @@
 namespace fastdeploy {
 
 struct NCNNBackendOption {
-  /// Whether to use light mode, default true.
+  /// Whether to use light mode, default false.
   bool light_mode = true;
   /// Number of threads while use CPU
   int cpu_threads = 1;

@@ -22,6 +22,9 @@
 namespace fastdeploy {
 /// Convert data type from NCNN to FastDeploy
 FDDataType NCNNDataTypeToFD(size_t elemsize, bool integer) {
+  if (elemsize <= 0) {
+    return FDDataType::FP32;
+  }
   FDASSERT(elemsize == 4,
            "Only support float32/int32 NCNN dtype(elemsize=4)"
            " in FastDeploy now, but got elemsize %d",
@@ -51,12 +54,21 @@ void NCNNBackend::BuildOption(const NCNNBackendOption& option) {
     opt_.use_fp16_arithmetic = true;
     FDINFO << "FP16 precision is enabled for Backend::NCNN" << std::endl;
 #endif
+  } else {
+    // force fp16 false
+    opt_.use_fp16_packed = false;
+    opt_.use_fp16_storage = false;
+    opt_.use_fp16_arithmetic = false;
   }
   if (option_.enable_bf16) {
 #if defined(__aarch64__) || defined(_M_ARM64)
-    opt_.use_bf16_storage = true;  // only storage
+    opt_.use_bf16_storage = true;
     opt_.use_packing_layout = true;
 #endif
+  } else {
+    // force bf16 false
+    opt_.use_bf16_storage = false;
+    opt_.use_packing_layout = false;
   }
   if (option_.enable_int8) {
     opt_.use_int8_packed = true;
@@ -64,6 +76,12 @@ void NCNNBackend::BuildOption(const NCNNBackendOption& option) {
     opt_.use_int8_arithmetic = true;
     opt_.use_int8_inference = true;
     FDINFO << "INT8 precision is enabled for Backend::NCNN" << std::endl;
+  } else {
+    // force int8 false
+    opt_.use_int8_packed = false;
+    opt_.use_int8_storage = false;
+    opt_.use_int8_arithmetic = false;
+    opt_.use_int8_inference = false;
   }
   // cpu power mode
   ncnn::set_cpu_powersave(option_.cpu_powersave);
@@ -78,6 +96,9 @@ std::vector<int> NCNNBackend::GetMatShape(const ncnn::Mat& mat,
                                           size_t* elemsize) {
   std::vector<int> shape;
   int dims = mat.dims;
+  if (dims <= 0) {
+    return {0, 0, 0, 0};
+  }
   // Only support batch=1
   shape.resize(dims + 1);
   shape[0] = 1;  // batch always 1
@@ -125,7 +146,7 @@ bool NCNNBackend::SetTensorInfoByCustomOrder(
         // Fill i-th info
         TensorInfo info;
         info.name = tensor_names[id];
-        size_t elemsize = -1;
+        size_t elemsize = 0;
         info.shape = GetMatShapeByBlob(tensor_indexes[id], &elemsize);
         // Only support FP32 input/output
         info.dtype = NCNNDataTypeToFD(elemsize);
@@ -150,7 +171,7 @@ bool NCNNBackend::SetTensorInfo(const std::vector<const char*>& tensor_names,
     // Fill i-th info
     TensorInfo info;
     info.name = tensor_names[i];
-    size_t elemsize = -1;
+    size_t elemsize = 0;
     info.shape = GetMatShapeByBlob(tensor_indexes[i], &elemsize);
     // Only support FP32 input/output
     info.dtype = NCNNDataTypeToFD(elemsize);
@@ -183,13 +204,13 @@ bool NCNNBackend::Init(const RuntimeOption& runtime_option) {
   BuildOption(runtime_option.ncnn_option);
   net_ = std::shared_ptr<ncnn::Net>(new ncnn::Net());
   net_->opt = opt_;
-  // Load model files
-  FDASSERT(!(net_->load_model(runtime_option.model_file.c_str())),
-           "Can not load model file for Backend::NCNN: %s",
-           runtime_option.model_file.c_str())  // *.bin
+  // Load param(graph) first, then, load model(bin).
   FDASSERT(!(net_->load_param(runtime_option.params_file.c_str())),
            "Can not load model file for Backend::NCNN: %s",
            runtime_option.params_file.c_str())  // *.param
+  FDASSERT(!(net_->load_model(runtime_option.model_file.c_str())),
+           "Can not load model file for Backend::NCNN: %s",
+           runtime_option.model_file.c_str())  // *.bin
 
   // Get input/output infos
   inputs_desc_.clear();
@@ -267,6 +288,7 @@ bool NCNNBackend::UpdateInputShapeAndDesc(const std::vector<FDTensor>& inputs) {
     for (int j = 0; j < inputs_desc_.size(); ++j) {
       if (inputs[i].name == inputs_desc_[j].name) {
         inputs_desc_[j].shape = GetNCNNShape(inputs[i].Shape());
+        inputs_desc_[j].dtype = inputs[j].Dtype();
         find = true;
         break;
       }
@@ -289,9 +311,10 @@ bool NCNNBackend::Infer(std::vector<FDTensor>& inputs,
   FDASSERT(UpdateInputShapeAndDesc(inputs),
            "Backend::NCNN update input tensor shape failed!");
 
-  ncnn::Extractor extractor = net_->create_extractor();
-
   RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
+  // create a new extractor for each loop in benchmark profiling.
+  // ref: ncnn/blob/master/benchmark/benchncnn.cpp
+  ncnn::Extractor extractor = net_->create_extractor();
   for (size_t i = 0; i < inputs.size(); ++i) {
     auto iter = inputs_order_.find(inputs[i].name);
     if (iter == inputs_order_.end()) {
@@ -338,8 +361,11 @@ bool NCNNBackend::Infer(std::vector<FDTensor>& inputs,
     // type = 0, default
     // type = 1, do not convert fp16/bf16 or / and packing
     int extract_type = 0;  // may use type 1
-    FDASSERT(!extractor.extract(outputs_desc_[i].name.c_str(), outs[i],
-                                extract_type),
+    // assign a new extractor for benchmark profiling.
+    // ref: ncnn/blob/master/benchmark/benchncnn.cpp
+    ncnn::Extractor extractor_ref = extractor;
+    FDASSERT(!extractor_ref.extract(outputs_desc_[i].name.c_str(), outs[i],
+                                    extract_type),
              "Cannot extract output: %s", outputs_desc_[i].name.c_str())
   }
   RUNTIME_PROFILE_LOOP_END
@@ -347,7 +373,7 @@ bool NCNNBackend::Infer(std::vector<FDTensor>& inputs,
   // Copy -> output tensors.
   outputs->resize(outputs_desc_.size());
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
-    size_t elemsize = -1;
+    size_t elemsize = 0;
     outputs_desc_[i].shape = GetMatShape(outs[i], &elemsize);
     // Only support FP32 input/output now.
     outputs_desc_[i].dtype = NCNNDataTypeToFD(elemsize);
@@ -356,7 +382,7 @@ bool NCNNBackend::Infer(std::vector<FDTensor>& inputs,
     // Handle the data via 16 bytes aligned, use
     // ncnn::Mat::channel(i) with CHW order instead of
     // copy from raw data directly. c >= 1 (1,2,3,...)
-    // Refence: ncnn/blob/master/docs/faq.md
+    // Reference: ncnn/blob/master/docs/faq.md
     const size_t cbytes = (*outputs)[i].Nbytes() / outs[i].c;
     for (int j = 0; j < outs[i].c; ++j) {
       uint8_t* raw_mutable_data =
@@ -370,17 +396,34 @@ bool NCNNBackend::Infer(std::vector<FDTensor>& inputs,
   return true;
 }
 
-std::string NCNNBackend::ShapeStr(const std::vector<int>& shape) {
-  std::string str = "[";
-  for (int j = 0; j < shape.size(); ++j) {
-    str += std::to_string(shape[j]);
-    if (j == shape.size() - 1) {
-      str += "]";
-    } else {
-      str += ",";
-    }
+std::string NCNNBackend::ShapeStr(const ncnn::Mat& mat,
+                                  const std::string name) {
+  std::ostringstream oss;
+  oss << "\n";
+  for (int i = 0; i < 100; ++i) {
+    oss << "=";
   }
-  return str;
+  oss << "\n";
+  // c,h,w,d,elembits,elemsize
+  if (name != "") {
+    oss << "[" << name << "] ";
+  }
+  oss << "shape info: [";
+  oss << "c: " << mat.c << ", "
+      << "h: " << mat.h << ", "
+      << "w: " << mat.w << ", "
+      << "d: " << mat.d << ", "
+      << "dims: " << mat.dims << ", "
+      << "cstep: " << mat.cstep << ", "
+      << "elembits: " << mat.elembits() << ", "
+      << "elemsize: " << mat.elemsize << ", "
+      << "elempack: " << mat.elempack << "]"
+      << "\n";
+  for (int i = 0; i < 100; ++i) {
+    oss << "=";
+  }
+  oss << "\n";
+  return oss.str();
 }
 
 TensorInfo NCNNBackend::GetInputInfo(int index) {

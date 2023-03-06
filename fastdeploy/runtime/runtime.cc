@@ -165,6 +165,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     CreatePorosBackend();
   } else if (option.backend == Backend::MNN) {
     CreateMNNBackend();
+  } else if (option.backend == Backend::NCNN) {
+    CreateNCNNBackend();
   } else {
     std::string msg = Str(GetAvailableBackends());
     FDERROR << "The compiled FastDeploy only supports " << msg << ", "
