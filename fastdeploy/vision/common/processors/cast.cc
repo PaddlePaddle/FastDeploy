@@ -14,6 +14,8 @@
 
 #include "fastdeploy/vision/common/processors/cast.h"
 
+#include "fastdeploy/vision/common/processors/utils.h"
+
 namespace fastdeploy {
 namespace vision {
 
