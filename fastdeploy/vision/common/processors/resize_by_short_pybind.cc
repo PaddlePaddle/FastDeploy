@@ -12,16 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/pybind/main.h"
+#include "fastdeploy/vision/common/processors/base.h"
 
 namespace fastdeploy {
 void BindResizeByShort(pybind11::module& m) {
-  pybind11::class_<vision::ResizeByShort>(m, "ResizeByShort")
+  pybind11::class_<vision::ResizeByShort, vision::Processor>(m, "ResizeByShort")
       .def(pybind11::init<int, int, bool, std::vector<int>>(),
-           "Default constructor")
-      .def("__call__", [](vision::ResizeByShort& self, vision::FDMat* mat) {
-        self(mat);
-        return true;
-      });
+           "Default constructor");
 }
 
 }  // namespace fastdeploy

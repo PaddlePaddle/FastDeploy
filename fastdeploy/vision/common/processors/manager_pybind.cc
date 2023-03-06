@@ -17,6 +17,8 @@
 
 namespace fastdeploy {
 namespace vision {
+// PyProcessorManager is used for pybind11::init() of ProcessorManager
+// Because ProcessorManager have a pure Virtual function Apply()
 class FASTDEPLOY_DECL PyProcessorManager : public ProcessorManager {
  public:
   using ProcessorManager::ProcessorManager;

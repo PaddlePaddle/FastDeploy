@@ -12,18 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/pybind/main.h"
+#include "fastdeploy/vision/common/processors/base.h"
 
 namespace fastdeploy {
 void BindNormalizeAndPermute(pybind11::module& m) {
-  pybind11::class_<vision::NormalizeAndPermute>(m, "NormalizeAndPermute")
+  pybind11::class_<vision::NormalizeAndPermute, vision::Processor>(
+      m, "NormalizeAndPermute")
       .def(pybind11::init<std::vector<float>, std::vector<float>, bool,
                           std::vector<float>, std::vector<float>, bool>(),
-           "Default constructor")
-      .def("__call__",
-           [](vision::NormalizeAndPermute& self, vision::FDMat* mat) {
-             self(mat);
-             return true;
-           });
+           "Default constructor");
 }
 
 }  // namespace fastdeploy
