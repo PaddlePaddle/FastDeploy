@@ -73,6 +73,7 @@ struct FASTDEPLOY_DECL Mat {
     fcv_mat = mat;
     mat_type = ProcLib::FLYCV;
   }
+  fcv::Mat* GetFlyCVMat();
 #endif
 
   void* Data();
