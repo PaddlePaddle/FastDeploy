@@ -4,6 +4,9 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.8)
 set(FASTDEPLOY_VERSION @FASTDEPLOY_VERSION@)
 set(LIBRARY_NAME @LIBRARY_NAME@)
 
+# If compile with GLIBC_CXX_ABI=0
+set(NEED_ABI0 @NEED_ABI0@)
+
 # Hardware and Language API
 set(WITH_GPU @WITH_GPU@)
 set(WITH_IPU @WITH_IPU@)
@@ -66,7 +69,11 @@ include(${CMAKE_CURRENT_LIST_DIR}/utils.cmake)
 if(NOT MSVC)
   set(CMAKE_CXX_STANDARD 11)
   set(CMAKE_CXX_FLAGS "-Wno-format")
-  add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
+  if(NEED_ABI0=ON)
+    add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
+  else()
+    add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
+  endif()
 endif(NOT MSVC)
 
 # Set FastDeploy static lib definitions
