@@ -72,6 +72,26 @@ bool DBDetector::Predict(const cv::Mat& img,
   return true;
 }
 
+bool DBDetector::Predict(const cv::Mat& img, vision::OCRResult* ocr_result) {
+  if (!Predict(img, &(ocr_result->boxes))) {
+    return false;
+  }
+  return true;
+}
+
+bool DBDetector::BatchPredict(const std::vector<cv::Mat>& images,
+                              std::vector<vision::OCRResult>* ocr_results) {
+  std::vector<std::vector<std::array<int, 8>>> det_results;
+  if (!BatchPredict(images, &det_results)) {
+    return false;
+  }
+  ocr_results->resize(det_results.size());
+  for (int i = 0; i < det_results.size(); i++) {
+    (*ocr_results)[i].boxes = std::move(det_results[i]);
+  }
+  return true;
+}
+
 bool DBDetector::BatchPredict(
     const std::vector<cv::Mat>& images,
     std::vector<std::vector<std::array<int, 8>>>* det_results) {
