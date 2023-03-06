@@ -76,7 +76,8 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
       return false;
     }
   } else if (config_info["device"] == "xpu") {
-    option->UseKunlunXin(std::stoi(config_info["device_id"]));
+    option->UseKunlunXin(std::stoi(config_info["device_id"]),
+                         std::stoi(config_info["xpu_l3_cache"]));
     if (config_info["backend"] == "ort") {
       option->UseOrtBackend();
     } else if (config_info["backend"] == "paddle") {
