@@ -5,7 +5,7 @@ warmup: 200
 repeat: 1000
 backend: default
 profile_mode: runtime
-include_h2d_d2h: true
+include_h2d_d2h: false
 use_fp16: false
 collect_memory_info: false
 sampling_interval: 1
