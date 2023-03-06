@@ -42,6 +42,7 @@
 | sampling_interval    | 记录 cpu/gpu memory信息采样时间间隔，单位ms，默认为 50  |
 | precision_compare    | 是否进行精度比较，默认为 false  |  
 | result_path    | 记录 Benchmark 数据的 txt 文件路径  |  
+| xpu_l3_cache | 设置XPU L3 Cache大小，默认值为0。设置策略，对于 昆仑2 XPU R200，L3 Cache可用的最大值为 62914560，对于 昆仑1 XPU 则为 16776192 |
 
 ## 3. X86_64 CPU 和 NVIDIA GPU 环境下运行 Benchmark
 
