@@ -16,15 +16,12 @@
 namespace fastdeploy {
 void BindResizeByShort(pybind11::module& m) {
   pybind11::class_<vision::ResizeByShort>(m, "ResizeByShort")
-      .def(pybind11::init<int, int, bool, std::vector<int>>(), "Default constructor")
-      .def("__call__",
-             [](vision::ResizeByShort& self, vision::FDMat* mat) {
-                vision::ProcLib lib = vision::ProcLib::DEFAULT;
-                // vision::FDMat mat_fd = vision::WrapMat(PyArrayToCvMat(mat));
-                self(mat, lib);
-                return true;
-              }
-          );
+      .def(pybind11::init<int, int, bool, std::vector<int>>(),
+           "Default constructor")
+      .def("__call__", [](vision::ResizeByShort& self, vision::FDMat* mat) {
+        self(mat);
+        return true;
+      });
 }
 
 }  // namespace fastdeploy

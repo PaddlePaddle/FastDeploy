@@ -11,17 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "fastdeploy/pybind/main.h"
 #include <pybind11/operators.h>
+#include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
 void BindProcessor(pybind11::module& m) {
   pybind11::class_<vision::Processor>(m, "Processor")
-      .def("__call__",
-         [](vision::Processor& self, vision::FDMat* mat) {
-            vision::ProcLib lib = vision::ProcLib::DEFAULT;
-            return self(mat, lib);
-         });
+      .def("__call__", [](vision::Processor& self, vision::FDMat* mat) {
+        self(mat);
+        return true;
+      });
 }
 
 }  // namespace fastdeploy

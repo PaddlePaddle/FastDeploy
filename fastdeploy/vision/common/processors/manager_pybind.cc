@@ -18,21 +18,17 @@
 namespace fastdeploy {
 namespace vision {
 class FASTDEPLOY_DECL PyProcessorManager : public ProcessorManager {
-  public:
-    using ProcessorManager::ProcessorManager;
-    bool Apply(FDMatBatch* image_batch, std::vector<FDTensor>* outputs) override {
-      PYBIND11_OVERRIDE_PURE(bool,
-                             ProcessorManager,
-                             Apply,
-                             image_batch,
-                             outputs
-      );
-    }
+ public:
+  using ProcessorManager::ProcessorManager;
+  bool Apply(FDMatBatch* image_batch, std::vector<FDTensor>* outputs) override {
+    PYBIND11_OVERRIDE_PURE(bool, ProcessorManager, Apply, image_batch, outputs);
+  }
 };
-} // namespace vision
+}  // namespace vision
 
 void BindProcessorManager(pybind11::module& m) {
-  pybind11::class_<vision::ProcessorManager, vision::PyProcessorManager>(m, "ProcessorManager")
+  pybind11::class_<vision::ProcessorManager, vision::PyProcessorManager>(
+      m, "ProcessorManager")
       .def(pybind11::init<>())
       .def("run",
            [](vision::ProcessorManager& self,
@@ -57,6 +53,5 @@ void BindProcessorManager(pybind11::module& m) {
       .def("use_cuda",
            [](vision::ProcessorManager& self, bool enable_cv_cuda = false,
               int gpu_id = -1) { self.UseCuda(enable_cv_cuda, gpu_id); })
-      .def("Apply", &vision::ProcessorManager::Apply);
 }
 }  // namespace fastdeploy
