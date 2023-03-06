@@ -130,6 +130,144 @@ public class DetectionResult {
 
 }
 
+public class OCRResult {
+  public List<int[]> boxes;
+  public List<string> text;
+  public List<float> rec_scores;
+  public List<float> cls_scores;
+  public List<int> cls_labels;
+  public ResultType type;
+
+  public OCRResult() {
+    this.boxes = new List<int[]>();
+    this.text = new List<string>();
+    this.rec_scores = new List<float>();
+    this.cls_scores = new List<float>();
+    this.cls_labels = new List<int>();
+    this.type = ResultType.OCR;
+  }
+  public string ToString() {
+  string no_result = "";
+  if (boxes.Count > 0) {
+    string information = "";
+    for (int n = 0; n < boxes.Count; n++) {
+      information = information + "det boxes: [";
+      for (int i = 0; i < 4; i++) {
+        information = information + "[" + boxes[n][i * 2].ToString() + "," +
+              boxes[n][i * 2 + 1].ToString() + "]";
+
+        if (i != 3) {
+          information = information + ",";
+        }
+      }
+      information = information + "]";
+
+      if (rec_scores.Count > 0) {
+        information = information + "rec text: " + text[n] + " rec score:" +
+              rec_scores[n].ToString() + " ";
+      }
+      if (cls_labels.Count > 0) {
+        information = information + "cls label: " + cls_labels[n].ToString() +
+              " cls score: " + cls_scores[n].ToString();
+      }
+      information = information + "\n";
+    }
+    return information;
+
+  } else if (boxes.Count == 0 && rec_scores.Count > 0 &&
+             cls_scores.Count > 0) {
+    string information="";
+    for (int i = 0; i < rec_scores.Count; i++) {
+      information = information + "rec text: " + text[i] + " rec score:" +
+            rec_scores[i].ToString() + " ";
+      information = information + "cls label: " + cls_labels[i].ToString() +
+            " cls score: " + cls_scores[i].ToString();
+      information = information + "\n";
+    }
+    return information;
+  } else if (boxes.Count == 0 && rec_scores.Count == 0 &&
+             cls_scores.Count > 0) {
+    string information="";
+    for (int i = 0; i < cls_scores.Count; i++) {
+      information = information + "cls label: " + cls_labels[i].ToString() +
+            " cls score: " + cls_scores[i].ToString();
+      information = information + "\n";
+    }
+    return information;
+  } else if (boxes.Count == 0 && rec_scores.Count > 0 &&
+             cls_scores.Count == 0) {
+    string information="";
+    for (int i = 0; i < rec_scores.Count; i++) {
+      information = information + "rec text: " + text[i] + " rec score:" +
+            rec_scores[i].ToString() + " ";
+      information = information + "\n";
+    }
+    return information;
+  }
+
+  no_result = no_result + "No Results!";
+  return no_result;
+  }
+
+}
+
+public class OCRClassifierResult{
+  public int cls_label;
+  public float cls_score;
+}
+
+public class OCRDBDetectorResult{
+  public List<int[]> boxes;
+}
+
+public class OCRRecognizerResult{
+  public string text;
+  public float rec_score;
+}
+
+public class SegmentationResult{
+  public List<byte> label_map;
+  public List<float> score_map;
+  public List<long> shape;
+  public bool contain_score_map;
+  public ResultType type;
+  public SegmentationResult() {
+    this.label_map = new List<byte>();
+    this.score_map = new List<float>();
+    this.shape = new List<long>();
+    this.contain_score_map = false;
+    this.type = ResultType.SEGMENTATION;
+  }
+
+  public string ToString() {
+    string information;
+    information = "SegmentationResult Image masks 10 rows x 10 cols: \n";
+    for (int i = 0; i < 10; ++i) {
+      information += "[";
+      for (int j = 0; j < 10; ++j) {
+        information = information + label_map[i * 10 + j].ToString() + ", ";
+      }
+      information += ".....]\n";
+    }
+    information += "...........\n";
+    if (contain_score_map) {
+      information += "SegmentationResult Score map 10 rows x 10 cols: \n";
+      for (int i = 0; i < 10; ++i) {
+        information += "[";
+        for (int j = 0; j < 10; ++j) {
+          information = information + score_map[i * 10 + j].ToString() + ", ";
+        }
+        information += ".....]\n";
+      }
+      information += "...........\n";
+    }
+    information += "result shape is: [" + shape[0].ToString() + " " +
+          shape[1].ToString() + "]";
+    return information;
+    }
+}
+
+
 public class ConvertResult {
 
   public static FD_ClassifyResult
@@ -318,6 +456,190 @@ public class ConvertResult {
     detection_result.contain_masks = fd_detection_result.contain_masks;
     detection_result.type = (ResultType)fd_detection_result.type;
     return detection_result;
+  }
+
+  // OCRResult
+  public static FD_OCRResult
+  ConvertOCRResultToCResult(OCRResult ocr_result) {
+    FD_OCRResult fd_ocr_result = new FD_OCRResult();
+
+    // copy boxes
+    int boxes_coordinate_dim = 8;
+    int size;
+    fd_ocr_result.boxes.size = (uint)ocr_result.boxes.Count;
+    FD_OneDimArrayInt32[] boxes =
+        new FD_OneDimArrayInt32[fd_ocr_result.boxes.size];
+    // Copy each box
+    for (int i = 0; i < (int)fd_ocr_result.boxes.size; i++) {
+      boxes[i].size = (uint)ocr_result.boxes[i].Length;
+      int[] boxes_i = new int[boxes_coordinate_dim];
+      ocr_result.boxes[i].CopyTo(boxes_i, 0);
+      size = Marshal.SizeOf(boxes_i[0]) * boxes_i.Length;
+      boxes[i].data = Marshal.AllocHGlobal(size);
+      Marshal.Copy(boxes_i, 0, boxes[i].data, boxes_i.Length);
+    }
+    // Copy data to unmanaged memory
+    size = Marshal.SizeOf(boxes[0]) * boxes.Length;
+    fd_ocr_result.boxes.data = Marshal.AllocHGlobal(size);
+    for (int i = 0; i < boxes.Length; i++) {
+      Marshal.StructureToPtr(
+          boxes[i],
+          fd_ocr_result.boxes.data + i * Marshal.SizeOf(boxes[0]), true);
+    }
+
+    // copy text 
+    fd_ocr_result.text = ConvertStringArrayToCOneDimArrayCstr(ocr_result.text.ToArray());
+
+    // copy rec_scores
+    fd_ocr_result.rec_scores.size = (uint)ocr_result.rec_scores.Count;
+    float[] rec_scores = new float[fd_ocr_result.rec_scores.size];
+    // Copy data from Link to Array
+    ocr_result.rec_scores.CopyTo(rec_scores);
+    // Copy data to unmanaged memory
+    size = Marshal.SizeOf(rec_scores[0]) * rec_scores.Length;
+    fd_ocr_result.rec_scores.data = Marshal.AllocHGlobal(size);
+    Marshal.Copy(rec_scores, 0, fd_ocr_result.rec_scores.data, rec_scores.Length);
+
+    // copy cls_scores
+    fd_ocr_result.cls_scores.size = (uint)ocr_result.cls_scores.Count;
+    float[] cls_scores = new float[fd_ocr_result.cls_scores.size];
+    // Copy data from Link to Array
+    ocr_result.cls_scores.CopyTo(cls_scores);
+    // Copy data to unmanaged memory
+    size = Marshal.SizeOf(cls_scores[0]) * cls_scores.Length;
+    fd_ocr_result.cls_scores.data = Marshal.AllocHGlobal(size);
+    Marshal.Copy(cls_scores, 0, fd_ocr_result.cls_scores.data, cls_scores.Length);
+
+    // copy cls_labels
+    fd_ocr_result.cls_labels.size = (uint)ocr_result.cls_labels.Count;
+    int[] cls_labels = new int[fd_ocr_result.cls_labels.size];
+    // Copy data from Link to Array
+    ocr_result.cls_labels.CopyTo(cls_labels);
+    // Copy data to unmanaged memory
+    size = Marshal.SizeOf(cls_labels[0]) * cls_labels.Length;
+    fd_ocr_result.cls_labels.data = Marshal.AllocHGlobal(size);
+    Marshal.Copy(cls_labels, 0, fd_ocr_result.cls_labels.data, cls_labels.Length);
+    
+    fd_ocr_result.type = (FD_ResultType)ocr_result.type;
+    return fd_ocr_result;
+  }
+
+  public static OCRResult
+  ConvertCResultToOCRResult(FD_OCRResult fd_ocr_result) {
+    OCRResult ocr_result = new OCRResult();
+
+    // copy boxes
+    ocr_result.boxes = new List<int[]>();
+    FD_OneDimArrayInt32[] boxes =
+        new FD_OneDimArrayInt32[fd_ocr_result.boxes.size];
+    for (int i = 0; i < (int)fd_ocr_result.boxes.size; i++) {
+      boxes[i] = (FD_OneDimArrayInt32)Marshal.PtrToStructure(
+          fd_ocr_result.boxes.data + i * Marshal.SizeOf(boxes[0]),
+          typeof(FD_OneDimArrayInt32));
+      int[] box_i = new int[boxes[i].size];
+      Marshal.Copy(boxes[i].data, box_i, 0, box_i.Length);
+      ocr_result.boxes.Add(box_i);
+    }
+
+    // copy text
+    string[] texts = ConvertCOneDimArrayCstrToStringArray(fd_ocr_result.text);
+    ocr_result.text = new List<string>(texts);
+
+    // copy rec_scores
+    float[] rec_scores = new float[fd_ocr_result.rec_scores.size];
+    Marshal.Copy(fd_ocr_result.rec_scores.data, rec_scores, 0,
+                 rec_scores.Length);
+    ocr_result.rec_scores = new List<float>(rec_scores);
+
+    // copy cls_scores
+    float[] cls_scores = new float[fd_ocr_result.cls_scores.size];
+    Marshal.Copy(fd_ocr_result.cls_scores.data, cls_scores, 0,
+                 cls_scores.Length);
+    ocr_result.cls_scores = new List<float>(cls_scores);
+
+    // copy cls_labels
+    int[] cls_labels = new int[fd_ocr_result.cls_labels.size];
+    Marshal.Copy(fd_ocr_result.cls_labels.data, cls_labels, 0,
+                 cls_labels.Length);
+    ocr_result.cls_labels = new List<int>(cls_labels);
+
+    ocr_result.type = (ResultType)fd_ocr_result.type;
+    return ocr_result;
+  }
+
+  public static SegmentationResult
+  ConvertCResultToSegmentationResult(FD_SegmentationResult fd_segmentation_result){
+    SegmentationResult segmentation_result = new SegmentationResult();
+
+    // copy label_map
+    byte[] label_map = new byte[fd_segmentation_result.label_map.size];
+    Marshal.Copy(fd_segmentation_result.label_map.data, label_map, 0,
+                 label_map.Length);
+    segmentation_result.label_map = new List<byte>(label_map);
+
+    // copy score_map
+    float[] score_map = new float[fd_segmentation_result.score_map.size];
+    Marshal.Copy(fd_segmentation_result.score_map.data, score_map, 0,
+                 score_map.Length);
+    segmentation_result.score_map = new List<float>(score_map);
+
+    // copy shape
+    long[] shape = new long[fd_segmentation_result.shape.size];
+    Marshal.Copy(fd_segmentation_result.shape.data, shape, 0,
+                 shape.Length);
+    segmentation_result.shape = new List<long>(shape);
+
+    segmentation_result.contain_score_map = fd_segmentation_result.contain_score_map;
+    segmentation_result.type = (ResultType)fd_segmentation_result.type;
+    return segmentation_result;
+
+  }
+  public static FD_SegmentationResult
+  ConvertSegmentationResultToCResult(SegmentationResult segmentation_result){
+    FD_SegmentationResult fd_segmentation_result = new FD_SegmentationResult();
+    // copy label_map
+    // Create a managed array
+    fd_segmentation_result.label_map.size = (uint)segmentation_result.label_map.Count;
+    byte[] label_map = new byte[fd_segmentation_result.label_map.size];
+    // Copy data from Link to Array
+    segmentation_result.label_map.CopyTo(label_map);
+
+    // Copy data to unmanaged memory
+    int size = Marshal.SizeOf(label_map[0]) * label_map.Length;
+    fd_segmentation_result.label_map.data = Marshal.AllocHGlobal(size);
+    Marshal.Copy(label_map, 0, fd_segmentation_result.label_map.data,
+                 label_map.Length);
+    
+    // copy score_map
+    // Create a managed array
+    fd_segmentation_result.score_map.size = (uint)segmentation_result.score_map.Count;
+    if(fd_segmentation_result.score_map.size != 0){
+    float[] score_map = new float[fd_segmentation_result.score_map.size];
+    // Copy data from Link to Array
+    segmentation_result.score_map.CopyTo(score_map);
+    // Copy data to unmanaged memory
+    size = Marshal.SizeOf(score_map[0]) * score_map.Length;
+    fd_segmentation_result.score_map.data = Marshal.AllocHGlobal(size);
+    Marshal.Copy(score_map, 0, fd_segmentation_result.score_map.data,
+                 score_map.Length);
+    }
+    
+    // copy shape
+    // Create a managed array
+    fd_segmentation_result.shape.size = (uint)segmentation_result.shape.Count;
+    long[] shape = new long[fd_segmentation_result.shape.size];
+    // Copy data from Link to Array
+    segmentation_result.shape.CopyTo(shape);
+    // Copy data to unmanaged memory
+    size = Marshal.SizeOf(shape[0]) * shape.Length;
+    fd_segmentation_result.shape.data = Marshal.AllocHGlobal(size);
+    Marshal.Copy(shape, 0, fd_segmentation_result.shape.data,
+                 shape.Length);
+
+    fd_segmentation_result.contain_score_map = segmentation_result.contain_score_map;
+    fd_segmentation_result.type = (FD_ResultType)segmentation_result.type;
+
+    return fd_segmentation_result;
   }
 
 

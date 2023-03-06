@@ -65,7 +65,10 @@ if __name__ == "__main__":
     if not os.path.exists(yaml_config["output_folder"]):
         os.mkdir(yaml_config["output_folder"])
 
-    model_base_name = os.path.basename(yaml_config["model_path"]).split(".")[0]
+    name_list = os.path.basename(yaml_config["model_path"]).split(".")
+    model_base_name = ""
+    for name in name_list[0:-1]:
+        model_base_name += name
     model_device_name = config.target_platform.lower()
     if yaml_config["do_quantization"]:
         model_save_name = model_base_name + "_" + model_device_name + "_quantized" + ".rknn"

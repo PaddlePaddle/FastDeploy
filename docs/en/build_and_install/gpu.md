@@ -16,8 +16,8 @@ Please do not modify other cmake paramters exclude the following options.
 | ENABLE_TEXT             | Linux(x64/Windows(x64) | Default OFF, whether to intergrate text models |
 | CUDA_DIRECTORY          | Linux(x64/Windows(x64) | Default /usr/local/cuda，require CUDA>=11.2 |
 | TRT_DIRECTORY | Linux(x64/Windows(x64) | Default empty，require TensorRT>=8.4， e.g. /Download/TensorRT-8.5 |
-| ENABLE_CAPI             | Linux(x64)/Windows(x64)/Mac OSX(x86) | Default OFF, whether to intergrate C API  |
-| ENABLE_CSHARPAPI        | Windows(x64) | Default OFF, whether to intergrate C# API   |
+| WITH_CAPI             | Linux(x64)/Windows(x64)/Mac OSX(x86) | Default OFF, whether to intergrate C API  |
+| WITH_CSHARPAPI        | Windows(x64) | Default OFF, whether to intergrate C# API   |
 
 The configuration for third libraries(Optional, if the following option is not defined, the prebuilt third libraries will download automaticly while building FastDeploy).
 | Option                     | Description                                                                                           |
@@ -87,7 +87,7 @@ cmake .. -G "Visual Studio 16 2019" -A x64 \
          -DTRT_DIRECTORY="D:\Paddle\TensorRT-8.4.1.5" \
          -DCUDA_DIRECTORY="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2" \
          -DCMAKE_INSTALL_PREFIX="D:\Paddle\compiled_fastdeploy"
-% nuget restore  （please execute it when ENABLE_CSHARPAPI to prepare dependencies in C#)
+% nuget restore  （please execute it when WITH_CSHARPAPI=ON to prepare dependencies in C#)
 msbuild fastdeploy.sln /m /p:Configuration=Release /p:Platform=x64
 msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 ```

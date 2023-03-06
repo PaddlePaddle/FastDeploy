@@ -15,6 +15,7 @@
 
 #include <memory>
 #include <thread>  // NOLINT
+#include <unordered_map>
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/core/fd_tensor.h"
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
@@ -138,6 +139,15 @@ struct FASTDEPLOY_DECL ResultManager {
   /// Calculate diff value between two FDTensor results.
   static TensorDiff CalculateDiffStatis(const FDTensor& lhs,
                                         const FDTensor& rhs);
+  /// Save Benchmark data
+  static void SaveBenchmarkResult(const std::string& res,
+                                  const std::string& path);
+  /// Load Benchmark config
+  static bool LoadBenchmarkConfig(const std::string& path,
+             std::unordered_map<std::string, std::string>* config_info);
+  /// Get Input Shapes
+  static std::vector<std::vector<int32_t>> GetInputShapes(
+                                      const std::string& raw_shapes);
 #if defined(ENABLE_VISION)
   /// Save & Load functions for basic results.
   static bool SaveDetectionResult(const vision::DetectionResult& res,
