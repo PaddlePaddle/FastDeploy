@@ -86,18 +86,13 @@ __build_fastdeploy_android_shared() {
         -DANDROID_PLATFORM=${ANDROID_PLATFORM} \
         -DANDROID_STL=${ANDROID_STL} \
         -DANDROID_TOOLCHAIN=${ANDROID_TOOLCHAIN} \
-        -DENABLE_ORT_BACKEND=OFF \
         -DENABLE_LITE_BACKEND=ON \
-        -DENABLE_PADDLE2ONNX=OFF \
-        -DENABLE_FLYCV=ON \
+        -DENABLE_FLYCV=OFF \
         -DENABLE_TEXT=OFF \
-        -DENABLE_VISION=ON \
-        -DBUILD_EXAMPLES=OFF \
-        -DWITH_ANDROID_OPENCV_STATIC=ON \
-        -DWITH_ANDROID_FLYCV_STATIC=ON \
+        -DENABLE_VISION=OFF \
         -DWITH_ANDROID_LITE_STATIC=ON \
-        -DWITH_ANDROID_OPENMP=ON \
-        -DWITH_ANDROID_JAVA=OFF \
+        -DWITH_ANDROID_TENSOR_FUNCS=OFF \
+        -DBUILD_EXAMPLES=OFF \
         -DCMAKE_INSTALL_PREFIX=${FASDEPLOY_INSTALL_DIR} \
         -Wno-dev ../../.. && make -j8 && make install
 
@@ -115,5 +110,5 @@ main() {
 main
 
 # Usage:
-# ./scripts/android/build_android_cpp_with_static_deps.sh arm64-v8a 21
-# ./scripts/android/build_android_cpp_with_static_deps.sh armeabi-v7a 21
+# ./scripts/android/build_android_cpp_with_runtime_only.sh arm64-v8a 21
+# ./scripts/android/build_android_cpp_with_runtime_only.sh armeabi-v7a 21
