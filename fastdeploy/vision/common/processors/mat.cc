@@ -37,9 +37,7 @@ cv::Mat* Mat::GetOpenCVMat() {
 #ifdef WITH_GPU
     FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
              "[ERROR] Error occurs while sync cuda stream.");
-    FDASSERT(layout == Layout::HWC,
-             "Only HWC tensor can be converted to cv::Mat for now");
-    cpu_mat = CreateZeroCopyOpenCVMatFromTensor(*fd_tensor);
+    cpu_mat = CreateZeroCopyOpenCVMatFromTensor(*fd_tensor, layout);
     mat_type = ProcLib::OPENCV;
     device = Device::CPU;
     return &cpu_mat;
@@ -160,7 +158,7 @@ void Mat::PrintInfo(const std::string& flag) {
 #ifdef WITH_GPU
     FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
              "[ERROR] Error occurs while sync cuda stream.");
-    cv::Mat tmp_mat = CreateZeroCopyOpenCVMatFromTensor(*fd_tensor);
+    cv::Mat tmp_mat = CreateZeroCopyOpenCVMatFromTensor(*fd_tensor, layout);
     cv::Scalar mean = cv::mean(tmp_mat);
     for (int i = 0; i < Channels(); ++i) {
       std::cout << mean[i] << " ";

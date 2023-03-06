@@ -147,7 +147,7 @@ bool Resize::ImplByCvCuda(FDMat* mat) {
 
   // CV-CUDA Interp value is compatible with OpenCV
   cvcuda_resize_op_(mat->Stream(), src_tensor, dst_tensor,
-                    NVCVInterpolationType(interp_));
+                    CreateCvCudaInterp(interp_));
 
   mat->SetTensor(mat->output_cache);
   mat->SetWidth(width_);

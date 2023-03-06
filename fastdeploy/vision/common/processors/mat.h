@@ -13,7 +13,6 @@
 // limitations under the License.
 #pragma once
 #include "fastdeploy/core/fd_tensor.h"
-#include "fastdeploy/vision/common/processors/utils.h"
 #include "fastdeploy/vision/common/processors/proc_lib.h"
 #include "opencv2/core/core.hpp"
 

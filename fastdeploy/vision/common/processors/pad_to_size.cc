@@ -14,6 +14,8 @@
 
 #include "fastdeploy/vision/common/processors/pad_to_size.h"
 
+#include "fastdeploy/vision/common/processors/utils.h"
+
 namespace fastdeploy {
 namespace vision {
 
@@ -44,11 +46,13 @@ static bool PadCHWByOpenCV(FDMat* mat, int width, int height,
                            const std::vector<float>& value) {
   int origin_w = mat->Width();
   int origin_h = mat->Height();
+  cv::Mat* im = mat->GetOpenCVMat();
   cv::Mat new_im(height, width,
                  CreateOpenCVDataType(mat->Type(), mat->Channels()));
+
   for (int i = 0; i < mat->Channels(); ++i) {
-    uint8_t* src_data = reinterpret_cast<uint8_t*>(mat->Data()) +
-                        i * origin_w * origin_h * FDDataTypeSize(mat->Type());
+    uint8_t* src_data =
+        im->ptr() + i * origin_w * origin_h * FDDataTypeSize(mat->Type());
     cv::Mat src(origin_h, origin_w, CreateOpenCVDataType(mat->Type(), 1),
                 src_data);
 
@@ -65,10 +69,7 @@ static bool PadCHWByOpenCV(FDMat* mat, int width, int height,
   return true;
 }
 
-bool PadToSize::ImplByOpenCV(FDMat* mat) {
-  if (width_ == -1 || height_ == -1) {
-    return true;
-  }
+bool PadToSize::CheckArgs(FDMat* mat) {
   if (mat->Channels() > 4) {
     FDERROR << "PadToSize: Only support channels <= 4." << std::endl;
     return false;
@@ -81,22 +82,28 @@ bool PadToSize::ImplByOpenCV(FDMat* mat) {
         << "." << std::endl;
     return false;
   }
-  int origin_w = mat->Width();
-  int origin_h = mat->Height();
-  if (origin_w > width_) {
-    FDERROR << "PadToSize: the input width:" << origin_w
+  if (mat->Width() > width_) {
+    FDERROR << "PadToSize: the input width:" << mat->Width()
             << " is greater than the target width: " << width_ << "."
             << std::endl;
     return false;
   }
-  if (origin_h > height_) {
-    FDERROR << "PadToSize: the input height:" << origin_h
+  if (mat->Height() > height_) {
+    FDERROR << "PadToSize: the input height:" << mat->Height()
             << " is greater than the target height: " << height_ << "."
             << std::endl;
     return false;
   }
-  if (origin_w == width_ && origin_h == height_) {
+  return true;
+}
+
+bool PadToSize::ImplByOpenCV(FDMat* mat) {
+  if (width_ == -1 || height_ == -1 ||
+      (mat->Width() == width_ && mat->Height() == height_)) {
     return true;
+  }
+  if (CheckArgs(mat) == false) {
+    return false;
   }
   if (mat->layout == Layout::HWC) {
     return PadHWCByOpenCV(mat, width_, height_, value_);
@@ -158,44 +165,99 @@ static bool PadCHWByFlyCV(FDMat* mat, int width, int height,
   return true;
 }
 
-bool PadToSize::ImplByFlyCV(Mat* mat) {
-  if (width_ == -1 || height_ == -1) {
+bool PadToSize::ImplByFlyCV(FDMat* mat) {
+  if (width_ == -1 || height_ == -1 ||
+      (mat->Width() == width_ && mat->Height() == height_)) {
     return true;
   }
-  if (mat->Channels() > 4) {
-    FDERROR << "PadToSize: Only support channels <= 4." << std::endl;
+  if (CheckArgs(mat) == false) {
     return false;
   }
-  if (mat->Channels() != value_.size()) {
-    FDERROR
-        << "PadToSize: Require input channels equals to size of padding value, "
-           "but now channels = "
-        << mat->Channels() << ", the size of padding values = " << value_.size()
-        << "." << std::endl;
-    return false;
-  }
-  int origin_w = mat->Width();
-  int origin_h = mat->Height();
-  if (origin_w > width_) {
-    FDERROR << "PadToSize: the input width:" << origin_w
-            << " is greater than the target width: " << width_ << "."
-            << std::endl;
-    return false;
-  }
-  if (origin_h > height_) {
-    FDERROR << "PadToSize: the input height:" << origin_h
-            << " is greater than the target height: " << height_ << "."
-            << std::endl;
-    return false;
-  }
-  if (origin_w == width_ && origin_h == height_) {
-    return true;
-  }
-
   if (mat->layout == Layout::HWC) {
     return PadHWCByFlyCV(mat, width_, height_, value_);
   } else if (mat->layout == Layout::CHW) {
     return PadCHWByFlyCV(mat, width_, height_, value_);
+  }
+  return false;
+}
+#endif
+
+#ifdef ENABLE_CVCUDA
+static bool PadHWCByCvCuda(cvcuda::CopyMakeBorder& pad_op, FDMat* mat,
+                           int width, int height,
+                           const std::vector<float>& value) {
+  float4 border_value;
+  if (value.size() == 1) {
+    border_value = make_float4(value[0], 0.0f, 0.0f, 0.0f);
+  } else if (value.size() == 2) {
+    border_value = make_float4(value[0], value[1], 0.0f, 0.0f);
+  } else if (value.size() == 3) {
+    border_value = make_float4(value[0], value[1], value[2], 0.0f);
+  } else {
+    border_value = make_float4(value[0], value[1], value[2], value[3]);
+  }
+
+  // Prepare input tensor
+  FDTensor* src = CreateCachedGpuInputTensor(mat);
+  auto src_tensor = CreateCvCudaTensorWrapData(*src);
+
+  // Prepare output tensor
+  mat->output_cache->Resize({height, width, mat->Channels()}, mat->Type(),
+                            "output_cache", Device::GPU);
+  auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
+
+  pad_op(mat->Stream(), src_tensor, dst_tensor, 0, 0, NVCV_BORDER_CONSTANT,
+         border_value);
+
+  mat->SetTensor(mat->output_cache);
+  mat->mat_type = ProcLib::CVCUDA;
+  return true;
+}
+
+static bool PadCHWByCvCuda(cvcuda::CopyMakeBorder& pad_op, FDMat* mat,
+                           int width, int height,
+                           const std::vector<float>& value) {
+  std::cout << "pad to size cvcuda" << std::endl;
+  float4 border_value = make_float4(value[0], 0.0f, 0.0f, 0.0f);
+  FDTensor* input = CreateCachedGpuInputTensor(mat);
+  int channels = input->shape[0];
+  mat->output_cache->Resize({channels, height, width}, mat->Type(),
+                            "output_cache", Device::GPU);
+  for (int i = 0; i < channels; ++i) {
+    uint8_t* src_data =
+        reinterpret_cast<uint8_t*>(input->Data()) +
+        i * mat->Width() * mat->Height() * FDDataTypeSize(mat->Type());
+    FDTensor src;
+    src.SetExternalData({mat->Height(), mat->Width(), 1}, input->Dtype(),
+                        src_data, input->device, input->device_id);
+    auto src_tensor = CreateCvCudaTensorWrapData(src);
+
+    uint8_t* dst_data = reinterpret_cast<uint8_t*>(mat->output_cache->Data()) +
+                        i * width * height * FDDataTypeSize(mat->Type());
+    FDTensor dst;
+    dst.SetExternalData({height, width, 1}, input->Dtype(), dst_data,
+                        input->device, input->device_id);
+    auto dst_tensor = CreateCvCudaTensorWrapData(dst);
+
+    pad_op(mat->Stream(), src_tensor, dst_tensor, 0, 0, NVCV_BORDER_CONSTANT,
+           border_value);
+  }
+  mat->SetTensor(mat->output_cache);
+  mat->mat_type = ProcLib::CVCUDA;
+  return true;
+}
+bool PadToSize::ImplByCvCuda(FDMat* mat) {
+  if (width_ == -1 || height_ == -1 ||
+      (mat->Width() == width_ && mat->Height() == height_)) {
+    return true;
+  }
+  if (CheckArgs(mat) == false) {
+    return false;
+  }
+  if (mat->layout == Layout::HWC) {
+    return PadHWCByCvCuda(cvcuda_pad_op_, mat, width_, height_, value_);
+  } else if (mat->layout == Layout::CHW) {
+    return PadCHWByCvCuda(cvcuda_pad_op_, mat, width_, height_, value_);
   }
   return false;
 }
