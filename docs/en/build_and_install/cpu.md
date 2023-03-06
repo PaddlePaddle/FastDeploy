@@ -10,6 +10,7 @@ Please do not modify other cmake paramters exclude the following options.
 |:------------------------|:------- | :--------------------------------------------------------------------------|
 | ENABLE_ORT_BACKEND      | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | Default OFF, whether to intergrate ONNX Runtime backend   |
 | ENABLE_PADDLE_BACKEND   | Linux(x64)/Windows(x64) | Default OFF, whether to intergrate Paddle Inference backend             |  
+| ENABLE_LITE_BACKEND   | Linux(aarch64) | Default OFF, whether to intergrate Paddle Lite backend             | 
 | ENABLE_OPENVINO_BACKEND | Linux(x64)/Windows(x64)/Mac OSX(x86) | Default OFF, whether to intergrate OpenVINO backend      |
 | ENABLE_VISION           | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | Default OFF, whether to intergrate vision models |
 | ENABLE_TEXT             | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | Default OFF, whether to intergrate text models |
