@@ -36,16 +36,6 @@ set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" "${PADDLELITE_LIB_DIR}")
 
 set(PADDLELITE_URL_PREFIX "https://bj.bcebos.com/fastdeploy/third_libs")
 
-if(ANDROID)
-  # check ABI, toolchain
-  if((NOT ANDROID_ABI MATCHES "armeabi-v7a") AND (NOT ANDROID_ABI MATCHES "arm64-v8a"))
-    message(FATAL_ERROR "FastDeploy with Paddle Lite only support armeabi-v7a, arm64-v8a now.")
-  endif()
-  if(NOT ANDROID_TOOLCHAIN MATCHES "clang")
-     message(FATAL_ERROR "Currently, only support clang toolchain while cross compiling FastDeploy for Android with Paddle Lite backend, but found ${ANDROID_TOOLCHAIN}.")
-  endif()  
-endif()
-
 if(NOT PADDLELITE_URL)
   if(WIN32 OR APPLE OR IOS)
     message(FATAL_ERROR "Doesn't support windows/mac/ios platform with backend Paddle Lite now.")
@@ -65,7 +55,7 @@ endif()
 
 if(WIN32 OR APPLE OR IOS)
   message(FATAL_ERROR "Doesn't support windows/mac/ios platform with backend Paddle Lite now.")
-elseif(ANDROID AND WITH_LITE_STATIC)
+elseif(ANDROID AND WITH_ANDROID_LITE_STATIC)
   set(PADDLELITE_LIB "${PADDLELITE_LIB_DIR}/libpaddle_api_full_bundled.a")
   set(PADDLELITE_REMOVE_LIB "${PADDLELITE_LIB_DIR}/libpaddle_full_api_shared.so")
 else()
