@@ -35,18 +35,6 @@ set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}"
 
 include_directories(${FLYCV_INC_DIR})
 
-option(WITH_FLYCV_STATIC "Whether to use FlyCV static lib for Android/Linux." OFF)
-
-# ABI check
-if(ANDROID)
-  if((NOT ANDROID_ABI MATCHES "armeabi-v7a") AND (NOT ANDROID_ABI MATCHES "arm64-v8a"))
-    message(FATAL_ERROR "FastDeploy with FlyCV only support armeabi-v7a, arm64-v8a now.")
-  endif()
-  if(NOT ANDROID_TOOLCHAIN MATCHES "clang")
-    message(FATAL_ERROR "Currently, only support clang toolchain while cross compiling FastDeploy for Android with FlyCV, but found ${ANDROID_TOOLCHAIN}.")
-  endif()  
-endif()
-
 if(WIN32)
   set(FLYCV_COMPILE_LIB
       "${FLYCV_INSTALL_DIR}/lib/flycv.lib"
@@ -56,26 +44,20 @@ elseif(APPLE)
       "${FLYCV_INSTALL_DIR}/lib/libflycv.dylib"
       CACHE FILEPATH "flycv compile library." FORCE)      
 elseif(ANDROID)
-  if(WITH_FLYCV_STATIC)
+  if(WITH_ANDROID_FLYCV_STATIC)
     set(FLYCV_COMPILE_LIB
-    "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libflycv_static.a"
-    CACHE FILEPATH "flycv compile library." FORCE)   
+      "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libflycv_static.a"
+      CACHE FILEPATH "flycv compile library." FORCE)   
   else()
     set(FLYCV_COMPILE_LIB
-    "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libflycv_shared.so"
-    CACHE FILEPATH "flycv compile library." FORCE)  
+      "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libflycv_shared.so"
+      CACHE FILEPATH "flycv compile library." FORCE)  
   endif()  
 else()
-  if(WITH_FLYCV_STATIC)
-    set(FLYCV_COMPILE_LIB
-        "${FLYCV_INSTALL_DIR}/lib/libflycv_static.a"
-        CACHE FILEPATH "flycv compile library." FORCE)
-  else()
-    set(FLYCV_COMPILE_LIB
+  set(FLYCV_COMPILE_LIB
       "${FLYCV_INSTALL_DIR}/lib/libflycv_shared.so"
       CACHE FILEPATH "flycv compile library." FORCE)
-  endif()
-endif(WIN32)
+endif()
 
 set(FLYCV_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
 set(FLYCV_VERSION "1.0.0")
@@ -151,7 +133,7 @@ set_property(TARGET external_flycv PROPERTY IMPORTED_LOCATION
 add_dependencies(external_flycv ${FLYCV_PROJECT})
 
 set(FLYCV_LIBRARIES external_flycv)
-if(WITH_FLYCV_STATIC)
+if(WITH_ANDROID_FLYCV_STATIC)
   if (ANDROID)
     add_library(external_flycv_png16 STATIC IMPORTED GLOBAL)
     add_library(external_flycv_turbojpeg STATIC IMPORTED GLOBAL)
@@ -168,27 +150,7 @@ if(WITH_FLYCV_STATIC)
     list(APPEND FLYCV_LIBRARIES external_flycv_png16) 
     list(APPEND FLYCV_LIBRARIES external_flycv_turbojpeg) 
     list(APPEND FLYCV_LIBRARIES external_flycv_z)   
-  elseif(APPLE OR WIN32)
-    message(FATAL_ERROR "Not support FlyCV static lib for APPLE/WIN32 now!")  
   else()
-    if((CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64") OR (CMAKE_SYSTEM_PROCESSOR MATCHES "arm"))
-      message(FATAL_ERROR "Not support FlyCV static lib for aarch64/arm linux now!") 
-    else()
-      add_library(external_flycv_png16 STATIC IMPORTED GLOBAL)
-      add_library(external_flycv_turbojpeg STATIC IMPORTED GLOBAL)
-      add_library(external_flycv_z STATIC IMPORTED GLOBAL)
-      set_property(TARGET external_flycv_png16 PROPERTY IMPORTED_LOCATION
-                  "${FLYCV_INSTALL_DIR}/lib/libpng16.a")
-      set_property(TARGET external_flycv_turbojpeg PROPERTY IMPORTED_LOCATION
-                  "${FLYCV_INSTALL_DIR}/lib/libturbojpeg.a") 
-      set_property(TARGET external_flycv_z PROPERTY IMPORTED_LOCATION
-                  "${FLYCV_INSTALL_DIR}/lib/libz.a")  
-      add_dependencies(external_flycv_png16 ${FLYCV_PROJECT})      
-      add_dependencies(external_flycv_turbojpeg ${FLYCV_PROJECT})
-      add_dependencies(external_flycv_z ${FLYCV_PROJECT})  
-      list(APPEND FLYCV_LIBRARIES external_flycv_png16) 
-      list(APPEND FLYCV_LIBRARIES external_flycv_turbojpeg) 
-      list(APPEND FLYCV_LIBRARIES external_flycv_z)   
-    endif()
-  endif()                      
+    message(FATAL_ERROR "Not support FlyCV static lib for APPLE/WIN32/Linux now!")  
+  endif()  
 endif()
