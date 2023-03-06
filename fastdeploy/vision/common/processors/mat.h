@@ -16,6 +16,10 @@
 #include "fastdeploy/vision/common/processors/proc_lib.h"
 #include "opencv2/core/core.hpp"
 
+#ifdef ENABLE_FLYCV
+#include "flycv.h"  // NOLINT
+#endif
+
 #ifdef WITH_GPU
 #include <cuda_runtime_api.h>
 #endif
@@ -68,21 +72,6 @@ struct FASTDEPLOY_DECL Mat {
   void SetMat(const fcv::Mat& mat) {
     fcv_mat = mat;
     mat_type = ProcLib::FLYCV;
-  }
-
-  fcv::Mat* GetFlyCVMat() {
-    if (mat_type == ProcLib::FLYCV) {
-      return &fcv_mat;
-    } else if (mat_type == ProcLib::OPENCV) {
-      // Just a reference to cpu_mat, zero copy. After you
-      // call this method, fcv_mat and cpu_mat will point
-      // to the same memory buffer.
-      fcv_mat = ConvertOpenCVMatToFlyCV(cpu_mat);
-      mat_type = ProcLib::FLYCV;
-      return &fcv_mat;
-    } else {
-      FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
-    }
   }
 #endif
 
