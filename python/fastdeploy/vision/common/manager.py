@@ -38,6 +38,7 @@ class ProcessorManager:
         """
         return self._manager.use_cuda(enable_cv_cuda, gpu_id)
 
+
 class PyProcessorManager(ABC):
     def __init__(self):
         self._manager = C.vision.processors.ProcessorManager()
@@ -50,14 +51,16 @@ class PyProcessorManager(ABC):
         """
         return self._manager.use_cuda(enable_cv_cuda, gpu_id)
 
-    def __call__(self, images: typing.List[C.vision.FDMat], outputs: typing.List[C.FDTensor]):
+    def __call__(self, images):
         image_batch = C.vision.FDMatBatch()
         image_batch.from_mats(images)
 
         self._manager.pre_apply(image_batch)
-        self.apply(image_batch, outputs)
+        outputs = self.apply(image_batch)
         self._manager.post_apply()
+        return outputs
 
     @abstractmethod
-    def apply(self, image_batch, outputs):
-        pass
+    def apply(self, image_batch):
+        print("This functin has to be implemented")
+        return []

@@ -36,12 +36,15 @@ class CustomProcessor(fd.vision.common.manager.PyProcessorManager):
         self.normalize_permute_op = fd.C.vision.processors.NormalizeAndPermute(
             mean, std, is_scale, min, max, swap_rb)
 
-    def apply(self, image_batch, outputs):
-        image_batch.mats[0].print_info('before')
-        self.resize_op(image_batch.mats[0])
-        image_batch.mats[0].print_info('after')
-        self.normalize_permute_op(image_batch.mats[0])
-        outputs.append(image_batch.mats[0])
+    def apply(self, image_batch):
+        outputs = []
+        for i in range(len(image_batch.mats)):
+            image_batch.mats[i].print_info('before')
+            self.resize_op(image_batch.mats[i])
+            image_batch.mats[i].print_info('after')
+            self.normalize_permute_op(image_batch.mats[i])
+            outputs.append(image_batch.mats[i])
+        return outputs
 
 
 if __name__ == "__main__":
@@ -64,9 +67,9 @@ if __name__ == "__main__":
         preprocessor.use_cuda(True, -1)
 
     # run the Processer with CVCUDA
-    outputs = []
     images = [mat1, mat2]
-    preprocessor(images, outputs)
+    outputs = preprocessor(images)
 
     # show output
-    outputs[0].print_info('outputs[0]')
+    for i in range(len(outputs)):
+        outputs[i].print_info('outputs' + str(i) + ': ')
