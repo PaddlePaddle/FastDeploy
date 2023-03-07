@@ -18,8 +18,7 @@ namespace fastdeploy {
 void BindProcessor(pybind11::module& m) {
   pybind11::class_<vision::Processor>(m, "Processor")
       .def("__call__", [](vision::Processor& self, vision::FDMat* mat) {
-        self(mat);
-        return true;
+        return self(mat);
       });
 }
 

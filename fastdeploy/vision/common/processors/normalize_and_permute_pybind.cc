@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/pybind/main.h"
-#include "fastdeploy/vision/common/processors/base.h"
 
 namespace fastdeploy {
 void BindNormalizeAndPermute(pybind11::module& m) {

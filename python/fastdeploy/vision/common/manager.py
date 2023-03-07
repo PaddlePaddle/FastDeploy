@@ -15,7 +15,6 @@
 from __future__ import absolute_import
 from abc import ABC, abstractmethod
 from ... import c_lib_wrap as C
-import typing
 
 
 class ProcessorManager:
@@ -40,6 +39,10 @@ class ProcessorManager:
 
 
 class PyProcessorManager(ABC):
+    """
+    PyProcessorManager is used to define a customized processor in python
+    """
+
     def __init__(self):
         self._manager = C.vision.processors.ProcessorManager()
 
@@ -62,5 +65,5 @@ class PyProcessorManager(ABC):
 
     @abstractmethod
     def apply(self, image_batch):
-        print("This functin has to be implemented")
+        print("This function has to be implemented.")
         return []
