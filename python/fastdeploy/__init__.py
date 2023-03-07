@@ -16,6 +16,8 @@ import logging
 import os
 import sys
 
+logger = logging.getLogger(__name__)
+
 # Create a symbol link to tensorrt library.
 trt_directory = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -27,8 +29,17 @@ if os.name != "nt" and os.path.exists(trt_directory):
     ]:
         dst = os.path.join(trt_directory, trt_lib)
         src = os.path.join(trt_directory, trt_lib + ".8")
-        if not os.path.exists(src):
-            os.symlink(src, dst)
+        if not os.path.exists(dst):
+            try:
+                os.symlink(src, dst)
+                logger.info(
+                    f"Create a symbolic link pointing to {src} named {dst}.")
+            except OSErros as e:
+                logger.warning(
+                    f"Warning! Failed to create a symbolic link pointing to {src} by an unprivileged user."
+                    " Please use administator privilege to import fastdeploy at first time."
+                )
+                break
 
 # Note(zhoushunjie): Fix the import order of paddle and fastdeploy library.
 # This solution will be removed it when the confilct of paddle and
