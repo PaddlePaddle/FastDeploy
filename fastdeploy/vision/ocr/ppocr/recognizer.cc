@@ -79,10 +79,24 @@ bool Recognizer::Predict(const cv::Mat& img, std::string* text,
   return true;
 }
 
+bool Recognizer::Predict(const cv::Mat& img, vision::OCRResult* ocr_result) {
+  ocr_result->text.resize(1);
+  ocr_result->rec_scores.resize(1);
+  if (!Predict(img, &(ocr_result->text[0]), &(ocr_result->rec_scores[0]))) {
+    return false;
+  }
+  return true;
+}
+
 bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
                               std::vector<std::string>* texts,
                               std::vector<float>* rec_scores) {
   return BatchPredict(images, texts, rec_scores, 0, images.size(), {});
+}
+
+bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
+                              vision::OCRResult* ocr_result) {
+  return BatchPredict(images, &(ocr_result->text), &(ocr_result->rec_scores));
 }
 
 bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,

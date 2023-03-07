@@ -126,7 +126,7 @@ bool Pad::ImplByCvCuda(FDMat* mat) {
   auto src_tensor = CreateCvCudaTensorWrapData(*src);
 
   int height = mat->Height() + top_ + bottom_;
-  int width = mat->Height() + left_ + right_;
+  int width = mat->Width() + left_ + right_;
 
   // Prepare output tensor
   mat->output_cache->Resize({height, width, mat->Channels()}, mat->Type(),
@@ -137,9 +137,6 @@ bool Pad::ImplByCvCuda(FDMat* mat) {
                  NVCV_BORDER_CONSTANT, value);
 
   mat->SetTensor(mat->output_cache);
-  mat->SetWidth(width);
-  mat->SetHeight(height);
-  mat->device = Device::GPU;
   mat->mat_type = ProcLib::CVCUDA;
   return true;
 }

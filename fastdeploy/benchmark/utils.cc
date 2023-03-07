@@ -249,7 +249,7 @@ bool ResultManager::SaveFDTensor(const FDTensor& tensor,
 
 bool ResultManager::LoadFDTensor(FDTensor* tensor, const std::string& path) {
   if (!CheckFileExists(path)) {
-    FDERROR << "Can't found file from" << path << std::endl;
+    FDERROR << "Can't found file from " << path << std::endl;
     return false;
   }
   auto lines = ReadLines(path);
@@ -363,6 +363,45 @@ void ResultManager::SaveBenchmarkResult(const std::string& res,
   }
   fs << res;
   fs.close();
+}
+
+bool ResultManager::LoadBenchmarkConfig(
+    const std::string& path,
+    std::unordered_map<std::string, std::string>* config_info) {
+  if (!CheckFileExists(path)) {
+    FDERROR << "Can't found file from " << path << std::endl;
+    return false;
+  }
+  auto lines = ReadLines(path);
+  for (auto line : lines) {
+    std::vector<std::string> tokens;
+    Split(line, tokens, ':');
+    (*config_info)[tokens[0]] = Strip(tokens[1], ' ');
+  }
+  return true;
+}
+
+std::vector<std::vector<int32_t>> ResultManager::GetInputShapes(
+    const std::string& raw_shapes) {
+  std::vector<std::vector<int32_t>> shapes;
+  std::vector<std::string> shape_tokens;
+  Split(raw_shapes, shape_tokens, ':');
+  for (auto str_shape : shape_tokens) {
+    std::vector<int32_t> shape;
+    std::string tmp_str = str_shape;
+    while (!tmp_str.empty()) {
+      int dim = atoi(tmp_str.data());
+      shape.push_back(dim);
+      size_t next_offset = tmp_str.find(",");
+      if (next_offset == std::string::npos) {
+        break;
+      } else {
+        tmp_str = tmp_str.substr(next_offset + 1);
+      }
+    }
+    shapes.push_back(shape);
+  }
+  return shapes;
 }
 
 #if defined(ENABLE_VISION)
@@ -520,7 +559,7 @@ bool ResultManager::SaveOCRDetResult(const std::vector<std::array<int, 8>>& res,
 bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
                                         const std::string& path) {
   if (!CheckFileExists(path)) {
-    FDERROR << "Can't found file from" << path << std::endl;
+    FDERROR << "Can't found file from " << path << std::endl;
     return false;
   }
   auto lines = ReadLines(path);
@@ -553,7 +592,7 @@ bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
 bool ResultManager::LoadClassifyResult(vision::ClassifyResult* res,
                                        const std::string& path) {
   if (!CheckFileExists(path)) {
-    FDERROR << "Can't found file from" << path << std::endl;
+    FDERROR << "Can't found file from " << path << std::endl;
     return false;
   }
   auto lines = ReadLines(path);
@@ -575,7 +614,7 @@ bool ResultManager::LoadClassifyResult(vision::ClassifyResult* res,
 bool ResultManager::LoadSegmentationResult(vision::SegmentationResult* res,
                                            const std::string& path) {
   if (!CheckFileExists(path)) {
-    FDERROR << "Can't found file from" << path << std::endl;
+    FDERROR << "Can't found file from " << path << std::endl;
     return false;
   }
   auto lines = ReadLines(path);
@@ -602,7 +641,7 @@ bool ResultManager::LoadSegmentationResult(vision::SegmentationResult* res,
 bool ResultManager::LoadOCRDetResult(std::vector<std::array<int, 8>>* res,
                                      const std::string& path) {
   if (!CheckFileExists(path)) {
-    FDERROR << "Can't found file from" << path << std::endl;
+    FDERROR << "Can't found file from " << path << std::endl;
     return false;
   }
   auto lines = ReadLines(path);
