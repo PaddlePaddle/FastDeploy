@@ -55,12 +55,11 @@ bool ProcessorManager::PreApply(FDMatBatch* image_batch) {
             << std::endl;
     return false;
   }
-  
+
   if (image_batch->mats->size() > input_caches_.size()) {
     input_caches_.resize(image_batch->mats->size());
     output_caches_.resize(image_batch->mats->size());
   }
-
   image_batch->input_cache = &batch_input_cache_;
   image_batch->output_cache = &batch_output_cache_;
 
@@ -76,10 +75,11 @@ bool ProcessorManager::PreApply(FDMatBatch* image_batch) {
       // Make a copy of the input data ptr, so that the original data ptr of
       // FDMat won't be modified.
       auto fd_tensor = std::make_shared<FDTensor>();
-      fd_tensor->SetExternalData(
-          (*(image_batch->mats))[i].Tensor()->shape, (*(image_batch->mats))[i].Tensor()->Dtype(),
-          (*(image_batch->mats))[i].Tensor()->Data(), (*(image_batch->mats))[i].Tensor()->device,
-          (*(image_batch->mats))[i].Tensor()->device_id);
+      fd_tensor->SetExternalData((*(image_batch->mats))[i].Tensor()->shape,
+                                 (*(image_batch->mats))[i].Tensor()->Dtype(),
+                                 (*(image_batch->mats))[i].Tensor()->Data(),
+                                 (*(image_batch->mats))[i].Tensor()->device,
+                                 (*(image_batch->mats))[i].Tensor()->device_id);
       (*(image_batch->mats))[i].SetTensor(fd_tensor);
     }
   }
@@ -95,14 +95,10 @@ bool ProcessorManager::PostApply() {
 
 bool ProcessorManager::Run(std::vector<FDMat>* images,
                            std::vector<FDTensor>* outputs) {
-
   FDMatBatch image_batch(images);
   bool preApply = PreApply(&image_batch);
-
   bool ret = Apply(&image_batch, outputs);
-
   bool postApply = PostApply();
-  
   return ret;
 }
 
