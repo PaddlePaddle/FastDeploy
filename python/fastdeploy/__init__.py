@@ -16,6 +16,20 @@ import logging
 import os
 import sys
 
+# Create a symbol link to tensorrt library.
+trt_directory = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "libs/third_libs/tensorrt/lib/")
+if os.name != "nt" and os.path.exists(trt_directory):
+    for trt_lib in [
+            "libnvcaffe_parser.so", "libnvinfer_plugin.so", "libnvinfer.so",
+            "libnvonnxparser.so", "libnvparsers.so"
+    ]:
+        src = os.path.join(trt_directory, trt_lib)
+        dst = os.path.join(trt_directory, trt_lib + ".8")
+        if not os.path.exists(src):
+            os.symlink(src, dst)
+
 # Note(zhoushunjie): Fix the import order of paddle and fastdeploy library.
 # This solution will be removed it when the confilct of paddle and
 # fastdeploy is fixed.
