@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if(WITH_JAVA)
+if(WITH_ANDROID_JAVA)
   set(JNI_SRCS_FOUND OFF)
   if(NOT ANDROID)
     message(FATAL_ERROR "Only support jni lib for Android now!")
@@ -33,7 +33,7 @@ if(WITH_JAVA)
     # Build fastdelpoy_jni_dummy when the third-party 
     # libraries (opencv, paddle lite, flycv) are ready.
     add_dependencies(fastdelpoy_jni_dummy ${LIBRARY_NAME})
-    target_compile_definitions(fastdelpoy_jni_dummy PRIVATE WITH_JAVA)
+    target_compile_definitions(fastdelpoy_jni_dummy PRIVATE WITH_ANDROID_JAVA)
     if(TARGET fastdelpoy_jni_dummy)
       add_library(fastdeploy_jni SHARED ${JNI_SRCS})
       target_link_libraries(fastdeploy_jni fastdelpoy_jni_dummy ${DEPEND_LIBS} 
