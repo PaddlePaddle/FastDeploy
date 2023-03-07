@@ -107,10 +107,18 @@ else()
           set(PADDLEINFERENCE_VERSION "2.4-dev1")
           set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-ipu-${PADDLEINFERENCE_VERSION}.tgz")
       endif()
+
+      if(NEED_ABI0)
+        if(WITH_GPU OR WITH_PU)
+          message(WARNING "While NEED_ABI0=ON, only support CPU now, will fallback to CPU.")
+        endif()
+        set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-2.4.0-abi0.tgz")
+      endif()
     endif()
   endif()
   set(PADDLEINFERENCE_URL "${PADDLEINFERENCE_URL_BASE}${PADDLEINFERENCE_FILE}")
-  
+
+ 
   ExternalProject_Add(
     ${PADDLEINFERENCE_PROJECT}
     ${EXTERNAL_PROJECT_LOG_ARGS}
