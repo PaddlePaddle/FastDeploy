@@ -78,7 +78,6 @@ class FASTDEPLOY_DECL Processor {
     FDWARNING << Name()
               << " is not implemented with CUDA, will fallback to OpenCV."
               << std::endl;
-    mat->GetOpenCVMat();
     return ImplByOpenCV(mat);
   }
 
@@ -95,7 +94,6 @@ class FASTDEPLOY_DECL Processor {
     FDWARNING << Name()
               << " is not implemented with CV-CUDA, will fallback to OpenCV."
               << std::endl;
-    mat->GetOpenCVMat();
     return ImplByOpenCV(mat);
   }
 
