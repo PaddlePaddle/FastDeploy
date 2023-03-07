@@ -111,9 +111,23 @@ tar -zxvf yolov8_s_500e_coco.tgz
 ```
 注意，为避免对性能统计产生影响，测试性能时，最好不要开启内存显存统计的功能，当把collect_memory_info参数设置为true时，只有内存显存参数是稳定可靠的。更多参数设置，请参考[参数设置说明](#参数设置说明)
 
+## 4. 各个硬件上的一键运行脚本  
 
-## 4. ARM CPU 环境下运行 Benchmark
-- TODO
+在准备好相关的环境配置和SDK后，可以使用本目录提供的脚本一键运行后的benchmark数据。
+- 获取模型和资源文件  
+```bash
+./get_models.sh 
+```  
+- 运行benchmark脚本  
+```bash  
+# x86 CPU
+./benchmark_x86.sh
+# Arm CPU
+./benchmark_arm.sh
+# NVIDIA GPU
+./benchmark_gpu.sh
+# XPU
+./benchmark_xpu.sh
+```
 
-## 5. 昆仑芯 XPU 环境下运行 Benchmark
-- TODO
+
