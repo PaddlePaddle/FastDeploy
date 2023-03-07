@@ -33,11 +33,11 @@ if os.name != "nt" and os.path.exists(trt_directory):
         if not os.path.exists(dst):
             try:
                 os.symlink(src, dst)
-                logging.info(
+                logger.info(
                     f"Create a symbolic link pointing to {src} named {dst}.")
             except OSErros as e:
-                logging.warning(
-                    f"Warning! Failed to create a symbolic link pointing to {src} by an unprivileged user."
+                logger.warning(
+                    f"Failed to create a symbolic link pointing to {src} by an unprivileged user."
                     " Please use administator privilege to import fastdeploy at first time."
                 )
                 break
