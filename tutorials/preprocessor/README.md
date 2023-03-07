@@ -1,3 +1,4 @@
+English | [中文](README_CN.md)
 # Preprocessor API
 
 ## C++
@@ -15,7 +16,7 @@ Preprocessors library Python API，Currently supported operators are as follows:
 
 ### Code Demo：
 
-- [Python Demo](/python)
+- [Python Demo](python)
 
 ### Performance comparison between CVCUDA and OpenCV:
 

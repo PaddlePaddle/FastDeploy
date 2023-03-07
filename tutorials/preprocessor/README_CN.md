@@ -1,3 +1,4 @@
+[English](README.md) | 中文
 # Preprocessor API
 
 ## C++
@@ -15,7 +16,7 @@
 
 ### 示例代码：
 
-- [Python示例](/python)
+- [Python示例](python)
 
 ### CVCUDA与OpenCV性能对比：
 
