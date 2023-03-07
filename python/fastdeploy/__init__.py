@@ -25,8 +25,8 @@ if os.name != "nt" and os.path.exists(trt_directory):
             "libnvcaffe_parser.so", "libnvinfer_plugin.so", "libnvinfer.so",
             "libnvonnxparser.so", "libnvparsers.so"
     ]:
-        src = os.path.join(trt_directory, trt_lib)
-        dst = os.path.join(trt_directory, trt_lib + ".8")
+        dst = os.path.join(trt_directory, trt_lib)
+        src = os.path.join(trt_directory, trt_lib + ".8")
         if not os.path.exists(src):
             os.symlink(src, dst)
 
