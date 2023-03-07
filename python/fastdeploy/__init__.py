@@ -16,14 +16,12 @@ import logging
 import os
 import sys
 
-logger = logging.getLogger(__name__)
-
 # Create a symbol link to tensorrt library.
 trt_directory = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "libs/third_libs/tensorrt/lib/")
 if os.name != "nt" and os.path.exists(trt_directory):
-    logger.setLevel(logging.INFO)
+    logging.basicConfig(level=logging.INFO)
     for trt_lib in [
             "libnvcaffe_parser.so", "libnvinfer_plugin.so", "libnvinfer.so",
             "libnvonnxparser.so", "libnvparsers.so"
@@ -33,16 +31,16 @@ if os.name != "nt" and os.path.exists(trt_directory):
         if not os.path.exists(dst):
             try:
                 os.symlink(src, dst)
-                logger.info(
+                logging.info(
                     f"Create a symbolic link pointing to {src} named {dst}.")
-            except OSErros as e:
-                logger.warning(
+            except OSError as e:
+                logging.warning(
                     f"Failed to create a symbolic link pointing to {src} by an unprivileged user. "
                     "It may failed when you use Paddle TensorRT backend. "
                     "Please use administator privilege to import fastdeploy at first time."
                 )
                 break
-    logger.setLevel(logging.NOTSET)
+    logging.basicConfig(level=logging.NOTSET)
 
 # Note(zhoushunjie): Fix the import order of paddle and fastdeploy library.
 # This solution will be removed it when the confilct of paddle and
