@@ -365,7 +365,7 @@ class SOLOv2(PPYOLOE):
         self._model = C.vision.detection.SOLOv2(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
-        assert self.initialized, "YOLOv3 model initialize failed."
+        assert self.initialized, "SOLOv2 model initialize failed."
 
     def clone(self):
         """Clone SOLOv2 object
@@ -373,7 +373,7 @@ class SOLOv2(PPYOLOE):
         :return: a new SOLOv2 object
         """
 
-        class SOLOv2Clone(YOLOv3):
+        class SOLOv2Clone(SOLOv2):
             def __init__(self, model):
                 self._model = model
 
