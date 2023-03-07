@@ -96,7 +96,7 @@ void CpuInfer(const char* det_model_dir, const char* cls_model_dir,
 
   FD_C_Mat im = FD_C_Imread(image_file);
 
-  FD_C_OCRResult* result = (FD_C_OCRResult*)malloc(sizeof(FD_C_OCRResult));
+  FD_C_OCRResult* result = FD_C_CreateOCRResult();
 
   if (!FD_C_PPOCRv3WrapperPredict(ppocr_v3, im, result)) {
     printf("Failed to predict.\n");
@@ -191,7 +191,7 @@ void GpuInfer(const char* det_model_dir, const char* cls_model_dir,
 
   FD_C_Mat im = FD_C_Imread(image_file);
 
-  FD_C_OCRResult* result = (FD_C_OCRResult*)malloc(sizeof(FD_C_OCRResult));
+  FD_C_OCRResult* result = FD_C_CreateOCRResult();
 
   if (!FD_C_PPOCRv3WrapperPredict(ppocr_v3, im, result)) {
     printf("Failed to predict.\n");
