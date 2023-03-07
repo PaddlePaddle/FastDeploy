@@ -23,6 +23,7 @@ trt_directory = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "libs/third_libs/tensorrt/lib/")
 if os.name != "nt" and os.path.exists(trt_directory):
+    logger.setLevel(logging.INFO)
     for trt_lib in [
             "libnvcaffe_parser.so", "libnvinfer_plugin.so", "libnvinfer.so",
             "libnvonnxparser.so", "libnvparsers.so"
@@ -32,14 +33,15 @@ if os.name != "nt" and os.path.exists(trt_directory):
         if not os.path.exists(dst):
             try:
                 os.symlink(src, dst)
-                logger.info(
+                logging.info(
                     f"Create a symbolic link pointing to {src} named {dst}.")
             except OSErros as e:
-                logger.warning(
+                logging.warning(
                     f"Warning! Failed to create a symbolic link pointing to {src} by an unprivileged user."
                     " Please use administator privilege to import fastdeploy at first time."
                 )
                 break
+    logger.setLevel(logging.NOTSET)
 
 # Note(zhoushunjie): Fix the import order of paddle and fastdeploy library.
 # This solution will be removed it when the confilct of paddle and
