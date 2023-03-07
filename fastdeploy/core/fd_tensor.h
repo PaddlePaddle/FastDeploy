@@ -25,11 +25,89 @@
 
 namespace fastdeploy {
 
+/*! @brief FDTensor object used to represend data matrix
+ *
+ */
 struct FASTDEPLOY_DECL FDTensor {
-  // std::vector<int8_t> data;
+  /** \brief Set data buffer for a FDTensor, e.g
+   *  ```
+   *  std::vector<float> buffer(1 * 3 * 224 * 224, 0);
+   *  FDTensor tensor;
+   *  tensor.SetData({1, 3, 224, 224}, FDDataType::FLOAT, buffer.data());
+   *  ```
+   * \param[in] tensor_shape The shape of tensor
+   * \param[in] data_type The data type of tensor
+   * \param[in] data_buffer The pointer of data buffer memory
+   * \param[in] copy Whether to copy memory from data_buffer to tensor, if false, this tensor will share memory with data_buffer, and the data is managed by userself
+   * \param[in] data_device The device of data_buffer, e.g if data_buffer is a pointer to GPU data, the device should be Device::GPU
+   * \param[in] data_device_id The device id of data_buffer
+   */
+  void SetData(const std::vector<int64_t>& tensor_shape, const FDDataType& data_type, void* data_buffer, bool copy = false, const Device& data_device = Device::CPU, int data_device_id = -1) {
+    SetExternalData(tensor_shape, data_type, data_buffer, data_device, data_device_id);
+    if (copy) {
+      StopSharing();
+    }
+  }
+
+  /// Get data pointer of tensor
+  void* GetData() {
+    return MutableData();
+  }
+  /// Get data pointer of tensor
+  const void* GetData() const {
+    return Data();
+  }
+
+  /// Expand the shape of tensor, it will not change the data memory, just modify its attribute `shape`
+  void ExpandDim(int64_t axis = 0);
+
+  /// Squeeze the shape of tensor, it will not change the data memory, just modify its attribute `shape`
+  void Squeeze(int64_t axis = 0);
+
+  /// Reshape the tensor, it will not change the data memory, just modify its attribute `shape`
+  bool Reshape(const std::vector<int64_t>& new_shape);
+
+  /// Total size of tensor memory buffer in bytes
+  int Nbytes() const;
+
+  /// Total number of elements in tensor
+  int Numel() const;
+
+  /// Get shape of tensor
+  std::vector<int64_t> Shape() const { return shape; }
+
+  /// Get dtype of tensor
+  FDDataType Dtype() const { return dtype; }
+
+  /** \brief Allocate cpu data buffer for a FDTensor, e.g
+   *  ```
+   *  FDTensor tensor;
+   *  tensor.Allocate(FDDataType::FLOAT, {1, 3, 224, 224};
+   *  ```
+   * \param[in] data_type The data type of tensor
+   * \param[in] tensor_shape The shape of tensor
+   */
+  void Allocate(const FDDataType& data_type, const std::vector<int64_t>& data_shape) {
+    Allocate(data_shape, data_type, name);
+  }
+
+  /// Debug function, print shape, dtype, mean, max, min of tensor
+  void PrintInfo(const std::string& prefix = "Debug TensorInfo: ") const;
+
+  /// Name of tensor, while feed to runtime, this need be defined
+  std::string name = "";
+
+  /// Whether the tensor is owned the data buffer or share the data buffer from outside
+  bool IsShared() { return external_data_ptr != nullptr; }
+  /// If the tensor is share the data buffer from outside, `StopSharing` will copy to its own structure; Otherwise, do nothing
+  void StopSharing();
+
+
+  // ******************************************************
+  // The following member and function only used by inside FastDeploy, maybe removed in next version
+
   void* buffer_ = nullptr;
   std::vector<int64_t> shape = {0};
-  std::string name = "";
   FDDataType dtype = FDDataType::INT8;
 
   // This use to skip memory copy step
@@ -64,10 +142,6 @@ struct FASTDEPLOY_DECL FDTensor {
 
   void* Data();
 
-  bool IsShared() { return external_data_ptr != nullptr; }
-
-  void StopSharing();
-
   const void* Data() const;
 
   // Use this data to get the tensor data to process
@@ -78,6 +152,7 @@ struct FASTDEPLOY_DECL FDTensor {
   // will copy to cpu store in `temporary_cpu_buffer`
   const void* CpuData() const;
 
+  // void SetDataBuffer(const std::vector<int64_t>& new_shape, const FDDataType& data_type, void* data_buffer, bool copy = false, const Device& new_device = Device::CPU, int new_device_id = -1);
   // Set user memory buffer for Tensor, the memory is managed by
   // the user it self, but the Tensor will share the memory with user
   // So take care with the user buffer
@@ -85,15 +160,6 @@ struct FASTDEPLOY_DECL FDTensor {
                        const FDDataType& data_type, void* data_buffer,
                        const Device& new_device = Device::CPU,
                        int new_device_id = -1);
-
-  // Expand the shape of a Tensor. Insert a new axis that will appear
-  // at the `axis` position in the expanded Tensor shape.
-  void ExpandDim(int64_t axis = 0);
-
-  // Squeeze the shape of a Tensor. Erase the axis that will appear
-  // at the `axis` position in the squeezed Tensor shape.
-  void Squeeze(int64_t axis = 0);
-
   // Initialize Tensor
   // Include setting attribute for tensor
   // and allocate cpu memory buffer
@@ -102,18 +168,6 @@ struct FASTDEPLOY_DECL FDTensor {
                 const std::string& tensor_name = "",
                 const Device& new_device = Device::CPU);
 
-  // Total size of tensor memory buffer in bytes
-  int Nbytes() const;
-
-  // Total number of elements in this tensor
-  int Numel() const;
-
-  // Get shape of FDTensor
-  std::vector<int64_t> Shape() const { return shape; }
-
-  // Get dtype of FDTensor
-  FDDataType Dtype() const { return dtype; }
-
   void Resize(size_t nbytes);
 
   void Resize(const std::vector<int64_t>& new_shape);
@@ -121,12 +175,6 @@ struct FASTDEPLOY_DECL FDTensor {
   void Resize(const std::vector<int64_t>& new_shape,
               const FDDataType& data_type, const std::string& tensor_name = "",
               const Device& new_device = Device::CPU);
-
-  bool Reshape(const std::vector<int64_t>& new_shape);
-  // Debug function
-  // Use this function to print shape, dtype, mean, max, min
-  // prefix will also be printed as tag
-  void PrintInfo(const std::string& prefix = "TensorInfo: ") const;
 
   bool ReallocFn(size_t nbytes);
 
