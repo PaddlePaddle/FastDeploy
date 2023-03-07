@@ -1,26 +1,22 @@
-from re import T
-from traceback import print_tb
-from typing import List
-from cv2 import resize
 import fastdeploy as fd
 import cv2
-import numpy as np
+
+from fastdeploy.vision.common.manager import PyProcessorManager
 
 
 def parse_arguments():
     import argparse
-    import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--use_cvcuda",
-        required=True,
+        required=False,
         type=bool,
-        help="Use CVCUDA in preprocess")
+        help="Use CV-CUDA in preprocess")
     return parser.parse_args()
 
 
 # define CustomProcessor
-class CustomProcessor(fd.vision.common.manager.PyProcessorManager):
+class CustomProcessor(PyProcessorManager):
     def __init__(self) -> None:
         super().__init__()
         # create op
@@ -39,9 +35,7 @@ class CustomProcessor(fd.vision.common.manager.PyProcessorManager):
     def apply(self, image_batch):
         outputs = []
         for i in range(len(image_batch.mats)):
-            image_batch.mats[i].print_info('before')
             self.resize_op(image_batch.mats[i])
-            image_batch.mats[i].print_info('after')
             self.normalize_permute_op(image_batch.mats[i])
             outputs.append(image_batch.mats[i])
         return outputs
@@ -57,17 +51,21 @@ if __name__ == "__main__":
     mat1.from_numpy(im1)
     mat2 = fd.C.vision.FDMat()
     mat2.from_numpy(im2)
+    images = [mat1, mat2]
 
     args = parse_arguments()
     # creae processor
     preprocessor = CustomProcessor()
 
-    # use CVCUDA
+    # use CV-CUDA
     if args.use_cvcuda:
         preprocessor.use_cuda(True, -1)
 
+    # show input
+    for i in range(len(images)):
+        images[i].print_info('images' + str(i) + ': ')
+
     # run the Processer with CVCUDA
-    images = [mat1, mat2]
     outputs = preprocessor(images)
 
     # show output
