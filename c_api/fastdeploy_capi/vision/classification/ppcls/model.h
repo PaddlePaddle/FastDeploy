@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include "fastdeploy_capi/fd_common.h"
-#include "fastdeploy_capi/fd_type.h"
-#include "fastdeploy_capi/runtime_option.h"
+#include "fastdeploy_capi/core/fd_common.h"
+#include "fastdeploy_capi/core/fd_type.h"
+#include "fastdeploy_capi/runtime/runtime_option.h"
 #include "fastdeploy_capi/vision/result.h"
 
 typedef struct FD_C_PaddleClasModelWrapper FD_C_PaddleClasModelWrapper;
@@ -54,12 +54,36 @@ FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroyPaddleClasModelWrapper(
  *
  * \param[in] fd_c_paddleclas_model_wrapper pointer to FD_C_PaddleClasModelWrapper object
  * \param[in] img pointer to cv::Mat image
- * \param[in] fd_c_classify_result_wrapper pointer to FD_C_PaddleClasModelWrapper object, which stores the result.
+ * \param[in] fd_c_classify_result pointer to FD_C_ClassifyResult object, which stores the result.
  */
 
 FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PaddleClasModelWrapperPredict(
-    __fd_take FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper,
-    FD_C_Mat img, FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper);
+    __fd_keep FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper,
+    FD_C_Mat img, FD_C_ClassifyResult* fd_c_classify_result_wrapper);
+
+/** \brief Check if the model is initialized successfully
+ *
+ * \param[in] fd_c_paddleclas_model_wrapper pointer to FD_C_PaddleClasModelWrapper object
+ *
+ * \return Return a bool of value true if initialized successfully
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PaddleClasModelWrapperInitialized(
+    __fd_keep FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper);
+
+
+/** \brief Predict the classification results for a batch of input images
+   *
+   * \param[in] fd_c_paddleclas_model_wrapper pointer to FD_C_PaddleClasModelWrapper object
+   * \param[in] imgs The input image list, each element comes from cv::imread()
+   * \param[in] results The output classification result list
+   * \return true if the prediction successed, otherwise false
+   */
+FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PaddleClasModelWrapperBatchPredict(
+            __fd_keep FD_C_PaddleClasModelWrapper* fd_c_paddleclas_model_wrapper,
+            FD_C_OneDimMat imgs,
+            FD_C_OneDimClassifyResult* results);
+
 
 #ifdef __cplusplus
 }  // extern "C"

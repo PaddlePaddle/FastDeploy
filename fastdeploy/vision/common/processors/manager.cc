@@ -31,14 +31,14 @@ void ProcessorManager::UseCuda(bool enable_cv_cuda, int gpu_id) {
   }
   FDASSERT(cudaStreamCreate(&stream_) == cudaSuccess,
            "[ERROR] Error occurs while creating cuda stream.");
-  DefaultProcLib::default_lib = ProcLib::CUDA;
+  proc_lib_ = ProcLib::CUDA;
 #else
   FDASSERT(false, "FastDeploy didn't compile with WITH_GPU.");
 #endif
 
   if (enable_cv_cuda) {
 #ifdef ENABLE_CVCUDA
-    DefaultProcLib::default_lib = ProcLib::CVCUDA;
+    proc_lib_ = ProcLib::CVCUDA;
 #else
     FDASSERT(false, "FastDeploy didn't compile with CV-CUDA.");
 #endif
@@ -46,16 +46,11 @@ void ProcessorManager::UseCuda(bool enable_cv_cuda, int gpu_id) {
 }
 
 bool ProcessorManager::CudaUsed() {
-  return (DefaultProcLib::default_lib == ProcLib::CUDA ||
-          DefaultProcLib::default_lib == ProcLib::CVCUDA);
+  return (proc_lib_ == ProcLib::CUDA || proc_lib_ == ProcLib::CVCUDA);
 }
 
 bool ProcessorManager::Run(std::vector<FDMat>* images,
                            std::vector<FDTensor>* outputs) {
-  if (!initialized_) {
-    FDERROR << "The preprocessor is not initialized." << std::endl;
-    return false;
-  }
   if (images->size() == 0) {
     FDERROR << "The size of input images should be greater than 0."
             << std::endl;
@@ -70,6 +65,7 @@ bool ProcessorManager::Run(std::vector<FDMat>* images,
   FDMatBatch image_batch(images);
   image_batch.input_cache = &batch_input_cache_;
   image_batch.output_cache = &batch_output_cache_;
+  image_batch.proc_lib = proc_lib_;
 
   for (size_t i = 0; i < images->size(); ++i) {
     if (CudaUsed()) {
@@ -77,6 +73,17 @@ bool ProcessorManager::Run(std::vector<FDMat>* images,
     }
     (*images)[i].input_cache = &input_caches_[i];
     (*images)[i].output_cache = &output_caches_[i];
+    (*images)[i].proc_lib = proc_lib_;
+    if ((*images)[i].mat_type == ProcLib::CUDA) {
+      // Make a copy of the input data ptr, so that the original data ptr of
+      // FDMat won't be modified.
+      auto fd_tensor = std::make_shared<FDTensor>();
+      fd_tensor->SetExternalData(
+          (*images)[i].Tensor()->shape, (*images)[i].Tensor()->Dtype(),
+          (*images)[i].Tensor()->Data(), (*images)[i].Tensor()->device,
+          (*images)[i].Tensor()->device_id);
+      (*images)[i].SetTensor(fd_tensor);
+    }
   }
 
   bool ret = Apply(&image_batch, outputs);

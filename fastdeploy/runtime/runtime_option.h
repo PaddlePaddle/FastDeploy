@@ -77,6 +77,10 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void UseTimVX();
   /// Use Huawei Ascend to inference
   void UseAscend();
+
+  /// Use onnxruntime DirectML to inference
+  void UseDirectML();
+
   /// Use Sophgo to inference
   void UseSophgo();
   /// \brief Turn on KunlunXin XPU.
@@ -109,6 +113,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
                     bool enable_multi_stream = false);
 
   void SetExternalStream(void* external_stream);
+
   /*
    * @brief Set number of cpu threads while inference on CPU, by default it will decided by the different backends
    */
@@ -149,6 +154,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   OpenVINOBackendOption openvino_option;
   /// Option to configure Paddle Lite backend
   LiteBackendOption paddle_lite_option;
+  /// Option to configure RKNPU2 backend
+  RKNPU2BackendOption rknpu2_option;
 
   /** \brief Set the profile mode as 'true'.
    *
@@ -170,9 +177,21 @@ struct FASTDEPLOY_DECL RuntimeOption {
     benchmark_option.enable_profile = false;
   }
 
+  /** \brief Enable to check if current backend set by user can be found at valid_xxx_backend.
+   */
+  void EnableValidBackendCheck() {
+    enable_valid_backend_check = true;
+  }
+  /** \brief Disable to check if current backend set by user can be found at valid_xxx_backend.
+   */
+  void DisableValidBackendCheck() {
+    enable_valid_backend_check = false;
+  }
 
   /// Benchmark option
   benchmark::BenchmarkOption benchmark_option;
+  // enable the check for valid backend, default true.
+  bool enable_valid_backend_check = true;
 
   // If model_from_memory is true, the model_file and params_file is
   // binary stream in memory;
@@ -196,12 +215,6 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void* external_stream_ = nullptr;
 
   bool enable_pinned_memory = false;
-
-  // ======Only for RKNPU2 Backend=======
-  fastdeploy::rknpu2::CpuName rknpu2_cpu_name_ =
-      fastdeploy::rknpu2::CpuName::RK3588;
-  fastdeploy::rknpu2::CoreMask rknpu2_core_mask_ =
-      fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
 
   // *** The belowing api are deprecated, will be removed in v1.2.0
   // *** Do not use it anymore

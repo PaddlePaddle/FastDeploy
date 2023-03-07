@@ -83,21 +83,22 @@ def build_option(args):
         elif backend in ["trt", "paddle_trt"]:
             option.use_trt_backend()
             if "Deeplabv3_ResNet101" in args.model or "FCN_HRNet_W18" in args.model or "Unet_cityscapes" in args.model or "PP_LiteSeg_B_STDC2_cityscapes" in args.model:
-                option.set_trt_input_shape("x", [1, 3, 1024, 2048],
-                                           [1, 3, 1024,
-                                            2048], [1, 3, 1024, 2048])
+                option.trt_option.set_shape("x", [1, 3, 1024, 2048],
+                                            [1, 3, 1024, 2048],
+                                            [1, 3, 1024, 2048])
             elif "Portrait_PP_HumanSegV2_Lite_256x144" in args.model:
-                option.set_trt_input_shape("x", [1, 3, 144, 256],
-                                           [1, 3, 144, 256], [1, 3, 144, 256])
+                option.trt_option.set_shape(
+                    "x", [1, 3, 144, 256], [1, 3, 144, 256], [1, 3, 144, 256])
             elif "PP_HumanSegV1_Server" in args.model:
-                option.set_trt_input_shape("x", [1, 3, 512, 512],
-                                           [1, 3, 512, 512], [1, 3, 512, 512])
+                option.trt_option.set_shape(
+                    "x", [1, 3, 512, 512], [1, 3, 512, 512], [1, 3, 512, 512])
             else:
-                option.set_trt_input_shape("x", [1, 3, 192, 192],
-                                           [1, 3, 192, 192], [1, 3, 192, 192])
+                option.trt_option.set_shape(
+                    "x", [1, 3, 192, 192], [1, 3, 192, 192], [1, 3, 192, 192])
             if backend == "paddle_trt":
-                option.enable_paddle_trt_collect_shape()
-                option.enable_paddle_to_trt()
+                option.paddle_infer_option.collect_trt_shape = True
+                option.use_paddle_infer_backend()
+                option.paddle_infer_option.enable_trt = True
             if enable_trt_fp16:
                 option.enable_trt_fp16()
         elif backend == "default":

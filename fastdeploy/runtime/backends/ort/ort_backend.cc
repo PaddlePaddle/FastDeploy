@@ -1,3 +1,4 @@
+
 // Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,6 +14,7 @@
 // limitations under the License.
 
 #include "fastdeploy/runtime/backends/ort/ort_backend.h"
+
 #include "fastdeploy/core/float16.h"
 #include "fastdeploy/runtime/backends/ort/ops/adaptive_pool2d.h"
 #include "fastdeploy/runtime/backends/ort/ops/multiclass_nms.h"
@@ -29,7 +31,7 @@ namespace fastdeploy {
 std::vector<OrtCustomOp*> OrtBackend::custom_operators_ =
     std::vector<OrtCustomOp*>();
 
-void OrtBackend::BuildOption(const OrtBackendOption& option) {
+bool OrtBackend::BuildOption(const OrtBackendOption& option) {
   option_ = option;
   if (option.graph_optimization_level >= 0) {
     session_options_.SetGraphOptimizationLevel(
@@ -44,6 +46,53 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
   if (option.execution_mode >= 0) {
     session_options_.SetExecutionMode(ExecutionMode(option.execution_mode));
   }
+
+#ifdef WITH_DIRECTML
+  // If use DirectML
+  if (option.device == Device::DIRECTML) {
+    auto all_providers = Ort::GetAvailableProviders();
+    bool support_dml = false;
+    std::string providers_msg = "";
+    for (size_t i = 0; i < all_providers.size(); ++i) {
+      providers_msg = providers_msg + all_providers[i] + ", ";
+      if (all_providers[i] == "DmlExecutionProvider") {
+        support_dml = true;
+      }
+    }
+
+    if (!support_dml) {
+      FDWARNING << "Compiled fastdeploy with onnxruntime doesn't "
+                   "support DirectML, the available providers are "
+                << providers_msg << "will fallback to CPUExecutionProvider."
+                << "Please check if DirectML is installed successfully."
+                << std::endl;
+      option_.device = Device::CPU;
+    } else {
+      // Must set as below when use dml.
+      session_options_.DisableMemPattern();
+      session_options_.SetExecutionMode(ExecutionMode(0));
+
+      // DML session_option
+      OrtApi const& ortApi = Ort::GetApi();
+      const OrtDmlApi* ortDmlApi;
+      ortApi.GetExecutionProviderApi(
+          "DML", ORT_API_VERSION, reinterpret_cast<const void**>(&ortDmlApi));
+      OrtStatus* onnx_dml_status =
+          ortDmlApi->SessionOptionsAppendExecutionProvider_DML(session_options_,
+                                                               0);
+      if (onnx_dml_status != nullptr) {
+        FDERROR
+            << "DirectML is not support in your machine, the program will exit."
+            << std::endl;
+        ortApi.ReleaseStatus(onnx_dml_status);
+        return false;
+      }
+    }
+    return true;
+  }
+#endif
+
+  // CUDA
   if (option.device == Device::GPU) {
     auto all_providers = Ort::GetAvailableProviders();
     bool support_cuda = false;
@@ -69,7 +118,9 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
       }
       session_options_.AppendExecutionProvider_CUDA(cuda_options);
     }
+    return true;
   }
+  return true;
 }
 
 bool OrtBackend::use_fp16() {
@@ -95,7 +146,8 @@ bool OrtBackend::use_fp16() {
 }
 
 bool OrtBackend::Init(const RuntimeOption& option) {
-  if (option.device != Device::CPU && option.device != Device::GPU) {
+  if (option.device != Device::CPU && option.device != Device::GPU &&
+      option.device != Device::DIRECTML) {
     FDERROR
         << "Backend::ORT only supports Device::CPU/Device::GPU, but now its "
         << option.device << "." << std::endl;
@@ -205,7 +257,12 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
   } else {
     onnx_model_buffer = model_file;
   }
-  BuildOption(option);
+
+  if (!BuildOption(option)) {
+    FDERROR << "Create Ort option fail." << std::endl;
+    return false;
+  }
+
   InitCustomOperators();
   if (model_file_name.size()) {
     session_ = {env_, model_file_name.c_str(), session_options_};

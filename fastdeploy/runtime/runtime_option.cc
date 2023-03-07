@@ -60,8 +60,8 @@ void RuntimeOption::UseCpu() { device = Device::CPU; }
 
 void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
                               fastdeploy::rknpu2::CoreMask rknpu2_core) {
-  rknpu2_cpu_name_ = rknpu2_name;
-  rknpu2_core_mask_ = rknpu2_core;
+  rknpu2_option.cpu_name = rknpu2_name;
+  rknpu2_option.core_mask = rknpu2_core;
   device = Device::RKNPU;
 }
 
@@ -92,6 +92,8 @@ void RuntimeOption::UseAscend() {
   device = Device::ASCEND;
   paddle_lite_option.device = device;
 }
+
+void RuntimeOption::UseDirectML() { device = Device::DIRECTML; }
 
 void RuntimeOption::UseSophgo() {
   device = Device::SOPHGOTPUD;

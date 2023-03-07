@@ -17,6 +17,7 @@
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/processors/mat.h"
 #include "fastdeploy/vision/common/processors/mat_batch.h"
+#include "fastdeploy/vision/common/processors/base.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -34,6 +35,10 @@ class FASTDEPLOY_DECL ProcessorManager {
   void UseCuda(bool enable_cv_cuda = false, int gpu_id = -1);
 
   bool CudaUsed();
+
+#ifdef WITH_GPU
+  cudaStream_t Stream() const { return stream_; }
+#endif
 
   void SetStream(FDMat* mat) {
 #ifdef WITH_GPU
@@ -56,7 +61,7 @@ class FASTDEPLOY_DECL ProcessorManager {
 
   int DeviceId() { return device_id_; }
 
-  /** \brief Process the input image and prepare input tensors for runtime
+  /** \brief Process the input images and prepare input tensors for runtime
    *
    * \param[in] images The input image data list, all the elements are returned by cv::imread()
    * \param[in] outputs The output tensors which will feed in runtime
@@ -74,7 +79,7 @@ class FASTDEPLOY_DECL ProcessorManager {
                      std::vector<FDTensor>* outputs) = 0;
 
  protected:
-  bool initialized_ = false;
+  ProcLib proc_lib_ = ProcLib::DEFAULT;
 
  private:
 #ifdef WITH_GPU

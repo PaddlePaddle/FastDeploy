@@ -76,25 +76,26 @@ def build_option(args):
     else:
         option.use_trt_backend()
         if args.backend == 'paddle_trt':
-            option.enable_paddle_to_trt()
-            option.enable_paddle_trt_collect_shape()
+            option.paddle_infer_option.collect_trt_shape = True
+            option.use_paddle_infer_backend()
+            option.paddle_infer_option.enable_trt = True
         trt_file = os.path.join(args.model_dir, "infer.trt")
-        option.set_trt_input_shape(
+        option.trt_option.set_shape(
             'input_ids',
             min_shape=[1, 1],
             opt_shape=[args.batch_size, args.max_length // 2],
             max_shape=[args.batch_size, args.max_length])
-        option.set_trt_input_shape(
+        option.trt_option.set_shape(
             'token_type_ids',
             min_shape=[1, 1],
             opt_shape=[args.batch_size, args.max_length // 2],
             max_shape=[args.batch_size, args.max_length])
-        option.set_trt_input_shape(
+        option.trt_option.set_shape(
             'pos_ids',
             min_shape=[1, 1],
             opt_shape=[args.batch_size, args.max_length // 2],
             max_shape=[args.batch_size, args.max_length])
-        option.set_trt_input_shape(
+        option.trt_option.set_shape(
             'att_mask',
             min_shape=[1, 1],
             opt_shape=[args.batch_size, args.max_length // 2],

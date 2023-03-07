@@ -35,21 +35,30 @@ void CpuInfer(const char* model_dir, const char* image_file) {
   FD_C_RuntimeOptionWrapper* option = FD_C_CreateRuntimeOptionWrapper();
   FD_C_RuntimeOptionWrapperUseCpu(option);
 
-  FD_C_PPYOLOEWrapper* model = FD_C_CreatesPPYOLOEWrapper(
-      model_file, params_file, config_file, option, PADDLE);
+  FD_C_PPYOLOEWrapper* model = FD_C_CreatePPYOLOEWrapper(
+      model_file, params_file, config_file, option, FD_C_ModelFormat_PADDLE);
 
-  FD_C_Mat im = FD_C_Imread(image_file);
-
-  FD_C_DetectionResultWrapper* result_wrapper =
-      FD_C_CreateDetectionResultWrapper();
-
-  if (!FD_C_PPYOLOEWrapperPredict(model, im, result_wrapper)) {
-    printf("Failed to predict.\n");
+  if (!FD_C_PPYOLOEWrapperInitialized(model)) {
+    printf("Failed to initialize.\n");
+    FD_C_DestroyRuntimeOptionWrapper(option);
+    FD_C_DestroyPPYOLOEWrapper(model);
     return;
   }
 
+  FD_C_Mat im = FD_C_Imread(image_file);
+
   FD_C_DetectionResult* result =
-      FD_C_DetectionResultWrapperGetData(result_wrapper);
+      (FD_C_DetectionResult*)malloc(sizeof(FD_C_DetectionResult));
+
+  if (!FD_C_PPYOLOEWrapperPredict(model, im, result)) {
+    printf("Failed to predict.\n");
+    FD_C_DestroyRuntimeOptionWrapper(option);
+    FD_C_DestroyPPYOLOEWrapper(model);
+    FD_C_DestroyMat(im);
+    free(result);
+    return;
+  }
+
   FD_C_Mat vis_im = FD_C_VisDetection(im, result, 0.5, 1, 0.5);
 
   FD_C_Imwrite("vis_result.jpg", vis_im);
@@ -57,7 +66,6 @@ void CpuInfer(const char* model_dir, const char* image_file) {
 
   FD_C_DestroyRuntimeOptionWrapper(option);
   FD_C_DestroyPPYOLOEWrapper(model);
-  FD_C_DestroyDetectionResultWrapper(result_wrapper);
   FD_C_DestroyDetectionResult(result);
   FD_C_DestroyMat(im);
   FD_C_DestroyMat(vis_im);
@@ -75,21 +83,30 @@ void GpuInfer(const char* model_dir, const char* image_file) {
   FD_C_RuntimeOptionWrapper* option = FD_C_CreateRuntimeOptionWrapper();
   FD_C_RuntimeOptionWrapperUseGpu(option, 0);
 
-  FD_C_PPYOLOEWrapper* model = FD_C_CreatesPPYOLOEWrapper(
-      model_file, params_file, config_file, option, PADDLE);
+  FD_C_PPYOLOEWrapper* model = FD_C_CreatePPYOLOEWrapper(
+      model_file, params_file, config_file, option, FD_C_ModelFormat_PADDLE);
 
-  FD_C_Mat im = FD_C_Imread(image_file);
-
-  FD_C_DetectionResultWrapper* result_wrapper =
-      FD_C_CreateDetectionResultWrapper();
-
-  if (!FD_C_PPYOLOEWrapperPredict(model, im, result_wrapper)) {
-    printf("Failed to predict.\n");
+  if (!FD_C_PPYOLOEWrapperInitialized(model)) {
+    printf("Failed to initialize.\n");
+    FD_C_DestroyRuntimeOptionWrapper(option);
+    FD_C_DestroyPPYOLOEWrapper(model);
     return;
   }
 
+  FD_C_Mat im = FD_C_Imread(image_file);
+
   FD_C_DetectionResult* result =
-      FD_C_DetectionResultWrapperGetData(result_wrapper);
+      (FD_C_DetectionResult*)malloc(sizeof(FD_C_DetectionResult));
+
+  if (!FD_C_PPYOLOEWrapperPredict(model, im, result)) {
+    printf("Failed to predict.\n");
+    FD_C_DestroyRuntimeOptionWrapper(option);
+    FD_C_DestroyPPYOLOEWrapper(model);
+    FD_C_DestroyMat(im);
+    free(result);
+    return;
+  }
+
   FD_C_Mat vis_im = FD_C_VisDetection(im, result, 0.5, 1, 0.5);
 
   FD_C_Imwrite("vis_result.jpg", vis_im);
@@ -97,7 +114,6 @@ void GpuInfer(const char* model_dir, const char* image_file) {
 
   FD_C_DestroyRuntimeOptionWrapper(option);
   FD_C_DestroyPPYOLOEWrapper(model);
-  FD_C_DestroyDetectionResultWrapper(result_wrapper);
   FD_C_DestroyDetectionResult(result);
   FD_C_DestroyMat(im);
   FD_C_DestroyMat(vis_im);

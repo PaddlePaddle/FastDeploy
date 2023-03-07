@@ -15,10 +15,17 @@
 
 #include <memory>
 #include <thread>  // NOLINT
+#include <unordered_map>
 #include "fastdeploy/utils/utils.h"
+#include "fastdeploy/core/fd_tensor.h"
+#if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
+#include "fastdeploy/vision/common/result.h"
+#endif
 
 namespace fastdeploy {
 namespace benchmark {
+
+#if defined(ENABLE_BENCHMARK)
 /*! @brief ResourceUsageMonitor object used when to collect memory info.
  */
 class FASTDEPLOY_DECL ResourceUsageMonitor {
@@ -85,6 +92,95 @@ FASTDEPLOY_DECL std::string Strip(const std::string& str, char ch = ' ');
 FASTDEPLOY_DECL void Split(const std::string& s,
                            std::vector<std::string>& tokens,
                            char delim = ' ');
+
+/// Diff values for precision evaluation
+struct FASTDEPLOY_DECL BaseDiff {};
+
+struct FASTDEPLOY_DECL EvalStatis {
+  double mean = -1.0;
+  double min = -1.0;
+  double max = -1.0;
+};
+
+struct FASTDEPLOY_DECL TensorDiff: public BaseDiff {
+  EvalStatis data;
+};
+
+#if defined(ENABLE_VISION)
+struct FASTDEPLOY_DECL DetectionDiff: public BaseDiff {
+  EvalStatis boxes;
+  EvalStatis scores;
+  EvalStatis labels;
+};
+
+struct FASTDEPLOY_DECL ClassifyDiff: public BaseDiff {
+  EvalStatis scores;
+  EvalStatis labels;
+};
+
+struct FASTDEPLOY_DECL SegmentationDiff: public BaseDiff {
+  EvalStatis scores;
+  EvalStatis labels;
+};
+
+struct FASTDEPLOY_DECL OCRDetDiff: public BaseDiff {
+  EvalStatis boxes;
+};
+
+#endif  // ENABLE_VISION
+#endif  // ENABLE_BENCHMARK
+
+/// Utils for precision evaluation
+struct FASTDEPLOY_DECL ResultManager {
+#if defined(ENABLE_BENCHMARK)
+  /// Save & Load functions for FDTensor result.
+  static bool SaveFDTensor(const FDTensor& tensor, const std::string& path);
+  static bool LoadFDTensor(FDTensor* tensor, const std::string& path);
+  /// Calculate diff value between two FDTensor results.
+  static TensorDiff CalculateDiffStatis(const FDTensor& lhs,
+                                        const FDTensor& rhs);
+  /// Save Benchmark data
+  static void SaveBenchmarkResult(const std::string& res,
+                                  const std::string& path);
+  /// Load Benchmark config
+  static bool LoadBenchmarkConfig(const std::string& path,
+             std::unordered_map<std::string, std::string>* config_info);
+  /// Get Input Shapes
+  static std::vector<std::vector<int32_t>> GetInputShapes(
+                                      const std::string& raw_shapes);
+#if defined(ENABLE_VISION)
+  /// Save & Load functions for basic results.
+  static bool SaveDetectionResult(const vision::DetectionResult& res,
+                                  const std::string& path);
+  static bool LoadDetectionResult(vision::DetectionResult* res,
+                                  const std::string& path);
+  static bool SaveClassifyResult(const vision::ClassifyResult& res,
+                                 const std::string& path);
+  static bool LoadClassifyResult(vision::ClassifyResult* res,
+                                 const std::string& path);
+  static bool SaveSegmentationResult(const vision::SegmentationResult& res,
+                                     const std::string& path);
+  static bool LoadSegmentationResult(vision::SegmentationResult* res,
+                                     const std::string& path);
+  static bool SaveOCRDetResult(const std::vector<std::array<int, 8>>& res,
+                               const std::string& path);
+  static bool LoadOCRDetResult(std::vector<std::array<int, 8>>* res,
+                               const std::string& path);
+  /// Calculate diff value between two basic results.
+  static DetectionDiff CalculateDiffStatis(const vision::DetectionResult& lhs,
+                                           const vision::DetectionResult& rhs,
+                                           const float& score_threshold = 0.3f);
+  static ClassifyDiff CalculateDiffStatis(const vision::ClassifyResult& lhs,
+                                          const vision::ClassifyResult& rhs);
+  static SegmentationDiff CalculateDiffStatis(
+      const vision::SegmentationResult& lhs,
+      const vision::SegmentationResult& rhs);
+  static OCRDetDiff CalculateDiffStatis(
+      const std::vector<std::array<int, 8>>& lhs,
+      const std::vector<std::array<int, 8>>& rhs);
+#endif  // ENABLE_VISION
+#endif  // ENABLE_BENCHMARK
+};
 
 }  // namespace benchmark
 }  // namespace fastdeploy

@@ -45,6 +45,9 @@ class FASTDEPLOY_DECL FastDeployModel {
   /** Model's valid timvx backends. This member defined all the timvx backends have successfully tested for the model
    */
   std::vector<Backend> valid_timvx_backends = {};
+    /** Model's valid directml backends. This member defined all the onnxruntime directml backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_directml_backends = {};
   /** Model's valid ascend backends. This member defined all the cann backends have successfully tested for the model
    */
   std::vector<Backend> valid_ascend_backends = {};
@@ -117,8 +120,7 @@ class FASTDEPLOY_DECL FastDeployModel {
    */
   virtual double GetProfileTime() {
     return runtime_->GetProfileTime();
-  }            
-
+  }
   /** \brief Release reused input/output buffers
   */
   virtual void ReleaseReusedBuffer() {
@@ -158,6 +160,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool CreateTimVXBackend();
   bool CreateKunlunXinBackend();
   bool CreateASCENDBackend();
+  bool CreateDirectMLBackend();
   bool IsSupported(const std::vector<Backend>& backends,
                    Backend backend);
 

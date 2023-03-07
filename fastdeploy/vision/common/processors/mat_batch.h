@@ -29,7 +29,7 @@ struct FASTDEPLOY_DECL FDMatBatch {
   // MatBatch is intialized with a list of mats,
   // the data is stored in the mats separately.
   // Call Tensor() function to get a batched 4-dimension tensor.
-  explicit FDMatBatch(std::vector<Mat>* _mats) {
+  explicit FDMatBatch(std::vector<FDMat>* _mats) {
     mats = _mats;
     layout = FDMatBatchLayout::NHWC;
     mat_type = ProcLib::OPENCV;
@@ -44,7 +44,7 @@ struct FASTDEPLOY_DECL FDMatBatch {
 #ifdef WITH_GPU
   cudaStream_t stream = nullptr;
 #endif
-  FDTensor fd_tensor;
+  std::shared_ptr<FDTensor> fd_tensor = std::make_shared<FDTensor>();
 
  public:
   // When using CV-CUDA/CUDA, please set input/output cache,
@@ -56,10 +56,11 @@ struct FASTDEPLOY_DECL FDMatBatch {
   void SetStream(cudaStream_t s);
 #endif
 
-  std::vector<FDMat>* mats;
+  std::vector<FDMat>* mats = nullptr;
   ProcLib mat_type = ProcLib::OPENCV;
   FDMatBatchLayout layout = FDMatBatchLayout::NHWC;
   Device device = Device::CPU;
+  ProcLib proc_lib = ProcLib::DEFAULT;
 
   // False: the data is stored in the mats separately
   // True: the data is stored in the fd_tensor continuously in 4 dimensions

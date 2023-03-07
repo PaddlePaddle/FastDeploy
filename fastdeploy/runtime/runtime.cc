@@ -154,21 +154,13 @@ bool Runtime::Init(const RuntimeOption& _option) {
   } else if (option.backend == Backend::SOPHGOTPU) {
     CreateSophgoNPUBackend();
   } else if (option.backend == Backend::POROS) {
-    FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
-             "Backend::POROS only supports Device::CPU/Device::GPU.");
-    FDASSERT(option.model_format == ModelFormat::TORCHSCRIPT,
-             "Backend::POROS only supports model format of "
-             "ModelFormat::TORCHSCRIPT.");
-    FDINFO << "Runtime initialized with Backend::POROS in " << option.device
-           << "." << std::endl;
-    return true;
+    CreatePorosBackend();
   } else {
-    FDERROR << "Runtime only support "
-               "Backend::ORT/Backend::TRT/Backend::PDINFER/Backend::POROS as "
-               "backend now."
-            << std::endl;
+    std::string msg = Str(GetAvailableBackends());
+    FDERROR << "The compiled FastDeploy only supports " << msg << ", " << option.backend << " is not supported now." << std::endl;
     return false;
   }
+  backend_->benchmark_option_ = option.benchmark_option;
   return true;
 }
 
@@ -224,6 +216,25 @@ void Runtime::BindInputTensor(const std::string& name, FDTensor& input) {
   }
 }
 
+void Runtime::BindOutputTensor(const std::string& name, FDTensor& output) {
+  bool is_exist = false;
+  for (auto& t : output_tensors_) {
+    if (t.name == name) {
+      FDINFO << "The output name [" << name << "] is exist." << std::endl;
+      is_exist = true;
+      t.SetExternalData(output.shape, output.dtype, output.MutableData(),
+                        output.device, output.device_id);
+      break;
+    }
+  }
+  if (!is_exist) {
+    FDINFO << "The output name [" << name << "] is prebinded added into output tensor list." << std::endl;
+    FDTensor new_tensor(name);
+    new_tensor.SetExternalData(output.shape, output.dtype, output.MutableData(),
+                               output.device, output.device_id);
+    output_tensors_.emplace_back(std::move(new_tensor));
+  }
+}
 FDTensor* Runtime::GetOutputTensor(const std::string& name) {
   for (auto& t : output_tensors_) {
     if (t.name == name) {
@@ -244,44 +255,9 @@ void Runtime::ReleaseModelMemoryBuffer() {
 }
 
 void Runtime::CreatePaddleBackend() {
-  FDASSERT(
-      option.device == Device::CPU || option.device == Device::GPU ||
-          option.device == Device::IPU,
-      "Backend::PDINFER only supports Device::CPU/Device::GPU/Device::IPU.");
-  FDASSERT(
-      option.model_format == ModelFormat::PADDLE,
-      "Backend::PDINFER only supports model format of ModelFormat::PADDLE.");
 #ifdef ENABLE_PADDLE_BACKEND
-  option.paddle_infer_option.model_file = option.model_file;
-  option.paddle_infer_option.params_file = option.params_file;
-  option.paddle_infer_option.model_from_memory_ = option.model_from_memory_;
-  option.paddle_infer_option.device = option.device;
-  option.paddle_infer_option.device_id = option.device_id;
-  option.paddle_infer_option.enable_pinned_memory = option.enable_pinned_memory;
-  option.paddle_infer_option.external_stream_ = option.external_stream_;
-  option.paddle_infer_option.trt_option = option.trt_option;
-  option.paddle_infer_option.trt_option.gpu_id = option.device_id;
   backend_ = utils::make_unique<PaddleBackend>();
-  auto casted_backend = dynamic_cast<PaddleBackend*>(backend_.get());
-  casted_backend->benchmark_option_ = option.benchmark_option;
-
-  if (option.model_from_memory_) {
-    FDASSERT(
-        casted_backend->InitFromPaddle(option.model_file, option.params_file,
-                                       option.paddle_infer_option),
-        "Load model from Paddle failed while initliazing PaddleBackend.");
-    ReleaseModelMemoryBuffer();
-  } else {
-    std::string model_buffer = "";
-    std::string params_buffer = "";
-    FDASSERT(ReadBinaryFromFile(option.model_file, &model_buffer),
-             "Fail to read binary from model file");
-    FDASSERT(ReadBinaryFromFile(option.params_file, &params_buffer),
-             "Fail to read binary from parameter file");
-    FDASSERT(casted_backend->InitFromPaddle(model_buffer, params_buffer,
-                                            option.paddle_infer_option),
-             "Load model from Paddle failed while initliazing PaddleBackend.");
-  }
+  FDASSERT(backend_->Init(option), "Failed to initialized Paddle Inference backend.");
 #else
   FDASSERT(false,
            "PaddleBackend is not available, please compiled with "
@@ -294,7 +270,6 @@ void Runtime::CreatePaddleBackend() {
 void Runtime::CreateOpenVINOBackend() {
 #ifdef ENABLE_OPENVINO_BACKEND
   backend_ = utils::make_unique<OpenVINOBackend>();
-  backend_->benchmark_option_ = option.benchmark_option;
   FDASSERT(backend_->Init(option), "Failed to initialize OpenVINOBackend.");
 #else
   FDASSERT(false,
@@ -308,7 +283,6 @@ void Runtime::CreateOpenVINOBackend() {
 void Runtime::CreateOrtBackend() {
 #ifdef ENABLE_ORT_BACKEND
   backend_ = utils::make_unique<OrtBackend>();
-  backend_->benchmark_option_ = option.benchmark_option;
 
   FDASSERT(backend_->Init(option), "Failed to initialize Backend::ORT.");
 #else
@@ -322,14 +296,7 @@ void Runtime::CreateOrtBackend() {
 
 void Runtime::CreateTrtBackend() {
 #ifdef ENABLE_TRT_BACKEND
-  option.trt_option.model_file = option.model_file;
-  option.trt_option.params_file = option.params_file;
-  option.trt_option.model_format = option.model_format;
-  option.trt_option.gpu_id = option.device_id;
-  option.trt_option.enable_pinned_memory = option.enable_pinned_memory;
-  option.trt_option.external_stream_ = option.external_stream_;
   backend_ = utils::make_unique<TrtBackend>();
-  backend_->benchmark_option_ = option.benchmark_option;
   FDASSERT(backend_->Init(option), "Failed to initialize TensorRT backend.");
 #else
   FDASSERT(false,
@@ -343,7 +310,6 @@ void Runtime::CreateTrtBackend() {
 void Runtime::CreateLiteBackend() {
 #ifdef ENABLE_LITE_BACKEND
   backend_ = utils::make_unique<LiteBackend>();
-  backend_->benchmark_option_ = option.benchmark_option;
 
   FDASSERT(backend_->Init(option),
            "Load model from nb file failed while initializing LiteBackend.");
@@ -357,20 +323,9 @@ void Runtime::CreateLiteBackend() {
 }
 
 void Runtime::CreateRKNPU2Backend() {
-  FDASSERT(option.model_from_memory_ == false,
-           "RKNPU2Backend don't support to load model from memory");
-  FDASSERT(option.device == Device::RKNPU,
-           "Backend::RKNPU2 only supports Device::RKNPU2");
-  FDASSERT(option.model_format == ModelFormat::RKNN,
-           "RKNPU2Backend only support model format of ModelFormat::RKNN");
 #ifdef ENABLE_RKNPU2_BACKEND
-  auto rknpu2_option = RKNPU2BackendOption();
-  rknpu2_option.cpu_name = option.rknpu2_cpu_name_;
-  rknpu2_option.core_mask = option.rknpu2_core_mask_;
   backend_ = utils::make_unique<RKNPU2Backend>();
-  auto casted_backend = dynamic_cast<RKNPU2Backend*>(backend_.get());
-  FDASSERT(casted_backend->InitFromRKNN(option.model_file, rknpu2_option),
-           "Load model from nb file failed while initializing LiteBackend.");
+  FDASSERT(backend_->Init(option), "Failed to initialize RKNPU2 backend.");
 #else
   FDASSERT(false,
            "RKNPU2Backend is not available, please compiled with "
@@ -413,25 +368,28 @@ Runtime* Runtime::Clone(void* stream, int device_id) {
   return runtime;
 }
 
-// only for poros backend
-bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
-                      const RuntimeOption& _option) {
+void Runtime::CreatePorosBackend() {
 #ifdef ENABLE_POROS_BACKEND
-  FDASSERT(
-      option.model_format == ModelFormat::TORCHSCRIPT,
-      "PorosBackend only support model format of ModelFormat::TORCHSCRIPT.");
-  if (option.device != Device::CPU && option.device != Device::GPU) {
-    FDERROR << "PorosBackend only supports CPU/GPU, but now its "
-            << option.device << "." << std::endl;
-    return false;
-  }
+  backend_ = utils::make_unique<PorosBackend>();
+  FDASSERT(backend_->Init(option), "Failed to initialize Poros backend.");
+#else
+  FDASSERT(false,
+           "PorosBackend is not available, please compiled with "
+           "ENABLE_POROS_BACKEND=ON.");
+#endif
+  FDINFO << "Runtime initialized with Backend::POROS in " << option.device
+         << "." << std::endl;
+}
+
+// only for poros backend
+bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors) {
+#ifdef ENABLE_POROS_BACKEND
   option.poros_option.device = option.device;
   option.poros_option.device_id = option.device_id;
   option.poros_option.enable_fp16 = option.trt_option.enable_fp16;
   option.poros_option.max_batch_size = option.trt_option.max_batch_size;
   option.poros_option.max_workspace_size = option.trt_option.max_workspace_size;
 
-  backend_ = utils::make_unique<PorosBackend>();
   auto casted_backend = dynamic_cast<PorosBackend*>(backend_.get());
   FDASSERT(
       casted_backend->Compile(option.model_file, prewarm_tensors,

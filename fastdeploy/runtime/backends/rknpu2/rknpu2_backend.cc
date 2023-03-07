@@ -76,17 +76,27 @@ void RKNPU2Backend::BuildOption(const RKNPU2BackendOption& option) {
 }
 
 /***************************************************************
- *  @name       InitFromRKNN
+ *  @name       Init
  *  @brief      Initialize RKNN model
  *  @param      model_file: Binary data for the RKNN model or the path of RKNN
  *model. params_file: None option: config
  *  @return     bool
  *  @note       None
  ***************************************************************/
-bool RKNPU2Backend::InitFromRKNN(const std::string& model_file,
-                                 const RKNPU2BackendOption& option) {
+bool RKNPU2Backend::Init(const RuntimeOption& runtime_option) {
+  if (!(Supported(runtime_option.model_format, Backend::RKNPU2) &&
+        Supported(runtime_option.device, Backend::RKNPU2))) {
+    return false;
+  }
+  if (runtime_option.model_from_memory_) {
+    FDERROR << "RKNPU2 backend doesn't support load model from memory, please "
+               "load model from disk."
+            << std::endl;
+    return false;
+  }
+
   // LoadModel
-  if (!this->LoadModel((char*)model_file.data())) {
+  if (!this->LoadModel((char*)runtime_option.model_file.data())) {
     FDERROR << "load model failed" << std::endl;
     return false;
   }
@@ -98,7 +108,7 @@ bool RKNPU2Backend::InitFromRKNN(const std::string& model_file,
   }
 
   // BuildOption
-  this->BuildOption(option);
+  this->BuildOption(runtime_option.rknpu2_option);
 
   // SetCoreMask if RK3588
   if (this->option_.cpu_name == rknpu2::CpuName::RK3588) {
@@ -124,7 +134,7 @@ bool RKNPU2Backend::InitFromRKNN(const std::string& model_file,
  *  @return     bool
  *  @note       Only support RK3588
  ***************************************************************/
-bool RKNPU2Backend::SetCoreMask(const rknpu2::CoreMask& core_mask) {
+bool RKNPU2Backend::SetCoreMask(const rknpu2::CoreMask& core_mask) const {
   int ret = rknn_set_core_mask(ctx, static_cast<rknn_core_mask>(core_mask));
   if (ret != RKNN_SUCC) {
     FDERROR << "rknn_set_core_mask fail! ret=" << ret << std::endl;
@@ -322,14 +332,8 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
 
       // Create input tensor memory
       input_attrs_[i].type = input_type;
-      input_attrs_[i].size = inputs[0].Nbytes();
-      input_attrs_[i].size_with_stride = inputs[0].Nbytes();
-      if (input_attrs_[i].type == RKNN_TENSOR_FLOAT16 ||
-          input_attrs_[i].type == RKNN_TENSOR_FLOAT32) {
-        FDINFO << "The input model is not a quantitative model. "
-                  "Close the normalize operation."
-               << std::endl;
-      }
+      input_attrs_[i].size = inputs[i].Nbytes();
+      input_attrs_[i].size_with_stride = inputs[i].Nbytes();
 
       input_mems_[i] = rknn_create_mem(ctx, inputs[i].Nbytes());
       if (input_mems_[i] == nullptr) {
