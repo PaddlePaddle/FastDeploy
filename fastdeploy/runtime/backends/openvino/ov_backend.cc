@@ -203,28 +203,41 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
   }
 
   ov::AnyMap properties;
-  if (option_.device == "CPU" && option_.cpu_thread_num > 0) {
-    properties["INFERENCE_NUM_THREADS"] = option_.cpu_thread_num;
+  if (option_.hint == "UNDEFINED") {
+    if (option_.device == "CPU" && option_.cpu_thread_num > 0) {
+      properties["INFERENCE_NUM_THREADS"] = option_.cpu_thread_num;
+    }
+    if (option_.device == "CPU") {
+      if (option_.num_streams == -1) {
+        properties["NUM_STREAMS"] = ov::streams::AUTO;
+      } else if (option_.num_streams == -2) {
+        properties["NUM_STREAMS"] = ov::streams::NUMA;
+      } else if (option_.num_streams > 0) {
+        properties["NUM_STREAMS"] = option_.num_streams;
+      }
+    } else {
+      if (option_.num_streams != 0) {
+        FDWARNING << "NUM_STREAMS only available on device CPU, currently the "
+                    "device is set as "
+                  << option_.device << ", the NUM_STREAMS will be ignored."
+                  << std::endl;
+      }
+    }
+    FDINFO << "number of streams:" << option_.num_streams << "."
+          << std::endl;
+    FDINFO << "Compile OpenVINO model on device_name:" << option.device << "."
+          << std::endl;
   }
-  if (option_.device == "CPU") {
-    if (option_.num_streams == -1) {
-      properties["NUM_STREAMS"] = ov::streams::AUTO;
-    } else if (option_.num_streams == -2) {
-      properties["NUM_STREAMS"] = ov::streams::NUMA;
-    } else if (option_.num_streams > 0) {
-      properties["NUM_STREAMS"] = option_.num_streams;
-    }
-  } else {
-    if (option_.num_streams != 0) {
-      FDWARNING << "NUM_STREAMS only available on device CPU, currently the "
-                   "device is set as "
-                << option_.device << ", the NUM_STREAMS will be ignored."
-                << std::endl;
-    }
+  else if (option_.hint == "LATENCY") {
+     properties.emplace(ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY));
+  }
+  else if (option_.hint == "THROUGHPUT") {
+     properties.emplace(ov::hint::performance_mode(ov::hint::PerformanceMode::THROUGHPUT));
+  }
+  else if (option_.hint == "CUMULATIVE_THROUGHPUT") {
+     properties.emplace(ov::hint::performance_mode(ov::hint::PerformanceMode::CUMULATIVE_THROUGHPUT));
   }
 
-  FDINFO << "Compile OpenVINO model on device_name:" << option.device << "."
-         << std::endl;
   compiled_model_ = core_.compile_model(model, option.device, properties);
 
   request_ = compiled_model_.create_infer_request();
@@ -332,26 +345,43 @@ bool OpenVINOBackend::InitFromOnnx(const std::string& model_file,
   }
 
   ov::AnyMap properties;
-  if (option_.device == "CPU" && option_.cpu_thread_num > 0) {
-    properties["INFERENCE_NUM_THREADS"] = option_.cpu_thread_num;
+  if (option_.hint == "UNDEFINED") {
+    if (option_.device == "CPU" && option_.cpu_thread_num > 0) {
+      properties["INFERENCE_NUM_THREADS"] = option_.cpu_thread_num;
+    }
+    if (option_.device == "CPU") {
+      if (option_.num_streams == -1) {
+        properties["NUM_STREAMS"] = ov::streams::AUTO;
+      } else if (option_.num_streams == -2) {
+        properties["NUM_STREAMS"] = ov::streams::NUMA;
+      } else if (option_.num_streams > 0) {
+        properties["NUM_STREAMS"] = option_.num_streams;
+      }
+    } else {
+      if (option_.num_streams != 0) {
+        FDWARNING << "NUM_STREAMS only available on device CPU, currently the "
+                    "device is set as "
+                  << option_.device << ", the NUM_STREAMS will be ignored."
+                  << std::endl;
+      }
+    }
+    FDINFO << "number of streams:" << option_.num_streams << "."
+          << std::endl;
+    FDINFO << "Compile OpenVINO model on device_name:" << option.device << "."
+          << std::endl;
   }
-  if (option_.device == "CPU") {
-    if (option_.num_streams == -1) {
-      properties["NUM_STREAMS"] = ov::streams::AUTO;
-    } else if (option_.num_streams == -2) {
-      properties["NUM_STREAMS"] = ov::streams::NUMA;
-    } else if (option_.num_streams > 0) {
-      properties["NUM_STREAMS"] = option_.num_streams;
-    }
-  } else {
-    if (option_.num_streams != 0) {
-      FDWARNING << "NUM_STREAMS only available on device CPU, currently the "
-                   "device is set as "
-                << option_.device << ", the NUM_STREAMS will be ignored."
-                << std::endl;
-    }
+  else if (option_.hint == "LATENCY") {
+     properties.emplace(ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY));
+  }
+  else if (option_.hint == "THROUGHPUT") {
+     properties.emplace(ov::hint::performance_mode(ov::hint::PerformanceMode::THROUGHPUT));
+  }
+  else if (option_.hint == "CUMULATIVE_THROUGHPUT") {
+     properties.emplace(ov::hint::performance_mode(ov::hint::PerformanceMode::CUMULATIVE_THROUGHPUT));
   }
 
+  FDINFO << "number of streams:" << option_.num_streams << "."
+         << std::endl;
   FDINFO << "Compile OpenVINO model on device_name:" << option.device << "."
          << std::endl;
   compiled_model_ = core_.compile_model(model, option.device, properties);
@@ -384,7 +414,8 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
   }
 
   RUNTIME_PROFILE_LOOP_BEGIN(1)
-  request_.infer();
+  request_.start_async();
+  request_.wait();
   RUNTIME_PROFILE_LOOP_END
 
   outputs->resize(output_infos_.size());
