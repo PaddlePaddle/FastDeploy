@@ -3,8 +3,8 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 本目录下提供`infer.py`快速完成PPOCRv3在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
@@ -56,7 +56,7 @@ python3 infer_static_shape.py \
 ## 其它文档
 
 - [Python API文档查阅](https://baidu-paddle.github.io/fastdeploy-api/python/html/)
-- [PPOCR 系列模型介绍](../../)
+- [PPOCR 系列模型介绍](../README.md)
 - [PPOCRv3 C++部署](../cpp)
-- [模型预测结果说明](../../../../../../docs/api/vision_results/)
+- [模型预测结果说明](../../../../../../docs/api/vision_results/README_CN.md)
 - [如何切换模型推理后端引擎](../../../../../../docs/cn/faq/how_to_change_backend.md)
