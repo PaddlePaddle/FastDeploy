@@ -13,7 +13,7 @@ PPDetBase::PPDetBase(const std::string& model_file,
                      const std::string& config_file,
                      const RuntimeOption& custom_option,
                      const ModelFormat& model_format)
-    : preprocessor_(config_file), postprocessor_(config_file) {
+    : preprocessor_(config_file), postprocessor_(preprocessor_.GetArch()) {
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
