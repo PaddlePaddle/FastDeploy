@@ -32,12 +32,28 @@ class CustomProcessor(PyProcessorManager):
         self.normalize_permute_op = fd.C.vision.processors.NormalizeAndPermute(
             mean, std, is_scale, min, max, swap_rb)
 
+        width = 50
+        height = 50
+        self.centercrop_op = fd.C.vision.processors.CenterCrop(width, height)
+
+        top = 5
+        bottom = 5
+        left = 5
+        right = 5
+        pad_value = [225, 225, 225]
+        self.pad_op = fd.C.vision.processors.Pad(top, bottom, left, right,
+                                                 pad_value)
+
     def apply(self, image_batch):
         outputs = []
+        self.resize_op(image_batch)
+        self.centercrop_op(image_batch)
+        self.pad_op(image_batch)
+        self.normalize_permute_op(image_batch)
+
         for i in range(len(image_batch.mats)):
-            self.resize_op(image_batch.mats[i])
-            self.normalize_permute_op(image_batch.mats[i])
             outputs.append(image_batch.mats[i])
+
         return outputs
 
 
