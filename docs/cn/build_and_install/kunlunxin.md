@@ -10,19 +10,14 @@ FastDeploy 基于 Paddle Lite 后端支持在昆仑芯 XPU 上进行部署推理
 相关编译选项说明如下：  
 |编译选项|默认值|说明|备注|  
 |:---|:---|:---|:---|  
-| WITH_KUNLUNXIN| OFF | 需要在昆仑芯XPU上部署时需要设置为ON | - |
-| ENABLE_ORT_BACKEND | OFF | 是否编译集成ONNX Runtime后端 | - |
-| ENABLE_PADDLE_BACKEND | OFF | 是否编译集成Paddle Inference后端 | - |
-| ENABLE_OPENVINO_BACKEND | OFF | 是否编译集成OpenVINO后端 | - |
+| WITH_KUNLUNXIN| OFF | 需要在昆仑芯 XPU 上部署时需要设置为 ON | - |
 | ENABLE_VISION | OFF | 是否编译集成视觉模型的部署模块 | - |
-| ENABLE_TEXT | OFF | 是否编译集成文本NLP模型的部署模块 | - |
+| ENABLE_TEXT | OFF | 是否编译集成文本 NLP 模型的部署模块 | - |
 
 第三方库依赖指定（不设定如下参数，会自动下载预编译库）
 | 选项                     | 说明                                                                                           |
 | :---------------------- | :--------------------------------------------------------------------------------------------- |
-| ORT_DIRECTORY           | 当开启ONNX Runtime后端时，用于指定用户本地的ONNX Runtime库路径；如果不指定，编译过程会自动下载ONNX Runtime库  |
-| OPENCV_DIRECTORY        | 当ENABLE_VISION=ON时，用于指定用户本地的OpenCV库路径；如果不指定，编译过程会自动下载OpenCV库              |
-| OPENVINO_DIRECTORY      | 当开启OpenVINO后端时, 用于指定用户本地的OpenVINO库路径；如果不指定，编译过程会自动下载OpenVINO库             |
+| OPENCV_DIRECTORY        | 当 ENABLE_VISION=ON 时，用于指定用户本地的 OpenCV 库路径；如果不指定，编译过程会自动下载 OpenCV 库              |
 
 更多编译选项请参考[FastDeploy编译选项说明](./README.md)
 
@@ -31,7 +26,7 @@ FastDeploy 基于 Paddle Lite 后端支持在昆仑芯 XPU 上进行部署推理
 - gcc/g++: version >= 8.2
 - cmake: version >= 3.15
 
-此外更推荐开发者自行安装，编译时通过`-DOPENCV_DIRECTORY`来指定环境中的OpenCV（如若不指定-DOPENCV_DIRECTORY，会自动下载FastDeploy提供的预编译的OpenCV，但在**Linux平台**无法支持Video的读取，以及imshow等可视化界面功能）
+此外更推荐开发者自行安装，编译时通过 `-DOPENCV_DIRECTORY` 来指定环境中的 OpenCV（如若不指定 -DOPENCV_DIRECTORY，会自动下载 FastDeploy 提供的预编译的 OpenCV，但在 **Linux平台** 无法支持 Video 的读取，以及 imshow 等可视化界面功能）
 
 ```
 sudo apt-get install libopencv-dev
@@ -46,11 +41,9 @@ mkdir build && cd build
 # CMake configuration with KunlunXin xpu toolchain
 cmake -DWITH_KUNLUNXIN=ON  \
       -DWITH_GPU=OFF  \ # 不编译 GPU
-      -DENABLE_ORT_BACKEND=ON  \ # 可选择开启 ORT 后端
-      -DENABLE_PADDLE_BACKEND=ON  \ # 可选择开启 Paddle 后端
       -DCMAKE_INSTALL_PREFIX=fastdeploy-kunlunxin \
       -DENABLE_VISION=ON \ # 是否编译集成视觉模型的部署模块，可选择开启
-      -DOPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \ # 指定系统自带的opencv路径
+      -DOPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \ # 指定系统自带的 opencv 路径
       ..
 
 # Build FastDeploy KunlunXin XPU C++ SDK
@@ -66,10 +59,8 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
 export WITH_KUNLUNXIN=ON
 export WITH_GPU=OFF
-export ENABLE_ORT_BACKEND=ON
-export ENABLE_PADDLE_BACKEND=ON
 export ENABLE_VISION=ON
-# OPENCV_DIRECTORY可选，不指定会自动下载FastDeploy提供的预编译OpenCV库
+# OPENCV_DIRECTORY 可选，不指定会自动下载 FastDeploy 提供的预编译 OpenCV 库
 export OPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4
 
 python setup.py build
