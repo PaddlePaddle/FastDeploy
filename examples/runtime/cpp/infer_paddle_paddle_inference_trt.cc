@@ -27,16 +27,20 @@ int main(int argc, char* argv[]) {
   // https://baidu-paddle.github.io/fastdeploy-api/cpp/html/structfastdeploy_1_1RuntimeOption.html
   fd::RuntimeOption runtime_option;
   runtime_option.SetModelPath(model_file, params_file);
-  runtime_option.UseOrtBackend();
-  
-  // Use CPU to inference
-  runtime_option.UseCpu();
-  runtime_option.SetCpuThreadNum(12);
+  runtime_option.UsePaddleInferBackend();
+   runtime_option.UseGpu(0);
+ 
+  // Enable Paddle Inference + TensorRT
+  // If need to configure Paddle Inference backend for more option, we can configure runtime_option.paddle_infer_option
+  // refer https://baidu-paddle.github.io/fastdeploy-api/cpp/html/structfastdeploy_1_1PaddleBackendOption.html
+  runtime_option.paddle_infer_option.enable_trt = true;
 
-  // Use Gpu to inference
-  // runtime_option.UseGpu(0);
-  // If need to configure ONNX Runtime backend for more option, we can configure runtime_option.ort_option
-  // refer https://baidu-paddle.github.io/fastdeploy-api/cpp/html/structfastdeploy_1_1OrtBackendOption.html
+  // If need to configure TensorRT backend for more option, we can configure runtime_option.trt_option
+  // refer https://baidu-paddle.github.io/fastdeploy-api/cpp/html/structfastdeploy_1_1TrtBackendOption.html
+  // Use float16 inference to improve performance
+  runtime_option.trt_option.enable_fp16 = true;
+  // Cache trt engine to reduce time cost in model initialize
+  runtime_option.trt_option.serialize_file = "./pplcnet_model.trt";
 
   fd::Runtime runtime;
   assert(runtime.Init(runtime_option));
