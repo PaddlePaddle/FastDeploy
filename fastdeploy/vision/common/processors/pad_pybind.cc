@@ -11,26 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-
-void BindProcessorManager(pybind11::module& m);
-void BindNormalizeAndPermute(pybind11::module& m);
-void BindProcessor(pybind11::module& m);
-void BindResizeByShort(pybind11::module& m);
-void BindCenterCrop(pybind11::module& m);
-void BindPad(pybind11::module& m);
-
-void BindProcessors(pybind11::module& m) {
-  auto processors_m =
-      m.def_submodule("processors", "Module to deploy Processors models");
-  BindProcessorManager(processors_m);
-  BindProcessor(processors_m);
-  BindNormalizeAndPermute(processors_m);
-  BindResizeByShort(processors_m);
-  BindCenterCrop(processors_m);
-  BindPad(processors_m);
+void BindPad(pybind11::module& m) {
+  pybind11::class_<vision::Pad, vision::Processor>(
+      m, "Pad")
+      .def(pybind11::init<int, int, int, int, std::vector<float>>(), "Default constructor");
 }
+
 }  // namespace fastdeploy
