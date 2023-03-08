@@ -147,7 +147,9 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_buffer,
   }
   config_.SetModelBuffer(model_buffer.c_str(), model_buffer.size(),
                          params_buffer.c_str(), params_buffer.size());
-  config_.EnableMemoryOptim();
+  if (option.enable_memory_optimize) {
+    config_.EnableMemoryOptim();
+  }
   BuildOption(option);
 
   // The input/output information get from predictor is not right, use
