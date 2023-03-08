@@ -157,12 +157,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Option to configure RKNPU2 backend
   RKNPU2BackendOption rknpu2_option;
 
-  /** \brief Set the profile mode as 'true'.
-   *
-   * \param[in] inclue_h2d_d2h Whether to include time of H2D_D2H for time of runtime.
-   * \param[in] repeat Repeat times for runtime inference.
-   * \param[in] warmup Warmup times for runtime inference.
-   */
+  //  \brief Set the profile mode as 'true'.
+  // 
+  // \param[in] inclue_h2d_d2h Whether to include time of H2D_D2H for time of runtime.
+  // \param[in] repeat Repeat times for runtime inference.
+  // \param[in] warmup Warmup times for runtime inference.
+  // 
   void EnableProfiling(bool inclue_h2d_d2h = false,
                        int repeat = 100, int warmup = 50) {
     benchmark_option.enable_profile = true;
@@ -171,24 +171,24 @@ struct FASTDEPLOY_DECL RuntimeOption {
     benchmark_option.include_h2d_d2h = inclue_h2d_d2h;
   }
 
-  /** \brief Set the profile mode as 'false'.
-   */
+  // \brief Set the profile mode as 'false'.
+  //
   void DisableProfiling() {
     benchmark_option.enable_profile = false;
   }
 
-  /** \brief Enable to check if current backend set by user can be found at valid_xxx_backend.
-   */
+  // \brief Enable to check if current backend set by user can be found at valid_xxx_backend.
+  //
   void EnableValidBackendCheck() {
     enable_valid_backend_check = true;
   }
-  /** \brief Disable to check if current backend set by user can be found at valid_xxx_backend.
-   */
+  // \brief Disable to check if current backend set by user can be found at valid_xxx_backend.
+  //
   void DisableValidBackendCheck() {
     enable_valid_backend_check = false;
   }
 
-  /// Benchmark option
+  // Benchmark option
   benchmark::BenchmarkOption benchmark_option;
   // enable the check for valid backend, default true.
   bool enable_valid_backend_check = true;
@@ -199,7 +199,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string model_file = "";
   std::string params_file = "";
   bool model_from_memory_ = false;
-  /// format of input model
+  // format of input model
   ModelFormat model_format = ModelFormat::PADDLE;
 
   std::string encryption_key_ = "";
