@@ -15,7 +15,7 @@
 
 namespace fastdeploy {
 void BindFDMatBatch(pybind11::module& m) {
-  pybind11::class_<vision::FDMatBatch>(m, "MatBatch")
+  pybind11::class_<vision::FDMatBatch>(m, "FDMatBatch")
       .def(pybind11::init<>(), "Default constructor")
       .def_readwrite("input_cache", &vision::FDMatBatch::input_cache)
       .def_readwrite("output_cache", &vision::FDMatBatch::output_cache)
