@@ -52,7 +52,7 @@ struct NCNNBackendOption {
   bool enable_fp16 = false;
   /// Enable use bf16 precision
   bool enable_bf16 = false;
-  /// Inference device, NCNN support CPU/GPU(OpenCV/VULKAN)
+  /// Inference device, NCNN support CPU/GPU(OpenCL/VULKAN)
   Device device = Device::CPU;
   /// Index of inference device
   int device_id = 0;

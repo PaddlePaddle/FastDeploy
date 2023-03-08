@@ -34,6 +34,7 @@
 #include "fastdeploy/runtime/backends/tensorrt/option.h"
 #include "fastdeploy/runtime/backends/mnn/option.h"
 #include "fastdeploy/runtime/backends/ncnn/option.h"
+#include "fastdeploy/runtime/backends/tnn/option.h"
 #include "fastdeploy/benchmark/option.h"
 
 namespace fastdeploy {
@@ -139,6 +140,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void UseMNNBackend();
   /// Set NCNN as inference backend, only support arm cpu
   void UseNCNNBackend();
+  /// Set TNN as inference backend, only support arm cpu
+  void UseTNNBackend();
   /** \Use Graphcore IPU to inference.
    *
    * \param[in] device_num the number of IPUs.
@@ -167,6 +170,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   MNNBackendOption mnn_option;
   /// Option to configure NCNN backend
   NCNNBackendOption ncnn_option;
+  /// Option to configure TNN backend
+  TNNBackendOption tnn_option;
 
   /** \brief Set the profile mode as 'true'.
    *

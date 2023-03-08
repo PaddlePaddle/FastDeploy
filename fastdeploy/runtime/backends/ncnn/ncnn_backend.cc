@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/runtime/backends/ncnn/ncnn_backend.h"
-
-#include <memory>
-#include <string>
+#include "fastdeploy/runtime/backends/ncnn/ncnn_backend.h"  // NO LINT
 
 #include "fastdeploy/utils/utils.h"
 
@@ -156,9 +153,9 @@ bool NCNNBackend::SetTensorInfoByCustomOrder(
         find = true;
       }
     }
-    FDASSERT(find, "Can not match ordered info %d from NCNN Model", i)
+    FDASSERT(find, "Can not match ordered %d from NCNN Model", i)
   }
-  return false;
+  return true;
 }
 
 bool NCNNBackend::SetTensorInfo(const std::vector<const char*>& tensor_names,
@@ -324,7 +321,8 @@ bool NCNNBackend::Infer(std::vector<FDTensor>& inputs,
     }
 
     auto shape = GetNCNNShape(inputs[i].shape);
-    FDASSERT(shape[0] == 1, "Only support batch=1, but got %d", shape[0])
+    FDASSERT(shape[0] == 1, "Backend::NCNN only support batch=1, but got %d",
+             shape[0])
     // Default dtype of ncnn::Mat is FP32. We only support
     // FP32 input/output now.
     if (shape.size() == 4) {  // dims = 4

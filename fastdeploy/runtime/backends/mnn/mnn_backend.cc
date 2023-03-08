@@ -14,9 +14,6 @@
 
 #include "fastdeploy/runtime/backends/mnn/mnn_backend.h"
 
-#include <memory>
-#include <string>
-
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
@@ -131,7 +128,7 @@ bool MNNBackend::SetTensorInfoByCustomOrder(
         find = true;
       }
     }
-    FDASSERT(find, "Can not match ordered info %d from MNN Model", i)
+    FDASSERT(find, "Can not match ordered %d from MNN Model", i)
   }
   return true;
 }
@@ -372,7 +369,7 @@ bool MNNBackend::Infer(std::vector<FDTensor>& inputs,
         MNN_COPY_NCHW_DATA_FROM_HOST(int64_t)
         break;
       default:
-        FDASSERT(false, "Unexpected data type of %s.",
+        FDASSERT(false, "Unsupport data type of %s for Backend::MNN",
                  Str(inputs[i].dtype).c_str())
         break;
     }

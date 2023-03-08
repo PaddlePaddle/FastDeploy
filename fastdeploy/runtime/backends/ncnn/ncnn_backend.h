@@ -63,9 +63,9 @@ class NCNNBackend : public BaseBackend {
                      std::map<std::string, int>* order);
   std::vector<int> GetNCNNShape(const std::vector<int64_t>& shape);
   std::vector<int64_t> GetFDShape(const std::vector<int>& shape);
-  std::string ShapeStr(const ncnn::Mat &mat, const std::string name = "");
   std::vector<int> GetMatShapeByBlob(int id, size_t* elemsize);
   std::vector<int> GetMatShape(const ncnn::Mat& mat, size_t* elemsize);
+  std::string ShapeStr(const ncnn::Mat &mat, const std::string name = "");
 
   std::vector<TensorInfo> inputs_desc_;
   std::vector<TensorInfo> outputs_desc_;

@@ -113,6 +113,7 @@ void RuntimeOption::SetCpuThreadNum(int thread_num) {
   paddle_infer_option.cpu_thread_num = thread_num;
   mnn_option.cpu_threads = thread_num;
   ncnn_option.cpu_threads = thread_num;
+  tnn_option.cpu_threads = thread_num;
 }
 
 void RuntimeOption::SetOrtGraphOptLevel(int level) {
@@ -200,6 +201,14 @@ void RuntimeOption::UseNCNNBackend() {
   backend = Backend::NCNN;
 #else
   FDASSERT(false, "The FastDeploy didn't compile with NCNN.");
+#endif
+}
+
+void RuntimeOption::UseTNNBackend() {
+#ifdef ENABLE_TNN_BACKEND
+  backend = Backend::TNN;
+#else
+  FDASSERT(false, "The FastDeploy didn't compile with TNN.");
 #endif
 }
 

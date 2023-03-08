@@ -57,6 +57,10 @@
 #include "fastdeploy/runtime/backends/ncnn/ncnn_backend.h"
 #endif
 
+#ifdef ENABLE_TNN_BACKEND
+#include "fastdeploy/runtime/backends/tnn/tnn_backend.h"
+#endif
+
 namespace fastdeploy {
 
 bool AutoSelectBackend(RuntimeOption& option) {
@@ -167,6 +171,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     CreateMNNBackend();
   } else if (option.backend == Backend::NCNN) {
     CreateNCNNBackend();
+  } else if (option.backend == Backend::TNN) {
+    CreateTNNBackend();
   } else {
     std::string msg = Str(GetAvailableBackends());
     FDERROR << "The compiled FastDeploy only supports " << msg << ", "
@@ -445,6 +451,21 @@ void Runtime::CreateNCNNBackend() {
            "ENABLE_NCNN_BACKEND=ON.");
 #endif
   FDINFO << "Runtime initialized with Backend::NCNN in " << option.device << "."
+         << std::endl;
+}
+
+void Runtime::CreateTNNBackend() {
+#ifdef ENABLE_TNN_BACKEND
+  backend_ = utils::make_unique<TNNBackend>();
+
+  FDASSERT(backend_->Init(option),
+           "Load model from tnn file failed while initializing TNNBackend.");
+#else
+  FDASSERT(false,
+           "TNNBackend is not available, please compiled with "
+           "ENABLE_TNN_BACKEND=ON.");
+#endif
+  FDINFO << "Runtime initialized with Backend::TNN in " << option.device << "."
          << std::endl;
 }
 
