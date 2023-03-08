@@ -73,7 +73,10 @@ class PaddleDetPostprocessor:
         """
         return self._postprocessor.run(runtime_results)
 
-    def apply_decode_and_nms(self, nms_option=None):
+    def apply_nms(self):
+        self.apply_nms()
+
+    def set_nms_option(self, nms_option=None):
         """This function will enable decode and nms in postprocess step.
         """
         if nms_option is None:
@@ -337,6 +340,44 @@ class YOLOv3(PPYOLOE):
                 self._model = model
 
         clone_model = YOLOv3Clone(self._model.clone())
+        return clone_model
+
+
+class SOLOv2(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load a SOLOv2 model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g solov2/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g solov2/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g solov2/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == ModelFormat.PADDLE, "SOLOv2 model only support model format of ModelFormat.Paddle now."
+        self._model = C.vision.detection.SOLOv2(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "SOLOv2 model initialize failed."
+
+    def clone(self):
+        """Clone SOLOv2 object
+
+        :return: a new SOLOv2 object
+        """
+
+        class SOLOv2Clone(SOLOv2):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = SOLOv2Clone(self._model.clone())
         return clone_model
 
 
