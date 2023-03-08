@@ -44,11 +44,30 @@ bool PaddleClasPreprocessor::BuildPreprocessPipelineFromConfig() {
              "Require the transform information in yaml be Map type.");
     auto op_name = op.begin()->first.as<std::string>();
     if (op_name == "ResizeImage") {
-      int target_size = op.begin()->second["resize_short"].as<int>();
-      bool use_scale = false;
-      int interp = 1;
-      processors_.push_back(
-          std::make_shared<ResizeByShort>(target_size, 1, use_scale));
+      if (op.begin()->second["resize_short"]){
+            int target_size = op.begin()->second["resize_short"].as<int>();
+            bool use_scale = false;
+            int interp = 1;
+            processors_.push_back(
+                std::make_shared<ResizeByShort>(target_size, 1, use_scale));
+      }else if (op.begin()->second["size"]){
+        int width = 0;
+        int height = 0;
+        if (op.begin()->second["size"].IsScalar()){
+            auto size = op.begin()->second["size"].as<int>();
+            width = size;
+            height = size;
+        }else{
+            auto size = op.begin()->second["size"].as<std::vector<int>>();
+            width = size[0];
+            height = size[1];
+        }
+        processors_.push_back(
+            std::make_shared<Resize>(width, height, -1.0, -1.0, 1, false));
+      }else{
+        FDERROR << "Invalid params for ResizeImage for both 'size' and 'resize_short' are None" << std::endl;
+      }
+
     } else if (op_name == "CropImage") {
       int width = op.begin()->second["size"].as<int>();
       int height = op.begin()->second["size"].as<int>();
