@@ -44,6 +44,10 @@ class FASTDEPLOY_DECL PaddleDetPreprocessor {
   /// This function will disable hwc2chw in preprocessing step.
   void DisablePermute();
 
+  std::string GetArch() {
+    return arch_;
+  }
+
  private:
   bool BuildPreprocessPipelineFromConfig();
   std::vector<std::shared_ptr<Processor>> processors_;
@@ -54,6 +58,8 @@ class FASTDEPLOY_DECL PaddleDetPreprocessor {
   bool disable_normalize_ = false;
   // read config file
   std::string config_file_;
+  // read arch_ for postprocess
+  std::string arch_;
 };
 
 }  // namespace detection
