@@ -207,6 +207,7 @@ bool OrtBackend::InitFromPaddle(const std::string& model_buffer,
   if (option.device == Device::GPU && option.enable_fp16) {
     use_fp16();
   }
+  convert_to_fp16 = true;
   if (!paddle2onnx::Export(
           model_buffer.c_str(), model_buffer.size(), params_buffer.c_str(),
           params_buffer.size(), &model_content_ptr, &model_content_size, 11,
@@ -245,8 +246,10 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
     return false;
   }
   std::string onnx_model_buffer;
-  if (option.device == Device::GPU && option.enable_fp16 && !convert_to_fp16 &&
-      use_fp16()) {
+  // if (option.device == Device::GPU && option.enable_fp16 && !convert_to_fp16
+  // &&
+  //     use_fp16()) {
+  if (true) {
     char* model_content_ptr;
     int model_content_size = 0;
     paddle2onnx::ConvertFP32ToFP16(model_file.c_str(), model_file.size(),
