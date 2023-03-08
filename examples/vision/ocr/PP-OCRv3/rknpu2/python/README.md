@@ -3,8 +3,8 @@ English | [简体中文](README_CN.md)
 
 Two steps before deployment
 
-- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
-- 2.  Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
+- 2.  Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 This directory provides examples that `infer.py` fast finishes the deployment of PPOCRv3 on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
 
@@ -43,7 +43,7 @@ The visualized result after running is as follows
 ## Other Documents
 
 - [Python API reference](https://baidu-paddle.github.io/fastdeploy-api/python/html/)
-- [PPOCR Model Description](../../)
+- [PPOCR Model Description](../README.md)
 - [PPOCRv3 C++ Deployment](../cpp)
-- [Model Prediction Results](../../../../../../docs/api/vision_results/)
+- [Model Prediction Results](../../../../../../docs/api/vision_results/README.md)
 - [How to switch the model inference backend engine](../../../../../../docs/en/faq/how_to_change_backend.md)

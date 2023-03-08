@@ -115,6 +115,12 @@ void PaddleTensorToFDTensor(std::unique_ptr<paddle_infer::Tensor>& tensor,
     } else if (fd_tensor->dtype == FDDataType::INT64) {
       tensor->CopyToCpu(static_cast<int64_t*>(fd_tensor->MutableData()));
       return;
+    } else if (fd_tensor->dtype == FDDataType::INT8) {
+      tensor->CopyToCpu(static_cast<int8_t*>(fd_tensor->MutableData()));
+      return;
+    } else if (fd_tensor->dtype == FDDataType::UINT8) {
+      tensor->CopyToCpu(static_cast<uint8_t*>(fd_tensor->MutableData()));
+      return;
     }
     FDASSERT(false, "Unexpected data type(%s) while infer with PaddleBackend.",
              Str(fd_tensor->dtype).c_str());
