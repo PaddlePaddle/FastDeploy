@@ -12,3 +12,6 @@
 	path = examples/multimodal/stable_diffusion/swift+coreml/swift_coreml_diffusers
 	url = https://github.com/lishicheng1996/swift-coreml-diffusers.git
 	branch = paddle_stable_diffusion
+[submodule "third_party/Paddle2ONNX"]
+	path = third_party/Paddle2ONNX
+	url = https://github.com/PaddlePaddle/Paddle2ONNX.git
