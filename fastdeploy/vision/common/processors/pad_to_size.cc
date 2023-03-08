@@ -217,7 +217,6 @@ static bool PadHWCByCvCuda(cvcuda::CopyMakeBorder& pad_op, FDMat* mat,
 static bool PadCHWByCvCuda(cvcuda::CopyMakeBorder& pad_op, FDMat* mat,
                            int width, int height,
                            const std::vector<float>& value) {
-  std::cout << "pad to size cvcuda" << std::endl;
   float4 border_value = make_float4(value[0], 0.0f, 0.0f, 0.0f);
   FDTensor* input = CreateCachedGpuInputTensor(mat);
   int channels = input->shape[0];
