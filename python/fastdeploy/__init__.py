@@ -27,7 +27,6 @@ except:
 from .c_lib_wrap import (
     ModelFormat,
     Backend,
-    rknpu2,
     FDDataType,
     TensorInfo,
     Device,
