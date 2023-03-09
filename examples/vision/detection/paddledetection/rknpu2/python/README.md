@@ -12,11 +12,10 @@ This directory provides `infer.py` for a quick example of Picodet deployment on 
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/detection/paddledetection/rknpu2/python
 
-# Download images.
+# Download images and model
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
-
-# copy model
-cp -r ./picodet_s_416_coco_lcnet /path/to/FastDeploy/examples/vision/detection/rknpu2detection/paddledetection/python
+wget https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/picodet_s_416_coco_lcnet.zip
+unzip picodet_s_416_coco_lcnet.zip
 
 # Inference.
 python3 infer.py --model_file ./picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet_rk3568.rknn  \

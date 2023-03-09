@@ -55,7 +55,7 @@ if __name__ == "__main__":
         model_format=fd.ModelFormat.RKNN)
     model.preprocessor.disable_normalize()
     model.preprocessor.disable_permute()
-    model.postprocessor.apply_decode_and_nms()
+    model.postprocessor.apply_nms()
 
     # 预测图片分割结果
     im = cv2.imread(args.image)

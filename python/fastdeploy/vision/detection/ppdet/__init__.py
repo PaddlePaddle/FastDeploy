@@ -74,14 +74,14 @@ class PaddleDetPostprocessor:
         return self._postprocessor.run(runtime_results)
 
     def apply_nms(self):
-        self.apply_nms()
+        self._postprocessor.apply_nms()
 
     def set_nms_option(self, nms_option=None):
         """This function will enable decode and nms in postprocess step.
         """
         if nms_option is None:
             nms_option = NMSOption()
-        self._postprocessor.ApplyDecodeAndNMS(self, nms_option.nms_option)
+        self._postprocessor.set_nms_option(self, nms_option.nms_option)
 
 
 class PPYOLOE(FastDeployModel):

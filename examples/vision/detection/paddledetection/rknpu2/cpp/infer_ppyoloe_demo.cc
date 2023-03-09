@@ -43,7 +43,8 @@ void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
 }
 
 void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
-  auto model_file = model_dir + "/ppyoloe_plus_crn_s_80e_coco_rk3588_quantized.rknn";
+  auto model_file =
+      model_dir + "/ppyoloe_plus_crn_s_80e_coco_rk3588_quantized.rknn";
   auto params_file = "";
   auto config_file = model_dir + "/infer_cfg.yml";
 
@@ -57,7 +58,7 @@ void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
 
   model.GetPreprocessor().DisablePermute();
   model.GetPreprocessor().DisableNormalize();
-  model.GetPostprocessor().ApplyDecodeAndNMS();
+  model.GetPostprocessor().ApplyNMS();
 
   auto im = cv::imread(image_file);
 
