@@ -14,7 +14,7 @@
 #include "fastdeploy/pybind/main.h"
 #include "fastdeploy/runtime/backends/rknpu2/option.h"
 namespace fastdeploy {
-void BindRKNPU2Config(pybind11::module& m) {
+void BindRKNPU2Option(pybind11::module& m) {
   pybind11::enum_<fastdeploy::rknpu2::CpuName>(
       m, "CpuName", pybind11::arithmetic(), "CpuName for inference.")
       .value("RK356X", fastdeploy::rknpu2::CpuName::RK356X)
