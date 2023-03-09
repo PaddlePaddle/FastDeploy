@@ -335,7 +335,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                     disable_trt_ops);
               } else if (param_key == "delete_passes") {
                 std::vector<std::string> delete_passes;
-                SplitStringByDelimiter(value_string, ' ', &disable_trt_ops);
+                SplitStringByDelimiter(value_string, ' ', &delete_passes);
                 for (auto&& pass : delete_passes) {
                   runtime_options_->paddle_infer_option.DeletePass(pass);
                 }
