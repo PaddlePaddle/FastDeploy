@@ -45,8 +45,9 @@ if(NOT MSVC)
   endif()
 endif(NOT MSVC)
 
+include(${PROJECT_SOURCE_DIR}/cmake/build_tools.cmake)
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND (NOT WITH_TIMVX))
-  include(${PROJECT_SOURCE_DIR}/cmake/patchelf.cmake)
+  download_patchelf()
 endif()
 
 
@@ -423,10 +424,11 @@ if(ENABLE_ENCRYPTION)
 endif()
 
 if(ENABLE_PADDLE2ONNX)
+  set(BUILD_PADDLE2ONNX ON)
   add_definitions(-DENABLE_PADDLE2ONNX)
   if(BUILD_PADDLE2ONNX)
+    download_protobuf()
     set(WITH_STATIC ON)
-    set(ONNX_USE_LITE_PROTO ON)
     add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/Paddle2ONNX)
     include_directories(${PROJECT_SOURCE_DIR}/third_party/Paddle2ONNX)
     list(APPEND DEPEND_LIBS paddle2onnx_dummy)
