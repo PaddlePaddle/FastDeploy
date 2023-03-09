@@ -47,8 +47,7 @@ void CpuInfer(const char* model_dir, const char* image_file) {
 
   FD_C_Mat im = FD_C_Imread(image_file);
 
-  FD_C_SegmentationResult* result =
-      (FD_C_SegmentationResult*)malloc(sizeof(FD_C_SegmentationResult));
+  FD_C_SegmentationResult* result = FD_C_CreateSegmentationResult();
 
   if (!FD_C_PaddleSegModelWrapperPredict(model, im, result)) {
     printf("Failed to predict.\n");
@@ -99,8 +98,7 @@ void GpuInfer(const char* model_dir, const char* image_file) {
 
   FD_C_Mat im = FD_C_Imread(image_file);
 
-  FD_C_SegmentationResult* result =
-      (FD_C_SegmentationResult*)malloc(sizeof(FD_C_SegmentationResult));
+  FD_C_SegmentationResult* result = FD_C_CreateSegmentationResult();
 
   if (!FD_C_PaddleSegModelWrapperPredict(model, im, result)) {
     printf("Failed to predict.\n");
