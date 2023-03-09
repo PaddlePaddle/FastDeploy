@@ -331,7 +331,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
               } else if (param_key == "disable_trt_ops") {
                 std::vector<std::string> disable_trt_ops;
                 SplitStringByDelimiter(value_string, ' ', &disable_trt_ops);
-                runtime_options_->paddle_infer_option.DisablePaddleTrtOPs(
+                runtime_options_->paddle_infer_option.DisableTrtOps(
                     disable_trt_ops);
               } else if (param_key == "delete_passes") {
                 std::vector<std::string> delete_passes;
