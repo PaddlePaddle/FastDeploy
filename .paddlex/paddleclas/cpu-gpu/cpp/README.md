@@ -11,7 +11,7 @@
 
 # 在CPU上使用Paddle Inference推理
 ./infer_demo ResNet50 test.jpg 0
-# 在CPU上使用OenVINO推理
+# 在CPU上使用OpenVINO推理
 ./infer_demo ResNet50 test.jpg 1
 # 在CPU上使用ONNX Runtime推理
 ./infer_demo ResNet50 test.jpg 2
