@@ -11,36 +11,23 @@ Before deployment, two steps require confirmation.
 Taking ResNet50_vd inference on Linux as an example, the compilation test can be completed by executing the following command in this directory. FastDeploy version 0.7.0 or above (x.x.x>=0.7.0)  is required to support this model.
 
 ```bash
-mkdir build
-cd build
-# Download FastDeploy precompiled library. Users can choose your appropriate version in the`FastDeploy Precompiled Library` mentioned above
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
-tar xvf fastdeploy-linux-x64-x.x.x.tgz
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
-make -j
+# Find the model directory in the package, e.g. ResNet50
 
-# Download ResNet50_vd model file and test images
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz
-tar -xvf ResNet50_vd_infer.tgz
-wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
-
+# Prepare a test image, e.g. test.jpg
 
 # CPU inference
-./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 0
+./infer_demo ResNet50 test.jpg 0
 # GPU inference
-./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 1
+./infer_demo ResNet50 test.jpg 1
 # TensorRT inference on GPU
-./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 2
+./infer_demo ResNet50 test.jpg 2
 # IPU inference
-./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 3
+./infer_demo ResNet50 test.jpg 3
 # KunlunXin XPU inference
-./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 4
+./infer_demo ResNet50 test.jpg 4
 # Ascend inference
-./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 5
+./infer_demo ResNet50 test.jpg 5
 ```
-
-The above command works for Linux or MacOS. Refer to
-- [How to use FastDeploy C++ SDK in Windows](../../../../../docs/cn/faq/use_sdk_on_windows.md) for SDK use-pattern in Windows
 
 ## PaddleClas C++ Interface
 
@@ -54,8 +41,6 @@ fastdeploy::vision::classification::PaddleClasModel(
         const RuntimeOption& runtime_option = RuntimeOption(),
         const ModelFormat& model_format = ModelFormat::PADDLE)
 ```
-
-PaddleClas model loading and initialization, where model_file and params_file are the Paddle inference files exported from the training model. Refer to [Model Export](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/inference_deployment/export_model.md#2-%E5%88%86%E7%B1%BB%E6%A8%A1%E5%9E%8B%E5%AF%BC%E5%87%BA) for more information
 
 **Parameter**
 
@@ -76,11 +61,5 @@ PaddleClas model loading and initialization, where model_file and params_file ar
 > **Parameter**
 >
 > > * **im**: Input images in HWC or BGR format
-> > * **result**: The classification result, including label_id, and the corresponding confidence. Refer to [Visual Model Prediction Results](../../../../../docs/api/vision_results/) for the description of ClassifyResult
+> > * **result**: The classification result, including label_id, and the corresponding confidence. Refer to [Visual Model Prediction Results](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/classification_result.md) for the description of ClassifyResult
 > > * **topk**(int): Return the topk classification results with the highest prediction probability. Default 1
-
-
-- [Model Description](../../)
-- [Python Deployment](../python)
-- [Visual Model prediction results](../../../../../docs/api/vision_results/)
-- [How to switch the model inference backend engine](../../../../../docs/en/faq/how_to_change_backend.md)

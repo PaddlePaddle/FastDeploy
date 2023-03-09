@@ -27,7 +27,7 @@ CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=/serving/models --bac
 ```
 >> **注意**:
 
->> 拉取其他硬件上的镜像请看[服务化部署主文档](../../../../../serving/README_CN.md)
+>> 拉取其他硬件上的镜像请看[服务化部署主文档](https://github.com/PaddlePaddle/FastDeploy/blob/develop/serving/README_CN.md)
 
 >> 执行fastdeployserver启动服务出现"Address already in use", 请使用`--grpc-port`指定端口号来启动服务，同时更改客户端示例中的请求端口号.
 

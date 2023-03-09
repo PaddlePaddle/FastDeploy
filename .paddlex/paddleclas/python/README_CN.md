@@ -52,8 +52,3 @@ fd.vision.classification.PaddleClasModel(model_file, params_file, config_file, r
 > **返回**
 >
 > > 返回`fastdeploy.vision.ClassifyResult`结构体，结构体说明参考文档[视觉模型预测结果](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/classification_result_CN.md)
-
-
-## 其它文档
-
-- [如何切换模型推理后端引擎](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/how_to_change_backend.md)
