@@ -73,6 +73,10 @@ TRITONSERVER_Error* FDParseShape(triton::common::TritonJson::Value& io,
                                  const std::string& name,
                                  std::vector<int32_t>* shape);
 
+int SplitStringByDelimiter(const std::string& s,
+                           char delimiter,
+                           std::vector<std::string>* results);
+
 }  // namespace fastdeploy_runtime
 }  // namespace backend
 }  // namespace triton
