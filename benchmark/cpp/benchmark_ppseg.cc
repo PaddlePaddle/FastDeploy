@@ -22,6 +22,7 @@ namespace benchmark = fastdeploy::benchmark;
 DEFINE_string(trt_shape, "1,3,192,192:1,3,192,192:1,3,192,192",
               "Set min/opt/max shape for trt/paddle_trt backend."
               "eg:--trt_shape 1,3,192,192:1,3,192,192:1,3,192,192");
+DEFINE_bool(quant, false, "Whether to use quantize model");
 
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
@@ -37,6 +38,7 @@ int main(int argc, char* argv[]) {
   auto model_file = FLAGS_model + sep + "model.pdmodel";
   auto params_file = FLAGS_model + sep + "model.pdiparams";
   auto config_file = FLAGS_model + sep + "deploy.yaml";
+  auto model_format = fastdeploy::ModelFormat::PADDLE;
   if (config_info["backend"] == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
   }
@@ -47,8 +49,24 @@ int main(int argc, char* argv[]) {
     option.trt_option.SetShape("x", trt_shapes[0], trt_shapes[1],
                                trt_shapes[2]);
   }
+  if (config_info["backend"] == "mnn") {
+    model_file = FLAGS_model + sep + "model.mnn";
+    if (FLAGS_quant) {
+      model_file = FLAGS_model + sep + "model_quant.mnn";
+    }
+    params_file = "";
+    model_format = fastdeploy::ModelFormat::MNN_MODEL;
+  } else if (config_info["backend"] == "tnn") {
+    model_file = FLAGS_model + sep + "model.opt.tnnmodel";
+    params_file = FLAGS_model + sep + "model.opt.tnnproto";
+    model_format = fastdeploy::ModelFormat::TNN_MODEL;
+  } else if (config_info["backend"] == "ncnn") {
+    model_file = FLAGS_model + sep + "model.opt.bin";
+    params_file = FLAGS_model + sep + "model.opt.param";
+    model_format = fastdeploy::ModelFormat::NCNN_MODEL;
+  }
   auto model_ppseg = vision::segmentation::PaddleSegModel(
-      model_file, params_file, config_file, option);
+      model_file, params_file, config_file, option, model_format);
   vision::SegmentationResult res;
   if (config_info["precision_compare"] == "true") {
     // Run once at least

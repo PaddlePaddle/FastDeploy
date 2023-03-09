@@ -20,6 +20,7 @@ namespace vision = fastdeploy::vision;
 namespace benchmark = fastdeploy::benchmark;
 
 DEFINE_bool(no_nms, false, "Whether the model contains nms.");
+DEFINE_bool(quant, false, "Whether to use quantize model");
 
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
@@ -32,11 +33,40 @@ int main(int argc, char* argv[]) {
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
+  auto backend = config_info["backend"];
   auto model_file = FLAGS_model + sep + "model.pdmodel";
   auto params_file = FLAGS_model + sep + "model.pdiparams";
   auto config_file = FLAGS_model + sep + "infer_cfg.yml";
-  auto model_ppyolov8 = vision::detection::PaddleYOLOv8(model_file, params_file,
-                                                        config_file, option);
+  auto model_format = fastdeploy::ModelFormat::PADDLE;
+  if (config_info["backend"] == "mnn") {
+    model_file = FLAGS_model + sep + "model.mnn";
+    if (FLAGS_quant) {
+      model_file = FLAGS_model + sep + "model_quant.mnn";
+    }
+    params_file = "";
+    model_format = fastdeploy::ModelFormat::MNN_MODEL;
+    // Set custom input/output orders
+    option.mnn_option.in_orders = {{"image", 0}, {"scale_factor", 1}};
+    option.mnn_option.out_orders = {{"tmp_73", 0}, {"concat_15.tmp_0", 1}};
+  } else if (config_info["backend"] == "tnn") {
+    model_file = FLAGS_model + sep + "model.opt.tnnmodel";
+    params_file = FLAGS_model + sep + "model.opt.tnnproto";
+    model_format = fastdeploy::ModelFormat::TNN_MODEL;
+    option.tnn_option.in_orders = {{"image", 0}, {"scale_factor", 1}};
+    option.tnn_option.out_orders = {{"tmp_73", 0}, {"concat_15.tmp_0", 1}};
+  } else if (config_info["backend"] == "ncnn") {
+    // WARN: PaddleYOLOv8 not support for NCNN now!
+    model_file = FLAGS_model + sep + "model.opt.bin";
+    params_file = FLAGS_model + sep + "model.opt.param";
+    model_format = fastdeploy::ModelFormat::NCNN_MODEL;
+    option.ncnn_option.in_orders = {{"image", 0}, {"scale_factor", 1}};
+    option.ncnn_option.out_orders = {{"tmp_73", 0}, {"concat_15.tmp_0", 1}};
+  }
+  auto model_ppyolov8 = vision::detection::PaddleYOLOv8(
+      model_file, params_file, config_file, option, model_format);
+  if (FLAGS_no_nms) {
+    model_ppyolov8.GetPostprocessor().ApplyNMS();
+  }
   vision::DetectionResult res;
   if (config_info["precision_compare"] == "true") {
     // Run once at least
@@ -88,14 +118,10 @@ int main(int argc, char* argv[]) {
               << ", min=" << det_tensor_diff.data.min << std::endl;
   }
   // Run profiling
-  if (FLAGS_no_nms) {
-    model_ppyolov8.GetPostprocessor().ApplyNMS();
-  }
   BENCHMARK_MODEL(model_ppyolov8, model_ppyolov8.Predict(im, &res))
   auto vis_im = vision::VisDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 #endif
-
   return 0;
 }

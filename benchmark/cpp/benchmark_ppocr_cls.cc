@@ -22,6 +22,7 @@ namespace benchmark = fastdeploy::benchmark;
 DEFINE_string(trt_shape, "1,3,48,10:4,3,48,320:8,3,48,1024",
               "Set min/opt/max shape for trt/paddle_trt backend."
               "eg:--trt_shape 1,3,48,10:4,3,48,320:8,3,48,1024");
+DEFINE_bool(quant, false, "Whether to use quantize model");
 
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
@@ -37,6 +38,7 @@ int main(int argc, char* argv[]) {
   // Classification Model
   auto cls_model_file = FLAGS_model + sep + "inference.pdmodel";
   auto cls_params_file = FLAGS_model + sep + "inference.pdiparams";
+  auto model_format = fastdeploy::ModelFormat::PADDLE;
   if (config_info["backend"] == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
   }
@@ -47,8 +49,24 @@ int main(int argc, char* argv[]) {
     option.trt_option.SetShape("x", trt_shapes[0], trt_shapes[1],
                                trt_shapes[2]);
   }
-  auto model_ppocr_cls =
-      vision::ocr::Classifier(cls_model_file, cls_params_file, option);
+  if (config_info["backend"] == "mnn") {
+    model_file = FLAGS_model + sep + "inference.mnn";
+    params_file = "";
+    model_format = fastdeploy::ModelFormat::MNN_MODEL;
+    if (FLAGS_quant) {
+      model_file = FLAGS_model + sep + "inference_quant.mnn";
+    }
+  } else if (config_info["backend"] == "tnn") {
+    model_file = FLAGS_model + sep + "inference.opt.tnnmodel";
+    params_file = FLAGS_model + sep + "inference.opt.tnnproto";
+    model_format = fastdeploy::ModelFormat::TNN_MODEL;
+  } else if (config_info["backend"] == "ncnn") {
+    model_file = FLAGS_model + sep + "inference.opt.bin";
+    params_file = FLAGS_model + sep + "inference.opt.param";
+    model_format = fastdeploy::ModelFormat::NCNN_MODEL;
+  }
+  auto model_ppocr_cls = vision::ocr::Classifier(
+      cls_model_file, cls_params_file, option, model_format);
   int32_t res_label;
   float res_score;
   if (config_info["precision_compare"] == "true") {

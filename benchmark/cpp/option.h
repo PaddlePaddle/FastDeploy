@@ -66,11 +66,26 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
       if (config_info["use_fp16"] == "true") {
         option->paddle_lite_option.enable_fp16 = true;
       }
+    } else if (config_info["backend"] == "mnn") {
+      option->UseMNNBackend();
+      if (config_info["use_fp16"]) {
+        option->mnn_option.enable_fp16 = true;
+      }
+    } else if (config_info["backend"] == "ncnn") {
+      option->UseNCNNBackend();
+      if (config_info["use_fp16"]) {
+        option->ncnn_option.enable_fp16 = true;
+      }
+    } else if (config_info["backend"] == "tnn") {
+      option->UseTNNBackend();
+      if (config_info["use_fp16"]) {
+        option->tnn_option.enable_fp16 = true;
+      }
     } else if (config_info["backend"] == "default") {
       return true;
     } else {
       std::cout << "While inference with CPU, only support "
-                   "default/ort/ov/paddle/lite now, "
+                   "default/ort/ov/paddle/lite/mnn/ncnn/tnn now, "
                 << config_info["backend"] << " is not supported." << std::endl;
       PrintUsage();
       return false;

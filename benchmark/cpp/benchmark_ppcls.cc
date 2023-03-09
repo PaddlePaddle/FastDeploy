@@ -16,6 +16,8 @@
 #include "macros.h"
 #include "option.h"
 
+DEFINE_bool(quant, false, "Whether to use quantize model");
+
 namespace vision = fastdeploy::vision;
 namespace benchmark = fastdeploy::benchmark;
 
@@ -37,8 +39,25 @@ int main(int argc, char* argv[]) {
   auto model_file = FLAGS_model + sep + "inference.pdmodel";
   auto params_file = FLAGS_model + sep + "inference.pdiparams";
   auto config_file = FLAGS_model + sep + "inference_cls.yaml";
+  auto model_format = fastdeploy::ModelFormat::PADDLE;
+  if (config_info["backend"] == "mnn") {
+    model_file = FLAGS_model + sep + "inference.mnn";
+    params_file = "";
+    model_format = fastdeploy::ModelFormat::MNN_MODEL;
+    if (FLAGS_quant) {
+      model_file = FLAGS_model + sep + "inference_quant.mnn";
+    }
+  } else if (config_info["backend"] == "tnn") {
+    model_file = FLAGS_model + sep + "inference.opt.tnnmodel";
+    params_file = FLAGS_model + sep + "inference.opt.tnnproto";
+    model_format = fastdeploy::ModelFormat::TNN_MODEL;
+  } else if (config_info["backend"] == "ncnn") {
+    model_file = FLAGS_model + sep + "inference.opt.bin";
+    params_file = FLAGS_model + sep + "inference.opt.param";
+    model_format = fastdeploy::ModelFormat::NCNN_MODEL;
+  }
   auto model_ppcls = vision::classification::PaddleClasModel(
-      model_file, params_file, config_file, option);
+      model_file, params_file, config_file, option, model_format);
   vision::ClassifyResult res;
   if (config_info["precision_compare"] == "true") {
     // Run once at least
