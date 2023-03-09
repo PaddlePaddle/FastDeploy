@@ -4,16 +4,18 @@
 
 ### 1. SDK概览
 
-FastDeploy部署SDK是基于FastDeploy Runtime多后端能力开发的，实现AI模型在各类硬件的高效推理部署。整个部署包有四部分组成：使用文档(README.md)、模型文件夹(model)、模型部署示例(example)、FastDeploy C++ SDK（CPU：fastdeploy-linux-x64-0.0.0；GPU：fastdeploy-linux-x64-gpu-0.0.0）。开发者可以快速验证模型的高性能部署，并将SDK集成到自己AI项目中。
+FastDeploy是一款全场景、易用灵活、极致高效的AI推理部署工具，使用FastDeploy可以简单高效的在10+款硬件上对PaddleSeg模型进行快速部署，本文档介绍在Linux下使用C++完成AI部署能力的介绍，更多能力PaddleX即将上线。
+
+FastDeploy SDK 是基于 FastDeploy Runtime 多后端能力开发的，实现AI模型在各类硬件的高效推理部署。部署包由四部分组成：使用文档(README.md)、模型文件夹(model)、模型部署示例(example)、FastDeploy C++ SDK（CPU：fastdeploy-linux-x64-0.0.0；GPU：fastdeploy-linux-x64-gpu-0.0.0）。开发者可以快速验证模型的高性能部署，并将SDK集成到自己AI项目中。
 
 ```
 Model_Name-FastDeploy-Linux-x86_64_CPU
 ├── README.md  # 使用文档，介绍SDK使用整体情况
 ├── model      # 训练好的模型文件
 │   ├── inference.pdmodel         # 模型结构文件
-│   ├── inference.pdiparams       # 模型标签文件
+│   ├── inference.pdiparams       # 模型参数文件
 │   ├── inference_**.yaml         # 模型配置文件
-│   ├── inference.pdiparams.info  # 模型参数文件
+│   ├── inference.pdiparams.info  
 ├── example
 │   ├── cpp                  # C++部署示例
 │   ├── python               # Python部署示例
@@ -36,7 +38,7 @@ Model_Name-FastDeploy-Linux-x86_64_CPU
 
 #### 2.1 主要功能
 
-部署包实现了基于模型的AI高性能推理图像，目前支持输入图像粒度的推理。视频推拉流即将支持；服务化部署，可以参考服务化部署文档。
+部署示例实现了模型高性能推理图像的功能，开发者可以基于[SDK API文档](https://baidu-paddle.github.io/fastdeploy-api/cpp/html/)完成更多丰富的部署能力；视频推拉流即将支持；服务化部署，可以参考服务化部署文档。
 
 #### 2.2 支持硬件
 
@@ -49,6 +51,9 @@ FastDeploy C++ SDK Version 0.0.0以FastDeploy源码develop分支编译，功能�
 * 基础AI推理，支持C++、Python图像粒度推理。（即将支持C#、C）
 * 支持用户基于FastDeploy API自定义开发。
 * 支持用户自动编译不同后端，缩小库体积。
+* 支持切换不同后端，放便快速对平台迁移。
+* 集成高性能前后预处理库，保证AI推理端到端性能最优。
+
 
 ## 二、SDK快速使用
 
