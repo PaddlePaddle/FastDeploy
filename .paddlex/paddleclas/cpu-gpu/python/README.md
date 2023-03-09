@@ -11,7 +11,7 @@
 
 # 在CPU上使用Paddle Inference推理
 python infer.py --model ResNet50 --image test.jpg --device cpu --backend paddle --topk 1
-# 在CPU上使用OenVINO推理
+# 在CPU上使用OpenVINO推理
 python infer.py --model ResNet50 --image test.jpg --device cpu --backend openvino --topk 1
 # 在CPU上使用ONNX Runtime推理
 python infer.py --model ResNet50 --image test.jpg --device cpu --backend ort --topk 1
