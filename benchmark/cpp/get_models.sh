@@ -176,7 +176,7 @@ onnx2tnn_cmd() {
       echo "[INFO][$model_dir] --- running onnx2tnn_cmd ... "
       # ${@:3} may look like: -in image:1,3,640,640 scale_factor:1,2
       # TNNConvert onnx2tnn $model_dir/$onnx_file -v=v1.0 -o $model_dir
-      TNNConvert onnx2tnn $model_dir/$onnx_file -optimize -v=v1.0 -o $model_dir ${@:3} > onnx2tnn.log 2>&1 && cat onnx2tnn.log && cat onnx2tnn.log
+      TNNConvert onnx2tnn $model_dir/$onnx_file -optimize -v=v1.0 -o $model_dir ${@:3} > onnx2tnn.log 2>&1 && cat onnx2tnn.log
       local check=$(echo $(cat onnx2tnn.log | grep succeed | wc -l))
       rm onnx2tnn.log
       if [ "$check" = "1" ]; then
