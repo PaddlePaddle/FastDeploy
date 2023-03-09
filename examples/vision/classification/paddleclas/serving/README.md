@@ -32,7 +32,7 @@ docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt
 docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10
 
 # Run the container named fd_serving and mount it in the /serving directory of the container
-nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/serving registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10  bash
+nvidia-docker run -it --shm-size 2g --net=host --name fd_serving -v `pwd`/:/serving registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10  bash
 
 # Start the service (The CUDA_VISIBLE_DEVICES  environment variable is not set, which entitles the scheduling authority of all GPU cards)
 CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=/serving/models --backend-config=python,shm-default-byte-size=10485760
