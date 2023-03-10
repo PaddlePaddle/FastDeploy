@@ -1,4 +1,4 @@
-# Linux C++ SDK
+# Linux Python SDK
 
 ## 一、SDK简介
 
