@@ -6,7 +6,10 @@ download_fd_model_zxvf() {
   local model="$1"  # xxx_model.tgz
   local len=${#model}
   local model_dir=${model:0:${#model}-4}  # xxx_model
-  echo "${model_dir}"
+  if [ -d "${model_dir}" ]; then
+     echo "[INFO] --- $model_dir already exists!"
+     return
+  fi
   if [ ! -f "${model}" ]; then
      echo "[INFO] --- downloading $model"
      wget https://bj.bcebos.com/paddlehub/fastdeploy/$model && tar -zxvf $model
@@ -22,6 +25,10 @@ download_fd_model_zxvf() {
 download_fd_model_xvf() {
   local model="$1"
   local model_dir=${model:0:${#model}-4}  # xxx_model
+  if [ -d "${model_dir}" ]; then
+     echo "[INFO] --- $model_dir already exists!"
+     return
+  fi
   if [ ! -f "${model}" ]; then
      echo "[INFO] --- downloading $model"
      wget https://bj.bcebos.com/paddlehub/fastdeploy/$model && tar -xvf $model
@@ -38,6 +45,10 @@ download_common_model_zxvf() {
   local model_url="$1"
   local model="$2"
   local model_dir=${model:0:${#model}-4}  # xxx_model
+  if [ -d "${model_dir}" ]; then
+     echo "[INFO] --- $model_dir already exists!"
+     return
+  fi
   if [ ! -f "${model}" ]; then
      echo "[INFO] --- downloading $model"
      wget ${model_url} && tar -zxvf $model
@@ -54,6 +65,10 @@ download_common_model_xvf() {
   local model_url="$1"
   local model="$2"
   local model_dir=${model:0:${#model}-4}  # xxx_model
+  if [ -d "${model_dir}" ]; then
+     echo "[INFO] --- $model_dir already exists!"
+     return
+  fi
   if [ ! -f "${model}" ]; then
      echo "[INFO] --- downloading $model"
      wget ${model_url} && tar -xvf $model
