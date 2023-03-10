@@ -327,5 +327,5 @@ if [ "$CONVERT_FLAG" = "convert" ]; then
 fi
 
 # ./get_models.sh
-# ./get_models.sh convert
-# ./get_models.sh convert delete
+# ./get_models.sh convert # convert models -> onnx/mnn/tnn/ncnn
+# ./get_models.sh convert delete # delete converted models
