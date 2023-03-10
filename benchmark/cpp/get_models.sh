@@ -85,6 +85,7 @@ download_common_file() {
 
 # Convert model: paddle -> onnx -> mnn/tnn/ncnn
 CONVERT_LOG=convert.$(date "+%Y.%m.%d.%H.%M.%S").log
+CONVERT_FLAG=$1
 CONVERT_MODE=$2
 
 dump_convert_log() {
@@ -222,12 +223,13 @@ onnx2ncnn_cmd() {
 }
 convert_fd_model() {
    local model_dir=$1
-   local model_file=$2
-   local param_file=$3
+   local model_file=$(cd $model_dir && ls *.pdmodel && cd ..)
+   local param_file=$(cd $model_dir && ls *.pdiparams && cd ..)
    local onnx_file=${model_file:0:${#model_file}-8}.onnx
+   echo "[INFO] --- Processing $model_file, $param_file ..."
    paddle2onnx_cmd $model_dir $model_file $param_file
    onnx2mnn_cmd $model_dir $onnx_file
-   onnx2tnn_cmd $model_dir $onnx_file ${@:4}
+   onnx2tnn_cmd $model_dir $onnx_file ${@:2}
    onnx2ncnn_cmd $model_dir $onnx_file
 }
 
@@ -282,40 +284,41 @@ download_common_file https://github.com/paddlepaddle/PaddleDetection/raw/release
 download_common_file https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt ppocr_keys_v1.txt
 
 # covert models -> onnx/mnn/tnn/ncnn
-if [ "$1" = "convert" ]; then
-   convert_fd_model ppyoloe_crn_l_300e_coco_no_nms model.pdmodel model.pdiparams -in image:1,3,640,640 scale_factor:1,2
-   convert_fd_model picodet_l_640_coco_lcnet_no_nms model.pdmodel model.pdiparams -in image:1,3,640,640
-   convert_fd_model ppyoloe_plus_crn_m_80e_coco_no_nms model.pdmodel model.pdiparams -in image:1,3,640,640 scale_factor:1,2
-   convert_fd_model yolox_s_300e_coco_no_nms model.pdmodel model.pdiparams -in image:1,3,640,640 scale_factor:1,2
-   convert_fd_model yolov5_s_300e_coco_no_nms model.pdmodel model.pdiparams -in image:1,3,640,640 scale_factor:1,2
-   convert_fd_model yolov6_s_300e_coco_no_nms model.pdmodel model.pdiparams -in image:1,3,640,640 scale_factor:1,2
-   convert_fd_model yolov7_l_300e_coco_no_nms model.pdmodel model.pdiparams -in image:1,3,640,640 scale_factor:1,2
-   convert_fd_model yolov8_s_500e_coco_no_nms model.pdmodel model.pdiparams -in image:1,3,640,640 scale_factor:1,2
+if [ "$CONVERT_FLAG" = "convert" ]; then
+   convert_fd_model ppyoloe_crn_l_300e_coco_no_nms -in image:1,3,640,640 scale_factor:1,2
+   convert_fd_model picodet_l_640_coco_lcnet_no_nms -in image:1,3,640,640
+   convert_fd_model ppyoloe_plus_crn_m_80e_coco_no_nms -in image:1,3,640,640 scale_factor:1,2
+   convert_fd_model yolox_s_300e_coco_no_nms -in image:1,3,640,640 scale_factor:1,2
+   convert_fd_model yolov5_s_300e_coco_no_nms -in image:1,3,640,640 scale_factor:1,2
+   convert_fd_model yolov6_s_300e_coco_no_nms -in image:1,3,640,640 scale_factor:1,2
+   convert_fd_model yolov7_l_300e_coco_no_nms -in image:1,3,640,640 scale_factor:1,2
+   convert_fd_model yolov8_s_500e_coco_no_nms -in image:1,3,640,640 scale_factor:1,2
 
-   convert_fd_model PPLCNet_x1_0_infer inference.pdmodel inference.pdiparams -in 1,3,224,224
-   convert_fd_model PPLCNetV2_base_infer inference.pdmodel inference.pdiparams -in 1,3,224,224
-   convert_fd_model MobileNetV1_x0_25_infer inference.pdmodel inference.pdiparams -in 1,3,224,224
-   convert_fd_model MobileNetV1_ssld_infer inference.pdmodel inference.pdiparams -in 1,3,224,224
-   convert_fd_model MobileNetV3_large_x1_0_ssld_infer inference.pdmodel inference.pdiparams -in 1,3,224,224
-   convert_fd_model ShuffleNetV2_x2_0_infer inference.pdmodel inference.pdiparams -in 1,3,224,224
-   convert_fd_model ResNet50_vd_infer inference.pdmodel inference.pdiparams -in 1,3,224,224
-   convert_fd_model EfficientNetB0_small_infer inference.pdmodel inference.pdiparams -in 1,3,224,224
-   convert_fd_model PPHGNet_tiny_ssld_infer inference.pdmodel inference.pdiparams -in 1,3,224,224
+   convert_fd_model PPLCNet_x1_0_infer -in 1,3,224,224
+   convert_fd_model PPLCNetV2_base_infer -in 1,3,224,224
+   convert_fd_model MobileNetV1_x0_25_infer -in 1,3,224,224
+   convert_fd_model MobileNetV1_ssld_infer -in 1,3,224,224
+   convert_fd_model MobileNetV3_large_x1_0_ssld_infer -in 1,3,224,224
+   convert_fd_model ShuffleNetV2_x2_0_infer -in 1,3,224,224
+   convert_fd_model ResNet50_vd_infer -in 1,3,224,224
+   convert_fd_model EfficientNetB0_small_infer -in 1,3,224,224
+   convert_fd_model PPHGNet_tiny_ssld_infer -in 1,3,224,224
 
-   convert_fd_model PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer model.pdmodel model.pdiparams -in 1,3,512,512
-   convert_fd_model PP_HumanSegV1_Lite_infer model.pdmodel model.pdiparams -in 1,3,192,192
-   convert_fd_model PP_HumanSegV2_Lite_192x192_with_argmax_infer model.pdmodel model.pdiparams -in 1,3,192,192
-   convert_fd_model Portrait_PP_HumanSegV2_Lite_256x144_with_argmax_infer model.pdmodel model.pdiparams -in 1,3,144,256
-   convert_fd_model Deeplabv3_ResNet101_OS8_cityscapes_with_argmax_infer model.pdmodel model.pdiparams -in 1,3,512,512
-   convert_fd_model SegFormer_B0-cityscapes-with-argmax model.pdmodel model.pdiparams -in 1,3,512,512
-   convert_fd_model PPHumanMatting model.pdmodel model.pdiparams
-   convert_fd_model PPModnet_MobileNetV2 model.pdmodel model.pdiparams -in 1,3,512,512
+   convert_fd_model PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer -in 1,3,512,512
+   convert_fd_model PP_HumanSegV1_Lite_infer -in 1,3,192,192
+   convert_fd_model PP_HumanSegV2_Lite_192x192_with_argmax_infer -in 1,3,192,192
+   convert_fd_model Portrait_PP_HumanSegV2_Lite_256x144_with_argmax_infer -in 1,3,144,256
+   convert_fd_model Deeplabv3_ResNet101_OS8_cityscapes_with_argmax_infer -in 1,3,512,512
+   convert_fd_model SegFormer_B0-cityscapes-with-argmax -in 1,3,512,512
+   convert_fd_model PPHumanMatting
+   convert_fd_model PP-Matting-512
+   convert_fd_model PPModnet_MobileNetV2 -in 1,3,512,512
 
-   convert_fd_model ch_PP-OCRv3_det_infer inference.pdmodel inference.pdiparams -in x:1,3,960,608
-   convert_fd_model ch_PP-OCRv3_rec_infer inference.pdmodel inference.pdiparams -in x:1,3,48,572
-   convert_fd_model ch_ppocr_mobile_v2.0_cls_infer inference.pdmodel inference.pdiparams -in x:1,3,48,572
-   convert_fd_model ch_PP-OCRv2_det_infer inference.pdmodel inference.pdiparams -in x:1,3,960,608
-   convert_fd_model ch_PP-OCRv2_rec_infer inference.pdmodel inference.pdiparams -in x:1,3,48,572
+   convert_fd_model ch_PP-OCRv3_det_infer -in x:1,3,960,608
+   convert_fd_model ch_PP-OCRv3_rec_infer -in x:1,3,48,572
+   convert_fd_model ch_ppocr_mobile_v2.0_cls_infer -in x:1,3,48,572
+   convert_fd_model ch_PP-OCRv2_det_infer -in x:1,3,960,608
+   convert_fd_model ch_PP-OCRv2_rec_infer -in x:1,3,48,572
 
    echo "-----------------------------------------Convert Status-----------------------------------------"
    cat ${CONVERT_LOG}
