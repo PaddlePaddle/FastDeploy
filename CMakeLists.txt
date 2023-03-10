@@ -38,7 +38,11 @@ include(${PROJECT_SOURCE_DIR}/cmake/utils.cmake)
 if(NOT MSVC)
   set(CMAKE_CXX_STANDARD 11)
   set(CMAKE_CXX_FLAGS "-Wno-format -g0 -O3")
-  add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
+  if(NEED_ABI0)
+    add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
+  else()
+    add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
+  endif()
 endif(NOT MSVC)
 
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND (NOT WITH_TIMVX))
@@ -370,7 +374,7 @@ if(ENABLE_TRT_BACKEND)
     endif()
     if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
       execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
-	      COMMAND sh -c "xargs ${PATCHELF_EXE} --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
+	      COMMAND sh -c "xargs ${PATCHELF_EXE} --force-rpath --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
     	          RESULT_VARIABLE result
                       OUTPUT_VARIABLE curr_out
                       ERROR_VARIABLE  curr_out)
