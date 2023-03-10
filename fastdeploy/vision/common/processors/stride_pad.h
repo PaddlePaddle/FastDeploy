@@ -15,6 +15,11 @@
 #pragma once
 
 #include "fastdeploy/vision/common/processors/base.h"
+#ifdef ENABLE_CVCUDA
+#include <cvcuda/OpCopyMakeBorder.hpp>
+
+#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
+#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -30,6 +35,9 @@ class FASTDEPLOY_DECL StridePad : public Processor {
 #ifdef ENABLE_FLYCV
   bool ImplByFlyCV(Mat* mat);
 #endif
+#ifdef ENABLE_CVCUDA
+  bool ImplByCvCuda(FDMat* mat);
+#endif
   std::string Name() { return "StridePad"; }
 
   static bool Run(Mat* mat, int stride,
@@ -39,6 +47,9 @@ class FASTDEPLOY_DECL StridePad : public Processor {
  private:
   int stride_ = 32;
   std::vector<float> value_;
+#ifdef ENABLE_CVCUDA
+  cvcuda::CopyMakeBorder cvcuda_pad_op_;
+#endif
 };
 }  // namespace vision
 }  // namespace fastdeploy
