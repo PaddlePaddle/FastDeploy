@@ -6,7 +6,7 @@
 
 FastDeploy是一款全场景、易用灵活、极致高效的AI推理部署工具，使用FastDeploy可以简单高效的在10+款硬件上对PaddleSeg模型进行快速部署，本文档介绍在Linux下使用C++完成AI部署能力的介绍，更多能力PaddleX即将上线。
 
-FastDeploy SDK 是基于 FastDeploy Runtime 多后端能力开发的，实现AI模型在各类硬件的高效推理部署。部署包由四部分组成：使用文档(README.md)、模型文件夹(model)、模型部署示例(example)、FastDeploy C++ SDK（CPU：fastdeploy-linux-x64-0.0.0；GPU：fastdeploy-linux-x64-gpu-0.0.0）。开发者可以快速验证模型的高性能部署，并将SDK集成到自己AI项目中。
+FastDeploy SDK 是基于 FastDeploy Runtime 多后端能力开发的，实现AI模型在各类硬件的高效推理部署。部署包由四部分组成：使用文档(README.md)、模型文件夹(model)、模型部署示例(example)、FastDeploy C++ SDK（CPU：fastdeploy-win-x64-0.0.0；GPU：fastdeploy-win-x64-gpu-0.0.0）。开发者可以快速验证模型的高性能部署，并将SDK集成到自己AI项目中。
 
 ```
 Model_Name-FastDeploy-Linux-x86_64_CPU
@@ -16,14 +16,12 @@ Model_Name-FastDeploy-Linux-x86_64_CPU
 │   ├── inference.pdiparams       # 模型参数文件
 │   ├── inference_**.yaml         # 模型配置文件
 │   ├── inference.pdiparams.info  
-├── example
-│   ├── cpp                  # C++部署示例
-│   ├── python               # Python部署示例
-├── fastdeploy-linux-x64-0.0.0  # FastDeploy C++ SDK
+├── example    # C++部署示例
+├── fastdeploy-win-x64-0.0.0  # FastDeploy C++ SDK
 │   ├── libs         # FastDeploy库文件
 │   ├── include      # FastDeploy头文件
 │   ├── third_libs   # FastDeploy第三方依赖
-│   ├── fastdeploy_init.sh
+│   ├── fastdeploy_init.bat
 │   ├── FastDeploy.cmake
 │   ├── FastDeployConfig.cmake
 │   ├── FastDeployCSharp.cmake
@@ -59,15 +57,9 @@ FastDeploy C++ SDK Version 0.0.0以FastDeploy源码develop分支编译，功能�
 
 ### 1. 环境准备
 
-- GCC 8.2
+- cmake >= 3.12
+- Visual Studio 16 2019
 - GPU环境：CUDA 11.2, cuDNN 8.2
-
-需要把FastDeploy SDK的相关库文件的路径，LD_LIBRARY_PATH环境变量中。FastDeploy提供了辅助脚本来帮助完成。
-执行如下命令，即可将库路径导入到LD_LIBRARY_PATH中
-```
-source fastdeploy-linux-x64-0.0.0/fastdeploy_init.sh
-```
-注意此命令执行后仅在当前的命令环境中生效（切换一个新的终端窗口，或关闭窗口重新打开后会无效），如若需要在系统中持续生效，可将这些环境变量加入到~/.bashrc文件中。
 
 ### 2. Linux编译部署示例
 
@@ -76,15 +68,24 @@ cd example
 mkdir build
 cd build
 # 运行cmake命令需要指定FastDeploy SDK路径，FastDeploy SDK位于下载的部署包内
-cmake .. -DFASTDEPLOY_INSTALL_DIR=../../fastdeploy-linux-x64-x.x.x/
-make -j
+# 对于GPU环境，需要指定CUDA路径，例如-DCUDA_DIRECTORY="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2"
+cmake .. -G "Visual Studio 16 2019" -A x64 -DFASTDEPLOY_INSTALL_DIR=..\..\fastdeploy-win-x64-0.0.0
+
+msbuild infer_demo.sln /m:4 /p:Configuration=Release /p:Platform=x64
+
+```
+
+在Windows上运行示例前，需要将FastDeploy依赖的库拷贝至可执行程序所在目录，或者配置环境变量。fastdeploy_init.bat脚本用于将所有依赖库拷贝至可执行程序所在目录：
+
+```
+cd fastdeploy-win-x64-0.0.0
+
+fastdeploy_init.bat install %cd% ..\example\build\Release
 ```
 
 ### 3. 运行部署示例
 
 请参考example/目录下的README
-
-### 4. 错误代码及说明
 
 ## 三、FastDeploy部署其他参考文档
 
