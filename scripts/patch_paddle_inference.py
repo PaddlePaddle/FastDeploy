@@ -30,8 +30,8 @@ def process_paddle_inference(paddle_inference_so_file):
     ]
 
     patchelf_exe = os.getenv("PATCHELF_EXE", "patchelf")
-    command = "{} --set-rpath '{}' {}".format(patchelf_exe, ":".join(rpaths),
-                                              paddle_inference_so_file)
+    command = "{} --force-rpath --set-rpath '{}' {}".format(
+        patchelf_exe, ":".join(rpaths), paddle_inference_so_file)
     if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
         assert os.system(
             command) == 0, "patchelf {} failed, the command: {}".format(
