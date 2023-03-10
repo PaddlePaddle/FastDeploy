@@ -4,7 +4,7 @@
 
 ### 1. SDK概览
 
-FastDeploy是一款全场景、易用灵活、极致高效的AI推理部署工具，使用FastDeploy可以简单高效的在10+款硬件上对PaddleSeg模型进行快速部署，本文档介绍在Linux下使用Python完成AI部署能力的介绍，更多能力PaddleX即将上线。
+FastDeploy是一款全场景、易用灵活、极致高效的AI推理部署工具，使用FastDeploy可以简单高效的在10+款硬件上对Paddle模型进行快速部署，本文档介绍在Linux下使用Python完成AI部署能力的介绍，更多能力PaddleX即将上线。
 
 FastDeploy SDK 是基于 FastDeploy Runtime 多后端能力开发的，实现AI模型在各类硬件的高效推理部署。部署包由四部分组成：使用文档(README.md)、模型文件夹(model)、模型部署示例(example)、FastDeploy Python安装包（CPU：fastdeploy_python-0.0.0-cp36-cp36m-manylinux1_x86_64.whl；GPU：fastdeploy_gpu_python-0.0.0-cp36-cp36m-manylinux1_x86_64.whl）。开发者可以快速验证模型的高性能部署，并将SDK集成到自己AI项目中。
 
