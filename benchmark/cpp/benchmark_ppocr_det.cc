@@ -50,19 +50,19 @@ int main(int argc, char* argv[]) {
                                trt_shapes[2]);
   }
   if (config_info["backend"] == "mnn") {
-    model_file = FLAGS_model + sep + "inference.mnn";
-    params_file = "";
+    det_model_file = FLAGS_model + sep + "inference.mnn";
+    det_params_file = "";
     model_format = fastdeploy::ModelFormat::MNN_MODEL;
     if (FLAGS_quant) {
-      model_file = FLAGS_model + sep + "inference_quant.mnn";
+      det_model_file = FLAGS_model + sep + "inference_quant.mnn";
     }
   } else if (config_info["backend"] == "tnn") {
-    model_file = FLAGS_model + sep + "inference.opt.tnnmodel";
-    params_file = FLAGS_model + sep + "inference.opt.tnnproto";
+    det_model_file = FLAGS_model + sep + "inference.opt.tnnmodel";
+    det_params_file = FLAGS_model + sep + "inference.opt.tnnproto";
     model_format = fastdeploy::ModelFormat::TNN_MODEL;
   } else if (config_info["backend"] == "ncnn") {
-    model_file = FLAGS_model + sep + "inference.opt.bin";
-    params_file = FLAGS_model + sep + "inference.opt.param";
+    det_model_file = FLAGS_model + sep + "inference.opt.bin";
+    det_params_file = FLAGS_model + sep + "inference.opt.param";
     model_format = fastdeploy::ModelFormat::NCNN_MODEL;
   }
   auto model_ppocr_det = vision::ocr::DBDetector(

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <unordered_map>
 #include "fastdeploy/vision.h"
 
 static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
@@ -68,17 +69,17 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
       }
     } else if (config_info["backend"] == "mnn") {
       option->UseMNNBackend();
-      if (config_info["use_fp16"]) {
+      if (config_info["use_fp16"] == "true") {
         option->mnn_option.enable_fp16 = true;
       }
     } else if (config_info["backend"] == "ncnn") {
       option->UseNCNNBackend();
-      if (config_info["use_fp16"]) {
+      if (config_info["use_fp16"] == "true") {
         option->ncnn_option.enable_fp16 = true;
       }
     } else if (config_info["backend"] == "tnn") {
       option->UseTNNBackend();
-      if (config_info["use_fp16"]) {
+      if (config_info["use_fp16"] == "true") {
         option->tnn_option.enable_fp16 = true;
       }
     } else if (config_info["backend"] == "default") {
