@@ -45,7 +45,6 @@ FastDeploy Version 0.0.0以FastDeploy源码develop分支编译，功能列表：
 
 ### 1. 环境准备
 
-- GCC 8.2
 - GPU环境：CUDA 11.2, cuDNN 8.2
 
 ```
