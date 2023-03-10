@@ -1,4 +1,4 @@
-# Linux C++ SDK
+# Windows C++ SDK
 
 ## 一、SDK简介
 
