@@ -57,6 +57,10 @@ struct FASTDEPLOY_DECL FDMatBatch {
 #endif
 
   std::vector<FDMat>* mats = nullptr;
+
+  // Used by pybind, since python cannot pass list as pointer or reference
+  std::vector<FDMat> mats_holder;
+
   ProcLib mat_type = ProcLib::OPENCV;
   FDMatBatchLayout layout = FDMatBatchLayout::NHWC;
   Device device = Device::CPU;
