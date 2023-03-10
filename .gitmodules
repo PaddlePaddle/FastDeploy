@@ -15,3 +15,6 @@
 [submodule "third_party/Paddle2ONNX"]
 	path = third_party/Paddle2ONNX
 	url = https://github.com/PaddlePaddle/Paddle2ONNX.git
+[submodule "third_party/onnx"]
+	path = third_party/onnx
+	url = https://github.com/onnx/onnx.git
