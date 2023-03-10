@@ -23,11 +23,6 @@
 #else
 #define PADDLE2ONNX_DECL __attribute__((visibility("default")))
 #endif  // _WIN32
-// Include mappers_registry.h for paddle2onnx static library.
-// This header will do notthings when you are using paddle2onnx 
-// dynamic library.
-#include "mappers_registry.h"
-
 namespace paddle2onnx {
 
 struct PADDLE2ONNX_DECL CustomOp {
