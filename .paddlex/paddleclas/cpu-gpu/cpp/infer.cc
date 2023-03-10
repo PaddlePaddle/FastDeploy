@@ -19,7 +19,8 @@ const char sep = '\\';
 const char sep = '/';
 #endif
 
-void InitAndInfer(const std::string& model_dir, const std::string& image_file, const fastdeploy::RuntimeOption &option)) {
+void InitAndInfer(const std::string& model_dir, const std::string& image_file,
+                  const fastdeploy::RuntimeOption& option) {
   auto model_file = model_dir + sep + "inference.pdmodel";
   auto params_file = model_dir + sep + "inference.pdiparams";
   auto config_file = model_dir + sep + "inference_cls.yaml";
@@ -71,9 +72,8 @@ int main(int argc, char* argv[]) {
     option.UsePaddleBackend();  // Paddle Inference
   } else if (flag == 5) {
     option.UseGpu();
-    option.UseTrtBackend();
-    option.EnablePaddleTrtCollectShape();
-    option.EnablePaddleToTrt();  // Paddle-TensorRT
+    option.UsePaddleBackend();
+    option.paddle_infer_option.enable_trt = true;  // Paddle-TensorRT
   } else if (flag == 6) {
     option.UseGpu();
     option.UseOrtBackend();  // ONNX Runtime
