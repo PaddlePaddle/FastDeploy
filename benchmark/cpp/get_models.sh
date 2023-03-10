@@ -2,12 +2,6 @@
 set -e
 set +x
 
-proxyoff(){
-    unset http_proxy
-    unset https_proxy
-    echo -e "[INFO] --- Proxy OFF!"
-}
-
 download_fd_model_zxvf() {
   local model="$1"
   if [ ! -f "${model}" ]; then
@@ -57,7 +51,6 @@ download_common_file() {
   fi
 }
 
-proxyoff
 # PaddleDetection
 download_fd_model_zxvf ppyoloe_crn_l_300e_coco_no_nms.tgz
 download_fd_model_zxvf picodet_l_640_coco_lcnet_no_nms.tgz
