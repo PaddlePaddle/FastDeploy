@@ -1,0 +1,16 @@
+.DS_Store
+
+*~
+
+*.pyc
+.pydevproject
+build/*
+.eggs/*
+dist/*
+.setuptools*
+paddle2onnx.egg-info/*
+*.pdmodel
+*_*.onnx
+*.log
+version.py
+paddle2onnx/mappers_registry.h
