@@ -9,7 +9,7 @@ FastDeploy是一款全场景、易用灵活、极致高效的AI推理部署工�
 FastDeploy SDK 是基于 FastDeploy Runtime 多后端能力开发的，实现AI模型在各类硬件的高效推理部署。部署包由四部分组成：使用文档(README.md)、模型文件夹(model)、模型部署示例(example)、FastDeploy C++ SDK（CPU：fastdeploy-win-x64-0.0.0；GPU：fastdeploy-win-x64-gpu-0.0.0）。开发者可以快速验证模型的高性能部署，并将SDK集成到自己AI项目中。
 
 ```
-Model_Name-FastDeploy-Linux-x86_64_CPU
+Model_Name-FastDeploy-Windows-x86_64_CPU
 ├── README.md  # 使用文档，介绍SDK使用整体情况
 ├── model      # 训练好的模型文件
 │   ├── inference.pdmodel         # 模型结构文件
@@ -58,7 +58,7 @@ FastDeploy C++ SDK Version 0.0.0以FastDeploy源码develop分支编译，功能�
 ### 1. 环境准备
 
 - cmake >= 3.12
-- Visual Studio 16 2019
+- Visual Studio 2019
 - GPU环境：CUDA 11.2, cuDNN 8.2
 
 ### 2. Linux编译部署示例
