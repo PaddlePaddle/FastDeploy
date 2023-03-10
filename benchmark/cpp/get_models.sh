@@ -2,12 +2,6 @@
 set +e
 set +x
 
-proxyoff(){
-    unset http_proxy
-    unset https_proxy
-    echo -e "[INFO] --- Proxy OFF!"
-}
-
 download_fd_model_zxvf() {
   local model="$1"  # xxx_model.tgz
   local len=${#model}
@@ -233,7 +227,6 @@ convert_fd_model() {
    onnx2ncnn_cmd $model_dir $onnx_file
 }
 
-proxyoff
 # PaddleDetection
 download_fd_model_zxvf ppyoloe_crn_l_300e_coco_no_nms.tgz
 download_fd_model_zxvf picodet_l_640_coco_lcnet_no_nms.tgz
