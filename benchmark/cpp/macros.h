@@ -34,21 +34,17 @@
     __resource_moniter__.Start();                                           \
   }                                                                         \
   if (__config_info__["profile_mode"] == "runtime") {                       \
-    std::cout << "Runtime(ms): "                                            \
-    __ss__ << "Runtime(ms): "                                               \
     if (!BENCHMARK_FUNC) {                                                  \
       std::cerr << "Failed to predict." << std::endl;                       \
       return 0;                                                             \
     }                                                                       \
     double __profile_time__ = MODEL_NAME.GetProfileTime() * 1000;           \
-    std::cout << __profile_time__ << "ms." << std::endl;                    \
-    __ss__ << __profile_time__ << "ms." << std::endl;                       \
+    std::cout << "Runtime(ms): " << __profile_time__ << "ms." << std::endl; \
+    __ss__ << "Runtime(ms): " << __profile_time__ << "ms." << std::endl;    \
   } else {                                                                  \
     std::cout << "Warmup "                                                  \
               << __config_info__["warmup"]                                  \
               << " times..." << std::endl;                                  \
-    std::cout << "End2End(ms): "                                            \
-    __ss__ << "End2End(ms): "                                               \
     int __warmup__ = std::stoi(__config_info__["warmup"]);                  \
     for (int __i__ = 0; __i__ < __warmup__; __i__++) {                      \
       if (!BENCHMARK_FUNC) {                                                \
@@ -71,8 +67,8 @@
     }                                                                       \
     __tc__.End();                                                           \
     double __end2end__ = __tc__.Duration() / __repeat__ * 1000;             \
-    std::cout << __end2end__ << "ms." << std::endl;                         \
-    __ss__ << __end2end__ << "ms." << std::endl;                            \
+    std::cout << "End2End(ms): " << __end2end__ << "ms." << std::endl;      \
+    __ss__ << "End2End(ms): " << __end2end__ << "ms." << std::endl;         \
   }                                                                         \
   if (__config_info__["collect_memory_info"] == "true") {                   \
     float __cpu_mem__ = __resource_moniter__.GetMaxCpuMem();                \
