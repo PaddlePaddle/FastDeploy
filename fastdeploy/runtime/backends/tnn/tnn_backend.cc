@@ -156,7 +156,7 @@ bool TNNBackend::SetTensorInfo(const tnn::BlobMap& blobs,
     auto data_format = iter.second->GetBlobDesc().data_format;
     FDASSERT((data_format == tnn::DataFormat::DATA_FORMAT_NCHW) ||
                  (data_format == tnn::DataFormat::DATA_FORMAT_NC4HW4),
-             "Backend::TNN only support NCHW/_NC4HW4 data layout now!"
+             "Backend::TNN only support NCHW/NC4HW4 data layout now!"
              " but got %d !",
              data_format)
     // Fill i-th info
@@ -354,7 +354,6 @@ bool TNNBackend::Infer(std::vector<FDTensor>& inputs,
            "Backend::TNN instance_ Forward failed!");  // Forward sync
   RUNTIME_PROFILE_LOOP_END
 
-  std::vector<std::shared_ptr<tnn::Mat>> outs(outputs_desc_.size());
   // Get output tensors, outputs_desc_ is already
   // reordered by custom output orders.
   outputs->resize(outputs_desc_.size());
@@ -366,7 +365,6 @@ bool TNNBackend::Infer(std::vector<FDTensor>& inputs,
         "Backend::TNN instance_ GetOutputMat [%s] failed!",
         outputs_desc_[i].name.c_str())
     outputs_desc_[i].shape = out_mat->GetDims();
-    outputs_desc_[i].dtype = TNNMatTypeToFD(out_mat->GetMatType());
     // Copy -> FD Tensor
     (*outputs)[i].Resize(GetFDShape(outputs_desc_[i].shape),
                          outputs_desc_[i].dtype, outputs_desc_[i].name);
