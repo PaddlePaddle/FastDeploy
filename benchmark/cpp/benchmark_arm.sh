@@ -1,4 +1,5 @@
 # Run all models specify hardware and specify backend
+export LD_LIBRARY_PATH=${PWD}:$LD_LIBRARY_PATH
 
 # PaddleDetection
 ./benchmark_ppyolov5 --model yolov5_s_300e_coco_no_nms --image 000000014439.jpg --config_path config.arm.txt --no_nms
