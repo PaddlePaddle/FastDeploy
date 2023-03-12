@@ -9,17 +9,17 @@ include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 include_directories(${FASTDEPLOY_INCS})
 
 add_executable(benchmark_yolov5 ${PROJECT_SOURCE_DIR}/benchmark_yolov5.cc)
-add_executable(benchmark_ppyolov5 ${PROJECT_SOURCE_DIR}/benchmark_ppyolov5.cc) # PaddleDetection
+add_executable(benchmark_ppyolov5 ${PROJECT_SOURCE_DIR}/benchmark_ppyolov5.cc)
 add_executable(benchmark_ppyolov6 ${PROJECT_SOURCE_DIR}/benchmark_ppyolov6.cc)
 add_executable(benchmark_ppyolov7 ${PROJECT_SOURCE_DIR}/benchmark_ppyolov7.cc)
 add_executable(benchmark_ppyolov8 ${PROJECT_SOURCE_DIR}/benchmark_ppyolov8.cc)
 add_executable(benchmark_ppyolox ${PROJECT_SOURCE_DIR}/benchmark_ppyolox.cc)
 add_executable(benchmark_ppyoloe ${PROJECT_SOURCE_DIR}/benchmark_ppyoloe.cc)
 add_executable(benchmark_picodet ${PROJECT_SOURCE_DIR}/benchmark_picodet.cc)
-add_executable(benchmark_ppcls ${PROJECT_SOURCE_DIR}/benchmark_ppcls.cc) # PaddleClas
-add_executable(benchmark_ppseg ${PROJECT_SOURCE_DIR}/benchmark_ppseg.cc) # PaddleSeg
+add_executable(benchmark_ppcls ${PROJECT_SOURCE_DIR}/benchmark_ppcls.cc)
+add_executable(benchmark_ppseg ${PROJECT_SOURCE_DIR}/benchmark_ppseg.cc)
 add_executable(benchmark_ppmatting ${PROJECT_SOURCE_DIR}/benchmark_ppmatting.cc)
-add_executable(benchmark_ppocr_det ${PROJECT_SOURCE_DIR}/benchmark_ppocr_det.cc) # PaddleOCR
+add_executable(benchmark_ppocr_det ${PROJECT_SOURCE_DIR}/benchmark_ppocr_det.cc)
 add_executable(benchmark_ppocr_cls ${PROJECT_SOURCE_DIR}/benchmark_ppocr_cls.cc)
 add_executable(benchmark_ppocr_rec ${PROJECT_SOURCE_DIR}/benchmark_ppocr_rec.cc)
 
