@@ -16,6 +16,7 @@
 
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/utils/utils.h"
+#include "fastdeploy/vision/common/processors/mat.h"
 #include "opencv2/core/core.hpp"
 
 #ifdef ENABLE_FLYCV
@@ -42,11 +43,12 @@ cv::Mat ConvertFlyCVMatToOpenCV(fcv::Mat& fim);
 
 // Create zero copy OpenCV/FlyCV Mat from FD Tensor / Buffer
 cv::Mat CreateZeroCopyOpenCVMatFromBuffer(int height, int width,
-  int channels, FDDataType type, void* data);
-cv::Mat CreateZeroCopyOpenCVMatFromTensor(const FDTensor& tensor);
+    int channels, FDDataType type, void* data);
+cv::Mat CreateZeroCopyOpenCVMatFromTensor(const FDTensor& tensor,
+    Layout layout = Layout::HWC);
 #ifdef ENABLE_FLYCV
 fcv::Mat CreateZeroCopyFlyCVMatFromBuffer(int height, int width,
-  int channels, FDDataType type, void* data);
+    int channels, FDDataType type, void* data);
 fcv::Mat CreateZeroCopyFlyCVMatFromTensor(const FDTensor& tensor);
 #endif
 }  // namespace vision

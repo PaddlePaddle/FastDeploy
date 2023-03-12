@@ -13,6 +13,8 @@
 # limitations under the License.
 
 from __future__ import absolute_import
+from abc import ABC, abstractmethod
+from ... import c_lib_wrap as C
 
 
 class ProcessorManager:
@@ -34,3 +36,34 @@ class ProcessorManager:
         :param: gpu_id: GPU device id
         """
         return self._manager.use_cuda(enable_cv_cuda, gpu_id)
+
+
+class PyProcessorManager(ABC):
+    """
+    PyProcessorManager is used to define a customized processor in python
+    """
+
+    def __init__(self):
+        self._manager = C.vision.processors.ProcessorManager()
+
+    def use_cuda(self, enable_cv_cuda=False, gpu_id=-1):
+        """Use CUDA processors
+
+        :param: enable_cv_cuda: Ture: use CV-CUDA, False: use CUDA only
+        :param: gpu_id: GPU device id
+        """
+        return self._manager.use_cuda(enable_cv_cuda, gpu_id)
+
+    def __call__(self, images):
+        image_batch = C.vision.FDMatBatch()
+        image_batch.from_mats(images)
+
+        self._manager.pre_apply(image_batch)
+        outputs = self.apply(image_batch)
+        self._manager.post_apply()
+        return outputs
+
+    @abstractmethod
+    def apply(self, image_batch):
+        print("This function has to be implemented.")
+        return []
