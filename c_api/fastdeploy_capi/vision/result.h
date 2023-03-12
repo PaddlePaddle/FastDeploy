@@ -109,6 +109,13 @@ FD_C_CreateClassifyResultWrapper();
 FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroyClassifyResultWrapper(
     __fd_take FD_C_ClassifyResultWrapper* fd_c_classify_result_wrapper);
 
+/** \brief Create a new FD_C_ClassifyResult object
+ *
+ * \return Return a pointer to FD_C_ClassifyResult object
+ */
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_ClassifyResult*
+FD_C_CreateClassifyResult();
+
 /** \brief Destroy a FD_C_ClassifyResult object
  *
  * \param[in] fd_c_classify_result pointer to FD_C_ClassifyResult object
@@ -159,6 +166,7 @@ FD_C_ClassifyResultStr(
 FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_DetectionResultWrapper*
 FD_C_CreateDetectionResultWrapper();
 
+
 /** \brief Destroy a FD_C_DetectionResultWrapper object
  *
  * \param[in] fd_c_detection_result_wrapper pointer to FD_C_DetectionResultWrapper object
@@ -166,6 +174,14 @@ FD_C_CreateDetectionResultWrapper();
 
 FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroyDetectionResultWrapper(
     __fd_take FD_C_DetectionResultWrapper* fd_c_detection_result_wrapper);
+
+
+/** \brief Create a new FD_C_DetectionResult object
+ *
+ * \return Return a pointer to FD_C_DetectionResult object
+ */
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_DetectionResult*
+FD_C_CreateDetectionResult();
 
 /** \brief Destroy a FD_C_DetectionResult object
  *
@@ -225,6 +241,14 @@ FD_C_CreateOCRResultWrapper();
 FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroyOCRResultWrapper(
     __fd_take FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper);
 
+
+/** \brief Create a new FD_C_OCRResult object
+ *
+ * \return Return a pointer to FD_C_OCRResult object
+ */
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_OCRResult*
+FD_C_CreateOCRResult();
+
 /** \brief Destroy a FD_C_OCRResult object
  *
  * \param[in] fd_c_ocr_result pointer to FD_C_OCRResult object
@@ -281,6 +305,13 @@ FD_C_CreateSegmentationResultWrapper();
 
 FASTDEPLOY_CAPI_EXPORT extern void FD_C_DestroySegmentationResultWrapper(
     __fd_take FD_C_SegmentationResultWrapper* fd_c_segmentation_result_wrapper);
+
+/** \brief Create a new FD_C_SegmentationResult object
+ *
+ * \return Return a pointer to FD_C_SegmentationResult object
+ */
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_SegmentationResult*
+FD_C_CreateSegmentationResult();
 
 /** \brief Destroy a FD_C_SegmentationResult object
  *
