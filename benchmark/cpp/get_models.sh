@@ -88,7 +88,7 @@ download_common_model_xvf https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP
 download_common_model_xvf https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_rec_infer.tar ch_PP-OCRv2_rec_infer.tar
 # download images
 download_common_file https://bj.bcebos.com/paddlehub/fastdeploy/rec_img.jpg rec_img.jpg
-download_common_file https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png cityscapes_demo.png
+download_common_file https://bj.bcebos.com/paddlehub/fastdeploy/cityscapes_demo.png cityscapes_demo.png
 download_common_file https://bj.bcebos.com/fastdeploy/test/portrait_heng.jpg portrait_heng.jpg
 download_common_file https://bj.bcebos.com/paddlehub/fastdeploy/matting_input.jpg matting_input.jpg
 download_common_file https://github.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg 12.jpg
