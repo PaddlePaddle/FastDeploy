@@ -144,6 +144,18 @@ TRITONSERVER_Error* FDParseShape(triton::common::TritonJson::Value& io,
   return nullptr;  // success
 }
 
+int SplitStringByDelimiter(const std::string& s, char delimiter,
+                           std::vector<std::string>* results) {
+  std::string token;
+  std::istringstream token_stream(s);
+  int number_of_tokens = 0;
+  while (std::getline(token_stream, token, delimiter)) {
+    results->push_back(token);
+    number_of_tokens += 1;
+  }
+  return number_of_tokens;
+}
+
 }  // namespace fastdeploy_runtime
 }  // namespace backend
 }  // namespace triton
