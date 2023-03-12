@@ -88,13 +88,6 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   if (!option.enable_log_info) {
     config_.DisableGlogInfo();
   }
-  if (!option.delete_pass_names.empty()) {
-    auto pass_builder = config_.pass_builder();
-    for (int i = 0; i < option.delete_pass_names.size(); i++) {
-      FDINFO << "Delete pass : " << option.delete_pass_names[i] << std::endl;
-      pass_builder->DeletePass(option.delete_pass_names[i]);
-    }
-  }
   if (option.cpu_thread_num <= 0) {
     config_.SetCpuMathLibraryNumThreads(8);
   } else {
@@ -147,7 +140,9 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_buffer,
   }
   config_.SetModelBuffer(model_buffer.c_str(), model_buffer.size(),
                          params_buffer.c_str(), params_buffer.size());
-  config_.EnableMemoryOptim();
+  if (option.enable_memory_optimize) {
+    config_.EnableMemoryOptim();
+  }
   BuildOption(option);
 
   // The input/output information get from predictor is not right, use
@@ -236,6 +231,15 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_buffer,
     FDINFO << "Start loading shape range info file " << shape_range_info
            << " to set TensorRT dynamic shape." << std::endl;
     config_.EnableTunedTensorRtDynamicShape(shape_range_info, false);
+  }
+  // Note(zhoushunjie): The pass deletion should be executed just before
+  // creating predictor.
+  if (!option.delete_pass_names.empty()) {
+    auto pass_builder = config_.pass_builder();
+    for (int i = 0; i < option.delete_pass_names.size(); i++) {
+      FDINFO << "Delete pass : " << option.delete_pass_names[i] << std::endl;
+      pass_builder->DeletePass(option.delete_pass_names[i]);
+    }
   }
   predictor_ = paddle_infer::CreatePredictor(config_);
   initialized_ = true;

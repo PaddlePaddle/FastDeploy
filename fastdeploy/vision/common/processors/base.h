@@ -47,58 +47,17 @@ class FASTDEPLOY_DECL Processor {
 
   virtual std::string Name() = 0;
 
-  virtual bool ImplByOpenCV(FDMat* mat) {
-    FDERROR << Name() << " Not Implement Yet." << std::endl;
-    return false;
-  }
+  virtual bool ImplByOpenCV(FDMat* mat);
+  virtual bool ImplByOpenCV(FDMatBatch* mat_batch);
 
-  virtual bool ImplByOpenCV(FDMatBatch* mat_batch) {
-    for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
-      if (ImplByOpenCV(&(*(mat_batch->mats))[i]) != true) {
-        return false;
-      }
-    }
-    return true;
-  }
+  virtual bool ImplByFlyCV(FDMat* mat);
+  virtual bool ImplByFlyCV(FDMatBatch* mat_batch);
 
-  virtual bool ImplByFlyCV(FDMat* mat) {
-    return ImplByOpenCV(mat);
-  }
+  virtual bool ImplByCuda(FDMat* mat);
+  virtual bool ImplByCuda(FDMatBatch* mat_batch);
 
-  virtual bool ImplByFlyCV(FDMatBatch* mat_batch) {
-    for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
-      if (ImplByFlyCV(&(*(mat_batch->mats))[i]) != true) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  virtual bool ImplByCuda(FDMat* mat) {
-    return ImplByOpenCV(mat);
-  }
-
-  virtual bool ImplByCuda(FDMatBatch* mat_batch) {
-    for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
-      if (ImplByCuda(&(*(mat_batch->mats))[i]) != true) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  virtual bool ImplByCvCuda(FDMat* mat) {
-    return ImplByOpenCV(mat);
-  }
-
-  virtual bool ImplByCvCuda(FDMatBatch* mat_batch) {
-    for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
-      if (ImplByCvCuda(&(*(mat_batch->mats))[i]) != true) {
-        return false;
-      }
-    }
-    return true;
-  }
+  virtual bool ImplByCvCuda(FDMat* mat);
+  virtual bool ImplByCvCuda(FDMatBatch* mat_batch);
 
   virtual bool operator()(FDMat* mat);
 

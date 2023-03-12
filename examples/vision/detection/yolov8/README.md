@@ -22,7 +22,6 @@ For developers' testing, models exported by YOLOv8 are provided below. Developer
 
 - [Python Deployment](python)
 - [C++ Deployment](cpp)
-- [Serving Deployment](serving)
 
 ## Release Note
 

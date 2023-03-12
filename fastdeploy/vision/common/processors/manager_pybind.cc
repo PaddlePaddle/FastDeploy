@@ -14,8 +14,22 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
+namespace vision {
+// PyProcessorManager is used for pybind11::init() of ProcessorManager
+// Because ProcessorManager have a pure Virtual function Apply()
+class FASTDEPLOY_DECL PyProcessorManager : public ProcessorManager {
+ public:
+  using ProcessorManager::ProcessorManager;
+  bool Apply(FDMatBatch* image_batch, std::vector<FDTensor>* outputs) override {
+    PYBIND11_OVERRIDE_PURE(bool, ProcessorManager, Apply, image_batch, outputs);
+  }
+};
+}  // namespace vision
+
 void BindProcessorManager(pybind11::module& m) {
-  pybind11::class_<vision::ProcessorManager>(m, "ProcessorManager")
+  pybind11::class_<vision::ProcessorManager, vision::PyProcessorManager>(
+      m, "ProcessorManager")
+      .def(pybind11::init<>())
       .def("run",
            [](vision::ProcessorManager& self,
               std::vector<pybind11::array>& im_list) {
@@ -34,6 +48,8 @@ void BindProcessorManager(pybind11::module& m) {
              }
              return outputs;
            })
+      .def("pre_apply", &vision::ProcessorManager::PreApply)
+      .def("post_apply", &vision::ProcessorManager::PostApply)
       .def("use_cuda",
            [](vision::ProcessorManager& self, bool enable_cv_cuda = false,
               int gpu_id = -1) { self.UseCuda(enable_cv_cuda, gpu_id); });

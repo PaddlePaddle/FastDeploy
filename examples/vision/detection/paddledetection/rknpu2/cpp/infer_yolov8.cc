@@ -57,7 +57,7 @@ void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
 
   model.GetPreprocessor().DisablePermute();
   model.GetPreprocessor().DisableNormalize();
-  model.GetPostprocessor().ApplyDecodeAndNMS();
+  model.GetPostprocessor().ApplyNMS();
 
   auto im = cv::imread(image_file);
 

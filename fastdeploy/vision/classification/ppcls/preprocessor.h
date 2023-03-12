@@ -31,7 +31,9 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor : public ProcessorManager {
    */
   explicit PaddleClasPreprocessor(const std::string& config_file);
 
-  /** \brief Process the input image and prepare input tensors for runtime
+  /** \brief Implement the virtual function of ProcessorManager, Apply() is the
+   *  body of Run(). Apply() contains the main logic of preprocessing, Run() is
+   *  called by users to execute preprocessing
    *
    * \param[in] image_batch The input image batch
    * \param[in] outputs The output tensors which will feed in runtime

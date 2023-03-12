@@ -15,6 +15,11 @@
 #pragma once
 
 #include "fastdeploy/vision/common/processors/base.h"
+#ifdef ENABLE_CVCUDA
+#include <cvcuda/OpConvertTo.hpp>
+
+#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
+#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -26,6 +31,9 @@ class FASTDEPLOY_DECL Cast : public Processor {
 #ifdef ENABLE_FLYCV
   bool ImplByFlyCV(Mat* mat);
 #endif
+#ifdef ENABLE_CVCUDA
+  bool ImplByCvCuda(FDMat* mat);
+#endif
   std::string Name() { return "Cast"; }
   static bool Run(Mat* mat, const std::string& dtype,
                   ProcLib lib = ProcLib::DEFAULT);
@@ -34,6 +42,9 @@ class FASTDEPLOY_DECL Cast : public Processor {
 
  private:
   std::string dtype_;
+#ifdef ENABLE_CVCUDA
+  cvcuda::ConvertTo cvcuda_convert_op_;
+#endif
 };
 }  // namespace vision
 }  // namespace fastdeploy

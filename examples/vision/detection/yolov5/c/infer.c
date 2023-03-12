@@ -39,8 +39,7 @@ void CpuInfer(const char* model_file, const char* image_file) {
 
   FD_C_Mat im = FD_C_Imread(image_file);
 
-  FD_C_DetectionResult* result =
-      (FD_C_DetectionResult*)malloc(sizeof(FD_C_DetectionResult));
+  FD_C_DetectionResult* result = FD_C_CreateDetectionResult();
 
   if (!FD_C_YOLOv5WrapperPredict(model, im, result)) {
     printf("Failed to predict.\n");
@@ -79,8 +78,7 @@ void GpuInfer(const char* model_file, const char* image_file) {
 
   FD_C_Mat im = FD_C_Imread(image_file);
 
-  FD_C_DetectionResult* result =
-      (FD_C_DetectionResult*)malloc(sizeof(FD_C_DetectionResult));
+  FD_C_DetectionResult* result = FD_C_CreateDetectionResult();
 
   if (!FD_C_YOLOv5WrapperPredict(model, im, result)) {
     printf("Failed to predict.\n");

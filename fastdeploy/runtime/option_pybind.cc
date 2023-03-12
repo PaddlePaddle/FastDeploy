@@ -22,7 +22,7 @@ void BindOrtOption(pybind11::module& m);
 void BindTrtOption(pybind11::module& m);
 void BindPaddleOption(pybind11::module& m);
 void BindPorosOption(pybind11::module& m);
-
+void BindRKNPU2Option(pybind11::module& m);
 void BindOption(pybind11::module& m) {
   BindLiteOption(m);
   BindOpenVINOOption(m);
@@ -30,6 +30,7 @@ void BindOption(pybind11::module& m) {
   BindTrtOption(m);
   BindPaddleOption(m);
   BindPorosOption(m);
+  BindRKNPU2Option(m);
 
   pybind11::class_<RuntimeOption>(m, "RuntimeOption")
       .def(pybind11::init())

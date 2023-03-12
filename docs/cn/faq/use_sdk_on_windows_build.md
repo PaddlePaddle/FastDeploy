@@ -25,7 +25,7 @@
 <div id="Environment"></div>  
 
 - cmake >= 3.12
-- Visual Studio 16 2019
+- Visual Studio 2019
 - cuda >= 11.2 (当WITH_GPU=ON)
 - cudnn >= 8.0 (当WITH_GPU=ON)
 

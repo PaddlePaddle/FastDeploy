@@ -45,6 +45,7 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
         option->trt_option.enable_fp16 = true;
       }
     } else if (config_info["backend"] == "default") {
+      PrintBenchmarkInfo(config_info);
       return true;
     } else {
       std::cout << "While inference with GPU, only support "
@@ -67,6 +68,7 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
         option->paddle_lite_option.enable_fp16 = true;
       }
     } else if (config_info["backend"] == "default") {
+      PrintBenchmarkInfo(config_info);
       return true;
     } else {
       std::cout << "While inference with CPU, only support "
@@ -76,7 +78,8 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
       return false;
     }
   } else if (config_info["device"] == "xpu") {
-    option->UseKunlunXin(std::stoi(config_info["device_id"]));
+    option->UseKunlunXin(std::stoi(config_info["device_id"]),
+                         std::stoi(config_info["xpu_l3_cache"]));
     if (config_info["backend"] == "ort") {
       option->UseOrtBackend();
     } else if (config_info["backend"] == "paddle") {
@@ -87,6 +90,7 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
         option->paddle_lite_option.enable_fp16 = true;
       }
     } else if (config_info["backend"] == "default") {
+      PrintBenchmarkInfo(config_info);
       return true;
     } else {
       std::cout << "While inference with XPU, only support "
