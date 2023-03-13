@@ -233,31 +233,28 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
   Ort::Allocator allocator(session_, memory_info);
   size_t n_inputs = session_.GetInputCount();
   for (size_t i = 0; i < n_inputs; ++i) {
-    auto input_name = session_.GetInputName(i, allocator);
+    auto input_name_ptr = session_.GetInputNameAllocated(i, allocator);
     auto type_info = session_.GetInputTypeInfo(i);
     std::vector<int64_t> shape =
         type_info.GetTensorTypeAndShapeInfo().GetShape();
     ONNXTensorElementDataType data_type =
         type_info.GetTensorTypeAndShapeInfo().GetElementType();
-    inputs_desc_.emplace_back(OrtValueInfo{input_name, shape, data_type});
-    allocator.Free(input_name);
+    inputs_desc_.emplace_back(OrtValueInfo{input_name_ptr.get(), shape, data_type});
   }
 
   size_t n_outputs = session_.GetOutputCount();
   for (size_t i = 0; i < n_outputs; ++i) {
-    auto output_name = session_.GetOutputName(i, allocator);
+    auto output_name_ptr = session_.GetOutputNameAllocated(i, allocator);
     auto type_info = session_.GetOutputTypeInfo(i);
     std::vector<int64_t> shape =
         type_info.GetTensorTypeAndShapeInfo().GetShape();
     ONNXTensorElementDataType data_type =
         type_info.GetTensorTypeAndShapeInfo().GetElementType();
-    outputs_desc_.emplace_back(OrtValueInfo{output_name, shape, data_type});
+    outputs_desc_.emplace_back(OrtValueInfo{output_name_ptr.get(), shape, data_type});
 
     Ort::MemoryInfo out_memory_info("Cpu", OrtDeviceAllocator, 0,
                                     OrtMemTypeDefault);
-    binding_->BindOutput(output_name, out_memory_info);
-
-    allocator.Free(output_name);
+    binding_->BindOutput(output_name_ptr.get(), out_memory_info);
   }
   initialized_ = true;
   return true;
