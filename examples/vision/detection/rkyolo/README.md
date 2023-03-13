@@ -12,7 +12,7 @@ FastDeploy currently supports the deployment of the following three models:
 - RKYOLOX
 - RKYOLOv7
 
-For people’s testing, we provide three converted models that allow downloading and use. If you need to convert models, refer to [RKNN_model_convert](https://github.com/airockchip/rknn_model_zoo/tree/main/models/CV/object_detection/yolo/RKNN_model_convert)
+For people’s testing, we provide three converted models that allow downloading and use. If you need to convert models, refer to [RKNN_model_convert](https://github.com/airockchip/rknn_model_zoo/tree/main/models/CV/object_detection/yolo/RKNN_model_convert).
 
 | Model Name           | Download Address                                                     |
 | ------------------ | ------------------------------------------------------------ |
