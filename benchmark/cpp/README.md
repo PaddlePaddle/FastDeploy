@@ -116,18 +116,33 @@ tar -zxvf yolov8_s_500e_coco.tgz
 在准备好相关的环境配置和SDK后，可以使用本目录提供的脚本一键运行后的benchmark数据。
 - 获取模型和资源文件  
 ```bash
-./get_models.sh 
+./get_models.sh
 ```  
 - 运行benchmark脚本  
-```bash  
-# x86 CPU
-./benchmark_x86.sh
-# Arm CPU
-./benchmark_arm.sh
-# NVIDIA GPU
-./benchmark_gpu.sh
-# XPU
-./benchmark_xpu.sh
+```bash
+# x86 CPU Paddle backend fp32
+./benchmark_x86.sh config/config.x86.paddle.fp32.txt
+# x86 CPU ONNXRuntime backend fp32
+./benchmark_x86.sh config/config.x86.ort.fp32.txt
+# x86 CPU OpenVIVO backend fp32
+./benchmark_x86.sh config/config.x86.ov.fp32.txt
+# NVIDIA GPU Paddle backend fp32
+./benchmark_gpu.sh config/config.gpu.paddle.fp32.txt
+# NVIDIA GPU ONNXRuntime backend fp32
+./benchmark_gpu.sh config/config.gpu.ort.fp32.txt
+# NVIDIA GPU Paddle_trt backend fp32
+./benchmark_gpu_trt.sh config/config.gpu.paddle_trt.fp32.txt
+# NVIDIA GPU Paddle_trt backend fp16
+./benchmark_gpu_trt.sh config/config.gpu.paddle_trt.fp16.txt
+# NVIDIA GPU TRT backend fp32
+./benchmark_gpu_trt.sh config/config.gpu.trt.fp32.txt
+# NVIDIA GPU TRT backend fp16
+./benchmark_gpu_trt.sh config/config.gpu.trt.fp16.txt
+
+# Arm CPU PaddleLite backend fp32
+./benchmark_arm.sh config/config.arm.lite.fp32.txt
+# Arm CPU PaddleLite backend fp32
+./benchmark_arm.sh config/config.arm.lite.fp16.txt
+# XPU Paddle Lite backend fp32
+./benchmark_xpu.sh config/config.xpu.lite.fp32.txt
 ```
-
-
