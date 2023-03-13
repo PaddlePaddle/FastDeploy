@@ -23,15 +23,10 @@ do
       if [ -d "$second" ]
       then
         dir_name=${second##*/}
-        if [ "$dir_name" == "serving" ]
-        then
-          compress $second "serving"
-        else
-          for third in $second/*
-          do
-            compress $third ${third##*/}
-          done
-        fi
+        for third in $second/*
+        do
+          compress $third ${third##*/}
+        done
       fi
     done
   fi
