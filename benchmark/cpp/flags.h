@@ -62,8 +62,8 @@ static void PrintBenchmarkInfo(std::unordered_map<std::string,
   ss << "device: " << config_info["device"] << std::endl;
   if (config_info["device"] == "gpu") {
     ss << "device_id: " << config_info["device_id"] << std::endl;
-    ss << "use_fp16: " << config_info["use_fp16"] << std::endl;
   }
+  ss << "use_fp16: " << config_info["use_fp16"] << std::endl;
   ss << "backend: " << config_info["backend"] << std::endl;
   if (config_info["device"] == "cpu") {
     ss << "cpu_thread_nums: " << config_info["cpu_thread_nums"] << std::endl;

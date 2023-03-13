@@ -37,7 +37,7 @@ cv::Mat* Mat::GetOpenCVMat() {
 #ifdef WITH_GPU
     FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
              "[ERROR] Error occurs while sync cuda stream.");
-    cpu_mat = CreateZeroCopyOpenCVMatFromTensor(*fd_tensor);
+    cpu_mat = CreateZeroCopyOpenCVMatFromTensor(*fd_tensor, layout);
     mat_type = ProcLib::OPENCV;
     device = Device::CPU;
     return &cpu_mat;
@@ -48,6 +48,23 @@ cv::Mat* Mat::GetOpenCVMat() {
     FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
   }
 }
+
+#ifdef ENABLE_FLYCV
+fcv::Mat* Mat::GetFlyCVMat() {
+  if (mat_type == ProcLib::FLYCV) {
+    return &fcv_mat;
+  } else if (mat_type == ProcLib::OPENCV) {
+    // Just a reference to cpu_mat, zero copy. After you
+    // call this method, fcv_mat and cpu_mat will point
+    // to the same memory buffer.
+    fcv_mat = ConvertOpenCVMatToFlyCV(cpu_mat);
+    mat_type = ProcLib::FLYCV;
+    return &fcv_mat;
+  } else {
+    FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
+  }
+}
+#endif
 
 void* Mat::Data() {
   if (mat_type == ProcLib::FLYCV) {
@@ -158,7 +175,7 @@ void Mat::PrintInfo(const std::string& flag) {
 #ifdef WITH_GPU
     FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
              "[ERROR] Error occurs while sync cuda stream.");
-    cv::Mat tmp_mat = CreateZeroCopyOpenCVMatFromTensor(*fd_tensor);
+    cv::Mat tmp_mat = CreateZeroCopyOpenCVMatFromTensor(*fd_tensor, layout);
     cv::Scalar mean = cv::mean(tmp_mat);
     for (int i = 0; i < Channels(); ++i) {
       std::cout << mean[i] << " ";
