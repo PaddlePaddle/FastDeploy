@@ -58,10 +58,10 @@ sleep_seconds() {
 
 # usage:
 # ./benchmark_arm.sh
-# ./benchmark_arm.sh config.arm.lite.txt
-# ./benchmark_arm.sh config.arm.mnn.txt
-# ./benchmark_arm.sh config.arm.tnn.txt
-# ./benchmark_arm.sh config.arm.ncnn.txt
+# ./benchmark_arm.sh config.arm.lite.fp32.txt
+# ./benchmark_arm.sh config.arm.mnn.fp32.txt
+# ./benchmark_arm.sh config.arm.tnn.fp32.txt
+# ./benchmark_arm.sh config.arm.ncnn.fp32.txt
 # ./benchmark_arm.sh config.arm.lite.fp16.txt
 # ./benchmark_arm.sh config.arm.mnn.fp16.txt
 # ./benchmark_arm.sh config.arm.tnn.fp16.txt
