@@ -141,7 +141,7 @@ tar -zxvf yolov8_s_500e_coco.tgz
 
 # Arm CPU PaddleLite backend fp32
 ./benchmark_arm.sh config/config.arm.lite.fp32.txt
-# Arm CPU PaddleLite backend fp32
+# Arm CPU PaddleLite backend fp16
 ./benchmark_arm.sh config/config.arm.lite.fp16.txt
 # XPU Paddle Lite backend fp32
 ./benchmark_xpu.sh config/config.xpu.lite.fp32.txt
