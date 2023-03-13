@@ -2,7 +2,15 @@ from __future__ import absolute_import
 from ... import c_lib_wrap as C
 
 
-class ResizeByShort():
+class Processor():
+    def __init__(self):
+        self.processor
+
+    def __call__(self, mat):
+        self.processor(mat)
+
+
+class ResizeByShort(Processor):
     def __init__(self, target_size: int, interp=1, use_scale=True, max_hw=[]):
         self.processor = C.vision.processors.ResizeByShort(target_size, interp,
                                                            use_scale, max_hw)
@@ -14,11 +22,8 @@ class ResizeByShort():
         :param max_hw: max spatial size which is used by ResizeByShort
         """
 
-    def __call__(self, mat):
-        self.processor(mat)
 
-
-class CenterCrop():
+class CenterCrop(Processor):
     def __init__(self, width, height):
         self.processor = C.vision.processors.CenterCrop(width, height)
         """Create a CenterCrop operation with the given parameters.
@@ -27,11 +32,8 @@ class CenterCrop():
         :param height: desired height of the cropped image
         """
 
-    def __call__(self, mat):
-        self.processor(mat)
 
-
-class Pad():
+class Pad(Processor):
     def __init__(self, top: int, bottom: int, left: int, right: int, value=[]):
         self.processor = C.vision.processors.Pad(top, bottom, left, right,
                                                  value)
@@ -44,11 +46,8 @@ class Pad():
         :param value: the value that is used to pad on the input image
         """
 
-    def __call__(self, mat):
-        self.processor(mat)
 
-
-class NormalizeAndPermute():
+class NormalizeAndPermute(Processor):
     def __init__(self,
                  mean=[],
                  std=[],
@@ -66,6 +65,3 @@ class NormalizeAndPermute():
         :param min      A list containing the minimum value of each channel
         :param max      A list containing the maximum value of each channel
         """
-
-    def __call__(self, mat):
-        self.processor(mat)
