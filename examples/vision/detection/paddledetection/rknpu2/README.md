@@ -85,7 +85,8 @@ outputs_nodes:
 For your convenience, we provide python scripts that will enable you to quickly convert ONNX models to RKNN models through our pre-configured config file 
 ### model transformation
 ```bash
-python tools/rknpu2/export.py --config_path tools/rknpu2/config/picodet_s_416_coco_lcnet_unquantized.yaml \
+python tools/rknpu2/export.py --config_path 
+tools/rknpu2/config/picodet_s_416_coco_lcnet_unquantized.yaml \
                               --target_platform rk3588
 ```
 
