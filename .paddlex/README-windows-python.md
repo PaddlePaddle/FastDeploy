@@ -1,15 +1,15 @@
-# FastDeploy Linux Python SDK
+# Windows Python SDK
 
 ## 一、SDK简介
 
 ### 1. SDK概览
 
-FastDeploy是一款全场景、易用灵活、极致高效的AI推理部署工具，使用FastDeploy可以简单高效的在10+款硬件上对Paddle模型进行快速部署，本文档介绍在Linux下使用Python完成AI部署能力的介绍，更多能力PaddleX即将上线。
+FastDeploy是一款全场景、易用灵活、极致高效的AI推理部署工具，使用FastDeploy可以简单高效的在10+款硬件上对Paddle模型进行快速部署，本文档介绍在Windows下使用Python完成AI部署能力的介绍，更多能力PaddleX即将上线。
 
-FastDeploy SDK 是基于 FastDeploy Runtime 多后端能力开发的，实现AI模型在各类硬件的高效推理部署。部署包由四部分组成：使用文档(README.md)、模型文件夹(model)、模型部署示例(example)、FastDeploy Python安装包（CPU：fastdeploy_python-0.0.0-cp36-cp36m-manylinux1_x86_64.whl；GPU：fastdeploy_gpu_python-0.0.0-cp36-cp36m-manylinux1_x86_64.whl）。开发者可以快速验证模型的高性能部署，并将SDK集成到自己AI项目中。
+FastDeploy SDK 是基于 FastDeploy Runtime 多后端能力开发的，实现AI模型在各类硬件的高效推理部署。部署包由四部分组成：使用文档(README.md)、模型文件夹(model)、模型部署示例(example)、FastDeploy Python安装包（CPU：fastdeploy_python-0.0.0-cp36-cp36m-win_amd64.whl；GPU：fastdeploy_gpu_python-0.0.0-cp36-cp36m-win_amd64.whl）。开发者可以快速验证模型的高性能部署，并将SDK集成到自己AI项目中。
 
 ```
-Model_Name-FastDeploy-Linux-x86_64_CPU
+Model_Name-FastDeploy-Windows-x86_64_CPU
 ├── README.md  # 使用文档，介绍SDK使用整体情况
 ├── model      # 训练好的模型文件
 │   ├── inference.pdmodel         # 模型结构文件
@@ -17,7 +17,7 @@ Model_Name-FastDeploy-Linux-x86_64_CPU
 │   ├── inference_**.yaml         # 模型配置文件
 │   ├── inference.pdiparams.info  
 ├── example                       # Python部署示例
-├── fastdeploy_python-0.0.0-cp36-cp36m-manylinux1_x86_64.whl  # FastDeploy Python安装包
+├── fastdeploy_python-0.0.0-cp36-cp36m-win_amd64.whl  # FastDeploy Python安装包
 ```
 
 ### 2. 适用范围
@@ -50,7 +50,7 @@ FastDeploy Version 0.0.0以FastDeploy源码develop分支编译，功能列表：
 ```
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
 
-pip install fastdeploy_python-0.0.0-cp36-cp36m-manylinux1_x86_64.whl
+pip install fastdeploy_python-0.0.0-cp36-cp36m-win_amd64.whl
 ```
 
 ### 2. 运行部署示例

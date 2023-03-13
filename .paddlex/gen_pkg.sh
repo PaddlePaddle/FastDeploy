@@ -7,7 +7,7 @@ compress() {
   rm -rf output/$pkg_name
   mkdir -p output/$pkg_name/example
   cp -r $1/* output/$pkg_name/example
-  cp *$2*.md output/$pkg_name
+  cp *$2.md output/$pkg_name
   cd output
   tar czvf $pkg_name.tgz $pkg_name/
   cd -
@@ -25,7 +25,7 @@ do
         dir_name=${second##*/}
         if [ "$dir_name" == "serving" ]
         then
-          compress $second "python"
+          compress $second "serving"
         else
           for third in $second/*
           do
