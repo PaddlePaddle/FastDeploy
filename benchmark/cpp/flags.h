@@ -27,6 +27,8 @@ static const char sep = '/';
 DEFINE_string(model, "", "Directory of the inference model.");
 DEFINE_string(image, "", "Path of the image file.");
 DEFINE_string(config_path, "config.txt", "Path of benchmark config.");
+DEFINE_int32(warmup, -1, "Number of warmup for profiling.");
+DEFINE_int32(repeat, -1, "Number of repeats for profiling.");
 
 static void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path "
@@ -48,6 +50,14 @@ static void PrintBenchmarkInfo(std::unordered_map<std::string,
     return;
   }
   // Save benchmark info
+  int warmup = std::stoi(config_info["warmup"]);
+  int repeat = std::stoi(config_info["repeat"]);
+  if (FLAGS_warmup != -1) {
+    warmup = FLAGS_warmup;
+  }
+  if (FLAGS_repeat != -1) {
+    repeat = FLAGS_repeat;
+  }
   std::stringstream ss;
   ss.precision(3);
   ss << "\n======= Model Info =======\n";
@@ -57,8 +67,8 @@ static void PrintBenchmarkInfo(std::unordered_map<std::string,
     ss << "include_h2d_d2h: " << config_info["include_h2d_d2h"] << std::endl;
   }
   ss << "\n======= Backend Info =======\n";
-  ss << "warmup: " << config_info["warmup"] << std::endl;
-  ss << "repeats: " << config_info["repeat"] << std::endl;
+  ss << "warmup: " << warmup << std::endl;
+  ss << "repeats: " << repeat << std::endl;
   ss << "device: " << config_info["device"] << std::endl;
   if (config_info["device"] == "gpu") {
     ss << "device_id: " << config_info["device_id"] << std::endl;
