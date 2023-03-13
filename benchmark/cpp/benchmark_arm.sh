@@ -56,13 +56,13 @@ sleep_seconds() {
 ./benchmark_ppmatting --model PPHumanMatting --image matting_input.jpg --config_path $CONFIG_PATH && sleep_seconds 600
 ./benchmark_ppmatting --model PPModnet_MobileNetV2 --image matting_input.jpg --config_path $CONFIG_PATH && sleep_seconds 600
 
-# usage:
-# ./benchmark_arm.sh
-# ./benchmark_arm.sh config.arm.lite.fp32.txt
-# ./benchmark_arm.sh config.arm.mnn.fp32.txt
-# ./benchmark_arm.sh config.arm.tnn.fp32.txt
-# ./benchmark_arm.sh config.arm.ncnn.fp32.txt
-# ./benchmark_arm.sh config.arm.lite.fp16.txt
-# ./benchmark_arm.sh config.arm.mnn.fp16.txt
-# ./benchmark_arm.sh config.arm.tnn.fp16.txt
-# ./benchmark_arm.sh config.arm.ncnn.fp16.txt
+# Usage:
+# ./benchmark_arm.sh config/config.arm.txt
+# ./benchmark_arm.sh config/config.arm.lite.fp32.txt
+# ./benchmark_arm.sh config/config.arm.mnn.fp32.txt
+# ./benchmark_arm.sh config/config.arm.tnn.fp32.txt
+# ./benchmark_arm.sh config/config.arm.ncnn.fp32.txt
+# ./benchmark_arm.sh config/config.arm.lite.fp16.txt
+# ./benchmark_arm.sh config/config.arm.mnn.fp16.txt
+# ./benchmark_arm.sh config/config.arm.tnn.fp16.txt
+# ./benchmark_arm.sh config/config.arm.ncnn.fp16.txt
