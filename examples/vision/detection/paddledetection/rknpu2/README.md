@@ -10,7 +10,7 @@ The PaddleDetection models that have been tested on RKNPU2 are as follows:
 - PPYOLOE(int8)
 - YOLOV8
 
-If detailed speed information is required, you can check out the [RKNPU2模型速度一览表](../../../../../docs/cn/faq/rknpu2/rknpu2.md)
+If detailed speed information is required, you can check out the [RKNPU2 Model Speed Table](../../../../../docs/cn/faq/rknpu2/rknpu2.md)
 
 ## Prepare PaddleDetection deployment models and convert models
 Before RKNPU deployment, you need to transform Paddle model to RKNN model:
