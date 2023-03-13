@@ -65,3 +65,47 @@ class NormalizeAndPermute(Processor):
         :param min      A list containing the minimum value of each channel
         :param max      A list containing the maximum value of each channel
         """
+
+
+class Cast(Processor):
+    def __init__(self, dtype="float"):
+        self.processor = C.vision.processors.Cast(dtype)
+
+
+class HWC2CHW(Processor):
+    def __init__(self):
+        self.processor = C.vision.processors.HWC2CHW()
+
+
+class Normalize(Processor):
+    def __init__(self,
+                 mean=[],
+                 std=[],
+                 is_scale=True,
+                 min=[],
+                 max=[],
+                 swap_rb=False):
+        self.processor = C.vision.processors.Normalize(mean, std, is_scale,
+                                                       min, max, swap_rb)
+
+
+class PadToSize(Processor):
+    def __init__(self, width, height, value=[]):
+        self.processor = C.vision.processors.PadToSize(width, height, value)
+
+
+class Resize(Processor):
+    def __init__(self,
+                 width,
+                 height,
+                 scale_w=-1.0,
+                 scale_h=-1.0,
+                 interp=1,
+                 use_scale=False):
+        self.processor = C.vision.processors.Resize(width, height, scale_w,
+                                                    scale_h, interp, use_scale)
+
+
+class StridePad(Processor):
+    def __init__(self, stride, value=[]):
+        self.processor = C.vision.processors.StridePad(stride, value)
