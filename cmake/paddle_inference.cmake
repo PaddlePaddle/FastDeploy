@@ -134,6 +134,7 @@ else()
 endif(PADDLEINFERENCE_DIRECTORY)
 
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
+  message("?????????????? ${PATCHELF_EXE}")
   add_custom_target(patchelf_paddle_inference ALL COMMAND  bash -c "PATCHELF_EXE=${PATCHELF_EXE} python ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_inference.py ${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so" DEPENDS ${LIBRARY_NAME})
 endif()
 

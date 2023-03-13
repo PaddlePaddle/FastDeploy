@@ -48,6 +48,7 @@ endif(NOT MSVC)
 include(${PROJECT_SOURCE_DIR}/cmake/build_tools.cmake)
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND (NOT WITH_TIMVX))
   download_patchelf()
+  set(PATCHELF_EXE ${THIRD_PARTY_PATH}/patchelf/bin/patchelf)
 endif()
 
 
