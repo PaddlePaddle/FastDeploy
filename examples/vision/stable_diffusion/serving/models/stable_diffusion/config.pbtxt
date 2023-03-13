@@ -1,0 +1,28 @@
+backend: "python"
+max_batch_size: 1
+
+input [
+  {
+    name: "INPUT_0"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  }
+]
+
+output [
+  {
+    name: "OUTPUT_0"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  }
+]
+
+# Number of instances of the model
+instance_group [
+  {
+    # The number of instances is 1
+    count: 1
+    # Use CPU
+    kind: KIND_CPU
+  }
+]
