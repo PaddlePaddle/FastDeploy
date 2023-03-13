@@ -17,16 +17,19 @@
 
 1. 将编译后的库拷贝到当前目录，可使用如下命令：
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleSeg.git
-# 注意：如果当前分支找不到下面的fastdeploy测试代码，请切换到develop分支
-# git checkout develop
-
-cp -r FastDeploy/build/fastdeploy-timvx/ path/to/PaddleSeg/deploy/fastdeploy/semantic_segmentation/amlogic/a311d/cpp
+# 下载部署示例代码
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cp -r FastDeploy/build/fastdeploy-timvx/ FastDeploy/examples/vision/segmentation/semantic_segmentation/amlogic/a311d/cpp
+# # 如果您希望从PaddleSeg下载示例代码，请运行
+# git clone https://github.com/PaddlePaddle/PaddleSeg.git
+# # 注意：如果当前分支找不到下面的fastdeploy测试代码，请切换到develop分支
+# # git checkout develop
+# cp -r FastDeploy/build/fastdeploy-timvx/ PaddleSeg/deploy/fastdeploy/semantic_segmentation/amlogic/a311d/cpp
 ```
 
 2. 在当前路径下载部署所需的模型和示例图片：
 ```bash
-cd path/to/PaddleSeg/deploy/fastdeploy/semantic_segmentation/amlogic/a311d/cpp
+cd FastDeploy/examples/vision/segmentation/semantic_segmentation/amlogic/a311d/cpp
 mkdir models && mkdir images
 wget https://bj.bcebos.com/fastdeploy/models/rk1/ppliteseg.tar.gz
 tar -xvf ppliteseg.tar.gz
@@ -37,7 +40,7 @@ cp -r cityscapes_demo.png images
 
 3. 编译部署示例，可使入如下命令：
 ```bash
-cd path/to/PaddleSeg/deploy/fastdeploy/semantic_segmentation/amlogic/a311d/cpp
+cd FastDeploy/examples/vision/segmentation/semantic_segmentation/amlogic/a311d/cpp
 mkdir build && cd build
 cmake -DCMAKE_TOOLCHAIN_FILE=${PWD}/../fastdeploy-timvx/toolchain.cmake -DFASTDEPLOY_INSTALL_DIR=${PWD}/../fastdeploy-timvx -DTARGET_ABI=arm64 ..
 make -j8

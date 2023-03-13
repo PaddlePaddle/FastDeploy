@@ -21,10 +21,13 @@ wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 
 # 下载部署示例代码
-git clone https://github.com/PaddlePaddle/PaddleSeg.git
-# 注意：如果当前分支找不到下面的fastdeploy测试代码，请切换到develop分支
-# git checkout develop
-cd PaddleSeg/deploy/fastdeploy/matting/cpp-gpu/cpp
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy/examples/vision/segmentation/matting/cpp-gpu/cpp
+# # 如果您希望从PaddleSeg下载示例代码，请运行
+# git clone https://github.com/PaddlePaddle/PaddleSeg.git
+# # 注意：如果当前分支找不到下面的fastdeploy测试代码，请切换到develop分支
+# # git checkout develop
+# cd PaddleSeg/deploy/fastdeploy/matting/cpp-gpu/cpp
 
 # 编译部署示例
 mkdir build && cd build

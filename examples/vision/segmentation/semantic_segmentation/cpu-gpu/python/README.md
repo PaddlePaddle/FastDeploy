@@ -18,10 +18,13 @@ pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdep
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
 
 # 下载部署示例代码
-git clone https://github.com/PaddlePaddle/PaddleSeg.git
-# 注意：如果当前分支找不到下面的fastdeploy测试代码，请切换到develop分支
-# git checkout develop
-cd PaddleSeg/deploy/fastdeploy/semantic_segmentation/cpp-gpu/python
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy/examples/vision/segmentation/semantic_segmentation/cpp-gpu/python
+# 如果您希望从PaddleSeg下载示例代码，请运行
+# git clone https://github.com/PaddlePaddle/PaddleSeg.git
+# # 注意：如果当前分支找不到下面的fastdeploy测试代码，请切换到develop分支
+# # git checkout develop
+# cd PaddleSeg/deploy/fastdeploy/semantic_segmentation/cpp-gpu/python
 
 # 下载Unet模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.tgz

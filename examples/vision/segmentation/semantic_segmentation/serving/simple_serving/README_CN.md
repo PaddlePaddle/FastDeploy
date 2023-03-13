@@ -11,10 +11,13 @@ PaddleSeg Python轻量服务化部署是FastDeploy基于Flask框架搭建的可�
 ## 2. 启动服务
 ```bash
 # 下载部署示例代码
-git clone https://github.com/PaddlePaddle/PaddleSeg.git
-# 注意：如果当前分支找不到下面的fastdeploy测试代码，请切换到develop分支
-# git checkout develop
-cd PaddleSeg/deploy/fastdeploy/semantic_segmentation/serving/simple_serving
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy/examples/vision/segmentation/semantic_segmentation/serving/simple_serving
+# 如果您希望从PaddleSeg下载示例代码，请运行
+# git clone https://github.com/PaddlePaddle/PaddleSeg.git
+# # 注意：如果当前分支找不到下面的fastdeploy测试代码，请切换到develop分支
+# # git checkout develop
+# cd PaddleSeg/deploy/fastdeploy/semantic_segmentation/serving/simple_serving
 
 # 下载PP-LiteSeg模型文件
 wget https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer.tgz

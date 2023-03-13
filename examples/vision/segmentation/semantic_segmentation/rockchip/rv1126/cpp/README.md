@@ -18,11 +18,14 @@
 
 2. 将编译后的库拷贝到当前目录，可使用如下命令：
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleSeg.git
-# 注意：如果当前分支找不到下面的fastdeploy测试代码，请切换到develop分支
-# git checkout develop
-
-cp -r FastDeploy/build/fastdeploy-timvx/PaddleSeg/deploy/fastdeploy/semantic_segmentation/rockchip/rv1126/cpp
+# 下载部署示例代码
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cp -r FastDeploy/build/fastdeploy-timvx/ FastDeploy/examples/vision/segmentation/semantic_segmentation/rockchip/rv1126/cpp
+# 如果您希望从PaddleSeg下载示例代码，请运行
+# git clone https://github.com/PaddlePaddle/PaddleSeg.git
+# # 注意：如果当前分支找不到下面的fastdeploy测试代码，请切换到develop分支
+# # git checkout develop
+# cp -r FastDeploy/build/fastdeploy-timvx/ PaddleSeg/deploy/fastdeploy/semantic_segmentation/rockchip/rv1126/cpp
 ```
 
 3. 在当前路径下载部署所需的模型和示例图片：

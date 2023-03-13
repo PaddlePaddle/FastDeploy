@@ -11,10 +11,13 @@ Before serving deployment, it is necessary to confirm the hardware and software 
 
 ```bash
 # Download demo code
-git clone https://github.com/PaddlePaddle/PaddleSeg.git
-# Note: If the current branch cannot find the following fastdeploy test code, switch to the develop branch
-# git checkout develop
-cd PaddleSeg/deploy/fastdeploy/semantic_segmentation/serving/fastdeploy_serving
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy/examples/vision/segmentation/semantic_segmentation/serving/fastdeploy_serving
+# If you want to download the demo code from PaddleSeg repo, please run
+# git clone https://github.com/PaddlePaddle/PaddleSeg.git
+# # Note: If the current branch cannot find the following fastdeploy test code, switch to the develop branch
+# # git checkout develop
+# cd PaddleSeg/deploy/fastdeploy/semantic_segmentation/serving/fastdeploy_serving
 
 # Download PP_LiteSeg model file
 wget  https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer.tgz
