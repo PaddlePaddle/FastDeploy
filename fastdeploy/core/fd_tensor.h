@@ -125,6 +125,7 @@ struct FASTDEPLOY_DECL FDTensor {
   void* buffer_ = nullptr;
   std::vector<int64_t> shape = {0};
   FDDataType dtype = FDDataType::INT8;
+  // Just for paddle inference backend
   std::vector<std::vector<size_t>> lod;
 
   // This use to skip memory copy step
