@@ -1,8 +1,8 @@
 # Run all models specify hardware and specify backend
 export LD_LIBRARY_PATH=${PWD}:$LD_LIBRARY_PATH
 
-CONFIG_PATH="config.arm.txt"
-if [ ! "$1" = "config.arm.txt" ]; then
+CONFIG_PATH="config.arm.lite.fp32.txt"
+if [ ! "$1" = "$CONFIG_PATH" ]; then
   if [ -f "$1" ]; then
     CONFIG_PATH="$1"
   fi
