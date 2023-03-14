@@ -12,11 +12,11 @@
 
 ## 转换模型
 
-模型转换代码请参考[模型转换文档](../README_CN.md)
+模型转换代码请参考[模型转换文档](../README.md)
 
 ## 编译SDK
 
-请参考[RK2代NPU部署库编译](../../../../../../docs/cn/faq/rknpu2/build.md)编译SDK.
+请参考[RK2代NPU部署库编译](../../../../../../../docs/cn/faq/rknpu2/build.md)编译SDK.
 
 ### 编译example
 

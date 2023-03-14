@@ -5,8 +5,8 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 以Linux上推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本1.0.4以上(x.x.x>=1.0.4)
 
@@ -32,10 +32,10 @@ wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 ```
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
-- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
 如果用户使用华为昇腾NPU部署, 请参考以下方式在部署前初始化部署环境:
-- [如何使用华为昇腾NPU部署](../../../../../docs/cn/faq/use_sdk_on_ascend.md)
+- [如何使用华为昇腾NPU部署](../../../../../../docs/cn/faq/use_sdk_on_ascend.md)
 
 运行完成可视化结果如下图所示
 
@@ -155,7 +155,7 @@ FD_C_Bool FD_C_PaddleSegWrapperPredict(
 > **参数**
 > * **fd_c_ppseg_wrapper**(FD_C_PaddleSegWrapper*): 指向PaddleSeg模型的指针
 > * **img**（FD_C_Mat）: 输入图像的指针，指向cv::Mat对象，可以调用FD_C_Imread读取图像获取
-> * **result**FD_C_SegmentationResult*): Segmentation检测结果，SegmentationResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> * **result**FD_C_SegmentationResult*): Segmentation检测结果，SegmentationResult说明参考[视觉模型预测结果](../../../../../../docs/api/vision_results/)
 
 
 #### Predict结果
@@ -181,5 +181,5 @@ FD_C_Mat FD_C_VisSegmentation(FD_C_Mat im,
 
 - [PPSegmentation 系列模型介绍](../../)
 - [PaddleSeg Python部署](../python)
-- [模型预测结果说明](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [模型预测结果说明](../../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../../../docs/cn/faq/how_to_change_backend.md)
