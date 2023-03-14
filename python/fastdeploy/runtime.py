@@ -283,16 +283,6 @@ class RuntimeOption:
         )
         self._option.ort_option.graph_optimize_level = level
 
-    def enable_ort_fp16(self):
-        """Enable half precision inference while using ONNXRuntime backend, notice that the FP16 is only supported on GPU, in other cases, will fallback to FP32 inference.
-        """
-        self._option.ort_option.enable_fp16 = True
-
-    def disable_trt_fp16(self):
-        """Disable half precision inference while suing ONNXRuntime backend.
-        """
-        self._option.ort_option.enable_fp16 = False
-
     def use_paddle_backend(self):
         """Use Paddle Inference backend, support inference Paddle model on CPU/Nvidia GPU.
         """

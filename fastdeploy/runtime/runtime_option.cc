@@ -125,10 +125,6 @@ void RuntimeOption::SetOrtGraphOptLevel(int level) {
   ort_option.graph_optimization_level = level;
 }
 
-void RuntimeOption::EnableOrtFP16() { ort_option.enable_fp16 = true; }
-
-void RuntimeOption::DisableOrtFP16() { ort_option.enable_fp16 = false; }
-
 // use paddle inference backend
 void RuntimeOption::UsePaddleBackend() {
 #ifdef ENABLE_PADDLE_BACKEND

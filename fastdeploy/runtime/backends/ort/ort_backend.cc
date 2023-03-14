@@ -137,7 +137,7 @@ bool OrtBackend::use_fp16() {
     convert_to_fp16 = true;
   } else {
     convert_to_fp16 = false;
-    FDWARNING << "FP16 only support on CPU, while the compiled fastdeploy with "
+    FDWARNING << "FP16 only support on GPU, while the compiled fastdeploy with "
                  "onnxruntime doesn't "
                  "support GPU, the available providers are "
               << providers_msg << ". Will use FP32 to infer." << std::endl;
@@ -157,7 +157,6 @@ bool OrtBackend::Init(const RuntimeOption& option) {
   ort_option.device = option.device;
   ort_option.device_id = option.device_id;
   ort_option.external_stream_ = option.external_stream_;
-  // ort_option.enable_fp16 = option.enable_fp16;
 
   if (option.model_format == ModelFormat::PADDLE) {
     if (option.model_from_memory_) {
@@ -207,7 +206,6 @@ bool OrtBackend::InitFromPaddle(const std::string& model_buffer,
   if (option.device == Device::GPU && option.enable_fp16) {
     use_fp16();
   }
-  convert_to_fp16 = true;
   if (!paddle2onnx::Export(
           model_buffer.c_str(), model_buffer.size(), params_buffer.c_str(),
           params_buffer.size(), &model_content_ptr, &model_content_size, 11,
@@ -246,10 +244,8 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
     return false;
   }
   std::string onnx_model_buffer;
-  // if (option.device == Device::GPU && option.enable_fp16 && !convert_to_fp16
-  // &&
-  //     use_fp16()) {
-  if (true) {
+  if (option.device == Device::GPU && option.enable_fp16 && !convert_to_fp16 &&
+      use_fp16()) {
     char* model_content_ptr;
     int model_content_size = 0;
     paddle2onnx::ConvertFP32ToFP16(model_file.c_str(), model_file.size(),
@@ -286,7 +282,8 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
         type_info.GetTensorTypeAndShapeInfo().GetShape();
     ONNXTensorElementDataType data_type =
         type_info.GetTensorTypeAndShapeInfo().GetElementType();
-    inputs_desc_.emplace_back(OrtValueInfo{input_name_ptr.get(), shape, data_type});
+    inputs_desc_.emplace_back(
+        OrtValueInfo{input_name_ptr.get(), shape, data_type});
   }
 
   size_t n_outputs = session_.GetOutputCount();
@@ -297,7 +294,8 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
         type_info.GetTensorTypeAndShapeInfo().GetShape();
     ONNXTensorElementDataType data_type =
         type_info.GetTensorTypeAndShapeInfo().GetElementType();
-    outputs_desc_.emplace_back(OrtValueInfo{output_name_ptr.get(), shape, data_type});
+    outputs_desc_.emplace_back(
+        OrtValueInfo{output_name_ptr.get(), shape, data_type});
 
     Ort::MemoryInfo out_memory_info("Cpu", OrtDeviceAllocator, 0,
                                     OrtMemTypeDefault);
