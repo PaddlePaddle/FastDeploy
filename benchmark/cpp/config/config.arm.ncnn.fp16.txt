@@ -1,7 +1,7 @@
 device: cpu
 device_id: 0
 cpu_thread_nums: 1
-warmup: 5
+warmup: 20
 repeat: 50
 backend: ncnn
 profile_mode: runtime

@@ -6,6 +6,10 @@
 |选项|需要设置的值|说明|
 |---|---|---|  
 | ENABLE_BENCHMARK  | ON | 默认OFF, 是否打开BENCHMARK模式 |
+| ENABLE_LITE_BACKEND  | ON/OFF | 移动端必选，默认OFF, 是否打开Paddle Lite后端 |
+| ENABLE_MNN_BACKEND  | ON/OFF | 移动端可选，默认OFF, 是否打开MNN后端 |
+| ENABLE_TNN_BACKEND  | ON/OFF | 移动端可选，默认OFF, 是否打开TNN后端 |
+| ENABLE_NCNN_BACKEND  | ON/OFF | 移动端可选，默认OFF, 是否打开NCNN后端 |
 | ENABLE_VISION     | ON | 默认OFF，是否编译集成视觉模型的部署模块 |
 | ENABLE_TEXT       | ON | 默认OFF，是否编译集成文本NLP模型的部署模块 |  
 
@@ -139,9 +143,9 @@ tar -zxvf yolov8_s_500e_coco.tgz
 # NVIDIA GPU TRT backend fp16
 ./benchmark_gpu_trt.sh config/config.gpu.trt.fp16.txt
 
-# Arm CPU PaddleLite backend fp32
+# Arm CPU Paddle Lite backend fp32
 ./benchmark_arm.sh config/config.arm.lite.fp32.txt
-# Arm CPU PaddleLite backend fp16
+# Arm CPU Paddle Lite backend fp16
 ./benchmark_arm.sh config/config.arm.lite.fp16.txt
 # XPU Paddle Lite backend fp32
 ./benchmark_xpu.sh config/config.xpu.lite.fp32.txt
