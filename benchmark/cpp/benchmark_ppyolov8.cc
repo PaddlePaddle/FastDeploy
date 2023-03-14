@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
   }
   // Run profiling
   if (FLAGS_no_nms) {
-    model_ppyolov8.GetPostprocessor().ApplyDecodeAndNMS();
+    model_ppyolov8.GetPostprocessor().ApplyNMS();
   }
   BENCHMARK_MODEL(model_ppyolov8, model_ppyolov8.Predict(im, &res))
   auto vis_im = vision::VisDetection(im, res);

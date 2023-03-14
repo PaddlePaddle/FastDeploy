@@ -37,6 +37,11 @@ void FD_C_DestroyClassifyResultWrapper(
   delete fd_c_classify_result_wrapper;
 }
 
+FD_C_ClassifyResult* FD_C_CreateClassifyResult() {
+  FD_C_ClassifyResult* fd_c_classify_result = new FD_C_ClassifyResult();
+  return fd_c_classify_result;
+}
+
 void FD_C_DestroyClassifyResult(
     __fd_take FD_C_ClassifyResult* fd_c_classify_result) {
   if (fd_c_classify_result == nullptr) return;
@@ -44,6 +49,7 @@ void FD_C_DestroyClassifyResult(
   delete[] fd_c_classify_result->label_ids.data;
   // delete scores
   delete[] fd_c_classify_result->scores.data;
+  delete fd_c_classify_result;
 }
 
 void FD_C_ClassifyResultWrapperToCResult(
@@ -117,6 +123,11 @@ void FD_C_DestroyDetectionResultWrapper(
   delete fd_c_detection_result_wrapper;
 }
 
+FD_C_DetectionResult* FD_C_CreateDetectionResult() {
+  FD_C_DetectionResult* fd_c_detection_result = new FD_C_DetectionResult();
+  return fd_c_detection_result;
+}
+
 void FD_C_DestroyDetectionResult(
     __fd_take FD_C_DetectionResult* fd_c_detection_result) {
   if (fd_c_detection_result == nullptr) return;
@@ -134,6 +145,7 @@ void FD_C_DestroyDetectionResult(
     delete[] fd_c_detection_result->masks.data[i].data.data;
     delete[] fd_c_detection_result->masks.data[i].shape.data;
   }
+  delete fd_c_detection_result;
 }
 
 void FD_C_DetectionResultWrapperToCResult(
@@ -275,6 +287,11 @@ void FD_C_DestroyOCRResultWrapper(
   delete fd_c_ocr_result_wrapper;
 }
 
+FD_C_OCRResult* FD_C_CreateOCRResult() {
+  FD_C_OCRResult* fd_c_ocr_result = new FD_C_OCRResult();
+  return fd_c_ocr_result;
+}
+
 void FD_C_DestroyOCRResult(__fd_take FD_C_OCRResult* fd_c_ocr_result) {
   if (fd_c_ocr_result == nullptr) return;
   // delete boxes
@@ -293,6 +310,7 @@ void FD_C_DestroyOCRResult(__fd_take FD_C_OCRResult* fd_c_ocr_result) {
   delete[] fd_c_ocr_result->cls_scores.data;
   // delete cls_labels
   delete[] fd_c_ocr_result->cls_labels.data;
+  delete fd_c_ocr_result;
 }
 
 void FD_C_OCRResultWrapperToCResult(
@@ -418,6 +436,12 @@ void FD_C_DestroySegmentationResultWrapper(
   delete fd_c_segmentation_result_wrapper;
 }
 
+FD_C_SegmentationResult* FD_C_CreateSegmentationResult() {
+  FD_C_SegmentationResult* fd_c_segmentation_result =
+      new FD_C_SegmentationResult();
+  return fd_c_segmentation_result;
+}
+
 void FD_C_DestroySegmentationResult(
     __fd_take FD_C_SegmentationResult* fd_c_segmentation_result) {
   if (fd_c_segmentation_result == nullptr) return;
@@ -427,6 +451,7 @@ void FD_C_DestroySegmentationResult(
   delete[] fd_c_segmentation_result->score_map.data;
   // delete shape
   delete[] fd_c_segmentation_result->shape.data;
+  delete fd_c_segmentation_result;
 }
 
 void FD_C_SegmentationResultWrapperToCResult(

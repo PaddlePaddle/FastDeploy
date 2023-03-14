@@ -23,10 +23,17 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
   std::unordered_map<std::string, std::string> config_info;
   fastdeploy::benchmark::ResultManager::LoadBenchmarkConfig(
                             FLAGS_config_path, &config_info);
+  int warmup = std::stoi(config_info["warmup"]);
+  int repeat = std::stoi(config_info["repeat"]);
+  if (FLAGS_warmup != -1) {
+    warmup = FLAGS_warmup;
+  }
+  if (FLAGS_repeat != -1) {
+    repeat = FLAGS_repeat;
+  }
   if (config_info["profile_mode"] == "runtime") {
     option->EnableProfiling(config_info["include_h2d_d2h"] == "true",
-                            std::stoi(config_info["repeat"]),
-                            std::stoi(config_info["warmup"]));
+                            repeat, warmup);
   }
   if (config_info["device"] == "gpu") {
     option->UseGpu(std::stoi(config_info["device_id"]));
@@ -45,6 +52,7 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
         option->trt_option.enable_fp16 = true;
       }
     } else if (config_info["backend"] == "default") {
+      PrintBenchmarkInfo(config_info);
       return true;
     } else {
       std::cout << "While inference with GPU, only support "
@@ -67,6 +75,7 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
         option->paddle_lite_option.enable_fp16 = true;
       }
     } else if (config_info["backend"] == "default") {
+      PrintBenchmarkInfo(config_info);
       return true;
     } else {
       std::cout << "While inference with CPU, only support "
@@ -88,6 +97,7 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
         option->paddle_lite_option.enable_fp16 = true;
       }
     } else if (config_info["backend"] == "default") {
+      PrintBenchmarkInfo(config_info);
       return true;
     } else {
       std::cout << "While inference with XPU, only support "

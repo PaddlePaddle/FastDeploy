@@ -22,4 +22,4 @@ for root, dirs, files in os.walk(third_libs):
     for f in files:
         if f.strip().count(".so") > 0 or f.strip() == "plugins.xml":
             full_path = os.path.join(root, f)
-            shutil.copy(full_path, os.path.join(bc_dirname, "lib"))  
+            shutil.copy(full_path, os.path.join(bc_dirname, "lib"), follow_symlinks=False)  
