@@ -22,6 +22,12 @@ void BindProcessor(pybind11::module& m);
 void BindResizeByShort(pybind11::module& m);
 void BindCenterCrop(pybind11::module& m);
 void BindPad(pybind11::module& m);
+void BindCast(pybind11::module& m);
+void BindHWC2CHW(pybind11::module& m);
+void BindNormalize(pybind11::module& m);
+void BindPadToSize(pybind11::module& m);
+void BindResize(pybind11::module& m);
+void BindStridePad(pybind11::module& m);
 
 void BindProcessors(pybind11::module& m) {
   auto processors_m =
@@ -32,5 +38,11 @@ void BindProcessors(pybind11::module& m) {
   BindResizeByShort(processors_m);
   BindCenterCrop(processors_m);
   BindPad(processors_m);
+  BindCast(processors_m);
+  BindHWC2CHW(processors_m);
+  BindNormalize(processors_m);
+  BindPadToSize(processors_m);
+  BindResize(processors_m);
+  BindStridePad(processors_m);
 }
 }  // namespace fastdeploy
