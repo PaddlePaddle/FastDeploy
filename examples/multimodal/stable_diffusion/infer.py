@@ -191,7 +191,6 @@ def create_kunlunxin_runtime(model_dir, model_prefix, use_fp16=False, device_id=
     params_file = os.path.join(model_dir, model_prefix, "inference.pdiparams")
     option.set_model_path(model_file, params_file)
     if use_fp16:
-        print("debug : use fp16")
         option.enable_lite_fp16()
     return fd.Runtime(option)
 
