@@ -17,7 +17,7 @@
 
 namespace fastdeploy {
 
-using py = pybind11;
+namespace py = pybind11;
 
 void BindIpuOption(pybind11::module& m) {
   py::class_<IpuOption>(m, "IpuOption")

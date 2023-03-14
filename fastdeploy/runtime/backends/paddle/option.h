@@ -19,6 +19,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include "fastdeploy/runtime/backends/tensorrt/option.h"
 
 
