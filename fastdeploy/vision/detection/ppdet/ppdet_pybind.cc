@@ -15,8 +15,8 @@
 
 namespace fastdeploy {
 void BindPPDet(pybind11::module& m) {
-  pybind11::class_<vision::detection::PaddleDetPreprocessor>(
-      m, "PaddleDetPreprocessor")
+  pybind11::class_<vision::detection::PaddleDetPreprocessor,
+                   vision::ProcessorManager>(m, "PaddleDetPreprocessor")
       .def(pybind11::init<std::string>())
       .def("run",
            [](vision::detection::PaddleDetPreprocessor& self,

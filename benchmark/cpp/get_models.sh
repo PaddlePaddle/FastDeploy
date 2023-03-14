@@ -2,12 +2,6 @@
 set -e
 set +x
 
-proxyoff(){
-    unset http_proxy
-    unset https_proxy
-    echo -e "[INFO] --- Proxy OFF!"
-}
-
 download_fd_model_zxvf() {
   local model="$1"
   if [ ! -f "${model}" ]; then
@@ -57,7 +51,6 @@ download_common_file() {
   fi
 }
 
-proxyoff
 # PaddleDetection
 download_fd_model_zxvf ppyoloe_crn_l_300e_coco_no_nms.tgz
 download_fd_model_zxvf picodet_l_640_coco_lcnet_no_nms.tgz
@@ -95,10 +88,10 @@ download_common_model_xvf https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP
 download_common_model_xvf https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_rec_infer.tar ch_PP-OCRv2_rec_infer.tar
 # download images
 download_common_file https://bj.bcebos.com/paddlehub/fastdeploy/rec_img.jpg rec_img.jpg
-download_common_file https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png cityscapes_demo.png
-download_common_file https://bj.bcebos.com/fastdeploy/test/portrait_heng.jpg portrait_heng.jpg
+download_common_file https://bj.bcebos.com/paddlehub/fastdeploy/cityscapes_demo.png cityscapes_demo.png
+download_common_file https://bj.bcebos.com/paddlehub/fastdeploy/portrait_heng.jpg portrait_heng.jpg
 download_common_file https://bj.bcebos.com/paddlehub/fastdeploy/matting_input.jpg matting_input.jpg
 download_common_file https://github.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg 12.jpg
 download_common_file https://github.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg ILSVRC2012_val_00000010.jpeg
 download_common_file https://github.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg 000000014439.jpg
-download_common_file https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt ppocr_keys_v1.txt
+download_common_file https://github.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt ppocr_keys_v1.txt
