@@ -17,16 +17,6 @@ sleep_seconds() {
   sleep $sleep_interval
 }
 
-# PaddleDetection: +8
-./benchmark_ppyolov5 --model yolov5_s_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds
-./benchmark_ppyolov6 --model yolov6_s_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds
-./benchmark_ppyolov7 --model yolov7_l_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds 600
-./benchmark_ppyolov8 --model yolov8_s_500e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds
-./benchmark_ppyolox --model yolox_s_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds
-./benchmark_ppyoloe --model ppyoloe_crn_l_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds 600
-./benchmark_ppyoloe --model ppyoloe_plus_crn_m_80e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds
-./benchmark_picodet --model picodet_l_640_coco_lcnet_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds
-
 # PaddleClas: +9
 ./benchmark_ppcls --model PPLCNet_x1_0_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH && sleep_seconds
 ./benchmark_ppcls --model PPLCNetV2_base_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH && sleep_seconds
@@ -44,6 +34,16 @@ sleep_seconds() {
 ./benchmark_ppocr_rec --model ch_PP-OCRv3_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH && sleep_seconds
 ./benchmark_ppocr_det --model ch_PP-OCRv2_det_infer --image 12.jpg --config_path $CONFIG_PATH && sleep_seconds
 ./benchmark_ppocr_rec --model ch_PP-OCRv2_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH && sleep_seconds
+
+# PaddleDetection: +8
+./benchmark_ppyolov5 --model yolov5_s_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds
+./benchmark_ppyolov6 --model yolov6_s_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds
+./benchmark_ppyolov8 --model yolov8_s_500e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds
+./benchmark_ppyolox --model yolox_s_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds
+./benchmark_ppyoloe --model ppyoloe_plus_crn_m_80e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds
+./benchmark_picodet --model picodet_l_640_coco_lcnet_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds
+./benchmark_ppyolov7 --model yolov7_l_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds 600
+./benchmark_ppyoloe --model ppyoloe_crn_l_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms && sleep_seconds 600
 
 # PaddleSeg: +9
 ./benchmark_ppseg --model PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH && sleep_seconds
