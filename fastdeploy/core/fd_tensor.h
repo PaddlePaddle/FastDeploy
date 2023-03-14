@@ -42,8 +42,17 @@ struct FASTDEPLOY_DECL FDTensor {
    * \param[in] data_device The device of data_buffer, e.g if data_buffer is a pointer to GPU data, the device should be Device::GPU
    * \param[in] data_device_id The device id of data_buffer
    */
-  void SetData(const std::vector<int64_t>& tensor_shape, const FDDataType& data_type, void* data_buffer, bool copy = false, const Device& data_device = Device::CPU, int data_device_id = -1) {
-    SetExternalData(tensor_shape, data_type, data_buffer, data_device, data_device_id);
+  void SetData(const std::vector<int64_t>& tensor_shape,
+               const FDDataType& data_type,
+               void* data_buffer,
+               bool copy = false,
+               const Device& data_device = Device::CPU,
+               int data_device_id = -1) {
+    SetExternalData(tensor_shape,
+                    data_type,
+                    data_buffer,
+                    data_device,
+                    data_device_id);
     if (copy) {
       StopSharing();
     }
@@ -58,13 +67,16 @@ struct FASTDEPLOY_DECL FDTensor {
     return Data();
   }
 
-  /// Expand the shape of tensor, it will not change the data memory, just modify its attribute `shape`
+  /// Expand the shape of tensor, it will not change the data memory,
+  /// just modify its attribute `shape`
   void ExpandDim(int64_t axis = 0);
 
-  /// Squeeze the shape of tensor, it will not change the data memory, just modify its attribute `shape`
+  /// Squeeze the shape of tensor, it will not change the data memory,
+  /// just modify its attribute `shape`
   void Squeeze(int64_t axis = 0);
 
-  /// Reshape the tensor, it will not change the data memory, just modify its attribute `shape`
+  /// Reshape the tensor, it will not change the data memory,
+  /// just modify its attribute `shape`
   bool Reshape(const std::vector<int64_t>& new_shape);
 
   /// Total size of tensor memory buffer in bytes
@@ -87,7 +99,8 @@ struct FASTDEPLOY_DECL FDTensor {
    * \param[in] data_type The data type of tensor
    * \param[in] tensor_shape The shape of tensor
    */
-  void Allocate(const FDDataType& data_type, const std::vector<int64_t>& data_shape) {
+  void Allocate(const FDDataType& data_type,
+                const std::vector<int64_t>& data_shape) {
     Allocate(data_shape, data_type, name);
   }
 
@@ -97,18 +110,22 @@ struct FASTDEPLOY_DECL FDTensor {
   /// Name of tensor, while feed to runtime, this need be defined
   std::string name = "";
 
-  /// Whether the tensor is owned the data buffer or share the data buffer from outside
+  /// Whether the tensor is owned the data buffer or
+  /// share the data buffer from outside
   bool IsShared() { return external_data_ptr != nullptr; }
-  /// If the tensor is share the data buffer from outside, `StopSharing` will copy to its own structure; Otherwise, do nothing
+  /// If the tensor is share the data buffer from outside,
+  /// `StopSharing` will copy to its own structure; Otherwise, do nothing
   void StopSharing();
 
 
   // ******************************************************
-  // The following member and function only used by inside FastDeploy, maybe removed in next version
+  // The following member and function only used by inside FastDeploy,
+  // maybe removed in next version
 
   void* buffer_ = nullptr;
   std::vector<int64_t> shape = {0};
   FDDataType dtype = FDDataType::INT8;
+  std::vector<std::vector<size_t>> lod;
 
   // This use to skip memory copy step
   // the external_data_ptr will point to the user allocated memory
@@ -152,7 +169,13 @@ struct FASTDEPLOY_DECL FDTensor {
   // will copy to cpu store in `temporary_cpu_buffer`
   const void* CpuData() const;
 
-  // void SetDataBuffer(const std::vector<int64_t>& new_shape, const FDDataType& data_type, void* data_buffer, bool copy = false, const Device& new_device = Device::CPU, int new_device_id = -1);
+  // void SetDataBuffer(const std::vector<int64_t>& new_shape,
+  //                    const FDDataType& data_type,
+  //                    void* data_buffer,
+  //                    bool copy = false,
+  //                    const Device& new_device = Device::CPU,
+  //                    int new_device_id = -1);
+  //
   // Set user memory buffer for Tensor, the memory is managed by
   // the user it self, but the Tensor will share the memory with user
   // So take care with the user buffer

@@ -281,7 +281,15 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
 
   RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
   for (size_t i = 0; i < inputs.size(); ++i) {
-    auto handle = predictor_->GetInputHandle(inputs[i].name);
+    const auto& input_name = inputs[i].name;
+    if (option_.lod_name_map_.find(input_name) != option_.lod_name_map_.end()) {
+      // Current input is a lod info tensor, don't set input handler.
+      const auto& tensor_name = option_.lod_name_map_[input_name];
+      auto handle = predictor_->GetInputHandle(tensor_name);
+      handle.get()->SetLoD(inputs[i].lod);
+      continue;
+    }
+    auto handle = predictor_->GetInputHandle(input_name);
     ShareTensorFromFDTensor(handle.get(), inputs[i]);
   }
   std::unordered_set<std::string> prebinded_output_name;

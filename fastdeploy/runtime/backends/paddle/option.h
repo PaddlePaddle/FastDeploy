@@ -91,6 +91,16 @@ struct PaddleBackendOption {
     ipu_option.ipu_enable_half_partial = enable_half_partial;
   }
 
+  void SetLodMap(const std::unordered_map<std::string, std::string>&
+          lod_name_map) {
+    lod_name_map_ = lod_name_map;
+  }
+
+  void AddLodNameToLodMap(const std::string& lod_name,
+                          const std::string& tensor_name) {
+    lod_name_map_[lod_name] = tensor_name;
+  }
+
   // The belowing parameters may be removed, please do not
   // read or write them directly
   TrtBackendOption trt_option;
@@ -103,7 +113,8 @@ struct PaddleBackendOption {
   std::vector<std::string> delete_pass_names = {};
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
-
+  // The map of lod info name to fdtensor info name.
+  std::unordered_map<std::string, std::string> lod_name_map_;
   // load model and paramters from memory
   bool model_from_memory_ = false;
 };
