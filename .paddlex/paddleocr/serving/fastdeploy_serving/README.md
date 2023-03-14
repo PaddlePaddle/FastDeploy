@@ -16,7 +16,7 @@ PP-OCRv3由det(检测)、cls(分类)和rec(识别)三个模型组成.
 
 <p align="center">
     <br>
-<img src='./ppocr.png'">
+<img src="https://user-images.githubusercontent.com/15235574/224879693-4bd7676e-9b49-4238-883c-b5762867fa8e.png">
     <br>
 <p>
 
