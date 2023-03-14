@@ -18,6 +18,13 @@ make -j8
 ./infer_rkyolo /path/to/model 000000014439.jpg
 ```
 
+## 常见问题
+
+如果你使用自己训练的YOLOv5模型，你可能会碰到运行FastDeploy的demo后出现`segmentation fault`的问题，很大概率是label数目不一致，你可以使用以下方案来解决:
+
+```c++
+model.GetPostprocessor().SetClassNum(3);
+```
 
 - [模型介绍](../../)
 - [Python部署](../python)

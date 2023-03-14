@@ -19,10 +19,16 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 cp -r ./model /path/to/FastDeploy/examples/vision/detection/rkyolo/python
 
 # 推理
-python3 infer.py --model_file ./model/  \
-                  --image 000000014439.jpg
+python3 infer.py --model_file /path/to/model  --image /path/to/000000014439.jpg
 ```
 
+## 常见问题
+
+如果你使用自己训练的YOLOv5模型，你可能会碰到运行FastDeploy的demo后出现`segmentation fault`的问题，很大概率是label数目不一致，你可以使用以下方案来解决:
+
+```python
+model.postprocessor.class_num = 3
+```
 
 ## 注意事项
 RKNPU上对模型的输入要求是使用NHWC格式，且图片归一化操作会在转RKNN模型时，内嵌到模型中，因此我们在使用FastDeploy部署时，需要先调用DisablePermute(C++) `disable_permute(Python)`，在预处理阶段禁用归一化以及数据格式的转换。
