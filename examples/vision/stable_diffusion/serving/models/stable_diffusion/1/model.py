@@ -84,13 +84,6 @@ def create_paddle_inference_runtime(model_dir,
         option.paddle_infer_option.enable_trt = True
         if use_fp16:
             option.trt_option.enable_fp16 = True
-        #else:
-        #    # Note(zhoushunjie): These two passes don't support fp32 now.
-        #    # Remove these 2 lines of code in future.
-        #    option.paddle_infer_option.delete_pass("trt_cross_multihead_matmul_fuse_pass")
-        #    option.paddle_infer_option.delete_pass("trt_flash_multihead_matmul_fuse_pass")
-        #    option.paddle_infer_option.delete_pass("preln_elementwise_groupnorm_act_pass")
-        #    option.paddle_infer_option.delete_pass("elementwise_groupnorm_act_pass")
         cache_file = os.path.join(model_dir, model_prefix, "_opt_cache/")
         option.set_trt_cache_file(cache_file)
         # Need to enable collect shape for ernie
@@ -190,10 +183,6 @@ def create_pipe(args):
         unet_dynamic_shape,
         use_fp16=args.use_fp16,
         device_id=args.device_id,
-        disable_paddle_pass=[
-            "trt_cross_multihead_matmul_fuse_pass",
-            "trt_flash_multihead_matmul_fuse_pass"
-        ],
         paddle_stream=paddle_stream, )
     print(f"Spend {time.time() - start : .2f} s to load unet model.")
 
@@ -213,8 +202,6 @@ def create_pipe(args):
         vae_dynamic_shape,
         use_fp16=args.use_fp16,
         device_id=device_id,
-        #disable_paddle_pass=["elementwise_groupnorm_act_pass", "preln_elementwise_groupnorm_act_pass"],
-        #disable_paddle_pass=["elementwise_groupnorm_act_pass"],
         paddle_stream=paddle_stream, )
 
     pipe = FastDeployStableDiffusionPipeline(
@@ -254,8 +241,13 @@ class TritonPythonModel:
           * model_version: Model version
           * model_name: Model name
         """
+
         self.model_args = MyArgs()
+        if args['model_instance_kind'] == "GPU":
+            self.model_args.device_id = int(args['model_instance_device_id'][
+                0])
         self.pipe = create_pipe(self.model_args)
+
         # You must parse model_config. JSON string is not parsed here
         self.model_config = json.loads(args['model_config'])
         print("model_config:", self.model_config)
@@ -293,19 +285,18 @@ class TritonPythonModel:
           be the same as `requests`
         """
         responses = []
-        # print("num:", len(requests), flush=True)
+        prompt = []
         for request in requests:
             data = pb_utils.get_input_tensor_by_name(request,
                                                      self.input_names[0])
             data = data.as_numpy()
             data = [i[0].decode('utf-8') for i in data]
-            prompt = data[0]
-            print("input=", prompt)
-            image = self.pipe(
-                prompt,
-                num_inference_steps=self.model_args.inference_steps).images[0]
+            prompt.append(data[0])
+        # batch predict, for now, only support batch = 1
+        images = self.pipe(
+            prompt, num_inference_steps=self.model_args.inference_steps).images
+        for image in images:
             image_byte = image2byte(image)
-            print("byte = ", image_byte)
             out_result = np.array(image_byte, dtype='object')
             out_tensor = pb_utils.Tensor(self.output_names[0], out_result)
             inference_response = pb_utils.InferenceResponse(output_tensors=[

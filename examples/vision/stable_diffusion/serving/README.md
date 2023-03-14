@@ -91,10 +91,12 @@ fastdeployserver --model-repository=.
   - `grpc-port`(optional): GRPC服务的端口号. 默认: `8001`.
   - `metrics-port`(optional): 服务端指标的端口号. 默认: `8002`. 本示例中未使用该端口.
 
-**注意**:首次加载会比较慢。
+**注意**:首次加载会比较慢，用户可根据自身需求修改`model.py`中的相关参数和配置。
 
 服务的调用输入为String类型的一段文字，例如:"a photo of an astronaut riding a horse on mars"。
+
 服务的调用输出为生成的图片的base64编码的String。
+
 具体接口配置文件在`config.pbtxt`中，定义如下：
 ```
 input [
