@@ -25,7 +25,7 @@
 请参考[SOPHGO部署库编译](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install/sophgo.md)编译SDK，编译完成后，将在build目录下生成fastdeploy-sophgo目录。拷贝fastdeploy-sophgo至当前目录
 
 ### 拷贝模型文件，以及配置文件至model文件夹
-将Paddle模型转换为SOPHGO bmodel模型，转换步骤参考[文档](../README_CN.md#将paddleseg推理模型转换为bmodel模型步骤)
+将Paddle模型转换为SOPHGO bmodel模型，转换步骤参考[文档](../README.md#将paddleseg推理模型转换为bmodel模型步骤)
 
 将转换后的SOPHGO bmodel模型文件拷贝至model中
 
@@ -53,4 +53,4 @@ make
 - [PaddleSeg C++ API文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/cpp/html/namespacefastdeploy_1_1vision_1_1segmentation.html)
 - [FastDeploy部署PaddleSeg模型概览](../../)
 - [Python部署](../python)
-- [模型转换](../README_CN.md#将paddleseg推理模型转换为bmodel模型步骤)
+- [模型转换](../README.md#将paddleseg推理模型转换为bmodel模型步骤)

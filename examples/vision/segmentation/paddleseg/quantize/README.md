@@ -22,6 +22,6 @@ FastDeploy 量化模型部署的过程大致都与FP32模型类似，只是模�
 
 | 硬件支持列表 |  |   |   |
 |:----- | :-- | :-- | :-- |
-| [NVIDIA GPU](cpu-gpu) | [X86 CPU](cpu-gpu)| [飞腾CPU](cpu-gpu) | [ARM CPU](cpu-gpu) |
-| [Intel GPU(独立显卡/集成显卡)](cpu-gpu) | [昆仑](kunlun) | [昇腾](ascend) | [瑞芯微](rockchip) |
-| [晶晨](amlogic) | [算能](sophgo) |
+| [NVIDIA GPU](../cpu-gpu) | [X86 CPU](../cpu-gpu)| [飞腾CPU](../cpu-gpu) | [ARM CPU](../cpu-gpu) |
+| [Intel GPU(独立显卡/集成显卡)](../cpu-gpu) | [昆仑](../kunlun) | [昇腾](../ascend) | [瑞芯微](../rockchip) |
+| [晶晨](../amlogic) | [算能](../sophgo) |

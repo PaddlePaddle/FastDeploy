@@ -32,7 +32,7 @@ RKNPU上对模型的输入要求是使用NHWC格式，且图片归一化操作�
 
 - [FastDeploy部署PaddleSeg模型概览](..)
 - [PaddleSeg C++部署](../cpp)
-- [转换PaddleSeg模型至RKNN模型文档](../README_CN.md#准备paddleseg部署模型以及转换模型)
+- [转换PaddleSeg模型至RKNN模型文档](../README.md#准备paddleseg部署模型以及转换模型)
 
 ## 常见问题
 - [如何将模型预测结果SegmentationResult转为numpy格式](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/vision_result_related_problems.md)

@@ -8,8 +8,8 @@
 软硬件环境满足要求，以及交叉编译环境的准备，请参考：[瑞芯微RV1126部署环境](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install#自行编译安装)  
 
 ### 模型准备
-1. 用户可以直接使用由[FastDeploy 提供的量化模型](../README_CN.md#瑞芯微-rv1126-支持的paddleseg模型)进行部署。
-2. 若FastDeploy没有提供满足要求的量化模型，用户可以参考[PaddleSeg动态图模型导出为RV1126支持的INT8模型](../README_CN.md#paddleseg动态图模型导出为rv1126支持的int8模型)自行导出或训练量化模型
+1. 用户可以直接使用由[FastDeploy 提供的量化模型](../README.md#瑞芯微-rv1126-支持的paddleseg模型)进行部署。
+2. 若FastDeploy没有提供满足要求的量化模型，用户可以参考[PaddleSeg动态图模型导出为RV1126支持的INT8模型](../README.md#paddleseg动态图模型导出为rv1126支持的int8模型)自行导出或训练量化模型
 3. 若上述导出或训练的模型出现精度下降或者报错，则需要使用异构计算，使得模型算子部分跑在RV1126的ARM CPU上进行调试以及精度验证，其中异构计算所需的文件是subgraph.txt。具体关于异构计算可参考：[异构计算](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/heterogeneous_computing_on_timvx_npu.md)。
 
 ## 在 RV1126 上部署量化后的 PP-LiteSeg 分割模型
