@@ -46,9 +46,9 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor : public ProcessorManager {
   /// Set preprocess normalize parameters, please call this API to customize
   /// the normalize parameters, otherwise it will use the default normalize
   /// parameters.
-  void SetNormalize(const std::vector<float>& mean = {0.485f, 0.456f, 0.406f},
-                    const std::vector<float>& std = {0.229f, 0.224f, 0.225f},
-                    bool is_scale = true) {
+  void SetNormalize(const std::vector<float>& mean,
+                    const std::vector<float>& std,
+                    bool is_scale) {
     normalize_permute_op_ =
         std::make_shared<NormalizeAndPermute>(mean, std, is_scale);
   }
