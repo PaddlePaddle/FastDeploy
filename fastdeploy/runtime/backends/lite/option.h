@@ -53,32 +53,46 @@ enum LitePowerMode {
 struct LiteBackendOption {
   /// Paddle Lite power mode for mobile device.
   int power_mode = 3;
-  /// Number of threads while use CPU
+  // Number of threads while use CPU
   int cpu_threads = 1;
   /// Enable use half precision
   bool enable_fp16 = false;
-  /// Inference device, Paddle Lite support CPU/KUNLUNXIN/TIMVX/ASCEND
+  // Inference device, Paddle Lite support CPU/KUNLUNXIN/TIMVX/ASCEND
   Device device = Device::CPU;
-  /// Index of inference device
+  // Index of inference device
   int device_id = 0;
 
+  /// kunlunxin_l3_workspace_size
   int kunlunxin_l3_workspace_size = 0xfffc00;
+  /// kunlunxin_locked
   bool kunlunxin_locked = false;
+  /// kunlunxin_autotune
   bool kunlunxin_autotune = true;
+  /// kunlunxin_autotune_file
   std::string kunlunxin_autotune_file = "";
+  /// kunlunxin_precision
   std::string kunlunxin_precision = "int16";
+  /// kunlunxin_adaptive_seqlen
   bool kunlunxin_adaptive_seqlen = false;
+  /// kunlunxin_enable_multi_stream
   bool kunlunxin_enable_multi_stream = false;
 
   /// Optimized model dir for CxxConfig
   std::string optimized_model_dir = "";
+  /// nnadapter_subgraph_partition_config_path
   std::string nnadapter_subgraph_partition_config_path = "";
+  /// nnadapter_subgraph_partition_config_buffer
   std::string nnadapter_subgraph_partition_config_buffer = "";
+  /// nnadapter_context_properties
   std::string nnadapter_context_properties = "";
+  /// nnadapter_model_cache_dir
   std::string nnadapter_model_cache_dir = "";
+  /// nnadapter_mixed_precision_quantization_config_path
   std::string nnadapter_mixed_precision_quantization_config_path = "";
+  /// nnadapter_dynamic_shape_info
   std::map<std::string, std::vector<std::vector<int64_t>>>
     nnadapter_dynamic_shape_info = {{"", {{0}}}};
+  /// nnadapter_device_names
   std::vector<std::string> nnadapter_device_names = {};
 };
 }  // namespace fastdeploy
