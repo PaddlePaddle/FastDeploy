@@ -40,7 +40,7 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_
 ```
 
 The above command works for Linux or MacOS. For SDK in Windows, refer to:
-- [How to use FastDeploy C++ SDK in Windows](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+- [How to use FastDeploy C++ SDK in Windows](../../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
 The visualized result after running is as follows
 
