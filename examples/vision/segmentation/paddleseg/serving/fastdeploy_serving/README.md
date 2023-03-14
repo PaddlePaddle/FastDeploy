@@ -65,4 +65,4 @@ When the request is sent successfully, the results are returned in json format a
 
 
 
-The default is to run ONNXRuntime on CPU. If developers need to run it on GPU or other inference engines, please see the  [Configs File](../../../../../serving/docs/EN/model_configuration-en.md) to modify the configs in `models/runtime/config.pbtxt`.
+The default is to run ONNXRuntime on CPU. If developers need to run it on GPU or other inference engines, please see the  [Configs File](../../../../../../serving/docs/EN/model_configuration-en.md) to modify the configs in `models/runtime/config.pbtxt`.

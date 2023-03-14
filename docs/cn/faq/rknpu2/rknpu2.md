@@ -25,9 +25,9 @@ FastDeploy在RK3588s上进行了测试，测试环境如下:
 | Detection            | [RKYOLOV5](../../../../examples/vision/detection/rkyolo/README.md)                               | YOLOV5-S-Relu(int8)      | 是    | 57         |
 | Detection            | [RKYOLOX](../../../../examples/vision/detection/rkyolo/README.md)                                | yolox-s                  | 是    | 130        |
 | Detection            | [RKYOLOV7](../../../../examples/vision/detection/rkyolo/README.md)                               | yolov7-tiny              | 是    | 58         |
-| Segmentation         | [Unet](../../../../examples/vision/segmentation/paddleseg/rknpu2/README.md)                      | Unet-cityscapes          | 否    | -          |
-| Segmentation         | [PP-HumanSegV2Lite](../../../../examples/vision/segmentation/paddleseg/rknpu2/README.md)         | portrait(int8)           | 是    | 43         |
-| Segmentation         | [PP-HumanSegV2Lite](../../../../examples/vision/segmentation/paddleseg/rknpu2/README.md)         | human(int8)              | 是    | 43         |
+| Segmentation         | [Unet](../../../../examples/vision/segmentation/paddleseg/rockchip/rknpu2/README.md)                      | Unet-cityscapes          | 否    | -          |
+| Segmentation         | [PP-HumanSegV2Lite](../../../../examples/vision/segmentation/paddleseg/rockchip/rknpu2/README.md)         | portrait(int8)           | 是    | 43         |
+| Segmentation         | [PP-HumanSegV2Lite](../../../../examples/vision/segmentation/paddleseg/rockchip/rknpu2/README.md)         | human(int8)              | 是    | 43         |
 | Face Detection       | [SCRFD](../../../../examples/vision/facedet/scrfd/rknpu2/README.md)                              | SCRFD-2.5G-kps-640(int8) | 是    | 42         |
 | Face FaceRecognition | [InsightFace](../../../../examples/vision/faceid/insightface/rknpu2/README_CN.md)                | ms1mv3_arcface_r18(int8) | 是    | 12         |
 

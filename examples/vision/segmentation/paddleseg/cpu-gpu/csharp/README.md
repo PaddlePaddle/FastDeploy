@@ -5,8 +5,8 @@ This directory provides `infer.cs` to finish the deployment of PaddleSeg on CPU/
 
 Before deployment, two steps require confirmation
 
-- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
-- 2.  Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
+- 2.  Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 Please follow below instructions to compile and test in Windows. FastDeploy version 1.0.4 or above (x.x.x>=1.0.4) is required to support this model.
 
@@ -35,7 +35,7 @@ msbuild infer_demo.sln /m:4 /p:Configuration=Release /p:Platform=x64
 ```
 
 For more information about how to use FastDeploy SDK to compile a project with Visual Studio 2019. Please refer to
-- [Using the FastDeploy C++ SDK on Windows Platform](../../../../../docs/en/faq/use_sdk_on_windows.md)
+- [Using the FastDeploy C++ SDK on Windows Platform](../../../../../../docs/en/faq/use_sdk_on_windows.md)
 
 ## 4. Execute compiled program
 
@@ -93,12 +93,12 @@ fastdeploy.SegmentationResult Predict(OpenCvSharp.Mat im)
 >>
 > **Return**
 >
->> * **result**: Segmentation prediction results, refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for SegmentationResult
+>> * **result**: Segmentation prediction results, refer to [Vision Model Prediction Results](../../../../../../docs/api/vision_results/) for SegmentationResult
 
 
 ## Other Documents
 
 - [PPSegmentation Model Description](../../)
 - [PaddleSeg Python Deployment](../python)
-- [Model Prediction Results](../../../../../docs/api/vision_results/)
-- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [Model Prediction Results](../../../../../../docs/api/vision_results/)
+- [How to switch the model inference backend engine](../../../../../../docs/cn/faq/how_to_change_backend.md)

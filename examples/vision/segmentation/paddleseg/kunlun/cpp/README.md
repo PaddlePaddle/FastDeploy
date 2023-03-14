@@ -6,7 +6,7 @@
 ## 昆仑芯XPU编译FastDeploy环境准备
 在部署前，需自行编译基于昆仑芯XPU的预测库，参考文档[昆仑芯XPU部署环境编译安装](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install#自行编译安装)
 
->>**注意** **PP-Matting**、**PP-HumanMatting**的模型，请从[Matting模型部署](../../../matting)下载
+>>**注意** **PP-Matting**、**PP-HumanMatting**的模型，请从[Matting模型部署](../../../../matting)下载
 
 ```bash
 #下载部署示例代码

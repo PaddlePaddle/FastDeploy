@@ -35,7 +35,7 @@ sudo ./infer_tinypose_demo ./PP_TinyPose_256x192_infer ./hrnet_demo.jpg
 </div>
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
-- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
 ## PP-TinyPose C++接口
 
@@ -79,5 +79,5 @@ PPTinyPose模型加载和初始化，其中model_file为导出的Paddle模型格
 
 - [模型介绍](../../../)
 - [Python部署](../../python)
-- [视觉模型预测结果](../../../../../../docs/api/vision_results/)
+- [视觉模型预测结果](../../../../../../../docs/api/vision_results/)
 - [如何切换模型推理后端引擎](../../../../../../docs/cn/faq/how_to_change_backend.md)

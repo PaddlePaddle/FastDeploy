@@ -27,7 +27,7 @@ python3 infer.py --model_file ./bmodel/pp_liteseg_1684x_f32.bmodel --config_file
 
 ## 快速链接
 - [pp_liteseg C++部署](../cpp)
-- [转换 pp_liteseg SOPHGO模型文档](../README_CN.md#导出bmodel模型)
+- [转换 pp_liteseg SOPHGO模型文档](../README.md#导出bmodel模型)
 
 ## 常见问题
 - [如何将模型预测结果SegmentationResult转为numpy格式](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/vision_result_related_problems.md)
