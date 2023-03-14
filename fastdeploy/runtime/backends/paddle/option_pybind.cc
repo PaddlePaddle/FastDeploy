@@ -17,9 +17,11 @@
 
 namespace fastdeploy {
 
+using py = pybind11;
+
 void BindIpuOption(pybind11::module& m) {
-  pybind11::class_<IpuOption>(m, "IpuOption")
-      .def(pybind11::init())
+  py::class_<IpuOption>(m, "IpuOption")
+      .def(py::init())
       .def_readwrite("ipu_device_num", &IpuOption::ipu_device_num)
       .def_readwrite("ipu_micro_batch_size", &IpuOption::ipu_micro_batch_size)
       .def_readwrite("ipu_enable_pipelining", &IpuOption::ipu_enable_pipelining)
@@ -32,16 +34,17 @@ void BindIpuOption(pybind11::module& m) {
                      &IpuOption::ipu_enable_half_partial);
 }
 
-void BindPaddleOption(pybind11::module& m) {
+void BindPaddleOption(py::module& m) {
   BindIpuOption(m);
-  pybind11::class_<PaddleBackendOption>(m, "PaddleBackendOption")
-      .def(pybind11::init())
+  py::class_<PaddleBackendOption>(m, "PaddleBackendOption")
+      .def(py::init())
       .def_readwrite("enable_fixed_size_opt",
                      &PaddleBackendOption::enable_fixed_size_opt)
       .def_readwrite("enable_log_info", &PaddleBackendOption::enable_log_info)
       .def_readwrite("enable_mkldnn", &PaddleBackendOption::enable_mkldnn)
       .def_readwrite("enable_trt", &PaddleBackendOption::enable_trt)
-      .def_readwrite("enable_memory_optimize", &PaddleBackendOption::enable_memory_optimize)
+      .def_readwrite("enable_memory_optimize",
+                     &PaddleBackendOption::enable_memory_optimize)
       .def_readwrite("ipu_option", &PaddleBackendOption::ipu_option)
       .def_readwrite("collect_trt_shape",
                      &PaddleBackendOption::collect_trt_shape)
@@ -51,7 +54,10 @@ void BindPaddleOption(pybind11::module& m) {
                      &PaddleBackendOption::gpu_mem_init_size)
       .def("disable_trt_ops", &PaddleBackendOption::DisableTrtOps)
       .def("delete_pass", &PaddleBackendOption::DeletePass)
-      .def("set_ipu_config", &PaddleBackendOption::SetIpuConfig);
+      .def("set_ipu_config", &PaddleBackendOption::SetIpuConfig)
+      .def("set_lod_map", &PaddleBackendOption::SetLodMap, py::arg("lod_map"))
+      .def("add_lod_name_to_lod_map", &PaddleBackendOption::AddLodNameToLodMap,
+           py::arg("lod_name"), py::arg("tensor_name"));
 }
 
 }  // namespace fastdeploy
