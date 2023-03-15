@@ -59,7 +59,7 @@ PaddleClas模型导出，请参考其文档说明[模型导出](https://github.c
 | [ResNeXt50_32x4d](https://bj.bcebos.com/paddlehub/fastdeploy/ResNeXt50_32x4d_infer.tgz) |  89MB | 224x224 | 77.75% | 93.82% |
 | [DenseNet121](https://bj.bcebos.com/paddlehub/fastdeploy/DenseNet121_infer.tgz) |  29MB | 224x224 | 75.66% | 92.58% |
 | [PULC_person_exists](https://bj.bcebos.com/paddlehub/fastdeploy/person_exists_infer.tgz) |  6MB | 224x224 |  |  |
-| [ViT_large_patch16_224](https://bj.bcebos.com/paddlehub/fastdeploy/ViT_large_patch16_224_infer.tgz) |  1.1GB | 224x224 |  |  |
+| [ViT_large_patch16_224](https://bj.bcebos.com/paddlehub/fastdeploy/ViT_large_patch16_224_infer.tgz) |  1.1GB | 224x224 | 83.23% |  96.50%|
 
 
 ## 详细部署文档
