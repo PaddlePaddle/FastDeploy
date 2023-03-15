@@ -88,10 +88,14 @@ nvidia-docker run -i --rm --name ${docker_name} \
            -e "trt_version=${trt_version}"\
            nvcr.io/nvidia/tritonserver:21.10-py3-min \
            bash -c \
-           'cd /workspace/fastdeploy/python;
+           'export https_proxy_tmp=${https_proxy}
+            export http_proxy_tmp=${http_proxy}
+            cd /workspace/fastdeploy/python;
             rm -rf .setuptools-cmake-build dist build fastdeploy/libs/third_libs;
             apt-get update;
             apt-get install -y --no-install-recommends patchelf python3-dev python3-pip rapidjson-dev;
+            unset http_proxy
+            unset https_proxy
             ln -s /usr/bin/python3 /usr/bin/python;
             export PATH=/workspace/fastdeploy/serving/cmake-3.18.6-Linux-x86_64/bin:$PATH;
             export WITH_GPU=ON;
@@ -111,6 +115,8 @@ nvidia-docker run -i --rm --name ${docker_name} \
             make install;
             cd /workspace/fastdeploy/serving;
             rm -rf build; mkdir build; cd build;
+            export https_proxy=${https_proxy_tmp}
+            export http_proxy=${http_proxy_tmp}
             cmake .. -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy_install -DTRITON_COMMON_REPO_TAG=r21.10 -DTRITON_CORE_REPO_TAG=r21.10 -DTRITON_BACKEND_REPO_TAG=r21.10;
             make -j`nproc`'
 
@@ -126,7 +132,9 @@ docker run -i --rm --name ${docker_name} \
            -e "https_proxy=${https_proxy}" \
            paddlepaddle/fastdeploy:21.10-cpu-only-buildbase \
            bash -c \
-           'cd /workspace/fastdeploy/python;
+           'export https_proxy_tmp=${https_proxy}
+            export http_proxy_tmp=${http_proxy}
+            cd /workspace/fastdeploy/python;
             rm -rf .setuptools-cmake-build dist build fastdeploy/libs/third_libs;
             ln -s /usr/bin/python3 /usr/bin/python;
             export WITH_GPU=OFF;
@@ -135,6 +143,8 @@ docker run -i --rm --name ${docker_name} \
             export ENABLE_OPENVINO_BACKEND=OFF;
             export ENABLE_VISION=ON;
             export ENABLE_TEXT=ON;
+            unset http_proxy
+            unset https_proxy
             python setup.py build;
             python setup.py bdist_wheel;
             cd /workspace/fastdeploy;
@@ -144,6 +154,8 @@ docker run -i --rm --name ${docker_name} \
             make install;
             cd /workspace/fastdeploy/serving;
             rm -rf build; mkdir build; cd build;
+            export https_proxy=${https_proxy_tmp}
+            export http_proxy=${http_proxy_tmp}
             cmake .. -DTRITON_ENABLE_GPU=OFF -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy_install -DTRITON_COMMON_REPO_TAG=r21.10 -DTRITON_CORE_REPO_TAG=r21.10 -DTRITON_BACKEND_REPO_TAG=r21.10;
             make -j`nproc`'
 
