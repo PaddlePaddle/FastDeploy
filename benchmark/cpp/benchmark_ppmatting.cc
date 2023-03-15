@@ -50,6 +50,30 @@ int main(int argc, char* argv[]) {
   auto model_ppmatting =
       vision::matting::PPMatting(model_file, params_file, config_file, option);
   vision::MattingResult res;
+  if (config_info["precision_compare"] == "true") {
+    // Run once at least
+    model_ppmatting.Predict(&im, &res);
+    // 1. Test result diff
+    std::cout << "=============== Test result diff =================\n";
+    // Save result to -> disk.
+    std::string matting_result_path = "ppmatting_result.txt";
+    benchmark::ResultManager::SaveMattingResult(res, matting_result_path);
+    // Load result from <- disk.
+    vision::MattingResult res_loaded;
+    benchmark::ResultManager::LoadMattingResult(&res_loaded,
+                                                matting_result_path);
+    // Calculate diff between two results.
+    auto matting_diff =
+        benchmark::ResultManager::CalculateDiffStatis(res, res_loaded);
+    std::cout << "Alpha diff: mean=" << matting_diff.alpha.mean
+              << ", max=" << matting_diff.alpha.max
+              << ", min=" << matting_diff.alpha.min << std::endl;
+    if (res_loaded.contain_foreground) {
+      std::cout << "Foreground diff: mean=" << matting_diff.foreground.mean
+                << ", max=" << matting_diff.foreground.max
+                << ", min=" << matting_diff.foreground.min << std::endl;
+    }
+  }
   BENCHMARK_MODEL(model_ppmatting, model_ppmatting.Predict(&im, &res))
   auto vis_im = vision::VisMatting(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
