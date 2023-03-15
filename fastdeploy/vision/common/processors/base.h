@@ -37,6 +37,8 @@ FASTDEPLOY_DECL void DisableFlyCV();
  */
 FASTDEPLOY_DECL void SetProcLibCpuNumThreads(int threads);
 
+/*! @brief Processor base class for processors in fastdeploy/vision/common/processors
+ */
 class FASTDEPLOY_DECL Processor {
  public:
   // default_lib has the highest priority
@@ -65,6 +67,8 @@ class FASTDEPLOY_DECL Processor {
   // future, please use operator()(FDMat* mat) instead and set proc_lib in mat.
   virtual bool operator()(FDMat* mat, ProcLib lib);
 
+  /*! @brief override operator `()` for using processor in this way: `processor(input)`
+  */
   virtual bool operator()(FDMatBatch* mat_batch);
 };
 
