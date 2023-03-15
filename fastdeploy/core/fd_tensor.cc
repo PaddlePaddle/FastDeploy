@@ -89,7 +89,7 @@ void FDTensor::SetExternalData(const std::vector<int64_t>& new_shape,
   device_id = new_device_id;
 }
 
-void FDTensor::SetLod(const std::vector<std::vector<size_t>>& new_lod) {
+void FDTensor::SetLoD(const std::vector<std::vector<size_t>>& new_lod) {
   lod = new_lod;
 }
 

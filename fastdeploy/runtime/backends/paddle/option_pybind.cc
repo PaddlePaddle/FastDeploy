@@ -55,8 +55,8 @@ void BindPaddleOption(py::module& m) {
       .def("disable_trt_ops", &PaddleBackendOption::DisableTrtOps)
       .def("delete_pass", &PaddleBackendOption::DeletePass)
       .def("set_ipu_config", &PaddleBackendOption::SetIpuConfig)
-      .def("set_lod_map", &PaddleBackendOption::SetLodMap, py::arg("lod_map"))
-      .def("add_lod_name_to_lod_map", &PaddleBackendOption::AddLodNameToLodMap,
+      .def("set_lod_map", &PaddleBackendOption::SetLoDMap, py::arg("lod_map"))
+      .def("add_lod_name_to_lod_map", &PaddleBackendOption::AddLoDNameToLoDMap,
            py::arg("lod_name"), py::arg("tensor_name"));
 }
 

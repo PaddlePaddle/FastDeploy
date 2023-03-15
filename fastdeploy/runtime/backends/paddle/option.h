@@ -92,12 +92,12 @@ struct PaddleBackendOption {
     ipu_option.ipu_enable_half_partial = enable_half_partial;
   }
 
-  void SetLodMap(const std::unordered_map<std::string, std::string>&
+  void SetLoDMap(const std::unordered_map<std::string, std::string>&
           lod_name_map) {
     lod_name_map_ = lod_name_map;
   }
 
-  void AddLodNameToLodMap(const std::string& lod_name,
+  void AddLoDNameToLoDMap(const std::string& lod_name,
                           const std::string& tensor_name) {
     lod_name_map_[lod_name] = tensor_name;
   }

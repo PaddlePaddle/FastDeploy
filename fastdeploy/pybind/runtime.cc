@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "Python.h"
 #include "fastdeploy/pybind/main.h"
+
+namespace py = pybind11;
 
 namespace fastdeploy {
 
@@ -54,19 +57,40 @@ void BindRuntime(pybind11::module& m) {
              return self.Compile(warm_tensors);
            })
       .def("infer",
-           [](Runtime& self, std::map<std::string, pybind11::array>& data) {
+           [](Runtime& self, std::map<std::string, py::object>& data) {
              std::vector<FDTensor> inputs(data.size());
              int index = 0;
              for (auto iter = data.begin(); iter != data.end(); ++iter) {
-               std::vector<int64_t> data_shape;
-               data_shape.insert(data_shape.begin(), iter->second.shape(),
-                                 iter->second.shape() + iter->second.ndim());
-               auto dtype = NumpyDataTypeToFDDataType(iter->second.dtype());
-               // TODO(jiangjiajun) Maybe skip memory copy is a better choice
-               // use SetExternalData
-               inputs[index].Resize(data_shape, dtype);
-               memcpy(inputs[index].MutableData(), iter->second.mutable_data(),
-                      iter->second.nbytes());
+               if (py::isinstance<py::array>(iter->second)) {
+                 py::array ndarray = iter->second.cast<py::array>();
+                 std::vector<int64_t> data_shape;
+                 data_shape.insert(data_shape.begin(), ndarray.shape(),
+                                   ndarray.shape() + ndarray.ndim());
+                 auto dtype = NumpyDataTypeToFDDataType(ndarray.dtype());
+                 // TODO(jiangjiajun) Maybe skip memory copy is a better choice
+                 // use SetExternalData
+                 inputs[index].Resize(data_shape, dtype);
+                 memcpy(inputs[index].MutableData(), ndarray.mutable_data(),
+                        ndarray.nbytes());
+               } else if (py::isinstance<py::list>(iter->second)) {
+                 // Set lod info to tensor.
+                 py::list lod_infos = iter->second.cast<py::list>();
+                 std::vector<std::vector<size_t>> lod(lod_infos.size());
+                 for (size_t i = 0; i < lod_infos.size(); ++i) {
+                   auto* curr_level_obj = lod_infos[i].ptr();
+                   Py_ssize_t len = PyList_Size(curr_level_obj);
+                   PyObject* item = nullptr;
+                   for (Py_ssize_t j = 0; j < len; ++j) {
+                     item = PyList_GetItem(curr_level_obj, j);
+                     lod[i].push_back(PyLong_AsSize_t(item));
+                   }
+                 }
+                 inputs[index].SetLoD(lod);
+               } else {
+                 FDASSERT(false,
+                          "Failed to inference with runtime. The type of input "
+                          "must be np.ndarray or list(list(int)).");
+               }
                inputs[index].name = iter->first;
                index += 1;
              }
@@ -95,6 +119,9 @@ void BindRuntime(pybind11::module& m) {
                                       iter->second.Dtype(), iter->second.Data(),
                                       iter->second.device);
                tensor.name = iter->first;
+               if (iter->second.lod.size() > 0) {
+                 tensor.SetLoD(iter->second.lod);
+               }
                inputs.push_back(tensor);
              }
              std::vector<FDTensor> outputs;
