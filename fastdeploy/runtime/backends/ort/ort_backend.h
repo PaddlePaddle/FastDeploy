@@ -58,8 +58,6 @@ class OrtBackend : public BaseBackend {
   std::vector<TensorInfo> GetOutputInfos() override;
   static std::vector<OrtCustomOp*> custom_operators_;
   void InitCustomOperators();
-  // return if use fp16 for ONNXRuntime-GPU
-  bool use_fp16();
 
  private:
   bool InitFromPaddle(const std::string& model_buffer,
@@ -76,8 +74,7 @@ class OrtBackend : public BaseBackend {
   std::shared_ptr<Ort::IoBinding> binding_;
   std::vector<OrtValueInfo> inputs_desc_;
   std::vector<OrtValueInfo> outputs_desc_;
-  // if convert fp32 model to fp16 model
-  bool convert_to_fp16 = false;
+
   // the ONNX model file name,
   // when ONNX is bigger than 2G, we will set this name
   std::string model_file_name;

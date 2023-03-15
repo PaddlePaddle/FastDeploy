@@ -123,28 +123,6 @@ bool OrtBackend::BuildOption(const OrtBackendOption& option) {
   return true;
 }
 
-bool OrtBackend::use_fp16() {
-  bool support_cuda = false;
-  auto all_providers = Ort::GetAvailableProviders();
-  std::string providers_msg = "";
-  for (size_t i = 0; i < all_providers.size(); ++i) {
-    providers_msg = providers_msg + all_providers[i] + ", ";
-    if (all_providers[i] == "CUDAExecutionProvider") {
-      support_cuda = true;
-    }
-  }
-  if (support_cuda) {
-    convert_to_fp16 = true;
-  } else {
-    convert_to_fp16 = false;
-    FDWARNING << "FP16 only support on GPU, while the compiled fastdeploy with "
-                 "onnxruntime doesn't "
-                 "support GPU, the available providers are "
-              << providers_msg << ". Will use FP32 to infer." << std::endl;
-  }
-  return convert_to_fp16;
-}
-
 bool OrtBackend::Init(const RuntimeOption& option) {
   if (option.device != Device::CPU && option.device != Device::GPU &&
       option.device != Device::DIRECTML) {
@@ -203,14 +181,11 @@ bool OrtBackend::InitFromPaddle(const std::string& model_buffer,
   strcpy(ops[1].op_name, "pool2d");
   strcpy(ops[1].export_op_name, "AdaptivePool2d");
 
-  if (option.device == Device::GPU && option.enable_fp16) {
-    use_fp16();
-  }
   if (!paddle2onnx::Export(
           model_buffer.c_str(), model_buffer.size(), params_buffer.c_str(),
           params_buffer.size(), &model_content_ptr, &model_content_size, 11,
           true, verbose, true, true, true, ops.data(), 2, "onnxruntime",
-          nullptr, 0, "", &save_external, convert_to_fp16)) {
+          nullptr, 0, "", &save_external, false)) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;
@@ -244,8 +219,11 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
     return false;
   }
   std::string onnx_model_buffer;
-  if (option.device == Device::GPU && option.enable_fp16 && !convert_to_fp16 &&
-      use_fp16()) {
+  if (option.enable_fp16) {
+    if (option.device == Device::CPU) {
+      FDWARNING << "Turning on FP16 on CPU may result in slower inference."
+                << std::endl;
+    }
     char* model_content_ptr;
     int model_content_size = 0;
     paddle2onnx::ConvertFP32ToFP16(model_file.c_str(), model_file.size(),
