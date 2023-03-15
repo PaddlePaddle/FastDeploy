@@ -235,6 +235,7 @@ void BindFDTensor(pybind11::module& m) {
   pybind11::class_<FDTensor>(m, "FDTensor")
       .def(pybind11::init<>(), "Default Constructor")
       .def_readwrite("name", &FDTensor::name)
+      .def_readwrite("lod", &FDTensor::lod)
       .def_readonly("shape", &FDTensor::shape)
       .def_readonly("dtype", &FDTensor::dtype)
       .def_readonly("device", &FDTensor::device)
