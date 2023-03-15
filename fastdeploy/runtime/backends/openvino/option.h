@@ -32,8 +32,12 @@ struct OpenVINOBackendOption {
   /// Number of streams while use OpenVINO
   int num_streams = 1;
 
+  /// Affinity mode
+  std::string affinity  = "YES";
+
   /// Performance hint mode
   std::string hint = "UNDEFINED";
+
   /**
    * @brief Set device name for OpenVINO, default 'CPU', can also be 'AUTO', 'GPU', 'GPU.1'....
    */
@@ -56,6 +60,18 @@ struct OpenVINOBackendOption {
     for (const auto& op : operators) {
       cpu_operators.insert(op);
     }
+  }
+
+  /**
+   * @brief Set Affinity mode
+   */
+  void SetAffinity (const std::string& _affinity) {
+    FDASSERT(_affinity == "YES" || _affinity == "NO" || _affinity == "NUMA" ||
+                 _affinity == "HYBRID_AWARE",
+             "The affinity mode should be one of the list "
+             "['YES', 'NO', 'NUMA', "
+             "'HYBRID_AWARE'] ");
+    affinity = _affinity;
   }
 
   /**
