@@ -5,8 +5,8 @@ This directory provides `infer.c` to finish the deployment of PaddleSeg on CPU/G
 
 Before deployment, two steps require confirmation
 
-- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
-- 2.  Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
+- 2.  Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 Taking inference on Linux as an example, the compilation test can be completed by executing the following command in this directory. FastDeploy version 1.0.4 or above (x.x.x>=1.0.4) is required to support this model.
 
@@ -32,7 +32,7 @@ wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 ```
 
 The above command works for Linux or MacOS. For SDK in Windows, refer to:
-- [How to use FastDeploy C++ SDK in Windows](../../../../../docs/en/faq/use_sdk_on_windows.md)
+- [How to use FastDeploy C++ SDK in Windows](../../../../../../docs/en/faq/use_sdk_on_windows.md)
 
 The visualized result after running is as follows
 
@@ -154,7 +154,7 @@ FD_C_Bool FD_C_PaddleSegWrapperPredict(
 > **Params**
 > * **fd_c_ppseg_wrapper**(FD_C_PaddleSegWrapper*): Pointer to manipulate PaddleSeg object.
 > * **img**（FD_C_Mat）: pointer to cv::Mat object, which can be obained by FD_C_Imread interface
-> * **result**(FD_C_SegmentationResult*): Segmentation prediction results, Refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for SegmentationResult
+> * **result**(FD_C_SegmentationResult*): Segmentation prediction results, Refer to [Vision Model Prediction Results](../../../../../../docs/api/vision_results/) for SegmentationResult
 
 
 #### Result
@@ -180,5 +180,5 @@ FD_C_Mat FD_C_VisSegmentation(FD_C_Mat im,
 
 - [PPSegmentation Model Description](../../)
 - [PaddleSeg Python Deployment](../python)
-- [Model Prediction Results](../../../../../docs/api/vision_results/)
-- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [Model Prediction Results](../../../../../../docs/api/vision_results/)
+- [How to switch the model inference backend engine](../../../../../../docs/cn/faq/how_to_change_backend.md)
