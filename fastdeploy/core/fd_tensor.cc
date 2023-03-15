@@ -89,6 +89,10 @@ void FDTensor::SetExternalData(const std::vector<int64_t>& new_shape,
   device_id = new_device_id;
 }
 
+void FDTensor::SetLod(const std::vector<std::vector<size_t>>& new_lod) {
+  lod = new_lod;
+}
+
 void FDTensor::ExpandDim(int64_t axis) {
   size_t ndim = shape.size();
   FDASSERT(axis >= 0 && axis <= ndim,
@@ -216,7 +220,8 @@ void FDTensor::PrintInfo(const std::string& prefix) const {
   for (int i = 0; i < shape.size(); ++i) {
     std::cout << shape[i] << " ";
   }
-  std::cout << ", buffer_=" << buffer_ << ", external_data_ptr=" << external_data_ptr;
+  std::cout << ", buffer_=" << buffer_
+            << ", external_data_ptr=" << external_data_ptr;
   double mean = 0;
   double max = -99999999;
   double min = 99999999;

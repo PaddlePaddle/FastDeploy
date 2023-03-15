@@ -184,6 +184,8 @@ struct FASTDEPLOY_DECL FDTensor {
                        const FDDataType& data_type, void* data_buffer,
                        const Device& new_device = Device::CPU,
                        int new_device_id = -1);
+
+  void SetLod(const std::vector<std::vector<size_t>>& new_lod);
   // Initialize Tensor
   // Include setting attribute for tensor
   // and allocate cpu memory buffer
