@@ -90,7 +90,6 @@ download_fd_model_zxvf DenseNet121_infer.tgz
 download_fd_model_zxvf PPHGNet_small_infer.tgz
 download_fd_model_zxvf person_exists_infer.tgz
 download_fd_model_zxvf EfficientNetB0_small_infer.tgz
-
 # PaddleSeg
 download_fd_model_zxvf PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer.tgz
 download_fd_model_zxvf PP_HumanSegV1_Lite_infer.tgz
