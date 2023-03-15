@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
   vision::MattingResult res;
   if (config_info["precision_compare"] == "true") {
     // Run once at least
-    model_ppmatting.Predict(im, &res);
+    model_ppmatting.Predict(&im, &res);
     // 1. Test result diff
     std::cout << "=============== Test result diff =================\n";
     // Save result to -> disk.
