@@ -1,3 +1,4 @@
+https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar
 https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar
 https://bj.bcebos.com/fastdeploy/models/yolov5s_ptq_model.tar.gz
 https://bj.bcebos.com/fastdeploy/models/ppyoloe_noshare_qat.tar.gz
