@@ -206,6 +206,9 @@ void Runtime::BindInputTensor(const std::string& name, FDTensor& input) {
       is_exist = true;
       t.SetExternalData(input.shape, input.dtype, input.MutableData(),
                         input.device, input.device_id);
+      if (input.lod.size() > 0) {
+        t.SetLod(input.lod);
+      }
       break;
     }
   }
@@ -213,6 +216,9 @@ void Runtime::BindInputTensor(const std::string& name, FDTensor& input) {
     FDTensor new_tensor(name);
     new_tensor.SetExternalData(input.shape, input.dtype, input.MutableData(),
                                input.device, input.device_id);
+    if (input.lod.size() > 0) {
+      new_tensor.SetLod(input.lod);
+    }
     input_tensors_.emplace_back(std::move(new_tensor));
   }
 }
@@ -224,6 +230,9 @@ void Runtime::BindOutputTensor(const std::string& name, FDTensor& output) {
       is_exist = true;
       t.SetExternalData(output.shape, output.dtype, output.MutableData(),
                         output.device, output.device_id);
+      if (output.lod.size() > 0) {
+        t.SetLod(output.lod);
+      }
       break;
     }
   }
@@ -231,6 +240,9 @@ void Runtime::BindOutputTensor(const std::string& name, FDTensor& output) {
     FDTensor new_tensor(name);
     new_tensor.SetExternalData(output.shape, output.dtype, output.MutableData(),
                                output.device, output.device_id);
+    if (output.lod.size() > 0) {
+      new_tensor.SetLod(output.lod);
+    }
     output_tensors_.emplace_back(std::move(new_tensor));
   }
 }

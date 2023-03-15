@@ -80,11 +80,7 @@ if(PADDLEINFERENCE_DIRECTORY)
   endif()
 else()
   set(PADDLEINFERENCE_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
-<<<<<<< HEAD
   set(PADDLEINFERENCE_VERSION "2.4-dev7")
-=======
-  set(PADDLEINFERENCE_VERSION "2.4-dev6")
->>>>>>> fix
   if(WIN32)
     if (WITH_GPU)
       set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-gpu-trt-${PADDLEINFERENCE_VERSION}.zip")
