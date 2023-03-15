@@ -1116,11 +1116,23 @@ TRITONSERVER_Error* ModelInstanceState::SetInputTensors(
     } else {
       device = fastdeploy::Device::CPU;
     }
-
     fastdeploy::FDTensor fdtensor(in_name);
-    fdtensor.SetExternalData(batchn_shape, ConvertDataTypeToFD(input_datatype),
-                             const_cast<char*>(input_buffer), device,
-                             device_id);
+    if (input_datatype == TRITONSERVER_TYPE_BYTES) {
+      // Deserialize the byte tensors to strings, then convert them to lod info
+      std::string str(input_buffer);
+      char* curr_input_buffer = input_buffer;
+      for (int i = 0; i < batchn_shape[0]; ++i) {
+        char* next_input_buffer =
+            std::find(curr_input_buffer, input_buffer + batchn_byte_size, '\0');
+        fastdeploy::FDINFO << "This is a string input: " << curr_input_buffer
+                           << std::endl;
+        curr_input_buffer = next_input_buffer + 1;
+      }
+    } else {
+      fdtensor.SetExternalData(
+          batchn_shape, ConvertDataTypeToFD(input_datatype),
+          const_cast<char*>(input_buffer), device, device_id);
+    }
     runtime_->BindInputTensor(in_name, fdtensor);
   }
 
