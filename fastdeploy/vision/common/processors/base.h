@@ -61,13 +61,27 @@ class FASTDEPLOY_DECL Processor {
   virtual bool ImplByCvCuda(FDMat* mat);
   virtual bool ImplByCvCuda(FDMatBatch* mat_batch);
 
+  /*! @brief operator `()` for calling processor in this way: `processor(mat)`
+  *
+  * \param[in] mat: The input mat
+  * \return true if the process successed, otherwise false
+  */
   virtual bool operator()(FDMat* mat);
 
-  // This function is for backward compatibility, will be removed in the near
-  // future, please use operator()(FDMat* mat) instead and set proc_lib in mat.
+  /*! @brief operator `()` for calling processor in this way: `processor(mat, lib)`
+  *  This function is for backward compatibility, will be removed in the near
+  *  future, please use operator()(FDMat* mat) instead and set proc_lib in mat.
+  *
+  * \param[in] mat: The input mat
+  * \param[in] lib: The processing library, opencv, cv-cuda, flycv, etc.
+  * \return true if the process successed, otherwise false
+  */
   virtual bool operator()(FDMat* mat, ProcLib lib);
 
-  /*! @brief override operator `()` for using processor in this way: `processor(input)`
+  /*! @brief operator `()` for calling processor in this way: `processor(mat_batch)`
+  *
+  * \param[in] mat_batch: The input mat batch
+  * \return true if the process successed, otherwise false
   */
   virtual bool operator()(FDMatBatch* mat_batch);
 };
