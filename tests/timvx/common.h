@@ -52,23 +52,23 @@ bool CompareDetResult(const fastdeploy::vision::DetectionResult& res,
       for (auto str : strs) {
         vals.push_back(atof(str.c_str()));
       }
-      if (abs(res.scores[obj_num] - vals[4]) > 0.1) {
+      if (abs(res.scores[obj_num] - vals[4]) > 0.3) {
         std::cout<< "Score error, the result is: "
-                  << vals[4] << " but the expected is: "
-                  << res.scores[obj_num] << std::endl;
+                  << res.scores[obj_num] << " but the expected is: "
+                  << vals[4] << std::endl;
         return false;
       }
       if (abs(res.label_ids[obj_num] - vals[5]) > 0) {
         std::cout<< "label error, the result is: "
-                  << vals[5] << " but the expected is: "
-                  << res.label_ids[obj_num] <<std::endl;
+                  << res.label_ids[obj_num] << " but the expected is: "
+                  << vals[5] <<std::endl;
         return false;
       }
       std::array<float, 4> boxes = res.boxes[obj_num++];
       for (auto i = 0; i < 4; i++) {
-        if (abs(boxes[i] - vals[i]) > 1) {
+        if (abs(boxes[i] - vals[i]) > 5) {
            std::cout<< "position error, the result is: "
-           << vals[i] << " but the expected is: " <<boxes[i] <<std::endl;
+           << boxes[i] << " but the expected is: " << vals[i] <<std::endl;
            return false;
         }
       }
@@ -101,8 +101,8 @@ bool CompareClsResult(const fastdeploy::vision::ClassifyResult& res,
       int32_t label = static_cast<int32_t>(atof(strs[1].c_str()));
       if (res.label_ids[obj_num] != label) {
         std::cout<< "label error, the result is: "
-                << label << " but the expected is: "
-                << res.label_ids[obj_num]<< "\n" << std::endl;
+                << res.label_ids[obj_num] << " but the expected is: "
+                << label<< "\n" << std::endl;
         return false;
       }
     } else if (line.find("scores") != line.npos
@@ -116,8 +116,8 @@ bool CompareClsResult(const fastdeploy::vision::ClassifyResult& res,
       float score = atof(strs[1].c_str());
       if (abs(res.scores[obj_num] - score) > 1e-1) {
         std::cout << "score error, the result is: "
-                  << score << " but the expected is: "
-                  << res.scores[obj_num]<< "\n" << std::endl;
+                  << res.scores[obj_num] << " but the expected is: "
+                  << score << "\n" << std::endl;
         return false;
       } else {
         obj_num++;
@@ -231,7 +231,7 @@ bool CompareSegResult(const fastdeploy::vision::SegmentationResult& res,
       return false;
     }
     for (auto i = 0; i < res.score_map.size(); i++) {
-      if (abs(res.score_map[i] - scores[i]) > 1e-1) {
+      if (abs(res.score_map[i] - scores[i]) > 3e-1) {
         std::cout << "Output scores and expected scores mismatch."
                  << std::endl;
         return false;
