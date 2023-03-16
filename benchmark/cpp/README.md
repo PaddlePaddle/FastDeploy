@@ -130,18 +130,18 @@ tar -zxvf yolov8_s_500e_coco.tgz
 ./benchmark_gpu.sh config/config.gpu.paddle.fp32.txt
 # NVIDIA GPU ONNXRuntime backend fp32
 ./benchmark_gpu.sh config/config.gpu.ort.fp32.txt
-# NVIDIA GPU Paddle_trt backend fp32
+# NVIDIA GPU Paddle-TRT backend fp32
 ./benchmark_gpu_trt.sh config/config.gpu.paddle_trt.fp32.txt
-# NVIDIA GPU Paddle_trt backend fp16
+# NVIDIA GPU Paddle-TRT backend fp16
 ./benchmark_gpu_trt.sh config/config.gpu.paddle_trt.fp16.txt
 # NVIDIA GPU TRT backend fp32
 ./benchmark_gpu_trt.sh config/config.gpu.trt.fp32.txt
 # NVIDIA GPU TRT backend fp16
 ./benchmark_gpu_trt.sh config/config.gpu.trt.fp16.txt
 
-# Arm CPU PaddleLite backend fp32
+# Arm CPU Paddle Lite backend fp32
 ./benchmark_arm.sh config/config.arm.lite.fp32.txt
-# Arm CPU PaddleLite backend fp16
+# Arm CPU Paddle Lite backend fp16
 ./benchmark_arm.sh config/config.arm.lite.fp16.txt
 # XPU Paddle Lite backend fp32
 ./benchmark_xpu.sh config/config.xpu.lite.fp32.txt
