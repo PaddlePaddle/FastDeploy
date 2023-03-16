@@ -181,4 +181,4 @@ FD_C_Mat FD_C_VisSegmentation(FD_C_Mat im,
 - [PPSegmentation Model Description](../../)
 - [PaddleSeg Python Deployment](../python)
 - [Model Prediction Results](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/)
-- [How to switch the model inference backend engine](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/faq/how_to_change_backend.md)
+- [How to switch the model inference backend engine](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/en/faq/how_to_change_backend.md)
