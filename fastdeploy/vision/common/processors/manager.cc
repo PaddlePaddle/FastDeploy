@@ -60,7 +60,7 @@ void ProcessorManager::PreApply(FDMatBatch* image_batch) {
   }
   image_batch->input_cache = &batch_input_cache_;
   image_batch->output_cache = &batch_output_cache_;
-
+  image_batch->proc_lib = proc_lib_;
   if (CudaUsed()) {
     SetStream(image_batch);
   }
