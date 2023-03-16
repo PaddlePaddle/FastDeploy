@@ -25,12 +25,13 @@ fi
 ./benchmark_ppseg --model Deeplabv3_ResNet101_OS8_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH
 ./benchmark_ppseg --model PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH
 ./benchmark_ppseg --model SegFormer_B0-cityscapes-with-argmax --image cityscapes_demo.png --config_path $CONFIG_PATH
-./benchmark_ppseg --model PP-Matting-512 --image matting_input.jpg --config_path $CONFIG_PATH
-./benchmark_ppseg --model PPHumanMatting --image matting_input.jpg --config_path $CONFIG_PATH
-./benchmark_ppseg --model PPModnet_MobileNetV2 --image matting_input.jpg --config_path $CONFIG_PATH
+./benchmark_ppmatting --model PP-Matting-512 --image matting_input.jpg --config_path $CONFIG_PATH
+./benchmark_ppmatting --model PPHumanMatting --image matting_input.jpg --config_path $CONFIG_PATH
+./benchmark_ppmatting --model PPModnet_MobileNetV2 --image matting_input.jpg --config_path $CONFIG_PATH
 ./benchmark_ppseg --model Unet_cityscapes_with_argmax_infer --image matting_input.jpg --config_path $CONFIG_PATH
 ./benchmark_ppseg --model PP_HumanSegV1_Server_with_argmax_infer --image matting_input.jpg --config_path $CONFIG_PATH
 ./benchmark_ppseg --model FCN_HRNet_W18_cityscapes_with_argmax_infer --image matting_input.jpg --config_path $CONFIG_PATH
+./benchmark_ppseg --model PP_HumanSegV2_Mobile_192x192_with_argmax_infer --image matting_input.jpg --config_path $CONFIG_PATH
 
 
 
