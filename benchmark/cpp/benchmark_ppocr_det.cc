@@ -35,10 +35,16 @@ int main(int argc, char* argv[]) {
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
-  // Detection Model
-  auto det_model_file = FLAGS_model + sep + "inference.pdmodel";
-  auto det_params_file = FLAGS_model + sep + "inference.pdiparams";
+  std::string model_name, params_name, config_name;
   auto model_format = fastdeploy::ModelFormat::PADDLE;
+  if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
+                               &model_format, config_info, false,
+                               FLAGS_quant)) {
+    return -1;
+  }
+
+  auto model_file = FLAGS_model + sep + model_name;
+  auto params_file = FLAGS_model + sep + params_name;
   if (config_info["backend"] == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
   }
@@ -49,24 +55,9 @@ int main(int argc, char* argv[]) {
     option.trt_option.SetShape("x", trt_shapes[0], trt_shapes[1],
                                trt_shapes[2]);
   }
-  if (config_info["backend"] == "mnn") {
-    det_model_file = FLAGS_model + sep + "inference.mnn";
-    det_params_file = "";
-    model_format = fastdeploy::ModelFormat::MNN_MODEL;
-    if (FLAGS_quant) {
-      det_model_file = FLAGS_model + sep + "inference_quant.mnn";
-    }
-  } else if (config_info["backend"] == "tnn") {
-    det_model_file = FLAGS_model + sep + "inference.opt.tnnmodel";
-    det_params_file = FLAGS_model + sep + "inference.opt.tnnproto";
-    model_format = fastdeploy::ModelFormat::TNN_MODEL;
-  } else if (config_info["backend"] == "ncnn") {
-    det_model_file = FLAGS_model + sep + "inference.opt.bin";
-    det_params_file = FLAGS_model + sep + "inference.opt.param";
-    model_format = fastdeploy::ModelFormat::NCNN_MODEL;
-  }
-  auto model_ppocr_det = vision::ocr::DBDetector(
-      det_model_file, det_params_file, option, model_format);
+
+  auto model_ppocr_det =
+      vision::ocr::DBDetector(model_file, params_file, option, model_format);
   std::vector<std::array<int, 8>> res;
   if (config_info["precision_compare"] == "true") {
     // Run once at least

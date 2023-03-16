@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
   std::string model_name, params_name, config_name;
   auto model_format = fastdeploy::ModelFormat::PADDLE;
   if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
-                               &model_format, config_info, FLAGS_quant)) {
+                               &model_format, config_info, true, FLAGS_quant)) {
     return -1;
   }
 

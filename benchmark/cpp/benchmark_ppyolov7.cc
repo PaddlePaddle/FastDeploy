@@ -33,35 +33,21 @@ int main(int argc, char* argv[]) {
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
-  auto backend = config_info["backend"];
-  auto model_file = FLAGS_model + sep + "model.pdmodel";
-  auto params_file = FLAGS_model + sep + "model.pdiparams";
-  auto config_file = FLAGS_model + sep + "infer_cfg.yml";
+  std::string model_name, params_name, config_name;
   auto model_format = fastdeploy::ModelFormat::PADDLE;
-  if (config_info["backend"] == "mnn") {
-    model_file = FLAGS_model + sep + "model.mnn";
-    if (FLAGS_quant) {
-      model_file = FLAGS_model + sep + "model_quant.mnn";
-    }
-    params_file = "";
-    model_format = fastdeploy::ModelFormat::MNN_MODEL;
-    // Set custom input/output orders
-    option.mnn_option.in_orders = {{"image", 0}, {"scale_factor", 1}};
-    option.mnn_option.out_orders = {{"tmp_134", 0}, {"concat_23.tmp_0", 1}};
-  } else if (config_info["backend"] == "tnn") {
-    model_file = FLAGS_model + sep + "model.opt.tnnmodel";
-    params_file = FLAGS_model + sep + "model.opt.tnnproto";
-    model_format = fastdeploy::ModelFormat::TNN_MODEL;
-    option.tnn_option.in_orders = {{"image", 0}, {"scale_factor", 1}};
-    option.tnn_option.out_orders = {{"tmp_134", 0}, {"concat_23.tmp_0", 1}};
-  } else if (config_info["backend"] == "ncnn") {
-    // WARN: PaddleYOLOv7 not support for NCNN now!
-    model_file = FLAGS_model + sep + "model.opt.bin";
-    params_file = FLAGS_model + sep + "model.opt.param";
-    model_format = fastdeploy::ModelFormat::NCNN_MODEL;
-    option.ncnn_option.in_orders = {{"image", 0}, {"scale_factor", 1}};
-    option.ncnn_option.out_orders = {{"tmp_134", 0}, {"concat_23.tmp_0", 1}};
+  if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
+                               &model_format, config_info, true, FLAGS_quant)) {
+    return -1;
   }
+  auto model_file = FLAGS_model + sep + model_name;
+  auto params_file = FLAGS_model + sep + params_name;
+  auto config_file = FLAGS_model + sep + config_name;
+  option.mnn_option.in_orders = {{"image", 0}, {"scale_factor", 1}};
+  option.mnn_option.out_orders = {{"tmp_134", 0}, {"concat_23.tmp_0", 1}};
+  option.tnn_option.in_orders = {{"image", 0}, {"scale_factor", 1}};
+  option.tnn_option.out_orders = {{"tmp_134", 0}, {"concat_23.tmp_0", 1}};
+  option.ncnn_option.in_orders = {{"image", 0}, {"scale_factor", 1}};
+  option.ncnn_option.out_orders = {{"tmp_134", 0}, {"concat_23.tmp_0", 1}};
   auto model_ppyolov7 = vision::detection::PaddleYOLOv7(
       model_file, params_file, config_file, option, model_format);
   if (FLAGS_no_nms) {

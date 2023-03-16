@@ -35,10 +35,15 @@ int main(int argc, char* argv[]) {
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
-  auto model_file = FLAGS_model + sep + "model.pdmodel";
-  auto params_file = FLAGS_model + sep + "model.pdiparams";
-  auto config_file = FLAGS_model + sep + "deploy.yaml";
+  std::string model_name, params_name, config_name;
   auto model_format = fastdeploy::ModelFormat::PADDLE;
+  if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
+                               &model_format, config_info, true, FLAGS_quant)) {
+    return -1;
+  }
+  auto model_file = FLAGS_model + sep + model_name;
+  auto params_file = FLAGS_model + sep + params_name;
+  auto config_file = FLAGS_model + sep + config_name;
   if (config_info["backend"] == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
   }
@@ -48,22 +53,6 @@ int main(int argc, char* argv[]) {
         benchmark::ResultManager::GetInputShapes(FLAGS_trt_shape);
     option.trt_option.SetShape("x", trt_shapes[0], trt_shapes[1],
                                trt_shapes[2]);
-  }
-  if (config_info["backend"] == "mnn") {
-    model_file = FLAGS_model + sep + "model.mnn";
-    if (FLAGS_quant) {
-      model_file = FLAGS_model + sep + "model_quant.mnn";
-    }
-    params_file = "";
-    model_format = fastdeploy::ModelFormat::MNN_MODEL;
-  } else if (config_info["backend"] == "tnn") {
-    model_file = FLAGS_model + sep + "model.opt.tnnmodel";
-    params_file = FLAGS_model + sep + "model.opt.tnnproto";
-    model_format = fastdeploy::ModelFormat::TNN_MODEL;
-  } else if (config_info["backend"] == "ncnn") {
-    model_file = FLAGS_model + sep + "model.opt.bin";
-    params_file = FLAGS_model + sep + "model.opt.param";
-    model_format = fastdeploy::ModelFormat::NCNN_MODEL;
   }
   auto model_ppseg = vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option, model_format);

@@ -144,14 +144,20 @@ static bool UpdateModelResourceName(
   std::string* model_name, std::string* params_name,
   std::string* config_name, fastdeploy::ModelFormat* model_format,
   std::unordered_map<std::string, std::string>& config_info,
-  bool use_quant_model = false) {
+  bool use_config_file = true, bool use_quant_model = false) {
   *model_format = fastdeploy::ModelFormat::PADDLE;
   if (!(GetModelResoucesNameFromDir(FLAGS_model, model_name, "pdmodel")
-    && GetModelResoucesNameFromDir(FLAGS_model, params_name, "pdiparams")
-    && GetModelResoucesNameFromDir(FLAGS_model, config_name, "yml"))) {
+    && GetModelResoucesNameFromDir(FLAGS_model, params_name, "pdiparams"))) {
     std::cout << "Can not find Paddle model resources." << std::endl;
     return false;
   }
+  if (use_config_file) {
+    if (!GetModelResoucesNameFromDir(FLAGS_model, config_name, "yml")) {
+      std::cout << "Can not find config yaml resources." << std::endl;
+      return false;
+    }
+  }
+
   if (config_info["backend"] == "mnn") {
     *model_format = fastdeploy::ModelFormat::MNN_MODEL;
     if (use_quant_model) {

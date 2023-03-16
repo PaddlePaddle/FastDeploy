@@ -36,10 +36,16 @@ int main(int argc, char* argv[]) {
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
-  // Recognition Model
-  auto rec_model_file = FLAGS_model + sep + "inference.pdmodel";
-  auto rec_params_file = FLAGS_model + sep + "inference.pdiparams";
+  std::string model_name, params_name, config_name;
   auto model_format = fastdeploy::ModelFormat::PADDLE;
+  if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
+                               &model_format, config_info, false,
+                               FLAGS_quant)) {
+    return -1;
+  }
+
+  auto model_file = FLAGS_model + sep + model_name;
+  auto params_file = FLAGS_model + sep + params_name;
   if (config_info["backend"] == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
   }
@@ -50,25 +56,9 @@ int main(int argc, char* argv[]) {
     option.trt_option.SetShape("x", trt_shapes[0], trt_shapes[1],
                                trt_shapes[2]);
   }
-  if (config_info["backend"] == "mnn") {
-    rec_model_file = FLAGS_model + sep + "inference.mnn";
-    rec_params_file = "";
-    model_format = fastdeploy::ModelFormat::MNN_MODEL;
-    if (FLAGS_quant) {
-      rec_model_file = FLAGS_model + sep + "inference_quant.mnn";
-    }
-  } else if (config_info["backend"] == "tnn") {
-    rec_model_file = FLAGS_model + sep + "inference.opt.tnnmodel";
-    rec_params_file = FLAGS_model + sep + "inference.opt.tnnproto";
-    model_format = fastdeploy::ModelFormat::TNN_MODEL;
-  } else if (config_info["backend"] == "ncnn") {
-    rec_model_file = FLAGS_model + sep + "inference.opt.bin";
-    rec_params_file = FLAGS_model + sep + "inference.opt.param";
-    model_format = fastdeploy::ModelFormat::NCNN_MODEL;
-  }
-  auto model_ppocr_rec =
-      vision::ocr::Recognizer(rec_model_file, rec_params_file,
-                              FLAGS_rec_label_file, option, model_format);
+
+  auto model_ppocr_rec = vision::ocr::Recognizer(
+      model_file, params_file, FLAGS_rec_label_file, option, model_format);
   std::string text;
   float rec_score;
   if (config_info["precision_compare"] == "true") {
