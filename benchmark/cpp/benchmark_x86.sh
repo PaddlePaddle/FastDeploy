@@ -31,7 +31,6 @@ fi
 ./benchmark_ppseg --model Unet_cityscapes_with_argmax_infer --image matting_input.jpg --config_path $CONFIG_PATH
 ./benchmark_ppseg --model PP_HumanSegV1_Server_with_argmax_infer --image matting_input.jpg --config_path $CONFIG_PATH
 ./benchmark_ppseg --model FCN_HRNet_W18_cityscapes_with_argmax_infer --image matting_input.jpg --config_path $CONFIG_PATH
-./benchmark_ppseg --model PP_HumanSegV2_Mobile_192x192_with_argmax_infer --image matting_input.jpg --config_path $CONFIG_PATH
 
 
 # PaddleClas
