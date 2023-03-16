@@ -34,9 +34,15 @@ int main(int argc, char* argv[]) {
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
+  std::string model_name, params_name, config_name;
+  auto model_format = fastdeploy::ModelFormat::PADDLE;
+  if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
+                               &model_format, config_info, false)) {
+    return -1;
+  }
   // Classification Model
-  auto cls_model_file = FLAGS_model + sep + "inference.pdmodel";
-  auto cls_params_file = FLAGS_model + sep + "inference.pdiparams";
+  auto model_file = FLAGS_model + sep + model_name;
+  auto params_file = FLAGS_model + sep + params_name;
   if (config_info["backend"] == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
   }
@@ -48,7 +54,7 @@ int main(int argc, char* argv[]) {
                                trt_shapes[2]);
   }
   auto model_ppocr_cls =
-      vision::ocr::Classifier(cls_model_file, cls_params_file, option);
+      vision::ocr::Classifier(model_file, params_file, option, model_format);
   int32_t res_label;
   float res_score;
   if (config_info["precision_compare"] == "true") {
