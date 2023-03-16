@@ -268,7 +268,8 @@ std::vector<TensorInfo> PaddleBackend::GetOutputInfos() {
 
 bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
                           std::vector<FDTensor>* outputs, bool copy_to_fd) {
-  if (inputs.size() != inputs_desc_.size()) {
+  auto lod_size = option_.lod_name_map_.size();
+  if (inputs.size() - lod_size != inputs_desc_.size()) {
     FDERROR << "[PaddleBackend] Size of inputs(" << inputs.size()
             << ") should keep same with the inputs of this model("
             << inputs_desc_.size() << ")." << std::endl;
