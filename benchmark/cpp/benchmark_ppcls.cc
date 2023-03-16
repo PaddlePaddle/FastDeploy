@@ -36,26 +36,16 @@ int main(int argc, char* argv[]) {
   if (config_info["backend"] == "paddle_trt") {
     option.trt_option.max_batch_size = 1;
   }
-  auto model_file = FLAGS_model + sep + "inference.pdmodel";
-  auto params_file = FLAGS_model + sep + "inference.pdiparams";
-  auto config_file = FLAGS_model + sep + "inference_cls.yaml";
+  std::string model_name, params_name, config_name;
   auto model_format = fastdeploy::ModelFormat::PADDLE;
-  if (config_info["backend"] == "mnn") {
-    model_file = FLAGS_model + sep + "inference.mnn";
-    params_file = "";
-    model_format = fastdeploy::ModelFormat::MNN_MODEL;
-    if (FLAGS_quant) {
-      model_file = FLAGS_model + sep + "inference_quant.mnn";
-    }
-  } else if (config_info["backend"] == "tnn") {
-    model_file = FLAGS_model + sep + "inference.opt.tnnmodel";
-    params_file = FLAGS_model + sep + "inference.opt.tnnproto";
-    model_format = fastdeploy::ModelFormat::TNN_MODEL;
-  } else if (config_info["backend"] == "ncnn") {
-    model_file = FLAGS_model + sep + "inference.opt.bin";
-    params_file = FLAGS_model + sep + "inference.opt.param";
-    model_format = fastdeploy::ModelFormat::NCNN_MODEL;
+  if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
+                               &model_format, config_info, FLAGS_quant)) {
+    return -1;
   }
+
+  auto model_file = FLAGS_model + sep + model_name;
+  auto params_file = FLAGS_model + sep + params_name;
+  auto config_file = FLAGS_model + sep + config_name;
   auto model_ppcls = vision::classification::PaddleClasModel(
       model_file, params_file, config_file, option, model_format);
   vision::ClassifyResult res;
