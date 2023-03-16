@@ -700,7 +700,19 @@ TRITONSERVER_Error* ModelInstanceState::ValidateInputs() {
 
   triton::common::TritonJson::Value ios;
   RETURN_IF_ERROR(model_state_->ModelConfig().MemberAsArray("input", &ios));
-  if (input_tensor_infos_.size() != ios.ArraySize()) {
+  // The lod infos do not belong to model input, need to exculde them.
+  size_t lod_info_num = 0;
+  for (size_t i = 0; i < ios.ArraySize(); i++) {
+    triton::common::TritonJson::Value io;
+    RETURN_IF_ERROR(ios.IndexAsObject(i, &io));
+    std::string io_dtype;
+    RETURN_IF_ERROR(io.MemberAsString("data_type", &io_dtype));
+    if (io_dtype == "TYPE_STRING") {
+      ++lod_info_num;
+    }
+  }
+
+  if (input_tensor_infos_.size() != ios.ArraySize() - lod_info_num) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
         (std::string("unable to load model '") + model_state_->Name() +
@@ -716,7 +728,11 @@ TRITONSERVER_Error* ModelInstanceState::ValidateInputs() {
     RETURN_IF_ERROR(io.MemberAsString("name", &io_name));
     std::string io_dtype;
     RETURN_IF_ERROR(io.MemberAsString("data_type", &io_dtype));
-
+    if (io_dtype == "TYPE_STRING") {
+      // It's a lod info string, so there's no need to check input, set shape,
+      // etc.
+      continue;
+    }
     input_names_.emplace_back(io_name);
     int index = GetInfoIndex(io_name, input_tensor_infos_);
     if (index < 0) {
