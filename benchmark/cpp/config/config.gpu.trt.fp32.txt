@@ -1,8 +1,8 @@
 device: gpu
 device_id: 0
 cpu_thread_nums: 1
-warmup: 200
-repeat: 1000
+warmup: 20
+repeat: 100
 backend: trt
 profile_mode: runtime
 include_h2d_d2h: false
