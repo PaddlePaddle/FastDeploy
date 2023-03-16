@@ -39,20 +39,23 @@ def dygraph2onnx(layer, save_file, input_spec=None, opset_version=9, **configs):
     import paddle2onnx
     import paddle
     dirname = os.path.split(save_file)[0]
-    paddle_model_dir = os.path.join(dirname, "paddle_model_static_onnx_temp_dir")
+    paddle_model_dir = os.path.join(dirname,
+                                    "paddle_model_static_onnx_temp_dir")
     model_file = os.path.join(paddle_model_dir, "model.pdmodel")
     params_file = os.path.join(paddle_model_dir, "model.pdiparams")
 
     if os.path.exists(paddle_model_dir):
         if os.path.isfile(paddle_model_dir):
-            logging.info("File {} exists, will remove it.".format(paddle_model_dir))
+            logging.info("File {} exists, will remove it.".format(
+                paddle_model_dir))
             os.remove(paddle_model_dir)
         if os.path.isfile(model_file):
             os.remove(model_file)
         if os.path.isfile(params_file):
             os.remove(params_file)
     paddle.jit.save(layer, os.path.join(paddle_model_dir, "model"), input_spec)
-    logging.info("Static PaddlePaddle model saved in {}.".format(paddle_model_dir))
+    logging.info("Static PaddlePaddle model saved in {}.".format(
+        paddle_model_dir))
     if not os.path.isfile(params_file):
         params_file = ""
 

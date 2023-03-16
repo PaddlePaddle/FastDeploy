@@ -92,6 +92,10 @@ void Pool2dMapper::ExportAsCustomOp() {
   AddAttribute(node, "output_size", output_info[0].shape);
   Warn() << "Pool2d is exported as custom operator: " << custom_op_name
          << std::endl;
+  helper_->MakeValueInfo(input_info[0].name, input_info[0].dtype,
+                         input_info[0].shape);
+  helper_->MakeValueInfo(output_info[0].name, output_info[0].dtype,
+                         output_info[0].shape);
 }
 
 void Pool2dMapper::AdaptivePool(const std::vector<TensorInfo>& input_info,

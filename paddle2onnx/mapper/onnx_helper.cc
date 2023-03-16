@@ -38,7 +38,8 @@ void AddAttribute(std::shared_ptr<ONNX_NAMESPACE::NodeProto> node,
   for (int i = 0; i < node->attribute_size(); ++i) {
     if (node->attribute(i).name() == name) {
       node->mutable_attribute(i)->set_f(value);
-      node->mutable_attribute(i)->set_type(ONNX_NAMESPACE::AttributeProto::FLOAT);
+      node->mutable_attribute(i)->set_type(
+          ONNX_NAMESPACE::AttributeProto::FLOAT);
       return;
     }
   }
@@ -175,6 +176,27 @@ std::shared_ptr<ONNX_NAMESPACE::ValueInfoProto> MakeValueInfo(
       shape->add_dim()->set_dim_value(dim);
     }
   }
+  return value_info;
+}
+
+std::shared_ptr<ONNX_NAMESPACE::ValueInfoProto> OnnxHelper::MakeValueInfo(
+    const std::string& name, const int32_t& dtype,
+    std::vector<int64_t>& shape) {
+  auto value_info = std::make_shared<ONNX_NAMESPACE::ValueInfoProto>();
+  value_info->set_name(name);
+  auto type_proto = value_info->mutable_type();
+  auto tensor_type_proto = type_proto->mutable_tensor_type();
+  tensor_type_proto->set_elem_type(GetOnnxDtype(dtype));
+  auto shape_proto = tensor_type_proto->mutable_shape();
+  for (auto& dim : shape) {
+    if (dim < 0) {
+      auto dynamic_dim_name = MapperHelper::Get()->GenName("DynamicDimension");
+      shape_proto->add_dim()->set_dim_param(dynamic_dim_name);
+    } else {
+      shape_proto->add_dim()->set_dim_value(dim);
+    }
+  }
+  value_infos.push_back(value_info);
   return value_info;
 }
 

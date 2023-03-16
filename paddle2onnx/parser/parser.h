@@ -136,8 +136,8 @@ class PaddleParser {
                                     // set is_quantized_model to be true
 
   bool Init(const std::string& _model, const std::string& _params = "");
-  bool Init(const void* model_buffer, int model_size,
-            const void* params_buffer = nullptr, int params_size = 0);
+  bool Init(const void* model_buffer, int64_t model_size,
+            const void* params_buffer = nullptr, int64_t params_size = 0);
   void InitBlock();
 
   int NumOfBlocks() const;
@@ -201,10 +201,11 @@ class PaddleParser {
   void GetGlobalBlockInputOutputInfo();
   bool GetParamNames(std::vector<std::string>* var_names);
   bool LoadProgram(const std::string& model);
-  bool LoadProgram(const void* model_buffer, int model_size);
+  bool LoadProgram(const void* model_buffer, int64_t model_size);
   bool LoadParams(const std::string& path);
   bool LoadParamsFromMemoryBuffer(const std::string& buffer);
-  bool LoadParamsFromMemoryBuffer(const void* params_buffer, int params_size);
+  bool LoadParamsFromMemoryBuffer(const void* params_buffer,
+                                  int64_t params_size);
   // This is a trick flag
   // While there's a nms operator in paddle model,
   // the shape inference of paddle is not correct

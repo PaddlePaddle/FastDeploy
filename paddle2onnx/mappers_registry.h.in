@@ -209,5 +209,6 @@ USE_P2O_MAPPER(yolo_box, YoloBoxMapper)
 USE_P2O_MAPPER(multiclass_nms3, NMSMapper)
 USE_P2O_MAPPER(roi_align, RoiAlignMapper)
 USE_P2O_MAPPER(index_sample, IndexSampleMapper)
+USE_P2O_MAPPER(mv, MvMapper)
 #endif // WITH_PADDLE2ONNX_STATIC_INTERNAL_AT_COMPILING
 #endif // WITH_PADDLE2ONNX_STATIC_INTERNAL

@@ -23,6 +23,7 @@
 #else
 #define PADDLE2ONNX_DECL __attribute__((visibility("default")))
 #endif  // _WIN32
+
 namespace paddle2onnx {
 
 struct PADDLE2ONNX_DECL CustomOp {
@@ -55,17 +56,19 @@ PADDLE2ONNX_DECL bool Export(
     CustomOp* ops = nullptr, int op_count = 0,
     const char* deploy_backend = "onnxruntime",
     char** calibration_cache = nullptr, int* calibration_size = 0,
-    const char* external_file = "", bool* save_external = nullptr);
+    const char* external_file = "", bool* save_external = nullptr,
+    bool export_fp16_model = false);
 
 PADDLE2ONNX_DECL bool Export(
-    const void* model_buffer, int model_size, const void* params_buffer,
-    int params_size, char** out, int* out_size, int32_t opset_version = 11,
+    const void* model_buffer, int64_t model_size, const void* params_buffer,
+    int64_t params_size, char** out, int* out_size, int32_t opset_version = 11,
     bool auto_upgrade_opset = true, bool verbose = false,
     bool enable_onnx_checker = true, bool enable_experimental_op = false,
     bool enable_optimize = true, CustomOp* ops = nullptr, int op_count = 0,
     const char* deploy_backend = "onnxruntime",
     char** calibration_cache = nullptr, int* calibration_size = 0,
-    const char* external_file = "", bool* save_external = nullptr);
+    const char* external_file = "", bool* save_external = nullptr,
+    bool export_fp16_model = false);
 
 // Following are inside usage, will remove it maybe
 struct PADDLE2ONNX_DECL ModelTensorInfo {
@@ -107,6 +110,9 @@ struct PADDLE2ONNX_DECL OnnxReader {
 PADDLE2ONNX_DECL bool RemoveMultiClassNMS(const char* onnx_model,
                                           int model_size, char** out_model,
                                           int* out_model_size);
+
+PADDLE2ONNX_DECL bool ConvertFP32ToFP16(const char* onnx_model, int model_size,
+                                        char** out_model, int* out_model_size);
 
 struct PADDLE2ONNX_DECL PaddleReader {
   PaddleReader(const char* model_buffer, int buffer_size);

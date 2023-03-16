@@ -36,7 +36,8 @@ PYBIND11_MODULE(paddle2onnx_cpp2py_export, m) {
                      const CustomOpInfo& info = CustomOpInfo(),
                      const std::string& deploy_backend = "onnxruntime",
                      const std::string& calibration_file = "",
-                     const std::string& external_file = "") {
+                     const std::string& external_file = "",
+                     const bool& export_fp16_model = false) {
     P2OLogger(verbose) << "Start to parse PaddlePaddle model..." << std::endl;
     P2OLogger(verbose) << "Model file path: " << model_filename << std::endl;
     P2OLogger(verbose) << "Paramters file path: " << params_filename
@@ -46,11 +47,13 @@ PYBIND11_MODULE(paddle2onnx_cpp2py_export, m) {
       int size = 0;
       char* calibration_cache = nullptr;
       int cache_size = 0;
+      bool save_external;
       if (!Export(model_filename.c_str(), params_filename.c_str(), &out, &size,
                   opset_version, auto_upgrade_opset, verbose,
                   enable_onnx_checker, enable_experimental_op, enable_optimize,
                   nullptr, 0, deploy_backend.c_str(), &calibration_cache,
-                  &cache_size, external_file.c_str())) {
+                  &cache_size, external_file.c_str(), &save_external,
+                  export_fp16_model)) {
         P2OLogger(verbose) << "Paddle model convert failed." << std::endl;
         return pybind11::bytes("");
       }
@@ -83,11 +86,13 @@ PYBIND11_MODULE(paddle2onnx_cpp2py_export, m) {
     int size = 0;
     char* calibration_cache = nullptr;
     int cache_size = 0;
+    bool save_external;
     if (!Export(model_filename.c_str(), params_filename.c_str(), &out, &size,
                 opset_version, auto_upgrade_opset, verbose, enable_onnx_checker,
                 enable_experimental_op, enable_optimize, ops.data(),
                 info.size(), deploy_backend.c_str(), &calibration_cache,
-                &cache_size, external_file.c_str())) {
+                &cache_size, external_file.c_str(), &save_external,
+                export_fp16_model)) {
       P2OLogger(verbose) << "Paddle model convert failed." << std::endl;
       return pybind11::bytes("");
     }
@@ -114,5 +119,10 @@ PYBIND11_MODULE(paddle2onnx_cpp2py_export, m) {
         ONNX_NAMESPACE::optimization::OptimizePaddle2ONNX(
             model_path, optimized_model_path, shape_infos);
       });
+  m.def("convert_to_fp16", [](const std::string& fp32_model_path,
+                              const std::string& fp16_model_path) {
+    paddle2onnx::optimization::Paddle2ONNXFP32ToFP16(fp32_model_path,
+                                                     fp16_model_path);
+  });
 }
 }  // namespace paddle2onnx

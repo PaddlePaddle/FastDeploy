@@ -124,6 +124,11 @@ def arg_parser():
         type=_text_type,
         default=None,
         help="The filename of external_data when the model is bigger than 2G.")
+    parser.add_argument(
+        "--export_fp16_model",
+        type=ast.literal_eval,
+        default=False,
+        help="Whether export FP16 model for ORT-GPU, default False")
     return parser
 
 
@@ -138,12 +143,13 @@ def c_paddle_to_onnx(model_file,
                      enable_optimize=True,
                      deploy_backend="onnxruntime",
                      calibration_file="",
-                     external_file=""):
+                     external_file="",
+                     export_fp16_model=False):
     import paddle2onnx.paddle2onnx_cpp2py_export as c_p2o
     onnx_model_str = c_p2o.export(
         model_file, params_file, opset_version, auto_upgrade_opset, verbose,
         enable_onnx_checker, enable_experimental_op, enable_optimize, {},
-        deploy_backend, calibration_file, external_file)
+        deploy_backend, calibration_file, external_file, export_fp16_model)
     if save_file is not None:
         with open(save_file, "wb") as f:
             f.write(onnx_model_str)
@@ -242,7 +248,8 @@ def main():
             enable_optimize=True,
             deploy_backend=args.deploy_backend,
             calibration_file=calibration_file,
-            external_file=external_file)
+            external_file=external_file,
+            export_fp16_model=args.export_fp16_model)
         logging.info("===============Make PaddlePaddle Better!================")
         logging.info("A little survey: https://iwenjuan.baidu.com/?code=r8hu2s")
         return

@@ -48,7 +48,7 @@ bool PaddleParser::LoadProgram(const std::string& model) {
   return true;
 }
 
-bool PaddleParser::LoadProgram(const void* model_buffer, int model_size) {
+bool PaddleParser::LoadProgram(const void* model_buffer, int64_t model_size) {
   prog = std::make_shared<paddle2onnx::framework::proto::ProgramDesc>();
   if (!prog->ParseFromArray(model_buffer, model_size)) {
     P2OLogger() << "Failed to parse PaddlePaddle model from memory buffer."
@@ -100,7 +100,7 @@ bool PaddleParser::GetParamNames(std::vector<std::string>* var_names) {
 bool PaddleParser::LoadParamsFromMemoryBuffer(
     const std::string& params_buffer) {
   params.clear();
-  int total_size = params_buffer.size();
+  int64_t total_size = params_buffer.size();
 
   std::vector<std::string> var_names;
   GetParamNames(&var_names);
@@ -178,7 +178,7 @@ bool PaddleParser::LoadParamsFromMemoryBuffer(
 }
 
 bool PaddleParser::LoadParamsFromMemoryBuffer(const void* params_buffer,
-                                              int params_size) {
+                                              int64_t params_size) {
   params.clear();
 
   const char* read_pointer = reinterpret_cast<const char*>(params_buffer);
@@ -379,8 +379,8 @@ bool PaddleParser::Init(const std::string& _model, const std::string& _params) {
   return true;
 }
 
-bool PaddleParser::Init(const void* model_buffer, int model_size,
-                        const void* params_buffer, int params_size) {
+bool PaddleParser::Init(const void* model_buffer, int64_t model_size,
+                        const void* params_buffer, int64_t params_size) {
   std::vector<Weight> weights;
   if (!LoadProgram(model_buffer, model_size)) {
     P2OLogger() << "Failed to load program of PaddlePaddle model from memory."
@@ -582,9 +582,9 @@ std::vector<TensorInfo> PaddleParser::GetOpAttrVar(
   std::vector<TensorInfo> inputs;
   for (auto i = 0; i < op.attrs_size(); ++i) {
     if (op.attrs(i).name() == name) {
-      Assert(IsAttrVar(op, i),
-             "Required AttrVar: " + name +
-                 " type is Variable in operator: " + op.type());
+      Assert(IsAttrVar(op, i), "Required AttrVar: " + name +
+                                   " type is Variable in operator: " +
+                                   op.type());
       // Case 1: Attribute is a single Var
       if (op.attrs(i).has_var_name()) {
         inputs.push_back(GetTensorInfo(op.attrs(i).var_name(), block));
@@ -630,8 +630,8 @@ void PaddleParser::GetOpAttr(const paddle2onnx::framework::proto::OpDesc& op,
       found = true;
       if (IsAttrVar(op, i)) break;
       Assert(op.attrs(i).has_i() || op.attrs(i).has_l(),
-             "Cannot find int32/int64 data from attr: " + name +
-                 " in op:" + op.type());
+             "Cannot find int32/int64 data from attr: " + name + " in op:" +
+                 op.type());
       if (op.attrs(i).has_i()) {
         *res = (int64_t)(op.attrs(i).i());
       } else {
@@ -728,8 +728,8 @@ void PaddleParser::GetOpAttr(const paddle2onnx::framework::proto::OpDesc& op,
       found = true;
       if (IsAttrVar(op, i)) break;
       Assert(op.attrs(i).floats_size() >= 0,
-             "Cannot find list of float data from attr: " + name +
-                 " in op: " + op.type());
+             "Cannot find list of float data from attr: " + name + " in op: " +
+                 op.type());
       for (auto j = 0; j < op.attrs(i).floats_size(); ++j) {
         res->push_back(static_cast<float>(op.attrs(i).floats(j)));
       }
@@ -749,8 +749,8 @@ void PaddleParser::GetOpAttr(const paddle2onnx::framework::proto::OpDesc& op,
       found = true;
       if (IsAttrVar(op, i)) break;
       Assert(op.attrs(i).float64s_size() >= 0,
-             "Cannot find list of double data from attr: " + name +
-                 " in op: " + op.type());
+             "Cannot find list of double data from attr: " + name + " in op: " +
+                 op.type());
       for (auto j = 0; j < op.attrs(i).float64s_size(); ++j) {
         res->push_back(static_cast<double>(op.attrs(i).float64s(j)));
       }

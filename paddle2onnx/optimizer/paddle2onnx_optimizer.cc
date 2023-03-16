@@ -26,6 +26,8 @@
 #include "paddle2onnx/optimizer/replace_mul_to_identity.h"
 #include "paddle2onnx/utils/utils.h"
 
+#include "paddle2onnx/converter.h"
+
 namespace ONNX_NAMESPACE {
 namespace optimization {
 
@@ -57,16 +59,16 @@ ONNX_NAMESPACE::ModelProto OptimizeOnnxModel(
   return optimized_model_proto;
 }
 
-bool OptimizePaddle2ONNX(const std::string& model_path,
-                         const std::string& optimized_model_path,
-                         const OptimizerOption& option) {
-  std::ifstream fin(model_path, std::ios::in | std::ios::binary);
+std::shared_ptr<ONNX_NAMESPACE::ModelProto> LoadModelFromFile(
+    const std::string& file_path) {
+  auto model_proto = std::make_shared<ONNX_NAMESPACE::ModelProto>();
+  std::ifstream fin(file_path, std::ios::in | std::ios::binary);
   if (!fin.is_open()) {
     P2OLogger(true)
-        << "Failed to read model file: " << model_path
+        << "Failed to read model file: " << file_path
         << ", please make sure your model file or file path is valid."
         << std::endl;
-    return false;
+    return model_proto;
   }
   std::string contents;
   fin.seekg(0, std::ios::end);
@@ -76,11 +78,17 @@ bool OptimizePaddle2ONNX(const std::string& model_path,
   fin.read(&(contents.at(0)), contents.size());
   fin.close();
 
-  auto model_proto = std::make_shared<ONNX_NAMESPACE::ModelProto>();
   if (!model_proto->ParseFromString(contents)) {
-    P2OLogger(true) << "Failed to optimize this model." << std::endl;
-    return false;
+    P2OLogger(true) << "Failed to load ONNX model from file." << std::endl;
+    return model_proto;
   }
+  return model_proto;
+}
+
+bool OptimizePaddle2ONNX(const std::string& model_path,
+                         const std::string& optimized_model_path,
+                         const OptimizerOption& option) {
+  auto model_proto = LoadModelFromFile(model_path);
   ONNX_NAMESPACE::optimization::Optimizer::passes
       .registerPass<ONNX_NAMESPACE::optimization::FuseConstantReshape>();
   ONNX_NAMESPACE::optimization::Optimizer::passes
@@ -122,28 +130,7 @@ bool OptimizePaddle2ONNX(
     const std::string& model_path, const std::string& optimized_model_path,
     const std::map<std::string, std::vector<int>>& shape_infos,
     const OptimizerOption& option) {
-  std::ifstream fin(model_path, std::ios::in | std::ios::binary);
-  if (!fin.is_open()) {
-    P2OLogger(true)
-        << "Failed to read model file: " << model_path
-        << ", please make sure your model file or file path is valid."
-        << std::endl;
-    return false;
-  }
-  std::string contents;
-  fin.seekg(0, std::ios::end);
-  contents.clear();
-  contents.resize(fin.tellg());
-  fin.seekg(0, std::ios::beg);
-  fin.read(&(contents.at(0)), contents.size());
-  fin.close();
-
-  auto model_proto = std::make_shared<ONNX_NAMESPACE::ModelProto>();
-  if (!model_proto->ParseFromString(contents)) {
-    P2OLogger(true) << "Failed to optimize this model." << std::endl;
-    return false;
-  }
-
+  auto model_proto = LoadModelFromFile(model_path);
   if (shape_infos.size() > 0) {
     // reinfer shape for this onnx model
     auto graph = model_proto->mutable_graph();
@@ -214,5 +201,40 @@ bool OptimizePaddle2ONNX(
   out.close();
   return true;
 }
+
+bool Paddle2ONNXFP32ToFP16(const std::string& model_path,
+                           const std::string& converted_model_path) {
+  std::ifstream fin(model_path, std::ios::in | std::ios::binary);
+  if (!fin.is_open()) {
+    P2OLogger(true)
+        << "Failed to read model file: " << model_path
+        << ", please make sure your model file or file path is valid."
+        << std::endl;
+    return false;
+  }
+  std::string contents;
+  fin.seekg(0, std::ios::end);
+  contents.clear();
+  contents.resize(fin.tellg());
+  fin.seekg(0, std::ios::beg);
+  fin.read(&(contents.at(0)), contents.size());
+  fin.close();
+
+  char* out_model_ptr = nullptr;
+  int size = 0;
+  ConvertFP32ToFP16(contents.c_str(), contents.size(), &out_model_ptr, &size);
+  std::string onnx_proto(out_model_ptr, out_model_ptr + size);
+
+  std::fstream out(converted_model_path, std::ios::out | std::ios::binary);
+  if (!out) {
+    P2OLogger(true) << "Failed to write the optimized model to disk at "
+                    << converted_model_path << "." << std::endl;
+    return false;
+  }
+  out << onnx_proto;
+  out.close();
+  return true;
+}
+
 }  // namespace optimization
 }  // namespace ONNX_NAMESPACE

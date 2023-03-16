@@ -87,6 +87,10 @@ class OnnxHelper {
   template <typename T>
   bool TryGetTensorValue(const std::string& name, std::vector<T>* value);
 
+  std::shared_ptr<ONNX_NAMESPACE::ValueInfoProto> MakeValueInfo(
+      const std::string& name, const int32_t& dtype,
+      std::vector<int64_t>& shape);
+
   std::shared_ptr<ONNX_NAMESPACE::NodeProto> MakeNode(
       const std::string& op_type, const std::vector<std::string>& inputs,
       const std::vector<std::string>& outputs);
