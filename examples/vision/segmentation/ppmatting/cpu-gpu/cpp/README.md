@@ -45,7 +45,7 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 </div>
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
-- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
 ## 快速链接
 - [PaddleSeg C++ API文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/cpp/html/namespacefastdeploy_1_1vision_1_1segmentation.html)

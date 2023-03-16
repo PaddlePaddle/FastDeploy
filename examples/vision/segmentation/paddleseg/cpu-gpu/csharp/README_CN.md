@@ -5,8 +5,8 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 在本目录执行如下命令即可在Windows完成编译测试，支持此模型需保证FastDeploy版本1.0.4以上(x.x.x>=1.0.4)
 
@@ -35,8 +35,8 @@ msbuild infer_demo.sln /m:4 /p:Configuration=Release /p:Platform=x64
 ```
 
 关于使用Visual Studio 2019创建sln工程，或者CMake工程等方式编译的更详细信息，可参考如下文档
-- [在 Windows 使用 FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
-- [FastDeploy C++库在Windows上的多种使用方式](../../../../../docs/cn/faq/use_sdk_on_windows_build.md)
+- [在 Windows 使用 FastDeploy C++ SDK](../../../../../../docs/cn/faq/use_sdk_on_windows.md)
+- [FastDeploy C++库在Windows上的多种使用方式](../../../../../../docs/cn/faq/use_sdk_on_windows_build.md)
 
 ## 4. 运行可执行程序
 
@@ -98,5 +98,5 @@ fastdeploy.SegmentationResult Predict(OpenCvSharp.Mat im)
 
 - [模型介绍](../../)
 - [Python部署](../python)
-- [视觉模型预测结果](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [视觉模型预测结果](../../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../../../docs/cn/faq/how_to_change_backend.md)
