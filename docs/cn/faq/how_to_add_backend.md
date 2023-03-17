@@ -73,7 +73,7 @@ make install
 
 我们可参照 https://github.com/PaddlePaddle/FastDeploy/tree/develop/examples/runtime/cpp 此处的示例，写一个新增后端加载模型并推理测试，验证无问题即可。
 
-### 5. Python接口绑定
+### 6. Python接口绑定
 
 在完成C++后端开发后，如有进一步Python接口支持的需求，仅需在FastDeploy快速绑定几个基础的接口即可。
 
@@ -84,7 +84,7 @@ make install
 
 至此，就完成了Python接口的绑定。
 
-### 6.  Python 后端测试
+### 7.  Python 后端测试
 
 在完成上述部署后，即可编译安装FastDeploy python包
 ```
