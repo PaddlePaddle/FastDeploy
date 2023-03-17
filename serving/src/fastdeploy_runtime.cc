@@ -619,6 +619,9 @@ class ModelInstanceState : public BackendModelInstance {
       const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses,
       BackendInputCollector* collector, bool* cuda_copy);
+  TRITONSERVER_Error* DeserializeStringInputToLodTensor(
+      const char* input_buffer, size_t nbytes,
+      std::vector<std::vector<std::vector<size_t>>>* lods);
 
   TRITONSERVER_Error* ReadOutputTensors(
       size_t total_batch_size, TRITONBACKEND_Request** requests,
@@ -1052,6 +1055,49 @@ TRITONSERVER_Error* ModelInstanceState::Run(
   return nullptr;
 }
 
+TRITONSERVER_Error* ModelInstanceState::DeserializeStringInputToLodTensor(
+    const char* input_buffer, size_t nbytes,
+    std::vector<std::vector<std::vector<size_t>>>* lods) {
+  // Deserialize the byte tensors to strings, then convert them to lod info
+  // The example format of lod tensor: '{"lod": [[0, 10, 14, 19], [0, 2]] '}'
+  // Every string is following 4 bytes which means the length of string.
+  // The string layout: | 4 bytes | string0 | 4 bytes | string1 | ... |
+
+  const char* curr_input_buffer = input_buffer;
+  size_t offset = 0;
+  while (offset < nbytes) {
+    std::vector<std::vector<size_t>> lod;
+    uint32_t curr_string_bytes =
+        *(reinterpret_cast<const uint32_t*>(curr_input_buffer + offset));
+    offset += 4;
+    triton::common::TritonJson::Value lod_infos;
+    TRITONSERVER_Error* err = nullptr;
+    if (curr_string_bytes != 0) {
+      err = lod_infos.Parse(curr_input_buffer + offset, curr_string_bytes);
+    }
+    RETURN_IF_ERROR(err);
+
+    std::vector<std::string> names;
+    lod_infos.Members(&names);
+    triton::common::TritonJson::Value curr_lod;
+    lod_infos.MemberAsArray(names[0].c_str(), &curr_lod);
+    for (size_t i = 0; i < curr_lod.ArraySize(); ++i) {
+      triton::common::TritonJson::Value curr_lod_level;
+      curr_lod.IndexAsArray(i, &curr_lod_level);
+      uint64_t value = 0;
+      std::vector<size_t> lod_level;
+      for (size_t j = 0; j < curr_lod_level.ArraySize(); ++j) {
+        curr_lod_level.IndexAsUInt(j, &value);
+        lod_level.push_back(value);
+      }
+      lod.emplace_back(std::move(lod_level));
+    }
+    offset += curr_string_bytes;
+    lods->emplace_back(std::move(lod));
+  }
+  return nullptr;
+}
+
 TRITONSERVER_Error* ModelInstanceState::SetInputTensors(
     size_t total_batch_size, TRITONBACKEND_Request** requests,
     const uint32_t request_count,
@@ -1134,15 +1180,9 @@ TRITONSERVER_Error* ModelInstanceState::SetInputTensors(
     }
     fastdeploy::FDTensor fdtensor(in_name);
     if (input_datatype == TRITONSERVER_TYPE_BYTES) {
-      // Deserialize the byte tensors to strings, then convert them to lod info
-      const char* curr_input_buffer = input_buffer;
-      for (int i = 0; i < batchn_shape[0]; ++i) {
-        const char* next_input_buffer =
-            std::find(curr_input_buffer, input_buffer + batchn_byte_size, '\0');
-        fastdeploy::FDINFO << "This is a string input: " << curr_input_buffer
-                           << std::endl;
-        curr_input_buffer = next_input_buffer + 1;
-      }
+      std::vector<std::vector<std::vector<size_t>>> lods;
+      DeserializeStringInputToLodTensor(input_buffer, batchn_byte_size, &lods);
+      fdtensor.SetLoD(lods[0]);
     } else {
       fdtensor.SetExternalData(
           batchn_shape, ConvertDataTypeToFD(input_datatype),
