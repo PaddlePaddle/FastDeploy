@@ -1,0 +1,24 @@
+# - Config file for the ONNX Optimizer package
+# It defines the following variable(s)
+#   ONNX_OPTIMIZER_INCLUDE_DIRS     - include directories for onnx optimizer
+# as well as ONNX Optimizer targets for other cmake libraries to use.
+
+# library version information
+set(ONNX_OPTIMIZER_VERSION "@ONNX_OPTIMIZER_VERSION@")
+
+# import targets
+include ("${CMAKE_CURRENT_LIST_DIR}/ONNXOptimizerTargets.cmake")
+
+# include directory.
+#
+# Newer versions of CMake set the INTERFACE_INCLUDE_DIRECTORIES property
+# of the imported targets. It is hence not necessary to add this path
+# manually to the include search path for targets which link to gflags.
+# The following lines are here for backward compatibility, in case one
+# would like to use the old-style include path.
+get_filename_component(
+    CMAKE_CURRENT_LIST_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+get_filename_component(
+    _INSTALL_PREFIX "${CMAKE_CURRENT_LIST_DIR}/../../../" ABSOLUTE)
+set(ONNX_OPTIMIZER_INCLUDE_DIRS "${_INSTALL_PREFIX}/include")
+
