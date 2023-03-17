@@ -74,8 +74,9 @@ class PaddleBackend : public BaseBackend {
  private:
   void BuildOption(const PaddleBackendOption& option);
 
-  bool InitFromPaddle(const std::string& model_buffer,
-                     const std::string& params_buffer,
+  bool InitFromPaddle(const std::string& model,
+                     const std::string& params,
+                     bool model_from_memory,
                      const PaddleBackendOption& option = PaddleBackendOption());
 
   void
