@@ -24,6 +24,8 @@
 namespace fastdeploy {
 namespace vision {
 
+/*! @brief Processor for transform images from HWC to CHW.
+ */
 class FASTDEPLOY_DECL HWC2CHW : public Processor {
  public:
   bool ImplByOpenCV(Mat* mat);
@@ -35,6 +37,12 @@ class FASTDEPLOY_DECL HWC2CHW : public Processor {
 #endif
   std::string Name() { return "HWC2CHW"; }
 
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \return true if the process successed, otherwise false
+   */
   static bool Run(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
  private:
 #ifdef ENABLE_CVCUDA
