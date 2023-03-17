@@ -1,43 +1,93 @@
 #!/bin/bash
-set -e
+set +e
 set +x
 
 download_fd_model_zxvf() {
-  local model="$1"
+  local model="$1"  # xxx_model.tgz
+  local len=${#model}
+  local model_dir=${model:0:${#model}-4}  # xxx_model
+  if [ -d "${model_dir}" ]; then
+     echo "[INFO] --- $model_dir already exists!"
+     return
+  fi
   if [ ! -f "${model}" ]; then
      echo "[INFO] --- downloading $model"
      wget https://bj.bcebos.com/paddlehub/fastdeploy/$model && tar -zxvf $model
+     # remove tar crash
+     rm $(ls ./${model_dir}/._*)
   else
      echo "[INFO] --- $model already exists!"
+     if [ ! -d "${model_dir}" ]; then
+        tar -zxvf $model
+        rm $(ls ./${model_dir}/._*)
+     else
+        echo "[INFO] --- $model_dir already exists!"
+     fi
   fi
 }
 download_fd_model_xvf() {
   local model="$1"
+  local model_dir=${model:0:${#model}-4}  # xxx_model
+  if [ -d "${model_dir}" ]; then
+     echo "[INFO] --- $model_dir already exists!"
+     return
+  fi
   if [ ! -f "${model}" ]; then
      echo "[INFO] --- downloading $model"
      wget https://bj.bcebos.com/paddlehub/fastdeploy/$model && tar -xvf $model
+     rm $(ls ./${model_dir}/._*)
   else
      echo "[INFO] --- $model already exists!"
+     if [ ! -d "${model_dir}" ]; then
+        tar -xvf $model
+        rm $(ls ./${model_dir}/._*)
+     else
+        echo "[INFO] --- $model_dir already exists!"
+     fi
   fi
 }
 download_common_model_zxvf() {
   local model_url="$1"
   local model="$2"
+  local model_dir=${model:0:${#model}-4}  # xxx_model
+  if [ -d "${model_dir}" ]; then
+     echo "[INFO] --- $model_dir already exists!"
+     return
+  fi
   if [ ! -f "${model}" ]; then
      echo "[INFO] --- downloading $model"
      wget ${model_url} && tar -zxvf $model
+     rm $(ls ./${model_dir}/._*)
   else
      echo "[INFO] --- $model already exists!"
+     if [ ! -d "${model_dir}" ]; then
+        tar -zxvf $model
+        rm $(ls ./${model_dir}/._*)
+     else
+        echo "[INFO] --- $model_dir already exists!"
+     fi
   fi
 }
 download_common_model_xvf() {
   local model_url="$1"
   local model="$2"
+  local model_dir=${model:0:${#model}-4}  # xxx_model
+  if [ -d "${model_dir}" ]; then
+     echo "[INFO] --- $model_dir already exists!"
+     return
+  fi
   if [ ! -f "${model}" ]; then
      echo "[INFO] --- downloading $model"
      wget ${model_url} && tar -xvf $model
+     rm $(ls ./${model_dir}/._*)
   else
      echo "[INFO] --- $model already exists!"
+     if [ ! -d "${model_dir}" ]; then
+        tar -xvf $model
+        rm $(ls ./${model_dir}/._*)
+     else
+        echo "[INFO] --- $model_dir already exists!"
+     fi
   fi
 }
 download_common_file() {
@@ -60,6 +110,7 @@ download_fd_model_zxvf yolov5_s_300e_coco_no_nms.tgz
 download_fd_model_zxvf yolov6_s_300e_coco_no_nms.tgz
 download_fd_model_zxvf yolov7_l_300e_coco_no_nms.tgz
 download_fd_model_zxvf yolov8_s_500e_coco_no_nms.tgz
+
 # PaddleClas
 download_fd_model_zxvf PPLCNet_x1_0_infer.tgz
 download_fd_model_zxvf PPLCNetV2_base_infer.tgz
@@ -90,6 +141,7 @@ download_fd_model_zxvf DenseNet121_infer.tgz
 download_fd_model_zxvf PPHGNet_small_infer.tgz
 download_fd_model_zxvf person_exists_infer.tgz
 download_fd_model_zxvf EfficientNetB0_small_infer.tgz
+
 # PaddleSeg
 download_fd_model_zxvf PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer.tgz
 download_fd_model_zxvf PP_HumanSegV1_Lite_infer.tgz
@@ -100,12 +152,14 @@ download_fd_model_zxvf SegFormer_B0-cityscapes-with-argmax.tgz
 download_fd_model_xvf PP-Matting-512.tgz
 download_fd_model_xvf PPHumanMatting.tgz
 download_fd_model_xvf PPModnet_MobileNetV2.tgz
+
 # PaddleOCR
 download_common_model_xvf https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_det_infer.tar ch_PP-OCRv3_det_infer.tar
 download_common_model_xvf https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_rec_infer.tar ch_PP-OCRv3_rec_infer.tar
 download_common_model_xvf https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar ch_ppocr_mobile_v2.0_cls_infer.tar
 download_common_model_xvf https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_det_infer.tar ch_PP-OCRv2_det_infer.tar
 download_common_model_xvf https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_rec_infer.tar ch_PP-OCRv2_rec_infer.tar
+
 # download images
 download_common_file https://bj.bcebos.com/paddlehub/fastdeploy/rec_img.jpg rec_img.jpg
 download_common_file https://bj.bcebos.com/paddlehub/fastdeploy/cityscapes_demo.png cityscapes_demo.png
