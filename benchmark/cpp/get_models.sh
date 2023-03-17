@@ -13,10 +13,13 @@ download_fd_model_zxvf() {
   if [ ! -f "${model}" ]; then
      echo "[INFO] --- downloading $model"
      wget https://bj.bcebos.com/paddlehub/fastdeploy/$model && tar -zxvf $model
+     # remove tar crash
+     rm -f $(ls ${model_dir}/._*)
   else
      echo "[INFO] --- $model already exists!"
      if [ ! -d "${model_dir}" ]; then
         tar -zxvf $model
+        rm $(ls ./${model_dir}/._*)
      else
         echo "[INFO] --- $model_dir already exists!"
      fi
@@ -32,10 +35,12 @@ download_fd_model_xvf() {
   if [ ! -f "${model}" ]; then
      echo "[INFO] --- downloading $model"
      wget https://bj.bcebos.com/paddlehub/fastdeploy/$model && tar -xvf $model
+     rm $(ls ./${model_dir}/._*)
   else
      echo "[INFO] --- $model already exists!"
      if [ ! -d "${model_dir}" ]; then
         tar -xvf $model
+        rm $(ls ./${model_dir}/._*)
      else
         echo "[INFO] --- $model_dir already exists!"
      fi
@@ -52,10 +57,12 @@ download_common_model_zxvf() {
   if [ ! -f "${model}" ]; then
      echo "[INFO] --- downloading $model"
      wget ${model_url} && tar -zxvf $model
+     rm $(ls ./${model_dir}/._*)
   else
      echo "[INFO] --- $model already exists!"
      if [ ! -d "${model_dir}" ]; then
         tar -zxvf $model
+        rm $(ls ./${model_dir}/._*)
      else
         echo "[INFO] --- $model_dir already exists!"
      fi
@@ -72,10 +79,12 @@ download_common_model_xvf() {
   if [ ! -f "${model}" ]; then
      echo "[INFO] --- downloading $model"
      wget ${model_url} && tar -xvf $model
+     rm $(ls ./${model_dir}/._*)
   else
      echo "[INFO] --- $model already exists!"
      if [ ! -d "${model_dir}" ]; then
         tar -xvf $model
+        rm $(ls ./${model_dir}/._*)
      else
         echo "[INFO] --- $model_dir already exists!"
      fi
