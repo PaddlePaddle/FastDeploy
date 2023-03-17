@@ -239,7 +239,6 @@ void Runtime::BindOutputTensor(const std::string& name, FDTensor& output) {
   bool is_exist = false;
   for (auto& t : output_tensors_) {
     if (t.name == name) {
-      FDINFO << "The output name [" << name << "] is exist." << std::endl;
       is_exist = true;
       t.SetExternalData(output.shape, output.dtype, output.MutableData(),
                         output.device, output.device_id);
@@ -247,8 +246,11 @@ void Runtime::BindOutputTensor(const std::string& name, FDTensor& output) {
     }
   }
   if (!is_exist) {
+<<<<<<< HEAD
     FDINFO << "The output name [" << name
            << "] is prebinded added into output tensor list." << std::endl;
+=======
+>>>>>>> 3b1343c726c60fc4782e0c5453236a054230cf6c
     FDTensor new_tensor(name);
     new_tensor.SetExternalData(output.shape, output.dtype, output.MutableData(),
                                output.device, output.device_id);
