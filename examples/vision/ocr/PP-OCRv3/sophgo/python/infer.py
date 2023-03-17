@@ -39,6 +39,7 @@ def getPPOCRv3():
     tar_str_rec = 'tar xvf ch_PP-OCRv3_rec_infer.tar'
     cmd_str_img = 'wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg'
     cmd_str_label = 'wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt'
+    script_str = 'wget https://raw.githubusercontent.com/PaddlePaddle/Paddle2ONNX/develop/tools/paddle/paddle_infer_shape.py'
     if not os.path.exists('ch_PP-OCRv3_det_infer.tar'):
         print(cmd_str_det, tar_str_det)
         run(cmd_str_det, shell=True)
@@ -57,19 +58,46 @@ def getPPOCRv3():
     if not os.path.exists('ppocr_keys_v1.txt'):
         print(cmd_str_label)
         run(cmd_str_label, shell=True)
+    if not os.path.exists('paddle_infer_shape.py'):
+        print(script_str)
+        run(script_str, shell=True)
+
+def fix_input_shape():
+    fix_det_str = 'python paddle_infer_shape.py --model_dir ch_PP-OCRv3_det_infer \
+                    --model_filename inference.pdmodel \
+                    --params_filename inference.pdiparams \
+                    --save_dir ch_PP-OCRv3_det_infer_fix \
+                    --input_shape_dict="{\'x\':[1,3,960,608]}"'
+    fix_rec_str = 'python paddle_infer_shape.py --model_dir ch_PP-OCRv3_rec_infer \
+                    --model_filename inference.pdmodel \
+                    --params_filename inference.pdiparams \
+                    --save_dir ch_PP-OCRv3_rec_infer_fix \
+                    --input_shape_dict="{\'x\':[1,3,48,320]}"'
+    fix_cls_str = 'python paddle_infer_shape.py --model_dir ch_PP-OCRv3_cls_infer \
+                    --model_filename inference.pdmodel \
+                    --params_filename inference.pdiparams \
+                    --save_dir ch_PP-OCRv3_cls_infer_fix \
+                    --input_shape_dict="{\'x\':[1,3,48,192]}"'
+    print(fix_det_str)
+    run(fix_det_str, shell=True)
+    print(fix_rec_str)
+    run(fix_rec_str, shell=True)
+    print(fix_cls_str)
+    run(fix_cls_str, shell=True)
+
 
 def paddle2onnx():
-    cmd_str_det = 'paddle2onnx --model_dir ch_PP-OCRv3_det_infer \
+    cmd_str_det = 'paddle2onnx --model_dir ch_PP-OCRv3_det_infer_fix \
             --model_filename inference.pdmodel \
             --params_filename inference.pdiparams \
             --save_file ch_PP-OCRv3_det_infer.onnx \
             --enable_dev_version True'
-    cmd_str_cls = 'paddle2onnx --model_dir ch_ppocr_mobile_v2.0_cls_infer \
+    cmd_str_cls = 'paddle2onnx --model_dir ch_ppocr_mobile_v2.0_cls_infer_fix \
             --model_filename inference.pdmodel \
             --params_filename inference.pdiparams \
             --save_file ch_PP-OCRv3_cls_infer.onnx \
             --enable_dev_version True'
-    cmd_str_rec = 'paddle2onnx --model_dir ch_PP-OCRv3_rec_infer \
+    cmd_str_rec = 'paddle2onnx --model_dir ch_PP-OCRv3_rec_infer_fix \
             --model_filename inference.pdmodel \
             --params_filename inference.pdiparams \
             --save_file ch_PP-OCRv3_rec_infer.onnx \
@@ -80,28 +108,6 @@ def paddle2onnx():
     run(cmd_str_cls, shell=True)
     print(cmd_str_rec)
     run(cmd_str_rec, shell=True)
-
-def fixOnnx():
-    cmd_str_det = 'python3 -m paddle2onnx.optimize \
-        --input_model ch_PP-OCRv3_det_infer.onnx \
-        --output_model  ch_PP-OCRv3_det_infer_fix.onnx \
-        --input_shape_dict "{\'x\':[1,3,960,608]}"'
-    cmd_str_rec = 'python3 -m paddle2onnx.optimize \
-        --input_model ch_PP-OCRv3_rec_infer.onnx \
-        --output_model  ch_PP-OCRv3_rec_infer_fix.onnx \
-        --input_shape_dict "{\'x\':[1,3,48,320]}"'
-    cmd_str_cls = 'python3 -m paddle2onnx.optimize \
-        --input_model ch_PP-OCRv3_cls_infer.onnx \
-        --output_model  ch_PP-OCRv3_cls_infer_fix.onnx \
-        --input_shape_dict "{\'x\':[1,3,48,192]}"'
-    print(cmd_str_det)
-    run(cmd_str_det, shell=True)
-    print(cmd_str_rec)
-    run(cmd_str_rec, shell=True)
-    print(cmd_str_cls)
-    run(cmd_str_cls, shell=True)
-
-
 
 def mlir_prepare():
     mlir_path = os.getenv("MODEL_ZOO_PATH")
@@ -149,7 +155,7 @@ def onnx2mlir():
         --mlir ./ch_PP-OCRv3_rec.mlir'
     transform_str_cls = 'model_transform.py \
         --model_name ch_PP-OCRv3_cls \
-        --model_def ../ch_PP-OCRv3_cls_infer.onnx \
+        --model_def ../ch_PP-OCRv3_cls_infer_fix.onnx \
         --input_shapes [[1,3,48,192]] \
         --mean 0.0,0.0,0.0 \
         --scale 0.0039216,0.0039216,0.0039216 \
@@ -210,8 +216,8 @@ args = parse_arguments()
 
 if (args.auto):
     getPPOCRv3()
+    fix_input_shape()
     paddle2onnx()
-    fixOnnx()
     mlir_prepare()
     onnx2mlir()
     mlir2bmodel()

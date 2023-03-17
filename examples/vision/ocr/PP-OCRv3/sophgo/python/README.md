@@ -14,9 +14,10 @@ cd FastDeploy/examples/vision/ocr/PP-OCRv3/sophgo/python
 # 下载图片
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
 
-#下载字典文件
+# 下载字典文件
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt
 
+# 推理
 # --auto True，自动完成下载数据、模型转换、推理
 python3 infer.py --auto True --det_model '' --cls_model '' --rec_model '' --rec_label_file '' --image ''
 
