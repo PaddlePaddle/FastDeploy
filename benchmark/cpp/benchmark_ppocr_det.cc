@@ -35,8 +35,15 @@ int main(int argc, char* argv[]) {
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
   // Detection Model
-  auto det_model_file = FLAGS_model + sep + "inference.pdmodel";
-  auto det_params_file = FLAGS_model + sep + "inference.pdiparams";
+  std::string model_name, params_name, config_name;
+  auto model_format = fastdeploy::ModelFormat::PADDLE;
+  if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
+                               &model_format, config_info, false)) {
+    return -1;
+  }
+  // Classification Model
+  auto model_file = FLAGS_model + sep + model_name;
+  auto params_file = FLAGS_model + sep + params_name;
   if (config_info["backend"] == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
   }
@@ -48,7 +55,7 @@ int main(int argc, char* argv[]) {
                                trt_shapes[2]);
   }
   auto model_ppocr_det =
-      vision::ocr::DBDetector(det_model_file, det_params_file, option);
+      vision::ocr::DBDetector(model_file, params_file, option, model_format);
   std::vector<std::array<int, 8>> res;
   if (config_info["precision_compare"] == "true") {
     // Run once at least
