@@ -86,7 +86,7 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
     }
   } else if (config_info["device"] == "xpu") {
     if (FLAGS_xpu_l3_cache >= 0) {
-       option->UseKunlunXin(std::stoi(config_info["device_id"],
+       option->UseKunlunXin(std::stoi(config_info["device_id"]),
                                       FLAGS_xpu_l3_cache);
     } else {
       option->UseKunlunXin(std::stoi(config_info["device_id"]),
