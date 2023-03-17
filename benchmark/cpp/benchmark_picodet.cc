@@ -32,12 +32,18 @@ int main(int argc, char* argv[]) {
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
-  auto backend = config_info["backend"];
-  auto model_file = FLAGS_model + sep + "model.pdmodel";
-  auto params_file = FLAGS_model + sep + "model.pdiparams";
-  auto config_file = FLAGS_model + sep + "infer_cfg.yml";
-  auto model_picodet =
-      vision::detection::PicoDet(model_file, params_file, config_file, option);
+  std::string model_name, params_name, config_name;
+  auto model_format = fastdeploy::ModelFormat::PADDLE;
+  if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
+                               &model_format, config_info)) {
+    return -1;
+  }
+
+  auto model_file = FLAGS_model + sep + model_name;
+  auto params_file = FLAGS_model + sep + params_name;
+  auto config_file = FLAGS_model + sep + config_name;
+  auto model_picodet = vision::detection::PicoDet(
+      model_file, params_file, config_file, option, model_format);
   if (FLAGS_no_nms) {
     model_picodet.GetPostprocessor().ApplyNMS();
   }

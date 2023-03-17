@@ -34,9 +34,16 @@ int main(int argc, char* argv[]) {
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
-  auto model_file = FLAGS_model + sep + "model.pdmodel";
-  auto params_file = FLAGS_model + sep + "model.pdiparams";
-  auto config_file = FLAGS_model + sep + "deploy.yaml";
+  std::string model_name, params_name, config_name;
+  auto model_format = fastdeploy::ModelFormat::PADDLE;
+  if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
+                               &model_format, config_info)) {
+    return -1;
+  }
+
+  auto model_file = FLAGS_model + sep + model_name;
+  auto params_file = FLAGS_model + sep + params_name;
+  auto config_file = FLAGS_model + sep + config_name;
   if (config_info["backend"] == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
   }
@@ -47,8 +54,8 @@ int main(int argc, char* argv[]) {
     option.trt_option.SetShape("x", trt_shapes[0], trt_shapes[1],
                                trt_shapes[2]);
   }
-  auto model_ppmatting =
-      vision::matting::PPMatting(model_file, params_file, config_file, option);
+  auto model_ppmatting = vision::matting::PPMatting(
+      model_file, params_file, config_file, option, model_format);
   vision::MattingResult res;
   if (config_info["precision_compare"] == "true") {
     // Run once at least
