@@ -242,7 +242,13 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
 
   InitCustomOperators();
   if (model_file_name.size()) {
+#ifdef WIN32
+    std::wstring widestr =
+        std::wstring(model_file_name.begin(), model_file_name.end());
+    session_ = {env_, widestr.c_str(), session_options_};
+#else
     session_ = {env_, model_file_name.c_str(), session_options_};
+#endif
   } else {
     session_ = {env_, onnx_model_buffer.data(), onnx_model_buffer.size(),
                 session_options_};
