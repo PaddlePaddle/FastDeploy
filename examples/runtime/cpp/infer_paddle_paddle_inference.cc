@@ -27,7 +27,6 @@ int main(int argc, char* argv[]) {
   // https://baidu-paddle.github.io/fastdeploy-api/cpp/html/structfastdeploy_1_1RuntimeOption.html
   fd::RuntimeOption runtime_option;
   runtime_option.SetModelPath(model_file, params_file);
-  runtime_option.UsePaddleInferBackend();
   runtime_option.UseCpu();
  
   // If need to configure Paddle Inference backend for more option, we can configure runtime_option.paddle_infer_option

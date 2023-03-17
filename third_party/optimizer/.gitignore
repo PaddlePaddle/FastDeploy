@@ -1,0 +1,84 @@
+## General
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.cuo
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.pyd
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+
+# Compiled python
+*.pyc
+
+# Compiled MATLAB
+*.mex*
+
+# IPython notebook checkpoints
+.ipynb_checkpoints
+
+# Editor temporaries
+*.swn
+*.swo
+*.swp
+*~
+
+# Sublime Text settings
+*.sublime-workspace
+*.sublime-project
+
+# Eclipse Project settings
+*.*project
+.settings
+
+# QtCreator files
+*.user
+
+# PyCharm files
+.idea
+
+# Visual Studio Code files
+.vscode
+
+# OSX dir files
+.DS_Store
+
+## ONNX
+
+# build, distribute, and bins (+ python proto bindings)
+build/
+build_*/
+.build_debug/*
+.build_release/*
+.setuptools-cmake-build/*
+
+# setup.py intermediates
+.eggs
+dist
+*.egg-info
+*.ninja
+.ninja_deps
+.ninja_log
+compile_commands.json
+
+# generated files
+onnxoptimizer/version.py
+compile_commands.json
+
+# autocomplete
+.ycm_extra_conf.py
+
+# test coverage data files
+*.gcov
+
+.mypy_cache
+virtualenv
+venv

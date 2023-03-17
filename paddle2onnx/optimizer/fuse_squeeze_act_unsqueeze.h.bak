@@ -1,0 +1,102 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#pragma once
+
+// Before:
+//   axis = n
+//   A = Squeeze(x, axis)
+//   B = Act(A)
+//   C = Unsqueeze(x, axis)
+// After:
+//   C = act(x)
+
+#include <numeric>
+
+#include "onnx/defs/tensor_util.h"
+#include "onnxoptimizer/pass.h"
+
+namespace ONNX_NAMESPACE {
+namespace optimization {
+
+struct FuseSqueezeActUnsqueeze final : public PredicateBasedPass {
+  explicit FuseSqueezeActUnsqueeze()
+      : PredicateBasedPass(PassType::Fuse, PassEfficiency::Complete,
+                           PassOptimizationType::Compute) {}
+  std::string getPassName() const override { return "fuse_squeeze_act_unsqueeze"; }
+
+  bool patternMatchPredicate(Node* node) override {
+    // if you want more act supported
+    // just modify here
+    return node->kind() == kUnqueeze &&
+           node->inputs()[0]->node()->kind() == kLeakyRelu &&
+           node->inputs()[0]->node()->inputs()[0] == kSqueeze;
+  }
+  bool runTransform(Node* n, Graph& graph,
+                    NodeDestroyType& destroy_current) override {
+    destroy_current = NodeDestroyType::DestroyZero;
+
+    if (n->inputs()[0]->uses().size() > 1) {
+      return false;
+    }
+    if (n->inputs()[0]->node->inputs[0]->uses().size() > 1) {
+      return false;
+    }
+
+    Node* unsqueeze = n;
+    Node* act = n->inputs()[0]->node();
+    Node* squeeze = act->inputs()[0]->node();
+
+    // Process 'axes' data
+    std::vector<int64_t> unsqueeze_axes;
+    if (unsqueeze->hasAttribute(kaxes)) {
+      // opset 13 below
+      unsqueeze_axes = unsqueeze->is(kaxes);
+    } else {
+      // opset 13 and above - first check if 'unsqueeze' has 'axes' input
+      // constant
+      if (unsqueeze->inputs()[1]->node()->kind() != kConstant) {
+        return false;
+      }
+      if (unsqueeze->inputs()[1]->uses().size() > 1) {
+        return false;
+      }
+      Node* axes_const = unsqueeze->inputs()[1]->node();
+      Tensor t = axes_const->t(kvalue);
+      unsqueeze_axes = ParseData<int64_t>(&t);
+    }
+
+    Tensor t = constant->t(kvalue);
+    const auto& ori_size = t.sizes();
+    for (size_t i = 0; i < axes.size(); ++i) {
+      if (axes[i] < 0) {
+        axes[i] = axes[i] +  ori_size.size() + i + 1;
+      }
+    }
+
+    std::vector<int64_t> new_size(ori_size.begin(), ori_size.end());
+    for (size_t i = 0; i < axes.size(); ++i) {
+      new_size.insert(new_size.begin() + axes[i], 1);
+    }
+
+    t.sizes().clear();
+    t.sizes().insert(t.sizes().begin(), new_size.begin(),
+                     new_size.begin() + new_size.size());
+    constant->t_(kvalue, std::move(t));
+
+    // update constant node
+    constant->output()->setSizes(unsqueeze->output()->sizes());
+    constant->output()->setElemType(unsqueeze->output()->elemType());
+    const bool replacing_success =
+        tryReplacingAllUsesWith(unsqueeze->output(), unsqueeze->inputs()[0]);
+    if (!replacing_success) {
+      return false;
+    }
+    destroy_current = NodeDestroyType::DestroyOne;
+    return true;
+  }
+};
+
+}  // namespace optimization
+}  // namespace ONNX_NAMESPACE
