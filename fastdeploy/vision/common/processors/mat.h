@@ -29,6 +29,8 @@ namespace vision {
 
 enum Layout { HWC, CHW };
 
+/*! @brief FDMat is a structure for replace cv::Mat
+ */
 struct FASTDEPLOY_DECL Mat {
   Mat() = default;
   explicit Mat(const cv::Mat& mat) {
