@@ -22,9 +22,14 @@ void BindOpenVINOOption(pybind11::module& m) {
       .def(pybind11::init())
       .def_readwrite("cpu_thread_num", &OpenVINOBackendOption::cpu_thread_num)
       .def_readwrite("num_streams", &OpenVINOBackendOption::num_streams)
+      .def_readwrite("affinity", &OpenVINOBackendOption::affinity)
+      .def_readwrite("hint", &OpenVINOBackendOption::hint)
       .def("set_device", &OpenVINOBackendOption::SetDevice)
       .def("set_shape_info", &OpenVINOBackendOption::SetShapeInfo)
-      .def("set_cpu_operators", &OpenVINOBackendOption::SetCpuOperators);
+      .def("set_cpu_operators", &OpenVINOBackendOption::SetCpuOperators)
+      .def("set_affinity", &OpenVINOBackendOption::SetAffinity)
+      .def("set_performance_hint", &OpenVINOBackendOption::SetPerformanceHint)
+      .def("set_stream_num", &OpenVINOBackendOption::SetStreamNum);
 }
 
 }  // namespace fastdeploy
