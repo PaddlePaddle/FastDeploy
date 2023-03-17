@@ -18,6 +18,8 @@
 
 namespace fastdeploy {
 namespace vision {
+/*! @brief Processor for convert images with given paramters and permute images from HWC to CHW.
+ */
 class FASTDEPLOY_DECL ConvertAndPermute : public Processor {
  public:
   ConvertAndPermute(const std::vector<float>& alpha = std::vector<float>(),
@@ -29,12 +31,24 @@ class FASTDEPLOY_DECL ConvertAndPermute : public Processor {
 #endif
   std::string Name() { return "ConvertAndPermute"; }
 
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data，`result = mat * alpha + beta`
+   * \param[in] alpha The alpha channel data
+   * \param[in] beta The beta channel data
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \return true if the process successed, otherwise false
+   */
   static bool Run(FDMat* mat, const std::vector<float>& alpha,
                   const std::vector<float>& beta, bool swap_rb = false,
                   ProcLib lib = ProcLib::DEFAULT);
 
   std::vector<float> GetAlpha() const { return alpha_; }
 
+  /** \brief Process the input images
+   *
+   * \param[in] alpha set the value of the alpha parameter
+   */
   void SetAlpha(const std::vector<float>& alpha) {
     alpha_.clear();
     std::vector<float>().swap(alpha_);
@@ -43,6 +57,10 @@ class FASTDEPLOY_DECL ConvertAndPermute : public Processor {
 
   std::vector<float> GetBeta() const { return beta_; }
 
+  /** \brief Process the input images
+   *
+   * \param[in] beta set the value of the beta parameter
+   */
   void SetBeta(const std::vector<float>& beta) {
     beta_.clear();
     std::vector<float>().swap(beta_);
@@ -53,6 +71,10 @@ class FASTDEPLOY_DECL ConvertAndPermute : public Processor {
     return swap_rb_;
   }
 
+  /** \brief Process the input images
+   *
+   * \param[in] swap_rb set the value of the swap_rb parameter
+   */
   void SetSwapRB(bool swap_rb) {
     swap_rb_ = swap_rb;
   }
