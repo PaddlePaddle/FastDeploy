@@ -21,23 +21,48 @@ fi
 ./benchmark_ppseg --model Portrait_PP_HumanSegV2_Lite_256x144_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --trt_shape 1,3,144,256:1,3,144,256:1,3,144,256
 ./benchmark_ppseg --model PP_HumanSegV2_Lite_192x192_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --trt_shape 1,3,192,192:1,3,192,192:1,3,192,192
 ./benchmark_ppseg --model PP_HumanSegV1_Lite_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --trt_shape 1,3,192,192:1,3,192,192:1,3,192,192
+./benchmark_ppseg --model PP_HumanSegV2_Mobile_192x192_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --trt_shape 1,3,192,192:1,3,192,192:1,3,192,192
 ./benchmark_ppseg --model Deeplabv3_ResNet101_OS8_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
 ./benchmark_ppseg --model PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
 ./benchmark_ppseg --model SegFormer_B0-cityscapes-with-argmax --image cityscapes_demo.png --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
 ./benchmark_ppmatting --model PP-Matting-512 --image matting_input.jpg --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
 ./benchmark_ppmatting --model PPHumanMatting --image matting_input.jpg --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
 ./benchmark_ppmatting --model PPModnet_MobileNetV2 --image matting_input.jpg --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
+./benchmark_ppseg --model Unet_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
+./benchmark_ppseg --model PP_HumanSegV1_Server_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
+./benchmark_ppseg --model FCN_HRNet_W18_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
+
 
 # PaddleClas
 ./benchmark_ppcls --model PPLCNet_x1_0_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
 ./benchmark_ppcls --model PPLCNetV2_base_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model EfficientNetB7_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model EfficientNetB0_small_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model GhostNet_x0_5_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model GhostNet_x1_3_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model GhostNet_x1_3_ssld_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
 ./benchmark_ppcls --model MobileNetV1_x0_25_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
 ./benchmark_ppcls --model MobileNetV1_ssld_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model MobileNetV2_x0_25_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model MobileNetV2_ssld_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model MobileNetV3_small_x0_35_ssld_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
 ./benchmark_ppcls --model MobileNetV3_large_x1_0_ssld_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model ShuffleNetV2_x0_25_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
 ./benchmark_ppcls --model ShuffleNetV2_x2_0_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model SqueezeNet1_1_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model InceptionV3_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
 ./benchmark_ppcls --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
-./benchmark_ppcls --model EfficientNetB0_small_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
 ./benchmark_ppcls --model PPHGNet_tiny_ssld_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model PPHGNet_base_ssld_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model ResNet50_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model EfficientNetB0_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model MobileNetV2_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model MobileNetV3_small_x1_0_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model ViT_large_patch16_224_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model ResNeXt50_32x4d_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model DenseNet121_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model PPHGNet_small_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+./benchmark_ppcls --model person_exists_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
 
 # PaddleOCR
 ./benchmark_ppocr_det --model ch_PP-OCRv3_det_infer --image 12.jpg --config_path $CONFIG_PATH --trt_shape 1,3,64,64:1,3,640,640:1,3,960,960
