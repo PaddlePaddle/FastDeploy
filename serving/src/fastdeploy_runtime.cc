@@ -41,7 +41,6 @@
 #include "triton/backend/backend_model.h"
 #include "triton/backend/backend_model_instance.h"
 #include "triton/backend/backend_output_responder.h"
-
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
@@ -345,6 +344,21 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                     ParseBoolValue(value_string, &enable_fixed_size_opt));
                 runtime_options_->paddle_infer_option.enable_fixed_size_opt =
                     enable_fixed_size_opt;
+              } else if (param_key == "lod_map") {
+                std::unordered_map<std::string, std::string> lod_name_map;
+                triton::common::TritonJson::Value lod_map;
+                // Parse string to json map
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    lod_map.Parse(value_string.c_str(), value_string.length()));
+
+                std::vector<std::string> key_names;
+                lod_map.Members(&key_names);
+                for (auto& key_name : key_names) {
+                  std::string value;
+                  lod_map.MemberAsString(key_name.c_str(), &value);
+                  lod_name_map[key_name] = value;
+                }
+                runtime_options_->paddle_infer_option.SetLoDMap(lod_name_map);
               }
             }
           }
@@ -1058,25 +1072,37 @@ TRITONSERVER_Error* ModelInstanceState::Run(
 TRITONSERVER_Error* ModelInstanceState::DeserializeStringInputToLodTensor(
     const char* input_buffer, size_t nbytes,
     std::vector<std::vector<std::vector<size_t>>>* lods) {
-  // Deserialize the byte tensors to strings, then convert them to lod info
-  // The example format of lod tensor: '{"lod": [[0, 10, 14, 19], [0, 2]] '}'
-  // Every string is following 4 bytes which means the length of string.
-  // The string layout: | 4 bytes | string0 | 4 bytes | string1 | ... |
+  // We use strings to store lod infos, and serialize the strings into a
+  // continous byte sequence. So we need to deserialize the byte tensors into
+  // strings, then convert the string into lod infos.
+  // The byte tensors contains serveral strings, and the layout of the byte
+  // tensor is as following: | 4 bytes (length of string0) | string0 | 4 bytes
+  // (length of string1) | string1 | ... |
+  // An simple example of lod tensor can be '[[0, 10, 14, 19], [0, 2]]'.
 
+  // The input_buffer is a simple string, first we convert it to json string,
+  // then we parse the json string into a lod info.
   const char* curr_input_buffer = input_buffer;
   size_t offset = 0;
   while (offset < nbytes) {
+    // 1. Deserialize the byte tensors into strings
     std::vector<std::vector<size_t>> lod;
     uint32_t curr_string_bytes =
         *(reinterpret_cast<const uint32_t*>(curr_input_buffer + offset));
     offset += 4;
+
+    // 2. Convert a normal string into a json string.
+    std::string json_str =
+        "{\"0\":" + std::string(curr_input_buffer + offset, curr_string_bytes) +
+        "}";
     triton::common::TritonJson::Value lod_infos;
     TRITONSERVER_Error* err = nullptr;
     if (curr_string_bytes != 0) {
-      err = lod_infos.Parse(curr_input_buffer + offset, curr_string_bytes);
+      err = lod_infos.Parse(json_str.c_str(), json_str.length());
     }
     RETURN_IF_ERROR(err);
 
+    // 3. Convert the strings into lod infos
     std::vector<std::string> names;
     lod_infos.Members(&names);
     triton::common::TritonJson::Value curr_lod;
@@ -1090,10 +1116,10 @@ TRITONSERVER_Error* ModelInstanceState::DeserializeStringInputToLodTensor(
         curr_lod_level.IndexAsUInt(j, &value);
         lod_level.push_back(value);
       }
-      lod.emplace_back(std::move(lod_level));
+      lod.push_back(std::move(lod_level));
     }
+    lods->push_back(std::move(lod));
     offset += curr_string_bytes;
-    lods->emplace_back(std::move(lod));
   }
   return nullptr;
 }
