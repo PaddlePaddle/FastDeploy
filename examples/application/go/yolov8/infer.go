@@ -16,12 +16,6 @@ package main
 
 // #cgo CFLAGS:  -I./fastdeploy_capi
 // #cgo LDFLAGS: -L./fastdeploy-linux-x64-0.0.0/lib -lfastdeploy
-//// #cgo LDFLAGS: -L/home/wanziyu/Paddle/FastDeploy/build/compiled_fastdeploy_sdk/third_libs/install/onnxruntime/lib -lonnxruntime
-//// #cgo LDFLAGS: -L/home/wanziyu/Paddle/FastDeploy/build/compiled_fastdeploy_sdk/third_libs/install/openvino/runtime/lib -lopenvino
-//// #cgo LDFLAGS: -L/home/wanziyu/Paddle/FastDeploy/build/compiled_fastdeploy_sdk/third_libs/install/paddle2onnx/lib -lpaddle2onnx
-//// #cgo LDFLAGS: -L/home/wanziyu/Paddle/FastDeploy/build/compiled_fastdeploy_sdk/third_libs/install/paddle_inference/paddle/lib -lpaddle_inference
-//// #cgo LDFLAGS: -L/home/wanziyu/Paddle/FastDeploy/build/compiled_fastdeploy_sdk/third_libs/install/fast_tokenizer/lib -lcore_tokenizers
-//// #cgo LDFLAGS: -L/home/wanziyu/Paddle/FastDeploy/examples/vision/detection/paddledetection/c/build/fastdeploy-linux-x64-1.0.4/third_libs/install/opencv/lib64
 // #include <fastdeploy_capi/vision.h>
 // #include <stdio.h>
 // #include <stdbool.h>
