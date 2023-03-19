@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
       config_info["backend"] == "trt") {
     std::vector<std::vector<int32_t>> trt_shapes =
         benchmark::ResultManager::GetInputShapes(FLAGS_trt_shape);
-    option.trt_option.SetShape("x", trt_shapes[0], trt_shapes[1],
+    option.trt_option.SetShape("img", trt_shapes[0], trt_shapes[1],
                                trt_shapes[2]);
   }
   auto model_ppmatting = vision::matting::PPMatting(
