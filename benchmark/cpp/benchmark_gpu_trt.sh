@@ -26,7 +26,7 @@ fi
 ./benchmark_ppseg --model PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
 ./benchmark_ppseg --model SegFormer_B0-cityscapes-with-argmax --image cityscapes_demo.png --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
 ./benchmark_ppmatting --model PP-Matting-512 --image matting_input.jpg --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
-./benchmark_ppmatting --model PPHumanMatting --image matting_input.jpg --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
+./benchmark_ppmatting --model PPHumanMatting --image matting_input.jpg --config_path $CONFIG_PATH --trt_shape 1,3,2048,2048:1,3,2048,2048:1,3,2048,2048
 ./benchmark_ppmatting --model PPModnet_MobileNetV2 --image matting_input.jpg --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
 ./benchmark_ppseg --model Unet_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
 ./benchmark_ppseg --model PP_HumanSegV1_Server_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
@@ -69,4 +69,4 @@ fi
 ./benchmark_ppocr_cls --model ch_ppocr_mobile_v2.0_cls_infer --image rec_img.jpg --config_path $CONFIG_PATH --trt_shape 1,3,48,10:4,3,48,320:8,3,48,1024
 ./benchmark_ppocr_rec --model ch_PP-OCRv3_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH --trt_shape 1,3,48,10:4,3,48,320:8,3,48,2304
 ./benchmark_ppocr_det --model ch_PP-OCRv2_det_infer --image 12.jpg --config_path $CONFIG_PATH --trt_shape 1,3,64,64:1,3,640,640:1,3,960,960
-./benchmark_ppocr_rec --model ch_PP-OCRv2_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH --trt_shape 1,3,32,10:4,3,32,320:8,3,32,2304
+./benchmark_ppocr_rec --model ch_PP-OCRv2_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH --trt_shape 1,3,48,10:4,3,48,320:8,3,48,2304
