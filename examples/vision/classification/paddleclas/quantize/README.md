@@ -1,51 +1,43 @@
-English | [简体中文](README_CN.md)
-# PaddleClas Quantification Model Deployment
-FastDeploy supports the deployment of quantification models and provides a convenient tool for automatic model compression.
- Users can use it to deploy models after quantification or directly deploy quantized models provided by FastDeploy.
 
-## FastDeploy one-click auto-compression tool
-FastDeploy provides a one-click auto-compression tool that allows users to quantize models by simply entering a configuration file.
-Refer to [one-click auto-compression tool](../../../../../tools/common_tools/auto_compression/) for details. 
-Attention:The quantized classification model still requires the inference_cls.yaml file in the FP32 model folder. The model folder after personal quantification does not contain this yaml file. But users can copy this yaml file from the FP32 model folder to your quantized model folder.
+# PaddleClas 量化模型部署-FastDeploy
 
-## Download the quantized PaddleClas model
-Users can also directly download the quantized models in the table below.
+FastDeploy已支持部署量化模型,并提供一键模型自动化压缩的工具.
+用户可以使用一键模型自动化压缩工具,自行对模型量化后部署, 也可以直接下载FastDeploy提供的量化模型进行部署.
 
-Benchmark table description:
-- Runtime latency: model’s inference latency on multiple Runtimes, including CPU->GPU data copy, GPU inference, and GPU->CPU data copy time. It does not include the pre and post processing time of the model.
-- End2End latency: model’s latency in the actual inference scenario, including the pre and post processing time of the model.
-- Measured latency: The average latency after 1000 times of inference in milliseconds.
-- INT8 + FP16: Enable FP16 inference for Runtime while inferring the INT8 quantification model
-- INT8 + FP16 + PM: Use Pinned Memory to speed up the GPU->CPU data copy while inferring the INT8 quantization model with FP16 turned on.
-- Maximum speedup ratio: Obtained by dividing the FP32 latency by the highest INT8 inference latency.
-- The strategy is to use a few unlabeled data sets to train the model for quantification and to verify the accuracy on the full validation set. The INT8 accuracy does not represent the highest value.
-- The CPU is Intel(R) Xeon(R) Gold 6271C, and the number of CPU threads is fixed to 1. The GPU is Tesla T4 with TensorRT version 8.4.15.
+## 1. FastDeploy一键模型自动化压缩工具  
 
-### Runtime Benchmark
-| Model                 |Inference Backend            |Deployment Hardware    | FP32 Runtime Latency   | INT8 Runtime Latency | INT8 + FP16 Runtime Latency  | INT8+FP16+PM Runtime Latency  | Maximum Speedup Ratio    | FP32 Top1 | INT8 Top1 | Quantification Method   |
-| ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |----- |----- |
-| [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | TensorRT         |    GPU    |  3.55 | 0.99|0.98|1.06  |      3.62      | 79.12  | 79.06 | Offline |
-| [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | Paddle-TensorRT  |    GPU    |  3.46 |None |0.87|1.03  |      3.98      | 79.12  | 79.06 | Offline |
-| [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | ONNX Runtime    |    CPU    |  76.14       |  35.43  |None|None  |     2.15        | 79.12  | 78.87| Offline|
-| [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | Paddle Inference  |    CPU    |  76.21       |  24.01 |None|None  |     3.17       | 79.12  | 78.55 | Offline|
-| [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)        | TensorRT  |    GPU    |     0.91 |   0.43 |0.49 | 0.54    |      2.12       |77.89 | 76.86 | Offline |
-| [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)        | Paddle-TensorRT   |    GPU    |  0.88|   None| 0.49|0.51 |      1.80      |77.89 | 76.86 | Offline |
-| [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)        | ONNX Runtime |    CPU    |     30.53   |   9.59|None|None    |     3.18       |77.89 | 75.09 |Offline |
-| [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)        |  Paddle Inference  |    CPU    |     12.29  |   4.68  |     None|None|2.62       |77.89 | 71.36 |Offline |
+FastDeploy 提供了一键模型自动化压缩工具, 能够简单地通过输入一个配置文件, 对模型进行量化.
+详细教程请见: [一键模型自动化压缩工具](https://github.com/PaddlePaddle/FastDeploy/tree/develop/tools/common_tools/auto_compression)。**注意**: 推理量化后的分类模型仍然需要FP32模型文件夹下的inference_cls.yaml文件, 自行量化的模型文件夹内不包含此yaml文件, 用户从FP32模型文件夹下复制此yaml文件到量化后的模型文件夹内即可。
 
-### End2End Benchmark
-| Model                 |Inference Backend          |Deployment Hardware    | FP32 End2End Latency   | INT8 End2End Latency | INT8 + FP16 End2End Latency  | INT8+FP16+PM End2End Latency  | Maximum Speedup Ratio    | FP32 Top1 | INT8 Top1 | Quantification Method   |
-| ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |----- |----- |
-| [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | TensorRT         |    GPU    |  4.92| 2.28|2.24|2.23 |      2.21     | 79.12  | 79.06 | Offline |
-| [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | Paddle-TensorRT  |    GPU    |  4.48|None |2.09|2.10 |      2.14   | 79.12  | 79.06 | Offline |
-| [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | ONNX Runtime    |    CPU    |  77.43    |  41.90 |None|None  |     1.85        | 79.12  | 78.87| Offline|
-| [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | Paddle Inference  |    CPU    |   80.60     |  27.75 |None|None  |     2.90     | 79.12  | 78.55 | Offline|
-| [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)        | TensorRT  |    GPU    |     2.19 |   1.48|1.57| 1.57   |      1.48     |77.89 | 76.86 | Offline |
-| [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)        | Paddle-TensorRT   |    GPU    |  2.04|   None| 1.47|1.45 |      1.41     |77.89 | 76.86 | Offline |
-| [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)        | ONNX Runtime |    CPU    |     34.02  |   12.97|None|None    |    2.62       |77.89 | 75.09 |Offline |
-| [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)        |  Paddle Inference  |    CPU    |    16.31 |   7.42  |     None|None| 2.20      |77.89 | 71.36 |Offline |
+## 2. 下载量化完成的PaddleClas模型  
 
-## Detailed Deployment Tutorials
+用户也可以直接下载下表中的量化模型进行部署.(点击模型名字即可下载)
 
-- [Python Deployment](python)
-- [C++ Deployment](cpp)
+| 模型                 | 量化方式 |
+| [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | 离线量化 |
+| [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)  |  离线量化 |
+
+量化后模型的Benchmark比较，请参考[量化模型 Benchmark](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/quantize.md)
+
+## 3. 部署量化模型
+
+### 3.1 部署代码
+FastDeploy 部署量化模型与部署FP32模型完全一致, 用户只需要将输入的模型换为量化后的模型即可.
+如果硬件在量化模型部署过程有特殊处理，也会在文档中特别标明.
+因此本目录下，不提供代码文件, 量化模型部署参考对应的硬件部署即可, 具体请点击下一小节里的链接.
+
+### 3.2 支持部署量化模型的硬件  
+
+|硬件类型|该硬件是否支持|使用指南|Python|C++|
+|:---:|:---:|:---:|:---:|:---:|
+|X86 CPU|✅|[链接](cpu-gpu)|✅|✅|
+|NVIDIA GPU|✅|[链接](cpu-gpu)|✅|✅|
+|飞腾CPU|✅|[链接](cpu-gpu)|✅|✅|
+|ARM CPU|✅|[链接](cpu-gpu)|✅|✅|
+|Intel GPU(集成显卡)|✅|[链接](cpu-gpu)|✅|✅|  
+|Intel GPU(独立显卡)|✅|[链接](cpu-gpu)|✅|✅|  
+|昆仑|✅|[链接](kunlun)|✅|✅|
+|昇腾|✅|[链接](ascend)|✅|✅|
+|瑞芯微|✅|[链接](rockchip)|✅|✅|  
+|晶晨|✅|[链接](amlogic)|--|✅|  
+|算能|✅|[链接](sophgo)|✅|✅|  
