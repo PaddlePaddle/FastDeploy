@@ -19,6 +19,8 @@
 namespace fastdeploy {
 namespace vision {
 
+/*! @brief Processor for crop images with given paramters.
+ */
 class FASTDEPLOY_DECL Crop : public Processor {
  public:
   Crop(int offset_w, int offset_h, int width, int height) {
@@ -35,6 +37,16 @@ class FASTDEPLOY_DECL Crop : public Processor {
 #endif
   std::string Name() { return "Crop"; }
 
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data
+   * \param[in] offset_w The offset of width.
+   * \param[in] offset_h The offset of height.
+   * \param[in] width The width of the output image.
+   * \param[in] height The height of the output image.
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \return true if the process successed, otherwise false
+   */
   static bool Run(Mat* mat, int offset_w, int offset_h, int width, int height,
                   ProcLib lib = ProcLib::DEFAULT);
 

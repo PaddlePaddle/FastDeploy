@@ -15,8 +15,12 @@ cd FastDeploy/examples/vision/classification/paddleclas/sophgo/python
 # 下载图片
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
-# 推理
-python3 infer.py --model_file ./bmodel/resnet50_1684x_f32.bmodel  --config_file ResNet50_vd_infer/inference_cls.yaml  --image ILSVRC2012_val_00000010.jpeg
+# 手动设置推理使用的模型、配置文件和图片路径
+python3 infer.py --auto False --model_file ./bmodel/resnet50_1684x_f32.bmodel  --config_file ResNet50_vd_infer/inference_cls.yaml  --image ILSVRC2012_val_00000010.jpeg
+
+# 自动完成下载数据-模型编译-推理，不需要设置模型、配置文件和图片路径
+python3 infer.py --auto True --model '' --config_file '' --image ''
+
 
 # 运行完成后返回结果如下所示
 ClassifyResult(

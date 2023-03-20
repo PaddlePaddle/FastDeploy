@@ -22,6 +22,8 @@
 namespace fastdeploy {
 namespace vision {
 
+/*! @brief ProcessorManager for Preprocess
+ */
 class FASTDEPLOY_DECL ProcessorManager {
  public:
   ~ProcessorManager();
