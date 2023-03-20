@@ -69,4 +69,4 @@ fi
 ./benchmark_ppocr_cls --model ch_ppocr_mobile_v2.0_cls_infer --image rec_img.jpg --config_path $CONFIG_PATH --trt_shape 1,3,48,10:4,3,48,320:8,3,48,1024
 ./benchmark_ppocr_rec --model ch_PP-OCRv3_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH --trt_shape 1,3,48,10:4,3,48,320:8,3,48,2304
 ./benchmark_ppocr_det --model ch_PP-OCRv2_det_infer --image 12.jpg --config_path $CONFIG_PATH --trt_shape 1,3,64,64:1,3,640,640:1,3,960,960
-./benchmark_ppocr_rec --model ch_PP-OCRv2_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH --trt_shape 1,3,48,10:4,3,48,320:8,3,48,2304
+./benchmark_ppocr_rec --model ch_PP-OCRv2_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH --trt_shape 1,3,32,10:4,3,32,320:8,3,32,2304
