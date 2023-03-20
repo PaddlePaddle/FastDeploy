@@ -45,8 +45,10 @@ if(NOT MSVC)
   endif()
 endif(NOT MSVC)
 
+include(${PROJECT_SOURCE_DIR}/cmake/build_tools.cmake)
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND (NOT WITH_TIMVX))
-  include(${PROJECT_SOURCE_DIR}/cmake/patchelf.cmake)
+  download_patchelf()
+  set(PATCHELF_EXE ${THIRD_PARTY_PATH}/patchelf/bin/patchelf)
 endif()
 
 
@@ -423,9 +425,17 @@ if(ENABLE_ENCRYPTION)
 endif()
 
 if(ENABLE_PADDLE2ONNX)
+  set(BUILD_PADDLE2ONNX ON)
   add_definitions(-DENABLE_PADDLE2ONNX)
-  include(${PROJECT_SOURCE_DIR}/cmake/paddle2onnx.cmake)
-  list(APPEND DEPEND_LIBS external_paddle2onnx)
+  if(BUILD_PADDLE2ONNX)
+    download_protobuf()
+    include(${PROJECT_SOURCE_DIR}/cmake/build_paddle2onnx.cmake)
+    list(APPEND ALL_DEPLOY_SRCS ${PADDLE2ONNX_ALL_SRCS})
+    list(APPEND DEPEND_LIBS p2o_paddle_proto onnx)
+  else()
+    include(${PROJECT_SOURCE_DIR}/cmake/paddle2onnx.cmake)
+    list(APPEND DEPEND_LIBS external_paddle2onnx)
+  endif()
 endif(ENABLE_PADDLE2ONNX)
 
 if(WITH_CAPI)
@@ -549,10 +559,25 @@ if(NOT ANDROID)
     DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install
     DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs
   )
-  install(
-    DIRECTORY ${PROJECT_SOURCE_DIR}/examples
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
-  )
+  if(WIN32)
+    install(
+      DIRECTORY ${PROJECT_SOURCE_DIR}/examples/vision
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/examples
+    )
+    install(
+      DIRECTORY ${PROJECT_SOURCE_DIR}/examples/text
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/examples
+    )
+    install(
+      DIRECTORY ${PROJECT_SOURCE_DIR}/examples/runtime
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/examples
+    )
+  else()
+    install(
+      DIRECTORY ${PROJECT_SOURCE_DIR}/examples
+      DESTINATION ${CMAKE_INSTALL_PREFIX}
+    )
+  endif()
 else()
   set_android_third_libs_installation()
 endif()

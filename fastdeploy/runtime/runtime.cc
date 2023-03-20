@@ -157,7 +157,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     CreatePorosBackend();
   } else {
     std::string msg = Str(GetAvailableBackends());
-    FDERROR << "The compiled FastDeploy only supports " << msg << ", " << option.backend << " is not supported now." << std::endl;
+    FDERROR << "The compiled FastDeploy only supports " << msg << ", "
+            << option.backend << " is not supported now." << std::endl;
     return false;
   }
   backend_->benchmark_option_ = option.benchmark_option;
@@ -220,7 +221,6 @@ void Runtime::BindOutputTensor(const std::string& name, FDTensor& output) {
   bool is_exist = false;
   for (auto& t : output_tensors_) {
     if (t.name == name) {
-      FDINFO << "The output name [" << name << "] is exist." << std::endl;
       is_exist = true;
       t.SetExternalData(output.shape, output.dtype, output.MutableData(),
                         output.device, output.device_id);
@@ -228,7 +228,6 @@ void Runtime::BindOutputTensor(const std::string& name, FDTensor& output) {
     }
   }
   if (!is_exist) {
-    FDINFO << "The output name [" << name << "] is prebinded added into output tensor list." << std::endl;
     FDTensor new_tensor(name);
     new_tensor.SetExternalData(output.shape, output.dtype, output.MutableData(),
                                output.device, output.device_id);
@@ -257,7 +256,8 @@ void Runtime::ReleaseModelMemoryBuffer() {
 void Runtime::CreatePaddleBackend() {
 #ifdef ENABLE_PADDLE_BACKEND
   backend_ = utils::make_unique<PaddleBackend>();
-  FDASSERT(backend_->Init(option), "Failed to initialized Paddle Inference backend.");
+  FDASSERT(backend_->Init(option),
+           "Failed to initialized Paddle Inference backend.");
 #else
   FDASSERT(false,
            "PaddleBackend is not available, please compiled with "

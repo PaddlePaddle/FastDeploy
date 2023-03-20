@@ -127,6 +127,11 @@ struct FASTDEPLOY_DECL OCRDetDiff: public BaseDiff {
   EvalStatis boxes;
 };
 
+struct FASTDEPLOY_DECL MattingDiff: public BaseDiff {
+  EvalStatis alpha;
+  EvalStatis foreground;
+};
+
 #endif  // ENABLE_VISION
 #endif  // ENABLE_BENCHMARK
 
@@ -166,6 +171,10 @@ struct FASTDEPLOY_DECL ResultManager {
                                const std::string& path);
   static bool LoadOCRDetResult(std::vector<std::array<int, 8>>* res,
                                const std::string& path);
+  static bool SaveMattingResult(const vision::MattingResult& res,
+                                const std::string& path);
+  static bool LoadMattingResult(vision::MattingResult* res,
+                                const std::string& path);
   /// Calculate diff value between two basic results.
   static DetectionDiff CalculateDiffStatis(const vision::DetectionResult& lhs,
                                            const vision::DetectionResult& rhs,
@@ -178,6 +187,9 @@ struct FASTDEPLOY_DECL ResultManager {
   static OCRDetDiff CalculateDiffStatis(
       const std::vector<std::array<int, 8>>& lhs,
       const std::vector<std::array<int, 8>>& rhs);
+  static MattingDiff CalculateDiffStatis(
+      const vision::MattingResult& lhs,
+      const vision::MattingResult& rhs);
 #endif  // ENABLE_VISION
 #endif  // ENABLE_BENCHMARK
 };

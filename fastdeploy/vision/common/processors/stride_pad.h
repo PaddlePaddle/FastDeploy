@@ -24,6 +24,8 @@
 namespace fastdeploy {
 namespace vision {
 
+/*! @brief Processor for padding images with stride.
+ */
 class FASTDEPLOY_DECL StridePad : public Processor {
  public:
   // only support pad with left-top padding mode
@@ -40,6 +42,14 @@ class FASTDEPLOY_DECL StridePad : public Processor {
 #endif
   std::string Name() { return "StridePad"; }
 
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data, `result = mat * alpha + beta`
+   * \param[in] stride stride of the padding.
+   * \param[in] value value vector used by padding of the output image.
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \return true if the process successed, otherwise false
+   */
   static bool Run(Mat* mat, int stride,
                   const std::vector<float>& value = std::vector<float>(),
                   ProcLib lib = ProcLib::DEFAULT);

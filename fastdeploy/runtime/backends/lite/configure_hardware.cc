@@ -66,6 +66,7 @@ void LiteBackend::ConfigureKunlunXin(const LiteBackendOption& option) {
       option.kunlunxin_l3_workspace_size);
   config_.set_xpu_l3_cache_method(option.kunlunxin_l3_workspace_size,
                                   option.kunlunxin_locked);
+  config_.set_xpu_l3_cache_autotune(option.kunlunxin_autotune);
   config_.set_xpu_conv_autotune(option.kunlunxin_autotune,
                                 option.kunlunxin_autotune_file);
   config_.set_xpu_multi_encoder_method(option.kunlunxin_precision,

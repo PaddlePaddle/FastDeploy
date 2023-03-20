@@ -15,8 +15,11 @@ cd FastDeploy/examples/vision/classification/paddleclas/sophgo/python
 # Download images.
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
-# Inference.
-python3 infer.py --model_file ./bmodel/resnet50_1684x_f32.bmodel  --config_file ResNet50_vd_infer/inference_cls.yaml  --image ILSVRC2012_val_00000010.jpeg
+# Inference. Need to manually set the model, configuration file and image path used for inference.
+python3 infer.py --auto False --model_file ./bmodel/resnet50_1684x_f32.bmodel  --config_file ResNet50_vd_infer/inference_cls.yaml  --image ILSVRC2012_val_00000010.jpeg
+
+# Automatic completion of downloading data - model compilation - inference, no need to set up model, configuration file and image paths.
+python3 infer.py --auto True --model '' --config_file '' --image ''
 
 # The returned result.
 ClassifyResult(

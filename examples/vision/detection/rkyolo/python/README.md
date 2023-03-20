@@ -19,10 +19,16 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 cp -r ./model /path/to/FastDeploy/examples/vision/detection/rkyolo/python
 
 # Inference
-python3 infer.py --model_file ./model/  \
-                  --image 000000014439.jpg
+python3 infer.py --model_file /path/to/model  --image /path/to/000000014439.jpg
 ```
 
+## common problem
+
+If you use the YOLOv5 model you have trained, you may encounter the problem of 'segmentation fault' after running the demo of FastDeploy. It is likely that the number of labels is inconsistent. You can use the following solution:
+
+```python
+model.postprocessor.class_num = 3
+```
 
 ## Note
 The model needs to be in NHWC format on RKNPU. The normalized image will be embedded in the RKNN model. Therefore, when we deploy with FastDeploy, call DisablePermute(C++) or `disable_permute(Python)` to disable normalization and data format conversion during preprocessing.

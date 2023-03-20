@@ -24,6 +24,8 @@
 namespace fastdeploy {
 namespace vision {
 
+/*! @brief Processor for padding images to given size.
+ */
 class FASTDEPLOY_DECL PadToSize : public Processor {
  public:
   // only support pad with right-bottom padding mode
@@ -41,10 +43,24 @@ class FASTDEPLOY_DECL PadToSize : public Processor {
 #endif
   std::string Name() { return "PadToSize"; }
 
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data, `result = mat * alpha + beta`
+   * \param[in] width width of the output image.
+   * \param[in] height height of the output image.
+   * \param[in] value value vector used by padding of the output image.
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \return true if the process successed, otherwise false
+   */
   static bool Run(Mat* mat, int width, int height,
                   const std::vector<float>& value,
                   ProcLib lib = ProcLib::DEFAULT);
 
+  /** \brief Process the input images
+   *
+   * \param[in] width set the value of the width parameter
+   * \param[in] height set the value of the height parameter
+   */
   void SetWidthHeight(int width, int height) {
     width_ = width;
     height_ = height;

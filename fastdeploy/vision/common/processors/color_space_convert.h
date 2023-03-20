@@ -19,6 +19,8 @@
 namespace fastdeploy {
 namespace vision {
 
+/*! @brief Processor for tansform images from BGR to RGB.
+ */
 class FASTDEPLOY_DECL BGR2RGB : public Processor {
  public:
   bool ImplByOpenCV(FDMat* mat);
@@ -27,9 +29,17 @@ class FASTDEPLOY_DECL BGR2RGB : public Processor {
 #endif
   virtual std::string Name() { return "BGR2RGB"; }
 
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \return true if the process successed, otherwise false
+   */
   static bool Run(FDMat* mat, ProcLib lib = ProcLib::DEFAULT);
 };
 
+/*! @brief Processor for tansform images from RGB to BGR.
+ */
 class FASTDEPLOY_DECL RGB2BGR : public Processor {
  public:
   bool ImplByOpenCV(FDMat* mat);
@@ -38,9 +48,17 @@ class FASTDEPLOY_DECL RGB2BGR : public Processor {
 #endif
   std::string Name() { return "RGB2BGR"; }
 
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \return true if the process successed, otherwise false
+   */
   static bool Run(FDMat* mat, ProcLib lib = ProcLib::DEFAULT);
 };
 
+/*! @brief Processor for tansform images from BGR to GRAY.
+ */
 class FASTDEPLOY_DECL BGR2GRAY : public Processor {
  public:
   bool ImplByOpenCV(FDMat* mat);
@@ -49,9 +67,17 @@ class FASTDEPLOY_DECL BGR2GRAY : public Processor {
 #endif
   virtual std::string Name() { return "BGR2GRAY"; }
 
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \return true if the process successed, otherwise false
+   */
   static bool Run(FDMat* mat, ProcLib lib = ProcLib::DEFAULT);
 };
 
+/*! @brief Processor for tansform images from RGB to GRAY.
+ */
 class FASTDEPLOY_DECL RGB2GRAY : public Processor {
  public:
   bool ImplByOpenCV(FDMat* mat);
@@ -60,6 +86,12 @@ class FASTDEPLOY_DECL RGB2GRAY : public Processor {
 #endif
   std::string Name() { return "RGB2GRAY"; }
 
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \return true if the process successed, otherwise false
+   */
   static bool Run(FDMat* mat, ProcLib lib = ProcLib::DEFAULT);
 };
 

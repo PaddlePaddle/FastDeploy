@@ -18,6 +18,8 @@
 
 namespace fastdeploy {
 namespace vision {
+/*! @brief Processor for convert images with given paramters.
+ */
 class FASTDEPLOY_DECL Convert : public Processor {
  public:
   Convert(const std::vector<float>& alpha, const std::vector<float>& beta);
@@ -30,6 +32,14 @@ class FASTDEPLOY_DECL Convert : public Processor {
 
   // Compute `result = mat * alpha + beta` directly by channel.
   // The default behavior is the same as OpenCV's convertTo method.
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data，`result = mat * alpha + beta`
+   * \param[in] alpha The alpha channel data
+   * \param[in] beta The beta channel data
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \return true if the process successed, otherwise false
+   */
   static bool Run(Mat* mat, const std::vector<float>& alpha,
                   const std::vector<float>& beta,
                   ProcLib lib = ProcLib::DEFAULT);

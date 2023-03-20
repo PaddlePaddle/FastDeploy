@@ -18,6 +18,8 @@
 
 namespace fastdeploy {
 namespace vision {
+/*! @brief Processor for Normalize images with given paramters.
+ */
 class FASTDEPLOY_DECL Normalize : public Processor {
  public:
   Normalize(const std::vector<float>& mean, const std::vector<float>& std,
@@ -49,6 +51,17 @@ class FASTDEPLOY_DECL Normalize : public Processor {
   // There will be some precomputation in contruct function
   // and the `norm(mat)` only need to compute result = mat * alpha + beta
   // which will reduce lots of time
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data, `result = mat * alpha + beta`
+   * \param[in] mean target mean vector of output images
+   * \param[in] std target std vector of output images
+   * \param[in] max max value vector to be in target image
+   * \param[in] min min value vector to be in target image
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \param[in] swap_rb to define whether to swap r and b channel order
+   * \return true if the process successed, otherwise false
+   */
   static bool Run(Mat* mat, const std::vector<float>& mean,
                   const std::vector<float>& std, bool is_scale = true,
                   const std::vector<float>& min = std::vector<float>(),
@@ -62,6 +75,10 @@ class FASTDEPLOY_DECL Normalize : public Processor {
     return swap_rb_;
   }
 
+  /** \brief Process the input images
+   *
+   * \param[in] swap_rb set the value of the swap_rb parameter
+   */
   void SetSwapRB(bool swap_rb) {
     swap_rb_ = swap_rb;
   }
