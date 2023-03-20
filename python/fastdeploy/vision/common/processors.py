@@ -141,6 +141,6 @@ class StridePad(Processor):
         """Create a StridePad processor with given parameters.
 
         :param stride: Stride of the processor
-        :param value:  Values to pad with
+        :param value: Values to pad with
         """
         self.processor = C.vision.processors.StridePad(stride, value)
