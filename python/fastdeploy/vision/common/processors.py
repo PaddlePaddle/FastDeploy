@@ -61,11 +61,11 @@ class NormalizeAndPermute(Processor):
                  swap_rb=False):
         """Creae a Normalize and a Permute operation with the given parameters.
 
-        :param mean     A list containing the mean of each channel
-        :param std      A list containing the standard deviation of each channel
-        :param is_scale Specifies if the image are being scaled or not
-        :param min      A list containing the minimum value of each channel
-        :param max      A list containing the maximum value of each channel
+        :param mean:     A list containing the mean of each channel
+        :param std:      A list containing the standard deviation of each channel
+        :param is_scale: Specifies if the image are being scaled or not
+        :param min:      A list containing the minimum value of each channel
+        :param max:      A list containing the maximum value of each channel
         """
         self.processor = C.vision.processors.NormalizeAndPermute(
             mean, std, is_scale, min, max, swap_rb)
@@ -75,7 +75,7 @@ class Cast(Processor):
     def __init__(self, dtype="float"):
         """Creat a new cast opereaton with given dtype
 
-        :param dtype dtype of the output
+        :param dtype: dtype of the output
         """
         self.processor = C.vision.processors.Cast(dtype)
 
@@ -99,11 +99,11 @@ class Normalize(Processor):
                  swap_rb=False):
         """Creat a new normalize opereator with given paremeters.
 
-        :param mean     A list containing the mean of each channel
-        :param std      A list containing the standard deviation of each channel
-        :param is_scale Specifies if the image are being scaled or not
-        :param min      A list containing the minimum value of each channel
-        :param max      A list containing the maximum value of each channel
+        :param mean:     A list containing the mean of each channel
+        :param std:      A list containing the standard deviation of each channel
+        :param is_scale: Specifies if the image are being scaled or not
+        :param min:      A list containing the minimum value of each channel
+        :param max:      A list containing the maximum value of each channel
         """
         self.processor = C.vision.processors.Normalize(mean, std, is_scale,
                                                        min, max, swap_rb)
@@ -113,9 +113,9 @@ class PadToSize(Processor):
     def __init__(self, width, height, value=[]):
         """Create a new PadToSize opereator with given parameters.
 
-        :param width     Desired width of the output image
-        :param height    Desired height of the output image
-        :param value     values to pad with
+        :param width:     Desired width of the output image
+        :param height:    Desired height of the output image
+        :param value:     values to pad with
         """
         self.processor = C.vision.processors.PadToSize(width, height, value)
 
@@ -130,10 +130,10 @@ class Resize(Processor):
                  use_scale=False):
         """Create a Resize operation with the given parameters.
 
-        :param width   Desired width of the output image
-        :param height  Desired height of the output image
-        :param scale_w Scales the width in x-direction
-        :param scale_h Scales the height in y-direction
+        :param width:   Desired width of the output image
+        :param height:  Desired height of the output image
+        :param scale_w: Scales the width in x-direction
+        :param scale_h: Scales the height in y-direction
         :param interp: optionally, the interpolation mode for resizing image
         :param use_scale: optionally, whether to scale image
         """
@@ -145,7 +145,7 @@ class StridePad(Processor):
     def __init__(self, stride, value=[]):
         """Create a StridePad processor with given parameters.
 
-        :param stride Stride of the processor
-        :param value  values to pad with
+        :param stride: Stride of the processor
+        :param value:  values to pad with
         """
         self.processor = C.vision.processors.StridePad(stride, value)
