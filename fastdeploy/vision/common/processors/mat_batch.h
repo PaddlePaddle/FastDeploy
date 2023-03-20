@@ -23,6 +23,8 @@ namespace vision {
 
 enum FDMatBatchLayout { NHWC, NCHW };
 
+/*! @brief FDMatBatch contains batch data for preprocess
+ */
 struct FASTDEPLOY_DECL FDMatBatch {
   FDMatBatch() = default;
 
