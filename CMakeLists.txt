@@ -554,6 +554,15 @@ install(
   PATTERN "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/*/*.h"
 )
 
+if(NOT ANDROID)
+  install(
+    DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs
+  )
+else()
+  set_android_third_libs_installation()
+endif()
+
 install(
   FILES
   ${PROJECT_SOURCE_DIR}/LICENSE
