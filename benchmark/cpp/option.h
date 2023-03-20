@@ -16,12 +16,6 @@
 
 #include "fastdeploy/vision.h"
 
-#ifdef WIN32
-static const char sep = '\\';
-#else
-static const char sep = '/';
-#endif
-
 static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
                         int argc, char* argv[], bool remove_flags) {
   google::ParseCommandLineFlags(&argc, &argv, remove_flags);
@@ -49,7 +43,8 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
       option->UsePaddleInferBackend();
     } else if (config_info["backend"] == "trt" ||
                config_info["backend"] == "paddle_trt") {
-      option->trt_option.serialize_file = FLAGS_model + sep + "model_cache.trt";
+      option->trt_option.serialize_file = FLAGS_model +
+                                          sep + "trt_serialized.trt";
       option->UseTrtBackend();
       if (config_info["backend"] == "paddle_trt") {
         option->UsePaddleInferBackend();
