@@ -18,12 +18,12 @@ fi
 ./benchmark_picodet --model picodet_l_640_coco_lcnet_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
 
 # PaddleSeg
-./benchmark_ppseg --model Portrait_PP_HumanSegV2_Lite_256x144_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH
-./benchmark_ppseg --model PP_HumanSegV2_Lite_192x192_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH
+./benchmark_ppseg --model Portrait_PP_HumanSegV2_Lite_256x144_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --xpu_l3_cache 0
+./benchmark_ppseg --model PP_HumanSegV2_Lite_192x192_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH  --xpu_l3_cache 0
 ./benchmark_ppseg --model PP_HumanSegV1_Lite_infer --image portrait_heng.jpg --config_path $CONFIG_PATH
-./benchmark_ppseg --model Deeplabv3_ResNet101_OS8_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH
-./benchmark_ppseg --model PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH
-./benchmark_ppseg --model SegFormer_B0-cityscapes-with-argmax --image cityscapes_demo.png --config_path $CONFIG_PATH
+./benchmark_ppseg --model Deeplabv3_ResNet101_OS8_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH --xpu_l3_cache 0
+./benchmark_ppseg --model PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH --xpu_l3_cache 0
+./benchmark_ppseg --model SegFormer_B0-cityscapes-with-argmax --image cityscapes_demo.png --config_path $CONFIG_PATH --xpu_l3_cache 0
 ./benchmark_ppmatting --model PP-Matting-512 --image matting_input.jpg --config_path $CONFIG_PATH
 ./benchmark_ppmatting --model PPHumanMatting --image matting_input.jpg --config_path $CONFIG_PATH
 ./benchmark_ppmatting --model PPModnet_MobileNetV2 --image matting_input.jpg --config_path $CONFIG_PATH
