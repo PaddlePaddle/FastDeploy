@@ -1,4 +1,4 @@
-# Vision Processor(图像预处理库)
+# Vision Processor(多硬件图像处理库)
 
 ## fastdeploy.vision.common.manager.PyProcessorManager
 
@@ -40,22 +40,6 @@
     :inherited-members:
 ```
 
-## fastdeploy.vision.common.processors.Pad
-
-```{eval-rst}
-.. autoclass:: fastdeploy.vision.common.processors.Pad
-    :members:
-    :inherited-members:
-```
-
-## fastdeploy.vision.common.processors.NormalizeAndPermute
-
-```{eval-rst}
-.. autoclass:: fastdeploy.vision.common.processors.NormalizeAndPermute
-    :members:
-    :inherited-members:
-```
-
 ## fastdeploy.vision.common.processors.Cast
 
 ```{eval-rst}
@@ -80,6 +64,22 @@
     :inherited-members:
 ```
 
+## fastdeploy.vision.common.processors.NormalizeAndPermute
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.common.processors.NormalizeAndPermute
+    :members:
+    :inherited-members:
+```
+
+## fastdeploy.vision.common.processors.Pad
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.common.processors.Pad
+    :members:
+    :inherited-members:
+```
+
 ## fastdeploy.vision.common.processors.PadToSize
 
 ```{eval-rst}
@@ -95,4 +95,3 @@
     :members:
     :inherited-members:
 ```
-
