@@ -183,13 +183,13 @@ class cmake_build(setuptools.Command):
             # configure
             cmake_args = [
                 CMAKE,
-                '-DPYTHON_INCLUDE_DIR={}'.format(sysconfig.get_python_inc()),
-                '-DPYTHON_EXECUTABLE={}'.format(sys.executable),
-                '-DBUILD_FASTDEPLOY_PYTHON=ON',
-                '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
-                '-DONNX_NAMESPACE={}'.format(ONNX_NAMESPACE),
-                '-DPY_EXT_SUFFIX={}'.format(
-                    sysconfig.get_config_var('EXT_SUFFIX') or ''),
+                # '-DPYTHON_INCLUDE_DIR={}'.format(sysconfig.get_python_inc()),
+                # '-DPYTHON_EXECUTABLE={}'.format(sys.executable),
+                # '-DBUILD_FASTDEPLOY_PYTHON=ON',
+                # '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
+                # '-DONNX_NAMESPACE={}'.format(ONNX_NAMESPACE),
+                # '-DPY_EXT_SUFFIX={}'.format(
+                #     sysconfig.get_config_var('EXT_SUFFIX') or ''),
                 '-DFASTDEPLOY_INSTALL_DIR={}'.format(FASTDEPLOY_INSTALL_DIR),
             ]
             cmake_args.append('-DCMAKE_BUILD_TYPE=%s' % build_type)
@@ -308,10 +308,10 @@ ext_modules = [
 ################################################################################
 
 # no need to do fancy stuff so far
-if PACKAGE_NAME != "fastdeploy_streamer":
-    packages = setuptools.find_packages(exclude=['fastdeploy*', 'scripts'])
-else:
-    packages = setuptools.find_packages(exclude=['scripts'])
+# if PACKAGE_NAME != "fastdeploy_streamer":
+#     packages = setuptools.find_packages(exclude=['fastdeploy*', 'scripts'])
+# else:
+packages = setuptools.find_packages(exclude=['scripts'])
 
 ################################################################################
 # Test
@@ -325,18 +325,9 @@ if sys.version_info[0] == 3:
 # Final
 ################################################################################
 
-package_data = {PACKAGE_NAME: ["LICENSE", "ThirdPartyNotices.txt"]}
+package_data = {PACKAGE_NAME: []}
 
 if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
-    shutil.copy(
-        os.path.join(TOP_DIR, "ThirdPartyNotices.txt"),
-        os.path.join(TOP_DIR, PACKAGE_NAME))
-    shutil.copy(
-        os.path.join(TOP_DIR, "LICENSE"), os.path.join(TOP_DIR, PACKAGE_NAME))
-    from scripts.process_libraries import process_libraries
-    all_lib_data = process_libraries(
-        os.path.split(os.path.abspath(__file__))[0])
-    package_data[PACKAGE_NAME].extend(all_lib_data)
     setuptools.setup(
         name=wheel_name,
         version=VersionInfo.version,
@@ -350,7 +341,6 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
         author='fastdeploy',
         author_email='fastdeploy@baidu.com',
         url='https://github.com/PaddlePaddle/FastDeploy.git',
-        install_requires=REQUIRED_PACKAGES,
         classifiers=[
             "Programming Language :: Python :: 3",
             "License :: OSI Approved :: Apache Software License",
@@ -372,7 +362,6 @@ else:
         author='fastdeploy',
         author_email='fastdeploy@baidu.com',
         url='https://github.com/PaddlePaddle/FastDeploy.git',
-        install_requires=REQUIRED_PACKAGES,
         classifiers=[
             "Programming Language :: Python :: 3",
             "License :: OSI Approved :: Apache Software License",
