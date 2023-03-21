@@ -178,13 +178,13 @@ class cmake_build(setuptools.Command):
             # configure
             cmake_args = [
                 CMAKE,
-                # '-DPYTHON_INCLUDE_DIR={}'.format(sysconfig.get_python_inc()),
-                # '-DPYTHON_EXECUTABLE={}'.format(sys.executable),
-                # '-DBUILD_FASTDEPLOY_PYTHON=ON',
-                # '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
-                # '-DONNX_NAMESPACE={}'.format(ONNX_NAMESPACE),
-                # '-DPY_EXT_SUFFIX={}'.format(
-                #     sysconfig.get_config_var('EXT_SUFFIX') or ''),
+                '-DPYTHON_INCLUDE_DIR={}'.format(sysconfig.get_python_inc()),
+                '-DPYTHON_EXECUTABLE={}'.format(sys.executable),
+                '-DBUILD_FASTDEPLOY_PYTHON=ON',
+                '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
+                '-DONNX_NAMESPACE={}'.format(ONNX_NAMESPACE),
+                '-DPY_EXT_SUFFIX={}'.format(
+                    sysconfig.get_config_var('EXT_SUFFIX') or ''),
                 '-DFASTDEPLOY_INSTALL_DIR={}'.format(FASTDEPLOY_INSTALL_DIR),
             ]
             cmake_args.append('-DCMAKE_BUILD_TYPE=%s' % build_type)
@@ -252,7 +252,6 @@ class build_ext(setuptools.command.build_ext.build_ext):
             dst = os.path.join(
                 os.path.realpath(self.build_lib), PACKAGE_NAME, filename)
             self.copy_file(src, dst)
-
 
 class mypy_type_check(ONNXCommand):
     description = 'Run MyPy type checker'
