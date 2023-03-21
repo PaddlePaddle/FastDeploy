@@ -190,25 +190,13 @@ class cmake_build(setuptools.Command):
             cmake_args.append('-DCMAKE_BUILD_TYPE=%s' % build_type)
             for k, v in setup_configs.items():
                 cmake_args.append("-D{}={}".format(k, v))
-            if WINDOWS:
-                cmake_args.extend([
-                    # we need to link with libpython on windows, so
-                    # passing python version to window in order to
-                    # find python in cmake
-                    '-DPY_VERSION={}'.format('{0}.{1}'.format(* \
-                                                              sys.version_info[:2])),
-                ])
-                if platform.architecture()[0] == '64bit':
-                    cmake_args.extend(['-A', 'x64', '-T', 'host=x64'])
-                else:
-                    cmake_args.extend(['-A', 'Win32', '-T', 'host=x86'])
             if 'CMAKE_ARGS' in os.environ:
                 extra_cmake_args = shlex.split(os.environ['CMAKE_ARGS'])
                 # prevent crossfire with downstream scripts
                 del os.environ['CMAKE_ARGS']
                 log.info('Extra cmake args: {}'.format(extra_cmake_args))
                 cmake_args.extend(extra_cmake_args)
-            cmake_args.append(TOP_DIR)
+            # cmake_args.append(TOP_DIR)
             subprocess.check_call(cmake_args)
 
             build_args = [CMAKE, '--build', os.curdir]
