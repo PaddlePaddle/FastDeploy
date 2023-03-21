@@ -7,6 +7,26 @@ if [ ! "$1" = "$CONFIG_PATH" ]; then
   fi
 fi
 
+# PaddleDetection with TRT NMS (Only for Paddle-TRT)
+# ./benchmark_ppyolov5 --model yolov5_s_300e_coco_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH 
+./benchmark_ppyolov6 --model yolov6_s_300e_coco_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH 
+# ./benchmark_ppyolov7 --model yolov7_l_300e_coco_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH 
+./benchmark_ppyolov8 --model yolov8_s_500e_coco_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH 
+# ./benchmark_ppyolox --model yolox_s_300e_coco_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH 
+./benchmark_ppyoloe --model ppyoloe_crn_l_300e_coco_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH 
+./benchmark_ppyoloe --model ppyoloe_plus_crn_m_80e_coco_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_picodet --model picodet_l_640_coco_lcnet_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH 
+
+# PaddleDetection (For TensorRT)
+# ./benchmark_ppyolov5 --model yolov5_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH 
+./benchmark_ppyolov6 --model yolov6_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+# ./benchmark_ppyolov7 --model yolov7_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH 
+./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+# ./benchmark_ppyolox --model yolox_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyoloe --model ppyoloe_crn_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyoloe --model ppyoloe_plus_crn_m_80e_coco --image 000000014439.jpg --config_path $CONFIG_PATH 
+./benchmark_picodet --model picodet_l_640_coco_lcnet --image 000000014439.jpg --config_path $CONFIG_PATH
+
 # PaddleDetection
 # ./benchmark_ppyolov5 --model yolov5_s_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
 # ./benchmark_ppyolov6 --model yolov6_s_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
@@ -29,17 +49,17 @@ fi
 # ./benchmark_ppmatting --model PPModnet_MobileNetV2 --image matting_input.jpg --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
 
 # PaddleClas
-./benchmark_ppcls --model PPLCNet_x1_0_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
-./benchmark_ppcls --model PPLCNetV2_base_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
-./benchmark_ppcls --model MobileNetV1_x0_25_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
-./benchmark_ppcls --model MobileNetV2_x0_25_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
-./benchmark_ppcls --model MobileNetV1_ssld_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
-./benchmark_ppcls --model MobileNetV2_ssld_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
-./benchmark_ppcls --model MobileNetV3_large_x1_0_ssld_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
-./benchmark_ppcls --model ShuffleNetV2_x2_0_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
-./benchmark_ppcls --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
-./benchmark_ppcls --model EfficientNetB0_small_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
-./benchmark_ppcls --model PPHGNet_tiny_ssld_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+# ./benchmark_ppcls --model PPLCNet_x1_0_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+# ./benchmark_ppcls --model PPLCNetV2_base_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+# ./benchmark_ppcls --model MobileNetV1_x0_25_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+# ./benchmark_ppcls --model MobileNetV2_x0_25_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+# ./benchmark_ppcls --model MobileNetV1_ssld_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+# ./benchmark_ppcls --model MobileNetV2_ssld_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+# ./benchmark_ppcls --model MobileNetV3_large_x1_0_ssld_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+# ./benchmark_ppcls --model ShuffleNetV2_x2_0_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+# ./benchmark_ppcls --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+# ./benchmark_ppcls --model EfficientNetB0_small_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
+# ./benchmark_ppcls --model PPHGNet_tiny_ssld_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH
 
 # PaddleOCR
 # ./benchmark_ppocr_det --model ch_PP-OCRv3_det_infer --image 12.jpg --config_path $CONFIG_PATH --trt_shape 1,3,64,64:1,3,640,640:1,3,960,960
