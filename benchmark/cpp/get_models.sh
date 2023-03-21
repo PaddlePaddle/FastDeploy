@@ -152,6 +152,11 @@ download_fd_model_zxvf SegFormer_B0-cityscapes-with-argmax.tgz
 download_fd_model_xvf PP-Matting-512.tgz
 download_fd_model_xvf PPHumanMatting.tgz
 download_fd_model_xvf PPModnet_MobileNetV2.tgz
+download_fd_model_xvf Unet_cityscapes_with_argmax_infer.tgz
+download_fd_model_xvf PP_HumanSegV1_Server_with_argmax_infer.tgz
+download_fd_model_xvf FCN_HRNet_W18_cityscapes_with_argmax_infer.tgz
+download_fd_model_xvf PP_HumanSegV2_Mobile_192x192_with_argmax_infer.tgz
+
 
 # PaddleOCR
 download_common_model_xvf https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_det_infer.tar ch_PP-OCRv3_det_infer.tar
