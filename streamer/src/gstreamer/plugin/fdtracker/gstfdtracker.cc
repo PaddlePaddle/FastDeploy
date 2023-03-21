@@ -496,151 +496,86 @@ gst_fdtracker_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
   NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta (buf);
 
   std::cout << "This is a new frame!" << std::endl;
-  for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
-    l_frame = l_frame->next) {
+  for(l_frame = batch_meta->frame_meta_list; l_frame != NULL;
+      l_frame = l_frame->next) {
       std::vector<float> rects;
       std::map<int, std::vector<float>> bbox_per_class;
       NvDsFrameMeta *frame_meta = (NvDsFrameMeta *) (l_frame->data);
 
-      //OcSortTracker *octracker = fdtracker->octracker;
-      cv::Mat dets;
-
-      for (l_obj = frame_meta->obj_meta_list; l_obj != NULL;
+    for(l_obj = frame_meta->obj_meta_list; l_obj != NULL;
         l_obj = l_obj->next) {
-          obj_meta = (NvDsObjectMeta *) (l_obj->data);
-	  if(obj_meta->class_id != 0)
-	    continue;
-	  if (obj_meta->confidence < 0.1) {
-            continue;
-	  }
-	  if(bbox_per_class.find(obj_meta->class_id) == bbox_per_class.end()) {
-	    std::vector<float> vec;
-	    bbox_per_class[obj_meta->class_id] = vec;
-	  }
-	  detector_bbox = obj_meta->detector_bbox_info.org_bbox_coords;
-	  bbox_per_class[obj_meta->class_id].emplace_back(obj_meta->class_id);
-          bbox_per_class[obj_meta->class_id].emplace_back(obj_meta->confidence);
-          bbox_per_class[obj_meta->class_id].emplace_back(detector_bbox.left);
-          bbox_per_class[obj_meta->class_id].emplace_back(detector_bbox.top);
-          bbox_per_class[obj_meta->class_id].emplace_back(detector_bbox.left+detector_bbox.width);
-          bbox_per_class[obj_meta->class_id].emplace_back(detector_bbox.top+detector_bbox.height);
-
-	  cv::Mat rect(1, 6, CV_32FC1);
-	  *rect.ptr<float>(0,0) = float(obj_meta->class_id);
-          *rect.ptr<float>(0,1) = obj_meta->confidence;
-          *rect.ptr<float>(0,2) = detector_bbox.left;
-          *rect.ptr<float>(0,3) = detector_bbox.top;
-          *rect.ptr<float>(0,4) = detector_bbox.left+detector_bbox.width;
-          *rect.ptr<float>(0,5) = detector_bbox.top+detector_bbox.height;
-	  dets.push_back(rect);
-      }	
+      obj_meta = (NvDsObjectMeta *) (l_obj->data);
+      if(bbox_per_class.find(obj_meta->class_id) == bbox_per_class.end()) {
+        std::vector<float> vec;
+        bbox_per_class[obj_meta->class_id] = vec;
+      }
+      detector_bbox = obj_meta->detector_bbox_info.org_bbox_coords;
+      bbox_per_class[obj_meta->class_id].emplace_back(obj_meta->class_id);
+      bbox_per_class[obj_meta->class_id].emplace_back(obj_meta->confidence);
+      bbox_per_class[obj_meta->class_id].emplace_back(detector_bbox.left);
+      bbox_per_class[obj_meta->class_id].emplace_back(detector_bbox.top);
+      bbox_per_class[obj_meta->class_id].emplace_back(detector_bbox.left+detector_bbox.width);
+      bbox_per_class[obj_meta->class_id].emplace_back(detector_bbox.top+detector_bbox.height);
+    }	
       
-      nvds_clear_obj_meta_list(frame_meta, frame_meta->obj_meta_list);   
+    nvds_clear_obj_meta_list(frame_meta, frame_meta->obj_meta_list);   
 
-      //for(std::map<int, std::vector<float>>::iterator iter = bbox_per_class.begin(); iter != bbox_per_class.end(); iter++) {
-	//std::map<int, OcSortTracker*>* octracker = fdtracker->tracker_per_class;
-	//if(octracker->find(iter->first) == octracker->end()) {
-	//  octracker->insert(std::make_pair(iter->first, new OcSortTracker(iter->first)));
-	//}
-        //cv::Mat dets(iter->second.size()/6, 6, CV_32FC1, cv::Scalar(0));
-	//memcpy(dets.data, iter->second.data(), iter->second.size() * sizeof(float));
-	
-	//cv::FileStorage fs("src_mat.xml", cv::FileStorage::APPEND);
-	//fs << "frame"+std::to_string(fdtracker->frame_id) << dets;
-        
-	//cv::FileStorage fs("src_mat.xml", cv::FileStorage::READ);
-        //fs["frame"+std::to_string(fdtracker->frame_id)] >> dets;
-
-	std::cout << dets << std::endl;
-	octracker->update(dets, true, false);
-        //(*octracker)[iter->first]->update(dets, true, false);
-	cv::Mat trackers = octracker->get_trackers();
-        //cv::Mat trackers = (*octracker)[iter->first]->get_trackers();
-	
-	//cv::Mat trackers;
-    	//cv::FileStorage fs1("det_mat.xml", cv::FileStorage::READ);
-    	//fs1["frame"+std::to_string(fdtracker->frame_id)] >> trackers;
-	//std::cout << "frame id: " << fdtracker->frame_id << std::endl;
-
-	cv::FileStorage fs1("det_mat.xml", cv::FileStorage::APPEND);
-        fs1 << "frame"+std::to_string(fdtracker->frame_id) << trackers;
-	std::cout << "return mat:" << trackers << std::endl;
-	for(int i = 0; i < trackers.rows; i++) {
-	  NvDsBatchMeta *batch_meta_pool = frame_meta->base_meta.batch_meta;
-          NvDsObjectMeta *object_meta = nvds_acquire_obj_meta_from_pool(batch_meta_pool);
-          NvOSD_RectParams & rect_params = object_meta->rect_params;
-          NvOSD_TextParams & text_params = object_meta->text_params;
-	  detector_bbox = object_meta->detector_bbox_info.org_bbox_coords;
-	  detector_bbox.left = *(trackers.ptr<float>(i, 2));
-          detector_bbox.top = *(trackers.ptr<float>(i, 3));
-          detector_bbox.width = *(trackers.ptr<float>(i, 4)) - *(trackers.ptr<float>(i, 2));
-          detector_bbox.height = *(trackers.ptr<float>(i, 5)) - *(trackers.ptr<float>(i, 3));
-          rect_params.left = detector_bbox.left;
-          rect_params.top = detector_bbox.top;
-          rect_params.width = detector_bbox.width;
-          rect_params.height = detector_bbox.height;
-          /* Font to be used for label text. */
-          static gchar font_name[] = "Serif";
-          /* Semi-transparent yellow background. */
-          rect_params.has_bg_color = 0;
-      	  rect_params.bg_color = (NvOSD_ColorParams) {
-      	  1, 1, 0, 0.4};
-      	  /* Red border of width 6. */
-      	  rect_params.border_width = 3;
-      	  rect_params.border_color = (NvOSD_ColorParams) {
-      	  1, 0, 0, 1};
-      	  object_meta->class_id = *(trackers.ptr<float>(i, 0));
-	  object_meta->object_id = *(trackers.ptr<float>(i, 1));
-	  std::string text = std::to_string(fdtracker->frame_id) + " " + std::to_string(object_meta->object_id);
-      	  text_params.display_text = g_strdup(text.c_str());
-          /* Display text above the left top corner of the object. */
-      	  text_params.x_offset = rect_params.left;
-      	  text_params.y_offset = rect_params.top - 10;
-      	  /* Set black background for the text. */
-      	  text_params.set_bg_clr = 1;
-      	  text_params.text_bg_clr = (NvOSD_ColorParams) {
-      	  0, 0, 0, 1};
-      	  /* Font face, size and color. */
-      	  text_params.font_params.font_name = font_name;
-      	  text_params.font_params.font_size = 11;
-      	  text_params.font_params.font_color = (NvOSD_ColorParams) {
-      	  1, 1, 1, 1};
-      	  nvds_add_obj_meta_to_frame(frame_meta, object_meta, object_meta->parent);
-	}
-      //}
-      
-	fdtracker->frame_id += 1;
- //     std::string tracker_id_string = " " + std::to_string(obj_meta->object_id);
- //     obj_meta->text_params.display_text = strcat(obj_meta->text_params.display_text, tracker_id_string.c_str());
+    for(std::map<int, std::vector<float>>::iterator iter = bbox_per_class.begin(); iter != bbox_per_class.end(); iter++) {
+      std::map<int, OcSortTracker*>* octracker = fdtracker->tracker_per_class;
+      if(octracker->find(iter->first) == octracker->end()) {
+        octracker->insert(std::make_pair(iter->first, new OcSortTracker(iter->first)));
+      }
+      cv::Mat dets(iter->second.size()/6, 6, CV_32FC1, cv::Scalar(0));
+	    memcpy(dets.data, iter->second.data(), iter->second.size() * sizeof(float));
+      (*octracker)[iter->first]->update(dets, true, false);
+      cv::Mat trackers = (*octracker)[iter->first]->get_trackers();
+      for(int i = 0; i < trackers.rows; i++) {
+        NvDsBatchMeta *batch_meta_pool = frame_meta->base_meta.batch_meta;
+        NvDsObjectMeta *object_meta = nvds_acquire_obj_meta_from_pool(batch_meta_pool);
+        NvOSD_RectParams & rect_params = object_meta->rect_params;
+        NvOSD_TextParams & text_params = object_meta->text_params;
+        detector_bbox = object_meta->detector_bbox_info.org_bbox_coords;
+        detector_bbox.left = *(trackers.ptr<float>(i, 2));
+        detector_bbox.top = *(trackers.ptr<float>(i, 3));
+        detector_bbox.width = *(trackers.ptr<float>(i, 4)) - *(trackers.ptr<float>(i, 2));
+        detector_bbox.height = *(trackers.ptr<float>(i, 5)) - *(trackers.ptr<float>(i, 3));
+        rect_params.left = detector_bbox.left;
+        rect_params.top = detector_bbox.top;
+        rect_params.width = detector_bbox.width;
+        rect_params.height = detector_bbox.height;
+        /* Font to be used for label text. */
+        static gchar font_name[] = "Serif";
+        /* Semi-transparent yellow background. */
+        rect_params.has_bg_color = 0;
+        rect_params.bg_color = (NvOSD_ColorParams) {
+        1, 1, 0, 0.4};
+        /* Red border of width 6. */
+        rect_params.border_width = 3;
+        rect_params.border_color = (NvOSD_ColorParams) {
+        1, 0, 0, 1};
+        object_meta->class_id = *(trackers.ptr<float>(i, 0));
+        object_meta->object_id = *(trackers.ptr<float>(i, 1));
+        std::string text = std::to_string(std::to_string(object_meta->object_id);
+        text_params.display_text = g_strdup(text.c_str());
+        /* Display text above the left top corner of the object. */
+        text_params.x_offset = rect_params.left;
+        text_params.y_offset = rect_params.top - 10;
+        /* Set black background for the text. */
+        text_params.set_bg_clr = 1;
+        text_params.text_bg_clr = (NvOSD_ColorParams) {
+        0, 0, 0, 1};
+        /* Font face, size and color. */
+        text_params.font_params.font_name = font_name;
+        text_params.font_params.font_size = 11;
+        text_params.font_params.font_color = (NvOSD_ColorParams) {
+        1, 1, 1, 1};
+        nvds_add_obj_meta_to_frame(frame_meta, object_meta, object_meta->parent);
+      }
+    }
   }
   GST_DEBUG_OBJECT (fdtracker, "transform_ip");
 
   return GST_FLOW_OK;
-}
-
-struct Bbox{
-  float x1;
-  float y1;
-  float x2;
-  float y2;
-};
-
-static float
-IOU(const Bbox_cache& box1, const Bbox_cache& box2)
-{
-//  Bbox box1 = {bbox_1.left, bbox_1.top, bbox_1.left+bbox_1.width, bbox_1.top+bbox_1.height};
-//  Bbox box2 = {bbox_2.left, bbox_2.top, bbox_2.left+bbox_2.width, bbox_2.top+bbox_2.height};
-    float max_x = std::max(box1.x1,box2.x1);  // 找出左上角坐标哪个大
-    float min_x = std::min(box1.x2,box2.x2);  // 找出右下角坐标哪个小
-    float max_y = std::max(box1.y1,box2.y1);
-    float min_y = std::min(box1.y2,box2.y2);
-    if(min_x<=max_x || min_y<=max_y) // 如果没有重叠
-        return 0;
-    float over_area = (min_x - max_x) * (min_y - max_y);  // 计算重叠面积
-    float area_a = (box1.x2 - box1.x1) * (box1.y2 - box1.y1);
-    float area_b = (box2.x2 - box2.x1) * (box2.y2 - box2.y1);
-    float iou = over_area / (area_a + area_b - over_area); 
-    return iou;
 }
 
 static gboolean

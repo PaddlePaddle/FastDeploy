@@ -11,8 +11,8 @@
 #include "ocsort.h"
 
 bool isnan_in_pred(cv::Mat &mat) {
-  for (int i=0; i<mat.cols; i++) {
-    for (int j=0; j<mat.rows; j++) {
+  for (int i=0; i<mat.rows; i++) {
+    for (int j=0; j<mat.cols; j++) {
       if (isnan(*(mat.ptr<float>(i, j)))) {
         return true;
       }

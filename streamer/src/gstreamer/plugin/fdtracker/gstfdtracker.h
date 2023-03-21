@@ -52,8 +52,6 @@ struct _GstFdtracker
   
   std::queue<std::vector<Bbox_cache>>* previous_frame;
   std::map<int, OcSortTracker*>* tracker_per_class;
-  OcSortTracker *octracker;
-  int frame_id = 0;
 };
 
 struct _GstFdtrackerClass
