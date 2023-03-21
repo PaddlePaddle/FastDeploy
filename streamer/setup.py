@@ -43,11 +43,6 @@ from textwrap import dedent
 import multiprocessing
 
 setup_configs = dict()
-setup_configs["BUILD_ON_JETSON"] = os.getenv("BUILD_ON_JETSON", "ON")
-setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND",
-                                                   "OFF")
-setup_configs["PADDLEINFERENCE_DIRECTORY"] = os.getenv(
-    "PADDLEINFERENCE_DIRECTORY", "/Download/paddle_inference_jetson")
 setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
 
 SRC_DIR = os.path.join(TOP_DIR, PACKAGE_NAME)
