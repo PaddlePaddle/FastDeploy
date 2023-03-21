@@ -73,11 +73,12 @@ void CpuInfer(const char* det_model_dir, const char* cls_model_dir,
   FD_C_RuntimeOptionWrapperUseCpu(rec_option);
 
   FD_C_DBDetectorWrapper* det_model = FD_C_CreateDBDetectorWrapper(
-      det_model_file, det_params_file, det_option, PADDLE);
+      det_model_file, det_params_file, det_option, FD_C_ModelFormat_PADDLE);
   FD_C_ClassifierWrapper* cls_model = FD_C_CreateClassifierWrapper(
-      cls_model_file, cls_params_file, cls_option, PADDLE);
+      cls_model_file, cls_params_file, cls_option, FD_C_ModelFormat_PADDLE);
   FD_C_RecognizerWrapper* rec_model = FD_C_CreateRecognizerWrapper(
-      rec_model_file, rec_params_file, rec_label_file, rec_option, PADDLE);
+      rec_model_file, rec_params_file, rec_label_file, rec_option,
+      FD_C_ModelFormat_PADDLE);
 
   FD_C_PPOCRv2Wrapper* ppocr_v2 =
       FD_C_CreatePPOCRv2Wrapper(det_model, cls_model, rec_model);
@@ -95,7 +96,7 @@ void CpuInfer(const char* det_model_dir, const char* cls_model_dir,
 
   FD_C_Mat im = FD_C_Imread(image_file);
 
-  FD_C_OCRResult* result = (FD_C_OCRResult*)malloc(sizeof(FD_C_OCRResult));
+  FD_C_OCRResult* result = FD_C_CreateOCRResult();
 
   if (!FD_C_PPOCRv2WrapperPredict(ppocr_v2, im, result)) {
     printf("Failed to predict.\n");
@@ -112,16 +113,9 @@ void CpuInfer(const char* det_model_dir, const char* cls_model_dir,
   }
 
   // print res
-  // You can directly access fields in FD_C_OCRResult and print it refer to
-  // OCRResult API Doc Or you can wrap it using
-  // FD_C_OCRResult_Wrapper, which containes C++ structure
-  // fastdeploy::vision::OCRResult, and using C API
-  // FD_C_OCRResultWrapperStr to call
-  // fastdeploy::vision::OCRResult::Str() in it. For convenience, we choose
-  // this method to print it.
-  FD_C_OCRResultWrapper* result_wrapper =
-      FD_C_CreateOCRResultWrapperFromData(result);
-  printf("%s", FD_C_OCRResultWrapperStr(result_wrapper));
+  char res[2000];
+  FD_C_OCRResultStr(result, res);
+  printf("%s", res);
   FD_C_Mat vis_im = FD_C_VisOcr(im, result);
   FD_C_Imwrite("vis_result.jpg", vis_im);
   printf("Visualized result saved in ./vis_result.jpg\n");
@@ -133,9 +127,9 @@ void CpuInfer(const char* det_model_dir, const char* cls_model_dir,
   FD_C_DestroyDBDetectorWrapper(det_model);
   FD_C_DestroyRecognizerWrapper(rec_model);
   FD_C_DestroyPPOCRv2Wrapper(ppocr_v2);
-  FD_C_DestroyOCRResultWrapper(result_wrapper);
   FD_C_DestroyOCRResult(result);
   FD_C_DestroyMat(im);
+  FD_C_DestroyMat(vis_im);
 }
 
 void GpuInfer(const char* det_model_dir, const char* cls_model_dir,
@@ -174,11 +168,12 @@ void GpuInfer(const char* det_model_dir, const char* cls_model_dir,
   FD_C_RuntimeOptionWrapperUseGpu(rec_option, 0);
 
   FD_C_DBDetectorWrapper* det_model = FD_C_CreateDBDetectorWrapper(
-      det_model_file, det_params_file, det_option, PADDLE);
+      det_model_file, det_params_file, det_option, FD_C_ModelFormat_PADDLE);
   FD_C_ClassifierWrapper* cls_model = FD_C_CreateClassifierWrapper(
-      cls_model_file, cls_params_file, cls_option, PADDLE);
+      cls_model_file, cls_params_file, cls_option, FD_C_ModelFormat_PADDLE);
   FD_C_RecognizerWrapper* rec_model = FD_C_CreateRecognizerWrapper(
-      rec_model_file, rec_params_file, rec_label_file, rec_option, PADDLE);
+      rec_model_file, rec_params_file, rec_label_file, rec_option,
+      FD_C_ModelFormat_PADDLE);
 
   FD_C_PPOCRv2Wrapper* ppocr_v2 =
       FD_C_CreatePPOCRv2Wrapper(det_model, cls_model, rec_model);
@@ -196,7 +191,7 @@ void GpuInfer(const char* det_model_dir, const char* cls_model_dir,
 
   FD_C_Mat im = FD_C_Imread(image_file);
 
-  FD_C_OCRResult* result = (FD_C_OCRResult*)malloc(sizeof(FD_C_OCRResult));
+  FD_C_OCRResult* result = FD_C_CreateOCRResult();
 
   if (!FD_C_PPOCRv2WrapperPredict(ppocr_v2, im, result)) {
     printf("Failed to predict.\n");
@@ -213,16 +208,9 @@ void GpuInfer(const char* det_model_dir, const char* cls_model_dir,
   }
 
   // print res
-  // You can directly access fields in FD_C_OCRResult and print it refer to
-  // OCRResult API Doc Or you can wrap it using
-  // FD_C_OCRResult_Wrapper, which containes C++ structure
-  // fastdeploy::vision::OCRResult, and using C API
-  // FD_C_OCRResultWrapperStr to call
-  // fastdeploy::vision::OCRResult::Str() in it. For convenience, we choose
-  // this method to print it.
-  FD_C_OCRResultWrapper* result_wrapper =
-      FD_C_CreateOCRResultWrapperFromData(result);
-  printf("%s", FD_C_OCRResultWrapperStr(result_wrapper));
+  char res[2000];
+  FD_C_OCRResultStr(result, res);
+  printf("%s", res);
   FD_C_Mat vis_im = FD_C_VisOcr(im, result);
   FD_C_Imwrite("vis_result.jpg", vis_im);
   printf("Visualized result saved in ./vis_result.jpg\n");
@@ -234,9 +222,9 @@ void GpuInfer(const char* det_model_dir, const char* cls_model_dir,
   FD_C_DestroyDBDetectorWrapper(det_model);
   FD_C_DestroyRecognizerWrapper(rec_model);
   FD_C_DestroyPPOCRv2Wrapper(ppocr_v2);
-  FD_C_DestroyOCRResultWrapper(result_wrapper);
   FD_C_DestroyOCRResult(result);
   FD_C_DestroyMat(im);
+  FD_C_DestroyMat(vis_im);
 }
 int main(int argc, char* argv[]) {
   if (argc < 7) {

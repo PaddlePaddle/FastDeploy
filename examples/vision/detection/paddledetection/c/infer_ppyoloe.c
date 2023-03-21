@@ -36,7 +36,7 @@ void CpuInfer(const char* model_dir, const char* image_file) {
   FD_C_RuntimeOptionWrapperUseCpu(option);
 
   FD_C_PPYOLOEWrapper* model = FD_C_CreatePPYOLOEWrapper(
-      model_file, params_file, config_file, option, PADDLE);
+      model_file, params_file, config_file, option, FD_C_ModelFormat_PADDLE);
 
   if (!FD_C_PPYOLOEWrapperInitialized(model)) {
     printf("Failed to initialize.\n");
@@ -47,8 +47,7 @@ void CpuInfer(const char* model_dir, const char* image_file) {
 
   FD_C_Mat im = FD_C_Imread(image_file);
 
-  FD_C_DetectionResult* result =
-      (FD_C_DetectionResult*)malloc(sizeof(FD_C_DetectionResult));
+  FD_C_DetectionResult* result = FD_C_CreateDetectionResult();
 
   if (!FD_C_PPYOLOEWrapperPredict(model, im, result)) {
     printf("Failed to predict.\n");
@@ -84,7 +83,7 @@ void GpuInfer(const char* model_dir, const char* image_file) {
   FD_C_RuntimeOptionWrapperUseGpu(option, 0);
 
   FD_C_PPYOLOEWrapper* model = FD_C_CreatePPYOLOEWrapper(
-      model_file, params_file, config_file, option, PADDLE);
+      model_file, params_file, config_file, option, FD_C_ModelFormat_PADDLE);
 
   if (!FD_C_PPYOLOEWrapperInitialized(model)) {
     printf("Failed to initialize.\n");
@@ -95,8 +94,7 @@ void GpuInfer(const char* model_dir, const char* image_file) {
 
   FD_C_Mat im = FD_C_Imread(image_file);
 
-  FD_C_DetectionResult* result =
-      (FD_C_DetectionResult*)malloc(sizeof(FD_C_DetectionResult));
+  FD_C_DetectionResult* result = FD_C_CreateDetectionResult();
 
   if (!FD_C_PPYOLOEWrapperPredict(model, im, result)) {
     printf("Failed to predict.\n");

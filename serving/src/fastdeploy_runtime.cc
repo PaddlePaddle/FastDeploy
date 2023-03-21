@@ -233,7 +233,8 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
               bool use_paddle_log;
               THROW_IF_BACKEND_MODEL_ERROR(
                   ParseBoolValue(value_string, &use_paddle_log));
-              runtime_options_->paddle_infer_option.enable_log_info = use_paddle_log;
+              runtime_options_->paddle_infer_option.enable_log_info =
+                  use_paddle_log;
             } else if (param_key == "num_streams") {
               int num_streams;
               THROW_IF_BACKEND_MODEL_ERROR(
@@ -320,12 +321,36 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 bool use_paddle_log;
                 THROW_IF_BACKEND_MODEL_ERROR(
                     ParseBoolValue(value_string, &use_paddle_log));
-                runtime_options_->paddle_infer_option.enable_log_info = use_paddle_log;
+                runtime_options_->paddle_infer_option.enable_log_info =
+                    use_paddle_log;
               } else if (param_key == "is_clone") {
                 THROW_IF_BACKEND_MODEL_ERROR(
                     ParseBoolValue(value_string, &is_clone_));
               } else if (param_key == "encryption_key") {
                 runtime_options_->SetEncryptionKey(value_string);
+              } else if (param_key == "disable_trt_ops") {
+                std::vector<std::string> disable_trt_ops;
+                SplitStringByDelimiter(value_string, ' ', &disable_trt_ops);
+                runtime_options_->paddle_infer_option.DisableTrtOps(
+                    disable_trt_ops);
+              } else if (param_key == "delete_passes") {
+                std::vector<std::string> delete_passes;
+                SplitStringByDelimiter(value_string, ' ', &delete_passes);
+                for (auto&& pass : delete_passes) {
+                  runtime_options_->paddle_infer_option.DeletePass(pass);
+                }
+              } else if (param_key == "enable_fixed_size_opt") {
+                bool enable_fixed_size_opt = false;
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &enable_fixed_size_opt));
+                runtime_options_->paddle_infer_option.enable_fixed_size_opt =
+                    enable_fixed_size_opt;
+              } else if (param_key == "collect_trt_shape") {
+                bool collect_trt_shape = false;
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &collect_trt_shape));
+                runtime_options_->paddle_infer_option.collect_trt_shape =
+                    collect_trt_shape;
               }
             }
           }

@@ -15,6 +15,7 @@
 
 #include <memory>
 #include <thread>  // NOLINT
+#include <unordered_map>
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/core/fd_tensor.h"
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
@@ -116,6 +117,21 @@ struct FASTDEPLOY_DECL ClassifyDiff: public BaseDiff {
   EvalStatis scores;
   EvalStatis labels;
 };
+
+struct FASTDEPLOY_DECL SegmentationDiff: public BaseDiff {
+  EvalStatis scores;
+  EvalStatis labels;
+};
+
+struct FASTDEPLOY_DECL OCRDetDiff: public BaseDiff {
+  EvalStatis boxes;
+};
+
+struct FASTDEPLOY_DECL MattingDiff: public BaseDiff {
+  EvalStatis alpha;
+  EvalStatis foreground;
+};
+
 #endif  // ENABLE_VISION
 #endif  // ENABLE_BENCHMARK
 
@@ -126,8 +142,17 @@ struct FASTDEPLOY_DECL ResultManager {
   static bool SaveFDTensor(const FDTensor& tensor, const std::string& path);
   static bool LoadFDTensor(FDTensor* tensor, const std::string& path);
   /// Calculate diff value between two FDTensor results.
-  static TensorDiff CalculateDiffStatis(FDTensor* lhs,
-                                        FDTensor* rhs);
+  static TensorDiff CalculateDiffStatis(const FDTensor& lhs,
+                                        const FDTensor& rhs);
+  /// Save Benchmark data
+  static void SaveBenchmarkResult(const std::string& res,
+                                  const std::string& path);
+  /// Load Benchmark config
+  static bool LoadBenchmarkConfig(const std::string& path,
+             std::unordered_map<std::string, std::string>* config_info);
+  /// Get Input Shapes
+  static std::vector<std::vector<int32_t>> GetInputShapes(
+                                      const std::string& raw_shapes);
 #if defined(ENABLE_VISION)
   /// Save & Load functions for basic results.
   static bool SaveDetectionResult(const vision::DetectionResult& res,
@@ -138,12 +163,33 @@ struct FASTDEPLOY_DECL ResultManager {
                                  const std::string& path);
   static bool LoadClassifyResult(vision::ClassifyResult* res,
                                  const std::string& path);
+  static bool SaveSegmentationResult(const vision::SegmentationResult& res,
+                                     const std::string& path);
+  static bool LoadSegmentationResult(vision::SegmentationResult* res,
+                                     const std::string& path);
+  static bool SaveOCRDetResult(const std::vector<std::array<int, 8>>& res,
+                               const std::string& path);
+  static bool LoadOCRDetResult(std::vector<std::array<int, 8>>* res,
+                               const std::string& path);
+  static bool SaveMattingResult(const vision::MattingResult& res,
+                                const std::string& path);
+  static bool LoadMattingResult(vision::MattingResult* res,
+                                const std::string& path);
   /// Calculate diff value between two basic results.
-  static DetectionDiff CalculateDiffStatis(vision::DetectionResult* lhs,
-                                           vision::DetectionResult* rhs,
-                                           float score_threshold = 0.3f);
-  static ClassifyDiff CalculateDiffStatis(vision::ClassifyResult* lhs,
-                                          vision::ClassifyResult* rhs);
+  static DetectionDiff CalculateDiffStatis(const vision::DetectionResult& lhs,
+                                           const vision::DetectionResult& rhs,
+                                           const float& score_threshold = 0.3f);
+  static ClassifyDiff CalculateDiffStatis(const vision::ClassifyResult& lhs,
+                                          const vision::ClassifyResult& rhs);
+  static SegmentationDiff CalculateDiffStatis(
+      const vision::SegmentationResult& lhs,
+      const vision::SegmentationResult& rhs);
+  static OCRDetDiff CalculateDiffStatis(
+      const std::vector<std::array<int, 8>>& lhs,
+      const std::vector<std::array<int, 8>>& rhs);
+  static MattingDiff CalculateDiffStatis(
+      const vision::MattingResult& lhs,
+      const vision::MattingResult& rhs);
 #endif  // ENABLE_VISION
 #endif  // ENABLE_BENCHMARK
 };

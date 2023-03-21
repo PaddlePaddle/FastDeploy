@@ -14,7 +14,6 @@
 
 #include "fastdeploy/vision/classification/ppcls/preprocessor.h"
 
-#include "fastdeploy/function/concat.h"
 #include "yaml-cpp/yaml.h"
 
 namespace fastdeploy {
@@ -45,11 +44,30 @@ bool PaddleClasPreprocessor::BuildPreprocessPipelineFromConfig() {
              "Require the transform information in yaml be Map type.");
     auto op_name = op.begin()->first.as<std::string>();
     if (op_name == "ResizeImage") {
-      int target_size = op.begin()->second["resize_short"].as<int>();
-      bool use_scale = false;
-      int interp = 1;
-      processors_.push_back(
-          std::make_shared<ResizeByShort>(target_size, 1, use_scale));
+      if (op.begin()->second["resize_short"]){
+            int target_size = op.begin()->second["resize_short"].as<int>();
+            bool use_scale = false;
+            int interp = 1;
+            processors_.push_back(
+                std::make_shared<ResizeByShort>(target_size, 1, use_scale));
+      }else if (op.begin()->second["size"]){
+        int width = 0;
+        int height = 0;
+        if (op.begin()->second["size"].IsScalar()){
+            auto size = op.begin()->second["size"].as<int>();
+            width = size;
+            height = size;
+        }else{
+            auto size = op.begin()->second["size"].as<std::vector<int>>();
+            width = size[0];
+            height = size[1];
+        }
+        processors_.push_back(
+            std::make_shared<Resize>(width, height, -1.0, -1.0, 1, false));
+      }else{
+        FDERROR << "Invalid params for ResizeImage for both 'size' and 'resize_short' are None" << std::endl;
+      }
+
     } else if (op_name == "CropImage") {
       int width = op.begin()->second["size"].as<int>();
       int height = op.begin()->second["size"].as<int>();
@@ -102,13 +120,17 @@ void PaddleClasPreprocessor::DisablePermute() {
 
 bool PaddleClasPreprocessor::Apply(FDMatBatch* image_batch,
                                    std::vector<FDTensor>* outputs) {
+  if (!initialized_) {
+    FDERROR << "The preprocessor is not initialized." << std::endl;
+    return false;
+  }
   for (size_t j = 0; j < processors_.size(); ++j) {
-    ProcLib lib = ProcLib::DEFAULT;
+    image_batch->proc_lib = proc_lib_;
     if (initial_resize_on_cpu_ && j == 0 &&
         processors_[j]->Name().find("Resize") == 0) {
-      lib = ProcLib::OPENCV;
+      image_batch->proc_lib = ProcLib::OPENCV;
     }
-    if (!(*(processors_[j].get()))(image_batch, lib)) {
+    if (!(*(processors_[j].get()))(image_batch)) {
       FDERROR << "Failed to processs image in " << processors_[j]->Name() << "."
               << std::endl;
       return false;
@@ -116,8 +138,10 @@ bool PaddleClasPreprocessor::Apply(FDMatBatch* image_batch,
   }
 
   outputs->resize(1);
-  (*outputs)[0] = std::move(*(image_batch->Tensor()));
-  (*outputs)[0].device_id = DeviceId();
+  FDTensor* tensor = image_batch->Tensor();
+  (*outputs)[0].SetExternalData(tensor->Shape(), tensor->Dtype(),
+                                tensor->Data(), tensor->device,
+                                tensor->device_id);
   return true;
 }
 

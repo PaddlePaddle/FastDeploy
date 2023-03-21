@@ -25,7 +25,7 @@
 <div id="Environment"></div>  
 
 - cmake >= 3.12
-- Visual Studio 16 2019
+- Visual Studio 2019
 - cuda >= 11.2 (当WITH_GPU=ON)
 - cudnn >= 8.0 (当WITH_GPU=ON)
 
@@ -71,7 +71,7 @@ infer_ppyoloe_demo.exe ppyoloe_crn_l_300e_coco 000000014439.jpg 1  # GPU
 infer_ppyoloe_demo.exe ppyoloe_crn_l_300e_coco 000000014439.jpg 2  # GPU + TensorRT
 ```  
 
-特别说明，exe运行时所需要的依赖库配置方法，请参考章节: [多种方法配置exe运行时所需的依赖库](#CommandLineDeps)
+特别说明，exe运行时所需要的依赖库配置方法，请参考章节: [多种方法配置exe运行时所需的依赖库](./usage_of_fastdeploy_init_bat.md)
 
 ### 3.2 SDK使用方式二：Visual Studio 2019 创建 sln 工程使用 C++ SDK
 
@@ -173,7 +173,7 @@ D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\third_libs\inst
 D:\qiuyanjun\fastdeploy_test\infer_ppyoloe\x64\Release\infer_ppyoloe.exe  
 ```  
 
-（2）执行可执行文件，获得推理结果。 首先需要拷贝所有的dll到exe所在的目录下。同时，也需要把ppyoloe的模型文件和测试图片下载解压缩后，拷贝到exe所在的目录。 特别说明，exe运行时所需要的依赖库配置方法，请参考章节: [多种方法配置exe运行时所需的依赖库](#CommandLineDeps)  
+（2）执行可执行文件，获得推理结果。 首先需要拷贝所有的dll到exe所在的目录下。同时，也需要把ppyoloe的模型文件和测试图片下载解压缩后，拷贝到exe所在的目录。 特别说明，exe运行时所需要的依赖库配置方法，请参考章节: [多种方法配置exe运行时所需的依赖库](./usage_of_fastdeploy_init_bat.md)  
 
 ![image](https://user-images.githubusercontent.com/31974251/192829545-3ea36bfc-9a54-492b-984b-2d5d39094d47.png)  
 
@@ -279,7 +279,7 @@ install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR}/Release)
 
 ![image](https://user-images.githubusercontent.com/31974251/192146852-c64d2252-8c8f-4309-a950-908a5cb258b8.png)
 
-（2）执行可执行文件，获得推理结果。 首先需要拷贝所有的dll到exe所在的目录下，这里我们可以在CMakeLists.txt添加一下命令，可将FastDeploy中所有的dll安装到指定的目录。注意，该方式仅在最新的代码编译的SDK或版本>0.2.1下有效。其他配置方式，请参考章节: [多种方法配置exe运行时所需的依赖库](#CommandLineDeps)  
+（2）执行可执行文件，获得推理结果。 首先需要拷贝所有的dll到exe所在的目录下，这里我们可以在CMakeLists.txt添加一下命令，可将FastDeploy中所有的dll安装到指定的目录。注意，该方式仅在最新的代码编译的SDK或版本>0.2.1下有效。其他配置方式，请参考章节: [多种方法配置exe运行时所需的依赖库](./usage_of_fastdeploy_init_bat.md)  
 
 ```cmake  
 install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR}/Release)

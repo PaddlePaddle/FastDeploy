@@ -40,12 +40,16 @@ __global__ void NormalizeAndPermuteKernel(const uint8_t* src, float* dst,
 }
 
 bool NormalizeAndPermute::ImplByCuda(FDMat* mat) {
+  if (mat->layout != Layout::HWC) {
+    FDERROR << "Only supports input with HWC layout." << std::endl;
+    return false;
+  }
   // Prepare input tensor
   FDTensor* src = CreateCachedGpuInputTensor(mat);
 
   // Prepare output tensor
-  mat->output_cache->Resize(src->Shape(), FDDataType::FP32, "output_cache",
-                            Device::GPU);
+  mat->output_cache->Resize({src->shape[2], src->shape[0], src->shape[1]},
+                            FDDataType::FP32, "output_cache", Device::GPU);
 
   // Copy alpha and beta to GPU
   gpu_alpha_.Resize({1, 1, static_cast<int>(alpha_.size())}, FDDataType::FP32,
@@ -68,9 +72,8 @@ bool NormalizeAndPermute::ImplByCuda(FDMat* mat) {
       reinterpret_cast<float*>(gpu_beta_.Data()), mat->Channels(), swap_rb_, 1,
       jobs);
 
-  mat->SetTensor(mat->output_cache);
-  mat->device = Device::GPU;
   mat->layout = Layout::CHW;
+  mat->SetTensor(mat->output_cache);
   mat->mat_type = ProcLib::CUDA;
   return true;
 }
@@ -84,6 +87,8 @@ bool NormalizeAndPermute::ImplByCuda(FDMatBatch* mat_batch) {
                                   "batch_output_cache", Device::GPU);
   // NHWC -> NCHW
   std::swap(mat_batch->output_cache->shape[1],
+            mat_batch->output_cache->shape[3]);
+  std::swap(mat_batch->output_cache->shape[2],
             mat_batch->output_cache->shape[3]);
 
   // Copy alpha and beta to GPU
@@ -110,7 +115,6 @@ bool NormalizeAndPermute::ImplByCuda(FDMatBatch* mat_batch) {
       mat_batch->output_cache->shape[0], jobs);
 
   mat_batch->SetTensor(mat_batch->output_cache);
-  mat_batch->device = Device::GPU;
   mat_batch->layout = FDMatBatchLayout::NCHW;
   mat_batch->mat_type = ProcLib::CUDA;
   return true;

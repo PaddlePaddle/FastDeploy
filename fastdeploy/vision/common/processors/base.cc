@@ -20,9 +20,66 @@
 namespace fastdeploy {
 namespace vision {
 
-bool Processor::operator()(FDMat* mat, ProcLib lib) {
-  ProcLib target = lib;
-  if (lib == ProcLib::DEFAULT) {
+bool Processor::ImplByOpenCV(FDMat* mat) {
+  FDERROR << Name() << " Not Implement Yet." << std::endl;
+  return false;
+}
+
+bool Processor::ImplByOpenCV(FDMatBatch* mat_batch) {
+  for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+    if (ImplByOpenCV(&(*(mat_batch->mats))[i]) != true) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool Processor::ImplByFlyCV(FDMat* mat) { return ImplByOpenCV(mat); }
+
+bool Processor::ImplByFlyCV(FDMatBatch* mat_batch) {
+  for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+    if (ImplByFlyCV(&(*(mat_batch->mats))[i]) != true) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool Processor::ImplByCuda(FDMat* mat) {
+  FDWARNING << Name()
+            << " is not implemented with CUDA, will fallback to OpenCV."
+            << std::endl;
+  return ImplByOpenCV(mat);
+}
+
+bool Processor::ImplByCuda(FDMatBatch* mat_batch) {
+  for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+    if (ImplByCuda(&(*(mat_batch->mats))[i]) != true) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool Processor::ImplByCvCuda(FDMat* mat) {
+  FDWARNING << Name()
+            << " is not implemented with CV-CUDA, will fallback to OpenCV."
+            << std::endl;
+  return ImplByOpenCV(mat);
+}
+
+bool Processor::ImplByCvCuda(FDMatBatch* mat_batch) {
+  for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+    if (ImplByCvCuda(&(*(mat_batch->mats))[i]) != true) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool Processor::operator()(FDMat* mat) {
+  ProcLib target = mat->proc_lib;
+  if (mat->proc_lib == ProcLib::DEFAULT) {
     target = DefaultProcLib::default_lib;
   }
   if (target == ProcLib::FLYCV) {
@@ -52,9 +109,14 @@ bool Processor::operator()(FDMat* mat, ProcLib lib) {
   return ImplByOpenCV(mat);
 }
 
-bool Processor::operator()(FDMatBatch* mat_batch, ProcLib lib) {
-  ProcLib target = lib;
-  if (lib == ProcLib::DEFAULT) {
+bool Processor::operator()(FDMat* mat, ProcLib lib) {
+  mat->proc_lib = lib;
+  return operator()(mat);
+}
+
+bool Processor::operator()(FDMatBatch* mat_batch) {
+  ProcLib target = mat_batch->proc_lib;
+  if (mat_batch->proc_lib == ProcLib::DEFAULT) {
     target = DefaultProcLib::default_lib;
   }
   if (target == ProcLib::FLYCV) {

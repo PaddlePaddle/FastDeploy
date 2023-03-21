@@ -13,9 +13,12 @@
 // limitations under the License.
 #pragma once
 #include "fastdeploy/core/fd_tensor.h"
-#include "fastdeploy/vision/common/processors/utils.h"
 #include "fastdeploy/vision/common/processors/proc_lib.h"
 #include "opencv2/core/core.hpp"
+
+#ifdef ENABLE_FLYCV
+#include "flycv.h"  // NOLINT
+#endif
 
 #ifdef WITH_GPU
 #include <cuda_runtime_api.h>
@@ -26,6 +29,8 @@ namespace vision {
 
 enum Layout { HWC, CHW };
 
+/*! @brief FDMat is a structure for replace cv::Mat
+ */
 struct FASTDEPLOY_DECL Mat {
   Mat() = default;
   explicit Mat(const cv::Mat& mat) {
@@ -70,21 +75,7 @@ struct FASTDEPLOY_DECL Mat {
     fcv_mat = mat;
     mat_type = ProcLib::FLYCV;
   }
-
-  fcv::Mat* GetFlyCVMat() {
-    if (mat_type == ProcLib::FLYCV) {
-      return &fcv_mat;
-    } else if (mat_type == ProcLib::OPENCV) {
-      // Just a reference to cpu_mat, zero copy. After you
-      // call this method, fcv_mat and cpu_mat will point
-      // to the same memory buffer.
-      fcv_mat = ConvertOpenCVMatToFlyCV(cpu_mat);
-      mat_type = ProcLib::FLYCV;
-      return &fcv_mat;
-    } else {
-      FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
-    }
-  }
+  fcv::Mat* GetFlyCVMat();
 #endif
 
   void* Data();
@@ -145,6 +136,7 @@ struct FASTDEPLOY_DECL Mat {
   ProcLib mat_type = ProcLib::OPENCV;
   Layout layout = Layout::HWC;
   Device device = Device::CPU;
+  ProcLib proc_lib = ProcLib::DEFAULT;
 
   // Create FD Mat from FD Tensor. This method only create a
   // new FD Mat with zero copy and it's data pointer is reference

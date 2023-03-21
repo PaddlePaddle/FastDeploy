@@ -36,9 +36,12 @@ void BindPaddleOption(pybind11::module& m) {
   BindIpuOption(m);
   pybind11::class_<PaddleBackendOption>(m, "PaddleBackendOption")
       .def(pybind11::init())
+      .def_readwrite("enable_fixed_size_opt",
+                     &PaddleBackendOption::enable_fixed_size_opt)
       .def_readwrite("enable_log_info", &PaddleBackendOption::enable_log_info)
       .def_readwrite("enable_mkldnn", &PaddleBackendOption::enable_mkldnn)
       .def_readwrite("enable_trt", &PaddleBackendOption::enable_trt)
+      .def_readwrite("enable_memory_optimize", &PaddleBackendOption::enable_memory_optimize)
       .def_readwrite("ipu_option", &PaddleBackendOption::ipu_option)
       .def_readwrite("collect_trt_shape",
                      &PaddleBackendOption::collect_trt_shape)

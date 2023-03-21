@@ -23,6 +23,8 @@ namespace vision {
 
 enum FDMatBatchLayout { NHWC, NCHW };
 
+/*! @brief FDMatBatch contains batch data for preprocess
+ */
 struct FASTDEPLOY_DECL FDMatBatch {
   FDMatBatch() = default;
 
@@ -56,10 +58,15 @@ struct FASTDEPLOY_DECL FDMatBatch {
   void SetStream(cudaStream_t s);
 #endif
 
-  std::vector<FDMat>* mats;
+  std::vector<FDMat>* mats = nullptr;
+
+  // Used by pybind, since python cannot pass list as pointer or reference
+  std::vector<FDMat> mats_holder;
+
   ProcLib mat_type = ProcLib::OPENCV;
   FDMatBatchLayout layout = FDMatBatchLayout::NHWC;
   Device device = Device::CPU;
+  ProcLib proc_lib = ProcLib::DEFAULT;
 
   // False: the data is stored in the mats separately
   // True: the data is stored in the fd_tensor continuously in 4 dimensions
