@@ -281,7 +281,7 @@ cmdclass = {
 
 ext_modules = [
     setuptools.Extension(
-        name=str(PACKAGE_NAME + '.' + setup_configs["PY_LIBRARY_NAME"]),
+        name=str(PACKAGE_NAME + '.' + streamer + '.' + setup_configs["PY_LIBRARY_NAME"]),
         sources=[]),
 ]
 
