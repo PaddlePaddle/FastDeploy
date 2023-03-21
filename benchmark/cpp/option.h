@@ -43,6 +43,8 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
       option->UsePaddleInferBackend();
     } else if (config_info["backend"] == "trt" ||
                config_info["backend"] == "paddle_trt") {
+      option->trt_option.serialize_file = FLAGS_model +
+                                          sep + "trt_serialized.trt";
       option->UseTrtBackend();
       if (config_info["backend"] == "paddle_trt") {
         option->UsePaddleInferBackend();
