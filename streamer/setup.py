@@ -196,7 +196,7 @@ class cmake_build(setuptools.Command):
                 del os.environ['CMAKE_ARGS']
                 log.info('Extra cmake args: {}'.format(extra_cmake_args))
                 cmake_args.extend(extra_cmake_args)
-            # cmake_args.append(TOP_DIR)
+            cmake_args.append(TOP_DIR/streamer)
             subprocess.check_call(cmake_args)
 
             build_args = [CMAKE, '--build', os.curdir]
