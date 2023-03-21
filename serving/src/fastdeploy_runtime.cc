@@ -345,6 +345,12 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                     ParseBoolValue(value_string, &enable_fixed_size_opt));
                 runtime_options_->paddle_infer_option.enable_fixed_size_opt =
                     enable_fixed_size_opt;
+              } else if (param_key == "collect_trt_shape") {
+                bool collect_trt_shape = false;
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &collect_trt_shape));
+                runtime_options_->paddle_infer_option.collect_trt_shape =
+                    collect_trt_shape;
               }
             }
           }

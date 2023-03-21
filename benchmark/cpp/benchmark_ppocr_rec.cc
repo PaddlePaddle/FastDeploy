@@ -55,6 +55,11 @@ int main(int argc, char* argv[]) {
   }
   auto model_ppocr_rec = vision::ocr::Recognizer(
       model_file, params_file, FLAGS_rec_label_file, option, model_format);
+  std::vector<std::string> model_names;
+  fastdeploy::benchmark::Split(FLAGS_model, model_names, sep);
+  if (model_names[model_names.size() - 1] == "ch_PP-OCRv2_rec_infer") {
+    model_ppocr_rec.GetPreprocessor().SetRecImageShape({3, 32, 320});
+  }
   std::string text;
   float rec_score;
   if (config_info["precision_compare"] == "true") {
