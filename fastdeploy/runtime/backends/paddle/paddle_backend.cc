@@ -113,7 +113,8 @@ bool PaddleBackend::Init(const RuntimeOption& runtime_option) {
   option.paddle_infer_option.external_stream_ = runtime_option.external_stream_;
   option.paddle_infer_option.trt_option = runtime_option.trt_option;
   option.paddle_infer_option.trt_option.gpu_id = runtime_option.device_id;
-  return InitFromPaddle(option.model_file, option.params_file, option.model_from_memory_, option.paddle_infer_option);
+  return InitFromPaddle(option.model_file, option.params_file,
+                        option.model_from_memory_, option.paddle_infer_option);
 }
 
 bool PaddleBackend::InitFromPaddle(const std::string& model,
@@ -126,8 +127,8 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
     return false;
   }
   if (model_from_memory) {
-    config_.SetModelBuffer(model.c_str(), model.size(),
-                           params.c_str(), params.size());
+    config_.SetModelBuffer(model.c_str(), model.size(), params.c_str(),
+                           params.size());
   } else {
     config_.SetModel(model, params);
   }
@@ -140,7 +141,8 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
   // PaddleReader instead now
   std::string model_content = model;
   if (!model_from_memory) {
-    FDASSERT(ReadBinaryFromFile(model, &model_content), "Failed to read file %s.", model.c_str());
+    FDASSERT(ReadBinaryFromFile(model, &model_content),
+             "Failed to read file %s.", model.c_str());
   }
   auto reader =
       paddle2onnx::PaddleReader(model_content.c_str(), model_content.size());
@@ -210,8 +212,7 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
       paddle_infer::Config analysis_config;
       if (model_from_memory) {
         analysis_config.SetModelBuffer(model.c_str(), model.size(),
-                                       params.c_str(),
-                                       params.size());
+                                       params.c_str(), params.size());
       } else {
         analysis_config.SetModel(model, params);
       }
@@ -283,7 +284,6 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
     auto handle = predictor_->GetInputHandle(inputs[i].name);
     ShareTensorFromFDTensor(handle.get(), inputs[i]);
   }
-  std::unordered_set<std::string> prebinded_output_name;
   // prebinded output only support for GPU
   if (!copy_to_fd) {
     for (size_t i = 0; i < (*outputs).size(); ++i) {
@@ -297,7 +297,6 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
       // Record the prebinded output_name.
       // Those outputs do not need PaddleTensorToFDTensor
       // after predictor_.Run()
-      prebinded_output_name.insert(output_name);
       auto handle = predictor_->GetOutputHandle(output_name);
       ShareOutTensorFromFDTensor(handle.get(), (*outputs)[i]);
     }
@@ -309,11 +308,6 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
 
   outputs->resize(outputs_desc_.size());
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
-    // skip prebinded output
-    if (copy_to_fd == false &&
-        prebinded_output_name.count(outputs_desc_[i].name)) {
-      continue;
-    }
     auto handle = predictor_->GetOutputHandle(outputs_desc_[i].name);
     if (copy_to_fd) {
       (*outputs)[i].is_pinned_memory = option_.enable_pinned_memory;
@@ -334,7 +328,10 @@ std::unique_ptr<BaseBackend> PaddleBackend::Clone(RuntimeOption& runtime_option,
     auto clone_option = option_;
     clone_option.device_id = device_id;
     clone_option.external_stream_ = stream;
-    FDASSERT(casted_backend->InitFromPaddle(runtime_option.model_file, runtime_option.params_file, runtime_option.model_from_memory_, clone_option), "Clone model from Paddle failed while initialize PaddleBackend.");
+    FDASSERT(casted_backend->InitFromPaddle(
+                 runtime_option.model_file, runtime_option.params_file,
+                 runtime_option.model_from_memory_, clone_option),
+             "Clone model from Paddle failed while initialize PaddleBackend.");
     FDWARNING << "The target device id:" << device_id
               << " is different from current device id:" << option_.device_id
               << ", cannot share memory with current engine." << std::endl;
