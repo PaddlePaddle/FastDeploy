@@ -48,10 +48,12 @@ RUN python3 -m pip install  /opt/fastdeploy/*.whl \
     && rm -rf /opt/fastdeploy/*.whl
 
 # unset proxy
-# ENV http_proxy=
-# ENV https_proxy=
+# ENV http_proxy=''
+# ENV https_proxy=''
 # RUN python3 -m pip install paddlepaddle-gpu==2.4.1.post112 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
-RUN python3 -m pip install paddlepaddle-gpu==2.4.1
+RUN unset http_proxy
+RUN unset https_proxy
+RUN python3 -m pip install https://paddle-wheel.bj.bcebos.com/2.4.1/linux/linux-gpu-cuda11.2-cudnn8-mkl-gcc8.2-avx/paddlepaddle_gpu-2.4.1.post112-cp38-cp38-linux_x86_64.whl
 
 COPY serving/build/libtriton_fastdeploy.so /opt/tritonserver/backends/fastdeploy/
 COPY build/fastdeploy_install /opt/fastdeploy/
