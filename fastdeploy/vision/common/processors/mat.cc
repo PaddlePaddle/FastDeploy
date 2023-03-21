@@ -37,7 +37,7 @@ cv::Mat* Mat::GetOpenCVMat() {
 #ifdef WITH_GPU
     FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
              "[ERROR] Error occurs while sync cuda stream.");
-    cpu_mat = CreateZeroCopyOpenCVMatFromTensor(*fd_tensor);
+    cpu_mat = CreateZeroCopyOpenCVMatFromTensor(*fd_tensor, layout);
     mat_type = ProcLib::OPENCV;
     device = Device::CPU;
     return &cpu_mat;
@@ -48,6 +48,23 @@ cv::Mat* Mat::GetOpenCVMat() {
     FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
   }
 }
+
+#ifdef ENABLE_FLYCV
+fcv::Mat* Mat::GetFlyCVMat() {
+  if (mat_type == ProcLib::FLYCV) {
+    return &fcv_mat;
+  } else if (mat_type == ProcLib::OPENCV) {
+    // Just a reference to cpu_mat, zero copy. After you
+    // call this method, fcv_mat and cpu_mat will point
+    // to the same memory buffer.
+    fcv_mat = ConvertOpenCVMatToFlyCV(cpu_mat);
+    mat_type = ProcLib::FLYCV;
+    return &fcv_mat;
+  } else {
+    FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
+  }
+}
+#endif
 
 void* Mat::Data() {
   if (mat_type == ProcLib::FLYCV) {
@@ -158,7 +175,7 @@ void Mat::PrintInfo(const std::string& flag) {
 #ifdef WITH_GPU
     FDASSERT(cudaStreamSynchronize(stream) == cudaSuccess,
              "[ERROR] Error occurs while sync cuda stream.");
-    cv::Mat tmp_mat = CreateZeroCopyOpenCVMatFromTensor(*fd_tensor);
+    cv::Mat tmp_mat = CreateZeroCopyOpenCVMatFromTensor(*fd_tensor, layout);
     cv::Scalar mean = cv::mean(tmp_mat);
     for (int i = 0; i < Channels(); ++i) {
       std::cout << mean[i] << " ";
@@ -272,6 +289,9 @@ std::vector<FDMat> WrapMat(const std::vector<cv::Mat>& images) {
 }
 
 bool CheckShapeConsistency(std::vector<Mat>* mats) {
+  if (mats == nullptr) {
+    return true;
+  }
   for (size_t i = 1; i < mats->size(); ++i) {
     if ((*mats)[i].Channels() != (*mats)[0].Channels() ||
         (*mats)[i].Width() != (*mats)[0].Width() ||
@@ -285,21 +305,24 @@ bool CheckShapeConsistency(std::vector<Mat>* mats) {
 FDTensor* CreateCachedGpuInputTensor(Mat* mat) {
 #ifdef WITH_GPU
   FDTensor* src = mat->Tensor();
+  // Need to make sure the tensor is pointed to the input_cache.
+  if (src->Data() == mat->output_cache->Data()) {
+    std::swap(mat->input_cache, mat->output_cache);
+    std::swap(mat->input_cache->name, mat->output_cache->name);
+  }
   if (src->device == Device::GPU) {
-    if (src->Data() == mat->output_cache->Data()) {
-      std::swap(mat->input_cache, mat->output_cache);
-      std::swap(mat->input_cache->name, mat->output_cache->name);
-    }
     return src;
   } else if (src->device == Device::CPU) {
-    // Mats on CPU, we need copy these tensors from CPU to GPU
+    // Tensor on CPU, we need copy it from CPU to GPU
     FDASSERT(src->Shape().size() == 3, "The CPU tensor must has 3 dims.")
-    mat->input_cache->Resize(src->Shape(), src->Dtype(), "input_cache",
-                             Device::GPU);
+    mat->output_cache->Resize(src->Shape(), src->Dtype(), "output_cache",
+                              Device::GPU);
     FDASSERT(
-        cudaMemcpyAsync(mat->input_cache->Data(), src->Data(), src->Nbytes(),
+        cudaMemcpyAsync(mat->output_cache->Data(), src->Data(), src->Nbytes(),
                         cudaMemcpyHostToDevice, mat->Stream()) == 0,
         "[ERROR] Error occurs while copy memory from CPU to GPU.");
+    std::swap(mat->input_cache, mat->output_cache);
+    std::swap(mat->input_cache->name, mat->output_cache->name);
     return mat->input_cache;
   } else {
     FDASSERT(false, "FDMat is on unsupported device: %d", src->device);

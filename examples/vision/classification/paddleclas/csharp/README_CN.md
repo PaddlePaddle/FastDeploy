@@ -8,7 +8,7 @@
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-以Linux上ResNet50_vd推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本1.0.4以上(x.x.x>=1.0.4)
+在本目录执行如下命令即可在Windows完成编译测试，支持此模型需保证FastDeploy版本1.0.4以上(x.x.x>=1.0.4)
 
 ## 1. 下载C#包管理程序nuget客户端
 > https://dist.nuget.org/win-x86-commandline/v6.4.0/nuget.exe
@@ -50,9 +50,9 @@ fastdeploy_init.bat install %cd% D:\Download\fastdeploy-win-x64-gpu-x.x.x\exampl
 ```shell
 cd Release
 # CPU推理
-./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 0
+infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 0
 # GPU推理
-./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 1
+infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 1
 ```
 
 ## PaddleClas C#接口

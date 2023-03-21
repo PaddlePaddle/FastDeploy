@@ -36,6 +36,7 @@ DBDetector::DBDetector(const std::string& model_file,
     valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE};
     valid_sophgonpu_backends = {Backend::SOPHGOTPU};
+    valid_rknpu_backends = {Backend::RKNPU2};
   }
 
   runtime_option = custom_option;
@@ -68,6 +69,26 @@ bool DBDetector::Predict(const cv::Mat& img,
     return false;
   }
   *boxes_result = std::move(det_results[0]);
+  return true;
+}
+
+bool DBDetector::Predict(const cv::Mat& img, vision::OCRResult* ocr_result) {
+  if (!Predict(img, &(ocr_result->boxes))) {
+    return false;
+  }
+  return true;
+}
+
+bool DBDetector::BatchPredict(const std::vector<cv::Mat>& images,
+                              std::vector<vision::OCRResult>* ocr_results) {
+  std::vector<std::vector<std::array<int, 8>>> det_results;
+  if (!BatchPredict(images, &det_results)) {
+    return false;
+  }
+  ocr_results->resize(det_results.size());
+  for (int i = 0; i < det_results.size(); i++) {
+    (*ocr_results)[i].boxes = std::move(det_results[i]);
+  }
   return true;
 }
 

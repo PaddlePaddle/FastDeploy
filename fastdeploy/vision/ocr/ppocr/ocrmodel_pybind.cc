@@ -23,9 +23,12 @@ void BindPPOCRModel(pybind11::module& m) {
   });
 
   // DBDetector
-  pybind11::class_<vision::ocr::DBDetectorPreprocessor>(
-      m, "DBDetectorPreprocessor")
+  pybind11::class_<vision::ocr::DBDetectorPreprocessor,
+                   vision::ProcessorManager>(m, "DBDetectorPreprocessor")
       .def(pybind11::init<>())
+      .def_property("static_shape_infer",
+                    &vision::ocr::DBDetectorPreprocessor::GetStaticShapeInfer,
+                    &vision::ocr::DBDetectorPreprocessor::SetStaticShapeInfer)
       .def_property("max_side_len",
                     &vision::ocr::DBDetectorPreprocessor::GetMaxSideLen,
                     &vision::ocr::DBDetectorPreprocessor::SetMaxSideLen)
@@ -33,19 +36,27 @@ void BindPPOCRModel(pybind11::module& m) {
            [](vision::ocr::DBDetectorPreprocessor& self,
               const std::vector<float>& mean, const std::vector<float>& std,
               bool is_scale) { self.SetNormalize(mean, std, is_scale); })
-      .def("run", [](vision::ocr::DBDetectorPreprocessor& self,
-                     std::vector<pybind11::array>& im_list) {
-        std::vector<vision::FDMat> images;
-        for (size_t i = 0; i < im_list.size(); ++i) {
-          images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
-        }
-        std::vector<FDTensor> outputs;
-        self.Run(&images, &outputs);
-        auto batch_det_img_info = self.GetBatchImgInfo();
-        for (size_t i = 0; i < outputs.size(); ++i) {
-          outputs[i].StopSharing();
-        }
-        return std::make_pair(outputs, *batch_det_img_info);
+      .def("run",
+           [](vision::ocr::DBDetectorPreprocessor& self,
+              std::vector<pybind11::array>& im_list) {
+             std::vector<vision::FDMat> images;
+             for (size_t i = 0; i < im_list.size(); ++i) {
+               images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
+             }
+             std::vector<FDTensor> outputs;
+             self.Run(&images, &outputs);
+             auto batch_det_img_info = self.GetBatchImgInfo();
+             for (size_t i = 0; i < outputs.size(); ++i) {
+               outputs[i].StopSharing();
+             }
+             return std::make_pair(outputs, *batch_det_img_info);
+           })
+      .def("disable_normalize",
+           [](vision::ocr::DBDetectorPreprocessor& self) {
+             self.DisableNormalize();
+           })
+      .def("disable_permute", [](vision::ocr::DBDetectorPreprocessor& self) {
+        self.DisablePermute();
       });
 
   pybind11::class_<vision::ocr::DBDetectorPostprocessor>(
@@ -106,50 +117,56 @@ void BindPPOCRModel(pybind11::module& m) {
       .def("predict",
            [](vision::ocr::DBDetector& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);
-             std::vector<std::array<int, 8>> boxes_result;
-             self.Predict(mat, &boxes_result);
-             return boxes_result;
+             vision::OCRResult ocr_result;
+             self.Predict(mat, &ocr_result);
+             return ocr_result;
            })
       .def("batch_predict", [](vision::ocr::DBDetector& self,
                                std::vector<pybind11::array>& data) {
         std::vector<cv::Mat> images;
-        std::vector<std::vector<std::array<int, 8>>> det_results;
         for (size_t i = 0; i < data.size(); ++i) {
           images.push_back(PyArrayToCvMat(data[i]));
         }
-        self.BatchPredict(images, &det_results);
-        return det_results;
+        std::vector<vision::OCRResult> ocr_results;
+        self.BatchPredict(images, &ocr_results);
+        return ocr_results;
       });
 
   // Classifier
-  pybind11::class_<vision::ocr::ClassifierPreprocessor>(
-      m, "ClassifierPreprocessor")
+  pybind11::class_<vision::ocr::ClassifierPreprocessor,
+                   vision::ProcessorManager>(m, "ClassifierPreprocessor")
       .def(pybind11::init<>())
       .def_property("cls_image_shape",
                     &vision::ocr::ClassifierPreprocessor::GetClsImageShape,
                     &vision::ocr::ClassifierPreprocessor::SetClsImageShape)
-      .def_property("mean", &vision::ocr::ClassifierPreprocessor::GetMean,
-                    &vision::ocr::ClassifierPreprocessor::SetMean)
-      .def_property("scale", &vision::ocr::ClassifierPreprocessor::GetScale,
-                    &vision::ocr::ClassifierPreprocessor::SetScale)
-      .def_property("is_scale",
-                    &vision::ocr::ClassifierPreprocessor::GetIsScale,
-                    &vision::ocr::ClassifierPreprocessor::SetIsScale)
-      .def("run", [](vision::ocr::ClassifierPreprocessor& self,
-                     std::vector<pybind11::array>& im_list) {
-        std::vector<vision::FDMat> images;
-        for (size_t i = 0; i < im_list.size(); ++i) {
-          images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
-        }
-        std::vector<FDTensor> outputs;
-        if (!self.Run(&images, &outputs)) {
-          throw std::runtime_error(
-              "Failed to preprocess the input data in ClassifierPreprocessor.");
-        }
-        for (size_t i = 0; i < outputs.size(); ++i) {
-          outputs[i].StopSharing();
-        }
-        return outputs;
+      .def("set_normalize",
+           [](vision::ocr::ClassifierPreprocessor& self,
+              const std::vector<float>& mean, const std::vector<float>& std,
+              bool is_scale) { self.SetNormalize(mean, std, is_scale); })
+      .def("run",
+           [](vision::ocr::ClassifierPreprocessor& self,
+              std::vector<pybind11::array>& im_list) {
+             std::vector<vision::FDMat> images;
+             for (size_t i = 0; i < im_list.size(); ++i) {
+               images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
+             }
+             std::vector<FDTensor> outputs;
+             if (!self.Run(&images, &outputs)) {
+               throw std::runtime_error(
+                   "Failed to preprocess the input data in "
+                   "ClassifierPreprocessor.");
+             }
+             for (size_t i = 0; i < outputs.size(); ++i) {
+               outputs[i].StopSharing();
+             }
+             return outputs;
+           })
+      .def("disable_normalize",
+           [](vision::ocr::ClassifierPreprocessor& self) {
+             self.DisableNormalize();
+           })
+      .def("disable_permute", [](vision::ocr::ClassifierPreprocessor& self) {
+        self.DisablePermute();
       });
 
   pybind11::class_<vision::ocr::ClassifierPostprocessor>(
@@ -195,26 +212,24 @@ void BindPPOCRModel(pybind11::module& m) {
       .def("predict",
            [](vision::ocr::Classifier& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);
-             int32_t cls_label;
-             float cls_score;
-             self.Predict(mat, &cls_label, &cls_score);
-             return std::make_pair(cls_label, cls_score);
+             vision::OCRResult ocr_result;
+             self.Predict(mat, &ocr_result);
+             return ocr_result;
            })
       .def("batch_predict", [](vision::ocr::Classifier& self,
                                std::vector<pybind11::array>& data) {
         std::vector<cv::Mat> images;
-        std::vector<int32_t> cls_labels;
-        std::vector<float> cls_scores;
         for (size_t i = 0; i < data.size(); ++i) {
           images.push_back(PyArrayToCvMat(data[i]));
         }
-        self.BatchPredict(images, &cls_labels, &cls_scores);
-        return std::make_pair(cls_labels, cls_scores);
+        vision::OCRResult ocr_result;
+        self.BatchPredict(images, &ocr_result);
+        return ocr_result;
       });
 
   // Recognizer
-  pybind11::class_<vision::ocr::RecognizerPreprocessor>(
-      m, "RecognizerPreprocessor")
+  pybind11::class_<vision::ocr::RecognizerPreprocessor,
+                   vision::ProcessorManager>(m, "RecognizerPreprocessor")
       .def(pybind11::init<>())
       .def_property("static_shape_infer",
                     &vision::ocr::RecognizerPreprocessor::GetStaticShapeInfer,
@@ -222,28 +237,34 @@ void BindPPOCRModel(pybind11::module& m) {
       .def_property("rec_image_shape",
                     &vision::ocr::RecognizerPreprocessor::GetRecImageShape,
                     &vision::ocr::RecognizerPreprocessor::SetRecImageShape)
-      .def_property("mean", &vision::ocr::RecognizerPreprocessor::GetMean,
-                    &vision::ocr::RecognizerPreprocessor::SetMean)
-      .def_property("scale", &vision::ocr::RecognizerPreprocessor::GetScale,
-                    &vision::ocr::RecognizerPreprocessor::SetScale)
-      .def_property("is_scale",
-                    &vision::ocr::RecognizerPreprocessor::GetIsScale,
-                    &vision::ocr::RecognizerPreprocessor::SetIsScale)
-      .def("run", [](vision::ocr::RecognizerPreprocessor& self,
-                     std::vector<pybind11::array>& im_list) {
-        std::vector<vision::FDMat> images;
-        for (size_t i = 0; i < im_list.size(); ++i) {
-          images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
-        }
-        std::vector<FDTensor> outputs;
-        if (!self.Run(&images, &outputs)) {
-          throw std::runtime_error(
-              "Failed to preprocess the input data in RecognizerPreprocessor.");
-        }
-        for (size_t i = 0; i < outputs.size(); ++i) {
-          outputs[i].StopSharing();
-        }
-        return outputs;
+      .def("set_normalize",
+           [](vision::ocr::RecognizerPreprocessor& self,
+              const std::vector<float>& mean, const std::vector<float>& std,
+              bool is_scale) { self.SetNormalize(mean, std, is_scale); })
+      .def("run",
+           [](vision::ocr::RecognizerPreprocessor& self,
+              std::vector<pybind11::array>& im_list) {
+             std::vector<vision::FDMat> images;
+             for (size_t i = 0; i < im_list.size(); ++i) {
+               images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
+             }
+             std::vector<FDTensor> outputs;
+             if (!self.Run(&images, &outputs)) {
+               throw std::runtime_error(
+                   "Failed to preprocess the input data in "
+                   "RecognizerPreprocessor.");
+             }
+             for (size_t i = 0; i < outputs.size(); ++i) {
+               outputs[i].StopSharing();
+             }
+             return outputs;
+           })
+      .def("disable_normalize",
+           [](vision::ocr::RecognizerPreprocessor& self) {
+             self.DisableNormalize();
+           })
+      .def("disable_permute", [](vision::ocr::RecognizerPreprocessor& self) {
+        self.DisablePermute();
       });
 
   pybind11::class_<vision::ocr::RecognizerPostprocessor>(
@@ -286,21 +307,19 @@ void BindPPOCRModel(pybind11::module& m) {
       .def("predict",
            [](vision::ocr::Recognizer& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);
-             std::string text;
-             float rec_score;
-             self.Predict(mat, &text, &rec_score);
-             return std::make_pair(text, rec_score);
+             vision::OCRResult ocr_result;
+             self.Predict(mat, &ocr_result);
+             return ocr_result;
            })
       .def("batch_predict", [](vision::ocr::Recognizer& self,
                                std::vector<pybind11::array>& data) {
         std::vector<cv::Mat> images;
-        std::vector<std::string> texts;
-        std::vector<float> rec_scores;
         for (size_t i = 0; i < data.size(); ++i) {
           images.push_back(PyArrayToCvMat(data[i]));
         }
-        self.BatchPredict(images, &texts, &rec_scores);
-        return std::make_pair(texts, rec_scores);
+        vision::OCRResult ocr_result;
+        self.BatchPredict(images, &ocr_result);
+        return ocr_result;
       });
 }
 }  // namespace fastdeploy
