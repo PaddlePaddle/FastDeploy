@@ -102,14 +102,14 @@ download_common_file() {
 }
 
 # PaddleDetection models with Paddle-TRT NMS
-download_fd_model_zxvf ppyoloe_crn_l_300e_coco_trt_nms.tgz
-download_fd_model_zxvf picodet_l_640_coco_lcnet_trt_nms.tgz
-download_fd_model_zxvf ppyoloe_plus_crn_m_80e_coco_trt_nms.tgz
+# download_fd_model_zxvf ppyoloe_crn_l_300e_coco_trt_nms.tgz
+# download_fd_model_zxvf picodet_l_640_coco_lcnet_trt_nms.tgz
+# download_fd_model_zxvf ppyoloe_plus_crn_m_80e_coco_trt_nms.tgz
 # download_fd_model_zxvf yolox_s_300e_coco_trt_nms.tgz
 # download_fd_model_zxvf yolov5_s_300e_coco_trt_nms.tgz
-download_fd_model_zxvf yolov6_s_300e_coco_trt_nms.tgz
+# download_fd_model_zxvf yolov6_s_300e_coco_trt_nms.tgz
 # download_fd_model_zxvf yolov7_l_300e_coco_trt_nms.tgz
-download_fd_model_zxvf yolov8_s_500e_coco_trt_nms.tgz
+# download_fd_model_zxvf yolov8_s_500e_coco_trt_nms.tgz
  
 # PaddleDetection models with normal NMS
 download_fd_model_zxvf ppyoloe_crn_l_300e_coco.tgz
