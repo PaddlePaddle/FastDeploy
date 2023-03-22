@@ -46,14 +46,14 @@ fi
 ./benchmark_ppocr_rec --model ch_PP-OCRv2_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH --trt_shape 1,3,32,10:4,3,32,320:8,3,32,2304
 
 # PaddleDetection
-./benchmark_ppyolov5 --model yolov5_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ppyolov6 --model yolov6_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ppyolox --model yolox_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ppyoloe --model ppyoloe_plus_crn_m_80e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_picodet --model picodet_l_640_coco_lcnet --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ppyolov7 --model yolov7_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ppyoloe --model ppyoloe_crn_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov5 --model yolov5_s_300e_coco_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov6 --model yolov6_s_300e_coco_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov8 --model yolov8_s_500e_coco_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolox --model yolox_s_300e_coco_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyoloe --model ppyoloe_plus_crn_m_80e_coco_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_picodet --model picodet_l_640_coco_lcnet_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov7 --model yolov7_l_300e_coco_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyoloe --model ppyoloe_crn_l_300e_coco_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH
 
 # PaddleSeg
 ./benchmark_ppseg --model Portrait_PP_HumanSegV2_Lite_256x144_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --trt_shape 1,3,144,256:1,3,144,256:1,3,144,256
