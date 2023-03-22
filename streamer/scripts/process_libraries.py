@@ -23,7 +23,7 @@ user_specified_dirs = ['', '', ]
 def process_on_linux(current_dir):
     rpaths = ["$ORIGIN:$ORIGIN/libs"]
     fd_libs = list()
-    libs_path = os.path.join(current_dir, "fastdeploy", "libs")
+    libs_path = os.path.join(current_dir, ".setuptools-cmake-build")
     for f in os.listdir(libs_path):
         filename = os.path.join(libs_path, f)
         if not os.path.isfile(filename):
@@ -32,22 +32,6 @@ def process_on_linux(current_dir):
             fd_libs.append(filename)
 
     cmake_build_dir = os.path.join(current_dir, ".setuptools-cmake-build")
-    patchelf_bin_path = os.path.join(cmake_build_dir, "third_libs/patchelf/bin/patchelf")
-    if not os.path.exists(patchelf_bin_path):
-        patchelf_bin_path = "patchelf"
-
-    third_libs_path = os.path.join(libs_path, "third_libs")
-
-    # remove some useless opencv file in python wheels to decrease package size
-    if os.path.exists(os.path.join(third_libs_path, "opencv")):
-        for root, dirs, files in os.walk(os.path.join(third_libs_path, "opencv")):
-            for f in files:
-                items = f.strip().split('.')
-                if len(items) != 4:
-                    os.remove(os.path.join(root, f))
-                    continue
-                if items[0].strip() not in ["libopencv_highgui", "libopencv_video", "libopencv_videoio", "libopencv_imgcodecs", "libopencv_imgproc", "libopencv_core"]:
-                    os.remove(os.path.join(root, f))
 
     all_libs_paths = [third_libs_path] + user_specified_dirs
     for path in all_libs_paths:
