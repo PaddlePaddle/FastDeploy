@@ -310,9 +310,6 @@ if sys.version_info[0] == 3:
 package_data = {PACKAGE_NAME: []}
 
 if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
-    from scripts.process_libraries import process_libraries
-    all_lib_data = process_libraries(
-        os.path.split(os.path.abspath(__file__))[0])
     package_data[PACKAGE_NAME].extend('libfd_streamer.so')
     setuptools.setup(
         name=wheel_name,
