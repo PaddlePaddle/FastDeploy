@@ -22,7 +22,7 @@ import os
 
 TOP_DIR = os.path.realpath(os.path.dirname(__file__))
 TOP_DIR = os.path.split(TOP_DIR)[0]
-PACKAGE_NAME = os.getenv("PACKAGE_NAME", "fastdeploy_streamer")
+PACKAGE_NAME = os.getenv("PACKAGE_NAME", "streamer")
 wheel_name = "fastdeploy-streamer-python"
 
 from distutils.spawn import find_executable
@@ -46,7 +46,7 @@ setup_configs = dict()
 setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
 
 SRC_DIR = os.path.join(TOP_DIR, PACKAGE_NAME)
-PYTHON_SRC_DIR = os.path.join(TOP_DIR, "streamer", PACKAGE_NAME)
+PYTHON_SRC_DIR = os.path.join(TOP_DIR, "streamer", "src")
 CMAKE_BUILD_DIR = os.path.join(TOP_DIR, 'streamer', '.setuptools-cmake-build')
 FASTDEPLOY_INSTALL_DIR = os.path.join(TOP_DIR,'build', 'installed_fastdeploy')
 
@@ -310,10 +310,10 @@ if sys.version_info[0] == 3:
 package_data = {PACKAGE_NAME: []}
 
 if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
-    # from scripts.process_libraries import process_libraries
-    # all_lib_data = process_libraries(
-    #     os.path.split(os.path.abspath(__file__))[0])
-    package_data[PACKAGE_NAME].extend(['/.setuptools-cmake-build/libfd_streamer.so'])
+    from scripts.process_libraries import process_libraries
+    all_lib_data = process_libraries(
+        os.path.split(os.path.abspath(__file__))[0])
+    package_data[PACKAGE_NAME].extend(all_lib_data)
     setuptools.setup(
         name=wheel_name,
         version=VersionInfo.version,
