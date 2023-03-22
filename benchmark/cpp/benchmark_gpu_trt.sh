@@ -7,6 +7,7 @@ if [ ! "$1" = "$CONFIG_PATH" ]; then
   fi
 fi
 
+
 # PaddleDetection
 ./benchmark_ppyolov5 --model yolov5_s_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
 ./benchmark_ppyolov6 --model yolov6_s_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
@@ -16,6 +17,22 @@ fi
 ./benchmark_ppyoloe --model ppyoloe_crn_l_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
 ./benchmark_ppyoloe --model ppyoloe_plus_crn_m_80e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
 ./benchmark_picodet --model picodet_l_640_coco_lcnet_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
+./benchmark_yolov3 --model yolov3_darknet53_270e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_picodet --model picodet_l_320_coco_lcnet --image 000000014439.jpg $CONFIG_PATH
+./benchmark_rtmdet --model rtmdet_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_rtmdet --model rtmdet_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov5 --model yolov5_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov5 --model yolov5_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov6 --model yolov6_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov6 --model yolov6_s_400e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov7 --model yolov7_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov7 --model yolov7_x_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyoloe --model ppyoloe_crn_l_80e_sliced_visdrone_640_025 --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ssd --model yolov8_x_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ssd --model yolov8_l_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ssd --model yolov8_m_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ssd --model yolov8_s_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ssd --model yolov8_n_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 
 # PaddleSeg
 ./benchmark_ppseg --model Portrait_PP_HumanSegV2_Lite_256x144_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --trt_shape 1,3,144,256:1,3,144,256:1,3,144,256
