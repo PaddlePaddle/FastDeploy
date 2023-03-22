@@ -1,11 +1,11 @@
 # source this file to import libraries
 
 PLATFORM=`uname`
-FASTDEPLOY_LIBRARY_PATH=${BASH_SOURCE:-.}
+FASTDEPLOY_LIBRARY_PATH=${BASH_SOURCE:-$0}
 if [[ "$PLATFORM" == "Linux" ]];then
     FASTDEPLOY_LIBRARY_PATH=`readlink -f ${FASTDEPLOY_LIBRARY_PATH}`
 fi
-FASTDEPLOY_LIBRARY_PATH=$(cd "${FASTDEPLOY_LIBRARY_PATH%/*}"; pwd)
+FASTDEPLOY_LIBRARY_PATH=$(cd `dirname ${FASTDEPLOY_LIBRARY_PATH}`; pwd)
 
 echo "=============== Information ======================"
 echo "FastDeploy Library Path: $FASTDEPLOY_LIBRARY_PATH"
