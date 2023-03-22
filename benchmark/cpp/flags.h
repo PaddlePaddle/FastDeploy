@@ -32,6 +32,7 @@ DEFINE_string(image, "", "Path of the image file.");
 DEFINE_string(config_path, "config.txt", "Path of benchmark config.");
 DEFINE_int32(warmup, -1, "Number of warmup for profiling.");
 DEFINE_int32(repeat, -1, "Number of repeats for profiling.");
+DEFINE_int32(xpu_l3_cache, -1, "Size xpu l3 cache for profiling.");
 
 static void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path "

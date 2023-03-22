@@ -43,7 +43,7 @@ fi
 ./benchmark_ppseg --model PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
 ./benchmark_ppseg --model SegFormer_B0-cityscapes-with-argmax --image cityscapes_demo.png --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
 ./benchmark_ppmatting --model PP-Matting-512 --image matting_input.jpg --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
-./benchmark_ppmatting --model PPHumanMatting --image matting_input.jpg --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
+./benchmark_ppmatting --model PPHumanMatting --image matting_input.jpg --config_path $CONFIG_PATH --trt_shape 1,3,2048,2048:1,3,2048,2048:1,3,2048,2048
 ./benchmark_ppmatting --model PPModnet_MobileNetV2 --image matting_input.jpg --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
 ./benchmark_ppseg --model Unet_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
 ./benchmark_ppseg --model PP_HumanSegV1_Server_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
