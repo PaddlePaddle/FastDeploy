@@ -23,7 +23,7 @@ user_specified_dirs = ['', '', ]
 def process_on_linux(current_dir):
     rpaths = ["$ORIGIN:$ORIGIN/libs"]
     fd_libs = list()
-    libs_path = os.path.join(current_dir, ".setuptools-cmake-build")
+    libs_path = os.path.join(current_dir, "src", "libs")
     for f in os.listdir(libs_path):
         filename = os.path.join(libs_path, f)
         if not os.path.isfile(filename):
@@ -137,7 +137,7 @@ def process_libraries(current_dir):
     elif platform.system().lower() == "windows":
         process_on_windows(current_dir)
 
-    all_files = get_all_files(os.path.join(current_dir, "fastdeploy", "libs"))
+    all_files = get_all_files(os.path.join(current_dir, "src", "libs"))
     package_data = list()
 
     if platform.system().lower() == "windows":
@@ -155,7 +155,7 @@ def process_libraries(current_dir):
                     "dll") or check_windows_legal_file(f):
                 package_data.append(
                     os.path.relpath(f, os.path.join(current_dir,
-                                                    "fastdeploy")))
+                                                    "src")))
 
         return package_data
 
@@ -183,5 +183,5 @@ def process_libraries(current_dir):
 
         if remain:
             package_data.append(
-                os.path.relpath(f, os.path.join(current_dir, "fastdeploy")))
+                os.path.relpath(f, os.path.join(current_dir, "src")))
     return package_data
