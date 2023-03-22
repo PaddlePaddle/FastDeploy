@@ -44,9 +44,9 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file,
   }
 
   if (CompareDetResult(res, det_result_file)) {
-    std::cout << "Run Successfully." << std::endl;
+    std::cout << model_dir + "Run Successfully." << std::endl;
   } else {
-    std::cerr << "Results have diff." << std::endl;
+    std::cerr << model_dir + "Results have diff." << std::endl;
   }
 }
 
