@@ -50,6 +50,10 @@ FDDataType GetFdDtype(const ONNXTensorElementDataType& ort_dtype) {
     return FDDataType::INT64;
   } else if (ort_dtype == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
     return FDDataType::FP16;
+  } else if (ort_dtype == ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8) {
+    return FDDataType::UINT8;
+  } else if (ort_dtype == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8) {
+    return FDDataType::INT8;
   }
   FDERROR << "Unrecognized ort data type:" << ort_dtype << "." << std::endl;
   return FDDataType::FP32;
