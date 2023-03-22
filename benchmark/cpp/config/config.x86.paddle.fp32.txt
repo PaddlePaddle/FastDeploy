@@ -1,6 +1,6 @@
 device: cpu
 device_id: 0
-cpu_thread_nums: 1
+cpu_thread_nums: 8
 warmup: 200
 repeat: 1000
 backend: paddle

@@ -34,9 +34,16 @@ int main(int argc, char* argv[]) {
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
-  auto model_file = FLAGS_model + sep + "model.pdmodel";
-  auto params_file = FLAGS_model + sep + "model.pdiparams";
-  auto config_file = FLAGS_model + sep + "deploy.yaml";
+  std::string model_name, params_name, config_name;
+  auto model_format = fastdeploy::ModelFormat::PADDLE;
+  if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
+                               &model_format, config_info)) {
+    return -1;
+  }
+
+  auto model_file = FLAGS_model + sep + model_name;
+  auto params_file = FLAGS_model + sep + params_name;
+  auto config_file = FLAGS_model + sep + config_name;
   if (config_info["backend"] == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
   }
@@ -44,12 +51,36 @@ int main(int argc, char* argv[]) {
       config_info["backend"] == "trt") {
     std::vector<std::vector<int32_t>> trt_shapes =
         benchmark::ResultManager::GetInputShapes(FLAGS_trt_shape);
-    option.trt_option.SetShape("x", trt_shapes[0], trt_shapes[1],
+    option.trt_option.SetShape("img", trt_shapes[0], trt_shapes[1],
                                trt_shapes[2]);
   }
-  auto model_ppmatting =
-      vision::matting::PPMatting(model_file, params_file, config_file, option);
+  auto model_ppmatting = vision::matting::PPMatting(
+      model_file, params_file, config_file, option, model_format);
   vision::MattingResult res;
+  if (config_info["precision_compare"] == "true") {
+    // Run once at least
+    model_ppmatting.Predict(&im, &res);
+    // 1. Test result diff
+    std::cout << "=============== Test result diff =================\n";
+    // Save result to -> disk.
+    std::string matting_result_path = "ppmatting_result.txt";
+    benchmark::ResultManager::SaveMattingResult(res, matting_result_path);
+    // Load result from <- disk.
+    vision::MattingResult res_loaded;
+    benchmark::ResultManager::LoadMattingResult(&res_loaded,
+                                                matting_result_path);
+    // Calculate diff between two results.
+    auto matting_diff =
+        benchmark::ResultManager::CalculateDiffStatis(res, res_loaded);
+    std::cout << "Alpha diff: mean=" << matting_diff.alpha.mean
+              << ", max=" << matting_diff.alpha.max
+              << ", min=" << matting_diff.alpha.min << std::endl;
+    if (res_loaded.contain_foreground) {
+      std::cout << "Foreground diff: mean=" << matting_diff.foreground.mean
+                << ", max=" << matting_diff.foreground.max
+                << ", min=" << matting_diff.foreground.min << std::endl;
+    }
+  }
   BENCHMARK_MODEL(model_ppmatting, model_ppmatting.Predict(&im, &res))
   auto vis_im = vision::VisMatting(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
