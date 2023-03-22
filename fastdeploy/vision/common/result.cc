@@ -16,9 +16,19 @@
 namespace fastdeploy {
 namespace vision {
 
-void ClassifyResult::Clear() {
+void ClassifyResult::Free() {
   std::vector<int32_t>().swap(label_ids);
   std::vector<float>().swap(scores);
+}
+
+void ClassifyResult::Clear() {
+  label_ids.clear();
+  scores.clear();
+}
+
+void ClassifyResult::Resize(int size) {
+  label_ids.resize(size);
+  scores.resize(size);
 }
 
 std::string ClassifyResult::Str() {
@@ -47,9 +57,14 @@ void Mask::Reserve(int size) { data.reserve(size); }
 
 void Mask::Resize(int size) { data.resize(size); }
 
-void Mask::Clear() {
+void Mask::Free() {
   std::vector<uint8_t>().swap(data);
   std::vector<int64_t>().swap(shape);
+}
+
+void Mask::Clear() {
+  data.clear();
+  shape.clear();
 }
 
 std::string Mask::Str() {
@@ -94,7 +109,7 @@ DetectionResult& DetectionResult::operator=(DetectionResult&& other) {
   return *this;
 }
 
-void DetectionResult::Clear() {
+void DetectionResult::Free() {
   std::vector<std::array<float, 4>>().swap(boxes);
   std::vector<float>().swap(scores);
   std::vector<int32_t>().swap(label_ids);
@@ -102,18 +117,30 @@ void DetectionResult::Clear() {
   contain_masks = false;
 }
 
+void DetectionResult::Clear() {
+  boxes.clear();
+  scores.clear();
+  label_ids.clear();
+  masks.clear();
+  contain_masks = false;
+}
+
 void DetectionResult::Reserve(int size) {
   boxes.reserve(size);
   scores.reserve(size);
   label_ids.reserve(size);
-  masks.reserve(size);
+  if (contain_masks) {
+    masks.reserve(size);
+  }
 }
 
 void DetectionResult::Resize(int size) {
   boxes.resize(size);
   scores.resize(size);
   label_ids.resize(size);
-  masks.resize(size);
+  if (contain_masks) {
+    masks.resize(size);
+  }
 }
 
 std::string DetectionResult::Str() {
@@ -139,9 +166,15 @@ std::string DetectionResult::Str() {
   return out;
 }
 
-void KeyPointDetectionResult::Clear() {
+void KeyPointDetectionResult::Free() {
   std::vector<std::array<float, 2>>().swap(keypoints);
   std::vector<float>().swap(scores);
+  num_joints = -1;
+}
+
+void KeyPointDetectionResult::Clear() {
+  keypoints.clear();
+  scores.clear();
   num_joints = -1;
 }
 
@@ -155,8 +188,8 @@ std::string KeyPointDetectionResult::Str() {
   out = "KeyPointDetectionResult: [x, y, conf]\n";
   for (size_t i = 0; i < keypoints.size(); ++i) {
     out = out + std::to_string(keypoints[i][0]) + "," +
-          std::to_string(keypoints[i][1]) + ", " +
-          std::to_string(scores[i]) + "\n";
+          std::to_string(keypoints[i][1]) + ", " + std::to_string(scores[i]) +
+          "\n";
   }
   out += "num_joints:" + std::to_string(num_joints) + "\n";
   return out;
@@ -170,22 +203,22 @@ void OCRResult::Clear() {
   cls_labels.clear();
 }
 
-void MOTResult::Clear(){
+void MOTResult::Clear() {
   boxes.clear();
   ids.clear();
   scores.clear();
   class_ids.clear();
 }
 
-std::string MOTResult::Str(){
+std::string MOTResult::Str() {
   std::string out;
-  out = "MOTResult:\nall boxes counts: "+std::to_string(boxes.size())+"\n";
+  out = "MOTResult:\nall boxes counts: " + std::to_string(boxes.size()) + "\n";
   out += "[xmin\tymin\txmax\tymax\tid\tscore]\n";
   for (size_t i = 0; i < boxes.size(); ++i) {
-    out = out + "["+ std::to_string(boxes[i][0]) + "\t" +
+    out = out + "[" + std::to_string(boxes[i][0]) + "\t" +
           std::to_string(boxes[i][1]) + "\t" + std::to_string(boxes[i][2]) +
-          "\t" + std::to_string(boxes[i][3]) + "\t" +
-          std::to_string(ids[i]) + "\t" + std::to_string(scores[i]) + "]\n";
+          "\t" + std::to_string(boxes[i][3]) + "\t" + std::to_string(ids[i]) +
+          "\t" + std::to_string(scores[i]) + "]\n";
   }
   return out;
 }
@@ -197,10 +230,17 @@ FaceDetectionResult::FaceDetectionResult(const FaceDetectionResult& res) {
   landmarks_per_face = res.landmarks_per_face;
 }
 
-void FaceDetectionResult::Clear() {
+void FaceDetectionResult::Free() {
   std::vector<std::array<float, 4>>().swap(boxes);
   std::vector<float>().swap(scores);
   std::vector<std::array<float, 2>>().swap(landmarks);
+  landmarks_per_face = 0;
+}
+
+void FaceDetectionResult::Clear() {
+  boxes.clear();
+  scores.clear();
+  landmarks.clear();
   landmarks_per_face = 0;
 }
 
@@ -257,23 +297,22 @@ std::string FaceDetectionResult::Str() {
   return out;
 }
 
-void FaceAlignmentResult::Clear() {
+void FaceAlignmentResult::Free() {
   std::vector<std::array<float, 2>>().swap(landmarks);
 }
 
-void FaceAlignmentResult::Reserve(int size) {
-  landmarks.resize(size);
-}
+void FaceAlignmentResult::Clear() { landmarks.clear(); }
 
-void FaceAlignmentResult::Resize(int size) {
-  landmarks.resize(size);
-}
+void FaceAlignmentResult::Reserve(int size) { landmarks.resize(size); }
+
+void FaceAlignmentResult::Resize(int size) { landmarks.resize(size); }
 
 std::string FaceAlignmentResult::Str() {
   std::string out;
 
   out = "FaceAlignmentResult: [x, y]\n";
-  out = out + "There are " +std::to_string(landmarks.size()) + " landmarks, the top 10 are listed as below:\n";
+  out = out + "There are " + std::to_string(landmarks.size()) +
+        " landmarks, the top 10 are listed as below:\n";
   int landmarks_size = landmarks.size();
   size_t result_length = std::min(10, landmarks_size);
   for (size_t i = 0; i < result_length; ++i) {
@@ -355,7 +394,9 @@ FaceRecognitionResult::FaceRecognitionResult(const FaceRecognitionResult& res) {
   embedding.assign(res.embedding.begin(), res.embedding.end());
 }
 
-void FaceRecognitionResult::Clear() { std::vector<float>().swap(embedding); }
+void FaceRecognitionResult::Free() { std::vector<float>().swap(embedding); }
+
+void FaceRecognitionResult::Clear() { embedding.clear(); }
 
 void FaceRecognitionResult::Reserve(int size) { embedding.reserve(size); }
 
@@ -536,28 +577,23 @@ std::string OCRResult::Str() {
   return no_result;
 }
 
-void HeadPoseResult::Clear() {
-  std::vector<float>().swap(euler_angles);
-}
+void HeadPoseResult::Free() { std::vector<float>().swap(euler_angles); }
 
-void HeadPoseResult::Reserve(int size) {
-  euler_angles.resize(size);
-}
+void HeadPoseResult::Clear() { euler_angles.clear(); }
 
-void HeadPoseResult::Resize(int size) {
-  euler_angles.resize(size);
-}
+void HeadPoseResult::Reserve(int size) { euler_angles.resize(size); }
+
+void HeadPoseResult::Resize(int size) { euler_angles.resize(size); }
 
 std::string HeadPoseResult::Str() {
   std::string out;
 
   out = "HeadPoseResult: [yaw, pitch, roll]\n";
-  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" +
-        "pitch: " + std::to_string(euler_angles[1]) + "\n" +
-        "roll: " + std::to_string(euler_angles[2]) + "\n";
+  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" + "pitch: " +
+        std::to_string(euler_angles[1]) + "\n" + "roll: " +
+        std::to_string(euler_angles[2]) + "\n";
   return out;
 }
-
 
 }  // namespace vision
 }  // namespace fastdeploy

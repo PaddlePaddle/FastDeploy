@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include "fastdeploy/vision/common/processors/manager.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
@@ -22,7 +23,7 @@ namespace vision {
 namespace classification {
 /*! @brief Preprocessor object for PaddleClas serials model.
  */
-class FASTDEPLOY_DECL PaddleClasPreprocessor {
+class FASTDEPLOY_DECL PaddleClasPreprocessor : public ProcessorManager {
  public:
   /** \brief Create a preprocessor instance for PaddleClas serials model
    *
@@ -30,40 +31,41 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
    */
   explicit PaddleClasPreprocessor(const std::string& config_file);
 
-  /** \brief Process the input image and prepare input tensors for runtime
+  /** \brief Implement the virtual function of ProcessorManager, Apply() is the
+   *  body of Run(). Apply() contains the main logic of preprocessing, Run() is
+   *  called by users to execute preprocessing
    *
-   * \param[in] images The input image data list, all the elements are returned by cv::imread()
+   * \param[in] image_batch The input image batch
    * \param[in] outputs The output tensors which will feed in runtime
    * \return true if the preprocess successed, otherwise false
    */
-  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
-
-  /** \brief Use GPU to run preprocessing
-   *
-   * \param[in] gpu_id GPU device id
-   */
-  void UseGpu(int gpu_id = -1);
-
-  bool WithGpu() { return use_cuda_; }
+  virtual bool Apply(FDMatBatch* image_batch,
+                     std::vector<FDTensor>* outputs);
 
   /// This function will disable normalize in preprocessing step.
   void DisableNormalize();
   /// This function will disable hwc2chw in preprocessing step.
   void DisablePermute();
 
+  /** \brief When the initial operator is Resize, and input image size is large,
+   *     maybe it's better to run resize on CPU, because the HostToDevice memcpy
+   *     is time consuming. Set this true to run the initial resize on CPU.
+   *
+   * \param[in] v ture or false
+   */
+  void InitialResizeOnCpu(bool v) { initial_resize_on_cpu_ = v; }
+
  private:
   bool BuildPreprocessPipelineFromConfig();
-  std::vector<std::shared_ptr<Processor>> processors_;
   bool initialized_ = false;
-  bool use_cuda_ = false;
-  // GPU device id
-  int device_id_ = -1;
+  std::vector<std::shared_ptr<Processor>> processors_;
   // for recording the switch of hwc2chw
   bool disable_permute_ = false;
   // for recording the switch of normalize
   bool disable_normalize_ = false;
   // read config file
   std::string config_file_;
+  bool initial_resize_on_cpu_ = false;
 };
 
 }  // namespace classification

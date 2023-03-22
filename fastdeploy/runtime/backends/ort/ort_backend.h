@@ -24,6 +24,10 @@
 #include "fastdeploy/runtime/backends/ort/option.h"
 #include "onnxruntime_cxx_api.h"  // NOLINT
 
+#ifdef WITH_DIRECTML
+#include "dml_provider_factory.h" // NOLINT
+#endif
+
 namespace fastdeploy {
 
 struct OrtValueInfo {
@@ -37,16 +41,9 @@ class OrtBackend : public BaseBackend {
   OrtBackend() {}
   virtual ~OrtBackend() = default;
 
-  void BuildOption(const OrtBackendOption& option);
+  bool BuildOption(const OrtBackendOption& option);
 
-  bool InitFromPaddle(const std::string& model_file,
-                      const std::string& params_file,
-                      const OrtBackendOption& option = OrtBackendOption(),
-                      bool verbose = false);
-
-  bool InitFromOnnx(const std::string& model_file,
-                    const OrtBackendOption& option = OrtBackendOption(),
-                    bool from_memory_buffer = false);
+  bool Init(const RuntimeOption& option);
 
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
@@ -63,6 +60,14 @@ class OrtBackend : public BaseBackend {
   void InitCustomOperators();
 
  private:
+  bool InitFromPaddle(const std::string& model_buffer,
+                      const std::string& params_buffer,
+                      const OrtBackendOption& option = OrtBackendOption(),
+                      bool verbose = false);
+
+  bool InitFromOnnx(const std::string& model_buffer,
+                    const OrtBackendOption& option = OrtBackendOption());
+
   Ort::Env env_;
   Ort::Session session_{nullptr};
   Ort::SessionOptions session_options_;

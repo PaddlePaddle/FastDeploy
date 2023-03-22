@@ -15,16 +15,33 @@
 #pragma once
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 
 namespace fastdeploy {
 namespace vision {
-
 namespace detection {
 /*! @brief Postprocessor object for PaddleDet serials model.
  */
 class FASTDEPLOY_DECL PaddleDetPostprocessor {
  public:
-  PaddleDetPostprocessor() = default;
+  PaddleDetPostprocessor() {
+    // There may be no NMS config in the yaml file,
+    // so we need to give a initial value to multi_class_nms_.
+    multi_class_nms_.SetNMSOption(NMSOption());
+  }
+
+  /** \brief Create a preprocessor instance for PaddleDet serials model
+   *
+   * \param[in] config_file Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+   */
+  explicit PaddleDetPostprocessor(const std::string& arch) {
+    // Used to differentiate models
+    arch_ = arch;
+    // There may be no NMS config in the yaml file,
+    // so we need to give a initial value to multi_class_nms_.
+    multi_class_nms_.SetNMSOption(NMSOption());
+  }
+
   /** \brief Process the result of runtime and fill to ClassifyResult structure
    *
    * \param[in] tensors The inference result from runtime
@@ -36,24 +53,47 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
 
   /// Apply box decoding and nms step for the outputs for the model.This is
   /// only available for those model exported without box decoding and nms.
-  void ApplyDecodeAndNMS();
+  void ApplyNMS() { with_nms_ = false; }
 
-  bool DecodeAndNMSApplied();
+  /// If you do not want to modify the Yaml configuration file,
+  /// you can use this function to set NMS parameters.
+  void SetNMSOption(const NMSOption& option) {
+    multi_class_nms_.SetNMSOption(option);
+  }
 
-  /// Set scale_factor_ value.This is only available for those model exported
-  /// without box decoding and nms.
-  void SetScaleFactor(float* scale_factor_value);
+  // Set scale_factor_ value.This is only available for those model exported
+  // without nms.
+  void SetScaleFactor(const std::vector<float>& scale_factor_value) {
+    scale_factor_ = scale_factor_value;
+  }
 
  private:
+  std::vector<float> scale_factor_{0.0, 0.0};
+  std::vector<float> GetScaleFactor() { return scale_factor_; }
+
+  // for model without nms.
+  bool with_nms_ = true;
+
+  // Used to differentiate models
+  std::string arch_;
+
+  PaddleMultiClassNMS multi_class_nms_{};
+
+  // Process for General tensor without nms.
+  bool ProcessWithoutNMS(const std::vector<FDTensor>& tensors,
+                         std::vector<DetectionResult>* results);
+
+  // Process for General tensor with nms.
+  bool ProcessWithNMS(const std::vector<FDTensor>& tensors,
+                      std::vector<DetectionResult>* results);
+
+  // Process SOLOv2
+  bool ProcessSolov2(const std::vector<FDTensor>& tensors,
+                     std::vector<DetectionResult>* results);
+
   // Process mask tensor for MaskRCNN
   bool ProcessMask(const FDTensor& tensor,
                    std::vector<DetectionResult>* results);
-
-  bool apply_decode_and_nms_ = false;
-  std::vector<float> scale_factor_{1.0, 1.0};
-  std::vector<float> GetScaleFactor();
-  bool ProcessUnDecodeResults(const std::vector<FDTensor>& tensors,
-                              std::vector<DetectionResult>* results);
 };
 
 }  // namespace detection

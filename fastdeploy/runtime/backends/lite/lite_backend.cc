@@ -13,148 +13,42 @@
 // limitations under the License.
 
 #include "fastdeploy/runtime/backends/lite/lite_backend.h"
+// https://github.com/PaddlePaddle/Paddle-Lite/issues/8290
+// When compiling the FastDeploy dynamic library, namely,
+// WITH_STATIC_LIB=OFF, and depending on the Paddle Lite
+// static library, you need to include the fake registration
+// codes of Paddle Lite. When you compile the FastDeploy static
+// library and depends on the Paddle Lite static library,
+// WITH_STATIC_LIB=ON, you do not need to include the fake
+// registration codes for Paddle Lite, but wait until you
+// use the FastDeploy static library.
+#if (defined(WITH_LITE_STATIC) && (!defined(WITH_STATIC_LIB)))
+#warning You are compiling the FastDeploy dynamic library with \
+Paddle Lite static lib We will automatically add some registration \
+codes for ops, kernels and passes for Paddle Lite.
+#include "paddle_use_kernels.h"  // NOLINT
+#include "paddle_use_ops.h"      // NOLINT
+#include "paddle_use_passes.h"   // NOLINT
+#endif
 
 #include <cstring>
 
 namespace fastdeploy {
 
-// Convert data type from paddle lite to fastdeploy
-FDDataType LiteDataTypeToFD(const paddle::lite_api::PrecisionType& dtype) {
-  if (dtype == paddle::lite_api::PrecisionType::kFloat) {
-    return FDDataType::FP32;
-  } else if (dtype == paddle::lite_api::PrecisionType::kInt8) {
-    return FDDataType::INT8;
-  } else if (dtype == paddle::lite_api::PrecisionType::kInt32) {
-    return FDDataType::INT32;
-  } else if (dtype == paddle::lite_api::PrecisionType::kInt64) {
-    return FDDataType::INT64;
-  } else if (dtype == paddle::lite_api::PrecisionType::kInt16) {
-    return FDDataType::INT16;
-  } else if (dtype == paddle::lite_api::PrecisionType::kUInt8) {
-    return FDDataType::UINT8;
-  } else if (dtype == paddle::lite_api::PrecisionType::kFP64) {
-    return FDDataType::FP64;
-  }
-  FDASSERT(false, "Unexpected data type of %d.", dtype);
-  return FDDataType::FP32;
-}
-
 void LiteBackend::BuildOption(const LiteBackendOption& option) {
   option_ = option;
-  std::vector<paddle::lite_api::Place> valid_places;
-  if (option_.enable_int8) {
-    if (option_.enable_kunlunxin) {
-      valid_places.push_back(
-          paddle::lite_api::Place{TARGET(kXPU), PRECISION(kInt8)});
-    } else {
-      valid_places.push_back(
-          paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
-    }
-    FDINFO << "Lite::Backend enable_int8 option is ON ! Lite::Backend will "
-           << "inference with int8 precision!" << std::endl;
+
+  if (option_.device == Device::CPU) {
+    ConfigureCpu(option_);
+  } else if (option_.device == Device::TIMVX) {
+    ConfigureTimvx(option_);
+  } else if (option_.device == Device::KUNLUNXIN) {
+    ConfigureKunlunXin(option_);
+  } else if (option_.device == Device::ASCEND) {
+    ConfigureAscend(option_);
   }
-  if (option_.enable_fp16) {
-    if (option_.enable_kunlunxin) {
-      valid_places.push_back(
-          paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFP16)});
-    } else {
-      paddle::lite_api::MobileConfig check_fp16_config;
-      // Determine whether the device supports the FP16
-      // instruction set (or whether it is an arm device
-      // of the armv8.2 architecture)
-      supported_fp16_ = check_fp16_config.check_fp16_valid();
-      if (supported_fp16_) {
-        valid_places.push_back(
-            paddle::lite_api::Place{TARGET(kARM), PRECISION(kFP16)});
-        FDINFO << "The device supports FP16, Lite::Backend will inference with "
-                  "FP16 precision."
-               << std::endl;
-      } else {
-        FDWARNING << "The device doesn't support FP16, will fallback to FP32.";
-      }
-    }
-  }
-  if (!option_.nnadapter_subgraph_partition_config_path.empty()) {
-    std::vector<char> nnadapter_subgraph_partition_config_buffer;
-    if (ReadFile(option_.nnadapter_subgraph_partition_config_path,
-                 &nnadapter_subgraph_partition_config_buffer, false)) {
-      if (!nnadapter_subgraph_partition_config_buffer.empty()) {
-        std::string nnadapter_subgraph_partition_config_string(
-            nnadapter_subgraph_partition_config_buffer.data(),
-            nnadapter_subgraph_partition_config_buffer.size());
-        config_.set_nnadapter_subgraph_partition_config_buffer(
-            nnadapter_subgraph_partition_config_string);
-      }
-    }
-  }
-  if (option_.enable_timvx) {
-    config_.set_nnadapter_device_names({"verisilicon_timvx"});
-    valid_places.push_back(
-        paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});
-    valid_places.push_back(
-        paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kFloat)});
-    valid_places.push_back(
-        paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
-  }
-
-  if (option_.enable_ascend) {
-    if (option_.nnadapter_device_names.empty()) {
-      config_.set_nnadapter_device_names({"huawei_ascend_npu"});
-    } else {
-      config_.set_nnadapter_device_names(option_.nnadapter_device_names);
-    }
-
-    if (!option_.nnadapter_context_properties.empty()) {
-      config_.set_nnadapter_context_properties(
-          option_.nnadapter_context_properties);
-    }
-
-    if (!option_.nnadapter_model_cache_dir.empty()) {
-      config_.set_nnadapter_model_cache_dir(option_.nnadapter_model_cache_dir);
-    }
-
-    if (!option_.nnadapter_mixed_precision_quantization_config_path.empty()) {
-      config_.set_nnadapter_mixed_precision_quantization_config_path(
-          option_.nnadapter_mixed_precision_quantization_config_path);
-    }
-
-    if (!option_.nnadapter_subgraph_partition_config_path.empty()) {
-      config_.set_nnadapter_subgraph_partition_config_path(
-          option_.nnadapter_subgraph_partition_config_path);
-    }
-
-    valid_places.push_back(
-        paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});
-    valid_places.push_back(
-        paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kFloat)});
-    valid_places.push_back(
-        paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
-  }
-
-  if (option_.enable_kunlunxin) {
-    valid_places.push_back(
-        paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFloat)});
-    valid_places.push_back(
-        paddle::lite_api::Place{TARGET(kX86), PRECISION(kFloat)});
-    config_.set_xpu_dev_per_thread(option_.device_id);
-    config_.set_xpu_workspace_l3_size_per_thread(
-        option_.kunlunxin_l3_workspace_size);
-    config_.set_xpu_l3_cache_method(option_.kunlunxin_l3_workspace_size,
-                                    option_.kunlunxin_locked);
-    config_.set_xpu_conv_autotune(option_.kunlunxin_autotune,
-                                  option_.kunlunxin_autotune_file);
-    config_.set_xpu_multi_encoder_method(option_.kunlunxin_precision,
-                                         option_.kunlunxin_adaptive_seqlen);
-    if (option_.kunlunxin_enable_multi_stream) {
-      config_.enable_xpu_multi_stream();
-    }
-  } else {
-    valid_places.push_back(
-        paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
-  }
-  config_.set_valid_places(valid_places);
-  if (option_.threads > 0) {
-    config_.set_threads(option_.threads);
+  if (option_.cpu_threads > 0) {
+    config_.set_threads(option_.cpu_threads);
   }
   if (option_.power_mode > 0) {
     config_.set_power_mode(
@@ -162,41 +56,39 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
   }
 }
 
-bool LiteBackend::ReadFile(const std::string& filename,
-                           std::vector<char>* contents, const bool binary) {
-  FILE* fp = fopen(filename.c_str(), binary ? "rb" : "r");
-  if (!fp) {
-    FDERROR << "Cannot open file " << filename << "." << std::endl;
-    return false;
-  }
-  fseek(fp, 0, SEEK_END);
-  size_t size = ftell(fp);
-  fseek(fp, 0, SEEK_SET);
-  contents->clear();
-  contents->resize(size);
-  size_t offset = 0;
-  char* ptr = reinterpret_cast<char*>(&(contents->at(0)));
-  while (offset < size) {
-    size_t already_read = fread(ptr, 1, size - offset, fp);
-    offset += already_read;
-    ptr += already_read;
-  }
-  fclose(fp);
-  return true;
-}
-
-bool LiteBackend::InitFromPaddle(const std::string& model_file,
-                                 const std::string& params_file,
-                                 const LiteBackendOption& option) {
+bool LiteBackend::Init(const RuntimeOption& runtime_option) {
   if (initialized_) {
     FDERROR << "LiteBackend is already initialized, cannot initialize again."
             << std::endl;
     return false;
   }
 
-  config_.set_model_file(model_file);
-  config_.set_param_file(params_file);
-  BuildOption(option);
+  if (runtime_option.model_format != ModelFormat::PADDLE) {
+    FDERROR
+        << "PaddleLiteBackend only supports model format PADDLE, but now it's "
+        << runtime_option.model_format << "." << std::endl;
+    return false;
+  }
+  if (runtime_option.device != Device::CPU &&
+      runtime_option.device != Device::KUNLUNXIN &&
+      runtime_option.device != Device::ASCEND &&
+      runtime_option.device != Device::TIMVX) {
+    FDERROR << "PaddleLiteBackend only supports "
+               "Device::CPU/Device::TIMVX/Device::KUNLUNXIN/Device::ASCEND, "
+               "but now it's "
+            << runtime_option.device << "." << std::endl;
+    return false;
+  }
+  if (runtime_option.model_from_memory_) {
+    FDERROR << "PaddleLiteBackend doesn't support load model from memory, "
+               "please load model from disk."
+            << std::endl;
+    return false;
+  }
+
+  config_.set_model_file(runtime_option.model_file);
+  config_.set_param_file(runtime_option.params_file);
+  BuildOption(runtime_option.paddle_lite_option);
   predictor_ =
       paddle::lite_api::CreatePaddlePredictor<paddle::lite_api::CxxConfig>(
           config_);
@@ -229,7 +121,7 @@ bool LiteBackend::InitFromPaddle(const std::string& model_file,
     auto shape = tensor->shape();
     info.shape.assign(shape.begin(), shape.end());
     info.name = output_names[i];
-    if (!option_.enable_kunlunxin) {
+    if (option_.device != Device::KUNLUNXIN) {
       info.dtype = LiteDataTypeToFD(tensor->precision());
     }
     outputs_desc_.emplace_back(info);
@@ -265,6 +157,8 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
             << inputs_desc_.size() << ")." << std::endl;
     return false;
   }
+
+  RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
   for (size_t i = 0; i < inputs.size(); ++i) {
     auto iter = inputs_order_.find(inputs[i].name);
     if (iter == inputs_order_.end()) {
@@ -272,6 +166,7 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
               << " in loaded model." << std::endl;
       return false;
     }
+
     auto tensor = predictor_->GetInput(iter->second);
     // Adjust dims only, allocate lazy.
     tensor->Resize(inputs[i].shape);
@@ -304,7 +199,9 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
     }
   }
 
+  RUNTIME_PROFILE_LOOP_BEGIN(1)
   predictor_->Run();
+  RUNTIME_PROFILE_LOOP_END
 
   outputs->resize(outputs_desc_.size());
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
@@ -317,7 +214,53 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
     memcpy((*outputs)[i].MutableData(), tensor->data<void>(),
            (*outputs)[i].Nbytes());
   }
+  RUNTIME_PROFILE_LOOP_H2D_D2H_END
   return true;
+}
+
+bool ReadFile(const std::string& filename, std::vector<char>* contents,
+              bool binary) {
+  FILE* fp = fopen(filename.c_str(), binary ? "rb" : "r");
+  if (!fp) {
+    FDERROR << "Cannot open file " << filename << "." << std::endl;
+    return false;
+  }
+  fseek(fp, 0, SEEK_END);
+  size_t size = ftell(fp);
+  fseek(fp, 0, SEEK_SET);
+  contents->clear();
+  contents->resize(size);
+  size_t offset = 0;
+  char* ptr = reinterpret_cast<char*>(&(contents->at(0)));
+  while (offset < size) {
+    size_t already_read = fread(ptr, 1, size - offset, fp);
+    offset += already_read;
+    ptr += already_read;
+  }
+  fclose(fp);
+  return true;
+}
+
+// Convert data type from paddle lite to fastdeploy
+FDDataType LiteDataTypeToFD(const paddle::lite_api::PrecisionType& dtype) {
+  if (dtype == paddle::lite_api::PrecisionType::kFloat) {
+    return FDDataType::FP32;
+  } else if (dtype == paddle::lite_api::PrecisionType::kInt8) {
+    return FDDataType::INT8;
+  } else if (dtype == paddle::lite_api::PrecisionType::kInt32) {
+    return FDDataType::INT32;
+  } else if (dtype == paddle::lite_api::PrecisionType::kInt64) {
+    return FDDataType::INT64;
+  } else if (dtype == paddle::lite_api::PrecisionType::kInt16) {
+    return FDDataType::INT16;
+  } else if (dtype == paddle::lite_api::PrecisionType::kUInt8) {
+    return FDDataType::UINT8;
+  } else if (dtype == paddle::lite_api::PrecisionType::kFP64) {
+    return FDDataType::FP64;
+  }
+  FDASSERT(false, "Unexpected data type of %s.",
+           paddle::lite_api::PrecisionToStr(dtype).c_str());
+  return FDDataType::FP32;
 }
 
 }  // namespace fastdeploy

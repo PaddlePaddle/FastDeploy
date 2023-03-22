@@ -17,7 +17,7 @@
 namespace fastdeploy {
 namespace vision {
 
-bool Resize::ImplByOpenCV(Mat* mat) {
+bool Resize::ImplByOpenCV(FDMat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "Resize: The format of input is not HWC." << std::endl;
     return false;
@@ -55,7 +55,7 @@ bool Resize::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool Resize::ImplByFlyCV(Mat* mat) {
+bool Resize::ImplByFlyCV(FDMat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "Resize: The format of input is not HWC." << std::endl;
     return false;
@@ -79,7 +79,7 @@ bool Resize::ImplByFlyCV(Mat* mat) {
   } else if (interp_ == 2) {
     interp_method = fcv::InterpolationType::INTER_CUBIC;
   } else if (interp_ == 3) {
-    interp_method = fcv::InterpolationType::INTER_AREA;  
+    interp_method = fcv::InterpolationType::INTER_AREA;
   } else {
     FDERROR << "Resize: Only support interp_ be 0/1/2/3 with FlyCV, but "
                "now it's "
@@ -116,8 +116,50 @@ bool Resize::ImplByFlyCV(Mat* mat) {
 }
 #endif
 
-bool Resize::Run(Mat* mat, int width, int height, float scale_w, float scale_h,
-                 int interp, bool use_scale, ProcLib lib) {
+#ifdef ENABLE_CVCUDA
+bool Resize::ImplByCvCuda(FDMat* mat) {
+  if (width_ == mat->Width() && height_ == mat->Height()) {
+    return true;
+  }
+  if (fabs(scale_w_ - 1.0) < 1e-06 && fabs(scale_h_ - 1.0) < 1e-06) {
+    return true;
+  }
+
+  if (width_ > 0 && height_ > 0) {
+  } else if (scale_w_ > 0 && scale_h_ > 0) {
+    width_ = std::round(scale_w_ * mat->Width());
+    height_ = std::round(scale_h_ * mat->Height());
+  } else {
+    FDERROR << "Resize: the parameters must satisfy (width > 0 && height > 0) "
+               "or (scale_w > 0 && scale_h > 0)."
+            << std::endl;
+    return false;
+  }
+
+  // Prepare input tensor
+  FDTensor* src = CreateCachedGpuInputTensor(mat);
+  auto src_tensor = CreateCvCudaTensorWrapData(*src);
+
+  // Prepare output tensor
+  mat->output_cache->Resize({height_, width_, mat->Channels()}, mat->Type(),
+                            "output_cache", Device::GPU);
+  auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
+
+  // CV-CUDA Interp value is compatible with OpenCV
+  cvcuda_resize_op_(mat->Stream(), src_tensor, dst_tensor,
+                    CreateCvCudaInterp(interp_));
+
+  mat->SetTensor(mat->output_cache);
+  mat->SetWidth(width_);
+  mat->SetHeight(height_);
+  mat->device = Device::GPU;
+  mat->mat_type = ProcLib::CVCUDA;
+  return true;
+}
+#endif
+
+bool Resize::Run(FDMat* mat, int width, int height, float scale_w,
+                 float scale_h, int interp, bool use_scale, ProcLib lib) {
   if (mat->Height() == height && mat->Width() == width) {
     return true;
   }

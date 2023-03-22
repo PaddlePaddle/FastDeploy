@@ -56,11 +56,19 @@ class FASTDEPLOY_DECL Yolov7FacePostprocessor{
   /// Get nms_threshold, default 0.45
   float GetNMSThreshold() const { return nms_threshold_; }
 
+  /// Set landmarks_per_face, default 5
+  void SetLandmarksPerFace(const int& landmarks_per_face) {
+    landmarks_per_face_ = landmarks_per_face;
+  }
+
+  /// Get landmarks_per_face, default 5
+  int GetLandmarksPerFace() const { return landmarks_per_face_; }
+
+
  protected:
   float conf_threshold_;
   float nms_threshold_;
-  bool multi_label_;
-  float max_wh_;
+  int landmarks_per_face_;
 };
 
 }  // namespace facedet

@@ -26,7 +26,7 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_
 
 # Download the example code for deployment
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/ocr/PP-OCRv3/python/
+cd examples/vision/ocr/PP-OCRv3/python/
 
 # CPU inference
 python infer.py --det_model ch_PP-OCRv3_det_infer --cls_model ch_ppocr_mobile_v2.0_cls_infer --rec_model ch_PP-OCRv3_rec_infer --rec_label_file ppocr_keys_v1.txt --image 12.jpg --device cpu

@@ -19,6 +19,7 @@
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_postprocess_op.h"
 #include "fastdeploy/vision/ocr/ppocr/cls_postprocessor.h"
 #include "fastdeploy/vision/ocr/ppocr/cls_preprocessor.h"
+#include "fastdeploy/utils/unique_ptr.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -41,6 +42,13 @@ class FASTDEPLOY_DECL Classifier : public FastDeployModel {
   Classifier(const std::string& model_file, const std::string& params_file = "",
              const RuntimeOption& custom_option = RuntimeOption(),
              const ModelFormat& model_format = ModelFormat::PADDLE);
+
+  /** \brief Clone a new Classifier with less memory usage when multiple instances of the same model are created
+   *
+   * \return new Classifier* type unique pointer
+   */
+  virtual std::unique_ptr<Classifier> Clone() const;
+
   /// Get model's name
   std::string ModelName() const { return "ppocr/ocr_cls"; }
 
@@ -53,6 +61,24 @@ class FASTDEPLOY_DECL Classifier : public FastDeployModel {
    */
   virtual bool Predict(const cv::Mat& img,
                       int32_t* cls_label, float* cls_score);
+
+  /** \brief Predict the input image and get OCR recognition model result.
+   *
+   * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * \param[in] ocr_result The output of OCR recognition model result will be writen to this structure.
+   * \return true if the prediction is successed, otherwise false.
+   */
+  virtual bool Predict(const cv::Mat& img, vision::OCRResult* ocr_result);
+
+  /** \brief BatchPredict the input image and get OCR classification model result.
+   *
+   * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * \param[in] ocr_result The output of OCR classification model result will be writen to this structure.
+   * \return true if the prediction is successed, otherwise false.
+   */
+  virtual bool BatchPredict(const std::vector<cv::Mat>& images,
+                              vision::OCRResult* ocr_result);
+
   /** \brief BatchPredict the input image and get OCR classification model cls_result.
    *
    * \param[in] images The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.

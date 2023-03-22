@@ -27,19 +27,7 @@ SophgoBackend::~SophgoBackend() { bm_dev_free(handle_); }
 bool SophgoBackend::GetSDKAndDeviceVersion() { return true; }
 
 /***************************************************************
- *  @name      BuildOption
- *  @brief     save option
- *  @param     SOPHGOTPU2BackendOption
- *  @note      None
- ***************************************************************/
-void SophgoBackend::BuildOption(const SophgoBackendOption& option) {
-  //  this->option_ = option;
-  // save cpu_name
-  //   this->option_.cpu_name = option.cpu_name;
-}
-
-/***************************************************************
- *  @name       InitFromSophgo
+ *  @name       Init
  *  @brief      Initialize Sophgo model
  *  @param      model_file: Binary data for the Sophgo model.
  *              params_file: None
@@ -47,8 +35,26 @@ void SophgoBackend::BuildOption(const SophgoBackendOption& option) {
  *  @return     bool
  *  @note       None
  ***************************************************************/
-bool SophgoBackend::InitFromSophgo(const std::string& model_file,
-                                   const SophgoBackendOption& option) {
+bool SophgoBackend::Init(const RuntimeOption& option) {
+  if (option.model_from_memory_) {
+    FDERROR << "SophgoBackend doesn't support load model from memory, please "
+               "load model from disk."
+            << std::endl;
+    return false;
+  }
+  if (option.model_format != ModelFormat::SOPHGO) {
+    FDERROR << "SophgoBackend only supports model format SOPHGO, but now it's "
+            << option.model_format << "." << std::endl;
+    return false;
+  }
+  if (option.device != Device::SOPHGOTPUD) {
+    FDERROR << "SophgoBackend only supports device::SOPHGOTPUD, but now it's "
+            << option.device << "." << std::endl;
+    return false;
+  }
+
+  std::string model_file = option.model_file;
+
   // LoadModel
   if (!this->LoadModel((char*)model_file.data())) {
     FDERROR << "load model failed" << std::endl;
@@ -60,9 +66,6 @@ bool SophgoBackend::InitFromSophgo(const std::string& model_file,
     FDERROR << "get SDK and device version failed" << std::endl;
     return false;
   }
-
-  // BuildOption
-  this->BuildOption(option);
 
   // GetModelInputOutputInfos
   if (!this->GetModelInputOutputInfos()) {

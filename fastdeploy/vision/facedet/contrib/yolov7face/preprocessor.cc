@@ -32,10 +32,12 @@ Yolov7FacePreprocessor::Yolov7FacePreprocessor() {
   max_wh_ = 7680.0;
 }
 
-bool Yolov7FacePreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
-                                 std::vector<std::map<std::string, std::array<float, 2>>>* ims_info) {
+bool Yolov7FacePreprocessor::Run(
+    std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
+    std::vector<std::map<std::string, std::array<float, 2>>>* ims_info) {
   if (images->size() == 0) {
-    FDERROR << "The size of input images should be greater than 0." << std::endl;
+    FDERROR << "The size of input images should be greater than 0."
+            << std::endl;
     return false;
   }
   ims_info->resize(images->size());
@@ -56,8 +58,9 @@ bool Yolov7FacePreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   return true;
 }
 
-bool Yolov7FacePreprocessor::Preprocess(FDMat* mat, FDTensor* output,
-                                        std::map<std::string, std::array<float, 2>>* im_info){
+bool Yolov7FacePreprocessor::Preprocess(
+    FDMat* mat, FDTensor* output,
+    std::map<std::string, std::array<float, 2>>* im_info) {
   // Record the shape of image and the shape of preprocessed image
   (*im_info)["input_shape"] = {static_cast<float>(mat->Height()),
                                static_cast<float>(mat->Width())};
@@ -75,13 +78,13 @@ bool Yolov7FacePreprocessor::Preprocess(FDMat* mat, FDTensor* output,
                                 static_cast<float>(mat->Width())};
 
   mat->ShareWithTensor(output);
-  output->ExpandDim(0);  // reshape to n, h, w, c
+  output->ExpandDim(0);  // reshape to n, c, h, w
   return true;
 }
 
 void Yolov7FacePreprocessor::LetterBox(FDMat* mat) {
   float scale =
-      std::min(size_[1] * 1.0 / mat->Height(), size_[0] * 1.0 / mat->Width()); 
+      std::min(size_[1] * 1.0 / mat->Height(), size_[0] * 1.0 / mat->Width());
   if (!is_scale_up_) {
     scale = std::min(scale, 1.0f);
   }

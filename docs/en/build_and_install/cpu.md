@@ -9,10 +9,13 @@ Please do not modify other cmake paramters exclude the following options.
 | Option                      | Supported Platform | Description                                                                        |
 |:------------------------|:------- | :--------------------------------------------------------------------------|
 | ENABLE_ORT_BACKEND      | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | Default OFF, whether to intergrate ONNX Runtime backend   |
-| ENABLE_PADDLE_BACKEND   | Linux(x64)/Windows(x64) | Default OFF, whether to intergrate Paddle Inference backend             |               
+| ENABLE_PADDLE_BACKEND   | Linux(x64)/Windows(x64) | Default OFF, whether to intergrate Paddle Inference backend             |  
+| ENABLE_LITE_BACKEND   | Linux(aarch64) | Default OFF, whether to intergrate Paddle Lite backend             | 
 | ENABLE_OPENVINO_BACKEND | Linux(x64)/Windows(x64)/Mac OSX(x86) | Default OFF, whether to intergrate OpenVINO backend      |
 | ENABLE_VISION           | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | Default OFF, whether to intergrate vision models |
 | ENABLE_TEXT             | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | Default OFF, whether to intergrate text models |
+| WITH_CAPI             | Linux(x64)/Windows(x64)/Mac OSX(x86) | Default OFF, whether to intergrate C API  |
+| WITH_CSHARPAPI        | Windows(x64) | Default OFF, whether to intergrate C# API   |
 
 The configuration for third libraries(Optional, if the following option is not defined, the prebuilt third libraries will download automaticly while building FastDeploy).
 | Option                     | Description                                                                                           |
@@ -51,7 +54,7 @@ make install
 
 ### Windows
 
-Prerequisite for Compiling on Windows: 
+Prerequisite for Compiling on Windows:
 
 - Windows 10/11 x64
 - Visual Studio 2019
@@ -68,6 +71,7 @@ cmake .. -G "Visual Studio 16 2019" -A x64 \
          -DENABLE_OPENVINO_BACKEND=ON \
          -DENABLE_VISION=ON \
          -DCMAKE_INSTALL_PREFIX="D:\Paddle\compiled_fastdeploy"
+% nuget restore  （please execute it when WITH_CSHARPAPI=ON to prepare dependencies in C#)
 msbuild fastdeploy.sln /m /p:Configuration=Release /p:Platform=x64
 msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 ```
@@ -78,7 +82,7 @@ If you use CMake GUI, please refer to [How to Compile with CMakeGUI + Visual Stu
 
 ## How to Build and Install Python SDK
 
-Prerequisite for Compiling: 
+Prerequisite for Compiling:
 
 - gcc/g++ >= 5.4 (8.2 is recommended)
 - cmake >= 3.18.0

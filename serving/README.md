@@ -6,6 +6,8 @@
 
 FastDeploy builds an end-to-end serving deployment based on [Triton Inference Server](https://github.com/triton-inference-server/server). The underlying backend uses the FastDeploy high-performance Runtime module and integrates the FastDeploy pre- and post-processing modules to achieve end-to-end serving deployment. It can achieve fast deployment with easy-to-use process and excellent performance.
 
+> FastDeploy also provides an easy-to-use Python service deployment method, refer [PaddleSeg deployment example](../examples/vision/segmentation/paddleseg/serving/simple_serving) for its usage.
+
 ## Prepare the environment
 
 ### Environment requirements
@@ -20,7 +22,7 @@ FastDeploy builds an end-to-end serving deployment based on [Triton Inference Se
 CPU images only support Paddle/ONNX models for serving deployment on CPUs, and supported inference backends include OpenVINO, Paddle Inference, and ONNX Runtime
 
 ```shell
-docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.2-cpu-only-21.10
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.4-cpu-only-21.10
 ```
 
 #### GPU Image
@@ -28,7 +30,7 @@ docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.2-cpu-only-21.10
 GPU images support Paddle/ONNX models for serving deployment on GPU and CPU, and supported inference backends including OpenVINO, TensorRT, Paddle Inference, and ONNX Runtime
 
 ```
-docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.2-gpu-cuda11.4-trt8.4-21.10
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.4-gpu-cuda11.4-trt8.5-21.10
 ```
 
 Users can also compile the image by themselves according to their own needs, referring to the following documents:
@@ -37,9 +39,11 @@ Users can also compile the image by themselves according to their own needs, ref
 
 ## Other Tutorials
 
-- [How to Prepare Serving Model Repository](docs/EN/model_repository-en.md) 
-- [Serving Deployment Configuration for Runtime](docs/EN/model_configuration-en.md) 
+- [How to Prepare Serving Model Repository](docs/EN/model_repository-en.md)
+- [Serving Deployment Configuration for Runtime](docs/EN/model_configuration-en.md)
 - [Demo of Serving Deployment](docs/EN/demo-en.md)
+- [Client Access Instruction](docs/EN/client-en.md)
+- [Serving deployment visualization](docs/EN/vdl_management-en.md)
 
 
 ### Serving Deployment Demo

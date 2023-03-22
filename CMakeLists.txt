@@ -13,7 +13,7 @@
 # limitations under the License.
 
 PROJECT(fastdeploy C CXX)
-CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 
 
 option(CSRCS_DIR_NAME "Name of source code directory")
@@ -37,20 +37,20 @@ include(${PROJECT_SOURCE_DIR}/cmake/utils.cmake)
 # Set C++11 as standard for the whole project
 if(NOT MSVC)
   set(CMAKE_CXX_STANDARD 11)
-  set(CMAKE_CXX_FLAGS "-Wno-format")
-  add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
+  set(CMAKE_CXX_FLAGS "-Wno-format -g0 -O3")
+  if(NEED_ABI0)
+    add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
+  else()
+    add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
+  endif()
 endif(NOT MSVC)
 
+include(${PROJECT_SOURCE_DIR}/cmake/build_tools.cmake)
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND (NOT WITH_TIMVX))
-  include(${PROJECT_SOURCE_DIR}/cmake/patchelf.cmake)
+  download_patchelf()
+  set(PATCHELF_EXE ${THIRD_PARTY_PATH}/patchelf/bin/patchelf)
 endif()
 
-
-if(ANDROID)
-  # To reduce the volume of the library
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g0 -Ofast -ffunction-sections -fdata-sections")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g0 -Ofast -ffunction-sections -fdata-sections")
-endif()
 
 ############################# Basic Options for FastDeploy ################################
 option(WITH_GPU "Whether WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernce-gpu/poros-gpu" OFF)
@@ -66,16 +66,16 @@ option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
+option(ENABLE_CVCUDA "Whether to enable NVIDIA CV-CUDA to boost image preprocess." OFF)
 option(ENABLE_ENCRYPTION "Whether to enable ENCRYPTION." OFF)
+option(ENABLE_BENCHMARK "Whether to enable Benchmark mode." OFF)
 option(WITH_ASCEND "Whether to compile for Huawei Ascend deploy." OFF)
+option(WITH_DIRECTML "Whether to compile for onnxruntime DirectML deploy." OFF)
 option(WITH_TIMVX "Whether to compile for TIMVX deploy." OFF)
 option(WITH_KUNLUNXIN "Whether to compile for KunlunXin XPU deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
-
-############################# Options for Android cross compiling #########################
-option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
-option(WITH_LITE_STATIC "Use Paddle Lite static lib for Android." OFF)
-option(WITH_OPENMP "Use OpenMP support for Android." OFF)
+option(WITH_CAPI "Whether to compile with c api." OFF)
+option(WITH_CSHARPAPI "Whether to compile with c# api" OFF)
 
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
 option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
@@ -86,7 +86,6 @@ set(TRT_DIRECTORY "" CACHE PATH "If build tensorrt backend, need to define path 
 set(ORT_DIRECTORY "" CACHE PATH "User can specify the installed onnxruntime directory.")
 set(OPENCV_DIRECTORY "" CACHE PATH "User can specify the installed opencv directory.")
 set(OPENVINO_DIRECTORY "" CACHE PATH "User can specify the installed openvino directory.")
-
 
 # Whether to build fastdeploy on device Nvidia Jetson
 # Only support CPU Inference & GPU(TensorRT) Inference Now
@@ -143,19 +142,23 @@ if(WITH_IPU)
   add_definitions(-DWITH_IPU)
 endif()
 
+if(ANDROID)
+  include(${PROJECT_SOURCE_DIR}/cmake/android.cmake)
+  check_android_options_policy()
+  set_android_cxx_complie_flags()
+endif()
+
 # Check for macOS architecture
 get_osx_architecture()
 
 ##################################### Building: FastDeploy C++ SDK #######################################
 add_definitions(-DFASTDEPLOY_LIB)
+# set CMAKE_BUILD_TYPE to Release
+add_definitions(-DCMAKE_BUILD_TYPE=Release)
 # configure files before glob sources.
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h)
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/main.cc.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/main.cc)
 file(GLOB_RECURSE ALL_DEPLOY_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cc)
-if(WITH_GPU)
-  file(GLOB_RECURSE DEPLOY_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cu)
-  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_CUDA_SRCS})
-endif()
 file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/ort/*.cc)
 file(GLOB_RECURSE DEPLOY_PADDLE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/paddle/*.cc)
 file(GLOB_RECURSE DEPLOY_POROS_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/poros/*.cc)
@@ -164,12 +167,25 @@ file(GLOB_RECURSE DEPLOY_OPENVINO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/f
 file(GLOB_RECURSE DEPLOY_RKNPU2_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/rknpu2/*.cc)
 file(GLOB_RECURSE DEPLOY_SOPHGO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/sophgo/*.cc)
 file(GLOB_RECURSE DEPLOY_LITE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/lite/*.cc)
-file(GLOB_RECURSE DEPLOY_VISION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cc)
 file(GLOB_RECURSE DEPLOY_ENCRYPTION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/encryption/*.cc)
 file(GLOB_RECURSE DEPLOY_PIPELINE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pipeline/*.cc)
+file(GLOB_RECURSE DEPLOY_VISION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cc)
 file(GLOB_RECURSE DEPLOY_TEXT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/text/*.cc)
 file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*_pybind.cc)
-list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_POROS_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_OPENVINO_SRCS} ${DEPLOY_LITE_SRCS} ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS} ${DEPLOY_PIPELINE_SRCS} ${DEPLOY_RKNPU2_SRCS} ${DEPLOY_SOPHGO_SRCS} ${DEPLOY_ENCRYPTION_SRCS})
+if(WITH_GPU)
+  file(GLOB_RECURSE DEPLOY_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cu)
+  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_CUDA_SRCS})
+  file(GLOB_RECURSE DEPLOY_VISION_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cu)
+  list(APPEND DEPLOY_VISION_SRCS ${DEPLOY_VISION_CUDA_SRCS})
+  file(GLOB_RECURSE DEPLOY_TEXT_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/text/*.cu)
+  list(APPEND DEPLOY_TEXT_SRCS ${DEPLOY_TEXT_CUDA_SRCS})
+endif()
+list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS}
+                                 ${DEPLOY_POROS_SRCS} ${DEPLOY_TRT_SRCS}
+                                 ${DEPLOY_OPENVINO_SRCS} ${DEPLOY_LITE_SRCS}
+                                 ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS}
+                                 ${DEPLOY_PIPELINE_SRCS} ${DEPLOY_RKNPU2_SRCS}
+                                 ${DEPLOY_SOPHGO_SRCS} ${DEPLOY_ENCRYPTION_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -180,6 +196,13 @@ string(STRIP "${FASTDEPLOY_VERSION}" FASTDEPLOY_VERSION)
 include_directories(${PROJECT_SOURCE_DIR}/third_party/eigen)
 if(WIN32)
   add_definitions(-DEIGEN_STRONG_INLINE=inline)
+endif()
+
+if(ANDROID)
+  # Set tensor function/openmp compile policy after
+  # ALL_DEPLOY_SRCS/DEPEND_LIBS defined
+  set_android_tensor_funcs_compile_policy()
+  set_android_openmp_compile_policy()
 endif()
 
 # sw(sunway) not support thread_local semantic
@@ -284,10 +307,16 @@ if(WITH_GPU)
   include_directories(${CUDA_DIRECTORY}/include)
   if(WIN32)
     find_library(CUDA_LIB cudart ${CUDA_DIRECTORY}/lib/x64)
+    find_library(NVJPEG_LIB nvjpeg ${CUDA_DIRECTORY}/lib/x64)
+    add_definitions(-DENABLE_NVJPEG)
   else()
     find_library(CUDA_LIB cudart ${CUDA_DIRECTORY}/lib64)
+    if(NOT BUILD_ON_JETSON)
+      find_library(NVJPEG_LIB nvjpeg ${CUDA_DIRECTORY}/lib64)
+      add_definitions(-DENABLE_NVJPEG)
+    endif()
   endif()
-  list(APPEND DEPEND_LIBS ${CUDA_LIB})
+  list(APPEND DEPEND_LIBS ${CUDA_LIB} ${NVJPEG_LIB})
 
   # build CUDA source files in fastdeploy, CUDA source files include CUDA preprocessing, TRT plugins, etc.
   enable_language(CUDA)
@@ -347,7 +376,7 @@ if(ENABLE_TRT_BACKEND)
     endif()
     if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
       execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
-	      COMMAND sh -c "xargs ${PATCHELF_EXE} --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
+	      COMMAND sh -c "xargs ${PATCHELF_EXE} --force-rpath --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
     	          RESULT_VARIABLE result
                       OUTPUT_VARIABLE curr_out
                       ERROR_VARIABLE  curr_out)
@@ -371,7 +400,13 @@ if(ENABLE_VISION)
   if(ENABLE_FLYCV)
     add_definitions(-DENABLE_FLYCV)
     include(${PROJECT_SOURCE_DIR}/cmake/flycv.cmake)
-    list(APPEND DEPEND_LIBS external_flycv)
+    list(APPEND DEPEND_LIBS ${FLYCV_LIBRARIES})
+  endif()
+
+  if(ENABLE_CVCUDA)
+    include(${PROJECT_SOURCE_DIR}/cmake/cvcuda.cmake)
+    add_definitions(-DENABLE_CVCUDA)
+    list(APPEND DEPEND_LIBS nvcv_types cvcuda)
   endif()
 endif()
 
@@ -390,13 +425,35 @@ if(ENABLE_ENCRYPTION)
 endif()
 
 if(ENABLE_PADDLE2ONNX)
+  set(BUILD_PADDLE2ONNX ON)
   add_definitions(-DENABLE_PADDLE2ONNX)
-  include(${PROJECT_SOURCE_DIR}/cmake/paddle2onnx.cmake)
-  list(APPEND DEPEND_LIBS external_paddle2onnx)
+  if(BUILD_PADDLE2ONNX)
+    download_protobuf()
+    include(${PROJECT_SOURCE_DIR}/cmake/build_paddle2onnx.cmake)
+    list(APPEND ALL_DEPLOY_SRCS ${PADDLE2ONNX_ALL_SRCS})
+    list(APPEND DEPEND_LIBS p2o_paddle_proto onnx)
+  else()
+    include(${PROJECT_SOURCE_DIR}/cmake/paddle2onnx.cmake)
+    list(APPEND DEPEND_LIBS external_paddle2onnx)
+  endif()
 endif(ENABLE_PADDLE2ONNX)
+
+if(WITH_CAPI)
+  include(${PROJECT_SOURCE_DIR}/c_api/CMakeLists.txt)
+  if(MSVC)
+  add_definitions(-DFD_CAPI)
+  endif()
+endif()
+
+if(WITH_CSHARPAPI)
+  if(MSVC)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/csharp)
+  endif()
+endif()
 
 
 configure_file(${PROJECT_SOURCE_DIR}/FastDeploy.cmake.in ${PROJECT_SOURCE_DIR}/FastDeploy.cmake @ONLY)
+configure_file(${PROJECT_SOURCE_DIR}/FastDeployCSharp.cmake.in ${PROJECT_SOURCE_DIR}/FastDeployCSharp.cmake @ONLY)
 configure_file(${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py.in ${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py)
 configure_file(${PROJECT_SOURCE_DIR}/python/scripts/process_libraries.py.in ${PROJECT_SOURCE_DIR}/python/scripts/process_libraries.py)
 
@@ -411,17 +468,7 @@ string(STRIP "${FASTDEPLOY_VERSION}" FASTDEPLOY_VERSION)
 if (APPLE)
   set_target_properties(${LIBRARY_NAME} PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
 elseif(ANDROID)
-  set_target_properties(${LIBRARY_NAME} PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
-  # strip debug C++ symbol table
-  set(COMMON_LINK_FLAGS "-Wl,-exclude-libs,ALL")
-  set(COMMON_LINK_FLAGS_REL "-Wl,-s,--gc-sections,-exclude-libs,ALL")
-  if(WITH_OPENCV_STATIC OR WITH_LITE_STATIC)
-    set(COMMON_LINK_FLAGS "${COMMON_LINK_FLAGS},--allow-multiple-definition")
-    set(COMMON_LINK_FLAGS_REL "${COMMON_LINK_FLAGS_REL},--allow-multiple-definition")
-  endif()
-  set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS ${COMMON_LINK_FLAGS})
-  set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS_RELEASE ${COMMON_LINK_FLAGS_REL})
-  set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS_MINSIZEREL ${COMMON_LINK_FLAGS_REL})
+  set_android_library_cxx_link_flags()
 elseif(MSVC)
 else()
   if(WITH_GPU)
@@ -443,20 +490,12 @@ if(MSVC)
   set_source_files_properties(${FD_FILES_REQUIRE_BIGOBJ} PROPERTIES COMPILE_FLAGS "/bigobj")
 endif()
 
-# extra depend libs for android
+target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 if(ANDROID)
-  find_library(log-lib log)
-  list(APPEND DEPEND_LIBS ${log-lib})
-  if(WITH_OPENMP)
-    find_package(OpenMP)
-    if(OpenMP_CXX_FOUND)
-      list(APPEND DEPEND_LIBS OpenMP::OpenMP_CXX)
-    endif()
-  endif()
+  set_android_extra_libraries_target()
 endif()
 
-target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
-
+##################################### Examples ####################################
 if(WIN32)
   if(ENABLE_VISION)
     if("${CMAKE_GENERATOR}" STREQUAL "Ninja")
@@ -500,16 +539,13 @@ if(WIN32)
     RUNTIME DESTINATION lib
   )
 elseif(ANDROID)
-  install(
-    TARGETS ${LIBRARY_NAME}
-    LIBRARY DESTINATION lib/${ANDROID_ABI}
-  )
+  set_android_libraries_installation()
 else()
   install(
     TARGETS ${LIBRARY_NAME}
-    LIBRARY DESTINATION lib
-  )
+    LIBRARY DESTINATION lib)
 endif()
+
 install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy
   DESTINATION ${CMAKE_INSTALL_PREFIX}/include
@@ -517,22 +553,14 @@ install(
   PATTERN "*.h"
   PATTERN "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/*/*.h"
 )
-install(
-  DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install
-  DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs
-)
 
-if(WIN32 AND BUILD_EXAMPLES)
-  get_windows_path(_tmp_install_dir ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install)
-  get_windows_path(_publish_exe_dir ${EXECUTABLE_OUTPUT_PATH}/Release)
-  list(GET CMAKE_CONFIGURATION_TYPES 0 _CONFIG_TYPE)
-  if((${CMAKE_BUILD_TYPE} MATCHES "Release") OR (${_CONFIG_TYPE} MATCHES "Release"))
-    install(TARGETS ${LIBRARY_NAME} RUNTIME DESTINATION ${EXECUTABLE_OUTPUT_PATH}/Release)
-    add_custom_target(
-      copy_fd_third_dlls_examples ALL COMMAND
-      cmd /C ${PROJECT_SOURCE_DIR}/scripts/fastdeploy_init.bat install ${_tmp_install_dir} ${_publish_exe_dir} noconfirm)
-    add_dependencies(copy_fd_third_dlls_examples ${LIBRARY_NAME} copy_yaml_library)
-  endif()
+if(NOT ANDROID)
+  install(
+    DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs
+  )
+else()
+  set_android_third_libs_installation()
 endif()
 
 install(
@@ -541,13 +569,11 @@ install(
   ${PROJECT_SOURCE_DIR}/ThirdPartyNotices.txt
   ${PROJECT_SOURCE_DIR}/VERSION_NUMBER
   ${PROJECT_SOURCE_DIR}/FastDeploy.cmake
+  ${PROJECT_SOURCE_DIR}/FastDeployCSharp.cmake
   ${PROJECT_SOURCE_DIR}/cmake/FastDeployConfig.cmake
   ${PROJECT_SOURCE_DIR}/cmake/utils.cmake
-  DESTINATION ${CMAKE_INSTALL_PREFIX}
-)
-
-install(
-  DIRECTORY ${PROJECT_SOURCE_DIR}/examples
+  ${PROJECT_SOURCE_DIR}/cmake/summary.cmake
+  ${PROJECT_SOURCE_DIR}/cmake/openmp.cmake
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 
@@ -575,7 +601,30 @@ if(WITH_ASCEND)
   )
 endif()
 
+if(WITH_CAPI)
+  install(
+    DIRECTORY ${PROJECT_SOURCE_DIR}/c_api/fastdeploy_capi
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+    FILES_MATCHING
+    PATTERN "*.h"
+    PATTERN "*/types_internal.h" EXCLUDE
+  )
+endif()
+
 include(${PROJECT_SOURCE_DIR}/cmake/config_cpack.cmake)
+
+if(WIN32 AND BUILD_EXAMPLES)
+  get_windows_path(_tmp_install_dir ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install)
+  get_windows_path(_publish_exe_dir ${EXECUTABLE_OUTPUT_PATH}/Release)
+  list(GET CMAKE_CONFIGURATION_TYPES 0 _CONFIG_TYPE)
+  if((${CMAKE_BUILD_TYPE} MATCHES "Release") OR (${_CONFIG_TYPE} MATCHES "Release"))
+    install(TARGETS ${LIBRARY_NAME} RUNTIME DESTINATION ${EXECUTABLE_OUTPUT_PATH}/Release)
+    add_custom_target(
+      copy_fd_third_dlls_examples ALL COMMAND
+      cmd /C ${PROJECT_SOURCE_DIR}/scripts/fastdeploy_init.bat install ${_tmp_install_dir} ${_publish_exe_dir} noconfirm)
+    add_dependencies(copy_fd_third_dlls_examples ${LIBRARY_NAME} copy_yaml_library)
+  endif()
+endif()
 
 ############################### Building: FastDeploy Python Wheel #############################
 if(BUILD_FASTDEPLOY_PYTHON)

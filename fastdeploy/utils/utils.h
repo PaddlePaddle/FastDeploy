@@ -43,6 +43,9 @@ namespace fastdeploy {
 
 class FASTDEPLOY_DECL FDLogger {
  public:
+  static bool enable_info;
+  static bool enable_warning;
+
   FDLogger() {
     line_ = "";
     prefix_ = "[FastDeploy]";
@@ -90,11 +93,12 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
       << __REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
 
 #define FDWARNING                                                              \
-  FDLogger(true, "[WARNING]")                                                  \
+  FDLogger(fastdeploy::FDLogger::enable_warning, "[WARNING]")                  \
       << __REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
 
 #define FDINFO                                                                 \
-  FDLogger(true, "[INFO]") << __REL_FILE__ << "(" << __LINE__                  \
+  FDLogger(fastdeploy::FDLogger::enable_info, "[INFO]")                        \
+                           << __REL_FILE__ << "(" << __LINE__                  \
                            << ")::" << __FUNCTION__ << "\t"
 
 #define FDASSERT(condition, format, ...)                                       \
@@ -203,16 +207,39 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
 FASTDEPLOY_DECL std::vector<int64_t>
 GetStride(const std::vector<int64_t>& dims);
 
-template <typename T, typename std::enable_if<std::is_integral<T>::value,
-                                              bool>::type = true>
+template <typename T>
 std::string Str(const std::vector<T>& shape) {
   std::ostringstream oss;
   oss << "[ " << shape[0];
-  for (int i = 1; i < shape.size(); ++i) {
+  for (size_t i = 1; i < shape.size(); ++i) {
     oss << " ," << shape[i];
   }
   oss << " ]";
   return oss.str();
 }
+
+/// Set behaviour of logging while using FastDeploy
+FASTDEPLOY_DECL void SetLogger(bool enable_info = true,
+                               bool enable_warning = true);
+
+template <typename T>
+void CalculateStatisInfo(const void* src_ptr, int size, double* mean,
+                         double* max, double* min) {
+  const T* ptr = static_cast<const T*>(src_ptr);
+  *mean = static_cast<double>(0);
+  *max = static_cast<double>(-99999999);
+  *min = static_cast<double>(99999999);
+  for (int i = 0; i < size; ++i) {
+    if (*(ptr + i) > *max) {
+      *max = *(ptr + i);
+    }
+    if (*(ptr + i) < *min) {
+      *min = *(ptr + i);
+    }
+    *mean += *(ptr + i);
+  }
+  *mean = *mean / size;
+}
+
 
 }  // namespace fastdeploy

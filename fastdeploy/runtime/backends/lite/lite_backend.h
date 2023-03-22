@@ -19,23 +19,20 @@
 #include <string>
 #include <vector>
 
-#include "fastdeploy/runtime/backends/backend.h"
-#include "fastdeploy/runtime/backends/lite/option.h"
 #include "paddle_api.h"  // NOLINT
 
+#include "fastdeploy/runtime/backends/backend.h"
+#include "fastdeploy/runtime/runtime_option.h"
+#include "fastdeploy/runtime/backends/lite/option.h"
+
 namespace fastdeploy {
-// Convert data type from paddle lite to fastdeploy
-FDDataType LiteDataTypeToFD(const paddle::lite_api::PrecisionType& dtype);
 
 class LiteBackend : public BaseBackend {
  public:
   LiteBackend() {}
   virtual ~LiteBackend() = default;
-  void BuildOption(const LiteBackendOption& option);
 
-  bool InitFromPaddle(const std::string& model_file,
-                      const std::string& params_file,
-                      const LiteBackendOption& option = LiteBackendOption());
+  bool Init(const RuntimeOption& option) override;
 
   bool Infer(std::vector<FDTensor>& inputs,
             std::vector<FDTensor>* outputs,
@@ -51,15 +48,28 @@ class LiteBackend : public BaseBackend {
   std::vector<TensorInfo> GetOutputInfos() override;
 
  private:
+  void BuildOption(const LiteBackendOption& option);
+
+  void ConfigureCpu(const LiteBackendOption& option);
+  void ConfigureTimvx(const LiteBackendOption& option);
+  void ConfigureAscend(const LiteBackendOption& option);
+  void ConfigureKunlunXin(const LiteBackendOption& option);
+  void ConfigureNNAdapter(const LiteBackendOption& option);
+
   paddle::lite_api::CxxConfig config_;
   std::shared_ptr<paddle::lite_api::PaddlePredictor> predictor_;
   std::vector<TensorInfo> inputs_desc_;
   std::vector<TensorInfo> outputs_desc_;
   std::map<std::string, int> inputs_order_;
   LiteBackendOption option_;
-  bool supported_fp16_ = false;
-  bool ReadFile(const std::string& filename,
-               std::vector<char>* contents,
-               const bool binary = true);
 };
+
+// Convert data type from paddle lite to fastdeploy
+FDDataType LiteDataTypeToFD(const paddle::lite_api::PrecisionType& dtype);
+
+// Helper function to read file
+bool ReadFile(const std::string& filename,
+             std::vector<char>* contents,
+             bool binary = true);
+
 }  // namespace fastdeploy

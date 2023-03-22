@@ -1,0 +1,17 @@
+mean:
+  -
+    - 0
+    - 0
+    - 0
+std:
+  -
+    - 255
+    - 255
+    - 255
+model_path: ./yolov8_n_500e_coco/yolov8_n_500e_coco.onnx
+outputs_nodes:
+  - 'p2o.Mul.119'
+  - 'p2o.Concat.49'
+do_quantization: True
+dataset: "./yolov8_n_500e_coco/dataset.txt"
+output_folder: "./yolov8_n_500e_coco"

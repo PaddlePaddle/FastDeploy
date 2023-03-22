@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/core/fd_tensor.h"
-#include "fastdeploy/core/float16.h"
-#include "fastdeploy/utils/utils.h"
 
 #include <algorithm>
 #include <cstring>
+
+#include "fastdeploy/core/float16.h"
+#include "fastdeploy/utils/utils.h"
 #ifdef WITH_GPU
 #include <cuda_runtime_api.h>
 #endif
@@ -142,6 +143,9 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape,
                       const FDDataType& data_type,
                       const std::string& tensor_name,
                       const Device& new_device) {
+  if (device != new_device) {
+    FreeFn();
+  }
   external_data_ptr = nullptr;
   name = tensor_name;
   device = new_device;
@@ -207,26 +211,12 @@ bool FDTensor::Reshape(const std::vector<int64_t>& new_shape) {
   return true;
 }
 
-template <typename T>
-void CalculateStatisInfo(const void* src_ptr, int size, double* mean,
-                         double* max, double* min) {
-  const T* ptr = static_cast<const T*>(src_ptr);
-  *mean = 0;
-  *max = -99999999;
-  *min = 99999999;
-  for (int i = 0; i < size; ++i) {
-    if (*(ptr + i) > *max) {
-      *max = *(ptr + i);
-    }
-    if (*(ptr + i) < *min) {
-      *min = *(ptr + i);
-    }
-    *mean += *(ptr + i);
-  }
-  *mean = *mean / size;
-}
-
 void FDTensor::PrintInfo(const std::string& prefix) const {
+  std::cout << prefix << ": name=" << name << ", shape=";
+  for (int i = 0; i < shape.size(); ++i) {
+    std::cout << shape[i] << " ";
+  }
+  std::cout << ", buffer_=" << buffer_ << ", external_data_ptr=" << external_data_ptr;
   double mean = 0;
   double max = -99999999;
   double min = 99999999;
@@ -249,10 +239,6 @@ void FDTensor::PrintInfo(const std::string& prefix) const {
              "PrintInfo function doesn't support current situation, maybe you "
              "need enhance this function now.");
   }
-  std::cout << prefix << ": name=" << name << ", shape=";
-  for (int i = 0; i < shape.size(); ++i) {
-    std::cout << shape[i] << " ";
-  }
   std::cout << ", dtype=" << Str(dtype) << ", mean=" << mean << ", max=" << max
             << ", min=" << min << std::endl;
 }
@@ -260,44 +246,48 @@ void FDTensor::PrintInfo(const std::string& prefix) const {
 bool FDTensor::ReallocFn(size_t nbytes) {
   if (device == Device::GPU) {
 #ifdef WITH_GPU
-    size_t original_nbytes = Nbytes();
+    size_t original_nbytes = nbytes_allocated;
     if (nbytes > original_nbytes) {
       if (buffer_ != nullptr) {
         FDDeviceFree()(buffer_);
       }
       FDDeviceAllocator()(&buffer_, nbytes);
+      nbytes_allocated = nbytes;
     }
     return buffer_ != nullptr;
 #else
-    FDASSERT(false, "The FastDeploy FDTensor allocator didn't compile under "
-                    "-DWITH_GPU=ON,"
-                    "so this is an unexpected problem happend.");
+    FDASSERT(false,
+             "The FastDeploy FDTensor allocator didn't compile under "
+             "-DWITH_GPU=ON,"
+             "so this is an unexpected problem happend.");
 #endif
   } else {
     if (is_pinned_memory) {
 #ifdef WITH_GPU
-      size_t original_nbytes = Nbytes();
+      size_t original_nbytes = nbytes_allocated;
       if (nbytes > original_nbytes) {
         if (buffer_ != nullptr) {
           FDDeviceHostFree()(buffer_);
         }
         FDDeviceHostAllocator()(&buffer_, nbytes);
+        nbytes_allocated = nbytes;
       }
       return buffer_ != nullptr;
 #else
-      FDASSERT(false, "The FastDeploy FDTensor allocator didn't compile under "
-                      "-DWITH_GPU=ON,"
-                      "so this is an unexpected problem happend.");
+      FDASSERT(false,
+               "The FastDeploy FDTensor allocator didn't compile under "
+               "-DWITH_GPU=ON,"
+               "so this is an unexpected problem happend.");
 #endif
     }
     buffer_ = realloc(buffer_, nbytes);
+    nbytes_allocated = nbytes;
     return buffer_ != nullptr;
   }
 }
 
 void FDTensor::FreeFn() {
-  if (external_data_ptr != nullptr)
-    external_data_ptr = nullptr;
+  if (external_data_ptr != nullptr) external_data_ptr = nullptr;
   if (buffer_ != nullptr) {
     if (device == Device::GPU) {
 #ifdef WITH_GPU
@@ -313,6 +303,7 @@ void FDTensor::FreeFn() {
       }
     }
     buffer_ = nullptr;
+    nbytes_allocated = 0;
   }
 }
 
@@ -353,56 +344,65 @@ FDTensor::FDTensor(const char* tensor_name) { name = tensor_name; }
 FDTensor::FDTensor(const Scalar& scalar) {
   Allocate({1}, scalar.dtype());
   switch (scalar.dtype()) {
-  case FDDataType::BOOL:
-    (reinterpret_cast<bool*>(Data()))[0] = scalar.to<bool>();
-    break;
-  case FDDataType::UINT8:
-    (reinterpret_cast<uint8_t*>(Data()))[0] = scalar.to<uint8_t>();
-    break;
-  case FDDataType::INT8:
-    (reinterpret_cast<int8_t*>(Data()))[0] = scalar.to<int8_t>();
-    break;
-  case FDDataType::INT16:
-    (reinterpret_cast<int16_t*>(Data()))[0] = scalar.to<int16_t>();
-    break;
-  case FDDataType::INT32:
-    (reinterpret_cast<int*>(Data()))[0] = scalar.to<int>();
-    break;
-  case FDDataType::INT64:
-    (reinterpret_cast<int64_t*>(Data()))[0] = scalar.to<int64_t>();
-    break;
-  case FDDataType::FP16:
-    (reinterpret_cast<float16*>(Data()))[0] = scalar.to<float16>();
-    break;
-  case FDDataType::FP32:
-    (reinterpret_cast<float*>(Data()))[0] = scalar.to<float>();
-    break;
-  case FDDataType::FP64:
-    (reinterpret_cast<double*>(Data()))[0] = scalar.to<double>();
-    break;
+    case FDDataType::BOOL:
+      (reinterpret_cast<bool*>(Data()))[0] = scalar.to<bool>();
+      break;
+    case FDDataType::UINT8:
+      (reinterpret_cast<uint8_t*>(Data()))[0] = scalar.to<uint8_t>();
+      break;
+    case FDDataType::INT8:
+      (reinterpret_cast<int8_t*>(Data()))[0] = scalar.to<int8_t>();
+      break;
+    case FDDataType::INT16:
+      (reinterpret_cast<int16_t*>(Data()))[0] = scalar.to<int16_t>();
+      break;
+    case FDDataType::INT32:
+      (reinterpret_cast<int*>(Data()))[0] = scalar.to<int>();
+      break;
+    case FDDataType::INT64:
+      (reinterpret_cast<int64_t*>(Data()))[0] = scalar.to<int64_t>();
+      break;
+    case FDDataType::FP16:
+      (reinterpret_cast<float16*>(Data()))[0] = scalar.to<float16>();
+      break;
+    case FDDataType::FP32:
+      (reinterpret_cast<float*>(Data()))[0] = scalar.to<float>();
+      break;
+    case FDDataType::FP64:
+      (reinterpret_cast<double*>(Data()))[0] = scalar.to<double>();
+      break;
+    default:
+      break;
   }
 }
 
 FDTensor::FDTensor(const FDTensor& other)
-    : shape(other.shape), name(other.name), dtype(other.dtype),
-      device(other.device), external_data_ptr(other.external_data_ptr),
+    : shape(other.shape),
+      name(other.name),
+      dtype(other.dtype),
+      device(other.device),
       device_id(other.device_id) {
   // Copy buffer
   if (other.buffer_ == nullptr) {
-    buffer_ = nullptr;
+    FreeFn();
   } else {
     size_t nbytes = Nbytes();
     FDASSERT(ReallocFn(nbytes),
              "The FastDeploy FDTensor allocate memory error");
     CopyBuffer(buffer_, other.buffer_, nbytes, device, is_pinned_memory);
   }
+  external_data_ptr = other.external_data_ptr;
 }
 
 FDTensor::FDTensor(FDTensor&& other)
-    : buffer_(other.buffer_), shape(std::move(other.shape)),
-      name(std::move(other.name)), dtype(other.dtype),
-      external_data_ptr(other.external_data_ptr), device(other.device),
-      device_id(other.device_id) {
+    : buffer_(other.buffer_),
+      shape(std::move(other.shape)),
+      name(std::move(other.name)),
+      dtype(other.dtype),
+      external_data_ptr(other.external_data_ptr),
+      device(other.device),
+      device_id(other.device_id),
+      nbytes_allocated(other.nbytes_allocated) {
   other.name = "";
   // Note(zhoushunjie): Avoid double free.
   other.buffer_ = nullptr;
@@ -441,6 +441,7 @@ FDTensor& FDTensor::operator=(FDTensor&& other) {
     dtype = other.dtype;
     device = other.device;
     device_id = other.device_id;
+    nbytes_allocated = other.nbytes_allocated;
 
     other.name = "";
     // Note(zhoushunjie): Avoid double free.

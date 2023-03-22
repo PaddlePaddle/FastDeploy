@@ -17,7 +17,7 @@
 namespace fastdeploy {
 namespace vision {
 
-bool ResizeByShort::ImplByOpenCV(Mat* mat) {
+bool ResizeByShort::ImplByOpenCV(FDMat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
@@ -37,7 +37,7 @@ bool ResizeByShort::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool ResizeByShort::ImplByFlyCV(Mat* mat) {
+bool ResizeByShort::ImplByFlyCV(FDMat* mat) {
   fcv::Mat* im = mat->GetFlyCVMat();
   int origin_w = im->width();
   int origin_h = im->height();
@@ -51,7 +51,7 @@ bool ResizeByShort::ImplByFlyCV(Mat* mat) {
   } else if (interp_ == 2) {
     interp_method = fcv::InterpolationType::INTER_CUBIC;
   } else if (interp_ == 3) {
-    interp_method = fcv::InterpolationType::INTER_AREA; 
+    interp_method = fcv::InterpolationType::INTER_AREA;
   } else {
     FDERROR << "LimitByShort: Only support interp_ be 0/1/2/3 with FlyCV, but "
                "now it's "
@@ -76,6 +76,79 @@ bool ResizeByShort::ImplByFlyCV(Mat* mat) {
       mat->SetWidth(new_im.width());
     }
   }
+  return true;
+}
+#endif
+
+#ifdef ENABLE_CVCUDA
+bool ResizeByShort::ImplByCvCuda(FDMat* mat) {
+  // Prepare input tensor
+  FDTensor* src = CreateCachedGpuInputTensor(mat);
+  auto src_tensor = CreateCvCudaTensorWrapData(*src);
+
+  double scale = GenerateScale(mat->Width(), mat->Height());
+  int width = static_cast<int>(round(scale * mat->Width()));
+  int height = static_cast<int>(round(scale * mat->Height()));
+
+  // Prepare output tensor
+  mat->output_cache->Resize({height, width, mat->Channels()}, mat->Type(),
+                            "output_cache", Device::GPU);
+  auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
+
+  cvcuda_resize_op_(mat->Stream(), src_tensor, dst_tensor,
+                    CreateCvCudaInterp(interp_));
+
+  mat->SetTensor(mat->output_cache);
+  mat->SetWidth(width);
+  mat->SetHeight(height);
+  mat->device = Device::GPU;
+  mat->mat_type = ProcLib::CVCUDA;
+  return true;
+}
+
+bool ResizeByShort::ImplByCvCuda(FDMatBatch* mat_batch) {
+  // TODO(wangxinyu): to support batched tensor as input
+  FDASSERT(mat_batch->has_batched_tensor == false,
+           "ResizeByShort doesn't support batched tensor as input for now.");
+  // Prepare input batch
+  std::string tensor_name = Name() + "_cvcuda_src";
+  std::vector<FDTensor*> src_tensors;
+  for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+    FDTensor* src = CreateCachedGpuInputTensor(&(*(mat_batch->mats))[i]);
+    src_tensors.push_back(src);
+  }
+  nvcv::ImageBatchVarShape src_batch(mat_batch->mats->size());
+  CreateCvCudaImageBatchVarShape(src_tensors, src_batch);
+
+  // Prepare output batch
+  tensor_name = Name() + "_cvcuda_dst";
+  std::vector<FDTensor*> dst_tensors;
+  for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+    FDMat* mat = &(*(mat_batch->mats))[i];
+    double scale = GenerateScale(mat->Width(), mat->Height());
+    int width = static_cast<int>(round(scale * mat->Width()));
+    int height = static_cast<int>(round(scale * mat->Height()));
+    mat->output_cache->Resize({height, width, mat->Channels()}, mat->Type(),
+                              "output_cache", Device::GPU);
+    dst_tensors.push_back(mat->output_cache);
+  }
+  nvcv::ImageBatchVarShape dst_batch(mat_batch->mats->size());
+  CreateCvCudaImageBatchVarShape(dst_tensors, dst_batch);
+
+  // CV-CUDA Interp value is compatible with OpenCV
+  cvcuda_resize_op_(mat_batch->Stream(), src_batch, dst_batch,
+                    CreateCvCudaInterp(interp_));
+
+  for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+    FDMat* mat = &(*(mat_batch->mats))[i];
+    mat->SetTensor(dst_tensors[i]);
+    mat->SetWidth(dst_tensors[i]->Shape()[1]);
+    mat->SetHeight(dst_tensors[i]->Shape()[0]);
+    mat->device = Device::GPU;
+    mat->mat_type = ProcLib::CVCUDA;
+  }
+  mat_batch->device = Device::GPU;
+  mat_batch->mat_type = ProcLib::CVCUDA;
   return true;
 }
 #endif
@@ -106,7 +179,7 @@ double ResizeByShort::GenerateScale(const int origin_w, const int origin_h) {
   return scale;
 }
 
-bool ResizeByShort::Run(Mat* mat, int target_size, int interp, bool use_scale,
+bool ResizeByShort::Run(FDMat* mat, int target_size, int interp, bool use_scale,
                         const std::vector<int>& max_hw, ProcLib lib) {
   auto r = ResizeByShort(target_size, interp, use_scale, max_hw);
   return r(mat, lib);

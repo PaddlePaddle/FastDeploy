@@ -29,7 +29,8 @@ namespace fastdeploy {
 /*! Inference backend supported in FastDeploy */
 enum Backend {
   UNKNOWN,  ///< Unknown inference backend
-  ORT,  ///< ONNX Runtime, support Paddle/ONNX format model, CPU / Nvidia GPU
+  ORT,  //< ONNX Runtime, support Paddle/ONNX format model,
+  //< CPU/ Nvidia GPU DirectML
   TRT,  ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
   PDINFER,  ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
   POROS,    ///< Poros, support TorchScript format model, CPU / Nvidia GPU
@@ -58,7 +59,8 @@ enum FASTDEPLOY_DECL Device {
   TIMVX,
   KUNLUNXIN,
   ASCEND,
-  SOPHGOTPUD
+  SOPHGOTPUD,
+  DIRECTML
 };
 
 /*! Deep learning model format */
@@ -72,7 +74,8 @@ enum ModelFormat {
 };
 
 /// Describle all the supported backends for specified model format
-static std::map<ModelFormat, std::vector<Backend>> s_default_backends_cfg = {
+static std::map<ModelFormat, std::vector<Backend>>
+    s_default_backends_by_format = {
   {ModelFormat::PADDLE, {Backend::PDINFER, Backend::LITE,
                       Backend::ORT, Backend::OPENVINO, Backend::TRT}},
   {ModelFormat::ONNX, {Backend::ORT, Backend::OPENVINO, Backend::TRT}},
@@ -81,8 +84,58 @@ static std::map<ModelFormat, std::vector<Backend>> s_default_backends_cfg = {
   {ModelFormat::SOPHGO, {Backend::SOPHGOTPU}}
 };
 
+/// Describle all the supported backends for specified device
+static std::map<Device, std::vector<Backend>>
+    s_default_backends_by_device = {
+  {Device::CPU, {Backend::LITE, Backend::PDINFER, Backend::ORT,
+                Backend::OPENVINO, Backend::POROS}},
+  {Device::GPU, {Backend::PDINFER, Backend::ORT, Backend::TRT, Backend::POROS}},
+  {Device::RKNPU, {Backend::RKNPU2}},
+  {Device::IPU, {Backend::PDINFER}},
+  {Device::TIMVX, {Backend::LITE}},
+  {Device::KUNLUNXIN, {Backend::LITE}},
+  {Device::ASCEND, {Backend::LITE}},
+  {Device::SOPHGOTPUD, {Backend::SOPHGOTPU}},
+  {Device::DIRECTML, {Backend::ORT}}
+};
+
+inline bool Supported(ModelFormat format, Backend backend) {
+  auto iter = s_default_backends_by_format.find(format);
+  if (iter == s_default_backends_by_format.end()) {
+    FDERROR << "Didn't find format is registered in " <<
+            "s_default_backends_by_format." << std::endl;
+    return false;
+  }
+  for (size_t i = 0; i < iter->second.size(); ++i) {
+    if (iter->second[i] == backend) {
+      return true;
+    }
+  }
+  std::string msg = Str(iter->second);
+  FDERROR << backend << " only supports " << msg << ", but now it's "
+                      << format << "." << std::endl;
+  return false;
+}
+
+inline bool Supported(Device device, Backend backend) {
+  auto iter = s_default_backends_by_device.find(device);
+  if (iter == s_default_backends_by_device.end()) {
+    FDERROR << "Didn't find device is registered in " <<
+              "s_default_backends_by_device." << std::endl;
+    return false;
+  }
+  for (size_t i = 0; i < iter->second.size(); ++i) {
+    if (iter->second[i] == backend) {
+      return true;
+    }
+  }
+  std::string msg = Str(iter->second);
+  FDERROR << backend << " only supports " << msg << ", but now it's "
+          << device << "." << std::endl;
+  return false;
+}
+
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const Backend& b);
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const Device& d);
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const ModelFormat& f);
-
 }  // namespace fastdeploy

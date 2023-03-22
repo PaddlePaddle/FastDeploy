@@ -13,16 +13,73 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/common/processors/base.h"
-#include "fastdeploy/vision/common/processors/proc_lib.h"
 
 #include "fastdeploy/utils/utils.h"
+#include "fastdeploy/vision/common/processors/proc_lib.h"
 
 namespace fastdeploy {
 namespace vision {
 
-bool Processor::operator()(Mat* mat, ProcLib lib) {
-  ProcLib target = lib;
-  if (lib == ProcLib::DEFAULT) {
+bool Processor::ImplByOpenCV(FDMat* mat) {
+  FDERROR << Name() << " Not Implement Yet." << std::endl;
+  return false;
+}
+
+bool Processor::ImplByOpenCV(FDMatBatch* mat_batch) {
+  for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+    if (ImplByOpenCV(&(*(mat_batch->mats))[i]) != true) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool Processor::ImplByFlyCV(FDMat* mat) { return ImplByOpenCV(mat); }
+
+bool Processor::ImplByFlyCV(FDMatBatch* mat_batch) {
+  for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+    if (ImplByFlyCV(&(*(mat_batch->mats))[i]) != true) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool Processor::ImplByCuda(FDMat* mat) {
+  FDWARNING << Name()
+            << " is not implemented with CUDA, will fallback to OpenCV."
+            << std::endl;
+  return ImplByOpenCV(mat);
+}
+
+bool Processor::ImplByCuda(FDMatBatch* mat_batch) {
+  for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+    if (ImplByCuda(&(*(mat_batch->mats))[i]) != true) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool Processor::ImplByCvCuda(FDMat* mat) {
+  FDWARNING << Name()
+            << " is not implemented with CV-CUDA, will fallback to OpenCV."
+            << std::endl;
+  return ImplByOpenCV(mat);
+}
+
+bool Processor::ImplByCvCuda(FDMatBatch* mat_batch) {
+  for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
+    if (ImplByCvCuda(&(*(mat_batch->mats))[i]) != true) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool Processor::operator()(FDMat* mat) {
+  ProcLib target = mat->proc_lib;
+  if (mat->proc_lib == ProcLib::DEFAULT) {
     target = DefaultProcLib::default_lib;
   }
   if (target == ProcLib::FLYCV) {
@@ -33,27 +90,62 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
 #endif
   } else if (target == ProcLib::CUDA) {
 #ifdef WITH_GPU
+    FDASSERT(mat->Stream() != nullptr,
+             "CUDA processor requires cuda stream, please set stream for Mat");
     return ImplByCuda(mat);
 #else
     FDASSERT(false, "FastDeploy didn't compile with WITH_GPU.");
+#endif
+  } else if (target == ProcLib::CVCUDA) {
+#ifdef ENABLE_CVCUDA
+    FDASSERT(mat->Stream() != nullptr,
+             "CV-CUDA requires cuda stream, please set stream for Mat");
+    return ImplByCvCuda(mat);
+#else
+    FDASSERT(false, "FastDeploy didn't compile with CV-CUDA.");
 #endif
   }
   // DEFAULT & OPENCV
   return ImplByOpenCV(mat);
 }
 
-FDTensor* Processor::UpdateAndGetReusedBuffer(
-    const std::vector<int64_t>& new_shape, const int& opencv_dtype,
-    const std::string& buffer_name, const Device& new_device,
-    const bool& use_pinned_memory) {
-  if (reused_buffers_.count(buffer_name) == 0) {
-    reused_buffers_[buffer_name] = FDTensor();
+bool Processor::operator()(FDMat* mat, ProcLib lib) {
+  mat->proc_lib = lib;
+  return operator()(mat);
+}
+
+bool Processor::operator()(FDMatBatch* mat_batch) {
+  ProcLib target = mat_batch->proc_lib;
+  if (mat_batch->proc_lib == ProcLib::DEFAULT) {
+    target = DefaultProcLib::default_lib;
   }
-  reused_buffers_[buffer_name].is_pinned_memory = use_pinned_memory;
-  reused_buffers_[buffer_name].Resize(new_shape,
-                                      OpenCVDataTypeToFD(opencv_dtype),
-                                      buffer_name, new_device);
-  return &reused_buffers_[buffer_name];
+  if (target == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    return ImplByFlyCV(mat_batch);
+#else
+    FDASSERT(false, "FastDeploy didn't compile with FlyCV.");
+#endif
+  } else if (target == ProcLib::CUDA) {
+#ifdef WITH_GPU
+    FDASSERT(
+        mat_batch->Stream() != nullptr,
+        "CUDA processor requires cuda stream, please set stream for mat_batch");
+    return ImplByCuda(mat_batch);
+#else
+    FDASSERT(false, "FastDeploy didn't compile with WITH_GPU.");
+#endif
+  } else if (target == ProcLib::CVCUDA) {
+#ifdef ENABLE_CVCUDA
+    FDASSERT(mat_batch->Stream() != nullptr,
+             "CV-CUDA processor requires cuda stream, please set stream for "
+             "mat_batch");
+    return ImplByCvCuda(mat_batch);
+#else
+    FDASSERT(false, "FastDeploy didn't compile with CV-CUDA.");
+#endif
+  }
+  // DEFAULT & OPENCV
+  return ImplByOpenCV(mat_batch);
 }
 
 void EnableFlyCV() {

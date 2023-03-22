@@ -16,6 +16,7 @@
 
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/processors/mat.h"
+#include "fastdeploy/vision/common/processors/mat_batch.h"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include <unordered_map>
@@ -36,6 +37,8 @@ FASTDEPLOY_DECL void DisableFlyCV();
  */
 FASTDEPLOY_DECL void SetProcLibCpuNumThreads(int threads);
 
+/*! @brief Processor base class for processors in fastdeploy/vision/common/processors
+ */
 class FASTDEPLOY_DECL Processor {
  public:
   // default_lib has the highest priority
@@ -46,29 +49,41 @@ class FASTDEPLOY_DECL Processor {
 
   virtual std::string Name() = 0;
 
-  virtual bool ImplByOpenCV(Mat* mat) {
-    FDERROR << Name() << " Not Implement Yet." << std::endl;
-    return false;
-  }
+  virtual bool ImplByOpenCV(FDMat* mat);
+  virtual bool ImplByOpenCV(FDMatBatch* mat_batch);
 
-  virtual bool ImplByFlyCV(Mat* mat) {
-    return ImplByOpenCV(mat);
-  }
+  virtual bool ImplByFlyCV(FDMat* mat);
+  virtual bool ImplByFlyCV(FDMatBatch* mat_batch);
 
-  virtual bool ImplByCuda(Mat* mat) {
-    return ImplByOpenCV(mat);
-  }
+  virtual bool ImplByCuda(FDMat* mat);
+  virtual bool ImplByCuda(FDMatBatch* mat_batch);
 
-  virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
+  virtual bool ImplByCvCuda(FDMat* mat);
+  virtual bool ImplByCvCuda(FDMatBatch* mat_batch);
 
- protected:
-  FDTensor* UpdateAndGetReusedBuffer(
-      const std::vector<int64_t>& new_shape, const int& opencv_dtype,
-      const std::string& buffer_name, const Device& new_device = Device::CPU,
-      const bool& use_pinned_memory = false);
+  /*! @brief operator `()` for calling processor in this way: `processor(mat)`
+  *
+  * \param[in] mat: The input mat
+  * \return true if the process successed, otherwise false
+  */
+  virtual bool operator()(FDMat* mat);
 
- private:
-  std::unordered_map<std::string, FDTensor> reused_buffers_;
+  /*! @brief operator `()` for calling processor in this way: `processor(mat, lib)`
+  *  This function is for backward compatibility, will be removed in the near
+  *  future, please use operator()(FDMat* mat) instead and set proc_lib in mat.
+  *
+  * \param[in] mat: The input mat
+  * \param[in] lib: The processing library, opencv, cv-cuda, flycv, etc.
+  * \return true if the process successed, otherwise false
+  */
+  virtual bool operator()(FDMat* mat, ProcLib lib);
+
+  /*! @brief operator `()` for calling processor in this way: `processor(mat_batch)`
+  *
+  * \param[in] mat_batch: The input mat batch
+  * \return true if the process successed, otherwise false
+  */
+  virtual bool operator()(FDMatBatch* mat_batch);
 };
 
 }  // namespace vision
