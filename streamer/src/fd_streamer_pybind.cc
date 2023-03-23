@@ -16,10 +16,12 @@
 #include "fd_streamer.h"
 
 namespace fastdeploy {
+namespace streamer {
 void BindFDStreamer(pybind11::module& m) {
-  pybind11::class_<streamer::FDStreamer>(m, "FDStreamer")
+  pybind11::class_<FDStreamer>(m, "FDStreamer")
       .def(pybind11::init<std::string>())
-      .def("Run", &FDStreamer::Run);
+      .def("Run", &FDStreamer::Run)
       .def("RunAsync", &FDStreamer::RunAsync);
 }
+}  // namespace streamer
 }  // namespace fastdeploy
