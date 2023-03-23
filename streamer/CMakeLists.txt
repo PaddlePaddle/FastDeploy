@@ -22,8 +22,6 @@ if(NOT CSRCS_DIR_NAME)
   set(CSRCS_DIR_NAME ".")
 endif()
 
-configure_file(${PROJECT_SOURCE_DIR}/../fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/../fastdeploy/core/config.h)
-configure_file(${PROJECT_SOURCE_DIR}/../fastdeploy/pybind/main.cc.in ${PROJECT_SOURCE_DIR}/../fastdeploy/pybind/main.cc)
 option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
 option(ENABLE_DEEPSTREAM "Enable NVIDIA DeepStream SDK" ON)
 option(PY_LIBRARY_NAME "Name of build python library name")
@@ -70,11 +68,7 @@ target_link_libraries(fd_streamer ${FASTDEPLOY_LIBS} ${DEPEND_LIBS})
 if(BUILD_FASTDEPLOY_PYTHON)
   add_definitions(-DBUILD_FASTDEPLOY_PYTHON)
   if("${PY_EXT_SUFFIX}" STREQUAL "")
-    if(MSVC)
-      set(PY_EXT_SUFFIX ".pyd")
-    else()
-      set(PY_EXT_SUFFIX ".so")
-    endif()
+    set(PY_EXT_SUFFIX ".so")
   endif()
 
   # find_package Python has replaced PythonInterp and PythonLibs since cmake 3.12
@@ -102,38 +96,12 @@ if(BUILD_FASTDEPLOY_PYTHON)
   target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/../third_party/pybind11/include)
   target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/../third_party/dlpack/include)
 
-  if(APPLE)
-    set_target_properties(${PY_LIBRARY_NAME}
-                          PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
-  endif()
-
-  target_link_libraries(${PY_LIBRARY_NAME} PUBLIC ${LIBRARY_NAME})
-
-  message(STATUS "Found Python: ${LIBRARY_NAME}")
-
-  if(MSVC)
-    target_link_libraries(${PY_LIBRARY_NAME} PRIVATE ${PYTHON_LIBRARIES})
-    target_compile_options(${PY_LIBRARY_NAME}
-                           PRIVATE /MP
-                                   /wd4244 # 'argument': conversion from 'google::
-                                           # protobuf::uint64' to 'int', possible
-                                           # loss of data
-                                   /wd4267 # Conversion from 'size_t' to 'int',
-                                           # possible loss of data
-                                   /wd4996 # The second parameter is ignored.
-                                   ${EXTRA_FLAGS})
-    target_compile_options(${PY_LIBRARY_NAME} PRIVATE $<$<NOT:$<CONFIG:Debug>>:/MT> $<$<CONFIG:Debug>:/MTd>)
-  endif()
+  target_link_libraries(${PY_LIBRARY_NAME} PUBLIC fd_streamer)
 
   file(REMOVE_RECURSE ${PROJECT_SOURCE_DIR}/src/libs)
   file(MAKE_DIRECTORY ${PROJECT_SOURCE_DIR}/src/libs)
 
-  if(WIN32)
-    add_custom_target(copy_fd_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy_directory   ${CMAKE_CURRENT_BINARY_DIR}/Release ${PROJECT_SOURCE_DIR}/src/libs/ DEPENDS ${PY_LIBRARY_NAME})
-  elseif(APPLE)
-    add_custom_target(copy_fd_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/*.so** ${CMAKE_CURRENT_BINARY_DIR}/*.dylib** ${PROJECT_SOURCE_DIR}/src/libs/ DEPENDS ${PY_LIBRARY_NAME})
-  else()
-    add_custom_target(copy_fd_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/*.so* ${PROJECT_SOURCE_DIR}/src/libs/ DEPENDS ${PY_LIBRARY_NAME})
-  endif()
+  add_custom_target(copy_fd_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/*.so* ${PROJECT_SOURCE_DIR}/src/libs/ DEPENDS ${PY_LIBRARY_NAME})
+
   add_custom_target(copy_third_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install ${PROJECT_SOURCE_DIR}/src/libs/third_libs DEPENDS ${PY_LIBRARY_NAME})
 endif(BUILD_FASTDEPLOY_PYTHON)
