@@ -15,13 +15,16 @@
 PROJECT(fd_streamer C CXX)
 CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 
-option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
-option(ENABLE_DEEPSTREAM "Enable NVIDIA DeepStream SDK" ON)
-option(PY_LIBRARY_NAME "Name of build python library name")
-
 if(NOT PY_LIBRARY_NAME)
   set(PY_LIBRARY_NAME "streamer_main")
 endif()
+if(NOT CSRCS_DIR_NAME)
+  set(CSRCS_DIR_NAME ".")
+endif()
+
+option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
+option(ENABLE_DEEPSTREAM "Enable NVIDIA DeepStream SDK" ON)
+option(PY_LIBRARY_NAME "Name of build python library name")
 
 file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/src/*.cc ${PROJECT_SOURCE_DIR}/src/*_pybind.cc)
 file(GLOB_RECURSE ALL_STREAMER_SRCS ${PROJECT_SOURCE_DIR}/src/*.cc)
@@ -88,8 +91,8 @@ if(BUILD_FASTDEPLOY_PYTHON)
                              $<INSTALL_INTERFACE:include>
                              ${PYTHON_INCLUDE_DIR})
 
-  target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/third_party/pybind11/include)
-  target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/third_party/dlpack/include)
+  target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/../third_party/pybind11/include)
+  target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/../third_party/dlpack/include)
 
   if(APPLE)
     set_target_properties(${PY_LIBRARY_NAME}
