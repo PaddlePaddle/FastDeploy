@@ -21,6 +21,7 @@ option(PY_LIBRARY_NAME "Name of build python library name")
 
 if(NOT PY_LIBRARY_NAME)
   set(PY_LIBRARY_NAME "streamer_main")
+endif()
 
 file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/src/*.cc ${PROJECT_SOURCE_DIR}/src/*_pybind.cc)
 file(GLOB_RECURSE ALL_STREAMER_SRCS ${PROJECT_SOURCE_DIR}/src/*.cc)
