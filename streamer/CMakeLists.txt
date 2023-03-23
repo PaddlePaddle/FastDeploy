@@ -32,6 +32,7 @@ file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/src/*.cc ${PROJECT_SO
 file(GLOB_RECURSE ALL_STREAMER_SRCS ${PROJECT_SOURCE_DIR}/src/*.cc)
 file(GLOB_RECURSE DEEPSTREAM_SRCS ${PROJECT_SOURCE_DIR}/src/deepstream/*.cc)
 list(REMOVE_ITEM ALL_STREAMER_SRCS ${DEEPSTREAM_SRCS})
+list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_PYBIND_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -57,7 +58,7 @@ endif()
 # If we link multiple yaml-cpp libs, strange error will occur.
 list(APPEND DEPEND_LIBS yaml-cpp)
 
-add_library(fd_streamer SHARED ${ALL_STREAMER_SRCS})
+add_library(fd_streamer SHARED ${ALL_STREAMER_SRCS} ${ALL_DEPLOY_SRCS})
 target_link_libraries(fd_streamer ${FASTDEPLOY_LIBS} ${DEPEND_LIBS})
 
 ############################### Building: FastDeploy Python Wheel #############################
