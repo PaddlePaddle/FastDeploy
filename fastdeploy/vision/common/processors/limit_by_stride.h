@@ -19,6 +19,8 @@
 namespace fastdeploy {
 namespace vision {
 
+/*! @brief Processor for LimitByStride images with given paramters.
+ */
 class FASTDEPLOY_DECL LimitByStride : public Processor {
  public:
   explicit LimitByStride(int stride = 32, int interp = 1) {
@@ -33,6 +35,14 @@ class FASTDEPLOY_DECL LimitByStride : public Processor {
 #endif
   std::string Name() { return "LimitByStride"; }
 
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data
+   * \param[in] stride limit image stride, deafult is 32
+   * \param[in] interp interpolation method, deafult is 1
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \return true if the process successed, otherwise false
+   */
   static bool Run(Mat* mat, int stride = 32, int interp = 1,
                   ProcLib lib = ProcLib::DEFAULT);
 

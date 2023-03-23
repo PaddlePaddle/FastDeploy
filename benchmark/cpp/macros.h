@@ -79,7 +79,7 @@
     std::cout << "gpu_rss_mb: " << __gpu_mem__ << "MB." << std::endl;       \
     __ss__ << "gpu_rss_mb: " << __gpu_mem__ << "MB." << std::endl;          \
     std::cout << "gpu_util: " << __gpu_util__ << std::endl;                 \
-    __ss__ << "gpu_rss_mb: " << __gpu_mem__ << "MB." << std::endl;          \
+    __ss__ << "gpu_util: " << __gpu_util__ << "MB." << std::endl;          \
     __resource_moniter__.Stop();                                            \
   }                                                                         \
   fastdeploy::benchmark::ResultManager::SaveBenchmarkResult(__ss__.str(),   \
