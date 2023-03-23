@@ -23,7 +23,7 @@ user_specified_dirs = ['@OPENCV_DIRECTORY@', '@ORT_DIRECTORY@', ]
 def process_on_linux(current_dir):
     rpaths = ["$ORIGIN:$ORIGIN/libs"]
     fd_libs = list()
-    libs_path = os.path.join(current_dir, "fastdeploy", "libs")
+    libs_path = os.path.join(current_dir, "src", "libs")
     for f in os.listdir(libs_path):
         filename = os.path.join(libs_path, f)
         if not os.path.isfile(filename):
@@ -32,36 +32,7 @@ def process_on_linux(current_dir):
             fd_libs.append(filename)
 
     cmake_build_dir = os.path.join(current_dir, ".setuptools-cmake-build")
-    patchelf_bin_path = os.path.join(cmake_build_dir, "third_libs/patchelf/bin/patchelf")
-    if not os.path.exists(patchelf_bin_path):
-        patchelf_bin_path = "patchelf"
 
-    third_libs_path = os.path.join(libs_path, "third_libs")
-
-    # remove some useless opencv file in python wheels to decrease package size
-    if os.path.exists(os.path.join(third_libs_path, "opencv")):
-        for root, dirs, files in os.walk(os.path.join(third_libs_path, "opencv")):
-            for f in files:
-                items = f.strip().split('.')
-                if len(items) != 4:
-                    os.remove(os.path.join(root, f))
-                    continue
-                if items[0].strip() not in ["libopencv_highgui", "libopencv_video", "libopencv_videoio", "libopencv_imgcodecs", "libopencv_imgproc", "libopencv_core"]:
-                    os.remove(os.path.join(root, f))
-
-    all_libs_paths = [third_libs_path] + user_specified_dirs
-    for path in all_libs_paths:
-        for root, dirs, files in os.walk(path):
-            for d in dirs:
-                if d not in ["lib", "lib64"]:
-                    continue
-                rel_path = os.path.relpath(os.path.join(root, d), libs_path)
-                if path in user_specified_dirs:
-                    # Note(zhoushunjie): Use the absolute path for user_specified_dirs
-                    rpath = os.path.join(root, d)
-                else:
-                    rpath = "$ORIGIN/" + rel_path
-                rpaths.append(rpath)
     for lib in fd_libs:
         command = "{} --set-rpath '{}' {}".format(patchelf_bin_path, ":".join(rpaths), lib)
         if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
@@ -153,51 +124,15 @@ def process_libraries(current_dir):
     elif platform.system().lower() == "windows":
         process_on_windows(current_dir)
 
-    all_files = get_all_files(os.path.join(current_dir, "fastdeploy", "libs"))
+    all_files = get_all_files(os.path.join(current_dir, "src", "libs"))
     package_data = list()
-
-    if platform.system().lower() == "windows":
-
-        def check_windows_legal_file(f):
-            # Note(zhoushunjie): Special case for some library
-            # File 'plugins.xml' is special case of openvino.
-            for special_file in ['plugins.xml']:
-                if special_file in f:
-                    return True
-            return False
-
-        for f in all_files:
-            if f.endswith(".pyd") or f.endswith("lib") or f.endswith(
-                    "dll") or check_windows_legal_file(f):
-                package_data.append(
-                    os.path.relpath(f, os.path.join(current_dir,
-                                                    "fastdeploy")))
-
-        return package_data
 
     filters = [".vcxproj", ".png", ".java", ".h", ".cc", ".cpp", ".hpp"]
     for f in all_files:
         remain = True
-        for flt in filters:
-            if f.count(flt) > 0:
-                remain = False
-        filename = os.path.split(f)[-1]
-# Note(zhoushunjie): To add the trt libs below will increase the size of whl package by 450M.
-        if filename in [
-                "libnvinfer_plugin.so",
-                "libnvinfer.so", "libnvonnxparser.so",
-                "libnvparsers.so", "libnvcaffe_parser.so"
-        ]:
-            continue
-
-        for lib_prefix in ["libnvinfer_plugin.so.8.",
-            "libnvinfer.so.8.", "libnvonnxparser.so.8.",
-            "libnvparsers.so.8.", "libnvcaffe_parser.so.8."]:
-            if filename.startswith(lib_prefix):
-                remain = False
-                break
 
         if remain:
             package_data.append(
-                os.path.relpath(f, os.path.join(current_dir, "fastdeploy")))
+                os.path.relpath(f, os.path.join(current_dir, "src")))
+        print(f)
     return package_data
