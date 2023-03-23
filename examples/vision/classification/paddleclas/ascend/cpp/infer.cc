@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <string>
 
 #include "fastdeploy/vision.h"
 #ifdef WIN32
@@ -20,23 +19,23 @@ const char sep = '\\';
 const char sep = '/';
 #endif
 
-void InitAndInfer(const std::string &model_dir, const std::string &image_file) {
-  auto model_file = model_dir + sep + "resnet50_1684x_f32.bmodel";
-  auto params_file = model_dir + sep + "";
-  auto config_file = model_dir + sep + "preprocess_config.yaml";
+void AscendInfer(const std::string &model_dir, const std::string &image_file) {
+  auto model_file = model_dir + sep + "inference.pdmodel";
+  auto params_file = model_dir + sep + "inference.pdiparams";
+  auto config_file = model_dir + sep + "inference_cls.yaml";
 
-  fastdeploy::RuntimeOption option;
-  option.UseSophgo();
-  auto model_format = fastdeploy::ModelFormat::SOPHGO;
+  auto option = fastdeploy::RuntimeOption();
+  option.UseAscend();
+
   auto model = fastdeploy::vision::classification::PaddleClasModel(
-      model_file, params_file, config_file, option, model_format);
+      model_file, params_file, config_file, option);
 
   assert(model.Initialized());
 
   auto im = cv::imread(image_file);
 
   fastdeploy::vision::ClassifyResult res;
-  if (!model.Predict(im, &res)) {
+  if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
@@ -46,16 +45,12 @@ void InitAndInfer(const std::string &model_dir, const std::string &image_file) {
 
 int main(int argc, char *argv[]) {
   if (argc < 3) {
-    std::cout << "Usage: infer_demo path/to/model "
-                 "path/to/image "
-                 "run_option, "
-                 "e.g ./infer_demo ./bmodel ./test.jpeg"
-              << std::endl;
+    std::cout << "Usage: infer_demo path/to/model path/to/image " << std::endl;
     return -1;
   }
 
   std::string model_dir = argv[1];
   std::string test_image = argv[2];
-  InitAndInfer(model_dir, test_image);
+  AscendInfer(model_dir, test_image);
   return 0;
 }
