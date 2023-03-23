@@ -44,6 +44,7 @@ list(APPEND DEPEND_LIBS ${GSTAPP_LIBRARIES})
 include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 include_directories(${FASTDEPLOY_INCS})
 include_directories(${PROJECT_SOURCE_DIR}/src/)
+include_directories(${PROJECT_SOURCE_DIR}/../third_party/pybind11/include/)
 
 if(ENABLE_DEEPSTREAM)
   add_definitions(-DENABLE_DEEPSTREAM)
@@ -60,7 +61,6 @@ list(APPEND DEPEND_LIBS yaml-cpp)
 
 add_library(fd_streamer SHARED ${ALL_STREAMER_SRCS} ${ALL_DEPLOY_SRCS})
 target_link_libraries(fd_streamer ${FASTDEPLOY_LIBS} ${DEPEND_LIBS})
-target_include_directories(${PROJECT_SOURCE_DIR}/../third_party/pybind11/include)
 
 ############################### Building: FastDeploy Python Wheel #############################
 if(BUILD_FASTDEPLOY_PYTHON)
