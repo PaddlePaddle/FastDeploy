@@ -102,6 +102,4 @@ if(BUILD_FASTDEPLOY_PYTHON)
   file(MAKE_DIRECTORY ${PROJECT_SOURCE_DIR}/src/libs)
 
   add_custom_target(copy_fd_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/*.so* ${PROJECT_SOURCE_DIR}/src/libs/ DEPENDS ${PY_LIBRARY_NAME})
-
-  add_custom_target(copy_third_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install ${PROJECT_SOURCE_DIR}/src/libs/third_libs DEPENDS ${PY_LIBRARY_NAME})
 endif(BUILD_FASTDEPLOY_PYTHON)
