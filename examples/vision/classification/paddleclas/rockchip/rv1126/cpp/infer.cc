@@ -21,15 +21,15 @@ const char sep = '/';
 #endif
 
 void InitAndInfer(const std::string &model_dir, const std::string &image_file) {
-  auto model_file = model_dir + sep + "resnet50_1684x_f32.bmodel";
-  auto params_file = model_dir + sep + "";
-  auto config_file = model_dir + sep + "preprocess_config.yaml";
-
+  auto model_file = model_dir + sep + "inference.pdmodel";
+  auto params_file = model_dir + sep + "inference.pdiparams";
+  auto config_file = model_dir + sep + "inference_cls.yaml";
+  fastdeploy::vision::EnableFlyCV();
   fastdeploy::RuntimeOption option;
-  option.UseSophgo();
-  auto model_format = fastdeploy::ModelFormat::SOPHGO;
+  option.UseTimVX();
+
   auto model = fastdeploy::vision::classification::PaddleClasModel(
-      model_file, params_file, config_file, option, model_format);
+      model_file, params_file, config_file, option);
 
   assert(model.Initialized());
 
@@ -46,10 +46,9 @@ void InitAndInfer(const std::string &model_dir, const std::string &image_file) {
 
 int main(int argc, char *argv[]) {
   if (argc < 3) {
-    std::cout << "Usage: infer_demo path/to/model "
+    std::cout << "Usage: infer_demo path/to/quant_model "
                  "path/to/image "
-                 "run_option, "
-                 "e.g ./infer_demo ./bmodel ./test.jpeg"
+                 "e.g ./infer_demo ./ResNet50_vd_quant ./test.jpeg"
               << std::endl;
     return -1;
   }

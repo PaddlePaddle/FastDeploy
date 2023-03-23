@@ -3,19 +3,25 @@ import cv2
 import os
 from subprocess import run
 
+
 def parse_arguments():
     import argparse
     import ast
     parser = argparse.ArgumentParser()
-    parser.add_argument("--auto", required=True, help="Auto download, convert, compile and infer if True")
+    parser.add_argument(
+        "--auto",
+        required=True,
+        help="Auto download, convert, compile and infer if True")
     parser.add_argument("--model", required=True, help="Path of bmodel")
-    parser.add_argument("--config_file", required=True, help="Path of config file")
+    parser.add_argument(
+        "--config_file", required=True, help="Path of config file")
     parser.add_argument(
         "--image", type=str, required=True, help="Path of test image file.")
     parser.add_argument(
         "--topk", type=int, default=1, help="Return topk results.")
 
     return parser.parse_args()
+
 
 def download():
     cmd_str = 'wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz'
@@ -27,26 +33,32 @@ def download():
         run(jpg_str, shell=True)
     run(tar_str, shell=True)
 
+
 def paddle2onnx():
     cmd_str = 'paddle2onnx --model_dir ResNet50_vd_infer \
             --model_filename inference.pdmodel \
             --params_filename inference.pdiparams \
             --save_file ResNet50_vd_infer.onnx \
             --enable_dev_version True'
+
     print(cmd_str)
     run(cmd_str, shell=True)
+
 
 def mlir_prepare():
     mlir_path = os.getenv("MODEL_ZOO_PATH")
     mlir_path = mlir_path[:-13]
-    cmd_list = ['mkdir ResNet50',
-                'cp -rf ' + os.path.join(mlir_path, 'regression/dataset/COCO2017/') + ' ./ResNet50',
-                'cp -rf ' + os.path.join(mlir_path, 'regression/image/') + ' ./ResNet50',
-                'cp ResNet50_vd_infer.onnx ./ResNet50/',
-                'mkdir ./ResNet50/workspace']
+    cmd_list = [
+        'mkdir ResNet50', 'cp -rf ' + os.path.join(
+            mlir_path, 'regression/dataset/COCO2017/') + ' ./ResNet50',
+        'cp -rf ' + os.path.join(mlir_path,
+                                 'regression/image/') + ' ./ResNet50',
+        'cp ResNet50_vd_infer.onnx ./ResNet50/', 'mkdir ./ResNet50/workspace'
+    ]
     for str in cmd_list:
         print(str)
         run(str, shell=True)
+
 
 def onnx2mlir():
     cmd_str = 'model_transform.py \
@@ -61,10 +73,12 @@ def onnx2mlir():
         --test_input ../image/dog.jpg \
         --test_result ./ResNet50_vd_infer_top_outputs.npz \
         --mlir ./ResNet50_vd_infer.mlir'
+
     print(cmd_str)
     os.chdir('./ResNet50/workspace/')
     run(cmd_str, shell=True)
     os.chdir('../../')
+
 
 def mlir2bmodel():
     cmd_str = 'model_deploy.py \
@@ -74,6 +88,7 @@ def mlir2bmodel():
         --test_input ./ResNet50_vd_infer_in_f32.npz \
         --test_reference ./ResNet50_vd_infer_top_outputs.npz \
         --model ./ResNet50_vd_infer_1684x_f32.bmodel'
+
     print(cmd_str)
     os.chdir('./ResNet50/workspace')
     run(cmd_str, shell=True)
@@ -82,7 +97,7 @@ def mlir2bmodel():
 
 args = parse_arguments()
 
-if(args.auto):
+if (args.auto):
     download()
     paddle2onnx()
     mlir_prepare()
