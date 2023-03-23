@@ -51,7 +51,6 @@ class FASTDEPLOY_DECL CenterFacePreprocessor{
 
   // target size, tuple of (width, height), default size = {640, 640}
   std::vector<int> size_;
-
 };
 
 }  // namespace facedet

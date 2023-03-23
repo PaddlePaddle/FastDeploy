@@ -74,6 +74,10 @@ class OrtBackend : public BaseBackend {
   std::shared_ptr<Ort::IoBinding> binding_;
   std::vector<OrtValueInfo> inputs_desc_;
   std::vector<OrtValueInfo> outputs_desc_;
+
+  // the ONNX model file name,
+  // when ONNX is bigger than 2G, we will set this name
+  std::string model_file_name;
 #ifndef NON_64_PLATFORM
   Ort::CustomOpDomain custom_op_domain_ = Ort::CustomOpDomain("Paddle");
 #endif
