@@ -28,17 +28,17 @@ option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
 option(ENABLE_DEEPSTREAM "Enable NVIDIA DeepStream SDK" ON)
 option(PY_LIBRARY_NAME "Name of build python library name")
 
-file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/src/*.cc ${PROJECT_SOURCE_DIR}/src/*_pybind.cc)
+file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/src/*_pybind.cc)
 file(GLOB_RECURSE ALL_STREAMER_SRCS ${PROJECT_SOURCE_DIR}/src/*.cc)
 file(GLOB_RECURSE DEEPSTREAM_SRCS ${PROJECT_SOURCE_DIR}/src/deepstream/*.cc)
 list(REMOVE_ITEM ALL_STREAMER_SRCS ${DEEPSTREAM_SRCS})
-list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_PYBIND_SRCS})
+list(REMOVE ALL_STREAMER_SRCS ${DEPLOY_PYBIND_SRCS})
 
 set(DEPEND_LIBS "")
 
 # find python3
-find_package(Python3 ${PYTHON_MINIMUM_VERSION} REQUIRED COMPONENTS Interpreter Development)
-message(STATUS "Found Python: ${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}.${Python3_VERSION_PATCH}")
+#find_package(Python3 ${PYTHON_MINIMUM_VERSION} REQUIRED COMPONENTS Interpreter Development)
+#message(STATUS "Found Python: ${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}.${Python3_VERSION_PATCH}")
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GSTAPP gstreamer-app-1.0 REQUIRED)
@@ -48,7 +48,7 @@ list(APPEND DEPEND_LIBS ${GSTAPP_LIBRARIES})
 include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 include_directories(${FASTDEPLOY_INCS})
 include_directories(${PROJECT_SOURCE_DIR}/src/)
-include_directories(${PROJECT_SOURCE_DIR}/../third_party/pybind11/include/)
+#include_directories(${PROJECT_SOURCE_DIR}/../third_party/pybind11/include/)
 
 if(ENABLE_DEEPSTREAM)
   add_definitions(-DENABLE_DEEPSTREAM)
