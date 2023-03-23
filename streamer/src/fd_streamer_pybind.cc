@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/pybind/main.h"
-#include "fastdeploy/fd_streamer.h"
+#include "fd_streamer.h"
 
 namespace fastdeploy {
 void BindFDStreamer(pybind11::module& m) {
