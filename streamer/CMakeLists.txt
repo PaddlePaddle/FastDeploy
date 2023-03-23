@@ -36,6 +36,10 @@ list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_PYBIND_SRCS})
 
 set(DEPEND_LIBS "")
 
+# find python3
+find_package(Python3 ${PYTHON_MINIMUM_VERSION} REQUIRED COMPONENTS Interpreter Development)
+message(STATUS "Found Python: ${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}.${Python3_VERSION_PATCH}")
+
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GSTAPP gstreamer-app-1.0 REQUIRED)
 include_directories(${GSTAPP_INCLUDE_DIRS})
