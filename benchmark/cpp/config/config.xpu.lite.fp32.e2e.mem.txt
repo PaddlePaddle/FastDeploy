@@ -1,8 +1,8 @@
 device: xpu
 device_id: 0
 cpu_thread_nums: 1
-warmup: 10
-repeat: 20
+warmup: 200
+repeat: 1000
 backend: lite
 profile_mode: end2end
 include_h2d_d2h: false

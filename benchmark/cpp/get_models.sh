@@ -102,6 +102,7 @@ download_common_file() {
 }
 
 # PaddleDetection
+
 download_fd_model_zxvf ppyoloe_crn_l_300e_coco_no_nms.tgz
 download_fd_model_zxvf picodet_l_640_coco_lcnet_no_nms.tgz
 download_fd_model_zxvf ppyoloe_plus_crn_m_80e_coco_no_nms.tgz
