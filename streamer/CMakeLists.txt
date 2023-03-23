@@ -109,6 +109,8 @@ if(BUILD_FASTDEPLOY_PYTHON)
 
   target_link_libraries(${PY_LIBRARY_NAME} PUBLIC ${LIBRARY_NAME})
 
+  message(STATUS "Found Python: ${LIBRARY_NAME}")
+
   if(MSVC)
     target_link_libraries(${PY_LIBRARY_NAME} PRIVATE ${PYTHON_LIBRARIES})
     target_compile_options(${PY_LIBRARY_NAME}
