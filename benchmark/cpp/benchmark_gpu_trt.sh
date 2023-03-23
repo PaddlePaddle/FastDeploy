@@ -28,11 +28,11 @@ fi
 ./benchmark_ppyolov7 --model yolov7_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolov7 --model yolov7_x_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyoloe --model ppyoloe_crn_l_80e_sliced_visdrone_640_025 --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ssd --model yolov8_x_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ssd --model yolov8_l_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ssd --model yolov8_m_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ssd --model yolov8_s_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ssd --model yolov8_n_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov8 --model yolov8_x_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov8 --model yolov8_l_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov8 --model yolov8_m_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov8 --model yolov8_n_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 
 # PaddleSeg
 ./benchmark_ppseg --model Portrait_PP_HumanSegV2_Lite_256x144_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --trt_shape 1,3,144,256:1,3,144,256:1,3,144,256
