@@ -22,6 +22,8 @@ if(NOT CSRCS_DIR_NAME)
   set(CSRCS_DIR_NAME ".")
 endif()
 
+configure_file(${PROJECT_SOURCE_DIR}/../fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/../fastdeploy/core/config.h)
+configure_file(${PROJECT_SOURCE_DIR}/../fastdeploy/pybind/main.cc.in ${PROJECT_SOURCE_DIR}/../fastdeploy/pybind/main.cc)
 option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
 option(ENABLE_DEEPSTREAM "Enable NVIDIA DeepStream SDK" ON)
 option(PY_LIBRARY_NAME "Name of build python library name")
