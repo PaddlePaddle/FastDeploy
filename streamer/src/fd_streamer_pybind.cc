@@ -19,7 +19,10 @@ namespace fastdeploy {
 namespace streamer {
 void BindFDStreamer(pybind11::module& m) {
   pybind11::class_<FDStreamer>(m, "FDStreamer")
-      .def(pybind11::init<std::string>())
+      .def(pybind11::init<>(), "Default Constructor")
+      .def("Init", [](FDStreamer& self, std::string config_file){
+        return self.Init(config_file);
+      })
       .def("Run", &FDStreamer::Run)
       .def("RunAsync", &FDStreamer::RunAsync);
 }
