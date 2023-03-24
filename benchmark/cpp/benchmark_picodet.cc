@@ -42,6 +42,9 @@ int main(int argc, char* argv[]) {
   auto model_file = FLAGS_model + sep + model_name;
   auto params_file = FLAGS_model + sep + params_name;
   auto config_file = FLAGS_model + sep + config_name;
+  if (config_info["backend"] == "paddle_trt") {
+    option.paddle_infer_option.collect_trt_shape = true;
+  }
   if (config_info["backend"] == "paddle_trt" ||
       config_info["backend"] == "trt") {
     option.trt_option.SetShape("image", {1, 3, 640, 640}, {1, 3, 640, 640},
