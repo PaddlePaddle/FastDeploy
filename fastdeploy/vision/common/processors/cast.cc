@@ -96,7 +96,7 @@ bool Cast::ImplByCvCuda(FDMat* mat) {
   auto dst_tensor =
       CreateCvCudaTensorWrapData(*(mat->output_cache), mat->layout);
 
-  cvcuda_convert_op_(mat->Stream(), src_tensor, dst_tensor, 1.0f, 0.0f);
+  cvcuda_convert_op_(mat->Stream(), *src_tensor, *dst_tensor, 1.0f, 0.0f);
 
   mat->SetTensor(mat->output_cache);
   mat->mat_type = ProcLib::CVCUDA;
