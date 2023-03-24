@@ -13,8 +13,7 @@
 # limitations under the License.
 
 from __future__ import absolute_import
-import logging
-from .libs.fastdeploy_streamer_main import *
+from . import c_lib_wrap as C
 
 class FDStreamer:
     def __init__(self):

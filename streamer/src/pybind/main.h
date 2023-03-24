@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "pybind/main.h"
-#include "fd_streamer.h"
+#pragma once
+
+#include <pybind11/numpy.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <pybind11/eval.h>
+
+#include <type_traits>
 
 namespace fastdeploy {
 namespace streamer {
-void BindFDStreamer(pybind11::module& m) {
-  pybind11::class_<FDStreamer>(m, "FDStreamer")
-      .def(pybind11::init<>(), "Default Constructor")
-      .def("Init", [](FDStreamer& self, std::string config_file){
-        return self.Init(config_file);
-      })
-      .def("Run", &FDStreamer::Run)
-      .def("RunAsync", &FDStreamer::RunAsync);
-}
+
+
 }  // namespace streamer
 }  // namespace fastdeploy
+

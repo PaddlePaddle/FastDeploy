@@ -26,7 +26,7 @@ option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
 option(ENABLE_DEEPSTREAM "Enable NVIDIA DeepStream SDK" ON)
 option(PY_LIBRARY_NAME "Name of build python library name")
 
-file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/src/*_pybind.cc)
+file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/src/pybind/*.cc ${PROJECT_SOURCE_DIR}/src/*_pybind.cc)
 file(GLOB_RECURSE ALL_STREAMER_SRCS ${PROJECT_SOURCE_DIR}/src/*.cc)
 file(GLOB_RECURSE DEEPSTREAM_SRCS ${PROJECT_SOURCE_DIR}/src/deepstream/*.cc)
 list(REMOVE_ITEM ALL_STREAMER_SRCS ${DEEPSTREAM_SRCS})
@@ -80,6 +80,8 @@ if(BUILD_FASTDEPLOY_PYTHON)
     set(CMAKE_NO_SYSTEM_FROM_IMPORTED 1)
   endif()
 
+  message(STATUS "pybind srcs: ${DEPLOY_PYBIND_SRCS}")
+
   add_library(${PY_LIBRARY_NAME} MODULE ${DEPLOY_PYBIND_SRCS})
   redefine_file_macro(${PY_LIBRARY_NAME})
   set_target_properties(${PY_LIBRARY_NAME} PROPERTIES PREFIX "")
@@ -94,12 +96,12 @@ if(BUILD_FASTDEPLOY_PYTHON)
                              ${PYTHON_INCLUDE_DIR})
 
   target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/../third_party/pybind11/include)
-  target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/../third_party/dlpack/include)
+  # target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/../third_party/dlpack/include)
 
   target_link_libraries(${PY_LIBRARY_NAME} PUBLIC fd_streamer)
 
-  file(REMOVE_RECURSE ${PROJECT_SOURCE_DIR}/src/libs)
-  file(MAKE_DIRECTORY ${PROJECT_SOURCE_DIR}/src/libs)
+  file(REMOVE_RECURSE ${PROJECT_SOURCE_DIR}/python/streamer/libs)
+  file(MAKE_DIRECTORY ${PROJECT_SOURCE_DIR}/python/streamer/libs)
 
-  add_custom_target(copy_fd_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/*.so* ${PROJECT_SOURCE_DIR}/src/libs/ DEPENDS ${PY_LIBRARY_NAME})
+  add_custom_target(copy_fd_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/*.so* ${PROJECT_SOURCE_DIR}/python/streamer/libs/ DEPENDS ${PY_LIBRARY_NAME})
 endif(BUILD_FASTDEPLOY_PYTHON)

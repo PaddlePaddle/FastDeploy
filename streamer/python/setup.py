@@ -45,10 +45,12 @@ import multiprocessing
 setup_configs = dict()
 setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
 
-SRC_DIR = os.path.join(TOP_DIR, PACKAGE_NAME)
-PYTHON_SRC_DIR = os.path.join(TOP_DIR, "streamer", "src")
-CMAKE_BUILD_DIR = os.path.join(TOP_DIR, 'streamer', '.setuptools-cmake-build')
-FASTDEPLOY_INSTALL_DIR = os.path.join(TOP_DIR,'build', 'installed_fastdeploy')
+print(TOP_DIR, 'top dir--')
+
+SRC_DIR = os.path.join(TOP_DIR, 'python')
+PYTHON_SRC_DIR = os.path.join(TOP_DIR, 'python', "streamer")
+CMAKE_BUILD_DIR = os.path.join(TOP_DIR, 'python', '.setuptools-cmake-build')
+FASTDEPLOY_INSTALL_DIR = os.path.join(TOP_DIR, '../build', 'installed_fastdeploy')
 
 WINDOWS = (os.name == 'nt')
 
@@ -77,7 +79,7 @@ try:
 except (OSError, subprocess.CalledProcessError):
     git_version = None
 
-with open(os.path.join(TOP_DIR, 'VERSION_NUMBER')) as version_file:
+with open(os.path.join(TOP_DIR, '..', 'VERSION_NUMBER')) as version_file:
     VersionInfo = namedtuple('VersionInfo', ['version', 'git_version'])(
         version=version_file.read().strip(), git_version=git_version)
 
@@ -196,7 +198,7 @@ class cmake_build(setuptools.Command):
                 del os.environ['CMAKE_ARGS']
                 log.info('Extra cmake args: {}'.format(extra_cmake_args))
                 cmake_args.extend(extra_cmake_args)
-            cmake_args.append('%s/streamer' % TOP_DIR)
+            cmake_args.append(TOP_DIR)
             subprocess.check_call(cmake_args)
 
             build_args = [CMAKE, '--build', os.curdir]
@@ -314,6 +316,8 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     all_lib_data = process_libraries(
         os.path.split(os.path.abspath(__file__))[0])
     package_data[PACKAGE_NAME].extend(all_lib_data)
+    print("Package_data:")
+    print(all_lib_data)
     setuptools.setup(
         name=wheel_name,
         version=VersionInfo.version,
