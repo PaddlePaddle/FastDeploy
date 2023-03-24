@@ -46,8 +46,8 @@ struct TrtBackendOption {
    */
   void SetShape(const std::string& tensor_name,
                 const std::vector<int32_t>& min,
-                const std::vector<int32_t>& opt = std::vector<int32_t>(),
-                const std::vector<int32_t>& max = std::vector<int32_t>()) {
+                const std::vector<int32_t>& opt,
+                const std::vector<int32_t>& max) {
     min_shape[tensor_name].clear();
     max_shape[tensor_name].clear();
     opt_shape[tensor_name].clear();
