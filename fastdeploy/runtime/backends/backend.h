@@ -85,10 +85,10 @@ class BaseBackend {
                      bool copy_to_fd = true) = 0;
   // Optional: For those backends which can share memory
   // while creating multiple inference engines with same model file
-  virtual std::unique_ptr<BaseBackend> Clone(RuntimeOption &runtime_option,
-                                             void *stream = nullptr,
+  virtual std::unique_ptr<BaseBackend> Clone(RuntimeOption& runtime_option,
+                                             void* stream = nullptr,
                                              int device_id = -1) {
-    FDERROR << "Clone no support" << std::endl;
+    FDERROR << "Clone no support " << runtime_option.backend << " " << stream << " " << device_id << std::endl;
     return nullptr;
   }
 

@@ -32,11 +32,17 @@ int main(int argc, char* argv[]) {
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
-  auto model_file = FLAGS_model + sep + "model.pdmodel";
-  auto params_file = FLAGS_model + sep + "model.pdiparams";
-  auto config_file = FLAGS_model + sep + "infer_cfg.yml";
-  auto model_ppyolov8 = vision::detection::PaddleYOLOv8(model_file, params_file,
-                                                        config_file, option);
+  std::string model_name, params_name, config_name;
+  auto model_format = fastdeploy::ModelFormat::PADDLE;
+  if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
+                               &model_format, config_info)) {
+    return -1;
+  }
+  auto model_file = FLAGS_model + sep + model_name;
+  auto params_file = FLAGS_model + sep + params_name;
+  auto config_file = FLAGS_model + sep + config_name;
+  auto model_ppyolov8 = vision::detection::PaddleYOLOv8(
+      model_file, params_file, config_file, option, model_format);
   vision::DetectionResult res;
   if (config_info["precision_compare"] == "true") {
     // Run once at least
@@ -89,7 +95,7 @@ int main(int argc, char* argv[]) {
   }
   // Run profiling
   if (FLAGS_no_nms) {
-    model_ppyolov8.GetPostprocessor().ApplyDecodeAndNMS();
+    model_ppyolov8.GetPostprocessor().ApplyNMS();
   }
   BENCHMARK_MODEL(model_ppyolov8, model_ppyolov8.Predict(im, &res))
   auto vis_im = vision::VisDetection(im, res);

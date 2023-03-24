@@ -45,8 +45,10 @@ if(NOT MSVC)
   endif()
 endif(NOT MSVC)
 
+include(${PROJECT_SOURCE_DIR}/cmake/build_tools.cmake)
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND (NOT WITH_TIMVX))
-  include(${PROJECT_SOURCE_DIR}/cmake/patchelf.cmake)
+  download_patchelf()
+  set(PATCHELF_EXE ${THIRD_PARTY_PATH}/patchelf/bin/patchelf)
 endif()
 
 
@@ -374,7 +376,7 @@ if(ENABLE_TRT_BACKEND)
     endif()
     if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
       execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
-	      COMMAND sh -c "xargs ${PATCHELF_EXE} --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
+	      COMMAND sh -c "xargs ${PATCHELF_EXE} --force-rpath --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
     	          RESULT_VARIABLE result
                       OUTPUT_VARIABLE curr_out
                       ERROR_VARIABLE  curr_out)
@@ -423,9 +425,17 @@ if(ENABLE_ENCRYPTION)
 endif()
 
 if(ENABLE_PADDLE2ONNX)
+  set(BUILD_PADDLE2ONNX ON)
   add_definitions(-DENABLE_PADDLE2ONNX)
-  include(${PROJECT_SOURCE_DIR}/cmake/paddle2onnx.cmake)
-  list(APPEND DEPEND_LIBS external_paddle2onnx)
+  if(BUILD_PADDLE2ONNX)
+    download_protobuf()
+    include(${PROJECT_SOURCE_DIR}/cmake/build_paddle2onnx.cmake)
+    list(APPEND ALL_DEPLOY_SRCS ${PADDLE2ONNX_ALL_SRCS})
+    list(APPEND DEPEND_LIBS p2o_paddle_proto onnx)
+  else()
+    include(${PROJECT_SOURCE_DIR}/cmake/paddle2onnx.cmake)
+    list(APPEND DEPEND_LIBS external_paddle2onnx)
+  endif()
 endif(ENABLE_PADDLE2ONNX)
 
 if(WITH_CAPI)
@@ -548,10 +558,6 @@ if(NOT ANDROID)
   install(
     DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install
     DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs
-  )
-  install(
-    DIRECTORY ${PROJECT_SOURCE_DIR}/examples
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
   )
 else()
   set_android_third_libs_installation()

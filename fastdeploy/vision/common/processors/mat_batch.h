@@ -23,6 +23,8 @@ namespace vision {
 
 enum FDMatBatchLayout { NHWC, NCHW };
 
+/*! @brief FDMatBatch contains batch data for preprocess
+ */
 struct FASTDEPLOY_DECL FDMatBatch {
   FDMatBatch() = default;
 
@@ -57,6 +59,10 @@ struct FASTDEPLOY_DECL FDMatBatch {
 #endif
 
   std::vector<FDMat>* mats = nullptr;
+
+  // Used by pybind, since python cannot pass list as pointer or reference
+  std::vector<FDMat> mats_holder;
+
   ProcLib mat_type = ProcLib::OPENCV;
   FDMatBatchLayout layout = FDMatBatchLayout::NHWC;
   Device device = Device::CPU;
