@@ -16,11 +16,12 @@ from __future__ import absolute_import
 from . import c_lib_wrap as C
 
 class FDStreamer:
-    def __init__(self):
-        return fastdeploy.streamer.Init()
+    def __init__(self, config_file):
+        self.streamer = C.FDStreamer()
+        self.streamer.Init(config_file)
 
     def Run(self):
-        return fastdeploy.streamer.Run()
+        self.streamer.Run()
 
-    def RunAsyuc(self):
-        return  fastdeploy.streamer.RunAsyuc()
+    def RunAsync(self):
+        self.streamer.RunAsync()
