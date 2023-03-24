@@ -24,6 +24,10 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   option_ = option;
   if (option.device == Device::GPU) {
     config_.EnableUseGpu(option.gpu_mem_init_size, option.device_id);
+    if (option_.switch_ir_debug) {
+      FDINFO << "Will Enable ir_debug for Paddle Backend." << std::endl;
+      config_.SwitchIrDebug();
+    }
     if (option_.external_stream_) {
       FDINFO << "Will use external stream for Paddle Backend." << std::endl;
       config_.SetExecStream(option_.external_stream_);
