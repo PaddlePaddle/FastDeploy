@@ -98,6 +98,7 @@ def mlir2bmodel():
 
 args = parse_arguments()
 
+
 if args.auto:
     download()
     paddle2onnx()

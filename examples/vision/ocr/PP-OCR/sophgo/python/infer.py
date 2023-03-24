@@ -73,7 +73,7 @@ def fix_input_shape():
                     --params_filename inference.pdiparams \
                     --save_dir ch_PP-OCRv3_rec_infer_fix \
                     --input_shape_dict="{\'x\':[1,3,48,320]}"'
-    fix_cls_str = 'python paddle_infer_shape.py --model_dir ch_PP-OCRv3_cls_infer \
+    fix_cls_str = 'python paddle_infer_shape.py --model_dir ch_ppocr_mobile_v2.0_cls_infer \
                     --model_filename inference.pdmodel \
                     --params_filename inference.pdiparams \
                     --save_dir ch_PP-OCRv3_cls_infer_fix \
@@ -92,7 +92,7 @@ def paddle2onnx():
             --params_filename inference.pdiparams \
             --save_file ch_PP-OCRv3_det_infer.onnx \
             --enable_dev_version True'
-    cmd_str_cls = 'paddle2onnx --model_dir ch_ppocr_mobile_v2.0_cls_infer_fix \
+    cmd_str_cls = 'paddle2onnx --model_dir ch_PP-OCRv3_cls_infer_fix \
             --model_filename inference.pdmodel \
             --params_filename inference.pdiparams \
             --save_file ch_PP-OCRv3_cls_infer.onnx \
@@ -119,9 +119,6 @@ def mlir_prepare():
                 'mv ch_PP-OCRv3_det_infer.onnx ./ch_PP-OCRv3',
                 'mv ch_PP-OCRv3_rec_infer.onnx ./ch_PP-OCRv3',
                 'mv ch_PP-OCRv3_cls_infer.onnx ./ch_PP-OCRv3',
-                'mv ch_PP-OCRv3_det_infer_fix.onnx ./ch_PP-OCRv3',
-                'mv ch_PP-OCRv3_rec_infer_fix.onnx ./ch_PP-OCRv3',
-                'mv ch_PP-OCRv3_cls_infer_fix.onnx ./ch_PP-OCRv3',
                 'mkdir ./ch_PP-OCRv3/workspace']
     for str in mv_str_list:
         print(str)
@@ -131,7 +128,7 @@ def mlir_prepare():
 def onnx2mlir():
     transform_str_det = 'model_transform.py \
         --model_name ch_PP-OCRv3_det \
-        --model_def ../ch_PP-OCRv3_det_infer_fix.onnx \
+        --model_def ../ch_PP-OCRv3_det_infer.onnx \
         --input_shapes [[1,3,960,608]] \
         --mean 0.0,0.0,0.0 \
         --scale 0.0039216,0.0039216,0.0039216 \
@@ -143,7 +140,7 @@ def onnx2mlir():
         --mlir ./ch_PP-OCRv3_det.mlir'
     transform_str_rec = 'model_transform.py \
         --model_name ch_PP-OCRv3_rec \
-        --model_def ../ch_PP-OCRv3_rec_infer_fix.onnx \
+        --model_def ../ch_PP-OCRv3_rec_infer.onnx \
         --input_shapes [[1,3,48,320]] \
         --mean 0.0,0.0,0.0 \
         --scale 0.0039216,0.0039216,0.0039216 \
@@ -155,7 +152,7 @@ def onnx2mlir():
         --mlir ./ch_PP-OCRv3_rec.mlir'
     transform_str_cls = 'model_transform.py \
         --model_name ch_PP-OCRv3_cls \
-        --model_def ../ch_PP-OCRv3_cls_infer_fix.onnx \
+        --model_def ../ch_PP-OCRv3_cls_infer.onnx \
         --input_shapes [[1,3,48,192]] \
         --mean 0.0,0.0,0.0 \
         --scale 0.0039216,0.0039216,0.0039216 \
