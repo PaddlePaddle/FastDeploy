@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/pybind/main.h"
 #include "fastdeploy/runtime/backends/paddle/option.h"
+#include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
 
@@ -41,7 +41,9 @@ void BindPaddleOption(pybind11::module& m) {
       .def_readwrite("enable_log_info", &PaddleBackendOption::enable_log_info)
       .def_readwrite("enable_mkldnn", &PaddleBackendOption::enable_mkldnn)
       .def_readwrite("enable_trt", &PaddleBackendOption::enable_trt)
-      .def_readwrite("enable_memory_optimize", &PaddleBackendOption::enable_memory_optimize)
+      .def_readwrite("enable_memory_optimize",
+                     &PaddleBackendOption::enable_memory_optimize)
+      .def_readwrite("switch_ir_debug", &PaddleBackendOption::switch_ir_debug)
       .def_readwrite("ipu_option", &PaddleBackendOption::ipu_option)
       .def_readwrite("collect_trt_shape",
                      &PaddleBackendOption::collect_trt_shape)
