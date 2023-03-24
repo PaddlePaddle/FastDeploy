@@ -15,10 +15,10 @@
 #include "flags.h"
 #include "macros.h"
 #include "option.h"
- 
+
 namespace vision = fastdeploy::vision;
 namespace benchmark = fastdeploy::benchmark;
- 
+
 DEFINE_string(trt_shape, "1,3,224,224:1,3,224,224:1,3,224,224",
               "Set min/opt/max shape for trt/paddle_trt backend."
               "eg:--trt_shape 1,3,224,224:1,3,224,224:1,3,224,224");
@@ -48,7 +48,7 @@ int main(int argc, char* argv[]) {
                                &model_format, config_info)) {
     return -1;
   }
- 
+
   auto model_file = FLAGS_model + sep + model_name;
   auto params_file = FLAGS_model + sep + params_name;
   auto config_file = FLAGS_model + sep + config_name;

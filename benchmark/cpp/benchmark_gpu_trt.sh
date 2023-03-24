@@ -1,12 +1,12 @@
 # Run all models specify hardware and specify backend
- 
+
 CONFIG_PATH="config.gpu.paddle_trt.fp32.txt"
 if [ ! "$1" = "$CONFIG_PATH" ]; then
   if [ -f "$1" ]; then
     CONFIG_PATH="$1"
   fi
 fi
- 
+
 # PaddleClas
 ./benchmark_ppcls --model PPLCNet_x1_0_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH --trt_shape "1,3,224,224:1,3,224,224:1,3,224,224" --input_name "x"
 ./benchmark_ppcls --model PPLCNetV2_base_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH --trt_shape "1,3,224,224:1,3,224,224:1,3,224,224" --input_name "x"
