@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <string>
+
 #include "fastdeploy/vision.h"
 #ifdef WIN32
 const char sep = '\\';
@@ -19,11 +20,11 @@ const char sep = '\\';
 const char sep = '/';
 #endif
 
-void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
+void InitAndInfer(const std::string &model_dir, const std::string &image_file) {
   auto model_file = model_dir + sep + "resnet50_1684x_f32.bmodel";
   auto params_file = model_dir + sep + "";
   auto config_file = model_dir + sep + "preprocess_config.yaml";
-  
+
   fastdeploy::RuntimeOption option;
   option.UseSophgo();
   auto model_format = fastdeploy::ModelFormat::SOPHGO;
@@ -41,10 +42,9 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
   }
 
   std::cout << res.Str() << std::endl;
-
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
   if (argc < 3) {
     std::cout << "Usage: infer_demo path/to/model "
                  "path/to/image "
