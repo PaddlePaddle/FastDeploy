@@ -13,22 +13,23 @@ class CustomPreprocessor : public fd::vision::ProcessorManager {
   virtual bool Apply(fd::vision::FDMatBatch* image_batch,
                      std::vector<fd::FDTensor>* outputs);
 
- protected:
+ private:
+  // Create op
   int width = 160;
   int height = 160;
+  std::shared_ptr<fd::vision::Resize> resize_op =
+      std::make_shared<fd::vision::Resize>(width, height, -1.0, -1.0, 1, false);
+  std::shared_ptr<fd::vision::CenterCrop> crop =
+      std::make_shared<fd::vision::CenterCrop>(50, 50);
+  std::vector<float> mean = {0.485f, 0.456f, 0.406f};
+  std::vector<float> std = {0.229f, 0.224f, 0.225f};
+  std::shared_ptr<fd::vision::Normalize> normalize =
+      std::make_shared<fd::vision::Normalize>(mean, std);
 };
 
 // Implement our custom processor's Apply() method
 bool CustomPreprocessor::Apply(fd::vision::FDMatBatch* image_batch,
                                std::vector<fd::FDTensor>* outputs) {
-  // Create op
-  auto resize_op =
-      std::make_shared<fd::vision::Resize>(width, height, -1.0, -1.0, 1, false);
-  auto crop = std::make_shared<fd::vision::CenterCrop>(50, 50);
-  std::vector<float> mean = {0.485f, 0.456f, 0.406f};
-  std::vector<float> std = {0.229f, 0.224f, 0.225f};
-  auto normalize = std::make_shared<fd::vision::Normalize>(mean, std);
-
   // Use op to transform the images
   bool resize_ret = (*resize_op)(&(image_batch->mats->at(0)));
   bool crop_ret = (*crop)(image_batch);
@@ -44,10 +45,10 @@ bool CustomPreprocessor::Apply(fd::vision::FDMatBatch* image_batch,
 
 int main(int argc, char* argv[]) {
   if (argc < 2) {
-    std::cout << "Usage: image_decoder path/to/image run_option, "
-                 "e.g ./image_decoder ./test.jpeg 0"
+    std::cout << "Usage: ./preprocessor_demo path/to/image run_option, "
+                 "e.g ././preprocessor_demo ./test.jpeg 0"
               << std::endl;
-    std::cout << "Run_option 0: OpenCV; 1: CVCUDA " << std::endl;
+    std::cout << "Run_option 0: OpenCV; 1: CV-CUDA " << std::endl;
     return -1;
   }
 
@@ -60,7 +61,7 @@ int main(int argc, char* argv[]) {
   // CustomPreprocessor processor;
   CustomPreprocessor processor = CustomPreprocessor();
 
-  // Use CVCUDA if parameter passed and detected
+  // Use CV-CUDA if parameter passed and detected
   if (std::atoi(argv[2]) == 1) {
     processor.UseCuda(true, 0);
   }
@@ -70,7 +71,7 @@ int main(int argc, char* argv[]) {
 
   // Print output
   for (int i = 0; i < outputs.size(); i++) {
-    outputs.at(i).PrintInfo("out");
+    outputs[i].PrintInfo("out");
   }
 
   return 0;
