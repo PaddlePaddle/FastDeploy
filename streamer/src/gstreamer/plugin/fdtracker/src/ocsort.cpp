@@ -172,7 +172,7 @@ cv::Mat OcSortTracker::get_trackers(void){
   int tracker_num = this->trackers.size();
   for(int idx=tracker_num-1; idx>=0; idx--) {
     cv::Mat rect(1,6,CV_32FC1);
-    if(this->trackers[idx]->last_observation[0]==-1) {
+    if(this->trackers[idx]->last_observation[0]<0) {
       rect(cv::Rect(2,0,4,1)) = this->trackers[idx]->get_state();
     }
     else {
