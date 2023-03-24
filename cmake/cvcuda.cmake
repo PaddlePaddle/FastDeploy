@@ -24,10 +24,10 @@ if(NOT (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64"))
   message(FATAL_ERROR "CV-CUDA only support x86_64.")
 endif()
 
-set(CVCUDA_LIB_URL https://github.com/CVCUDA/CV-CUDA/releases/download/v0.2.0-alpha/nvcv-lib-0.2.0_alpha-cuda11-x86_64-linux.tar.xz)
-set(CVCUDA_LIB_FILENAME nvcv-lib-0.2.0_alpha-cuda11-x86_64-linux.tar.xz)
-set(CVCUDA_DEV_URL https://github.com/CVCUDA/CV-CUDA/releases/download/v0.2.0-alpha/nvcv-dev-0.2.0_alpha-cuda11-x86_64-linux.tar.xz)
-set(CVCUDA_DEV_FILENAME nvcv-dev-0.2.0_alpha-cuda11-x86_64-linux.tar.xz)
+set(CVCUDA_LIB_URL https://github.com/CVCUDA/CV-CUDA/releases/download/v0.2.1-alpha/nvcv-lib-0.2.1_alpha-cuda11-x86_64-linux.tar.xz)
+set(CVCUDA_LIB_FILENAME nvcv-lib-0.2.1_alpha-cuda11-x86_64-linux.tar.xz)
+set(CVCUDA_DEV_URL https://github.com/CVCUDA/CV-CUDA/releases/download/v0.2.1-alpha/nvcv-dev-0.2.1_alpha-cuda11-x86_64-linux.tar.xz)
+set(CVCUDA_DEV_FILENAME nvcv-dev-0.2.1_alpha-cuda11-x86_64-linux.tar.xz)
 
 download_and_decompress(${CVCUDA_LIB_URL} ${CMAKE_CURRENT_BINARY_DIR}/${CVCUDA_LIB_FILENAME} ${THIRD_PARTY_PATH}/cvcuda)
 download_and_decompress(${CVCUDA_DEV_URL} ${CMAKE_CURRENT_BINARY_DIR}/${CVCUDA_DEV_FILENAME} ${THIRD_PARTY_PATH}/cvcuda)
@@ -40,4 +40,3 @@ execute_process(COMMAND cp -r ${THIRD_PARTY_PATH}/cvcuda/opt/nvidia/cvcuda0/incl
 link_directories(${THIRD_PARTY_PATH}/install/cvcuda/lib)
 include_directories(${THIRD_PARTY_PATH}/install/cvcuda/include)
 
-set(CMAKE_CXX_STANDARD 17)
