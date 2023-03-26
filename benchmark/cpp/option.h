@@ -44,6 +44,8 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
       option->UsePaddleInferBackend();
     } else if (config_info["backend"] == "trt" ||
                config_info["backend"] == "paddle_trt") {
+      option->trt_option.serialize_file = FLAGS_model +
+                                          sep + "trt_serialized.trt";
       option->UseTrtBackend();
       if (config_info["backend"] == "paddle_trt") {
         option->UsePaddleInferBackend();
@@ -101,8 +103,13 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
       return false;
     }
   } else if (config_info["device"] == "xpu") {
-    option->UseKunlunXin(std::stoi(config_info["device_id"]),
-                         std::stoi(config_info["xpu_l3_cache"]));
+    if (FLAGS_xpu_l3_cache >= 0) {
+       option->UseKunlunXin(std::stoi(config_info["device_id"]),
+                                      FLAGS_xpu_l3_cache);
+    } else {
+      option->UseKunlunXin(std::stoi(config_info["device_id"]),
+                           std::stoi(config_info["xpu_l3_cache"]));
+    }
     if (config_info["backend"] == "ort") {
       option->UseOrtBackend();
     } else if (config_info["backend"] == "paddle") {

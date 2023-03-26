@@ -14,7 +14,6 @@
 
 /*! \file runtime_option.h
     \brief A brief file description.
-
     More details
  */
 
@@ -174,11 +173,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
   TNNBackendOption tnn_option;
 
   //  \brief Set the profile mode as 'true'.
-  // 
-  // \param[in] inclue_h2d_d2h Whether to include time of H2D_D2H for time of runtime.
+  //
+  // \param[in] inclue_h2d_d2h Whether to
+  //            include time of H2D_D2H for time of runtime.
   // \param[in] repeat Repeat times for runtime inference.
   // \param[in] warmup Warmup times for runtime inference.
-  // 
+  //
   void EnableProfiling(bool inclue_h2d_d2h = false,
                        int repeat = 100, int warmup = 50) {
     benchmark_option.enable_profile = true;
@@ -193,12 +193,14 @@ struct FASTDEPLOY_DECL RuntimeOption {
     benchmark_option.enable_profile = false;
   }
 
-  // \brief Enable to check if current backend set by user can be found at valid_xxx_backend.
+  // \brief Enable to check if current backend set by
+  //        user can be found at valid_xxx_backend.
   //
   void EnableValidBackendCheck() {
     enable_valid_backend_check = true;
   }
-  // \brief Disable to check if current backend set by user can be found at valid_xxx_backend.
+  // \brief Disable to check if current backend set by
+  //        user can be found at valid_xxx_backend.
   //
   void DisableValidBackendCheck() {
     enable_valid_backend_check = false;

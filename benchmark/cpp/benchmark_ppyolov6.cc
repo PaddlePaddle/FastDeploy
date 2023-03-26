@@ -48,6 +48,15 @@ int main(int argc, char* argv[]) {
   option.tnn_option.out_orders = {{"tmp_25", 0}, {"concat_8.tmp_0", 1}};
   option.ncnn_option.in_orders = {{"image", 0}, {"scale_factor", 1}};
   option.ncnn_option.out_orders = {{"tmp_25", 0}, {"concat_8.tmp_0", 1}};
+  if (config_info["backend"] == "paddle_trt") {
+    option.paddle_infer_option.collect_trt_shape = true;
+  }
+  if (config_info["backend"] == "paddle_trt" ||
+      config_info["backend"] == "trt") {
+    option.trt_option.SetShape("image", {1, 3, 640, 640}, {1, 3, 640, 640},
+                               {1, 3, 640, 640});
+    option.trt_option.SetShape("scale_factor", {1, 2}, {1, 2}, {1, 2});
+  }
   auto model_ppyolov6 = vision::detection::PaddleYOLOv6(
       model_file, params_file, config_file, option, model_format);
   if (FLAGS_no_nms) {

@@ -82,6 +82,7 @@ else()
   set(PADDLEINFERENCE_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
   set(PADDLEINFERENCE_VERSION "2.4-dev7")
   if(WIN32)
+    set(PADDLEINFERENCE_VERSION "2.4-dev6") # dev7 for win is not ready now!
     if (WITH_GPU)
       set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-gpu-trt-${PADDLEINFERENCE_VERSION}.zip")
     else()
@@ -134,7 +135,6 @@ else()
 endif(PADDLEINFERENCE_DIRECTORY)
 
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
-  message("?????????????? ${PATCHELF_EXE}")
   add_custom_target(patchelf_paddle_inference ALL COMMAND  bash -c "PATCHELF_EXE=${PATCHELF_EXE} python ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_inference.py ${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so" DEPENDS ${LIBRARY_NAME})
 endif()
 
