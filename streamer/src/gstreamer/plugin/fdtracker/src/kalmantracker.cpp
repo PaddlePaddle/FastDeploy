@@ -4,8 +4,8 @@
 // Ths copyright of CnybTseng/JDE is as follows:
 // MIT License
 
+#include "include/kalmantracker.h"
 #include <algorithm>
-#include "kalmantracker.h"
 
 void TKalmanFilter::init(const cv::Mat &measurement) {
   measurement.copyTo(statePost(cv::Rect(0, 0, 1, 4)));
@@ -73,12 +73,7 @@ void TKalmanFilter::project(cv::Mat *mean, cv::Mat *covariance) const {
 
   *mean = measurementMatrix * statePost;
   cv::Mat temp = measurementMatrix * errorCovPost;
-  gemm(temp,
-       measurementMatrix,
-       1,
-       measurementNoiseCov_,
-       1,
-       *covariance,
+  gemm(temp, measurementMatrix, 1, measurementNoiseCov_, 1, *covariance,
        cv::GEMM_2_T);
 }
 
@@ -86,7 +81,7 @@ int KalmanTracker::count = 0;
 
 const cv::Mat &KalmanTracker::predict(void) {
   this->age += 1;
-  if(this->time_since_update > 0) {
+  if (this->time_since_update > 0) {
     this->hit_streak = 0;
   }
   this->time_since_update += 1;
@@ -106,28 +101,28 @@ const cv::Mat KalmanTracker::get_state(void) {
 
 cv::Vec2f speed_direction(cv::Vec4f bbox1, cv::Vec4f bbox2) {
   cv::Vec2f center1, center2, speed;
-  center1[0] = (bbox1[0]+bbox1[2])/2.0;
-  center1[1] = (bbox1[1]+bbox1[3])/2.0;
-  center2[0] = (bbox2[0]+bbox2[2])/2.0;
-  center2[1] = (bbox2[1]+bbox2[3])/2.0;
-  speed[0] = center1[0]-center2[0];
-  speed[1] = center1[1]-center2[1];
-  float norm = sqrt(speed[0]*speed[0] + speed[1]*speed[1]) + 1e-6;
+  center1[0] = (bbox1[0] + bbox1[2]) / 2.0;
+  center1[1] = (bbox1[1] + bbox1[3]) / 2.0;
+  center2[0] = (bbox2[0] + bbox2[2]) / 2.0;
+  center2[1] = (bbox2[1] + bbox2[3]) / 2.0;
+  speed[0] = center1[0] - center2[0];
+  speed[1] = center1[1] - center2[1];
+  float norm = sqrt(speed[0] * speed[0] + speed[1] * speed[1]) + 1e-6;
   speed /= norm;
   return speed;
 }
 
 void KalmanTracker::update(cv::Vec4f dets, bool angle_cost) {
-  if(angle_cost && this->last_observation[0]>0) {
-    cv::Vec4f previous_box(-1,-1,-1,-1);
-    for (int i=0; i<this->delta_t; i++) {
+  if (angle_cost && this->last_observation[0] > 0) {
+    cv::Vec4f previous_box(-1, -1, -1, -1);
+    for (int i = 0; i < this->delta_t; i++) {
       int dt = this->delta_t - i;
-      if (this->observations.find(this->age - dt)!=this->observations.end()) {
-        previous_box = this->observations[this->age-dt];
+      if (this->observations.find(this->age - dt) != this->observations.end()) {
+        previous_box = this->observations[this->age - dt];
         break;
       }
     }
-    if (previous_box[0]<0) {
+    if (previous_box[0] < 0) {
       previous_box = this->last_observation;
     }
     this->velocity = speed_direction(dets, previous_box);
@@ -156,7 +151,8 @@ void KalmanTracker::activate(int timestamp_) {
   starttime = timestamp_;
 }
 
-void KalmanTracker::reactivate(KalmanTracker *traj, int timestamp_, bool newid) {
+void KalmanTracker::reactivate(KalmanTracker *traj, int timestamp_,
+                               bool newid) {
   TKalmanFilter::correct(cv::Mat(traj->xyah));
   length = 0;
   state = Tracked;
@@ -164,4 +160,3 @@ void KalmanTracker::reactivate(KalmanTracker *traj, int timestamp_, bool newid) 
   timestamp = timestamp_;
   if (newid) alloc_id();
 }
-

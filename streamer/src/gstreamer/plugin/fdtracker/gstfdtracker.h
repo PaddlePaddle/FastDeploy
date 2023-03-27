@@ -17,23 +17,27 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef _GST_FDTRAKER_H_
-#define _GST_FDTRAKER_H_
+#ifndef STREAMER_SRC_GSTREAMER_PLUGIN_FDTRACKER_GSTFDTRACKER_H_
+#define STREAMER_SRC_GSTREAMER_PLUGIN_FDTRACKER_GSTFDTRACKER_H_
 
 #include <gst/base/gstbasetransform.h>
 #include <queue>
 #include <vector>
 #include <map>
-#include "gstnvdsmeta.h"
+#include <gstnvdsmeta.h>
 #include "include/ocsort.h"
 
 G_BEGIN_DECLS
 
 #define GST_TYPE_FDTRACKER   (gst_fdtracker_get_type())
-#define GST_FDTRACKER(obj)   (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_FDTRACKER,GstFdtracker))
-#define GST_FDTRAKERCLASS(klass)   (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_FDTRAKERGstFdtrackerClass))
-#define GST_IS_FDTRACKER(obj)   (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_FDTRACKER))
-#define GST_IS_FDTRACKER_CLASS(obj)   (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_FDTRACKER))
+#define GST_FDTRACKER(obj)   (G_TYPE_CHECK_INSTANCE_CAST((obj),
+                              GST_TYPE_FDTRACKER, GstFdtracker))
+#define GST_FDTRAKERCLASS(klass)   (G_TYPE_CHECK_CLASS_CAST((klass),
+                                    GST_TYPE_FDTRAKERGstFdtrackerClass))
+#define GST_IS_FDTRACKER(obj)   (G_TYPE_CHECK_INSTANCE_TYPE((obj),
+                                 GST_TYPE_FDTRACKER))
+#define GST_IS_FDTRACKER_CLASS(obj)   (G_TYPE_CHECK_CLASS_TYPE((klass),
+                                       GST_TYPE_FDTRACKER))
 
 typedef struct _GstFdtracker GstFdtracker;
 typedef struct _GstFdtrackerClass GstFdtrackerClass;
@@ -46,22 +50,19 @@ struct Bbox_cache {
   int tracker_id = -1;
 };
 
-struct _GstFdtracker
-{
+struct _GstFdtracker {
   GstBaseTransform base_fdtracker;
-  
+
   std::queue<std::vector<Bbox_cache>>* previous_frame;
   std::map<int, OcSortTracker*>* tracker_per_class;
 };
 
-struct _GstFdtrackerClass
-{
+struct _GstFdtrackerClass {
   GstBaseTransformClass base_fdtracker_class;
 };
 
-GType gst_fdtracker_get_type (void);
+GType gst_fdtracker_get_type(void);
 
 G_END_DECLS
 
-#endif
-
+#endif  // STREAMER_SRC_GSTREAMER_PLUGIN_FDTRACKER_GSTFDTRACKER_H_

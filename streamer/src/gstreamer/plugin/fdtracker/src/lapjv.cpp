@@ -8,12 +8,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lapjv.h"
+#include "include/lapjv.h"
 
 /** Column-reduction and reduction transfer for a dense cost matrix.
  */
-int _ccrrt_dense(
-    const int n, float *cost[], int *free_rows, int *x, int *y, float *v) {
+int _ccrrt_dense(const int n, float *cost[], int *free_rows, int *x, int *y,
+                 float *v) {
   int n_free_rows;
   bool *unique;
 
@@ -71,13 +71,8 @@ int _ccrrt_dense(
 
 /** Augmenting row reduction for a dense cost matrix.
  */
-int _carr_dense(const int n,
-                float *cost[],
-                const int n_free_rows,
-                int *free_rows,
-                int *x,
-                int *y,
-                float *v) {
+int _carr_dense(const int n, float *cost[], const int n_free_rows,
+                int *free_rows, int *x, int *y, float *v) {
   int current = 0;
   int new_free_rows = 0;
   int rr_cnt = 0;
@@ -156,15 +151,8 @@ int _find_dense(const int n, int lo, float *d, int *cols, int *y) {
 
 // Scan all columns in TODO starting from arbitrary column in SCAN
 // and try to decrease d of the TODO columns using the SCAN column.
-int _scan_dense(const int n,
-                float *cost[],
-                int *plo,
-                int *phi,
-                float *d,
-                int *cols,
-                int *pred,
-                int *y,
-                float *v) {
+int _scan_dense(const int n, float *cost[], int *plo, int *phi, float *d,
+                int *cols, int *pred, int *y, float *v) {
   int lo = *plo;
   int hi = *phi;
   float h, cred_ij;
@@ -203,12 +191,8 @@ int _scan_dense(const int n,
  *
  * \return The closest free column index.
  */
-int find_path_dense(const int n,
-                    float *cost[],
-                    const int start_i,
-                    int *y,
-                    float *v,
-                    int *pred) {
+int find_path_dense(const int n, float *cost[], const int start_i, int *y,
+                    float *v, int *pred) {
   int lo = 0, hi = 0;
   int final_j = -1;
   int n_ready = 0;
@@ -256,13 +240,8 @@ int find_path_dense(const int n,
 
 /** Augment for a dense cost matrix.
  */
-int _ca_dense(const int n,
-              float *cost[],
-              const int n_free_rows,
-              int *free_rows,
-              int *x,
-              int *y,
-              float *v) {
+int _ca_dense(const int n, float *cost[], const int n_free_rows, int *free_rows,
+              int *x, int *y, float *v) {
   int *pred;
 
   NEW(pred, int, n);
@@ -285,11 +264,8 @@ int _ca_dense(const int n,
 
 /** Solve dense sparse LAP.
  */
-int lapjv_internal(const cv::Mat &cost,
-                   const bool extend_cost,
-                   const float cost_limit,
-                   int *x,
-                   int *y) {
+int lapjv_internal(const cv::Mat &cost, const bool extend_cost,
+                   const float cost_limit, int *x, int *y) {
   int n_rows = cost.rows;
   int n_cols = cost.cols;
   int n;

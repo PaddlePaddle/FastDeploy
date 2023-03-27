@@ -1,4 +1,4 @@
-//Copyright (c) 2023 niuzhibo. All Rights Reserved.
+// Copyright (c) 2023 niuzhibo. All Rights Reserved.
 
 #pragma once
 
@@ -8,17 +8,23 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-#include "kalmantracker.h"
+#include "include/kalmantracker.h"
 
 class OcSortTracker {
  public:
-  OcSortTracker(int classid);
+  explicit OcSortTracker(int classid);
   virtual ~OcSortTracker(void) {}
   // static OcSortTracker *instance(void);
   virtual bool update(const cv::Mat &dets, bool use_byte, bool use_angle_cost);
   cv::Mat get_trackers(void);
-  void associate_only_iou(cv::Mat detections, cv::Mat trackers, float iou_threshold, std::map<int, int> &matches, std::vector<int> &mismatch_row, std::vector<int> &mismatch_col);
-  void associate(cv::Mat detections, cv::Mat trackers, float iou_threshold, cv::Mat velocities, cv::Mat previous_obs, float vdc_weight, std::map<int, int> &matches, std::vector<int> &mismatch_row, std::vector<int> &mismatch_col);
+  void associate_only_iou(cv::Mat detections, cv::Mat trackers,
+                          float iou_threshold, std::map<int, int> &matches,
+                          std::vector<int> &mismatch_row,
+                          std::vector<int> &mismatch_col);
+  void associate(cv::Mat detections, cv::Mat trackers, float iou_threshold,
+                 cv::Mat velocities, cv::Mat previous_obs, float vdc_weight,
+                 std::map<int, int> &matches, std::vector<int> &mismatch_row,
+                 std::vector<int> &mismatch_col);
   std::vector<KalmanTracker*> trackers;
   std::vector<KalmanTracker*> unused_trackers;
 
@@ -33,6 +39,5 @@ class OcSortTracker {
   int max_age = 30;
   int min_hits = 0;
   int frame_count = 0;
-  int classid=0;
+  int classid = 0;
 };
-

@@ -1,34 +1,36 @@
-//Copyright (c) 2023 niuzhibo. All Rights Reserved.
+// Copyright (c) 2023 niuzhibo. All Rights Reserved.
 
-#include <vector>
 #include <stdio.h>
+#include <vector>
 
-#include "trajectory.h"
+#include "include/trajectory.h"
 
-std::vector<std::vector<int>> Trajectory::entrance_count(OcSortTracker* octracker) {
+std::vector<std::vector<int>> Trajectory::entrance_count(
+    OcSortTracker* octracker) {
   std::vector<int> breakin, breakout;
   std::vector<std::vector<int>> res;
-  for (auto tracker : octracker->trackers){
+  for (auto tracker : octracker->trackers) {
     if (tracker->observations.size() < 2) {
       continue;
     }
     if (this->inout_type == horizontal) {
-      auto precenter = tracker->observations[tracker->age-1][3];
+      auto precenter = tracker->observations[tracker->age - 1][3];
       auto curcenter = tracker->observations[tracker->age][3];
-      if (precenter <=  this->region[1] && curcenter > this->region[1]) {
+      if (precenter <= this->region[1] && curcenter > this->region[1]) {
         breakin.emplace_back(tracker->id);
-      }
-      else if(precenter >=  this->region[1] && curcenter < this->region[1]) {
+      } else if (precenter >= this->region[1] && curcenter < this->region[1]) {
         breakout.emplace_back(tracker->id);
       }
-    }
-    else {
-      auto precenter = (tracker->observations[tracker->age-1][0] + tracker->observations[tracker->age-1][2])/2.0;
-      auto curcenter = (tracker->observations[tracker->age][0] + tracker->observations[tracker->age][2])/2.0;
-      if (precenter <=  this->region[0] && curcenter > this->region[0]) {
+    } else {
+      auto precenter = (tracker->observations[tracker->age - 1][0] +
+                        tracker->observations[tracker->age - 1][2]) /
+                       2.0;
+      auto curcenter = (tracker->observations[tracker->age][0] +
+                        tracker->observations[tracker->age][2]) /
+                       2.0;
+      if (precenter <= this->region[0] && curcenter > this->region[0]) {
         breakin.emplace_back(tracker->id);
-      }
-      else if(precenter >=  this->region[0] && curcenter < this->region[0]) {
+      } else if (precenter >= this->region[0] && curcenter < this->region[0]) {
         breakout.emplace_back(tracker->id);
       }
     }
@@ -40,18 +42,19 @@ std::vector<std::vector<int>> Trajectory::entrance_count(OcSortTracker* octracke
   return res;
 }
 
-bool checkinarea(cv::Point point, std::vector<std::vector<float>> area, int num_pts) {
-  if (area.size()==0){
+bool checkinarea(cv::Point point, std::vector<std::vector<float>> area,
+                 int num_pts) {
+  if (area.size() == 0) {
     return false;
   }
   cv::Point points[1][num_pts];
   int maxw = 0;
   int maxh = 0;
-  for (int i=0;i<num_pts;i++) {
-    if (area[i][0]>maxw){
+  for (int i = 0; i < num_pts; i++) {
+    if (area[i][0] > maxw) {
       maxw = area[i][0];
     }
-    if (area[i][1]>maxh){
+    if (area[i][1] > maxh) {
       maxh = area[i][1];
     }
     points[0][i] = cv::Point(area[i][0], area[i][1]);
@@ -59,24 +62,24 @@ bool checkinarea(cv::Point point, std::vector<std::vector<float>> area, int num_
   maxw = std::max(maxw, point.x);
   maxh = std::max(maxh, point.y);
 
-  cv::Mat img = cv::Mat::zeros(maxh+1, maxw+1, CV_32FC1);
+  cv::Mat img = cv::Mat::zeros(maxh + 1, maxw + 1, CV_32FC1);
   // img.setTo(0);
-  
-	const cv::Point* ppt[] = {points[0]};
-	int npt[] = { num_pts };
+
+  const cv::Point* ppt[] = {points[0]};
+  int npt[] = {num_pts};
   cv::fillPoly(img, ppt, npt, 1, cv::Scalar(1.0));
-  if (img.at<float>(point)>0.5){
+  if (img.at<float>(point) > 0.5) {
     return true;
-  }
-  else {
+  } else {
     return false;
   }
 }
 
 std::vector<int> Trajectory::breakin_count(OcSortTracker* octracker) {
   std::vector<int> res;
-  for (auto tracker : octracker->trackers){
-    float locx = (tracker->last_observation[0] + tracker->last_observation[1])/2.0;
+  for (auto tracker : octracker->trackers) {
+    float locx =
+        (tracker->last_observation[0] + tracker->last_observation[1]) / 2.0;
     float locy = tracker->last_observation[3];
     cv::Point2f loc(locx, locy);
     if (checkinarea(loc, this->breakarea, this->num_pts)) {
@@ -86,50 +89,52 @@ std::vector<int> Trajectory::breakin_count(OcSortTracker* octracker) {
   return res;
 }
 
-bool Trajectory::set_region(region_type inout_type, std::vector<int> region){
+bool Trajectory::set_region(region_type inout_type, std::vector<int> region) {
   if (region.size() != 2) {
     printf("illegal region set, the region should be a vector of size=2(x,y)");
     return false;
   }
   this->inout_type = inout_type;
-  if (inout_type==horizontal) {
+  if (inout_type == horizontal) {
     this->region = region;
-  }
-  else {
+  } else {
     this->region = region;
   }
   return true;
-  
 }
 
-bool Trajectory::set_area(std::vector<int> area){
+bool Trajectory::set_area(std::vector<int> area) {
   if (area.size() < 6) {
-    printf("illegal area set, the area should include at least 3 points, so the vector should have a size>=6");
+    printf(
+        "illegal area set, the area should include at least 3 points, so the "
+        "vector should have a size>=6");
     return false;
   }
-  if (area.size()%2 != 0) {
-    printf("illegal area set, the area vector should have even nunmbers, while got number of %d", int(area.size()));
+  if (area.size() % 2 != 0) {
+    printf(
+        "illegal area set, the area vector should have even nunmbers, while "
+        "got number of %d",
+        static_cast<int>(area.size()));
     return false;
   }
   this->breakarea.clear();
-  
-  this->num_pts = area.size()/2;
-  for(int i=0;i<this->num_pts;i++) {
+
+  this->num_pts = area.size() / 2;
+  for (int i = 0; i < this->num_pts; i++) {
     std::vector<float> temp;
-    temp.push_back(area[i*2]);
-    temp.push_back(area[i*2+1]);
+    temp.push_back(area[i * 2]);
+    temp.push_back(area[i * 2 + 1]);
     this->breakarea.push_back(temp);
   }
-  
+
   return true;
 }
 
-void Trajectory::clearset(void){
-  this->countin=0;
-  this->countout=0;
+void Trajectory::clearset(void) {
+  this->countin = 0;
+  this->countout = 0;
   this->breakin.clear();
   this->region.clear();
   this->breakarea.clear();
-  this->inout_type=horizontal;
+  this->inout_type = horizontal;
 }
-
