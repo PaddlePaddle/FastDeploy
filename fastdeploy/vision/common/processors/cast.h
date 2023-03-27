@@ -24,6 +24,8 @@
 namespace fastdeploy {
 namespace vision {
 
+/*! @brief Processor for cast images with given type deafault is float.
+ */
 class FASTDEPLOY_DECL Cast : public Processor {
  public:
   explicit Cast(const std::string& dtype = "float") : dtype_(dtype) {}
@@ -35,6 +37,13 @@ class FASTDEPLOY_DECL Cast : public Processor {
   bool ImplByCvCuda(FDMat* mat);
 #endif
   std::string Name() { return "Cast"; }
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data
+   * \param[in] dtype type of data will be casted to
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \return true if the process successed, otherwise false
+   */
   static bool Run(Mat* mat, const std::string& dtype,
                   ProcLib lib = ProcLib::DEFAULT);
 

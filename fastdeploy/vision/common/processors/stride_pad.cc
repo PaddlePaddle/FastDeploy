@@ -167,7 +167,7 @@ bool StridePad::ImplByCvCuda(FDMat* mat) {
                             "output_cache", Device::GPU);
   auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
 
-  cvcuda_pad_op_(mat->Stream(), src_tensor, dst_tensor, 0, 0,
+  cvcuda_pad_op_(mat->Stream(), *src_tensor, *dst_tensor, 0, 0,
                  NVCV_BORDER_CONSTANT, value);
 
   mat->SetTensor(mat->output_cache);
