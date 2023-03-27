@@ -28,6 +28,7 @@ DEFINE_string(trt_shapes, "1,3,224,224:1,3,224,224:1,3,224,224",
 DEFINE_bool(dump, false, "whether to dump output tensors.");
 DEFINE_bool(diff, false, "check the diff between two tensors.");
 DEFINE_string(tensors, "a.txt", "a.txt:b.txt");
+DEFINE_bool(info, false, "only check the input infos of model");
 
 static std::vector<int64_t> GetInt64Shape(const std::vector<int>& shape) {
   std::vector<int64_t> new_shape;
@@ -81,29 +82,31 @@ int main(int argc, char* argv[]) {
   // Init flags infos
   std::vector<std::vector<int32_t>> input_shapes =
       benchmark::ResultManager::GetInputShapes(FLAGS_shapes);
-  assert(runtime.NumInputs() == input_shapes.size());
-
   std::vector<std::string> input_names =
       benchmark::ResultManager::GetInputNames(FLAGS_names);
   std::vector<fastdeploy::FDDataType> input_dtypes =
       benchmark::ResultManager::GetInputDtypes(FLAGS_dtypes);
 
-  if (config_info["backend"] == "paddle_trt") {
-    option.paddle_infer_option.collect_trt_shape = true;
-  }
-  if (config_info["backend"] == "paddle_trt" ||
-      config_info["backend"] == "trt") {
-    std::vector<std::vector<int32_t>> trt_shapes =
-        benchmark::ResultManager::GetInputShapes(FLAGS_trt_shapes);
-    if (input_names[0] == "DEFAULT") {
-      std::cout << "Please set the input names for TRT/Paddle-TRT backend!"
-                << std::endl;
-      return -1;
+  // TRT shapes
+  if (!FLAGS_info) {
+    if (config_info["backend"] == "paddle_trt") {
+      option.paddle_infer_option.collect_trt_shape = true;
     }
-    assert(input_names.size() == (trt_shapes.size() / 3));
-    for (int i = 0; i < input_shapes.size(); ++i) {
-      option.trt_option.SetShape(input_names[i], trt_shapes[i * 3],
-                                 trt_shapes[i * 3 + 1], trt_shapes[i * 3 + 2]);
+    if (config_info["backend"] == "paddle_trt" ||
+        config_info["backend"] == "trt") {
+      std::vector<std::vector<int32_t>> trt_shapes =
+          benchmark::ResultManager::GetInputShapes(FLAGS_trt_shapes);
+      if (input_names[0] == "DEFAULT") {
+        std::cout << "Please set the input names for TRT/Paddle-TRT backend!"
+                  << std::endl;
+        return -1;
+      }
+      assert(input_names.size() == (trt_shapes.size() / 3));
+      for (int i = 0; i < input_shapes.size(); ++i) {
+        option.trt_option.SetShape(input_names[i], trt_shapes[i * 3],
+                                   trt_shapes[i * 3 + 1],
+                                   trt_shapes[i * 3 + 2]);
+      }
     }
   }
 
@@ -119,11 +122,22 @@ int main(int argc, char* argv[]) {
       input_names.push_back(runtime.GetInputInfo(i).name);
     }
   }
-  assert(runtime.NumInputs() == input_names.size());
-  assert(runtime.NumInputs() == input_dtypes.size());
 
+  // Only check input infos
+  if (!FLAGS_info) {
+    assert(runtime.NumInputs() == input_shapes.size());
+    assert(runtime.NumInputs() == input_names.size());
+    assert(runtime.NumInputs() == input_dtypes.size());
+  } else {
+    auto input_infos = runtime.GetInputInfos();
+    for (int i = 0; i < input_infos.size(); ++i) {
+      std::cout << input_infos[i] << std::endl;
+    }
+    return 0;
+  }
+
+  // Run profiling
   std::vector<fastdeploy::FDTensor> inputs(runtime.NumInputs());
-
   // Feed inputs
   for (int i = 0; i < inputs.size(); ++i) {
     fastdeploy::function::Full(1, GetInt64Shape(input_shapes[i]), &inputs[i],
