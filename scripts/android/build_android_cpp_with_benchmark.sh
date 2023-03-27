@@ -93,7 +93,7 @@ __build_fastdeploy_android_shared() {
         -DENABLE_TNN_BACKEND=ON \
         -DENABLE_PADDLE2ONNX=OFF \
         -DENABLE_FLYCV=ON \
-        -DENABLE_TEXT=OFF \
+        -DENABLE_TEXT=ON \
         -DENABLE_VISION=ON \
         -DBUILD_EXAMPLES=OFF \
         -DENABLE_BENCHMARK=ON \
