@@ -25,6 +25,9 @@ DEFINE_string(dtypes, "FP32", "Set input dtypes for model.");
 DEFINE_string(trt_shapes, "1,3,224,224:1,3,224,224:1,3,224,224",
               "Set min/opt/max shape for trt/paddle_trt backend."
               "eg:--trt_shape 1,3,224,224:1,3,224,224:1,3,224,224");
+DEFINE_bool(dump, false, "whether to dump output tensors.");
+DEFINE_bool(diff, false, "check the diff between two tensors.");
+DEFINE_string(tensors, "a.txt", "a.txt:b.txt");
 
 static std::vector<int64_t> GetInt64Shape(const std::vector<int>& shape) {
   std::vector<int64_t> new_shape;
@@ -37,6 +40,25 @@ static std::vector<int64_t> GetInt64Shape(const std::vector<int>& shape) {
 
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK)
+  // Only check tensor diff
+  google::ParseCommandLineFlags(&argc, &argv, true);
+  if (FLAGS_diff) {
+    std::cout << "Check tensor diff ..." << std::endl;
+    std::vector<std::string> tensor_paths =
+        benchmark::ResultManager::SplitStr(FLAGS_tensors);
+    assert(tensor_paths.size() == 2);
+    fastdeploy::FDTensor tensor_a, tensor_b;
+    benchmark::ResultManager::LoadFDTensor(&tensor_a, tensor_paths[0]);
+    benchmark::ResultManager::LoadFDTensor(&tensor_b, tensor_paths[1]);
+    auto tensor_diff =
+        benchmark::ResultManager::CalculateDiffStatis(tensor_a, tensor_b);
+    std::cout << "Tensor diff: mean=" << tensor_diff.data.mean
+              << ", max=" << tensor_diff.data.max
+              << ", min=" << tensor_diff.data.min << std::endl;
+
+    return 0;
+  }
+
   // Initialization
   auto option = fastdeploy::RuntimeOption();
   if (!CreateRuntimeOption(&option, argc, argv, true)) {
@@ -113,6 +135,23 @@ int main(int argc, char* argv[]) {
   runtime.Infer(inputs, &outputs);
 
   auto profile_time = runtime.GetProfileTime() * 1000.0;
+
+  // Dump outputs
+  if (FLAGS_dump) {
+    for (int i = 0; i < outputs.size(); ++i) {
+      auto name_tokens =
+          benchmark::ResultManager::SplitStr(outputs[i].name, '/');
+      std::string out_name = name_tokens[0];
+      for (int j = 1; j < name_tokens.size(); ++j) {
+        out_name += "_";
+        out_name += name_tokens[j];
+      }
+      std::string out_file = config_info["backend"] + "_" + out_name + ".txt";
+      benchmark::ResultManager::SaveFDTensor(outputs[i], out_file);
+      outputs[i].PrintInfo();
+      std::cout << "Saved: " << out_file << std::endl;
+    }
+  }
 
   std::cout << "Runtime: " << profile_time << " ms" << std::endl;
 #endif

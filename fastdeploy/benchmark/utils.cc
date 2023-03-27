@@ -411,6 +411,13 @@ std::vector<std::string> ResultManager::GetInputNames(
   return names_tokens;
 }
 
+std::vector<std::string> ResultManager::SplitStr(const std::string& raw_str,
+                                                 char delim) {
+  std::vector<std::string> str_tokens;
+  Split(raw_str, str_tokens, delim);
+  return str_tokens;
+}
+
 std::vector<FDDataType> ResultManager::GetInputDtypes(
     const std::string& raw_dtypes) {
   std::vector<FDDataType> dtypes;
