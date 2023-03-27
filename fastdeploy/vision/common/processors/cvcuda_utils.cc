@@ -43,8 +43,8 @@ nvcv::ImageFormat CreateCvCudaImageFormat(FDDataType type, int channel,
   return nvcv::FMT_BGRf32;
 }
 
-nvcv::TensorWrapData CreateCvCudaTensorWrapData(const FDTensor& tensor,
-                                                Layout layout) {
+std::shared_ptr<nvcv::TensorWrapData> CreateCvCudaTensorWrapData(
+    const FDTensor& tensor, Layout layout) {
   FDASSERT(tensor.shape.size() == 3,
            "When create CVCUDA tensor from FD tensor,"
            "tensor shape should be 3-Dim,");
@@ -76,7 +76,7 @@ nvcv::TensorWrapData CreateCvCudaTensorWrapData(const FDTensor& tensor,
   nvcv::TensorDataStridedCuda tensor_data(
       nvcv::TensorShape{req.shape, req.rank, req.layout},
       nvcv::DataType{req.dtype}, buf);
-  return nvcv::TensorWrapData(tensor_data);
+  return std::make_shared<nvcv::TensorWrapData>(tensor_data, nullptr);
 }
 
 void* GetCvCudaTensorDataPtr(const nvcv::TensorWrapData& tensor) {
