@@ -17,17 +17,17 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 # 推理
 # ppyoloe推理示例
 # 指定--auto True，自动完成模型准备、转换和推理，需要指定PaddleDetection路径
-python3 infer_ppyoloe.py --auto True --PPDetect_Path {Path to PaddleDetection} --model_file '' --config_file '' --image ''
+python3 infer_ppyoloe.py --auto True --pp_detect_path {Path to PaddleDetection} --model_file '' --config_file '' --image ''
 
 # 指定--auto False，需要用户指定模型、配置文件和图片路径，不需要指定PaddleDetection路径。
-python3 infer_ppyoloe.py --auto False --PPDetect_Path '' --model_file model/ppyoloe_crn_s_300e_coco_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
+python3 infer_ppyoloe.py --auto False --pp_detect_path '' --model_file model/ppyoloe_crn_s_300e_coco_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
 
 # picodet推理示例
 # 指定--auto True，自动完成模型准备、转换和推理，需要指定PaddleDetection路径
-python3 infer_picodet.py --auto True --PPDetect_Path {Path to PaddleDetection} --model_file '' --config_file '' --image ''
+python3 infer_picodet.py --auto True --pp_detect_path {Path to PaddleDetection} --model_file '' --config_file '' --image ''
 
 # 指定--auto False，需要用户指定模型、配置文件和图片路径，不需要指定PaddleDetection路径。
-python3 infer_picodet.py --auto False --PPDetect_Path '' --model_file model/ppyoloe_crn_s_300e_coco_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
+python3 infer_picodet.py --auto False --pp_detect_path '' --model_file model/ppyoloe_crn_s_300e_coco_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
 
 # yolov8推理示例
 python3 infer_yolov8.py --model_file model/yolov8s_s_300e_coco_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg

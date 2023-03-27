@@ -18,7 +18,7 @@ from subprocess import run
 from prepare_npz import prepare
 
 def export_model(args):
-    PPDetection_path = args.PPDetect_Path
+    PPDetection_path = args.pp_detect_path
 
     export_str = 'python3 tools/export_model.py \
                 -c configs/picodet/picodet_s_320_coco_lcnet.yml \
@@ -108,7 +108,7 @@ def parse_arguments():
     parser.add_argument(
         "--auto", required=True, help="Auto download, convert, compile and infer if True")
     parser.add_argument(
-        "--PPDetect_Path", default='/workspace/PaddleDetection', help="Path of PaddleDetection folder")
+        "--pp_detect_path", default='/workspace/PaddleDetection', help="Path of PaddleDetection folder")
     parser.add_argument(
         "--model_file", required=True, help="Path of sophgo model.")
     parser.add_argument("--config_file", required=True, help="Path of config.")
