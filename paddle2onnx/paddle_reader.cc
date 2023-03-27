@@ -22,8 +22,10 @@ int32_t GetDataTypeFromPaddle(int dtype) {
     return 4;
   } else if (dtype == P2ODataType::INT64) {
     return 5;
+  } else if (dtype == P2ODataType::FP16) {
+    return 6;
   }
-  Assert(false, "Only support float/double/uint8/int32/int64 in PaddleReader.");
+  Assert(false, "Only support float/double/uint8/int32/int64/float16 in PaddleReader.");
   return -1;
 }
 
