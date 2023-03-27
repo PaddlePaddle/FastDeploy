@@ -95,7 +95,7 @@ bool ResizeByShort::ImplByCvCuda(FDMat* mat) {
                             "output_cache", Device::GPU);
   auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
 
-  cvcuda_resize_op_(mat->Stream(), src_tensor, dst_tensor,
+  cvcuda_resize_op_(mat->Stream(), *src_tensor, *dst_tensor,
                     CreateCvCudaInterp(interp_));
 
   mat->SetTensor(mat->output_cache);
