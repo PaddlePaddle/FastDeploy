@@ -27,7 +27,7 @@ namespace vision {
 
 nvcv::ImageFormat CreateCvCudaImageFormat(FDDataType type, int channel,
                                           bool interleaved = true);
-nvcv::TensorWrapData CreateCvCudaTensorWrapData(const FDTensor& tensor,
+std::shared_ptr<nvcv::TensorWrapData> CreateCvCudaTensorWrapData(const FDTensor& tensor,
                                                 Layout layout = Layout::HWC);
 void* GetCvCudaTensorDataPtr(const nvcv::TensorWrapData& tensor);
 nvcv::ImageWrapData CreateImageWrapData(const FDTensor& tensor);
