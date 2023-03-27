@@ -20,14 +20,16 @@ option(ENABLE_DEEPSTREAM "Enable NVIDIA DeepStream SDK" ON)
 
 file(GLOB_RECURSE ALL_STREAMER_SRCS ${PROJECT_SOURCE_DIR}/src/*.cc)
 file(GLOB_RECURSE DEEPSTREAM_SRCS ${PROJECT_SOURCE_DIR}/src/deepstream/*.cc)
+file(GLOB_RECURSE PLUGIN_SRCS ${PROJECT_SOURCE_DIR}/src/gstreamer/plugin/*.cc)
 list(REMOVE_ITEM ALL_STREAMER_SRCS ${DEEPSTREAM_SRCS})
+list(REMOVE_ITEM ALL_STREAMER_SRCS ${PLUGIN_SRCS})
 
 set(DEPEND_LIBS "")
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GSTAPP gstreamer-app-1.0 REQUIRED)
-include_directories(${GSTAPP_INCLUDE_DIRS})
-list(APPEND DEPEND_LIBS ${GSTAPP_LIBRARIES})
+pkg_check_modules(GST gstreamer-app-1.0 gstreamer-video-1.0 REQUIRED)
+include_directories(${GST_INCLUDE_DIRS})
+list(APPEND DEPEND_LIBS ${GST_LIBRARIES})
 
 include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 include_directories(${FASTDEPLOY_INCS})
@@ -48,3 +50,6 @@ list(APPEND DEPEND_LIBS yaml-cpp)
 
 add_library(fd_streamer SHARED ${ALL_STREAMER_SRCS})
 target_link_libraries(fd_streamer ${FASTDEPLOY_LIBS} ${DEPEND_LIBS})
+
+add_subdirectory(src/gstreamer/meta)
+add_subdirectory(src/gstreamer/plugin/fdinfer)
