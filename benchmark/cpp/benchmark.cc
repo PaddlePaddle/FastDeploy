@@ -153,7 +153,12 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  std::cout << "Runtime: " << profile_time << " ms" << std::endl;
+  std::stringstream ss;
+  ss.precision(6);
+  std::cout << "Runtime(ms): " << profile_time << "ms." << std::endl;
+  ss << "Runtime(ms): " << profile_time << "ms." << std::endl;
+  benchmark::ResultManager::SaveBenchmarkResult(ss.str(),
+                                                config_info["result_path"]);
 #endif
   return 0;
 }
