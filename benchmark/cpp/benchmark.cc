@@ -19,22 +19,12 @@
 namespace vision = fastdeploy::vision;
 namespace benchmark = fastdeploy::benchmark;
 
-// TOOD: Support TRT shape
-DEFINE_string(trt_shape, "1,3,224,224:1,3,224,224:1,3,224,224",
+DEFINE_string(shapes, "1,3,224,224", "Set input shape for model.");
+DEFINE_string(names, "DEFAULT", "Set input names for model.");
+DEFINE_string(dtypes, "FP32", "Set input dtypes for model.");
+DEFINE_string(trt_shapes, "1,3,224,224:1,3,224,224:1,3,224,224",
               "Set min/opt/max shape for trt/paddle_trt backend."
               "eg:--trt_shape 1,3,224,224:1,3,224,224:1,3,224,224");
-
-DEFINE_string(shapes, "1,3,224,224",
-              "Set input shape for model."
-              "eg:--shapes 1,3,224,224");
-
-DEFINE_string(names, "DEFAULT",
-              "Set input names for model."
-              "eg:--names x");
-
-DEFINE_string(dtypes, "FP32",
-              "Set input dtypes for model."
-              "eg:--dtypes FP32");
 
 static std::vector<int64_t> GetInt64Shape(const std::vector<int>& shape) {
   std::vector<int64_t> new_shape;
@@ -66,9 +56,7 @@ int main(int argc, char* argv[]) {
 
   option.SetModelPath(model_file, params_file, model_format);
 
-  fastdeploy::Runtime runtime;
-  runtime.Init(option);
-
+  // Init flags infos
   std::vector<std::vector<int32_t>> input_shapes =
       benchmark::ResultManager::GetInputShapes(FLAGS_shapes);
   assert(runtime.NumInputs() == input_shapes.size());
@@ -77,6 +65,32 @@ int main(int argc, char* argv[]) {
       benchmark::ResultManager::GetInputNames(FLAGS_names);
   std::vector<fastdeploy::FDDataType> input_dtypes =
       benchmark::ResultManager::GetInputDtypes(FLAGS_dtypes);
+
+  if (config_info["backend"] == "paddle_trt") {
+    option.paddle_infer_option.collect_trt_shape = true;
+  }
+  if (config_info["backend"] == "paddle_trt" ||
+      config_info["backend"] == "trt") {
+    std::vector<std::vector<int32_t>> trt_shapes =
+        benchmark::ResultManager::GetInputShapes(FLAGS_trt_shapes);
+    if (input_names[0] == "DEFAULT") {
+      std::cout << "Please set the input names for TRT/Paddle-TRT backend!"
+                << std::endl;
+      return -1;
+    }
+    assert(input_names.size() == (trt_shapes.size() / 3));
+    for (int i = 0; i < input_shapes.size(); ++i) {
+      option.trt_option.SetShape(input_names[i], trt_shapes[i * 3],
+                                 trt_shapes[i * 3 + 1], trt_shapes[i * 3 + 2]);
+    }
+  }
+
+  // Init runtime
+  fastdeploy::Runtime runtime;
+  if (!runtime.Init(option)) {
+    std::cout << "Initial Runtime failed!" << std::endl;
+  }
+
   if (input_names[0] == "DEFAULT") {
     input_names.clear();
     for (int i = 0; i < runtime.NumInputs(); ++i) {
@@ -88,6 +102,7 @@ int main(int argc, char* argv[]) {
 
   std::vector<fastdeploy::FDTensor> inputs(runtime.NumInputs());
 
+  // Feed inputs
   for (int i = 0; i < inputs.size(); ++i) {
     fastdeploy::function::Full(1, GetInt64Shape(input_shapes[i]), &inputs[i],
                                input_dtypes[i]);
