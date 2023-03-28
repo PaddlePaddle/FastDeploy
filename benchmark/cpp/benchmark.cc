@@ -39,31 +39,27 @@ static std::vector<int64_t> GetInt64Shape(const std::vector<int>& shape) {
   return new_shape;
 }
 
-int main(int argc, char* argv[]) {
-#if defined(ENABLE_BENCHMARK)
-  // Only check tensor diff
+static void CheckTensorDiff(int argc, char* argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
-  if (FLAGS_diff) {
-    std::cout << "Check tensor diff ..." << std::endl;
-    std::vector<std::string> tensor_paths =
-        benchmark::ResultManager::SplitStr(FLAGS_tensors);
-    assert(tensor_paths.size() == 2);
-    fastdeploy::FDTensor tensor_a, tensor_b;
-    benchmark::ResultManager::LoadFDTensor(&tensor_a, tensor_paths[0]);
-    benchmark::ResultManager::LoadFDTensor(&tensor_b, tensor_paths[1]);
-    auto tensor_diff =
-        benchmark::ResultManager::CalculateDiffStatis(tensor_a, tensor_b);
-    std::cout << "Tensor diff: mean=" << tensor_diff.data.mean
-              << ", max=" << tensor_diff.data.max
-              << ", min=" << tensor_diff.data.min << std::endl;
+  std::cout << "Check tensor diff ..." << std::endl;
+  std::vector<std::string> tensor_paths =
+      benchmark::ResultManager::SplitStr(FLAGS_tensors);
+  assert(tensor_paths.size() == 2);
+  fastdeploy::FDTensor tensor_a, tensor_b;
+  benchmark::ResultManager::LoadFDTensor(&tensor_a, tensor_paths[0]);
+  benchmark::ResultManager::LoadFDTensor(&tensor_b, tensor_paths[1]);
+  auto tensor_diff =
+      benchmark::ResultManager::CalculateDiffStatis(tensor_a, tensor_b);
+  std::cout << "Tensor diff: mean=" << tensor_diff.data.mean
+            << ", max=" << tensor_diff.data.max
+            << ", min=" << tensor_diff.data.min << std::endl;
+}
 
-    return 0;
-  }
-
+static void RuntimeProfiling(int argc, char* argv[]) {
   // Initialization
   auto option = fastdeploy::RuntimeOption();
   if (!CreateRuntimeOption(&option, argc, argv, true)) {
-    return -1;
+    return;
   }
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
@@ -72,7 +68,7 @@ int main(int argc, char* argv[]) {
   auto model_format = fastdeploy::ModelFormat::PADDLE;
   if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
                                &model_format, config_info, false)) {
-    return -1;
+    return;
   }
   auto model_file = FLAGS_model + sep + model_name;
   auto params_file = FLAGS_model + sep + params_name;
@@ -88,25 +84,22 @@ int main(int argc, char* argv[]) {
       benchmark::ResultManager::GetInputDtypes(FLAGS_dtypes);
 
   // TRT shapes
-  if (!FLAGS_info) {
-    if (config_info["backend"] == "paddle_trt") {
-      option.paddle_infer_option.collect_trt_shape = true;
+  if (config_info["backend"] == "paddle_trt") {
+    option.paddle_infer_option.collect_trt_shape = true;
+  }
+  if (config_info["backend"] == "paddle_trt" ||
+      config_info["backend"] == "trt") {
+    std::vector<std::vector<int32_t>> trt_shapes =
+        benchmark::ResultManager::GetInputShapes(FLAGS_trt_shapes);
+    if (input_names[0] == "DEFAULT") {
+      std::cout << "Please set the input names for TRT/Paddle-TRT backend!"
+                << std::endl;
+      return;
     }
-    if (config_info["backend"] == "paddle_trt" ||
-        config_info["backend"] == "trt") {
-      std::vector<std::vector<int32_t>> trt_shapes =
-          benchmark::ResultManager::GetInputShapes(FLAGS_trt_shapes);
-      if (input_names[0] == "DEFAULT") {
-        std::cout << "Please set the input names for TRT/Paddle-TRT backend!"
-                  << std::endl;
-        return -1;
-      }
-      assert(input_names.size() == (trt_shapes.size() / 3));
-      for (int i = 0; i < input_shapes.size(); ++i) {
-        option.trt_option.SetShape(input_names[i], trt_shapes[i * 3],
-                                   trt_shapes[i * 3 + 1],
-                                   trt_shapes[i * 3 + 2]);
-      }
+    assert(input_names.size() == (trt_shapes.size() / 3));
+    for (int i = 0; i < input_shapes.size(); ++i) {
+      option.trt_option.SetShape(input_names[i], trt_shapes[i * 3],
+                                 trt_shapes[i * 3 + 1], trt_shapes[i * 3 + 2]);
     }
   }
 
@@ -123,20 +116,10 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  // Only check input infos
-  if (!FLAGS_info) {
-    assert(runtime.NumInputs() == input_shapes.size());
-    assert(runtime.NumInputs() == input_names.size());
-    assert(runtime.NumInputs() == input_dtypes.size());
-  } else {
-    auto input_infos = runtime.GetInputInfos();
-    for (int i = 0; i < input_infos.size(); ++i) {
-      std::cout << input_infos[i] << std::endl;
-    }
-    return 0;
-  }
+  assert(runtime.NumInputs() == input_shapes.size());
+  assert(runtime.NumInputs() == input_names.size());
+  assert(runtime.NumInputs() == input_dtypes.size());
 
-  // Run profiling
   std::vector<fastdeploy::FDTensor> inputs(runtime.NumInputs());
   // Feed inputs
   for (int i = 0; i < inputs.size(); ++i) {
@@ -146,7 +129,7 @@ int main(int argc, char* argv[]) {
   }
 
   std::vector<fastdeploy::FDTensor> outputs;
-  runtime.Infer(inputs, &outputs);
+  runtime.Infer(inputs, &outputs);  // Run profiling
 
   auto profile_time = runtime.GetProfileTime() * 1000.0;
 
@@ -173,6 +156,52 @@ int main(int argc, char* argv[]) {
   ss << "Runtime(ms): " << profile_time << "ms." << std::endl;
   benchmark::ResultManager::SaveBenchmarkResult(ss.str(),
                                                 config_info["result_path"]);
+}
+
+static void showInputInfos(int argc, char* argv[]) {
+  auto option = fastdeploy::RuntimeOption();
+  if (!CreateRuntimeOption(&option, argc, argv, true)) {
+    return;
+  }
+  std::unordered_map<std::string, std::string> config_info;
+  benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
+                                                &config_info);
+  std::string model_name, params_name, config_name;
+  auto model_format = fastdeploy::ModelFormat::PADDLE;
+  if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
+                               &model_format, config_info, false)) {
+    return;
+  }
+  auto model_file = FLAGS_model + sep + model_name;
+  auto params_file = FLAGS_model + sep + params_name;
+
+  option.SetModelPath(model_file, params_file, model_format);
+
+  // Init runtime
+  fastdeploy::Runtime runtime;
+  if (!runtime.Init(option)) {
+    std::cout << "Initial Runtime failed!" << std::endl;
+  }
+  // Show input tensor infos
+  auto input_infos = runtime.GetInputInfos();
+  for (int i = 0; i < input_infos.size(); ++i) {
+    std::cout << input_infos[i] << std::endl;
+  }
+}
+
+int main(int argc, char* argv[]) {
+  google::ParseCommandLineFlags(&argc, &argv, true);
+#if defined(ENABLE_BENCHMARK)
+  if (FLAGS_diff) {
+    CheckTensorDiff(argc, argv);
+    return 0;
+  } else if (FLAGS_info) {
+    showInputInfos(argc, argv);
+    return 0;
+  } else {
+    RuntimeProfiling(argc, argv);
+    return 0;
+  }
 #endif
   return 0;
 }
