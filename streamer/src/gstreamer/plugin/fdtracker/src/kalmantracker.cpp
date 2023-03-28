@@ -18,8 +18,8 @@
 // Copyright (c) 2020 CnybTseng
 // Licensed under The MIT License
 
-#include "include/kalmantracker.h"
 #include <algorithm>
+#include "gstreamer/plugin/fdtracker/include/trajectory.h"
 
 void TKalmanFilter::init(const cv::Mat &measurement) {
   measurement.copyTo(statePost(cv::Rect(0, 0, 1, 4)));

@@ -15,7 +15,7 @@
 #include <stdio.h>
 #include <vector>
 
-#include "include/trajectory.h"
+#include "gstreamer/plugin/fdtracker/include/trajectory.h"
 
 std::vector<std::vector<int>> Trajectory::entrance_count(
     OcSortTracker* octracker) {

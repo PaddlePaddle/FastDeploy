@@ -15,7 +15,7 @@
 #pragma once
 
 #include <vector>
-#include "include/ocsort.h"
+#include "gstreamer/plugin/fdtracker/include/ocsort.h"
 
 typedef enum { horizontal = 0, vertical = 1} region_type;
 

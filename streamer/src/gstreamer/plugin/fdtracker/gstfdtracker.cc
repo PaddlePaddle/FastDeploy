@@ -58,7 +58,6 @@ static GstStaticPadTemplate gst_fdtracker_sink_template =
                                 "memory:NVMM", "{ NV12, RGBA }")));
 
 /* class initialization */
-
 G_DEFINE_TYPE_WITH_CODE(
     GstFdtracker, gst_fdtracker, GST_TYPE_BASE_TRANSFORM,
     GST_DEBUG_CATEGORY_INIT(gst_fdtracker_debug_category, "fdtracker", 0,
@@ -141,7 +140,6 @@ static gboolean gst_fdtracker_start(GstBaseTransform *trans) {
 
   GST_DEBUG_OBJECT(fdtracker, "start");
 
-  fdtracker->previous_frame = new std::queue<std::vector<Bbox_cache>>;
   fdtracker->tracker_per_class = new std::map<int, OcSortTracker *>;
   return TRUE;
 }
@@ -151,7 +149,6 @@ static gboolean gst_fdtracker_stop(GstBaseTransform *trans) {
 
   GST_DEBUG_OBJECT(fdtracker, "stop");
 
-  delete fdtracker->previous_frame;
   delete fdtracker->tracker_per_class;
   return TRUE;
 }
@@ -233,21 +230,20 @@ static GstFlowReturn gst_fdtracker_transform_ip(GstBaseTransform *trans,
         rect_params.border_color = (NvOSD_ColorParams){1, 0, 0, 1};
         object_meta->class_id = *(trackers.ptr<float>(i, 0));
         object_meta->object_id = *(trackers.ptr<float>(i, 1));
-        std::string text = std::to_string(std::to_string(object_meta->object_id);
+        std::string text = std::to_string(object_meta->object_id);
         text_params.display_text = g_strdup(text.c_str());
         /* Display text above the left top corner of the object. */
         text_params.x_offset = rect_params.left;
         text_params.y_offset = rect_params.top - 10;
         /* Set black background for the text. */
         text_params.set_bg_clr = 1;
-        text_params.text_bg_clr = (NvOSD_ColorParams) {
-        0, 0, 0, 1};
+        text_params.text_bg_clr = (NvOSD_ColorParams){0, 0, 0, 1};
         /* Font face, size and color. */
         text_params.font_params.font_name = font_name;
         text_params.font_params.font_size = 11;
-        text_params.font_params.font_color = (NvOSD_ColorParams) {
-        1, 1, 1, 1};
-        nvds_add_obj_meta_to_frame(frame_meta, object_meta, object_meta->parent);
+        text_params.font_params.font_color = (NvOSD_ColorParams){1, 1, 1, 1};
+        nvds_add_obj_meta_to_frame(frame_meta, object_meta,
+                                   object_meta->parent);
       }
     }
   }

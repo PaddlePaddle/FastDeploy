@@ -18,9 +18,9 @@
 #include <map>
 #include <utility>
 
-#include "streamer/src/gstreamer/plugin/fdtracker/include/kalmantracker.h"
-#include "streamer/src/gstreamer/plugin/fdtracker/include/lapjv.h"
-#include "streamer/src/gstreamer/plugin/fdtracker/include/ocsort.h"
+#include "gstreamer/plugin/fdtracker/include/kalmantracker.h"
+#include "gstreamer/plugin/fdtracker/include/lapjv.h"
+#include "gstreamer/plugin/fdtracker/include/ocsort.h"
 
 bool isnan_in_pred(cv::Mat &mat) {
   for (int i = 0; i < mat.rows; i++) {
@@ -285,8 +285,8 @@ void OcSortTracker::associate_only_iou(cv::Mat detections, cv::Mat trackers,
   float maxValue =
       *std::max_element(iou_matrix.begin<float>(), iou_matrix.end<float>());
   if (maxValue > iou_threshold) {
-    lapjv_internal(-iou_matrix, true, 1000.f, reinterpret_cast<int *> x.data,
-                   reinterpret_cast<int *> y.data);
+    lapjv_internal(-iou_matrix, true, 1000.f, reinterpret_cast<int *>(x.data),
+                   reinterpret_cast<int *>(y.data));
   }
 
   for (int i = 0; i < x.rows; ++i) {

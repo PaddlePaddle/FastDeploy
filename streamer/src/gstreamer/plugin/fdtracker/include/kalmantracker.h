@@ -90,7 +90,7 @@ class KalmanTracker : public TKalmanFilter {
 
   TrajectoryState state;
   cv::Vec4f ltrb;
-  cv::Vec4f last_observation(-1, -1, -1, -1);
+  cv::Vec4f last_observation{-1, -1, -1, -1};
   cv::Vec2f velocity;
   std::map<int, cv::Vec4f> observations;
   int id;

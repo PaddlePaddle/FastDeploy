@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "include/lapjv.h"
+#include "gstreamer/plugin/fdtracker/include/lapjv.h"
 
 /** Column-reduction and reduction transfer for a dense cost matrix.
  */
