@@ -1,34 +1,16 @@
-/* GStreamer
- * Copyright (C) 2023 FIXME <fixme@example.com>
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
- *
- * You should have received a copy of the GNU Library General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
- * Boston, MA 02110-1335, USA.
- */
-/**
- * SECTION:element-gstfdtracker
- *
- * The fdtracker element does FIXME stuff.
- *
- * <refsect2>
- * <title>Example launch line</title>
- * |[
- * gst-launch-1.0 -v fakesrc ! fdtracker ! FIXME ! fakesink
- * ]|
- * FIXME Describe what the pipeline does.
- * </refsect2>
- */
+// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include "gstfdtracker.h"
 #include <gst/base/gstbasetransform.h>
@@ -51,59 +33,12 @@ static void gst_fdtracker_set_property(GObject *object, guint property_id,
                                        const GValue *value, GParamSpec *pspec);
 static void gst_fdtracker_get_property(GObject *object, guint property_id,
                                        GValue *value, GParamSpec *pspec);
-static void gst_fdtracker_dispose(GObject *object);
-static void gst_fdtracker_finalize(GObject *object);
-
-static GstCaps *gst_fdtracker_transform_caps(GstBaseTransform *trans,
-                                             GstPadDirection direction,
-                                             GstCaps *caps, GstCaps *filter);
-static GstCaps *gst_fdtracker_fixate_caps(GstBaseTransform *trans,
-                                          GstPadDirection direction,
-                                          GstCaps *caps, GstCaps *othercaps);
-static gboolean gst_fdtracker_accept_caps(GstBaseTransform *trans,
-                                          GstPadDirection direction,
-                                          GstCaps *caps);
 static gboolean gst_fdtracker_set_caps(GstBaseTransform *trans, GstCaps *incaps,
                                        GstCaps *outcaps);
-static gboolean gst_fdtracker_query(GstBaseTransform *trans,
-                                    GstPadDirection direction, GstQuery *query);
-static gboolean gst_fdtracker_decide_allocation(GstBaseTransform *trans,
-                                                GstQuery *query);
-static gboolean gst_fdtracker_filter_meta(GstBaseTransform *trans,
-                                          GstQuery *query, GType api,
-                                          const GstStructure *params);
-static gboolean gst_fdtracker_propose_allocation(GstBaseTransform *trans,
-                                                 GstQuery *decide_query,
-                                                 GstQuery *query);
-static gboolean gst_fdtracker_transform_size(GstBaseTransform *trans,
-                                             GstPadDirection direction,
-                                             GstCaps *caps, gsize size,
-                                             GstCaps *othercaps,
-                                             gsize *othersize);
-static gboolean gst_fdtracker_get_unit_size(GstBaseTransform *trans,
-                                            GstCaps *caps, gsize *size);
 static gboolean gst_fdtracker_start(GstBaseTransform *trans);
 static gboolean gst_fdtracker_stop(GstBaseTransform *trans);
-static gboolean gst_fdtracker_sink_event(GstBaseTransform *trans,
-                                         GstEvent *event);
-static gboolean gst_fdtracker_src_event(GstBaseTransform *trans,
-                                        GstEvent *event);
-static GstFlowReturn gst_fdtracker_prepare_output_buffer(
-    GstBaseTransform *trans, GstBuffer *input, GstBuffer **outbuf);
-static gboolean gst_fdtracker_copy_metadata(GstBaseTransform *trans,
-                                            GstBuffer *input,
-                                            GstBuffer *outbuf);
-static gboolean gst_fdtracker_transform_meta(GstBaseTransform *trans,
-                                             GstBuffer *outbuf, GstMeta *meta,
-                                             GstBuffer *inbuf);
-static void gst_fdtracker_before_transform(GstBaseTransform *trans,
-                                           GstBuffer *buffer);
-static GstFlowReturn gst_fdtracker_transform(GstBaseTransform *trans,
-                                             GstBuffer *inbuf,
-                                             GstBuffer *outbuf);
 static GstFlowReturn gst_fdtracker_transform_ip(GstBaseTransform *trans,
                                                 GstBuffer *buf);
-static float IOU(const Bbox_cache &bbox_1, const Bbox_cache &bbox_2);
 
 enum { PROP_0 };
 
@@ -136,11 +71,6 @@ static void gst_fdtracker_class_init(GstFdtrackerClass *klass) {
 
   /* Setting up pads and setting metadata should be moved to
      base_class_init if you intend to subclass this class. */
-  // gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS(klass),
-  //     &gst_fdtracker_src_template);
-  // gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS(klass),
-  //     &gst_fdtracker_sink_template);
-
   gst_element_class_add_pad_template(
       GST_ELEMENT_CLASS(klass),
       gst_static_pad_template_get(&gst_fdtracker_src_template));
@@ -154,42 +84,9 @@ static void gst_fdtracker_class_init(GstFdtrackerClass *klass) {
 
   gobject_class->set_property = gst_fdtracker_set_property;
   gobject_class->get_property = gst_fdtracker_get_property;
-  // gobject_class->dispose = gst_fdtracker_dispose;
-  // gobject_class->finalize = gst_fdtracker_finalize;
-  // base_transform_class->transform_caps = GST_DEBUG_FUNCPTR
-  // (gst_fdtracker_transform_caps);
-  // base_transform_class->fixate_caps = GST_DEBUG_FUNCPTR
-  // (gst_fdtracker_fixate_caps);
-  // base_transform_class->accept_caps = GST_DEBUG_FUNCPTR
-  // (gst_fdtracker_accept_caps);
   base_transform_class->set_caps = GST_DEBUG_FUNCPTR(gst_fdtracker_set_caps);
-  // base_transform_class->query = GST_DEBUG_FUNCPTR (gst_fdtracker_query);
-  // base_transform_class->decide_allocation = GST_DEBUG_FUNCPTR
-  // (gst_fdtracker_decide_allocation);
-  // base_transform_class->filter_meta = GST_DEBUG_FUNCPTR
-  // (gst_fdtracker_filter_meta);
-  // base_transform_class->propose_allocation = GST_DEBUG_FUNCPTR
-  // (gst_fdtracker_propose_allocation);
-  // base_transform_class->transform_size = GST_DEBUG_FUNCPTR
-  // (gst_fdtracker_transform_size);
-  // base_transform_class->get_unit_size = GST_DEBUG_FUNCPTR
-  // (gst_fdtracker_get_unit_size);
   base_transform_class->start = GST_DEBUG_FUNCPTR(gst_fdtracker_start);
   base_transform_class->stop = GST_DEBUG_FUNCPTR(gst_fdtracker_stop);
-  // base_transform_class->sink_event = GST_DEBUG_FUNCPTR
-  // (gst_fdtracker_sink_event);
-  // base_transform_class->src_event = GST_DEBUG_FUNCPTR
-  // (gst_fdtracker_src_event);
-  // base_transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR
-  // (gst_fdtracker_prepare_output_buffer);
-  // base_transform_class->copy_metadata = GST_DEBUG_FUNCPTR
-  // (gst_fdtracker_copy_metadata);
-  // base_transform_class->transform_meta = GST_DEBUG_FUNCPTR
-  // (gst_fdtracker_transform_meta);
-  // base_transform_class->before_transform = GST_DEBUG_FUNCPTR
-  // (gst_fdtracker_before_transform);
-  // base_transform_class->transform = GST_DEBUG_FUNCPTR
-  // (gst_fdtracker_transform);
   base_transform_class->transform_ip =
       GST_DEBUG_FUNCPTR(gst_fdtracker_transform_ip);
 }
@@ -229,146 +126,11 @@ void gst_fdtracker_get_property(GObject *object, guint property_id,
   }
 }
 
-void gst_fdtracker_dispose(GObject *object) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(object);
-
-  GST_DEBUG_OBJECT(fdtracker, "dispose");
-
-  /* clean up as possible.  may be called multiple times */
-
-  G_OBJECT_CLASS(gst_fdtracker_parent_class)->dispose(object);
-}
-
-void gst_fdtracker_finalize(GObject *object) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(object);
-
-  GST_DEBUG_OBJECT(fdtracker, "finalize");
-
-  /* clean up object here */
-
-  G_OBJECT_CLASS(gst_fdtracker_parent_class)->finalize(object);
-}
-
-static GstCaps *gst_fdtracker_transform_caps(GstBaseTransform *trans,
-                                             GstPadDirection direction,
-                                             GstCaps *caps, GstCaps *filter) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-  GstCaps *othercaps;
-
-  GST_DEBUG_OBJECT(fdtracker, "transform_caps");
-
-  othercaps = gst_caps_copy(caps);
-
-  /* Copy other caps and modify as appropriate */
-  /* This works for the simplest cases, where the transform modifies one
-   * or more fields in the caps structure.  It does not work correctly
-   * if passthrough caps are preferred. */
-  if (direction == GST_PAD_SRC) {
-    /* transform caps going upstream */
-  } else {
-    /* transform caps going downstream */
-  }
-
-  if (filter) {
-    GstCaps *intersect;
-
-    intersect = gst_caps_intersect(othercaps, filter);
-    gst_caps_unref(othercaps);
-
-    return intersect;
-  } else {
-    return othercaps;
-  }
-}
-
-static GstCaps *gst_fdtracker_fixate_caps(GstBaseTransform *trans,
-                                          GstPadDirection direction,
-                                          GstCaps *caps, GstCaps *othercaps) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-
-  GST_DEBUG_OBJECT(fdtracker, "fixate_caps");
-
-  return NULL;
-}
-
-static gboolean gst_fdtracker_accept_caps(GstBaseTransform *trans,
-                                          GstPadDirection direction,
-                                          GstCaps *caps) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-
-  GST_DEBUG_OBJECT(fdtracker, "accept_caps");
-
-  return TRUE;
-}
-
 static gboolean gst_fdtracker_set_caps(GstBaseTransform *trans, GstCaps *incaps,
                                        GstCaps *outcaps) {
   GstFdtracker *fdtracker = GST_FDTRACKER(trans);
 
   GST_DEBUG_OBJECT(fdtracker, "set_caps");
-
-  return TRUE;
-}
-
-static gboolean gst_fdtracker_query(GstBaseTransform *trans,
-                                    GstPadDirection direction,
-                                    GstQuery *query) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-
-  GST_DEBUG_OBJECT(fdtracker, "query");
-
-  return TRUE;
-}
-
-/* decide allocation query for output buffers */
-static gboolean gst_fdtracker_decide_allocation(GstBaseTransform *trans,
-                                                GstQuery *query) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-
-  GST_DEBUG_OBJECT(fdtracker, "decide_allocation");
-
-  return TRUE;
-}
-
-static gboolean gst_fdtracker_filter_meta(GstBaseTransform *trans,
-                                          GstQuery *query, GType api,
-                                          const GstStructure *params) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-
-  GST_DEBUG_OBJECT(fdtracker, "filter_meta");
-
-  return TRUE;
-}
-
-/* propose allocation query parameters for input buffers */
-static gboolean gst_fdtracker_propose_allocation(GstBaseTransform *trans,
-                                                 GstQuery *decide_query,
-                                                 GstQuery *query) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-
-  GST_DEBUG_OBJECT(fdtracker, "propose_allocation");
-
-  return TRUE;
-}
-
-/* transform size */
-static gboolean gst_fdtracker_transform_size(GstBaseTransform *trans,
-                                             GstPadDirection direction,
-                                             GstCaps *caps, gsize size,
-                                             GstCaps *othercaps,
-                                             gsize *othersize) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-
-  GST_DEBUG_OBJECT(fdtracker, "transform_size");
-
-  return TRUE;
-}
-
-static gboolean gst_fdtracker_get_unit_size(GstBaseTransform *trans,
-                                            GstCaps *caps, gsize *size) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-
-  GST_DEBUG_OBJECT(fdtracker, "get_unit_size");
 
   return TRUE;
 }
@@ -394,77 +156,6 @@ static gboolean gst_fdtracker_stop(GstBaseTransform *trans) {
   return TRUE;
 }
 
-/* sink and src pad event handlers */
-static gboolean gst_fdtracker_sink_event(GstBaseTransform *trans,
-                                         GstEvent *event) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-
-  GST_DEBUG_OBJECT(fdtracker, "sink_event");
-
-  return GST_BASE_TRANSFORM_CLASS(gst_fdtracker_parent_class)
-      ->sink_event(trans, event);
-}
-
-static gboolean gst_fdtracker_src_event(GstBaseTransform *trans,
-                                        GstEvent *event) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-
-  GST_DEBUG_OBJECT(fdtracker, "src_event");
-
-  return GST_BASE_TRANSFORM_CLASS(gst_fdtracker_parent_class)
-      ->src_event(trans, event);
-}
-
-static GstFlowReturn gst_fdtracker_prepare_output_buffer(
-    GstBaseTransform *trans, GstBuffer *input, GstBuffer **outbuf) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-
-  GST_DEBUG_OBJECT(fdtracker, "prepare_output_buffer");
-
-  return GST_FLOW_OK;
-}
-
-/* metadata */
-static gboolean gst_fdtracker_copy_metadata(GstBaseTransform *trans,
-                                            GstBuffer *input,
-                                            GstBuffer *outbuf) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-
-  GST_DEBUG_OBJECT(fdtracker, "copy_metadata");
-
-  return TRUE;
-}
-
-static gboolean gst_fdtracker_transform_meta(GstBaseTransform *trans,
-                                             GstBuffer *outbuf, GstMeta *meta,
-                                             GstBuffer *inbuf) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-
-  GST_DEBUG_OBJECT(fdtracker, "transform_meta");
-
-  return TRUE;
-}
-
-static void gst_fdtracker_before_transform(GstBaseTransform *trans,
-                                           GstBuffer *buffer) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-
-  GST_DEBUG_OBJECT(fdtracker, "before_transform");
-}
-
-/* transform */
-static GstFlowReturn gst_fdtracker_transform(GstBaseTransform *trans,
-                                             GstBuffer *inbuf,
-                                             GstBuffer *outbuf) {
-  GstFdtracker *fdtracker = GST_FDTRACKER(trans);
-
-  std::cout << "transform" << std::endl;
-
-  GST_DEBUG_OBJECT(fdtracker, "transform");
-
-  return GST_FLOW_OK;
-}
-OcSortTracker *octracker = new OcSortTracker(0);
 static GstFlowReturn gst_fdtracker_transform_ip(GstBaseTransform *trans,
                                                 GstBuffer *buf) {
   GstFdtracker *fdtracker = GST_FDTRACKER(trans);
@@ -473,14 +164,12 @@ static GstFlowReturn gst_fdtracker_transform_ip(GstBaseTransform *trans,
   NvDsMetaList *l_frame = NULL;
   NvDsMetaList *l_obj = NULL;
   NvBbox_Coords detector_bbox;
-  NvBbox_Coords tracker_bbox;
 
   NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta(buf);
 
   std::cout << "This is a new frame!" << std::endl;
   for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
        l_frame = l_frame->next) {
-    std::vector<float> rects;
     std::map<int, std::vector<float>> bbox_per_class;
     NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)(l_frame->data);
 

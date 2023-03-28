@@ -1,11 +1,28 @@
-
-// The code is based on:
+// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Part of the following code in this file refs to
 // https://github.com/gatagat/lap/blob/master/lap/lapjv.h
-// Ths copyright of gatagat/lap is as follows:
-// MIT License
+//
+// Copyright (c) 2022 paddlepaddle
+// Licensed under The MIT License
+// \file labjv.h
+// \brief
+// \author Bohua, Kong
 
-#ifndef DEPLOY_PPTRACKING_CPP_INCLUDE_LAPJV_H_
-#define DEPLOY_PPTRACKING_CPP_INCLUDE_LAPJV_H_
+#ifndef STREAMER_SRC_GSTREAMER_PLUGIN_FDTRACKER_INCLUDE_LAPJV_H_
+#define STREAMER_SRC_GSTREAMER_PLUGIN_FDTRACKER_INCLUDE_LAPJV_H_
 #define LARGE 1000000
 
 #if !defined TRUE
@@ -45,4 +62,4 @@ int lapjv_internal(const cv::Mat &cost,
                    int *y);
 
 
-#endif  // DEPLOY_PPTRACKING_CPP_INCLUDE_LAPJV_H_
+#endif  // STREAMER_SRC_GSTREAMER_PLUGIN_FDTRACKER_INCLUDE_LAPJV_H_

@@ -1,8 +1,25 @@
-
-// The code is based on:
+// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Part of the following code in this file refs to
 // https://github.com/CnybTseng/JDE/blob/master/platforms/common/trajectory.h
-// Ths copyright of CnybTseng/JDE is as follows:
-// MIT License
+//
+// Copyright (c) 2022 paddlepaddle
+// Licensed under The MIT License
+// \file kalmantracker.h
+// \brief
+// \author Bohua, Kong
 
 #pragma once
 
@@ -24,11 +41,11 @@ typedef enum { New = 0, Tracked = 1, Lost = 2, Removed = 3 } TrajectoryState;
 
 inline void printmat(cv::Mat &mat) {
   std::string str;
-  for (int i=0; i<mat.rows; i++) {
-    for (int j=0; j<mat.cols; j++) {
+  for (int i=0; i < mat.rows; i++) {
+    for (int j=0; j < mat.cols; j++) {
       str += std::to_string(*(mat.ptr<float>(i, j)))+" ";
     }
-  };
+  }
   printf("\nmat rows: %d, cols: %d, str: %s", mat.rows, mat.cols, str.c_str());
 }
 
@@ -67,7 +84,8 @@ class KalmanTracker : public TKalmanFilter {
   virtual const cv::Mat &predict(void);
   virtual void update(cv::Vec4f dets, bool angle_cost);
   virtual void activate(int timestamp);
-  virtual void reactivate(KalmanTracker *traj, int timestamp, bool newid = false);
+  virtual void reactivate(KalmanTracker *traj, int timestamp,
+                          bool newid = false);
   virtual void mark_lost(void);
   virtual void mark_removed(void);
   virtual int get_length(void);
@@ -79,21 +97,21 @@ class KalmanTracker : public TKalmanFilter {
   cv::Vec2f velocity;
   std::map<int, cv::Vec4f> observations;
   int id;
-  bool is_activated=false;
-  int time_since_update=0;
+  bool is_activated = false;
+  int time_since_update = 0;
   int timestamp;
   int starttime;
   float score;
-  int age=0;
-  int delta_t=3;
-  int hits=0;
-  int hit_streak=0;
+  int age = 0;
+  int delta_t = 3;
+  int hits = 0;
+  int hit_streak = 0;
 
  private:
   static int count;
   cv::Vec4f xyah;
   float eta;
-  int length=0;
+  int length = 0;
 };
 
 inline cv::Vec4f ltrb2xyah(const cv::Vec4f &ltrb) {
