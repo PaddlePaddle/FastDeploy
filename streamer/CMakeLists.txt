@@ -26,10 +26,6 @@ list(REMOVE_ITEM ALL_STREAMER_SRCS ${PLUGIN_SRCS})
 
 set(DEPEND_LIBS "")
 
-# Link the opencv
-SET(OpenCV_DIR "/usr/lib/aarch64-linux-gnu/cmake/opencv4")
-find_package(OpenCV REQUIRED PATHS ${OPENCV_DIR}/share/OpenCV NO_DEFAULT_PATH)
-
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST gstreamer-app-1.0 gstreamer-video-1.0 REQUIRED)
 include_directories(${GST_INCLUDE_DIRS})
@@ -51,8 +47,6 @@ endif()
 # Link the yaml-cpp in system path, because deepstream also depends on yaml-cpp,
 # If we link multiple yaml-cpp libs, strange error will occur.
 list(APPEND DEPEND_LIBS yaml-cpp)
-
-list(APPEND DEPEND_LIBS ${OpenCV_LIBS})
 
 add_library(fd_streamer SHARED ${ALL_STREAMER_SRCS})
 target_link_libraries(fd_streamer ${FASTDEPLOY_LIBS} ${DEPEND_LIBS})

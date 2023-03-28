@@ -15,11 +15,8 @@
 // Part of the following code in this file refs to
 // https://github.com/CnybTseng/JDE/blob/master/platforms/common/trajectory.h
 //
-// Copyright (c) 2022 paddlepaddle
+// Copyright (c) 2020 CnybTseng
 // Licensed under The MIT License
-// \file kalmantracker.h
-// \brief
-// \author Bohua, Kong
 
 #pragma once
 

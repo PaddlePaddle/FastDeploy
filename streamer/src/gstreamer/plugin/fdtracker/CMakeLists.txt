@@ -15,4 +15,4 @@
 file(GLOB_RECURSE ALL_SRCS ${PROJECT_SOURCE_DIR}/*.cc ${PROJECT_SOURCE_DIR}/src/*.cpp)
 
 add_library(gstfdtracker SHARED ${ALL_SRCS} )
-target_link_libraries(gstfdtracker ${DEPEND_LIBS})
+target_link_libraries(gstfdtracker ${DEPEND_LIBS} ${FASTDEPLOY_LIBS})

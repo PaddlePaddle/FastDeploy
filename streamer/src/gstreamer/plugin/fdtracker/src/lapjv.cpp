@@ -15,11 +15,8 @@
 // Part of the following code in this file refs to
 // https://github.com/gatagat/lap/blob/master/lap/lapjv.h
 //
-// Copyright (c) 2022 paddlepaddle
-// Licensed under The MIT License
-// \file labjv.h
-// \brief
-// \author Bohua, Kong
+// Copyright (c) 2012-2017, Tomas Kazmar
+// Licensed under The BSD 2-Clause "Simplified" License
 
 #include <stdio.h>
 #include <stdlib.h>
