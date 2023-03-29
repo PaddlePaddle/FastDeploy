@@ -70,7 +70,7 @@ bool CenterCrop::ImplByCvCuda(FDMat* mat) {
   int offset_x = static_cast<int>((mat->Width() - width_) / 2);
   int offset_y = static_cast<int>((mat->Height() - height_) / 2);
   NVCVRectI crop_roi = {offset_x, offset_y, width_, height_};
-  cvcuda_crop_op_(mat->Stream(), src_tensor, dst_tensor, crop_roi);
+  cvcuda_crop_op_(mat->Stream(), *src_tensor, *dst_tensor, crop_roi);
 
   mat->SetTensor(mat->output_cache);
   mat->SetWidth(width_);

@@ -181,22 +181,21 @@ bool OrtBackend::InitFromPaddle(const std::string& model_buffer,
   strcpy(ops[1].op_name, "pool2d");
   strcpy(ops[1].export_op_name, "AdaptivePool2d");
 
-  if (!paddle2onnx::Export(model_buffer.c_str(), model_buffer.size(),
-                           params_buffer.c_str(), params_buffer.size(),
-                           &model_content_ptr, &model_content_size, 11, true,
-                           verbose, true, true, true, ops.data(), 2,
-                           "onnxruntime", nullptr, 0, "", &save_external)) {
+  if (!paddle2onnx::Export(
+          model_buffer.c_str(), model_buffer.size(), params_buffer.c_str(),
+          params_buffer.size(), &model_content_ptr, &model_content_size, 11,
+          true, verbose, true, true, true, ops.data(), 2, "onnxruntime",
+          nullptr, 0, "", &save_external, false)) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;
   }
-
   std::string onnx_model_proto(model_content_ptr,
                                model_content_ptr + model_content_size);
   delete[] model_content_ptr;
   model_content_ptr = nullptr;
   if (save_external) {
-    std::string model_file_name = "model.onnx";
+    model_file_name = "model.onnx";
     std::fstream f(model_file_name, std::ios::out);
     FDASSERT(f.is_open(), "Can not open file: %s to save model.",
              model_file_name.c_str());
@@ -219,6 +218,22 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
             << std::endl;
     return false;
   }
+  std::string onnx_model_buffer;
+  if (option.enable_fp16) {
+    if (option.device == Device::CPU) {
+      FDWARNING << "Turning on FP16 on CPU may result in slower inference."
+                << std::endl;
+    }
+    char* model_content_ptr;
+    int model_content_size = 0;
+    paddle2onnx::ConvertFP32ToFP16(model_file.c_str(), model_file.size(),
+                                   &model_content_ptr, &model_content_size);
+    std::string onnx_model_proto(model_content_ptr,
+                                 model_content_ptr + model_content_size);
+    onnx_model_buffer = onnx_model_proto;
+  } else {
+    onnx_model_buffer = model_file;
+  }
 
   if (!BuildOption(option)) {
     FDERROR << "Create Ort option fail." << std::endl;
@@ -226,7 +241,19 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
   }
 
   InitCustomOperators();
-  session_ = {env_, model_file.data(), model_file.size(), session_options_};
+  if (model_file_name.size()) {
+#ifdef WIN32
+    std::wstring widestr =
+        std::wstring(model_file_name.begin(), model_file_name.end());
+    session_ = {env_, widestr.c_str(), session_options_};
+#else
+    session_ = {env_, model_file_name.c_str(), session_options_};
+#endif
+  } else {
+    session_ = {env_, onnx_model_buffer.data(), onnx_model_buffer.size(),
+                session_options_};
+  }
+
   binding_ = std::make_shared<Ort::IoBinding>(session_);
 
   Ort::MemoryInfo memory_info("Cpu", OrtDeviceAllocator, 0, OrtMemTypeDefault);

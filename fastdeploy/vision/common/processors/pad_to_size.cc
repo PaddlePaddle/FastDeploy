@@ -206,7 +206,7 @@ static bool PadHWCByCvCuda(cvcuda::CopyMakeBorder& pad_op, FDMat* mat,
                             "output_cache", Device::GPU);
   auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
 
-  pad_op(mat->Stream(), src_tensor, dst_tensor, 0, 0, NVCV_BORDER_CONSTANT,
+  pad_op(mat->Stream(), *src_tensor, *dst_tensor, 0, 0, NVCV_BORDER_CONSTANT,
          border_value);
 
   mat->SetTensor(mat->output_cache);
@@ -238,8 +238,8 @@ static bool PadCHWByCvCuda(cvcuda::CopyMakeBorder& pad_op, FDMat* mat,
                         input->device, input->device_id);
     auto dst_tensor = CreateCvCudaTensorWrapData(dst);
 
-    pad_op(mat->Stream(), src_tensor, dst_tensor, 0, 0, NVCV_BORDER_CONSTANT,
-           border_value);
+    pad_op(mat->Stream(), (*src_tensor), (*dst_tensor), 0, 0,
+           NVCV_BORDER_CONSTANT, border_value);
   }
   mat->SetTensor(mat->output_cache);
   mat->mat_type = ProcLib::CVCUDA;
