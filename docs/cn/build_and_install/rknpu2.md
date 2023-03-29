@@ -66,7 +66,7 @@ cd FastDeploy
 git checkout develop
 
 mkdir build && cd build
-cmake ..  -DENABLE_ORT_BACKEND=ON \
+cmake ..  -DENABLE_ORT_BACKEND=OFF \
 	      -DENABLE_RKNPU2_BACKEND=ON \
 	      -DENABLE_VISION=ON \
 	      -DRKNN2_TARGET_SOC=RK3588 \

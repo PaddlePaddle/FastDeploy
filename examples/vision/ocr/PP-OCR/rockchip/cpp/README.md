@@ -10,57 +10,7 @@
 - 2. 同时请用户参考[FastDeploy RKNPU2资源导航](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install/rknpu2.md)
 
 ## 2.部署模型准备
-在部署前, 请准备好您所需要运行的推理模型, 您可以在[FastDeploy支持的PaddleOCR模型列表](../README.md)中下载所需模型.
-同时, 在RKNPU2上部署PP-OCR系列模型时，我们需要把Paddle的推理模型转为RKNN模型.
-由于rknn_toolkit2工具暂不支持直接从Paddle直接转换为RKNN模型，因此我们需要先将Paddle推理模型转为ONNX模型, 最后转为RKNN模型, 示例如下.
-
-```bash
-# 下载PP-OCRv3文字检测模型
-wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_det_infer.tar
-tar -xvf ch_PP-OCRv3_det_infer.tar
-# 下载文字方向分类器模型
-wget https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar
-tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar
-# 下载PP-OCRv3文字识别模型
-wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_rec_infer.tar
-tar -xvf ch_PP-OCRv3_rec_infer.tar
-
-# 请用户自行安装最新发布版本的paddle2onnx, 转换模型到ONNX格式的模型
-paddle2onnx --model_dir ch_PP-OCRv3_det_infer \
-            --model_filename inference.pdmodel \
-            --params_filename inference.pdiparams \
-            --save_file ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer.onnx \
-            --enable_dev_version True
-paddle2onnx --model_dir ch_ppocr_mobile_v2.0_cls_infer \
-            --model_filename inference.pdmodel \
-            --params_filename inference.pdiparams \
-            --save_file ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
-            --enable_dev_version True
-paddle2onnx --model_dir ch_PP-OCRv3_rec_infer \
-            --model_filename inference.pdmodel \
-            --params_filename inference.pdiparams \
-            --save_file ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer.onnx \
-            --enable_dev_version True
-
-# 固定模型的输入shape
-python -m paddle2onnx.optimize --input_model ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer.onnx \
-                               --output_model ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer.onnx \
-                               --input_shape_dict "{'x':[1,3,960,960]}"
-python -m paddle2onnx.optimize --input_model ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
-                               --output_model ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
-                               --input_shape_dict "{'x':[1,3,48,192]}"
-python -m paddle2onnx.optimize --input_model ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer.onnx \
-                               --output_model ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer.onnx \
-                               --input_shape_dict "{'x':[1,3,48,320]}"
-
-# 在rockchip/rknpu2_tools/目录下, 我们为用户提供了转换ONNX模型到RKNN模型的工具
-python rockchip/rknpu2_tools/export.py --config_path tools/rknpu2/config/ppocrv3_det.yaml \
-                              --target_platform rk3588
-python rockchip/rknpu2_tools/export.py --config_path tools/rknpu2/config/ppocrv3_rec.yaml \
-                              --target_platform rk3588
-python rockchip/rknpu2_tools/export.py --config_path tools/rknpu2/config/ppocrv3_cls.yaml \
-                              --target_platform rk3588
-```
+在部署前, 请准备好您所需要运行的推理模型, 您可以在[FastDeploy支持的PaddleOCR模型列表](../README.md)中下载或转换所需模型.
 
 ## 3.运行部署示例
 在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本1.0.3以上(x.x.x>1.0.3), RKNN版本在1.4.1b22以上。
@@ -90,18 +40,24 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_
 
 # CPU推理
 ./infer_demo ./ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer.onnx \
-                          ./ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
-                          ./ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer.onnx \
-                          ./ppocr_keys_v1.txt \
-                          ./12.jpg \
-                          0
+              ./ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.onnx \
+              ./ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer.onnx \
+              ./ppocr_keys_v1.txt \
+              ./12.jpg \
+              0
 # RKNPU推理
-./infer_demo ./ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer_rk3588_unquantized.rknn \
-                            ./ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v20_cls_infer_rk3588_unquantized.rknn \
-                             ./ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer_rk3588_unquantized.rknn \
-                              ./ppocr_keys_v1.txt \
-                              ./12.jpg \
-                              1
+sudo ./infer_demo    ./ch_PP-OCRv3_det_infer/ch_PP-OCRv3_det_infer_rk3588_unquantized.rknn \
+                    ./ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v20_cls_infer_rk3588_unquantized.rknn \
+                    ./ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_rec_infer_rk3588_unquantized.rknn \
+                    ./ppocr_keys_v1.txt \
+                    ./12.jpg \
+                    1
+sudo ./infer_demo   ./PPOCRV3_det_QAT/PPOCRV3_det_QAT_rk3588_unquantized.rknn \
+                    ./ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v20_cls_infer_rk3588_unquantized.rknn \
+                    ./PPOCRV3_rec_QAT/PPOCRV3_rec_QAT_rk3588_unquantized.rknn \
+                    ./ppocr_keys_v1.txt \
+                    ./12.jpg \
+                    1
 ```
 
 运行完成可视化结果如下图所示:
