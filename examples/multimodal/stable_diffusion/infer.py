@@ -324,7 +324,7 @@ if __name__ == "__main__":
         start = time.time()
         unet_runtime = create_kunlunxin_runtime(
             args.model_dir, args.unet_model_prefix, 
-            args.ues_fp16,
+            use_fp16=args.ues_fp16,
             device_id=args.device_id)
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
     pipe = StableDiffusionFastDeployPipeline(
