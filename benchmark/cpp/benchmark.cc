@@ -25,6 +25,7 @@ DEFINE_string(dtypes, "FP32", "Set input dtypes for model.");
 DEFINE_string(trt_shapes, "1,3,224,224:1,3,224,224:1,3,224,224",
               "Set min/opt/max shape for trt/paddle_trt backend."
               "eg:--trt_shape 1,3,224,224:1,3,224,224:1,3,224,224");
+DEFINE_int32(batch, 1, "trt max batch size.");              
 DEFINE_bool(dump, false, "whether to dump output tensors.");
 DEFINE_bool(info, false, "only check the input infos of model");
 DEFINE_bool(diff, false, "check the diff between two tensors.");
@@ -106,6 +107,7 @@ static void RuntimeProfiling(int argc, char* argv[]) {
   }
   if (config_info["backend"] == "paddle_trt" ||
       config_info["backend"] == "trt") {
+    option.trt_option.max_batch_size = FLAGS_batch;
     std::vector<std::vector<int32_t>> trt_shapes =
         benchmark::ResultManager::GetInputShapes(FLAGS_trt_shapes);
     if (input_names[0] == "DEFAULT") {

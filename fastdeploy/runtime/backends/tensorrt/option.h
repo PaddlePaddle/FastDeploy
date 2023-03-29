@@ -25,7 +25,8 @@ namespace fastdeploy {
  */
 struct TrtBackendOption {
   /// `max_batch_size`, it's deprecated in TensorRT 8.x
-  size_t max_batch_size = 32;
+  /// size_t max_batch_size = 32;
+  size_t max_batch_size = -1;
 
   /// `max_workspace_size` for TensorRT
   size_t max_workspace_size = 1 << 30;
