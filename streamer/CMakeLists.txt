@@ -29,8 +29,10 @@ option(PY_LIBRARY_NAME "Name of build python library name")
 file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/src/pybind/*.cc ${PROJECT_SOURCE_DIR}/src/*_pybind.cc)
 file(GLOB_RECURSE ALL_STREAMER_SRCS ${PROJECT_SOURCE_DIR}/src/*.cc)
 file(GLOB_RECURSE DEEPSTREAM_SRCS ${PROJECT_SOURCE_DIR}/src/deepstream/*.cc)
+file(GLOB_RECURSE PLUGIN_SRCS ${PROJECT_SOURCE_DIR}/src/gstreamer/plugin/*.cc)
 list(REMOVE_ITEM ALL_STREAMER_SRCS ${DEEPSTREAM_SRCS})
 list(REMOVE_ITEM ALL_STREAMER_SRCS ${DEPLOY_PYBIND_SRCS})
+list(REMOVE_ITEM ALL_STREAMER_SRCS ${PLUGIN_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -39,9 +41,9 @@ set(DEPEND_LIBS "")
 #message(STATUS "Found Python: ${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}.${Python3_VERSION_PATCH}")
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GSTAPP gstreamer-app-1.0 REQUIRED)
-include_directories(${GSTAPP_INCLUDE_DIRS})
-list(APPEND DEPEND_LIBS ${GSTAPP_LIBRARIES})
+pkg_check_modules(GST gstreamer-app-1.0 gstreamer-video-1.0 REQUIRED)
+include_directories(${GST_INCLUDE_DIRS})
+list(APPEND DEPEND_LIBS ${GST_LIBRARIES})
 
 include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 include_directories(${FASTDEPLOY_INCS})
@@ -105,3 +107,6 @@ if(BUILD_FASTDEPLOY_PYTHON)
 
   add_custom_target(copy_fd_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/*.so* ${PROJECT_SOURCE_DIR}/python/streamer/libs/ DEPENDS ${PY_LIBRARY_NAME})
 endif(BUILD_FASTDEPLOY_PYTHON)
+
+add_subdirectory(src/gstreamer/meta)
+add_subdirectory(src/gstreamer/plugin/fdinfer)
