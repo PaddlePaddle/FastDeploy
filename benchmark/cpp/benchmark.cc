@@ -26,9 +26,12 @@ DEFINE_string(trt_shapes, "1,3,224,224:1,3,224,224:1,3,224,224",
               "Set min/opt/max shape for trt/paddle_trt backend."
               "eg:--trt_shape 1,3,224,224:1,3,224,224:1,3,224,224");
 DEFINE_bool(dump, false, "whether to dump output tensors.");
-DEFINE_bool(diff, false, "check the diff between two tensors.");
-DEFINE_string(tensors, "a.txt", "a.txt:b.txt");
 DEFINE_bool(info, false, "only check the input infos of model");
+DEFINE_bool(diff, false, "check the diff between two tensors.");
+DEFINE_string(tensors, "tensor_a.txt:tensor_b.txt",
+              "The paths to dumped tensors.");
+DEFINE_bool(mem, false, "Whether to force to collect memory info.");
+DEFINE_int32(interval, -1, "Sampling interval for collect memory info.");
 
 static std::vector<int64_t> GetInt64Shape(const std::vector<int>& shape) {
   std::vector<int64_t> new_shape;
@@ -56,7 +59,7 @@ static void CheckTensorDiff(int argc, char* argv[]) {
 }
 
 static void RuntimeProfiling(int argc, char* argv[]) {
-  // Initialization
+  // Init runtime option
   auto option = fastdeploy::RuntimeOption();
   if (!CreateRuntimeOption(&option, argc, argv, true)) {
     return;
@@ -64,6 +67,20 @@ static void RuntimeProfiling(int argc, char* argv[]) {
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
+
+  // Init log recorder
+  std::stringstream ss;
+  ss.precision(6);
+
+  // Memory resource moniter
+  int sampling_interval = FLAGS_interval >= 1
+                              ? FLAGS_interval
+                              : std::stoi(config_info["sampling_interval"]);
+
+  benchmark::ResourceUsageMonitor resource_moniter(
+      sampling_interval, std::stoi(config_info["device_id"]));
+
+  // Check model path and model format
   std::string model_name, params_name, config_name;
   auto model_format = fastdeploy::ModelFormat::PADDLE;
   if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
@@ -75,7 +92,7 @@ static void RuntimeProfiling(int argc, char* argv[]) {
 
   option.SetModelPath(model_file, params_file, model_format);
 
-  // Init flags infos
+  // Get input shapes/names/dtypes
   std::vector<std::vector<int32_t>> input_shapes =
       benchmark::ResultManager::GetInputShapes(FLAGS_shapes);
   std::vector<std::string> input_names =
@@ -83,7 +100,7 @@ static void RuntimeProfiling(int argc, char* argv[]) {
   std::vector<fastdeploy::FDDataType> input_dtypes =
       benchmark::ResultManager::GetInputDtypes(FLAGS_dtypes);
 
-  // TRT shapes
+  // Set tensorrt shapes
   if (config_info["backend"] == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
   }
@@ -109,6 +126,7 @@ static void RuntimeProfiling(int argc, char* argv[]) {
     std::cout << "Initial Runtime failed!" << std::endl;
   }
 
+  // Check default input names
   if (input_names[0] == "DEFAULT") {
     input_names.clear();
     for (int i = 0; i < runtime.NumInputs(); ++i) {
@@ -120,20 +138,56 @@ static void RuntimeProfiling(int argc, char* argv[]) {
   assert(runtime.NumInputs() == input_names.size());
   assert(runtime.NumInputs() == input_dtypes.size());
 
+  // Feed inputs, all values set as 1.
   std::vector<fastdeploy::FDTensor> inputs(runtime.NumInputs());
-  // Feed inputs
   for (int i = 0; i < inputs.size(); ++i) {
     fastdeploy::function::Full(1, GetInt64Shape(input_shapes[i]), &inputs[i],
                                input_dtypes[i]);
     inputs[i].name = input_names[i];
   }
 
+  // Start memory resource moniter
+  if (config_info["collect_memory_info"] == "true" || FLAGS_mem) {
+    resource_moniter.Start();
+  }
+
+  // Run runtime profiling
   std::vector<fastdeploy::FDTensor> outputs;
-  runtime.Infer(inputs, &outputs);  // Run profiling
+  if (!runtime.Infer(inputs, &outputs)) {
+    std::cerr << "Failed to predict." << std::endl;
+    ss << "Runtime(ms): Failed" << std::endl;
+    if (config_info["collect_memory_info"] == "true") {
+      ss << "cpu_rss_mb: Failed" << std::endl;
+      ss << "gpu_rss_mb: Failed" << std::endl;
+      ss << "gpu_util: Failed" << std::endl;
+      resource_moniter.Stop();
+    }
+    benchmark::ResultManager::SaveBenchmarkResult(ss.str(),
+                                                  config_info["result_path"]);
+    return;
+  }
 
-  auto profile_time = runtime.GetProfileTime() * 1000.0;
+  double profile_time = runtime.GetProfileTime() * 1000.0;
+  std::cout << "Runtime(ms): " << profile_time << "ms." << std::endl;
+  ss << "Runtime(ms): " << profile_time << "ms." << std::endl;
 
-  // Dump outputs
+  // Collect memory info
+  if (config_info["collect_memory_info"] == "true" || FLAGS_mem) {
+    float cpu_mem = resource_moniter.GetMaxCpuMem();
+    float gpu_mem = resource_moniter.GetMaxGpuMem();
+    float gpu_util = resource_moniter.GetMaxGpuUtil();
+    std::cout << "cpu_rss_mb: " << cpu_mem << "MB." << std::endl;
+    ss << "cpu_rss_mb: " << cpu_mem << "MB." << std::endl;
+    std::cout << "gpu_rss_mb: " << gpu_mem << "MB." << std::endl;
+    ss << "gpu_rss_mb: " << gpu_mem << "MB." << std::endl;
+    std::cout << "gpu_util: " << gpu_util << std::endl;
+    ss << "gpu_util: " << gpu_util << "MB." << std::endl;
+    resource_moniter.Stop();
+  }
+  benchmark::ResultManager::SaveBenchmarkResult(ss.str(),
+                                                config_info["result_path"]);
+
+  // Dump output tensors
   if (FLAGS_dump) {
     for (int i = 0; i < outputs.size(); ++i) {
       auto name_tokens =
@@ -149,13 +203,6 @@ static void RuntimeProfiling(int argc, char* argv[]) {
       std::cout << "Saved: " << out_file << std::endl;
     }
   }
-
-  std::stringstream ss;
-  ss.precision(6);
-  std::cout << "Runtime(ms): " << profile_time << "ms." << std::endl;
-  ss << "Runtime(ms): " << profile_time << "ms." << std::endl;
-  benchmark::ResultManager::SaveBenchmarkResult(ss.str(),
-                                                config_info["result_path"]);
 }
 
 static void showInputInfos(int argc, char* argv[]) {
