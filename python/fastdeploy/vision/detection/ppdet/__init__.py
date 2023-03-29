@@ -17,36 +17,28 @@ from typing import Union, List
 import logging
 from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
+from ...common import ProcessorManager
 
 
-class PaddleDetPreprocessor:
+class PaddleDetPreprocessor(ProcessorManager):
     def __init__(self, config_file):
         """Create a preprocessor for PaddleDetection Model from configuration file
 
         :param config_file: (str)Path of configuration file, e.g ppyoloe/infer_cfg.yml
         """
-        self._preprocessor = C.vision.detection.PaddleDetPreprocessor(
-            config_file)
-
-    def run(self, input_ims):
-        """Preprocess input images for PaddleDetection Model
-
-        :param: input_ims: (list of numpy.ndarray)The input image
-        :return: list of FDTensor, include image, scale_factor, im_shape
-        """
-        return self._preprocessor.run(input_ims)
+        self._manager = C.vision.detection.PaddleDetPreprocessor(config_file)
 
     def disable_normalize(self):
         """
         This function will disable normalize in preprocessing step.
         """
-        self._preprocessor.disable_normalize()
+        self._manager.disable_normalize()
 
     def disable_permute(self):
         """
         This function will disable hwc2chw in preprocessing step.
         """
-        self._preprocessor.disable_permute()
+        self._manager.disable_permute()
 
 
 class NMSOption:
