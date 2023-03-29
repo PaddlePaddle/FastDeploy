@@ -110,3 +110,4 @@ endif(BUILD_FASTDEPLOY_PYTHON)
 
 add_subdirectory(src/gstreamer/meta)
 add_subdirectory(src/gstreamer/plugin/fdinfer)
+add_subdirectory(src/gstreamer/plugin/fdtracker)
