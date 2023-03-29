@@ -142,6 +142,8 @@ download_fd_model_zxvf yolov8_l_500e_coco.tgz
 download_fd_model_zxvf yolov8_m_500e_coco.tgz
 download_fd_model_zxvf yolov8_s_500e_coco.tgz
 download_fd_model_zxvf yolov8_n_500e_coco.tgz
+download_fd_model_zxvf picodet_l_320_coco_lcnet.tgz
+download_fd_model_zxvf yolov7_x_300e_coco.tgz
 
 # PaddleClas
 download_fd_model_zxvf PPLCNet_x1_0_infer.tgz
