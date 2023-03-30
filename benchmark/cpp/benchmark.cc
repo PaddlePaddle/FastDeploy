@@ -40,6 +40,7 @@ DEFINE_string(params_file, "", "Optional, set specific params file,"
 DEFINE_string(model_format, "PADDLE", "Optional, set specific model format,"
              "eg, PADDLE/ONNX/RKNN/TORCHSCRIPT/SOPHGO");
 
+#if defined(ENABLE_BENCHMARK)
 static std::vector<int64_t> GetInt64Shape(const std::vector<int>& shape) {
   std::vector<int64_t> new_shape;
   new_shape.resize(shape.size());
@@ -276,10 +277,11 @@ static void showInputInfos(int argc, char* argv[]) {
     std::cout << input_infos[i] << std::endl;
   }
 }
+#endif
 
 int main(int argc, char* argv[]) {
-  google::ParseCommandLineFlags(&argc, &argv, true);
 #if defined(ENABLE_BENCHMARK)
+  google::ParseCommandLineFlags(&argc, &argv, true);
   if (FLAGS_diff) {
     CheckTensorDiff(argc, argv);
     return 0;
