@@ -25,14 +25,14 @@
 G_BEGIN_DECLS
 
 #define GST_TYPE_FDTRACKER   (gst_fdtracker_get_type())
-#define GST_FDTRACKER(obj)   G_TYPE_CHECK_INSTANCE_CAST(obj) \
-    (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_FDTRACKER, GstFdtracker)
-#define GST_FDTRAKERCLASS(klass)   G_TYPE_CHECK_CLASS_CAST(klass) \
-    (G_TYPE_CHECK_CLASS_CAST(klass), GST_TYPE_FDTRAKERGstFdtrackerClass)
-#define GST_IS_FDTRACKER(obj)   G_TYPE_CHECK_INSTANCE_TYPE(obj) \
-    (G_TYPE_CHECK_INSTANCE_TYPE(obj), GST_TYPE_FDTRACKER)
-#define GST_IS_FDTRACKER_CLASS(obj)   G_TYPE_CHECK_CLASS_TYPE(klass) \
-    (G_TYPE_CHECK_CLASS_TYPE(klass), GST_TYPE_FDTRACKER)
+#define GST_FDTRACKER(obj) \
+    (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_FDTRACKER, GstFdtracker))
+#define GST_FDTRAKERCLASS(klass) \
+    (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_FDTRAKERGstFdtrackerClass))
+#define GST_IS_FDTRACKER(obj) \
+    (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_FDTRACKER))
+#define GST_IS_FDTRACKER_CLASS(obj) \
+    (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_FDTRACKER))
 
 typedef struct _GstFdtracker GstFdtracker;
 typedef struct _GstFdtrackerClass GstFdtrackerClass;
