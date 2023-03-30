@@ -1,5 +1,5 @@
 device: gpu
-device_id: 3
+device_id: 0
 cpu_thread_nums: 1
 warmup: 20
 repeat: 100

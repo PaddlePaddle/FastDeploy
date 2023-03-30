@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+export CUDA_VISIBLE_DEVICES='2'
 bash benchmark_gpu.sh config/config.gpu.ort.fp32.e2e.mem.txt
 bash benchmark_gpu.sh config/config.gpu.ort.fp32.e2e.txt
 bash benchmark_gpu.sh config/config.gpu.ort.fp32.txt
