@@ -153,6 +153,14 @@ struct FASTDEPLOY_DECL ResultManager {
   /// Get Input Shapes
   static std::vector<std::vector<int32_t>> GetInputShapes(
                                       const std::string& raw_shapes);
+  /// Get Input Names
+  static std::vector<std::string> GetInputNames(
+                                      const std::string& raw_names);
+  /// Get Input Dtypes
+  static std::vector<FDDataType> GetInputDtypes(const std::string& raw_dtypes);
+  /// Split string
+  static std::vector<std::string> SplitStr(const std::string& raw_str,
+                                           char delim = ':');
 #if defined(ENABLE_VISION)
   /// Save & Load functions for basic results.
   static bool SaveDetectionResult(const vision::DetectionResult& res,
