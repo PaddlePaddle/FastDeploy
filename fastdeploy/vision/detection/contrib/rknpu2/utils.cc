@@ -32,7 +32,6 @@ static float CalculateOverlap(float xmin0, float ymin0, float xmax0,
 int NMS(int valid_count, std::vector<float>& output_locations,
         std::vector<int>& class_id, std::vector<int>& order, float threshold,
         bool class_agnostic) {
-  // printf("class_agnostic: %d\n", class_agnostic);
   for (int i = 0; i < valid_count; ++i) {
     if (order[i] == -1) {
       continue;
