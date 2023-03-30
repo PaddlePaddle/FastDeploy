@@ -77,9 +77,9 @@ def mlir2bmodel():
 args = parse_arguments()
 
 if args.auto:
-    # download()
-    # mlir_prepare()
-    # onnx2mlir()
+    download()
+    mlir_prepare()
+    onnx2mlir()
     mlir2bmodel()
 
 # 配置runtime，加载模型
