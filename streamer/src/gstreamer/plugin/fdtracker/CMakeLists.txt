@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-file(GLOB_RECURSE ALL_SRCS ${PROJECT_SOURCE_DIR}/*.cc ${PROJECT_SOURCE_DIR}/src/*.cpp)
+file(GLOB_RECURSE ALL_SRCS ${PROJECT_SOURCE_DIR}/src/gstreamer/plugin/fdtracker/*.cc ${PROJECT_SOURCE_DIR}/src/gstreamer/plugin/fdtracker/*.cpp)
 
 add_library(gstfdtracker SHARED ${ALL_SRCS} )
 target_link_libraries(gstfdtracker ${DEPEND_LIBS} ${FASTDEPLOY_LIBS})

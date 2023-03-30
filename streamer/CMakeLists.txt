@@ -16,15 +16,11 @@ PROJECT(fd_streamer C CXX)
 CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 
 if(NOT PY_LIBRARY_NAME)
-  set(PY_LIBRARY_NAME "streamer_main")
-endif()
-if(NOT CSRCS_DIR_NAME)
-  set(CSRCS_DIR_NAME ".")
+  set(PY_LIBRARY_NAME "fastdeploy_streamer_main")
 endif()
 
 option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
 option(ENABLE_DEEPSTREAM "Enable NVIDIA DeepStream SDK" ON)
-option(PY_LIBRARY_NAME "Name of build python library name")
 
 file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/src/pybind/*.cc ${PROJECT_SOURCE_DIR}/src/*_pybind.cc)
 file(GLOB_RECURSE ALL_STREAMER_SRCS ${PROJECT_SOURCE_DIR}/src/*.cc)
@@ -35,10 +31,6 @@ list(REMOVE_ITEM ALL_STREAMER_SRCS ${DEPLOY_PYBIND_SRCS})
 list(REMOVE_ITEM ALL_STREAMER_SRCS ${PLUGIN_SRCS})
 
 set(DEPEND_LIBS "")
-
-# find python3
-#find_package(Python3 ${PYTHON_MINIMUM_VERSION} REQUIRED COMPONENTS Interpreter Development)
-#message(STATUS "Found Python: ${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}.${Python3_VERSION_PATCH}")
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST gstreamer-app-1.0 gstreamer-video-1.0 REQUIRED)
@@ -67,8 +59,8 @@ add_library(fd_streamer SHARED ${ALL_STREAMER_SRCS} ${ALL_DEPLOY_SRCS})
 target_link_libraries(fd_streamer ${FASTDEPLOY_LIBS} ${DEPEND_LIBS})
 
 ############################### Building: FastDeploy Python Wheel #############################
-if(BUILD_FASTDEPLOY_PYTHON)
-  add_definitions(-DBUILD_FASTDEPLOY_PYTHON)
+if(BUILD_FDSTREAMER_PYTHON)
+  add_definitions(-DBUILD_FDSTREAMER_PYTHON)
   if("${PY_EXT_SUFFIX}" STREQUAL "")
     set(PY_EXT_SUFFIX ".so")
   endif()
@@ -106,7 +98,7 @@ if(BUILD_FASTDEPLOY_PYTHON)
   file(MAKE_DIRECTORY ${PROJECT_SOURCE_DIR}/python/streamer/libs)
 
   add_custom_target(copy_fd_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/*.so* ${PROJECT_SOURCE_DIR}/python/streamer/libs/ DEPENDS ${PY_LIBRARY_NAME})
-endif(BUILD_FASTDEPLOY_PYTHON)
+endif(BUILD_FDSTREAMER_PYTHON)
 
 add_subdirectory(src/gstreamer/meta)
 add_subdirectory(src/gstreamer/plugin/fdinfer)

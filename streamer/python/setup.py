@@ -43,7 +43,7 @@ from textwrap import dedent
 import multiprocessing
 
 setup_configs = dict()
-setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
+setup_configs["PY_LIBRARY_NAME"] = "fastdeploy" + PACKAGE_NAME + "_main"
 
 print(TOP_DIR, 'top dir--')
 
@@ -60,15 +60,6 @@ MAKE = find_executable('make')
 setup_requires = []
 extras_require = {}
 
-
-################################################################################
-# Global variables for controlling the build variant
-################################################################################
-
-# Default value is set to TRUE\1 to keep the settings same as the current ones.
-# However going forward the recomemded way to is to set this to False\0
-USE_MSVC_STATIC_RUNTIME = bool(os.getenv('USE_MSVC_STATIC_RUNTIME', '1') == '1')
-ONNX_NAMESPACE = os.getenv('ONNX_NAMESPACE', 'paddle2onnx')
 ################################################################################
 # Version
 ################################################################################
@@ -108,8 +99,6 @@ def cd(path):
 ################################################################################
 # Customized commands
 ################################################################################
-
-
 class ONNXCommand(setuptools.Command):
     user_options = []
 
@@ -182,9 +171,8 @@ class cmake_build(setuptools.Command):
                 CMAKE,
                 '-DPYTHON_INCLUDE_DIR={}'.format(sysconfig.get_python_inc()),
                 '-DPYTHON_EXECUTABLE={}'.format(sys.executable),
-                '-DBUILD_FASTDEPLOY_PYTHON=ON',
+                '-DBUILD_FDSTREAMER_PYTHON=ON',
                 '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
-                '-DONNX_NAMESPACE={}'.format(ONNX_NAMESPACE),
                 '-DPY_EXT_SUFFIX={}'.format(
                     sysconfig.get_config_var('EXT_SUFFIX') or ''),
                 '-DFASTDEPLOY_INSTALL_DIR={}'.format(FASTDEPLOY_INSTALL_DIR),

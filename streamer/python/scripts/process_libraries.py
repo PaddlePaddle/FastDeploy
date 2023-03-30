@@ -69,8 +69,4 @@ def process_libraries(current_dir):
         if remain:
             package_data.append(
                 os.path.relpath(f, os.path.join(current_dir, "streamer")))
-#            print("Package_data:")
-#            print(package_data)
-#        print("f_name:")
-#        print(f)
     return package_data

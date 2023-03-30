@@ -19,7 +19,7 @@ namespace streamer {
 
 void BindFDStreamer(pybind11::module&);
 
-PYBIND11_MODULE(streamer_main, m) {
+PYBIND11_MODULE(fastdeploy_streamer_main, m) {
   m.doc() =
       "Make programer easier to deploy deeplearning model, save time to save "
       "the world!";
