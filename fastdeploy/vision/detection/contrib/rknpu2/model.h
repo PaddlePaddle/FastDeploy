@@ -23,8 +23,6 @@ class FASTDEPLOY_DECL RKYOLOV5 : public RKYOLO {
   /** \brief Set path of model file and configuration file, and the configuration of runtime
    *
    * \param[in] model_file Path of model file, e.g picodet/model.pdmodel
-   * \param[in] params_file Path of parameter file, e.g picodet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
-   * \param[in] config_file Path of configuration file for deployment, e.g picodet/infer_cfg.yml
    * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
    * \param[in] model_format Model format of the loaded model, default is Paddle format
    */
@@ -49,8 +47,6 @@ class FASTDEPLOY_DECL RKYOLOV7 : public RKYOLO {
   /** \brief Set path of model file and configuration file, and the configuration of runtime
    *
    * \param[in] model_file Path of model file, e.g picodet/model.pdmodel
-   * \param[in] params_file Path of parameter file, e.g picodet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
-   * \param[in] config_file Path of configuration file for deployment, e.g picodet/infer_cfg.yml
    * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
    * \param[in] model_format Model format of the loaded model, default is Paddle format
    */
@@ -75,20 +71,18 @@ class FASTDEPLOY_DECL RKYOLOX : public RKYOLO {
   /** \brief Set path of model file and configuration file, and the configuration of runtime
    *
    * \param[in] model_file Path of model file, e.g picodet/model.pdmodel
-   * \param[in] params_file Path of parameter file, e.g picodet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
-   * \param[in] config_file Path of configuration file for deployment, e.g picodet/infer_cfg.yml
    * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
    * \param[in] model_format Model format of the loaded model, default is Paddle format
    */
   RKYOLOX(const std::string& model_file,
-           const RuntimeOption& custom_option = RuntimeOption(),
-           const ModelFormat& model_format = ModelFormat::RKNN)
+          const RuntimeOption& custom_option = RuntimeOption(),
+          const ModelFormat& model_format = ModelFormat::RKNN)
       : RKYOLO(model_file, custom_option, model_format) {
     valid_cpu_backends = {};
     valid_gpu_backends = {};
     valid_rknpu_backends = {Backend::RKNPU2};
-    std::vector<int> anchors = {10, 13, 16,  30,  33, 23,  30,  61,  62,
-                                45, 59, 119, 116, 90, 156, 198, 373, 326};
+    std::vector<int> anchors = {1, 1, 1, 1, 1, 1, 1, 1, 1,
+                                1, 1, 1, 1, 1, 1, 1, 1, 1};
     int anchor_per_branch_ = 1;
     GetPostprocessor().SetAnchor(anchors, anchor_per_branch_);
   }

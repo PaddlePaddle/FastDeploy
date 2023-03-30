@@ -53,3 +53,4 @@ target_link_libraries(fd_streamer ${FASTDEPLOY_LIBS} ${DEPEND_LIBS})
 
 add_subdirectory(src/gstreamer/meta)
 add_subdirectory(src/gstreamer/plugin/fdinfer)
+add_subdirectory(src/gstreamer/plugin/fdtracker)
