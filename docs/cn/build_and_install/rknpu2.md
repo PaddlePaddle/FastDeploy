@@ -51,12 +51,13 @@ pip install rknn_toolkit2-1.4.2b3+0bdd72ff-cp36-cp36m-linux_x86_64.whl
 
 ## 安装FastDeploy C++ SDK
 
-针对RK356X和RK3588的性能差异，我们提供了两种方式来编译FastDeploy。
+由于不同开发板的性能以及资源均不相同，我们提供了板端编译以及交叉编译两种方式来编译FastDeploy。
+您可以根据需求从中选择一种来进行。
 
 ### 板端编译FastDeploy C++ SDK
 
 对于内存比较充足且编译工具链完整的开发版，我们推荐直接在板端执行编译。
-以下教程在RK356X(debian10),RK3588(debian 11) 环境下完成。
+以下教程在RK356X(debian10),RK3588(debian 11) 环境下测试通过。
 
 你可以通过修改以下参数来实现自定义你的FastDeploy工具包。
 
@@ -83,7 +84,12 @@ cmake ..  -DENABLE_ORT_BACKEND=ON \
 	      -DENABLE_VISION=ON \
 	      -DRKNN2_TARGET_SOC=RK3588 \
           -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.0
+
+# build if soc is RK3588
 make -j8
+# build if soc is RK356X
+make -j4
+
 make install
 ```
 
@@ -96,7 +102,7 @@ make install
 ```bash
 sudo apt install cmake build-essential
 wget https://bj.bcebos.com/paddle2onnx/libs/gcc-linaro-6.3.1-2017.tar.gz
-tar -xzvf gcc-linaro-6.3.1-2017.05-x86_64_aarch64-linux-gnu.tar.gz -C your_save_path
+tar -xzvf gcc-linaro-6.3.1-2017.05-x86_64_aarch64-linux-gnu.tar.gz -C /path/to/save
 ```
 
 你可以通过修改以下参数来实现自定义你的FastDeploy工具包。
