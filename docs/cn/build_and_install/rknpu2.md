@@ -49,10 +49,19 @@ wget https://bj.bcebos.com/fastdeploy/third_libs/rknn_toolkit2-1.4.2b3+0bdd72ff-
 pip install rknn_toolkit2-1.4.2b3+0bdd72ff-cp36-cp36m-linux_x86_64.whl
 ```
 
-## 安装FastDeploy C++ SDK
+## 编译安装FastDeploy C++ SDK
 
 由于不同开发板的性能以及资源均不相同，我们提供了板端编译以及交叉编译两种方式来编译FastDeploy。
 您可以根据需求从中选择一种来进行。
+
+### FastDeploy后端支持详情
+
+FastDeploy当前在`RK356X/RK3588`平台上支持后端引擎如下:
+
+| 后端                | 平台                   | 支持模型格式 | 说明                                         |
+|:------------------|:---------------------|:-------|:-------------------------------------------|
+| ONNX&nbsp;Runtime | RK356X   <br> RK3588 | ONNX   | 编译开关`ENABLE_ORT_BACKEND`为ON或OFF控制，默认OFF    |
+| RKNPU2            | RK356X   <br> RK3588 | RKNN   | 编译开关`ENABLE_RKNPU2_BACKEND`为ON或OFF控制，默认OFF |
 
 ### 板端编译FastDeploy C++ SDK
 
@@ -96,9 +105,10 @@ make install
 ### 交叉编译FastDeploy C++ SDK
 
 对于内存不够充足或者编译工具链不够完整的开发版，我们也提供了交叉编译的方式来帮助你完成FastDeploy编译。
-以下的交叉编译过程在Ubuntu22.04下完成。
+以下的交叉编译过程在Ubuntu22.04下测试通过。
 
-因此在开始交叉编译前，你需要按以下步骤配置安装环境，以确保板端不会出现glibc对不上的错误。
+在开始交叉编译前，你需要按以下步骤配置安装环境，以确保板端不会出现glibc对应不上的错误。
+
 ```bash
 sudo apt install cmake build-essential
 wget https://bj.bcebos.com/paddle2onnx/libs/gcc-linaro-6.3.1-2017.tar.gz
@@ -183,8 +193,5 @@ pip3 install fastdeploy_python-0.0.0-cp39-cp39-linux_aarch64.whl
 
 ## 导航目录
 
-* [RKNPU2开发环境搭建](../faq/rknpu2/environment.md)
-* [编译FastDeploy](../faq/rknpu2/build.md)
 * [RKNN模型导出建议](../faq/rknpu2/export.md)
 * [RKNPU2模型速度一览表](../faq/rknpu2/rknpu2.md)
-* [RKNPU2 常见问题合集](../faq/rknpu2/issues.md)
