@@ -1,7 +1,14 @@
 [English](../../../en/faq/rknpu2/build.md) | 中文
 # FastDeploy RKNPU2引擎编译
 
+## FastDeploy后端支持详情
 
+FastDeploy当前在`RK356X/RK3588`平台上支持后端引擎如下:
+
+| 后端                | 平台                   | 支持模型格式 | 说明                                         |
+|:------------------|:---------------------|:-------|:-------------------------------------------|
+| ONNX&nbsp;Runtime | RK356X   <br> RK3588 | ONNX   | 编译开关`ENABLE_ORT_BACKEND`为ON或OFF控制，默认OFF    |
+| RKNPU2            | RK356X   <br> RK3588 | RKNN   | 编译开关`ENABLE_RKNPU2_BACKEND`为ON或OFF控制，默认OFF |
 
 ## 编译FastDeploy SDK
 
