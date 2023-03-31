@@ -28,7 +28,11 @@ wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 将Paddle模型转换为SOPHGO bmodel模型，转换步骤参考[文档](../README_CN.md)
 
 # 推理
-python3 infer.py --model_file ./bmodel/pp_liteseg_1684x_f32.bmodel --config_file ./bmodel/deploy.yaml --image cityscapes_demo.png
+# --auto True: 自动完成下载数据、模型转换、推理 
+python3 infer.py --auto True --model '' --config_file '' --image ''
+
+# --auto False，需要用户设置模型、配置文件、图片路径，进行推理
+python3 infer.py --auto False --model_file ./bmodel/pp_liteseg_1684x_f32.bmodel --config_file ./bmodel/deploy.yaml --image cityscapes_demo.png
 
 # 运行完成后返回结果如下所示
 运行结果保存在sophgo_img.png中
