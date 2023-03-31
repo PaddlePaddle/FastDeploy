@@ -15,8 +15,11 @@ cd FastDeploy/examples/vision/detection/yolov5/sophgo/python
 # 下载图片
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
-# 推理
-python3 infer.py --model_file ./bmodel/yolov5s_1684x_f32.bmodel --image 000000014439.jpg
+# 指定--auto True，自动完成下载数据、模型转换、推理
+python3 infer.py --auto True
+
+# 指定--auto False，则需要设置模型目录、图片目录
+python3 infer.py --auto False --model_file ./bmodel/yolov5s_1684x_f32.bmodel --image 000000014439.jpg
 
 # 运行完成后返回结果如下所示
 DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]

@@ -30,7 +30,7 @@ void SophgoInfer(const std::string& model_dir, const std::string& image_file) {
   
   auto model = fastdeploy::vision::detection::PaddleYOLOv8(model_file, params_file, config_file, option, format);
 
-  model.GetPostprocessor().ApplyDecodeAndNMS();
+  model.GetPostprocessor().ApplyNMS();
 
   auto im = cv::imread(image_file);
 
