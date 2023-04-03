@@ -8,4 +8,4 @@ This directory provides some tutorials for FastDeploy. For other model deploymen
 - Model multithreaded call [see multi_thread](multi_thread)
 - Image decoding, including hardward decoding, e.g. nvJPEG [image_decoder](image_decoder)
 - Vision processor (preprocessing, CV-CUDA, FlyCV, etc.）[vision_processor](vision_processor)
-- Deploy models with C or C# API [use_c_csharp_sdk](use_c_sharp_sdk)
+- Deploy models with C or C# API [use_c_csharp_sdk](use_c_csharp_sdk)

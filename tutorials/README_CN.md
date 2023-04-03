@@ -9,4 +9,4 @@
 - 模型多线程调用 [见multi_thread](multi_thread)
 - 图片解码（含nvJPEG硬解码） [见image_decoder](image_decoder)
 - 多硬件图像处理库（预处理、CV-CUDA、FlyCV等） [见vision_processor](vision_processor)
-- 使用C或C# API进行模型部署 [见use_c_csharp_sdk](use_c_sharp_sdk)
+- 使用C或C# API进行模型部署 [见use_c_csharp_sdk](use_c_csharp_sdk)
