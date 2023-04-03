@@ -25,13 +25,13 @@
 
 namespace fastdeploy {
 class HorizonBackend : public BaseBackend {
+public:
     HorizonBackend() = default;
     ~HorizonBackend();
 
     // Horizon Backend implementation.
-    bool LoadModel(void *model);
-    bool InitFromHorizon(const std::string& model_file);
-    bool GetModelInputOutputInfos();
+    bool Init(const RuntimeOption& runtime_option);
+
 
     int NumInputs() const override {
         return static_cast<int>(inputs_desc_.size());
@@ -60,8 +60,12 @@ private:
     
     std::vector<TensorInfo> inputs_desc_;
     std::vector<TensorInfo> outputs_desc_;
+    bool GetModelInputOutputInfos();
+    bool LoadModel(const char *model);
 
-    static FDDataType HorizonTensorTypeToFDDataType(hbDNNDataType type);
+    bool infer_init = false;
+    static FDDataType HorizonTensorTypeToFDDataType(int32_t type);
+    static hbDNNDataType FDDataTypeToHorizonTensorType(FDDataType type);
 
 }; // class HorizonBackend
 } //namespace fastdeploy

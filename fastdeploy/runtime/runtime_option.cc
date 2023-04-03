@@ -65,6 +65,10 @@ void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
   device = Device::RKNPU;
 }
 
+void RuntimeOption::UseHorizon(){
+  device = Device::SUNRISENPU;
+}
+
 void RuntimeOption::UseTimVX() {
   device = Device::TIMVX;
   paddle_lite_option.device = device;
