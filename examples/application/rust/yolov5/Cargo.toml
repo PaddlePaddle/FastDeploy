@@ -1,0 +1,11 @@
+[package]
+name = "infer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libc = "0.2"
+clap = "2.32.0"
+
+[build-dependencies]
+bindgen = "0.53.1"
