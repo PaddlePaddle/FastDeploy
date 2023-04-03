@@ -39,11 +39,11 @@ fi
 ./benchmark_ppcls --model person_exists_infer --image ILSVRC2012_val_00000010.jpeg --config_path $CONFIG_PATH --trt_shape "1,3,224,224:1,3,224,224:1,3,224,224" --input_name "x"
 
 # PaddleOCR
-./benchmark_ppocr_det --model ch_PP-OCRv3_det_infer --image 12.jpg --config_path $CONFIG_PATH --trt_shape 1,3,64,64:1,3,640,640:1,3,960,960
+./benchmark_ppocr_det --model ch_PP-OCRv3_det_infer --image 12.jpg --config_path $CONFIG_PATH --trt_shape 1,3,960,608:1,3,960,608:1,3,960,608
 ./benchmark_ppocr_cls --model ch_ppocr_mobile_v2.0_cls_infer --image rec_img.jpg --config_path $CONFIG_PATH --trt_shape 1,3,48,192:1,3,48,192:1,3,48,192
-./benchmark_ppocr_rec --model ch_PP-OCRv3_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH --trt_shape 1,3,48,10:4,3,48,320:8,3,48,2304
-./benchmark_ppocr_det --model ch_PP-OCRv2_det_infer --image 12.jpg --config_path $CONFIG_PATH --trt_shape 1,3,64,64:1,3,640,640:1,3,960,960
-./benchmark_ppocr_rec --model ch_PP-OCRv2_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH --trt_shape 1,3,32,10:4,3,32,320:8,3,32,2304
+./benchmark_ppocr_rec --model ch_PP-OCRv3_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH --trt_shape 1,3,48,572:1,3,48,572:1,3,48,572
+./benchmark_ppocr_det --model ch_PP-OCRv2_det_infer --image 12.jpg --config_path $CONFIG_PATH --trt_shape 1,3,960,608:1,3,960,608:1,3,960,608
+./benchmark_ppocr_rec --model ch_PP-OCRv2_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH --trt_shape 1,3,32,10:1,3,32,320:1,3,32,2304
 
 # PaddleDetection
 ./benchmark_ppyolov5 --model yolov5_s_300e_coco_trt_nms --image 000000014439.jpg --config_path $CONFIG_PATH
