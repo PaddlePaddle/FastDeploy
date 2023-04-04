@@ -108,6 +108,38 @@ void BindVision(pybind11::module& m) {
       .def("__repr__", &vision::DetectionResult::Str)
       .def("__str__", &vision::DetectionResult::Str);
 
+  pybind11::class_<vision::Detection3DResult>(m, "Detection3DResult")
+      .def(pybind11::init())
+      .def_readwrite("scores", &vision::Detection3DResult::scores)
+      .def_readwrite("label_ids", &vision::Detection3DResult::label_ids)
+      .def_readwrite("boxes", &vision::Detection3DResult::boxes)
+      .def_readwrite("center", &vision::Detection3DResult::center)
+      .def_readwrite("observation_angle",
+                     &vision::Detection3DResult::observation_angle)
+      .def_readwrite("yaw_angle", &vision::Detection3DResult::yaw_angle)
+      .def(pybind11::pickle(
+          [](const vision::Detection3DResult& d) {
+            return pybind11::make_tuple(d.scores, d.label_ids, d.boxes,
+                                        d.center, d.observation_angle,
+                                        d.yaw_angle);
+          },
+          [](pybind11::tuple t) {
+            if (t.size() != 6)
+              throw std::runtime_error(
+                  "vision::Detection3DResult pickle with Invalid state!");
+
+            vision::Detection3DResult d;
+            d.scores = t[0].cast<std::vector<float>>();
+            d.label_ids = t[1].cast<std::vector<int32_t>>();
+            d.boxes = t[2].cast<std::vector<std::array<float, 7>>>();
+            d.center = t[3].cast<std::vector<std::array<float, 3>>>();
+            d.observation_angle = t[4].cast<std::vector<float>>();
+            d.yaw_angle = t[5].cast<std::vector<float>>();
+            return d;
+          }))
+      .def("__repr__", &vision::Detection3DResult::Str)
+      .def("__str__", &vision::Detection3DResult::Str);
+
   pybind11::class_<vision::OCRResult>(m, "OCRResult")
       .def(pybind11::init())
       .def_readwrite("boxes", &vision::OCRResult::boxes)

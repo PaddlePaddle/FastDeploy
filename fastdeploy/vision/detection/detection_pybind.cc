@@ -31,6 +31,7 @@ void BindYOLOv7End2EndTRT(pybind11::module& m);
 void BindYOLOv7End2EndORT(pybind11::module& m);
 void BindYOLOv8(pybind11::module& m);
 void BindRKYOLO(pybind11::module& m);
+void BindSmoke(pybind11::module& m);
 
 void BindDetection(pybind11::module& m) {
   auto detection_module =
@@ -50,5 +51,6 @@ void BindDetection(pybind11::module& m) {
   BindYOLOv7End2EndORT(detection_module);
   BindYOLOv8(detection_module);
   BindRKYOLO(detection_module);
+  BindSmoke(detection_module);
 }
 }  // namespace fastdeploy

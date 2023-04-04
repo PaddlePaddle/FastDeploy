@@ -140,6 +140,42 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   std::string Str();
 };
 
+/*! @brief Detection result structure for all the object detection models and instance segmentation models
+ */
+struct FASTDEPLOY_DECL Detection3DResult : public BaseResult {
+  Detection3DResult() = default;
+
+  std::vector<float> scores;
+
+  std::vector<int32_t> label_ids;
+
+  std::vector<std::array<float, 7>> boxes;
+
+  std::vector<std::array<float, 3>> center;
+
+  std::vector<float>observation_angle;
+
+  std::vector<float>yaw_angle;
+
+  /// Copy constructor
+  Detection3DResult(const Detection3DResult& res);
+  /// Move assignment
+  Detection3DResult& operator=(Detection3DResult&& other);
+
+  /// Clear Detection3DResult
+  void Clear();
+
+  /// Clear Detection3DResult and free the memory
+  void Free();
+
+  void Reserve(int size);
+
+  void Resize(int size);
+
+  /// Debug function, convert the result to string to print
+  std::string Str();
+};
+
 /*! @brief KeyPoint Detection result structure for all the keypoint detection models
  */
 struct FASTDEPLOY_DECL KeyPointDetectionResult : public BaseResult {

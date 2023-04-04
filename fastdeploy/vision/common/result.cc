@@ -166,6 +166,87 @@ std::string DetectionResult::Str() {
   return out;
 }
 
+// Detection3DResult -----------------------------------------------------
+Detection3DResult::Detection3DResult(const Detection3DResult& res) {
+  scores.assign(res.scores.begin(), res.scores.end());
+  label_ids.assign(res.label_ids.begin(), res.label_ids.end());
+  boxes.assign(res.boxes.begin(), res.boxes.end());
+  center.assign(res.center.begin(), res.center.end());
+  observation_angle.assign(res.observation_angle.begin(),
+                           res.observation_angle.end());
+  yaw_angle.assign(res.yaw_angle.begin(), res.yaw_angle.end());
+}
+
+Detection3DResult& Detection3DResult::operator=(Detection3DResult&& other) {
+  if (&other != this) {
+    scores = std::move(other.scores);
+    label_ids = std::move(other.label_ids);
+    boxes = std::move(other.boxes);
+    center = std::move(other.center);
+    observation_angle = std::move(other.observation_angle);
+    yaw_angle = std::move(other.yaw_angle);
+  }
+  return *this;
+}
+
+void Detection3DResult::Free() {
+  std::vector<float>().swap(scores);
+  std::vector<int32_t>().swap(label_ids);
+  std::vector<std::array<float, 7>>().swap(boxes);
+  std::vector<std::array<float, 3>>().swap(center);
+  std::vector<float>().swap(observation_angle);
+  std::vector<float>().swap(yaw_angle);
+}
+
+void Detection3DResult::Clear() {
+  scores.clear();
+  label_ids.clear();
+  boxes.clear();
+  center.clear();
+  observation_angle.clear();
+  yaw_angle.clear();
+}
+
+void Detection3DResult::Reserve(int size) {
+  scores.reserve(size);
+  label_ids.reserve(size);
+  boxes.reserve(size);
+  center.reserve(size);
+  observation_angle.reserve(size);
+  yaw_angle.reserve(size);
+}
+
+void Detection3DResult::Resize(int size) {
+  scores.resize(size);
+  label_ids.resize(size);
+  boxes.resize(size);
+  center.resize(size);
+  observation_angle.resize(size);
+  yaw_angle.resize(size);
+}
+
+std::string Detection3DResult::Str() {
+  std::string out;
+  out =
+      "Detection3DResult: [xmin, ymin, xmax, ymax, w, h, l, yaw_angle, "
+      "ob_angle, score, label_id]\n";
+  for (size_t i = 0; i < boxes.size(); ++i) {
+    out = out + std::to_string(boxes[i][0]) + "," +
+          std::to_string(boxes[i][1]) + ", " + std::to_string(boxes[i][2]) +
+          ", " + std::to_string(boxes[i][3]) + ", " +
+          std::to_string(boxes[i][4]) + ", " + std::to_string(boxes[i][5]) +
+          ", " + std::to_string(boxes[i][6]) + ", " +
+          std::to_string(yaw_angle[i]) + ", " +
+          std::to_string(observation_angle[i]) + ", " +
+          std::to_string(scores[i]) + ", " + std::to_string(label_ids[i]);
+
+    out += "\n";
+  }
+  return out;
+}
+
+// Detection3DResult finished
+
 void KeyPointDetectionResult::Free() {
   std::vector<std::array<float, 2>>().swap(keypoints);
   std::vector<float>().swap(scores);
@@ -531,8 +612,8 @@ std::string OCRResult::Str() {
       out = out + "]";
 
       if (rec_scores.size() > 0) {
-        out = out + "rec text: " + text[n] + " rec score:" +
-              std::to_string(rec_scores[n]) + " ";
+        out = out + "rec text: " + text[n] +
+              " rec score:" + std::to_string(rec_scores[n]) + " ";
       }
       if (cls_labels.size() > 0) {
         out = out + "cls label: " + std::to_string(cls_labels[n]) +
@@ -546,8 +627,8 @@ std::string OCRResult::Str() {
              cls_scores.size() > 0) {
     std::string out;
     for (int i = 0; i < rec_scores.size(); i++) {
-      out = out + "rec text: " + text[i] + " rec score:" +
-            std::to_string(rec_scores[i]) + " ";
+      out = out + "rec text: " + text[i] +
+            " rec score:" + std::to_string(rec_scores[i]) + " ";
       out = out + "cls label: " + std::to_string(cls_labels[i]) +
             " cls score: " + std::to_string(cls_scores[i]);
       out = out + "\n";
@@ -566,8 +647,8 @@ std::string OCRResult::Str() {
              cls_scores.size() == 0) {
     std::string out;
     for (int i = 0; i < rec_scores.size(); i++) {
-      out = out + "rec text: " + text[i] + " rec score:" +
-            std::to_string(rec_scores[i]) + " ";
+      out = out + "rec text: " + text[i] +
+            " rec score:" + std::to_string(rec_scores[i]) + " ";
       out = out + "\n";
     }
     return out;
@@ -589,9 +670,9 @@ std::string HeadPoseResult::Str() {
   std::string out;
 
   out = "HeadPoseResult: [yaw, pitch, roll]\n";
-  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" + "pitch: " +
-        std::to_string(euler_angles[1]) + "\n" + "roll: " +
-        std::to_string(euler_angles[2]) + "\n";
+  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" +
+        "pitch: " + std::to_string(euler_angles[1]) + "\n" +
+        "roll: " + std::to_string(euler_angles[2]) + "\n";
   return out;
 }
 
