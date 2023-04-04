@@ -131,8 +131,13 @@ bool PaddleSegPreprocessor::Apply(FDMatBatch* image_batch,
       max_width = std::max(max_width, ((*images)[i]).Width());
       max_height = std::max(max_height, ((*images)[i]).Height());
     }
+    std::shared_ptr<Resize> pre_resize_op =
+        std::make_shared<Resize>(max_width, max_height);
     for (size_t i = 0; i < img_num; ++i) {
-      Resize::Run(&(*images)[i], max_width, max_height);
+      if (!(*pre_resize_op)(&(*images)[i])) {
+        FDERROR << "Failed to batch resize max_width and max_height"
+                << std::endl;
+      }
     }
   }
   for (size_t i = 0; i < img_num; ++i) {
@@ -145,17 +150,10 @@ bool PaddleSegPreprocessor::Apply(FDMatBatch* image_batch,
     }
   }
   outputs->resize(1);
-  // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> tensors(img_num);
-  for (size_t i = 0; i < img_num; ++i) {
-    (*images)[i].ShareWithTensor(&(tensors[i]));
-    tensors[i].ExpandDim(0);
-  }
-  if (tensors.size() == 1) {
-    (*outputs)[0] = std::move(tensors[0]);
-  } else {
-    function::Concat(tensors, &((*outputs)[0]), 0);
-  }
+  FDTensor* tensor = image_batch->Tensor();
+  (*outputs)[0].SetExternalData(tensor->Shape(), tensor->Dtype(),
+                                tensor->Data(), tensor->device,
+                                tensor->device_id);
   return true;
 }
 
