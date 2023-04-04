@@ -41,16 +41,26 @@ int main(int argc, char* argv[]) {
   auto model_file = FLAGS_model + sep + model_name;
   auto params_file = FLAGS_model + sep + params_name;
   auto config_file = FLAGS_model + sep + config_name;
-  auto model_fasterRCNN = vision::detection::FasterRCNN(
+  if (config_info["backend"] == "paddle_trt") {
+    option.paddle_infer_option.collect_trt_shape = true;
+  }
+  if (config_info["backend"] == "paddle_trt" ||
+      config_info["backend"] == "trt") {
+    option.trt_option.SetShape("image", {1, 3, 640, 640}, {1, 3, 640, 640},
+                               {1, 3, 640, 640});
+    option.trt_option.SetShape("scale_factor", {1, 2}, {1, 2},
+                               {1, 2});
+  }
+  auto model_fasterrcnn = vision::detection::FasterRCNN(
       model_file, params_file, config_file, option, model_format);
   vision::DetectionResult res;
   if (config_info["precision_compare"] == "true") {
     // Run once at least
-    model_fasterRCNN.Predict(im, &res);
+    model_fasterrcnn.Predict(im, &res);
     // 1. Test result diff
     std::cout << "=============== Test result diff =================\n";
     // Save result to -> disk.
-    std::string det_result_path = "fasterRCNN_result.txt";
+    std::string det_result_path = "fasterrcnn_result.txt";
     benchmark::ResultManager::SaveDetectionResult(res, det_result_path);
     // Load result from <- disk.
     vision::DetectionResult res_loaded;
@@ -67,9 +77,9 @@ int main(int argc, char* argv[]) {
   }
   // Run profiling
   if (FLAGS_no_nms) {
-    model_fasterRCNN.GetPostprocessor().ApplyNMS();
+    model_fasterrcnn.GetPostprocessor().ApplyNMS();
   }
-  BENCHMARK_MODEL(model_fasterRCNN, model_fasterRCNN.Predict(im, &res))
+  BENCHMARK_MODEL(model_fasterrcnn, model_fasterrcnn.Predict(im, &res))
   auto vis_im = vision::VisDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
