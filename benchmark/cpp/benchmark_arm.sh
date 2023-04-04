@@ -84,13 +84,13 @@ sleep_seconds() {
 ./benchmark_maskrcnn --model mask_rcnn_r50_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_rtmdet --model rtmdet_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_rtmdet --model rtmdet_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-# ./benchmark_cascadercnn --model cascade_rcnn_r50_fpn_1x_coco --image 000000014439.jpg $CONFIG_PATH
-# ./benchmark_cascadercnn --model cascade_rcnn_r50_vd_fpn_ssld_2x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_cascadercnn --model cascade_rcnn_r50_fpn_1x_coco --image 000000014439.jpg $CONFIG_PATH
+./benchmark_cascadercnn --model cascade_rcnn_r50_vd_fpn_ssld_2x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_fcos --model fcos_r50_fpn_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_gfl --model gfl_r50_fpn_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_retinanet --model retinanet_r101_fpn_2x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_retinanet --model retinanet_r50_fpn_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-# ./benchmark_tood --model tood_r50_fpn_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_tood --model tood_r50_fpn_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ttfnet --model ttfnet_darknet53_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolov5 --model yolov5_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolov6 --model yolov6_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
