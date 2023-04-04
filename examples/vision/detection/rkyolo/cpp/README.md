@@ -15,7 +15,21 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 cd build
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j8
-./infer_rkyolo /path/to/model 000000014439.jpg
+
+# infer yolov5
+wget https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/yolov5-s-relu.zip
+unzip yolov5-s-relu.zip
+./infer_rkyolov5 yolov5-s-relu/yolov5s_relu_tk2_RK3588_i8.rknn 000000014439.jpg
+
+# infer yolov7
+wget https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/yolov7-tiny.zip
+unzip yolov7-tiny.zip
+./infer_rkyolov7 yolov7-tiny/yolov7-tiny_tk2_RK3588_i8.rknn 000000014439.jpg
+
+# infer yolox
+wget https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/yolox-s.zip
+unzip yolox-s.zip
+./infer_rkyolox yolox-s/yoloxs_tk2_RK3588_i8.rknn 000000014439.jpg
 ```
 
 ## common problem

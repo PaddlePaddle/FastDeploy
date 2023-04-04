@@ -93,6 +93,9 @@ class RKYOLOPostprocessor:
         """
         return self._postprocessor.run(runtime_results)
 
+    def set_anchor(self, anchor):
+        self._postprocessor.set_anchor(anchor)
+
     @property
     def conf_threshold(self):
         """
@@ -135,16 +138,16 @@ class RKYOLOPostprocessor:
             "The value to set `nms_threshold` must be type of float."
         self._postprocessor.class_num = class_num
 
+
 class RKYOLOV5(FastDeployModel):
     def __init__(self,
                  model_file,
-                 params_file="",
                  runtime_option=None,
-                 model_format=ModelFormat.ONNX):
+                 model_format=ModelFormat.RKNN):
         """Load a RKYOLOV5 model exported by RKYOLOV5.
 
-        :param model_file: (str)Path of model file, e.g ./yolov5.onnx
-        :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param model_file: (str)Path of model file, e.g ./yolov5.rknn
+        :param params_file: (str)Path of parameters file, e.g , if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
@@ -153,6 +156,124 @@ class RKYOLOV5(FastDeployModel):
         super(RKYOLOV5, self).__init__(runtime_option)
 
         self._model = C.vision.detection.RKYOLOV5(
+            model_file, self._runtime_option, model_format)
+        # 通过self.initialized判断整个模型的初始化是否成功
+        assert self.initialized, "RKYOLOV5 initialize failed."
+
+    def predict(self, input_image, conf_threshold=0.25, nms_iou_threshold=0.5):
+        """Detect an input image
+
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :param conf_threshold: confidence threshold for postprocessing, default is 0.25
+        :param nms_iou_threshold: iou threshold for NMS, default is 0.5
+        :return: DetectionResult
+        """
+
+        self.postprocessor.conf_threshold = conf_threshold
+        self.postprocessor.nms_threshold = nms_iou_threshold
+        return self._model.predict(input_image)
+
+    def batch_predict(self, images):
+        """Classify a batch of input image
+
+        :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
+        :return list of DetectionResult
+        """
+
+        return self._model.batch_predict(images)
+
+    @property
+    def preprocessor(self):
+        """Get RKYOLOV5Preprocessor object of the loaded model
+
+        :return RKYOLOV5Preprocessor
+        """
+        return self._model.preprocessor
+
+    @property
+    def postprocessor(self):
+        """Get RKYOLOV5Postprocessor object of the loaded model
+
+        :return RKYOLOV5Postprocessor
+        """
+        return self._model.postprocessor
+
+
+class RKYOLOX(FastDeployModel):
+    def __init__(self,
+                 model_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.RKNN):
+        """Load a RKYOLOX model exported by RKYOLOX.
+
+        :param model_file: (str)Path of model file, e.g ./yolox.rknn
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+        # 调用基函数进行backend_option的初始化
+        # 初始化后的option保存在self._runtime_option
+        super(RKYOLOX, self).__init__(runtime_option)
+
+        self._model = C.vision.detection.RKYOLOX(
+            model_file, self._runtime_option, model_format)
+        # 通过self.initialized判断整个模型的初始化是否成功
+        assert self.initialized, "RKYOLOV5 initialize failed."
+
+    def predict(self, input_image, conf_threshold=0.25, nms_iou_threshold=0.5):
+        """Detect an input image
+
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :param conf_threshold: confidence threshold for postprocessing, default is 0.25
+        :param nms_iou_threshold: iou threshold for NMS, default is 0.5
+        :return: DetectionResult
+        """
+
+        self.postprocessor.conf_threshold = conf_threshold
+        self.postprocessor.nms_threshold = nms_iou_threshold
+        return self._model.predict(input_image)
+
+    def batch_predict(self, images):
+        """Classify a batch of input image
+
+        :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
+        :return list of DetectionResult
+        """
+
+        return self._model.batch_predict(images)
+
+    @property
+    def preprocessor(self):
+        """Get RKYOLOV5Preprocessor object of the loaded model
+
+        :return RKYOLOV5Preprocessor
+        """
+        return self._model.preprocessor
+
+    @property
+    def postprocessor(self):
+        """Get RKYOLOV5Postprocessor object of the loaded model
+
+        :return RKYOLOV5Postprocessor
+        """
+        return self._model.postprocessor
+
+
+class RKYOLOV7(FastDeployModel):
+    def __init__(self,
+                 model_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.RKNN):
+        """Load a RKYOLOX model exported by RKYOLOV7.
+
+        :param model_file: (str)Path of model file, e.g ./yolov7.rknn
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+        # 调用基函数进行backend_option的初始化
+        # 初始化后的option保存在self._runtime_option
+        super(RKYOLOV7, self).__init__(runtime_option)
+
+        self._model = C.vision.detection.RKYOLOV7(
             model_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
         assert self.initialized, "RKYOLOV5 initialize failed."

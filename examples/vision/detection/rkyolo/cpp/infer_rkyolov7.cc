@@ -19,8 +19,8 @@ void RKNPU2Infer(const std::string& model_file, const std::string& image_file) {
 
   auto format = fastdeploy::ModelFormat::RKNN;
 
-  auto model = fastdeploy::vision::detection::RKYOLOV5(
-      model_file, option,format);
+  auto model =
+      fastdeploy::vision::detection::RKYOLOV7(model_file, option, format);
 
   auto im = cv::imread(image_file);
 
@@ -31,7 +31,7 @@ void RKNPU2Infer(const std::string& model_file, const std::string& image_file) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  auto vis_im = fastdeploy::vision::VisDetection(im, res,0.5);
+  auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.5);
   tc.End();
   tc.PrintInfo("RKYOLOV5 in RKNN");
   std::cout << res.Str() << std::endl;
@@ -52,4 +52,3 @@ int main(int argc, char* argv[]) {
 
   return 0;
 }
-
