@@ -47,7 +47,7 @@ bool SmokePostprocessor::Run(const std::vector<FDTensor>& tensors,
     result->boxes.emplace_back(std::array<float, 7>{
         vec[2], vec[3], vec[4], vec[5], vec[6], vec[7], vec[8]});
     result->center.emplace_back(std::array<float, 3>{vec[9], vec[10], vec[11]});
-    result->observation_angle.push_back(vec[0]);
+    result->observation_angle.push_back(vec[1]);
     result->yaw_angle.push_back(vec[12]);
   }
   return true;

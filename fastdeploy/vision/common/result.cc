@@ -175,6 +175,7 @@ Detection3DResult::Detection3DResult(const Detection3DResult& res) {
   observation_angle.assign(res.observation_angle.begin(),
                            res.observation_angle.end());
   yaw_angle.assign(res.yaw_angle.begin(), res.yaw_angle.end());
+  velocity.assign(res.velocity.begin(), res.velocity.end());
 }
 
 Detection3DResult& Detection3DResult::operator=(Detection3DResult&& other) {
@@ -185,6 +186,7 @@ Detection3DResult& Detection3DResult::operator=(Detection3DResult&& other) {
     center = std::move(other.center);
     observation_angle = std::move(other.observation_angle);
     yaw_angle = std::move(other.yaw_angle);
+    velocity = std::move(other.velocity);
   }
   return *this;
 }
@@ -196,6 +198,7 @@ void Detection3DResult::Free() {
   std::vector<std::array<float, 3>>().swap(center);
   std::vector<float>().swap(observation_angle);
   std::vector<float>().swap(yaw_angle);
+  std::vector<float>().swap(velocity);
 }
 
 void Detection3DResult::Clear() {
@@ -205,6 +208,7 @@ void Detection3DResult::Clear() {
   center.clear();
   observation_angle.clear();
   yaw_angle.clear();
+  velocity.clear();
 }
 
 void Detection3DResult::Reserve(int size) {
@@ -214,6 +218,7 @@ void Detection3DResult::Reserve(int size) {
   center.reserve(size);
   observation_angle.reserve(size);
   yaw_angle.reserve(size);
+  velocity.reserve(size);
 }
 
 void Detection3DResult::Resize(int size) {
@@ -223,12 +228,14 @@ void Detection3DResult::Resize(int size) {
   center.resize(size);
   observation_angle.resize(size);
   yaw_angle.resize(size);
+  velocity.resize(size);
 }
 
 std::string Detection3DResult::Str() {
   std::string out;
   out =
-      "Detection3DResult: [xmin, ymin, xmax, ymax, w, h, l, yaw_angle, "
+      "Detection3DResult: [xmin, ymin, xmax, ymax, w, h, l, cx, cy, cz, "
+      "yaw_angle, "
       "ob_angle, score, label_id]\n";
   for (size_t i = 0; i < boxes.size(); ++i) {
     out = out + std::to_string(boxes[i][0]) + "," +
@@ -236,6 +243,8 @@ std::string Detection3DResult::Str() {
           ", " + std::to_string(boxes[i][3]) + ", " +
           std::to_string(boxes[i][4]) + ", " + std::to_string(boxes[i][5]) +
           ", " + std::to_string(boxes[i][6]) + ", " +
+          std::to_string(center[i][0]) + ", " + std::to_string(center[i][1]) +
+          ", " + std::to_string(center[i][2]) + ", " +
           std::to_string(yaw_angle[i]) + ", " +
           std::to_string(observation_angle[i]) + ", " +
           std::to_string(scores[i]) + ", " + std::to_string(label_ids[i]);

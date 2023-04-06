@@ -157,6 +157,8 @@ struct FASTDEPLOY_DECL Detection3DResult : public BaseResult {
 
   std::vector<float>yaw_angle;
 
+  std::vector<float>velocity;
+
   /// Copy constructor
   Detection3DResult(const Detection3DResult& res);
   /// Move assignment
