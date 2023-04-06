@@ -115,29 +115,29 @@ void RKNPU2Backend::BuildOption(const RKNPU2BackendOption& option) {
  ***************************************************************/
 bool RKNPU2Backend::Init(const RuntimeOption& runtime_option) {
   if (!this->RuntimeOptionIsApplicable(runtime_option)) {
-    FDERROR << "runtime option is not applicable." << std::endl;
+    FDERROR << "Runtime option is not applicable." << std::endl;
     return false;
   }
 
   if (!this->LoadModel((char*)runtime_option.model_file.data())) {
-    FDERROR << "load model failed" << std::endl;
+    FDERROR << "Load model failed" << std::endl;
     return false;
   }
 
   if (!this->InitInputAndOutputNumber()) {
-    FDERROR << "get SDK and device version failed" << std::endl;
+    FDERROR << "Get SDK and device version failed" << std::endl;
     return false;
   }
 
   if (!this->GetSDKAndDeviceVersion()) {
-    FDERROR << "get SDK and device version failed" << std::endl;
+    FDERROR << "Get SDK and device version failed" << std::endl;
     return false;
   }
 
   this->BuildOption(runtime_option.rknpu2_option);
 
   if (!this->InitInputAndOutputInformation()) {
-    FDERROR << "get model input output information failed" << std::endl;
+    FDERROR << "Get model input output information failed" << std::endl;
     return false;
   }
 
