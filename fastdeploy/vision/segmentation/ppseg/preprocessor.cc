@@ -131,10 +131,9 @@ bool PaddleSegPreprocessor::Apply(FDMatBatch* image_batch,
       max_width = std::max(max_width, ((*images)[i]).Width());
       max_height = std::max(max_height, ((*images)[i]).Height());
     }
-    std::shared_ptr<Resize> pre_resize_op =
-        std::make_shared<Resize>(max_width, max_height);
+    pre_resize_op_->SetWidthAndHeight(max_width, max_height);
     for (size_t i = 0; i < img_num; ++i) {
-      if (!(*pre_resize_op)(&(*images)[i])) {
+      if (!(*pre_resize_op_)(&(*images)[i])) {
         FDERROR << "Failed to batch resize max_width and max_height"
                 << std::endl;
       }

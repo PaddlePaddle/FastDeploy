@@ -83,6 +83,8 @@ class FASTDEPLOY_DECL PaddleSegPreprocessor : public ProcessorManager {
   bool initialized_ = false;
 
   std::map<std::string, std::vector<std::array<int, 2>>>* imgs_info_;
+  std::shared_ptr<Resize> pre_resize_op_ =
+        std::make_shared<Resize>(0, 0);
 };
 
 }  // namespace segmentation
