@@ -166,8 +166,8 @@ std::string DetectionResult::Str() {
   return out;
 }
 
-// Detection3DResult -----------------------------------------------------
-Detection3DResult::Detection3DResult(const Detection3DResult& res) {
+// PerceptionResult -----------------------------------------------------
+PerceptionResult::PerceptionResult(const PerceptionResult& res) {
   scores.assign(res.scores.begin(), res.scores.end());
   label_ids.assign(res.label_ids.begin(), res.label_ids.end());
   boxes.assign(res.boxes.begin(), res.boxes.end());
@@ -178,7 +178,7 @@ Detection3DResult::Detection3DResult(const Detection3DResult& res) {
   velocity.assign(res.velocity.begin(), res.velocity.end());
 }
 
-Detection3DResult& Detection3DResult::operator=(Detection3DResult&& other) {
+PerceptionResult& PerceptionResult::operator=(PerceptionResult&& other) {
   if (&other != this) {
     scores = std::move(other.scores);
     label_ids = std::move(other.label_ids);
@@ -191,7 +191,7 @@ Detection3DResult& Detection3DResult::operator=(Detection3DResult&& other) {
   return *this;
 }
 
-void Detection3DResult::Free() {
+void PerceptionResult::Free() {
   std::vector<float>().swap(scores);
   std::vector<int32_t>().swap(label_ids);
   std::vector<std::array<float, 7>>().swap(boxes);
@@ -201,7 +201,7 @@ void Detection3DResult::Free() {
   std::vector<float>().swap(velocity);
 }
 
-void Detection3DResult::Clear() {
+void PerceptionResult::Clear() {
   scores.clear();
   label_ids.clear();
   boxes.clear();
@@ -211,7 +211,7 @@ void Detection3DResult::Clear() {
   velocity.clear();
 }
 
-void Detection3DResult::Reserve(int size) {
+void PerceptionResult::Reserve(int size) {
   scores.reserve(size);
   label_ids.reserve(size);
   boxes.reserve(size);
@@ -221,7 +221,7 @@ void Detection3DResult::Reserve(int size) {
   velocity.reserve(size);
 }
 
-void Detection3DResult::Resize(int size) {
+void PerceptionResult::Resize(int size) {
   scores.resize(size);
   label_ids.resize(size);
   boxes.resize(size);
@@ -231,10 +231,10 @@ void Detection3DResult::Resize(int size) {
   velocity.resize(size);
 }
 
-std::string Detection3DResult::Str() {
+std::string PerceptionResult::Str() {
   std::string out;
   out =
-      "Detection3DResult: [xmin, ymin, xmax, ymax, w, h, l, cx, cy, cz, "
+      "PerceptionResult: [xmin, ymin, xmax, ymax, w, h, l, cx, cy, cz, "
       "yaw_angle, "
       "ob_angle, score, label_id]\n";
   for (size_t i = 0; i < boxes.size(); ++i) {
@@ -254,7 +254,7 @@ std::string Detection3DResult::Str() {
   return out;
 }
 
-// Detection3DResult finished
+// PerceptionResult finished
 
 void KeyPointDetectionResult::Free() {
   std::vector<std::array<float, 2>>().swap(keypoints);

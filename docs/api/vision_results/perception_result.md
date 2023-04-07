@@ -1,16 +1,16 @@
 English | [简体中文](detection_result_CN.md)
-# Detection3DResult target detection result
+# PerceptionResult target detection result
 
-The Detection3DResult code is defined in `fastdeploy/vision/common/result.h`, which is used to indicate the detected 3D target: two-dimensional target frame, target frame length, width and height, target category and target confidence, target orientation angle and observation angle etc.
+The PerceptionResult code is defined in `fastdeploy/vision/common/result.h`, which is used to indicate the detected 3D target: two-dimensional target frame, target frame length, width and height, target category and target confidence, target orientation angle and observation angle etc.
 
 ## C++ definition
 
 ```c++
-fastdeploy::vision::Detection3DResult
+fastdeploy::vision::PerceptionResult
 ```
 
 ```c++
-struct Detection3DResult {
+struct PerceptionResult {
    std::vector<float> scores;
    std::vector<int32_t> label_ids;
    std::vector<std::array<float, 7>> boxes;
@@ -34,7 +34,7 @@ struct Detection3DResult {
 ## Python definition
 
 ```python
-fastdeploy.vision.Detection3DResult
+fastdeploy.vision.PerceptionResult
 ```
 
 - **scores**(list of float): Member variable, indicating the confidence of all detected targets, `scores.size()` indicates the number of detected frames

@@ -20,7 +20,7 @@
 namespace fastdeploy {
 namespace vision {
 
-namespace detection {
+namespace perception {
 /*! @brief Preprocessor object for Smoke serials model.
  */
 class FASTDEPLOY_DECL SmokePreprocessor : public ProcessorManager  {
@@ -56,6 +56,6 @@ class FASTDEPLOY_DECL SmokePreprocessor : public ProcessorManager  {
   std::vector<float> input_ratio_data_;
 };
 
-}  // namespace detection
+}  // namespace perception
 }  // namespace vision
 }  // namespace fastdeploy

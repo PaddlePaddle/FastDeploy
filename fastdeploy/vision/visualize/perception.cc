@@ -46,9 +46,9 @@ matrix multiple(const matrix a, const matrix b) {
   return c;
 }
 
-cv::Mat VisDetection3D(const cv::Mat& im, const Detection3DResult& result,
-                       const std::string& config_file, float score_threshold,
-                       int line_size, float font_size) {
+cv::Mat VisPerception(const cv::Mat& im, const PerceptionResult& result,
+                      const std::string& config_file, float score_threshold,
+                      int line_size, float font_size) {
   if (result.scores.empty()) {
     return im;
   }

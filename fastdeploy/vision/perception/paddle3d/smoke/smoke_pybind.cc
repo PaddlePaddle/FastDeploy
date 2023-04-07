@@ -16,9 +16,10 @@
 
 namespace fastdeploy {
 void BindSmoke(pybind11::module& m) {
-  pybind11::class_<vision::detection::SmokePreprocessor>(m, "SmokePreprocessor")
+  pybind11::class_<vision::perception::SmokePreprocessor>(m,
+                                                          "SmokePreprocessor")
       .def(pybind11::init<>())
-      .def("run", [](vision::detection::SmokePreprocessor& self,
+      .def("run", [](vision::perception::SmokePreprocessor& self,
                      std::vector<pybind11::array>& im_list) {
         std::vector<vision::FDMat> images;
         for (size_t i = 0; i < im_list.size(); ++i) {
@@ -35,13 +36,13 @@ void BindSmoke(pybind11::module& m) {
         return outputs;
       });
 
-  pybind11::class_<vision::detection::SmokePostprocessor>(m,
-                                                          "SmokePostprocessor")
+  pybind11::class_<vision::perception::SmokePostprocessor>(m,
+                                                           "SmokePostprocessor")
       .def(pybind11::init<>())
       .def("run",
-           [](vision::detection::SmokePostprocessor& self,
+           [](vision::perception::SmokePostprocessor& self,
               std::vector<FDTensor>& inputs) {
-             std::vector<vision::Detection3DResult> results;
+             std::vector<vision::PerceptionResult> results;
              if (!self.Run(inputs, &results)) {
                throw std::runtime_error(
                    "Failed to postprocess the runtime result in "
@@ -49,9 +50,9 @@ void BindSmoke(pybind11::module& m) {
              }
              return results;
            })
-      .def("run", [](vision::detection::SmokePostprocessor& self,
+      .def("run", [](vision::perception::SmokePostprocessor& self,
                      std::vector<pybind11::array>& input_array) {
-        std::vector<vision::Detection3DResult> results;
+        std::vector<vision::PerceptionResult> results;
         std::vector<FDTensor> inputs;
         PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
         if (!self.Run(inputs, &results)) {
@@ -62,30 +63,30 @@ void BindSmoke(pybind11::module& m) {
         return results;
       });
 
-  pybind11::class_<vision::detection::Smoke, FastDeployModel>(m, "Smoke")
+  pybind11::class_<vision::perception::Smoke, FastDeployModel>(m, "Smoke")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>())
       .def("predict",
-           [](vision::detection::Smoke& self, pybind11::array& data) {
+           [](vision::perception::Smoke& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);
-             vision::Detection3DResult res;
+             vision::PerceptionResult res;
              self.Predict(mat, &res);
              return res;
            })
       .def("batch_predict",
-           [](vision::detection::Smoke& self,
+           [](vision::perception::Smoke& self,
               std::vector<pybind11::array>& data) {
              std::vector<cv::Mat> images;
              for (size_t i = 0; i < data.size(); ++i) {
                images.push_back(PyArrayToCvMat(data[i]));
              }
-             std::vector<vision::Detection3DResult> results;
+             std::vector<vision::PerceptionResult> results;
              self.BatchPredict(images, &results);
              return results;
            })
       .def_property_readonly("preprocessor",
-                             &vision::detection::Smoke::GetPreprocessor)
+                             &vision::perception::Smoke::GetPreprocessor)
       .def_property_readonly("postprocessor",
-                             &vision::detection::Smoke::GetPostprocessor);
+                             &vision::perception::Smoke::GetPostprocessor);
 }
 }  // namespace fastdeploy

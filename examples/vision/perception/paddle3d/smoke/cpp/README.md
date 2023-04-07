@@ -63,7 +63,7 @@ Smoke model loading and initialization.
 #### Predict function
 
 > ```c++
-> Smoke::Predict(cv::Mat* im, Detection3DResult* result)
+> Smoke::Predict(cv::Mat* im, PerceptionResult* result)
 > ```
 >
 > Model prediction interface, the input image directly outputs the detection result.
@@ -71,7 +71,7 @@ Smoke model loading and initialization.
 > **parameters**
 >
 > > * **im**: input image, note that it must be in HWC, BGR format
-> > * **result**: Detection result, including the detection frame, the confidence of each frame, Detection3DResult description reference [visual model prediction results](../../../../../docs/api /vision_results/)
+> > * **result**: Detection result, including the detection frame, the confidence of each frame, PerceptionResult description reference [visual model prediction results](../../../../../docs/api /vision_results/)
 
 
 - [Model Introduction](../../)

@@ -33,14 +33,14 @@ void BindVisualize(pybind11::module& m) {
           vision::Mat(vis_im).ShareWithTensor(&out);
           return TensorToPyArray(out);
         })
-      .def("vis_detection3d",
-           [](pybind11::array& im_data, vision::Detection3DResult& result,
+      .def("vis_perception",
+           [](pybind11::array& im_data, vision::PerceptionResult& result,
               const std::string& config_file, float score_threshold,
               int line_size, float font_size) {
              auto im = PyArrayToCvMat(im_data);
              auto vis_im =
-                 vision::VisDetection3D(im, result, config_file,
-                                        score_threshold, line_size, font_size);
+                 vision::VisPerception(im, result, config_file, score_threshold,
+                                       line_size, font_size);
              FDTensor out;
              vision::Mat(vis_im).ShareWithTensor(&out);
              return TensorToPyArray(out);

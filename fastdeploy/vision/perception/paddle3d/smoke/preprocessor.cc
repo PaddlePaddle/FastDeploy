@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/detection/paddle3d/smoke/preprocessor.h"
+#include "fastdeploy/vision/perception/paddle3d/smoke/preprocessor.h"
 
 #include "fastdeploy/function/concat.h"
 #include "yaml-cpp/yaml.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace detection {
+namespace perception {
 
 SmokePreprocessor::SmokePreprocessor(const std::string& config_file) {
   this->config_file_ = config_file;
@@ -156,6 +156,6 @@ bool SmokePreprocessor::Apply(FDMatBatch* image_batch,
   return true;
 }
 
-}  // namespace detection
+}  // namespace perception
 }  // namespace vision
 }  // namespace fastdeploy

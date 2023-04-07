@@ -63,7 +63,7 @@ Smoke模型加载和初始化。
 #### Predict函数
 
 > ```c++
-> Smoke::Predict(cv::Mat* im, Detection3DResult* result)
+> Smoke::Predict(cv::Mat* im, PerceptionResult* result)
 > ```
 >
 > 模型预测接口，输入图像直接输出检测结果。
@@ -71,7 +71,7 @@ Smoke模型加载和初始化。
 > **参数**
 >
 > > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 检测结果，包括检测框，各个框的置信度, Detection3DResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > * **result**: 检测结果，包括检测框，各个框的置信度, PerceptionResult 说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 
 - [模型介绍](../../)

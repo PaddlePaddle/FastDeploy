@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/detection/paddle3d/smoke/smoke.h"
+#include "fastdeploy/vision/perception/paddle3d/smoke/smoke.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace detection {
+namespace perception {
 
 Smoke::Smoke(const std::string& model_file, const std::string& params_file,
              const std::string& config_file, const RuntimeOption& custom_option,
@@ -40,8 +40,8 @@ bool Smoke::Initialize() {
   return true;
 }
 
-bool Smoke::Predict(const cv::Mat& im, Detection3DResult* result) {
-  std::vector<Detection3DResult> results;
+bool Smoke::Predict(const cv::Mat& im, PerceptionResult* result) {
+  std::vector<PerceptionResult> results;
   if (!BatchPredict({im}, &results)) {
     return false;
   }
@@ -52,7 +52,7 @@ bool Smoke::Predict(const cv::Mat& im, Detection3DResult* result) {
 }
 
 bool Smoke::BatchPredict(const std::vector<cv::Mat>& images,
-                         std::vector<Detection3DResult>* results) {
+                         std::vector<PerceptionResult>* results) {
   std::vector<FDMat> fd_images = WrapMat(images);
 
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
@@ -77,6 +77,6 @@ bool Smoke::BatchPredict(const std::vector<cv::Mat>& images,
   return true;
 }
 
-}  // namespace detection
+}  // namespace perception
 }  // namespace vision
 }  // namespace fastdeploy

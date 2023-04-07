@@ -57,7 +57,7 @@ Smoke模型加载和初始化。
 
 > **返回**
 >
-> > 返回`fastdeploy.vision.Detection3DResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > 返回`fastdeploy.vision.PerceptionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 
 ## 其它文档

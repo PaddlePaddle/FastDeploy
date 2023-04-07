@@ -19,7 +19,7 @@
 namespace fastdeploy {
 namespace vision {
 
-namespace detection {
+namespace perception {
 /*! @brief Postprocessor object for Smoke serials model.
  */
 class FASTDEPLOY_DECL SmokePostprocessor {
@@ -28,7 +28,7 @@ class FASTDEPLOY_DECL SmokePostprocessor {
    */
   SmokePostprocessor();
 
-  /** \brief Process the result of runtime and fill to Detection3DResult structure
+  /** \brief Process the result of runtime and fill to PerceptionResult structure
    *
    * \param[in] tensors The inference result from runtime
    * \param[in] result The output result of detection
@@ -36,13 +36,13 @@ class FASTDEPLOY_DECL SmokePostprocessor {
    * \return true if the postprocess successed, otherwise false
    */
   bool Run(const std::vector<FDTensor>& tensors,
-      std::vector<Detection3DResult>* results);
+      std::vector<PerceptionResult>* results);
 
 
  protected:
   float conf_threshold_;
 };
 
-}  // namespace detection
+}  // namespace perception
 }  // namespace vision
 }  // namespace fastdeploy

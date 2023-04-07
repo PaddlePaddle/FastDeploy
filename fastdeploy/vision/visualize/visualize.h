@@ -32,8 +32,8 @@ class FASTDEPLOY_DECL Visualize {
   static cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
                               float score_threshold = 0.0, int line_size = 1,
                               float font_size = 0.5f);
-  static cv::Mat VisDetection3D(const cv::Mat& im,
-                     const Detection3DResult& result,
+  static cv::Mat VisPerception(const cv::Mat& im,
+                     const PerceptionResult& result,
                      const std::string & config_file,
                      float score_threshold = 0.0,
                      int line_size = 1,
@@ -98,8 +98,8 @@ FASTDEPLOY_DECL cv::Mat VisDetection(const cv::Mat& im,
  * \param[in] font_size font size for text
  * \return cv::Mat type stores the visualized results
  */
-FASTDEPLOY_DECL cv::Mat VisDetection3D(const cv::Mat& im,
-                     const Detection3DResult& result,
+FASTDEPLOY_DECL cv::Mat VisPerception(const cv::Mat& im,
+                     const PerceptionResult& result,
                      const std::string & config_file,
                      float score_threshold = 0.0,
                      int line_size = 1 ,

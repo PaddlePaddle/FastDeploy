@@ -142,8 +142,8 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
 
 /*! @brief Detection result structure for all the object detection models and instance segmentation models
  */
-struct FASTDEPLOY_DECL Detection3DResult : public BaseResult {
-  Detection3DResult() = default;
+struct FASTDEPLOY_DECL PerceptionResult : public BaseResult {
+  PerceptionResult() = default;
 
   std::vector<float> scores;
 
@@ -160,14 +160,14 @@ struct FASTDEPLOY_DECL Detection3DResult : public BaseResult {
   std::vector<float>velocity;
 
   /// Copy constructor
-  Detection3DResult(const Detection3DResult& res);
+  PerceptionResult(const PerceptionResult& res);
   /// Move assignment
-  Detection3DResult& operator=(Detection3DResult&& other);
+  PerceptionResult& operator=(PerceptionResult&& other);
 
-  /// Clear Detection3DResult
+  /// Clear PerceptionResult
   void Clear();
 
-  /// Clear Detection3DResult and free the memory
+  /// Clear PerceptionResult and free the memory
   void Free();
 
   void Reserve(int size);

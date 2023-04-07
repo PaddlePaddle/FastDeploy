@@ -24,7 +24,8 @@ def build_option(args):
     option = fd.RuntimeOption()
     if args.device.lower() == "gpu":
         option.use_gpu(0)
-
+    if args.device.lower() == "cpu":
+        option.use_cpu()
     return option
 
 
@@ -35,7 +36,7 @@ params_file = os.path.join(args.model, "smoke.pdiparams")
 config_file = os.path.join(args.model, "infer_cfg.yml")
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.detection.Smoke(
+model = fd.vision.perception.Smoke(
     model_file, params_file, config_file, runtime_option=runtime_option)
 
 # 预测图片检测结果
@@ -44,6 +45,6 @@ result = model.predict(im)
 print(result)
 
 # 预测结果可视化
-vis_im = fd.vision.vis_detection3d(im, result, config_file)
+vis_im = fd.vision.vis_perception(im, result, config_file)
 cv2.imwrite("visualized_result.jpg", vis_im)
 print("Visualized result save in ./visualized_result.jpg")

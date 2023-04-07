@@ -25,21 +25,21 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file,
   auto params_file = model_dir + sep + "smoke.pdiparams";
   auto config_file = model_dir + sep + "infer_cfg.yml";
   fastdeploy::vision::EnableFlyCV();
-  auto model = fastdeploy::vision::detection::Smoke(
+  auto model = fastdeploy::vision::perception::Smoke(
       model_file, params_file, config_file, option,
       fastdeploy::ModelFormat::PADDLE);
   assert(model.Initialized());
 
   auto im = cv::imread(image_file);
 
-  fastdeploy::vision::Detection3DResult res;
+  fastdeploy::vision::PerceptionResult res;
   if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
   std::cout << res.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::VisDetection3D(im, res, config_file);
+  auto vis_im = fastdeploy::vision::VisPerception(im, res, config_file);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }

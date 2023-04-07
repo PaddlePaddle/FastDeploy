@@ -38,12 +38,12 @@ def vis_detection(im_data,
                                   line_size, font_size)
 
 
-def vis_detection3d(im_data,
-                    det_result,
-                    config_file,
-                    score_threshold=0.0,
-                    line_size=1,
-                    font_size=0.5):
+def vis_perception(im_data,
+                   det_result,
+                   config_file,
+                   score_threshold=0.0,
+                   line_size=1,
+                   font_size=0.5):
     """Show the visualized results for 3d detection models
 
     :param im_data: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
@@ -54,8 +54,8 @@ def vis_detection3d(im_data,
     :param font_size: (float) font_size font size for text
     :return: (numpy.ndarray) image with visualized results
     """
-    return C.vision.vis_detection3d(im_data, det_result, config_file,
-                                    score_threshold, line_size, font_size)
+    return C.vision.vis_perception(im_data, det_result, config_file,
+                                   score_threshold, line_size, font_size)
 
 
 def vis_keypoint_detection(im_data, keypoint_det_result, conf_threshold=0.5):

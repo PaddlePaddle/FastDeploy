@@ -1,16 +1,16 @@
-简体中文 ｜ [English](detection3d_result.md)
-# Detection3DResult 目标检测结果
+简体中文 ｜ [English](perception_result.md)
+# PerceptionResult 目标检测结果
 
-Detection3DResult代码定义在`fastdeploy/vision/common/result.h`中，用于表明检测出来的3D目标的：二维目标框、目标框长宽高、目标类别和目标置信度、目标朝向角和观测角等。
+PerceptionResult`fastdeploy/vision/common/result.h`中，用于表明检测出来的3D目标的：二维目标框、目标框长宽高、目标类别和目标置信度、目标朝向角和观测角等。
 
 ## C++ 定义
 
 ```c++
-fastdeploy::vision::Detection3DResult
+fastdeploy::vision::PerceptionResult
 ```  
 
 ```c++
-struct Detection3DResult {
+struct PerceptionResult {
   std::vector<float> scores;
   std::vector<int32_t> label_ids;
   std::vector<std::array<float, 7>> boxes;
@@ -34,7 +34,7 @@ struct Detection3DResult {
 ## Python 定义
 
 ```python
-fastdeploy.vision.Detection3DResult  
+fastdeploy.vision.PerceptionResult  
 ```
 
 - **scores**(list of float): 成员变量，表示检测出来的所有目标置信度，`scores.size()`表示检测出来框的个数

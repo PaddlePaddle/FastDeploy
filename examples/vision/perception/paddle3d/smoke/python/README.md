@@ -56,7 +56,7 @@ Smoke model loading and initialization.
 
 > **Back**
 >
-> > Return the `fastdeploy.vision.Detection3DResult` structure, structure description reference document [Vision Model Prediction Results](../../../../../docs/api/vision_results/)
+> > Return the `fastdeploy.vision.PerceptionResult` structure, structure description reference document [Vision Model Prediction Results](../../../../../docs/api/vision_results/)
 
 
 ## Other documents

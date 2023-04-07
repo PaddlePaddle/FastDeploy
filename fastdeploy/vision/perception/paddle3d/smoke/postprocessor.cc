@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/detection/paddle3d/smoke/postprocessor.h"
+#include "fastdeploy/vision/perception/paddle3d/smoke/postprocessor.h"
 
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace detection {
+namespace perception {
 
 SmokePostprocessor::SmokePostprocessor() {}
 
 bool SmokePostprocessor::Run(const std::vector<FDTensor>& tensors,
-                             std::vector<Detection3DResult>* results) {
+                             std::vector<PerceptionResult>* results) {
   results->resize(1);
   (*results)[0].Clear();
   (*results)[0].Reserve(tensors[0].shape[0]);
@@ -53,6 +53,6 @@ bool SmokePostprocessor::Run(const std::vector<FDTensor>& tensors,
   return true;
 }
 
-}  // namespace detection
+}  // namespace perception
 }  // namespace vision
 }  // namespace fastdeploy

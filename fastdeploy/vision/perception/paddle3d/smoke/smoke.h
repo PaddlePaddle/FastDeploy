@@ -15,12 +15,12 @@
 #pragma once
 
 #include "fastdeploy/fastdeploy_model.h"
-#include "fastdeploy/vision/detection/paddle3d/smoke/preprocessor.h"
-#include "fastdeploy/vision/detection/paddle3d/smoke/postprocessor.h"
+#include "fastdeploy/vision/perception/paddle3d/smoke/preprocessor.h"
+#include "fastdeploy/vision/perception/paddle3d/smoke/postprocessor.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace detection {
+namespace perception {
 /*! @brief smoke model object used when to load a smoke model exported by smoke.
  */
 class FASTDEPLOY_DECL Smoke : public FastDeployModel {
@@ -39,22 +39,22 @@ class FASTDEPLOY_DECL Smoke : public FastDeployModel {
 
   std::string ModelName() const { return "Paddle3D/smoke"; }
 
-  /** \brief Predict the detection result for an input image
+  /** \brief Predict the perception result for an input image
    *
    * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
-   * \param[in] result The output detection result will be writen to this structure
+   * \param[in] result The output perception result will be writen to this structure
    * \return true if the prediction successed, otherwise false
    */
-  virtual bool Predict(const cv::Mat& img, Detection3DResult* result);
+  virtual bool Predict(const cv::Mat& img, PerceptionResult* result);
 
-  /** \brief Predict the detection results for a batch of input images
+  /** \brief Predict the perception results for a batch of input images
    *
    * \param[in] imgs, The input image list, each element comes from cv::imread()
-   * \param[in] results The output detection result list
+   * \param[in] results The output perception result list
    * \return true if the prediction successed, otherwise false
    */
   virtual bool BatchPredict(const std::vector<cv::Mat>& imgs,
-                            std::vector<Detection3DResult>* results);
+                            std::vector<PerceptionResult>* results);
 
   /// Get preprocessor reference of Smoke
   virtual SmokePreprocessor& GetPreprocessor() {
@@ -73,6 +73,6 @@ class FASTDEPLOY_DECL Smoke : public FastDeployModel {
   bool initialized_ = false;
 };
 
-}  // namespace detection
+}  // namespace perception
 }  // namespace vision
 }  // namespace fastdeploy

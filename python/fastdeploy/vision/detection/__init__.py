@@ -28,4 +28,3 @@ from .contrib.yolov7end2end_ort import YOLOv7End2EndORT
 from .contrib.yolov8 import *
 from .ppdet import *
 from .contrib.rkyolo import *
-from .paddle3d.smoke import *
