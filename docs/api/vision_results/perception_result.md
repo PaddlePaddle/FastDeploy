@@ -17,6 +17,7 @@ struct PerceptionResult {
    std::vector<std::array<float, 3>> center;
    std::vector<float>observation_angle;
    std::vector<float>yaw_angle;
+   std::vector<std::array<float, 3>>velocity;
    void Clear();
    std::string Str();
 };
@@ -28,6 +29,7 @@ struct PerceptionResult {
 - **center**: member variable, indicating the center point coordinates of all detected target frames, the number of elements is consistent with `scores.size()`, and each frame uses 3 float values to represent the center point coordinates of the frame in turn
 - **observation_angle**: Member variable, indicating the observation angle of the detected frame, and the number of elements is consistent with `scores.size()`
 - **yaw_angle**: Member variable, indicating the orientation angle of the detected frame, the number of elements is consistent with `scores.size()`
+- **velocity**: Member variable, indicating the velocity of the detected frame, the number of elements is consistent with `scores.size()`
 - **Clear()**: member function, used to clear the results stored in the structure
 - **Str()**: member function, output the information in the structure as a string (for Debug)
 
@@ -43,3 +45,4 @@ fastdeploy.vision.PerceptionResult
 - **center**(list of list(float)): Member variable, which represents the coordinates of the center points of all detected target frames, the number of elements is the same as `scores.size()`, and each frame is represented by 3 floats The values ​​in turn represent the coordinates of the center point of the box
 - **observation_angle**: member variable, indicating the orientation angle of the detected frame, and the number of elements is consistent with `scores.size()`
 - **yaw_angle**: Member variable, indicating the orientation angle of the detected frame, the number of elements is consistent with `scores.size()`
+- **velocity**: Member variable, indicating the velocity of the detected frame, the number of elements is consistent with `scores.size()`

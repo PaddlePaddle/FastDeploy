@@ -17,6 +17,7 @@ struct PerceptionResult {
   std::vector<std::array<float, 3>> center;
   std::vector<float>observation_angle;
   std::vector<float>yaw_angle;
+  std::vector<std::array<float, 3>>velocity;
   void Clear();
   std::string Str();
 };
@@ -28,6 +29,7 @@ struct PerceptionResult {
 - **center**: 成员变量，表示检测出来的所有目标框中心点坐标，其元素个数与`scores.size()`一致，每个框以3个float数值依次表示框中心点坐标
 - **observation_angle**: 成员变量，表示检测出来的框的观测角，其元素个数与`scores.size()`一致
 - **yaw_angle**: 成员变量，表示检测出来的框的朝向角，其元素个数与`scores.size()`一致
+- **velocity**: 成员变量，表示检测出来的框的速度，其元素个数与`scores.size()`一致
 - **Clear()**: 成员函数，用于清除结构体中存储的结果
 - **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
 
@@ -43,3 +45,4 @@ fastdeploy.vision.PerceptionResult
 - **center**(list of list(float)): 成员变量，表示检测出来的所有目标框中心点坐标，其元素个数与`scores.size()`一致，每个框以3个float数值依次表示框中心点坐标
 - **observation_angle**: 成员变量，表示检测出来的框的朝向角，其元素个数与`scores.size()`一致
 - **yaw_angle**: 成员变量，表示检测出来的框的朝向角，其元素个数与`scores.size()`一致
+- **velocity**: 成员变量，表示检测出来的框的速度，其元素个数与`scores.size()`一致

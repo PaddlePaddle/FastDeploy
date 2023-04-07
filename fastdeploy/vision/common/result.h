@@ -148,16 +148,16 @@ struct FASTDEPLOY_DECL PerceptionResult : public BaseResult {
   std::vector<float> scores;
 
   std::vector<int32_t> label_ids;
-
+  // xmin, ymin, xmax, ymax, h, w, l
   std::vector<std::array<float, 7>> boxes;
-
+  // cx, cy, cz
   std::vector<std::array<float, 3>> center;
 
-  std::vector<float>observation_angle;
+  std::vector<float> observation_angle;
 
-  std::vector<float>yaw_angle;
-
-  std::vector<float>velocity;
+  std::vector<float> yaw_angle;
+  // vx, vy, vz
+  std::vector<std::array<float, 3>> velocity;
 
   /// Copy constructor
   PerceptionResult(const PerceptionResult& res);

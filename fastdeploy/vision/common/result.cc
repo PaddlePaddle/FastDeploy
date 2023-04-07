@@ -198,7 +198,7 @@ void PerceptionResult::Free() {
   std::vector<std::array<float, 3>>().swap(center);
   std::vector<float>().swap(observation_angle);
   std::vector<float>().swap(yaw_angle);
-  std::vector<float>().swap(velocity);
+  std::vector<std::array<float, 3>>().swap(velocity);
 }
 
 void PerceptionResult::Clear() {

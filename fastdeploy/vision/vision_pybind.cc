@@ -118,14 +118,15 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("observation_angle",
                      &vision::PerceptionResult::observation_angle)
       .def_readwrite("yaw_angle", &vision::PerceptionResult::yaw_angle)
+      .def_readwrite("velocity", &vision::PerceptionResult::velocity)
       .def(pybind11::pickle(
           [](const vision::PerceptionResult& d) {
             return pybind11::make_tuple(d.scores, d.label_ids, d.boxes,
                                         d.center, d.observation_angle,
-                                        d.yaw_angle);
+                                        d.yaw_angle, d.velocity);
           },
           [](pybind11::tuple t) {
-            if (t.size() != 6)
+            if (t.size() != 7)
               throw std::runtime_error(
                   "vision::PerceptionResult pickle with Invalid state!");
 
@@ -136,6 +137,7 @@ void BindVision(pybind11::module& m) {
             d.center = t[3].cast<std::vector<std::array<float, 3>>>();
             d.observation_angle = t[4].cast<std::vector<float>>();
             d.yaw_angle = t[5].cast<std::vector<float>>();
+            d.velocity = t[6].cast<std::vector<std::array<float, 3>>>();
             return d;
           }))
       .def("__repr__", &vision::PerceptionResult::Str)
