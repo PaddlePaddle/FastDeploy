@@ -11,4 +11,4 @@ collect_memory_info: true
 sampling_interval: 1
 precision_compare: false
 xpu_l3_cache: 62914560
-result_path: benchmark_xpu_lite_fp32_e2e_mem.txt
+result_path: benchmark_xpu_lite_fp32_l3_e2e_mem.txt
