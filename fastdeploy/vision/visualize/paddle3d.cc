@@ -17,6 +17,7 @@
 #include "fastdeploy/vision/visualize/visualize.h"
 #include "opencv2/calib3d/calib3d.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+#include "yaml-cpp/yaml.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -29,7 +30,11 @@ matrix multiple(const matrix a, const matrix b) {
     matrix c;
     return c;
   }
-  // assert(a[0].size() == b.size(), "A[m,n] * B[p,q], n must equal to p.");
+  if (a[0].size() != b.size()) {
+    FDERROR << "A[m,n] * B[p,q], n must equal to p." << std::endl;
+    matrix c;
+    return c;
+  }
   const int n = a[0].size();  // a cols
   const int p = b[0].size();  // b cols
   matrix c(m, std::vector<float>(p, 0));
@@ -42,13 +47,43 @@ matrix multiple(const matrix a, const matrix b) {
 }
 
 cv::Mat VisDetection3D(const cv::Mat& im, const Detection3DResult& result,
-                       float score_threshold, int line_size, float font_size) {
+                       const std::string& config_file, float score_threshold,
+                       int line_size, float font_size) {
   if (result.scores.empty()) {
     return im;
   }
-  matrix k_data = {{721.53771973, 0.0, 609.55932617},
-                   {0.0, 721.53771973, 172.85400391},
-                   {0, 0, 1}};
+  YAML::Node cfg;
+  try {
+    cfg = YAML::LoadFile(config_file);
+  } catch (YAML::BadFile& e) {
+    FDERROR << "Failed to load yaml file " << config_file
+            << ", maybe you should check this file." << std::endl;
+    return im;
+  }
+
+  std::vector<int> target_size;
+  for (const auto& op : cfg["Preprocess"]) {
+    std::string op_name = op["type"].as<std::string>();
+    if (op_name == "Resize") {
+      target_size = op["target_size"].as<std::vector<int>>();
+    }
+  }
+
+  std::vector<float> vec_k_data = cfg["k_data"].as<std::vector<float>>();
+  if (vec_k_data.size() != 9) {
+    FDERROR
+        << "The K data load from the yaml file: " << config_file
+        << " is unexpected, the expected size is 9, but the loaded size is: "
+        << vec_k_data.size() << " ,maybe you should check this file."
+        << std::endl;
+    return im;
+  }
+  matrix k_data(3, std::vector<float>());
+  for (auto j = 0; j < 3; j++) {
+    k_data[j].insert(k_data[j].begin(), vec_k_data.begin() + j * 3,
+                     vec_k_data.begin() + j * 3 + 3);
+  }
+
   std::vector<double> rvec = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
   std::vector<double> tvec = {0, 0, 0};
 
@@ -60,9 +95,8 @@ cv::Mat VisDetection3D(const cv::Mat& im, const Detection3DResult& result,
   std::vector<int> color_map = GenerateColorMap(max_label_id);
   int h = im.rows;
   int w = im.cols;
-  cv::Mat vis_im;
-  cv::resize(im, vis_im, cv::Size(1280, 384), 0, 0, 0);
-  // auto vis_im = im.clone();
+  cv::Mat vis_im = im.clone();
+  cv::resize(im, vis_im, cv::Size(target_size[1], target_size[0]), 0, 0, 0);
   for (size_t i = 0; i < result.scores.size(); ++i) {
     if (result.scores[i] < 0.5) {
       continue;
@@ -78,43 +112,33 @@ cv::Mat VisDetection3D(const cv::Mat& im, const Detection3DResult& result,
     std::vector<float> y_corners = {0, 0, h, h, 0, 0, h, h};
     std::vector<float> z_corners = {0, 0, 0, w, w, w, w, 0};
 
-    // x_corners += -np.float32(l) / 2
-    // y_corners += -np.float32(h)
-    // z_corners += -np.float32(w) / 2
     for (auto j = 0; j < x_corners.size(); j++) {
       x_corners[j] = x_corners[j] - l / 2;
       y_corners[j] = y_corners[j] - h;
       z_corners[j] = z_corners[j] - w / 2;
     }
 
-    // corners_3d = np.array([x_corners, y_corners, z_corners])
     matrix corners_3d = {x_corners, y_corners, z_corners};
 
-    // rot_mat = np.array([[np.cos(ry), 0, np.sin(ry)], [0, 1, 0], [-np.sin(ry),
-    // 0, np.cos(ry)]])
     float ry = result.yaw_angle[i];
     matrix rot_mat = {
         {cosf(ry), 0, sinf(ry)}, {0, 1, 0}, {sinf(ry), 0, cosf(ry)}};
 
-    // corners_3d = np.matmul(rot_mat, corners_3d)
     matrix rot_corners_3d = multiple(rot_mat, corners_3d);
 
-    // corners_3d += np.array([x, y, z]).reshape([3, 1])
     for (auto j = 0; j < rot_corners_3d[0].size(); j++) {
       rot_corners_3d[0][j] += x;
       rot_corners_3d[1][j] += y;
       rot_corners_3d[2][j] += z;
     }
-    // corners_2d = np.matmul(K, corners_3d)
+
     auto corners_2d = multiple(k_data, rot_corners_3d);
 
-    // corners_2d = corners_2d[:2] / corners_2d[2]
     for (auto j = 0; j < corners_2d[0].size(); j++) {
       corners_2d[0][j] /= corners_2d[2][j];
       corners_2d[1][j] /= corners_2d[2][j];
     }
-    // box2d =
-    // np.array([min(corners_2d[0]),min(corners_2d[1]),max(corners_2d[0]),max(corners_2d[1])])
+
     std::vector<float> box2d = {
         *std::min_element(corners_2d[0].begin(), corners_2d[0].end()),
         *std::min_element(corners_2d[1].begin(), corners_2d[1].end()),
@@ -124,7 +148,7 @@ cv::Mat VisDetection3D(const cv::Mat& im, const Detection3DResult& result,
     if (box2d[0] == 0 && box2d[1] == 0 && box2d[2] == 0 && box2d[3] == 0) {
       continue;
     }
-    // cv2.projectPoints(box3d.T, rvec, tvec, K, 0)
+
     std::vector<cv::Point3f> points3d;
     for (auto j = 0; j < rot_corners_3d[0].size(); j++) {
       points3d.push_back(cv::Point3f(rot_corners_3d[0][j], rot_corners_3d[1][j],

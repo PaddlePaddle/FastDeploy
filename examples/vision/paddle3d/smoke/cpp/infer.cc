@@ -37,10 +37,9 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file,
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  std::cout << "predict finished." << std::endl;
   std::cout << res.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::VisDetection3D(im, res);
+  auto vis_im = fastdeploy::vision::VisDetection3D(im, res, config_file);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -52,15 +51,18 @@ int main(int argc, char* argv[]) {
                  "run_option, "
                  "e.g ./infer_demo ./smoke ./00000.png 0"
               << std::endl;
-    std::cout
-        << "The data type of run_option is int, 0: run on gpu with paddle "
-           "backend;"
-        << std::endl;
+    std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
+                 "with gpu;"
+              << std::endl;
     return -1;
   }
 
   fastdeploy::RuntimeOption option;
-  option.UseCpu();
+  if (std::atoi(argv[3]) == 0) {
+    option.UseCpu();
+  } else if (std::atoi(argv[3]) == 1) {
+    option.UseGpu();
+  }
   option.UsePaddleBackend();
 
   std::string model_dir = argv[1];

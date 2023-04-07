@@ -35,14 +35,14 @@ void BindVisualize(pybind11::module& m) {
         })
       .def("vis_detection3d",
            [](pybind11::array& im_data, vision::Detection3DResult& result,
-              float score_threshold, int line_size, float font_size) {
+              const std::string& config_file, float score_threshold,
+              int line_size, float font_size) {
              auto im = PyArrayToCvMat(im_data);
-             auto vis_im = vision::VisDetection3D(im, result, score_threshold,
-                                                  line_size, font_size);
+             auto vis_im =
+                 vision::VisDetection3D(im, result, config_file,
+                                        score_threshold, line_size, font_size);
              FDTensor out;
-             / home / ssd8 / yeliang / FastDeploy / fastdeploy / vision /
-                 visualize /
-                 visualize_pybind.cc vision::Mat(vis_im).ShareWithTensor(&out);
+             vision::Mat(vis_im).ShareWithTensor(&out);
              return TensorToPyArray(out);
            })
       .def("vis_face_detection",

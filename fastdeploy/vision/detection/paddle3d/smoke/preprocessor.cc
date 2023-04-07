@@ -135,12 +135,6 @@ bool SmokePreprocessor::Apply(FDMatBatch* image_batch,
 
   auto* ratio_data_ptr = reinterpret_cast<float*>((*outputs)[0].MutableData());
 
-  // std::vector<float> input_k_data = {
-  //     721.53771973, 0., 609.55932617, 0., 721.53771973, 172.85400391, 0, 0,
-  //     1};
-
-  // std::vector<float> input_ratio_data(2, 4);
-
   for (size_t i = 0; i < image_batch->mats->size(); ++i) {
     FDMat* mat = &(image_batch->mats->at(i));
     for (size_t j = 0; j < processors_.size(); ++j) {

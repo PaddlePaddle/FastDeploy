@@ -34,6 +34,7 @@ class FASTDEPLOY_DECL Visualize {
                               float font_size = 0.5f);
   static cv::Mat VisDetection3D(const cv::Mat& im,
                      const Detection3DResult& result,
+                     const std::string & config_file,
                      float score_threshold = 0.0,
                      int line_size = 1,
                      float font_size = 0.5f);
@@ -99,6 +100,7 @@ FASTDEPLOY_DECL cv::Mat VisDetection(const cv::Mat& im,
  */
 FASTDEPLOY_DECL cv::Mat VisDetection3D(const cv::Mat& im,
                      const Detection3DResult& result,
+                     const std::string & config_file,
                      float score_threshold = 0.0,
                      int line_size = 1 ,
                      float font_size = 0.5f);
