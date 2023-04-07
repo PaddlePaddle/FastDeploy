@@ -25,7 +25,7 @@ python infer.py --model smoke --image smoke_test.png --device gpu
 
 The visual result after running is shown in the figure below
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/30516196/230387825-53ac0a09-4137-4e49-9564-197cbc30ff08.png">
 
 ## Smoke Python interface
 

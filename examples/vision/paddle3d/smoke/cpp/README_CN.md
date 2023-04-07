@@ -32,7 +32,7 @@ wget https://bj.bcebos.com/fastdeploy/models/smoke_test.png
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/30516196/230387825-53ac0a09-4137-4e49-9564-197cbc30ff08.png">
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
 - [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
