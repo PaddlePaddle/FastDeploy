@@ -16,28 +16,23 @@
 * 在`Java`端调用动态链接库。
 
 ## C++端生成动态链接库
-首先需要在`cpp/CMakeLists.txt`文件中指定下载好的`FastDeploy`预编译库位置，当然也可以是自己编译的`FastDeploy`库位置。
-
-具体是将`cpp/CMakeLists.txt`文件第15行 `set(FastDeploy_DIR "/home/hjyp/data/fastdeploy-linux-x64-1.0.4/")`中的`FastDeploy_DIR`后面的路径替换为自己下载的预编译库路径。
-
-然后，将`jdk`目录下的`jni.h`和`jni_md.h`拷贝到当前`cpp`目录下。
+首先，切换路径到`cpp`目录，将`jdk`目录下的`jni.h`和`jni_md.h`拷贝到当前`cpp`目录下。
 ```shell
 cp /PathJdk/jdk-17.0.6/include/jni.h ./
 cp /Pathjdk/jdk-17.0.6/include/linux/jni_md.h ./
 ```
 
 接着，在`cpp`目录下执行以下命令，进行编译，生成动态链接库。
+> 注意：编译时需要通过`FASTDEPLOY_INSTALL_DIR`选项指明`FastDeploy`预编译库位置, 当然也可以是自己编译的`FastDeploy`库位置。
 ```shell
 mkdir build && cd build
-cmake ..
+cmake .. -FASTDEPLOY_INSTALL_DIR /fast-deploy-path
 make -j
 ```
 编译成功后，动态链接库会存放在`cpp/build`目录下，`Linux`下以`.so`结尾，`Windows`下以`.dll`结尾。
 
 ## 使用JAVA调用动态链接库
-切换路径到`java`目录下，将`InferDemo.java`中的`JNI_LIB_NAME`变量修改为刚刚生成的动态链接库的绝对路径，例如`/home/hjyp/code/DeepLearning/FastDeploy/examples/application/java/yolov8/cpp/build/libinferDemo.so`。
-
-将`FastDeploy`的库路径添加到环境变量，注意替换为自己的`FastDeploy`库所在路径。
+切换路径到`java`目录下，将`FastDeploy`的库路径添加到环境变量，注意替换为自己的`FastDeploy`库所在路径。
 ```bash
 source /Path/to/fastdeploy-linux-x64-0.0.0/fastdeploy_init.sh
 ```

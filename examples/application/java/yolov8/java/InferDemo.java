@@ -2,10 +2,10 @@ public class InferDemo {
 
     private native void infer(String modelPath, String imagePath);
 
-    private final static String JNI_LIB_NAME = "/home/hjyp/code/DeepLearning/FastDeploy/examples/application/java/yolov8/cpp/build/libinferDemo.so";
+    private final static String JNI_LIB_NAME = "../cpp/build/libinferDemo.so";
 
     static {
-        System.load(JNI_LIB_NAME);
+        System.load(InferDemo.class.getResource("/").getPath() + JNI_LIB_NAME);
     }
 
     public static void main(String[] args) {
@@ -18,7 +18,6 @@ public class InferDemo {
 
         InferDemo inferDemo = new InferDemo();
 
-        // 执行推理逻辑
         inferDemo.infer(modelPath, imagePath);
     }
 }

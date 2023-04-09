@@ -1,4 +1,4 @@
-#include "InferDemo.h"
+#include "infer_demo.h"
 
 #include "fastdeploy/vision.h"
 
@@ -35,23 +35,25 @@ JNIEXPORT void JNICALL Java_InferDemo_infer(JNIEnv *env, jobject thiz,
   std::string params_file = model_path + "model.pdiparams";
   std::string infer_cfg_file = model_path + "infer_cfg.yml";
 
-  // 模型推理的配置信息
+  // Configuration information for model inference
   fastdeploy::RuntimeOption option;
   auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file,
                                                       infer_cfg_file, option);
 
-  assert(model.Initialized());  // 判断模型是否初始化成功
+  assert(model.Initialized());  // Check whether the model is successfully
+                                // initialized
 
   std::string image_path = ConvertTo(env, imagePath);
   cv::Mat im = cv::imread(image_path);
   fastdeploy::vision::DetectionResult result;
 
-  assert(model.Predict(&im, &result));  // 判断是否预测成功
+  assert(model.Predict(&im,
+                       &result));  // Check whether the prediction is successful
 
   std::cout << result.Str() << std::endl;
 
   cv::Mat vis_im = fastdeploy::vision::Visualize::VisDetection(im, result, 0.5);
-  // 可视化结果保存到本地
+  // sava the visual results
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result save in vis_result.jpg" << std::endl;
 }

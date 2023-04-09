@@ -15,28 +15,23 @@ Using `Java` to call `C++` API can be divided into two steps:
 * Call the dynamic link library in `Java` side.
 
 ## Generates dynamic link library
-You first need to specify the location of the downloaded FastDeploy precompiled library in the `cpp/CMakeLists.txt` file, or the location of the FastDeploy library you compiled.
-
-Specifically, replace your path of FastDeploy library in `line 15` of the `cpp/CMakeLists.txt file`, for example `set(FastDeploy_DIR "/home/hjyp/data/fastdeploy-linux-x64-1.0.4/")`.
-
-Then, copy `jni.h` and `jni_md.h` which in `jdk` directory to current directory `cpp`.
+First, switch the path to `app` directory and copy `jni.h` and `jni_md.h` which in `jdk` directory to current directory `cpp`.
 ```shell
 cp /PathJdk/jdk-17.0.6/include/jni.h ./
 cp /Pathjdk/jdk-17.0.6/include/linux/jni_md.h ./
 ```
 
 Then, execute the following command in the `cpp` directory to compile and generate the dynamic link library.
+> Note: you will need to specify the location of the FASTDEPLOY_INSTALL_DIR pre-compile library at compile time, but also the location of your own compiled FastDeploy library.
 ```shell
 mkdir build && cd build
-cmake ..
+cmake .. -FASTDEPLOY_INSTALL_DIR /fast-deploy-path
 make -j
 ```
 After successful compilation, the dynamic link library will be stored in the `cpp/build` directory, ending in `.so` under `Linux` and `.dll` under `Windows`.
 
 ## Invoke dynamic link libraries using JAVA
-Switch the path to the `java` directory and change the `JNI_LIB_NAME` variable in `InferDemo.java` to the absolute path of the dynamic link library just generated, for example `/home/hjyp/code/DeepLearning/FastDeploy/examples/application/java/yolov5/cpp/build/libinferDemo.so`。
-
-Use the following command to add Fastdeploy library path to the environment variable. Note the path of the `FastDeploy` library replaced with your own.
+Switch the path to the `java` directory and use the following command to add Fastdeploy library path to the environment variable. Note the path of the `FastDeploy` library replaced with your own.
 
 ```bash
 source /Path/to/fastdeploy-linux-x64-1.0.4/fastdeploy_init.sh
