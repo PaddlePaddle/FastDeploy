@@ -38,3 +38,10 @@ FastDeploy
 
     runtime.md
     runtime_option.md
+
+..  toctree::
+    :caption: Vision Processor (图像预处理库)
+    :maxdepth: 2
+    :titlesonly:
+
+    vision_processor.md

@@ -54,6 +54,10 @@ struct PaddleBackendOption {
   bool enable_mkldnn = true;
   /// Use Paddle Inference + TensorRT to inference model on GPU
   bool enable_trt = false;
+  /// Whether enable memory optimize, default true
+  bool enable_memory_optimize = true;
+  /// Whether enable ir debug, default false
+  bool switch_ir_debug = false;
 
   /*
    * @brief IPU option, this will configure the IPU hardware, if inference model in IPU

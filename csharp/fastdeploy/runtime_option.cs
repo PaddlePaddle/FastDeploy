@@ -18,6 +18,8 @@ using System.Runtime.InteropServices;
 
 namespace fastdeploy {
 
+/*! @brief Option object used when create a new Runtime object
+ */
 public class RuntimeOption {
 
   public RuntimeOption() {
@@ -28,26 +30,41 @@ public class RuntimeOption {
     FD_C_DestroyRuntimeOptionWrapper(fd_runtime_option_wrapper);
   }
 
+  /** \brief Set path of model file and parameter file
+   *
+   * \param[in] model_path Path of model file, e.g ResNet50/model.pdmodel for Paddle format model / ResNet50/model.onnx for ONNX format model
+   * \param[in] params_path Path of parameter file, this only used when the model format is Paddle, e.g Resnet50/model.pdiparams
+   * \param[in] format Format of the loaded model
+   */
   public void SetModelPath(string model_path, string params_path = "",
                            ModelFormat format = ModelFormat.PADDLE) {
     FD_C_RuntimeOptionWrapperSetModelPath(fd_runtime_option_wrapper, model_path,
                                           params_path, format);
   }
 
+  /** \brief Specify the memory buffer of model and parameter. Used when model and params are loaded directly from memory
+   *
+   * \param[in] model_buffer The string of model memory buffer
+   * \param[in] params_buffer The string of parameters memory buffer
+   * \param[in] format Format of the loaded model
+   */
   public void SetModelBuffer(string model_buffer, string params_buffer = "",
                              ModelFormat format = ModelFormat.PADDLE) {
     FD_C_RuntimeOptionWrapperSetModelBuffer(
         fd_runtime_option_wrapper, model_buffer, params_buffer, format);
   }
 
+  /// Use cpu to inference, the runtime will inference on CPU by default
   public void UseCpu() {
     FD_C_RuntimeOptionWrapperUseCpu(fd_runtime_option_wrapper);
   }
 
+  /// Use Nvidia GPU to inference
   public void UseGpu(int gpu_id = 0) {
     FD_C_RuntimeOptionWrapperUseGpu(fd_runtime_option_wrapper, gpu_id);
   }
 
+  /// Use RKNPU2 e.g RK3588/RK356X to inference
   public void
   UseRKNPU2(rknpu2_CpuName rknpu2_name = rknpu2_CpuName.RK3588,
             rknpu2_CoreMask rknpu2_core = rknpu2_CoreMask.RKNN_NPU_CORE_0) {
@@ -55,14 +72,38 @@ public class RuntimeOption {
                                        rknpu2_core);
   }
 
+  /// Use TimVX e.g RV1126/A311D to inference
   public void UseTimVX() {
     FD_C_RuntimeOptionWrapperUseTimVX(fd_runtime_option_wrapper);
   }
 
+  /// Use Huawei Ascend to inference
   public void UseAscend() {
     FD_C_RuntimeOptionWrapperUseAscend(fd_runtime_option_wrapper);
   }
 
+  /// \brief Turn on KunlunXin XPU.
+  ///
+  /// \param kunlunxin_id the KunlunXin XPU card to use (default is 0).
+  /// \param l3_workspace_size The size of the video memory allocated by the l3
+  ///         cache, the maximum is 16M.
+  /// \param locked Whether the allocated L3 cache can be locked. If false,
+  ///       it means that the L3 cache is not locked, and the allocated L3
+  ///       cache can be shared by multiple models, and multiple models
+  ///       sharing the L3 cache will be executed sequentially on the card.
+  /// \param autotune Whether to autotune the conv operator in the model. If
+  ///       true, when the conv operator of a certain dimension is executed
+  ///       for the first time, it will automatically search for a better
+  ///       algorithm to improve the performance of subsequent conv operators
+  ///       of the same dimension.
+  /// \param autotune_file Specify the path of the autotune file. If
+  ///       autotune_file is specified, the algorithm specified in the
+  ///       file will be used and autotune will not be performed again.
+  /// \param precision Calculation accuracy of multi_encoder
+  /// \param adaptive_seqlen Is the input of multi_encoder variable length
+  /// \param enable_multi_stream Whether to enable the multi stream of
+  ///        KunlunXin XPU.
+  ///
   public void
   UseKunlunXin(int kunlunxin_id = 0, int l3_workspace_size = 0xfffc00,
                bool locked = false, bool autotune = true,
@@ -74,6 +115,7 @@ public class RuntimeOption {
         enable_multi_stream);
   }
 
+  /// Use Sophgo to inference
   public void UseSophgo() {
     FD_C_RuntimeOptionWrapperUseSophgo(fd_runtime_option_wrapper);
   }
@@ -83,6 +125,9 @@ public class RuntimeOption {
                                                external_stream);
   }
 
+  /*
+   * @brief Set number of cpu threads while inference on CPU, by default it will decided by the different backends
+   */
   public void SetCpuThreadNum(int thread_num) {
     FD_C_RuntimeOptionWrapperSetCpuThreadNum(fd_runtime_option_wrapper,
                                              thread_num);
@@ -97,38 +142,47 @@ public class RuntimeOption {
     FD_C_RuntimeOptionWrapperUsePaddleBackend(fd_runtime_option_wrapper);
   }
 
+  /// Set Paddle Inference as inference backend, support CPU/GPU
   public void UsePaddleInferBackend() {
     FD_C_RuntimeOptionWrapperUsePaddleInferBackend(fd_runtime_option_wrapper);
   }
 
+  /// Set ONNX Runtime as inference backend, support CPU/GPU
   public void UseOrtBackend() {
     FD_C_RuntimeOptionWrapperUseOrtBackend(fd_runtime_option_wrapper);
   }
 
+  /// Set SOPHGO Runtime as inference backend, support SOPHGO
   public void UseSophgoBackend() {
     FD_C_RuntimeOptionWrapperUseSophgoBackend(fd_runtime_option_wrapper);
   }
 
+  /// Set TensorRT as inference backend, only support GPU
   public void UseTrtBackend() {
     FD_C_RuntimeOptionWrapperUseTrtBackend(fd_runtime_option_wrapper);
   }
 
+  /// Set Poros backend as inference backend, support CPU/GPU
   public void UsePorosBackend() {
     FD_C_RuntimeOptionWrapperUsePorosBackend(fd_runtime_option_wrapper);
   }
 
+  /// Set OpenVINO as inference backend, only support CPU
   public void UseOpenVINOBackend() {
     FD_C_RuntimeOptionWrapperUseOpenVINOBackend(fd_runtime_option_wrapper);
   }
 
+  /// Set Paddle Lite as inference backend, only support arm cpu
   public void UseLiteBackend() {
     FD_C_RuntimeOptionWrapperUseLiteBackend(fd_runtime_option_wrapper);
   }
 
+  /// Set Paddle Lite as inference backend, only support arm cpu
   public void UsePaddleLiteBackend() {
     FD_C_RuntimeOptionWrapperUsePaddleLiteBackend(fd_runtime_option_wrapper);
   }
 
+  
   public void SetPaddleMKLDNN(bool pd_mkldnn = true) {
     FD_C_RuntimeOptionWrapperSetPaddleMKLDNN(fd_runtime_option_wrapper,
                                              pd_mkldnn);

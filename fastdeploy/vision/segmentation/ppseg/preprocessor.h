@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
+#include "fastdeploy/vision/common/processors/manager.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
@@ -20,7 +21,7 @@ namespace vision {
 namespace segmentation {
 /*! @brief Preprocessor object for PaddleSeg serials model.
   */
-class FASTDEPLOY_DECL PaddleSegPreprocessor {
+class FASTDEPLOY_DECL PaddleSegPreprocessor : public ProcessorManager {
  public:
   /** \brief Create a preprocessor instance for PaddleSeg serials model
    *
@@ -28,17 +29,16 @@ class FASTDEPLOY_DECL PaddleSegPreprocessor {
    */
   explicit PaddleSegPreprocessor(const std::string& config_file);
 
-  /** \brief Process the input image and prepare input tensors for runtime
+  /** \brief Implement the virtual function of ProcessorManager, Apply() is the
+   *  body of Run(). Apply() contains the main logic of preprocessing, Run() is
+   *  called by users to execute preprocessing
    *
-   * \param[in] images The input image data list, all the elements are returned by cv::imread()
+   * \param[in] image_batch The input image batch
    * \param[in] outputs The output tensors which will feed in runtime
-   * \param[in] imgs_info The original input images shape info map, key is "shape_info", value is vector<array<int, 2>> a{{height, width}} 
    * \return true if the preprocess successed, otherwise false
    */
-  virtual bool Run(
-    std::vector<FDMat>* images,
-    std::vector<FDTensor>* outputs,
-    std::map<std::string, std::vector<std::array<int, 2>>>* imgs_info);
+  virtual bool Apply(FDMatBatch* image_batch,
+                     std::vector<FDTensor>* outputs);
 
   /// Get is_vertical_screen property of PP-HumanSeg model, default is false
   bool GetIsVerticalScreen() const {
@@ -54,6 +54,15 @@ class FASTDEPLOY_DECL PaddleSegPreprocessor {
   void DisableNormalize();
   /// This function will disable hwc2chw in preprocessing step.
   void DisablePermute();
+  /// This function will set imgs_info_ in PaddleSegPreprocessor
+  void SetImgsInfo(
+          std::map<std::string, std::vector<std::array<int, 2>>>* imgs_info) {
+    imgs_info_ = imgs_info;
+  }
+  /// This function will get imgs_info_ in PaddleSegPreprocessor
+  std::map<std::string, std::vector<std::array<int, 2>>>* GetImgsInfo() {
+    return imgs_info_;
+  }
 
  private:
   virtual bool BuildPreprocessPipelineFromConfig();
@@ -72,6 +81,10 @@ class FASTDEPLOY_DECL PaddleSegPreprocessor {
   bool is_contain_resize_op_ = false;
 
   bool initialized_ = false;
+
+  std::map<std::string, std::vector<std::array<int, 2>>>* imgs_info_;
+  std::shared_ptr<Resize> pre_resize_op_ =
+        std::make_shared<Resize>(0, 0);
 };
 
 }  // namespace segmentation

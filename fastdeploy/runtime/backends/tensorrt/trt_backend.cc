@@ -559,8 +559,9 @@ bool TrtBackend::BuildTrtEngine() {
     context_.reset();
     engine_.reset();
   }
-
-  builder_->setMaxBatchSize(option_.max_batch_size);
+  if (option_.max_batch_size >= 1) {
+    builder_->setMaxBatchSize(option_.max_batch_size);
+  }
   config->setMaxWorkspaceSize(option_.max_workspace_size);
   auto profile = builder_->createOptimizationProfile();
   for (const auto& item : shape_range_info_) {

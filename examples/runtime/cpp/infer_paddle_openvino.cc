@@ -13,48 +13,58 @@
 // limitations under the License.
 
 #include "fastdeploy/runtime.h"
+#include <cassert>
 
 namespace fd = fastdeploy;
 
 int main(int argc, char* argv[]) {
-  std::string model_file = "mobilenetv2/inference.pdmodel";
-  std::string params_file = "mobilenetv2/inference.pdiparams";
+  // Download from https://bj.bcebos.com/paddle2onnx/model_zoo/pplcnet.tar.gz
+  std::string model_file = "pplcnet/inference.pdmodel";
+  std::string params_file = "pplcnet/inference.pdiparams";
 
-  // setup option
+  // configure runtime
+  // How to configure by RuntimeOption, refer its api doc for more information
+  // https://baidu-paddle.github.io/fastdeploy-api/cpp/html/structfastdeploy_1_1RuntimeOption.html
   fd::RuntimeOption runtime_option;
-  runtime_option.SetModelPath(model_file, params_file, fd::ModelFormat::PADDLE);
+  runtime_option.SetModelPath(model_file, params_file);
   runtime_option.UseOpenVINOBackend();
-  runtime_option.SetCpuThreadNum(12);
-  // init runtime
-  std::unique_ptr<fd::Runtime> runtime =
-      std::unique_ptr<fd::Runtime>(new fd::Runtime());
-  if (!runtime->Init(runtime_option)) {
-    std::cerr << "--- Init FastDeploy Runitme Failed! "
-              << "\n--- Model:  " << model_file << std::endl;
-    return -1;
-  } else {
-    std::cout << "--- Init FastDeploy Runitme Done! "
-              << "\n--- Model:  " << model_file << std::endl;
-  }
-  // init input tensor shape
-  fd::TensorInfo info = runtime->GetInputInfo(0);
-  info.shape = {1, 3, 224, 224};
-
-  std::vector<fd::FDTensor> input_tensors(1);
-  std::vector<fd::FDTensor> output_tensors(1);
-
-  std::vector<float> inputs_data;
-  inputs_data.resize(1 * 3 * 224 * 224);
-  for (size_t i = 0; i < inputs_data.size(); ++i) {
-    inputs_data[i] = std::rand() % 1000 / 1000.0f;
-  }
-  input_tensors[0].SetExternalData({1, 3, 224, 224}, fd::FDDataType::FP32, inputs_data.data());
   
-  //get input name
-  input_tensors[0].name = info.name;
+  // Use CPU to inference
+  // If need to configure OpenVINO backend for more option, we can configure runtime_option.openvino_option
+  // refer https://baidu-paddle.github.io/fastdeploy-api/cpp/html/structfastdeploy_1_1OpenVINOBackendOption.html
+  runtime_option.UseCpu();
+  runtime_option.SetCpuThreadNum(12);
 
-  runtime->Infer(input_tensors, &output_tensors);
+  fd::Runtime runtime;
+  assert(runtime.Init(runtime_option));
 
-  output_tensors[0].PrintInfo();
+  // Get model's inputs information
+  // API doc refer https://baidu-paddle.github.io/fastdeploy-api/cpp/html/structfastdeploy_1_1Runtime.html
+  std::vector<fd::TensorInfo> inputs_info = runtime.GetInputInfos();
+
+  // Create dummy data fill with 0.5
+  std::vector<float> dummy_data(1 * 3 * 224 * 224, 0.5);
+
+  // Create inputs/outputs tensors
+  std::vector<fd::FDTensor> inputs(inputs_info.size());
+  std::vector<fd::FDTensor> outputs;
+
+  // Initialize input tensors
+  // API doc refer https://baidu-paddle.github.io/fastdeploy-api/cpp/html/structfastdeploy_1_1FDTensor.html
+  inputs[0].SetData({1, 3, 224, 224}, fd::FDDataType::FP32, dummy_data.data());
+  inputs[0].name = inputs_info[0].name;
+
+  // Inference
+  assert(runtime.Infer(inputs, &outputs));
+ 
+  // Print debug information of outputs 
+  outputs[0].PrintInfo();
+
+  // Get data pointer and print it's elements
+  const float* data_ptr = reinterpret_cast<const float*>(outputs[0].GetData());
+  for (size_t i = 0; i < 10 && i < outputs[0].Numel(); ++i) {
+    std::cout << data_ptr[i] << " ";
+  }
+  std::cout << std::endl;
   return 0;
 }

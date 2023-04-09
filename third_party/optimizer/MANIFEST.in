@@ -1,0 +1,7 @@
+recursive-include onnxoptimizer *.h *.c *.cc *.proto
+recursive-include examples *
+recursive-include cmake *
+recursive-include tools *
+recursive-include third_party *
+include VERSION_NUMBER
+include CMakeLists.txt

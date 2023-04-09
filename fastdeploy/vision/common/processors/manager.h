@@ -22,6 +22,8 @@
 namespace fastdeploy {
 namespace vision {
 
+/*! @brief ProcessorManager for Preprocess
+ */
 class FASTDEPLOY_DECL ProcessorManager {
  public:
   ~ProcessorManager();
@@ -77,6 +79,10 @@ class FASTDEPLOY_DECL ProcessorManager {
    */
   virtual bool Apply(FDMatBatch* image_batch,
                      std::vector<FDTensor>* outputs) = 0;
+
+  void PreApply(FDMatBatch* image_batch);
+
+  void PostApply();
 
  protected:
   ProcLib proc_lib_ = ProcLib::DEFAULT;

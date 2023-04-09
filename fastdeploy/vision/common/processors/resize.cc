@@ -146,8 +146,8 @@ bool Resize::ImplByCvCuda(FDMat* mat) {
   auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
 
   // CV-CUDA Interp value is compatible with OpenCV
-  cvcuda_resize_op_(mat->Stream(), src_tensor, dst_tensor,
-                    NVCVInterpolationType(interp_));
+  cvcuda_resize_op_(mat->Stream(), *src_tensor, *dst_tensor,
+                    CreateCvCudaInterp(interp_));
 
   mat->SetTensor(mat->output_cache);
   mat->SetWidth(width_);

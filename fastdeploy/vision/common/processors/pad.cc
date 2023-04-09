@@ -126,20 +126,17 @@ bool Pad::ImplByCvCuda(FDMat* mat) {
   auto src_tensor = CreateCvCudaTensorWrapData(*src);
 
   int height = mat->Height() + top_ + bottom_;
-  int width = mat->Height() + left_ + right_;
+  int width = mat->Width() + left_ + right_;
 
   // Prepare output tensor
   mat->output_cache->Resize({height, width, mat->Channels()}, mat->Type(),
                             "output_cache", Device::GPU);
   auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
 
-  cvcuda_pad_op_(mat->Stream(), src_tensor, dst_tensor, top_, left_,
+  cvcuda_pad_op_(mat->Stream(), *src_tensor, *dst_tensor, top_, left_,
                  NVCV_BORDER_CONSTANT, value);
 
   mat->SetTensor(mat->output_cache);
-  mat->SetWidth(width);
-  mat->SetHeight(height);
-  mat->device = Device::GPU;
   mat->mat_type = ProcLib::CVCUDA;
   return true;
 }
