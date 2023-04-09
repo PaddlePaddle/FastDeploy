@@ -53,7 +53,7 @@ PP-TinyPose模型加载和初始化，其中model_file, params_file以及config_
 
 > **返回**
 >
-> > 返回`fastdeploy.vision.KeyPointDetectionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > 返回`fastdeploy.vision.KeyPointDetectionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../../docs/api/vision_results/)
 
 ### 类成员属性
 #### 后处理参数
@@ -66,5 +66,5 @@ PP-TinyPose模型加载和初始化，其中model_file, params_file以及config_
 
 - [PP-TinyPose 模型介绍](..)
 - [PP-TinyPose C++部署](../cpp)
-- [模型预测结果说明](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [模型预测结果说明](../../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../../../docs/cn/faq/how_to_change_backend.md)

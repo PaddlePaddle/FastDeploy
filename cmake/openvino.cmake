@@ -24,6 +24,12 @@ if (OPENVINO_DIRECTORY)
   # For OPENVINO code to include internal headers.
   include_directories(${OPENVINO_INSTALL_INC_DIR})
   get_openvino_libs(${OPENVINO_DIRECTORY}/runtime)
+  include_directories(${OPENVINO_DIRECTORY}/runtime/include ${OPENVINO_DIRECTORY}/runtime/include/ie)
+  set(OPENVINO_LIB_DIR
+    "${OPENVINO_DIRECTORY}/runtime/lib/intel64"
+    CACHE PATH "openvino lib directory." FORCE)
+  set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" "${OPENVINO_LIB_DIR}")
+
 else()
   set(OPENVINO_PROJECT "extern_openvino")
 

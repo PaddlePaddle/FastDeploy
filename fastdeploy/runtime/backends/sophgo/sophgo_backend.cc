@@ -225,6 +225,13 @@ bool SophgoBackend::Infer(std::vector<FDTensor>& inputs,
     free(temp_out);
   }
 
+  for (int i = 0; i < input_size; i++) {
+    bm_free_device(handle_, input_tensors[i].device_mem);
+  }
+  for (int i = 0; i < output_size; i++) {
+    bm_free_device(handle_, output_tensors[i].device_mem);
+  }
+
   return true;
 }
 
