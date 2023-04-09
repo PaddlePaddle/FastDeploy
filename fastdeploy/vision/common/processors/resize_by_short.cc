@@ -95,9 +95,8 @@ bool ResizeByShort::ImplByCvCuda(FDMat* mat) {
                             "output_cache", Device::GPU);
   auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
 
-  // CV-CUDA Interp value is compatible with OpenCV
-  cvcuda_resize_op_(mat->Stream(), src_tensor, dst_tensor,
-                    NVCVInterpolationType(interp_));
+  cvcuda_resize_op_(mat->Stream(), *src_tensor, *dst_tensor,
+                    CreateCvCudaInterp(interp_));
 
   mat->SetTensor(mat->output_cache);
   mat->SetWidth(width);
@@ -138,7 +137,7 @@ bool ResizeByShort::ImplByCvCuda(FDMatBatch* mat_batch) {
 
   // CV-CUDA Interp value is compatible with OpenCV
   cvcuda_resize_op_(mat_batch->Stream(), src_batch, dst_batch,
-                    NVCVInterpolationType(interp_));
+                    CreateCvCudaInterp(interp_));
 
   for (size_t i = 0; i < mat_batch->mats->size(); ++i) {
     FDMat* mat = &(*(mat_batch->mats))[i];

@@ -23,8 +23,18 @@ namespace fastdeploy {
 namespace vision {
 namespace classification {
 
+/*! @brief PaddleClas serials model object used when to load a PaddleClas model exported by PaddleClas repository
+ */
 public class PaddleClasModel {
 
+  /** \brief Set path of model file and configuration file, and the configuration of runtime
+   *
+   * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
+   * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
+   * \param[in] model_format Model format of the loaded model, default is Paddle format
+   */
   public PaddleClasModel(string model_file, string params_file,
                          string config_file, RuntimeOption custom_option = null,
                          ModelFormat model_format = ModelFormat.PADDLE) {
@@ -40,11 +50,17 @@ public class PaddleClasModel {
     FD_C_DestroyPaddleClasModelWrapper(fd_paddleclas_model_wrapper);
   }
 
-
+  /// Get model's name
   public string ModelName() {
     return "PaddleClas/Model";
   }
 
+  /** \brief DEPRECATED Predict the classification result for an input image, remove at 1.0 version
+   *
+   * \param[in] im The input image data, comes from cv::imread()
+   *  
+   * \return ClassifyResult
+   */
   public ClassifyResult Predict(Mat img) {
     FD_ClassifyResult fd_classify_result = new FD_ClassifyResult();
     if(! FD_C_PaddleClasModelWrapperPredict(
@@ -59,6 +75,12 @@ public class PaddleClasModel {
     return classify_result;
   }
 
+  /** \brief Predict the classification results for a batch of input images
+   *
+   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * 
+   * \return List<ClassifyResult> 
+   */
   public List<ClassifyResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -86,6 +108,7 @@ public class PaddleClasModel {
     return results_out;
   }
 
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_PaddleClasModelWrapperInitialized(fd_paddleclas_model_wrapper);
   }

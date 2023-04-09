@@ -14,6 +14,8 @@
 
 #include "fastdeploy/vision/common/processors/cast.h"
 
+#include "fastdeploy/vision/common/processors/utils.h"
+
 namespace fastdeploy {
 namespace vision {
 
@@ -64,6 +66,40 @@ bool Cast::ImplByFlyCV(Mat* mat) {
     FDWARNING << "Cast not support for " << dtype_
               << " now! will skip this operation." << std::endl;
   }
+  return true;
+}
+#endif
+
+#ifdef ENABLE_CVCUDA
+bool Cast::ImplByCvCuda(FDMat* mat) {
+  FDDataType dst_dtype;
+  if (dtype_ == "float") {
+    dst_dtype = FDDataType::FP32;
+  } else if (dtype_ == "double") {
+    dst_dtype = FDDataType::FP64;
+  } else {
+    FDWARNING << "Cast not support for " << dtype_
+              << " now! will skip this operation." << std::endl;
+    return false;
+  }
+  if (mat->Type() == dst_dtype) {
+    return true;
+  }
+
+  // Prepare input tensor
+  FDTensor* src = CreateCachedGpuInputTensor(mat);
+  auto src_tensor = CreateCvCudaTensorWrapData(*src);
+
+  // Prepare output tensor
+  mat->output_cache->Resize(src->Shape(), dst_dtype, "output_cache",
+                            Device::GPU);
+  auto dst_tensor =
+      CreateCvCudaTensorWrapData(*(mat->output_cache), mat->layout);
+
+  cvcuda_convert_op_(mat->Stream(), *src_tensor, *dst_tensor, 1.0f, 0.0f);
+
+  mat->SetTensor(mat->output_cache);
+  mat->mat_type = ProcLib::CVCUDA;
   return true;
 }
 #endif

@@ -16,32 +16,26 @@ from __future__ import absolute_import
 import logging
 from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
+from ...common import ProcessorManager
 
 
 def sort_boxes(boxes):
     return C.vision.ocr.sort_boxes(boxes)
 
 
-class DBDetectorPreprocessor:
+class DBDetectorPreprocessor(ProcessorManager):
     def __init__(self):
         """
         Create a preprocessor for DBDetectorModel
         """
-        self._preprocessor = C.vision.ocr.DBDetectorPreprocessor()
-
-    def run(self, input_ims):
-        """Preprocess input images for DBDetectorModel
-
-        :param: input_ims: (list of numpy.ndarray) The input image
-        :return: pair(list of FDTensor, list of std::array<int, 4>)
-        """
-        return self._preprocessor.run(input_ims)
+        super(DBDetectorPreprocessor, self).__init__()
+        self._manager = C.vision.ocr.DBDetectorPreprocessor()
 
     @property
     def max_side_len(self):
         """Get max_side_len value.
         """
-        return self._preprocessor.max_side_len
+        return self._manager.max_side_len
 
     @max_side_len.setter
     def max_side_len(self, value):
@@ -50,12 +44,9 @@ class DBDetectorPreprocessor:
         """
         assert isinstance(
             value, int), "The value to set `max_side_len` must be type of int."
-        self._preprocessor.max_side_len = value
+        self._manager.max_side_len = value
 
-    def set_normalize(self,
-                      mean=[0.485, 0.456, 0.406],
-                      std=[0.229, 0.224, 0.225],
-                      is_scale=True):
+    def set_normalize(self, mean, std, is_scale):
         """Set preprocess normalize parameters, please call this API to
            customize the normalize parameters, otherwise it will use the default
            normalize parameters.
@@ -63,30 +54,30 @@ class DBDetectorPreprocessor:
         :param: std: (list of float) std values
         :param: is_scale: (boolean) whether to scale
         """
-        self._preprocessor.set_normalize(mean, std, is_scale)
+        self._manager.set_normalize(mean, std, is_scale)
 
     @property
     def static_shape_infer(self):
-        return self._preprocessor.static_shape_infer
+        return self._manager.static_shape_infer
 
     @static_shape_infer.setter
     def static_shape_infer(self, value):
         assert isinstance(
             value,
             bool), "The value to set `static_shape_infer` must be type of bool."
-        self._preprocessor.static_shape_infer = value
+        self._manager.static_shape_infer = value
 
     def disable_normalize(self):
         """
         This function will disable normalize in preprocessing step.
         """
-        self._preprocessor.disable_normalize()
+        self._manager.disable_normalize()
 
     def disable_permute(self):
         """
         This function will disable hwc2chw in preprocessing step.
         """
-        self._preprocessor.disable_permute()
+        self._manager.disable_permute()
 
 
 class DBDetectorPostprocessor:
@@ -327,71 +318,45 @@ class DBDetector(FastDeployModel):
         self._model.postprocessor.use_dilation = value
 
 
-class ClassifierPreprocessor:
+class ClassifierPreprocessor(ProcessorManager):
     def __init__(self):
         """Create a preprocessor for ClassifierModel
         """
-        self._preprocessor = C.vision.ocr.ClassifierPreprocessor()
+        super(ClassifierPreprocessor, self).__init__()
+        self._manager = C.vision.ocr.ClassifierPreprocessor()
 
-    def run(self, input_ims):
-        """Preprocess input images for ClassifierModel
-        :param: input_ims: (list of numpy.ndarray)The input image
-        :return: list of FDTensor
+    def set_normalize(self, mean, std, is_scale):
+        """Set preprocess normalize parameters, please call this API to
+           customize the normalize parameters, otherwise it will use the default
+           normalize parameters.
+        :param: mean: (list of float) mean values
+        :param: std: (list of float) std values
+        :param: is_scale: (boolean) whether to scale
         """
-        return self._preprocessor.run(input_ims)
-
-    @property
-    def is_scale(self):
-        return self._preprocessor.is_scale
-
-    @is_scale.setter
-    def is_scale(self, value):
-        assert isinstance(
-            value, bool), "The value to set `is_scale` must be type of bool."
-        self._preprocessor.is_scale = value
-
-    @property
-    def scale(self):
-        return self._preprocessor.scale
-
-    @scale.setter
-    def scale(self, value):
-        assert isinstance(
-            value, list), "The value to set `scale` must be type of list."
-        self._preprocessor.scale = value
-
-    @property
-    def mean(self):
-        return self._preprocessor.mean
-
-    @mean.setter
-    def mean(self, value):
-        assert isinstance(
-            value, list), "The value to set `mean` must be type of list."
-        self._preprocessor.mean = value
+        self._manager.set_normalize(mean, std, is_scale)
 
     @property
     def cls_image_shape(self):
-        return self._preprocessor.cls_image_shape
+        return self._manager.cls_image_shape
 
     @cls_image_shape.setter
     def cls_image_shape(self, value):
         assert isinstance(
             value,
             list), "The value to set `cls_image_shape` must be type of list."
-        self._preprocessor.cls_image_shape = value
+        self._manager.cls_image_shape = value
 
     def disable_normalize(self):
         """
         This function will disable normalize in preprocessing step.
         """
-        self._preprocessor.disable_normalize()
+        self._manager.disable_normalize()
 
     def disable_permute(self):
         """
         This function will disable hwc2chw in preprocessing step.
         """
-        self._preprocessor.disable_permute()
+        self._manager.disable_permute()
 
 
 class ClassifierPostprocessor:
@@ -496,37 +461,6 @@ class Classifier(FastDeployModel):
     def postprocessor(self, value):
         self._model.postprocessor = value
 
-    # Cls Preprocessor Property
-    @property
-    def is_scale(self):
-        return self._model.preprocessor.is_scale
-
-    @is_scale.setter
-    def is_scale(self, value):
-        assert isinstance(
-            value, bool), "The value to set `is_scale` must be type of bool."
-        self._model.preprocessor.is_scale = value
-
-    @property
-    def scale(self):
-        return self._model.preprocessor.scale
-
-    @scale.setter
-    def scale(self, value):
-        assert isinstance(
-            value, list), "The value to set `scale` must be type of list."
-        self._model.preprocessor.scale = value
-
-    @property
-    def mean(self):
-        return self._model.preprocessor.mean
-
-    @mean.setter
-    def mean(self, value):
-        assert isinstance(
-            value, list), "The value to set `mean` must be type of list."
-        self._model.preprocessor.mean = value
-
     @property
     def cls_image_shape(self):
         return self._model.preprocessor.cls_image_shape
@@ -551,82 +485,56 @@ class Classifier(FastDeployModel):
         self._model.postprocessor.cls_thresh = value
 
 
-class RecognizerPreprocessor:
+class RecognizerPreprocessor(ProcessorManager):
     def __init__(self):
         """Create a preprocessor for RecognizerModel
         """
-        self._preprocessor = C.vision.ocr.RecognizerPreprocessor()
-
-    def run(self, input_ims):
-        """Preprocess input images for RecognizerModel
-        :param: input_ims: (list of numpy.ndarray)The input image
-        :return: list of FDTensor
-        """
-        return self._preprocessor.run(input_ims)
+        super(RecognizerPreprocessor, self).__init__()
+        self._manager = C.vision.ocr.RecognizerPreprocessor()
 
     @property
     def static_shape_infer(self):
-        return self._preprocessor.static_shape_infer
+        return self._manager.static_shape_infer
 
     @static_shape_infer.setter
     def static_shape_infer(self, value):
         assert isinstance(
             value,
             bool), "The value to set `static_shape_infer` must be type of bool."
-        self._preprocessor.static_shape_infer = value
+        self._manager.static_shape_infer = value
 
-    @property
-    def is_scale(self):
-        return self._preprocessor.is_scale
-
-    @is_scale.setter
-    def is_scale(self, value):
-        assert isinstance(
-            value, bool), "The value to set `is_scale` must be type of bool."
-        self._preprocessor.is_scale = value
-
-    @property
-    def scale(self):
-        return self._preprocessor.scale
-
-    @scale.setter
-    def scale(self, value):
-        assert isinstance(
-            value, list), "The value to set `scale` must be type of list."
-        self._preprocessor.scale = value
-
-    @property
-    def mean(self):
-        return self._preprocessor.mean
-
-    @mean.setter
-    def mean(self, value):
-        assert isinstance(
-            value, list), "The value to set `mean` must be type of list."
-        self._preprocessor.mean = value
+    def set_normalize(self, mean, std, is_scale):
+        """Set preprocess normalize parameters, please call this API to
+           customize the normalize parameters, otherwise it will use the default
+           normalize parameters.
+        :param: mean: (list of float) mean values
+        :param: std: (list of float) std values
+        :param: is_scale: (boolean) whether to scale
+        """
+        self._manager.set_normalize(mean, std, is_scale)
 
     @property
     def rec_image_shape(self):
-        return self._preprocessor.rec_image_shape
+        return self._manager.rec_image_shape
 
     @rec_image_shape.setter
     def rec_image_shape(self, value):
         assert isinstance(
             value,
             list), "The value to set `rec_image_shape` must be type of list."
-        self._preprocessor.rec_image_shape = value
+        self._manager.rec_image_shape = value
 
     def disable_normalize(self):
         """
         This function will disable normalize in preprocessing step.
         """
-        self._preprocessor.disable_normalize()
+        self._manager.disable_normalize()
 
     def disable_permute(self):
         """
         This function will disable hwc2chw in preprocessing step.
         """
-        self._preprocessor.disable_permute()
+        self._manager.disable_permute()
 
 
 class RecognizerPostprocessor:
@@ -727,36 +635,6 @@ class Recognizer(FastDeployModel):
             value,
             bool), "The value to set `static_shape_infer` must be type of bool."
         self._model.preprocessor.static_shape_infer = value
-
-    @property
-    def is_scale(self):
-        return self._model.preprocessor.is_scale
-
-    @is_scale.setter
-    def is_scale(self, value):
-        assert isinstance(
-            value, bool), "The value to set `is_scale` must be type of bool."
-        self._model.preprocessor.is_scale = value
-
-    @property
-    def scale(self):
-        return self._model.preprocessor.scale
-
-    @scale.setter
-    def scale(self, value):
-        assert isinstance(
-            value, list), "The value to set `scale` must be type of list."
-        self._model.preprocessor.scale = value
-
-    @property
-    def mean(self):
-        return self._model.preprocessor.mean
-
-    @mean.setter
-    def mean(self, value):
-        assert isinstance(
-            value, list), "The value to set `mean` must be type of list."
-        self._model.preprocessor.mean = value
 
     @property
     def rec_image_shape(self):

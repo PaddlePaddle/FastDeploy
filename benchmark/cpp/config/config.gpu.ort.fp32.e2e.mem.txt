@@ -1,0 +1,14 @@
+device: gpu
+device_id: 0
+cpu_thread_nums: 1
+warmup: 20
+repeat: 100
+backend: ort
+profile_mode: end2end
+include_h2d_d2h: false
+use_fp16: false
+collect_memory_info: true
+sampling_interval: 1
+precision_compare: false
+xpu_l3_cache: 0
+result_path: benchmark_gpu_ort_fp32_e2e_mem.txt

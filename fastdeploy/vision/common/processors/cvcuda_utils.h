@@ -15,20 +15,25 @@
 #pragma once
 
 #include "fastdeploy/core/fd_tensor.h"
+#include "fastdeploy/vision/common/processors/mat.h"
 
 #ifdef ENABLE_CVCUDA
-#include "nvcv/Tensor.hpp"
+#include <nvcv/Tensor.hpp>
 #include <nvcv/ImageBatch.hpp>
+#include <cvcuda/Types.h>
 
 namespace fastdeploy {
 namespace vision {
 
-nvcv::ImageFormat CreateCvCudaImageFormat(FDDataType type, int channel);
-nvcv::TensorWrapData CreateCvCudaTensorWrapData(const FDTensor& tensor);
+nvcv::ImageFormat CreateCvCudaImageFormat(FDDataType type, int channel,
+                                          bool interleaved = true);
+std::shared_ptr<nvcv::TensorWrapData> CreateCvCudaTensorWrapData(const FDTensor& tensor,
+                                                Layout layout = Layout::HWC);
 void* GetCvCudaTensorDataPtr(const nvcv::TensorWrapData& tensor);
 nvcv::ImageWrapData CreateImageWrapData(const FDTensor& tensor);
 void CreateCvCudaImageBatchVarShape(std::vector<FDTensor*>& tensors,
                                     nvcv::ImageBatchVarShape& img_batch);
+NVCVInterpolationType CreateCvCudaInterp(int interp);
 
 }  // namespace vision
 }  // namespace fastdeploy

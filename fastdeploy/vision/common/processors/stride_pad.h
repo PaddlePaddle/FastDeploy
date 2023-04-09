@@ -15,10 +15,17 @@
 #pragma once
 
 #include "fastdeploy/vision/common/processors/base.h"
+#ifdef ENABLE_CVCUDA
+#include <cvcuda/OpCopyMakeBorder.hpp>
+
+#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
+#endif
 
 namespace fastdeploy {
 namespace vision {
 
+/*! @brief Processor for padding images with stride.
+ */
 class FASTDEPLOY_DECL StridePad : public Processor {
  public:
   // only support pad with left-top padding mode
@@ -30,8 +37,19 @@ class FASTDEPLOY_DECL StridePad : public Processor {
 #ifdef ENABLE_FLYCV
   bool ImplByFlyCV(Mat* mat);
 #endif
+#ifdef ENABLE_CVCUDA
+  bool ImplByCvCuda(FDMat* mat);
+#endif
   std::string Name() { return "StridePad"; }
 
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data, `result = mat * alpha + beta`
+   * \param[in] stride stride of the padding.
+   * \param[in] value value vector used by padding of the output image.
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \return true if the process successed, otherwise false
+   */
   static bool Run(Mat* mat, int stride,
                   const std::vector<float>& value = std::vector<float>(),
                   ProcLib lib = ProcLib::DEFAULT);
@@ -39,6 +57,9 @@ class FASTDEPLOY_DECL StridePad : public Processor {
  private:
   int stride_ = 32;
   std::vector<float> value_;
+#ifdef ENABLE_CVCUDA
+  cvcuda::CopyMakeBorder cvcuda_pad_op_;
+#endif
 };
 }  // namespace vision
 }  // namespace fastdeploy

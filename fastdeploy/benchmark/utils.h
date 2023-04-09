@@ -15,6 +15,7 @@
 
 #include <memory>
 #include <thread>  // NOLINT
+#include <unordered_map>
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/core/fd_tensor.h"
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
@@ -126,6 +127,11 @@ struct FASTDEPLOY_DECL OCRDetDiff: public BaseDiff {
   EvalStatis boxes;
 };
 
+struct FASTDEPLOY_DECL MattingDiff: public BaseDiff {
+  EvalStatis alpha;
+  EvalStatis foreground;
+};
+
 #endif  // ENABLE_VISION
 #endif  // ENABLE_BENCHMARK
 
@@ -138,6 +144,23 @@ struct FASTDEPLOY_DECL ResultManager {
   /// Calculate diff value between two FDTensor results.
   static TensorDiff CalculateDiffStatis(const FDTensor& lhs,
                                         const FDTensor& rhs);
+  /// Save Benchmark data
+  static void SaveBenchmarkResult(const std::string& res,
+                                  const std::string& path);
+  /// Load Benchmark config
+  static bool LoadBenchmarkConfig(const std::string& path,
+             std::unordered_map<std::string, std::string>* config_info);
+  /// Get Input Shapes
+  static std::vector<std::vector<int32_t>> GetInputShapes(
+                                      const std::string& raw_shapes);
+  /// Get Input Names
+  static std::vector<std::string> GetInputNames(
+                                      const std::string& raw_names);
+  /// Get Input Dtypes
+  static std::vector<FDDataType> GetInputDtypes(const std::string& raw_dtypes);
+  /// Split string
+  static std::vector<std::string> SplitStr(const std::string& raw_str,
+                                           char delim = ':');
 #if defined(ENABLE_VISION)
   /// Save & Load functions for basic results.
   static bool SaveDetectionResult(const vision::DetectionResult& res,
@@ -156,6 +179,10 @@ struct FASTDEPLOY_DECL ResultManager {
                                const std::string& path);
   static bool LoadOCRDetResult(std::vector<std::array<int, 8>>* res,
                                const std::string& path);
+  static bool SaveMattingResult(const vision::MattingResult& res,
+                                const std::string& path);
+  static bool LoadMattingResult(vision::MattingResult* res,
+                                const std::string& path);
   /// Calculate diff value between two basic results.
   static DetectionDiff CalculateDiffStatis(const vision::DetectionResult& lhs,
                                            const vision::DetectionResult& rhs,
@@ -168,6 +195,9 @@ struct FASTDEPLOY_DECL ResultManager {
   static OCRDetDiff CalculateDiffStatis(
       const std::vector<std::array<int, 8>>& lhs,
       const std::vector<std::array<int, 8>>& rhs);
+  static MattingDiff CalculateDiffStatis(
+      const vision::MattingResult& lhs,
+      const vision::MattingResult& rhs);
 #endif  // ENABLE_VISION
 #endif  // ENABLE_BENCHMARK
 };

@@ -212,6 +212,11 @@ bool FDTensor::Reshape(const std::vector<int64_t>& new_shape) {
 }
 
 void FDTensor::PrintInfo(const std::string& prefix) const {
+  std::cout << prefix << ": name=" << name << ", shape=";
+  for (int i = 0; i < shape.size(); ++i) {
+    std::cout << shape[i] << " ";
+  }
+  std::cout << ", buffer_=" << buffer_ << ", external_data_ptr=" << external_data_ptr;
   double mean = 0;
   double max = -99999999;
   double min = 99999999;
@@ -233,10 +238,6 @@ void FDTensor::PrintInfo(const std::string& prefix) const {
     FDASSERT(false,
              "PrintInfo function doesn't support current situation, maybe you "
              "need enhance this function now.");
-  }
-  std::cout << prefix << ": name=" << name << ", shape=";
-  for (int i = 0; i < shape.size(); ++i) {
-    std::cout << shape[i] << " ";
   }
   std::cout << ", dtype=" << Str(dtype) << ", mean=" << mean << ", max=" << max
             << ", min=" << min << std::endl;
@@ -380,7 +381,6 @@ FDTensor::FDTensor(const FDTensor& other)
       name(other.name),
       dtype(other.dtype),
       device(other.device),
-      external_data_ptr(other.external_data_ptr),
       device_id(other.device_id) {
   // Copy buffer
   if (other.buffer_ == nullptr) {
@@ -391,6 +391,7 @@ FDTensor::FDTensor(const FDTensor& other)
              "The FastDeploy FDTensor allocate memory error");
     CopyBuffer(buffer_, other.buffer_, nbytes, device, is_pinned_memory);
   }
+  external_data_ptr = other.external_data_ptr;
 }
 
 FDTensor::FDTensor(FDTensor&& other)

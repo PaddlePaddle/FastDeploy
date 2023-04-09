@@ -22,48 +22,90 @@
     std::cerr << "Failed to initialize." << std::endl;                      \
     return 0;                                                               \
   }                                                                         \
-  auto __im__ = cv::imread(FLAGS_image);                                    \
+  std::unordered_map<std::string, std::string> __config_info__;             \
+  fastdeploy::benchmark::ResultManager::LoadBenchmarkConfig(                \
+                             FLAGS_config_path, &__config_info__);          \
+  std::stringstream __ss__;                                                 \
+  __ss__.precision(6);                                                      \
   fastdeploy::benchmark::ResourceUsageMonitor __resource_moniter__(         \
-      FLAGS_sampling_interval, FLAGS_device_id);                            \
-  if (FLAGS_collect_memory_info) {                                          \
+                     std::stoi(__config_info__["sampling_interval"]),       \
+                     std::stoi(__config_info__["device_id"]));              \
+  if (__config_info__["collect_memory_info"] == "true") {                   \
     __resource_moniter__.Start();                                           \
   }                                                                         \
-  if (FLAGS_profile_mode == "runtime") {                                    \
+  if (__config_info__["profile_mode"] == "runtime") {                       \
     if (!BENCHMARK_FUNC) {                                                  \
       std::cerr << "Failed to predict." << std::endl;                       \
+      __ss__ << "Runtime(ms): Failed" << std::endl;                         \
+      if (__config_info__["collect_memory_info"] == "true") {               \
+        __ss__ << "cpu_rss_mb: Failed" << std::endl;                        \
+        __ss__ << "gpu_rss_mb: Failed" << std::endl;                        \
+        __ss__ << "gpu_util: Failed" << std::endl;                          \
+      }                                                                     \
+      fastdeploy::benchmark::ResultManager::SaveBenchmarkResult(            \
+                          __ss__.str(), __config_info__["result_path"]);    \
       return 0;                                                             \
     }                                                                       \
     double __profile_time__ = MODEL_NAME.GetProfileTime() * 1000;           \
     std::cout << "Runtime(ms): " << __profile_time__ << "ms." << std::endl; \
+    __ss__ << "Runtime(ms): " << __profile_time__ << "ms." << std::endl;    \
   } else {                                                                  \
-    std::cout << "Warmup " << FLAGS_warmup << " times..." << std::endl;     \
-    for (int __i__ = 0; __i__ < FLAGS_warmup; __i__++) {                    \
+    std::cout << "Warmup "                                                  \
+              << __config_info__["warmup"]                                  \
+              << " times..." << std::endl;                                  \
+    int __warmup__ = std::stoi(__config_info__["warmup"]);                  \
+    for (int __i__ = 0; __i__ < __warmup__; __i__++) {                      \
       if (!BENCHMARK_FUNC) {                                                \
         std::cerr << "Failed to predict." << std::endl;                     \
+        __ss__ << "End2End(ms): Failed" << std::endl;                       \
+        if (__config_info__["collect_memory_info"] == "true") {             \
+          __ss__ << "cpu_rss_mb: Failed" << std::endl;                      \
+          __ss__ << "gpu_rss_mb: Failed" << std::endl;                      \
+          __ss__ << "gpu_util: Failed" << std::endl;                        \
+        }                                                                   \
+        fastdeploy::benchmark::ResultManager::SaveBenchmarkResult(          \
+                          __ss__.str(), __config_info__["result_path"]);    \
         return 0;                                                           \
       }                                                                     \
     }                                                                       \
     std::cout << "Counting time..." << std::endl;                           \
-    std::cout << "Repeat " << FLAGS_repeat << " times..." << std::endl;     \
+    std::cout << "Repeat "                                                  \
+              << __config_info__["repeat"]                                  \
+              << " times..." << std::endl;                                  \
     fastdeploy::TimeCounter __tc__;                                         \
     __tc__.Start();                                                         \
-    for (int __i__ = 0; __i__ < FLAGS_repeat; __i__++) {                    \
+    int __repeat__ = std::stoi(__config_info__["repeat"]);                  \
+    for (int __i__ = 0; __i__ < __repeat__; __i__++) {                      \
       if (!BENCHMARK_FUNC) {                                                \
         std::cerr << "Failed to predict." << std::endl;                     \
+        __ss__ << "End2End(ms): Failed" << std::endl;                       \
+        if (__config_info__["collect_memory_info"] == "true") {             \
+          __ss__ << "cpu_rss_mb: Failed" << std::endl;                      \
+          __ss__ << "gpu_rss_mb: Failed" << std::endl;                      \
+          __ss__ << "gpu_util: Failed" << std::endl;                        \
+        }                                                                   \
+        fastdeploy::benchmark::ResultManager::SaveBenchmarkResult(          \
+                          __ss__.str(), __config_info__["result_path"]);    \
         return 0;                                                           \
       }                                                                     \
     }                                                                       \
     __tc__.End();                                                           \
-    double __end2end__ = __tc__.Duration() / FLAGS_repeat * 1000;           \
+    double __end2end__ = __tc__.Duration() / __repeat__ * 1000;             \
     std::cout << "End2End(ms): " << __end2end__ << "ms." << std::endl;      \
+    __ss__ << "End2End(ms): " << __end2end__ << "ms." << std::endl;         \
   }                                                                         \
-  if (FLAGS_collect_memory_info) {                                          \
+  if (__config_info__["collect_memory_info"] == "true") {                   \
     float __cpu_mem__ = __resource_moniter__.GetMaxCpuMem();                \
     float __gpu_mem__ = __resource_moniter__.GetMaxGpuMem();                \
     float __gpu_util__ = __resource_moniter__.GetMaxGpuUtil();              \
     std::cout << "cpu_rss_mb: " << __cpu_mem__ << "MB." << std::endl;       \
+    __ss__ << "cpu_rss_mb: " << __cpu_mem__ << "MB." << std::endl;          \
     std::cout << "gpu_rss_mb: " << __gpu_mem__ << "MB." << std::endl;       \
+    __ss__ << "gpu_rss_mb: " << __gpu_mem__ << "MB." << std::endl;          \
     std::cout << "gpu_util: " << __gpu_util__ << std::endl;                 \
+    __ss__ << "gpu_util: " << __gpu_util__ << "MB." << std::endl;           \
     __resource_moniter__.Stop();                                            \
   }                                                                         \
+  fastdeploy::benchmark::ResultManager::SaveBenchmarkResult(__ss__.str(),   \
+                                         __config_info__["result_path"]);   \
 }

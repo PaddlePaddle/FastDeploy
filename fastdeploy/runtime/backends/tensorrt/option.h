@@ -33,9 +33,8 @@ struct TrtBackendOption {
   /// Enable log while converting onnx model to tensorrt
   bool enable_log_info = false;
 
-  /*
-   * @brief Enable half precison inference, on some device not support half precision, it will fallback to float32 mode
-   */
+  
+  /// Enable half precison inference, on some device not support half precision, it will fallback to float32 mode
   bool enable_fp16 = false;
 
   /** \brief Set shape range of input tensor for the model that contain dynamic input shape while using TensorRT backend
@@ -47,8 +46,8 @@ struct TrtBackendOption {
    */
   void SetShape(const std::string& tensor_name,
                 const std::vector<int32_t>& min,
-                const std::vector<int32_t>& opt,
-                const std::vector<int32_t>& max) {
+                const std::vector<int32_t>& opt = std::vector<int32_t>(),
+                const std::vector<int32_t>& max = std::vector<int32_t>()) {
     min_shape[tensor_name].clear();
     max_shape[tensor_name].clear();
     opt_shape[tensor_name].clear();
@@ -64,9 +63,7 @@ struct TrtBackendOption {
       max_shape[tensor_name].assign(max.begin(), max.end());
     }
   }
-  /**
-   * @brief Set cache file path while use TensorRT backend. Loadding a Paddle/ONNX model and initialize TensorRT will take a long time, by this interface it will save the tensorrt engine to `cache_file_path`, and load it directly while execute the code again
-   */
+  /// Set cache file path while use TensorRT backend. Loadding a Paddle/ONNX model and initialize TensorRT will take a long time, by this interface it will save the tensorrt engine to `cache_file_path`, and load it directly while execute the code again
   std::string serialize_file = "";
 
   // The below parameters may be removed in next version, please do not

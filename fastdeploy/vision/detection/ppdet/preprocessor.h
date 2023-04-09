@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include "fastdeploy/vision/common/processors/manager.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
@@ -22,7 +23,7 @@ namespace vision {
 namespace detection {
 /*! @brief Preprocessor object for PaddleDet serials model.
  */
-class FASTDEPLOY_DECL PaddleDetPreprocessor {
+class FASTDEPLOY_DECL PaddleDetPreprocessor : public ProcessorManager {
  public:
   PaddleDetPreprocessor() = default;
   /** \brief Create a preprocessor instance for PaddleDet serials model
@@ -31,22 +32,31 @@ class FASTDEPLOY_DECL PaddleDetPreprocessor {
    */
   explicit PaddleDetPreprocessor(const std::string& config_file);
 
-  /** \brief Process the input image and prepare input tensors for runtime
+  /** \brief Implement the virtual function of ProcessorManager, Apply() is the
+   *  body of Run(). Apply() contains the main logic of preprocessing, Run() is
+   *  called by users to execute preprocessing
    *
-   * \param[in] images The input image data list, all the elements are returned by cv::imread()
-   * \param[in] outputs The output tensors which will feed in runtime, include image, scale_factor, im_shape
+   * \param[in] image_batch The input image batch
+   * \param[in] outputs The output tensors which will feed in runtime
    * \return true if the preprocess successed, otherwise false
    */
-  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
+  virtual bool Apply(FDMatBatch* image_batch,
+                     std::vector<FDTensor>* outputs);
 
   /// This function will disable normalize in preprocessing step.
   void DisableNormalize();
   /// This function will disable hwc2chw in preprocessing step.
   void DisablePermute();
 
+  std::string GetArch() {
+    return arch_;
+  }
+
  private:
   bool BuildPreprocessPipelineFromConfig();
   std::vector<std::shared_ptr<Processor>> processors_;
+  std::shared_ptr<PadToSize> pad_op_ =
+      std::make_shared<PadToSize>(0, 0, std::vector<float>(3, 0));
   bool initialized_ = false;
   // for recording the switch of hwc2chw
   bool disable_permute_ = false;
@@ -54,6 +64,8 @@ class FASTDEPLOY_DECL PaddleDetPreprocessor {
   bool disable_normalize_ = false;
   // read config file
   std::string config_file_;
+  // read arch_ for postprocess
+  std::string arch_;
 };
 
 }  // namespace detection
