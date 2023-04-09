@@ -133,7 +133,7 @@ bool Pad::ImplByCvCuda(FDMat* mat) {
                             "output_cache", Device::GPU);
   auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
 
-  cvcuda_pad_op_(mat->Stream(), src_tensor, dst_tensor, top_, left_,
+  cvcuda_pad_op_(mat->Stream(), *src_tensor, *dst_tensor, top_, left_,
                  NVCV_BORDER_CONSTANT, value);
 
   mat->SetTensor(mat->output_cache);

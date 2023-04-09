@@ -16,6 +16,7 @@ from __future__ import absolute_import
 import logging
 from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
+from ...common import ProcessorManager
 
 
 class PaddleSegModel(FastDeployModel):
@@ -87,34 +88,26 @@ class PaddleSegModel(FastDeployModel):
         return self._model.postprocessor
 
 
-class PaddleSegPreprocessor:
+class PaddleSegPreprocessor(ProcessorManager):
     def __init__(self, config_file):
         """Create a preprocessor for PaddleSegModel from configuration file
 
         :param config_file: (str)Path of configuration file, e.g ppliteseg/deploy.yaml
         """
-        self._preprocessor = C.vision.segmentation.PaddleSegPreprocessor(
+        self._manager = C.vision.segmentation.PaddleSegPreprocessor(
             config_file)
-
-    def run(self, input_ims):
-        """Preprocess input images for PaddleSegModel
-
-        :param input_ims: (list of numpy.ndarray)The input image
-        :return: list of FDTensor
-        """
-        return self._preprocessor.run(input_ims)
 
     def disable_normalize(self):
         """
         This function will disable normalize in preprocessing step.
         """
-        self._preprocessor.disable_normalize()
+        self._manager.disable_normalize()
 
     def disable_permute(self):
         """
         This function will disable hwc2chw in preprocessing step.
         """
-        self._preprocessor.disable_permute()
+        self._manager.disable_permute()
 
     @property
     def is_vertical_screen(self):
@@ -122,7 +115,7 @@ class PaddleSegPreprocessor:
 
         :return: value of is_vertical_screen(bool)
         """
-        return self._preprocessor.is_vertical_screen
+        return self._manager.is_vertical_screen
 
     @is_vertical_screen.setter
     def is_vertical_screen(self, value):
@@ -133,7 +126,7 @@ class PaddleSegPreprocessor:
         assert isinstance(
             value,
             bool), "The value to set `is_vertical_screen` must be type of bool."
-        self._preprocessor.is_vertical_screen = value
+        self._manager.is_vertical_screen = value
 
 
 class PaddleSegPostprocessor:
