@@ -23,9 +23,17 @@ namespace fastdeploy {
 namespace vision {
 namespace detection {
 
-// PPYOLOE
+/*! @brief PPYOLOE model
+ */
 public class PPYOLOE {
-
+  /** \brief Set path of model file and configuration file, and the configuration of runtime
+   *
+   * \param[in] model_file Path of model file, e.g ppyoloe/model.pdmodel
+   * \param[in] params_file Path of parameter file, e.g picodet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] config_file Path of configuration file for deployment, e.g picodet/infer_cfg.yml
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
+   * \param[in] model_format Model format of the loaded model, default is Paddle format
+   */
   public PPYOLOE(string model_file, string params_file, string config_file,
                  RuntimeOption custom_option = null,
                  ModelFormat model_format = ModelFormat.PADDLE) {
@@ -39,6 +47,11 @@ public class PPYOLOE {
 
   ~PPYOLOE() { FD_C_DestroyPPYOLOEWrapper(fd_ppyoloe_wrapper); }
 
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_PPYOLOEWrapperPredict(fd_ppyoloe_wrapper, img.CvPtr,
@@ -53,6 +66,11 @@ public class PPYOLOE {
     return detection_result;
   }
 
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -80,6 +98,7 @@ public class PPYOLOE {
     return results_out;
   }
 
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_PPYOLOEWrapperInitialized(fd_ppyoloe_wrapper);
   }
@@ -129,6 +148,9 @@ public class PPYOLOE {
 }
 
 // PicoDet
+
+/*! @brief PicoDet model
+ */
 public class PicoDet {
 
   public PicoDet(string model_file, string params_file, string config_file,
@@ -144,6 +166,12 @@ public class PicoDet {
 
   ~PicoDet() { FD_C_DestroyPicoDetWrapper(fd_picodet_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_PicoDetWrapperPredict(fd_picodet_wrapper, img.CvPtr,
@@ -158,6 +186,12 @@ public class PicoDet {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -185,6 +219,8 @@ public class PicoDet {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_PicoDetWrapperInitialized(fd_picodet_wrapper);
   }
@@ -236,6 +272,9 @@ public class PicoDet {
 
 // PPYOLO
 
+
+/*! @brief PPYOLO model
+ */
 public class PPYOLO {
 
   public PPYOLO(string model_file, string params_file, string config_file,
@@ -251,6 +290,12 @@ public class PPYOLO {
 
   ~PPYOLO() { FD_C_DestroyPPYOLOWrapper(fd_ppyolo_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_PPYOLOWrapperPredict(fd_ppyolo_wrapper, img.CvPtr,
@@ -265,6 +310,12 @@ public class PPYOLO {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -292,6 +343,8 @@ public class PPYOLO {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_PPYOLOWrapperInitialized(fd_ppyolo_wrapper);
   }
@@ -342,6 +395,9 @@ public class PPYOLO {
 
 // YOLOv3
 
+
+/*! @brief YOLOv3 model
+ */
 public class YOLOv3 {
 
   public YOLOv3(string model_file, string params_file, string config_file,
@@ -357,6 +413,12 @@ public class YOLOv3 {
 
   ~YOLOv3() { FD_C_DestroyYOLOv3Wrapper(fd_yolov3_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_YOLOv3WrapperPredict(fd_yolov3_wrapper, img.CvPtr,
@@ -371,6 +433,12 @@ public class YOLOv3 {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -398,6 +466,8 @@ public class YOLOv3 {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_YOLOv3WrapperInitialized(fd_yolov3_wrapper);
   }
@@ -448,6 +518,9 @@ public class YOLOv3 {
 
 // PaddleYOLOX
 
+
+/*! @brief PaddleYOLOX model
+ */
 public class PaddleYOLOX {
 
   public PaddleYOLOX(string model_file, string params_file, string config_file,
@@ -463,6 +536,12 @@ public class PaddleYOLOX {
 
   ~PaddleYOLOX() { FD_C_DestroyPaddleYOLOXWrapper(fd_paddleyolox_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_PaddleYOLOXWrapperPredict(fd_paddleyolox_wrapper, img.CvPtr,
@@ -477,6 +556,12 @@ public class PaddleYOLOX {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -504,6 +589,8 @@ public class PaddleYOLOX {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_PaddleYOLOXWrapperInitialized(fd_paddleyolox_wrapper);
   }
@@ -554,6 +641,9 @@ public class PaddleYOLOX {
 
 // FasterRCNN
 
+
+/*! @brief FasterRCNN model
+ */
 public class FasterRCNN {
 
   public FasterRCNN(string model_file, string params_file, string config_file,
@@ -569,6 +659,12 @@ public class FasterRCNN {
 
   ~FasterRCNN() { FD_C_DestroyFasterRCNNWrapper(fd_fasterrcnn_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_FasterRCNNWrapperPredict(fd_fasterrcnn_wrapper, img.CvPtr,
@@ -583,6 +679,12 @@ public class FasterRCNN {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -610,6 +712,8 @@ public class FasterRCNN {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_FasterRCNNWrapperInitialized(fd_fasterrcnn_wrapper);
   }
@@ -660,6 +764,9 @@ public class FasterRCNN {
 
 // MaskRCNN
 
+
+/*! @brief MaskRCNN model
+ */
 public class MaskRCNN {
 
   public MaskRCNN(string model_file, string params_file, string config_file,
@@ -675,6 +782,12 @@ public class MaskRCNN {
 
   ~MaskRCNN() { FD_C_DestroyMaskRCNNWrapper(fd_maskrcnn_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_MaskRCNNWrapperPredict(fd_maskrcnn_wrapper, img.CvPtr,
@@ -689,6 +802,12 @@ public class MaskRCNN {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -716,6 +835,8 @@ public class MaskRCNN {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_MaskRCNNWrapperInitialized(fd_maskrcnn_wrapper);
   }
@@ -766,6 +887,9 @@ public class MaskRCNN {
 
 // SSD
 
+
+/*! @brief SSD model
+ */
 public class SSD {
 
   public SSD(string model_file, string params_file, string config_file,
@@ -781,6 +905,12 @@ public class SSD {
 
   ~SSD() { FD_C_DestroySSDWrapper(fd_ssd_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_SSDWrapperPredict(fd_ssd_wrapper, img.CvPtr,
@@ -795,6 +925,12 @@ public class SSD {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -822,6 +958,8 @@ public class SSD {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_SSDWrapperInitialized(fd_ssd_wrapper);
   }
@@ -872,6 +1010,9 @@ public class SSD {
 
 // PaddleYOLOv5
 
+
+/*! @brief PaddleYOLOv5 model
+ */
 public class PaddleYOLOv5 {
 
   public PaddleYOLOv5(string model_file, string params_file, string config_file,
@@ -887,6 +1028,12 @@ public class PaddleYOLOv5 {
 
   ~PaddleYOLOv5() { FD_C_DestroyPaddleYOLOv5Wrapper(fd_paddleyolov5_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_PaddleYOLOv5WrapperPredict(fd_paddleyolov5_wrapper, img.CvPtr,
@@ -901,6 +1048,12 @@ public class PaddleYOLOv5 {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -928,6 +1081,8 @@ public class PaddleYOLOv5 {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_PaddleYOLOv5WrapperInitialized(fd_paddleyolov5_wrapper);
   }
@@ -978,6 +1133,9 @@ public class PaddleYOLOv5 {
 
 // PaddleYOLOv6
 
+
+/*! @brief PaddleYOLOv6 model
+ */
 public class PaddleYOLOv6 {
 
   public PaddleYOLOv6(string model_file, string params_file, string config_file,
@@ -993,6 +1151,12 @@ public class PaddleYOLOv6 {
 
   ~PaddleYOLOv6() { FD_C_DestroyPaddleYOLOv6Wrapper(fd_paddleyolov6_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_PaddleYOLOv6WrapperPredict(fd_paddleyolov6_wrapper, img.CvPtr,
@@ -1007,6 +1171,12 @@ public class PaddleYOLOv6 {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -1034,6 +1204,8 @@ public class PaddleYOLOv6 {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_PaddleYOLOv6WrapperInitialized(fd_paddleyolov6_wrapper);
   }
@@ -1084,6 +1256,9 @@ public class PaddleYOLOv6 {
 
 // PaddleYOLOv7
 
+
+/*! @brief PaddleYOLOv7 model
+ */
 public class PaddleYOLOv7 {
 
   public PaddleYOLOv7(string model_file, string params_file, string config_file,
@@ -1099,6 +1274,12 @@ public class PaddleYOLOv7 {
 
   ~PaddleYOLOv7() { FD_C_DestroyPaddleYOLOv7Wrapper(fd_paddleyolov7_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_PaddleYOLOv7WrapperPredict(fd_paddleyolov7_wrapper, img.CvPtr,
@@ -1113,6 +1294,12 @@ public class PaddleYOLOv7 {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -1140,6 +1327,8 @@ public class PaddleYOLOv7 {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_PaddleYOLOv7WrapperInitialized(fd_paddleyolov7_wrapper);
   }
@@ -1190,6 +1379,9 @@ public class PaddleYOLOv7 {
 
 // PaddleYOLOv8
 
+
+/*! @brief PaddleYOLOv8 model
+ */
 public class PaddleYOLOv8 {
 
   public PaddleYOLOv8(string model_file, string params_file, string config_file,
@@ -1205,6 +1397,12 @@ public class PaddleYOLOv8 {
 
   ~PaddleYOLOv8() { FD_C_DestroyPaddleYOLOv8Wrapper(fd_paddleyolov8_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_PaddleYOLOv8WrapperPredict(fd_paddleyolov8_wrapper, img.CvPtr,
@@ -1219,6 +1417,12 @@ public class PaddleYOLOv8 {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -1246,6 +1450,8 @@ public class PaddleYOLOv8 {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_PaddleYOLOv8WrapperInitialized(fd_paddleyolov8_wrapper);
   }
@@ -1296,6 +1502,9 @@ public class PaddleYOLOv8 {
 
 // RTMDet
 
+
+/*! @brief RTMDet model
+ */
 public class RTMDet {
 
   public RTMDet(string model_file, string params_file, string config_file,
@@ -1311,6 +1520,12 @@ public class RTMDet {
 
   ~RTMDet() { FD_C_DestroyRTMDetWrapper(fd_rtmdet_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_RTMDetWrapperPredict(fd_rtmdet_wrapper, img.CvPtr,
@@ -1325,6 +1540,12 @@ public class RTMDet {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -1352,6 +1573,8 @@ public class RTMDet {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_RTMDetWrapperInitialized(fd_rtmdet_wrapper);
   }
@@ -1402,6 +1625,9 @@ public class RTMDet {
 
 // CascadeRCNN
 
+
+/*! @brief CascadeRCNN model
+ */
 public class CascadeRCNN {
 
   public CascadeRCNN(string model_file, string params_file, string config_file,
@@ -1417,6 +1643,12 @@ public class CascadeRCNN {
 
   ~CascadeRCNN() { FD_C_DestroyCascadeRCNNWrapper(fd_cascadercnn_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_CascadeRCNNWrapperPredict(fd_cascadercnn_wrapper, img.CvPtr,
@@ -1431,6 +1663,12 @@ public class CascadeRCNN {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -1458,6 +1696,8 @@ public class CascadeRCNN {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_CascadeRCNNWrapperInitialized(fd_cascadercnn_wrapper);
   }
@@ -1508,6 +1748,9 @@ public class CascadeRCNN {
 
 // PSSDet
 
+
+/*! @brief PSSDet model
+ */
 public class PSSDet {
 
   public PSSDet(string model_file, string params_file, string config_file,
@@ -1523,6 +1766,12 @@ public class PSSDet {
 
   ~PSSDet() { FD_C_DestroyPSSDetWrapper(fd_pssdet_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_PSSDetWrapperPredict(fd_pssdet_wrapper, img.CvPtr,
@@ -1537,6 +1786,12 @@ public class PSSDet {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -1564,6 +1819,8 @@ public class PSSDet {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_PSSDetWrapperInitialized(fd_pssdet_wrapper);
   }
@@ -1614,6 +1871,9 @@ public class PSSDet {
 
 // RetinaNet
 
+
+/*! @brief RetinaNet model
+ */
 public class RetinaNet {
 
   public RetinaNet(string model_file, string params_file, string config_file,
@@ -1629,6 +1889,12 @@ public class RetinaNet {
 
   ~RetinaNet() { FD_C_DestroyRetinaNetWrapper(fd_retinanet_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_RetinaNetWrapperPredict(fd_retinanet_wrapper, img.CvPtr,
@@ -1643,6 +1909,12 @@ public class RetinaNet {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -1670,6 +1942,8 @@ public class RetinaNet {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_RetinaNetWrapperInitialized(fd_retinanet_wrapper);
   }
@@ -1720,6 +1994,9 @@ public class RetinaNet {
 
 // FCOS
 
+
+/*! @brief FCOS model
+ */
 public class FCOS {
 
   public FCOS(string model_file, string params_file, string config_file,
@@ -1735,6 +2012,12 @@ public class FCOS {
 
   ~FCOS() { FD_C_DestroyFCOSWrapper(fd_fcos_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_FCOSWrapperPredict(fd_fcos_wrapper, img.CvPtr,
@@ -1749,6 +2032,12 @@ public class FCOS {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -1776,6 +2065,8 @@ public class FCOS {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_FCOSWrapperInitialized(fd_fcos_wrapper);
   }
@@ -1826,6 +2117,9 @@ public class FCOS {
 
 // TTFNet
 
+
+/*! @brief TTFNet model
+ */
 public class TTFNet {
 
   public TTFNet(string model_file, string params_file, string config_file,
@@ -1841,6 +2135,12 @@ public class TTFNet {
 
   ~TTFNet() { FD_C_DestroyTTFNetWrapper(fd_ttfnet_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_TTFNetWrapperPredict(fd_ttfnet_wrapper, img.CvPtr,
@@ -1855,6 +2155,12 @@ public class TTFNet {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -1882,6 +2188,8 @@ public class TTFNet {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_TTFNetWrapperInitialized(fd_ttfnet_wrapper);
   }
@@ -1932,6 +2240,9 @@ public class TTFNet {
 
 // TOOD
 
+
+/*! @brief TOOD model
+ */
 public class TOOD {
 
   public TOOD(string model_file, string params_file, string config_file,
@@ -1947,6 +2258,12 @@ public class TOOD {
 
   ~TOOD() { FD_C_DestroyTOODWrapper(fd_tood_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_TOODWrapperPredict(fd_tood_wrapper, img.CvPtr,
@@ -1961,6 +2278,12 @@ public class TOOD {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -1988,6 +2311,8 @@ public class TOOD {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_TOODWrapperInitialized(fd_tood_wrapper);
   }
@@ -2038,6 +2363,9 @@ public class TOOD {
 
 // GFL
 
+
+/*! @brief GFL model
+ */
 public class GFL {
 
   public GFL(string model_file, string params_file, string config_file,
@@ -2053,6 +2381,12 @@ public class GFL {
 
   ~GFL() { FD_C_DestroyGFLWrapper(fd_gfl_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_GFLWrapperPredict(fd_gfl_wrapper, img.CvPtr,
@@ -2067,6 +2401,12 @@ public class GFL {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -2094,6 +2434,8 @@ public class GFL {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_GFLWrapperInitialized(fd_gfl_wrapper);
   }

@@ -24,6 +24,9 @@ namespace vision {
 namespace detection {
 
 // YOLOv5
+
+/*! @brief YOLOv5 model
+ */
 public class YOLOv5 {
 
   public YOLOv5( string model_file, string params_file,
@@ -39,6 +42,12 @@ public class YOLOv5 {
 
   ~YOLOv5() { FD_C_DestroyYOLOv5Wrapper(fd_yolov5_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_YOLOv5WrapperPredict(fd_yolov5_wrapper, img.CvPtr,
@@ -53,6 +62,12 @@ public class YOLOv5 {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -80,6 +95,8 @@ public class YOLOv5 {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_YOLOv5WrapperInitialized(fd_yolov5_wrapper);
   }
@@ -123,6 +140,9 @@ public class YOLOv5 {
 
 // YOLOv7
 
+
+/*! @brief YOLOv7 model
+ */
 public class YOLOv7 {
 
   public YOLOv7( string model_file, string params_file,
@@ -138,6 +158,12 @@ public class YOLOv7 {
 
   ~YOLOv7() { FD_C_DestroyYOLOv7Wrapper(fd_yolov7_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_YOLOv7WrapperPredict(fd_yolov7_wrapper, img.CvPtr,
@@ -152,6 +178,12 @@ public class YOLOv7 {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -179,6 +211,8 @@ public class YOLOv7 {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_YOLOv7WrapperInitialized(fd_yolov7_wrapper);
   }
@@ -221,6 +255,9 @@ public class YOLOv7 {
 
 // YOLOv8
 
+
+/*! @brief YOLOv8 model
+ */
 public class YOLOv8 {
 
   public YOLOv8( string model_file, string params_file,
@@ -236,6 +273,12 @@ public class YOLOv8 {
 
   ~YOLOv8() { FD_C_DestroyYOLOv8Wrapper(fd_yolov8_wrapper); }
 
+
+  /** \brief Predict the detection result for an input image
+    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+    * 
+    * \return DetectionResult
+    */
   public DetectionResult Predict(Mat img) {
     FD_DetectionResult fd_detection_result = new FD_DetectionResult();
     if(! FD_C_YOLOv8WrapperPredict(fd_yolov8_wrapper, img.CvPtr,
@@ -250,6 +293,12 @@ public class YOLOv8 {
     return detection_result;
   }
 
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return List<DetectionResult>
+   */
   public List<DetectionResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -277,6 +326,8 @@ public class YOLOv8 {
     return results_out;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_YOLOv8WrapperInitialized(fd_yolov8_wrapper);
   }
@@ -321,6 +372,9 @@ public class YOLOv8 {
 
 // YOLOv6
 
+
+/*! @brief YOLOv6 model
+ */
 public class YOLOv6 {
 
   public YOLOv6( string model_file, string params_file,
@@ -352,6 +406,8 @@ public class YOLOv6 {
     return detection_result;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_YOLOv6WrapperInitialized(fd_yolov6_wrapper);
   }
@@ -390,6 +446,9 @@ public class YOLOv6 {
 
 // YOLOR
 
+
+/*! @brief YOLOR model
+ */
 public class YOLOR {
 
   public YOLOR( string model_file, string params_file,
@@ -421,6 +480,8 @@ public class YOLOR {
     return detection_result;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_YOLORWrapperInitialized(fd_yolor_wrapper);
   }
@@ -460,6 +521,9 @@ public class YOLOR {
 
 // YOLOX
 
+
+/*! @brief YOLOX model
+ */
 public class YOLOX {
 
   public YOLOX( string model_file, string params_file,
@@ -491,6 +555,8 @@ public class YOLOX {
     return detection_result;
   }
 
+
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_YOLOXWrapperInitialized(fd_yolox_wrapper);
   }

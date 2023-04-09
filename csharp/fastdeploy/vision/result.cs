@@ -37,9 +37,11 @@ public enum ResultType {
   HEADPOSE
 }
 
+/*! Mask structure, used in DetectionResult for instance segmentation models
+ */
 public class Mask {
-  public List<byte> data;
-  public List<long> shape;
+  public List<byte> data; /// Mask data buffer
+  public List<long> shape; /// Shape of mask
   public ResultType type;
   public Mask() {
     this.data = new List<byte>();
@@ -47,6 +49,7 @@ public class Mask {
     this.type = ResultType.MASK;
   }
 
+  /// convert the result to string to print
   public override string ToString() {
     string information = "Mask(" ;
     int ndim = this.shape.Count;
@@ -63,16 +66,19 @@ public class Mask {
 
 }
 
+/*! @brief Classify result structure for all the image classify models
+ */
 public class ClassifyResult {
-  public List<int> label_ids;
-  public List<float> scores;
-  public ResultType type;
+  public List<int> label_ids; /// Classify result for an image
+  public List<float> scores; /// The confidence for each classify result
+  public ResultType type;   
   public ClassifyResult() {
     this.label_ids = new List<int>();
     this.scores = new List<float>();
     this.type = ResultType.CLASSIFY;
   }
 
+  /// convert the result to string to print
   public string ToString() {  
     string information;
     information = "ClassifyResult(\nlabel_ids: ";
@@ -89,12 +95,14 @@ public class ClassifyResult {
   }
 }
 
+/*! @brief Detection result structure for all the object detection models and instance segmentation models
+ */
 public class DetectionResult {
-  public List<float[]> boxes;
-  public List<float> scores;
-  public List<int> label_ids;
-  public List<Mask> masks;
-  public bool contain_masks;
+  public List<float[]> boxes;  /// Member variable which indicates the coordinates of all detected target boxes in a single image, each box is represented by 4 float values in order of xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner.
+  public List<float> scores;   /// Member variable which indicates the confidence level of all targets detected in a single image
+  public List<int> label_ids;  /// Member variable which indicates all target categories detected in a single image
+  public List<Mask> masks;  ///  Member variable which indicates all detected instance masks of a single image
+  public bool contain_masks; /// Member variable which indicates whether the detected result contains instance masks
   public ResultType type;
   public DetectionResult() {
     this.boxes = new List<float[]>();
@@ -105,7 +113,7 @@ public class DetectionResult {
     this.type = ResultType.DETECTION;
   }
 
-  
+  /// convert the result to string to print
   public string ToString() {
     string information;
     if (!contain_masks) {
@@ -130,12 +138,14 @@ public class DetectionResult {
 
 }
 
+/*! @brief OCR result structure for all the OCR models.
+ */
 public class OCRResult {
-  public List<int[]> boxes;
-  public List<string> text;
-  public List<float> rec_scores;
-  public List<float> cls_scores;
-  public List<int> cls_labels;
+  public List<int[]> boxes;   /// Member variable which indicates the coordinates of all detected target boxes in a single image. Each box is represented by 8 int values to indicate the 4 coordinates of the box, in the order of lower left, lower right, upper right, upper left.
+  public List<string> text;  /// Member variable which indicates the content of the recognized text in multiple text boxes
+  public List<float> rec_scores; ///  Member variable which indicates the confidence level of the recognized text.
+  public List<float> cls_scores;  ///  Member variable which indicates the confidence level of the classification result of the text box
+  public List<int> cls_labels;  /// Member variable which indicates the directional category of the textbox
   public ResultType type;
 
   public OCRResult() {
@@ -146,6 +156,8 @@ public class OCRResult {
     this.cls_labels = new List<int>();
     this.type = ResultType.OCR;
   }
+
+  /// convert the result to string to print
   public string ToString() {
   string no_result = "";
   if (boxes.Count > 0) {
@@ -225,11 +237,13 @@ public class OCRRecognizerResult{
   public float rec_score;
 }
 
+/*! @brief Segmentation result structure for all the segmentation models
+ */
 public class SegmentationResult{
-  public List<byte> label_map;
-  public List<float> score_map;
-  public List<long> shape;
-  public bool contain_score_map;
+  public List<byte> label_map;  /// `label_map` stores the pixel-level category labels for input image. 
+  public List<float> score_map;  /// `score_map` stores the probability of the predicted label for each pixel of input image.
+  public List<long> shape;  /// The output shape, means [H, W]
+  public bool contain_score_map;  /// SegmentationResult whether containing score_map
   public ResultType type;
   public SegmentationResult() {
     this.label_map = new List<byte>();
@@ -239,6 +253,7 @@ public class SegmentationResult{
     this.type = ResultType.SEGMENTATION;
   }
 
+  /// convert the result to string to print
   public string ToString() {
     string information;
     information = "SegmentationResult Image masks 10 rows x 10 cols: \n";

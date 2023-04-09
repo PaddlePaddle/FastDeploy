@@ -23,8 +23,18 @@ namespace fastdeploy {
 namespace vision {
 namespace segmentation {
 
+/*! @brief PaddleSeg serials model object used when to load a PaddleSeg model exported by PaddleSeg repository
+ */
 public class PaddleSegModel {
 
+  /** \brief Set path of model file and configuration file, and the configuration of runtime
+   *
+   * \param[in] model_file Path of model file, e.g unet/model.pdmodel
+   * \param[in] params_file Path of parameter file, e.g unet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] config_file Path of configuration file for deployment, e.g unet/deploy.yml
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
+   * \param[in] model_format Model format of the loaded model, default is Paddle format
+   */
   public PaddleSegModel(string model_file, string params_file,
                          string config_file, RuntimeOption custom_option = null,
                          ModelFormat model_format = ModelFormat.PADDLE) {
@@ -40,11 +50,17 @@ public class PaddleSegModel {
     FD_C_DestroyPaddleSegModelWrapper(fd_paddleseg_model_wrapper);
   }
 
-
+  /// Get model's name
   public string ModelName() {
     return "PaddleSeg";
   }
 
+  /** \brief DEPRECATED Predict the segmentation result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * 
+   * \return SegmentationResult
+   */
   public SegmentationResult Predict(Mat img) {
     FD_SegmentationResult fd_segmentation_result = new FD_SegmentationResult();
     if(! FD_C_PaddleSegModelWrapperPredict(
@@ -59,6 +75,12 @@ public class PaddleSegModel {
     return segmentation_result;
   }
 
+  /** \brief Predict the segmentation results for a batch of input images
+   *
+   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * 
+   * \return List<SegmentationResult>
+   */
   public List<SegmentationResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -86,6 +108,7 @@ public class PaddleSegModel {
     return results_out;
   }
 
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_PaddleSegModelWrapperInitialized(fd_paddleseg_model_wrapper);
   }
