@@ -154,9 +154,10 @@ bool LetterBoxResize::ImplByCuda(Mat* mat){
 #endif
 
 
-bool LetterBoxResize::Run(Mat* mat, const std::vector<int>& target_size, const std::vector<float>& color,ProcLib lib) {
-    auto l = LetterBoxResize(target_size,color);
-    return l(mat,lib);
+bool LetterBoxResize::Run(Mat* mat, const std::vector<int>& target_size,
+                          const std::vector<float>& color,ProcLib lib) {
+    auto l = LetterBoxResize(target_size, color);
+    return l(mat, lib);
 }
 
 }  // namespace vision
