@@ -404,6 +404,47 @@ std::vector<std::vector<int32_t>> ResultManager::GetInputShapes(
   return shapes;
 }
 
+std::vector<std::string> ResultManager::GetInputNames(
+    const std::string& raw_names) {
+  std::vector<std::string> names_tokens;
+  Split(raw_names, names_tokens, ':');
+  return names_tokens;
+}
+
+std::vector<std::string> ResultManager::SplitStr(const std::string& raw_str,
+                                                 char delim) {
+  std::vector<std::string> str_tokens;
+  Split(raw_str, str_tokens, delim);
+  return str_tokens;
+}
+
+std::vector<FDDataType> ResultManager::GetInputDtypes(
+    const std::string& raw_dtypes) {
+  std::vector<FDDataType> dtypes;
+  std::vector<std::string> dtypes_tokens;
+  Split(raw_dtypes, dtypes_tokens, ':');
+  for (auto dtype : dtypes_tokens) {
+    if (dtype == "FP32") {
+      dtypes.push_back(FDDataType::FP32);
+    } else if (dtype == "INT32") {
+      dtypes.push_back(FDDataType::INT32);
+    } else if (dtype == "INT64") {
+      dtypes.push_back(FDDataType::INT64);
+    } else if (dtype == "INT8") {
+      dtypes.push_back(FDDataType::INT8);
+    } else if (dtype == "UINT8") {
+      dtypes.push_back(FDDataType::UINT8);
+    } else if (dtype == "FP16") {
+      dtypes.push_back(FDDataType::FP16);
+    } else if (dtype == "FP64") {
+      dtypes.push_back(FDDataType::FP64);
+    } else {
+      dtypes.push_back(FDDataType::FP32);  // default
+    }
+  }
+  return dtypes;
+}
+
 #if defined(ENABLE_VISION)
 bool ResultManager::SaveDetectionResult(const vision::DetectionResult& res,
                                         const std::string& path) {
@@ -556,6 +597,44 @@ bool ResultManager::SaveOCRDetResult(const std::vector<std::array<int, 8>>& res,
   return true;
 }
 
+bool ResultManager::SaveMattingResult(const vision::MattingResult& res,
+                                      const std::string& path) {
+  if (res.alpha.empty()) {
+    FDERROR << "MattingResult can not be empty!" << std::endl;
+    return false;
+  }
+  std::ofstream fs(path, std::ios::out);
+  if (!fs.is_open()) {
+    FDERROR << "Fail to open file:" << path << std::endl;
+    return false;
+  }
+  fs.precision(20);
+  // alpha
+  fs << "alpha" << KEY_VALUE_SEP;
+  for (int i = 0; i < res.alpha.size(); ++i) {
+    if (i < res.alpha.size() - 1) {
+      fs << res.alpha[i] << VALUE_SEP;
+    } else {
+      fs << res.alpha[i];
+    }
+  }
+  fs << "\n";
+  // foreground
+  if (res.contain_foreground) {
+    fs << "foreground" << KEY_VALUE_SEP;
+    for (int i = 0; i < res.foreground.size(); ++i) {
+      if (i < res.foreground.size() - 1) {
+        fs << res.foreground[i] << VALUE_SEP;
+      } else {
+        fs << res.foreground[i];
+      }
+    }
+    fs << "\n";
+  }
+  fs.close();
+  return true;
+}
+
 bool ResultManager::LoadDetectionResult(vision::DetectionResult* res,
                                         const std::string& path) {
   if (!CheckFileExists(path)) {
@@ -653,6 +732,33 @@ bool ResultManager::LoadOCRDetResult(std::vector<std::array<int, 8>>* res,
   for (int i = 0; i < boxes_num; ++i) {
     for (int j = 0; j < 8; ++j) {
       (*res)[i][j] = std::stoi(data.begin()->second[i * 8 + j]);
+    }
+  }
+  return true;
+}
+
+bool ResultManager::LoadMattingResult(vision::MattingResult* res,
+                                      const std::string& path) {
+  if (!CheckFileExists(path)) {
+    FDERROR << "Can't found file from " << path << std::endl;
+    return false;
+  }
+  auto lines = ReadLines(path);
+  if (lines.size() > 1) {
+    res->contain_foreground = true;
+  }
+  std::map<std::string, std::vector<std::string>> data;
+  // alpha
+  data = SplitDataLine(lines[0]);
+  res->Resize(data.begin()->second.size());
+  for (int i = 0; i < data.begin()->second.size(); ++i) {
+    res->alpha[i] = std::stof(data.begin()->second[i]);
+  }
+  // foreground
+  if (lines.size() > 1) {
+    data = SplitDataLine(lines[1]);
+    for (int i = 0; i < data.begin()->second.size(); ++i) {
+      res->foreground[i] = std::stof(data.begin()->second[i]);
     }
   }
   return true;
@@ -767,6 +873,29 @@ OCRDetDiff ResultManager::CalculateDiffStatis(
   CalculateStatisInfo<float>(boxes_diff.data(), boxes_diff.size(),
                              &(diff.boxes.mean), &(diff.boxes.max),
                              &(diff.boxes.min));
+  return diff;
+}
+
+MattingDiff ResultManager::CalculateDiffStatis(
+    const vision::MattingResult& lhs, const vision::MattingResult& rhs) {
+  const int pixel_nums = std::min(lhs.alpha.size(), rhs.alpha.size());
+  std::vector<float> alpha_diff;
+  std::vector<float> foreground_diff;
+  for (int i = 0; i < pixel_nums; ++i) {
+    alpha_diff.push_back(lhs.alpha[i] - rhs.alpha[i]);
+    if (lhs.contain_foreground && rhs.contain_foreground) {
+      foreground_diff.push_back(lhs.foreground[i] - rhs.foreground[i]);
+    }
+  }
+  MattingDiff diff;
+  CalculateStatisInfo<float>(alpha_diff.data(), alpha_diff.size(),
+                             &(diff.alpha.mean), &(diff.alpha.max),
+                             &(diff.alpha.min));
+  if (lhs.contain_foreground && rhs.contain_foreground) {
+    CalculateStatisInfo<float>(foreground_diff.data(), foreground_diff.size(),
+                               &(diff.foreground.mean), &(diff.foreground.max),
+                               &(diff.foreground.min));
+  }
   return diff;
 }
 

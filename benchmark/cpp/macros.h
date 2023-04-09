@@ -36,6 +36,14 @@
   if (__config_info__["profile_mode"] == "runtime") {                       \
     if (!BENCHMARK_FUNC) {                                                  \
       std::cerr << "Failed to predict." << std::endl;                       \
+      __ss__ << "Runtime(ms): Failed" << std::endl;                         \
+      if (__config_info__["collect_memory_info"] == "true") {               \
+        __ss__ << "cpu_rss_mb: Failed" << std::endl;                        \
+        __ss__ << "gpu_rss_mb: Failed" << std::endl;                        \
+        __ss__ << "gpu_util: Failed" << std::endl;                          \
+      }                                                                     \
+      fastdeploy::benchmark::ResultManager::SaveBenchmarkResult(            \
+                          __ss__.str(), __config_info__["result_path"]);    \
       return 0;                                                             \
     }                                                                       \
     double __profile_time__ = MODEL_NAME.GetProfileTime() * 1000;           \
@@ -49,6 +57,14 @@
     for (int __i__ = 0; __i__ < __warmup__; __i__++) {                      \
       if (!BENCHMARK_FUNC) {                                                \
         std::cerr << "Failed to predict." << std::endl;                     \
+        __ss__ << "End2End(ms): Failed" << std::endl;                       \
+        if (__config_info__["collect_memory_info"] == "true") {             \
+          __ss__ << "cpu_rss_mb: Failed" << std::endl;                      \
+          __ss__ << "gpu_rss_mb: Failed" << std::endl;                      \
+          __ss__ << "gpu_util: Failed" << std::endl;                        \
+        }                                                                   \
+        fastdeploy::benchmark::ResultManager::SaveBenchmarkResult(          \
+                          __ss__.str(), __config_info__["result_path"]);    \
         return 0;                                                           \
       }                                                                     \
     }                                                                       \
@@ -62,6 +78,14 @@
     for (int __i__ = 0; __i__ < __repeat__; __i__++) {                      \
       if (!BENCHMARK_FUNC) {                                                \
         std::cerr << "Failed to predict." << std::endl;                     \
+        __ss__ << "End2End(ms): Failed" << std::endl;                       \
+        if (__config_info__["collect_memory_info"] == "true") {             \
+          __ss__ << "cpu_rss_mb: Failed" << std::endl;                      \
+          __ss__ << "gpu_rss_mb: Failed" << std::endl;                      \
+          __ss__ << "gpu_util: Failed" << std::endl;                        \
+        }                                                                   \
+        fastdeploy::benchmark::ResultManager::SaveBenchmarkResult(          \
+                          __ss__.str(), __config_info__["result_path"]);    \
         return 0;                                                           \
       }                                                                     \
     }                                                                       \
@@ -79,7 +103,7 @@
     std::cout << "gpu_rss_mb: " << __gpu_mem__ << "MB." << std::endl;       \
     __ss__ << "gpu_rss_mb: " << __gpu_mem__ << "MB." << std::endl;          \
     std::cout << "gpu_util: " << __gpu_util__ << std::endl;                 \
-    __ss__ << "gpu_rss_mb: " << __gpu_mem__ << "MB." << std::endl;          \
+    __ss__ << "gpu_util: " << __gpu_util__ << "MB." << std::endl;           \
     __resource_moniter__.Stop();                                            \
   }                                                                         \
   fastdeploy::benchmark::ResultManager::SaveBenchmarkResult(__ss__.str(),   \
