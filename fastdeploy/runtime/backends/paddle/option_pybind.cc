@@ -41,6 +41,9 @@ void BindPaddleOption(pybind11::module& m) {
       .def_readwrite("enable_log_info", &PaddleBackendOption::enable_log_info)
       .def_readwrite("enable_mkldnn", &PaddleBackendOption::enable_mkldnn)
       .def_readwrite("enable_trt", &PaddleBackendOption::enable_trt)
+      .def_readwrite("enable_memory_optimize",
+                     &PaddleBackendOption::enable_memory_optimize)
+      .def_readwrite("switch_ir_debug", &PaddleBackendOption::switch_ir_debug)
       .def_readwrite("ipu_option", &PaddleBackendOption::ipu_option)
       .def_readwrite("collect_trt_shape",
                      &PaddleBackendOption::collect_trt_shape)

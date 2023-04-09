@@ -75,8 +75,9 @@ bool HWC2CHW::ImplByCvCuda(FDMat* mat) {
   auto dst_tensor =
       CreateCvCudaTensorWrapData(*(mat->output_cache), Layout::CHW);
 
-  cvcuda_reformat_op_(mat->Stream(), src_tensor, dst_tensor);
+  cvcuda_reformat_op_(mat->Stream(), *src_tensor, *dst_tensor);
 
+  mat->layout = Layout::CHW;
   mat->SetTensor(mat->output_cache);
   mat->mat_type = ProcLib::CVCUDA;
   return true;

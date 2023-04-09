@@ -43,8 +43,8 @@ nvcv::ImageFormat CreateCvCudaImageFormat(FDDataType type, int channel,
   return nvcv::FMT_BGRf32;
 }
 
-nvcv::TensorWrapData CreateCvCudaTensorWrapData(const FDTensor& tensor,
-                                                Layout layout) {
+std::shared_ptr<nvcv::TensorWrapData> CreateCvCudaTensorWrapData(
+    const FDTensor& tensor, Layout layout) {
   FDASSERT(tensor.shape.size() == 3,
            "When create CVCUDA tensor from FD tensor,"
            "tensor shape should be 3-Dim,");
@@ -76,7 +76,7 @@ nvcv::TensorWrapData CreateCvCudaTensorWrapData(const FDTensor& tensor,
   nvcv::TensorDataStridedCuda tensor_data(
       nvcv::TensorShape{req.shape, req.rank, req.layout},
       nvcv::DataType{req.dtype}, buf);
-  return nvcv::TensorWrapData(tensor_data);
+  return std::make_shared<nvcv::TensorWrapData>(tensor_data, nullptr);
 }
 
 void* GetCvCudaTensorDataPtr(const nvcv::TensorWrapData& tensor) {
@@ -110,6 +110,17 @@ void CreateCvCudaImageBatchVarShape(std::vector<FDTensor*>& tensors,
     FDASSERT(tensors[i]->device == Device::GPU, "Tensor must on GPU.");
     img_batch.pushBack(CreateImageWrapData(*(tensors[i])));
   }
+}
+
+NVCVInterpolationType CreateCvCudaInterp(int interp) {
+  // CV-CUDA Interp value is compatible with OpenCV
+  auto nvcv_interp = NVCVInterpolationType(interp);
+
+  // Due to bug of CV-CUDA CUBIC resize, will force to convert CUBIC to LINEAR
+  if (nvcv_interp == NVCV_INTERP_CUBIC) {
+    return NVCV_INTERP_LINEAR;
+  }
+  return nvcv_interp;
 }
 #endif
 
