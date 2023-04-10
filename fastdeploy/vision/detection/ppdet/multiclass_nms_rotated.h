@@ -29,22 +29,22 @@ namespace detection {
    * \param[in] normalized Determine whether normalized is required
    * \param[in] score_threshold bbox threshold, bboxes with scores lower than it will not be considered.
    */
-struct NMSOption{
-  NMSOption() = default;
+struct NMSRotatedOption{
+  NMSRotatedOption() = default;
   int64_t background_label = -1;
-  int64_t keep_top_k = 100;
+  int64_t keep_top_k = -1;
   float nms_eta = 1.0;
-  float nms_threshold = 0.5;
-  int64_t nms_top_k = 1000;
-  bool normalized = true;
-  float score_threshold = 0.3;
+  float nms_threshold = 0.1;
+  int64_t nms_top_k = 2000;
+  bool normalized = false;
+  float score_threshold = 0.1;
 };
 
-struct PaddleMultiClassNMS {
+struct PaddleMultiClassNMSRotated {
   int64_t background_label = -1;
   int64_t keep_top_k = -1;
   float nms_eta;
-  float nms_threshold = 0.7;
+  float nms_threshold = 0.1;
   int64_t nms_top_k;
   bool normalized;
   float score_threshold;
@@ -61,14 +61,14 @@ struct PaddleMultiClassNMS {
                const std::vector<int64_t>& boxes_dim,
                const std::vector<int64_t>& scores_dim);
 
-  void SetNMSOption(const struct NMSOption &nms_option) {
-    background_label = nms_option.background_label;
-    keep_top_k = nms_option.keep_top_k;
-    nms_eta = nms_option.nms_eta;
-    nms_threshold = nms_option.nms_threshold;
-    nms_top_k = nms_option.nms_top_k;
-    normalized = nms_option.normalized;
-    score_threshold = nms_option.score_threshold;
+  void SetNMSRotatedOption(const struct NMSOption &nms_rotated_option) {
+    background_label = nms_rotated_option.background_label;
+    keep_top_k = nms_rotated_option.keep_top_k;
+    nms_eta = nms_rotated_option.nms_eta;
+    nms_threshold = nms_rotated_option.nms_threshold;
+    nms_top_k = nms_rotated_option.nms_top_k;
+    normalized = nms_rotated_option.normalized;
+    score_threshold = nms_rotated_option.score_threshold;
   }
 
 //  def rbox_iou(g, p):

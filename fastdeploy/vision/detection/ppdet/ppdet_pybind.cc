@@ -233,5 +233,10 @@ void BindPPDet(pybind11::module& m) {
       m, "SOLOv2")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>());
+
+  pybind11::class_<vision::detection::PPYOLOE_R, vision::detection::PPDetBase>(
+      m, "PPYOLOE_R")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
 }
 }  // namespace fastdeploy

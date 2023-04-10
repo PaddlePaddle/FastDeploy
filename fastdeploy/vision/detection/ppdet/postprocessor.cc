@@ -264,6 +264,56 @@ bool PaddleDetPostprocessor::ProcessSolov2(
   return true;
 }
 
+bool PaddleDetPostprocessor::ProcessPPYOLOE_R(
+    const std::vector<FDTensor>& tensors,
+    std::vector<DetectionResult>* results) {
+  if (tensors.size() != 2) {
+    FDERROR << "The size of tensors for PPYOLOE_R must be 2." << std::endl;
+    return false;
+  }
+
+  // tensor[0] means bbox data
+  const auto bbox_data = static_cast<const float*>(tensors[0].CpuData());
+  // tensor[1] means score data
+  const auto score_data_ = static_cast<const float*>(tensors[1].CpuData());
+
+  int batch_num = tensors[0].Shape()[0];
+  int slice_dim = tensors[0].Shape()[1];
+  int bbox_dim = tensors[0].Shape()[2];
+  int cls_dim = tensors[0].Shape()[2];
+  results.resize(batch_num);
+
+  for (int i_batch = 0; i_batch < batch_num; i_batch++) {
+    for (int i = 0; i < slice_dim; i++) {
+    }
+
+    bbox_data += bbox_dim * slice_dim;
+    score_data_ += cls_dim * slice_dim;
+  }
+
+  //    printf("bbox dim: ");
+  //    for (auto &dim : tensors[0].Shape()) {
+  //        printf("%d ", int(dim));
+  //    }
+  //    printf("\n");
+
+  //      printf("boxes dim: ");
+  //      for (int k=0; k<boxes_dim.size(); k++) {
+  //        printf("%d ", int(boxes_dim[k]));
+  //      }
+  //      printf("\n");
+  //
+  //      printf("score dim: ");
+  //      for (int k=0; k<scores_dim.size(); k++) {
+  //        printf("%d ", int(scores_dim[k]));
+  //      }
+  //      printf("\n");
+
+  printf("not completed!!!\n");
+
+  return true;
+}
+
 bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                  std::vector<DetectionResult>* results) {
   if (arch_ == "SOLOv2") {
@@ -272,6 +322,10 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
     // The fourth output of solov2 is mask
     return ProcessMask(tensors[3], results);
   } else {
+    if (tensors[0].Shape()[2] == 8) {  // PPYOLOE_R
+      return ProcessPPYOLOE_R(tensors, results);
+    }
+
     // Do process according to whether NMS exists.
     if (with_nms_) {
       if (!ProcessWithNMS(tensors, results)) {

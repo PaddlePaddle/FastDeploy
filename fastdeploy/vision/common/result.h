@@ -110,6 +110,8 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   std::vector<std::array<float, 4>> boxes;
   /** \brief The confidence for all the detected objects
    */
+  std::vector<std::array<float, 8>> rotated_boxes;
+
   std::vector<float> scores;
   /// The classify label for all the detected objects
   std::vector<int32_t> label_ids;

@@ -91,6 +91,10 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   bool ProcessSolov2(const std::vector<FDTensor>& tensors,
                      std::vector<DetectionResult>* results);
 
+  // Process PPYOLOE_R
+  bool ProcessPPYOLOE_R(const std::vector<FDTensor>& tensors,
+                        std::vector<DetectionResult>* results);
+
   // Process mask tensor for MaskRCNN
   bool ProcessMask(const FDTensor& tensor,
                    std::vector<DetectionResult>* results);
