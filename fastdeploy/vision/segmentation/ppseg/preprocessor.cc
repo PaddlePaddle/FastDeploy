@@ -21,7 +21,8 @@ namespace segmentation {
 
 PaddleSegPreprocessor::PaddleSegPreprocessor(const std::string& config_file) {
   this->config_file_ = config_file;
-  FDASSERT(BuildPreprocessPipelineFromConfig(), "Failed to create PaddleSegPreprocessor.");
+  FDASSERT(BuildPreprocessPipelineFromConfig(),
+           "Failed to create PaddleSegPreprocessor.");
   initialized_ = true;
 }
 
@@ -35,7 +36,7 @@ bool PaddleSegPreprocessor::BuildPreprocessPipelineFromConfig() {
     FDERROR << "Failed to load yaml file " << config_file_
             << ", maybe you should check this file." << std::endl;
     return false;
-  }   
+  }
 
   if (cfg["Deploy"]["transforms"]) {
     auto preprocess_cfg = cfg["Deploy"]["transforms"];
@@ -76,7 +77,7 @@ bool PaddleSegPreprocessor::BuildPreprocessPipelineFromConfig() {
     if (input_height != -1 && input_width != -1 && !is_contain_resize_op_) {
       is_contain_resize_op_ = true;
       processors_.insert(processors_.begin(),
-          std::make_shared<Resize>(input_width, input_height));
+                         std::make_shared<Resize>(input_width, input_height));
     }
   }
   if (!disable_permute_) {
@@ -88,22 +89,24 @@ bool PaddleSegPreprocessor::BuildPreprocessPipelineFromConfig() {
   return true;
 }
 
-bool PaddleSegPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs, std::map<std::string, std::vector<std::array<int, 2>>>* imgs_info) {
-  
+bool PaddleSegPreprocessor::Apply(FDMatBatch* image_batch,
+                                  std::vector<FDTensor>* outputs) {
+  std::vector<FDMat>* images = image_batch->mats;
   if (!initialized_) {
     FDERROR << "The preprocessor is not initialized." << std::endl;
     return false;
   }
   if (images->size() == 0) {
-    FDERROR << "The size of input images should be greater than 0." << std::endl;
+    FDERROR << "The size of input images should be greater than 0."
+            << std::endl;
     return false;
   }
   std::vector<std::array<int, 2>> shape_info;
   for (const auto& image : *images) {
-    shape_info.push_back({static_cast<int>(image.Height()),
-                          static_cast<int>(image.Width())});
+    shape_info.push_back(
+        {static_cast<int>(image.Height()), static_cast<int>(image.Width())});
   }
-  (*imgs_info)["shape_info"] = shape_info;
+  (*imgs_info_)["shape_info"] = shape_info;
   for (size_t i = 0; i < processors_.size(); ++i) {
     if (processors_[i]->Name() == "Resize") {
       auto processor = dynamic_cast<Resize*>(processors_[i].get());
@@ -123,13 +126,17 @@ bool PaddleSegPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor
   // Batch preprocess : resize all images to the largest image shape in batch
   if (!is_contain_resize_op_ && img_num > 1) {
     int max_width = 0;
-    int max_height = 0; 
+    int max_height = 0;
     for (size_t i = 0; i < img_num; ++i) {
       max_width = std::max(max_width, ((*images)[i]).Width());
       max_height = std::max(max_height, ((*images)[i]).Height());
     }
+    pre_resize_op_->SetWidthAndHeight(max_width, max_height);
     for (size_t i = 0; i < img_num; ++i) {
-      Resize::Run(&(*images)[i], max_width, max_height);
+      if (!(*pre_resize_op_)(&(*images)[i])) {
+        FDERROR << "Failed to batch resize max_width and max_height"
+                << std::endl;
+      }
     }
   }
   for (size_t i = 0; i < img_num; ++i) {
@@ -142,32 +149,29 @@ bool PaddleSegPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor
     }
   }
   outputs->resize(1);
-  // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> tensors(img_num);
-  for (size_t i = 0; i < img_num; ++i) {
-    (*images)[i].ShareWithTensor(&(tensors[i]));
-    tensors[i].ExpandDim(0);
-  }
-  if (tensors.size() == 1) {
-    (*outputs)[0] = std::move(tensors[0]);
-  } else {
-    function::Concat(tensors, &((*outputs)[0]), 0);
-  }
+  FDTensor* tensor = image_batch->Tensor();
+  (*outputs)[0].SetExternalData(tensor->Shape(), tensor->Dtype(),
+                                tensor->Data(), tensor->device,
+                                tensor->device_id);
   return true;
 }
 
 void PaddleSegPreprocessor::DisableNormalize() {
   this->disable_normalize_ = true;
-  // the DisableNormalize function will be invalid if the configuration file is loaded during preprocessing
+  // the DisableNormalize function will be invalid if the configuration file is
+  // loaded during preprocessing
   if (!BuildPreprocessPipelineFromConfig()) {
-    FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
+    FDERROR << "Failed to build preprocess pipeline from configuration file."
+            << std::endl;
   }
 }
 void PaddleSegPreprocessor::DisablePermute() {
   this->disable_permute_ = true;
-  // the DisablePermute function will be invalid if the configuration file is loaded during preprocessing
+  // the DisablePermute function will be invalid if the configuration file is
+  // loaded during preprocessing
   if (!BuildPreprocessPipelineFromConfig()) {
-    FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
+    FDERROR << "Failed to build preprocess pipeline from configuration file."
+            << std::endl;
   }
 }
 }  // namespace segmentation
