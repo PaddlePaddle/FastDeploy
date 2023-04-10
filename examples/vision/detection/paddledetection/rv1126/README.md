@@ -1,6 +1,6 @@
 English | [简体中文](README_CN.md)
-# Deploy PP-YOLOE Quantification Model on RV1126
-Now FastDeploy supports the deployment of PP-YOLOE quantification model to RV1126 based on Paddle Lite.
+# Deploy PP-YOLOE and PicoDet Quantification Model on RV1126
+Now FastDeploy supports the deployment of PP-YOLOE and PicoDet quantification model to RV1126 based on Paddle Lite.
 
 For model quantification and download, refer to [Model Quantification](../quantize/README.md)
 

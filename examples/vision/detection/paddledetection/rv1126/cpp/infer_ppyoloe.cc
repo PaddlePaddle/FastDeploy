@@ -24,7 +24,7 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
   auto params_file = model_dir + sep + "model.pdiparams";
   auto config_file = model_dir + sep + "infer_cfg.yml";
   auto subgraph_file = model_dir + sep + "subgraph.txt";
-  fastdeploy::vision::EnableFlyCV(); 
+  fastdeploy::vision::EnableFlyCV();
   fastdeploy::RuntimeOption option;
   option.UseTimVX();
   option.SetLiteSubgraphPartitionPath(subgraph_file);
@@ -46,14 +46,13 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
   auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
-
 }
 
 int main(int argc, char* argv[]) {
   if (argc < 3) {
-    std::cout << "Usage: infer_demo path/to/quant_model "
+    std::cout << "Usage: ppyoloe_infer_demo path/to/quant_model "
                  "path/to/image "
-                 "e.g ./infer_demo ./PPYOLOE_L_quant ./test.jpeg"
+                 "e.g ./ppyoloe_infer_demo ./PPYOLOE_L_quant ./test.jpeg"
               << std::endl;
     return -1;
   }
