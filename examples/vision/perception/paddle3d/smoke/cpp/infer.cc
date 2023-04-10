@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision.h"
 #ifdef WIN32
 const char sep = '\\';
@@ -24,7 +25,7 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file,
   auto model_file = model_dir + sep + "smoke.pdmodel";
   auto params_file = model_dir + sep + "smoke.pdiparams";
   auto config_file = model_dir + sep + "infer_cfg.yml";
-  fastdeploy::vision::EnableFlyCV();
+  // fastdeploy::vision::EnableFlyCV();
   auto model = fastdeploy::vision::perception::Smoke(
       model_file, params_file, config_file, option,
       fastdeploy::ModelFormat::PADDLE);
@@ -42,6 +43,19 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file,
   auto vis_im = fastdeploy::vision::VisPerception(im, res, config_file);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  for (auto i = 0; i < 20; i++) {
+    model.Predict(im, &res);
+  }
+  int64_t repeat_time = 100;
+  model.EnableRecordTimeOfRuntime();
+  fastdeploy::TimeCounter tc;
+  tc.Start();
+  for (auto i = 0; i < repeat_time; i++) {
+    model.Predict(im, &res);
+  }
+  tc.End();
+  std::cout << "e2e time: " << tc.Duration() / repeat_time << std::endl;
+  model.PrintStatisInfoOfRuntime();
 }
 
 int main(int argc, char* argv[]) {
@@ -52,7 +66,7 @@ int main(int argc, char* argv[]) {
                  "e.g ./infer_demo ./smoke ./00000.png 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu;"
+                 "with gpu; 2: run with paddle-trt"
               << std::endl;
     return -1;
   }
@@ -62,6 +76,17 @@ int main(int argc, char* argv[]) {
     option.UseCpu();
   } else if (std::atoi(argv[3]) == 1) {
     option.UseGpu();
+  } else if (std::atoi(argv[3]) == 2) {
+    option.UseGpu();
+    option.UseTrtBackend();
+    option.EnablePaddleToTrt();
+    option.SetTrtInputShape("images", {1, 3, 384, 1280});
+    option.SetTrtInputShape("down_ratios", {1, 2});
+    option.SetTrtInputShape("trans_cam_to_img", {1, 3, 3});
+    option.SetTrtInputData("trans_cam_to_img",
+                           {721.53771973, 0., 609.55932617, 0., 721.53771973,
+                            172.85400391, 0, 0, 1});
+    option.EnablePaddleTrtCollectShape();
   }
   option.UsePaddleBackend();
 

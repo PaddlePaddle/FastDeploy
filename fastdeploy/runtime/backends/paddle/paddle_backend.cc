@@ -226,10 +226,15 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
       std::map<std::string, std::vector<int>> min_shape;
       std::map<std::string, std::vector<int>> opt_shape;
       GetDynamicShapeFromOption(option, &max_shape, &min_shape, &opt_shape);
+      std::map<std::string, std::vector<float>> max_input_data;
+      std::map<std::string, std::vector<float>> min_input_data;
+      std::map<std::string, std::vector<float>> opt_input_data;
+      GetInputDataFromOption(option, &max_input_data, &min_input_data,
+                             &opt_input_data);
       // Need to run once to get the shape range info file.
-      CollectShapeRun(predictor_tmp.get(), max_shape);
-      CollectShapeRun(predictor_tmp.get(), min_shape);
-      CollectShapeRun(predictor_tmp.get(), opt_shape);
+      CollectShapeRun(predictor_tmp.get(), max_shape, max_input_data);
+      CollectShapeRun(predictor_tmp.get(), min_shape, min_input_data);
+      CollectShapeRun(predictor_tmp.get(), opt_shape, min_input_data);
       FDINFO << "Finish generating shape range info file." << std::endl;
     }
     FDINFO << "Start loading shape range info file " << shape_range_info
@@ -400,9 +405,33 @@ void PaddleBackend::GetDynamicShapeFromOption(
   }
 }
 
+void PaddleBackend::GetInputDataFromOption(
+    const PaddleBackendOption& option,
+    std::map<std::string, std::vector<float>>* max_input_data,
+    std::map<std::string, std::vector<float>>* min_input_data,
+    std::map<std::string, std::vector<float>>* opt_input_data) const {
+  for (const auto& item : option.trt_option.min_input_data) {
+    auto max_iter = option.trt_option.max_input_data.find(item.first);
+    auto opt_iter = option.trt_option.opt_input_data.find(item.first);
+    FDASSERT(max_iter != option.trt_option.max_input_data.end(),
+             "Cannot find %s in TrtBackendOption::min_input_data.",
+             item.first.c_str());
+    FDASSERT(opt_iter != option.trt_option.opt_input_data.end(),
+             "Cannot find %s in TrtBackendOption::opt_input_data.",
+             item.first.c_str());
+    (*max_input_data)[item.first].assign(max_iter->second.begin(),
+                                         max_iter->second.end());
+    (*opt_input_data)[item.first].assign(opt_iter->second.begin(),
+                                         opt_iter->second.end());
+    (*min_input_data)[item.first].assign(item.second.begin(),
+                                         item.second.end());
+  }
+}
+
 void PaddleBackend::CollectShapeRun(
     paddle_infer::Predictor* predictor,
-    const std::map<std::string, std::vector<int>>& shape) const {
+    const std::map<std::string, std::vector<int>>& shape,
+    const std::map<std::string, std::vector<float>>& data) const {
   auto input_names = predictor->GetInputNames();
   auto input_type = predictor->GetInputTypes();
   for (const auto& name : input_names) {
@@ -418,21 +447,47 @@ void PaddleBackend::CollectShapeRun(
     int shape_num = std::accumulate(shape_value.begin(), shape_value.end(), 1,
                                     std::multiplies<int>());
     tensor->Reshape(shape_value);
+
+    if (data.find(name) != data.end()) {
+      FDASSERT(data.at(name).size() == shape_num,
+               "The data num and accumulate of shape must be equal for input: "
+               "[\"%s\"], "
+               " When Use the (C++)RuntimeOption.trt_option.SetInputData/ "
+               " (Python)RuntimeOption.trt_option.set_input_data/",
+               name.c_str());
+    }
+
     auto dtype = input_type[name];
     switch (dtype) {
       case paddle_infer::DataType::FLOAT32: {
-        std::vector<float> input_data(shape_num, 1.0);
-        tensor->CopyFromCpu(input_data.data());
+        if (data.find(name) != data.end()) {
+          tensor->CopyFromCpu(data.at(name).data());
+        } else {
+          std::vector<float> input_data(shape_num, 1.0);
+          tensor->CopyFromCpu(input_data.data());
+        }
         break;
       }
       case paddle_infer::DataType::INT32: {
-        std::vector<int> input_data(shape_num, 1);
-        tensor->CopyFromCpu(input_data.data());
+        if (data.find(name) != data.end()) {
+          std::vector<int> input_data(data.at(name).begin(),
+                                      data.at(name).end());
+          tensor->CopyFromCpu(input_data.data());
+        } else {
+          std::vector<int> input_data(shape_num, 1);
+          tensor->CopyFromCpu(input_data.data());
+        }
         break;
       }
       case paddle_infer::DataType::INT64: {
-        std::vector<int64_t> input_data(shape_num, 1);
-        tensor->CopyFromCpu(input_data.data());
+        if (data.find(name) != data.end()) {
+          std::vector<int64_t> input_data(data.at(name).begin(),
+                                          data.at(name).end());
+          tensor->CopyFromCpu(input_data.data());
+        } else {
+          std::vector<int64_t> input_data(shape_num, 1);
+          tensor->CopyFromCpu(input_data.data());
+        }
         break;
       }
       default: {
