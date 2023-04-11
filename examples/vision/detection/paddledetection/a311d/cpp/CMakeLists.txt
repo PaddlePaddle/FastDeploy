@@ -10,13 +10,16 @@ include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 include_directories(${FASTDEPLOY_INCS})
 include_directories(${FastDeploy_INCLUDE_DIRS})
 
-add_executable(infer_demo ${PROJECT_SOURCE_DIR}/infer_ppyoloe.cc)
+add_executable(ppyoloe_infer_demo ${PROJECT_SOURCE_DIR}/infer_ppyoloe.cc)
+add_executable(picodet_infer_demo ${PROJECT_SOURCE_DIR}/infer_picodet.cc)
 # 添加FastDeploy库依赖
-target_link_libraries(infer_demo ${FASTDEPLOY_LIBS})
+target_link_libraries(ppyoloe_infer_demo ${FASTDEPLOY_LIBS})
+target_link_libraries(picodet_infer_demo ${FASTDEPLOY_LIBS})
 
 set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/build/install)
 
-install(TARGETS infer_demo DESTINATION ./)
+install(TARGETS ppyoloe_infer_demo DESTINATION ./)
+install(TARGETS picodet_infer_demo DESTINATION ./)
 
 install(DIRECTORY models DESTINATION ./)
 install(DIRECTORY images DESTINATION ./)
