@@ -83,6 +83,7 @@ std::string Mask::Str() {
 
 DetectionResult::DetectionResult(const DetectionResult& res) {
   boxes.assign(res.boxes.begin(), res.boxes.end());
+  rotated_boxes.assign(res.rotated_boxes.begin(), res.rotated_boxes.end());
   scores.assign(res.scores.begin(), res.scores.end());
   label_ids.assign(res.label_ids.begin(), res.label_ids.end());
   contain_masks = res.contain_masks;
@@ -98,6 +99,7 @@ DetectionResult::DetectionResult(const DetectionResult& res) {
 DetectionResult& DetectionResult::operator=(DetectionResult&& other) {
   if (&other != this) {
     boxes = std::move(other.boxes);
+    rotated_boxes = std::move(other.rotated_boxes);
     scores = std::move(other.scores);
     label_ids = std::move(other.label_ids);
     contain_masks = std::move(other.contain_masks);
@@ -111,6 +113,7 @@ DetectionResult& DetectionResult::operator=(DetectionResult&& other) {
 
 void DetectionResult::Free() {
   std::vector<std::array<float, 4>>().swap(boxes);
+  std::vector<std::array<float, 8>>().swap(rotated_boxes);
   std::vector<float>().swap(scores);
   std::vector<int32_t>().swap(label_ids);
   std::vector<Mask>().swap(masks);
@@ -119,6 +122,7 @@ void DetectionResult::Free() {
 
 void DetectionResult::Clear() {
   boxes.clear();
+  rotated_boxes.clear();
   scores.clear();
   label_ids.clear();
   masks.clear();
@@ -127,6 +131,7 @@ void DetectionResult::Clear() {
 
 void DetectionResult::Reserve(int size) {
   boxes.reserve(size);
+  rotated_boxes.reserve(size);
   scores.reserve(size);
   label_ids.reserve(size);
   if (contain_masks) {
@@ -136,6 +141,7 @@ void DetectionResult::Reserve(int size) {
 
 void DetectionResult::Resize(int size) {
   boxes.resize(size);
+  rotated_boxes.resize(size);
   scores.resize(size);
   label_ids.resize(size);
   if (contain_masks) {
@@ -162,6 +168,17 @@ std::string DetectionResult::Str() {
     } else {
       out += ", " + masks[i].Str();
     }
+  }
+
+  for (size_t i = 0; i < rotated_boxes.size(); ++i) {
+    out = out + std::to_string(rotated_boxes[i][0]) + "," +
+          std::to_string(rotated_boxes[i][1]) + ", " + std::to_string(rotated_boxes[i][2]) +
+          ", " + std::to_string(rotated_boxes[i][3]) + ", " +
+          std::to_string(rotated_boxes[i][4]) + "," +
+          std::to_string(rotated_boxes[i][5]) + ", " + std::to_string(rotated_boxes[i][6]) +
+          ", " + std::to_string(rotated_boxes[i][7]) + ", " +
+          std::to_string(scores[i]) + ", " + std::to_string(label_ids[i]);
+    out += "\n";
   }
   return out;
 }

@@ -52,16 +52,16 @@ struct PaddleMultiClassNMSRotated {
   std::vector<int32_t> out_num_rois_data;
   std::vector<int32_t> out_index_data;
   std::vector<float> out_box_data;
-  void FastNMS(const float* boxes, const float* scores, const int& num_boxes,
+  void FastNMSRotated(const float* boxes, const float* scores, const int& num_boxes,
                std::vector<int>* keep_indices);
-  int NMSForEachSample(const float* boxes, const float* scores, int num_boxes,
+  int NMSRotatedForEachSample(const float* boxes, const float* scores, int num_boxes,
                        int num_classes,
                        std::map<int, std::vector<int>>* keep_indices);
-  void Compute(const float* boxes, const float* scores,
+  void Compute(const float* ploy_boxes, const float* scores,
                const std::vector<int64_t>& boxes_dim,
                const std::vector<int64_t>& scores_dim);
 
-  void SetNMSRotatedOption(const struct NMSOption &nms_rotated_option) {
+  void SetNMSRotatedOption(const struct NMSRotatedOption &nms_rotated_option) {
     background_label = nms_rotated_option.background_label;
     keep_top_k = nms_rotated_option.keep_top_k;
     nms_eta = nms_rotated_option.nms_eta;
@@ -70,22 +70,6 @@ struct PaddleMultiClassNMSRotated {
     normalized = nms_rotated_option.normalized;
     score_threshold = nms_rotated_option.score_threshold;
   }
-
-//  def rbox_iou(g, p):
-//    g = np.array(g)
-//    p = np.array(p)
-//    g = Polygon(g[:8].reshape((4, 2)))
-//    p = Polygon(p[:8].reshape((4, 2)))
-//    g = g.buffer(0)
-//    p = p.buffer(0)
-//    if not g.is_valid or not p.is_valid:
-//        return 0
-//    inter = Polygon(g).intersection(Polygon(p)).area
-//    union = g.area + p.area - inter
-//    if union == 0:
-//        return 0
-//    else:
-//        return inter / union
 };
 }  // namespace detection
 }  // namespace vision

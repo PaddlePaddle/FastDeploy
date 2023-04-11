@@ -40,7 +40,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-
+  printf("---> box num: %d\n", int(res.rotated_boxes.size()));
   std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
@@ -61,7 +61,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
     return;
   }
 
-  auto im = cv::imread(image_file);
+  const cv::Mat im = cv::imread(image_file);
 
   fastdeploy::vision::DetectionResult res;
   if (!model.Predict(im, &res)) {
@@ -69,10 +69,10 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
     return;
   }
 
-  std::cout << res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.5);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  //std::cout << res.Str() << std::endl;
+  //auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.1);
+  //cv::imwrite("vis_result.jpg", vis_im);
+  //std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
 int main(int argc, char* argv[]) {

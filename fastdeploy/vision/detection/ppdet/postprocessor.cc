@@ -272,44 +272,51 @@ bool PaddleDetPostprocessor::ProcessPPYOLOE_R(
     return false;
   }
 
-  // tensor[0] means bbox data
-  const auto bbox_data = static_cast<const float*>(tensors[0].CpuData());
-  // tensor[1] means score data
-  const auto score_data_ = static_cast<const float*>(tensors[1].CpuData());
+  int boxes_index = 0;
+  int scores_index = 1;
+  multi_class_nms_rotated_.Compute(
+      static_cast<const float*>(tensors[boxes_index].Data()),
+      static_cast<const float*>(tensors[scores_index].Data()),
+      tensors[boxes_index].shape, tensors[scores_index].shape);
+  auto num_boxes = multi_class_nms_rotated_.out_num_rois_data;
+  auto box_data =
+      static_cast<const float*>(multi_class_nms_rotated_.out_box_data.data());
 
-  int batch_num = tensors[0].Shape()[0];
-  int slice_dim = tensors[0].Shape()[1];
-  int bbox_dim = tensors[0].Shape()[2];
-  int cls_dim = tensors[0].Shape()[2];
-  results.resize(batch_num);
+ // Get boxes for each input image
+  results->resize(num_boxes.size());
+  int offset = 0;
+  for (size_t i = 0; i < num_boxes.size(); ++i) {
+    printf("-=-->num boxes: %d\n", int(num_boxes[i]));
 
-  for (int i_batch = 0; i_batch < batch_num; i_batch++) {
-    for (int i = 0; i < slice_dim; i++) {
+    const float* ptr = box_data + offset;
+    (*results)[i].Reserve(num_boxes[i]);
+    for (size_t j = 0; j < num_boxes[i]; ++j) {
+      (*results)[i].label_ids.push_back(
+          static_cast<int32_t>(round(ptr[j * 10])));
+      (*results)[i].scores.push_back(ptr[j * 10 + 1]);
+      (*results)[i].rotated_boxes.push_back(std::array<float, 8>(
+          {ptr[j * 10 + 2], ptr[j * 10 + 3], ptr[j * 10 + 4], ptr[j * 10 + 5],
+           ptr[j * 10 + 6], ptr[j * 10 + 7], ptr[j * 10 + 8], ptr[j * 10 + 9]}));
+
+//      printf("box: %f %f %f %f %f %f %f %f \n", ptr[j * 10 + 2], ptr[j * 10 + 3], ptr[j * 10 + 4], ptr[j * 10 + 5],
+//           ptr[j * 10 + 6], ptr[j * 10 + 7], ptr[j * 10 + 8], ptr[j * 10 + 9]);
     }
-
-    bbox_data += bbox_dim * slice_dim;
-    score_data_ += cls_dim * slice_dim;
+    offset += (num_boxes[i] * 10);
+//    printf("rotated boxes size: %d", int((*results)[i].rotated_boxes.size()));
   }
 
-  //    printf("bbox dim: ");
-  //    for (auto &dim : tensors[0].Shape()) {
-  //        printf("%d ", int(dim));
-  //    }
-  //    printf("\n");
-
-  //      printf("boxes dim: ");
-  //      for (int k=0; k<boxes_dim.size(); k++) {
-  //        printf("%d ", int(boxes_dim[k]));
-  //      }
-  //      printf("\n");
-  //
-  //      printf("score dim: ");
-  //      for (int k=0; k<scores_dim.size(); k++) {
-  //        printf("%d ", int(scores_dim[k]));
-  //      }
-  //      printf("\n");
-
-  printf("not completed!!!\n");
+  // do scale
+  if (GetScaleFactor()[0] != 0) {
+    for (auto& result : *results) {
+      for (int i = 0; i < result.rotated_boxes.size(); i++) {
+        for (int j = 0; j < 8; j++) {
+          auto scale = i % 2 == 0 ? GetScaleFactor()[1] : GetScaleFactor()[0];
+          //printf("%f %f %f, \n", float(result.rotated_boxes[i][j]), float(scale), (result.rotated_boxes[i][j] / float(scale)));
+          result.rotated_boxes[i][j] /= float(scale);
+        }
+      }
+    }
+  }
 
   return true;
 }

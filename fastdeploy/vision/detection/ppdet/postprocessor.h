@@ -16,6 +16,7 @@
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms_rotated.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -28,6 +29,7 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
     // There may be no NMS config in the yaml file,
     // so we need to give a initial value to multi_class_nms_.
     multi_class_nms_.SetNMSOption(NMSOption());
+    multi_class_nms_rotated_.SetNMSRotatedOption(NMSRotatedOption());
   }
 
   /** \brief Create a preprocessor instance for PaddleDet serials model
@@ -40,6 +42,7 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
     // There may be no NMS config in the yaml file,
     // so we need to give a initial value to multi_class_nms_.
     multi_class_nms_.SetNMSOption(NMSOption());
+    multi_class_nms_rotated_.SetNMSRotatedOption(NMSRotatedOption());
   }
 
   /** \brief Process the result of runtime and fill to ClassifyResult structure
@@ -78,6 +81,8 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   std::string arch_;
 
   PaddleMultiClassNMS multi_class_nms_{};
+
+  PaddleMultiClassNMSRotated multi_class_nms_rotated_{};
 
   // Process for General tensor without nms.
   bool ProcessWithoutNMS(const std::vector<FDTensor>& tensors,
