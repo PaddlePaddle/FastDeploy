@@ -49,6 +49,11 @@ void LiteBackend::ConfigureCpu(const LiteBackendOption& option) {
   config_.set_valid_places(GetPlacesForCpu(option));
 }
 
+void LiteBackend::ConfigureGpu(const LiteBackendOption& option) {
+  // config_.set_valid_places(GetPlacesForCpu(option));
+  # TODO
+}
+
 void LiteBackend::ConfigureKunlunXin(const LiteBackendOption& option) {
   std::vector<paddle::lite_api::Place> valid_places;
   // TODO(yeliang): Placing kInt8 first may cause accuracy issues of some model

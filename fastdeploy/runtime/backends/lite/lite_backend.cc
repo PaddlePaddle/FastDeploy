@@ -40,6 +40,8 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
 
   if (option_.device == Device::CPU) {
     ConfigureCpu(option_);
+  } else if (option_.device == Device::GPU) {
+    ConfigureGpu(option_);
   } else if (option_.device == Device::TIMVX) {
     ConfigureTimvx(option_);
   } else if (option_.device == Device::KUNLUNXIN) {
