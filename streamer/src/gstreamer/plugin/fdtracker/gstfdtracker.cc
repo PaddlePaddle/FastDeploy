@@ -13,15 +13,18 @@
 // limitations under the License.
 
 #include "gstfdtracker.h"
+
 #include <gst/base/gstbasetransform.h>
 #include <gst/gst.h>
 #include <gst/video/video.h>
 #include <stdio.h>
+
 #include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <iostream>
 #include <string>
+
 #include "gstnvdsmeta.h"
 #include "gstreamer/meta/meta.h"
 
