@@ -72,11 +72,12 @@ bool LiteBackend::Init(const RuntimeOption& runtime_option) {
     return false;
   }
   if (runtime_option.device != Device::CPU &&
+      runtime_option.device != Device::GPU &&
       runtime_option.device != Device::KUNLUNXIN &&
       runtime_option.device != Device::ASCEND &&
       runtime_option.device != Device::TIMVX) {
     FDERROR << "PaddleLiteBackend only supports "
-               "Device::CPU/Device::TIMVX/Device::KUNLUNXIN/Device::ASCEND, "
+               "Device::CPU/Device::GPU/Device::TIMVX/Device::KUNLUNXIN/Device::ASCEND, "
                "but now it's "
             << runtime_option.device << "." << std::endl;
     return false;
