@@ -21,6 +21,7 @@
 #include <map>
 #include <gstnvdsmeta.h>
 #include "include/ocsort.h"
+#include "include/trajectory.h"
 
 G_BEGIN_DECLS
 
@@ -41,6 +42,7 @@ struct _GstFdtracker {
   GstBaseTransform base_fdtracker;
 
   std::map<int, OcSortTracker*>* tracker_per_class;
+  std::map<int, Trajectory*>* trajectory_per_class;
 };
 
 struct _GstFdtrackerClass {

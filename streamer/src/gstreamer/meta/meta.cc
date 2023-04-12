@@ -51,6 +51,56 @@ void AddDetectionMeta(GstBuffer* buffer, vision::DetectionResult& result,
   }
 }
 
+void AddTrackerMeta(GstBuffer* buffer, cv::Mat& result) {
+  if (!gst_buffer_is_writable(buffer)) {
+    throw std::runtime_error("Buffer is not writable.");
+  }
+
+  for (size_t i = 0; i < result.rows; ++i) {
+    float x1 = *(result.ptr<float>(i, 2));
+    float y1 = *(result.ptr<float>(i, 3));
+    float x2 = *(result.ptr<float>(i, 4));
+    float y2 = *(result.ptr<float>(i, 5));
+    GstVideoRegionOfInterestMeta* meta =
+        gst_buffer_add_video_region_of_interest_meta(buffer, "tracker", x1, y1,
+                                                     x2 - x1, y2 - y1);
+    meta->id = gst_util_seqnum_next();
+
+    // Add detection tensor
+    GstStructure* tracker = gst_structure_new(
+        "tracker", "x1", G_TYPE_FLOAT, x1, "y1", G_TYPE_FLOAT, y1, "x2",
+        G_TYPE_FLOAT, x2, "y2", G_TYPE_FLOAT, y2, NULL);
+    gst_structure_set(tracker, "class_id", G_TYPE_INT,
+                      *(result.ptr<float>(i, 4)), NULL);
+    gst_structure_set(tracker, "object_id", G_TYPE_INT,
+                      *(result.ptr<float>(i, 4)), NULL);
+    gst_video_region_of_interest_meta_add_param(meta, tracker);
+  }
+}
+
+void ReadDetectionMeta(GstBuffer* buffer, vision::DetectionResult& result) {
+  GstMeta* meta = NULL;
+  gpointer state = NULL;
+
+  while ((meta = gst_buffer_iterate_meta_filtered(
+              buffer, &state, GST_VIDEO_REGION_OF_INTEREST_META_API_TYPE))) {
+    float x1, y1, x2, y2, score;
+    int class_id;
+    GstVideoRegionOfInterestMeta* m = (GstVideoRegionOfInterestMeta*)meta;
+    GstStructure* detection =
+        gst_video_region_of_interest_meta_get_param(m, "detection");
+    gst_structure_get(detection, "x1", G_TYPE_FLOAT, &x1, NULL);
+    gst_structure_get(detection, "y1", G_TYPE_FLOAT, &y1, NULL);
+    gst_structure_get(detection, "x2", G_TYPE_FLOAT, &x2, NULL);
+    gst_structure_get(detection, "y2", G_TYPE_FLOAT, &y2, NULL);
+    gst_structure_get(detection, "class_id", G_TYPE_INT, &class_id, NULL);
+    gst_structure_get(detection, "score", G_TYPE_FLOAT, &score, NULL);
+    result.boxes.emplace_back(std::array<float, 4>{x1, y1, x2, y2});
+    result.label_ids.emplace_back(class_id);
+    result.scores.emplace_back(score);
+  }
+}
+
 void PrintROIMeta(GstBuffer* buffer) {
   GstMeta* meta = NULL;
   gpointer state = NULL;

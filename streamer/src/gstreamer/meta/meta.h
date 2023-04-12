@@ -23,6 +23,10 @@ namespace streamer {
 void AddDetectionMeta(GstBuffer* buffer, vision::DetectionResult& result,
     float thresh = 0.0);
 
+void AddTrackerMeta(GstBuffer* buffer, cv::Mat& result);
+
+void ReadDetectionMeta(GstBuffer* buffer, vision::DetectionResult& result);
+
 void PrintROIMeta(GstBuffer* buffer);
 
 }  // namespace streamer

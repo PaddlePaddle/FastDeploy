@@ -15,4 +15,4 @@
 file(GLOB_RECURSE ALL_SRCS ${PROJECT_SOURCE_DIR}/src/gstreamer/plugin/fdtracker/*.cc ${PROJECT_SOURCE_DIR}/src/gstreamer/plugin/fdtracker/*.cpp)
 
 add_library(gstfdtracker SHARED ${ALL_SRCS} )
-target_link_libraries(gstfdtracker ${DEPEND_LIBS} ${FASTDEPLOY_LIBS})
+target_link_libraries(gstfdtracker ${DEPEND_LIBS} ${GST_LIBRARIES} gstfdmeta ${FASTDEPLOY_LIBS})
