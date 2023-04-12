@@ -24,9 +24,9 @@ tar -xf smoke.tar.gz
 wget https://bj.bcebos.com/fastdeploy/models/smoke_test.png
 
 # CPU推理
-./infer_paddle_model_demo smoke smoke_test.png 0
+./infer_demo smoke smoke_test.png 0
 # GPU推理
-./infer_paddle_model_demo smoke smoke_test.png 1
+./infer_demo smoke smoke_test.png 1
 
 ```
 
