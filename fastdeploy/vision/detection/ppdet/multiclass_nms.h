@@ -70,22 +70,6 @@ struct PaddleMultiClassNMS {
     normalized = nms_option.normalized;
     score_threshold = nms_option.score_threshold;
   }
-
-//  def rbox_iou(g, p):
-//    g = np.array(g)
-//    p = np.array(p)
-//    g = Polygon(g[:8].reshape((4, 2)))
-//    p = Polygon(p[:8].reshape((4, 2)))
-//    g = g.buffer(0)
-//    p = p.buffer(0)
-//    if not g.is_valid or not p.is_valid:
-//        return 0
-//    inter = Polygon(g).intersection(Polygon(p)).area
-//    union = g.area + p.area - inter
-//    if union == 0:
-//        return 0
-//    else:
-//        return inter / union
 };
 }  // namespace detection
 }  // namespace vision
