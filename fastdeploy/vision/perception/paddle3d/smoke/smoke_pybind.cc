@@ -16,9 +16,9 @@
 
 namespace fastdeploy {
 void BindSmoke(pybind11::module& m) {
-  pybind11::class_<vision::perception::SmokePreprocessor>(m,
-                                                          "SmokePreprocessor")
-      .def(pybind11::init<>())
+  pybind11::class_<vision::perception::SmokePreprocessor,
+                   vision::ProcessorManager>(m, "SmokePreprocessor")
+      .def(pybind11::init<std::string>())
       .def("run", [](vision::perception::SmokePreprocessor& self,
                      std::vector<pybind11::array>& im_list) {
         std::vector<vision::FDMat> images;
