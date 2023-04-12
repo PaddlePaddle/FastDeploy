@@ -13,77 +13,53 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/detection/ppdet/multiclass_nms_rotated.h"
-#include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 
 #include <algorithm>
+#include <cmath>
+#include <opencv2/opencv.hpp>
+#include <vector>
 
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/utils/utils.h"
-#include <opencv2/opencv.hpp>
-#include <cmath>
-#include <vector>
-
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace detection {
 
-template <typename T> struct RotatedBox { T x_ctr, y_ctr, w, h, a; };
+template <typename T>
+struct RotatedBox {
+  T x_ctr, y_ctr, w, h, a;
+};
 
-template <typename T> struct Point {
+template <typename T>
+struct Point {
   T x, y;
-  Point(const T &px = 0, const T &py = 0) : x(px), y(py) {}
-  Point operator+(const Point &p) const {
-    return Point(x + p.x, y + p.y);
-  }
-  Point &operator+=(const Point &p) {
+  Point(const T& px = 0, const T& py = 0) : x(px), y(py) {}
+  Point operator+(const Point& p) const { return Point(x + p.x, y + p.y); }
+  Point& operator+=(const Point& p) {
     x += p.x;
     y += p.y;
     return *this;
   }
-  Point operator-(const Point &p) const {
-    return Point(x - p.x, y - p.y);
-  }
-  Point operator*(const T coeff) const {
-    return Point(x * coeff, y * coeff);
-  }
+  Point operator-(const Point& p) const { return Point(x - p.x, y - p.y); }
+  Point operator*(const T coeff) const { return Point(x * coeff, y * coeff); }
 };
 
 template <typename T>
-T dot_2d(const Point<T> &A, const Point<T> &B) {
+T dot_2d(const Point<T>& A, const Point<T>& B) {
   return A.x * B.x + A.y * B.y;
 }
 
 template <typename T>
-T cross_2d(const Point<T> &A, const Point<T> &B) {
+T cross_2d(const Point<T>& A, const Point<T>& B) {
   return A.x * B.y - B.x * A.y;
 }
 
 template <typename T>
-void get_rotated_vertices(const RotatedBox<T> &box,
-                                             Point<T> (&pts)[4]) {
-  // M_PI / 180. == 0.01745329251
-  // double theta = box.a * 0.01745329251;
-  // MODIFIED
-  double theta = box.a;
-  T cosTheta2 = (T)cos(theta) * 0.5f;
-  T sinTheta2 = (T)sin(theta) * 0.5f;
-
-  // y: top --> down; x: left --> right
-  pts[0].x = box.x_ctr - sinTheta2 * box.h - cosTheta2 * box.w;
-  pts[0].y = box.y_ctr + cosTheta2 * box.h - sinTheta2 * box.w;
-  pts[1].x = box.x_ctr + sinTheta2 * box.h - cosTheta2 * box.w;
-  pts[1].y = box.y_ctr - cosTheta2 * box.h - sinTheta2 * box.w;
-  pts[2].x = 2 * box.x_ctr - pts[0].x;
-  pts[2].y = 2 * box.y_ctr - pts[0].y;
-  pts[3].x = 2 * box.x_ctr - pts[1].x;
-  pts[3].y = 2 * box.y_ctr - pts[1].y;
-}
-
-template <typename T>
 int get_intersection_points(const Point<T> (&pts1)[4],
-                                               const Point<T> (&pts2)[4],
-                                               Point<T> (&intersections)[24]) {
+                            const Point<T> (&pts2)[4],
+                            Point<T> (&intersections)[24]) {
   // Line vector
   // A line from p1 to p2 is: p1 + (p2-p1)*t, t=[0,1]
   Point<T> vec1[4], vec2[4];
@@ -93,7 +69,7 @@ int get_intersection_points(const Point<T> (&pts1)[4],
   }
 
   // Line test - test all line combos for intersection
-  int num = 0; // number of intersections
+  int num = 0;  // number of intersections
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
       // Solve for 2x2 Ax=b
@@ -117,8 +93,8 @@ int get_intersection_points(const Point<T> (&pts1)[4],
 
   // Check for vertices of rect1 inside rect2
   {
-    const auto &AB = vec2[0];
-    const auto &DA = vec2[3];
+    const auto& AB = vec2[0];
+    const auto& DA = vec2[3];
     auto ABdotAB = dot_2d<T>(AB, AB);
     auto ADdotAD = dot_2d<T>(DA, DA);
     for (int i = 0; i < 4; i++) {
@@ -140,8 +116,8 @@ int get_intersection_points(const Point<T> (&pts1)[4],
 
   // Reverse the check - check for vertices of rect2 inside rect1
   {
-    const auto &AB = vec1[0];
-    const auto &DA = vec1[3];
+    const auto& AB = vec1[0];
+    const auto& DA = vec1[3];
     auto ABdotAB = dot_2d<T>(AB, AB);
     auto ADdotAD = dot_2d<T>(DA, DA);
     for (int i = 0; i < 4; i++) {
@@ -161,9 +137,8 @@ int get_intersection_points(const Point<T> (&pts1)[4],
 }
 
 template <typename T>
-int convex_hull_graham(const Point<T> (&p)[24],
-                                          const int &num_in, Point<T> (&q)[24],
-                                          bool shift_to_zero = false) {
+int convex_hull_graham(const Point<T> (&p)[24], const int& num_in,
+                       Point<T> (&q)[24], bool shift_to_zero = false) {
   assert(num_in >= 2);
 
   // Step 1:
@@ -176,7 +151,7 @@ int convex_hull_graham(const Point<T> (&p)[24],
       t = i;
     }
   }
-  auto &start = p[t]; // starting point
+  auto& start = p[t];  // starting point
 
   // Step 2:
   // Subtract starting point from every points (for sorting in the next step)
@@ -200,7 +175,7 @@ int convex_hull_graham(const Point<T> (&p)[24],
 
   // CPU version
   std::sort(q + 1, q + num_in,
-            [](const Point<T> &A, const Point<T> &B) -> bool {
+            [](const Point<T>& A, const Point<T>& B) -> bool {
               T temp = cross_2d<T>(A, B);
               if (fabs(temp) < 1e-6) {
                 return dot_2d<T>(A, A) < dot_2d<T>(B, B);
@@ -212,7 +187,7 @@ int convex_hull_graham(const Point<T> (&p)[24],
   // Step 4:
   // Make sure there are at least 2 points (that don't overlap with each other)
   // in the stack
-  int k; // index of the non-overlapped second point
+  int k;  // index of the non-overlapped second point
   for (k = 1; k < num_in; k++) {
     if (dist[k] > 1e-8) {
       break;
@@ -224,7 +199,7 @@ int convex_hull_graham(const Point<T> (&p)[24],
     return 1;
   }
   q[1] = q[k];
-  int m = 2; // 2 points in the stack
+  int m = 2;  // 2 points in the stack
   // Step 5:
   // Finally we can start the scanning process.
   // When a non-convex relationship between the 3 points is found
@@ -254,7 +229,7 @@ int convex_hull_graham(const Point<T> (&p)[24],
 }
 
 template <typename T>
-T polygon_area(const Point<T> (&q)[24], const int &m) {
+T polygon_area(const Point<T> (&q)[24], const int& m) {
   if (m <= 2) {
     return 0;
   }
@@ -268,19 +243,20 @@ T polygon_area(const Point<T> (&q)[24], const int &m) {
 }
 
 template <typename T>
-T rboxes_intersection(const RotatedBox<T> &box1,
-                                         const RotatedBox<T> &box2) {
+T rboxes_intersection(T const* const poly1_raw, T const* const poly2_raw) {
   // There are up to 4 x 4 + 4 + 4 = 24 intersections (including dups) returned
   // from rotated_rect_intersection_pts
   Point<T> intersectPts[24], orderedPts[24];
 
   Point<T> pts1[4];
+
   Point<T> pts2[4];
-  get_rotated_vertices<T>(box1, pts1);
-  get_rotated_vertices<T>(box2, pts2);
+  for (int i = 0; i < 4; i++) {
+    pts1[i] = Point<T>(poly1_raw[2 * i], poly1_raw[2 * i + 1]);
+    pts2[i] = Point<T>(poly2_raw[2 * i], poly2_raw[2 * i + 1]);
+  }
 
   int num = get_intersection_points<T>(pts1, pts2, intersectPts);
-
   if (num <= 2) {
     return 0.0;
   }
@@ -292,12 +268,26 @@ T rboxes_intersection(const RotatedBox<T> &box1,
 }
 
 template <typename T>
-void Poly2Rbox(T const *const poly_raw, RotatedBox<T>& box){
-  std::vector<cv::Point2f> contour_poly {
-    cv::Point2f(poly_raw[0], poly_raw[1]),
-    cv::Point2f(poly_raw[2], poly_raw[3]),
-    cv::Point2f(poly_raw[4], poly_raw[5]),
-    cv::Point2f(poly_raw[6], poly_raw[7]),
+T poly_area(T const* const poly_raw) {
+  T area = 0.0;
+  int j = 3;
+  for (int i = 0; i < 4; i++) {
+    // area += (x[j] + x[i]) * (y[j] - y[i]);
+    area += (poly_raw[2 * j] + poly_raw[2 * i]) *
+            (poly_raw[2 * j + 1] - poly_raw[2 * i + 1]);
+    j = i;
+  }
+  // return static_cast<T>(abs(static_cast<float>(area) / 2.0));
+  return std::abs(area / 2.0);
+}
+
+template <typename T>
+void Poly2Rbox(T const* const poly_raw, RotatedBox<T>& box) {
+  std::vector<cv::Point2f> contour_poly{
+      cv::Point2f(poly_raw[0], poly_raw[1]),
+      cv::Point2f(poly_raw[2], poly_raw[3]),
+      cv::Point2f(poly_raw[4], poly_raw[5]),
+      cv::Point2f(poly_raw[6], poly_raw[7]),
   };
   cv::RotatedRect rotate_rect = cv::minAreaRect(contour_poly);
   box.x_ctr = rotate_rect.center.x;
@@ -308,54 +298,24 @@ void Poly2Rbox(T const *const poly_raw, RotatedBox<T>& box){
 }
 
 template <typename T>
-T rbox_iou_single(T const *const poly1_raw, T const *const poly2_raw) {
-  // shift center to the middle point to achieve higher precision in result
-  RotatedBox<T> box1, box2;
-  Poly2Rbox<T>(poly1_raw, box1);
-  Poly2Rbox<T>(poly2_raw, box2);
-//  printf("poly1_raw: %f,%f,%f,%f,%f,%f,%f,%f\n",
-//    poly1_raw[0],poly1_raw[1],poly1_raw[2],poly1_raw[3],poly1_raw[4],poly1_raw[5],poly1_raw[6],poly1_raw[7]);
-//  printf("poly2_raw: %f,%f,%f,%f,%f,%f,%f,%f\n",
-//    poly2_raw[0],poly2_raw[1],poly2_raw[2],poly2_raw[3],poly2_raw[4],poly2_raw[5],poly2_raw[6],poly2_raw[7]);
-//
-//    printf("before box1: %f,%f,%f,%f,%f\n",
-//        box1.x_ctr,box1.y_ctr, box1.w, box1.h, box1.a);
-//    printf("before box2: %f,%f,%f,%f,%f\n",
-//        box2.x_ctr,box2.y_ctr, box2.w, box2.h, box2.a);
+T rbox_iou_single(T const* const poly1_raw, T const* const poly2_raw) {
+  const T area1 = poly_area(poly1_raw);
+  const T area2 = poly_area(poly2_raw);
 
-  auto center_shift_x = (box1.x_ctr + box2.x_ctr) / 2.0;
-  auto center_shift_y = (box1.y_ctr + box2.y_ctr) / 2.0;
-  box1.x_ctr -= center_shift_x;
-  box1.y_ctr -= center_shift_y;
-  box2.x_ctr -= center_shift_x;
-  box2.y_ctr -= center_shift_y;
-
-//      printf("after box1: %f,%f,%f,%f,%f\n",
-//        box1.x_ctr,box1.y_ctr, box1.w, box1.h, box1.a);
-//    printf("after box2: %f,%f,%f,%f,%f\n",
-//        box2.x_ctr,box2.y_ctr, box2.w, box2.h, box2.a);
-
-  if (box1.w < 1e-2 || box1.h < 1e-2 || box2.w < 1e-2 || box2.h < 1e-2) {
-    return 0.f;
-  }
-  const T area1 = box1.w * box1.h;
-  const T area2 = box2.w * box2.h;
-
-  const T intersection = rboxes_intersection<T>(box1, box2);
+  const T intersection = rboxes_intersection<T>(poly1_raw, poly2_raw);
   const T iou = intersection / (area1 + area2 - intersection);
   return iou;
 }
 
 template <typename T>
 bool SortScorePairDescendRotated(const std::pair<float, T>& pair1,
-                          const std::pair<float, T>& pair2) {
+                                 const std::pair<float, T>& pair2) {
   return pair1.first > pair2.first;
 }
 
-void GetMaxScoreIndexRotated(const float* scores, const int& score_size,
-                      const float& threshold, const int& top_k,
-                      std::vector<std::pair<float, int>>* sorted_indices) {
-                      printf("score size: %d score thrd: %f, top_k: %d\n", score_size, threshold, top_k);
+void GetMaxScoreIndexRotated(
+    const float* scores, const int& score_size, const float& threshold,
+    const int& top_k, std::vector<std::pair<float, int>>* sorted_indices) {
   for (size_t i = 0; i < score_size; ++i) {
     if (scores[i] > threshold) {
       sorted_indices->push_back(std::make_pair(scores[i], i));
@@ -370,13 +330,14 @@ void GetMaxScoreIndexRotated(const float* scores, const int& score_size,
   }
 }
 
-void PaddleMultiClassNMSRotated::FastNMSRotated(const float* boxes, const float* scores,
-                            const int& num_boxes,
-                            std::vector<int>* keep_indices) {
+void PaddleMultiClassNMSRotated::FastNMSRotated(
+    const float* boxes, const float* scores, const int& num_boxes,
+    std::vector<int>* keep_indices) {
   std::vector<std::pair<float, int>> sorted_indices;
   GetMaxScoreIndexRotated(scores, num_boxes, score_threshold, nms_top_k,
-                   &sorted_indices);
-   printf("nms thrd: %f, sort dim: %d\n", nms_threshold, int(sorted_indices.size()));
+                          &sorted_indices);
+  // printf("nms thrd: %f, sort dim: %d\n", nms_threshold,
+  // int(sorted_indices.size()));
   float adaptive_threshold = nms_threshold;
   while (sorted_indices.size() != 0) {
     const int idx = sorted_indices.front().second;
@@ -389,11 +350,7 @@ void PaddleMultiClassNMSRotated::FastNMSRotated(const float* boxes, const float*
       float overlap =
           rbox_iou_single<float>(boxes + idx * 8, boxes + kept_idx * 8);
 
-//      printf("overlap check: %f vs %f， keep num: %d\n", overlap, adaptive_threshold, int(keep_indices->size()));
       keep = overlap <= adaptive_threshold;
-
-//      if (!keep)
-//        printf("overlap check: %f vs %f， keep idx: %d\n", overlap, adaptive_threshold, kept_idx);
     }
     if (keep) {
       keep_indices->push_back(idx);
@@ -408,26 +365,17 @@ void PaddleMultiClassNMSRotated::FastNMSRotated(const float* boxes, const float*
 int PaddleMultiClassNMSRotated::NMSRotatedForEachSample(
     const float* boxes, const float* scores, int num_boxes, int num_classes,
     std::map<int, std::vector<int>>* keep_indices) {
-
   for (int i = 0; i < num_classes; ++i) {
     if (i == background_label) {
       continue;
     }
     const float* score_for_class_i = scores + i * num_boxes;
-    printf("--->cls id: %d, numbox: %d", i, num_boxes);
     FastNMSRotated(boxes, score_for_class_i, num_boxes, &((*keep_indices)[i]));
   }
   int num_det = 0;
   for (auto iter = keep_indices->begin(); iter != keep_indices->end(); ++iter) {
     num_det += iter->second.size();
-    printf("keep id: %d, \n", iter->first);
-    for (auto &kid: iter->second)
-        printf("%d ", kid);
-    printf("\n");
   }
-
-
-  printf("num det: %d, keep_top_k: %d， num_classes: %d\n", num_det, keep_top_k, num_classes);
 
   if (keep_top_k > -1 && num_det > keep_top_k) {
     std::vector<std::pair<float, std::pair<int, int>>> score_index_pairs;
@@ -458,17 +406,15 @@ int PaddleMultiClassNMSRotated::NMSRotatedForEachSample(
   return num_det;
 }
 
-void PaddleMultiClassNMSRotated::Compute(const float* boxes_data,
-                                  const float* scores_data,
-                                  const std::vector<int64_t>& boxes_dim,
-                                  const std::vector<int64_t>& scores_dim) {
-
+void PaddleMultiClassNMSRotated::Compute(
+    const float* boxes_data, const float* scores_data,
+    const std::vector<int64_t>& boxes_dim,
+    const std::vector<int64_t>& scores_dim) {
   int score_size = scores_dim.size();
 
   int64_t batch_size = scores_dim[0];
   int64_t box_dim = boxes_dim[2];
   int64_t out_dim = box_dim + 2;
-  printf("---> %d %d %d\n", boxes_dim[0], boxes_dim[1], boxes_dim[2]);
 
   int num_nmsed_out = 0;
   FDASSERT(score_size == 3,
@@ -486,8 +432,7 @@ void PaddleMultiClassNMSRotated::Compute(const float* boxes_data,
     const float* current_scores_ptr =
         scores_data + i * scores_dim[1] * scores_dim[2];
     int num = NMSRotatedForEachSample(current_boxes_ptr, current_scores_ptr,
-                               boxes_dim[1], scores_dim[1], &indices);
-                               printf("num: %d\n", num);
+                                      boxes_dim[1], scores_dim[1], &indices);
     num_nmsed_out += num;
     out_num_rois_data[i] = num;
     all_indices.emplace_back(indices);
@@ -518,8 +463,8 @@ void PaddleMultiClassNMSRotated::Compute(const float* boxes_data,
         int start = count * 10;
         out_box_data[start] = label;
         out_box_data[start + 1] = current_scores_class_ptr[indices[j]];
-        for (int k = 0; k <  8; k++) {
-            out_box_data[start + 2 + k] = current_boxes_ptr[indices[j] * 8 + k];
+        for (int k = 0; k < 8; k++) {
+          out_box_data[start + 2 + k] = current_boxes_ptr[indices[j] * 8 + k];
         }
         out_index_data[count] = i * boxes_dim[1] + indices[j];
         count += 1;

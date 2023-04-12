@@ -57,25 +57,26 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
     cv::Size text_size = cv::getTextSize(text, font, font_size, 1, nullptr);
 
     for (int j = 0; j < 4; j++) {
-        auto start = cv::Point(
-            static_cast<int>(round(result.rotated_boxes[i][2*j])),
-            static_cast<int>(round(result.rotated_boxes[i][2*j+1])));
+      auto start = cv::Point(
+          static_cast<int>(round(result.rotated_boxes[i][2 * j])),
+          static_cast<int>(round(result.rotated_boxes[i][2 * j + 1])));
 
-        cv::Point end;
-        if (j!=3) {
-            end = cv::Point(
-                static_cast<int>(round(result.rotated_boxes[i][2*(j+1)])),
-                static_cast<int>(round(result.rotated_boxes[i][2*(j+1) + 1])));
-        } else {
-             end = cv::Point(
-                static_cast<int>(round(result.rotated_boxes[i][0])),
-                static_cast<int>(round(result.rotated_boxes[i][1])));
-             cv::putText(vis_im, text, end, font, font_size,
-                cv::Scalar(255, 255, 255), 1);
-        }
-        cv::line(vis_im, start, end, cv::Scalar(255, 255, 255), 3, cv::LINE_AA, 0);
+      cv::Point end;
+      if (j != 3) {
+        end = cv::Point(
+            static_cast<int>(round(result.rotated_boxes[i][2 * (j + 1)])),
+            static_cast<int>(round(result.rotated_boxes[i][2 * (j + 1) + 1])));
+      } else {
+        end = cv::Point(static_cast<int>(round(result.rotated_boxes[i][0])),
+                        static_cast<int>(round(result.rotated_boxes[i][1])));
+        cv::putText(vis_im, text, end, font, font_size,
+                    cv::Scalar(255, 255, 255), 1);
+      }
+      cv::line(vis_im, start, end, cv::Scalar(255, 255, 255), 3, cv::LINE_AA,
+               0);
     }
   }
+
   for (size_t i = 0; i < result.boxes.size(); ++i) {
     if (result.scores[i] < score_threshold) {
       continue;
@@ -183,23 +184,23 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
     cv::Size text_size = cv::getTextSize(text, font, font_size, 1, nullptr);
 
     for (int j = 0; j < 4; j++) {
-        auto start = cv::Point(
-            static_cast<int>(round(result.rotated_boxes[i][2*j])),
-            static_cast<int>(round(result.rotated_boxes[i][2*j+1])));
+      auto start = cv::Point(
+          static_cast<int>(round(result.rotated_boxes[i][2 * j])),
+          static_cast<int>(round(result.rotated_boxes[i][2 * j + 1])));
 
-        cv::Point end;
-        if (j==3) {
-            end = cv::Point(
-                static_cast<int>(round(result.rotated_boxes[i][2*j])),
-                static_cast<int>(round(result.rotated_boxes[i][2*j+1])));
-        } else {
-             end = cv::Point(
-                static_cast<int>(round(result.rotated_boxes[i][0])),
-                static_cast<int>(round(result.rotated_boxes[i][1])));
-             cv::putText(vis_im, text, end, font, font_size,
-                cv::Scalar(255, 255, 255), 1);
-        }
-        cv::line(vis_im, start, end, cv::Scalar(255, 255, 255), 3, cv::LINE_AA, 0);
+      cv::Point end;
+      if (j == 3) {
+        end = cv::Point(
+            static_cast<int>(round(result.rotated_boxes[i][2 * j])),
+            static_cast<int>(round(result.rotated_boxes[i][2 * j + 1])));
+      } else {
+        end = cv::Point(static_cast<int>(round(result.rotated_boxes[i][0])),
+                        static_cast<int>(round(result.rotated_boxes[i][1])));
+        cv::putText(vis_im, text, end, font, font_size,
+                    cv::Scalar(255, 255, 255), 1);
+      }
+      cv::line(vis_im, start, end, cv::Scalar(255, 255, 255), 3, cv::LINE_AA,
+               0);
     }
   }
   for (size_t i = 0; i < result.boxes.size(); ++i) {

@@ -790,11 +790,11 @@ class PPYOLOE_R(PPYOLOE):
                  config_file,
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
-        """Load a PicoDet model exported by PaddleDetection.
+        """Load a PPYOLOE_R model exported by PaddleDetection.
 
-        :param model_file: (str)Path of model file, e.g picodet/model.pdmodel
-        :param params_file: (str)Path of parameters file, e.g picodet/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
-        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param model_file: (str)Path of model file, e.g ppyoloe_r/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g ppyoloe_r/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe_r/infer_cfg.yml
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
@@ -807,9 +807,9 @@ class PPYOLOE_R(PPYOLOE):
         assert self.initialized, "PicoDet model initialize failed."
 
     def clone(self):
-        """Clone PicoDet object
+        """Clone PPYOLOE_R object
 
-        :return: a new PicoDet object
+        :return: a new PPYOLOE_R object
         """
 
         class PPYOLOE_RClone(PPYOLOE_R):

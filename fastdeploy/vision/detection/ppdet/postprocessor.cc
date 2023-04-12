@@ -282,12 +282,10 @@ bool PaddleDetPostprocessor::ProcessPPYOLOE_R(
   auto box_data =
       static_cast<const float*>(multi_class_nms_rotated_.out_box_data.data());
 
- // Get boxes for each input image
+  // Get boxes for each input image
   results->resize(num_boxes.size());
   int offset = 0;
   for (size_t i = 0; i < num_boxes.size(); ++i) {
-    printf("-=-->num boxes: %d\n", int(num_boxes[i]));
-
     const float* ptr = box_data + offset;
     (*results)[i].Reserve(num_boxes[i]);
     for (size_t j = 0; j < num_boxes[i]; ++j) {
@@ -296,13 +294,10 @@ bool PaddleDetPostprocessor::ProcessPPYOLOE_R(
       (*results)[i].scores.push_back(ptr[j * 10 + 1]);
       (*results)[i].rotated_boxes.push_back(std::array<float, 8>(
           {ptr[j * 10 + 2], ptr[j * 10 + 3], ptr[j * 10 + 4], ptr[j * 10 + 5],
-           ptr[j * 10 + 6], ptr[j * 10 + 7], ptr[j * 10 + 8], ptr[j * 10 + 9]}));
-
-//      printf("box: %f %f %f %f %f %f %f %f \n", ptr[j * 10 + 2], ptr[j * 10 + 3], ptr[j * 10 + 4], ptr[j * 10 + 5],
-//           ptr[j * 10 + 6], ptr[j * 10 + 7], ptr[j * 10 + 8], ptr[j * 10 + 9]);
+           ptr[j * 10 + 6], ptr[j * 10 + 7], ptr[j * 10 + 8],
+           ptr[j * 10 + 9]}));
     }
     offset += (num_boxes[i] * 10);
-//    printf("rotated boxes size: %d", int((*results)[i].rotated_boxes.size()));
   }
 
   // do scale
@@ -311,7 +306,6 @@ bool PaddleDetPostprocessor::ProcessPPYOLOE_R(
       for (int i = 0; i < result.rotated_boxes.size(); i++) {
         for (int j = 0; j < 8; j++) {
           auto scale = i % 2 == 0 ? GetScaleFactor()[1] : GetScaleFactor()[0];
-          //printf("%f %f %f, \n", float(result.rotated_boxes[i][j]), float(scale), (result.rotated_boxes[i][j] / float(scale)));
           result.rotated_boxes[i][j] /= float(scale);
         }
       }

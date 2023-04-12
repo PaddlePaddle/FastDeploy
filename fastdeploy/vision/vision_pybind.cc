@@ -89,8 +89,8 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("contain_masks", &vision::DetectionResult::contain_masks)
       .def(pybind11::pickle(
           [](const vision::DetectionResult& d) {
-            return pybind11::make_tuple(d.boxes, d.scores, d.rotated_boxes, d.label_ids, d.masks,
-                                        d.contain_masks);
+            return pybind11::make_tuple(d.boxes, d.scores, d.rotated_boxes,
+                                        d.label_ids, d.masks, d.contain_masks);
           },
           [](pybind11::tuple t) {
             if (t.size() != 5)

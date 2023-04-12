@@ -441,14 +441,6 @@ class FASTDEPLOY_DECL GFL : public PPDetBase {
 
 class FASTDEPLOY_DECL PPYOLOE_R : public PPDetBase {
  public:
-  /** \brief Set path of model file and configuration file, and the configuration of runtime
-   *
-   * \param[in] model_file Path of model file, e.g picodet/model.pdmodel
-   * \param[in] params_file Path of parameter file, e.g picodet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
-   * \param[in] config_file Path of configuration file for deployment, e.g picodet/infer_cfg.yml
-   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
-   * \param[in] model_format Model format of the loaded model, default is Paddle format
-   */
   PPYOLOE_R(const std::string& model_file, const std::string& params_file,
           const std::string& config_file,
           const RuntimeOption& custom_option = RuntimeOption(),
@@ -457,6 +449,7 @@ class FASTDEPLOY_DECL PPYOLOE_R : public PPDetBase {
                   model_format) {
     valid_cpu_backends = { Backend::PDINFER};
     valid_gpu_backends = {Backend::PDINFER};
+    valid_sophgonpu_backends = {Backend::SOPHGOTPU};
     initialized = Initialize();
   }
 

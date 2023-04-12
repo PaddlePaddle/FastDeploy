@@ -20,7 +20,7 @@
 namespace fastdeploy {
 namespace vision {
 namespace detection {
-/** \brief Config for PaddleMultiClassNMS
+/** \brief Config for PaddleMultiClassNMSRotated
    * \param[in] background_label the value of background label
    * \param[in] keep_top_k the value of keep_top_k
    * \param[in] nms_eta the value of nms_eta

@@ -40,7 +40,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  printf("---> box num: %d\n", int(res.rotated_boxes.size()));
+
   std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
@@ -69,17 +69,17 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
     return;
   }
 
-  //std::cout << res.Str() << std::endl;
-  //auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.1);
-  //cv::imwrite("vis_result.jpg", vis_im);
-  //std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  std::cout << res.Str() << std::endl;
+  auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.1);
+  cv::imwrite("vis_result.jpg", vis_im);
+  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
   if (argc < 4) {
     std::cout
-        << "Usage: infer_demo path/to/model_dir path/to/image run_option, "
-           "e.g ./infer_model ./ppyoloe_model_dir ./test.jpeg 0"
+        << "Usage: infer_ppyoloe_r path/to/model_dir path/to/image run_option, "
+           "e.g ./infer_ppyoloe_r ./ppyoloe_model_dir ./test.jpeg 0"
         << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
                  "with gpu; 2: run with gpu and use tensorrt backend; 3: run "

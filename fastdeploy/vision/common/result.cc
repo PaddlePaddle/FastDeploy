@@ -172,11 +172,13 @@ std::string DetectionResult::Str() {
 
   for (size_t i = 0; i < rotated_boxes.size(); ++i) {
     out = out + std::to_string(rotated_boxes[i][0]) + "," +
-          std::to_string(rotated_boxes[i][1]) + ", " + std::to_string(rotated_boxes[i][2]) +
-          ", " + std::to_string(rotated_boxes[i][3]) + ", " +
+          std::to_string(rotated_boxes[i][1]) + ", " +
+          std::to_string(rotated_boxes[i][2]) + ", " +
+          std::to_string(rotated_boxes[i][3]) + ", " +
           std::to_string(rotated_boxes[i][4]) + "," +
-          std::to_string(rotated_boxes[i][5]) + ", " + std::to_string(rotated_boxes[i][6]) +
-          ", " + std::to_string(rotated_boxes[i][7]) + ", " +
+          std::to_string(rotated_boxes[i][5]) + ", " +
+          std::to_string(rotated_boxes[i][6]) + ", " +
+          std::to_string(rotated_boxes[i][7]) + ", " +
           std::to_string(scores[i]) + ", " + std::to_string(label_ids[i]);
     out += "\n";
   }
@@ -548,8 +550,8 @@ std::string OCRResult::Str() {
       out = out + "]";
 
       if (rec_scores.size() > 0) {
-        out = out + "rec text: " + text[n] + " rec score:" +
-              std::to_string(rec_scores[n]) + " ";
+        out = out + "rec text: " + text[n] +
+              " rec score:" + std::to_string(rec_scores[n]) + " ";
       }
       if (cls_labels.size() > 0) {
         out = out + "cls label: " + std::to_string(cls_labels[n]) +
@@ -563,8 +565,8 @@ std::string OCRResult::Str() {
              cls_scores.size() > 0) {
     std::string out;
     for (int i = 0; i < rec_scores.size(); i++) {
-      out = out + "rec text: " + text[i] + " rec score:" +
-            std::to_string(rec_scores[i]) + " ";
+      out = out + "rec text: " + text[i] +
+            " rec score:" + std::to_string(rec_scores[i]) + " ";
       out = out + "cls label: " + std::to_string(cls_labels[i]) +
             " cls score: " + std::to_string(cls_scores[i]);
       out = out + "\n";
@@ -583,8 +585,8 @@ std::string OCRResult::Str() {
              cls_scores.size() == 0) {
     std::string out;
     for (int i = 0; i < rec_scores.size(); i++) {
-      out = out + "rec text: " + text[i] + " rec score:" +
-            std::to_string(rec_scores[i]) + " ";
+      out = out + "rec text: " + text[i] +
+            " rec score:" + std::to_string(rec_scores[i]) + " ";
       out = out + "\n";
     }
     return out;
@@ -606,9 +608,9 @@ std::string HeadPoseResult::Str() {
   std::string out;
 
   out = "HeadPoseResult: [yaw, pitch, roll]\n";
-  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" + "pitch: " +
-        std::to_string(euler_angles[1]) + "\n" + "roll: " +
-        std::to_string(euler_angles[2]) + "\n";
+  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" +
+        "pitch: " + std::to_string(euler_angles[1]) + "\n" +
+        "roll: " + std::to_string(euler_angles[2]) + "\n";
   return out;
 }
 
