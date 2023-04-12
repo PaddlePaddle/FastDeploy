@@ -25,11 +25,11 @@ RKNPU2Backend::~RKNPU2Backend() {
   }
 
   if (this->tensor_memory_init_) {
-    for (uint32_t i = 0; i < io_num.n_input; i++) {
+    for (uint32_t i = 0; i < io_num_.n_input; i++) {
       rknn_destroy_mem(ctx_, input_mems_[i]);
     }
 
-    for (uint32_t i = 0; i < io_num.n_output; i++) {
+    for (uint32_t i = 0; i < io_num_.n_output; i++) {
       rknn_destroy_mem(ctx_, output_mems_[i]);
     }
   }
@@ -73,13 +73,13 @@ bool RKNPU2Backend::RuntimeOptionIsApplicable(
  */
 bool RKNPU2Backend::GetSDKAndDeviceVersion() {
   int ret;
-  ret = rknn_query(ctx_, RKNN_QUERY_SDK_VERSION, &sdk_ver, sizeof(sdk_ver));
+  ret = rknn_query(ctx_, RKNN_QUERY_SDK_VERSION, &sdk_ver_, sizeof(sdk_ver_));
   if (ret != RKNN_SUCC) {
     FDERROR << "The function(rknn_query) failed! ret=" << ret << std::endl;
     return false;
   }
-  FDINFO << "rknpu2 runtime version: " << sdk_ver.api_version << std::endl;
-  FDINFO << "rknpu2 driver version: " << sdk_ver.drv_version << std::endl;
+  FDINFO << "rknpu2 runtime version: " << sdk_ver_.api_version << std::endl;
+  FDINFO << "rknpu2 driver version: " << sdk_ver_.drv_version << std::endl;
   return true;
 }
 
@@ -198,7 +198,7 @@ bool RKNPU2Backend::InitInputAndOutputNumber() {
     return false;
   }
   int ret = RKNN_SUCC;
-  ret = rknn_query(ctx_, RKNN_QUERY_IN_OUT_NUM, &io_num, sizeof(io_num));
+  ret = rknn_query(ctx_, RKNN_QUERY_IN_OUT_NUM, &io_num_, sizeof(io_num_));
   if (ret != RKNN_SUCC) {
     FDERROR << "The function(rknn_query) failed! ret=" << ret << std::endl;
     return false;
@@ -227,21 +227,21 @@ bool RKNPU2Backend::InitRKNNTensorAddress() {
     InitInputAndOutputNumber();
   }
 
-  if (io_num.n_input == 0) {
+  if (io_num_.n_input == 0) {
     FDERROR << "The number of input tensors is 0." << std::endl;
     return false;
   }
 
-  if (io_num.n_output == 0) {
+  if (io_num_.n_output == 0) {
     FDERROR << "The number of output tensors is 0." << std::endl;
     return false;
   }
 
   // Allocate memory for private variable input_attrs_.
   input_attrs_ =
-      (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_input);
-  memset(input_attrs_, 0, io_num.n_input * sizeof(rknn_tensor_attr));
-  for (uint32_t i = 0; i < io_num.n_input; i++) {
+      (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num_.n_input);
+  memset(input_attrs_, 0, io_num_.n_input * sizeof(rknn_tensor_attr));
+  for (uint32_t i = 0; i < io_num_.n_input; i++) {
     int ret = RKNN_SUCC;
     input_attrs_[i].index = i;
     ret = rknn_query(ctx_, RKNN_QUERY_INPUT_ATTR, &(input_attrs_[i]),
@@ -264,9 +264,9 @@ bool RKNPU2Backend::InitRKNNTensorAddress() {
 
   // Allocate memory for private variable output_attrs_.
   output_attrs_ =
-      (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_output);
-  memset(output_attrs_, 0, io_num.n_output * sizeof(rknn_tensor_attr));
-  for (uint32_t i = 0; i < io_num.n_output; i++) {
+      (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num_.n_output);
+  memset(output_attrs_, 0, io_num_.n_output * sizeof(rknn_tensor_attr));
+  for (uint32_t i = 0; i < io_num_.n_output; i++) {
     int ret = RKNN_SUCC;
     output_attrs_[i].index = i;
     ret = rknn_query(ctx_, RKNN_QUERY_OUTPUT_ATTR, &(output_attrs_[i]),
@@ -302,21 +302,21 @@ bool RKNPU2Backend::InitInputAndOutputInformation() {
     InitRKNNTensorAddress();
   }
 
-  if (io_num.n_input == 0) {
+  if (io_num_.n_input == 0) {
     FDERROR << "The number of input tensors is 0." << std::endl;
     return false;
   }
 
-  if (io_num.n_output == 0) {
+  if (io_num_.n_output == 0) {
     FDERROR << "The number of output tensors is 0." << std::endl;
     return false;
   }
 
-  inputs_desc_.resize(io_num.n_input);
-  outputs_desc_.resize(io_num.n_output);
+  inputs_desc_.resize(io_num_.n_input);
+  outputs_desc_.resize(io_num_.n_output);
 
   // Get input info and copy to input tensor info
-  for (uint32_t i = 0; i < io_num.n_input; i++) {
+  for (uint32_t i = 0; i < io_num_.n_input; i++) {
     // Copy input_attrs_ to input tensor info
     std::string temp_name = input_attrs_[i].name;
     std::vector<int> temp_shape{};
@@ -331,7 +331,7 @@ bool RKNPU2Backend::InitInputAndOutputInformation() {
     inputs_desc_[i] = temp_input_info;
   }
 
-  for (uint32_t i = 0; i < io_num.n_output; i++) {
+  for (uint32_t i = 0; i < io_num_.n_output; i++) {
     // If the output dimension is 3, the runtime will automatically change it
     // to 4. Obviously, this is wrong, and manual correction is required here.
     int n_dims = static_cast<int>(output_attrs_[i].n_dims);
@@ -410,9 +410,9 @@ bool RKNPU2Backend::InitRKNNTensorMemory(std::vector<FDTensor>& inputs) {
     return false;
   }
   int ret = RKNN_SUCC;
-  input_mems_.resize(io_num.n_input);
-  output_mems_.resize(io_num.n_output);
-  for (uint32_t i = 0; i < io_num.n_input; i++) {
+  input_mems_.resize(io_num_.n_input);
+  output_mems_.resize(io_num_.n_output);
+  for (uint32_t i = 0; i < io_num_.n_input; i++) {
     // Judge whether the input and output types are the same
     rknn_tensor_type input_type =
         fastdeploy::RKNPU2Backend::FDDataTypeToRknnTensorType(inputs[i].dtype);
@@ -444,7 +444,7 @@ bool RKNPU2Backend::InitRKNNTensorMemory(std::vector<FDTensor>& inputs) {
     }
   }
 
-  for (uint32_t i = 0; i < io_num.n_output; ++i) {
+  for (uint32_t i = 0; i < io_num_.n_output; ++i) {
     // Most post-processing does not support the fp16 format.
     uint32_t output_size = output_attrs_[i].n_elems * sizeof(float);
     output_mems_[i] = rknn_create_mem(ctx_, output_size);
@@ -485,7 +485,7 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
   }
 
   // Copy input data to input tensor memory
-  for (uint32_t i = 0; i < io_num.n_input; i++) {
+  for (uint32_t i = 0; i < io_num_.n_input; i++) {
     uint32_t width = input_attrs_[i].dims[2];
     uint32_t stride = input_attrs_[i].w_stride;
     if (width == stride) {

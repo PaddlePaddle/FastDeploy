@@ -127,9 +127,9 @@ class RKNPU2Backend : public BaseBackend {
   bool InitRKNNTensorMemory(std::vector<FDTensor>& inputs);
 
   rknn_context ctx_{};
-  rknn_sdk_version sdk_ver{};
+  rknn_sdk_version sdk_ver_{};
 
-  rknn_input_output_num io_num{0, 0};
+  rknn_input_output_num io_num_{0, 0};
 
   std::vector<TensorInfo> inputs_desc_;
   std::vector<TensorInfo> outputs_desc_;
