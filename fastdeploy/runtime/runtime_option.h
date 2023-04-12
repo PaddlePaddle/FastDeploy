@@ -19,10 +19,7 @@
 
 #pragma once
 
-#include <algorithm>
-#include <map>
-#include <vector>
-#include "fastdeploy/runtime/enum_variables.h"
+#include "fastdeploy/benchmark/option.h"
 #include "fastdeploy/runtime/backends/lite/option.h"
 #include "fastdeploy/runtime/backends/openvino/option.h"
 #include "fastdeploy/runtime/backends/ort/option.h"
@@ -31,7 +28,11 @@
 #include "fastdeploy/runtime/backends/rknpu2/option.h"
 #include "fastdeploy/runtime/backends/sophgo/option.h"
 #include "fastdeploy/runtime/backends/tensorrt/option.h"
-#include "fastdeploy/benchmark/option.h"
+#include "fastdeploy/runtime/backends/tvm/option.h"
+#include "fastdeploy/runtime/enum_variables.h"
+#include <algorithm>
+#include <map>
+#include <vector>
 
 namespace fastdeploy {
 
@@ -156,6 +157,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   LiteBackendOption paddle_lite_option;
   /// Option to configure RKNPU2 backend
   RKNPU2BackendOption rknpu2_option;
+  /// Option to configure RKNPU2 backend
+  TVMBackendOption tvm_option;
 
   //  \brief Set the profile mode as 'true'.
   //
@@ -164,8 +167,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // \param[in] repeat Repeat times for runtime inference.
   // \param[in] warmup Warmup times for runtime inference.
   //
-  void EnableProfiling(bool inclue_h2d_d2h = false,
-                       int repeat = 100, int warmup = 50) {
+  void EnableProfiling(bool inclue_h2d_d2h = false, int repeat = 100,
+                       int warmup = 50) {
     benchmark_option.enable_profile = true;
     benchmark_option.warmup = warmup;
     benchmark_option.repeats = repeat;
@@ -174,22 +177,16 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   // \brief Set the profile mode as 'false'.
   //
-  void DisableProfiling() {
-    benchmark_option.enable_profile = false;
-  }
+  void DisableProfiling() { benchmark_option.enable_profile = false; }
 
   // \brief Enable to check if current backend set by
   //        user can be found at valid_xxx_backend.
   //
-  void EnableValidBackendCheck() {
-    enable_valid_backend_check = true;
-  }
+  void EnableValidBackendCheck() { enable_valid_backend_check = true; }
   // \brief Disable to check if current backend set by
   //        user can be found at valid_xxx_backend.
   //
-  void DisableValidBackendCheck() {
-    enable_valid_backend_check = false;
-  }
+  void DisableValidBackendCheck() { enable_valid_backend_check = false; }
 
   // Benchmark option
   benchmark::BenchmarkOption benchmark_option;
@@ -271,6 +268,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetOrtGraphOptLevel(int level = -1);
   void UsePaddleBackend();
   void UseLiteBackend();
+  void UseTVMBackend(const std::string& tvm_json_path,
+                     const std::string& tvm_params_path);
 };
 
 }  // namespace fastdeploy

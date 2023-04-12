@@ -20,24 +20,24 @@
 
 #pragma once
 #include "fastdeploy/utils/utils.h"
-#include <ostream>
 #include <map>
+#include <ostream>
 
 namespace fastdeploy {
-
 
 /*! Inference backend supported in FastDeploy */
 enum Backend {
   UNKNOWN,  ///< Unknown inference backend
-  ORT,  //< ONNX Runtime, support Paddle/ONNX format model,
+  ORT,      //< ONNX Runtime, support Paddle/ONNX format model,
   //< CPU/ Nvidia GPU DirectML
-  TRT,  ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
+  TRT,      ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
   PDINFER,  ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
   POROS,    ///< Poros, support TorchScript format model, CPU / Nvidia GPU
-  OPENVINO,   ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
-  LITE,       ///< Paddle Lite, support Paddle format model, ARM CPU only
-  RKNPU2,     ///< RKNPU2, support RKNN format model, Rockchip NPU only
-  SOPHGOTPU,  ///< SOPHGOTPU, support SOPHGO format model, Sophgo TPU only
+  OPENVINO,    ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
+  LITE,        ///< Paddle Lite, support Paddle format model, ARM CPU only
+  RKNPU2,      ///< RKNPU2, support RKNN format model, Rockchip NPU only
+  SOPHGOTPU,   ///< SOPHGOTPU, support SOPHGO format model, Sophgo TPU only
+  TVM,  ///< TVMBackend, support TVM format model, CPU / Nvidia GPU
 };
 
 /**
@@ -50,7 +50,6 @@ FASTDEPLOY_DECL std::vector<Backend> GetAvailableBackends();
  */
 FASTDEPLOY_DECL bool IsBackendAvailable(const Backend& backend);
 
-
 enum FASTDEPLOY_DECL Device {
   CPU,
   GPU,
@@ -60,7 +59,7 @@ enum FASTDEPLOY_DECL Device {
   KUNLUNXIN,
   ASCEND,
   SOPHGOTPUD,
-  DIRECTML
+  DIRECTML,
 };
 
 /*! Deep learning model format */
@@ -71,39 +70,42 @@ enum ModelFormat {
   RKNN,         ///< Model with RKNN format
   TORCHSCRIPT,  ///< Model with TorchScript format
   SOPHGO,       ///< Model with SOPHGO format
+  TVMFormat,    ///< Model with TVM format
 };
 
 /// Describle all the supported backends for specified model format
 static std::map<ModelFormat, std::vector<Backend>>
     s_default_backends_by_format = {
-  {ModelFormat::PADDLE, {Backend::PDINFER, Backend::LITE,
-                      Backend::ORT, Backend::OPENVINO, Backend::TRT}},
-  {ModelFormat::ONNX, {Backend::ORT, Backend::OPENVINO, Backend::TRT}},
-  {ModelFormat::RKNN, {Backend::RKNPU2}},
-  {ModelFormat::TORCHSCRIPT, {Backend::POROS}},
-  {ModelFormat::SOPHGO, {Backend::SOPHGOTPU}}
-};
+        {ModelFormat::PADDLE,
+         {Backend::PDINFER, Backend::LITE, Backend::ORT, Backend::OPENVINO,
+          Backend::TRT}},
+        {ModelFormat::ONNX, {Backend::ORT, Backend::OPENVINO, Backend::TRT}},
+        {ModelFormat::RKNN, {Backend::RKNPU2}},
+        {ModelFormat::TORCHSCRIPT, {Backend::POROS}},
+        {ModelFormat::SOPHGO, {Backend::SOPHGOTPU}},
+        {ModelFormat::TVMFormat, {Backend::TVM}}};
 
 /// Describle all the supported backends for specified device
-static std::map<Device, std::vector<Backend>>
-    s_default_backends_by_device = {
-  {Device::CPU, {Backend::LITE, Backend::PDINFER, Backend::ORT,
-                Backend::OPENVINO, Backend::POROS}},
-  {Device::GPU, {Backend::PDINFER, Backend::ORT, Backend::TRT, Backend::POROS}},
-  {Device::RKNPU, {Backend::RKNPU2}},
-  {Device::IPU, {Backend::PDINFER}},
-  {Device::TIMVX, {Backend::LITE}},
-  {Device::KUNLUNXIN, {Backend::LITE}},
-  {Device::ASCEND, {Backend::LITE}},
-  {Device::SOPHGOTPUD, {Backend::SOPHGOTPU}},
-  {Device::DIRECTML, {Backend::ORT}}
-};
+static std::map<Device, std::vector<Backend>> s_default_backends_by_device = {
+    {Device::CPU,
+     {Backend::LITE, Backend::PDINFER, Backend::ORT, Backend::OPENVINO,
+      Backend::POROS, Backend::TVM}},
+    {Device::GPU,
+     {Backend::PDINFER, Backend::ORT, Backend::TRT, Backend::POROS,
+      Backend::TVM}},
+    {Device::RKNPU, {Backend::RKNPU2}},
+    {Device::IPU, {Backend::PDINFER}},
+    {Device::TIMVX, {Backend::LITE}},
+    {Device::KUNLUNXIN, {Backend::LITE}},
+    {Device::ASCEND, {Backend::LITE}},
+    {Device::SOPHGOTPUD, {Backend::SOPHGOTPU}},
+    {Device::DIRECTML, {Backend::ORT}}};
 
 inline bool Supported(ModelFormat format, Backend backend) {
   auto iter = s_default_backends_by_format.find(format);
   if (iter == s_default_backends_by_format.end()) {
-    FDERROR << "Didn't find format is registered in " <<
-            "s_default_backends_by_format." << std::endl;
+    FDERROR << "Didn't find format is registered in "
+            << "s_default_backends_by_format." << std::endl;
     return false;
   }
   for (size_t i = 0; i < iter->second.size(); ++i) {
@@ -112,16 +114,16 @@ inline bool Supported(ModelFormat format, Backend backend) {
     }
   }
   std::string msg = Str(iter->second);
-  FDERROR << backend << " only supports " << msg << ", but now it's "
-                      << format << "." << std::endl;
+  FDERROR << backend << " only supports " << msg << ", but now it's " << format
+          << "." << std::endl;
   return false;
 }
 
 inline bool Supported(Device device, Backend backend) {
   auto iter = s_default_backends_by_device.find(device);
   if (iter == s_default_backends_by_device.end()) {
-    FDERROR << "Didn't find device is registered in " <<
-              "s_default_backends_by_device." << std::endl;
+    FDERROR << "Didn't find device is registered in "
+            << "s_default_backends_by_device." << std::endl;
     return false;
   }
   for (size_t i = 0; i < iter->second.size(); ++i) {
@@ -130,8 +132,8 @@ inline bool Supported(Device device, Backend backend) {
     }
   }
   std::string msg = Str(iter->second);
-  FDERROR << backend << " only supports " << msg << ", but now it's "
-          << device << "." << std::endl;
+  FDERROR << backend << " only supports " << msg << ", but now it's " << device
+          << "." << std::endl;
   return false;
 }
 

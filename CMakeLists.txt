@@ -61,6 +61,7 @@ option(ENABLE_PADDLE_BACKEND "Whether to enable paddle backend." OFF)
 option(ENABLE_POROS_BACKEND "Whether to enable poros backend." OFF)
 option(ENABLE_OPENVINO_BACKEND "Whether to enable openvino backend." OFF)
 option(ENABLE_RKNPU2_BACKEND "Whether to enable RKNPU2 backend." OFF)
+option(ENABLE_TVM_BACKEND "Whether to enable TVM backend." OFF)
 option(ENABLE_SOPHGO_BACKEND "Whether to enable SOPHON backend." OFF)
 option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
@@ -165,6 +166,7 @@ file(GLOB_RECURSE DEPLOY_POROS_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fast
 file(GLOB_RECURSE DEPLOY_TRT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/tensorrt/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/tensorrt/*.cpp)
 file(GLOB_RECURSE DEPLOY_OPENVINO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/openvino/*.cc)
 file(GLOB_RECURSE DEPLOY_RKNPU2_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/rknpu2/*.cc)
+file(GLOB_RECURSE DEPLOY_TVM_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/tvm/*.cc)
 file(GLOB_RECURSE DEPLOY_SOPHGO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/sophgo/*.cc)
 file(GLOB_RECURSE DEPLOY_LITE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/lite/*.cc)
 file(GLOB_RECURSE DEPLOY_ENCRYPTION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/encryption/*.cc)
@@ -185,7 +187,8 @@ list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS}
                                  ${DEPLOY_OPENVINO_SRCS} ${DEPLOY_LITE_SRCS}
                                  ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS}
                                  ${DEPLOY_PIPELINE_SRCS} ${DEPLOY_RKNPU2_SRCS}
-                                 ${DEPLOY_SOPHGO_SRCS} ${DEPLOY_ENCRYPTION_SRCS})
+                                 ${DEPLOY_SOPHGO_SRCS} ${DEPLOY_ENCRYPTION_SRCS}
+                                  ${DEPLOY_TVM_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -251,6 +254,14 @@ if(ENABLE_RKNPU2_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_RKNPU2_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/rknpu2.cmake)
   list(APPEND DEPEND_LIBS ${RKNN_RT_LIB})
+endif()
+
+if(ENABLE_TVM_BACKEND)
+  set(CMAKE_CXX_STANDARD 17)
+  add_definitions(-DENABLE_TVM_BACKEND)
+  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TVM_SRCS})
+  include(${PROJECT_SOURCE_DIR}/cmake/tvm.cmake)
+  list(APPEND DEPEND_LIBS ${TVM_RUNTIME_LIB})
 endif()
 
 if(ENABLE_SOPHGO_BACKEND)

@@ -110,6 +110,9 @@ std::vector<Backend> GetAvailableBackends() {
 #ifdef ENABLE_RKNPU2_BACKEND
   backends.push_back(Backend::RKNPU2);
 #endif
+#ifdef ENABLE_TVM_BACKEND
+  backends.push_back(Backend::TVM);
+#endif
 #ifdef ENABLE_SOPHGO_BACKEND
   backends.push_back(Backend::SOPHGOTPU);
 #endif

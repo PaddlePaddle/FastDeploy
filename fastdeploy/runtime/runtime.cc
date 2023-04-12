@@ -45,6 +45,10 @@
 #include "fastdeploy/runtime/backends/rknpu2/rknpu2_backend.h"
 #endif
 
+#ifdef ENABLE_TVM_BACKEND
+#include "fastdeploy/runtime/backends/tvm/tvm_backend.h"
+#endif
+
 #ifdef ENABLE_SOPHGO_BACKEND
 #include "fastdeploy/runtime/backends/sophgo/sophgo_backend.h"
 #endif
@@ -155,6 +159,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     CreateSophgoNPUBackend();
   } else if (option.backend == Backend::POROS) {
     CreatePorosBackend();
+  } else if (option.backend == Backend::TVM) {
+    CreateTVMBackend();
   } else {
     std::string msg = Str(GetAvailableBackends());
     FDERROR << "The compiled FastDeploy only supports " << msg << ", "
@@ -332,6 +338,19 @@ void Runtime::CreateRKNPU2Backend() {
            "ENABLE_RKNPU2_BACKEND=ON.");
 #endif
   FDINFO << "Runtime initialized with Backend::RKNPU2 in " << option.device
+         << "." << std::endl;
+}
+
+void Runtime::CreateTVMBackend() {
+#ifdef ENABLE_TVM_BACKEND
+  backend_ = utils::make_unique<TVMBackend>();
+  FDASSERT(backend_->Init(option), "Failed to initialize TVM backend.");
+#else
+  FDASSERT(false,
+           "TVMBackend is not available, please compiled with "
+           "ENABLE_TVM_BACKEND=ON.");
+#endif
+  FDINFO << "Runtime initialized with Backend::TVM in " << option.device
          << "." << std::endl;
 }
 

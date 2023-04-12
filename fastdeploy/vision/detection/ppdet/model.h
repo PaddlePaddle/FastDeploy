@@ -37,7 +37,7 @@ class FASTDEPLOY_DECL PicoDet : public PPDetBase {
       : PPDetBase(model_file, params_file, config_file, custom_option,
                   model_format) {
     valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
-                          Backend::LITE};
+                          Backend::LITE, Backend::TVM};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_rknpu_backends = {Backend::RKNPU2};
     valid_kunlunxin_backends = {Backend::LITE};
@@ -90,7 +90,7 @@ class FASTDEPLOY_DECL PPYOLOE : public PPDetBase {
       : PPDetBase(model_file, params_file, config_file, custom_option,
                   model_format) {
     valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
-                          Backend::LITE};
+                          Backend::LITE, Backend::TVM};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_timvx_backends = {Backend::LITE};
     valid_kunlunxin_backends = {Backend::LITE};
