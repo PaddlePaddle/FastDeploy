@@ -29,7 +29,7 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
   option.UseTimVX();
   option.SetLiteSubgraphPartitionPath(subgraph_file);
 
-  auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file,
+  auto model = fastdeploy::vision::detection::PicoDet(model_file, params_file,
                                                       config_file, option);
   assert(model.Initialized());
 
@@ -43,16 +43,16 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
 
   std::cout << res.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.5);
+  auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.3);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
   if (argc < 3) {
-    std::cout << "Usage: ppyoloe_infer_demo path/to/quant_model "
+    std::cout << "Usage: picodet_infer_demo path/to/quant_model "
                  "path/to/image "
-                 "e.g ./ppyoloe_infer_demo ./PPYOLOE_L_quant ./test.jpeg"
+                 "e.g ./picodet_infer_demo ./picodet_ptq ./test.jpeg"
               << std::endl;
     return -1;
   }

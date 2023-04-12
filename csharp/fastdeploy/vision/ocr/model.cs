@@ -27,8 +27,18 @@ namespace ocr {
 
 // Recognizer
 
+/*! @brief Recognizer object is used to load the recognition model provided by PaddleOCR.
+ */
 public class Recognizer {
 
+  /** \brief Set path of model file, and the configuration of runtime
+   *
+   * \param[in] model_file Path of model file, e.g ./ch_PP-OCRv3_rec_infer/model.pdmodel.
+   * \param[in] params_file Path of parameter file, e.g ./ch_PP-OCRv3_rec_infer/model.pdiparams, if the model format is ONNX, this parameter will be ignored.
+   * \param[in] label_path Path of label file used by OCR recognition model. e.g ./ppocr_keys_v1.txt
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`.
+   * \param[in] model_format Model format of the loaded model, default is Paddle format.
+   */
   public Recognizer(string model_file, string params_file,
                     string label_path,
                     RuntimeOption custom_option = null,
@@ -45,11 +55,17 @@ public class Recognizer {
     FD_C_DestroyRecognizerWrapper(fd_recognizer_model_wrapper);
   }
 
-
+  /// Get model's name
   public string ModelName() {
     return "ppocr/ocr_rec";
   }
 
+  /** \brief Predict the input image and get OCR recognition model result.
+   *
+   * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * 
+   * \return The output of OCR recognition model result
+   */
   public OCRRecognizerResult Predict(Mat img) {
     OCRRecognizerResult ocr_recognizer_result = new OCRRecognizerResult();
     FD_Cstr text = new FD_Cstr();
@@ -64,6 +80,12 @@ public class Recognizer {
     return ocr_recognizer_result;
   }
 
+  /** \brief BatchPredict the input image and get OCR recognition model result.
+   *
+   * \param[in] images The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * 
+   * \return The output of OCR recognition model result.
+   */
   public List<OCRRecognizerResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -152,6 +174,7 @@ public class Recognizer {
     return results_out;
   }
 
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_RecognizerWrapperInitialized(fd_recognizer_model_wrapper);
   }
@@ -219,8 +242,17 @@ public class Recognizer {
 
 // Classifier
 
+/*! @brief Classifier object is used to load the classification model provided by PaddleOCR.
+ */
 public class Classifier {
 
+  /** \brief Set path of model file, and the configuration of runtime
+   *
+   * \param[in] model_file Path of model file, e.g ./ch_ppocr_mobile_v2.0_cls_infer/model.pdmodel.
+   * \param[in] params_file Path of parameter file, e.g ./ch_ppocr_mobile_v2.0_cls_infer/model.pdiparams, if the model format is ONNX, this parameter will be ignored.
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`.
+   * \param[in] model_format Model format of the loaded model, default is Paddle format.
+   */
   public Classifier(string model_file, string params_file,
                     RuntimeOption custom_option = null,
                     ModelFormat model_format = ModelFormat.PADDLE) {
@@ -236,11 +268,17 @@ public class Classifier {
     FD_C_DestroyClassifierWrapper(fd_classifier_model_wrapper);
   }
 
-
+  /// Get model's name
   public string ModelName() {
     return "ppocr/ocr_cls";
   }
 
+  /** \brief Predict the input image and get OCR classification model cls_result.
+   *
+   * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * 
+   * \return OCRClassifierResult
+   */
   public OCRClassifierResult Predict(Mat img) {
     OCRClassifierResult ocr_classify_result = new OCRClassifierResult();
     if(! FD_C_ClassifierWrapperPredict(
@@ -252,6 +290,12 @@ public class Classifier {
     return ocr_classify_result;
   }
 
+  /** \brief BatchPredict the input image and get OCR classification model result.
+   *
+   * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * 
+   * \return List<OCRClassifierResult>
+   */
   public List<OCRClassifierResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -334,6 +378,7 @@ public class Classifier {
     return results_out;
   }
 
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_ClassifierWrapperInitialized(fd_classifier_model_wrapper);
   }
@@ -395,8 +440,17 @@ public class Classifier {
 
 // DBDetector
 
+/*! @brief DBDetector object is used to load the detection model provided by PaddleOCR.
+ */
 public class DBDetector {
 
+  /** \brief Set path of model file, and the configuration of runtime
+   *
+   * \param[in] model_file Path of model file, e.g ./ch_PP-OCRv3_det_infer/model.pdmodel.
+   * \param[in] params_file Path of parameter file, e.g ./ch_PP-OCRv3_det_infer/model.pdiparams, if the model format is ONNX, this parameter will be ignored.
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`.
+   * \param[in] model_format Model format of the loaded model, default is Paddle format.
+   */
   public DBDetector(string model_file, string params_file,
                     RuntimeOption custom_option = null,
                     ModelFormat model_format = ModelFormat.PADDLE) {
@@ -412,11 +466,17 @@ public class DBDetector {
     FD_C_DestroyDBDetectorWrapper(fd_dbdetector_model_wrapper);
   }
 
-
+  /// Get model's name
   public string ModelName() {
     return "ppocr/ocr_det";
   }
 
+  /** \brief Predict the input image and get OCR detection model result.
+   *
+   * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * 
+   * \return OCRDBDetectorResult
+   */
   public OCRDBDetectorResult Predict(Mat img) {
     OCRDBDetectorResult ocr_detector_result = new OCRDBDetectorResult();
     FD_TwoDimArrayInt32 fd_box_result = new FD_TwoDimArrayInt32();
@@ -441,6 +501,12 @@ public class DBDetector {
     return ocr_detector_result;
   }
 
+  /** \brief BatchPredict the input image and get OCR detection model result.
+   *
+   * \param[in] images The list input of image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * 
+   * \return List<OCRDBDetectorResult>
+   */
   public List<OCRDBDetectorResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -484,6 +550,7 @@ public class DBDetector {
     return results_out;
   }
 
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_DBDetectorWrapperInitialized(fd_dbdetector_model_wrapper);
   }
@@ -541,8 +608,16 @@ namespace pipeline {
 
 // PPOCRv2
 
+/*! @brief PPOCRv2 is used to load PP-OCRv2 series models provided by PaddleOCR.
+ */
 public class PPOCRv2 {
 
+  /** \brief Set up the detection model path, classification model path and recognition model path respectively.
+   *
+   * \param[in] det_model Path of detection model, e.g ./ch_PP-OCRv2_det_infer
+   * \param[in] cls_model Path of classification model, e.g ./ch_ppocr_mobile_v2.0_cls_infer
+   * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv2_rec_infer
+   */
   public PPOCRv2(DBDetector ppocrv2, Classifier classifier,
                  Recognizer recognizer) {
     fd_ppocrv2_wrapper = FD_C_CreatePPOCRv2Wrapper(
@@ -560,6 +635,12 @@ public class PPOCRv2 {
     return "PPOCRv2";
   }
 
+  /** \brief Predict the input image and get OCR result.
+   *
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * 
+   * \return OCRResult
+   */
   public OCRResult Predict(Mat img) {
     FD_OCRResult fd_ocr_result = new FD_OCRResult();
     if(! FD_C_PPOCRv2WrapperPredict(
@@ -573,6 +654,12 @@ public class PPOCRv2 {
     return ocr_detector_result;
   }
 
+  /** \brief BatchPredict the input image and get OCR result.
+   *
+   * \param[in] images The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * 
+   * \return List<OCRResult>
+   */
   public List<OCRResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -601,6 +688,7 @@ public class PPOCRv2 {
     return results_out;
   }
 
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_PPOCRv2WrapperInitialized(fd_ppocrv2_wrapper);
   }
@@ -643,8 +731,16 @@ public class PPOCRv2 {
 
 // PPOCRv3
 
+/*! @brief PPOCRv3 is used to load PP-OCRv3 series models provided by PaddleOCR.
+ */
 public class PPOCRv3 {
 
+  /** \brief Set up the detection model path, classification model path and recognition model path respectively.
+   *
+   * \param[in] det_model Path of detection model, e.g ./ch_PP-OCRv3_det_infer
+   * \param[in] cls_model Path of classification model, e.g ./ch_ppocr_mobile_v2.0_cls_infer
+   * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv3_rec_infer
+   */
   public PPOCRv3(DBDetector ppocrv3, Classifier classifier,
                  Recognizer recognizer) {
     fd_ppocrv3_wrapper = FD_C_CreatePPOCRv3Wrapper(
@@ -662,6 +758,12 @@ public class PPOCRv3 {
     return "PPOCRv3";
   }
 
+  /** \brief Predict the input image and get OCR result.
+   *
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * 
+   * \return OCRResult
+   */
   public OCRResult Predict(Mat img) {
     FD_OCRResult fd_ocr_result = new FD_OCRResult();
     if(! FD_C_PPOCRv3WrapperPredict(
@@ -675,6 +777,12 @@ public class PPOCRv3 {
     return ocr_detector_result;
   }
 
+  /** \brief BatchPredict the input image and get OCR result.
+   *
+   * \param[in] images The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * 
+   * \return List<OCRResult>
+   */
   public List<OCRResult> BatchPredict(List<Mat> imgs){
     FD_OneDimMat imgs_in = new FD_OneDimMat();
     imgs_in.size = (nuint)imgs.Count;
@@ -703,6 +811,7 @@ public class PPOCRv3 {
     return results_out;
   }
 
+  /// Check whether model is initialized successfully
   public bool Initialized() {
     return FD_C_PPOCRv3WrapperInitialized(fd_ppocrv3_wrapper);
   }
