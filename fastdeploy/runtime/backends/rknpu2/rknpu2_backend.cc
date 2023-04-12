@@ -14,7 +14,7 @@
 #include "fastdeploy/runtime/backends/rknpu2/rknpu2_backend.h"
 namespace fastdeploy {
 RKNPU2Backend::~RKNPU2Backend() {
-  if (this->tensor_attrs_init_) {
+  if (tensor_attrs_init_) {
     if (input_attrs_ != nullptr) {
       free(input_attrs_);
     }
@@ -24,7 +24,7 @@ RKNPU2Backend::~RKNPU2Backend() {
     }
   }
 
-  if (this->tensor_memory_init_) {
+  if (tensor_memory_init_) {
     for (uint32_t i = 0; i < io_num_.n_input; i++) {
       rknn_destroy_mem(ctx_, input_mems_[i]);
     }
@@ -90,17 +90,17 @@ bool RKNPU2Backend::GetSDKAndDeviceVersion() {
  *  @note      None
  */
 void RKNPU2Backend::BuildOption(const RKNPU2BackendOption& option) {
-  this->option_ = option;
+  option_ = option;
 
   // save cpu_name
-  this->option_.cpu_name = option.cpu_name;
+  option_.cpu_name = option.cpu_name;
 
   // save context
-  this->option_.core_mask = option.core_mask;
+  option_.core_mask = option.core_mask;
 
   // set core mask
-  if (this->option_.cpu_name == rknpu2::CpuName::RK3588) {
-    if (!this->SetCoreMask(option_.core_mask)) {
+  if (option_.cpu_name == rknpu2::CpuName::RK3588) {
+    if (!SetCoreMask(option_.core_mask)) {
       FDERROR << "set core mask failed" << std::endl;
     }
   }
@@ -114,29 +114,29 @@ void RKNPU2Backend::BuildOption(const RKNPU2BackendOption& option) {
  *  @note       None
  ***************************************************************/
 bool RKNPU2Backend::Init(const RuntimeOption& runtime_option) {
-  if (!this->RuntimeOptionIsApplicable(runtime_option)) {
+  if (!RuntimeOptionIsApplicable(runtime_option)) {
     FDERROR << "Runtime option is not applicable." << std::endl;
     return false;
   }
 
-  if (!this->LoadModel((char*)runtime_option.model_file.data())) {
+  if (!LoadModel((char*)runtime_option.model_file.data())) {
     FDERROR << "Load model failed" << std::endl;
     return false;
   }
 
-  if (!this->InitInputAndOutputNumber()) {
+  if (!InitInputAndOutputNumber()) {
     FDERROR << "Get SDK and device version failed" << std::endl;
     return false;
   }
 
-  if (!this->GetSDKAndDeviceVersion()) {
+  if (!GetSDKAndDeviceVersion()) {
     FDERROR << "Get SDK and device version failed" << std::endl;
     return false;
   }
 
-  this->BuildOption(runtime_option.rknpu2_option);
+  BuildOption(runtime_option.rknpu2_option);
 
-  if (!this->InitInputAndOutputInformation()) {
+  if (!InitInputAndOutputInformation()) {
     FDERROR << "Get model input output information failed" << std::endl;
     return false;
   }
@@ -152,7 +152,7 @@ bool RKNPU2Backend::Init(const RuntimeOption& runtime_option) {
  *  @note       Only support RK3588
  */
 bool RKNPU2Backend::SetCoreMask(const rknpu2::CoreMask& core_mask) const {
-  if (this->option_.cpu_name != rknpu2::CpuName::RK3588) {
+  if (option_.cpu_name != rknpu2::CpuName::RK3588) {
     FDINFO << "SetCoreMask only support when soc is RK3588." << std::endl;
     return false;
   }
@@ -463,13 +463,13 @@ bool RKNPU2Backend::InitRKNNTensorMemory(std::vector<FDTensor>& inputs) {
     }
   }
 
-  this->tensor_memory_init_ = true;
+  tensor_memory_init_ = true;
   return true;
 }
 
 bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
                           std::vector<FDTensor>* outputs, bool copy_to_fd) {
-  if (!this->tensor_memory_init_) {
+  if (!tensor_memory_init_) {
     if (!InitRKNNTensorMemory(inputs)) {
       FDERROR << "Init tensor memory failed." << std::endl;
     }
