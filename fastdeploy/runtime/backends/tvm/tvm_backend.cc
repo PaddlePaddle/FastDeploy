@@ -169,7 +169,7 @@ bool TVMBackend::Infer(std::vector<FDTensor>& inputs,
 
   // get result
   outputs->resize(NumOutputs());
-  std::vector<int64_t> temp_shape(4);
+  std::vector<int64_t> temp_shape{};
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
     temp_shape.resize(outputs_desc_[i].shape.size());
     for (int j = 0; j < outputs_desc_[i].shape.size(); ++j) {

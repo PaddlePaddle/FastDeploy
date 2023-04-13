@@ -33,6 +33,10 @@
 #cmakedefine ENABLE_POROS_BACKEND
 #endif
 
+#ifndef ENABLE_TVM_BACKEND
+#cmakedefine ENABLE_TVM_BACKEND
+#endif
+
 #ifndef ENABLE_OPENVINO_BACKEND
 #cmakedefine ENABLE_OPENVINO_BACKEND
 #endif
