@@ -666,6 +666,107 @@ class Recognizer(FastDeployModel):
         self._model.preprocessor.rec_image_shape = value
 
 
+class TablePreprocessor:
+    def __init__(self):
+        """Create a preprocessor for ClassifierModel
+        """
+        self._preprocessor = C.vision.ocr.TablePreprocessor()
+
+    def run(self, input_ims):
+        """Preprocess input images for ClassifierModel
+        :param: input_ims: (list of numpy.ndarray)The input image
+        :return: list of FDTensor
+        """
+        return self._preprocessor.run(input_ims)
+
+
+class TablePostprocessor:
+    def __init__(self):
+        """Create a postprocessor for ClassifierModel
+        """
+        self._postprocessor = C.vision.ocr.TablePostprocessor()
+
+    def run(self, runtime_results):
+        """Postprocess the runtime results for ClassifierModel
+        :param: runtime_results: (list of FDTensor or list of pyArray)The output FDTensor results from runtime
+        :return: list of Result(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
+        """
+        return self._postprocessor.run(runtime_results)
+
+
+class Table(FastDeployModel):
+    def __init__(self,
+                 model_file="",
+                 params_file="",
+                 table_char_dict_path="",
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load OCR classification model provided by PaddleOCR.
+
+        :param model_file: (str)Path of model file, e.g ./ch_ppocr_mobile_v2.0_cls_infer/model.pdmodel.
+        :param params_file: (str)Path of parameter file, e.g ./ch_ppocr_mobile_v2.0_cls_infer/model.pdiparams, if the model format is ONNX, this parameter will be ignored.
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU.
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model.
+        """
+        super(Table, self).__init__(runtime_option)
+
+        if (len(model_file) == 0):
+            self._model = C.vision.ocr.Table()
+            self._runnable = False
+        else:
+            self._model = C.vision.ocr.Table(
+                model_file, params_file, table_char_dict_path,
+                self._runtime_option, model_format)
+            assert self.initialized, "Classifier initialize failed."
+            self._runnable = True
+
+    def clone(self):
+        """Clone OCR classification model object
+        :return: a new OCR classification model object
+        """
+
+        class TableClone(Table):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = TableClone(self._model.clone())
+        return clone_model
+
+    def predict(self, input_image):
+        """Predict an input image
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :return: cls_label, cls_score
+        """
+        if self._runnable:
+            return self._model.predict(input_image)
+        return False
+
+    def batch_predict(self, images):
+        """Predict a batch of input image
+        :param images: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
+        :return: list of cls_label, list of cls_score
+        """
+        if self._runnable:
+            return self._model.batch_predict(images)
+        return False
+
+    @property
+    def preprocessor(self):
+        return self._model.preprocessor
+
+    @preprocessor.setter
+    def preprocessor(self, value):
+        self._model.preprocessor = value
+
+    @property
+    def postprocessor(self):
+        return self._model.postprocessor
+
+    @postprocessor.setter
+    def postprocessor(self, value):
+        self._model.postprocessor = value
+
+
 class PPOCRv3(FastDeployModel):
     def __init__(self, det_model=None, cls_model=None, rec_model=None):
         """Consruct a pipeline with text detector, direction classifier and text recognizer models
@@ -818,3 +919,58 @@ class PPOCRSystemv2(PPOCRv2):
 
     def predict(self, input_image):
         return super(PPOCRSystemv2, self).predict(input_image)
+
+
+class PPOCRTable(FastDeployModel):
+    def __init__(self, det_model=None, rec_model=None, table_model=None):
+        """Consruct a pipeline with text detector, text recognizer and table recognizer models
+
+        :param det_model: (FastDeployModel) The detection model object created by fastdeploy.vision.ocr.DBDetector.
+        :param rec_model: (FastDeployModel) The recognition model object created by fastdeploy.vision.ocr.Recognizer.
+        :param table_model: (FastDeployModel) The table recognition model object created by fastdeploy.vision.ocr.Table.
+        """
+        assert det_model is not None and rec_model is not None and table_model is not None, "The det_model, rec_model and table_model cannot be None."
+        self.system_ = C.vision.ocr.PPOCRTable(
+            det_model._model,
+            rec_model._model,
+            table_model._model, )
+
+    def clone(self):
+        """Clone PPOCRTable pipeline object
+        :return: a new PPOCRTable pipeline object
+        """
+
+        class PPOCRTableClone(PPOCRTable):
+            def __init__(self, system):
+                self.system_ = system
+
+        clone_model = PPOCRTableClone(self.system_.clone())
+        return clone_model
+
+    def predict(self, input_image):
+        """Predict an input image
+
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :return: OCRResult
+        """
+        return self.system_.predict(input_image)
+
+    def batch_predict(self, images):
+        """Predict a batch of input image
+        :param images: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
+        :return: OCRBatchResult
+        """
+
+        return self.system_.batch_predict(images)
+
+
+class PPOCRTableSystem(PPOCRTable):
+    def __init__(self, det_model=None, rec_model=None, table_model=None):
+        logging.warning(
+            "DEPRECATED: fd.vision.ocr.PPOCRTableSystem is deprecated, "
+            "please use fd.vision.ocr.PPOCRTable instead.")
+        super(PPOCRTableSystem, self).__init__(det_model, rec_model,
+                                               table_model)
+
+    def predict(self, input_image):
+        return super(PPOCRTableSystem, self).predict(input_image)

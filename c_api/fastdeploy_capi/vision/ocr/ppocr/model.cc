@@ -466,6 +466,79 @@ FD_C_Bool FD_C_PPOCRv3WrapperBatchPredict(
   return successful;
 }
 
+// PPTable
+FD_C_PPTableWrapper* FD_C_CreateTableWrapper(
+    FD_C_DBDetectorWrapper* fd_c_det_model_wrapper,
+    FD_C_RecognizerWrapper* fd_c_rec_model_wrapper,
+    FD_C_PPTableWrapper* fd_c_table_model_wrapper) {
+  FD_C_PPTableWrapper* fd_c_pptable_wrapper = new FD_C_PPTableWrapper();
+  auto& det_model =
+      CHECK_AND_CONVERT_FD_TYPE(DBDetectorWrapper, fd_c_det_model_wrapper);
+  auto& rec_model =
+      CHECK_AND_CONVERT_FD_TYPE(RecognizerWrapper, fd_c_rec_model_wrapper);
+  auto& table_model =
+      CHECK_AND_CONVERT_FD_TYPE(PPTableWrapper, fd_c_table_model_wrapper);
+  fd_c_pptable_wrapper->pptable_model =
+      std::unique_ptr<fastdeploy::pipeline::PPTable>(
+          new fastdeploy::pipeline::PPTable(det_model.get(), rec_model.get(),
+                                            table_model.get()));
+  return fd_c_pptable_wrapper;
+}
+
+PIPELINE_DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(PPTable,
+                                                        fd_c_pptable_wrapper)
+
+FD_C_Bool FD_C_PPTableWrapperPredict(FD_C_PPTableWrapper* fd_c_pptable_wrapper,
+                                     FD_C_Mat img,
+                                     FD_C_OCRResult* fd_c_table_result) {
+  cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
+  auto& model = CHECK_AND_CONVERT_FD_TYPE(PPTableWrapper, fd_c_pptable_wrapper);
+  FD_C_OCRResultWrapper* fd_c_table_result_wrapper =
+      FD_C_CreateOCRResultWrapper();
+  auto& table_result =
+      CHECK_AND_CONVERT_FD_TYPE(TableResultWrapper, fd_c_table_result_wrapper);
+
+  bool successful = model->Predict(im, table_result.get());
+  if (successful) {
+    FD_C_OCRResultWrapperToCResult(fd_c_table_result_wrapper,
+                                   fd_c_table_result);
+  }
+  FD_C_DestroyOCRResultWrapper(fd_c_table_result_wrapper);
+  return successful;
+}
+
+PIPELINE_DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(PPTable,
+                                                    fd_c_pptable_wrapper)
+
+FD_C_Bool FD_C_PPTableWrapperBatchPredict(
+    FD_C_PPTableWrapper* fd_c_pptable_wrapper, FD_C_OneDimMat imgs,
+    FD_C_OneDimOCRResult* results) {
+  std::vector<cv::Mat> imgs_vec;
+  std::vector<FD_C_OCRResultWrapper*> results_wrapper_out;
+  std::vector<fastdeploy::vision::TableResult> results_out;
+  for (int i = 0; i < imgs.size; i++) {
+    imgs_vec.push_back(*(reinterpret_cast<cv::Mat*>(imgs.data[i])));
+    FD_C_OCRResultWrapper* fd_table_result_wrapper =
+        FD_C_CreateOCRResultWrapper();
+    results_wrapper_out.push_back(fd_table_result_wrapper);
+  }
+  auto& model = CHECK_AND_CONVERT_FD_TYPE(PPTableWrapper, fd_c_pptable_wrapper);
+  bool successful = model->BatchPredict(imgs_vec, &results_out);
+  if (successful) {
+    // copy results back to FD_C_OneDimOCRResult
+    results->size = results_out.size();
+    results->data = new FD_C_OCRResult[results->size];
+    for (int i = 0; i < results_out.size(); i++) {
+      (*CHECK_AND_CONVERT_FD_TYPE(TableResultWrapper, results_wrapper_out[i])) =
+          std::move(results_out[i]);
+      FD_C_OCRResultWrapperToCResult(results_wrapper_out[i], &results->data[i]);
+    }
+  }
+  for (int i = 0; i < results_out.size(); i++) {
+    FD_C_DestroyOCRResultWrapper(results_wrapper_out[i]);
+  }
+  return successful;
+}
 #ifdef __cplusplus
 }
 #endif

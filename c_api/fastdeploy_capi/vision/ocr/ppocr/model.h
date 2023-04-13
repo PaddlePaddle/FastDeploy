@@ -343,6 +343,63 @@ FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PPOCRv3WrapperBatchPredict(
     FD_C_OneDimOCRResult* batch_result);
 
 
+// PPTable
+
+typedef struct FD_C_PPTableWrapper FD_C_PPTableWrapper;
+
+/** \brief Set up the detection model path, classification model path and table recognition model path respectively.
+ *
+ * \param[in] det_model Path of detection model, e.g ./ch_PP-OCRv3_det_infer
+ * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv3_rec_infer
+ * \param[in] table_model Path of recognition model, e.g ./en_ppstructure_mobile_v2.0_SLANet_infer
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_PPTableWrapper*
+FD_C_CreatePPTableWrapper(
+    FD_C_DBDetectorWrapper* det_model,
+    FD_C_RecognizerWrapper* rec_model,
+    FD_C_PPTableWrapper* table_model);
+
+/** \brief Destroy a FD_C_PPTableWrapper object
+ *
+ * \param[in] fd_c_pptable_wrapper pointer to FD_C_PPTableWrapper object
+ */
+
+OCR_DECLARE_DESTROY_WRAPPER_FUNCTION(PPTabel, fd_c_pptable_wrapper);
+
+/** \brief Predict the input image and get OCR result.
+ *
+ * \param[in] fd_c_pptable_wrapper pointer to FD_C_PPTableWrapper object
+ * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+ * \param[in] result The output OCR result will be writen to this structure.
+ * \return true if the prediction successed, otherwise false.
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PPTableWrapperPredict(
+    __fd_keep FD_C_PPTableWrapper* fd_c_pptable_wrapper, FD_C_Mat img,
+    FD_C_OCRResult* result);
+
+/** \brief Check if the model is initialized successfully
+ *
+ * \param[in] fd_c_pptable_wrapper pointer to FD_C_PPTableWrapper object
+ *
+ * \return Return a bool of value true if initialized successfully
+ */
+
+OCR_DECLARE_INITIALIZED_FUNCTION(PPTable, fd_c_pptable_wrapper);
+
+/** \brief BatchPredict the input image and get OCR result.
+ *
+ * \param[in] fd_c_pptable_wrapper pointer to FD_C_PPTableWrapper object
+ * \param[in] imgs The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+ * \param[in] batch_result The output list of OCR result will be writen to this structure.
+ * \return true if the prediction successed, otherwise false.
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PPTableWrapperBatchPredict(
+    __fd_keep FD_C_PPTableWrapper* fd_c_pptable_wrapper, FD_C_OneDimMat imgs,
+    FD_C_OneDimOCRResult* batch_result);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

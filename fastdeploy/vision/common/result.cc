@@ -531,8 +531,8 @@ std::string OCRResult::Str() {
       out = out + "]";
 
       if (rec_scores.size() > 0) {
-        out = out + "rec text: " + text[n] + " rec score:" +
-              std::to_string(rec_scores[n]) + " ";
+        out = out + "rec text: " + text[n] +
+              " rec score:" + std::to_string(rec_scores[n]) + " ";
       }
       if (cls_labels.size() > 0) {
         out = out + "cls label: " + std::to_string(cls_labels[n]) +
@@ -540,14 +540,40 @@ std::string OCRResult::Str() {
       }
       out = out + "\n";
     }
+
+    if (table_boxes.size() > 0 && table_structure.size() > 0) {
+      for (int n = 0; n < boxes.size(); n++) {
+        out = out + "table boxes: [";
+        for (int i = 0; i < 4; i++) {
+          out = out + "[" + std::to_string(table_boxes[n][i * 2]) + "," +
+                std::to_string(table_boxes[n][i * 2 + 1]) + "]";
+
+          if (i != 1) {
+            out = out + ",";
+          }
+        }
+        out = out + "]";
+      }
+
+      out = out + "\ntable structure: ";
+      for (int m = 0; m < table_structure.size(); m++) {
+        out += table_structure[m];
+      }
+
+      if (!table_html.empty()) {
+        out = out + "\n" + "table html: " + table_html;
+      }
+    }
+    std::vector<std::array<int, 8>> table_boxes;
+    std::vector<std::string> table_structure;
     return out;
 
   } else if (boxes.size() == 0 && rec_scores.size() > 0 &&
              cls_scores.size() > 0) {
     std::string out;
     for (int i = 0; i < rec_scores.size(); i++) {
-      out = out + "rec text: " + text[i] + " rec score:" +
-            std::to_string(rec_scores[i]) + " ";
+      out = out + "rec text: " + text[i] +
+            " rec score:" + std::to_string(rec_scores[i]) + " ";
       out = out + "cls label: " + std::to_string(cls_labels[i]) +
             " cls score: " + std::to_string(cls_scores[i]);
       out = out + "\n";
@@ -566,9 +592,34 @@ std::string OCRResult::Str() {
              cls_scores.size() == 0) {
     std::string out;
     for (int i = 0; i < rec_scores.size(); i++) {
-      out = out + "rec text: " + text[i] + " rec score:" +
-            std::to_string(rec_scores[i]) + " ";
+      out = out + "rec text: " + text[i] +
+            " rec score:" + std::to_string(rec_scores[i]) + " ";
       out = out + "\n";
+    }
+    return out;
+  } else if (boxes.size() == 0 && table_boxes.size() > 0 &&
+             table_structure.size() > 0) {
+    std::string out;
+    for (int n = 0; n < table_boxes.size(); n++) {
+      out = out + ", table boxes: [";
+      for (int i = 0; i < 2; i++) {
+        out = out + "[" + std::to_string(table_boxes[n][i * 2]) + "," +
+              std::to_string(table_boxes[n][i * 2 + 1]) + "]";
+
+        if (i != 1) {
+          out = out + ",";
+        }
+      }
+      out = out + "]";
+    }
+
+    out = out + "\ntable structure: ";
+    for (int m = 0; m < table_structure.size(); m++) {
+      out += table_structure[m];
+    }
+
+    if (!table_html.empty()) {
+      out = out + "\n" + "table html: " + table_html;
     }
     return out;
   }
@@ -589,9 +640,9 @@ std::string HeadPoseResult::Str() {
   std::string out;
 
   out = "HeadPoseResult: [yaw, pitch, roll]\n";
-  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" + "pitch: " +
-        std::to_string(euler_angles[1]) + "\n" + "roll: " +
-        std::to_string(euler_angles[2]) + "\n";
+  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" +
+        "pitch: " + std::to_string(euler_angles[1]) + "\n" +
+        "roll: " + std::to_string(euler_angles[2]) + "\n";
   return out;
 }
 

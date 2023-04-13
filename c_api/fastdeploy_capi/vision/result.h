@@ -69,6 +69,9 @@ typedef struct FD_C_OCRResult {
   FD_C_OneDimArrayFloat rec_scores;
   FD_C_OneDimArrayFloat cls_scores;
   FD_C_OneDimArrayInt32 cls_labels;
+  FD_C_TwoDimArrayInt32 table_boxes;
+  FD_C_OneDimArrayCstr  table_structure;
+  FD_C_Cstr table_html;
   FD_C_ResultType type;
 } FD_C_OCRResult;
 

@@ -29,8 +29,10 @@
 #include "fastdeploy/vision/ocr/ppocr/classifier.h"
 #include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
 #include "fastdeploy/vision/ocr/ppocr/recognizer.h"
+#include "fastdeploy/vision/ocr/ppocr/table.h"
 #include "fastdeploy/vision/ocr/ppocr/ppocr_v2.h"
 #include "fastdeploy/vision/ocr/ppocr/ppocr_v3.h"
+#include "fastdeploy/vision/ocr/ppocr/ppocr_table.h"
 #include "fastdeploy/vision/segmentation/ppseg/model.h"
 
 #define DEFINE_RESULT_WRAPPER_STRUCT(typename, varname) typedef struct FD_C_##typename##Wrapper { \
@@ -181,6 +183,9 @@ DEFINE_PIPELINE_MODEL_WRAPPER_STRUCT(PPOCRv2, ppocrv2_model);
 
 // PPOCRv3
 DEFINE_PIPELINE_MODEL_WRAPPER_STRUCT(PPOCRv3, ppocrv3_model);
+
+// PPOCRTable
+DEFINE_PIPELINE_MODEL_WRAPPER_STRUCT(PPOCRTable, ppocr_table_model);
 
 // Segmentation models
 
@@ -383,11 +388,17 @@ DECLARE_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(DBDetector, fd_dbdetector_wrappe
 // Classifier
 DECLARE_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(Classifier, fd_classifier_wrapper);
 
+// Table
+DECLARE_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(Table, fd_table_wrapper);
+
 // PPOCRv2
 DECLARE_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(PPOCRv2, fd_ppocrv2_wrapper);
 
 // PPOCRv3
 DECLARE_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(PPOCRv3, fd_ppocrv3_wrapper);
+
+// PPOCRTable
+DECLARE_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(PPOCRTable, fd_ppocr_table_wrapper);
 
 // Segmentation models
 

@@ -44,6 +44,7 @@ fi
 ./benchmark_ppocr_rec --model ch_PP-OCRv3_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH
 ./benchmark_ppocr_det --model ch_PP-OCRv2_det_infer --image 12.jpg --config_path $CONFIG_PATH
 ./benchmark_ppocr_rec --model ch_PP-OCRv2_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH
+./benchmark_ppocr_table --model en_ppstructure_mobile_v2.0_SLANet_infer --image table.jpg --table_char_dict_path table_structure_dict.txt --config_path $CONFIG_PATH
 
 # PaddleDetection
 ./benchmark_ppyolov5 --model yolov5_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH

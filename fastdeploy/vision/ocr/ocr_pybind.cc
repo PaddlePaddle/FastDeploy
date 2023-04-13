@@ -19,11 +19,13 @@ namespace fastdeploy {
 void BindPPOCRModel(pybind11::module& m);
 void BindPPOCRv3(pybind11::module& m);
 void BindPPOCRv2(pybind11::module& m);
+void BindPPOCRTable(pybind11::module& m);
 
 void BindOcr(pybind11::module& m) {
   auto ocr_module = m.def_submodule("ocr", "Module to deploy OCR models");
   BindPPOCRModel(ocr_module);
   BindPPOCRv3(ocr_module);
   BindPPOCRv2(ocr_module);
+  BindPPOCRTable(ocr_module);
 }
 }  // namespace fastdeploy

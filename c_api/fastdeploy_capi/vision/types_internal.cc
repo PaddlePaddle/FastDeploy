@@ -166,6 +166,11 @@ DECL_AND_IMPLEMENT_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
 DECL_AND_IMPLEMENT_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
     Classifier, fd_classifier_wrapper, classifier_model);
 
+// Table
+DECL_AND_IMPLEMENT_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(Table,
+                                                           fd_table_wrapper,
+                                                           table_model);
+
 // PPOCRv2
 DECL_AND_IMPLEMENT_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
     PPOCRv2, fd_ppocrv2_wrapper, ppocrv2_model);
@@ -173,6 +178,10 @@ DECL_AND_IMPLEMENT_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
 // PPOCRv3
 DECL_AND_IMPLEMENT_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
     PPOCRv3, fd_ppocrv3_wrapper, ppocrv3_model);
+
+// PPOCRTable
+DECL_AND_IMPLEMENT_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
+    PPOCRv3, fd_ppocr_table_wrapper, ppocr_table_model);
 
 // Segmentation models
 
