@@ -47,17 +47,17 @@ struct Point {
 };
 
 template <typename T>
-T dot_2d(const Point<T>& A, const Point<T>& B) {
+T Dot2D(const Point<T>& A, const Point<T>& B) {
   return A.x * B.x + A.y * B.y;
 }
 
 template <typename T>
-T cross_2d(const Point<T>& A, const Point<T>& B) {
+T Cross2D(const Point<T>& A, const Point<T>& B) {
   return A.x * B.y - B.x * A.y;
 }
 
 template <typename T>
-int get_intersection_points(const Point<T> (&pts1)[4],
+int GetIntersectionPoints(const Point<T> (&pts1)[4],
                             const Point<T> (&pts2)[4],
                             Point<T> (&intersections)[24]) {
   // Line vector
@@ -73,7 +73,7 @@ int get_intersection_points(const Point<T> (&pts1)[4],
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
       // Solve for 2x2 Ax=b
-      T det = cross_2d<T>(vec2[j], vec1[i]);
+      T det = Cross2D<T>(vec2[j], vec1[i]);
 
       // This takes care of parallel lines
       if (fabs(det) <= 1e-14) {
@@ -82,8 +82,8 @@ int get_intersection_points(const Point<T> (&pts1)[4],
 
       auto vec12 = pts2[j] - pts1[i];
 
-      T t1 = cross_2d<T>(vec2[j], vec12) / det;
-      T t2 = cross_2d<T>(vec1[i], vec12) / det;
+      T t1 = Cross2D<T>(vec2[j], vec12) / det;
+      T t2 = Cross2D<T>(vec1[i], vec12) / det;
 
       if (t1 >= 0.0f && t1 <= 1.0f && t2 >= 0.0f && t2 <= 1.0f) {
         intersections[num++] = pts1[i] + vec1[i] * t1;
@@ -95,8 +95,8 @@ int get_intersection_points(const Point<T> (&pts1)[4],
   {
     const auto& AB = vec2[0];
     const auto& DA = vec2[3];
-    auto ABdotAB = dot_2d<T>(AB, AB);
-    auto ADdotAD = dot_2d<T>(DA, DA);
+    auto ABdotAB = Dot2D<T>(AB, AB);
+    auto ADdotAD = Dot2D<T>(DA, DA);
     for (int i = 0; i < 4; i++) {
       // assume ABCD is the rectangle, and P is the point to be judged
       // P is inside ABCD iff. P's projection on AB lies within AB
@@ -104,8 +104,8 @@ int get_intersection_points(const Point<T> (&pts1)[4],
 
       auto AP = pts1[i] - pts2[0];
 
-      auto APdotAB = dot_2d<T>(AP, AB);
-      auto APdotAD = -dot_2d<T>(AP, DA);
+      auto APdotAB = Dot2D<T>(AP, AB);
+      auto APdotAD = -Dot2D<T>(AP, DA);
 
       if ((APdotAB >= 0) && (APdotAD >= 0) && (APdotAB <= ABdotAB) &&
           (APdotAD <= ADdotAD)) {
@@ -118,13 +118,13 @@ int get_intersection_points(const Point<T> (&pts1)[4],
   {
     const auto& AB = vec1[0];
     const auto& DA = vec1[3];
-    auto ABdotAB = dot_2d<T>(AB, AB);
-    auto ADdotAD = dot_2d<T>(DA, DA);
+    auto ABdotAB = Dot2D<T>(AB, AB);
+    auto ADdotAD = Dot2D<T>(DA, DA);
     for (int i = 0; i < 4; i++) {
       auto AP = pts2[i] - pts1[0];
 
-      auto APdotAB = dot_2d<T>(AP, AB);
-      auto APdotAD = -dot_2d<T>(AP, DA);
+      auto APdotAB = Dot2D<T>(AP, AB);
+      auto APdotAD = -Dot2D<T>(AP, DA);
 
       if ((APdotAB >= 0) && (APdotAD >= 0) && (APdotAB <= ABdotAB) &&
           (APdotAD <= ADdotAD)) {
@@ -137,7 +137,7 @@ int get_intersection_points(const Point<T> (&pts1)[4],
 }
 
 template <typename T>
-int convex_hull_graham(const Point<T> (&p)[24], const int& num_in,
+int ConvexHullGraham(const Point<T> (&p)[24], const int& num_in,
                        Point<T> (&q)[24], bool shift_to_zero = false) {
   assert(num_in >= 2);
 
@@ -170,15 +170,15 @@ int convex_hull_graham(const Point<T> (&p)[24], const int& num_in,
   // If the angles are the same, sort according to their distance to origin
   T dist[24];
   for (int i = 0; i < num_in; i++) {
-    dist[i] = dot_2d<T>(q[i], q[i]);
+    dist[i] = Dot2D<T>(q[i], q[i]);
   }
 
   // CPU version
   std::sort(q + 1, q + num_in,
             [](const Point<T>& A, const Point<T>& B) -> bool {
-              T temp = cross_2d<T>(A, B);
+              T temp = Cross2D<T>(A, B);
               if (fabs(temp) < 1e-6) {
-                return dot_2d<T>(A, A) < dot_2d<T>(B, B);
+                return Dot2D<T>(A, A) < Dot2D<T>(B, B);
               } else {
                 return temp > 0;
               }
@@ -208,7 +208,7 @@ int convex_hull_graham(const Point<T> (&p)[24], const int& num_in,
   // until the 3-point relationship is convex again, or
   // until the stack only contains two points
   for (int i = k + 1; i < num_in; i++) {
-    while (m > 1 && cross_2d<T>(q[i] - q[m - 2], q[m - 1] - q[m - 2]) >= 0) {
+    while (m > 1 && Cross2D<T>(q[i] - q[m - 2], q[m - 1] - q[m - 2]) >= 0) {
       m--;
     }
     q[m++] = q[i];
@@ -229,21 +229,21 @@ int convex_hull_graham(const Point<T> (&p)[24], const int& num_in,
 }
 
 template <typename T>
-T polygon_area(const Point<T> (&q)[24], const int& m) {
+T PolygonArea(const Point<T> (&q)[24], const int& m) {
   if (m <= 2) {
     return 0;
   }
 
   T area = 0;
   for (int i = 1; i < m - 1; i++) {
-    area += fabs(cross_2d<T>(q[i] - q[0], q[i + 1] - q[0]));
+    area += fabs(Cross2D<T>(q[i] - q[0], q[i + 1] - q[0]));
   }
 
   return area / 2.0;
 }
 
 template <typename T>
-T rboxes_intersection(T const* const poly1_raw, T const* const poly2_raw) {
+T RboxesIntersection(T const* const poly1_raw, T const* const poly2_raw) {
   // There are up to 4 x 4 + 4 + 4 = 24 intersections (including dups) returned
   // from rotated_rect_intersection_pts
   Point<T> intersectPts[24], orderedPts[24];
@@ -256,19 +256,19 @@ T rboxes_intersection(T const* const poly1_raw, T const* const poly2_raw) {
     pts2[i] = Point<T>(poly2_raw[2 * i], poly2_raw[2 * i + 1]);
   }
 
-  int num = get_intersection_points<T>(pts1, pts2, intersectPts);
+  int num = GetIntersectionPoints<T>(pts1, pts2, intersectPts);
   if (num <= 2) {
     return 0.0;
   }
 
   // Convex Hull to order the intersection points in clockwise order and find
   // the contour area.
-  int num_convex = convex_hull_graham<T>(intersectPts, num, orderedPts, true);
-  return polygon_area<T>(orderedPts, num_convex);
+  int num_convex = ConvexHullGraham<T>(intersectPts, num, orderedPts, true);
+  return PolygonArea<T>(orderedPts, num_convex);
 }
 
 template <typename T>
-T poly_area(T const* const poly_raw) {
+T PolyArea(T const* const poly_raw) {
   T area = 0.0;
   int j = 3;
   for (int i = 0; i < 4; i++) {
@@ -298,11 +298,11 @@ void Poly2Rbox(T const* const poly_raw, RotatedBox<T>& box) {
 }
 
 template <typename T>
-T rbox_iou_single(T const* const poly1_raw, T const* const poly2_raw) {
-  const T area1 = poly_area(poly1_raw);
-  const T area2 = poly_area(poly2_raw);
+T RboxIouSingle(T const* const poly1_raw, T const* const poly2_raw) {
+  const T area1 = PolyArea(poly1_raw);
+  const T area2 = PolyArea(poly2_raw);
 
-  const T intersection = rboxes_intersection<T>(poly1_raw, poly2_raw);
+  const T intersection = RboxesIntersection<T>(poly1_raw, poly2_raw);
   const T iou = intersection / (area1 + area2 - intersection);
   return iou;
 }
@@ -348,7 +348,7 @@ void PaddleMultiClassNMSRotated::FastNMSRotated(
       }
       const int kept_idx = (*keep_indices)[k];
       float overlap =
-          rbox_iou_single<float>(boxes + idx * 8, boxes + kept_idx * 8);
+          RboxIouSingle<float>(boxes + idx * 8, boxes + kept_idx * 8);
 
       keep = overlap <= adaptive_threshold;
     }

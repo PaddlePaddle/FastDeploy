@@ -264,11 +264,11 @@ bool PaddleDetPostprocessor::ProcessSolov2(
   return true;
 }
 
-bool PaddleDetPostprocessor::ProcessPPYOLOE_R(
+bool PaddleDetPostprocessor::ProcessPPYOLOER(
     const std::vector<FDTensor>& tensors,
     std::vector<DetectionResult>* results) {
   if (tensors.size() != 2) {
-    FDERROR << "The size of tensors for PPYOLOE_R must be 2." << std::endl;
+    FDERROR << "The size of tensors for PPYOLOER must be 2." << std::endl;
     return false;
   }
 
@@ -323,8 +323,8 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
     // The fourth output of solov2 is mask
     return ProcessMask(tensors[3], results);
   } else {
-    if (tensors[0].Shape()[2] == 8) {  // PPYOLOE_R
-      return ProcessPPYOLOE_R(tensors, results);
+    if (tensors[0].Shape()[2] == 8) {  // PPYOLOER
+      return ProcessPPYOLOER(tensors, results);
     }
 
     // Do process according to whether NMS exists.

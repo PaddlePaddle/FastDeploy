@@ -59,6 +59,12 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   void ApplyNMS() { with_nms_ = false; }
 
   /// If you do not want to modify the Yaml configuration file,
+  /// you can use this function to set rotated NMS parameters.
+  void SetNMSRotatedOption(const NMSRotatedOption& option) {
+    multi_class_nms_rotated_.SetNMSRotatedOption(option);
+  }
+
+  /// If you do not want to modify the Yaml configuration file,
   /// you can use this function to set NMS parameters.
   void SetNMSOption(const NMSOption& option) {
     multi_class_nms_.SetNMSOption(option);
@@ -96,8 +102,8 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   bool ProcessSolov2(const std::vector<FDTensor>& tensors,
                      std::vector<DetectionResult>* results);
 
-  // Process PPYOLOE_R
-  bool ProcessPPYOLOE_R(const std::vector<FDTensor>& tensors,
+  // Process PPYOLOER
+  bool ProcessPPYOLOER(const std::vector<FDTensor>& tensors,
                         std::vector<DetectionResult>* results);
 
   // Process mask tensor for MaskRCNN

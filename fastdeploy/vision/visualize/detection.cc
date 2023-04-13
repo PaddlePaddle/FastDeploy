@@ -165,7 +165,6 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
   int w = im.cols;
   auto vis_im = im.clone();
   for (size_t i = 0; i < result.rotated_boxes.size(); ++i) {
-    printf("result score: %f, %f\n", result.scores[i], score_threshold);
     if (result.scores[i] < score_threshold) {
       continue;
     }

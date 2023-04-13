@@ -439,9 +439,9 @@ class FASTDEPLOY_DECL GFL : public PPDetBase {
   virtual std::string ModelName() const { return "PaddleDetection/GFL"; }
 };
 
-class FASTDEPLOY_DECL PPYOLOE_R : public PPDetBase {
+class FASTDEPLOY_DECL PPYOLOER : public PPDetBase {
  public:
-  PPYOLOE_R(const std::string& model_file, const std::string& params_file,
+  PPYOLOER(const std::string& model_file, const std::string& params_file,
           const std::string& config_file,
           const RuntimeOption& custom_option = RuntimeOption(),
           const ModelFormat& model_format = ModelFormat::PADDLE)
@@ -453,7 +453,7 @@ class FASTDEPLOY_DECL PPYOLOE_R : public PPDetBase {
     initialized = Initialize();
   }
 
-  virtual std::string ModelName() const { return "PPYOLOE_R"; }
+  virtual std::string ModelName() const { return "PPYOLOER"; }
 };
 
 }  // namespace detection

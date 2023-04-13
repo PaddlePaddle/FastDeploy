@@ -19,16 +19,16 @@
 #include "fastdeploy/vision.h"
 
 void SophgoInfer(const std::string& model_dir, const std::string& image_file) {
-  auto model_file = model_dir + "/ppyoloe_crn_s_300e_coco_1684x_f32.bmodel";
+  auto model_file = model_dir + "/ppyoloe_r_crn_s_3x_dota_1684x_f32.bmodel";
   auto params_file = "";
   auto config_file = model_dir + "/infer_cfg.yml";
 
   auto option = fastdeploy::RuntimeOption();
   option.UseSophgo();
+  option.UseSophgoBackend();
 
   auto format = fastdeploy::ModelFormat::SOPHGO;
-
-  auto model = fastdeploy::vision::detection::PPYOLOE_R(
+  auto model = fastdeploy::vision::detection::PPYOLOER(
       model_file, params_file, config_file, option, format);
 
   auto im = cv::imread(image_file);
@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
   if (argc < 3) {
     std::cout
         << "Usage: infer_demo path/to/model_dir path/to/image run_option, "
-           "e.g ./infer_model ./picodet_model_dir ./test.jpeg"
+           "e.g ./infer_model ./model_dir ./test.jpeg"
         << std::endl;
     return -1;
   }

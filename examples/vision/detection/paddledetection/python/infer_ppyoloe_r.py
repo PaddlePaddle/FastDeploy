@@ -59,7 +59,7 @@ config_file = os.path.join(model_dir, "infer_cfg.yml")
 # 配置runtime，加载模型
 runtime_option = build_option(args)
 print(args)
-model = fd.vision.detection.PPYOLOE_R(
+model = fd.vision.detection.PPYOLOER(
     model_file, params_file, config_file, runtime_option=runtime_option)
 print(2222)
 

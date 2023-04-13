@@ -141,7 +141,7 @@ if __name__ == "__main__":
     runtime_option = fd.RuntimeOption()
     runtime_option.use_sophgo()
 
-    model = fd.vision.detection.PPYOLOE_R(
+    model = fd.vision.detection.PPYOLOER(
         model_file,
         params_file,
         config_file,

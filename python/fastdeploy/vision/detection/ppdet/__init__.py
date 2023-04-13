@@ -783,14 +783,14 @@ class GFL(PPYOLOE):
         assert self.initialized, "GFL model initialize failed."
 
 
-class PPYOLOE_R(PPYOLOE):
+class PPYOLOER(PPYOLOE):
     def __init__(self,
                  model_file,
                  params_file,
                  config_file,
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
-        """Load a PPYOLOE_R model exported by PaddleDetection.
+        """Load a PPYOLOER model exported by PaddleDetection.
 
         :param model_file: (str)Path of model file, e.g ppyoloe_r/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g ppyoloe_r/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
@@ -801,20 +801,20 @@ class PPYOLOE_R(PPYOLOE):
 
         super(PPYOLOE, self).__init__(runtime_option)
 
-        self._model = C.vision.detection.PPYOLOE_R(
+        self._model = C.vision.detection.PPYOLOER(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
         assert self.initialized, "PicoDet model initialize failed."
 
     def clone(self):
-        """Clone PPYOLOE_R object
+        """Clone PPYOLOER object
 
-        :return: a new PPYOLOE_R object
+        :return: a new PPYOLOER object
         """
 
-        class PPYOLOE_RClone(PPYOLOE_R):
+        class PPYOLOERClone(PPYOLOER):
             def __init__(self, model):
                 self._model = model
 
-        clone_model = PPYOLOE_RClone(self._model.clone())
+        clone_model = PPYOLOERClone(self._model.clone())
         return clone_model

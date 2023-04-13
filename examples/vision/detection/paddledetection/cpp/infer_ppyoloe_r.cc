@@ -26,7 +26,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   auto config_file = model_dir + sep + "infer_cfg.yml";
   auto option = fastdeploy::RuntimeOption();
   option.UseCpu();
-  auto model = fastdeploy::vision::detection::PPYOLOE_R(model_file, params_file,
+  auto model = fastdeploy::vision::detection::PPYOLOER(model_file, params_file,
                                                         config_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
@@ -54,7 +54,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
 
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
-  auto model = fastdeploy::vision::detection::PPYOLOE_R(model_file, params_file,
+  auto model = fastdeploy::vision::detection::PPYOLOER(model_file, params_file,
                                                         config_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
