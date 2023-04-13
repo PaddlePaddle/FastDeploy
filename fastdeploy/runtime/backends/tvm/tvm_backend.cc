@@ -36,18 +36,10 @@ bool TVMBackend::Init(const fastdeploy::RuntimeOption& runtime_option) {
 }
 
 bool TVMBackend::InitInputAndOutputTensor() {
-  std::cout << "InitInputAndOutputTensor Start" << std::endl;
   input_tensor_.resize(NumInputs());
   for (int i = 0; i < NumInputs(); ++i) {
     TensorInfo tensor_info = GetInputInfo(i);
     tvm::ShapeTuple shape(tensor_info.shape.begin(), tensor_info.shape.end());
-    std::vector<int> temp_shape{};
-    temp_shape.resize(shape.size());
-    for (int j = 0; j < shape.size(); ++j) {
-      temp_shape[j] = static_cast<int>(shape[j]);
-      std::cout << temp_shape[j] << " ";
-    }
-    std::cout << std::endl;
     input_tensor_[i] = tvm::runtime::NDArray::Empty(
         shape, FDDataTypeToDLDataType(tensor_info.dtype), dev_);
   }
@@ -56,16 +48,9 @@ bool TVMBackend::InitInputAndOutputTensor() {
   for (int i = 0; i < NumOutputs(); ++i) {
     TensorInfo tensor_info = GetOutputInfo(i);
     tvm::ShapeTuple shape(tensor_info.shape.begin(), tensor_info.shape.end());
-    std::vector<int> temp_shape{};
-    for (int j = 0; j < shape.size(); ++j) {
-      temp_shape[j] = static_cast<int>(shape[j]);
-      std::cout << temp_shape[j] << " ";
-    }
-    std::cout << std::endl;
     output_tensor_[i] = tvm::runtime::NDArray::Empty(
         shape, FDDataTypeToDLDataType(tensor_info.dtype), dev_);
   }
-  std::cout << "InitInputAndOutputTensor End" << std::endl;
   return true;
 }
 
@@ -163,11 +148,6 @@ FDDataType TVMBackend::TVMTensorTypeToFDDataType(tvm::String type) {
 bool TVMBackend::Infer(std::vector<FDTensor>& inputs,
                        std::vector<FDTensor>* outputs, bool copy_to_fd) {
   for (int i = 0; i < inputs.size(); ++i) {
-    std::cout << "Input Data[" << i << "](5): ";
-    for (int j = 0; j < 5; ++j) {
-      std::cout << static_cast<float*>(inputs[i].Data())[j] << " ";
-    }
-    std::cout << std::endl;
     memcpy(input_tensor_[i]->data, inputs[i].Data(), inputs[i].Nbytes());
   }
 
@@ -220,5 +200,4 @@ DLDataType TVMBackend::FDDataTypeToDLDataType(fastdeploy::FDDataType dtype) {
   }
   return {};
 }
-
 }  // namespace fastdeploy
