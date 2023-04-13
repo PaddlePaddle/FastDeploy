@@ -1,19 +1,19 @@
 # PaddleDetection SOPHGO部署示例
 
-## 支持模型列表
+## 1. 支持模型列表
 
 目前SOPHGO支持如下模型的部署
 - [PP-YOLOE系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe)
 - [PicoDet系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/picodet)
 - [YOLOV8系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4)
 
-## 准备PP-YOLOE YOLOV8或者PicoDet部署模型以及转换模型
+## 2. 准备PP-YOLOE YOLOV8或者PicoDet部署模型以及转换模型
 
 SOPHGO-TPU部署模型前需要将Paddle模型转换成bmodel模型，具体步骤如下:
 - Paddle动态图模型转换为ONNX模型，请参考[PaddleDetection导出模型](https://github.com/PaddlePaddle/PaddleDetection/blob/release/2.4/deploy/EXPORT_MODEL.md).
 - ONNX模型转换bmodel模型的过程，请参考[TPU-MLIR](https://github.com/sophgo/tpu-mlir)
 
-## 模型转换example
+## 3. 模型转换example
 
 PP-YOLOE YOLOV8和PicoDet模型转换过程类似，下面以ppyoloe_crn_s_300e_coco为例子,教大家如何转换Paddle模型到SOPHGO-TPU模型
 
@@ -38,7 +38,7 @@ python -m paddle2onnx.optimize --input_model ppyoloe_crn_s_300e_coco.onnx \
 ### 导出bmodel模型
 
 以转化BM1684x的bmodel模型为例子，我们需要下载[TPU-MLIR](https://github.com/sophgo/tpu-mlir)工程，安装过程具体参见[TPU-MLIR文档](https://github.com/sophgo/tpu-mlir/blob/master/README.md)。
-### 1.	安装
+## 4.	安装
 ``` shell
 docker pull sophgo/tpuc_dev:latest
 
@@ -49,7 +49,7 @@ source ./envsetup.sh
 ./build.sh
 ```
 
-### 2.	ONNX模型转换为bmodel模型
+## 5.	ONNX模型转换为bmodel模型
 ``` shell
 mkdir ppyoloe_crn_s_300e_coco && cd ppyoloe_crn_s_300e_coco
 
@@ -83,7 +83,7 @@ model_transform.py \
     --test_result ppyoloe_crn_s_300e_coco_top_outputs.npz \
     --mlir ppyoloe_crn_s_300e_coco.mlir
 ```
-### 注意
+## 6. 注意
 **由于TPU-MLIR当前不支持后处理算法，所以需要查看后处理的输入作为网络的输出**  
 具体方法为：output_names需要通过[NETRO](https://netron.app/) 查看，网页中打开需要转换的ONNX模型，搜索NonMaxSuppression节点  
 查看INPUTS中boxes和scores的名字，这个两个名字就是我们所需的output_names  
@@ -103,6 +103,6 @@ model_deploy.py \
 ```
 最终获得可以在BM1684x上能够运行的bmodel模型ppyoloe_crn_s_300e_coco_1684x_f32.bmodel。如果需要进一步对模型进行加速，可以将ONNX模型转换为INT8 bmodel，具体步骤参见[TPU-MLIR文档](https://github.com/sophgo/tpu-mlir/blob/master/README.md)。
 
-## 其他链接
+## 7. 详细的部署示例
 - [Cpp部署](./cpp)
 - [python部署](./python)
