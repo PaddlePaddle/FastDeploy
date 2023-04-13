@@ -21,12 +21,10 @@
 #include <string>
 #include <vector>
 
-#include <dlfcn.h>
 #include <dlpack/dlpack.h>
 #include <tvm/runtime/module.h>
 #include <tvm/runtime/packed_func.h>
 #include <tvm/runtime/registry.h>
-#include <tvm/runtime/crt/graph_executor.h>
 #include <unistd.h>
 
 namespace fastdeploy {
@@ -35,18 +33,29 @@ class TVMBackend : public BaseBackend {
   TVMBackend() = default;
   virtual ~TVMBackend() = default;
   bool Init(const RuntimeOption& runtime_option) override;
-  int NumInputs() const override { return -1; }
-  int NumOutputs() const override { return -1; }
-  TensorInfo GetInputInfo(int index) override { return TensorInfo{}; }
-  TensorInfo GetOutputInfo(int index) override { return TensorInfo{}; }
-  std::vector<TensorInfo> GetInputInfos() override { return {TensorInfo{}}; }
-  std::vector<TensorInfo> GetOutputInfos() override { return {TensorInfo{}}; }
+  int NumInputs() const override { return inputs_desc_.size(); }
+  int NumOutputs() const override { return outputs_desc_.size(); }
+  TensorInfo GetInputInfo(int index) override { return inputs_desc_[index]; }
+  TensorInfo GetOutputInfo(int index) override { return outputs_desc_[index]; }
+  std::vector<TensorInfo> GetInputInfos() override { return inputs_desc_; }
+  std::vector<TensorInfo> GetOutputInfos() override { return outputs_desc_; }
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
 
  private:
   DLDevice dev_;
+  tvm::runtime::Module gmod_;
+  std::vector<TensorInfo> inputs_desc_;
+  std::vector<TensorInfo> outputs_desc_;
+
   bool BuildDLDevice(Device device);
   bool BuildModel(const RuntimeOption& runtime_option);
+  bool InitInputAndOutputTensor();
+
+  std::vector<tvm::runtime::NDArray> input_tensor_;
+  std::vector<tvm::runtime::NDArray> output_tensor_;
+
+  FDDataType TVMTensorTypeToFDDataType(tvm::String type);
+  DLDataType FDDataTypeToDLDataType(FDDataType dtype);
 };
 }  // namespace fastdeploy

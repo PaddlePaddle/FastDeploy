@@ -8,19 +8,12 @@ python prune_paddle_model.py --model_dir yolov8_n_500e_coco  \
                              --params_filename model.pdiparams \
                              --output_names  tmp_73 concat_15.tmp_0 \
                              --save_dir yolov8_n_500e_coco
-python3 -m tvm.driver.tvmc compile --target=llvm \
-    --target-llvm-device=cpu \
-    yolov8_n_500e_coco/model.pdmodel \
-    --model-format=paddle \
-    --module-name=yolov8_n_500e_coco \
-    --input-shapes "image:[1,3,640,640],scale_factor:[1,2]" \
-    --module-name=yolov8_n_500e_coco \
-    --output=yolov8_n_500e_coco.tar
-tar -xvf yolov8_n_500e_coco.tar
+# export model
 ```
 
 ```bash
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../compiled_fastdeploy_sdk
 make -j
-./infer_ppyoloe_demo ../model 123
+wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
+./infer_ppyoloe_demo ../tvm_save 000000014439.jpg
 ```

@@ -268,8 +268,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetOrtGraphOptLevel(int level = -1);
   void UsePaddleBackend();
   void UseLiteBackend();
-  void UseTVMBackend(const std::string& tvm_json_path,
-                     const std::string& tvm_params_path);
+  void UseTVMBackend();
 };
 
 }  // namespace fastdeploy

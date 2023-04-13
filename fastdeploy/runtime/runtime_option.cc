@@ -58,11 +58,8 @@ void RuntimeOption::UseGpu(int gpu_id) {
 
 void RuntimeOption::UseCpu() { device = Device::CPU; }
 
-void RuntimeOption::UseTVMBackend(const std::string& tvm_json_path,
-                                  const std::string& tvm_params_path) {
+void RuntimeOption::UseTVMBackend() {
 #ifdef ENABLE_TVM_BACKEND
-  tvm_option.model_json_file = tvm_json_path;
-  tvm_option.model_params_file = tvm_params_path;
   backend = TVM;
 #else
   FDASSERT(false, "The FastDeploy didn't compile with TVMBackend.");

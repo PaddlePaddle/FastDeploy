@@ -15,13 +15,13 @@
 #include "fastdeploy/vision.h"
 
 void TVMInfer(const std::string& model_dir, const std::string& image_file) {
-  auto model_file = model_dir + "/picodet_l_320_coco_lcnet.so";
+  auto model_file = model_dir + "/tvm_model";
   auto params_file = "";
   auto config_file = model_dir + "/infer_cfg.yml";
 
   auto option = fastdeploy::RuntimeOption();
   option.UseCpu();
-  option.UseTVMBackend(model_dir + "/picodet_l_320_coco_lcnet.json",model_dir + "/picodet_l_320_coco_lcnet.params");
+  option.UseTVMBackend();
 
   auto format = fastdeploy::ModelFormat::TVMFormat;
 

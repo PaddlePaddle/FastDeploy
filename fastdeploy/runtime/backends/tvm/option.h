@@ -15,8 +15,7 @@
 
 namespace fastdeploy {
 struct TVMBackendOption {
-  std::string model_json_file;
-  std::string model_params_file;
+  TVMBackendOption() {}
 };
 
 }  // namespace fastdeploy
