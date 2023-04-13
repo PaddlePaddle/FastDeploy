@@ -12,201 +12,312 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/runtime/backends/rknpu2/rknpu2_backend.h"
-
-#include "fastdeploy/utils/perf.h"
 namespace fastdeploy {
 RKNPU2Backend::~RKNPU2Backend() {
-  // Release memory uniformly here
-  if (input_attrs_ != nullptr) {
-    free(input_attrs_);
+  if (tensor_attrs_init_) {
+    if (input_attrs_ != nullptr) {
+      free(input_attrs_);
+    }
+
+    if (output_attrs_ != nullptr) {
+      free(output_attrs_);
+    }
   }
 
-  if (output_attrs_ != nullptr) {
-    free(output_attrs_);
-  }
+  if (tensor_memory_init_) {
+    for (uint32_t i = 0; i < io_num_.n_input; i++) {
+      rknn_destroy_mem(ctx_, input_mems_[i]);
+    }
 
-  for (uint32_t i = 0; i < io_num.n_input; i++) {
-    rknn_destroy_mem(ctx, input_mems_[i]);
-  }
-  if (input_mems_ != nullptr) {
-    free(input_mems_);
-  }
-
-  for (uint32_t i = 0; i < io_num.n_output; i++) {
-    rknn_destroy_mem(ctx, output_mems_[i]);
-  }
-  if (output_mems_ != nullptr) {
-    free(output_mems_);
+    for (uint32_t i = 0; i < io_num_.n_output; i++) {
+      rknn_destroy_mem(ctx_, output_mems_[i]);
+    }
   }
 }
-/***************************************************************
- *  @name       GetSDKAndDeviceVersion
- *  @brief      get RKNN sdk and device version
+
+/*
+ *  @name       RuntimeOptionIsApplicable
+ *  @brief      This function is used to determine whether the RuntimeOption
+ *              meets the operating conditions of RKNPU2.
  *  @param      None
  *  @return     bool
  *  @note       None
- ***************************************************************/
-bool RKNPU2Backend::GetSDKAndDeviceVersion() {
-  int ret;
-  // get sdk and device version
-  ret = rknn_query(ctx, RKNN_QUERY_SDK_VERSION, &sdk_ver, sizeof(sdk_ver));
-  if (ret != RKNN_SUCC) {
-    printf("rknn_query fail! ret=%d\n", ret);
+ */
+bool RKNPU2Backend::RuntimeOptionIsApplicable(
+    const RuntimeOption& runtime_option) {
+  if (!Supported(runtime_option.model_format, Backend::RKNPU2)) {
+    FDERROR << "The model format is not supported for RKNPU2." << std::endl;
     return false;
   }
-  FDINFO << "rknn_api/rknnrt version: " << sdk_ver.api_version
-         << ", driver version: " << sdk_ver.drv_version << std::endl;
-  return true;
-}
 
-/***************************************************************
- *  @name      BuildOption
- *  @brief     save option
- *  @param     RKNPU2BackendOption
- *  @note      None
- ***************************************************************/
-void RKNPU2Backend::BuildOption(const RKNPU2BackendOption& option) {
-  this->option_ = option;
-
-  // save cpu_name
-  this->option_.cpu_name = option.cpu_name;
-
-  // save context
-  this->option_.core_mask = option.core_mask;
-}
-
-/***************************************************************
- *  @name       Init
- *  @brief      Initialize RKNN model
- *  @param      model_file: Binary data for the RKNN model or the path of RKNN
- *model. params_file: None option: config
- *  @return     bool
- *  @note       None
- ***************************************************************/
-bool RKNPU2Backend::Init(const RuntimeOption& runtime_option) {
-  if (!(Supported(runtime_option.model_format, Backend::RKNPU2) &&
-        Supported(runtime_option.device, Backend::RKNPU2))) {
+  if (!Supported(runtime_option.device, Backend::RKNPU2)) {
+    FDERROR << "The device is not supported for RKNPU2." << std::endl;
     return false;
   }
+
   if (runtime_option.model_from_memory_) {
     FDERROR << "RKNPU2 backend doesn't support load model from memory, please "
                "load model from disk."
             << std::endl;
     return false;
   }
+  return true;
+}
 
-  // LoadModel
-  if (!this->LoadModel((char*)runtime_option.model_file.data())) {
-    FDERROR << "load model failed" << std::endl;
+/*
+ *  @name       GetSDKAndDeviceVersion
+ *  @brief      Get RKNPU2 sdk and device version.
+ *  @param      None
+ *  @return     bool
+ *  @note       The private variable ctx_ must be initialized.
+ */
+bool RKNPU2Backend::GetSDKAndDeviceVersion() {
+  int ret;
+  ret = rknn_query(ctx_, RKNN_QUERY_SDK_VERSION, &sdk_ver_, sizeof(sdk_ver_));
+  if (ret != RKNN_SUCC) {
+    FDERROR << "The function(rknn_query) failed! ret=" << ret << std::endl;
     return false;
   }
+  FDINFO << "rknpu2 runtime version: " << sdk_ver_.api_version << std::endl;
+  FDINFO << "rknpu2 driver version: " << sdk_ver_.drv_version << std::endl;
+  return true;
+}
 
-  // GetSDKAndDeviceVersion
-  if (!this->GetSDKAndDeviceVersion()) {
-    FDERROR << "get SDK and device version failed" << std::endl;
-    return false;
-  }
+/*
+ *  @name      BuildOption
+ *  @brief     Save option and set core mask.
+ *  @param     RKNPU2BackendOption
+ *  @note      None
+ */
+void RKNPU2Backend::BuildOption(const RKNPU2BackendOption& option) {
+  option_ = option;
 
-  // BuildOption
-  this->BuildOption(runtime_option.rknpu2_option);
+  // save cpu_name
+  option_.cpu_name = option.cpu_name;
 
-  // SetCoreMask if RK3588
-  if (this->option_.cpu_name == rknpu2::CpuName::RK3588) {
-    if (!this->SetCoreMask(option_.core_mask)) {
+  // save context
+  option_.core_mask = option.core_mask;
+
+  // set core mask
+  if (option_.cpu_name == rknpu2::CpuName::RK3588) {
+    if (!SetCoreMask(option_.core_mask)) {
       FDERROR << "set core mask failed" << std::endl;
-      return false;
     }
   }
+}
 
-  // GetModelInputOutputInfos
-  if (!this->GetModelInputOutputInfos()) {
-    FDERROR << "get model input output infos failed" << std::endl;
+/***************************************************************
+ *  @name       Init
+ *  @brief      Initialize RKNN model
+ *  @param      model_file: Binary data for the RKNN model or the path of RKNN
+ *  @return     bool
+ *  @note       None
+ ***************************************************************/
+bool RKNPU2Backend::Init(const RuntimeOption& runtime_option) {
+  if (!RuntimeOptionIsApplicable(runtime_option)) {
+    FDERROR << "Runtime option is not applicable." << std::endl;
+    return false;
+  }
+
+  if (!LoadModel((char*)runtime_option.model_file.data())) {
+    FDERROR << "Load model failed" << std::endl;
+    return false;
+  }
+
+  if (!InitInputAndOutputNumber()) {
+    FDERROR << "Get SDK and device version failed" << std::endl;
+    return false;
+  }
+
+  if (!GetSDKAndDeviceVersion()) {
+    FDERROR << "Get SDK and device version failed" << std::endl;
+    return false;
+  }
+
+  BuildOption(runtime_option.rknpu2_option);
+
+  if (!InitInputAndOutputInformation()) {
+    FDERROR << "Get model input output information failed" << std::endl;
     return false;
   }
 
   return true;
 }
 
-/***************************************************************
+/*
  *  @name       SetCoreMask
- *  @brief      set NPU core for model
+ *  @brief      Set NPU core for model
  *  @param      core_mask: The specification of NPU core setting.
  *  @return     bool
  *  @note       Only support RK3588
- ***************************************************************/
+ */
 bool RKNPU2Backend::SetCoreMask(const rknpu2::CoreMask& core_mask) const {
-  int ret = rknn_set_core_mask(ctx, static_cast<rknn_core_mask>(core_mask));
+  if (option_.cpu_name != rknpu2::CpuName::RK3588) {
+    FDINFO << "SetCoreMask only support when soc is RK3588." << std::endl;
+    return false;
+  }
+
+  int ret = rknn_set_core_mask(ctx_, static_cast<rknn_core_mask>(core_mask));
   if (ret != RKNN_SUCC) {
-    FDERROR << "rknn_set_core_mask fail! ret=" << ret << std::endl;
+    FDERROR << "The function(rknn_set_core_mask) failed! ret=" << ret
+            << std::endl;
     return false;
   }
   return true;
 }
 
-/***************************************************************
+/*
  *  @name       LoadModel
- *  @brief      read rknn model
+ *  @brief      Read the model and initialize rknn context.
  *  @param      model: Binary data for the RKNN model or the path of RKNN model.
  *  @return     bool
  *  @note       None
- ***************************************************************/
+ */
 bool RKNPU2Backend::LoadModel(void* model) {
   int ret = RKNN_SUCC;
-  ret = rknn_init(&ctx, model, 0, 0, nullptr);
+  ret = rknn_init(&ctx_, model, 0, 0, nullptr);
   if (ret != RKNN_SUCC) {
-    FDERROR << "rknn_init fail! ret=" << ret << std::endl;
+    FDERROR << "The function(rknn_init) failed! ret=" << ret << std::endl;
     return false;
   }
   return true;
 }
 
-/***************************************************************
- *  @name       GetModelInputOutputInfos
- *  @brief      Get the detailed input and output infos of Model
+/*
+ *  @name       InitInputAndOutputNumber
+ *  @brief      Initialize io_num_.
+ *  @param
+ *  @return     bool
+ *  @note       The private variable ctx must be initialized to use this
+ * function.
+ */
+bool RKNPU2Backend::InitInputAndOutputNumber() {
+  if (io_num_init_) {
+    FDERROR << "The private variable io_num_ has been initialized."
+            << std::endl;
+    return false;
+  }
+  int ret = RKNN_SUCC;
+  ret = rknn_query(ctx_, RKNN_QUERY_IN_OUT_NUM, &io_num_, sizeof(io_num_));
+  if (ret != RKNN_SUCC) {
+    FDERROR << "The function(rknn_query) failed! ret=" << ret << std::endl;
+    return false;
+  }
+  io_num_init_ = true;
+  return true;
+}
+
+/*
+ *  @name       InitRKNNTensorAddress
+ *  @brief      Allocate memory for input_attrs_ and output_attrs_.
  *  @param      None
  *  @return     bool
  *  @note       None
- ***************************************************************/
-bool RKNPU2Backend::GetModelInputOutputInfos() {
-  int ret = RKNN_SUCC;
-
-  // Get the number of model inputs and outputs
-  ret = rknn_query(ctx, RKNN_QUERY_IN_OUT_NUM, &io_num, sizeof(io_num));
-  if (ret != RKNN_SUCC) {
+ */
+bool RKNPU2Backend::InitRKNNTensorAddress() {
+  if (tensor_attrs_init_) {
+    FDERROR << "Private variable input_attrs_ and output_attrs_ memory has "
+               "been allocated. Please do not allocate memory repeatedly or "
+               "memory leak may occur."
+            << std::endl;
     return false;
   }
 
-  // Get detailed input parameters
+  if (!io_num_init_) {
+    InitInputAndOutputNumber();
+  }
+
+  if (io_num_.n_input == 0) {
+    FDERROR << "The number of input tensors is 0." << std::endl;
+    return false;
+  }
+
+  if (io_num_.n_output == 0) {
+    FDERROR << "The number of output tensors is 0." << std::endl;
+    return false;
+  }
+
+  // Allocate memory for private variable input_attrs_.
   input_attrs_ =
-      (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_input);
-  memset(input_attrs_, 0, io_num.n_input * sizeof(rknn_tensor_attr));
-  inputs_desc_.resize(io_num.n_input);
-
-  // create input tensor memory
-  // rknn_tensor_mem* input_mems[io_num.n_input];
-  input_mems_ =
-      (rknn_tensor_mem**)malloc(sizeof(rknn_tensor_mem*) * io_num.n_input);
-
-  // get input info and copy to input tensor info
-  for (uint32_t i = 0; i < io_num.n_input; i++) {
+      (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num_.n_input);
+  memset(input_attrs_, 0, io_num_.n_input * sizeof(rknn_tensor_attr));
+  for (uint32_t i = 0; i < io_num_.n_input; i++) {
+    int ret = RKNN_SUCC;
     input_attrs_[i].index = i;
-
-    // query info
-    ret = rknn_query(ctx, RKNN_QUERY_INPUT_ATTR, &(input_attrs_[i]),
+    ret = rknn_query(ctx_, RKNN_QUERY_INPUT_ATTR, &(input_attrs_[i]),
                      sizeof(rknn_tensor_attr));
-    DumpTensorAttr(input_attrs_[i]);
 
     if (ret != RKNN_SUCC) {
-      printf("rknn_init error! ret=%d\n", ret);
+      FDERROR << "The function(rknn_query) failed! ret=" << ret << std::endl;
       return false;
     }
+
     if ((input_attrs_[i].fmt != RKNN_TENSOR_NHWC) &&
         (input_attrs_[i].fmt != RKNN_TENSOR_UNDEFINED)) {
       FDERROR << "rknpu2_backend only support input format is NHWC or UNDEFINED"
               << std::endl;
+      return false;
     }
 
-    // copy input_attrs_ to input tensor info
+    DumpTensorAttr(input_attrs_[i]);
+  }
+
+  // Allocate memory for private variable output_attrs_.
+  output_attrs_ =
+      (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num_.n_output);
+  memset(output_attrs_, 0, io_num_.n_output * sizeof(rknn_tensor_attr));
+  for (uint32_t i = 0; i < io_num_.n_output; i++) {
+    int ret = RKNN_SUCC;
+    output_attrs_[i].index = i;
+    ret = rknn_query(ctx_, RKNN_QUERY_OUTPUT_ATTR, &(output_attrs_[i]),
+                     sizeof(rknn_tensor_attr));
+
+    if (ret != RKNN_SUCC) {
+      FDERROR << "The function(rknn_query) failed! ret=" << ret << std::endl;
+      return false;
+    }
+
+    // FastDeploy Only support postprocess when output type is fp32,
+    // so output_attrs_.type needs to be fixed as RKNN_TENSOR_FLOAT32.
+    output_attrs_[i].type = RKNN_TENSOR_FLOAT32;
+    DumpTensorAttr(output_attrs_[i]);
+  }
+  tensor_attrs_init_ = true;
+  return true;
+}
+
+/*
+ *  @name       InitInputAndOutputInformation
+ *  @brief      Get the detailed input and output information of Model
+ *  @param      None
+ *  @return     bool
+ *  @note       None
+ */
+bool RKNPU2Backend::InitInputAndOutputInformation() {
+  if (!io_num_init_) {
+    InitInputAndOutputNumber();
+  }
+
+  if (!tensor_attrs_init_) {
+    InitRKNNTensorAddress();
+  }
+
+  if (io_num_.n_input == 0) {
+    FDERROR << "The number of input tensors is 0." << std::endl;
+    return false;
+  }
+
+  if (io_num_.n_output == 0) {
+    FDERROR << "The number of output tensors is 0." << std::endl;
+    return false;
+  }
+
+  inputs_desc_.resize(io_num_.n_input);
+  outputs_desc_.resize(io_num_.n_output);
+
+  // Get input info and copy to input tensor info
+  for (uint32_t i = 0; i < io_num_.n_input; i++) {
+    // Copy input_attrs_ to input tensor info
     std::string temp_name = input_attrs_[i].name;
     std::vector<int> temp_shape{};
     temp_shape.resize(input_attrs_[i].n_dims);
@@ -220,37 +331,15 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
     inputs_desc_[i] = temp_input_info;
   }
 
-  // Get detailed output parameters
-  output_attrs_ =
-      (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_output);
-  memset(output_attrs_, 0, io_num.n_output * sizeof(rknn_tensor_attr));
-  outputs_desc_.resize(io_num.n_output);
-
-  // Create output tensor memory
-  output_mems_ =
-      (rknn_tensor_mem**)malloc(sizeof(rknn_tensor_mem*) * io_num.n_output);
-  ;
-
-  for (uint32_t i = 0; i < io_num.n_output; i++) {
-    output_attrs_[i].index = i;
-    // query info
-    ret = rknn_query(ctx, RKNN_QUERY_OUTPUT_ATTR, &(output_attrs_[i]),
-                     sizeof(rknn_tensor_attr));
-    DumpTensorAttr(output_attrs_[i]);
-
-    if (ret != RKNN_SUCC) {
-      FDERROR << "rknn_query fail! ret = " << ret << std::endl;
-      return false;
-    }
-
+  for (uint32_t i = 0; i < io_num_.n_output; i++) {
     // If the output dimension is 3, the runtime will automatically change it
     // to 4. Obviously, this is wrong, and manual correction is required here.
-    int n_dims = output_attrs_[i].n_dims;
+    int n_dims = static_cast<int>(output_attrs_[i].n_dims);
     if ((n_dims == 4) && (output_attrs_[i].dims[3] == 1)) {
       n_dims--;
     }
 
-    // copy output_attrs_ to output tensor
+    // Copy output_attrs_ to output tensor
     std::string temp_name = output_attrs_[i].name;
     std::vector<int> temp_shape{};
     temp_shape.resize(n_dims);
@@ -266,13 +355,13 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
   return true;
 }
 
-/***************************************************************
+/*
  *  @name       DumpTensorAttr
  *  @brief      Get the model's detailed inputs and outputs
  *  @param      rknn_tensor_attr
  *  @return     None
  *  @note       None
- ***************************************************************/
+ */
 void RKNPU2Backend::DumpTensorAttr(rknn_tensor_attr& attr) {
   printf(
       "index=%d, name=%s, n_dims=%d, dims=[%d, %d, %d, %d], "
@@ -305,8 +394,87 @@ std::vector<TensorInfo> RKNPU2Backend::GetOutputInfos() {
   return outputs_desc_;
 }
 
+/*
+ *  @name       InitRKNNTensorMemory
+ *  @brief      Allocate memory for input and output tensors.
+ *  @param      std::vector<FDTensor>& inputs
+ *  @return     None
+ *  @note       None
+ */
+bool RKNPU2Backend::InitRKNNTensorMemory(std::vector<FDTensor>& inputs) {
+  if (tensor_memory_init_) {
+    FDERROR << "Private variable input_mems_ and output_mems_ memory has "
+               "been allocated. Please do not allocate memory repeatedly or "
+               "memory leak may occur."
+            << std::endl;
+    return false;
+  }
+  int ret = RKNN_SUCC;
+  input_mems_.resize(io_num_.n_input);
+  output_mems_.resize(io_num_.n_output);
+  for (uint32_t i = 0; i < io_num_.n_input; i++) {
+    // Judge whether the input and output types are the same
+    rknn_tensor_type input_type =
+        fastdeploy::RKNPU2Backend::FDDataTypeToRknnTensorType(inputs[i].dtype);
+    if (input_type != input_attrs_[i].type) {
+      FDWARNING << "The input tensor type != model's inputs type."
+                << "The input_type need "
+                << get_type_string(input_attrs_[i].type) << ",but inputs[" << i
+                << "].type is " << get_type_string(input_type) << std::endl;
+    }
+
+    // Create input tensor memory
+    input_attrs_[i].type = input_type;
+    input_attrs_[i].size = inputs[i].Nbytes();
+    input_attrs_[i].size_with_stride = inputs[i].Nbytes();
+
+    input_mems_[i] = rknn_create_mem(ctx_, inputs[i].Nbytes());
+    if (input_mems_[i] == nullptr) {
+      FDERROR << "The function(rknn_create_mem) failed! ret=" << ret
+              << std::endl;
+      return false;
+    }
+
+    // Set input tensor memory
+    ret = rknn_set_io_mem(ctx_, input_mems_[i], &input_attrs_[i]);
+    if (ret != RKNN_SUCC) {
+      FDERROR << "The function(rknn_set_io_mem) failed! ret=" << ret
+              << std::endl;
+      return false;
+    }
+  }
+
+  for (uint32_t i = 0; i < io_num_.n_output; ++i) {
+    // Most post-processing does not support the fp16 format.
+    uint32_t output_size = output_attrs_[i].n_elems * sizeof(float);
+    output_mems_[i] = rknn_create_mem(ctx_, output_size);
+    if (output_mems_[i] == nullptr) {
+      FDERROR << "The function(rknn_create_mem) failed! ret=" << ret
+              << std::endl;
+      return false;
+    }
+
+    // Set output tensor memory
+    ret = rknn_set_io_mem(ctx_, output_mems_[i], &output_attrs_[i]);
+    if (ret != RKNN_SUCC) {
+      FDERROR << "The function(rknn_set_io_mem) failed! ret=" << ret
+              << std::endl;
+      return false;
+    }
+  }
+
+  tensor_memory_init_ = true;
+  return true;
+}
+
 bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
                           std::vector<FDTensor>* outputs, bool copy_to_fd) {
+  if (!tensor_memory_init_) {
+    if (!InitRKNNTensorMemory(inputs)) {
+      FDERROR << "Init tensor memory failed." << std::endl;
+    }
+  }
+
   int ret = RKNN_SUCC;
   // Judge whether the input and output size are the same
   if (inputs.size() != inputs_desc_.size()) {
@@ -316,70 +484,8 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
     return false;
   }
 
-  if (!this->infer_init) {
-    for (uint32_t i = 0; i < io_num.n_input; i++) {
-      // Judge whether the input and output types are the same
-      rknn_tensor_type input_type =
-          fastdeploy::RKNPU2Backend::FDDataTypeToRknnTensorType(
-              inputs[i].dtype);
-      if (input_type != input_attrs_[i].type) {
-        FDWARNING << "The input tensor type != model's inputs type."
-                  << "The input_type need "
-                  << get_type_string(input_attrs_[i].type) << ",but inputs["
-                  << i << "].type is " << get_type_string(input_type)
-                  << std::endl;
-      }
-
-      // Create input tensor memory
-      input_attrs_[i].type = input_type;
-      input_attrs_[i].size = inputs[i].Nbytes();
-      input_attrs_[i].size_with_stride = inputs[i].Nbytes();
-
-      input_mems_[i] = rknn_create_mem(ctx, inputs[i].Nbytes());
-      if (input_mems_[i] == nullptr) {
-        FDERROR << "rknn_create_mem input_mems_ error." << std::endl;
-        return false;
-      }
-
-      // Set input tensor memory
-      ret = rknn_set_io_mem(ctx, input_mems_[i], &input_attrs_[i]);
-      if (ret != RKNN_SUCC) {
-        FDERROR << "input tensor memory rknn_set_io_mem fail! ret=" << ret
-                << std::endl;
-        return false;
-      }
-    }
-
-    for (uint32_t i = 0; i < io_num.n_output; ++i) {
-      // Most post-processing does not support the fp16 format.
-      // The unified output here is float32
-      uint32_t output_size = output_attrs_[i].n_elems * sizeof(float);
-      output_mems_[i] = rknn_create_mem(ctx, output_size);
-      if (output_mems_[i] == nullptr) {
-        FDERROR << "rknn_create_mem output_mems_ error." << std::endl;
-        return false;
-      }
-
-      // The data type of output data is changed to FP32
-      output_attrs_[i].type = RKNN_TENSOR_FLOAT32;
-
-      // default output type is depend on model, this requires float32 to
-      // compute top5
-      ret = rknn_set_io_mem(ctx, output_mems_[i], &output_attrs_[i]);
-
-      // set output memory and attribute
-      if (ret != RKNN_SUCC) {
-        FDERROR << "output tensor memory rknn_set_io_mem fail! ret=" << ret
-                << std::endl;
-        return false;
-      }
-    }
-
-    this->infer_init = true;
-  }
-
   // Copy input data to input tensor memory
-  for (uint32_t i = 0; i < io_num.n_input; i++) {
+  for (uint32_t i = 0; i < io_num_.n_input; i++) {
     uint32_t width = input_attrs_[i].dims[2];
     uint32_t stride = input_attrs_[i].w_stride;
     if (width == stride) {
@@ -395,7 +501,7 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
   }
 
   // run rknn
-  ret = rknn_run(ctx, nullptr);
+  ret = rknn_run(ctx_, nullptr);
   if (ret != RKNN_SUCC) {
     FDERROR << "rknn run error! ret=" << ret << std::endl;
     return false;
@@ -418,14 +524,14 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
   return true;
 }
 
-/***************************************************************
+/*
  *  @name       RknnTensorTypeToFDDataType
  *  @brief      Change RknnTensorType To FDDataType
  *  @param      rknn_tensor_type
  *  @return     None
  *  @note       Most post-processing does not support the fp16 format.
  *              Therefore, if the input is FP16, the output will be FP32.
- ***************************************************************/
+ */
 FDDataType RKNPU2Backend::RknnTensorTypeToFDDataType(rknn_tensor_type type) {
   if (type == rknn_tensor_type::RKNN_TENSOR_FLOAT16) {
     return FDDataType::FP32;
@@ -452,13 +558,13 @@ FDDataType RKNPU2Backend::RknnTensorTypeToFDDataType(rknn_tensor_type type) {
   return FDDataType::UNKNOWN1;
 }
 
-/***************************************************************
+/*
  *  @name       FDDataTypeToRknnTensorType
  *  @brief      Change FDDataType To RknnTensorType
  *  @param      FDDataType
  *  @return     None
  *  @note       None
- ***************************************************************/
+ */
 rknn_tensor_type RKNPU2Backend::FDDataTypeToRknnTensorType(
     fastdeploy::FDDataType type) {
   if (type == FDDataType::FP16) {
