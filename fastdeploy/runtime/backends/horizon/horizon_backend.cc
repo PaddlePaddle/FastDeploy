@@ -29,31 +29,30 @@ HorizonBackend::~HorizonBackend() {
     }
     for(int i = 0; i < NumInputs(); i++){
         
-        ret = hbSysFreeMem(&(input_mems_[i]->sysMem[0]));
+        ret = hbSysFreeMem(&(input_mems_[i].sysMem[0]));
         
         if(ret != 0){
             FDERROR << "release input mem fail! ret=" << ret << std::endl;
         }
-
-        if(input_mems_[i] != nullptr){
-            free(input_mems_[i]);
+        if(input_mems_ != nullptr){
+            free(input_mems_);
         }
     }
-    std::cout << "time to release output " << std::endl;
 
     for(int i = 0; i < NumOutputs(); i++){
-        ret = hbSysFreeMem(&(output_mems_[i]->sysMem[0]));
+        ret = hbSysFreeMem(&(output_mems_[i].sysMem[0]));
 
-        if(ret!= 0){
+        if(ret != 0){
             FDERROR << "release output mem fail! ret=" << ret << std::endl;
         }
-        if (output_mems_[i]!= nullptr){
-            free(output_mems_[i]);
+        if(output_mems_ != nullptr){
+            free(output_mems_);
         }
     }
-
-
-
+    ret = hbDNNRelease(packed_dnn_handle);
+    if(ret != 0){
+        FDERROR << "hbDNNRelease  fail! ret=" << ret << std::endl;
+    }
 }
 
 bool HorizonBackend::GetModelInputOutputInfos(){
@@ -94,8 +93,8 @@ bool HorizonBackend::GetModelInputOutputInfos(){
             return false;
         }
 
-        if ((input_properties_[i].tensorLayout != HB_DNN_LAYOUT_NCHW)) {
-            FDERROR << "horizon_backend only support input layout is NCHW"
+        if ((input_properties_[i].tensorLayout != HB_DNN_LAYOUT_NHWC)) {
+            FDERROR << "horizon_backend only support input layout is NHWC"
                     << std::endl;
         }
         if(input_properties_[i].tensorType!= HB_DNN_IMG_TYPE_RGB){
@@ -118,9 +117,9 @@ bool HorizonBackend::GetModelInputOutputInfos(){
         temp_shape.resize(n_dims);
         for (int j = 0; j < n_dims; j++) {
             temp_shape[j] = (int)input_properties_[i].validShape.dimensionSize[j];
-            std::cout << "current dim is " << temp_shape[j] << std::endl;
         }
-        // TODO: how to get input dtype ?
+
+        // Only support RGB format, so input type is UINT8
         FDDataType temp_dtype = FDDataType::UINT8;
         TensorInfo temp_input_info = {temp_name, temp_shape, temp_dtype};
         inputs_desc_[i] = temp_input_info;
@@ -161,7 +160,6 @@ bool HorizonBackend::GetModelInputOutputInfos(){
         temp_shape.resize(n_dims);
         for (int j = 0; j < n_dims; j++) {
             temp_shape[j] = (int)output_properties_[i].validShape.dimensionSize[j];
-            std::cout << "Shape of " << temp_name << " = " << temp_shape[j] << std::endl;
         }
 
         FDDataType temp_dtype = HorizonTensorTypeToFDDataType(output_properties_[i].tensorType);
@@ -236,57 +234,45 @@ bool HorizonBackend::Infer(std::vector<FDTensor>& inputs,
     }
 
     int ret = -1;
-    if(this->infer_init){
-        // hbDNNDataType input_type = fastdeploy::HorizonBackend::FDDataTypeToHorizonTensorType(inputs[i].dtype);
-        // TODO: Judge input tensor data type
-        // if (input_type != input_attrs_[i].type) {
-        // FDWARNING << "The input tensor type != model's inputs type."
-        //           << "The input_type need "
-        //           << get_type_string(input_attrs_[i].type) << ",but inputs["
-        //           << i << "].type is " << get_type_string(input_type)
-        //           << std::endl;
-        // }
+    if(!this->infer_init){
         // Create input tensor memory
-        // create input tensor memory
         int input_count = NumInputs();
         int output_count = NumOutputs();
 
-        input_mems_ = (hbDNNTensor**)malloc(sizeof(hbDNNTensor*) * input_count);
-        output_mems_ = (hbDNNTensor**)malloc(sizeof(hbDNNTensor*) * output_count);
-        for(uint32_t i = 0; i < NumInputs(); i++){
-            input_mems_[i]->properties = input_properties_[i];
-            int length = 1;
+        input_mems_ = (hbDNNTensor*)malloc(sizeof(hbDNNTensor) * input_count);
+        output_mems_ = (hbDNNTensor*)malloc(sizeof(hbDNNTensor) * output_count);
+
+        for(uint32_t i = 0; i < input_count; i++){
+            input_mems_[i].properties = input_properties_[i];
+
+            input_mems_[i].properties.alignedShape = input_mems_[i].properties.validShape;
+
             auto current_shape = GetInputInfo(i).shape;
-            auto &mem = input_mems_[i]->sysMem[0];
-            for(int j = 0; j < current_shape.size(); j ++){
-                if(current_shape[j]!= -1){
-                    length *= current_shape[j];
-                }
-            }
-            ret = hbSysAllocCachedMem(&mem, length);
+            auto &mem = input_mems_[i].sysMem[0];
+            int intput_memSize = input_properties_[i].alignedByteSize;
+            
+            ret = hbSysAllocCachedMem(&mem, intput_memSize);
+
             if(ret != 0){
                 FDERROR << "hbSysAllocCachedMem fails." << std::endl;
                 return false;
             }
         }
 
-        for(uint32_t i = 0; i < NumOutputs(); i++){
-            output_mems_[i]->properties = output_properties_[i];
-            int length = 1;
+        for(uint32_t i = 0; i < output_count; i++){
+
+            output_mems_[i].properties = output_properties_[i];
+            
             auto current_shape = GetOutputInfo(i).shape;
-            auto &mem = output_mems_[i]->sysMem[0];
-            for(int j = 0; j < current_shape.size(); j ++){
-                if(current_shape[j]!= -1){
-                    length *= current_shape[j];
-                }
-            }
-            ret = hbSysAllocCachedMem(&mem, length);
+            auto &mem = output_mems_[i].sysMem[0];
+            int output_memSize = output_properties_[i].alignedByteSize;
+            
+            ret = hbSysAllocCachedMem(&mem, output_memSize);
             if(ret != 0){
                 FDERROR << "hbSysAllocCachedMem fails." << std::endl;
                 return false;
             }
         }
-
         this->infer_init = true;
     }
     // Copy input data to input tensor memory
@@ -295,7 +281,7 @@ bool HorizonBackend::Infer(std::vector<FDTensor>& inputs,
             FDERROR << "inputs[i].Data is NULL." << std::endl;
             return false;
         }
-        auto &mem = input_mems_[i]->sysMem[0];
+        auto &mem = input_mems_[i].sysMem[0];
 
         memcpy(mem.virAddr, inputs[i].Data(), inputs[i].Nbytes());
         ret = hbSysFlushMem(&mem, HB_SYS_MEM_CACHE_CLEAN);
@@ -304,14 +290,16 @@ bool HorizonBackend::Infer(std::vector<FDTensor>& inputs,
             return false;
         }
     }
+
     hbDNNTaskHandle_t task_handle = nullptr;
     hbDNNInferCtrlParam infer_ctrl_param;
     HB_DNN_INITIALIZE_INFER_CTRL_PARAM(&infer_ctrl_param);
     ret = hbDNNInfer(&task_handle,
-              output_mems_,
-              input_mems_[0],
+              &output_mems_,
+              input_mems_,
               dnn_handle,
               &infer_ctrl_param);
+
     if(ret != 0){
         FDERROR << "hbDNNInference fails." << std::endl;
         return false;
@@ -321,7 +309,11 @@ bool HorizonBackend::Infer(std::vector<FDTensor>& inputs,
         FDERROR << "hbDNNWaitTaskDone fails." << std::endl;
         return false;
     }
-
+    ret = hbDNNReleaseTask(task_handle);
+    if(ret !=0){
+        FDERROR << "hbDNNReleaseTask fails." << std::endl;
+        return false;
+    }
     // get result
     outputs->resize(outputs_desc_.size());
     std::vector<int64_t> temp_shape(4);
@@ -333,15 +325,26 @@ bool HorizonBackend::Infer(std::vector<FDTensor>& inputs,
         (*outputs)[i].Resize(temp_shape, outputs_desc_[i].dtype,
                             outputs_desc_[i].name);
 
-        hbSysFlushMem(&(output_mems_[i]->sysMem[0]), HB_SYS_MEM_CACHE_INVALIDATE);                    
-        memcpy((*outputs)[i].MutableData(), (float*)output_mems_[i]->sysMem[0].virAddr,
+        hbSysFlushMem(&(output_mems_[i].sysMem[0]), HB_SYS_MEM_CACHE_INVALIDATE);
+        auto data = (float *)(output_mems_[i].sysMem[0].virAddr);
+
+        auto shift = output_mems_[i].properties.shift.shiftData;
+        auto scale = output_mems_[i].properties.scale.scaleData;
+
+        for(int j = 0; j < (*outputs)[i].Nbytes(); j++){
+            if (output_mems_[i].properties.quantiType == SHIFT) {
+                data[j] = data[j] / (1 << shift[j]);
+            } else if (output_mems_[i].properties.quantiType == SCALE) {
+                data[j] = data[j] * scale[j];
+            }
+        }
+
+        memcpy((*outputs)[i].MutableData(), (float*)output_mems_[i].sysMem[0].virAddr,
             (*outputs)[i].Nbytes());
     }
 
     return true;
 }
-
-
 
 FDDataType HorizonBackend::HorizonTensorTypeToFDDataType(int32_t type){
     if (type == hbDNNDataType::HB_DNN_TENSOR_TYPE_F16) {

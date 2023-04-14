@@ -14,48 +14,53 @@
 
 #include "fastdeploy/vision.h"
 
-void RKNPU2Infer(const std::string &model_dir, const std::string &image_file) {
-  auto model_file = model_dir + "/mobilenetv2_224x224_rgb.bin";
+void HorizonInfer(const std::string& model_dir, const std::string& image_file) {
+  auto model_file =
+      model_dir + "/ppyoloe_640x640_rgb_s.bin";
   auto params_file = "";
-  auto config_file = model_dir + "/inference_cls.yaml";
+  auto config_file = model_dir + "/infer_cfg.yml";
 
   auto option = fastdeploy::RuntimeOption();
   option.UseHorizon();
 
   auto format = fastdeploy::ModelFormat::HORIZON;
 
-  auto model = fastdeploy::vision::classification::PaddleClasModel(
+  auto model = fastdeploy::vision::detection::PPYOLOE(
       model_file, params_file, config_file, option, format);
-  if (!model.Initialized()) {
-    std::cerr << "Failed to initialize." << std::endl;
-    return;
-  }
+
   model.GetPreprocessor().DisablePermute();
   model.GetPreprocessor().DisableNormalize();
-
+  model.GetPostprocessor().ApplyNMS();
+  fastdeploy::vision::DetectionResult res;
+  auto im = cv::imread(image_file);
+  for(int i = 0; i < 100; i++){
+  
   fastdeploy::TimeCounter tc;
   tc.Start();
-  auto im = cv::imread(image_file);
-  fastdeploy::vision::ClassifyResult res;
-  if (!model.Predict(im, &res)) {
+  if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  // print res
-  std::cout << res.Str() << std::endl;
   tc.End();
-  tc.PrintInfo("PPClas in RKNPU2");
+  tc.PrintInfo("PPDet in Horizon");
+  // std::cout << res.Str() << std::endl;
+  }
+  
+  auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.5);
+  cv::imwrite("infer_horizon.jpg", vis_im);
+  std::cout << "Visualized result saved in ./infer_horizon.jpg" << std::endl;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   if (argc < 3) {
     std::cout
-        << "Usage: rknpu_test path/to/model_dir path/to/image run_option, "
-           "e.g ./rknpu_test ./ppclas_model_dir "
-           "./images/ILSVRC2012_val_00000010.jpeg"
+        << "Usage: infer_demo path/to/model_dir path/to/image run_option, "
+           "e.g ./infer_model ./picodet_model_dir ./test.jpeg"
         << std::endl;
     return -1;
   }
-  RKNPU2Infer(argv[1], argv[2]);
+
+  HorizonInfer(argv[1], argv[2]);
+  
   return 0;
 }
