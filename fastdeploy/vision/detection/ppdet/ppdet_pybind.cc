@@ -254,9 +254,9 @@ void BindPPDet(pybind11::module& m) {
       .def_readwrite("nms_threshold",
                      &vision::detection::NMSRotatedOption::nms_threshold)
       .def_readwrite("nms_top_k",
-                     &vision::NMSRotatedOption::NMSOption::nms_top_k)
+                     &vision::detection::NMSRotatedOption::NMSOption::nms_top_k)
       .def_readwrite("normalized",
-                     &vision::NMSRotatedOption::NMSOption::normalized)
+                     &vision::detection::NMSRotatedOption::NMSOption::normalized)
       .def_readwrite("score_threshold",
                      &vision::detection::NMSRotatedOption::score_threshold);
 }
