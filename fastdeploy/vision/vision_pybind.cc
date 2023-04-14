@@ -33,6 +33,7 @@ void BindHeadPose(pybind11::module& m);
 void BindSR(pybind11::module& m);
 void BindGeneration(pybind11::module& m);
 void BindVisualize(pybind11::module& m);
+void BindPerception(pybind11::module& m);
 
 void BindVision(pybind11::module& m) {
   pybind11::class_<vision::Mask>(m, "Mask")
@@ -107,6 +108,40 @@ void BindVision(pybind11::module& m) {
           }))
       .def("__repr__", &vision::DetectionResult::Str)
       .def("__str__", &vision::DetectionResult::Str);
+
+  pybind11::class_<vision::PerceptionResult>(m, "PerceptionResult")
+      .def(pybind11::init())
+      .def_readwrite("scores", &vision::PerceptionResult::scores)
+      .def_readwrite("label_ids", &vision::PerceptionResult::label_ids)
+      .def_readwrite("boxes", &vision::PerceptionResult::boxes)
+      .def_readwrite("center", &vision::PerceptionResult::center)
+      .def_readwrite("observation_angle",
+                     &vision::PerceptionResult::observation_angle)
+      .def_readwrite("yaw_angle", &vision::PerceptionResult::yaw_angle)
+      .def_readwrite("velocity", &vision::PerceptionResult::velocity)
+      .def(pybind11::pickle(
+          [](const vision::PerceptionResult& d) {
+            return pybind11::make_tuple(d.scores, d.label_ids, d.boxes,
+                                        d.center, d.observation_angle,
+                                        d.yaw_angle, d.velocity);
+          },
+          [](pybind11::tuple t) {
+            if (t.size() != 7)
+              throw std::runtime_error(
+                  "vision::PerceptionResult pickle with Invalid state!");
+
+            vision::PerceptionResult d;
+            d.scores = t[0].cast<std::vector<float>>();
+            d.label_ids = t[1].cast<std::vector<int32_t>>();
+            d.boxes = t[2].cast<std::vector<std::array<float, 7>>>();
+            d.center = t[3].cast<std::vector<std::array<float, 3>>>();
+            d.observation_angle = t[4].cast<std::vector<float>>();
+            d.yaw_angle = t[5].cast<std::vector<float>>();
+            d.velocity = t[6].cast<std::vector<std::array<float, 3>>>();
+            return d;
+          }))
+      .def("__repr__", &vision::PerceptionResult::Str)
+      .def("__str__", &vision::PerceptionResult::Str);
 
   pybind11::class_<vision::OCRResult>(m, "OCRResult")
       .def(pybind11::init())
@@ -224,5 +259,6 @@ void BindVision(pybind11::module& m) {
   BindSR(m);
   BindGeneration(m);
   BindVisualize(m);
+  BindPerception(m);
 }
 }  // namespace fastdeploy

@@ -27,6 +27,7 @@ from . import headpose
 from . import sr
 from . import evaluation
 from . import generation
+from . import perception
 from .utils import fd_result_to_json
 from .visualize import *
 from .. import C
