@@ -24,7 +24,7 @@ namespace vision {
 
 using matrix = std::vector<std::vector<float>>;
 
-matrix multiple(const matrix a, const matrix b) {
+matrix Multiple(const matrix a, const matrix b) {
   const int m = a.size();  // a rows
   if (m == 0) {
     matrix c;
@@ -124,7 +124,7 @@ cv::Mat VisPerception(const cv::Mat& im, const PerceptionResult& result,
     matrix rot_mat = {
         {cosf(ry), 0, sinf(ry)}, {0, 1, 0}, {sinf(ry), 0, cosf(ry)}};
 
-    matrix rot_corners_3d = multiple(rot_mat, corners_3d);
+    matrix rot_corners_3d = Multiple(rot_mat, corners_3d);
 
     for (auto j = 0; j < rot_corners_3d[0].size(); j++) {
       rot_corners_3d[0][j] += x;
@@ -132,7 +132,7 @@ cv::Mat VisPerception(const cv::Mat& im, const PerceptionResult& result,
       rot_corners_3d[2][j] += z;
     }
 
-    auto corners_2d = multiple(k_data, rot_corners_3d);
+    auto corners_2d = Multiple(k_data, rot_corners_3d);
 
     for (auto j = 0; j < corners_2d[0].size(); j++) {
       corners_2d[0][j] /= corners_2d[2][j];

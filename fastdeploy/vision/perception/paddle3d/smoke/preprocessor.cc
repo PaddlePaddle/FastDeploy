@@ -22,7 +22,7 @@ namespace vision {
 namespace perception {
 
 SmokePreprocessor::SmokePreprocessor(const std::string& config_file) {
-  this->config_file_ = config_file;
+  config_file_ = config_file;
   FDASSERT(BuildPreprocessPipelineFromConfig(),
            "Failed to create Paddle3DDetPreprocessor.");
   initialized_ = true;

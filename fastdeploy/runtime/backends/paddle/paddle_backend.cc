@@ -229,8 +229,10 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
       std::map<std::string, std::vector<float>> max_input_data;
       std::map<std::string, std::vector<float>> min_input_data;
       std::map<std::string, std::vector<float>> opt_input_data;
-      GetInputDataFromOption(option, &max_input_data, &min_input_data,
-                             &opt_input_data);
+      if (!option.trt_option.min_input_data.empty()) {
+        GetInputDataFromOption(option, &max_input_data, &min_input_data,
+                               &opt_input_data);
+      }
       // Need to run once to get the shape range info file.
       CollectShapeRun(predictor_tmp.get(), max_shape, max_input_data);
       CollectShapeRun(predictor_tmp.get(), min_shape, min_input_data);
