@@ -15,6 +15,7 @@
 #pragma once
 #include "fastdeploy/vision/detection/ppdet/base.h"
 #include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms_rotated.h"
 
 namespace fastdeploy {
 namespace vision {
