@@ -23,6 +23,7 @@ set(RKNN2_TARGET_SOC "@RKNN2_TARGET_SOC@")
 # Inference backend and FastDeploy Moudle
 set(ENABLE_ORT_BACKEND @ENABLE_ORT_BACKEND@)
 set(ENABLE_RKNPU2_BACKEND @ENABLE_RKNPU2_BACKEND@)
+set(ENABLE_HORIZON_BACKEND @ENABLE_HORIZON_BACKEND@)
 set(ENABLE_SOPHGO_BACKEND @ENABLE_SOPHGO_BACKEND@)
 set(ENABLE_LITE_BACKEND @ENABLE_LITE_BACKEND@)
 set(ENABLE_PADDLE_BACKEND @ENABLE_PADDLE_BACKEND@)
@@ -167,6 +168,23 @@ if(ENABLE_RKNPU2_BACKEND)
   list(APPEND FASTDEPLOY_LIBS ${RKNPU2_LIB})
 endif()
 
+if(ENABLE_HORIZON_BACKEND)
+  set(DNN_PATH "~/.horizon/ddk/xj3_aarch64/dnn/")
+  set(APPSDK_PATH "~/.horizon/ddk/xj3_aarch64/appsdk/appuser/")
+
+  set(DNN_LIB_PATH ${DNN_PATH}/lib)
+  set(APPSDK_LIB_PATH ${APPSDK_PATH}/lib/hbbpu)
+  set(BPU_libs dnn cnn_intf hbrt_bernoulli_aarch64)
+
+  include_directories(${DNN_PATH}/include
+                      ${APPSDK_PATH}/include)
+  link_directories(${DNN_LIB_PATH}
+                  ${APPSDK_PATH}/lib/hbbpu
+                  ${APPSDK_PATH}/lib)
+
+  list(APPEND FASTDEPLOY_LIBS ${BPU_libs})
+
+endif()
 if(ENABLE_LITE_BACKEND)
   set(LITE_DIR ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/${PADDLELITE_FILENAME})
   if(ANDROID)

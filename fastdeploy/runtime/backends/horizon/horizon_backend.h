@@ -51,19 +51,17 @@ public:
 private:
     hbPackedDNNHandle_t packed_dnn_handle;
     hbDNNHandle_t dnn_handle;
-
     hbDNNTensorProperties *input_properties_=nullptr;
     hbDNNTensorProperties *output_properties_=nullptr;
-    
-    hbDNNTensor **input_mems_;
-    hbDNNTensor **output_mems_;
-    
+    hbDNNTensor *input_mems_;
+    hbDNNTensor *output_mems_;
+
+    bool infer_init = false;
     std::vector<TensorInfo> inputs_desc_;
     std::vector<TensorInfo> outputs_desc_;
     bool GetModelInputOutputInfos();
     bool LoadModel(const char *model);
 
-    bool infer_init = false;
     static FDDataType HorizonTensorTypeToFDDataType(int32_t type);
     static hbDNNDataType FDDataTypeToHorizonTensorType(FDDataType type);
 
