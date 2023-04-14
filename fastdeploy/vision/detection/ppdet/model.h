@@ -98,6 +98,7 @@ class FASTDEPLOY_DECL PPYOLOE : public PPDetBase {
     valid_rknpu_backends = {Backend::RKNPU2};
     valid_ascend_backends = {Backend::LITE};
     valid_sophgonpu_backends = {Backend::SOPHGOTPU};
+    valid_horizon_backends = {Backend::HORIZONNPU};
     initialized = Initialize();
   }
 

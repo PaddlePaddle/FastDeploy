@@ -77,6 +77,7 @@ bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
   bool use_gpu = (runtime_option.device == Device::GPU);
   bool use_ipu = (runtime_option.device == Device::IPU);
   bool use_rknpu = (runtime_option.device == Device::RKNPU);
+  bool use_horizon = (runtime_option.device == Device::SUNRISENPU);
   bool use_sophgotpu = (runtime_option.device == Device::SOPHGOTPUD);
   bool use_timvx = (runtime_option.device == Device::TIMVX);
   bool use_ascend = (runtime_option.device == Device::ASCEND);
@@ -94,6 +95,13 @@ bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
     if (!IsSupported(valid_rknpu_backends, runtime_option.backend)) {
       FDERROR << "The valid rknpu backends of model " << ModelName() << " are "
               << Str(valid_rknpu_backends) << ", " << runtime_option.backend
+              << " is not supported." << std::endl;
+      return false;
+    }
+  } else if (use_horizon){
+    if(!IsSupported(valid_horizon_backends, runtime_option.backend)){
+      FDERROR << "The valid horizon backends of model " << ModelName() << " are "
+              << Str(valid_horizon_backends) << ", " << runtime_option.backend
               << " is not supported." << std::endl;
       return false;
     }
@@ -169,7 +177,9 @@ bool FastDeployModel::InitRuntimeWithSpecifiedDevice() {
 #endif
   } else if (runtime_option.device == Device::RKNPU) {
     return CreateRKNPUBackend();
-  } else if (runtime_option.device == Device::TIMVX) {
+  } else if (runtime_option.device == Device::SUNRISENPU){
+    return CreateHorizonBackend();
+  }else if (runtime_option.device == Device::TIMVX) {
     return CreateTimVXBackend();
   } else if (runtime_option.device == Device::ASCEND) {
     return CreateASCENDBackend();
@@ -189,7 +199,7 @@ bool FastDeployModel::InitRuntimeWithSpecifiedDevice() {
 #endif
   }
   FDERROR
-      << "Only support CPU/GPU/IPU/RKNPU/TIMVX/KunlunXin/ASCEND/DirectML now."
+      << "Only support CPU/GPU/IPU/RKNPU/HORIZONNPU/TIMVX/KunlunXin/ASCEND/DirectML now."
       << std::endl;
   return false;
 }
@@ -278,6 +288,29 @@ bool FastDeployModel::CreateRKNPUBackend() {
   return false;
 }
 
+bool FastDeployModel::CreateHorizonBackend(){
+  if(valid_horizon_backends.empty()) {
+    FDERROR << "There's no valid npu backends for model: " << ModelName()
+            << std::endl;
+    return false;
+  }
+  for (size_t i = 0; i < valid_horizon_backends.size(); ++i) {
+    if (!IsBackendAvailable(valid_horizon_backends[i])) {
+      continue;
+    }
+    runtime_option.backend = valid_horizon_backends[i];
+    runtime_ = std::unique_ptr<Runtime>(new Runtime());
+    if (!runtime_->Init(runtime_option)) {
+      return false;
+    }
+    runtime_initialized_ = true;
+    return true;
+  }
+  FDERROR << "Cannot find an available npu backend to load this model."
+          << std::endl;
+  return false;
+
+}
 bool FastDeployModel::CreateSophgoNPUBackend() {
   if (valid_sophgonpu_backends.empty()) {
     FDERROR << "There's no valid npu backends for model: " << ModelName()
