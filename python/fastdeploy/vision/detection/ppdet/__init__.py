@@ -50,6 +50,15 @@ class NMSOption:
         return self.nms_option.background_label
 
 
+class NMSRotatedOption:
+    def __init__(self):
+        self.nms_rotated_option = C.vision.detection.NMSRotatedOption()
+
+    @property
+    def background_label(self):
+        return self.nms_rotated_option.background_label
+
+
 class PaddleDetPostprocessor:
     def __init__(self):
         """Create a postprocessor for PaddleDetection Model
@@ -74,6 +83,14 @@ class PaddleDetPostprocessor:
         if nms_option is None:
             nms_option = NMSOption()
         self._postprocessor.set_nms_option(self, nms_option.nms_option)
+
+    def set_nms_rotated_option(self, nms_rotated_option=None):
+        """This function will enable decode and rotated nms in postprocess step.
+        """
+        if nms_rotated_option is None:
+            nms_rotated_option = NMSRotatedOption()
+        self._postprocessor.set_nms_rotated_option(
+            self, nms_rotated_option.nms_rotated_option)
 
 
 class PPYOLOE(FastDeployModel):
