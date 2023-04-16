@@ -140,6 +140,44 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   std::string Str();
 };
 
+/*! @brief Detection result structure for all the object detection models and instance segmentation models
+ */
+struct FASTDEPLOY_DECL PerceptionResult : public BaseResult {
+  PerceptionResult() = default;
+
+  std::vector<float> scores;
+
+  std::vector<int32_t> label_ids;
+  // xmin, ymin, xmax, ymax, h, w, l
+  std::vector<std::array<float, 7>> boxes;
+  // cx, cy, cz
+  std::vector<std::array<float, 3>> center;
+
+  std::vector<float> observation_angle;
+
+  std::vector<float> yaw_angle;
+  // vx, vy, vz
+  std::vector<std::array<float, 3>> velocity;
+
+  /// Copy constructor
+  PerceptionResult(const PerceptionResult& res);
+  /// Move assignment
+  PerceptionResult& operator=(PerceptionResult&& other);
+
+  /// Clear PerceptionResult
+  void Clear();
+
+  /// Clear PerceptionResult and free the memory
+  void Free();
+
+  void Reserve(int size);
+
+  void Resize(int size);
+
+  /// Debug function, convert the result to string to print
+  std::string Str();
+};
+
 /*! @brief KeyPoint Detection result structure for all the keypoint detection models
  */
 struct FASTDEPLOY_DECL KeyPointDetectionResult : public BaseResult {

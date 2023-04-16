@@ -33,8 +33,9 @@ struct TrtBackendOption {
   /// Enable log while converting onnx model to tensorrt
   bool enable_log_info = false;
 
-  
-  /// Enable half precison inference, on some device not support half precision, it will fallback to float32 mode
+
+  /// Enable half precison inference, on some device not support half precision,
+  /// it will fallback to float32 mode
   bool enable_fp16 = false;
 
   /** \brief Set shape range of input tensor for the model that contain dynamic input shape while using TensorRT backend
@@ -46,8 +47,8 @@ struct TrtBackendOption {
    */
   void SetShape(const std::string& tensor_name,
                 const std::vector<int32_t>& min,
-                const std::vector<int32_t>& opt,
-                const std::vector<int32_t>& max) {
+                const std::vector<int32_t>& opt = std::vector<int32_t>(),
+                const std::vector<int32_t>& max = std::vector<int32_t>()) {
     min_shape[tensor_name].clear();
     max_shape[tensor_name].clear();
     opt_shape[tensor_name].clear();
@@ -63,9 +64,44 @@ struct TrtBackendOption {
       max_shape[tensor_name].assign(max.begin(), max.end());
     }
   }
-  /// Set cache file path while use TensorRT backend. Loadding a Paddle/ONNX model and initialize TensorRT will take a long time, by this interface it will save the tensorrt engine to `cache_file_path`, and load it directly while execute the code again
+
+    /** \brief Set Input data for input tensor for the model  while using TensorRT backend
+   *
+   * \param[in] tensor_name The name of input for the model which is dynamic shape
+   * \param[in] min_data The input data for minimal shape for the input tensor
+   * \param[in] opt_data The input data for optimized shape for the input tensor
+   * \param[in] max_data The input data for maximum shape for the input tensor, if set as default value, it will keep same with min_data
+   */
+  void SetInputData(const std::string& tensor_name,
+                const std::vector<float> min_data,
+                const std::vector<float> opt_data = std::vector<float>(),
+                const std::vector<float> max_data = std::vector<float>()) {
+    max_input_data[tensor_name].clear();
+    min_input_data[tensor_name].clear();
+    opt_input_data[tensor_name].clear();
+    min_input_data[tensor_name].assign(min_data.begin(), min_data.end());
+    if (opt_data.empty()) {
+      opt_input_data[tensor_name].assign(min_data.begin(), min_data.end());
+    } else {
+      opt_input_data[tensor_name].assign(opt_data.begin(), opt_data.end());
+    }
+    if (max_data.empty()) {
+      max_input_data[tensor_name].assign(min_data.begin(), min_data.end());
+    } else {
+      max_input_data[tensor_name].assign(max_data.begin(), max_data.end());
+    }
+  }
+
+  /// Set cache file path while use TensorRT backend.
+  /// Loadding a Paddle/ONNX model and initialize TensorRT will
+  /// take a long time,
+  /// by this interface it will save the tensorrt engine to `cache_file_path`,
+  /// and load it directly while execute the code again
   std::string serialize_file = "";
 
+  std::map<std::string, std::vector<float>> max_input_data;
+  std::map<std::string, std::vector<float>> min_input_data;
+  std::map<std::string, std::vector<float>> opt_input_data;
   // The below parameters may be removed in next version, please do not
   // visit or use them directly
   std::map<std::string, std::vector<int32_t>> max_shape;
