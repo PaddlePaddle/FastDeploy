@@ -25,7 +25,7 @@
 
 namespace fastdeploy {
 class HorizonBackend : public BaseBackend {
-public:
+ public:
     HorizonBackend() = default;
     ~HorizonBackend();
 
@@ -48,11 +48,11 @@ public:
     bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
                 bool copy_to_fd = true) override;
 
-private:
+ private:
     hbPackedDNNHandle_t packed_dnn_handle;
     hbDNNHandle_t dnn_handle;
-    hbDNNTensorProperties *input_properties_=nullptr;
-    hbDNNTensorProperties *output_properties_=nullptr;
+    hbDNNTensorProperties *input_properties_ = nullptr;
+    hbDNNTensorProperties *output_properties_ = nullptr;
     hbDNNTensor *input_mems_;
     hbDNNTensor *output_mems_;
 
@@ -65,6 +65,6 @@ private:
     static FDDataType HorizonTensorTypeToFDDataType(int32_t type);
     static hbDNNDataType FDDataTypeToHorizonTensorType(FDDataType type);
 
-}; // class HorizonBackend
-} //namespace fastdeploy
+};
+}
 
