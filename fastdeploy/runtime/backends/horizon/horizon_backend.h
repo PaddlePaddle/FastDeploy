@@ -65,5 +65,5 @@ class HorizonBackend : public BaseBackend {
     static FDDataType HorizonTensorTypeToFDDataType(int32_t type);
     static hbDNNDataType FDDataTypeToHorizonTensorType(FDDataType type);
 };
-} // namespace fastdeploy
+}  // namespace fastdeploy
 
