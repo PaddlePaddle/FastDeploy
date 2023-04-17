@@ -26,7 +26,8 @@ void BindTrtOption(pybind11::module& m) {
       .def_readwrite("max_workspace_size",
                      &TrtBackendOption::max_workspace_size)
       .def_readwrite("serialize_file", &TrtBackendOption::serialize_file)
-      .def("set_shape", &TrtBackendOption::SetShape);
+      .def("set_shape", &TrtBackendOption::SetShape)
+      .def("set_input_data", &TrtBackendOption::SetInputData);
 }
 
 }  // namespace fastdeploy
