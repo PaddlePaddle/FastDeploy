@@ -383,6 +383,17 @@ void RuntimeOption::SetTrtInputShape(const std::string& input_name,
   trt_option.SetShape(input_name, min_shape, opt_shape, max_shape);
 }
 
+void RuntimeOption::SetTrtInputData(const std::string& input_name,
+                                    const std::vector<float>& min_shape_data,
+                                    const std::vector<float>& opt_shape_data,
+                                    const std::vector<float>& max_shape_data) {
+  FDWARNING << "`RuntimeOption::SetTrtInputData` will be removed in v1.2.0, "
+               "please use `RuntimeOption.trt_option.SetInputData()` instead."
+            << std::endl;
+  trt_option.SetInputData(input_name, min_shape_data, opt_shape_data,
+                          max_shape_data);
+}
+
 void RuntimeOption::SetTrtMaxWorkspaceSize(size_t max_workspace_size) {
   FDWARNING << "`RuntimeOption::SetTrtMaxWorkspaceSize` will be removed in "
                "v1.2.0, please modify its member variable directly, e.g "
