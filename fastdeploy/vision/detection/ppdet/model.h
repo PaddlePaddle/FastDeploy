@@ -439,6 +439,25 @@ class FASTDEPLOY_DECL GFL : public PPDetBase {
   virtual std::string ModelName() const { return "PaddleDetection/GFL"; }
 };
 
+class FASTDEPLOY_DECL PaddleDetectionModel : public PPDetBase {
+ public:
+  PaddleDetectionModel(const std::string& model_file, const std::string& params_file,
+          const std::string& config_file,
+          const RuntimeOption& custom_option = RuntimeOption(),
+          const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    if (!CheckArch()) {
+    FDWARNING << "Please set model arch,"
+            << "support value : SOLOv2, YOLO, SSD, RetinaNet, RCNN, Face , GFL , RTMDet ,"\
+            <<"FCOS , TTFNet , TOOD." << std::endl;
+    }
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetectionModel"; }
+};
+
 }  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy
