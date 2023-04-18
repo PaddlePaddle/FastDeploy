@@ -99,6 +99,7 @@ else()
     endif()
     set(PADDLEINFERENCE_VERSION "2.4-dev3")
   else()
+    # Linux with x86 CPU/Arm CPU/GPU/IPU ...
     if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
       message(FATAL_ERROR "Paddle Backend doesn't support linux aarch64 now.")
     else()
