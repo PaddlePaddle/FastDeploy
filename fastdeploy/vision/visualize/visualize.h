@@ -32,6 +32,12 @@ class FASTDEPLOY_DECL Visualize {
   static cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
                               float score_threshold = 0.0, int line_size = 1,
                               float font_size = 0.5f);
+  static cv::Mat VisPerception(const cv::Mat& im,
+                     const PerceptionResult& result,
+                     const std::string & config_file,
+                     float score_threshold = 0.0,
+                     int line_size = 1,
+                     float font_size = 0.5f);
   static cv::Mat VisFaceDetection(const cv::Mat& im,
                                   const FaceDetectionResult& result,
                                   int line_size = 1, float font_size = 0.5f);
@@ -82,6 +88,22 @@ FASTDEPLOY_DECL cv::Mat VisDetection(const cv::Mat& im,
                                      const std::vector<std::string>& labels,
                                      float score_threshold = 0.0,
                                      int line_size = 1, float font_size = 0.5f);
+/** \brief Show the visualized results with custom labels for detection models
+ *
+ * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+ * \param[in] result the result produced by model
+ * \param[in] labels the visualized result will show the bounding box contain class label
+ * \param[in] score_threshold threshold for result scores, the bounding box will not be shown if the score is less than score_threshold
+ * \param[in] line_size line size for bounding boxes
+ * \param[in] font_size font size for text
+ * \return cv::Mat type stores the visualized results
+ */
+FASTDEPLOY_DECL cv::Mat VisPerception(const cv::Mat& im,
+                     const PerceptionResult& result,
+                     const std::string & config_file,
+                     float score_threshold = 0.0,
+                     int line_size = 1 ,
+                     float font_size = 0.5f);
 /** \brief Show the visualized results for classification models
  *
  * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format

@@ -1,0 +1,8 @@
+https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar
+https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar
+https://bj.bcebos.com/fastdeploy/models/yolov5s_ptq_model.tar.gz
+https://bj.bcebos.com/fastdeploy/models/ppyoloe_noshare_qat.tar.gz
+https://bj.bcebos.com/fastdeploy/models/rk1/ppliteseg.tar.gz
+https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
+https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
+https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
