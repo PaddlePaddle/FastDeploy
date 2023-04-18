@@ -17,12 +17,6 @@ include(ExternalProject)
 if (OPENVINO_DIRECTORY)
   message(STATUS "Use the openvino lib specified by user. The OpenVINO path: ${OPENVINO_DIRECTORY}")
   STRING(REGEX REPLACE "\\\\" "/" OPENVINO_DIRECTORY ${OPENVINO_DIRECTORY})
-  set(OPENVINO_INSTALL_INC_DIR
-    "${OPENVINO_DIRECTORY}/runtime/include"
-    "${OPENVINO_DIRECTORY}/runtime/include/ie"
-    CACHE PATH "openvino install include directory." FORCE)
-  # For OPENVINO code to include internal headers.
-  include_directories(${OPENVINO_INSTALL_INC_DIR})
   get_openvino_libs(${OPENVINO_DIRECTORY}/runtime)
   include_directories(${OPENVINO_DIRECTORY}/runtime/include ${OPENVINO_DIRECTORY}/runtime/include/ie)
   set(OPENVINO_LIB_DIR
