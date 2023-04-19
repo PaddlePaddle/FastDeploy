@@ -86,6 +86,8 @@ setup_configs["OPENCV_DIRECTORY"] = os.getenv("OPENCV_DIRECTORY", "")
 setup_configs["ORT_DIRECTORY"] = os.getenv("ORT_DIRECTORY", "")
 setup_configs["PADDLEINFERENCE_DIRECTORY"] = os.getenv(
     "PADDLEINFERENCE_DIRECTORY", "")
+setup_configs["PADDLEINFERENCE_VERSION"] = os.getenv(
+    "PADDLEINFERENCE_VERSION", "")
 
 setup_configs["RKNN2_TARGET_SOC"] = os.getenv("RKNN2_TARGET_SOC", "")
 if setup_configs["RKNN2_TARGET_SOC"] != "" or setup_configs[
@@ -376,6 +378,10 @@ if sys.version_info[0] == 3:
 
 package_data = {PACKAGE_NAME: ["LICENSE", "ThirdPartyNotices.txt"]}
 
+extra_version_info = ""
+if setup_configs["PADDLEINFERENCE_VERSION"] != "":
+  extra_version_info += ("." + setup_configs["PADDLEINFERENCE_VERSION"])
+
 if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     shutil.copy(
         os.path.join(TOP_DIR, "ThirdPartyNotices.txt"),
@@ -395,7 +401,7 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     package_data[PACKAGE_NAME].extend(all_lib_data)
     setuptools.setup(
         name=wheel_name,
-        version=VersionInfo.version,
+        version=VersionInfo.version + extra_version_info,
         ext_modules=ext_modules,
         description="Deploy Kit Tool For Deeplearning models.",
         packages=packages,
@@ -416,7 +422,7 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
 else:
     setuptools.setup(
         name=wheel_name,
-        version=VersionInfo.version,
+        version=VersionInfo.version + extra_version_info,
         description="Deploy Kit Tool For Deeplearning models.",
         ext_modules=ext_modules,
         cmdclass=cmdclass,

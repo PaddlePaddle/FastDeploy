@@ -43,3 +43,4 @@ examples/vision/tests_quantize
 fastdeploy/LICENSE
 fastdeploy/ThirdPartyNotices.txt
 FastDeployCSharp.cmake
+python/fastdeploy/code_version.py

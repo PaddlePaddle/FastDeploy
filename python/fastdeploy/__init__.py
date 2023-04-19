@@ -45,6 +45,10 @@ if os.name != "nt" and os.path.exists(trt_directory):
 # Note(zhoushunjie): Fix the import order of paddle and fastdeploy library.
 # This solution will be removed it when the confilct of paddle and
 # fastdeploy is fixed.
+try:
+  import paddle
+except:
+  pass
 
 from .c_lib_wrap import (
     ModelFormat,
