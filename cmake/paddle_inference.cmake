@@ -24,9 +24,13 @@ set(PADDLEINFERENCE_PREFIX_DIR ${THIRD_PARTY_PATH}/paddle_inference)
 set(PADDLEINFERENCE_SOURCE_DIR
     ${THIRD_PARTY_PATH}/paddle_inference/src/${PADDLEINFERENCE_PROJECT})
 set(PADDLEINFERENCE_INSTALL_DIR ${THIRD_PARTY_PATH}/install/paddle_inference)
-set(PADDLEINFERENCE_INC_DIR
-    "${PADDLEINFERENCE_INSTALL_DIR}/paddle/include"
-    CACHE PATH "paddle_inference include directory." FORCE)
+# set(PADDLEINFERENCE_INC_DIR
+#     "${PADDLEINFERENCE_INSTALL_DIR}/paddle/include"
+#     CACHE PATH "paddle_inference include directory." FORCE)
+# NOTE: The head path need by paddle inference is xxx/paddle_inference,
+# not xxx/paddle_inference/paddle/include
+set(PADDLEINFERENCE_INC_DIR "${PADDLEINFERENCE_INSTALL_DIR}"
+    CACHE PATH "paddle_inference include directory." FORCE)    
 set(PADDLEINFERENCE_LIB_DIR
     "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/"
     CACHE PATH "paddle_inference lib directory." FORCE)
@@ -34,7 +38,8 @@ set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}"
                       "${PADDLEINFERENCE_LIB_DIR}")
 
 if(PADDLEINFERENCE_DIRECTORY)
-  set(PADDLEINFERENCE_INC_DIR ${PADDLEINFERENCE_DIRECTORY}/paddle/include)
+  # set(PADDLEINFERENCE_INC_DIR ${PADDLEINFERENCE_DIRECTORY}/paddle/include)
+  set(PADDLEINFERENCE_INC_DIR ${PADDLEINFERENCE_DIRECTORY})
 endif()
 
 include_directories(${PADDLEINFERENCE_INC_DIR})
@@ -103,11 +108,12 @@ else()
     if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
       message(FATAL_ERROR "Paddle Backend doesn't support linux aarch64 now.")
     else()
-      set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-mkl-avx-0.0.0-20230410.tgz")
       if(WITH_GPU)
-        set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-gpu-trt8.5.2.2-mkl-avx-0.0.0-20230410.tgz")
+        set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-gpu-trt8.5.2.2-mkl-avx-0.0.0.660f781b77.tgz")
+      else()
+        set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-mkl-avx-0.0.0.660f781b77.tgz")
       endif()
-      set(PADDLEINFERENCE_VERSION "0.0.0-20230410")
+      set(PADDLEINFERENCE_VERSION "0.0.0.660f781b77")
       if (WITH_IPU)
         set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-ipu-2.4-dev1.tgz")
         set(PADDLEINFERENCE_VERSION "2.4-dev1")
