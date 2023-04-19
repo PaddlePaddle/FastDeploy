@@ -47,6 +47,15 @@ fi
 ./benchmark_ppocr_table --model en_ppstructure_mobile_v2.0_SLANet_infer --image table.jpg --table_char_dict_path table_structure_dict.txt --config_path $CONFIG_PATH
 
 # PaddleDetection
+./benchmark_ppyolov5 --model yolov5_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov6 --model yolov6_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolox --model yolox_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyoloe --model ppyoloe_plus_crn_m_80e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_picodet --model picodet_l_640_coco_lcnet --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov7 --model yolov7_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyoloe --model ppyoloe_crn_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+
 ./benchmark_ppyolov5 --model yolov5_s_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
 ./benchmark_ppyolov6 --model yolov6_s_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
 ./benchmark_ppyolov7 --model yolov7_l_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
@@ -55,6 +64,7 @@ fi
 ./benchmark_ppyoloe --model ppyoloe_crn_l_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
 ./benchmark_ppyoloe --model ppyoloe_plus_crn_m_80e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
 ./benchmark_picodet --model picodet_l_640_coco_lcnet_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
+
 ./benchmark_ppyolo --model ppyolo_r50vd_dcn_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_yolov3 --model yolov3_darknet53_270e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolo --model ppyolov2_r101vd_dcn_365e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
@@ -72,10 +82,8 @@ fi
 ./benchmark_tood --model tood_r50_fpn_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ttfnet --model ttfnet_darknet53_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolov5 --model yolov5_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ppyolov5 --model yolov5_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolov6 --model yolov6_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolov6 --model yolov6_s_400e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ppyolov7 --model yolov7_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolov7 --model yolov7_x_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_fasterrcnn --model faster_rcnn_enhance_3x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyoloe --model ppyoloe_crn_l_80e_sliced_visdrone_640_025 --image 000000014439.jpg --config_path $CONFIG_PATH
@@ -85,7 +93,6 @@ fi
 ./benchmark_ppyolov8 --model yolov8_x_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolov8 --model yolov8_l_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolov8 --model yolov8_m_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolov8 --model yolov8_n_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 
 # PaddleSeg
