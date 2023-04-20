@@ -13,7 +13,7 @@ cd serving
 bash scripts/build.sh
 
 # Exit to the FastDeploy home directory and create the image
-# x.y.z is FastDeploy version, example: 1.0.5
+# x.y.z is FastDeploy version, example: 1.0.6
 cd ../
 docker build -t paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 -f serving/Dockerfile .
 ```
@@ -28,7 +28,7 @@ cd ../
 docker build -t paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.5-21.10 -f serving/Dockerfile_CUDA_11_4_TRT_8_4 .
 ```
 
-For example, create an GPU image based on FastDeploy v1.0.5 and ubuntu 20.04，cuda11.2 environment
+For example, create an GPU image based on FastDeploy v1.0.6 and ubuntu 20.04，cuda11.2 environment
 ```
 # Enter the serving directory and execute the script to compile the FastDeploy and serving backend
 cd serving
@@ -36,7 +36,7 @@ bash scripts/build_fd_cuda_11_2.sh
 
 # Exit to the FastDeploy home directory and create the image
 cd ../
-docker build -t paddlepaddle/fastdeploy:1.0.5-gpu-cuda11.2-trt8.4-21.10 -f serving/Dockerfile_CUDA_11_2 .
+docker build -t paddlepaddle/fastdeploy:1.0.6-gpu-cuda11.2-trt8.4-21.10 -f serving/Dockerfile_CUDA_11_2 .
 ```
 
 ### CPU Image
@@ -48,7 +48,7 @@ cd serving
 bash scripts/build.sh OFF
 
 # Exit to the FastDeploy home directory and create the image
-# x.y.z is FastDeploy version, example: 1.0.5
+# x.y.z is FastDeploy version, example: 1.0.6
 cd ../
 docker build -t paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10 -f serving/Dockerfile_cpu .
 ```
@@ -61,7 +61,7 @@ cd serving
 bash scripts/build_fd_ipu.sh
 
 # Exit to the FastDeploy home directory and create the image
-# x.y.z is FastDeploy version, example: 1.0.5
+# x.y.z is FastDeploy version, example: 1.0.6
 cd ../
 docker build -t paddlepaddle/fastdeploy:x.y.z-ipu-only-21.10 -f serving/Dockerfile_ipu .
 ```
