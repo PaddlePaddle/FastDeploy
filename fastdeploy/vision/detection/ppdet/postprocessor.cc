@@ -323,7 +323,7 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
     // The fourth output of solov2 is mask
     return ProcessMask(tensors[3], results);
   } else {
-    if (tensors[0].Shape()[2] == 8) {  // PPYOLOER
+    if (tensors[0].Shape().size() == 3 && tensors[0].Shape()[2] == 8) {  // PPYOLOER
       return ProcessPPYOLOER(tensors, results);
     }
 
