@@ -15,6 +15,9 @@ target_link_libraries(infer_faster_rcnn_demo ${FASTDEPLOY_LIBS})
 add_executable(infer_ppyoloe_demo ${PROJECT_SOURCE_DIR}/infer_ppyoloe.cc)
 target_link_libraries(infer_ppyoloe_demo ${FASTDEPLOY_LIBS})
 
+add_executable(infer_ppyoloe_r_demo ${PROJECT_SOURCE_DIR}/infer_ppyoloe_r.cc)
+target_link_libraries(infer_ppyoloe_r_demo ${FASTDEPLOY_LIBS})
+
 add_executable(infer_picodet_demo ${PROJECT_SOURCE_DIR}/infer_picodet.cc)
 target_link_libraries(infer_picodet_demo ${FASTDEPLOY_LIBS})
 
