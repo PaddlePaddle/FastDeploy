@@ -49,7 +49,7 @@ HorizonBackend::~HorizonBackend() {
             free(output_mems_);
         }
     }
-    ret = hbDNNRelease(packed_dnn_handle);
+    ret = hbDNNRelease(packed_dnn_handle_);
     if(ret != 0){
         FDERROR << "hbDNNRelease  fail! ret=" << ret << std::endl;
     }
@@ -60,13 +60,13 @@ bool HorizonBackend::GetModelInputOutputInfos(){
     int model_count = 0;
     int ret;
     // get model name
-    ret = hbDNNGetModelNameList(&model_name_list, &model_count, packed_dnn_handle);
+    ret = hbDNNGetModelNameList(&model_name_list, &model_count, packed_dnn_handle_);
     if(ret != 0){
         FDERROR << "get model name fail! ret=" << ret << std::endl;
         return false;
     }
     // get dnn handle
-    ret = hbDNNGetModelHandle(&dnn_handle, packed_dnn_handle, model_name_list[0]);
+    ret = hbDNNGetModelHandle(&dnn_handle_, packed_dnn_handle_, model_name_list[0]);
     if(ret != 0){
         FDERROR << "get dnn handle fail! ret=" << ret << std::endl;
         return false;
@@ -74,7 +74,7 @@ bool HorizonBackend::GetModelInputOutputInfos(){
     // get input infos
     // Get detailed input parameters
     int input_count = 0;
-    ret = hbDNNGetInputCount(&input_count, dnn_handle);
+    ret = hbDNNGetInputCount(&input_count, dnn_handle_);
     if(ret != 0){
         FDERROR << "get input count fail! ret=" << ret << std::endl;
         return false;
@@ -86,7 +86,7 @@ bool HorizonBackend::GetModelInputOutputInfos(){
 
     // get input info and copy to input tensor info
     for (uint32_t i = 0; i < input_count; i++) {
-        ret = hbDNNGetInputTensorProperties(&input_properties_[i], dnn_handle, i);
+        ret = hbDNNGetInputTensorProperties(&input_properties_[i], dnn_handle_, i);
 
         if(ret != 0){
             FDERROR << "get input tensor properties fail! ret=" << ret << std::endl;
@@ -104,7 +104,7 @@ bool HorizonBackend::GetModelInputOutputInfos(){
 
         const char *name;
 
-        ret = hbDNNGetInputName(&name, dnn_handle, i);
+        ret = hbDNNGetInputName(&name, dnn_handle_, i);
         if(ret != 0){
             FDERROR << "get input tensor name fail! ret=" << ret << std::endl;
             return false;
@@ -128,7 +128,7 @@ bool HorizonBackend::GetModelInputOutputInfos(){
     // get output infos
     // Get detailed output parameters
     int output_count = 0;
-    ret = hbDNNGetOutputCount(&output_count, dnn_handle);
+    ret = hbDNNGetOutputCount(&output_count, dnn_handle_);
     if(ret != 0){
         FDERROR << "get output count fail! ret=" << ret << std::endl;
         return false;
@@ -140,10 +140,10 @@ bool HorizonBackend::GetModelInputOutputInfos(){
 
     for (uint32_t i = 0; i < output_count; i++){
         // get model output size
-        ret = hbDNNGetOutputTensorProperties(&output_properties_[i], dnn_handle, i);
+        ret = hbDNNGetOutputTensorProperties(&output_properties_[i], dnn_handle_, i);
         
         const char *name;
-        ret = hbDNNGetOutputName(&name, dnn_handle, i);
+        ret = hbDNNGetOutputName(&name, dnn_handle_, i);
         if(ret != 0){
             FDERROR << "get output tensor name fail! ret=" << ret << std::endl;
             return false;
@@ -198,7 +198,7 @@ std::vector<TensorInfo> HorizonBackend::GetOutputInfos(){
 
 bool HorizonBackend::LoadModel(const char *model){
     int ret = -1;
-    ret = hbDNNInitializeFromFiles(&packed_dnn_handle, &model , 1);
+    ret = hbDNNInitializeFromFiles(&packed_dnn_handle_, &model , 1);
     if(ret != 0){
         FDERROR << "horizon_init fail! ret=" << ret << std::endl;
         return false;
@@ -207,13 +207,13 @@ bool HorizonBackend::LoadModel(const char *model){
 }
 bool HorizonBackend::Init(const RuntimeOption& runtime_option){
     // Init model from file
-    if (!this->LoadModel((char*)runtime_option.model_file.data())) {
+    if (!LoadModel((char*)runtime_option.model_file.data())) {
         FDERROR << "load model failed" << std::endl;
         return false;
     }
 
     // GetModelInputOutputInfos
-    if (!this->GetModelInputOutputInfos()) {
+    if (!GetModelInputOutputInfos()) {
         FDERROR << "get model input output infos failed" << std::endl;
         return false;
     }
@@ -232,9 +232,9 @@ bool HorizonBackend::Infer(std::vector<FDTensor>& inputs,
                 << inputs_desc_.size() << ")." << std::endl;
         return false;
     }
-
+    RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
     int ret = -1;
-    if(!this->infer_init){
+    if(!infer_init_){
         // Create input tensor memory
         int input_count = NumInputs();
         int output_count = NumOutputs();
@@ -273,7 +273,7 @@ bool HorizonBackend::Infer(std::vector<FDTensor>& inputs,
                 return false;
             }
         }
-        this->infer_init = true;
+        infer_init_ = true;
     }
     // Copy input data to input tensor memory
     for (uint32_t i = 0; i < NumInputs(); i++) {
@@ -294,12 +294,14 @@ bool HorizonBackend::Infer(std::vector<FDTensor>& inputs,
     hbDNNTaskHandle_t task_handle = nullptr;
     hbDNNInferCtrlParam infer_ctrl_param;
     HB_DNN_INITIALIZE_INFER_CTRL_PARAM(&infer_ctrl_param);
+    
+    RUNTIME_PROFILE_LOOP_BEGIN(1)
     ret = hbDNNInfer(&task_handle,
               &output_mems_,
               input_mems_,
-              dnn_handle,
+              dnn_handle_,
               &infer_ctrl_param);
-
+    RUNTIME_PROFILE_LOOP_END
     if(ret != 0){
         FDERROR << "hbDNNInference fails." << std::endl;
         return false;
@@ -342,7 +344,7 @@ bool HorizonBackend::Infer(std::vector<FDTensor>& inputs,
         memcpy((*outputs)[i].MutableData(), (float*)output_mems_[i].sysMem[0].virAddr,
             (*outputs)[i].Nbytes());
     }
-
+    RUNTIME_PROFILE_LOOP_H2D_D2H_END
     return true;
 }
 

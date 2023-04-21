@@ -49,14 +49,14 @@ class HorizonBackend : public BaseBackend {
                 bool copy_to_fd = true) override;
 
  private:
-    hbPackedDNNHandle_t packed_dnn_handle;
-    hbDNNHandle_t dnn_handle;
+    hbPackedDNNHandle_t packed_dnn_handle_;
+    hbDNNHandle_t dnn_handle_;
     hbDNNTensorProperties *input_properties_ = nullptr;
     hbDNNTensorProperties *output_properties_ = nullptr;
     hbDNNTensor *input_mems_;
     hbDNNTensor *output_mems_;
 
-    bool infer_init = false;
+    bool infer_init_ = false;
     std::vector<TensorInfo> inputs_desc_;
     std::vector<TensorInfo> outputs_desc_;
     bool GetModelInputOutputInfos();

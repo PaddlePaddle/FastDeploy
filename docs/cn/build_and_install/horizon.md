@@ -49,19 +49,10 @@ sh run_docker.sh /home gpu
 
 第一个目录为要挂载到容器上的目录，后一个参数为该docker启用gpu进行加速。
 
-进入docker环境，cd至如下目录：
-```bash
-cd /root/.horizon/ddk/xj3_aarch64
-```
-解压地平线的关键头文件和动态库
-```bash
-tar -xvf appsdk_20221207.tar.gz
-tar -xvf dnn_1.17.3a.tar.gz
-```
-至此，编译所需环境准备完成。
+至此，所需环境准备完毕。
 
 ## 安装FastDeploy C++ SDK
-
+下载交叉编译工具，[gcc_linaro_6.5.0_2018.12_x86_64_aarch64_linux_gnu](链接地址)，建议解压后放到`/opt`目录下。
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
@@ -70,8 +61,8 @@ cd FastDeploy
 git checkout develop
 
 mkdir build && cd build
-cmake ..  -DCMAKE_C_COMPILER=/opt/gcc-ubuntu-9.3.0-2020.03-x86_64-aarch64-linux-gnu//bin/aarch64-linux-gnu-gcc \
-          -DCMAKE_CXX_COMPILER=/opt/gcc-ubuntu-9.3.0-2020.03-x86_64-aarch64-linux-gnu//bin/aarch64-linux-gnu-g++ \
+cmake ..  -DCMAKE_C_COMPILER=/opt/gcc_linaro_6.5.0_2018.12_x86_64_aarch64_linux_gnu/gcc-linaro-6.5.0-2018.12-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-gcc \
+          -DCMAKE_CXX_COMPILER=/opt/gcc_linaro_6.5.0_2018.12_x86_64_aarch64_linux_gnu/gcc-linaro-6.5.0-2018.12-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-g++ \
           -DCMAKE_TOOLCHAIN_FILE=./../cmake/toolchain.cmake \
           -DTARGET_ABI=arm64 \
           -WITH_TIMVX=ON \

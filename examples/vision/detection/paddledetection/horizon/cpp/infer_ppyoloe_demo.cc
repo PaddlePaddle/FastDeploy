@@ -54,8 +54,8 @@ void HorizonInfer(const std::string& model_dir, const std::string& image_file) {
 int main(int argc, char* argv[]) {
   if (argc < 3) {
     std::cout
-        << "Usage: infer_demo path/to/model_dir path/to/image run_option, "
-           "e.g ./infer_model ./picodet_model_dir ./test.jpeg"
+        << "Usage: infer_ppyoloe_demo path/to/model_dir path/to/image, "
+           "e.g ./infer_ppyoloe_demo ./ppyoloe_model_dir ./test.jpeg"
         << std::endl;
     return -1;
   }

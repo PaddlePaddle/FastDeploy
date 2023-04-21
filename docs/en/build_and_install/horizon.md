@@ -1,4 +1,4 @@
-English | [简体中文](../../en/build_and_install/horizon.md)
+English | [简体中文](../../cn/build_and_install/horizon.md)
 
 # How to Build Horizon Deployment Environment
 
@@ -55,19 +55,10 @@ sh run_docker.sh /home gpu
 
 The first directory is the directory to be mounted on the container, and the latter parameter is to enable GPU acceleration for the Docker.
 
-Enter the Docker environment and cd to the following directory:
-```bash
-cd /root/.horizon/ddk/xj3_aarch64
-```
-Unzip the key header files and dynamic libraries for Horizon:
-```bash
-tar -xvf appsdk_20221207.tar.gz
-tar -xvf dnn_1.17.3a.tar.gz
-```
 At this point, the preparation of the required environment for compilation is complete.
 
 ## How to Build and Install C++ SDK
-
+Download the cross-compilation tool, [gcc_linaro_6.5.0_2018.12_x86_64_aarch64_linux_gnu](link), and it is recommended to extract it to the `/opt` directory.
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
@@ -75,8 +66,8 @@ cd FastDeploy
 git checkout develop
 
 mkdir build && cd build
-cmake ..  -DCMAKE_C_COMPILER=/opt/gcc-ubuntu-9.3.0-2020.03-x86_64-aarch64-linux-gnu//bin/aarch64-linux-gnu-gcc \
-          -DCMAKE_CXX_COMPILER=/opt/gcc-ubuntu-9.3.0-2020.03-x86_64-aarch64-linux-gnu//bin/aarch64-linux-gnu-g++ \
+cmake ..  -DCMAKE_C_COMPILER=/opt/gcc_linaro_6.5.0_2018.12_x86_64_aarch64_linux_gnu/gcc-linaro-6.5.0-2018.12-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-gcc \
+          -DCMAKE_CXX_COMPILER=/opt/gcc_linaro_6.5.0_2018.12_x86_64_aarch64_linux_gnu/gcc-linaro-6.5.0-2018.12-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-g++ \
           -DCMAKE_TOOLCHAIN_FILE=./../cmake/toolchain.cmake \
           -DTARGET_ABI=arm64 \
           -WITH_TIMVX=ON \
