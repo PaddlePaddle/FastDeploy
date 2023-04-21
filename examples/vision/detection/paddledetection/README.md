@@ -10,6 +10,7 @@ English | [简体中文](README_CN.md)
 Now FastDeploy supports the deployment of the following models
 
 - [PP-YOLOE(including PP-YOLOE+) models](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe)
+- [PP-YOLOE-R models](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.6/configs/rotate/ppyoloe_r)
 - [PicoDet models](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/picodet)
 - [PP-YOLO models(including v2)](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyolo)
 - [YOLOv3 models](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/yolov3)
@@ -43,7 +44,7 @@ Before deployment, PaddleDetection needs to be exported into the deployment mode
 
 ## Download Pre-trained Model
 
-For developers' testing, models exported by PaddleDetection are provided below. Developers can download them directly. 
+For developers' testing, models exported by PaddleDetection are provided below. Developers can download them directly.
 
 The accuracy metric is from model descriptions in PaddleDetection. Refer to them for details.
 

@@ -108,6 +108,9 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   /** \brief All the detected object boxes for an input image, the size of `boxes` is the number of detected objects, and the element of `boxes` is a array of 4 float values, means [xmin, ymin, xmax, ymax]
    */
   std::vector<std::array<float, 4>> boxes;
+  /** \brief All the detected rotated object boxes for an input image, the size of `boxes` is the number of detected objects, and the element of `rotated_boxes` is an array of 8 float values, means [x1, y1, x2, y2, x3, y3, x4, y4]
+   */
+  std::vector<std::array<float, 8>> rotated_boxes;
   /** \brief The confidence for all the detected objects
    */
   std::vector<float> scores;

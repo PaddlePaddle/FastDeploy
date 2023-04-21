@@ -16,6 +16,7 @@
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms_rotated.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -28,6 +29,7 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
     // There may be no NMS config in the yaml file,
     // so we need to give a initial value to multi_class_nms_.
     multi_class_nms_.SetNMSOption(NMSOption());
+    multi_class_nms_rotated_.SetNMSRotatedOption(NMSRotatedOption());
   }
 
   /** \brief Create a preprocessor instance for PaddleDet serials model
@@ -40,6 +42,7 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
     // There may be no NMS config in the yaml file,
     // so we need to give a initial value to multi_class_nms_.
     multi_class_nms_.SetNMSOption(NMSOption());
+    multi_class_nms_rotated_.SetNMSRotatedOption(NMSRotatedOption());
   }
 
   /** \brief Process the result of runtime and fill to ClassifyResult structure
@@ -54,6 +57,12 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   /// Apply box decoding and nms step for the outputs for the model.This is
   /// only available for those model exported without box decoding and nms.
   void ApplyNMS() { with_nms_ = false; }
+
+  /// If you do not want to modify the Yaml configuration file,
+  /// you can use this function to set rotated NMS parameters.
+  void SetNMSRotatedOption(const NMSRotatedOption& option) {
+    multi_class_nms_rotated_.SetNMSRotatedOption(option);
+  }
 
   /// If you do not want to modify the Yaml configuration file,
   /// you can use this function to set NMS parameters.
@@ -79,6 +88,8 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
 
   PaddleMultiClassNMS multi_class_nms_{};
 
+  PaddleMultiClassNMSRotated multi_class_nms_rotated_{};
+
   // Process for General tensor without nms.
   bool ProcessWithoutNMS(const std::vector<FDTensor>& tensors,
                          std::vector<DetectionResult>* results);
@@ -90,6 +101,10 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   // Process SOLOv2
   bool ProcessSolov2(const std::vector<FDTensor>& tensors,
                      std::vector<DetectionResult>* results);
+
+  // Process PPYOLOER
+  bool ProcessPPYOLOER(const std::vector<FDTensor>& tensors,
+                        std::vector<DetectionResult>* results);
 
   // Process mask tensor for MaskRCNN
   bool ProcessMask(const FDTensor& tensor,

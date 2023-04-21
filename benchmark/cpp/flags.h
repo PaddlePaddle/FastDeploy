@@ -158,5 +158,14 @@ static bool UpdateModelResourceName(
       return false;
     }
   }
+
+  if (config_info["backend"] == "sophgo") {
+    *model_format = fastdeploy::ModelFormat::SOPHGO;
+    if (!GetModelResoucesNameFromDir(FLAGS_model, model_name, "bmodel")) {
+      std::cout << "Can not find sophgo model resources." << std::endl;
+      return false;
+    }
+  }
+
   return true;
 }

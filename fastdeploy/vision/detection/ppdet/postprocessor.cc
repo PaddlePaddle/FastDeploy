@@ -264,6 +264,57 @@ bool PaddleDetPostprocessor::ProcessSolov2(
   return true;
 }
 
+bool PaddleDetPostprocessor::ProcessPPYOLOER(
+    const std::vector<FDTensor>& tensors,
+    std::vector<DetectionResult>* results) {
+  if (tensors.size() != 2) {
+    FDERROR << "The size of tensors for PPYOLOER must be 2." << std::endl;
+    return false;
+  }
+
+  int boxes_index = 0;
+  int scores_index = 1;
+  multi_class_nms_rotated_.Compute(
+      static_cast<const float*>(tensors[boxes_index].Data()),
+      static_cast<const float*>(tensors[scores_index].Data()),
+      tensors[boxes_index].shape, tensors[scores_index].shape);
+  auto num_boxes = multi_class_nms_rotated_.out_num_rois_data;
+  auto box_data =
+      static_cast<const float*>(multi_class_nms_rotated_.out_box_data.data());
+
+  // Get boxes for each input image
+  results->resize(num_boxes.size());
+  int offset = 0;
+  for (size_t i = 0; i < num_boxes.size(); ++i) {
+    const float* ptr = box_data + offset;
+    (*results)[i].Reserve(num_boxes[i]);
+    for (size_t j = 0; j < num_boxes[i]; ++j) {
+      (*results)[i].label_ids.push_back(
+          static_cast<int32_t>(round(ptr[j * 10])));
+      (*results)[i].scores.push_back(ptr[j * 10 + 1]);
+      (*results)[i].rotated_boxes.push_back(std::array<float, 8>(
+          {ptr[j * 10 + 2], ptr[j * 10 + 3], ptr[j * 10 + 4], ptr[j * 10 + 5],
+           ptr[j * 10 + 6], ptr[j * 10 + 7], ptr[j * 10 + 8],
+           ptr[j * 10 + 9]}));
+    }
+    offset += (num_boxes[i] * 10);
+  }
+
+  // do scale
+  if (GetScaleFactor()[0] != 0) {
+    for (auto& result : *results) {
+      for (int i = 0; i < result.rotated_boxes.size(); i++) {
+        for (int j = 0; j < 8; j++) {
+          auto scale = i % 2 == 0 ? GetScaleFactor()[1] : GetScaleFactor()[0];
+          result.rotated_boxes[i][j] /= float(scale);
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
 bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                  std::vector<DetectionResult>* results) {
   if (arch_ == "SOLOv2") {
@@ -272,6 +323,10 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
     // The fourth output of solov2 is mask
     return ProcessMask(tensors[3], results);
   } else {
+    if (tensors[0].Shape().size() == 3 && tensors[0].Shape()[2] == 8) {  // PPYOLOER
+      return ProcessPPYOLOER(tensors, results);
+    }
+
     // Do process according to whether NMS exists.
     if (with_nms_) {
       if (!ProcessWithNMS(tensors, results)) {

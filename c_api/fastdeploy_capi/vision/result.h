@@ -50,6 +50,7 @@ typedef struct FD_C_OneDimMask {
 
 typedef struct FD_C_DetectionResult {
   FD_C_TwoDimArrayFloat boxes;
+  FD_C_TwoDimArrayFloat rotated_boxes;
   FD_C_OneDimArrayFloat scores;
   FD_C_OneDimArrayInt32 label_ids;
   FD_C_OneDimMask masks;
