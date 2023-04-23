@@ -43,7 +43,6 @@ if(PADDLEINFERENCE_DIRECTORY)
 endif()
 
 include_directories(${PADDLEINFERENCE_INC_DIR})
-include_directories(${PADDLEINFERENCE_DIRECTORY})
 if(WIN32)
   set(PADDLEINFERENCE_COMPILE_LIB
       "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/paddle_inference.lib"
