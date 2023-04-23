@@ -58,8 +58,6 @@ struct PaddleBackendOption {
   bool enable_memory_optimize = true;
   /// Whether enable ir debug, default false
   bool switch_ir_debug = false;
-  /// Whether the load model is quantized model
-  bool is_quantize_model = false;
 
   /*
    * @brief IPU option, this will configure the IPU hardware, if inference model in IPU
