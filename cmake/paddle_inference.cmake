@@ -102,9 +102,10 @@ else()
       message(FATAL_ERROR "Paddle Backend doesn't support Mac OSX with Arm64 now.")
     else()
       # TODO(qiuyanjun): Should remove this old paddle inference lib
-      set(PADDLEINFERENCE_FILE "paddle_inference-osx-x86_64-2.4-dev3.tgz")
+      # set(PADDLEINFERENCE_FILE "paddle_inference-osx-x86_64-2.4-dev3.tgz")
+      set(PADDLEINFERENCE_FILE "paddle_inference-osx-x86_64-openblas-0.0.0.660f781b77.tgz")
       # TODO(qiuyanjun): Should use the commit id to tag the version
-      set(PADDLEINFERENCE_VERSION "2.4-dev3")
+      set(PADDLEINFERENCE_VERSION "0.0.0.660f781b77")
     endif()
   else()
     # Linux with x86 CPU/Arm CPU/GPU/IPU ...
