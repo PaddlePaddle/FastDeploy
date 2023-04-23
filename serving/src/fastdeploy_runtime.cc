@@ -314,9 +314,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 //       value_string,
                 //       &runtime_options_->trt_max_workspace_size));
               } else if (param_key == "cache_file") {
-                LOG_MESSAGE(TRITONSERVER_LOG_INFO,
-			    "Skipping setting TRT cache file.");
-                // runtime_options_->trt_option.serialize_file = value_string;
+                runtime_options_->trt_option.serialize_file = value_string;
               } else if (param_key == "use_paddle") {
                 runtime_options_->EnablePaddleToTrt();
               } else if (param_key == "use_paddle_log") {
