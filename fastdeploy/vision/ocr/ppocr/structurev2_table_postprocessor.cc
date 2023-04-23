@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/ocr/ppocr/table_postprocessor.h"
+#include "fastdeploy/vision/ocr/ppocr/structurev2_table_postprocessor.h"
 
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
@@ -21,9 +21,12 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-TablePostprocessor::TablePostprocessor() { initialized_ = false; }
+StructureV2TablePostprocessor::StructureV2TablePostprocessor() {
+  initialized_ = false;
+}
 
-TablePostprocessor::TablePostprocessor(const std::string& dict_path) {
+StructureV2TablePostprocessor::StructureV2TablePostprocessor(
+    const std::string& dict_path) {
   std::ifstream in(dict_path);
   FDASSERT(in, "Cannot open file %s to read.", dict_path.c_str());
   std::string line;
@@ -62,7 +65,7 @@ TablePostprocessor::TablePostprocessor(const std::string& dict_path) {
   initialized_ = true;
 }
 
-bool TablePostprocessor::SingleBatchPostprocessor(
+bool StructureV2TablePostprocessor::SingleBatchPostprocessor(
     const float* structure_probs, const float* bbox_preds, size_t slice_dim,
     size_t prob_dim, size_t box_dim, int img_width, int img_height,
     std::vector<std::array<int, 8>>* boxes_result,
@@ -123,7 +126,7 @@ bool TablePostprocessor::SingleBatchPostprocessor(
   return true;
 }
 
-bool TablePostprocessor::Run(
+bool StructureV2TablePostprocessor::Run(
     const std::vector<FDTensor>& tensors,
     std::vector<std::vector<std::array<int, 8>>>* bbox_batch_list,
     std::vector<std::vector<std::string>>* structure_batch_list,

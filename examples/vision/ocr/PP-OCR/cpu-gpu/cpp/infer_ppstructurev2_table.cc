@@ -56,15 +56,15 @@ void InitAndInfer(const std::string &det_model_dir,
                                 {1, 3, 488, 488});
 
   // Users could save TRT cache file to disk as follow.
-  // det_option.SetTrtCacheFile(det_model_dir + sep + "det_trt_cache.trt");
-  // cls_option.SetTrtCacheFile(cls_model_dir + sep + "cls_trt_cache.trt");
-  // rec_option.SetTrtCacheFile(rec_model_dir + sep + "rec_trt_cache.trt");
+  det_option.SetTrtCacheFile(det_model_dir + sep + "det_trt_cache.trt");
+  rec_option.SetTrtCacheFile(rec_model_dir + sep + "rec_trt_cache.trt");
+  table_option.SetTrtCacheFile(table_model_dir + sep + "table_trt_cache.trt");
 
   auto det_model = fastdeploy::vision::ocr::DBDetector(
       det_model_file, det_params_file, det_option);
   auto rec_model = fastdeploy::vision::ocr::Recognizer(
       rec_model_file, rec_params_file, rec_label_file, rec_option);
-  auto table_model = fastdeploy::vision::ocr::Table(
+  auto table_model = fastdeploy::vision::ocr::StructureV2Table(
       table_model_file, table_params_file, table_char_dict_path, table_option);
 
   assert(det_model.Initialized());
@@ -82,22 +82,20 @@ void InitAndInfer(const std::string &det_model_dir,
 
   rec_model.GetPreprocessor().SetStaticShapeInfer(true);
   rec_model.GetPreprocessor().SetRecImageShape({3, 48, 320});
-  //  rec_model.GetPreprocessor.rec_image_shape = [3, 48, 320];
 
   // The classification model is optional, so the PP-OCR can also be connected
   // in series as follows
-  auto ppocr_table =
-      fastdeploy::pipeline::PPOCRTable(&det_model, &rec_model, &table_model);
+  auto ppstructurev2_table = fastdeploy::pipeline::PPStructureV2Table(
+      &det_model, &rec_model, &table_model);
 
   // Set inference batch size for cls model and rec model, the value could be -1
   // and 1 to positive infinity.
   // When inference batch size is set to -1, it means that the inference batch
-  // size
-  // of the cls and rec models will be the same as the number of boxes detected
+  // size of the rec models will be the same as the number of boxes detected
   // by the det model.
-  ppocr_table.SetRecBatchSize(rec_batch_size);
+  ppstructurev2_table.SetRecBatchSize(rec_batch_size);
 
-  if (!ppocr_table.Initialized()) {
+  if (!ppstructurev2_table.Initialized()) {
     std::cerr << "Failed to initialize PP-OCR-Table." << std::endl;
     return;
   }
@@ -106,7 +104,7 @@ void InitAndInfer(const std::string &det_model_dir,
   auto im_bak = im.clone();
 
   fastdeploy::vision::OCRResult result;
-  if (!ppocr_table.Predict(&im, &result)) {
+  if (!ppstructurev2_table.Predict(&im, &result)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
@@ -120,11 +118,12 @@ void InitAndInfer(const std::string &det_model_dir,
 
 int main(int argc, char *argv[]) {
   if (argc < 8) {
-    std::cout << "Usage: infer_ppocr_table path/to/det_model path/to/rec_model "
+    std::cout << "Usage: infer_ppstructurev2_table path/to/det_model "
+                 "path/to/rec_model "
                  "path/to/table_model path/to/rec_label_file "
                  "path/to/table_char_dict_path path/to/image "
                  "run_option, "
-                 "e.g ./infer_ppocr_table ./ch_PP-OCRv3_det_infer "
+                 "e.g ./infer_ppstructurev2_table ./ch_PP-OCRv3_det_infer "
                  "./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv3_rec_infer "
                  "./ppocr_keys_v1.txt ./12.jpg 0"
               << std::endl;

@@ -156,16 +156,16 @@ det_model.postprocessor.det_db_unclip_ratio = 1.5
 det_model.postprocessor.det_db_score_mode = "slow"
 det_model.postprocessor.use_dilation = False
 
-ppocr_table = fd.vision.ocr.PPOCRTable(
+ppstructurev2_table = fd.vision.ocr.PPStructureV2Table(
     det_model=det_model, rec_model=rec_model, table_model=table_model)
 
-ppocr_table.rec_batch_size = args.rec_bs
+ppstructurev2_table.rec_batch_size = args.rec_bs
 
 # Read the input image
 im = cv2.imread(args.image)
 
 # Predict and reutrn the results
-result = ppocr_table.predict(im)
+result = ppstructurev2_table.predict(im)
 
 print(result)
 

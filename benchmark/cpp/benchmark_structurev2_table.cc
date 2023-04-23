@@ -55,9 +55,9 @@ int main(int argc, char *argv[]) {
                                trt_shapes[2]);
   }
 
-  auto model_ppocr_table =
-      vision::ocr::Table(model_file, params_file, FLAGS_table_char_dict_path,
-                         option, model_format);
+  auto model_ppocr_table = vision::ocr::StructureV2Table(
+      model_file, params_file, FLAGS_table_char_dict_path, option,
+      model_format);
   fastdeploy::vision::OCRResult result;
 
   if (config_info["precision_compare"] == "true") {

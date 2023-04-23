@@ -14,10 +14,10 @@ add_executable(infer_demo ${PROJECT_SOURCE_DIR}/infer.cc)
 # 添加FastDeploy库依赖
 target_link_libraries(infer_demo ${FASTDEPLOY_LIBS})
 
-# PP-OCR-Table
-add_executable(infer_ppocr_table ${PROJECT_SOURCE_DIR}/infer_ppocr_table.cc)
+# PPStructure-V2-Table
+add_executable(infer_ppstructurev2_table ${PROJECT_SOURCE_DIR}/infer_ppstructurev2_table.cc)
 # 添加FastDeploy库依赖
-target_link_libraries(infer_ppocr_table ${FASTDEPLOY_LIBS})
+target_link_libraries(infer_ppstructurev2_table ${FASTDEPLOY_LIBS})
 
 # Only Det
 add_executable(infer_det ${PROJECT_SOURCE_DIR}/infer_det.cc)
@@ -35,6 +35,6 @@ add_executable(infer_rec ${PROJECT_SOURCE_DIR}/infer_rec.cc)
 target_link_libraries(infer_rec ${FASTDEPLOY_LIBS})
 
 # Only Table
-add_executable(infer_table ${PROJECT_SOURCE_DIR}/infer_table.cc)
+add_executable(infer_structurev2_table ${PROJECT_SOURCE_DIR}/infer_structurev2_table.cc)
 # 添加FastDeploy库依赖
-target_link_libraries(infer_table ${FASTDEPLOY_LIBS})
+target_link_libraries(infer_structurev2_table ${FASTDEPLOY_LIBS})

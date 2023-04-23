@@ -27,7 +27,7 @@ void InitAndInfer(const std::string &table_model_dir,
   auto table_params_file = table_model_dir + sep + "inference.pdiparams";
   auto table_option = option;
 
-  auto table_model = fastdeploy::vision::ocr::Table(
+  auto table_model = fastdeploy::vision::ocr::StructureV2Table(
       table_model_file, table_params_file, table_char_dict_path, table_option);
   assert(table_model.Initialized());
 
@@ -58,22 +58,11 @@ int main(int argc, char *argv[]) {
   fastdeploy::RuntimeOption option;
   int flag = std::atoi(argv[4]);
 
-  //  if (flag == 0) {
-  //    option.UseCpu();
-  //  } else if (flag == 1) {
-  //    option.UseGpu();
-  //  }
-
-  option.UseCpu();
-  option.UseOrtBackend();
-
-  //    option.UseCpu();
-  //    option.UseOpenVINOBackend();  // OpenVINO
-
-  //    option.SetTrtInputShape("x", {1, 3, 488, 488}, {1, 3, 488, 488}, {1, 3,
-  //    488, 488});
-  //        option.UseGpu();
-  //    option.UseTrtBackend();  // TensorRT
+  if (flag == 0) {
+    option.UseCpu();
+  } else if (flag == 1) {
+    option.UseGpu();
+  }
 
   std::string table_model_dir = argv[1];
   std::string test_image = argv[2];

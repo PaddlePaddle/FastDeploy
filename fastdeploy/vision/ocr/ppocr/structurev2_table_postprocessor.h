@@ -23,14 +23,14 @@ namespace vision {
 namespace ocr {
 /*! @brief Postprocessor object for DBDetector serials model.
  */
-class FASTDEPLOY_DECL TablePostprocessor {
+class FASTDEPLOY_DECL StructureV2TablePostprocessor {
  public:
-  TablePostprocessor();
+  StructureV2TablePostprocessor();
   /** \brief Create a postprocessor instance for Recognizer serials model
    *
    * \param[in] label_path The path of label_dict
    */
-  explicit TablePostprocessor(const std::string& dict_path);
+  explicit StructureV2TablePostprocessor(const std::string& dict_path);
 
   /** \brief Process the result of runtime and fill to RecognizerResult
    *

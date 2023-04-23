@@ -12,21 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/ocr/ppocr/ppocr_table.h"
+#include "fastdeploy/vision/ocr/ppocr/ppstructurev2_table.h"
 
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
 namespace fastdeploy {
 namespace pipeline {
-PPOCRTable::PPOCRTable(fastdeploy::vision::ocr::DBDetector* det_model,
-                       fastdeploy::vision::ocr::Recognizer* rec_model,
-                       fastdeploy::vision::ocr::Table* table_model)
+PPStructureV2Table::PPStructureV2Table(
+    fastdeploy::vision::ocr::DBDetector* det_model,
+    fastdeploy::vision::ocr::Recognizer* rec_model,
+    fastdeploy::vision::ocr::StructureV2Table* table_model)
     : detector_(det_model), recognizer_(rec_model), table_(table_model) {
   Initialized();
 }
 
-bool PPOCRTable::SetRecBatchSize(int rec_batch_size) {
+bool PPStructureV2Table::SetRecBatchSize(int rec_batch_size) {
   if (rec_batch_size < -1 || rec_batch_size == 0) {
     FDERROR << "batch_size > 0 or batch_size == -1." << std::endl;
     return false;
@@ -35,9 +36,9 @@ bool PPOCRTable::SetRecBatchSize(int rec_batch_size) {
   return true;
 }
 
-int PPOCRTable::GetRecBatchSize() { return rec_batch_size_; }
+int PPStructureV2Table::GetRecBatchSize() { return rec_batch_size_; }
 
-bool PPOCRTable::Initialized() const {
+bool PPStructureV2Table::Initialized() const {
   if (detector_ != nullptr && !detector_->Initialized()) {
     return false;
   }
@@ -52,21 +53,22 @@ bool PPOCRTable::Initialized() const {
   return true;
 }
 
-std::unique_ptr<PPOCRTable> PPOCRTable::Clone() const {
-  std::unique_ptr<PPOCRTable> clone_model =
-      utils::make_unique<PPOCRTable>(PPOCRTable(*this));
+std::unique_ptr<PPStructureV2Table> PPStructureV2Table::Clone() const {
+  std::unique_ptr<PPStructureV2Table> clone_model =
+      utils::make_unique<PPStructureV2Table>(PPStructureV2Table(*this));
   clone_model->detector_ = detector_->Clone().release();
   clone_model->recognizer_ = recognizer_->Clone().release();
   clone_model->table_ = table_->Clone().release();
   return clone_model;
 }
 
-bool PPOCRTable::Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result) {
+bool PPStructureV2Table::Predict(cv::Mat* img,
+                                 fastdeploy::vision::OCRResult* result) {
   return Predict(*img, result);
 }
 
-bool PPOCRTable::Predict(const cv::Mat& img,
-                         fastdeploy::vision::OCRResult* result) {
+bool PPStructureV2Table::Predict(const cv::Mat& img,
+                                 fastdeploy::vision::OCRResult* result) {
   std::vector<fastdeploy::vision::OCRResult> batch_result(1);
   bool success = BatchPredict({img}, &batch_result);
   if (!success) {
@@ -76,7 +78,7 @@ bool PPOCRTable::Predict(const cv::Mat& img,
   return true;
 };
 
-bool PPOCRTable::BatchPredict(
+bool PPStructureV2Table::BatchPredict(
     const std::vector<cv::Mat>& images,
     std::vector<fastdeploy::vision::OCRResult>* batch_result) {
   batch_result->clear();

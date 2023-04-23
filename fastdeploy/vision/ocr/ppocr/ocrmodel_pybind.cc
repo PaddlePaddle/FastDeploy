@@ -323,10 +323,10 @@ void BindPPOCRModel(pybind11::module& m) {
       });
 
   // Table
-  pybind11::class_<vision::ocr::TablePreprocessor, vision::ProcessorManager>(
-      m, "TablePreprocessor")
+  pybind11::class_<vision::ocr::StructureV2TablePreprocessor,
+                   vision::ProcessorManager>(m, "StructureV2TablePreprocessor")
       .def(pybind11::init<>())
-      .def("run", [](vision::ocr::TablePreprocessor& self,
+      .def("run", [](vision::ocr::StructureV2TablePreprocessor& self,
                      std::vector<pybind11::array>& im_list) {
         std::vector<vision::FDMat> images;
         for (size_t i = 0; i < im_list.size(); ++i) {
@@ -336,7 +336,7 @@ void BindPPOCRModel(pybind11::module& m) {
         if (!self.Run(&images, &outputs)) {
           throw std::runtime_error(
               "Failed to preprocess the input data in "
-              "TablePreprocessor.");
+              "StructureV2TablePreprocessor.");
         }
 
         auto batch_det_img_info = self.GetBatchImgInfo();
@@ -347,10 +347,11 @@ void BindPPOCRModel(pybind11::module& m) {
         return std::make_pair(outputs, *batch_det_img_info);
       });
 
-  pybind11::class_<vision::ocr::TablePostprocessor>(m, "TablePostprocessor")
+  pybind11::class_<vision::ocr::StructureV2TablePostprocessor>(
+      m, "StructureV2TablePostprocessor")
       .def(pybind11::init<std::string>())
       .def("run",
-           [](vision::ocr::TablePostprocessor& self,
+           [](vision::ocr::StructureV2TablePostprocessor& self,
               std::vector<FDTensor>& inputs,
               const std::vector<std::array<int, 4>>& batch_det_img_info) {
              std::vector<std::vector<std::array<int, 8>>> boxes;
@@ -360,12 +361,12 @@ void BindPPOCRModel(pybind11::module& m) {
                            batch_det_img_info)) {
                throw std::runtime_error(
                    "Failed to preprocess the input data in "
-                   "TablePostprocessor.");
+                   "StructureV2TablePostprocessor.");
              }
              return std::make_pair(boxes, structure_list);
            })
       .def("run",
-           [](vision::ocr::TablePostprocessor& self,
+           [](vision::ocr::StructureV2TablePostprocessor& self,
               std::vector<pybind11::array>& input_array,
               const std::vector<std::array<int, 4>>& batch_det_img_info) {
              std::vector<FDTensor> inputs;
@@ -377,36 +378,36 @@ void BindPPOCRModel(pybind11::module& m) {
                            batch_det_img_info)) {
                throw std::runtime_error(
                    "Failed to preprocess the input data in "
-                   "TablePostprocessor.");
+                   "StructureV2TablePostprocessor.");
              }
              return std::make_pair(boxes, structure_list);
            });
 
-  pybind11::class_<vision::ocr::Table, FastDeployModel>(m, "Table")
+  pybind11::class_<vision::ocr::StructureV2Table, FastDeployModel>(m, "Table")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>())
       .def(pybind11::init<>())
       .def_property_readonly("preprocessor",
-                             &vision::ocr::Table::GetPreprocessor)
+                             &vision::ocr::StructureV2Table::GetPreprocessor)
       .def_property_readonly("postprocessor",
-                             &vision::ocr::Table::GetPostprocessor)
+                             &vision::ocr::StructureV2Table::GetPostprocessor)
       .def("predict",
-           [](vision::ocr::Table& self, pybind11::array& data) {
+           [](vision::ocr::StructureV2Table& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);
              vision::OCRResult ocr_result;
              self.Predict(mat, &ocr_result);
              return ocr_result;
            })
-      .def("batch_predict",
-           [](vision::ocr::Table& self, std::vector<pybind11::array>& data) {
-             std::vector<cv::Mat> images;
-             for (size_t i = 0; i < data.size(); ++i) {
-               images.push_back(PyArrayToCvMat(data[i]));
-             }
+      .def("batch_predict", [](vision::ocr::StructureV2Table& self,
+                               std::vector<pybind11::array>& data) {
+        std::vector<cv::Mat> images;
+        for (size_t i = 0; i < data.size(); ++i) {
+          images.push_back(PyArrayToCvMat(data[i]));
+        }
 
-             std::vector<vision::OCRResult> ocr_results;
-             self.BatchPredict(images, &ocr_results);
-             return ocr_results;
-           });
+        std::vector<vision::OCRResult> ocr_results;
+        self.BatchPredict(images, &ocr_results);
+        return ocr_results;
+      });
 }
 }  // namespace fastdeploy

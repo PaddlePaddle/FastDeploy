@@ -179,9 +179,9 @@ DECL_AND_IMPLEMENT_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
 DECL_AND_IMPLEMENT_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
     PPOCRv3, fd_ppocrv3_wrapper, ppocrv3_model);
 
-// PPOCRTable
+// PPStructureV2Table
 DECL_AND_IMPLEMENT_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
-    PPOCRv3, fd_ppocr_table_wrapper, ppocr_table_model);
+    PPOCRv3, fd_ppstructurev2_table_wrapper, ppstructurev2_table_model);
 
 // Segmentation models
 

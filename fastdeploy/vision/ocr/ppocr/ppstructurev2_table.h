@@ -20,7 +20,7 @@
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
-#include "fastdeploy/vision/ocr/ppocr/table.h"
+#include "fastdeploy/vision/ocr/ppocr/structurev2_table.h"
 #include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
 #include "fastdeploy/vision/ocr/ppocr/recognizer.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_postprocess_op.h"
@@ -31,9 +31,9 @@ namespace fastdeploy {
  *
  */
 namespace pipeline {
-/*! @brief PPOCRTable is used to load PP-OCRv2 series models provided by PaddleOCR.
+/*! @brief PPStructureV2Table is used to load PP-OCRv2 series models provided by PaddleOCR.
  */
-class FASTDEPLOY_DECL PPOCRTable : public FastDeployModel {
+class FASTDEPLOY_DECL PPStructureV2Table : public FastDeployModel {
  public:
   /** \brief Set up the detection model path, recognition model path and table model path respectively.
    *
@@ -41,16 +41,16 @@ class FASTDEPLOY_DECL PPOCRTable : public FastDeployModel {
    * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv2_rec_infer
    * \param[in] table_model Path of table recognition model, e.g ./en_ppstructure_mobile_v2.0_SLANet_infer
    */
-  PPOCRTable(fastdeploy::vision::ocr::DBDetector* det_model,
+  PPStructureV2Table(fastdeploy::vision::ocr::DBDetector* det_model,
                 fastdeploy::vision::ocr::Recognizer* rec_model,
-                fastdeploy::vision::ocr::Table* table_model);
+                fastdeploy::vision::ocr::StructureV2Table* table_model);
 
 
-  /** \brief Clone a new PPOCRTable with less memory usage when multiple instances of the same model are created
+  /** \brief Clone a new PPStructureV2Table with less memory usage when multiple instances of the same model are created
    *
-   * \return new PPOCRTable* type unique pointer
+   * \return new PPStructureV2Table* type unique pointer
    */
-  std::unique_ptr<PPOCRTable> Clone() const;
+  std::unique_ptr<PPStructureV2Table> Clone() const;
 
   /** \brief Predict the input image and get OCR result.
    *
@@ -77,7 +77,7 @@ class FASTDEPLOY_DECL PPOCRTable : public FastDeployModel {
  protected:
   fastdeploy::vision::ocr::DBDetector* detector_ = nullptr;
   fastdeploy::vision::ocr::Recognizer* recognizer_ = nullptr;
-  fastdeploy::vision::ocr::Table* table_ = nullptr;
+  fastdeploy::vision::ocr::StructureV2Table* table_ = nullptr;
 
  private:
   int rec_batch_size_ = 6;
@@ -85,7 +85,7 @@ class FASTDEPLOY_DECL PPOCRTable : public FastDeployModel {
 
 namespace application {
 namespace ocrsystem {
-  typedef pipeline::PPOCRTable PPOCRTableSystem;
+  typedef pipeline::PPStructureV2Table PPStructureV2TableSystem;
 }  // namespace ocrsystem
 }  // namespace application
 

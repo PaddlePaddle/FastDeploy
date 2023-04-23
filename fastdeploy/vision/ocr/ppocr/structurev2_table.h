@@ -17,8 +17,8 @@
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_postprocess_op.h"
-#include "fastdeploy/vision/ocr/ppocr/table_postprocessor.h"
-#include "fastdeploy/vision/ocr/ppocr/table_preprocessor.h"
+#include "fastdeploy/vision/ocr/ppocr/structurev2_table_postprocessor.h"
+#include "fastdeploy/vision/ocr/ppocr/structurev2_table_preprocessor.h"
 #include "fastdeploy/utils/unique_ptr.h"
 
 namespace fastdeploy {
@@ -92,20 +92,20 @@ class FASTDEPLOY_DECL Table : public FastDeployModel {
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
                               std::vector<vision::OCRResult>* ocr_results);
 
-  /// Get preprocessor reference of TablePreprocessor
-  virtual TablePreprocessor& GetPreprocessor() {
+  /// Get preprocessor reference of StructureV2TablePreprocessor
+  virtual StructureV2TablePreprocessor& GetPreprocessor() {
     return preprocessor_;
   }
 
-  /// Get postprocessor reference of TablePostprocessor
-  virtual TablePostprocessor& GetPostprocessor() {
+  /// Get postprocessor reference of StructureV2TablePostprocessor
+  virtual StructureV2TablePostprocessor& GetPostprocessor() {
     return postprocessor_;
   }
 
  private:
   bool Initialize();
-  TablePreprocessor preprocessor_;
-  TablePostprocessor postprocessor_;
+  StructureV2TablePreprocessor preprocessor_;
+  StructureV2TablePostprocessor postprocessor_;
 };
 
 }  // namespace ocr

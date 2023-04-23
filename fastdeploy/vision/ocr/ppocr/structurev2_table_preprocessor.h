@@ -23,9 +23,9 @@ namespace vision {
 namespace ocr {
 /*! @brief Preprocessor object for table model.
  */
-class FASTDEPLOY_DECL TablePreprocessor : public ProcessorManager {
+class FASTDEPLOY_DECL StructureV2TablePreprocessor : public ProcessorManager {
  public:
-  TablePreprocessor();
+  StructureV2TablePreprocessor();
   using ProcessorManager::Run;
   /** \brief Process the input image and prepare input tensors for runtime
    *
@@ -54,7 +54,7 @@ class FASTDEPLOY_DECL TablePreprocessor : public ProcessorManager {
   }
 
  private:
-  void OcrTableResizeImage(FDMat* mat, int batch_idx);
+  void StructureV2TableResizeImage(FDMat* mat, int batch_idx);
   // for recording the switch of hwc2chw
   bool disable_permute_ = false;
   // for recording the switch of normalize
