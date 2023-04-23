@@ -148,11 +148,9 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
     FDASSERT(ReadBinaryFromFile(model, &model_content),
              "Failed to read file %s.", model.c_str());
   }
-  auto reader =
-      paddle2onnx::PaddleReader(model_content.c_str(), model_content.size());
   // If it's a quantized model, and use cpu with mkldnn, automaticaly switch to
   // int8 mode
-  if (reader.is_quantize_model) {
+  if (option.is_quantize_model) {
     if (option.device == Device::GPU) {
       FDWARNING << "The loaded model is a quantized model, while inference on "
                    "GPU, please use TensorRT backend to get better performance."
@@ -184,25 +182,25 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
     }
   }
 
-  inputs_desc_.resize(reader.num_inputs);
-  for (int i = 0; i < reader.num_inputs; ++i) {
-    std::string name(reader.inputs[i].name);
-    std::vector<int64_t> shape(reader.inputs[i].shape,
-                               reader.inputs[i].shape + reader.inputs[i].rank);
-    inputs_desc_[i].name = name;
-    inputs_desc_[i].shape.assign(shape.begin(), shape.end());
-    inputs_desc_[i].dtype = ReaderDataTypeToFD(reader.inputs[i].dtype);
-  }
-  outputs_desc_.resize(reader.num_outputs);
-  for (int i = 0; i < reader.num_outputs; ++i) {
-    std::string name(reader.outputs[i].name);
-    std::vector<int64_t> shape(
-        reader.outputs[i].shape,
-        reader.outputs[i].shape + reader.outputs[i].rank);
-    outputs_desc_[i].name = name;
-    outputs_desc_[i].shape.assign(shape.begin(), shape.end());
-    outputs_desc_[i].dtype = ReaderDataTypeToFD(reader.outputs[i].dtype);
-  }
+//  inputs_desc_.resize(reader.num_inputs);
+//  for (int i = 0; i < reader.num_inputs; ++i) {
+//    std::string name(reader.inputs[i].name);
+//    std::vector<int64_t> shape(reader.inputs[i].shape,
+//                               reader.inputs[i].shape + reader.inputs[i].rank);
+//    inputs_desc_[i].name = name;
+//    inputs_desc_[i].shape.assign(shape.begin(), shape.end());
+//    inputs_desc_[i].dtype = ReaderDataTypeToFD(reader.inputs[i].dtype);
+//  }
+//  outputs_desc_.resize(reader.num_outputs);
+//  for (int i = 0; i < reader.num_outputs; ++i) {
+//    std::string name(reader.outputs[i].name);
+//    std::vector<int64_t> shape(
+//        reader.outputs[i].shape,
+//        reader.outputs[i].shape + reader.outputs[i].rank);
+//    outputs_desc_[i].name = name;
+//    outputs_desc_[i].shape.assign(shape.begin(), shape.end());
+//    outputs_desc_[i].dtype = ReaderDataTypeToFD(reader.outputs[i].dtype);
+//  }
   if (option.collect_trt_shape) {
     // Set the shape info file.
     std::string curr_model_dir = "./";
@@ -226,10 +224,17 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
       std::map<std::string, std::vector<int>> min_shape;
       std::map<std::string, std::vector<int>> opt_shape;
       GetDynamicShapeFromOption(option, &max_shape, &min_shape, &opt_shape);
+      std::map<std::string, std::vector<float>> max_input_data;
+      std::map<std::string, std::vector<float>> min_input_data;
+      std::map<std::string, std::vector<float>> opt_input_data;
+      if (!option.trt_option.min_input_data.empty()) {
+        GetInputDataFromOption(option, &max_input_data, &min_input_data,
+                               &opt_input_data);
+      }
       // Need to run once to get the shape range info file.
-      CollectShapeRun(predictor_tmp.get(), max_shape);
-      CollectShapeRun(predictor_tmp.get(), min_shape);
-      CollectShapeRun(predictor_tmp.get(), opt_shape);
+      CollectShapeRun(predictor_tmp.get(), max_shape, max_input_data);
+      CollectShapeRun(predictor_tmp.get(), min_shape, min_input_data);
+      CollectShapeRun(predictor_tmp.get(), opt_shape, min_input_data);
       FDINFO << "Finish generating shape range info file." << std::endl;
     }
     FDINFO << "Start loading shape range info file " << shape_range_info
@@ -246,6 +251,35 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
     }
   }
   predictor_ = paddle_infer::CreatePredictor(config_);
+
+  auto input_names = predictor_->GetInputNames();
+  auto output_names = predictor_->GetOutputNames();
+  auto input_dtypes = predictor_->GetInputTypes();
+  auto output_dtypes = predictor_->GetOutputTypes();
+  auto input_shapes = predictor_->GetInputTensorShape();
+  auto output_shapes = predictor_->GetOutputTensorShape();
+
+  inputs_desc_.resize(input_names.size());
+  for (int i = 0; i < input_names.size(); ++i) {
+    inputs_desc_[i].name = input_names[i];
+    auto iter = input_shapes.find(inputs_desc_[i].name);
+    FDASSERT(iter != input_shapes.end(), "Cannot find shape for input %s.", inputs_desc_[i].name.c_str());
+    inputs_desc_[i].shape.assign(iter->second.begin(), iter->second.end());
+    auto iter1 = input_dtypes.find(inputs_desc_[i].name);
+    FDASSERT(iter1 != input_dtypes.end(), "Cannot find data type for input %s.", inputs_desc_[i].name.c_str());
+    inputs_desc_[i].dtype = PaddleDataTypeToFD(iter1->second);
+  }
+  outputs_desc_.resize(output_names.size());
+  for (int i = 0; i < output_names.size(); ++i) {
+    outputs_desc_[i].name = output_names[i];
+    auto iter = output_shapes.find(outputs_desc_[i].name);
+    FDASSERT(iter != output_shapes.end(), "Cannot find shape for output %s.", outputs_desc_[i].name.c_str());
+    outputs_desc_[i].shape.assign(iter->second.begin(), iter->second.end());
+    auto iter1 = output_dtypes.find(outputs_desc_[i].name);
+    FDASSERT(iter1 != output_dtypes.end(), "Cannot find data type for output %s.", outputs_desc_[i].name.c_str());
+    outputs_desc_[i].dtype = PaddleDataTypeToFD(iter1->second);
+  }
+
   initialized_ = true;
   return true;
 }
@@ -400,9 +434,33 @@ void PaddleBackend::GetDynamicShapeFromOption(
   }
 }
 
+void PaddleBackend::GetInputDataFromOption(
+    const PaddleBackendOption& option,
+    std::map<std::string, std::vector<float>>* max_input_data,
+    std::map<std::string, std::vector<float>>* min_input_data,
+    std::map<std::string, std::vector<float>>* opt_input_data) const {
+  for (const auto& item : option.trt_option.min_input_data) {
+    auto max_iter = option.trt_option.max_input_data.find(item.first);
+    auto opt_iter = option.trt_option.opt_input_data.find(item.first);
+    FDASSERT(max_iter != option.trt_option.max_input_data.end(),
+             "Cannot find %s in TrtBackendOption::min_input_data.",
+             item.first.c_str());
+    FDASSERT(opt_iter != option.trt_option.opt_input_data.end(),
+             "Cannot find %s in TrtBackendOption::opt_input_data.",
+             item.first.c_str());
+    (*max_input_data)[item.first].assign(max_iter->second.begin(),
+                                         max_iter->second.end());
+    (*opt_input_data)[item.first].assign(opt_iter->second.begin(),
+                                         opt_iter->second.end());
+    (*min_input_data)[item.first].assign(item.second.begin(),
+                                         item.second.end());
+  }
+}
+
 void PaddleBackend::CollectShapeRun(
     paddle_infer::Predictor* predictor,
-    const std::map<std::string, std::vector<int>>& shape) const {
+    const std::map<std::string, std::vector<int>>& shape,
+    const std::map<std::string, std::vector<float>>& data) const {
   auto input_names = predictor->GetInputNames();
   auto input_type = predictor->GetInputTypes();
   for (const auto& name : input_names) {
@@ -418,21 +476,47 @@ void PaddleBackend::CollectShapeRun(
     int shape_num = std::accumulate(shape_value.begin(), shape_value.end(), 1,
                                     std::multiplies<int>());
     tensor->Reshape(shape_value);
+
+    if (data.find(name) != data.end()) {
+      FDASSERT(data.at(name).size() == shape_num,
+               "The data num and accumulate of shape must be equal for input: "
+               "[\"%s\"], "
+               " When Use the (C++)RuntimeOption.trt_option.SetInputData/ "
+               " (Python)RuntimeOption.trt_option.set_input_data/",
+               name.c_str());
+    }
+
     auto dtype = input_type[name];
     switch (dtype) {
       case paddle_infer::DataType::FLOAT32: {
-        std::vector<float> input_data(shape_num, 1.0);
-        tensor->CopyFromCpu(input_data.data());
+        if (data.find(name) != data.end()) {
+          tensor->CopyFromCpu(data.at(name).data());
+        } else {
+          std::vector<float> input_data(shape_num, 1.0);
+          tensor->CopyFromCpu(input_data.data());
+        }
         break;
       }
       case paddle_infer::DataType::INT32: {
-        std::vector<int> input_data(shape_num, 1);
-        tensor->CopyFromCpu(input_data.data());
+        if (data.find(name) != data.end()) {
+          std::vector<int> input_data(data.at(name).begin(),
+                                      data.at(name).end());
+          tensor->CopyFromCpu(input_data.data());
+        } else {
+          std::vector<int> input_data(shape_num, 1);
+          tensor->CopyFromCpu(input_data.data());
+        }
         break;
       }
       case paddle_infer::DataType::INT64: {
-        std::vector<int64_t> input_data(shape_num, 1);
-        tensor->CopyFromCpu(input_data.data());
+        if (data.find(name) != data.end()) {
+          std::vector<int64_t> input_data(data.at(name).begin(),
+                                          data.at(name).end());
+          tensor->CopyFromCpu(input_data.data());
+        } else {
+          std::vector<int64_t> input_data(shape_num, 1);
+          tensor->CopyFromCpu(input_data.data());
+        }
         break;
       }
       default: {

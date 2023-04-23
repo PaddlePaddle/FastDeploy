@@ -72,6 +72,9 @@ if(WITH_TESTING)
   message(STATUS "")
   message(STATUS "*************FastDeploy Unittest Summary**********")
   file(GLOB_RECURSE ALL_TEST_SRCS ${PROJECT_SOURCE_DIR}/tests/*/test_*.cc)
+
+  file(GLOB_RECURSE TIMVX_SRCS ${PROJECT_SOURCE_DIR}/tests/timvx/test_*.cc)
+  list(REMOVE_ITEM ALL_TEST_SRCS ${TIMVX_SRCS})
   if(NOT ENABLE_VISION)
     # vision_preprocess and release_task need vision
     file(GLOB_RECURSE VISION_TEST_SRCS ${PROJECT_SOURCE_DIR}/tests/vision_preprocess/test_*.cc)

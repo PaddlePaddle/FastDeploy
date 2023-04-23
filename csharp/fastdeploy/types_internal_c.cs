@@ -135,6 +135,7 @@ public struct FD_OneDimMask {
 [StructLayout(LayoutKind.Sequential)]
 public struct FD_DetectionResult {
   public FD_TwoDimArrayFloat boxes;
+  public FD_TwoDimArrayFloat rotated_boxes;
   public FD_OneDimArrayFloat scores;
   public FD_OneDimArrayInt32 label_ids;
   public FD_OneDimMask masks;
