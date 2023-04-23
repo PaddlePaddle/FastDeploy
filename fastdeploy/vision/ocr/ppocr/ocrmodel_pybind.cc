@@ -383,7 +383,8 @@ void BindPPOCRModel(pybind11::module& m) {
              return std::make_pair(boxes, structure_list);
            });
 
-  pybind11::class_<vision::ocr::StructureV2Table, FastDeployModel>(m, "Table")
+  pybind11::class_<vision::ocr::StructureV2Table, FastDeployModel>(
+      m, "StructureV2Table")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>())
       .def(pybind11::init<>())

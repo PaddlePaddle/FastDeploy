@@ -143,7 +143,7 @@ det_model = fd.vision.ocr.DBDetector(
 rec_model = fd.vision.ocr.Recognizer(
     rec_model_file, rec_params_file, rec_label_file, runtime_option=rec_option)
 
-table_model = fd.vision.ocr.Table(
+table_model = fd.vision.ocr.StructureV2Table(
     table_model_file,
     table_params_file,
     table_char_dict_path,

@@ -30,9 +30,9 @@ namespace ocr {
 
 /*! @brief DBDetector object is used to load the detection model provided by PaddleOCR.
  */
-class FASTDEPLOY_DECL Table : public FastDeployModel {
+class FASTDEPLOY_DECL StructureV2Table : public FastDeployModel {
  public:
-  Table();
+  StructureV2Table();
   /** \brief Set path of model file, and the configuration of runtime
    *
    * \param[in] model_file Path of model file, e.g ./en_ppstructure_mobile_v2.0_SLANet_infer/model.pdmodel.
@@ -40,16 +40,17 @@ class FASTDEPLOY_DECL Table : public FastDeployModel {
    * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`.
    * \param[in] model_format Model format of the loaded model, default is Paddle format.
    */
-  Table(const std::string& model_file, const std::string& params_file = "",
-             const std::string& table_char_dict_path = "",
-             const RuntimeOption& custom_option = RuntimeOption(),
-             const ModelFormat& model_format = ModelFormat::PADDLE);
+  StructureV2Table(const std::string& model_file,
+                   const std::string& params_file = "",
+                   const std::string& table_char_dict_path = "",
+                   const RuntimeOption& custom_option = RuntimeOption(),
+                   const ModelFormat& model_format = ModelFormat::PADDLE);
 
-  /** \brief Clone a new Table Recognizer with less memory usage when multiple instances of the same model are created
+  /** \brief Clone a new StructureV2Table Recognizer with less memory usage when multiple instances of the same model are created
    *
-   * \return new Table* type unique pointer
+   * \return new StructureV2Table* type unique pointer
    */
-  virtual std::unique_ptr<Table> Clone() const;
+  virtual std::unique_ptr<StructureV2Table> Clone() const;
 
   /// Get model's name
   std::string ModelName() const { return "ppocr/ocr_table"; }
@@ -78,10 +79,9 @@ class FASTDEPLOY_DECL Table : public FastDeployModel {
    * \param[in] det_results The output of OCR detection model result will be writen to this structure.
    * \return true if the prediction is successed, otherwise false.
    */
-   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
+  virtual bool BatchPredict(const std::vector<cv::Mat>& images,
             std::vector<std::vector<std::array<int, 8>>>* det_results,
-            std::vector<std::vector<std::string>>* structure_results
-          );
+            std::vector<std::vector<std::string>>* structure_results);
 
   /** \brief BatchPredict the input image and get OCR detection model result.
    *

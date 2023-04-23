@@ -45,9 +45,11 @@ void InitAndInfer(const std::string &table_model_dir,
 
 int main(int argc, char *argv[]) {
   if (argc < 5) {
-    std::cout << "Usage: infer_demo path/to/table_model path/to/image "
+    std::cout << "Usage: infer_demo path/to/table_model path/to/image  "
+                 "path/to/table_dict_path"
                  "run_option, "
-                 "e.g ./infer_demo ./ch_PP-OCRv3_det_infer ./12.jpg 0"
+                 "e.g ./infer_structurev2_table ch_ppocr_mobile_v2.0_cls_infer "
+                 "table.jpg table_structure_dict.txt 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
                  "with gpu;."

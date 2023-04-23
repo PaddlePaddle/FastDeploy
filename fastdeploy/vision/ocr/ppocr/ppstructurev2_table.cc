@@ -117,8 +117,6 @@ bool PPStructureV2Table::BatchPredict(
 
     std::vector<float> width_list;
     for (int i = 0; i < image_list.size(); i++) {
-      std::cout << "dims: " << image_list[i].cols << " vs "
-                << image_list[i].rows << std::endl;
       width_list.push_back(float(image_list[i].cols) / image_list[i].rows);
     }
     std::vector<int> indices = vision::ocr::ArgSort(width_list);

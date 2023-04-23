@@ -21,11 +21,12 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-Table::Table() {}
-Table::Table(const std::string& model_file, const std::string& params_file,
-             const std::string& table_char_dict_path,
-             const RuntimeOption& custom_option,
-             const ModelFormat& model_format)
+StructureV2Table::StructureV2Table() {}
+StructureV2Table::StructureV2Table(const std::string& model_file,
+                                   const std::string& params_file,
+                                   const std::string& table_char_dict_path,
+                                   const RuntimeOption& custom_option,
+                                   const ModelFormat& model_format)
     : postprocessor_(table_char_dict_path) {
   if (model_format == ModelFormat::ONNX) {
     valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
@@ -48,7 +49,7 @@ Table::Table(const std::string& model_file, const std::string& params_file,
 }
 
 // Init
-bool Table::Initialize() {
+bool StructureV2Table::Initialize() {
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
@@ -56,15 +57,16 @@ bool Table::Initialize() {
   return true;
 }
 
-std::unique_ptr<Table> Table::Clone() const {
-  std::unique_ptr<Table> clone_model = utils::make_unique<Table>(Table(*this));
+std::unique_ptr<StructureV2Table> StructureV2Table::Clone() const {
+  std::unique_ptr<StructureV2Table> clone_model =
+      utils::make_unique<StructureV2Table>(StructureV2Table(*this));
   clone_model->SetRuntime(clone_model->CloneRuntime());
   return clone_model;
 }
 
-bool Table::Predict(const cv::Mat& img,
-                    std::vector<std::array<int, 8>>* boxes_result,
-                    std::vector<std::string>* structure_result) {
+bool StructureV2Table::Predict(const cv::Mat& img,
+                               std::vector<std::array<int, 8>>* boxes_result,
+                               std::vector<std::string>* structure_result) {
   std::vector<std::vector<std::array<int, 8>>> det_results;
   std::vector<std::vector<std::string>> structure_results;
   if (!BatchPredict({img}, &det_results, &structure_results)) {
@@ -75,7 +77,8 @@ bool Table::Predict(const cv::Mat& img,
   return true;
 }
 
-bool Table::Predict(const cv::Mat& img, vision::OCRResult* ocr_result) {
+bool StructureV2Table::Predict(const cv::Mat& img,
+                               vision::OCRResult* ocr_result) {
   if (!Predict(img, &(ocr_result->table_boxes),
                &(ocr_result->table_structure))) {
     return false;
@@ -83,8 +86,9 @@ bool Table::Predict(const cv::Mat& img, vision::OCRResult* ocr_result) {
   return true;
 }
 
-bool Table::BatchPredict(const std::vector<cv::Mat>& images,
-                         std::vector<vision::OCRResult>* ocr_results) {
+bool StructureV2Table::BatchPredict(
+    const std::vector<cv::Mat>& images,
+    std::vector<vision::OCRResult>* ocr_results) {
   std::vector<std::vector<std::array<int, 8>>> det_results;
   std::vector<std::vector<std::string>> structure_results;
   if (!BatchPredict(images, &det_results, &structure_results)) {
@@ -98,7 +102,7 @@ bool Table::BatchPredict(const std::vector<cv::Mat>& images,
   return true;
 }
 
-bool Table::BatchPredict(
+bool StructureV2Table::BatchPredict(
     const std::vector<cv::Mat>& images,
     std::vector<std::vector<std::array<int, 8>>>* det_results,
     std::vector<std::vector<std::string>>* structure_results) {

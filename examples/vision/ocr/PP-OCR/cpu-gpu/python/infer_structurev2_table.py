@@ -64,8 +64,9 @@ table_params_file = os.path.join(args.table_model, "inference.pdiparams")
 table_option = build_option(args)
 
 # Create the table_model
-table_model = fd.vision.ocr.Table(table_model_file, table_params_file,
-                                  args.table_char_dict_path, table_option)
+table_model = fd.vision.ocr.StructureV2Table(
+    table_model_file, table_params_file, args.table_char_dict_path,
+    table_option)
 
 # Read the image
 im = cv2.imread(args.image)
