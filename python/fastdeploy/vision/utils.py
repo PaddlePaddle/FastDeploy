@@ -38,6 +38,19 @@ def detection_to_json(result):
     return json.dumps(r_json)
 
 
+def perception_to_json(result):
+    r_json = {
+        "scores": result.scores,
+        "label_ids": result.label_ids,
+        "boxes": result.boxes,
+        "center": result.center,
+        "observation_angle": result.observation_angle,
+        "yaw_angle": result.yaw_angle,
+        "velocity": result.velocity
+    }
+    return json.dumps(r_json)
+
+
 def classify_to_json(result):
     r_json = {
         "label_ids": result.label_ids,
@@ -151,6 +164,8 @@ def fd_result_to_json(result):
         return matting_to_json(result)
     elif isinstance(result, C.vision.HeadPoseResult):
         return head_pose_to_json(result)
+    elif isinstance(result, C.vision.PerceptionResult):
+        return perception_to_json(result)
     else:
         assert False, "{} Conversion to JSON format is not supported".format(
             type(result))
@@ -175,6 +190,18 @@ def json_to_detection(result):
     det_result.masks = masks
     det_result.contain_masks = result['contain_masks']
     return det_result
+
+
+def json_to_perception(result):
+    perception_result = C.vision.PerceptionResult()
+    perception_result.scores = result['scores']
+    perception_result.label_ids = result['label_ids']
+    perception_result.boxes = result['boxes']
+    perception_result.center = result['center']
+    perception_result.observation_angle = result['observation_angle']
+    perception_result.yaw_angle = result['yaw_angle']
+    perception_result.velocity = result['velocity']
+    return perception_result
 
 
 def json_to_classify(result):
