@@ -451,16 +451,16 @@ class FASTDEPLOY_DECL PaddleDetectionModel : public PPDetBase {
     if (!CheckArch()) {
     FDWARNING << "Please set model arch,"
             << "support value : SOLOv2, YOLO, SSD, RetinaNet, RCNN, Face , GFL , RTMDet ,"\
-            <<"FCOS , TTFNet , TOOD." << std::endl;
+            <<"FCOS , TTFNet , TOOD , DETR." << std::endl;
     }
     valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
                           Backend::LITE};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
-    valid_rknpu_backends = {Backend::RKNPU2};
+    valid_timvx_backends = {Backend::LITE};
     valid_kunlunxin_backends = {Backend::LITE};
+    valid_rknpu_backends = {Backend::RKNPU2};
     valid_ascend_backends = {Backend::LITE};
     valid_sophgonpu_backends = {Backend::SOPHGOTPU};
-    valid_timvx_backends = {Backend::LITE};
     initialized = Initialize();
   }
 

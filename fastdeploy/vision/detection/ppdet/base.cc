@@ -84,7 +84,7 @@ bool PPDetBase::BatchPredict(const std::vector<cv::Mat>& imgs,
 }
 
 bool PPDetBase::CheckArch(){
-    std::vector<std::string> archs = {"SOLOv2","YOLO","SSD","RetinaNet","RCNN","Face","GFL","YOLOX","YOLOv5","YOLOv6","YOLOv7","RTMDet","FCOS","TTFNet","TOOD"};
+    std::vector<std::string> archs = {"SOLOv2","YOLO","SSD","RetinaNet","RCNN","Face","GFL","YOLOX","YOLOv5","YOLOv6","YOLOv7","RTMDet","FCOS","TTFNet","TOOD","DETR"};
     auto arch_ = preprocessor_.GetArch();
     for (auto item : archs) {
         if (arch_ == item) {
