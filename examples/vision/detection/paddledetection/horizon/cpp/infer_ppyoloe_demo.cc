@@ -22,7 +22,8 @@ void HorizonInfer(const std::string& model_dir, const std::string& image_file) {
 
   auto option = fastdeploy::RuntimeOption();
   option.UseHorizon();
-
+  option.UseHorizonNPUBackend();
+  
   auto format = fastdeploy::ModelFormat::HORIZON;
 
   auto model = fastdeploy::vision::detection::PPYOLOE(

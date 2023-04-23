@@ -279,6 +279,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetOrtGraphOptLevel(int level = -1);
   void UsePaddleBackend();
   void UseLiteBackend();
+  void UseHorizonNPUBackend();
 };
 
 }  // namespace fastdeploy
