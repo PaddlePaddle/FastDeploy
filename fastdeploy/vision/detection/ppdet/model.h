@@ -450,12 +450,39 @@ class FASTDEPLOY_DECL PaddleDetectionModel : public PPDetBase {
     if (!CheckArch()) {
     FDWARNING << "Please set model arch,"
             << "support value : SOLOv2, YOLO, SSD, RetinaNet, RCNN, Face , GFL , RTMDet ,"\
-            <<"FCOS , TTFNet , TOOD." << std::endl;
+            <<"FCOS , TTFNet , TOOD , DETR." << std::endl;
     }
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
+                          Backend::LITE};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_timvx_backends = {Backend::LITE};
+    valid_kunlunxin_backends = {Backend::LITE};
+    valid_rknpu_backends = {Backend::RKNPU2};
+    valid_ascend_backends = {Backend::LITE};
+    valid_sophgonpu_backends = {Backend::SOPHGOTPU};
     initialized = Initialize();
   }
 
   virtual std::string ModelName() const { return "PaddleDetectionModel"; }
+};
+
+
+class FASTDEPLOY_DECL PPYOLOER : public PPDetBase {
+ public:
+  PPYOLOER(const std::string& model_file, const std::string& params_file,
+          const std::string& config_file,
+          const RuntimeOption& custom_option = RuntimeOption(),
+          const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+
+    valid_cpu_backends = { Backend::PDINFER};
+    valid_gpu_backends = {Backend::PDINFER};
+    valid_sophgonpu_backends = {Backend::SOPHGOTPU};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PPYOLOER"; }
 };
 
 }  // namespace detection
