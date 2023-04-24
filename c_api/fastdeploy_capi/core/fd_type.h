@@ -60,6 +60,11 @@ typedef struct FD_C_OneDimArrayCstr {
   FD_C_Cstr* data;
 } FD_C_OneDimArrayCstr;  // std::vector<std::string>
 
+typedef struct FD_C_TwoDimArrayCstr {
+  size_t size;
+  FD_C_OneDimArrayCstr* data;
+} FD_C_TwoDimArrayCstr;  // std::vector<std::vector<std::string>>
+
 typedef struct FD_C_TwoDimArraySize {
   size_t size;
   FD_C_OneDimArraySize* data;
@@ -134,6 +139,8 @@ DECLARE_DESTROY_FD_TYPE_FUNCTION(OneDimArrayFloat);
 DECLARE_DESTROY_FD_TYPE_FUNCTION(Cstr);
 // FD_C_OneDimArrayCstr
 DECLARE_DESTROY_FD_TYPE_FUNCTION(OneDimArrayCstr);
+// FD_C_TwoDimArrayCstr
+DECLARE_DESTROY_FD_TYPE_FUNCTION(TwoDimArrayCstr);
 // FD_C_TwoDimArraySize
 DECLARE_DESTROY_FD_TYPE_FUNCTION(TwoDimArraySize);
 // FD_C_TwoDimArrayInt8

@@ -178,6 +178,9 @@ DEFINE_OCR_MODEL_WRAPPER_STRUCT(DBDetector, dbdetector_model);
 // Classifier
 DEFINE_OCR_MODEL_WRAPPER_STRUCT(Classifier, classifier_model);
 
+// StructureV2Table
+DEFINE_OCR_MODEL_WRAPPER_STRUCT(StructureV2Table, table_model);
+
 // PPOCRv2
 DEFINE_PIPELINE_MODEL_WRAPPER_STRUCT(PPOCRv2, ppocrv2_model);
 
@@ -185,7 +188,7 @@ DEFINE_PIPELINE_MODEL_WRAPPER_STRUCT(PPOCRv2, ppocrv2_model);
 DEFINE_PIPELINE_MODEL_WRAPPER_STRUCT(PPOCRv3, ppocrv3_model);
 
 // PPStructureV2Table
-DEFINE_PIPELINE_MODEL_WRAPPER_STRUCT(PPStructureV2Table, ppstructurev2_table_model);
+DEFINE_PIPELINE_MODEL_WRAPPER_STRUCT(PPStructureV2Table, ppstructurev2table_model);
 
 // Segmentation models
 
@@ -398,7 +401,7 @@ DECLARE_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(PPOCRv2, fd_ppocrv2_wrapper
 DECLARE_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(PPOCRv3, fd_ppocrv3_wrapper);
 
 // PPStructureV2Table
-DECLARE_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(PPStructureV2Table, fd_ppstructurev2_table_wrapper);
+DECLARE_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(PPStructureV2Table, fd_ppstructurev2_table_wrapper);
 
 // Segmentation models
 

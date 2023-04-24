@@ -225,6 +225,68 @@ FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_DBDetectorWrapperBatchPredict(
     FD_C_ThreeDimArrayInt32* det_results);
 
 
+// StructureV2Table
+
+typedef struct FD_C_StructureV2TableWrapper FD_C_StructureV2TableWrapper;
+
+/** \brief Create a new FD_C_StructureV2TableWrapper object
+ *
+ * \param[in] model_file Path of model file, e.g ./en_ppstructure_mobile_v2.0_SLANet_infer/model.pdmodel.
+ * \param[in] params_file Path of parameter file, e.g ./en_ppstructure_mobile_v2.0_SLANet_infer/model.pdiparams, if the model format is ONNX, this parameter will be ignored.
+ * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`.
+ * \param[in] model_format Model format of the loaded model, default is Paddle format.
+ *
+ * \return Return a pointer to FD_C_StructureV2TableWrapper object
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_StructureV2TableWrapper*
+FD_C_CreateStructureV2TableWrapper(
+    const char* model_file, const char* params_file, const char* table_char_dict_path,
+    FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
+    const FD_C_ModelFormat model_format);
+
+/** \brief Destroy a FD_C_StructureV2TableWrapper object
+ *
+ * \param[in] fd_c_structurev2table_wrapper pointer to FD_C_DBDetectorWrapper object
+ */
+
+OCR_DECLARE_DESTROY_WRAPPER_FUNCTION(StructureV2Table, fd_c_structurev2table_wrapper);
+
+/** \brief Predict the input image and get OCR table model result.
+ *
+ * \param[in] fd_c_structurev2table_wrapper pointer to FD_C_StructureV2TableWrapper object
+ * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+ * \param[in] boxes_result The output of OCR table model result will be writen to this structure.
+ * \return true if the prediction is successed, otherwise false.
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_StructureV2TableWrapperPredict(
+    __fd_keep FD_C_StructureV2TableWrapper* fd_c_structurev2table_wrapper, FD_C_Mat img,
+    FD_C_TwoDimArrayInt32* boxes_result, FD_C_OneDimArrayCstr* structure_result);
+
+/** \brief Check if the model is initialized successfully
+ *
+ * \param[in] fd_c_dbdetector_wrapper pointer to FD_C_StructureV2TableWrapper object
+ *
+ * \return Return a bool of value true if initialized successfully
+ */
+
+OCR_DECLARE_INITIALIZED_FUNCTION(StructureV2Table, fd_c_structurev2table_wrapper);
+
+/** \brief BatchPredict the input image and get OCR table model result.
+ *
+ * \param[in] fd_c_structurev2table_wrapper pointer to FD_C_StructureV2TableWrapper object
+ * \param[in] imgs The list input of image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+ * \param[in] det_results The output of OCR table model result will be writen to this structure.
+ *
+ * \return true if the prediction is successed, otherwise false.
+ */
+
+FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_StructureV2TableWrapperBatchPredict(
+    __fd_keep FD_C_StructureV2TableWrapper* fd_c_structurev2table_wrapper, FD_C_OneDimMat imgs,
+    FD_C_ThreeDimArrayInt32* det_results, FD_C_TwoDimArrayCstr* structure_results);
+
+
 // PPOCRv2
 
 
@@ -343,61 +405,61 @@ FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PPOCRv3WrapperBatchPredict(
     FD_C_OneDimOCRResult* batch_result);
 
 
-// PPTable
+// PPStructureV2Table
 
-typedef struct FD_C_PPTableWrapper FD_C_PPTableWrapper;
+typedef struct FD_C_PPStructureV2TableWrapper FD_C_PPStructureV2TableWrapper;
 
 /** \brief Set up the detection model path, classification model path and table recognition model path respectively.
  *
  * \param[in] det_model Path of detection model, e.g ./ch_PP-OCRv3_det_infer
  * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv3_rec_infer
- * \param[in] table_model Path of recognition model, e.g ./en_ppstructure_mobile_v2.0_SLANet_infer
+ * \param[in] table_model Path of table model, e.g ./en_ppstructure_mobile_v2.0_SLANet_infer
  */
 
-FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_PPTableWrapper*
-FD_C_CreatePPTableWrapper(
+FASTDEPLOY_CAPI_EXPORT extern __fd_give FD_C_PPStructureV2TableWrapper*
+FD_C_CreatePPStructureV2TableWrapper(
     FD_C_DBDetectorWrapper* det_model,
     FD_C_RecognizerWrapper* rec_model,
-    FD_C_PPTableWrapper* table_model);
+    FD_C_StructureV2TableWrapper* table_model);
 
 /** \brief Destroy a FD_C_PPTableWrapper object
  *
- * \param[in] fd_c_pptable_wrapper pointer to FD_C_PPTableWrapper object
+ * \param[in] fd_c_ppstructurev2table_wrapper pointer to FD_C_PPStructureV2TableWrapper object
  */
 
-OCR_DECLARE_DESTROY_WRAPPER_FUNCTION(PPTabel, fd_c_pptable_wrapper);
+OCR_DECLARE_DESTROY_WRAPPER_FUNCTION(PPStructureV2Table, fd_c_ppstructurev2table_wrapper);
 
 /** \brief Predict the input image and get OCR result.
  *
- * \param[in] fd_c_pptable_wrapper pointer to FD_C_PPTableWrapper object
+ * \param[in] fd_c_ppstructurev2table_wrapper pointer to FD_C_PPStructureV2TableWrapper object
  * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
  * \param[in] result The output OCR result will be writen to this structure.
  * \return true if the prediction successed, otherwise false.
  */
 
-FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PPTableWrapperPredict(
-    __fd_keep FD_C_PPTableWrapper* fd_c_pptable_wrapper, FD_C_Mat img,
+FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PPStructureV2TableWrapperPredict(
+    __fd_keep FD_C_PPStructureV2TableWrapper* fd_c_ppstructurev2table_wrapper, FD_C_Mat img,
     FD_C_OCRResult* result);
 
 /** \brief Check if the model is initialized successfully
  *
- * \param[in] fd_c_pptable_wrapper pointer to FD_C_PPTableWrapper object
+ * \param[in] fd_c_ppstructurev2table_wrapper pointer to FD_C_PPStructureV2TableWrapper object
  *
  * \return Return a bool of value true if initialized successfully
  */
 
-OCR_DECLARE_INITIALIZED_FUNCTION(PPTable, fd_c_pptable_wrapper);
+OCR_DECLARE_INITIALIZED_FUNCTION(PPStructureV2Table, fd_c_ppstructurev2table_wrapper);
 
 /** \brief BatchPredict the input image and get OCR result.
  *
- * \param[in] fd_c_pptable_wrapper pointer to FD_C_PPTableWrapper object
+ * \param[in] fd_c_ppstructurev2table_wrapper pointer to FD_C_PPStructureV2TableWrapper object
  * \param[in] imgs The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
  * \param[in] batch_result The output list of OCR result will be writen to this structure.
  * \return true if the prediction successed, otherwise false.
  */
 
-FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PPTableWrapperBatchPredict(
-    __fd_keep FD_C_PPTableWrapper* fd_c_pptable_wrapper, FD_C_OneDimMat imgs,
+FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_PPStructureV2TableWrapperBatchPredict(
+    __fd_keep FD_C_PPStructureV2TableWrapper* fd_c_ppstructurev2table_wrapper, FD_C_OneDimMat imgs,
     FD_C_OneDimOCRResult* batch_result);
 
 #ifdef __cplusplus
