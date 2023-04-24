@@ -1,6 +1,5 @@
 PROJECT(infer_demo C CXX)
 CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
-SET(CMAKE_BUILD_TYPE "Debug")
 # specify the decompress directory of FastDeploy SDK
 option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
 include(${FASTDEPLOY_INSTALL_DIR}/utils/gflags.cmake)
