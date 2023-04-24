@@ -49,10 +49,11 @@ try:
   # import paddle
   import platform
   sys_platform = platform.platform().lower()
-  # windows: not conflict between fastdeploy and paddle
-  # linux: must import paddle first
-  # macos: still not remove the conflict between fastdeploy and paddle, 
-  #        we got (ERROR: flag 'xxx' was defined more than once).
+  # windows: not conflict between fastdeploy and paddle.
+  # linux: must import paddle first to solve the conflict.
+  # macos: still can not solve the conflict between fastdeploy and paddle, 
+  #        due to the global flags redefined in paddle inference so.
+  #        we got the error (ERROR: flag 'xxx' was defined more than once).
   if "linux" in sys_platform:
     import paddle
 except:
