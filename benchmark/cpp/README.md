@@ -148,7 +148,7 @@ tar -zxvf yolov8_s_500e_coco.tgz
 ```
 
 ## 5. Benchmark工具用法  
-FastDeploy除了提供包含模型前后处理在内的benchmark_xxx外，也提供常规的benchmark工具，以支持对任意模型进行benchmark。在编译benchmark目录的源码之后，会生成一个benchmark可执行文件，该工具支持[选项设置说明](#选项设置说明)中的所有参数，并且提供一些额外参数，便于使用，额外的参数说明如下。  
+FastDeploy除了提供包含模型前后处理在内的benchmark_xxx外，也提供常规的benchmark工具，以支持对任意模型进行benchmark。在编译benchmark目录的源码之后，会生成一个benchmark可执行文件，该工具支持[选项设置说明](#选项设置说明)中的所有参数，并且提供一些额外参数，便于使用，额外的参数说明如下。注意：该工具仅支持测试纯模型推理时间和推理+H2D+D2H耗时（当config.txt中include_h2d_d2h为true时），不支持测试包含前后处理在内的时间。
 
 | 参数                 | 作用                                        |
 | -------------------- | ------------------------------------------ |
