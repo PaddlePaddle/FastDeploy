@@ -84,7 +84,7 @@ bool StructureV2TablePostprocessor::SingleBatchPostprocessor(
       }
     }
 
-    if (structure_idx > 0 and structure_idx == dict_end_idx) break;
+    if (structure_idx > 0 && structure_idx == dict_end_idx) break;
 
     if (structure_idx == ignore_end_token_idx ||
         structure_idx == ignore_beg_token_idx)
