@@ -167,8 +167,8 @@ DECL_AND_IMPLEMENT_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(
     Classifier, fd_classifier_wrapper, classifier_model);
 
 // Table
-DECL_AND_IMPLEMENT_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(Table,
-                                                           fd_table_wrapper,
+DECL_AND_IMPLEMENT_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(StructureV2Table,
+                                                           fd_structurev2_table_wrapper,
                                                            table_model);
 
 // PPOCRv2

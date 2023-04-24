@@ -389,7 +389,7 @@ DECLARE_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(DBDetector, fd_dbdetector_wrappe
 DECLARE_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(Classifier, fd_classifier_wrapper);
 
 // Table
-DECLARE_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(Table, fd_table_wrapper);
+DECLARE_OCR_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(StructureV2Table, fd_structurev2_table_wrapper);
 
 // PPOCRv2
 DECLARE_PIPELINE_MODEL_FUNC_FOR_GET_PTR_FROM_WRAPPER(PPOCRv2, fd_ppocrv2_wrapper);
