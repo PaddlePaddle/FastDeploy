@@ -61,7 +61,6 @@ fi
 ./benchmark_ppyolox --model yolox_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyoloe --model ppyoloe_plus_crn_m_80e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_picodet --model picodet_l_640_coco_lcnet --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ppyolov7 --model yolov7_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyoloe --model ppyoloe_crn_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolo --model ppyolo_r50vd_dcn_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_yolov3 --model yolov3_darknet53_270e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
