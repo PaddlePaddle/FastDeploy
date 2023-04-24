@@ -146,3 +146,57 @@ tar -zxvf yolov8_s_500e_coco.tgz
 # XPU Paddle Lite backend fp32
 ./benchmark_xpu.sh config/config.xpu.lite.fp32.txt
 ```
+
+## 5. Benchmark工具用法  
+FastDeploy除了提供包含模型前后处理在内的benchmark_xxx外，也提供常规的benchmark工具，以支持对任意模型进行benchmark。在编译benchmark目录的源码之后，会生成一个benchmark可执行文件，该工具支持[选项设置说明](#选项设置说明)中的所有参数，并且提供一些额外参数，便于使用，额外的参数说明如下。注意：该工具仅支持测试纯模型推理时间和推理+H2D+D2H耗时（当config.txt中include_h2d_d2h为true时），不支持测试包含前后处理在内的时间。
+
+| 参数                 | 作用                                        |
+| -------------------- | ------------------------------------------ |
+| shapes             | Set input shape for model, default "1,3,224,224" |
+| names          |  Set input names for model, default "DEFAULT" |  
+| dtypes          | Set input dtypes for model, default "FP32" |  
+| trt_shapes          | Set min/opt/max shape for trt/paddle_trt backend. eg:--trt_shape 1,3,224,224:1,3,224,224:1,3,224,224", default "1,3,224,224:1,3,224,224:1,3,224,224" |  
+| batch          | TensorRT max batch size, default=1 |  
+| dump          | Whether to dump output tensors, default false. |  
+| info          | Only check the input infos of model, default false. |  
+| diff          | Check the diff between two tensors, default false. |  
+| tensors          | The paths to dumped tensors, should look like "tensor_a.txt:tensor_b.txt"|  
+| mem          | Whether to force to collect memory info, default false.  |  
+| model_file          | Optional, set specific model file, eg, model.pdmodel, model.onnx, default "UNKNOWN" |  
+| params_file          | Optional, set specific params file, eg, model.pdiparams, default "" |  
+| model_format          | Optional, set specific model format, eg, PADDLE/ONNX/RKNN/TORCHSCRIPT/SOPHGO, default "PADDLE" |  
+
+### 5.1 benchmark工具使用示例
+- 单输入示例：
+```bash
+./benchmark --model ResNet50_vd_infer --config_path config/config.x86.ov.fp32.txt --shapes 1,3,224,224 --names inputs --dtypes FP32
+```  
+- 多输入示例：  
+```bash 
+./benchmark --model yolov5_s_300e_coco --config_path config/config.arm.lite.fp32.txt --shapes 1,3,640,640:1,2 --names image:scale_factor --dtypes FP32:FP32
+```
+- Paddle-TRT示例 ：
+```bash  
+./benchmark --model ResNet50_vd_infer --config_path config/config.gpu.paddle_trt.fp16.txt --trt_shapes 1,3,224,224:1,3,224,224:1,3,224,224 --names inputs --dtypes FP32
+```
+- 支持FD全部后端和全部模型格式：--model_file, --params_file(optional), --model_format
+```bash
+# ONNX模型示例
+./benchmark --model ResNet50_vd_infer --model_file inference.onnx --model_format ONNX --config_path config/config.gpu.trt.fp16.txt --trt_shapes 1,3,224,224:1,3,224,224:1,3,224,224 --names inputs --dtypes FP32
+```  
+- 统计内显存占用：--mem 或 在config.txt中指定  
+```bash
+./benchmark --mem --model ResNet50_vd_infer --config_path config/config.x86.ov.fp32.txt --shapes 1,3,224,224 --names inputs --dtypes FP32
+```
+- 推理并dump 输出 tensor用作对比： --dump
+```bash 
+./benchmark --dump --model ResNet50_vd_infer --config_path config/config.x86.ov.fp32.txt --shapes 1,3,224,224 --names inputs --dtypes FP32
+```
+- 对比两个 dumped 的tensor :  --diff 
+```bash
+./benchmark --diff --tensors ov_linear_77.tmp_1.txt:lite_linear_77.tmp_1.txt
+```
+- 显示模型的输入信息： --info
+```bash
+./benchmark --info --model picodet_l_640_coco_lcnet --config_path config/config.arm.lite.fp32.txt 
+```
