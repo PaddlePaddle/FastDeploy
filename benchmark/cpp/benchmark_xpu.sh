@@ -96,7 +96,8 @@ fi
 # PaddleSeg
 ./benchmark_ppseg --model Portrait_PP_HumanSegV2_Lite_256x144_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --xpu_l3_cache 0
 ./benchmark_ppseg --model PP_HumanSegV2_Lite_192x192_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --xpu_l3_cache 0
-./benchmark_ppseg --model PP_HumanSegV1_Lite_infer --image portrait_heng.jpg --config_path $CONFIG_PATH
+./benchmark_ppseg --model PP_HumanSegV1_Lite_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --xpu_l3_cache 0
+./benchmark_ppseg --model PP_HumanSegV2_Mobile_192x192_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --xpu_l3_cache 0
 ./benchmark_ppseg --model PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH --xpu_l3_cache 0
 ./benchmark_ppseg --model FCN_HRNet_W18_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH --xpu_l3_cache 0
 ./benchmark_ppseg --model SegFormer_B0-cityscapes-with-argmax --image cityscapes_demo.png --config_path $CONFIG_PATH --xpu_l3_cache 0
