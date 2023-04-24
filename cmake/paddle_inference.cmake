@@ -43,7 +43,6 @@ if(PADDLEINFERENCE_DIRECTORY)
 endif()
 
 include_directories(${PADDLEINFERENCE_INC_DIR})
-include_directories(${PADDLEINFERENCE_DIRECTORY})
 if(WIN32)
   set(PADDLEINFERENCE_COMPILE_LIB
       "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/paddle_inference.lib"
@@ -100,12 +99,13 @@ else()
   elseif(APPLE)
     if(CURRENT_OSX_ARCH MATCHES "arm64")
       message(FATAL_ERROR "Paddle Backend doesn't support Mac OSX with Arm64 now.")
+      set(PADDLEINFERENCE_FILE "paddle_inference-osx-arm64-openblas-0.0.0.660f781b77.tgz")
     else()
       # TODO(qiuyanjun): Should remove this old paddle inference lib
-      set(PADDLEINFERENCE_FILE "paddle_inference-osx-x86_64-2.4-dev3.tgz")
-      # TODO(qiuyanjun): Should use the commit id to tag the version
-      set(PADDLEINFERENCE_VERSION "2.4-dev3")
+      # set(PADDLEINFERENCE_FILE "paddle_inference-osx-x86_64-2.4-dev3.tgz")
+      set(PADDLEINFERENCE_FILE "paddle_inference-osx-x86_64-openblas-0.0.0.660f781b77.tgz")
     endif()
+    set(PADDLEINFERENCE_VERSION "0.0.0.660f781b77")
   else()
     # Linux with x86 CPU/Arm CPU/GPU/IPU ...
     if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
