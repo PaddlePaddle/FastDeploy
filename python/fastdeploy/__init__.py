@@ -46,7 +46,15 @@ if os.name != "nt" and os.path.exists(trt_directory):
 # This solution will be removed it when the confilct of paddle and
 # fastdeploy is fixed.
 try:
-  import paddle
+  # import paddle
+  import platform
+  sys_platform = platform.platform().lower()
+  # windows: not conflict between fastdeploy and paddle
+  # linux: must import paddle first
+  # macos: still not remove the conflict between fastdeploy and paddle, 
+  #        we got (ERROR: flag 'xxx' was defined more than once).
+  if "linux" in sys_platform:
+    import paddle
 except:
   pass
 
