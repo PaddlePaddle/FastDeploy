@@ -22,7 +22,7 @@ C++ API, Currently supported operators are as follows:
 - PadToSize
 - StridePad
 
-Users can inherit `ProcessorManager` when creating a `Preprocessor` class in the C++ deployment of the visual class model, and can choose to use OpenCV or CV-CUDA through `UseCuda()` in the `ProcessorManager` base class. The base class `ProcessorManager` implements GPU memory management, CUDA stream management, etc. Users only need to implement the `apply()` function, in which operators in the multi-hardware image processing library are called to implement processing logic. For specific implementation, please refer to the sample code.
+Users can inherit `ProcessorManager` when creating a `Preprocessor` class in the C++ deployment of the visual class model, and can choose to use OpenCV or CV-CUDA through `UseCuda()` in the `ProcessorManager` base class. The base class `ProcessorManager` implements GPU memory management, CUDA stream management, etc. Users only need to implement the `Apply()` function, in which operators in the multi-hardware image processing library are called to implement processing logic. For specific implementation, please refer to the sample code.
 
 ## Python
 
