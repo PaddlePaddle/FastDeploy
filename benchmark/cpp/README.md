@@ -207,3 +207,7 @@ benchmark: ./benchmark -[info|diff|check|dump|mem] -model xxx -config_path xxx -
 ```bash
 ./benchmark --info --model picodet_l_640_coco_lcnet --config_path config/config.arm.lite.fp32.txt 
 ```
+- trt多输入示例：  
+```bash 
+./benchmark --model rtdetr_r50vd_6x_coco --trt_shapes 1,2:1,2:1,2:1,3,640,640:1,3,640,640:1,3,640,640:1,2:1,2:1,2 --names im_shape:image:scale_factor --shapes 1,2:1,3,640,640:1,2  --config_path config/config.gpu.paddle_trt.fp32.txt --dtypes FP32:FP32:FP32
+```
