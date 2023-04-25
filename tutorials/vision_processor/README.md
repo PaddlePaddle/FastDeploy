@@ -9,14 +9,22 @@ Vision Processor is used to implement model preprocessing, postprocessing, etc. 
 
 ## C++
 
-TODO(guxukai)
+Users can inherit `ProcessorManager` when creating a `Preprocessor` class in the C++ deployment of the visual class model, and can choose to use OpenCV or CV-CUDA through `UseCuda()` in the `ProcessorManager` base class. The base class `ProcessorManager` implements GPU memory management, CUDA stream management, etc. Users only need to implement the `apply()` function, in which operators in the multi-hardware image processing library are called to implement processing logic. For specific implementation, please refer to the sample code.
 
 ## Python
 
 Python API, Currently supported operators are as follows:
 
+- Cast
+- CenterCrop
+- HWC2CHW
+- Resize
 - ResizeByShort
 - NormalizeAndPermute
+- Normalize
+- Pad
+- PadToSize
+- StridePad
 
 Users can implement a image processing modules by inheriting the `PyProcessorManager` class. The base class `PyProcessorManager` implements GPU memory management, CUDA stream management, etc. Users only need to implement the apply() function by calling vision processors in this library and implements processing logic. For specific implementation, please refer to the demo code.
 
