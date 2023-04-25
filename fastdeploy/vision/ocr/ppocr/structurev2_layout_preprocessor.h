@@ -46,8 +46,8 @@ class FASTDEPLOY_DECL StructureV2LayoutPreprocessor : public ProcessorManager {
 
   /// Get the image info of the last batch, return a list of array
   /// {image width, image height, resize width, resize height}
-  const std::vector<std::array<int, 4>>* GetBatchImgInfo() {
-    return &batch_img_info_;
+  const std::vector<std::array<int, 4>>* GetBatchLayoutImgInfo() {
+    return &batch_layout_img_info_;
   }
 
   /// This function will disable normalize in preprocessing step.
@@ -58,11 +58,11 @@ class FASTDEPLOY_DECL StructureV2LayoutPreprocessor : public ProcessorManager {
   /// Set image_shape for the detection preprocess.
   /// This api is usually used when you retrain the model.
   /// Generally, you do not need to use it.
-  void SetImageShape(const std::vector<int>& image_shape) {
-    image_shape_ = image_shape;
+  void SetLayoutImageShape(const std::vector<int>& image_shape) {
+    layout_image_shape_ = image_shape;
   }
   /// Get cls_image_shape for the classification preprocess
-  std::vector<int> GetImageShape() const { return image_shape_; }
+  std::vector<int> GetLayoutImageShape() const { return layout_image_shape_; }
 
   /// Set static_shape_infer is true or not. When deploy PP-StructureV2
   /// on hardware which can not support dynamic input shape very well,
@@ -74,16 +74,18 @@ class FASTDEPLOY_DECL StructureV2LayoutPreprocessor : public ProcessorManager {
   bool GetStaticShapeInfer() const { return static_shape_infer_; }
 
  private:
+  bool ResizeLayoutImage(FDMat* img, int resize_w, int resize_h);
   // for recording the switch of hwc2chw
   bool disable_permute_ = false;
   // for recording the switch of normalize
   bool disable_normalize_ = false;
-  std::vector<std::array<int, 4>> batch_img_info_;
+  std::vector<std::array<int, 4>> batch_layout_img_info_;
   std::shared_ptr<Resize> resize_op_;
   std::shared_ptr<NormalizeAndPermute> normalize_permute_op_;
-  std::vector<int> image_shape_ = {3, 800, 608};
+  std::vector<int> layout_image_shape_ = {3, 800, 608}; // c,h,w
   // default true for pp-structurev2-layout model, backbone picodet.
   bool static_shape_infer_ = true;
+  std::array<int, 4> GetLayoutImgInfo(FDMat* img); 
 };
 
 }  // namespace ocr
