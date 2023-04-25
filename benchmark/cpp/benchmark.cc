@@ -39,6 +39,7 @@ DEFINE_string(params_file, "", "Optional, set specific params file,"
              "eg, model.pdiparams.");
 DEFINE_string(model_format, "PADDLE", "Optional, set specific model format,"
              "eg, PADDLE/ONNX/RKNN/TORCHSCRIPT/SOPHGO");
+DEFINE_bool(disable_mkldnn, false, "disable mkldnn for paddle backend");
 
 #if defined(ENABLE_BENCHMARK)
 static std::vector<int64_t> GetInt64Shape(const std::vector<int>& shape) {
@@ -87,6 +88,9 @@ static void RuntimeProfiling(int argc, char* argv[]) {
   auto option = fastdeploy::RuntimeOption();
   if (!CreateRuntimeOption(&option, argc, argv, true)) {
     return;
+  }
+  if (FLAGS_disable_mkldnn) {
+    option.paddle_infer_option.enable_mkldnn = false;
   }
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
