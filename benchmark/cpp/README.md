@@ -165,8 +165,15 @@ FastDeploy除了提供包含模型前后处理在内的benchmark_xxx外，也提
 | model_file          | Optional, set specific model file, eg, model.pdmodel, model.onnx, default "UNKNOWN" |  
 | params_file          | Optional, set specific params file, eg, model.pdiparams, default "" |  
 | model_format          | Optional, set specific model format, eg, PADDLE/ONNX/RKNN/TORCHSCRIPT/SOPHGO, default "PADDLE" |  
+| disable_mkldnn          | Whether to disable mkldnn for paddle backend, default false. |  
 
-### 5.1 benchmark工具使用示例
+### 5.1 benchmark工具使用示例  
+- 用法说明  
+```bash
+./benchmark --helpshort
+benchmark: ./benchmark -[info|diff|check|dump|mem] -model xxx -config_path xxx -[shapes|dtypes|names|tensors] -[model_file|params_file|model_format]
+...
+```
 - 单输入示例：
 ```bash
 ./benchmark --model ResNet50_vd_infer --config_path config/config.x86.ov.fp32.txt --shapes 1,3,224,224 --names inputs --dtypes FP32

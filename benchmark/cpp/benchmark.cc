@@ -285,6 +285,8 @@ static void showInputInfos(int argc, char* argv[]) {
 
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK)
+  google::SetVersionString("0.0.0");
+  google::SetUsageMessage("./benchmark -[info|diff|check|dump|mem] -model xxx -config_path xxx -[shapes|dtypes|names|tensors] -[model_file|params_file|model_format]");
   google::ParseCommandLineFlags(&argc, &argv, true);
   if (FLAGS_diff) {
     CheckTensorDiff(argc, argv);
