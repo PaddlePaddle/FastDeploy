@@ -91,6 +91,9 @@ bool PPDetBase::CheckArch(){
             return true;
         } 
     }
+    FDWARNING << "Please set model arch,"
+            << "support value : SOLOv2, YOLO, SSD, RetinaNet, RCNN, Face , GFL , RTMDet ,"\
+            <<"FCOS , TTFNet , TOOD , DETR." << std::endl;
     return false; 
 
 

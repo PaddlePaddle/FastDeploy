@@ -448,11 +448,7 @@ class FASTDEPLOY_DECL PaddleDetectionModel : public PPDetBase {
           const ModelFormat& model_format = ModelFormat::PADDLE)
       : PPDetBase(model_file, params_file, config_file, custom_option,
                   model_format) {
-    if (!CheckArch()) {
-    FDWARNING << "Please set model arch,"
-            << "support value : SOLOv2, YOLO, SSD, RetinaNet, RCNN, Face , GFL , RTMDet ,"\
-            <<"FCOS , TTFNet , TOOD , DETR." << std::endl;
-    }
+    CheckArch();
     valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
                           Backend::LITE};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
