@@ -12,29 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <set>
-#include <vector>
-#include "fastdeploy/core/fd_tensor.h"
-#include "fastdeploy/utils/utils.h"
-#include "fastdeploy/vision/common/result.h"
-
-#include "opencv2/core.hpp"
-#include "opencv2/imgproc.hpp"
+#include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-FASTDEPLOY_DECL cv::Mat GetRotateCropImage(const cv::Mat& srcimage,
-                           const std::array<int, 8>& box);
+static inline float FastExp(float x) {
+  union { uint32_t i; float f; } v{}; 
+  v.i = (1 << 23) * (1.4426950409 * x + 126.93490512f);
+  return v.f;
+}
 
-FASTDEPLOY_DECL void SortBoxes(std::vector<std::array<int, 8>>* boxes);
+std::vector<float> Softmax(std::vector<float> &src) {
+  int length = src.size();
+  std::vector<float> dst;
+  dst.resize(length);
+  const float alpha = static_cast<float>(
+    *std::max_element(&src[0], &src[0 + length]));
+  float denominator{0};
 
-FASTDEPLOY_DECL std::vector<int> ArgSort(const std::vector<float> &array);
+  for (int i = 0; i < length; ++i) {
+    dst[i] = FastExp(src[i] - alpha);
+    denominator += dst[i];
+  }
 
-FASTDEPLOY_DECL std::vector<float> Softmax(std::vector<float> &src);
+  for (int i = 0; i < length; ++i) {
+    dst[i] /= denominator;
+  }
+  return dst;
+}
 
 }  // namespace ocr
 }  // namespace vision
