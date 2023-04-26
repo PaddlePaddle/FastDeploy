@@ -130,7 +130,7 @@ bool StructureV2LayoutPostprocessor::SingleBatchPostprocessor(
         bbox_results[i].boxes[j][0] / scale_factor_w,
         bbox_results[i].boxes[j][1] / scale_factor_h,
         bbox_results[i].boxes[j][2] / scale_factor_w,
-        bbox_results[i].boxes[j][3] / scale_factor_w,
+        bbox_results[i].boxes[j][3] / scale_factor_h,
       });
     }
   }
