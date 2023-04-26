@@ -54,7 +54,7 @@ class FASTDEPLOY_DECL StructureV2LayoutPostprocessor {
   int GetNumClass() const { return num_class_; }
   /// Get fpn_stride_ of layout detection postprocess, default is {8, 16, 32, 64}
   std::vector<int> GetFPNStride() const { return fpn_stride_; }
-  /// Set reg_max_ for layout detection postprocess, default is 8 
+  /// Get reg_max_ of layout detection postprocess, default is 8 
   int GetRegMax() const { return reg_max_; }
 
  private:
