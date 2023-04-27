@@ -161,7 +161,7 @@ std::array<float, 4> StructureV2LayoutPostprocessor::DisPred2Bbox(
   float xmin = std::max(ct_x - dis_pred[0], 0.0f);
   float ymin = std::max(ct_y - dis_pred[1], 0.0f);
   float xmax = std::min(ct_x + dis_pred[2], static_cast<float>(resize_w));
-  float ymax = std::min(ct_y + dis_pred[3], static_cast<float>(resize_w));
+  float ymax = std::min(ct_y + dis_pred[3], static_cast<float>(resize_h));
 
   return {xmin, ymin, xmax, ymax};
 }
