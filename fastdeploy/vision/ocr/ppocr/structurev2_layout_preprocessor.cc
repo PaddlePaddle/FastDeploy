@@ -20,8 +20,8 @@ namespace ocr {
 
 StructureV2LayoutPreprocessor::StructureV2LayoutPreprocessor() {
   // default width(608) and height(900)
-  resize_op_ = std::make_shared<Resize>(layout_image_shape_[2], 
-                                        layout_image_shape_[1]);
+  resize_op_ =
+      std::make_shared<Resize>(layout_image_shape_[2], layout_image_shape_[1]);
   normalize_permute_op_ = std::make_shared<NormalizeAndPermute>(
       std::vector<float>({0.485f, 0.456f, 0.406f}),
       std::vector<float>({0.229f, 0.224f, 0.225f}), true);
@@ -29,30 +29,30 @@ StructureV2LayoutPreprocessor::StructureV2LayoutPreprocessor() {
 
 std::array<int, 4> StructureV2LayoutPreprocessor::GetLayoutImgInfo(FDMat* img) {
   if (static_shape_infer_) {
-    return {img->Width(), img->Height(), layout_image_shape_[2], 
+    return {img->Width(), img->Height(), layout_image_shape_[2],
             layout_image_shape_[1]};
   } else {
-    FDASSERT(false, "not support dynamic shape inference now!");
+    FDASSERT(false, "not support dynamic shape inference now!")
   }
-  return {img->Width(), img->Height(), layout_image_shape_[2], 
+  return {img->Width(), img->Height(), layout_image_shape_[2],
           layout_image_shape_[1]};
 }
 
-bool StructureV2LayoutPreprocessor::ResizeLayoutImage(FDMat* img, int resize_w, 
+bool StructureV2LayoutPreprocessor::ResizeLayoutImage(FDMat* img, int resize_w,
                                                       int resize_h) {
   resize_op_->SetWidthAndHeight(resize_w, resize_h);
-  (*resize_op_)(img);                                
+  (*resize_op_)(img);
   return true;
 }
 
-bool StructureV2LayoutPreprocessor::Apply(FDMatBatch* image_batch, 
-                                          std::vector<FDTensor>* outputs) {      
+bool StructureV2LayoutPreprocessor::Apply(FDMatBatch* image_batch,
+                                          std::vector<FDTensor>* outputs) {
   batch_layout_img_info_.clear();
-  batch_layout_img_info_.resize(image_batch->mats->size()); 
+  batch_layout_img_info_.resize(image_batch->mats->size());
   for (size_t i = 0; i < image_batch->mats->size(); ++i) {
     FDMat* mat = &(image_batch->mats->at(i));
     batch_layout_img_info_[i] = GetLayoutImgInfo(mat);
-    ResizeLayoutImage(mat, batch_layout_img_info_[i][2], 
+    ResizeLayoutImage(mat, batch_layout_img_info_[i][2],
                       batch_layout_img_info_[i][3]);
   }
   if (!disable_normalize_ && !disable_permute_) {
@@ -63,8 +63,8 @@ bool StructureV2LayoutPreprocessor::Apply(FDMatBatch* image_batch,
   FDTensor* tensor = image_batch->Tensor();
   (*outputs)[0].SetExternalData(tensor->Shape(), tensor->Dtype(),
                                 tensor->Data(), tensor->device,
-                                tensor->device_id);        
-  return true;                                          
+                                tensor->device_id);
+  return true;
 }
 
 }  // namespace ocr

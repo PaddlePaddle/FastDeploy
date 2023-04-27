@@ -23,9 +23,9 @@ namespace ocr {
 
 StructureV2Layout::StructureV2Layout() {}
 StructureV2Layout::StructureV2Layout(const std::string& model_file,
-                       const std::string& params_file,
-                       const RuntimeOption& custom_option,
-                       const ModelFormat& model_format) {
+                                     const std::string& params_file,
+                                     const RuntimeOption& custom_option,
+                                     const ModelFormat& model_format) {
   if (model_format == ModelFormat::ONNX) {
     valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
     valid_gpu_backends = {Backend::ORT, Backend::TRT};
@@ -46,7 +46,6 @@ StructureV2Layout::StructureV2Layout(const std::string& model_file,
   initialized = Initialize();
 }
 
-// Init
 bool StructureV2Layout::Initialize() {
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -92,8 +91,7 @@ bool StructureV2Layout::BatchPredict(const std::vector<cv::Mat>& images,
 
   if (!postprocessor_.Run(reused_output_tensors_, results,
                           *batch_layout_img_info)) {
-    FDERROR << "Failed to postprocess the inference results."
-            << std::endl;
+    FDERROR << "Failed to postprocess the inference results." << std::endl;
     return false;
   }
   return true;

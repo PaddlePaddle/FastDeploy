@@ -54,7 +54,6 @@ class FASTDEPLOY_DECL StructureV2LayoutPreprocessor : public ProcessorManager {
   void DisableNormalize() { disable_permute_ = true; }
   /// This function will disable hwc2chw in preprocessing step.
   void DisablePermute() { disable_normalize_ = true; }
-
   /// Set image_shape for the detection preprocess.
   /// This api is usually used when you retrain the model.
   /// Generally, you do not need to use it.
@@ -63,7 +62,6 @@ class FASTDEPLOY_DECL StructureV2LayoutPreprocessor : public ProcessorManager {
   }
   /// Get cls_image_shape for the classification preprocess
   std::vector<int> GetLayoutImageShape() const { return layout_image_shape_; }
-
   /// Set static_shape_infer is true or not. When deploy PP-StructureV2
   /// on hardware which can not support dynamic input shape very well,
   /// like Huawei Ascned, static_shape_infer needs to to be true.
@@ -85,7 +83,7 @@ class FASTDEPLOY_DECL StructureV2LayoutPreprocessor : public ProcessorManager {
   std::vector<int> layout_image_shape_ = {3, 800, 608}; // c,h,w
   // default true for pp-structurev2-layout model, backbone picodet.
   bool static_shape_infer_ = true;
-  std::array<int, 4> GetLayoutImgInfo(FDMat* img); 
+  std::array<int, 4> GetLayoutImgInfo(FDMat* img);
 };
 
 }  // namespace ocr

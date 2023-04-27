@@ -26,11 +26,12 @@
 namespace fastdeploy {
 
 namespace pipeline {
-typedef fastdeploy::vision::ocr::StructureV2Layout PPStructureV2Layout; 
+typedef fastdeploy::vision::ocr::StructureV2Layout PPStructureV2Layout;
 
 namespace application {
-namespace ocrsystem { 
-// TODO(qiuyanjun): This pipeline may not need  
+namespace ocrsystem {
+
+// TODO(qiuyanjun): This pipeline may not need
 typedef pipeline::PPStructureV2Layout PPStructureV2LayoutSystem;
 }  // namespace ocrsystem
 }  // namespace application

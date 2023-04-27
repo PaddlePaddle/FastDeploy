@@ -518,7 +518,6 @@ void BindPPOCRModel(pybind11::module& m) {
         for (size_t i = 0; i < data.size(); ++i) {
           images.push_back(PyArrayToCvMat(data[i]));
         }
-
         std::vector<vision::DetectionResult> results;
         self.BatchPredict(images, &results);
         return results;

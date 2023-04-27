@@ -24,7 +24,6 @@
 namespace fastdeploy {
 namespace vision {
 namespace ocr {
-
 /*! @brief StructureV2Layout object is used to load the PP-StructureV2-Layout detection model.
  */
 class FASTDEPLOY_DECL StructureV2Layout : public FastDeployModel {
@@ -37,7 +36,7 @@ class FASTDEPLOY_DECL StructureV2Layout : public FastDeployModel {
    * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`.
    * \param[in] model_format Model format of the loaded model, default is Paddle format.
    */
-  StructureV2Layout(const std::string& model_file, 
+  StructureV2Layout(const std::string& model_file,
                     const std::string& params_file = "",
                     const RuntimeOption& custom_option = RuntimeOption(),
                     const ModelFormat& model_format = ModelFormat::PADDLE);
