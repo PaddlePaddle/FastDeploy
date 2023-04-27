@@ -78,8 +78,8 @@ option(WITH_TESTING "Whether to compile with unittest." OFF)
 option(WITH_CAPI "Whether to compile with c api." OFF)
 option(WITH_CSHARPAPI "Whether to compile with c# api" OFF)
 
-# Whether to build fastdeploy with vision/text/... examples, only for testings.
 option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
+option(BUILD_PADDLE2ONNX "Whether to build paddle2onnx from sources" OFF)
 
 ######################### Paths to user's custom libraries directory #####################
 set(CUDA_DIRECTORY "" CACHE PATH "If build tensorrt backend, need to define path of cuda library.")
@@ -434,7 +434,6 @@ if(ENABLE_ENCRYPTION)
 endif()
 
 if(ENABLE_PADDLE2ONNX)
-  set(BUILD_PADDLE2ONNX ON)
   add_definitions(-DENABLE_PADDLE2ONNX)
   if(BUILD_PADDLE2ONNX)
     download_protobuf()

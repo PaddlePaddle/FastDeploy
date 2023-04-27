@@ -8,20 +8,42 @@
 
 ## C++
 
-待编写
+C++ API目前支持的算子如下：
+
+- Cast
+- CenterCrop
+- HWC2CHW
+- Resize
+- ResizeByShort
+- NormalizeAndPermute
+- Normalize
+- Pad
+- PadToSize
+- StridePad
+
+用户可在视觉类模型的C++部署中创建`Preprocessor`类时继承`ProcessorManager`，即可通过ProcessorManager基类中的`UseCuda()`选择使用OpenCV或者CV-CUDA，基类`ProcessorManager`实现了GPU内存管理、CUDA stream管理等，用户仅需要实现`Apply()`函数，在其中调用多硬件图像处理库中的算子、实现处理逻辑即可，具体实现可参考示例代码。
 
 ## Python
 
 Python API目前支持的算子如下：
 
+- Cast
+- CenterCrop
+- HWC2CHW
+- Resize
 - ResizeByShort
 - NormalizeAndPermute
+- Normalize
+- Pad
+- PadToSize
+- StridePad
 
-用户可通过继承PyProcessorManager类，实现自己的图像处理模块。基类PyProcessorManager实现了GPU内存管理、CUDA stream管理等，用户仅需要实现apply()函数，在其中调用多硬件图像处理库中的算子、实现处理逻辑即可，具体实现可参考示例代码。
+用户可通过继承`PyProcessorManager`类，实现自己的图像处理模块。基类`PyProcessorManager`实现了GPU内存管理、CUDA stream管理等，用户仅需要实现`apply()`函数，在其中调用多硬件图像处理库中的算子、实现处理逻辑即可，具体实现可参考示例代码。
 
 ### 示例代码
 
 - [Python示例](python)
+- [C++示例](cpp)
 
 ### CV-CUDA与OpenCV性能对比
 
