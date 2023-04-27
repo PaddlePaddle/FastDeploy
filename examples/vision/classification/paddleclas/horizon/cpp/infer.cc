@@ -22,7 +22,7 @@ void HorizonInfer(const std::string &model_dir, const std::string &image_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseHorizon();
   option.UseHorizonNPUBackend();
-  
+
   auto format = fastdeploy::ModelFormat::HORIZON;
 
   auto model = fastdeploy::vision::classification::PaddleClasModel(
@@ -34,32 +34,25 @@ void HorizonInfer(const std::string &model_dir, const std::string &image_file) {
   model.GetPreprocessor().DisablePermute();
   model.GetPreprocessor().DisableNormalize();
 
-  
-  
   auto im = cv::imread(image_file);
+
   fastdeploy::vision::ClassifyResult res;
-  for(int i = 0;i < 100;i++){
   fastdeploy::TimeCounter tc;
   tc.Start();
   if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  // print res
-  // std::cout << res.Str() << std::endl;
   tc.End();
   tc.PrintInfo("PPClas in Horizon");
-  }
 }
-  
 
-int main(int argc, char *argv[]){
+int main(int argc, char *argv[]) {
   if (argc < 3) {
-    std::cout
-        << "Usage: HorizonInfer path/to/model_dir path/to/image, "
-           "e.g ./infer_demo ./ppclas_model_dir "
-           "./images/ILSVRC2012_val_00000010.jpeg"
-        << std::endl;
+    std::cout << "Usage: HorizonInfer path/to/model_dir path/to/image, "
+                 "e.g ./infer_demo ./ppclas_model_dir "
+                 "./images/ILSVRC2012_val_00000010.jpeg"
+              << std::endl;
     return -1;
   }
   HorizonInfer(argv[1], argv[2]);

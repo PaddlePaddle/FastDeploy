@@ -15,15 +15,14 @@
 #include "fastdeploy/vision.h"
 
 void HorizonInfer(const std::string& model_dir, const std::string& image_file) {
-  auto model_file =
-      model_dir + "/ppyoloe_640x640_rgb_s.bin";
+  auto model_file = model_dir + "/ppyoloe_640x640_rgb_s.bin";
   auto params_file = "";
   auto config_file = model_dir + "/infer_cfg.yml";
 
   auto option = fastdeploy::RuntimeOption();
   option.UseHorizon();
   option.UseHorizonNPUBackend();
-  
+
   auto format = fastdeploy::ModelFormat::HORIZON;
 
   auto model = fastdeploy::vision::detection::PPYOLOE(
@@ -34,8 +33,7 @@ void HorizonInfer(const std::string& model_dir, const std::string& image_file) {
   model.GetPostprocessor().ApplyNMS();
   fastdeploy::vision::DetectionResult res;
   auto im = cv::imread(image_file);
-  for(int i = 0; i < 100; i++){
-  
+
   fastdeploy::TimeCounter tc;
   tc.Start();
   if (!model.Predict(&im, &res)) {
@@ -44,9 +42,7 @@ void HorizonInfer(const std::string& model_dir, const std::string& image_file) {
   }
   tc.End();
   tc.PrintInfo("PPDet in Horizon");
-  // std::cout << res.Str() << std::endl;
-  }
-  
+
   auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.5);
   cv::imwrite("infer_horizon.jpg", vis_im);
   std::cout << "Visualized result saved in ./infer_horizon.jpg" << std::endl;
@@ -54,14 +50,13 @@ void HorizonInfer(const std::string& model_dir, const std::string& image_file) {
 
 int main(int argc, char* argv[]) {
   if (argc < 3) {
-    std::cout
-        << "Usage: infer_ppyoloe_demo path/to/model_dir path/to/image, "
-           "e.g ./infer_ppyoloe_demo ./ppyoloe_model_dir ./test.jpeg"
-        << std::endl;
+    std::cout << "Usage: infer_ppyoloe_demo path/to/model_dir path/to/image, "
+                 "e.g ./infer_ppyoloe_demo ./ppyoloe_model_dir ./test.jpeg"
+              << std::endl;
     return -1;
   }
 
   HorizonInfer(argv[1], argv[2]);
-  
+
   return 0;
 }

@@ -176,8 +176,6 @@ if(ENABLE_HORIZON_BACKEND)
   set(APPSDK_LIB_PATH ${APPSDK_PATH}/lib/hbbpu)
   set(BPU_libs dnn cnn_intf hbrt_bernoulli_aarch64)
 
-  include_directories(${DNN_PATH}/include
-                      ${APPSDK_PATH}/include)
   link_directories(${DNN_LIB_PATH}
                   ${APPSDK_PATH}/lib/hbbpu
                   ${APPSDK_PATH}/lib)
