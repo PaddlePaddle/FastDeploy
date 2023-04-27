@@ -36,10 +36,15 @@ tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar
 # 下载PP-OCRv3文字识别模型
 wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_rec_infer.tar
 tar -xvf ch_PP-OCRv3_rec_infer.tar
+# 下载PPStructureV2表格识别模型
+wget https://paddleocr.bj.bcebos.com/ppstructure/models/slanet/ch_ppstructure_mobile_v2.0_SLANet_infer.tar
+tar xf ch_ppstructure_mobile_v2.0_SLANet_infer.tar
 
 # 下载预测图片与字典文件
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppstructure/docs/table/table.jpg
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/dict/table_structure_dict_ch.txt
 
 # 运行部署示例
 # 在CPU上使用Paddle Inference推理
@@ -71,6 +76,8 @@ python infer_cls.py --cls_model ch_ppocr_mobile_v2.0_cls_infer --image 12.jpg --
 # 在CPU上,单独使用文字识别模型部署
 python infer_rec.py  --rec_model ch_PP-OCRv3_rec_infer --rec_label_file ppocr_keys_v1.txt --image 12.jpg --device cpu
 
+# 在CPU上,单独使用文字识别模型部署
+python infer_structurev2_table.py  --table_model ./ch_ppstructure_mobile_v2.0_SLANet_infer --table_char_dict_path ./table_structure_dict_ch.txt --image table.jpg --device cpu
 ```
 
 运行完成可视化结果如下图所示
