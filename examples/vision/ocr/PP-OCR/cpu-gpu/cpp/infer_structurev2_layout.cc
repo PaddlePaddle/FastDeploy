@@ -19,14 +19,16 @@ const char sep = '\\';
 const char sep = '/';
 #endif
 
-void InitAndInfer(const std::string &model_dir, const std::string &image_file,
+void InitAndInfer(const std::string &layout_model_dir,
+                  const std::string &image_file,
                   const fastdeploy::RuntimeOption &option) {
-  auto model_file = model_dir + sep + "model.pdmodel";
-  auto params_file = model_dir + sep + "model.pdiparams";
+  auto layout_model_file = layout_model_dir + sep + "model.pdmodel";
+  auto layout_params_file = layout_model_dir + sep + "model.pdiparams";
 
-  auto model = fastdeploy::vision::ocr::StructureV2Layout(model_file,
-                                                          params_file, option);
-  if (!model.Initialized()) {
+  auto layout_model = fastdeploy::vision::ocr::StructureV2Layout(
+      layout_model_file, layout_params_file, option);
+
+  if (!layout_model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
@@ -34,9 +36,9 @@ void InitAndInfer(const std::string &model_dir, const std::string &image_file,
   auto im = cv::imread(image_file);
 
   // 5 for publaynet, 10 for cdla
-  model.GetPostprocessor().SetNumClass(5);
+  layout_model.GetPostprocessor().SetNumClass(5);
   fastdeploy::vision::DetectionResult res;
-  if (!model.Predict(im, &res)) {
+  if (!layout_model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
@@ -44,7 +46,7 @@ void InitAndInfer(const std::string &model_dir, const std::string &image_file,
   std::cout << res.Str() << std::endl;
   std::vector<std::string> labels = {"text", "title", "list", "table",
                                      "figure"};
-  if (model.GetPostprocessor().GetNumClass() == 10) {
+  if (layout_model.GetPostprocessor().GetNumClass() == 10) {
     labels = {"text",      "title",         "figure", "figure_caption",
               "table",     "table_caption", "header", "footer",
               "reference", "equation"};
@@ -78,8 +80,8 @@ int main(int argc, char *argv[]) {
     option.UseGpu();
   }
 
-  std::string model_dir = argv[1];
+  std::string layout_model_dir = argv[1];
   std::string image_file = argv[2];
-  InitAndInfer(model_dir, image_file, option);
+  InitAndInfer(layout_model_dir, image_file, option);
   return 0;
 }
