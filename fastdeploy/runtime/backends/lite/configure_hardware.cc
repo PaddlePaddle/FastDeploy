@@ -50,8 +50,16 @@ void LiteBackend::ConfigureCpu(const LiteBackendOption& option) {
 }
 
 void LiteBackend::ConfigureGpu(const LiteBackendOption& option) {
-  // config_.set_valid_places(GetPlacesForCpu(option));
-  # TODO
+  config_.set_valid_places(std::vector<paddle::lite_api::Place>({
+      paddle::lite_api::Place{TARGET(kOpenCL), PRECISION(kFP16), DATALAYOUT(kImageDefault)},
+      paddle::lite_api::Place{TARGET(kOpenCL), PRECISION(kFP16), DATALAYOUT(kImageFolder)},
+      paddle::lite_api::Place{TARGET(kOpenCL), PRECISION(kFloat)},
+      paddle::lite_api::Place{TARGET(kOpenCL), PRECISION(kAny), DATALAYOUT(kImageDefault)},
+      paddle::lite_api::Place{TARGET(kOpenCL), PRECISION(kAny), DATALAYOUT(kImageFolder)},
+      paddle::lite_api::Place{TARGET(kOpenCL), PRECISION(kAny)},
+      paddle::lite_api::Place{TARGET(kOpenCL), PRECISION(kInt32)},
+      paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)},
+      paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)}}));
 }
 
 void LiteBackend::ConfigureKunlunXin(const LiteBackendOption& option) {

@@ -82,6 +82,11 @@ bool LiteBackend::Init(const RuntimeOption& runtime_option) {
             << runtime_option.device << "." << std::endl;
     return false;
   }
+  if (runtime_option.device == Device::GPU &&
+      !paddle::lite_api::IsOpenCLBackendValid()) {
+    FDERROR << "PaddleLiteBackend GPU (OpenCL) is not supported by the current device."
+            << std::endl;
+  }
   if (runtime_option.model_from_memory_) {
     FDERROR << "PaddleLiteBackend doesn't support load model from memory, "
                "please load model from disk."
@@ -89,8 +94,12 @@ bool LiteBackend::Init(const RuntimeOption& runtime_option) {
     return false;
   }
 
-  config_.set_model_file(runtime_option.model_file);
-  config_.set_param_file(runtime_option.params_file);
+  if (runtime_option.device == Device::GPU) {
+    config_.set_model_dir(runtime_option.model_file);
+  } else {
+    config_.set_model_file(runtime_option.model_file);
+    config_.set_param_file(runtime_option.params_file);
+  }
   BuildOption(runtime_option.paddle_lite_option);
   predictor_ =
       paddle::lite_api::CreatePaddlePredictor<paddle::lite_api::CxxConfig>(
