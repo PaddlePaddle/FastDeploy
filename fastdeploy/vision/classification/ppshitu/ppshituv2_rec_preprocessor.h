@@ -22,8 +22,7 @@ namespace classification {
 
 /*! @brief Preprocessor object for PP-ShiTuV2 Recognizer model.
  */
-class FASTDEPLOY_DECL PPShiTuV2RecognizerPreprocessor :
-  public ProcessorManager {
+class FASTDEPLOY_DECL PPShiTuV2RecognizerPreprocessor : public ProcessorManager {
  public:
   /** \brief Create a preprocessor instance for PP-ShiTuV2 Recognizer model
    *
