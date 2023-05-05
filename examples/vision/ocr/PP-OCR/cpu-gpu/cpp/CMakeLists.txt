@@ -38,3 +38,8 @@ target_link_libraries(infer_rec ${FASTDEPLOY_LIBS})
 add_executable(infer_structurev2_table ${PROJECT_SOURCE_DIR}/infer_structurev2_table.cc)
 # 添加FastDeploy库依赖
 target_link_libraries(infer_structurev2_table ${FASTDEPLOY_LIBS})
+
+# Only Layout
+add_executable(infer_structurev2_layout ${PROJECT_SOURCE_DIR}/infer_structurev2_layout.cc)
+# 添加FastDeploy库依赖
+target_link_libraries(infer_structurev2_layout ${FASTDEPLOY_LIBS})
