@@ -266,6 +266,16 @@ class RuntimeOption:
         """
         return self._option.use_ascend()
 
+    def disable_valid_backend_check(self):
+        """ Disable checking validity of backend during inference
+        """        
+        return self._option.disable_valid_backend_check()
+
+    def enable_valid_backend_check(self):
+        """Enable checking validity of backend during inference
+        """
+        return self._option.enable_valid_backend_check()
+
     def set_cpu_thread_num(self, thread_num=-1):
         """Set number of threads if inference with CPU
 
