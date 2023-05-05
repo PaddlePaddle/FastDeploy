@@ -12,3 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
+#include "fastdeploy/vision/detection/ppdet/model.h"
+
+
+namespace fastdeploy {
+namespace vision {
+namespace classification {
+
+typedef detection::PicoDet PPShiTuV2Detector;
+
+}  // namespace classification
+}  // namespace vision
+}  // namespace fastdeploy

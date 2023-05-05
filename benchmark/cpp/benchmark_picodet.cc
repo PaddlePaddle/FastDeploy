@@ -49,8 +49,7 @@ int main(int argc, char* argv[]) {
       config_info["backend"] == "trt") {
     option.trt_option.SetShape("image", {1, 3, 640, 640}, {1, 3, 640, 640},
                                {1, 3, 640, 640});
-    option.trt_option.SetShape("scale_factor", {1, 2}, {1, 2},
-                               {1, 2});
+    option.trt_option.SetShape("scale_factor", {1, 2}, {1, 2}, {1, 2});
   }
   auto model_picodet = vision::detection::PicoDet(
       model_file, params_file, config_file, option, model_format);
@@ -81,7 +80,7 @@ int main(int argc, char* argv[]) {
   }
   // Run profiling
   BENCHMARK_MODEL(model_picodet, model_picodet.Predict(im, &res))
-  auto vis_im = vision::VisDetection(im, res);
+  auto vis_im = vision::VisDetection(im, res, 0.5f);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 #endif
