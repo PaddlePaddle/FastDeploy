@@ -153,10 +153,16 @@ std::string DetectionResult::Str() {
   std::string out;
   if (!contain_masks) {
     out = "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]\n";
+    if (!rotated_boxes.empty()) {
+      out = "DetectionResult: [x1, y1, x2, y2, x3, y3, x4, y4, score, label_id]\n";
+    }
   } else {
     out =
         "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id, "
         "mask_shape]\n";
+    if (!rotated_boxes.empty()) {
+      out = "DetectionResult: [x1, y1, x2, y2, x3, y3, x4, y4, score, label_id, mask_shape]\n";
+    } 
   }
   for (size_t i = 0; i < boxes.size(); ++i) {
     out = out + std::to_string(boxes[i][0]) + "," +

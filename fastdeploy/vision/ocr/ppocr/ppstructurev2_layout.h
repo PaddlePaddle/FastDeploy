@@ -12,35 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/common/processors/proc_lib.h"
+#pragma once
+
+#include <vector>
+
+#include "fastdeploy/fastdeploy_model.h"
+#include "fastdeploy/vision/common/processors/transform.h"
+#include "fastdeploy/vision/common/result.h"
+
+#include "fastdeploy/vision/ocr/ppocr/structurev2_layout.h"
+#include "fastdeploy/utils/unique_ptr.h"
 
 namespace fastdeploy {
-namespace vision {
 
-ProcLib DefaultProcLib::default_lib = ProcLib::DEFAULT;
+namespace pipeline {
+typedef fastdeploy::vision::ocr::StructureV2Layout PPStructureV2Layout;
 
-std::ostream& operator<<(std::ostream& out, const ProcLib& p) {
-  switch (p) {
-    case ProcLib::DEFAULT:
-      out << "ProcLib::DEFAULT";
-      break;
-    case ProcLib::OPENCV:
-      out << "ProcLib::OPENCV";
-      break;
-    case ProcLib::FLYCV:
-      out << "ProcLib::FLYCV";
-      break;
-    case ProcLib::CUDA:
-      out << "ProcLib::CUDA";
-      break;
-    case ProcLib::CVCUDA:
-      out << "ProcLib::CVCUDA";
-      break;  
-    default:
-      FDASSERT(false, "Unknow type of ProcLib.");
-  }
-  return out;
-}
+namespace application {
+namespace ocrsystem {
 
-}  // namespace vision
+// TODO(qiuyanjun): This pipeline may not need
+typedef pipeline::PPStructureV2Layout PPStructureV2LayoutSystem;
+}  // namespace ocrsystem
+}  // namespace application
+
+}  // namespace pipeline
 }  // namespace fastdeploy

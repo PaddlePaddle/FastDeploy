@@ -147,7 +147,8 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
 // Visualize DetectionResult with custom labels.
 cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
                      const std::vector<std::string>& labels,
-                     float score_threshold, int line_size, float font_size) {
+                     float score_threshold, int line_size, float font_size,
+                     std::vector<int> font_color, int font_thickness) {
   if (result.boxes.empty()) {
     return im;
   }
@@ -164,6 +165,7 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
   int h = im.rows;
   int w = im.cols;
   auto vis_im = im.clone();
+  auto font_color_ = cv::Scalar(font_color[0], font_color[1], font_color[2]);
   for (size_t i = 0; i < result.rotated_boxes.size(); ++i) {
     if (result.scores[i] < score_threshold) {
       continue;
@@ -195,8 +197,8 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
       } else {
         end = cv::Point(static_cast<int>(round(result.rotated_boxes[i][0])),
                         static_cast<int>(round(result.rotated_boxes[i][1])));
-        cv::putText(vis_im, text, end, font, font_size,
-                    cv::Scalar(255, 255, 255), 1);
+        cv::putText(vis_im, text, end, font, font_size, font_color_,
+                    font_thickness);
       }
       cv::line(vis_im, start, end, cv::Scalar(255, 255, 255), 3, cv::LINE_AA,
                0);
@@ -239,8 +241,8 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
     origin.y = y1;
     cv::Rect rect(x1, y1, box_w, box_h);
     cv::rectangle(vis_im, rect, rect_color, line_size);
-    cv::putText(vis_im, text, origin, font, font_size,
-                cv::Scalar(255, 255, 255), 1);
+    cv::putText(vis_im, text, origin, font, font_size, font_color_,
+                font_thickness);
     if (result.contain_masks) {
       int mask_h = static_cast<int>(result.masks[i].shape[0]);
       int mask_w = static_cast<int>(result.masks[i].shape[1]);

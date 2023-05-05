@@ -12,35 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/common/processors/proc_lib.h"
+#include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
 namespace fastdeploy {
 namespace vision {
+namespace ocr {
 
-ProcLib DefaultProcLib::default_lib = ProcLib::DEFAULT;
-
-std::ostream& operator<<(std::ostream& out, const ProcLib& p) {
-  switch (p) {
-    case ProcLib::DEFAULT:
-      out << "ProcLib::DEFAULT";
-      break;
-    case ProcLib::OPENCV:
-      out << "ProcLib::OPENCV";
-      break;
-    case ProcLib::FLYCV:
-      out << "ProcLib::FLYCV";
-      break;
-    case ProcLib::CUDA:
-      out << "ProcLib::CUDA";
-      break;
-    case ProcLib::CVCUDA:
-      out << "ProcLib::CVCUDA";
-      break;  
-    default:
-      FDASSERT(false, "Unknow type of ProcLib.");
-  }
-  return out;
+static inline float FastExp(float x) {
+  union { uint32_t i; float f; } v{}; 
+  v.i = (1 << 23) * (1.4426950409 * x + 126.93490512f);
+  return v.f;
 }
 
+std::vector<float> Softmax(std::vector<float> &src) {
+  int length = src.size();
+  std::vector<float> dst;
+  dst.resize(length);
+  const float alpha = static_cast<float>(
+    *std::max_element(&src[0], &src[0 + length]));
+  float denominator{0};
+
+  for (int i = 0; i < length; ++i) {
+    dst[i] = FastExp(src[i] - alpha);
+    denominator += dst[i];
+  }
+
+  for (int i = 0; i < length; ++i) {
+    dst[i] /= denominator;
+  }
+  return dst;
+}
+
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy
