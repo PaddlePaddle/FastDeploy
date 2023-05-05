@@ -23,7 +23,9 @@ def vis_detection(im_data,
                   labels=[],
                   score_threshold=0.0,
                   line_size=1,
-                  font_size=0.5):
+                  font_size=0.5,
+                  font_color=[255, 255, 255],
+                  font_thickness=1):
     """Show the visualized results for detection models
 
     :param im_data: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
@@ -32,10 +34,13 @@ def vis_detection(im_data,
     :param score_threshold: (float) score_threshold threshold for result scores, the bounding box will not be shown if the score is less than score_threshold
     :param line_size: (float) line_size line size for bounding boxes
     :param font_size: (float) font_size font size for text
+    :param font_color: (list of int) font_color  for text
+    :param font_thickness: (int) font_thickness for text
     :return: (numpy.ndarray) image with visualized results
     """
     return C.vision.vis_detection(im_data, det_result, labels, score_threshold,
-                                  line_size, font_size)
+                                  line_size, font_size, font_color,
+                                  font_thickness)
 
 
 def vis_perception(im_data,
