@@ -23,7 +23,7 @@ COPY --from=full /opt/tritonserver/lib /opt/tritonserver/lib
 COPY --from=full /opt/tritonserver/include /opt/tritonserver/include
 COPY --from=full /opt/tritonserver/backends/python /opt/tritonserver/backends/python
 
-COPY serving/TensorRT-8.4.1.5 /opt/TensorRT-8.4.1.5
+COPY serving/TensorRT-8.5.2.2 /opt/TensorRT-8.5.2.2
 
 ENV TZ=Asia/Shanghai \
     DEBIAN_FRONTEND=noninteractive \
@@ -43,17 +43,20 @@ RUN apt-get update \
     && python3 -m pip install -U pip \
     && python3 -m pip install paddlenlp fast-tokenizer-python
 
-# unset proxy
-ENV http_proxy=
-ENV https_proxy=
-RUN python3 -m pip install paddlepaddle-gpu==2.4.1.post112 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
-
 COPY python/dist/*.whl /opt/fastdeploy/
 RUN python3 -m pip install  /opt/fastdeploy/*.whl \
     && rm -rf /opt/fastdeploy/*.whl
 
+# unset proxy
+# ENV http_proxy=''
+# ENV https_proxy=''
+# RUN python3 -m pip install paddlepaddle-gpu==2.4.1.post112 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
+RUN unset http_proxy
+RUN unset https_proxy
+RUN python3 -m pip install https://paddle-wheel.bj.bcebos.com/2.4.1/linux/linux-gpu-cuda11.2-cudnn8-mkl-gcc8.2-avx/paddlepaddle_gpu-2.4.1.post112-cp38-cp38-linux_x86_64.whl
+
 COPY serving/build/libtriton_fastdeploy.so /opt/tritonserver/backends/fastdeploy/
 COPY build/fastdeploy_install /opt/fastdeploy/
 
-ENV LD_LIBRARY_PATH="/opt/TensorRT-8.4.1.5/lib/:/opt/fastdeploy/lib:/opt/fastdeploy/third_libs/install/onnxruntime/lib:/opt/fastdeploy/third_libs/install/paddle2onnx/lib:/opt/fastdeploy/third_libs/install/tensorrt/lib:/opt/fastdeploy/third_libs/install/paddle_inference/paddle/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mkldnn/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mklml/lib:/opt/fastdeploy/third_libs/install/openvino/runtime/lib:$LD_LIBRARY_PATH"
+ENV LD_LIBRARY_PATH="/opt/TensorRT-8.5.2.2/lib/:/opt/fastdeploy/lib:/opt/fastdeploy/third_libs/install/onnxruntime/lib:/opt/fastdeploy/third_libs/install/paddle2onnx/lib:/opt/fastdeploy/third_libs/install/tensorrt/lib:/opt/fastdeploy/third_libs/install/paddle_inference/paddle/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mkldnn/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mklml/lib:/opt/fastdeploy/third_libs/install/openvino/runtime/lib:$LD_LIBRARY_PATH"
 ENV PATH="/opt/tritonserver/bin:$PATH"

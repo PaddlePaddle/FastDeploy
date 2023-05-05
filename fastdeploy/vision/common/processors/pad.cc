@@ -91,6 +91,57 @@ bool Pad::ImplByFlyCV(Mat* mat) {
 }
 #endif
 
+#ifdef ENABLE_CVCUDA
+bool Pad::ImplByCvCuda(FDMat* mat) {
+  if (mat->layout != Layout::HWC) {
+    FDERROR << "Pad: The input data must be Layout::HWC format!" << std::endl;
+    return false;
+  }
+  if (mat->Channels() > 4) {
+    FDERROR << "Pad: Only support channels <= 4." << std::endl;
+    return false;
+  }
+  if (mat->Channels() != value_.size()) {
+    FDERROR << "Pad: Require input channels equals to size of padding value, "
+               "but now channels = "
+            << mat->Channels()
+            << ", the size of padding values = " << value_.size() << "."
+            << std::endl;
+    return false;
+  }
+
+  float4 value;
+  if (value_.size() == 1) {
+    value = make_float4(value_[0], 0.0f, 0.0f, 0.0f);
+  } else if (value_.size() == 2) {
+    value = make_float4(value_[0], value_[1], 0.0f, 0.0f);
+  } else if (value_.size() == 3) {
+    value = make_float4(value_[0], value_[1], value_[2], 0.0f);
+  } else {
+    value = make_float4(value_[0], value_[1], value_[2], value_[3]);
+  }
+
+  // Prepare input tensor
+  FDTensor* src = CreateCachedGpuInputTensor(mat);
+  auto src_tensor = CreateCvCudaTensorWrapData(*src);
+
+  int height = mat->Height() + top_ + bottom_;
+  int width = mat->Width() + left_ + right_;
+
+  // Prepare output tensor
+  mat->output_cache->Resize({height, width, mat->Channels()}, mat->Type(),
+                            "output_cache", Device::GPU);
+  auto dst_tensor = CreateCvCudaTensorWrapData(*(mat->output_cache));
+
+  cvcuda_pad_op_(mat->Stream(), *src_tensor, *dst_tensor, top_, left_,
+                 NVCV_BORDER_CONSTANT, value);
+
+  mat->SetTensor(mat->output_cache);
+  mat->mat_type = ProcLib::CVCUDA;
+  return true;
+}
+#endif
+
 bool Pad::Run(Mat* mat, const int& top, const int& bottom, const int& left,
               const int& right, const std::vector<float>& value, ProcLib lib) {
   auto p = Pad(top, bottom, left, right, value);

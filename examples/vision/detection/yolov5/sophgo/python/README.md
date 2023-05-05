@@ -15,7 +15,10 @@ cd FastDeploy/examples/vision/detection/yolov5/sophgo/python
 # Download images.
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
-# Inference.
+# Set --auto True, automatic inference.
+python3 infer.py --auto True
+
+# Set --auto False, need to set the model path and image path manually.
 python3 infer.py --model_file ./bmodel/yolov5s_1684x_f32.bmodel --image 000000014439.jpg
 
 # The returned result.

@@ -15,8 +15,8 @@
 #pragma once
 
 #include "fastdeploy/vision/common/result.h"
-#include "opencv2/imgproc/imgproc.hpp"
 #include "fastdeploy/vision/tracking/pptracking/model.h"
+#include "opencv2/imgproc/imgproc.hpp"
 
 namespace fastdeploy {
 /** \brief All C++ FastDeploy Vision Models APIs are defined inside this namespace
@@ -32,6 +32,12 @@ class FASTDEPLOY_DECL Visualize {
   static cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
                               float score_threshold = 0.0, int line_size = 1,
                               float font_size = 0.5f);
+  static cv::Mat VisPerception(const cv::Mat& im,
+                     const PerceptionResult& result,
+                     const std::string & config_file,
+                     float score_threshold = 0.0,
+                     int line_size = 1,
+                     float font_size = 0.5f);
   static cv::Mat VisFaceDetection(const cv::Mat& im,
                                   const FaceDetectionResult& result,
                                   int line_size = 1, float font_size = 0.5f);
@@ -41,9 +47,10 @@ class FASTDEPLOY_DECL Visualize {
                                  bool remove_small_connected_area = false);
   static cv::Mat RemoveSmallConnectedArea(const cv::Mat& alpha_pred,
                                           float threshold);
-  static cv::Mat SwapBackgroundMatting(
-      const cv::Mat& im, const cv::Mat& background, const MattingResult& result,
-      bool remove_small_connected_area = false);
+  static cv::Mat
+  SwapBackgroundMatting(const cv::Mat& im, const cv::Mat& background,
+                        const MattingResult& result,
+                        bool remove_small_connected_area = false);
   static cv::Mat SwapBackgroundSegmentation(const cv::Mat& im,
                                             const cv::Mat& background,
                                             int background_label,
@@ -74,13 +81,33 @@ FASTDEPLOY_DECL cv::Mat VisDetection(const cv::Mat& im,
  * \param[in] score_threshold threshold for result scores, the bounding box will not be shown if the score is less than score_threshold
  * \param[in] line_size line size for bounding boxes
  * \param[in] font_size font size for text
+ * \param[in] font_color font color for bounding text
+ * \param[in] font_thickness font thickness for text
  * \return cv::Mat type stores the visualized results
  */
 FASTDEPLOY_DECL cv::Mat VisDetection(const cv::Mat& im,
                                      const DetectionResult& result,
                                      const std::vector<std::string>& labels,
                                      float score_threshold = 0.0,
-                                     int line_size = 1, float font_size = 0.5f);
+                                     int line_size = 1, float font_size = 0.5f,
+                                     std::vector<int> font_color = {255, 255, 255},
+                                     int font_thickness = 1);
+/** \brief Show the visualized results with custom labels for detection models
+ *
+ * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+ * \param[in] result the result produced by model
+ * \param[in] labels the visualized result will show the bounding box contain class label
+ * \param[in] score_threshold threshold for result scores, the bounding box will not be shown if the score is less than score_threshold
+ * \param[in] line_size line size for bounding boxes
+ * \param[in] font_size font size for text
+ * \return cv::Mat type stores the visualized results
+ */
+FASTDEPLOY_DECL cv::Mat VisPerception(const cv::Mat& im,
+                     const PerceptionResult& result,
+                     const std::string & config_file,
+                     float score_threshold = 0.0,
+                     int line_size = 1 ,
+                     float font_size = 0.5f);
 /** \brief Show the visualized results for classification models
  *
  * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
@@ -90,9 +117,11 @@ FASTDEPLOY_DECL cv::Mat VisDetection(const cv::Mat& im,
  * \param[in] font_size font size
  * \return cv::Mat type stores the visualized results
  */
-FASTDEPLOY_DECL cv::Mat VisClassification(
-  const cv::Mat& im, const ClassifyResult& result, int top_k = 5,
-  float score_threshold = 0.0f, float font_size = 0.5f);
+FASTDEPLOY_DECL cv::Mat VisClassification(const cv::Mat& im,
+                                          const ClassifyResult& result,
+                                          int top_k = 5,
+                                          float score_threshold = 0.0f,
+                                          float font_size = 0.5f);
 /** \brief Show the visualized results with custom labels for classification models
  *
  * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
@@ -103,10 +132,10 @@ FASTDEPLOY_DECL cv::Mat VisClassification(
  * \param[in] font_size font size
  * \return cv::Mat type stores the visualized results
  */
-FASTDEPLOY_DECL cv::Mat VisClassification(
-  const cv::Mat& im, const ClassifyResult& result,
-  const std::vector<std::string>& labels, int top_k = 5,
-  float score_threshold = 0.0f, float font_size = 0.5f);
+FASTDEPLOY_DECL cv::Mat
+VisClassification(const cv::Mat& im, const ClassifyResult& result,
+                  const std::vector<std::string>& labels, int top_k = 5,
+                  float score_threshold = 0.0f, float font_size = 0.5f);
 /** \brief Show the visualized results for face detection models
  *
  * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
@@ -143,11 +172,15 @@ FASTDEPLOY_DECL cv::Mat VisSegmentation(const cv::Mat& im,
  *
  * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
  * \param[in] result the result produced by model
+ * \param[in] transparent_background if transparent_background==true, the background will with transparent color
+ * \param[in] transparent_threshold since the alpha value in MattringResult is a float between [0, 1], transparent_threshold is used to filter background pixel
  * \param[in] remove_small_connected_area if remove_small_connected_area==true, the visualized result will not include the small connected areas
  * \return cv::Mat type stores the visualized results
  */
 FASTDEPLOY_DECL cv::Mat VisMatting(const cv::Mat& im,
                                    const MattingResult& result,
+                                   bool transparent_background = false,
+                                   float transparent_threshold = 0.999,
                                    bool remove_small_connected_area = false);
 /** \brief Show the visualized results for Ocr models
  *
@@ -155,7 +188,8 @@ FASTDEPLOY_DECL cv::Mat VisMatting(const cv::Mat& im,
  * \param[in] result the result produced by model
  * \return cv::Mat type stores the visualized results
  */
-FASTDEPLOY_DECL cv::Mat VisOcr(const cv::Mat& im, const OCRResult& ocr_result);
+FASTDEPLOY_DECL cv::Mat VisOcr(const cv::Mat& im, const OCRResult& ocr_result,
+                               const float score_threshold = 0);
 
 FASTDEPLOY_DECL cv::Mat VisMOT(const cv::Mat& img, const MOTResult& results,
                                float score_threshold = 0.0f,
@@ -168,10 +202,10 @@ FASTDEPLOY_DECL cv::Mat VisMOT(const cv::Mat& img, const MOTResult& results,
  * \param[in] remove_small_connected_area if remove_small_connected_area==true, the visualized result will not include the small connected areas
  * \return cv::Mat type stores the visualized results
  */
-FASTDEPLOY_DECL cv::Mat SwapBackground(const cv::Mat& im,
-                                      const cv::Mat& background,
-                                      const MattingResult& result,
-                                      bool remove_small_connected_area = false);
+FASTDEPLOY_DECL cv::Mat
+SwapBackground(const cv::Mat& im, const cv::Mat& background,
+               const MattingResult& result,
+               bool remove_small_connected_area = false);
 /** \brief Swap the image background with SegmentationResult
  *
  * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
@@ -184,6 +218,7 @@ FASTDEPLOY_DECL cv::Mat SwapBackground(const cv::Mat& im,
                                        const cv::Mat& background,
                                        const SegmentationResult& result,
                                        int background_label);
+
 /** \brief Show the visualized results for key point detection models
  *
  * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
@@ -191,12 +226,11 @@ FASTDEPLOY_DECL cv::Mat SwapBackground(const cv::Mat& im,
  * \param[in] conf_threshold threshold for result scores, the result will not be shown if the score is less than conf_threshold
  * \return cv::Mat type stores the visualized results
  */
-FASTDEPLOY_DECL cv::Mat VisKeypointDetection(const cv::Mat& im,
-                        const KeyPointDetectionResult& results,
-                        float conf_threshold = 0.5f);
+FASTDEPLOY_DECL cv::Mat
+VisKeypointDetection(const cv::Mat& im, const KeyPointDetectionResult& results,
+                     float conf_threshold = 0.5f);
 FASTDEPLOY_DECL cv::Mat VisHeadPose(const cv::Mat& im,
-                                    const HeadPoseResult& result,
-                                    int size = 50,
+                                    const HeadPoseResult& result, int size = 50,
                                     int line_size = 1);
 
 }  // namespace vision

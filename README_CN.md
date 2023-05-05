@@ -28,7 +28,7 @@
 </p>
 
 <div align="center">
-    
+
 [<img src='https://user-images.githubusercontent.com/54695910/200465949-da478e1b-21ce-43b8-9f3f-287460e786bd.png' height="80px" width="110px">](examples/vision/classification)
 [<img src='https://user-images.githubusercontent.com/54695910/188054680-2f8d1952-c120-4b67-88fc-7d2d7d2378b4.gif' height="80px" width="110px">](examples/vision/detection)
 [<img src='https://user-images.githubusercontent.com/54695910/188054711-6119f0e7-d741-43b1-b273-9493d103d49f.gif' height="80px" width="110px">](examples/vision/segmentation/paddleseg)
@@ -44,25 +44,29 @@
 </div>
 
 
- **⚡️FastDeploy**是一款**全场景**、**易用灵活**、**极致高效**的AI推理部署工具， 支持**云边端**部署。提供超过 🔥160+ **Text**，**Vision**， **Speech**和**跨模态**模型📦**开箱即用**的部署体验，并实现🔚**端到端**的推理性能优化。包括 [物体检测](./examples/vision/detection)、[字符识别（OCR）](./examples/vision/ocr)、[人脸](./examples/vision/facedet)、[人像扣图](./examples/vision/matting)、[多目标跟踪系统](./examples/vision/tracking/pptracking)、[NLP](./examples/text)、[Stable Difussion文图生成](./examples/multimodal/stable_diffusion)、[TTS](./examples/audio/pp-tts) 等几十种任务场景，满足开发者**多场景、多硬件、多平台**的产业部署需求。
+ **⚡️FastDeploy**是一款**全场景**、**易用灵活**、**极致高效**的AI推理部署工具， 支持**云边端**部署。提供超过 🔥160+ **Text**，**Vision**， **Speech**和**跨模态**模型📦**开箱即用**的部署体验，并实现🔚**端到端**的推理性能优化。包括 [物体检测](./examples/vision/detection)、[字符识别（OCR）](./examples/vision/ocr)、[人脸](./examples/vision/facedet)、[人像扣图](./examples/vision/matting)、[多目标跟踪系统](./examples/vision/tracking/pptracking)、[NLP](./examples/text)、[Stable Diffusion文图生成](./examples/multimodal/stable_diffusion)、[TTS](./examples/audio/pp-tts) 等几十种任务场景，满足开发者**多场景、多硬件、多平台**的产业部署需求。
 
 <div align="center">
-    
+
 <img src="https://user-images.githubusercontent.com/54695910/213087733-7f2ea97b-baa4-4b0d-9b71-202ff6032a30.png" >
-    
+
 </div>
 
 
 ## 🌠 近期更新
 
-- ✨✨✨ **2023.01.17** 发布 [**YOLOv8**](./examples/vision/detection/paddledetection/) 在FastDeploy系列硬件的部署支持。 其中包括 [**Paddle YOLOv8**](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov8) 以及 [**社区 ultralytics YOLOv8**](https://github.com/ultralytics/ultralytics)
-    - [**Paddle YOLOv8**](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov8) 可以部署的硬件：[**Intel CPU**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**NVIDIA GPU**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**Jetson**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**飞腾**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**昆仑芯**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**昇腾**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**ARM CPU**](./examples/vision/detection/paddledetection/cpp/infer_yolov8.cc)、[**RK3588**](./examples/vision/detection/paddledetection/rknpu2/yolov8.md) 和 [**Sophgo TPU**](./examples/vision/detection/paddledetection/sophgo), 部分硬件包含 **Python** 部署和 **C++** 部署；
+- FastDeploy系列[**直播课程回放**](https://aistudio.baidu.com/aistudio/education/group/info/27800)
+
+- **2023.01.17** 发布 [**YOLOv8**](./examples/vision/detection/paddledetection/) 在FastDeploy系列硬件的部署支持。 其中包括 [**Paddle YOLOv8**](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov8) 以及 [**社区 ultralytics YOLOv8**](https://github.com/ultralytics/ultralytics)
+    - [**Paddle YOLOv8**](https://github.com/PaddlePaddle/PaddleYOLO/tree/release/2.5/configs/yolov8) 可以部署的硬件：[**Intel CPU**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**NVIDIA GPU**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**Jetson**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**飞腾**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**昆仑芯**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**昇腾**](./examples/vision/detection/paddledetection/python/infer_yolov8.py)、[**ARM CPU**](./examples/vision/detection/paddledetection/cpp/infer_yolov8.cc)、[**RK3588**](./examples/vision/detection/paddledetection/rknpu2) 和 [**Sophgo TPU**](./examples/vision/detection/paddledetection/sophgo), 部分硬件包含 **Python** 部署和 **C++** 部署；
     -  [**社区 ultralytics YOLOv8**](https://github.com/ultralytics/ultralytics) 可以部署的硬件：[**Intel CPU**](./examples/vision/detection/yolov8)、[**NVIDIA GPU**](./examples/vision/detection/yolov8)、[**Jetson**](./examples/vision/detection/yolov8)，均包含 **Python** 部署和 **C++** 部署；
     -  FastDeploy 一行模型API切换，可以实现**YOLOv8**、 **PP-YOLOE+**、**YOLOv5** 等模型性能对比。
  - 服务化部署结合VisualDL新增支持可视化部署。在FastDeploy容器中启动VDL服务后，即可在VDL界面修改模型配置、启动/管理模型服务、查看性能数据、发送请求等，详细操作可参考相关文档
     - [Serving可视化部署](https://github.com/PaddlePaddle/FastDeploy/blob/develop/serving/docs/zh_CN/vdl_management.md)
     - [Serving可视化请求](https://github.com/PaddlePaddle/FastDeploy/blob/develop/serving/docs/zh_CN/client.md#%E4%BD%BF%E7%94%A8fastdeploy-client%E8%BF%9B%E8%A1%8C%E5%8F%AF%E8%A7%86%E5%8C%96%E8%AF%B7%E6%B1%82)
- 
+
+
+
 - **✨👥✨ 社区交流**
 
     - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1o50e4voz-zbiIneCNRf_eH99eS2NVLg) and chat with other community members about ideas
@@ -70,7 +74,7 @@
     - **微信**：扫描二维码，填写问卷加入技术社区，与社区开发者交流部署产业落地痛点问题
 
 <div align="center">
-    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "150" height = "150" />
+    <img src="https://user-images.githubusercontent.com/54695910/216615983-bbb78319-0231-4635-86d1-f2ebf9eac85d.jpg" width = "150" height = "150" />
 </div>
 
 
@@ -262,7 +266,7 @@ int main(int argc, char* argv[]) {
 <div id="fastdeploy-server-models"></div>
 
 
-## ✴️ ✴️ 服务端模型支持列表 ✴️ ✴️ 
+## ✴️ ✴️ 服务端模型支持列表 ✴️ ✴️
 
 符号说明: (1)  ✅ : 已经支持; (2) ❔: 正在进行中; (3) N/A : 暂不支持. <br>
 
@@ -289,7 +293,7 @@ int main(int argc, char* argv[]) {
 | Classification         | [PaddleClas/SqueeezeNetV1.1](./examples/vision/classification/paddleclas)                    | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |✅       | ✅       |
 | Classification         | [PaddleClas/Inceptionv3](./examples/vision/classification/paddleclas)                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |✅       | ✅       |
 | Classification         | [PaddleClas/PP-HGNet](./examples/vision/classification/paddleclas)                           | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |✅       | ✅       |
-| Detection              | [PaddleDetection/PP-YOLOE+](./examples/vision/detection/paddledetection)                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |✅       | ✅       |
+| Detection              | 🔥🔥[PaddleDetection/PP-YOLOE+](./examples/vision/detection/paddledetection)                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |✅       | ✅       |
 | Detection              | [🔥PaddleDetection/YOLOv8](./examples/vision/detection/paddledetection)                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |✅       | ❔      |
 | Detection              | [🔥ultralytics/YOLOv8](./examples/vision/detection/yolov8)                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔               | ✅                           | ❔                           | ❔      |❔       | ❔      |
 | Detection              | [PaddleDetection/PicoDet](./examples/vision/detection/paddledetection)                       | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       | ❔       | ✅       |
@@ -309,6 +313,7 @@ int main(int argc, char* argv[]) {
 | Detection              | [WongKinYiu/ScaledYOLOv4](./examples/vision/detection/scaledyolov4)                          | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |❔       | ❔       |
 | Detection              | [ppogg/YOLOv5Lite](./examples/vision/detection/yolov5lite)                                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           |  ?       | ❔       |❔       |❔       |
 | Detection              | [RangiLyu/NanoDetPlus](./examples/vision/detection/nanodet_plus)                             | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |❔       | ❔       |
+| Perception              | [Paddle3D/Smoke](./examples/vision/perception/paddle3d/smoke)                             | ❔                                                 | ✅                         | ❔                         | ✅                         | ❔                       | ❔                      | ❔                           | ❔                 | ❔                            | ❔                           | ❔       |❔       | ✅       |
 | KeyPoint               | [PaddleDetection/TinyPose](./examples/vision/keypointdetection/tiny_pose)                    | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅        |❔       | ❔       |
 | KeyPoint               | [PaddleDetection/PicoDet + TinyPose](./examples/vision/keypointdetection/det_keypoint_unite) | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅        | ❔       |❔       |
 | HeadPose               | [omasaht/headpose](examples/vision/headpose)                                                 | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       | ❔       |❔       |

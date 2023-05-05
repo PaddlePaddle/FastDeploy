@@ -40,42 +40,50 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
            std::vector<DetectionResult>* results);
 
   /// Set nms_threshold, default 0.45
-  void SetNMSThreshold(const float& nms_threshold) {
-    nms_threshold_ = nms_threshold;
-  }
+  void SetNMSThreshold(float nms_threshold) { nms_threshold_ = nms_threshold; }
 
   /// Set conf_threshold, default 0.25
-  void SetConfThreshold(const float& conf_threshold) {
+  void SetConfThreshold(float conf_threshold) {
     conf_threshold_ = conf_threshold;
   }
 
   /// Get conf_threshold, default 0.25
-  float GetConfThreshold() const { return conf_threshold_; }
+  const float GetConfThreshold() { return conf_threshold_; }
 
   /// Get nms_threshold, default 0.45
-  float GetNMSThreshold() const { return nms_threshold_; }
+  const float GetNMSThreshold() { return nms_threshold_; }
 
-  // Set height and weight
-  void SetHeightAndWeight(int& height, int& width) {
+  /// Set height and weight
+  void SetHeightAndWeight(int height, int width) {
     height_ = height;
     width_ = width;
   }
 
-  // Set pad_hw_values
-  void SetPadHWValues(std::vector<std::vector<int>> pad_hw_values) {
+  /// Set pad_hw_values
+  void SetPadHWValues(const std::vector<std::vector<int>>& pad_hw_values) {
     pad_hw_values_ = pad_hw_values;
   }
 
-  // Set scale
-  void SetScale(std::vector<float> scale) {
-    scale_ = scale;
+  /// Set scale
+  void SetScale(const std::vector<float>& scale) { scale_ = scale; }
+
+  /// Get Anchor
+  const std::vector<int>& GetAnchor() { return anchors_; }
+
+  /// Set Anchor
+  void SetAnchor(const std::vector<int>& anchors) { anchors_ = anchors; }
+
+  void SetAnchorPerBranch(int anchor_per_branch) {
+    anchor_per_branch_ = anchor_per_branch;
   }
 
-  // Set Anchor
-  void SetAnchor(std::vector<int> anchors, int anchor_per_branch) {
-      anchors_ = anchors;
-      anchor_per_branch_ = anchor_per_branch;
+  /// Set the number of class
+  void SetClassNum(int num) {
+    obj_class_num_ = num;
+    prob_box_size_ = obj_class_num_ + 5;
   }
+  /// Get the number of class
+  int GetClassNum() { return obj_class_num_; }
 
  private:
   std::vector<int> anchors_ = {10, 13, 16,  30,  33, 23,  30,  61,  62,
@@ -85,12 +93,9 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
   int width_ = 0;
   int anchor_per_branch_ = 0;
 
-  int ProcessFP16(float *input, int *anchor, int grid_h,
-              int grid_w, int stride,
-              std::vector<float> &boxes,
-              std::vector<float> &boxScores,
-              std::vector<int> &classId,
-              float threshold);
+  int ProcessFP16(float* input, int* anchor, int grid_h, int grid_w, int stride,
+                  std::vector<float>& boxes, std::vector<float>& boxScores,
+                  std::vector<int>& classId, float threshold);
   // Model
   int QuickSortIndiceInverse(std::vector<float>& input, int left, int right,
                              std::vector<int>& indices);

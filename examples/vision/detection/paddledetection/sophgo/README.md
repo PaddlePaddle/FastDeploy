@@ -5,7 +5,8 @@
 目前SOPHGO支持如下模型的部署
 - [PP-YOLOE系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe)
 - [PicoDet系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/picodet)
-- [YOLOV8系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/)
+- [YOLOV8系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4)
+- [PP-YOLOE-R系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.6/configs/rotate/ppyoloe_r)
 
 ## 准备PP-YOLOE YOLOV8或者PicoDet部署模型以及转换模型
 

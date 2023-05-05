@@ -19,6 +19,8 @@
 namespace fastdeploy {
 namespace vision {
 
+/*! @brief Processor for Limit images by short edge with given paramters.
+ */
 class LimitShort : public Processor {
  public:
   explicit LimitShort(int max_short = -1, int min_short = -1, int interp = 1) {
@@ -38,6 +40,15 @@ class LimitShort : public Processor {
 #endif
   std::string Name() { return "LimitShort"; }
 
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data
+   * \param[in] max_short target size of short edge
+   * \param[in] min_short target size of short edge
+   * \param[in] interp interpolation method, deafult is 1
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \return true if the process successed, otherwise false
+   */
   static bool Run(Mat* mat, int max_short = -1, int min_short = -1,
                   int interp = 1, ProcLib lib = ProcLib::DEFAULT);
   int GetMaxShort() const { return max_short_; }

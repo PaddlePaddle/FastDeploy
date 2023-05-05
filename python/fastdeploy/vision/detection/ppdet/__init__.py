@@ -17,36 +17,28 @@ from typing import Union, List
 import logging
 from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
+from ...common import ProcessorManager
 
 
-class PaddleDetPreprocessor:
+class PaddleDetPreprocessor(ProcessorManager):
     def __init__(self, config_file):
         """Create a preprocessor for PaddleDetection Model from configuration file
 
         :param config_file: (str)Path of configuration file, e.g ppyoloe/infer_cfg.yml
         """
-        self._preprocessor = C.vision.detection.PaddleDetPreprocessor(
-            config_file)
-
-    def run(self, input_ims):
-        """Preprocess input images for PaddleDetection Model
-
-        :param: input_ims: (list of numpy.ndarray)The input image
-        :return: list of FDTensor, include image, scale_factor, im_shape
-        """
-        return self._preprocessor.run(input_ims)
+        self._manager = C.vision.detection.PaddleDetPreprocessor(config_file)
 
     def disable_normalize(self):
         """
         This function will disable normalize in preprocessing step.
         """
-        self._preprocessor.disable_normalize()
+        self._manager.disable_normalize()
 
     def disable_permute(self):
         """
         This function will disable hwc2chw in preprocessing step.
         """
-        self._preprocessor.disable_permute()
+        self._manager.disable_permute()
 
 
 class NMSOption:
@@ -56,6 +48,15 @@ class NMSOption:
     @property
     def background_label(self):
         return self.nms_option.background_label
+
+
+class NMSRotatedOption:
+    def __init__(self):
+        self.nms_rotated_option = C.vision.detection.NMSRotatedOption()
+
+    @property
+    def background_label(self):
+        return self.nms_rotated_option.background_label
 
 
 class PaddleDetPostprocessor:
@@ -73,12 +74,23 @@ class PaddleDetPostprocessor:
         """
         return self._postprocessor.run(runtime_results)
 
-    def apply_decode_and_nms(self, nms_option=None):
+    def apply_nms(self):
+        self._postprocessor.apply_nms()
+
+    def set_nms_option(self, nms_option=None):
         """This function will enable decode and nms in postprocess step.
         """
         if nms_option is None:
             nms_option = NMSOption()
-        self._postprocessor.ApplyDecodeAndNMS(self, nms_option.nms_option)
+        self._postprocessor.set_nms_option(self, nms_option.nms_option)
+
+    def set_nms_rotated_option(self, nms_rotated_option=None):
+        """This function will enable decode and rotated nms in postprocess step.
+        """
+        if nms_rotated_option is None:
+            nms_rotated_option = NMSRotatedOption()
+        self._postprocessor.set_nms_rotated_option(
+            self, nms_rotated_option.nms_rotated_option)
 
 
 class PPYOLOE(FastDeployModel):
@@ -337,6 +349,44 @@ class YOLOv3(PPYOLOE):
                 self._model = model
 
         clone_model = YOLOv3Clone(self._model.clone())
+        return clone_model
+
+
+class SOLOv2(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load a SOLOv2 model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g solov2/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g solov2/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g solov2/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == ModelFormat.PADDLE, "SOLOv2 model only support model format of ModelFormat.Paddle now."
+        self._model = C.vision.detection.SOLOv2(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "SOLOv2 model initialize failed."
+
+    def clone(self):
+        """Clone SOLOv2 object
+
+        :return: a new SOLOv2 object
+        """
+
+        class SOLOv2Clone(SOLOv2):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = SOLOv2Clone(self._model.clone())
         return clone_model
 
 
@@ -748,3 +798,112 @@ class GFL(PPYOLOE):
                                              config_file, self._runtime_option,
                                              model_format)
         assert self.initialized, "GFL model initialize failed."
+
+
+class PaddleDetectionModel(FastDeployModel):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load a PaddleDetectionModel model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g ppyoloe/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g ppyoloe/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+        super(PaddleDetectionModel, self).__init__(runtime_option)
+
+        self._model = C.vision.detection.PaddleDetectionModel(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "PaddleDetectionModel model initialize failed."
+
+    def predict(self, im):
+        """Detect an input image
+
+        :param im: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :return: DetectionResult
+        """
+
+        assert im is not None, "The input image data is None."
+        return self._model.predict(im)
+
+    def batch_predict(self, images):
+        """Detect a batch of input image list
+
+        :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
+        :return list of DetectionResult
+        """
+
+        return self._model.batch_predict(images)
+
+    def clone(self):
+        """Clone PPYOLOE object
+
+        :return: a new PPYOLOE object
+        """
+
+        class PPYOLOEClone(PPYOLOE):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = PPYOLOEClone(self._model.clone())
+        return clone_model
+
+    @property
+    def preprocessor(self):
+        """Get PaddleDetPreprocessor object of the loaded model
+
+        :return PaddleDetPreprocessor
+        """
+        return self._model.preprocessor
+
+    @property
+    def postprocessor(self):
+        """Get PaddleDetPostprocessor object of the loaded model
+
+        :return PaddleDetPostprocessor
+        """
+        return self._model.postprocessor
+
+
+
+class PPYOLOER(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load a PPYOLOER model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g ppyoloe_r/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g ppyoloe_r/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe_r/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        self._model = C.vision.detection.PPYOLOER(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "PicoDet model initialize failed."
+
+    def clone(self):
+        """Clone PPYOLOER object
+
+        :return: a new PPYOLOER object
+        """
+
+        class PPYOLOERClone(PPYOLOER):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = PPYOLOERClone(self._model.clone())
+        return clone_model

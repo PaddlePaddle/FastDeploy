@@ -3,35 +3,15 @@ project(rknpu2_test)
 
 set(CMAKE_CXX_STANDARD 14)
 
-# 指定下载解压后的fastdeploy库路径
-set(FASTDEPLOY_INSTALL_DIR "thirdpartys/fastdeploy-0.0.3")
+option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
+include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
+include_directories(${FASTDEPLOY_INCS})
 
-include(${FASTDEPLOY_INSTALL_DIR}/FastDeployConfig.cmake)
-include_directories(${FastDeploy_INCLUDE_DIRS})
+add_executable(infer_rkyolov5 infer_rkyolov5.cc)
+target_link_libraries(infer_rkyolov5 ${FASTDEPLOY_LIBS})
 
-add_executable(infer_rkyolo infer_rkyolo.cc)
-target_link_libraries(infer_rkyolo ${FastDeploy_LIBS})
+add_executable(infer_rkyolov7 infer_rkyolov7.cc)
+target_link_libraries(infer_rkyolov7 ${FASTDEPLOY_LIBS})
 
-
-
-set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/build/install)
-
-install(TARGETS infer_rkyolo DESTINATION ./)
-
-install(DIRECTORY model DESTINATION ./)
-install(DIRECTORY images DESTINATION ./)
-
-file(GLOB FASTDEPLOY_LIBS ${FASTDEPLOY_INSTALL_DIR}/lib/*)
-message("${FASTDEPLOY_LIBS}")
-install(PROGRAMS ${FASTDEPLOY_LIBS} DESTINATION lib)
-
-file(GLOB ONNXRUNTIME_LIBS ${FASTDEPLOY_INSTALL_DIR}/third_libs/install/onnxruntime/lib/*)
-install(PROGRAMS ${ONNXRUNTIME_LIBS} DESTINATION lib)
-
-install(DIRECTORY ${FASTDEPLOY_INSTALL_DIR}/third_libs/install/opencv/lib DESTINATION ./)
-
-file(GLOB PADDLETOONNX_LIBS ${FASTDEPLOY_INSTALL_DIR}/third_libs/install/paddle2onnx/lib/*)
-install(PROGRAMS ${PADDLETOONNX_LIBS} DESTINATION lib)
-
-file(GLOB RKNPU2_LIBS ${FASTDEPLOY_INSTALL_DIR}/third_libs/install/rknpu2_runtime/${RKNN2_TARGET_SOC}/lib/*)
-install(PROGRAMS ${RKNPU2_LIBS} DESTINATION lib)
+add_executable(infer_rkyolox infer_rkyolox.cc)
+target_link_libraries(infer_rkyolox ${FASTDEPLOY_LIBS})

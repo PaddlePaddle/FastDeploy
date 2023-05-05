@@ -15,8 +15,8 @@
 
 namespace fastdeploy {
 void BindPPDet(pybind11::module& m) {
-  pybind11::class_<vision::detection::PaddleDetPreprocessor>(
-      m, "PaddleDetPreprocessor")
+  pybind11::class_<vision::detection::PaddleDetPreprocessor,
+                   vision::ProcessorManager>(m, "PaddleDetPreprocessor")
       .def(pybind11::init<std::string>())
       .def("run",
            [](vision::detection::PaddleDetPreprocessor& self,
@@ -73,14 +73,20 @@ void BindPPDet(pybind11::module& m) {
              }
              return results;
            })
-      .def(
-          "apply_decode_and_nms",
-          [](vision::detection::PaddleDetPostprocessor& self,
-             vision::detection::NMSOption option) {
-            self.ApplyDecodeAndNMS(option);
-          },
-          "A function which adds two numbers",
-          pybind11::arg("option") = vision::detection::NMSOption())
+      .def("set_nms_option",
+           [](vision::detection::PaddleDetPostprocessor& self,
+              vision::detection::NMSOption option) {
+             self.SetNMSOption(option);
+           })
+      .def("set_nms_rotated_option",
+           [](vision::detection::PaddleDetPostprocessor& self,
+              vision::detection::NMSRotatedOption option) {
+             self.SetNMSRotatedOption(option);
+           })
+      .def("apply_nms",
+           [](vision::detection::PaddleDetPostprocessor& self) {
+             self.ApplyNMS();
+           })
       .def("run", [](vision::detection::PaddleDetPostprocessor& self,
                      std::vector<pybind11::array>& input_array) {
         std::vector<vision::DetectionResult> results;
@@ -122,9 +128,6 @@ void BindPPDet(pybind11::module& m) {
                              &vision::detection::PPDetBase::GetPreprocessor)
       .def_property_readonly("postprocessor",
                              &vision::detection::PPDetBase::GetPostprocessor);
-
-  pybind11::class_<vision::detection::PPDetDecode>(m, "PPDetDecode")
-      .def(pybind11::init<std::string>());
 
   pybind11::class_<vision::detection::PPYOLO, vision::detection::PPDetBase>(
       m, "PPYOLO")
@@ -230,5 +233,36 @@ void BindPPDet(pybind11::module& m) {
                                                                          "GFL")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>());
+
+  pybind11::class_<vision::detection::SOLOv2, vision::detection::PPDetBase>(
+      m, "SOLOv2")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+  
+  pybind11::class_<vision::detection::PaddleDetectionModel, vision::detection::PPDetBase>(
+      m, "PaddleDetectionModel")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+  
+  pybind11::class_<vision::detection::PPYOLOER, vision::detection::PPDetBase>(
+      m, "PPYOLOER")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+
+  pybind11::class_<vision::detection::NMSRotatedOption>(m, "NMSRotatedOption")
+      .def(pybind11::init())
+      .def_readwrite("background_label",
+                     &vision::detection::NMSRotatedOption::background_label)
+      .def_readwrite("keep_top_k",
+                     &vision::detection::NMSRotatedOption::keep_top_k)
+      .def_readwrite("nms_eta", &vision::detection::NMSRotatedOption::nms_eta)
+      .def_readwrite("nms_threshold",
+                     &vision::detection::NMSRotatedOption::nms_threshold)
+      .def_readwrite("nms_top_k",
+                     &vision::detection::NMSRotatedOption::nms_top_k)
+      .def_readwrite("normalized",
+                     &vision::detection::NMSRotatedOption::normalized)
+      .def_readwrite("score_threshold",
+                     &vision::detection::NMSRotatedOption::score_threshold);
 }
 }  // namespace fastdeploy

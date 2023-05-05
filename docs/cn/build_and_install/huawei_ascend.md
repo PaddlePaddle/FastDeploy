@@ -1,5 +1,17 @@
 # 华为昇腾NPU 部署环境编译准备
 
+## 导航目录
+
+* [简介以及编译选项](#简介以及编译选项)
+* [华为昇腾环境准备](#一华为昇腾环境准备)
+* [编译环境搭建](#二编译环境搭建)
+* [基于 Paddle Lite 的 C++ FastDeploy 库编译](#三基于-paddle-lite-的-c-fastdeploy-库编译)
+* [基于 Paddle Lite 的 Python FastDeploy 库编译](#四基于-paddle-lite-的-python-fastdeploy-库编译)
+* [昇腾部署时开启FlyCV](#五昇腾部署时开启flycv)
+* [昇腾部署Demo参考](#六昇腾部署demo参考)
+
+## 简介以及编译选项
+
 FastDeploy基于 Paddle-Lite 后端, 支持在华为昇腾NPU上进行部署推理。
 更多详细的信息请参考：[Paddle Lite部署示例](https://github.com/PaddlePaddle/Paddle-Lite/blob/develop/docs/demo_guides/huawei_ascend_npu.md)。
 
@@ -114,9 +126,17 @@ python setup.py bdist_wheel
 ## 五.昇腾部署时开启FlyCV
 [FlyCV](https://github.com/PaddlePaddle/FlyCV) 是一款高性能计算机图像处理库, 针对ARM架构做了很多优化, 相比其他图像处理库性能更为出色.
 FastDeploy现在已经集成FlyCV, 用户可以在支持的硬件平台上使用FlyCV, 实现模型端到端推理性能的加速.
-模型端到端推理中, 预处理和后处理阶段为CPU计算, 当用户使用ARM CPU + 昇腾的硬件平台时, 我们推荐用户使用FlyCV, 可以实现端到端的推理性能加速, 详见[FLyCV使用文档](./boost_cv_by_flycv.md).
+模型端到端推理中, 预处理和后处理阶段为CPU计算, 当用户使用ARM CPU + 昇腾的硬件平台时, 我们推荐用户使用FlyCV, 可以实现端到端的推理性能加速, 详见[FlyCV使用文档](../faq/boost_cv_by_flycv.md).
 
 
 ## 六.昇腾部署Demo参考
-- 华为昇腾NPU 上使用C++部署 PaddleClas 分类模型请参考：[PaddleClas 华为升腾NPU C++ 部署示例](../../../examples/vision/classification/paddleclas/cpp/README.md)
-- 华为昇腾NPU 上使用Python部署 PaddleClas 分类模型请参考：[PaddleClas 华为升腾NPU Python 部署示例](../../../examples/vision/classification/paddleclas/python/README.md)
+
+| 模型系列 | C++ 部署示例 | Python 部署示例 |
+| :-----------| :--------   | :--------------- |
+|   PaddleClas       |   [昇腾NPU C++ 部署示例](../../../examples/vision/classification/paddleclas/cpp/README_CN.md)       |    [昇腾NPU Python 部署示例](../../../examples/vision/classification/paddleclas/python/README_CN.md)          |  
+|   PaddleDetection  |      [昇腾NPU C++ 部署示例](../../../examples/vision/detection/paddledetection/cpp/README_CN.md)        |     [昇腾NPU Python 部署示例](../../../examples/vision/detection/paddledetection/python/README_CN.md)               |
+|   PaddleSeg        |      [昇腾NPU C++ 部署示例](../../../examples/vision/segmentation/paddleseg/cpp/README_CN.md)        |      [昇腾NPU Python 部署示例](../../../examples//vision/segmentation/paddleseg/python/README_CN.md)              |
+|   PaddleOCR        |     [昇腾NPU C++ 部署示例](../../../examples/vision/ocr/PP-OCRv3/cpp/README_CN.md)         |      [昇腾NPU Python 部署示例](../../../examples/vision//ocr/PP-OCRv3/python/README_CN.md)              |
+|   Yolov5           |      [昇腾NPU C++ 部署示例](../../../examples/vision/detection/yolov5/cpp/README_CN.md)       |       [昇腾NPU Python 部署示例](../../../examples/vision/detection/yolov5/python/README_CN.md)             |
+|   Yolov6           |      [昇腾NPU C++ 部署示例](../../../examples/vision/detection/yolov6/cpp/README_CN.md)        |       [昇腾NPU Python 部署示例](../../../examples/vision/detection/yolov6/python/README_CN.md)             |
+|   Yolov7           |      [昇腾NPU C++ 部署示例](../../../examples/vision/detection/yolov7/cpp/README_CN.md)        |       [昇腾NPU Python 部署示例](../../../examples/vision/detection/yolov7/python/README_CN.md)             |

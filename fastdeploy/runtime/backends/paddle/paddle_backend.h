@@ -25,7 +25,7 @@
 #include "paddle2onnx/converter.h"
 #endif
 #include "fastdeploy/utils/unique_ptr.h"
-#include "paddle_inference_api.h"  // NOLINT
+#include "paddle/include/paddle_inference_api.h"  // NOLINT
 
 namespace fastdeploy {
 
@@ -34,6 +34,9 @@ paddle_infer::PlaceType ConvertFDDeviceToPlace(Device device);
 
 // Share memory buffer with paddle_infer::Tensor from fastdeploy::FDTensor
 void ShareTensorFromFDTensor(paddle_infer::Tensor* tensor, FDTensor& fd_tensor);
+
+void ShareOutTensorFromFDTensor(paddle_infer::Tensor* tensor,
+                             FDTensor& fd_tensor);
 
 // convert paddle_infer::Tensor to fastdeploy::FDTensor
 // if copy_to_fd is true, copy memory data to FDTensor
@@ -51,12 +54,7 @@ class PaddleBackend : public BaseBackend {
  public:
   PaddleBackend() {}
   virtual ~PaddleBackend() = default;
-  void BuildOption(const PaddleBackendOption& option);
-
-  bool
-  InitFromPaddle(const std::string& model_file, const std::string& params_file,
-                 const PaddleBackendOption& option = PaddleBackendOption());
-
+  bool Init(const RuntimeOption& option);
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
 
@@ -64,7 +62,8 @@ class PaddleBackend : public BaseBackend {
 
   int NumOutputs() const override { return outputs_desc_.size(); }
 
-  std::unique_ptr<BaseBackend> Clone(void* stream = nullptr,
+  std::unique_ptr<BaseBackend> Clone(RuntimeOption &runtime_option,
+                                     void* stream = nullptr,
                                      int device_id = -1) override;
 
   TensorInfo GetInputInfo(int index) override;
@@ -73,14 +72,27 @@ class PaddleBackend : public BaseBackend {
   std::vector<TensorInfo> GetOutputInfos() override;
 
  private:
+  void BuildOption(const PaddleBackendOption& option);
+
+  bool InitFromPaddle(const std::string& model,
+                     const std::string& params,
+                     bool model_from_memory,
+                     const PaddleBackendOption& option = PaddleBackendOption());
+
   void
   CollectShapeRun(paddle_infer::Predictor* predictor,
-                  const std::map<std::string, std::vector<int>>& shape) const;
+                  const std::map<std::string, std::vector<int>>& shape,
+                  const std::map<std::string, std::vector<float>>& data) const;
   void GetDynamicShapeFromOption(
       const PaddleBackendOption& option,
       std::map<std::string, std::vector<int>>* max_shape,
       std::map<std::string, std::vector<int>>* min_shape,
       std::map<std::string, std::vector<int>>* opt_shape) const;
+  void GetInputDataFromOption(
+    const PaddleBackendOption& option,
+    std::map<std::string, std::vector<float>>* max_input_data,
+    std::map<std::string, std::vector<float>>* min_input_data,
+    std::map<std::string, std::vector<float>>* opt_input_data) const;
   void SetTRTDynamicShapeToConfig(const PaddleBackendOption& option);
   PaddleBackendOption option_;
   paddle_infer::Config config_;

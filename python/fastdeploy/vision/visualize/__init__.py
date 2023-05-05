@@ -23,7 +23,9 @@ def vis_detection(im_data,
                   labels=[],
                   score_threshold=0.0,
                   line_size=1,
-                  font_size=0.5):
+                  font_size=0.5,
+                  font_color=[255, 255, 255],
+                  font_thickness=1):
     """Show the visualized results for detection models
 
     :param im_data: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
@@ -32,10 +34,33 @@ def vis_detection(im_data,
     :param score_threshold: (float) score_threshold threshold for result scores, the bounding box will not be shown if the score is less than score_threshold
     :param line_size: (float) line_size line size for bounding boxes
     :param font_size: (float) font_size font size for text
+    :param font_color: (list of int) font_color  for text
+    :param font_thickness: (int) font_thickness for text
     :return: (numpy.ndarray) image with visualized results
     """
     return C.vision.vis_detection(im_data, det_result, labels, score_threshold,
-                                  line_size, font_size)
+                                  line_size, font_size, font_color,
+                                  font_thickness)
+
+
+def vis_perception(im_data,
+                   det_result,
+                   config_file,
+                   score_threshold=0.0,
+                   line_size=1,
+                   font_size=0.5):
+    """Show the visualized results for 3d detection models
+
+    :param im_data: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+    :param det_result: the result produced by model
+    :param config_file: the config file for detection and visualization
+    :param score_threshold: (float) score_threshold threshold for result scores, the bounding box will not be shown if the score is less than score_threshold
+    :param line_size: (float) line_size line size for bounding boxes
+    :param font_size: (float) font_size font size for text
+    :return: (numpy.ndarray) image with visualized results
+    """
+    return C.vision.vis_perception(im_data, det_result, config_file,
+                                   score_threshold, line_size, font_size)
 
 
 def vis_keypoint_detection(im_data, keypoint_det_result, conf_threshold=0.5):
@@ -95,15 +120,22 @@ def vis_matting_alpha(im_data,
                                 remove_small_connected_area)
 
 
-def vis_matting(im_data, matting_result, remove_small_connected_area=False):
+def vis_matting(im_data,
+                matting_result,
+                transparent_background=False,
+                transparent_threshold=0.99,
+                remove_small_connected_area=False):
     """Show the visualized results for matting models
 
     :param im_data: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
     :param matting_result: the result produced by model
+    :param transparent_background: whether visulizing matting result with transparent background
+    :param transparent_threshold: since the alpha value in MattringResult is a float between [0, 1], transparent_threshold is used to filter background pixel
     :param remove_small_connected_area: (bool) if remove_small_connected_area==True, the visualized result will not include the small connected areas
     :return: (numpy.ndarray) image with visualized results
     """
     return C.vision.vis_matting(im_data, matting_result,
+                                transparent_background, transparent_threshold,
                                 remove_small_connected_area)
 
 

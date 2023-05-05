@@ -9,9 +9,12 @@
 |:------------------------|:------- | :--------------------------------------------------------------------------|
 | ENABLE_ORT_BACKEND      | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | 默认OFF, 是否编译集成ONNX Runtime后端    |
 | ENABLE_PADDLE_BACKEND   | Linux(x64)/Windows(x64) | 默认OFF，是否编译集成Paddle Inference后端                             |  
+| ENABLE_LITE_BACKEND   | Linux(aarch64) | 默认OFF，是否编译集成Paddle Lite后端                             |  
 | ENABLE_OPENVINO_BACKEND | Linux(x64)/Windows(x64)/Mac OSX(x86) | 默认OFF，是否编译集成OpenVINO后端       |
 | ENABLE_VISION           | Linux(x64)/Windows(x64)/Mac OSX(x86) |  默认OFF，是否编译集成视觉模型的部署模块                                                    |
 | ENABLE_TEXT             | Linux(x64)/Windows(x64)/Mac OSX(x86) | 默认OFF，是否编译集成文本NLP模型的部署模块                                                  |
+| WITH_CAPI             | Linux(x64)/Windows(x64)/Mac OSX(x86) | 默认OFF，是否编译集成C API  |
+| WITH_CSHARPAPI        | Windows(x64) | 默认OFF，是否编译集成C# API  |
 
 第三方库依赖指定（不设定如下参数，会自动下载预编译库）
 | 选项                     | 说明                                                                                           |
@@ -67,7 +70,8 @@ cmake .. -G "Visual Studio 16 2019" -A x64 ^
          -DENABLE_OPENVINO_BACKEND=ON ^
          -DENABLE_VISION=ON ^
          -DENABLE_TEXT=ON ^
-         -DCMAKE_INSTALL_PREFIX="D:\Paddle\compiled_fastdeploy" ^
+         -DCMAKE_INSTALL_PREFIX="D:\Paddle\compiled_fastdeploy"
+% nuget restore  （please execute it when WITH_CSHARPAPI=ON to prepare dependencies in C#)
 msbuild fastdeploy.sln /m /p:Configuration=Release /p:Platform=x64
 msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 ```

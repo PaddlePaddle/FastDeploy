@@ -15,10 +15,17 @@
 #pragma once
 
 #include "fastdeploy/vision/common/processors/base.h"
+#ifdef ENABLE_CVCUDA
+#include <cvcuda/OpResize.hpp>
+
+#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
+#endif
 
 namespace fastdeploy {
 namespace vision {
 
+/*! @brief Processor for resize images by short edge.
+ */
 class FASTDEPLOY_DECL ResizeByShort : public Processor {
  public:
   ResizeByShort(int target_size, int interp = 1, bool use_scale = true,
@@ -28,16 +35,27 @@ class FASTDEPLOY_DECL ResizeByShort : public Processor {
     interp_ = interp;
     use_scale_ = use_scale;
   }
-  bool ImplByOpenCV(Mat* mat);
+  bool ImplByOpenCV(FDMat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFlyCV(Mat* mat);
+  bool ImplByFlyCV(FDMat* mat);
 #endif
 #ifdef ENABLE_CVCUDA
-  bool ImplByCvCuda(Mat* mat);
+  bool ImplByCvCuda(FDMat* mat);
+  bool ImplByCvCuda(FDMatBatch* mat_batch);
 #endif
   std::string Name() { return "ResizeByShort"; }
 
-  static bool Run(Mat* mat, int target_size, int interp = 1,
+  /** \brief Process the input images
+   *
+   * \param[in] mat The input image data, `result = mat * alpha + beta`
+   * \param[in] target_size target size of the output image.
+   * \param[in] interp interpolation method, deafult is 1.
+   * \param[in] use_scale to define wheather to scale the image, deafult is true.
+   * \param[in] max_hw max HW fo output image.
+   * \param[in] lib to define OpenCV or FlyCV or CVCUDA will be used.
+   * \return true if the process successed, otherwise false
+   */
+  static bool Run(FDMat* mat, int target_size, int interp = 1,
                   bool use_scale = true,
                   const std::vector<int>& max_hw = std::vector<int>(),
                   ProcLib lib = ProcLib::DEFAULT);
@@ -48,6 +66,9 @@ class FASTDEPLOY_DECL ResizeByShort : public Processor {
   std::vector<int> max_hw_;
   int interp_;
   bool use_scale_;
+#ifdef ENABLE_CVCUDA
+  cvcuda::Resize cvcuda_resize_op_;
+#endif
 };
 }  // namespace vision
 }  // namespace fastdeploy

@@ -156,6 +156,8 @@ PYBIND11_MODULE(@PY_LIBRARY_NAME@, m) {
       "Make programer easier to deploy deeplearning model, save time to save "
       "the world!";
 
+  m.def("set_logger", &SetLogger);
+
   BindFDTensor(m);
   BindRuntime(m);
   BindFDModel(m);
@@ -179,9 +181,6 @@ PYBIND11_MODULE(@PY_LIBRARY_NAME@, m) {
       m.def_submodule("text", "Text module of FastDeploy.");
   BindText(text_module);
 #endif
-  auto rknpu2_module =
-      m.def_submodule("rknpu2", "RKNPU2 config module of FastDeploy.");
-  BindRKNPU2Config(rknpu2_module);
 }
 
 }  // namespace fastdeploy

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/segmentation/ppseg/model.h"
+
 #include "fastdeploy/utils/unique_ptr.h"
 
 namespace fastdeploy {
@@ -20,22 +21,23 @@ namespace vision {
 namespace segmentation {
 
 PaddleSegModel::PaddleSegModel(const std::string& model_file,
-                     const std::string& params_file,
-                     const std::string& config_file,
-                     const RuntimeOption& custom_option,
-                     const ModelFormat& model_format) : preprocessor_(config_file),
-                                                        postprocessor_(config_file) {
-  if(model_format == ModelFormat::SOPHGO) {
+                               const std::string& params_file,
+                               const std::string& config_file,
+                               const RuntimeOption& custom_option,
+                               const ModelFormat& model_format)
+    : preprocessor_(config_file), postprocessor_(config_file) {
+  if (model_format == ModelFormat::SOPHGO) {
     valid_sophgonpu_backends = {Backend::SOPHGOTPU};
-  }
-  else{
-    valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT, Backend::LITE};
+  } else {
+    valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT,
+                          Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   }
   valid_rknpu_backends = {Backend::RKNPU2};
   valid_timvx_backends = {Backend::LITE};
   valid_kunlunxin_backends = {Backend::LITE};
   valid_ascend_backends = {Backend::LITE};
+  valid_directml_backends = {Backend::ORT};
 
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -44,8 +46,9 @@ PaddleSegModel::PaddleSegModel(const std::string& model_file,
   initialized = Initialize();
 }
 
-std::unique_ptr<PaddleSegModel>  PaddleSegModel::Clone() const {
-  std::unique_ptr<PaddleSegModel> clone_model = fastdeploy::utils::make_unique<PaddleSegModel>(PaddleSegModel(*this));
+std::unique_ptr<PaddleSegModel> PaddleSegModel::Clone() const {
+  std::unique_ptr<PaddleSegModel> clone_model =
+      fastdeploy::utils::make_unique<PaddleSegModel>(PaddleSegModel(*this));
   clone_model->SetRuntime(clone_model->CloneRuntime());
   return clone_model;
 }
@@ -59,7 +62,7 @@ bool PaddleSegModel::Initialize() {
 }
 
 bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
-  return Predict(*im, result); 
+  return Predict(*im, result);
 }
 
 bool PaddleSegModel::Predict(const cv::Mat& im, SegmentationResult* result) {
@@ -76,7 +79,8 @@ bool PaddleSegModel::BatchPredict(const std::vector<cv::Mat>& imgs,
   std::vector<FDMat> fd_images = WrapMat(imgs);
   // Record the shape of input images
   std::map<std::string, std::vector<std::array<int, 2>>> imgs_info;
-  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, &imgs_info)) {
+  preprocessor_.SetImgsInfo(&imgs_info);
+  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
     FDERROR << "Failed to preprocess input data while using model:"
             << ModelName() << "." << std::endl;
     return false;

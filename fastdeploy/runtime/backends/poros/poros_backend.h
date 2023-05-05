@@ -51,12 +51,19 @@ class PorosBackend : public BaseBackend {
 
   void BuildOption(const PorosBackendOption& option);
 
-  bool
-  InitFromTorchScript(const std::string& model_file,
-                      const PorosBackendOption& option = PorosBackendOption());
-
-  bool InitFromPoros(const std::string& model_file,
-                     const PorosBackendOption& option = PorosBackendOption());
+  bool Init(const RuntimeOption& option) {
+    if (!(Supported(option.model_format, Backend::POROS)
+        && Supported(option.device, Backend::POROS))) {
+      return false;
+    }
+    if (option.model_from_memory_) {
+      FDERROR << "Poros backend doesn't support load model "
+              << "from memory, please load model from disk."
+              << std::endl;
+      return false;
+    }
+    return true;
+  }
 
   bool Compile(const std::string& model_file,
                std::vector<std::vector<FDTensor>>& prewarm_tensors,

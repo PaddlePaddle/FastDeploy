@@ -13,24 +13,40 @@ cd FastDeploy/examples/vision/detection/paddledetection/sophgo/python
 
 # 下载图片
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
+wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/P0861__1.0__1154___824.png
 
 # 推理
-#ppyoloe推理示例
-python3 infer_ppyoloe.py --model_file model/ppyoloe_crn_s_300e_coco_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
+# ppyoloe推理示例
+# 指定--auto True，自动完成模型准备、转换和推理，需要指定PaddleDetection路径
+python3 infer_ppyoloe.py --auto True --pp_detect_path {Path to PaddleDetection} --model_file '' --config_file '' --image ''
 
-#picodet推理示例
-python3 infer_picodet.py --model_file model/picodet_s_416_coco_lcnet_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
+# 指定--auto False，需要用户指定模型、配置文件和图片路径，不需要指定PaddleDetection路径。
+python3 infer_ppyoloe.py --auto False --pp_detect_path '' --model_file model/ppyoloe_crn_s_300e_coco_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
 
-#yolov8推理示例
+# picodet推理示例
+# 指定--auto True，自动完成模型准备、转换和推理，需要指定PaddleDetection路径
+python3 infer_picodet.py --auto True --pp_detect_path {Path to PaddleDetection} --model_file '' --config_file '' --image ''
+
+# 指定--auto False，需要用户指定模型、配置文件和图片路径，不需要指定PaddleDetection路径。
+python3 infer_picodet.py --auto False --pp_detect_path '' --model_file model/ppyoloe_crn_s_300e_coco_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
+
+# yolov8推理示例
 python3 infer_yolov8.py --model_file model/yolov8s_s_300e_coco_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
 # 运行完成后返回结果如下所示
 可视化结果存储在sophgo_result.jpg中
+
+# ppyoloe_r推理示例
+# 指定--auto True，自动完成模型准备、转换和推理，需要指定PaddleDetection路径
+python3 infer_ppyoloe_r.py --model_file model/ppyoloe_r_crn_s_3x_dota_1684x_f32.bmodel --image P0861__1.0__1154___824.png --config_file model/infer_cfg.yml
+可视化结果存储在sophgo_result_ppyoloe_r.jpg中
 ```
 
 ## 其它文档
 - [PP-YOLOE C++部署](../cpp)
 - [PicoDet C++部署](../cpp)
 - [YOLOV8 C++部署](../cpp)
+- [PP-YOLOE-R C++部署](../cpp)
 - [转换PicoDet SOPHGO模型文档](../README.md)
 - [转换PP-YOLOE SOPHGO模型文档](../README.md)
 - [转换YOLOV8 SOPHGO模型文档](../README.md)
+- [转换PP-YOLOE-R SOPHGO模型文档](../README.md)

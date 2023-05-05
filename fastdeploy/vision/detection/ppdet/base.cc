@@ -13,11 +13,12 @@ PPDetBase::PPDetBase(const std::string& model_file,
                      const std::string& config_file,
                      const RuntimeOption& custom_option,
                      const ModelFormat& model_format)
-    : preprocessor_(config_file), postprocessor_(config_file) {
+    : preprocessor_(config_file), postprocessor_(preprocessor_.GetArch()) {
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
+
 }
 
 std::unique_ptr<PPDetBase> PPDetBase::Clone() const {
@@ -80,6 +81,22 @@ bool PPDetBase::BatchPredict(const std::vector<cv::Mat>& imgs,
     return false;
   }
   return true;
+}
+
+bool PPDetBase::CheckArch(){
+    std::vector<std::string> archs = {"SOLOv2","YOLO","SSD","RetinaNet","RCNN","Face","GFL","YOLOX","YOLOv5","YOLOv6","YOLOv7","RTMDet","FCOS","TTFNet","TOOD","DETR"};
+    auto arch_ = preprocessor_.GetArch();
+    for (auto item : archs) {
+        if (arch_ == item) {
+            return true;
+        } 
+    }
+    FDWARNING << "Please set model arch,"
+            << "support value : SOLOv2, YOLO, SSD, RetinaNet, RCNN, Face , GFL , RTMDet ,"\
+            <<"FCOS , TTFNet , TOOD , DETR." << std::endl;
+    return false; 
+
+
 }
 
 }  // namespace detection

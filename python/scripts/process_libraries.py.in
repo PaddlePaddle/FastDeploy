@@ -46,7 +46,7 @@ def process_on_linux(current_dir):
                 if len(items) != 4:
                     os.remove(os.path.join(root, f))
                     continue
-                if items[0].strip() not in ["libopencv_highgui", "libopencv_video", "libopencv_videoio", "libopencv_imgcodecs", "libopencv_imgproc", "libopencv_core"]:
+                if items[0].strip() not in ["libopencv_highgui", "libopencv_video", "libopencv_videoio", "libopencv_imgcodecs", "libopencv_imgproc", "libopencv_core",  "libopencv_calib3d", "libopencv_features2d", "libopencv_flann"]:
                     os.remove(os.path.join(root, f))
 
     all_libs_paths = [third_libs_path] + user_specified_dirs
@@ -183,12 +183,12 @@ def process_libraries(current_dir):
                 remain = False
         filename = os.path.split(f)[-1]
 # Note(zhoushunjie): To add the trt libs below will increase the size of whl package by 450M.
-#        if filename in [
-#                "libnvinfer_plugin.so",
-#                "libnvinfer.so", "libnvonnxparser.so",
-#                "libnvparsers.so", "libnvcaffe_parser.so"
-#        ]:
-#            continue
+        if filename in [
+                "libnvinfer_plugin.so",
+                "libnvinfer.so", "libnvonnxparser.so",
+                "libnvparsers.so", "libnvcaffe_parser.so"
+        ]:
+            continue
 
         for lib_prefix in ["libnvinfer_plugin.so.8.",
             "libnvinfer.so.8.", "libnvonnxparser.so.8.",

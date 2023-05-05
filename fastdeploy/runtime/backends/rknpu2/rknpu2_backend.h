@@ -13,9 +13,9 @@
 // limitations under the License.
 #pragma once
 
+#include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/runtime/backends/backend.h"
 #include "fastdeploy/runtime/backends/rknpu2/option.h"
-#include "fastdeploy/core/fd_tensor.h"
 #include "rknn_api.h"  // NOLINT
 #include <cstring>
 #include <iostream>
@@ -24,80 +24,154 @@
 #include <vector>
 
 namespace fastdeploy {
-struct RKNPU2BackendOption {
-  rknpu2::CpuName cpu_name = rknpu2::CpuName::RK3588;
-
-  // The specification of NPU core setting.It has the following choices :
-  // RKNN_NPU_CORE_AUTO : Referring to automatic mode, meaning that it will
-  // select the idle core inside the NPU.
-  // RKNN_NPU_CORE_0 : Running on the NPU0 core
-  // RKNN_NPU_CORE_1: Runing on the NPU1 core
-  // RKNN_NPU_CORE_2: Runing on the NPU2 core
-  // RKNN_NPU_CORE_0_1: Running on both NPU0 and NPU1 core simultaneously.
-  // RKNN_NPU_CORE_0_1_2: Running on both NPU0, NPU1 and NPU2 simultaneously.
-  rknpu2::CoreMask core_mask = rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
-};
-
 class RKNPU2Backend : public BaseBackend {
  public:
+  /***************************** BaseBackend API *****************************/
   RKNPU2Backend() = default;
-
   virtual ~RKNPU2Backend();
-
-  // RKNN API
-  bool LoadModel(void* model);
-
-  bool GetSDKAndDeviceVersion();
-
-  bool SetCoreMask(rknpu2::CoreMask& core_mask) const;
-
-  bool GetModelInputOutputInfos();
-
-  // BaseBackend API
-  void BuildOption(const RKNPU2BackendOption& option);
-
-  bool InitFromRKNN(const std::string& model_file,
-                    const RKNPU2BackendOption& option = RKNPU2BackendOption());
-
+  bool Init(const RuntimeOption& runtime_option);
   int NumInputs() const override {
     return static_cast<int>(inputs_desc_.size());
   }
-
   int NumOutputs() const override {
     return static_cast<int>(outputs_desc_.size());
   }
-
   TensorInfo GetInputInfo(int index) override;
   TensorInfo GetOutputInfo(int index) override;
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
+  /***************************** BaseBackend API *****************************/
 
  private:
-  // The object of rknn context.
-  rknn_context ctx{};
-  // The structure rknn_sdk_version is used to indicate the version
-  // information of the RKNN SDK.
-  rknn_sdk_version sdk_ver{};
-  // The structure rknn_input_output_num represents the number of
-  // input and output Tensor
-  rknn_input_output_num io_num{};
+  /*
+   *  @name       RuntimeOptionIsApplicable
+   *  @brief      This function is used to determine whether the RuntimeOption
+   *              meets the operating conditions of RKNPU2.
+   *  @param      None
+   *  @return     bool
+   *  @note       None
+   */
+  bool RuntimeOptionIsApplicable(const RuntimeOption& runtime_option);
+
+  /*
+   *  @name       LoadModel
+   *  @brief      Read the model and initialize rknn context.
+   *  @param      model: Binary data for the RKNN model or the path of RKNN model.
+   *  @return     bool
+   *  @note       None
+   */
+  bool LoadModel(void* model);
+
+  /*
+   *  @name       GetSDKAndDeviceVersion
+   *  @brief      Get RKNPU2 sdk and device version.
+   *  @param      None
+   *  @return     bool
+   *  @note       The private variable ctx must be initialized to use this function.
+   */
+  bool GetSDKAndDeviceVersion();
+
+  /*
+   *  @name      BuildOption
+   *  @brief     Save option and set core mask.
+   *  @param     RKNPU2BackendOption
+   *  @note      None
+   */
+  void BuildOption(const RKNPU2BackendOption& option);
+
+  /*
+   *  @name       SetCoreMask
+   *  @brief      Set NPU core for model
+   *  @param      core_mask: The specification of NPU core setting.
+   *  @return     bool
+   *  @note       Only support RK3588
+   */
+  bool SetCoreMask(const rknpu2::CoreMask& core_mask) const;
+
+  /*
+   *  @name       InitInputAndOutputNumber
+   *  @brief      Initialize io_num_.
+   *  @param
+   *  @return     bool
+   *  @note       The private variable ctx must be initialized to use this function.
+   */
+  bool InitInputAndOutputNumber();
+
+  /*
+   *  @name       InitRKNNTensorAddress
+   *  @brief      Allocate memory for input_attrs_ and output_attrs_.
+   *  @param      None
+   *  @return     bool
+   *  @note       None
+   */
+  bool InitRKNNTensorAddress();
+
+  /*
+   *  @name       InitInputAndOutputInformation
+   *  @brief      Initialize inputs_desc_ and outputs_desc_.
+   *  @param      None
+   *  @return     bool
+   *  @note       None
+   */
+  bool InitInputAndOutputInformation();
+
+  /*
+   *  @name       InitRKNNTensorMemory
+   *  @brief      Allocate memory for input and output tensors.
+   *  @param      std::vector<FDTensor>& inputs
+   *  @return     None
+   *  @note       None
+   */
+  bool InitRKNNTensorMemory(std::vector<FDTensor>& inputs);
+
+  rknn_context ctx_{};
+  rknn_sdk_version sdk_ver_{};
+
+  rknn_input_output_num io_num_{0, 0};
+
   std::vector<TensorInfo> inputs_desc_;
   std::vector<TensorInfo> outputs_desc_;
 
   rknn_tensor_attr* input_attrs_ = nullptr;
   rknn_tensor_attr* output_attrs_ = nullptr;
 
-  rknn_tensor_mem** input_mems_;
-  rknn_tensor_mem** output_mems_;
+  std::vector<rknn_tensor_mem*> input_mems_;
+  std::vector<rknn_tensor_mem*> output_mems_;
 
-  bool infer_init = false;
+  bool io_num_init_ = false;
+  bool tensor_attrs_init_ = false;
+  bool tensor_memory_init_ = false;
 
   RKNPU2BackendOption option_;
 
-  static void DumpTensorAttr(rknn_tensor_attr& attr);
-  static FDDataType RknnTensorTypeToFDDataType(rknn_tensor_type type);
-  static rknn_tensor_type FDDataTypeToRknnTensorType(FDDataType type);
+  /*
+   *  @name       DumpTensorAttr
+   *  @brief      Get the model's detailed inputs and outputs
+   *  @param      rknn_tensor_attr
+   *  @return     None
+   *  @note       None
+   */
+  void DumpTensorAttr(rknn_tensor_attr& attr);
+
+  /*
+   *  @name       RknnTensorTypeToFDDataType
+   *  @brief      Change RknnTensorType To FDDataType
+   *  @param      rknn_tensor_type
+   *  @return     None
+   *  @note       Most post-processing does not support the fp16 format.
+   *              Therefore, if the input is FP16, the output will be FP32.
+   */
+  FDDataType RknnTensorTypeToFDDataType(rknn_tensor_type type);
+
+  /*
+   *  @name       FDDataTypeToRknnTensorType
+   *  @brief      Change FDDataType To RknnTensorType
+   *  @param      FDDataType
+   *  @return     None
+   *  @note       None
+   */
+  rknn_tensor_type FDDataTypeToRknnTensorType(FDDataType type);
 };
 }  // namespace fastdeploy

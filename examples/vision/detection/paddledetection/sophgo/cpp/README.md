@@ -1,6 +1,6 @@
 # PaddleDetection C++部署示例
 
-本目录下提供`infer_ppyoloe.cc`,`infer_yolov8.cc`和`infer_picodet.cc`快速完成PP-YOLOE模型,YOLOV8模型和PicoDet模型在SOPHGO BM1684x板子上加速部署的示例。
+本目录下提供`infer_ppyoloe.cc`,`infer_ppyoloe_r.cc`,`infer_yolov8.cc`和`infer_picodet.cc`快速完成PP-YOLOE模型,PP-YOLOE-R模型,YOLOV8模型和PicoDet模型在SOPHGO BM1684x板子上加速部署的示例。
 
 在部署前，需确认以下两个步骤:
 
@@ -18,6 +18,7 @@
 ├── build  # 编译文件夹
 ├── image  # 存放图片的文件夹
 ├── infer_ppyoloe.cc
+├── infer_ppyoloe_r.cc
 ├── infer_picodet.cc
 ├── infer_yolov8.cc
 └── model  # 存放模型文件的文件夹
@@ -37,6 +38,9 @@
 ```bash
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 cp 000000014439.jpg ./images
+
+wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/P0861__1.0__1154___824.png
+cp P0861__1.0__1154___824.png ./images
 ```
 
 ### 编译example
@@ -52,6 +56,9 @@ make
 ```bash
 #ppyoloe推理示例
 ./infer_ppyoloe model images/000000014439.jpg
+
+#ppyoloe_r推理示例
+./infer_ppyoloe_r model images/P0861__1.0__1154___824.png
 
 #picodet推理示例
 ./infer_picodet model images/000000014439.jpg

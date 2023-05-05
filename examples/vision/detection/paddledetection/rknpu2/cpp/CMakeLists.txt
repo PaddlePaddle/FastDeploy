@@ -14,3 +14,6 @@ target_link_libraries(infer_picodet_demo ${FASTDEPLOY_LIBS})
 
 add_executable(infer_yolov8_demo ${PROJECT_SOURCE_DIR}/infer_yolov8_demo.cc)
 target_link_libraries(infer_yolov8_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_ppyoloe_demo ${PROJECT_SOURCE_DIR}/infer_ppyoloe_demo.cc)
+target_link_libraries(infer_ppyoloe_demo ${FASTDEPLOY_LIBS})

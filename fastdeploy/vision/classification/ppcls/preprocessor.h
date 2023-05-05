@@ -31,13 +31,15 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor : public ProcessorManager {
    */
   explicit PaddleClasPreprocessor(const std::string& config_file);
 
-  /** \brief Process the input image and prepare input tensors for runtime
+  /** \brief Implement the virtual function of ProcessorManager, Apply() is the
+   *  body of Run(). Apply() contains the main logic of preprocessing, Run() is
+   *  called by users to execute preprocessing
    *
-   * \param[in] images The input image data list, all the elements are returned by cv::imread()
+   * \param[in] image_batch The input image batch
    * \param[in] outputs The output tensors which will feed in runtime
    * \return true if the preprocess successed, otherwise false
    */
-  virtual bool Apply(std::vector<FDMat>* images,
+  virtual bool Apply(FDMatBatch* image_batch,
                      std::vector<FDTensor>* outputs);
 
   /// This function will disable normalize in preprocessing step.
@@ -45,8 +47,17 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor : public ProcessorManager {
   /// This function will disable hwc2chw in preprocessing step.
   void DisablePermute();
 
+  /** \brief When the initial operator is Resize, and input image size is large,
+   *     maybe it's better to run resize on CPU, because the HostToDevice memcpy
+   *     is time consuming. Set this true to run the initial resize on CPU.
+   *
+   * \param[in] v ture or false
+   */
+  void InitialResizeOnCpu(bool v) { initial_resize_on_cpu_ = v; }
+
  private:
   bool BuildPreprocessPipelineFromConfig();
+  bool initialized_ = false;
   std::vector<std::shared_ptr<Processor>> processors_;
   // for recording the switch of hwc2chw
   bool disable_permute_ = false;
@@ -54,6 +65,7 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor : public ProcessorManager {
   bool disable_normalize_ = false;
   // read config file
   std::string config_file_;
+  bool initial_resize_on_cpu_ = false;
 };
 
 }  // namespace classification

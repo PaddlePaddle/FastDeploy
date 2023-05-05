@@ -113,8 +113,59 @@ bool TrtBackend::LoadTrtCache(const std::string& trt_engine_file) {
   return true;
 }
 
-bool TrtBackend::InitFromPaddle(const std::string& model_file,
-                                const std::string& params_file,
+bool TrtBackend::Init(const RuntimeOption& runtime_option) {
+  auto trt_option = runtime_option.trt_option;
+  trt_option.model_file = runtime_option.model_file;
+  trt_option.params_file = runtime_option.params_file;
+  trt_option.model_format = runtime_option.model_format;
+  trt_option.gpu_id = runtime_option.device_id;
+  trt_option.enable_pinned_memory = runtime_option.enable_pinned_memory;
+  trt_option.external_stream_ = runtime_option.external_stream_;
+  if (runtime_option.device != Device::GPU) {
+    FDERROR << "TrtBackend only supports Device::GPU, but now it's "
+            << runtime_option.device << "." << std::endl;
+    return false;
+  }
+  if (runtime_option.model_format != ModelFormat::PADDLE &&
+      runtime_option.model_format != ModelFormat::ONNX) {
+    FDERROR
+        << "TrtBackend only supports model format PADDLE/ONNX, but now it's "
+        << runtime_option.model_format << "." << std::endl;
+    return false;
+  }
+  if (runtime_option.model_format == ModelFormat::PADDLE) {
+    if (runtime_option.model_from_memory_) {
+      return InitFromPaddle(runtime_option.model_file,
+                            runtime_option.params_file,
+                            trt_option);
+    } else {
+      std::string model_buffer;
+      std::string params_buffer;
+      FDASSERT(ReadBinaryFromFile(runtime_option.model_file, &model_buffer),
+               "Failed to read model file %s.",
+               runtime_option.model_file.c_str());
+      FDASSERT(ReadBinaryFromFile(runtime_option.params_file, &params_buffer),
+               "Failed to read parameters file %s.",
+               runtime_option.params_file.c_str());
+      return InitFromPaddle(model_buffer, params_buffer,
+                            trt_option);
+    }
+  } else {
+    if (runtime_option.model_from_memory_) {
+      return InitFromOnnx(runtime_option.model_file, trt_option);
+    } else {
+      std::string model_buffer;
+      FDASSERT(ReadBinaryFromFile(runtime_option.model_file, &model_buffer),
+               "Failed to read model file %s.",
+               runtime_option.model_file.c_str());
+      return InitFromOnnx(model_buffer, trt_option);
+    }
+  }
+  return true;
+}
+
+bool TrtBackend::InitFromPaddle(const std::string& model_buffer,
+                                const std::string& params_buffer,
                                 const TrtBackendOption& option, bool verbose) {
   if (initialized_) {
     FDERROR << "TrtBackend is already initlized, cannot initialize again."
@@ -132,7 +183,8 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
   int model_content_size = 0;
   char* calibration_cache_ptr;
   int calibration_cache_size = 0;
-  if (!paddle2onnx::Export(model_file.c_str(), params_file.c_str(),
+  if (!paddle2onnx::Export(model_buffer.c_str(), model_buffer.size(),
+                           params_buffer.c_str(), params_buffer.size(),
                            &model_content_ptr, &model_content_size, 11, true,
                            verbose, true, true, true, ops.data(), 1, "tensorrt",
                            &calibration_cache_ptr, &calibration_cache_size, "",
@@ -141,7 +193,6 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
             << std::endl;
     return false;
   }
-
   std::string onnx_model_proto(model_content_ptr,
                                model_content_ptr + model_content_size);
   delete[] model_content_ptr;
@@ -159,9 +210,8 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
              model_file_name_.c_str());
     f << onnx_model_proto;
     f.close();
-    return InitFromOnnx(model_file_name_, option, false);
   }
-  return InitFromOnnx(onnx_model_proto, option, true);
+  return InitFromOnnx(onnx_model_proto, option);
 #else
   FDERROR << "Didn't compile with PaddlePaddle frontend, you can try to "
              "call `InitFromOnnx` instead."
@@ -170,9 +220,8 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
 #endif
 }
 
-bool TrtBackend::InitFromOnnx(const std::string& model_file,
-                              const TrtBackendOption& option,
-                              bool from_memory_buffer) {
+bool TrtBackend::InitFromOnnx(const std::string& model_buffer,
+                              const TrtBackendOption& option) {
   if (initialized_) {
     FDERROR << "TrtBackend is already initlized, cannot initialize again."
             << std::endl;
@@ -181,22 +230,7 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
   option_ = option;
   cudaSetDevice(option_.gpu_id);
 
-  std::string onnx_content = "";
-  if (!from_memory_buffer) {
-    std::ifstream fin(model_file.c_str(), std::ios::binary | std::ios::in);
-    if (!fin) {
-      FDERROR << "[ERROR] Failed to open ONNX model file: " << model_file
-              << std::endl;
-      return false;
-    }
-    fin.seekg(0, std::ios::end);
-    onnx_content.resize(fin.tellg());
-    fin.seekg(0, std::ios::beg);
-    fin.read(&(onnx_content.at(0)), onnx_content.size());
-    fin.close();
-  } else {
-    onnx_content = model_file;
-  }
+  std::string onnx_content = model_buffer;
 
   // This part of code will record the original outputs order
   // because the converted tensorrt network may exist wrong order of outputs
@@ -304,14 +338,18 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
     BuildTrtEngine();
   }
 
+  RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
   cudaSetDevice(option_.gpu_id);
   SetInputs(inputs);
   AllocateOutputsBuffer(outputs, copy_to_fd);
 
+  RUNTIME_PROFILE_LOOP_BEGIN(1)
   if (!context_->enqueueV2(bindings_.data(), stream_, nullptr)) {
     FDERROR << "Failed to Infer with TensorRT." << std::endl;
     return false;
   }
+  RUNTIME_PROFILE_LOOP_END
+
   for (size_t i = 0; i < outputs->size(); ++i) {
     // if the final output tensor's dtype is different from the model output
     // tensor's dtype, then we need cast the data to the final output's dtype
@@ -352,7 +390,7 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
     FDASSERT(cudaStreamSynchronize(stream_) == cudaSuccess,
              "[ERROR] Error occurs while sync cuda stream.");
   }
-
+  RUNTIME_PROFILE_LOOP_H2D_D2H_END
   return true;
 }
 
@@ -494,6 +532,9 @@ void TrtBackend::AllocateOutputsBuffer(std::vector<FDTensor>* outputs,
 }
 
 bool TrtBackend::BuildTrtEngine() {
+  if (option_.enable_log_info) {
+    FDTrtLogger::Get()->SetLog(true, true);
+  }
   auto config =
       FDUniquePtr<nvinfer1::IBuilderConfig>(builder_->createBuilderConfig());
   if (!config) {
@@ -518,8 +559,9 @@ bool TrtBackend::BuildTrtEngine() {
     context_.reset();
     engine_.reset();
   }
-
-  builder_->setMaxBatchSize(option_.max_batch_size);
+  if (option_.max_batch_size >= 1) {
+    builder_->setMaxBatchSize(option_.max_batch_size);
+  }
   config->setMaxWorkspaceSize(option_.max_workspace_size);
   auto profile = builder_->createOptimizationProfile();
   for (const auto& item : shape_range_info_) {
@@ -739,20 +781,40 @@ std::vector<TensorInfo> TrtBackend::GetOutputInfos() {
   return infos;
 }
 
-std::unique_ptr<BaseBackend> TrtBackend::Clone(void* stream, int device_id) {
+std::unique_ptr<BaseBackend> TrtBackend::Clone(RuntimeOption& runtime_option,
+                                               void* stream, int device_id) {
   std::unique_ptr<BaseBackend> new_backend = utils::make_unique<TrtBackend>();
   auto casted_backend = dynamic_cast<TrtBackend*>(new_backend.get());
   if (device_id > 0 && device_id != option_.gpu_id) {
     auto clone_option = option_;
     clone_option.gpu_id = device_id;
     clone_option.external_stream_ = stream;
-    if (option_.model_format == ModelFormat::ONNX) {
-      FDASSERT(casted_backend->InitFromOnnx(option_.model_file, clone_option),
-               "Clone model from ONNX failed while initialize TrtBackend.");
-    } else {
-      FDASSERT(casted_backend->InitFromPaddle(
-                   option_.model_file, option_.params_file, clone_option),
+    if (runtime_option.model_from_memory_) {
+      FDASSERT(casted_backend->InitFromPaddle(runtime_option.model_file,
+                                              runtime_option.params_file,
+                                              clone_option),
                "Clone model from Paddle failed while initialize TrtBackend.");
+    } else {
+      if (option_.model_format == ModelFormat::ONNX) {
+        std::string model_buffer = "";
+        FDASSERT(
+            ReadBinaryFromFile(clone_option.model_file, &model_buffer),
+            "Fail to read binary from model file while cloning TrtBackend");
+        FDASSERT(casted_backend->InitFromOnnx(model_buffer, clone_option),
+                 "Clone model from ONNX failed while initialize TrtBackend.");
+      } else {
+        std::string model_buffer = "";
+        std::string params_buffer = "";
+        FDASSERT(
+            ReadBinaryFromFile(clone_option.model_file, &model_buffer),
+            "Fail to read binary from model file while cloning TrtBackend");
+        FDASSERT(
+            ReadBinaryFromFile(clone_option.params_file, &params_buffer),
+            "Fail to read binary from parameter file while cloning TrtBackend");
+        FDASSERT(casted_backend->InitFromPaddle(model_buffer, params_buffer,
+                                                clone_option),
+                 "Clone model from Paddle failed while initialize TrtBackend.");
+      }
     }
     FDWARNING << "The target device id:" << device_id
               << " is different from current device id:" << option_.gpu_id
