@@ -15,6 +15,7 @@ from __future__ import absolute_import
 
 from .contrib.yolov5cls import YOLOv5Cls
 from .ppcls import *
+from .ppshitu import PPShiTuV2Detector
 from .contrib.resnet import ResNet
 
 PPLCNet = PaddleClasModel
