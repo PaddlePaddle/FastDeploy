@@ -24,11 +24,6 @@ namespace classification {
 bool PPShiTuV2RecognizerPostprocessor::Run(
     const std::vector<FDTensor>& tensors,
     std::vector<ClassifyResult>* results) {
-  if (!initialized_) {
-    FDERROR << "Postprocessor is not initialized." << std::endl;
-    return false;
-  }
-
   int batch = tensors[0].shape[0];  // e.g [batch, 512]
   int num_feature = tensors[0].shape[1];
   const float* tensor_data = reinterpret_cast<const float*>(tensors[0].Data());

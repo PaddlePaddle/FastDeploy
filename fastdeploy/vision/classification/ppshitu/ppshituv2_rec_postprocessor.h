@@ -42,7 +42,6 @@ class FASTDEPLOY_DECL PPShiTuV2RecognizerPostprocessor {
  private:
   void FeatureNorm(std::vector<float> &feature);
   bool feature_norm_ = true;
-  bool initialized_ = false;
 };
 
 }  // namespace classification

@@ -33,7 +33,7 @@ void BindPPShiTuV2(pybind11::module& m) {
 
   pybind11::class_<vision::classification::PPShiTuV2RecognizerPostprocessor>(
       m, "PPShiTuV2RecognizerPostprocessor")
-      .def(pybind11::init<int>())
+      .def(pybind11::init<>())
       .def("run",
            [](vision::classification::PPShiTuV2RecognizerPostprocessor& self,
               std::vector<FDTensor>& inputs) {
