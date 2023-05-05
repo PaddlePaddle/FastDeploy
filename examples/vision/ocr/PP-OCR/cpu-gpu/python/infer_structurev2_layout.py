@@ -21,14 +21,9 @@ def parse_arguments():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--table_model",
+        "--layout_model",
         required=True,
-        help="Path of Table recognition model of PP-StructureV2.")
-    parser.add_argument(
-        "--table_char_dict_path",
-        type=str,
-        required=True,
-        help="tabel recognition dict path.")
+        help="Path of Layout detection model of PP-StructureV2.")
     parser.add_argument(
         "--image", type=str, required=True, help="Path of test image file.")
     parser.add_argument(
@@ -47,31 +42,50 @@ def parse_arguments():
 
 def build_option(args):
 
-    table_option = fd.RuntimeOption()
+    layout_option = fd.RuntimeOption()
 
     if args.device.lower() == "gpu":
-        table_option.use_gpu(args.device_id)
+        layout_option.use_gpu(args.device_id)
 
-    return table_option
+    return layout_option
 
 
 args = parse_arguments()
 
-table_model_file = os.path.join(args.table_model, "inference.pdmodel")
-table_params_file = os.path.join(args.table_model, "inference.pdiparams")
+layout_model_file = os.path.join(args.layout_model, "model.pdmodel")
+layout_params_file = os.path.join(args.layout_model, "model.pdiparams")
 
 # Set the runtime option
-table_option = build_option(args)
+layout_option = build_option(args)
 
 # Create the table_model
-table_model = fd.vision.ocr.StructureV2Table(
-    table_model_file, table_params_file, args.table_char_dict_path,
-    table_option)
+layout_model = fd.vision.ocr.StructureV2Layout(
+    layout_model_file, layout_params_file, layout_option)
+
+layout_model.postprocessor.num_class = 5
 
 # Read the image
 im = cv2.imread(args.image)
 
 # Predict and return the results
-result = table_model.predict(im)
+result = layout_model.predict(im)
 
 print(result)
+
+# Visualize the results
+labels = ["text", "title", "list", "table", "figure"]
+if layout_model.postprocessor.num_class == 10:
+    labels = [
+        "text", "title", "figure", "figure_caption", "table", "table_caption",
+        "header", "footer", "reference", "equation"
+    ]
+
+vis_im = fd.vision.vis_detection(
+    im,
+    result,
+    labels,
+    score_threshold=0.5,
+    font_color=[255, 0, 0],
+    font_thickness=2)
+cv2.imwrite("visualized_result.jpg", vis_im)
+print("Visualized result save in ./visualized_result.jpg")

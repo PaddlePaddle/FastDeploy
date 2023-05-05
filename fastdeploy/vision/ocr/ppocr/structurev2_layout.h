@@ -14,45 +14,41 @@
 
 #pragma once
 #include "fastdeploy/fastdeploy_model.h"
-#include "fastdeploy/vision/detection/ppdet/preprocessor.h"
-#include "fastdeploy/vision/detection/ppdet/postprocessor.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
-
-#include "fastdeploy/vision/utils/utils.h"
+#include "fastdeploy/vision/ocr/ppocr/utils/ocr_postprocess_op.h"
+#include "fastdeploy/vision/ocr/ppocr/structurev2_layout_preprocessor.h"
+#include "fastdeploy/vision/ocr/ppocr/structurev2_layout_postprocessor.h"
+#include "fastdeploy/utils/unique_ptr.h"
 
 namespace fastdeploy {
 namespace vision {
-/** \brief All object detection model APIs are defined inside this namespace
- *
+namespace ocr {
+/*! @brief StructureV2Layout object is used to load the PP-StructureV2-Layout detection model.
  */
-namespace detection {
-
-/*! @brief Base model object used when to load a model exported by PaddleDetection
- */
-class FASTDEPLOY_DECL PPDetBase : public FastDeployModel {
+class FASTDEPLOY_DECL StructureV2Layout : public FastDeployModel {
  public:
-  /** \brief Set path of model file and configuration file, and the configuration of runtime
+  StructureV2Layout();
+  /** \brief Set path of model file, and the configuration of runtime
    *
-   * \param[in] model_file Path of model file, e.g ppyoloe/model.pdmodel
-   * \param[in] params_file Path of parameter file, e.g ppyoloe/model.pdiparams, if the model format is ONNX, this parameter will be ignored
-   * \param[in] config_file Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
-   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
-   * \param[in] model_format Model format of the loaded model, default is Paddle format
+   * \param[in] model_file Path of model file, e.g ./picodet_lcnet_x1_0_fgd_layout_cdla_infer/model.pdmodel.
+   * \param[in] params_file Path of parameter file, e.g ./picodet_lcnet_x1_0_fgd_layout_cdla_infer/model.pdiparams, if the model format is ONNX, this parameter will be ignored.
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`.
+   * \param[in] model_format Model format of the loaded model, default is Paddle format.
    */
-  PPDetBase(const std::string& model_file, const std::string& params_file,
-          const std::string& config_file,
-          const RuntimeOption& custom_option = RuntimeOption(),
-          const ModelFormat& model_format = ModelFormat::PADDLE);
+  StructureV2Layout(const std::string& model_file,
+                    const std::string& params_file = "",
+                    const RuntimeOption& custom_option = RuntimeOption(),
+                    const ModelFormat& model_format = ModelFormat::PADDLE);
 
-  /** \brief Clone a new PaddleDetModel with less memory usage when multiple instances of the same model are created
+  /** \brief Clone a new StructureV2Layout with less memory usage when multiple instances of the same model are created
    *
-   * \return new PaddleDetModel* type unique pointer
+   * \return newStructureV2Layout* type unique pointer
    */
-  virtual std::unique_ptr<PPDetBase> Clone() const;
+  virtual std::unique_ptr<StructureV2Layout> Clone() const;
 
   /// Get model's name
-  virtual std::string ModelName() const { return "PaddleDetection/BaseModel"; }
+  std::string ModelName() const { return "pp-structurev2-layout"; }
 
   /** \brief DEPRECATED Predict the detection result for an input image
    *
@@ -77,22 +73,22 @@ class FASTDEPLOY_DECL PPDetBase : public FastDeployModel {
   virtual bool BatchPredict(const std::vector<cv::Mat>& imgs,
                             std::vector<DetectionResult>* results);
 
-  
-  PaddleDetPreprocessor& GetPreprocessor() {
+  /// Get preprocessor reference ofStructureV2LayoutPreprocessor
+  virtual StructureV2LayoutPreprocessor& GetPreprocessor() {
     return preprocessor_;
   }
 
-  PaddleDetPostprocessor& GetPostprocessor() {
+  /// Get postprocessor reference ofStructureV2LayoutPostprocessor
+  virtual StructureV2LayoutPostprocessor& GetPostprocessor() {
     return postprocessor_;
   }
-  virtual bool CheckArch();
 
- protected:
-  virtual bool Initialize();
-  PaddleDetPreprocessor preprocessor_;
-  PaddleDetPostprocessor postprocessor_;
+ private:
+  bool Initialize();
+  StructureV2LayoutPreprocessor preprocessor_;
+  StructureV2LayoutPostprocessor postprocessor_;
 };
 
-}  // namespace detection
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy

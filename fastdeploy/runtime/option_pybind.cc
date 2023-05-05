@@ -43,6 +43,8 @@ void BindOption(pybind11::module& m) {
       .def("use_sophgo", &RuntimeOption::UseSophgo)
       .def("use_ascend", &RuntimeOption::UseAscend)
       .def("use_kunlunxin", &RuntimeOption::UseKunlunXin)
+      .def("disable_valid_backend_check",&RuntimeOption::DisableValidBackendCheck)
+      .def("enable_valid_backend_check",&RuntimeOption::EnableValidBackendCheck)
       .def_readwrite("paddle_lite_option", &RuntimeOption::paddle_lite_option)
       .def_readwrite("openvino_option", &RuntimeOption::openvino_option)
       .def_readwrite("ort_option", &RuntimeOption::ort_option)

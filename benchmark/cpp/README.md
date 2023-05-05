@@ -186,6 +186,10 @@ benchmark: ./benchmark -[info|diff|check|dump|mem] -model xxx -config_path xxx -
 ```bash  
 ./benchmark --model ResNet50_vd_infer --config_path config/config.gpu.paddle_trt.fp16.txt --trt_shapes 1,3,224,224:1,3,224,224:1,3,224,224 --names inputs --dtypes FP32
 ```
+- TensorRT/Paddle-TRT多输入示例：  
+```bash 
+./benchmark --model rtdetr_r50vd_6x_coco --trt_shapes 1,2:1,2:1,2:1,3,640,640:1,3,640,640:1,3,640,640:1,2:1,2:1,2 --names im_shape:image:scale_factor --shapes 1,2:1,3,640,640:1,2  --config_path config/config.gpu.paddle_trt.fp32.txt --dtypes FP32:FP32:FP32
+```
 - 支持FD全部后端和全部模型格式：--model_file, --params_file(optional), --model_format
 ```bash
 # ONNX模型示例
