@@ -46,19 +46,58 @@ fi
 ./benchmark_ppocr_rec --model ch_PP-OCRv2_rec_infer --image rec_img.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH
 
 # PaddleDetection
+./benchmark_ppyolov5 --model yolov5_s_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
+./benchmark_ppyolov6 --model yolov6_s_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
+./benchmark_ppyolov7 --model yolov7_l_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
+./benchmark_ppyolov8 --model yolov8_s_500e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
+./benchmark_ppyolox --model yolox_s_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
+./benchmark_ppyoloe --model ppyoloe_crn_l_300e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
+./benchmark_ppyoloe --model ppyoloe_plus_crn_m_80e_coco_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
+./benchmark_picodet --model picodet_l_640_coco_lcnet_no_nms --image 000000014439.jpg --config_path $CONFIG_PATH --no_nms
+
 ./benchmark_ppyolov5 --model yolov5_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolov6 --model yolov6_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolov8 --model yolov8_s_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolox --model yolox_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyoloe --model ppyoloe_plus_crn_m_80e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_picodet --model picodet_l_640_coco_lcnet --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ppyolov7 --model yolov7_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyoloe --model ppyoloe_crn_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolo --model ppyolo_r50vd_dcn_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_yolov3 --model yolov3_darknet53_270e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolo --model ppyolov2_r101vd_dcn_365e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_picodet --model picodet_l_320_coco_lcnet --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_fasterrcnn --model faster_rcnn_r50_vd_fpn_2x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_maskrcnn --model mask_rcnn_r50_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_rtmdet --model rtmdet_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_rtmdet --model rtmdet_s_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_cascadercnn --model cascade_rcnn_r50_fpn_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_cascadercnn --model cascade_rcnn_r50_vd_fpn_ssld_2x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_fcos --model fcos_r50_fpn_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_gfl --model gfl_r50_fpn_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_retinanet --model retinanet_r101_fpn_2x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_retinanet --model retinanet_r50_fpn_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_tood --model tood_r50_fpn_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ttfnet --model ttfnet_darknet53_1x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov5 --model yolov5_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov6 --model yolov6_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov6 --model yolov6_s_400e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov7 --model yolov7_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov7 --model yolov7_x_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_fasterrcnn --model faster_rcnn_enhance_3x_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyoloe --model ppyoloe_crn_l_80e_sliced_visdrone_640_025 --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ssd --model ssd_mobilenet_v1_300_120e_voc --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ssd --model ssd_vgg16_300_240e_voc --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ssd --model ssdlite_mobilenet_v1_300_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov8 --model yolov8_x_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov8  --model yolov8_l_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov8  --model yolov8_m_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
+./benchmark_ppyolov8  --model yolov8_n_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 
 # PaddleSeg
 ./benchmark_ppseg --model Portrait_PP_HumanSegV2_Lite_256x144_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --xpu_l3_cache 0
 ./benchmark_ppseg --model PP_HumanSegV2_Lite_192x192_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --xpu_l3_cache 0
-./benchmark_ppseg --model PP_HumanSegV1_Lite_infer --image portrait_heng.jpg --config_path $CONFIG_PATH
+./benchmark_ppseg --model PP_HumanSegV1_Lite_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --xpu_l3_cache 0
+./benchmark_ppseg --model PP_HumanSegV2_Mobile_192x192_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --xpu_l3_cache 0
 ./benchmark_ppseg --model PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH --xpu_l3_cache 0
 ./benchmark_ppseg --model FCN_HRNet_W18_cityscapes_with_argmax_infer --image cityscapes_demo.png --config_path $CONFIG_PATH --xpu_l3_cache 0
 ./benchmark_ppseg --model SegFormer_B0-cityscapes-with-argmax --image cityscapes_demo.png --config_path $CONFIG_PATH --xpu_l3_cache 0

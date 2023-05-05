@@ -257,6 +257,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
       const std::string& input_name, const std::vector<int32_t>& min_shape,
       const std::vector<int32_t>& opt_shape = std::vector<int32_t>(),
       const std::vector<int32_t>& max_shape = std::vector<int32_t>());
+
+  void SetTrtInputData(
+      const std::string& input_name, const std::vector<float>& min_shape_data,
+      const std::vector<float>& opt_shape_data = std::vector<float>(),
+      const std::vector<float>& max_shape_data = std::vector<float>());
+
   void SetTrtMaxWorkspaceSize(size_t trt_max_workspace_size);
   void SetTrtMaxBatchSize(size_t max_batch_size);
   void EnableTrtFP16();

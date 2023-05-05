@@ -45,6 +45,19 @@ if os.name != "nt" and os.path.exists(trt_directory):
 # Note(zhoushunjie): Fix the import order of paddle and fastdeploy library.
 # This solution will be removed it when the confilct of paddle and
 # fastdeploy is fixed.
+try:
+  # import paddle
+  import platform
+  sys_platform = platform.platform().lower()
+  # windows: no conflict between fastdeploy and paddle.
+  # linux: must import paddle first to solve the conflict.
+  # macos: still can not solve the conflict between fastdeploy and paddle, 
+  #        due to the global flags redefined in paddle/paddle_inference so.
+  #        we got the error (ERROR: flag 'xxx' was defined more than once).
+  if "linux" in sys_platform:
+    import paddle
+except:
+  pass
 
 from .c_lib_wrap import (
     ModelFormat,
