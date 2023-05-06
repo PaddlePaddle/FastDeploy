@@ -47,13 +47,17 @@ std::string ClassifyResult::Str() {
     out = out + std::to_string(scores[i]) + ", ";
   }
   if (!feature.empty()) {
-    out += "\nfeature: \n";
+    out += "\nfeature: size (";
+    out += std::to_string(feature.size()) + "), only show first 100 values.\n";
     for (size_t i = 0; i < feature.size(); ++i) {
       // only show first 100 values.
       if ((i + 1) <= 100) {
         out = out + std::to_string(feature[i]) + ", ";
         if ((i + 1) % 10 == 0 && (i + 1) < 100) {
           out += "\n";
+        }
+        if ((i + 1) == 100) {
+          out += "\n......";
         }
       }
     }
