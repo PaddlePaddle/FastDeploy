@@ -49,9 +49,12 @@ std::string ClassifyResult::Str() {
   if (!feature.empty()) {
     out += "\nfeature: \n";
     for (size_t i = 0; i < feature.size(); ++i) {
-      out = out + std::to_string(feature[i]) + ", ";
-      if ((i + 1) % 32 == 0) {
-        out += "\n";
+      // only show first 100 values.
+      if ((i + 1) <= 100) {
+        out = out + std::to_string(feature[i]) + ", ";
+        if ((i + 1) % 10 == 0 && (i + 1) < 100) {
+          out += "\n";
+        }
       }
     }
   }
