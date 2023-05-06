@@ -59,6 +59,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   std::vector<Backend> valid_rknpu_backends = {};
   /** Model's valid hardware backends. This member defined all the sophgo npu backends have successfully tested for the model
    */
+  std::vector<Backend> valid_horizon_backends = {};
   std::vector<Backend> valid_sophgonpu_backends = {};
 
   /// Get number of inputs for this model
@@ -156,6 +157,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool CreateGpuBackend();
   bool CreateIpuBackend();
   bool CreateRKNPUBackend();
+  bool CreateHorizonBackend();
   bool CreateSophgoNPUBackend();
   bool CreateTimVXBackend();
   bool CreateKunlunXinBackend();

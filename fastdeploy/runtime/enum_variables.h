@@ -38,6 +38,7 @@ enum Backend {
   LITE,       ///< Paddle Lite, support Paddle format model, ARM CPU only
   RKNPU2,     ///< RKNPU2, support RKNN format model, Rockchip NPU only
   SOPHGOTPU,  ///< SOPHGOTPU, support SOPHGO format model, Sophgo TPU only
+  HORIZONNPU,     ///< HORIZONNPU, support Horizon format model, Horizon NPU
 };
 
 /**
@@ -60,7 +61,8 @@ enum FASTDEPLOY_DECL Device {
   KUNLUNXIN,
   ASCEND,
   SOPHGOTPUD,
-  DIRECTML
+  DIRECTML,
+  SUNRISENPU,
 };
 
 /*! Deep learning model format */
@@ -71,6 +73,7 @@ enum ModelFormat {
   RKNN,         ///< Model with RKNN format
   TORCHSCRIPT,  ///< Model with TorchScript format
   SOPHGO,       ///< Model with SOPHGO format
+  HORIZON,      ///< Model with HORIZON format
 };
 
 /// Describle all the supported backends for specified model format
@@ -80,6 +83,7 @@ static std::map<ModelFormat, std::vector<Backend>>
                       Backend::ORT, Backend::OPENVINO, Backend::TRT}},
   {ModelFormat::ONNX, {Backend::ORT, Backend::OPENVINO, Backend::TRT}},
   {ModelFormat::RKNN, {Backend::RKNPU2}},
+  {ModelFormat::HORIZON, {Backend::HORIZONNPU}},
   {ModelFormat::TORCHSCRIPT, {Backend::POROS}},
   {ModelFormat::SOPHGO, {Backend::SOPHGOTPU}}
 };
@@ -91,6 +95,7 @@ static std::map<Device, std::vector<Backend>>
                 Backend::OPENVINO, Backend::POROS}},
   {Device::GPU, {Backend::PDINFER, Backend::ORT, Backend::TRT, Backend::POROS}},
   {Device::RKNPU, {Backend::RKNPU2}},
+  {Device::SUNRISENPU, {Backend::HORIZONNPU}},
   {Device::IPU, {Backend::PDINFER}},
   {Device::TIMVX, {Backend::LITE}},
   {Device::KUNLUNXIN, {Backend::LITE}},

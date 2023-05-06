@@ -73,6 +73,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
                      fastdeploy::rknpu2::CpuName::RK356X,
                  fastdeploy::rknpu2::CoreMask rknpu2_core =
                      fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO);
+  // Use Horizon NPU to inference
+  void UseHorizon();
   /// Use TimVX e.g RV1126/A311D to inference
   void UseTimVX();
   /// Use Huawei Ascend to inference
@@ -277,6 +279,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetOrtGraphOptLevel(int level = -1);
   void UsePaddleBackend();
   void UseLiteBackend();
+  void UseHorizonNPUBackend();
 };
 
 }  // namespace fastdeploy

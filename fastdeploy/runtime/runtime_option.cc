@@ -65,6 +65,10 @@ void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
   device = Device::RKNPU;
 }
 
+void RuntimeOption::UseHorizon(){
+  device = Device::SUNRISENPU;
+}
+
 void RuntimeOption::UseTimVX() {
   device = Device::TIMVX;
   paddle_lite_option.device = device;
@@ -182,6 +186,14 @@ void RuntimeOption::UseLiteBackend() {
   backend = Backend::LITE;
 #else
   FDASSERT(false, "The FastDeploy didn't compile with Paddle Lite.");
+#endif
+}
+
+void RuntimeOption::UseHorizonNPUBackend(){
+#ifdef ENABLE_HORIZON_BACKEND
+  backend = Backend::HORIZONNPU;
+#else
+  FDASSERT(false, "The FastDeploy didn't compile with horizon");
 #endif
 }
 

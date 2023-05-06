@@ -42,6 +42,7 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
     valid_gpu_backends = {Backend::ORT, Backend::TRT};
     valid_rknpu_backends = {Backend::RKNPU2};
     valid_directml_backends = {Backend::ORT};
+    valid_horizon_backends = {Backend::HORIZONNPU};
   }
 
   runtime_option = custom_option;
