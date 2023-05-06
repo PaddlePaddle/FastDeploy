@@ -58,7 +58,7 @@ The first directory is the directory to be mounted on the container, and the lat
 At this point, the preparation of the required environment for compilation is complete.
 
 ## How to Build and Install C++ SDK
-Download the cross-compilation tool, [gcc_linaro_6.5.0_2018.12_x86_64_aarch64_linux_gnu](link), and it is recommended to extract it to the `/opt` directory.
+Download the cross-compilation tool, [gcc_linaro_6.5.0_2018.12_x86_64_aarch64_linux_gnu](https://bj.bcebos.com/fastdeploy/third_libs/gcc_linaro_6.5.0_2018.12_x86_64_aarch64_linux_gnu.tar.xz), and it is recommended to extract it to the `/opt` directory.
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
