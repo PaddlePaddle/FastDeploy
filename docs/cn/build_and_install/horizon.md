@@ -52,7 +52,7 @@ sh run_docker.sh /home gpu
 至此，所需环境准备完毕。
 
 ## 安装FastDeploy C++ SDK
-下载交叉编译工具，[gcc_linaro_6.5.0_2018.12_x86_64_aarch64_linux_gnu](链接地址)，建议解压后放到`/opt`目录下。
+下载交叉编译工具，[gcc_linaro_6.5.0_2018.12_x86_64_aarch64_linux_gnu](https://bj.bcebos.com/fastdeploy/third_libs/gcc_linaro_6.5.0_2018.12_x86_64_aarch64_linux_gnu.tar.xz)，建议解压后放到`/opt`目录下。
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
