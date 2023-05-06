@@ -78,6 +78,10 @@ int main(int argc, char *argv[]) {
     option.UseGpu();
     option.UsePaddleInferBackend();
     option.paddle_infer_option.enable_trt = true;
+    option.trt_option.SetShape("image", {1, 3, 640, 640}, {1, 3, 640, 640},
+                               {1, 3, 640, 640});
+    option.trt_option.SetShape("scale_factor", {1, 2}, {1, 2}, {1, 2});
+    option.trt_option.SetShape("im_shape", {1, 2}, {1, 2}, {1, 2});
   } else if (flag == 6) {
     option.UseGpu();
     option.UseOrtBackend();  // ONNX Runtime

@@ -88,7 +88,6 @@ int main(int argc, char* argv[]) {
               << ", min=" << cls_diff.scores.min << std::endl;
   }
   BENCHMARK_MODEL(model, model.Predict(im, &res))
-  std::cout << res.Str() << std::endl;
 #endif
   return 0;
 }

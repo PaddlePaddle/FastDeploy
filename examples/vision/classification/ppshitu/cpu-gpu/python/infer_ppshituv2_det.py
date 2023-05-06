@@ -48,6 +48,11 @@ def build_option(args):
         ) == "gpu", "Paddle-TensorRT backend require inference on device GPU."
         option.use_paddle_infer_backend()
         option.paddle_infer_option.enable_trt = True
+        option.paddle_infer_option.collect_trt_shape = True
+        option.trt_option.set_shape("image", [1, 3, 640, 640],
+                                    [1, 3, 640, 640], [1, 3, 640, 640])
+        option.trt_option.set_shape("scale_factor", [1, 2], [1, 2], [1, 2])
+        option.trt_option.set_shape("im_shape", [1, 2], [1, 2], [1, 2])
 
     elif args.backend.lower() == "ort":
         option.use_ort_backend()
