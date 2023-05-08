@@ -19,7 +19,13 @@
 namespace vision = fastdeploy::vision;
 namespace benchmark = fastdeploy::benchmark;
 
-DEFINE_bool(no_nms, false, "Whether the model contains nms.");
+DEFINE_string(trt_shape, "1,3,224,224:1,3,224,224:1,3,224,224",
+              "Set min/opt/max shape for trt/paddle_trt backend."
+              "eg:--trt_shape 1,3,224,224:1,3,224,224:1,3,224,224");
+
+DEFINE_string(input_name, "x",
+              "Set input name for trt/paddle_trt backend."
+              "eg:--input_names x");
 
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
@@ -32,6 +38,10 @@ int main(int argc, char* argv[]) {
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
+  // Set max_batch_size 1 for best performance
+  if (config_info["backend"] == "paddle_trt") {
+    option.trt_option.max_batch_size = 1;
+  }
   std::string model_name, params_name, config_name;
   auto model_format = fastdeploy::ModelFormat::PADDLE;
   if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
@@ -47,42 +57,37 @@ int main(int argc, char* argv[]) {
   }
   if (config_info["backend"] == "paddle_trt" ||
       config_info["backend"] == "trt") {
-    option.trt_option.SetShape("image", {1, 3, 640, 640}, {1, 3, 640, 640},
-                               {1, 3, 640, 640});
-    option.trt_option.SetShape("scale_factor", {1, 2}, {1, 2}, {1, 2});
+    std::vector<std::vector<int32_t>> trt_shapes =
+        benchmark::ResultManager::GetInputShapes(FLAGS_trt_shape);
+    option.trt_option.SetShape(FLAGS_input_name, trt_shapes[0], trt_shapes[1],
+                               trt_shapes[2]);
   }
-  auto model_picodet = vision::detection::PicoDet(
+
+  auto model = vision::classification::PPShiTuV2Recognizer(
       model_file, params_file, config_file, option, model_format);
-  if (FLAGS_no_nms) {
-    model_picodet.GetPostprocessor().ApplyNMS();
-  }
-  vision::DetectionResult res;
+  vision::ClassifyResult res;
   if (config_info["precision_compare"] == "true") {
     // Run once at least
-    model_picodet.Predict(im, &res);
+    model.Predict(im, &res);
     // 1. Test result diff
     std::cout << "=============== Test result diff =================\n";
     // Save result to -> disk.
-    std::string det_result_path = "picodet_result.txt";
-    benchmark::ResultManager::SaveDetectionResult(res, det_result_path);
+    std::string cls_result_path = "ppcls_result.txt";
+    benchmark::ResultManager::SaveClassifyResult(res, cls_result_path);
     // Load result from <- disk.
-    vision::DetectionResult res_loaded;
-    benchmark::ResultManager::LoadDetectionResult(&res_loaded, det_result_path);
+    vision::ClassifyResult res_loaded;
+    benchmark::ResultManager::LoadClassifyResult(&res_loaded, cls_result_path);
     // Calculate diff between two results.
-    auto det_diff =
+    auto cls_diff =
         benchmark::ResultManager::CalculateDiffStatis(res, res_loaded);
-    std::cout << "Boxes diff: mean=" << det_diff.boxes.mean
-              << ", max=" << det_diff.boxes.max
-              << ", min=" << det_diff.boxes.min << std::endl;
-    std::cout << "Label_ids diff: mean=" << det_diff.labels.mean
-              << ", max=" << det_diff.labels.max
-              << ", min=" << det_diff.labels.min << std::endl;
+    std::cout << "Labels diff: mean=" << cls_diff.labels.mean
+              << ", max=" << cls_diff.labels.max
+              << ", min=" << cls_diff.labels.min << std::endl;
+    std::cout << "Scores diff: mean=" << cls_diff.scores.mean
+              << ", max=" << cls_diff.scores.max
+              << ", min=" << cls_diff.scores.min << std::endl;
   }
-  // Run profiling
-  BENCHMARK_MODEL(model_picodet, model_picodet.Predict(im, &res))
-  auto vis_im = vision::VisDetection(im, res, 0.5f);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  BENCHMARK_MODEL(model, model.Predict(im, &res))
 #endif
   return 0;
 }
