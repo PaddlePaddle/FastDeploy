@@ -33,6 +33,9 @@ std::ostream& operator<<(std::ostream& out, const ProcLib& p) {
     case ProcLib::CUDA:
       out << "ProcLib::CUDA";
       break;
+    case ProcLib::CVCUDA:
+      out << "ProcLib::CVCUDA";
+      break;  
     default:
       FDASSERT(false, "Unknow type of ProcLib.");
   }

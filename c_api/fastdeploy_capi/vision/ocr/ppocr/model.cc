@@ -318,6 +318,124 @@ FD_C_Bool FD_C_DBDetectorWrapperBatchPredict(
   return successful;
 }
 
+// StructureV2Table
+FD_C_StructureV2TableWrapper* FD_C_CreateStructureV2TableWrapper(
+    const char* model_file, const char* params_file,
+    const char* table_char_dict_path,
+    FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
+    const FD_C_ModelFormat model_format) {
+  auto& runtime_option = CHECK_AND_CONVERT_FD_TYPE(RuntimeOptionWrapper,
+                                                   fd_c_runtime_option_wrapper);
+  FD_C_StructureV2TableWrapper* fd_c_structurev2table_wrapper =
+      new FD_C_StructureV2TableWrapper();
+  fd_c_structurev2table_wrapper->table_model =
+      std::unique_ptr<fastdeploy::vision::ocr::StructureV2Table>(
+          new fastdeploy::vision::ocr::StructureV2Table(
+              std::string(model_file), std::string(params_file),
+              std::string(table_char_dict_path), *runtime_option,
+              static_cast<fastdeploy::ModelFormat>(model_format)));
+  return fd_c_structurev2table_wrapper;
+}
+
+OCR_DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(
+    StructureV2Table, fd_c_structurev2table_wrapper)
+
+FD_C_Bool FD_C_StructureV2TableWrapperPredict(
+    FD_C_StructureV2TableWrapper* fd_c_structurev2table_wrapper, FD_C_Mat img,
+    FD_C_TwoDimArrayInt32* boxes_result,
+    FD_C_OneDimArrayCstr* structure_result) {
+  cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
+  std::vector<std::array<int, 8>> boxes_result_out;
+  std::vector<std::string> structures_result_out;
+  auto& model = CHECK_AND_CONVERT_FD_TYPE(StructureV2TableWrapper,
+                                          fd_c_structurev2table_wrapper);
+  bool successful =
+      model->Predict(*im, &boxes_result_out, &structures_result_out);
+  if (successful) {
+    // copy boxes
+    const int boxes_coordinate_dim = 8;
+    boxes_result->size = boxes_result_out.size();
+    boxes_result->data = new FD_C_OneDimArrayInt32[boxes_result->size];
+    for (size_t i = 0; i < boxes_result_out.size(); i++) {
+      boxes_result->data[i].size = boxes_coordinate_dim;
+      boxes_result->data[i].data = new int[boxes_coordinate_dim];
+      for (size_t j = 0; j < boxes_coordinate_dim; j++) {
+        boxes_result->data[i].data[j] = boxes_result_out[i][j];
+      }
+    }
+    // copy structures
+    structure_result->size = structures_result_out.size();
+    structure_result->data = new FD_C_Cstr[structure_result->size];
+    for (int i = 0; i < structures_result_out.size(); i++) {
+      structure_result->data[i].size = structures_result_out[i].length();
+      structure_result->data[i].data =
+          new char[structures_result_out[i].length() + 1];
+      strncpy(structure_result->data[i].data, structures_result_out[i].c_str(),
+              structures_result_out[i].length());
+    }
+  }
+  return successful;
+}
+
+OCR_DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(StructureV2Table,
+                                               fd_c_structurev2table_wrapper)
+
+FD_C_Bool FD_C_StructureV2TableWrapperBatchPredict(
+    FD_C_StructureV2TableWrapper* fd_c_structurev2table_wrapper,
+    FD_C_OneDimMat imgs, FD_C_ThreeDimArrayInt32* det_results,
+    FD_C_TwoDimArrayCstr* structure_results) {
+  std::vector<cv::Mat> imgs_vec;
+  std::vector<std::vector<std::array<int, 8>>> det_results_out;
+  std::vector<std::vector<std::string>> structure_results_out;
+  for (int i = 0; i < imgs.size; i++) {
+    imgs_vec.push_back(*(reinterpret_cast<cv::Mat*>(imgs.data[i])));
+  }
+  auto& model = CHECK_AND_CONVERT_FD_TYPE(StructureV2TableWrapper,
+                                          fd_c_structurev2table_wrapper);
+  bool successful =
+      model->BatchPredict(imgs_vec, &det_results_out, &structure_results_out);
+  if (successful) {
+    // copy results back to FD_C_ThreeDimArrayInt32
+    det_results->size = det_results_out.size();
+    det_results->data = new FD_C_TwoDimArrayInt32[det_results->size];
+    for (int batch_indx = 0; batch_indx < det_results->size; batch_indx++) {
+      const int boxes_coordinate_dim = 8;
+      det_results->data[batch_indx].size = det_results_out[batch_indx].size();
+      det_results->data[batch_indx].data =
+          new FD_C_OneDimArrayInt32[det_results->data[batch_indx].size];
+      for (size_t i = 0; i < det_results_out[batch_indx].size(); i++) {
+        det_results->data[batch_indx].data[i].size = boxes_coordinate_dim;
+        det_results->data[batch_indx].data[i].data =
+            new int[boxes_coordinate_dim];
+        for (size_t j = 0; j < boxes_coordinate_dim; j++) {
+          det_results->data[batch_indx].data[i].data[j] =
+              det_results_out[batch_indx][i][j];
+        }
+      }
+    }
+    // copy structures
+    structure_results->size = structure_results_out.size();
+    structure_results->data = new FD_C_OneDimArrayCstr[structure_results->size];
+    for (int batch_indx = 0; batch_indx < structure_results->size;
+         batch_indx++) {
+      structure_results->data[batch_indx].size =
+          structure_results_out[batch_indx].size();
+      structure_results->data[batch_indx].data =
+          new FD_C_Cstr[structure_results->data[batch_indx].size];
+      for (int i = 0; i < structure_results_out[batch_indx].size(); i++) {
+        structure_results->data[batch_indx].data[i].size =
+            structure_results_out[batch_indx][i].length();
+        structure_results->data[batch_indx].data[i].data =
+            new char[structure_results_out[batch_indx][i].length() + 1];
+        strncpy(structure_results->data[batch_indx].data[i].data,
+                structure_results_out[batch_indx][i].c_str(),
+                structure_results_out[batch_indx][i].length());
+      }
+    }
+  }
+  return successful;
+}
+
 // PPOCRv2
 
 FD_C_PPOCRv2Wrapper* FD_C_CreatePPOCRv2Wrapper(
@@ -466,6 +584,82 @@ FD_C_Bool FD_C_PPOCRv3WrapperBatchPredict(
   return successful;
 }
 
+// PPStructureV2Table
+
+FD_C_PPStructureV2TableWrapper* FD_C_CreatePPStructureV2TableWrapper(
+    FD_C_DBDetectorWrapper* fd_c_det_model_wrapper,
+    FD_C_RecognizerWrapper* fd_c_rec_model_wrapper,
+    FD_C_StructureV2TableWrapper* fd_c_structurev2table_wrapper) {
+  FD_C_PPStructureV2TableWrapper* fd_c_ppstructurev2table_wrapper =
+      new FD_C_PPStructureV2TableWrapper();
+  auto& det_model =
+      CHECK_AND_CONVERT_FD_TYPE(DBDetectorWrapper, fd_c_det_model_wrapper);
+  auto& rec_model =
+      CHECK_AND_CONVERT_FD_TYPE(RecognizerWrapper, fd_c_rec_model_wrapper);
+  auto& table_model = CHECK_AND_CONVERT_FD_TYPE(StructureV2TableWrapper,
+                                                fd_c_structurev2table_wrapper);
+  fd_c_ppstructurev2table_wrapper->ppstructurev2table_model =
+      std::unique_ptr<fastdeploy::pipeline::PPStructureV2Table>(
+          new fastdeploy::pipeline::PPStructureV2Table(
+              det_model.get(), rec_model.get(), table_model.get()));
+  return fd_c_ppstructurev2table_wrapper;
+}
+
+PIPELINE_DECLARE_AND_IMPLEMENT_DESTROY_WRAPPER_FUNCTION(
+    PPStructureV2Table, fd_c_ppstructurev2table_wrapper)
+
+FD_C_Bool FD_C_PPStructureV2TableWrapperPredict(
+    FD_C_PPStructureV2TableWrapper* fd_c_ppstructurev2table_wrapper,
+    FD_C_Mat img, FD_C_OCRResult* fd_c_ocr_result) {
+  cv::Mat* im = reinterpret_cast<cv::Mat*>(img);
+  auto& model = CHECK_AND_CONVERT_FD_TYPE(PPStructureV2TableWrapper,
+                                          fd_c_ppstructurev2table_wrapper);
+  FD_C_OCRResultWrapper* fd_c_ocr_result_wrapper =
+      FD_C_CreateOCRResultWrapper();
+  auto& ocr_result =
+      CHECK_AND_CONVERT_FD_TYPE(OCRResultWrapper, fd_c_ocr_result_wrapper);
+
+  bool successful = model->Predict(im, ocr_result.get());
+  if (successful) {
+    FD_C_OCRResultWrapperToCResult(fd_c_ocr_result_wrapper, fd_c_ocr_result);
+  }
+  FD_C_DestroyOCRResultWrapper(fd_c_ocr_result_wrapper);
+  return successful;
+}
+
+PIPELINE_DECLARE_AND_IMPLEMENT_INITIALIZED_FUNCTION(
+    PPStructureV2Table, fd_c_ppstructurev2table_wrapper)
+
+FD_C_Bool FD_C_PPStructureV2TableWrapperBatchPredict(
+    FD_C_PPStructureV2TableWrapper* fd_c_ppstructurev2table_wrapper,
+    FD_C_OneDimMat imgs, FD_C_OneDimOCRResult* results) {
+  std::vector<cv::Mat> imgs_vec;
+  std::vector<FD_C_OCRResultWrapper*> results_wrapper_out;
+  std::vector<fastdeploy::vision::OCRResult> results_out;
+  for (int i = 0; i < imgs.size; i++) {
+    imgs_vec.push_back(*(reinterpret_cast<cv::Mat*>(imgs.data[i])));
+    FD_C_OCRResultWrapper* fd_ocr_result_wrapper =
+        FD_C_CreateOCRResultWrapper();
+    results_wrapper_out.push_back(fd_ocr_result_wrapper);
+  }
+  auto& model = CHECK_AND_CONVERT_FD_TYPE(PPStructureV2TableWrapper,
+                                          fd_c_ppstructurev2table_wrapper);
+  bool successful = model->BatchPredict(imgs_vec, &results_out);
+  if (successful) {
+    // copy results back to FD_C_OneDimOCRResult
+    results->size = results_out.size();
+    results->data = new FD_C_OCRResult[results->size];
+    for (int i = 0; i < results_out.size(); i++) {
+      (*CHECK_AND_CONVERT_FD_TYPE(OCRResultWrapper, results_wrapper_out[i])) =
+          std::move(results_out[i]);
+      FD_C_OCRResultWrapperToCResult(results_wrapper_out[i], &results->data[i]);
+    }
+  }
+  for (int i = 0; i < results_out.size(); i++) {
+    FD_C_DestroyOCRResultWrapper(results_wrapper_out[i]);
+  }
+  return successful;
+}
 #ifdef __cplusplus
 }
 #endif

@@ -43,10 +43,21 @@ tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar
 # 下载PP-OCRv3文字识别模型
 wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_rec_infer.tar
 tar -xvf ch_PP-OCRv3_rec_infer.tar
+# 下载PPStructureV2表格识别模型
+wget https://paddleocr.bj.bcebos.com/ppstructure/models/slanet/ch_ppstructure_mobile_v2.0_SLANet_infer.tar
+tar xf ch_ppstructure_mobile_v2.0_SLANet_infer.tar
+# 下载PP-StructureV2版面分析模型
+wget https://paddleocr.bj.bcebos.com/ppstructure/models/layout/picodet_lcnet_x1_0_fgd_layout_infer.tar
+tar -xvf picodet_lcnet_x1_0_fgd_layout_infer.tar
 
 # 下载预测图片与字典文件
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppstructure/docs/table/table.jpg
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppstructure/docs/table/layout.jpg
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/dict/table_structure_dict_ch.txt
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/dict/layout_dict/layout_publaynet_dict.txt
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/dict/layout_dict/layout_cdla_dict.txt
 
 # 运行部署示例
 # 在CPU上使用Paddle Inference推理
@@ -66,7 +77,7 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_
 # 在GPU上使用Nvidia TensorRT推理
 ./infer_demo ./ch_PP-OCRv3_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv3_rec_infer ./ppocr_keys_v1.txt ./12.jpg 7
 
-# 同时, FastDeploy提供文字检测,文字分类,文字识别三个模型的单独推理,
+# 同时, FastDeploy提供文字检测,文字分类,文字识别,表格识别,版面分析等模型的单独推理,
 # 有需要的用户, 请准备合适的图片, 同时根据自己的需求, 参考infer.cc来配置自定义硬件与推理后端.
 
 # 在CPU上,单独使用文字检测模型部署
@@ -77,6 +88,12 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_
 
 # 在CPU上,单独使用文字识别模型部署
 ./infer_rec ./ch_PP-OCRv3_rec_infer ./ppocr_keys_v1.txt ./12.jpg 0
+
+# 在CPU上,单独使用表格识别模型部署
+./infer_structurev2_table ./ch_ppstructure_mobile_v2.0_SLANet_infer ./table_structure_dict_ch.txt ./table.jpg 0
+
+# 在CPU上,单独使用版面分析模型部署
+./infer_structurev2_layout ./picodet_lcnet_x1_0_fgd_layout_infer ./layout.jpg 0
 ```
 
 运行完成可视化结果如下图所示

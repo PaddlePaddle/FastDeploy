@@ -49,6 +49,8 @@ struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
   std::vector<int32_t> label_ids;
   /// The confidence for each classify result
   std::vector<float> scores;
+  /// The feature vector of recognizer, e.g, PP-ShiTuV2 Recognizer
+  std::vector<float> feature;
   ResultType type = ResultType::CLASSIFY;
 
   /// Resize ClassifyResult data buffer
@@ -108,6 +110,9 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   /** \brief All the detected object boxes for an input image, the size of `boxes` is the number of detected objects, and the element of `boxes` is a array of 4 float values, means [xmin, ymin, xmax, ymax]
    */
   std::vector<std::array<float, 4>> boxes;
+  /** \brief All the detected rotated object boxes for an input image, the size of `boxes` is the number of detected objects, and the element of `rotated_boxes` is an array of 8 float values, means [x1, y1, x2, y2, x3, y3, x4, y4]
+   */
+  std::vector<std::array<float, 8>> rotated_boxes;
   /** \brief The confidence for all the detected objects
    */
   std::vector<float> scores;
@@ -212,6 +217,10 @@ struct FASTDEPLOY_DECL OCRResult : public BaseResult {
 
   std::vector<float> cls_scores;
   std::vector<int32_t> cls_labels;
+
+  std::vector<std::array<int, 8>> table_boxes;
+  std::vector<std::string> table_structure;
+  std::string table_html;
 
   ResultType type = ResultType::OCR;
 

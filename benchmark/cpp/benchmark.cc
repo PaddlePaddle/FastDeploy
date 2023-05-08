@@ -25,7 +25,7 @@ DEFINE_string(dtypes, "FP32", "Set input dtypes for model.");
 DEFINE_string(trt_shapes, "1,3,224,224:1,3,224,224:1,3,224,224",
               "Set min/opt/max shape for trt/paddle_trt backend."
               "eg:--trt_shape 1,3,224,224:1,3,224,224:1,3,224,224");
-DEFINE_int32(batch, 1, "trt max batch size, default=1");              
+DEFINE_int32(batch, 1, "trt max batch size, default=1");
 DEFINE_bool(dump, false, "whether to dump output tensors.");
 DEFINE_bool(info, false, "only check the input infos of model");
 DEFINE_bool(diff, false, "check the diff between two tensors.");
@@ -33,12 +33,16 @@ DEFINE_string(tensors, "tensor_a.txt:tensor_b.txt",
               "The paths to dumped tensors.");
 DEFINE_bool(mem, false, "Whether to force to collect memory info.");
 DEFINE_int32(interval, -1, "Sampling interval for collect memory info.");
-DEFINE_string(model_file, "UNKNOWN", "Optional, set specific model file,"
-             "eg, model.pdmodel, model.onnx");
-DEFINE_string(params_file, "", "Optional, set specific params file,"
-             "eg, model.pdiparams.");
-DEFINE_string(model_format, "PADDLE", "Optional, set specific model format,"
-             "eg, PADDLE/ONNX/RKNN/TORCHSCRIPT/SOPHGO");
+DEFINE_string(model_file, "UNKNOWN",
+              "Optional, set specific model file,"
+              "eg, model.pdmodel, model.onnx");
+DEFINE_string(params_file, "",
+              "Optional, set specific params file,"
+              "eg, model.pdiparams.");
+DEFINE_string(model_format, "PADDLE",
+              "Optional, set specific model format,"
+              "eg, PADDLE/ONNX/RKNN/TORCHSCRIPT/SOPHGO");
+DEFINE_bool(disable_mkldnn, false, "disable mkldnn for paddle backend");
 
 #if defined(ENABLE_BENCHMARK)
 static std::vector<int64_t> GetInt64Shape(const std::vector<int>& shape) {
@@ -88,6 +92,9 @@ static void RuntimeProfiling(int argc, char* argv[]) {
   if (!CreateRuntimeOption(&option, argc, argv, true)) {
     return;
   }
+  if (FLAGS_disable_mkldnn) {
+    option.paddle_infer_option.enable_mkldnn = false;
+  }
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
@@ -113,9 +120,9 @@ static void RuntimeProfiling(int argc, char* argv[]) {
     model_file = FLAGS_model + sep + FLAGS_model_file;
     params_file = FLAGS_model + sep + FLAGS_params_file;
     model_format = GetModelFormat(FLAGS_model_format);
-    if (model_format == fastdeploy::ModelFormat::PADDLE 
-        && FLAGS_params_file == "") {
-      std::cout << "[ERROR] params_file can not be empty for PADDLE" 
+    if (model_format == fastdeploy::ModelFormat::PADDLE &&
+        FLAGS_params_file == "") {
+      std::cout << "[ERROR] params_file can not be empty for PADDLE"
                 << " format, Please, set your custom params_file manually."
                 << std::endl;
       return;
@@ -130,7 +137,7 @@ static void RuntimeProfiling(int argc, char* argv[]) {
     model_file = FLAGS_model + sep + model_name;
     params_file = FLAGS_model + sep + params_name;
   }
-  
+
   option.SetModelPath(model_file, params_file, model_format);
 
   // Get input shapes/names/dtypes
@@ -252,6 +259,9 @@ static void showInputInfos(int argc, char* argv[]) {
   if (!CreateRuntimeOption(&option, argc, argv, true)) {
     return;
   }
+  if (FLAGS_disable_mkldnn) {
+    option.paddle_infer_option.enable_mkldnn = false;
+  }
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
@@ -281,6 +291,10 @@ static void showInputInfos(int argc, char* argv[]) {
 
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK)
+  google::SetVersionString("0.0.0");
+  google::SetUsageMessage(
+      "./benchmark -[info|diff|check|dump|mem] -model xxx -config_path xxx "
+      "-[shapes|dtypes|names|tensors] -[model_file|params_file|model_format]");
   google::ParseCommandLineFlags(&argc, &argv, true);
   if (FLAGS_diff) {
     CheckTensorDiff(argc, argv);

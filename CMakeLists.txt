@@ -63,6 +63,7 @@ option(ENABLE_OPENVINO_BACKEND "Whether to enable openvino backend." OFF)
 option(ENABLE_RKNPU2_BACKEND "Whether to enable RKNPU2 backend." OFF)
 option(ENABLE_SOPHGO_BACKEND "Whether to enable SOPHON backend." OFF)
 option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
+option(ENABLE_HORIZON_BACKEND "Whether to enable HORIZON backend." OFF)
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
@@ -77,8 +78,8 @@ option(WITH_TESTING "Whether to compile with unittest." OFF)
 option(WITH_CAPI "Whether to compile with c api." OFF)
 option(WITH_CSHARPAPI "Whether to compile with c# api" OFF)
 
-# Whether to build fastdeploy with vision/text/... examples, only for testings.
 option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
+option(BUILD_PADDLE2ONNX "Whether to build paddle2onnx from sources" OFF)
 
 ######################### Paths to user's custom libraries directory #####################
 set(CUDA_DIRECTORY "" CACHE PATH "If build tensorrt backend, need to define path of cuda library.")
@@ -165,6 +166,7 @@ file(GLOB_RECURSE DEPLOY_POROS_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fast
 file(GLOB_RECURSE DEPLOY_TRT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/tensorrt/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/tensorrt/*.cpp)
 file(GLOB_RECURSE DEPLOY_OPENVINO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/openvino/*.cc)
 file(GLOB_RECURSE DEPLOY_RKNPU2_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/rknpu2/*.cc)
+file(GLOB_RECURSE DEPLOY_HORIZON_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/horizon/*.cc)
 file(GLOB_RECURSE DEPLOY_SOPHGO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/sophgo/*.cc)
 file(GLOB_RECURSE DEPLOY_LITE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/lite/*.cc)
 file(GLOB_RECURSE DEPLOY_ENCRYPTION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/encryption/*.cc)
@@ -185,7 +187,7 @@ list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS}
                                  ${DEPLOY_OPENVINO_SRCS} ${DEPLOY_LITE_SRCS}
                                  ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS}
                                  ${DEPLOY_PIPELINE_SRCS} ${DEPLOY_RKNPU2_SRCS}
-                                 ${DEPLOY_SOPHGO_SRCS} ${DEPLOY_ENCRYPTION_SRCS})
+                                 ${DEPLOY_SOPHGO_SRCS} ${DEPLOY_ENCRYPTION_SRCS} ${DEPLOY_HORIZON_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -251,6 +253,13 @@ if(ENABLE_RKNPU2_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_RKNPU2_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/rknpu2.cmake)
   list(APPEND DEPEND_LIBS ${RKNN_RT_LIB})
+endif()
+
+if(ENABLE_HORIZON_BACKEND)
+  add_definitions(-DENABLE_HORIZON_BACKEND)
+  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_HORIZON_SRCS})
+  include(${PROJECT_SOURCE_DIR}/cmake/horizon.cmake)
+  list(APPEND DEPEND_LIBS ${BPU_libs})
 endif()
 
 if(ENABLE_SOPHGO_BACKEND)
@@ -425,7 +434,6 @@ if(ENABLE_ENCRYPTION)
 endif()
 
 if(ENABLE_PADDLE2ONNX)
-  set(BUILD_PADDLE2ONNX ON)
   add_definitions(-DENABLE_PADDLE2ONNX)
   if(BUILD_PADDLE2ONNX)
     download_protobuf()

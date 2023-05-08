@@ -1,30 +1,52 @@
 # PaddleDetection Python部署示例
 
-## 1. 部署环境准备
+在部署前，需确认以下步骤
 
-在部署前，需自行编译基于算能硬件的FastDeploy python wheel包并安装，参考文档[算能硬件部署环境](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/cn/build_and_install#算能硬件部署环境)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../../docs/cn/build_and_install/sophgo.md)
 
-本目录下提供`infer.py`, 快速完成 PP-YOLOE ,在SOPHGO TPU上部署的示例，执行如下脚本即可完成。PP-YOLOV8和 PicoDet的部署逻辑类似，只需要切换模型即可。 
-
-## 2. 部署模型准备  
-在部署前，请准备好您所需要运行的推理模型，你可以选择使用[预导出的推理模型](../README.md)或者[自行导出PaddleDetection部署模型](../README.md)。
+本目录下提供`infer_ppyoloe.py`,`infer_yolov8.py`和`infer_picodet.py`快速完成 PP-YOLOE ,PP-YOLOV8和 PicoDet 在SOPHGO TPU上部署的示例。执行如下脚本即可完成
 
 ```bash
 # 下载部署示例代码
-git clone https://github.com/PaddlePaddle/PaddleDetection.git
-cd PaddleDetection/deploy/fastdeploy/sophgo/python
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy/examples/vision/detection/paddledetection/sophgo/python
 
 # 下载图片
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
+wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/P0861__1.0__1154___824.png
 
 # 推理
-#ppyoloe推理示例
-python3 infer.py --model_file model/ppyoloe_crn_s_300e_coco_1684x_f32.bmodel --config_file model/infer_cfg.yml --image_file ./000000014439.jpg
+# ppyoloe推理示例
+# 指定--auto True，自动完成模型准备、转换和推理，需要指定PaddleDetection路径
+python3 infer_ppyoloe.py --auto True --pp_detect_path {Path to PaddleDetection} --model_file '' --config_file '' --image ''
 
+# 指定--auto False，需要用户指定模型、配置文件和图片路径，不需要指定PaddleDetection路径。
+python3 infer_ppyoloe.py --auto False --pp_detect_path '' --model_file model/ppyoloe_crn_s_300e_coco_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
+
+# picodet推理示例
+# 指定--auto True，自动完成模型准备、转换和推理，需要指定PaddleDetection路径
+python3 infer_picodet.py --auto True --pp_detect_path {Path to PaddleDetection} --model_file '' --config_file '' --image ''
+
+# 指定--auto False，需要用户指定模型、配置文件和图片路径，不需要指定PaddleDetection路径。
+python3 infer_picodet.py --auto False --pp_detect_path '' --model_file model/ppyoloe_crn_s_300e_coco_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
+
+# yolov8推理示例
+python3 infer_yolov8.py --model_file model/yolov8s_s_300e_coco_1684x_f32.bmodel --config_file model/infer_cfg.yml --image ./000000014439.jpg
 # 运行完成后返回结果如下所示
 可视化结果存储在sophgo_result.jpg中
+
+# ppyoloe_r推理示例
+# 指定--auto True，自动完成模型准备、转换和推理，需要指定PaddleDetection路径
+python3 infer_ppyoloe_r.py --model_file model/ppyoloe_r_crn_s_3x_dota_1684x_f32.bmodel --image P0861__1.0__1154___824.png --config_file model/infer_cfg.yml
+可视化结果存储在sophgo_result_ppyoloe_r.jpg中
 ```
 
-## 3. 更多指南
-- [C++部署](../cpp)
+## 其它文档
+- [PP-YOLOE C++部署](../cpp)
+- [PicoDet C++部署](../cpp)
+- [YOLOV8 C++部署](../cpp)
+- [PP-YOLOE-R C++部署](../cpp)
+- [转换PicoDet SOPHGO模型文档](../README.md)
 - [转换PP-YOLOE SOPHGO模型文档](../README.md)
+- [转换YOLOV8 SOPHGO模型文档](../README.md)
+- [转换PP-YOLOE-R SOPHGO模型文档](../README.md)
