@@ -50,20 +50,21 @@ int main(int argc, char* argv[]) {
     option.trt_option.SetShape("image", {1, 3, 640, 640}, {1, 3, 640, 640},
                                {1, 3, 640, 640});
     option.trt_option.SetShape("scale_factor", {1, 2}, {1, 2}, {1, 2});
+    option.trt_option.SetShape("im_shape", {1, 2}, {1, 2}, {1, 2});
   }
-  auto model_picodet = vision::detection::PicoDet(
+  auto model = vision::classification::PPShiTuV2Detector(
       model_file, params_file, config_file, option, model_format);
   if (FLAGS_no_nms) {
-    model_picodet.GetPostprocessor().ApplyNMS();
+    model.GetPostprocessor().ApplyNMS();
   }
   vision::DetectionResult res;
   if (config_info["precision_compare"] == "true") {
     // Run once at least
-    model_picodet.Predict(im, &res);
+    model.Predict(im, &res);
     // 1. Test result diff
     std::cout << "=============== Test result diff =================\n";
     // Save result to -> disk.
-    std::string det_result_path = "picodet_result.txt";
+    std::string det_result_path = "ppshituv2_det_result.txt";
     benchmark::ResultManager::SaveDetectionResult(res, det_result_path);
     // Load result from <- disk.
     vision::DetectionResult res_loaded;
@@ -79,7 +80,7 @@ int main(int argc, char* argv[]) {
               << ", min=" << det_diff.labels.min << std::endl;
   }
   // Run profiling
-  BENCHMARK_MODEL(model_picodet, model_picodet.Predict(im, &res))
+  BENCHMARK_MODEL(model, model.Predict(im, &res))
   auto vis_im = vision::VisDetection(im, res, 0.5f);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
