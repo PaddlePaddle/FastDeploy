@@ -49,6 +49,8 @@ struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
   std::vector<int32_t> label_ids;
   /// The confidence for each classify result
   std::vector<float> scores;
+  /// The feature vector of recognizer, e.g, PP-ShiTuV2 Recognizer
+  std::vector<float> feature;
   ResultType type = ResultType::CLASSIFY;
 
   /// Resize ClassifyResult data buffer
