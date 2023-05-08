@@ -17,7 +17,7 @@ if(WITH_GPU AND WITH_IPU)
   message(FATAL_ERROR "Cannot build with WITH_GPU=ON and WITH_IPU=ON on the same time.")
 endif()
 
-option(PADDLEINFERENCE_DIRECTORY "Directory of Paddle Inference library" OFF)
+option(PADDLEINFERENCE_DIRECTORY "Directory of custom Paddle Inference library" OFF)
 
 set(PADDLEINFERENCE_PROJECT "extern_paddle_inference")
 set(PADDLEINFERENCE_PREFIX_DIR ${THIRD_PARTY_PATH}/paddle_inference)
