@@ -18,6 +18,8 @@
 #include "fastdeploy/vision/classification/contrib/resnet.h"
 #include "fastdeploy/vision/classification/contrib/yolov5cls/yolov5cls.h"
 #include "fastdeploy/vision/classification/ppcls/model.h"
+#include "fastdeploy/vision/classification/ppshitu/ppshituv2_rec.h"
+#include "fastdeploy/vision/classification/ppshitu/ppshituv2_det.h"
 #include "fastdeploy/vision/detection/contrib/nanodet_plus.h"
 #include "fastdeploy/vision/detection/contrib/scaledyolov4.h"
 #include "fastdeploy/vision/detection/contrib/yolor.h"

@@ -19,16 +19,21 @@ namespace vision {
 void ClassifyResult::Free() {
   std::vector<int32_t>().swap(label_ids);
   std::vector<float>().swap(scores);
+  std::vector<float>().swap(feature);
 }
 
 void ClassifyResult::Clear() {
   label_ids.clear();
   scores.clear();
+  feature.clear();
 }
 
 void ClassifyResult::Resize(int size) {
   label_ids.resize(size);
   scores.resize(size);
+  // TODO(qiuyanjun): feature not perform resize now.
+  // may need the code below for future.
+  // feature.resize(size);
 }
 
 std::string ClassifyResult::Str() {
@@ -38,8 +43,24 @@ std::string ClassifyResult::Str() {
     out = out + std::to_string(label_ids[i]) + ", ";
   }
   out += "\nscores: ";
-  for (size_t i = 0; i < label_ids.size(); ++i) {
+  for (size_t i = 0; i < scores.size(); ++i) {
     out = out + std::to_string(scores[i]) + ", ";
+  }
+  if (!feature.empty()) {
+    out += "\nfeature: size (";
+    out += std::to_string(feature.size()) + "), only show first 100 values.\n";
+    for (size_t i = 0; i < feature.size(); ++i) {
+      // only show first 100 values.
+      if ((i + 1) <= 100) {
+        out = out + std::to_string(feature[i]) + ", ";
+        if ((i + 1) % 10 == 0 && (i + 1) < 100) {
+          out += "\n";
+        }
+        if ((i + 1) == 100) {
+          out += "\n......";
+        }
+      }
+    }
   }
   out += "\n)";
   return out;
@@ -49,6 +70,7 @@ ClassifyResult& ClassifyResult::operator=(ClassifyResult&& other) {
   if (&other != this) {
     label_ids = std::move(other.label_ids);
     scores = std::move(other.scores);
+    feature = std::move(other.feature);
   }
   return *this;
 }
@@ -154,15 +176,19 @@ std::string DetectionResult::Str() {
   if (!contain_masks) {
     out = "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]\n";
     if (!rotated_boxes.empty()) {
-      out = "DetectionResult: [x1, y1, x2, y2, x3, y3, x4, y4, score, label_id]\n";
+      out =
+          "DetectionResult: [x1, y1, x2, y2, x3, y3, x4, y4, score, "
+          "label_id]\n";
     }
   } else {
     out =
         "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id, "
         "mask_shape]\n";
     if (!rotated_boxes.empty()) {
-      out = "DetectionResult: [x1, y1, x2, y2, x3, y3, x4, y4, score, label_id, mask_shape]\n";
-    } 
+      out =
+          "DetectionResult: [x1, y1, x2, y2, x3, y3, x4, y4, score, label_id, "
+          "mask_shape]\n";
+    }
   }
   for (size_t i = 0; i < boxes.size(); ++i) {
     out = out + std::to_string(boxes[i][0]) + "," +
@@ -646,8 +672,8 @@ std::string OCRResult::Str() {
       out = out + "]";
 
       if (rec_scores.size() > 0) {
-        out = out + "rec text: " + text[n] +
-              " rec score:" + std::to_string(rec_scores[n]) + " ";
+        out = out + "rec text: " + text[n] + " rec score:" +
+              std::to_string(rec_scores[n]) + " ";
       }
       if (cls_labels.size() > 0) {
         out = out + "cls label: " + std::to_string(cls_labels[n]) +
@@ -687,8 +713,8 @@ std::string OCRResult::Str() {
              cls_scores.size() > 0) {
     std::string out;
     for (int i = 0; i < rec_scores.size(); i++) {
-      out = out + "rec text: " + text[i] +
-            " rec score:" + std::to_string(rec_scores[i]) + " ";
+      out = out + "rec text: " + text[i] + " rec score:" +
+            std::to_string(rec_scores[i]) + " ";
       out = out + "cls label: " + std::to_string(cls_labels[i]) +
             " cls score: " + std::to_string(cls_scores[i]);
       out = out + "\n";
@@ -707,8 +733,8 @@ std::string OCRResult::Str() {
              cls_scores.size() == 0) {
     std::string out;
     for (int i = 0; i < rec_scores.size(); i++) {
-      out = out + "rec text: " + text[i] +
-            " rec score:" + std::to_string(rec_scores[i]) + " ";
+      out = out + "rec text: " + text[i] + " rec score:" +
+            std::to_string(rec_scores[i]) + " ";
       out = out + "\n";
     }
     return out;
@@ -755,9 +781,9 @@ std::string HeadPoseResult::Str() {
   std::string out;
 
   out = "HeadPoseResult: [yaw, pitch, roll]\n";
-  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" +
-        "pitch: " + std::to_string(euler_angles[1]) + "\n" +
-        "roll: " + std::to_string(euler_angles[2]) + "\n";
+  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" + "pitch: " +
+        std::to_string(euler_angles[1]) + "\n" + "roll: " +
+        std::to_string(euler_angles[2]) + "\n";
   return out;
 }
 
