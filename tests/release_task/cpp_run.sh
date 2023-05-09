@@ -4,6 +4,7 @@ CURRENT_DIR=$(cd $(dirname $0); pwd)
 PLATFORM=$1
 DEVICE=$2
 VERSION=$3
+CUSTOM_CPP_FASTDEPLOY_PACKAGE=$4
 if [ "$VERSION" = "0.0.0" ];then
        DOWNLOAD_DIR=dev
 else
@@ -14,10 +15,16 @@ if [ "$DEVICE" = "gpu" ];then
 else
        CPP_FASTDEPLOY_PACKAGE=fastdeploy-$PLATFORM-$VERSION
 fi
-echo $CPP_FASTDEPLOY_PACKAGE
+# Use custom package name if not empty
+if [ ! "$CUSTOM_CPP_FASTDEPLOY_PACKAGE" = "" ];then
+  CPP_FASTDEPLOY_PACKAGE=$CUSTOM_CPP_FASTDEPLOY_PACKAGE
+  echo "using custom package: $CUSTOM_CPP_FASTDEPLOY_PACKAGE"
+fi
+echo "current package: $CPP_FASTDEPLOY_PACKAGE"
+
 LINUX_X64_GPU_CASE=('ort' 'paddle' 'trt')
 LINUX_X64_CPU_CASE=('ort' 'paddle' 'openvino')
-#LINUX_AARCH_CPU_CASE=('ort' 'openvino')
+# LINUX_AARCH_CPU_CASE=('ort' 'openvino')
 LINUX_AARCH_CPU_CASE=('ort')
 MACOS_INTEL_CPU_CASE=('ort' 'openvino')
 MACOS_ARM64_CPU_CASE=('default')

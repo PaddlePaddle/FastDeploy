@@ -5,6 +5,7 @@ set NO_PROXY=bj.bcebos.com,xly.bce.baidu.com,aliyun.com
 set PLATFORM=%1
 set DEVICE=%2
 set VERSION=%3
+set CUSTOM_CPP_FASTDEPLOY_PACKAGE=%4
 set CURRENT_DIR=%cd%
 
 echo "CURRENT_DIR" %CURRENT_DIR%
@@ -27,7 +28,13 @@ if "%DEVICE%" == "gpu" (
     set RUN_CASES=ort paddle openvino
 )
 
-echo "CPP_FASTDEPLOY_PACKAGE: " %CPP_FASTDEPLOY_PACKAGE%
+@rem Use custom package name if not empty
+if "%CUSTOM_CPP_FASTDEPLOY_PACKAGE%" neq "" (
+  set CPP_FASTDEPLOY_PACKAGE=%CUSTOM_CPP_FASTDEPLOY_PACKAGE%
+  echo "using custom package: %CUSTOM_CPP_FASTDEPLOY_PACKAGE%"
+)
+
+echo "current package: %CPP_FASTDEPLOY_PACKAGE%"
 echo "RUN_CASES" %RUN_CASES%
 
 python -c "import wget; wget.download('https://fastdeploy.bj.bcebos.com/resource/images/000000014439.jpg')"
