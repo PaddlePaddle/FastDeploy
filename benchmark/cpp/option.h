@@ -26,11 +26,15 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
                             FLAGS_config_path, &config_info);
   int warmup = std::stoi(config_info["warmup"]);
   int repeat = std::stoi(config_info["repeat"]);
+  // force override some config options
   if (FLAGS_warmup != -1) {
     warmup = FLAGS_warmup;
   }
   if (FLAGS_repeat != -1) {
     repeat = FLAGS_repeat;
+  }
+  if (FLAGS_use_fp16) {
+    config_info["use_fp16"] = "true";
   }
   if (config_info["profile_mode"] == "runtime") {
     option->EnableProfiling(config_info["include_h2d_d2h"] == "true",

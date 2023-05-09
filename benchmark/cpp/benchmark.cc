@@ -65,6 +65,12 @@ static fastdeploy::ModelFormat GetModelFormat(const std::string& model_format) {
     return fastdeploy::ModelFormat::TORCHSCRIPT;
   } else if (model_format == "SOPHGO") {
     return fastdeploy::ModelFormat::SOPHGO;
+  } else if (model_format == "MNN") {
+    return fastdeploy::ModelFormat::MNN_MODEL;
+  } else if (model_format == "TNN") {
+    return fastdeploy::ModelFormat::TNN_MODEL;
+  } else if (model_format == "NCNN") {
+    return fastdeploy::ModelFormat::NCNN_MODEL;
   } else {
     return fastdeploy::ModelFormat::PADDLE;
   }
