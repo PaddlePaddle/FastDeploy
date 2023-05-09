@@ -49,6 +49,8 @@ struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
   std::vector<int32_t> label_ids;
   /// The confidence for each classify result
   std::vector<float> scores;
+  /// The feature vector of recognizer, e.g, PP-ShiTuV2 Recognizer
+  std::vector<float> feature;
   ResultType type = ResultType::CLASSIFY;
 
   /// Resize ClassifyResult data buffer
@@ -108,6 +110,9 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   /** \brief All the detected object boxes for an input image, the size of `boxes` is the number of detected objects, and the element of `boxes` is a array of 4 float values, means [xmin, ymin, xmax, ymax]
    */
   std::vector<std::array<float, 4>> boxes;
+  /** \brief All the detected rotated object boxes for an input image, the size of `boxes` is the number of detected objects, and the element of `rotated_boxes` is an array of 8 float values, means [x1, y1, x2, y2, x3, y3, x4, y4]
+   */
+  std::vector<std::array<float, 8>> rotated_boxes;
   /** \brief The confidence for all the detected objects
    */
   std::vector<float> scores;
@@ -130,6 +135,44 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   void Clear();
 
   /// Clear DetectionResult and free the memory
+  void Free();
+
+  void Reserve(int size);
+
+  void Resize(int size);
+
+  /// Debug function, convert the result to string to print
+  std::string Str();
+};
+
+/*! @brief Detection result structure for all the object detection models and instance segmentation models
+ */
+struct FASTDEPLOY_DECL PerceptionResult : public BaseResult {
+  PerceptionResult() = default;
+
+  std::vector<float> scores;
+
+  std::vector<int32_t> label_ids;
+  // xmin, ymin, xmax, ymax, h, w, l
+  std::vector<std::array<float, 7>> boxes;
+  // cx, cy, cz
+  std::vector<std::array<float, 3>> center;
+
+  std::vector<float> observation_angle;
+
+  std::vector<float> yaw_angle;
+  // vx, vy, vz
+  std::vector<std::array<float, 3>> velocity;
+
+  /// Copy constructor
+  PerceptionResult(const PerceptionResult& res);
+  /// Move assignment
+  PerceptionResult& operator=(PerceptionResult&& other);
+
+  /// Clear PerceptionResult
+  void Clear();
+
+  /// Clear PerceptionResult and free the memory
   void Free();
 
   void Reserve(int size);
@@ -174,6 +217,10 @@ struct FASTDEPLOY_DECL OCRResult : public BaseResult {
 
   std::vector<float> cls_scores;
   std::vector<int32_t> cls_labels;
+
+  std::vector<std::array<int, 8>> table_boxes;
+  std::vector<std::string> table_structure;
+  std::string table_html;
 
   ResultType type = ResultType::OCR;
 

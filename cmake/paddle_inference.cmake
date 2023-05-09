@@ -17,16 +17,20 @@ if(WITH_GPU AND WITH_IPU)
   message(FATAL_ERROR "Cannot build with WITH_GPU=ON and WITH_IPU=ON on the same time.")
 endif()
 
-option(PADDLEINFERENCE_DIRECTORY "Directory of Paddle Inference library" OFF)
+option(PADDLEINFERENCE_DIRECTORY "Directory of custom Paddle Inference library" OFF)
 
 set(PADDLEINFERENCE_PROJECT "extern_paddle_inference")
 set(PADDLEINFERENCE_PREFIX_DIR ${THIRD_PARTY_PATH}/paddle_inference)
 set(PADDLEINFERENCE_SOURCE_DIR
     ${THIRD_PARTY_PATH}/paddle_inference/src/${PADDLEINFERENCE_PROJECT})
 set(PADDLEINFERENCE_INSTALL_DIR ${THIRD_PARTY_PATH}/install/paddle_inference)
-set(PADDLEINFERENCE_INC_DIR
-    "${PADDLEINFERENCE_INSTALL_DIR}/paddle/include"
-    CACHE PATH "paddle_inference include directory." FORCE)
+# set(PADDLEINFERENCE_INC_DIR
+#     "${PADDLEINFERENCE_INSTALL_DIR}/paddle/include"
+#     CACHE PATH "paddle_inference include directory." FORCE)
+# NOTE: The head path need by paddle inference is xxx/paddle_inference,
+# not xxx/paddle_inference/paddle/include
+set(PADDLEINFERENCE_INC_DIR "${PADDLEINFERENCE_INSTALL_DIR}"
+    CACHE PATH "paddle_inference include directory." FORCE)    
 set(PADDLEINFERENCE_LIB_DIR
     "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/"
     CACHE PATH "paddle_inference lib directory." FORCE)
@@ -34,7 +38,8 @@ set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}"
                       "${PADDLEINFERENCE_LIB_DIR}")
 
 if(PADDLEINFERENCE_DIRECTORY)
-  set(PADDLEINFERENCE_INC_DIR ${PADDLEINFERENCE_DIRECTORY}/paddle/include)
+  # set(PADDLEINFERENCE_INC_DIR ${PADDLEINFERENCE_DIRECTORY}/paddle/include)
+  set(PADDLEINFERENCE_INC_DIR ${PADDLEINFERENCE_DIRECTORY})
 endif()
 
 include_directories(${PADDLEINFERENCE_INC_DIR})
@@ -66,47 +71,57 @@ endif(WIN32)
 
 
 if(PADDLEINFERENCE_DIRECTORY)
+  # Use custom Paddle Inference libs.
   if(EXISTS "${THIRD_PARTY_PATH}/install/paddle_inference")
     file(REMOVE_RECURSE "${THIRD_PARTY_PATH}/install/paddle_inference")
   endif()
   find_package(Python COMPONENTS Interpreter Development REQUIRED)
   message(STATUS "Copying ${PADDLEINFERENCE_DIRECTORY} to ${THIRD_PARTY_PATH}/install/paddle_inference ...")
   if(WIN32)
-    message(FATAL_ERROR "Define PADDLEINFERENCE_DIRECTORY is not supported on Windows platform.")
+    execute_process(COMMAND mkdir -p ${THIRD_PARTY_PATH}/install)
+    execute_process(COMMAND cp -r ${PADDLEINFERENCE_DIRECTORY} ${THIRD_PARTY_PATH}/install/paddle_inference)
   else()
     execute_process(COMMAND mkdir -p ${THIRD_PARTY_PATH}/install)
     execute_process(COMMAND cp -r ${PADDLEINFERENCE_DIRECTORY} ${THIRD_PARTY_PATH}/install/paddle_inference)
     execute_process(COMMAND rm -rf ${THIRD_PARTY_PATH}/install/paddle_inference/paddle/lib/*.a)
   endif()
 else()
+  # Use default Paddle Inference libs.
   set(PADDLEINFERENCE_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
-  set(PADDLEINFERENCE_VERSION "2.4-dev7")
   if(WIN32)
-    set(PADDLEINFERENCE_VERSION "2.4-dev6") # dev7 for win is not ready now!
     if (WITH_GPU)
-      set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-gpu-trt-${PADDLEINFERENCE_VERSION}.zip")
+      set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-gpu-trt8.5.2.2-mkl-avx-0.0.0.575cafb44b.zip")
+      set(PADDLEINFERENCE_VERSION "0.0.0.575cafb44b")
     else()
-      set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-${PADDLEINFERENCE_VERSION}.zip")
+      set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-mkl-avx-0.0.0.cbdba50933.zip")
+      set(PADDLEINFERENCE_VERSION "0.0.0.cbdba50933")
     endif()
   elseif(APPLE)
     if(CURRENT_OSX_ARCH MATCHES "arm64")
       message(FATAL_ERROR "Paddle Backend doesn't support Mac OSX with Arm64 now.")
-      set(PADDLEINFERENCE_FILE "paddle_inference-osx-arm64-${PADDLEINFERENCE_VERSION}.tgz")
+      set(PADDLEINFERENCE_FILE "paddle_inference-osx-arm64-openblas-0.0.0.660f781b77.tgz")
     else()
-      set(PADDLEINFERENCE_FILE "paddle_inference-osx-x86_64-${PADDLEINFERENCE_VERSION}.tgz")
+      # TODO(qiuyanjun): Should remove this old paddle inference lib
+      # set(PADDLEINFERENCE_FILE "paddle_inference-osx-x86_64-2.4-dev3.tgz")
+      set(PADDLEINFERENCE_FILE "paddle_inference-osx-x86_64-openblas-0.0.0.660f781b77.tgz")
     endif()
+    set(PADDLEINFERENCE_VERSION "0.0.0.660f781b77")
   else()
+    # Linux with x86 CPU/Arm CPU/GPU/IPU ...
     if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
       message(FATAL_ERROR "Paddle Backend doesn't support linux aarch64 now.")
-      set(PADDLEINFERENCE_FILE "paddle_inference-linux-aarch64-${PADDLEINFERENCE_VERSION}.tgz")
     else()
-      set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-${PADDLEINFERENCE_VERSION}.tgz")
       if(WITH_GPU)
-          set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-gpu-trt-${PADDLEINFERENCE_VERSION}.tgz")
+        set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-gpu-trt8.5.2.2-mkl-avx-0.0.0.660f781b77.tgz")
+        set(PADDLEINFERENCE_VERSION "0.0.0.660f781b77")
+      else()
+        set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-mkl-avx-0.0.0.660f781b77.tgz")
+        set(PADDLEINFERENCE_VERSION "0.0.0.660f781b77")
       endif()
       if (WITH_IPU)
-          set(PADDLEINFERENCE_VERSION "2.4-dev1")
-          set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-ipu-${PADDLEINFERENCE_VERSION}.tgz")
+        set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-ipu-2.4-dev1.tgz")
+        # TODO(qiuyanjun): Should use the commit id to tag the version
+        set(PADDLEINFERENCE_VERSION "2.4-dev1")
       endif()
 
       if(NEED_ABI0)
@@ -114,12 +129,12 @@ else()
           message(WARNING "While NEED_ABI0=ON, only support CPU now, will fallback to CPU.")
         endif()
         set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-2.4.0-abi0.tgz")
+        set(PADDLEINFERENCE_VERSION "2.4.0-abi0")
       endif()
     endif()
   endif()
   set(PADDLEINFERENCE_URL "${PADDLEINFERENCE_URL_BASE}${PADDLEINFERENCE_FILE}")
 
- 
   ExternalProject_Add(
     ${PADDLEINFERENCE_PROJECT}
     ${EXTERNAL_PROJECT_LOG_ARGS}
@@ -132,8 +147,10 @@ else()
     INSTALL_COMMAND
   	${CMAKE_COMMAND} -E copy_directory ${PADDLEINFERENCE_SOURCE_DIR} ${PADDLEINFERENCE_INSTALL_DIR}
     BUILD_BYPRODUCTS ${PADDLEINFERENCE_COMPILE_LIB})
+
 endif(PADDLEINFERENCE_DIRECTORY)
 
+# Path Paddle Inference ELF lib file
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
   add_custom_target(patchelf_paddle_inference ALL COMMAND  bash -c "PATCHELF_EXE=${PATCHELF_EXE} python ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_inference.py ${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so" DEPENDS ${LIBRARY_NAME})
 endif()

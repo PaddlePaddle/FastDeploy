@@ -61,7 +61,7 @@ struct PaddleMultiClassNMS {
                const std::vector<int64_t>& boxes_dim,
                const std::vector<int64_t>& scores_dim);
 
-  void SetNMSOption(const struct NMSOption &nms_option){
+  void SetNMSOption(const struct NMSOption &nms_option) {
     background_label = nms_option.background_label;
     keep_top_k = nms_option.keep_top_k;
     nms_eta = nms_option.nms_eta;

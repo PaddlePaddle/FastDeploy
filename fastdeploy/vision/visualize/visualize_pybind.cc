@@ -19,7 +19,8 @@ void BindVisualize(pybind11::module& m) {
   m.def("vis_detection",
         [](pybind11::array& im_data, vision::DetectionResult& result,
            std::vector<std::string>& labels, float score_threshold,
-           int line_size, float font_size) {
+           int line_size, float font_size, std::vector<int> font_color,
+           int font_thickness) {
           auto im = PyArrayToCvMat(im_data);
           cv::Mat vis_im;
           if (labels.empty()) {
@@ -27,12 +28,25 @@ void BindVisualize(pybind11::module& m) {
                                           line_size, font_size);
           } else {
             vis_im = vision::VisDetection(im, result, labels, score_threshold,
-                                          line_size, font_size);
+                                          line_size, font_size, font_color,
+                                          font_thickness);
           }
           FDTensor out;
           vision::Mat(vis_im).ShareWithTensor(&out);
           return TensorToPyArray(out);
         })
+      .def("vis_perception",
+           [](pybind11::array& im_data, vision::PerceptionResult& result,
+              const std::string& config_file, float score_threshold,
+              int line_size, float font_size) {
+             auto im = PyArrayToCvMat(im_data);
+             auto vis_im =
+                 vision::VisPerception(im, result, config_file, score_threshold,
+                                       line_size, font_size);
+             FDTensor out;
+             vision::Mat(vis_im).ShareWithTensor(&out);
+             return TensorToPyArray(out);
+           })
       .def("vis_face_detection",
            [](pybind11::array& im_data, vision::FaceDetectionResult& result,
               int line_size, float font_size) {

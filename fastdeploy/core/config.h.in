@@ -80,3 +80,7 @@
 #ifndef ENABLE_BENCHMARK
 #cmakedefine ENABLE_BENCHMARK
 #endif
+
+#ifndef ENABLE_HORIZON_BACKEND
+#cmakedefine ENABLE_HORIZON_BACKEND
+#endif

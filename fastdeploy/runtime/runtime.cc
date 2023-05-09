@@ -61,6 +61,10 @@
 #include "fastdeploy/runtime/backends/tnn/tnn_backend.h"
 #endif
 
+#ifdef ENABLE_HORIZON_BACKEND
+#include "fastdeploy/runtime/backends/horizon/horizon_backend.h"
+#endif
+
 namespace fastdeploy {
 
 bool AutoSelectBackend(RuntimeOption& option) {
@@ -173,6 +177,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     CreateNCNNBackend();
   } else if (option.backend == Backend::TNN) {
     CreateTNNBackend();
+  } else if (option.backend == Backend::HORIZONNPU) {
+    CreateHorizonBackend();
   } else {
     std::string msg = Str(GetAvailableBackends());
     FDERROR << "The compiled FastDeploy only supports " << msg << ", "
@@ -350,6 +356,18 @@ void Runtime::CreateRKNPU2Backend() {
            "ENABLE_RKNPU2_BACKEND=ON.");
 #endif
   FDINFO << "Runtime initialized with Backend::RKNPU2 in " << option.device
+         << "." << std::endl;
+}
+
+void Runtime::CreateHorizonBackend() {
+#ifdef ENABLE_HORIZON_BACKEND
+  backend_ = utils::make_unique<HorizonBackend>();
+  FDASSERT(backend_->Init(option), "Failed to initialize Horizon backend.");
+#else
+  FDASSERT(false, "HorizonBackend is not available, please compiled with ",
+           " ENABLE_HORIZON_BACKEND=ON.");
+#endif
+  FDINFO << "Runtime initialized with Backend::HORIZONNPU in " << option.device
          << "." << std::endl;
 }
 

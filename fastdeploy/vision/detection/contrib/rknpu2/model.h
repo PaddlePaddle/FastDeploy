@@ -36,7 +36,8 @@ class FASTDEPLOY_DECL RKYOLOV5 : public RKYOLO {
     std::vector<int> anchors = {10, 13, 16,  30,  33, 23,  30,  61,  62,
                                 45, 59, 119, 116, 90, 156, 198, 373, 326};
     int anchor_per_branch_ = 3;
-    GetPostprocessor().SetAnchor(anchors, anchor_per_branch_);
+    GetPostprocessor().SetAnchor(anchors);
+    GetPostprocessor().SetAnchorPerBranch(anchor_per_branch_);
   }
 
   virtual std::string ModelName() const { return "RKYOLOV5"; }
@@ -60,7 +61,8 @@ class FASTDEPLOY_DECL RKYOLOV7 : public RKYOLO {
     std::vector<int> anchors = {12, 16, 19,  36,  40,  28,  36,  75,  76,
                                 55, 72, 146, 142, 110, 192, 243, 459, 401};
     int anchor_per_branch_ = 3;
-    GetPostprocessor().SetAnchor(anchors, anchor_per_branch_);
+    GetPostprocessor().SetAnchor(anchors);
+    GetPostprocessor().SetAnchorPerBranch(anchor_per_branch_);
   }
 
   virtual std::string ModelName() const { return "RKYOLOV7"; }
@@ -84,7 +86,8 @@ class FASTDEPLOY_DECL RKYOLOX : public RKYOLO {
     std::vector<int> anchors = {1, 1, 1, 1, 1, 1, 1, 1, 1,
                                 1, 1, 1, 1, 1, 1, 1, 1, 1};
     int anchor_per_branch_ = 1;
-    GetPostprocessor().SetAnchor(anchors, anchor_per_branch_);
+    GetPostprocessor().SetAnchor(anchors);
+    GetPostprocessor().SetAnchorPerBranch(anchor_per_branch_);
   }
 
   virtual std::string ModelName() const { return "RKYOLOV7"; }

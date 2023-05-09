@@ -115,6 +115,7 @@ struct FASTDEPLOY_DECL Runtime {
   void CreateOpenVINOBackend();
   void CreateLiteBackend();
   void CreateRKNPU2Backend();
+  void CreateHorizonBackend();
   void CreateSophgoNPUBackend();
   void CreatePorosBackend();
   void CreateMNNBackend();

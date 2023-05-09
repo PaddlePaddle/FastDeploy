@@ -48,6 +48,15 @@ int main(int argc, char* argv[]) {
   option.tnn_option.out_orders = {{"tmp_16", 0}, {"concat_4.tmp_0", 1}};
   option.ncnn_option.in_orders = {{"image", 0}};
   option.ncnn_option.out_orders = {{"tmp_16", 0}, {"concat_4.tmp_0", 1}};
+  if (config_info["backend"] == "paddle_trt") {
+    option.paddle_infer_option.collect_trt_shape = true;
+  }
+  if (config_info["backend"] == "paddle_trt" ||
+      config_info["backend"] == "trt") {
+    option.trt_option.SetShape("image", {1, 3, 640, 640}, {1, 3, 640, 640},
+                               {1, 3, 640, 640});
+    option.trt_option.SetShape("scale_factor", {1, 2}, {1, 2}, {1, 2});
+  }
   auto model_picodet = vision::detection::PicoDet(
       model_file, params_file, config_file, option, model_format);
   if (FLAGS_no_nms) {
@@ -105,7 +114,7 @@ int main(int argc, char* argv[]) {
   }
   // Run profiling
   BENCHMARK_MODEL(model_picodet, model_picodet.Predict(im, &res))
-  auto vis_im = vision::VisDetection(im, res);
+  auto vis_im = vision::VisDetection(im, res, 0.5f);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 #endif

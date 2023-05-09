@@ -88,7 +88,7 @@ cd FastDeploy
 git checkout develop
 
 mkdir build && cd build
-cmake ..  -DENABLE_ORT_BACKEND=ON \
+cmake ..  -DENABLE_ORT_BACKEND=OFF \
 	      -DENABLE_RKNPU2_BACKEND=ON \
 	      -DENABLE_VISION=ON \
 	      -DRKNN2_TARGET_SOC=RK3588 \
@@ -111,7 +111,7 @@ make install
 
 ```bash
 sudo apt install cmake build-essential
-wget https://bj.bcebos.com/paddle2onnx/libs/gcc-linaro-6.3.1-2017.tar.gz
+wget https://bj.bcebos.com/fastdeploy/third_libs/gcc-linaro-6.3.1-2017.05-x86_64_aarch64-linux-gnu.tar.gz
 tar -xzvf gcc-linaro-6.3.1-2017.05-x86_64_aarch64-linux-gnu.tar.gz -C /path/to/save
 ```
 

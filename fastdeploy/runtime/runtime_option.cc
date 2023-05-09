@@ -65,6 +65,8 @@ void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
   device = Device::RKNPU;
 }
 
+void RuntimeOption::UseHorizon() { device = Device::SUNRISENPU; }
+
 void RuntimeOption::UseTimVX() {
   device = Device::TIMVX;
   paddle_lite_option.device = device;
@@ -209,6 +211,14 @@ void RuntimeOption::UseTNNBackend() {
   backend = Backend::TNN;
 #else
   FDASSERT(false, "The FastDeploy didn't compile with TNN.");
+#endif
+}
+
+void RuntimeOption::UseHorizonNPUBackend() {
+#ifdef ENABLE_HORIZON_BACKEND
+  backend = Backend::HORIZONNPU;
+#else
+  FDASSERT(false, "The FastDeploy didn't compile with horizon");
 #endif
 }
 
@@ -404,6 +414,17 @@ void RuntimeOption::SetTrtInputShape(const std::string& input_name,
                "please use `RuntimeOption.trt_option.SetShape()` instead."
             << std::endl;
   trt_option.SetShape(input_name, min_shape, opt_shape, max_shape);
+}
+
+void RuntimeOption::SetTrtInputData(const std::string& input_name,
+                                    const std::vector<float>& min_shape_data,
+                                    const std::vector<float>& opt_shape_data,
+                                    const std::vector<float>& max_shape_data) {
+  FDWARNING << "`RuntimeOption::SetTrtInputData` will be removed in v1.2.0, "
+               "please use `RuntimeOption.trt_option.SetInputData()` instead."
+            << std::endl;
+  trt_option.SetInputData(input_name, min_shape_data, opt_shape_data,
+                          max_shape_data);
 }
 
 void RuntimeOption::SetTrtMaxWorkspaceSize(size_t max_workspace_size) {

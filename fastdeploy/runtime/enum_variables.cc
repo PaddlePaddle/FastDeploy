@@ -38,6 +38,8 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
     out << "Backend::NCNN";
   } else if (backend == Backend::TNN) {
     out << "Backend::TNN";
+  } else if (backend == Backend::HORIZONNPU) {
+    out << "Backend::HORIZONNPU";
   } else {
     out << "UNKNOWN-Backend";
   }
@@ -54,6 +56,9 @@ std::ostream& operator<<(std::ostream& out, const Device& d) {
       break;
     case Device::RKNPU:
       out << "Device::RKNPU";
+      break;
+    case Device::SUNRISENPU:
+      out << "Device::SUNRISENPU";
       break;
     case Device::SOPHGOTPUD:
       out << "Device::SOPHGOTPUD";
@@ -93,6 +98,8 @@ std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
     out << "ModelFormat::NCNN_MODEL";
   } else if (format == ModelFormat::TNN_MODEL) {
     out << "ModelFormat::TNN_MODEL";
+  } else if (format == ModelFormat::HORIZON) {
+    out << "ModelFormat::HORIZON";
   } else {
     out << "UNKNOWN-ModelFormat";
   }
@@ -121,6 +128,9 @@ std::vector<Backend> GetAvailableBackends() {
 #endif
 #ifdef ENABLE_RKNPU2_BACKEND
   backends.push_back(Backend::RKNPU2);
+#endif
+#ifdef ENABLE_HORIZON_BACKEND
+  backends.push_back(Backend::HORIZONNPU);
 #endif
 #ifdef ENABLE_SOPHGO_BACKEND
   backends.push_back(Backend::SOPHGOTPU);

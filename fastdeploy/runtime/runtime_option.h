@@ -76,6 +76,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
                      fastdeploy::rknpu2::CpuName::RK356X,
                  fastdeploy::rknpu2::CoreMask rknpu2_core =
                      fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO);
+  // Use Horizon NPU to inference
+  void UseHorizon();
   /// Use TimVX e.g RV1126/A311D to inference
   void UseTimVX();
   /// Use Huawei Ascend to inference
@@ -272,6 +274,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
       const std::string& input_name, const std::vector<int32_t>& min_shape,
       const std::vector<int32_t>& opt_shape = std::vector<int32_t>(),
       const std::vector<int32_t>& max_shape = std::vector<int32_t>());
+
+  void SetTrtInputData(
+      const std::string& input_name, const std::vector<float>& min_shape_data,
+      const std::vector<float>& opt_shape_data = std::vector<float>(),
+      const std::vector<float>& max_shape_data = std::vector<float>());
+
   void SetTrtMaxWorkspaceSize(size_t trt_max_workspace_size);
   void SetTrtMaxBatchSize(size_t max_batch_size);
   void EnableTrtFP16();
@@ -286,6 +294,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetOrtGraphOptLevel(int level = -1);
   void UsePaddleBackend();
   void UseLiteBackend();
+  void UseHorizonNPUBackend();
 };
 
 }  // namespace fastdeploy
