@@ -317,6 +317,30 @@ if __name__ == '__main__':
                 runtime_option=rec_option)
             model = fd.vision.ocr.PPOCRv3(
                 det_model=det_model, cls_model=cls_model, rec_model=rec_model)
+        elif "OCRv4" in args.model_dir:
+            det_option = option
+            if args.backend in ["trt", "paddle_trt"]:
+                det_option.trt_option.set_shape(
+                    "x", [1, 3, 64, 64], [1, 3, 640, 640], [1, 3, 960, 960])
+            det_model = fd.vision.ocr.DBDetector(
+                det_model_file, det_params_file, runtime_option=det_option)
+            cls_option = option
+            if args.backend in ["trt", "paddle_trt"]:
+                cls_option.trt_option.set_shape(
+                    "x", [1, 3, 48, 10], [10, 3, 48, 320], [64, 3, 48, 1024])
+            cls_model = fd.vision.ocr.Classifier(
+                cls_model_file, cls_params_file, runtime_option=cls_option)
+            rec_option = option
+            if args.backend in ["trt", "paddle_trt"]:
+                rec_option.trt_option.set_shape(
+                    "x", [1, 3, 48, 10], [10, 3, 48, 320], [64, 3, 48, 2304])
+            rec_model = fd.vision.ocr.Recognizer(
+                rec_model_file,
+                rec_params_file,
+                rec_label_file,
+                runtime_option=rec_option)
+            model = fd.vision.ocr.PPOCRv3(
+                det_model=det_model, cls_model=cls_model, rec_model=rec_model)
         else:
             raise Exception("model {} not support now in ppocr series".format(
                 args.model_dir))
