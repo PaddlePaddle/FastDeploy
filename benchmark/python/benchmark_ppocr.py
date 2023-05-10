@@ -339,7 +339,7 @@ if __name__ == '__main__':
                 rec_params_file,
                 rec_label_file,
                 runtime_option=rec_option)
-            model = fd.vision.ocr.PPOCRv3(
+            model = fd.vision.ocr.PPOCRv4(
                 det_model=det_model, cls_model=cls_model, rec_model=rec_model)
         else:
             raise Exception("model {} not support now in ppocr series".format(

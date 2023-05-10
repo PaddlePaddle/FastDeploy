@@ -917,7 +917,7 @@ class PPOCRSystemv4(PPOCRv4):
         logging.warning(
             "DEPRECATED: fd.vision.ocr.PPOCRSystemv4 is deprecated, "
             "please use fd.vision.ocr.PPOCRv4 instead.")
-        super(PPOCRSystemv3, self).__init__(det_model, cls_model, rec_model)
+        super(PPOCRSystemv4, self).__init__(det_model, cls_model, rec_model)
 
     def predict(self, input_image):
         return super(PPOCRSystemv4, self).predict(input_image)

@@ -21,15 +21,15 @@ namespace fastdeploy {
  *
  */
 namespace pipeline {
-/*! @brief PPOCRv3 is used to load PP-OCRv3 series models provided by PaddleOCR.
+/*! @brief PPOCRv4 is used to load PP-OCRv4 series models provided by PaddleOCR.
  */
 class FASTDEPLOY_DECL PPOCRv4 : public PPOCRv3 {
  public:
    /** \brief Set up the detection model path, classification model path and recognition model path respectively.
    *
-   * \param[in] det_model Path of detection model, e.g ./ch_PP-OCRv3_det_infer
+   * \param[in] det_model Path of detection model, e.g ./ch_PP-OCRv4_det_infer
    * \param[in] cls_model Path of classification model, e.g ./ch_ppocr_mobile_v2.0_cls_infer
-   * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv3_rec_infer
+   * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv4_rec_infer
    */
   PPOCRv4(fastdeploy::vision::ocr::DBDetector* det_model,
                 fastdeploy::vision::ocr::Classifier* cls_model,
@@ -42,21 +42,21 @@ class FASTDEPLOY_DECL PPOCRv4 : public PPOCRv3 {
   }
   /** \brief Classification model is optional, so this function is set up the detection model path and recognition model path respectively.
    *
-   * \param[in] det_model Path of detection model, e.g ./ch_PP-OCRv3_det_infer
-   * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv3_rec_infer
+   * \param[in] det_model Path of detection model, e.g ./ch_PP-OCRv4_det_infer
+   * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv4_rec_infer
    */
   PPOCRv4(fastdeploy::vision::ocr::DBDetector* det_model,
                 fastdeploy::vision::ocr::Recognizer* rec_model)
                 : PPOCRv3(det_model, rec_model) {
-    // The only difference between v2 and v3
+    // The only difference between v2 and v4
     auto preprocess_shape = recognizer_->GetPreprocessor().GetRecImageShape();
     preprocess_shape[1] = 48;
     recognizer_->GetPreprocessor().SetRecImageShape(preprocess_shape);
   }
 
-  /** \brief Clone a new PPOCRv3 with less memory usage when multiple instances of the same model are created
+  /** \brief Clone a new PPOCRv4 with less memory usage when multiple instances of the same model are created
    *
-   * \return new PPOCRv3* type unique pointer
+   * \return new PPOCRv4* type unique pointer
    */
   std::unique_ptr<PPOCRv4> Clone() const {
     std::unique_ptr<PPOCRv4> clone_model = utils::make_unique<PPOCRv4>(PPOCRv4(*this));
