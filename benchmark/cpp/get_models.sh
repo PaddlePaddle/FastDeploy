@@ -140,9 +140,6 @@ download_fd_model_zxvf yolov8_m_500e_coco.tgz
 download_fd_model_zxvf yolov8_n_500e_coco.tgz
 download_fd_model_zxvf picodet_l_320_coco_lcnet.tgz
 download_fd_model_zxvf yolov7_x_300e_coco.tgz
-download_fd_model_zxvf yolov6_l_300e_coco.tgz
-download_fd_model_zxvf ppyoloe_plus_crn_m_80e_coco.tgz
-download_common_model_xvf https://paddledet.bj.bcebos.com/deploy/Inference/picodet_l_640_coco_lcnet.tar picodet_l_640_coco_lcnet.tar
 
 download_fd_model_zxvf ppyoloe_crn_l_300e_coco_trt_nms.tgz
 download_fd_model_zxvf picodet_l_640_coco_lcnet_trt_nms.tgz
