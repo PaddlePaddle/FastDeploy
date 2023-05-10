@@ -92,11 +92,6 @@ fi
 ./benchmark_ppyolov8  --model yolov8_l_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolov8  --model yolov8_m_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
 ./benchmark_ppyolov8  --model yolov8_n_500e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ppyolov8 --model ppyoloe_crn_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ppyolov8 --model yolov6_l_300e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ppyolov8 --model ppyoloe_plus_crn_m_80e_coco --image 000000014439.jpg --config_path $CONFIG_PATH
-./benchmark_ppyolov8 --model picodet_l_640_coco_lcnet --image 000000014439.jpg --config_path $CONFIG_PATH
-
 
 # PaddleSeg
 ./benchmark_ppseg --model Portrait_PP_HumanSegV2_Lite_256x144_with_argmax_infer --image portrait_heng.jpg --config_path $CONFIG_PATH --xpu_l3_cache 0
