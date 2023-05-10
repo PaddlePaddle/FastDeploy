@@ -32,6 +32,7 @@
 #include "fastdeploy/vision/ocr/ppocr/structurev2_table.h"
 #include "fastdeploy/vision/ocr/ppocr/ppocr_v2.h"
 #include "fastdeploy/vision/ocr/ppocr/ppocr_v3.h"
+#include "fastdeploy/vision/ocr/ppocr/ppocr_v4.h"
 #include "fastdeploy/vision/ocr/ppocr/ppstructurev2_table.h"
 #include "fastdeploy/vision/segmentation/ppseg/model.h"
 
