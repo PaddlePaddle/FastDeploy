@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/perception/paddle3d/petr/preprocessor.h"
+#include <iostream>
 
 #include "fastdeploy/function/concat.h"
 #include "yaml-cpp/yaml.h"
@@ -40,8 +41,6 @@ bool PetrPreprocessor::BuildPreprocessPipelineFromConfig() {
   }
 
   // read for preprocess
-  processors_.push_back(std::make_shared<BGR2RGB>());
-
   bool has_permute = false;
   for (const auto& op : cfg["Preprocess"]) {
     std::string op_name = op["type"].as<std::string>();
@@ -60,7 +59,8 @@ bool PetrPreprocessor::BuildPreprocessPipelineFromConfig() {
         std::fill(mean.begin(), mean.end(), 0.0);
         std::fill(std.begin(), std.end(), 1.0);
       }
-      processors_.push_back(std::make_shared<Normalize>(mean, std, is_scale));
+      mean_ = mean;
+      std_ = std;
     } else if (op_name == "Resize") {
       bool keep_ratio = op["keep_ratio"].as<bool>();
       auto target_size = op["target_size"].as<std::vector<int>>();
@@ -69,8 +69,8 @@ bool PetrPreprocessor::BuildPreprocessPipelineFromConfig() {
                "Require size of target_size be 2, but now it's %lu.",
                target_size.size());
       if (!keep_ratio) {
-        int width = target_size[1];
-        int height = target_size[0];
+        int width = target_size[0];
+        int height = target_size[1];
         processors_.push_back(
             std::make_shared<Resize>(width, height, -1.0, -1.0, interp, false));
       } else {
@@ -84,13 +84,10 @@ bool PetrPreprocessor::BuildPreprocessPipelineFromConfig() {
         processors_.push_back(std::make_shared<ResizeByShort>(
             min_target_size, interp, true, max_size));
       }
-    } else if (op_name == "Permute") {
+    }else if (op_name == "Permute") {
       // Do nothing, do permute as the last operation
       has_permute = true;
       continue;
-    } else if (op_name == "Crop") {
-        auto target_size = op["target_size"].as<std::vector<int>>();
-        processors_.push_back(std::make_shared<Crop>(target_size[0], target_size[1], target_size[2], target_size[3]));
     } else {
       FDERROR << "Unexcepted preprocess operator: " << op_name << "."
               << std::endl;
@@ -104,9 +101,6 @@ bool PetrPreprocessor::BuildPreprocessPipelineFromConfig() {
       processors_.push_back(std::make_shared<HWC2CHW>());
     }
   }
-
-  // Fusion will improve performance
-  FuseTransforms(&processors_);
 
   input_k_data_ = cfg["k_data"].as<std::vector<float>>();
   return true;
@@ -123,22 +117,29 @@ bool PetrPreprocessor::Apply(FDMatBatch* image_batch,
     FDERROR << "The preprocessor is not initialized." << std::endl;
     return false;
   }
-  // There are 3 outputs, image, k_data, ratio_data
+  // There are 3 outputs, image, k_data, timestamp
   outputs->resize(3);
   int batch = static_cast<int>(image_batch->mats->size());
 
   // Allocate memory for k_data
-  (*outputs)[1].Resize({batch, 4, 4}, FDDataType::FP32);
+  (*outputs)[1].Resize({1, batch, 4, 4}, FDDataType::FP32);
 
   // Allocate memory for image_data
-  (*outputs)[0].Resize({batch, 3, 320, 800}, FDDataType::FP32);
+  (*outputs)[0].Resize({1, batch, 3, 320, 800}, FDDataType::FP32);
 
   // Allocate memory for timestamp
   (*outputs)[2].Resize({1, batch}, FDDataType::FP32);
 
-  auto* k_data_ptr = reinterpret_cast<float*>((*outputs)[2].MutableData());
+  auto* image_ptr = reinterpret_cast<float*>((*outputs)[0].MutableData());
 
-  auto* ratio_data_ptr = reinterpret_cast<float*>((*outputs)[0].MutableData());
+  auto* k_data_ptr = reinterpret_cast<float*>((*outputs)[1].MutableData());
+
+  auto* timestamp_ptr = reinterpret_cast<float*>((*outputs)[2].MutableData());
+
+  // std::ofstream file;
+  // file.open("out_fd_pre.txt");
+  // FDMat* mat = &(image_batch->mats->at(0));
+  // file << *(mat->GetOpenCVMat());
 
   for (size_t i = 0; i < image_batch->mats->size(); ++i) {
     FDMat* mat = &(image_batch->mats->at(i));
@@ -148,16 +149,66 @@ bool PetrPreprocessor::Apply(FDMatBatch* image_batch,
                 << processors_[j]->Name() << "." << std::endl;
         return false;
       }
+      if(processors_[j]->Name() == "Resize") {
+      // crop and normalize after Resize
+        auto img = *(mat->GetOpenCVMat());
+        cv::Mat crop_img = img(cv::Range(130, 450), cv::Range(0, 800));
+        normalize(&crop_img, mean_, std_, scale_);
+        FDMat fd_mat = WrapMat(crop_img);
+        image_batch->mats->at(i) = fd_mat;
+      }
     }
-
-    memcpy(k_data_ptr + i * 96, input_k_data_.data(), 96 * sizeof(float));
   }
 
+  for (int i = 0; i < batch / 2 * 4 * 4; ++i) {
+    input_k_data_.emplace_back(input_k_data_[i]);
+  }
+
+  memcpy(k_data_ptr, input_k_data_.data(), batch * 16 * sizeof(float));
+
+  std::vector<float> timestamp(batch, 0.0f);
+  for (int i = batch / 2; i < batch; ++i) {
+      timestamp[i] = 1.0f;
+  }
+  memcpy(timestamp_ptr, timestamp.data(), batch * sizeof(float));
+
+  std::ofstream file;
+  file.open("out_fd_pre.txt");
+  FDMat* mat = &(image_batch->mats->at(0));
+  file << *(mat->GetOpenCVMat());
+  
   FDTensor* tensor = image_batch->Tensor();
   (*outputs)[0].SetExternalData(tensor->Shape(), tensor->Dtype(),
                                 tensor->Data(), tensor->device,
                                 tensor->device_id);
   return true;
+}
+
+void PetrPreprocessor::mat_to_vec(const cv::Mat *im, float *data) {
+  int rh = im->rows;
+  int rw = im->cols;
+  int rc = im->channels();
+
+  for (int i = 0; i < rc; ++i) {
+    cv::extractChannel(*im, cv::Mat(rh, rw, CV_32FC1, data + i * rh * rw), i);
+  }
+}
+
+void PetrPreprocessor::normalize(cv::Mat *im, const std::vector<float> &mean,
+               const std::vector<float> &std, float &scale) {
+  if (scale) {
+    (*im).convertTo(*im, CV_32FC3, scale);
+  }
+  for (int h = 0; h < im->rows; h++) {
+    for (int w = 0; w < im->cols; w++) {
+      im->at<cv::Vec3f>(h, w)[0] =
+          (im->at<cv::Vec3f>(h, w)[0] - mean[0]) / std[0];
+      im->at<cv::Vec3f>(h, w)[1] =
+          (im->at<cv::Vec3f>(h, w)[1] - mean[1]) / std[1];
+      im->at<cv::Vec3f>(h, w)[2] =
+          (im->at<cv::Vec3f>(h, w)[2] - mean[2]) / std[2];
+    }
+  }
 }
 
 }  // namespace perception

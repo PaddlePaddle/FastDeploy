@@ -29,6 +29,7 @@ Petr::Petr(const std::string& model_file, const std::string& params_file,
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
+  runtime_option.paddle_infer_option.enable_mkldnn = false;
   initialized = Initialize();
 }
 

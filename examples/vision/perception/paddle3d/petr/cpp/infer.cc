@@ -31,7 +31,7 @@ void InitAndInfer(const std::string& model_dir, const std::string& images_dir,
   assert(model.Initialized());
 
   std::vector<cv::Mat> im_batch;
-  for(int i = 0; i < 6; i++){
+  for(int i = 0; i < 12; i++){
     auto image_file = images_dir + sep + "image" + std::to_string(i) + ".png";
     auto im = cv::imread(image_file);
     im_batch.emplace_back(im);

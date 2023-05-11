@@ -41,6 +41,11 @@ class FASTDEPLOY_DECL PetrPreprocessor : public ProcessorManager  {
    */
   bool Apply(FDMatBatch* image_batch, std::vector<FDTensor>* outputs);
 
+  void normalize(cv::Mat *im, const std::vector<float> &mean,
+               const std::vector<float> &std, float &scale);
+
+  void mat_to_vec(const cv::Mat *im, float *data);
+
  protected:
   bool BuildPreprocessPipelineFromConfig();
   std::vector<std::shared_ptr<Processor>> processors_;
@@ -50,6 +55,10 @@ class FASTDEPLOY_DECL PetrPreprocessor : public ProcessorManager  {
   bool initialized_ = false;
 
   std::string config_file_;
+
+  float scale_ = 1.0f;
+  std::vector<float> mean_;
+  std::vector<float> std_;
 
   std::vector<float> input_k_data_;
 
