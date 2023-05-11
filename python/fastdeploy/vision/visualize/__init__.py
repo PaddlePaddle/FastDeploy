@@ -63,6 +63,8 @@ def vis_perception(im_data,
                                    score_threshold, line_size, font_size)
 
 
+
+
 def vis_keypoint_detection(im_data, keypoint_det_result, conf_threshold=0.5):
     """Show the visualized results for keypoint detection models
 
