@@ -41,6 +41,6 @@ if (DEFINED TARGET_ABI)
         set(OpenCV_DIR ${THIRD_PARTY_PATH}/install/opencv/lib/cmake/opencv4)
     else()
         message(FATAL_ERROR "When cross-compiling, please set the -DTARGET_ABI to arm64 or armhf.")
-    endif()
+    endif() 
 endif()
 
