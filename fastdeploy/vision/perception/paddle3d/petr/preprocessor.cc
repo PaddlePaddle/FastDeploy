@@ -84,7 +84,7 @@ bool PetrPreprocessor::BuildPreprocessPipelineFromConfig() {
         processors_.push_back(std::make_shared<ResizeByShort>(
             min_target_size, interp, true, max_size));
       }
-    }else if (op_name == "Permute") {
+    } else if (op_name == "Permute") {
       // Do nothing, do permute as the last operation
       has_permute = true;
       continue;
@@ -107,7 +107,7 @@ bool PetrPreprocessor::BuildPreprocessPipelineFromConfig() {
 }
 
 bool PetrPreprocessor::Apply(FDMatBatch* image_batch,
-                              std::vector<FDTensor>* outputs) {
+                             std::vector<FDTensor>* outputs) {
   if (image_batch->mats->empty()) {
     FDERROR << "The size of input images should be greater than 0."
             << std::endl;
@@ -149,8 +149,8 @@ bool PetrPreprocessor::Apply(FDMatBatch* image_batch,
                 << processors_[j]->Name() << "." << std::endl;
         return false;
       }
-      if(processors_[j]->Name() == "Resize") {
-      // crop and normalize after Resize
+      if (processors_[j]->Name() == "Resize") {
+        // crop and normalize after Resize
         auto img = *(mat->GetOpenCVMat());
         cv::Mat crop_img = img(cv::Range(130, 450), cv::Range(0, 800));
         normalize(&crop_img, mean_, std_, scale_);
@@ -168,7 +168,7 @@ bool PetrPreprocessor::Apply(FDMatBatch* image_batch,
 
   std::vector<float> timestamp(batch, 0.0f);
   for (int i = batch / 2; i < batch; ++i) {
-      timestamp[i] = 1.0f;
+    timestamp[i] = 1.0f;
   }
   memcpy(timestamp_ptr, timestamp.data(), batch * sizeof(float));
 
@@ -176,7 +176,7 @@ bool PetrPreprocessor::Apply(FDMatBatch* image_batch,
   file.open("out_fd_pre.txt");
   FDMat* mat = &(image_batch->mats->at(0));
   file << *(mat->GetOpenCVMat());
-  
+
   FDTensor* tensor = image_batch->Tensor();
   (*outputs)[0].SetExternalData(tensor->Shape(), tensor->Dtype(),
                                 tensor->Data(), tensor->device,
@@ -184,18 +184,8 @@ bool PetrPreprocessor::Apply(FDMatBatch* image_batch,
   return true;
 }
 
-void PetrPreprocessor::mat_to_vec(const cv::Mat *im, float *data) {
-  int rh = im->rows;
-  int rw = im->cols;
-  int rc = im->channels();
-
-  for (int i = 0; i < rc; ++i) {
-    cv::extractChannel(*im, cv::Mat(rh, rw, CV_32FC1, data + i * rh * rw), i);
-  }
-}
-
-void PetrPreprocessor::normalize(cv::Mat *im, const std::vector<float> &mean,
-               const std::vector<float> &std, float &scale) {
+void PetrPreprocessor::normalize(cv::Mat* im, const std::vector<float>& mean,
+                                 const std::vector<float>& std, float& scale) {
   if (scale) {
     (*im).convertTo(*im, CV_32FC3, scale);
   }
