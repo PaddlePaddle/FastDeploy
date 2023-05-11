@@ -64,7 +64,8 @@ setup_configs["ENABLE_OPENVINO_BACKEND"] = os.getenv("ENABLE_OPENVINO_BACKEND",
                                                      "OFF")
 setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND",
                                                    "OFF")
-setup_configs["ENABLE_POROS_BACKEND"] = os.getenv("ENABLE_POROS_BACKEND", "OFF")
+setup_configs["ENABLE_POROS_BACKEND"] = os.getenv("ENABLE_POROS_BACKEND",
+                                                  "OFF")
 setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
 setup_configs["ENABLE_LITE_BACKEND"] = os.getenv("ENABLE_LITE_BACKEND", "OFF")
 setup_configs["PADDLELITE_URL"] = os.getenv("PADDLELITE_URL", "OFF")
@@ -79,15 +80,16 @@ setup_configs["WITH_IPU"] = os.getenv("WITH_IPU", "OFF")
 setup_configs["WITH_KUNLUNXIN"] = os.getenv("WITH_KUNLUNXIN", "OFF")
 setup_configs["BUILD_ON_JETSON"] = os.getenv("BUILD_ON_JETSON", "OFF")
 setup_configs["TRT_DIRECTORY"] = os.getenv("TRT_DIRECTORY", "UNDEFINED")
-setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY", "/usr/local/cuda")
+setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY",
+                                            "/usr/local/cuda")
 setup_configs["LIBRARY_NAME"] = PACKAGE_NAME
 setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
 setup_configs["OPENCV_DIRECTORY"] = os.getenv("OPENCV_DIRECTORY", "")
 setup_configs["ORT_DIRECTORY"] = os.getenv("ORT_DIRECTORY", "")
 setup_configs["PADDLEINFERENCE_DIRECTORY"] = os.getenv(
     "PADDLEINFERENCE_DIRECTORY", "")
-setup_configs["PADDLEINFERENCE_VERSION"] = os.getenv(
-    "PADDLEINFERENCE_VERSION", "")
+setup_configs["PADDLEINFERENCE_VERSION"] = os.getenv("PADDLEINFERENCE_VERSION",
+                                                     "")
 
 setup_configs["RKNN2_TARGET_SOC"] = os.getenv("RKNN2_TARGET_SOC", "")
 if setup_configs["RKNN2_TARGET_SOC"] != "" or setup_configs[
@@ -121,7 +123,8 @@ extras_require = {}
 
 # Default value is set to TRUE\1 to keep the settings same as the current ones.
 # However going forward the recomemded way to is to set this to False\0
-USE_MSVC_STATIC_RUNTIME = bool(os.getenv('USE_MSVC_STATIC_RUNTIME', '1') == '1')
+USE_MSVC_STATIC_RUNTIME = bool(
+    os.getenv('USE_MSVC_STATIC_RUNTIME', '1') == '1')
 ONNX_NAMESPACE = os.getenv('ONNX_NAMESPACE', 'paddle2onnx')
 ################################################################################
 # Version
@@ -133,9 +136,20 @@ try:
 except (OSError, subprocess.CalledProcessError):
     git_version = None
 
+extra_version_info = ""
+if setup_configs["PADDLEINFERENCE_VERSION"] != "":
+    extra_version_info += ("." + setup_configs["PADDLEINFERENCE_VERSION"])
+
 with open(os.path.join(TOP_DIR, 'VERSION_NUMBER')) as version_file:
-    VersionInfo = namedtuple('VersionInfo', ['version', 'git_version'])(
-        version=version_file.read().strip(), git_version=git_version)
+    VersionInfo = namedtuple('VersionInfo', [
+        'version', 'git_version', 'extra_version_info', 'enable_trt_backend',
+        'enable_paddle_backend', 'with_gpu'
+    ])(version=version_file.read().strip(),
+       git_version=git_version,
+       extra_version_info=extra_version_info.strip("."),
+       enable_trt_backend=setup_configs["ENABLE_TRT_BACKEND"],
+       enable_paddle_backend=setup_configs["ENABLE_PADDLE_BACKEND"],
+       with_gpu=setup_configs["WITH_GPU"])
 
 ################################################################################
 # Pre Check
@@ -151,7 +165,8 @@ assert CMAKE, 'Could not find "cmake" executable!'
 @contextmanager
 def cd(path):
     if not os.path.isabs(path):
-        raise RuntimeError('Can only cd to absolute path, got: {}'.format(path))
+        raise RuntimeError('Can only cd to absolute path, got: {}'.format(
+            path))
     orig_path = os.getcwd()
     os.chdir(path)
     try:
@@ -196,6 +211,10 @@ class create_version(ONNXCommand):
             from __future__ import unicode_literals
             version = '{version}'
             git_version = '{git_version}'
+            extra_version_info = '{extra_version_info}'
+            enable_trt_backend = '{enable_trt_backend}'
+            enable_paddle_backend = '{enable_paddle_backend}'
+            with_gpu = '{with_gpu}'
             '''.format(**dict(VersionInfo._asdict()))))
 
 
@@ -377,10 +396,6 @@ if sys.version_info[0] == 3:
 ################################################################################
 
 package_data = {PACKAGE_NAME: ["LICENSE", "ThirdPartyNotices.txt"]}
-
-extra_version_info = ""
-if setup_configs["PADDLEINFERENCE_VERSION"] != "":
-  extra_version_info += ("." + setup_configs["PADDLEINFERENCE_VERSION"])
 
 if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     shutil.copy(
