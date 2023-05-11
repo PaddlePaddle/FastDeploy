@@ -92,6 +92,7 @@ FASTDEPLOY_DECL cv::Mat VisDetection(const cv::Mat& im,
                                      int line_size = 1, float font_size = 0.5f,
                                      std::vector<int> font_color = {255, 255, 255},
                                      int font_thickness = 1);
+
 /** \brief Show the visualized results with custom labels for detection models
  *
  * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
