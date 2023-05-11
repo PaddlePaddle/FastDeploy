@@ -225,6 +225,7 @@ class RuntimeOption:
                       autotune=True,
                       autotune_file="",
                       precision="int16",
+                      gm_default_size=0,
                       adaptive_seqlen=False,
                       enable_multi_stream=False):
         """Inference with KunlunXin XPU
@@ -244,6 +245,7 @@ class RuntimeOption:
         """
         return self._option.use_kunlunxin(device_id, l3_workspace_size, locked,
                                           autotune, autotune_file, precision,
+                                          gm_default_size,
                                           adaptive_seqlen, enable_multi_stream)
 
     def use_cpu(self):
