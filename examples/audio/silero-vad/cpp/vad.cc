@@ -156,38 +156,38 @@ bool Vad::Postprocess() {
     // Reset temp_end_ when > threshold_
     temp_end_ = 0;
   }
-  if (outputProb_ < threshold_ && !triggerd_) {
+  if (outputProb_ < threshold_ && !triggered_) {
     // 1) Silence
     // printf("{ silence: %.3f s }\n", 1.0 * current_sample_ / sample_rate_);
   }
-  if (outputProb_ >= threshold_ - 0.15 && triggerd_) {
+  if (outputProb_ >= threshold_ - 0.15 && triggered_) {
     // 2) Speaking
     // printf("{ speaking_2: %.3f s }\n", 1.0 * current_sample_ / sample_rate_);
   }
-  if (outputProb_ >= threshold_ && !triggerd_) {
+  if (outputProb_ >= threshold_ && !triggered_) {
     // 3) Start
-    triggerd_ = true;
+    triggered_ = true;
     speech_start_ = current_sample_ - window_size_samples_ -
                     speech_pad_samples_;  // minus window_size_samples_ to get
     // precise start time point.
     // printf("{ start: %.5f s }\n", 1.0 * speech_start_ / sample_rate_);
     speakStart_.emplace_back(1.0 * speech_start_ / sample_rate_);
   }
-  if (outputProb_ < threshold_ - 0.15 && triggerd_) {
+  if (outputProb_ < threshold_ - 0.15 && triggered_) {
     // 4) End
     if (current_sample_ - temp_end_ < min_silence_samples_) {
-      // a. silence < min_slience_samples, continue speaking
+      // a. silence < min_silence_samples, continue speaking
       // printf("{ speaking_4: %.3f s }\n", 1.0 * current_sample_ /
       // sample_rate_); printf("");
       if (temp_end_ == 0) {
         temp_end_ = current_sample_;
       }
     } else {
-      // b. silence >= min_slience_samples, end speaking
+      // b. silence >= min_silence_samples, end speaking
       speech_end_ = temp_end_ ? temp_end_ + speech_pad_samples_
                               : current_sample_ + speech_pad_samples_;
       temp_end_ = 0;
-      triggerd_ = false;
+      triggered_ = false;
       // printf("{ end: %.5f s }\n", 1.0 * speech_end_ / sample_rate_);
       speakEnd_.emplace_back(1.0 * speech_end_ / sample_rate_);
     }
