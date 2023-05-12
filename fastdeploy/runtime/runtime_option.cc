@@ -49,6 +49,11 @@ void RuntimeOption::UseGpu(int gpu_id) {
 #if defined(WITH_GPU) || defined(WITH_OPENCL)
   device = Device::GPU;
   device_id = gpu_id;
+  
+#if defined(WITH_OPENCL) && defined(ENABLE_LITE_BACKEND)
+  paddle_lite_option.device = device;
+#endif
+  
 #else
   FDWARNING << "The FastDeploy didn't compile with GPU, will force to use CPU."
             << std::endl;
