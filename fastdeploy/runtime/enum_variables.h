@@ -35,7 +35,7 @@ enum Backend {
   PDINFER,  ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
   POROS,    ///< Poros, support TorchScript format model, CPU / Nvidia GPU
   OPENVINO,   ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
-  LITE,       ///< Paddle Lite, support Paddle format model, ARM CPU only
+  LITE,       ///< Paddle Lite, support Paddle format model, ARM CPU / ARM GPU
   RKNPU2,     ///< RKNPU2, support RKNN format model, Rockchip NPU only
   SOPHGOTPU,  ///< SOPHGOTPU, support SOPHGO format model, Sophgo TPU only
   MNN,  ///< MNN, support MNN_MODEL format model, ARM CPU only
@@ -103,7 +103,8 @@ static std::map<Device, std::vector<Backend>>
   {Device::CPU, {Backend::LITE, Backend::PDINFER, Backend::ORT,
                  Backend::OPENVINO, Backend::POROS, Backend::MNN,
                  Backend::NCNN, Backend::TNN}},
-  {Device::GPU, {Backend::PDINFER, Backend::ORT, Backend::TRT, Backend::POROS}},
+  {Device::GPU, {Backend::LITE, Backend::PDINFER, Backend::ORT, Backend::TRT,
+                 Backend::POROS}},
   {Device::RKNPU, {Backend::RKNPU2}},
   {Device::SUNRISENPU, {Backend::HORIZONNPU}},
   {Device::IPU, {Backend::PDINFER}},

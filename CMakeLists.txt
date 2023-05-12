@@ -55,6 +55,7 @@ endif()
 ############################# Basic Options for FastDeploy ################################
 option(WITH_GPU "Whether WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernce-gpu/poros-gpu" OFF)
 option(WITH_IPU "Whether WITH_IPU=ON, will enable paddle-infernce-ipu" OFF)
+option(WITH_OPENCL "Whether WITH_OPENCL=ON, will enable paddle-lite-gpu" OFF)
 option(ENABLE_ORT_BACKEND "Whether to enable onnxruntime backend." OFF)
 option(ENABLE_TRT_BACKEND "Whether to enable tensorrt backend." OFF)
 option(ENABLE_PADDLE_BACKEND "Whether to enable paddle backend." OFF)
@@ -362,6 +363,10 @@ if(WITH_GPU)
   message(STATUS "CUDA compiler: ${CMAKE_CUDA_COMPILER}, version: "
                   "${CMAKE_CUDA_COMPILER_ID} ${CMAKE_CUDA_COMPILER_VERSION}")
   include(${PROJECT_SOURCE_DIR}/cmake/cuda.cmake)
+endif()
+
+if(WITH_OPENCL)
+  add_definitions(-DWITH_OPENCL)
 endif()
 
 if(ENABLE_TRT_BACKEND)

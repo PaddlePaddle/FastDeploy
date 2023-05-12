@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/runtime/backends/lite/lite_backend.h"
-
 #include <cstring>
+
+#include "fastdeploy/runtime/backends/lite/lite_backend.h"
 
 namespace fastdeploy {
 
@@ -47,6 +47,31 @@ std::vector<paddle::lite_api::Place> GetPlacesForCpu(
 
 void LiteBackend::ConfigureCpu(const LiteBackendOption& option) {
   config_.set_valid_places(GetPlacesForCpu(option));
+}
+
+void LiteBackend::ConfigureGpu(const LiteBackendOption& option) {
+  std::vector<paddle::lite_api::Place> valid_places;
+  if (option.enable_fp16) {
+    valid_places.emplace_back(paddle::lite_api::Place{
+        TARGET(kOpenCL), PRECISION(kFP16), DATALAYOUT(kImageDefault)});
+    valid_places.emplace_back(paddle::lite_api::Place{
+        TARGET(kOpenCL), PRECISION(kFP16), DATALAYOUT(kImageFolder)});
+  }
+  valid_places.emplace_back(
+      paddle::lite_api::Place{TARGET(kOpenCL), PRECISION(kFloat)});
+  valid_places.emplace_back(paddle::lite_api::Place{
+      TARGET(kOpenCL), PRECISION(kAny), DATALAYOUT(kImageDefault)});
+  valid_places.emplace_back(paddle::lite_api::Place{
+      TARGET(kOpenCL), PRECISION(kAny), DATALAYOUT(kImageFolder)});
+  valid_places.emplace_back(
+      paddle::lite_api::Place{TARGET(kOpenCL), PRECISION(kAny)});
+  valid_places.emplace_back(
+      paddle::lite_api::Place{TARGET(kOpenCL), PRECISION(kInt32)});
+  valid_places.emplace_back(
+      paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
+  valid_places.emplace_back(
+      paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
+  config_.set_valid_places(valid_places);
 }
 
 void LiteBackend::ConfigureKunlunXin(const LiteBackendOption& option) {
