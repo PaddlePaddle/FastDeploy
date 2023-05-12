@@ -175,13 +175,13 @@ bool Vad::Postprocess() {
   }
   if (outputProb_ < threshold_ - 0.15 && triggered_) {
     // 4) End
+    if (temp_end_ == 0) {
+      temp_end_ = current_sample_;
+    }
     if (current_sample_ - temp_end_ < min_silence_samples_) {
       // a. silence < min_silence_samples, continue speaking
       // printf("{ speaking_4: %.3f s }\n", 1.0 * current_sample_ /
       // sample_rate_); printf("");
-      if (temp_end_ == 0) {
-        temp_end_ = current_sample_;
-      }
     } else {
       // b. silence >= min_silence_samples, end speaking
       speech_end_ = temp_end_ ? temp_end_ + speech_pad_samples_
