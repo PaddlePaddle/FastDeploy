@@ -51,6 +51,7 @@ class LiteBackend : public BaseBackend {
   void BuildOption(const LiteBackendOption& option);
 
   void ConfigureCpu(const LiteBackendOption& option);
+  void ConfigureGpu(const LiteBackendOption& option);
   void ConfigureTimvx(const LiteBackendOption& option);
   void ConfigureAscend(const LiteBackendOption& option);
   void ConfigureKunlunXin(const LiteBackendOption& option);
