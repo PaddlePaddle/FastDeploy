@@ -40,6 +40,8 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
 
   if (option_.device == Device::CPU) {
     ConfigureCpu(option_);
+  } else if (option_.device == Device::GPU) {
+    ConfigureGpu(option_);
   } else if (option_.device == Device::TIMVX) {
     ConfigureTimvx(option_);
   } else if (option_.device == Device::KUNLUNXIN) {
@@ -70,14 +72,20 @@ bool LiteBackend::Init(const RuntimeOption& runtime_option) {
     return false;
   }
   if (runtime_option.device != Device::CPU &&
+      runtime_option.device != Device::GPU &&
       runtime_option.device != Device::KUNLUNXIN &&
       runtime_option.device != Device::ASCEND &&
       runtime_option.device != Device::TIMVX) {
     FDERROR << "PaddleLiteBackend only supports "
-               "Device::CPU/Device::TIMVX/Device::KUNLUNXIN/Device::ASCEND, "
+               "Device::CPU/Device::GPU/Device::TIMVX/Device::KUNLUNXIN/Device::ASCEND, "
                "but now it's "
             << runtime_option.device << "." << std::endl;
     return false;
+  }
+  if (runtime_option.device == Device::GPU &&
+      !paddle::lite_api::IsOpenCLBackendValid()) {
+    FDERROR << "PaddleLiteBackend GPU (OpenCL) is not supported by the current device."
+            << std::endl;
   }
   if (runtime_option.model_from_memory_) {
     FDERROR << "PaddleLiteBackend doesn't support load model from memory, "
