@@ -46,11 +46,13 @@ docker run -it --rm --name build_fd_libs \
             export ENABLE_OPENVINO_BACKEND=OFF;
             export ENABLE_VISION=ON;
             export ENABLE_TEXT=ON;
+            export PADDLEINFERENCE_URL=https://bj.bcebos.com/fastdeploy/third_libs/paddle_inference-linux-x64-gpu-trt8.5.2.2-mkl-avx-2.4.2.tgz;
+            export PADDLEINFERENCE_VERSION=paddle2.4.2;
             python setup.py build;
             python setup.py bdist_wheel;
             cd /workspace/fastdeploy;
             rm -rf build; mkdir -p build;cd build;
-            cmake .. -DENABLE_TRT_BACKEND=ON -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy_install -DWITH_GPU=ON -DTRT_DIRECTORY=/workspace/fastdeploy/serving/TensorRT-8.5.2.2/ -DENABLE_PADDLE_BACKEND=ON -DENABLE_ORT_BACKEND=ON -DENABLE_OPENVINO_BACKEND=ON -DENABLE_VISION=ON -DBUILD_FASTDEPLOY_PYTHON=OFF -DENABLE_PADDLE2ONNX=ON -DENABLE_TEXT=OFF -DLIBRARY_NAME=fastdeploy_runtime;
+            cmake .. -DENABLE_TRT_BACKEND=ON -DPADDLEINFERENCE_URL=${PADDLEINFERENCE_URL} -DPADDLEINFERENCE_VERSION=${PADDLEINFERENCE_VERSION} -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy_install -DWITH_GPU=ON -DTRT_DIRECTORY=/workspace/fastdeploy/serving/TensorRT-8.5.2.2/ -DENABLE_PADDLE_BACKEND=ON -DENABLE_ORT_BACKEND=ON -DENABLE_OPENVINO_BACKEND=ON -DENABLE_VISION=ON -DBUILD_FASTDEPLOY_PYTHON=OFF -DENABLE_PADDLE2ONNX=ON -DENABLE_TEXT=OFF -DLIBRARY_NAME=fastdeploy_runtime;
             make -j`nproc`;
             make install;
             cd /workspace/fastdeploy/serving;
