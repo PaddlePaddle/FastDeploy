@@ -19,7 +19,7 @@ if [ ! -d "./cmake-3.18.6-Linux-x86_64/" ]; then
     rm -rf cmake-3.18.6-Linux-x86_64.tar.gz
 fi
 
-if [ ! -d "./TensorRT-8.4.1.5/" ]; then
+if [ ! -d "./TensorRT-8.5.2.2/" ]; then
     wget https://fastdeploy.bj.bcebos.com/resource/TensorRT/TensorRT-8.5.2.2.Linux.x86_64-gnu.cuda-11.8.cudnn8.6.tar.gz
     tar -zxvf TensorRT-8.5.2.2.Linux.x86_64-gnu.cuda-11.8.cudnn8.6.tar.gz
     rm -rf TensorRT-8.5.2.2.Linux.x86_64-gnu.cuda-11.8.cudnn8.6.tar.gz
