@@ -13,6 +13,9 @@
 # limitations under the License.
 include(ExternalProject)
 
+# The priority strategy for Paddle inference is as follows:
+# PADDLEINFERENCE_DIRECTORY > custom PADDLEINFERENCE_URL > default PADDLEINFERENCE_URL.
+
 if(WITH_GPU AND WITH_IPU)
   message(FATAL_ERROR "Cannot build with WITH_GPU=ON and WITH_IPU=ON on the same time.")
 endif()
