@@ -111,9 +111,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
                     bool locked = false, bool autotune = true,
                     const std::string& autotune_file = "",
                     const std::string& precision = "int16",
-                    int gm_default_size = 0,
                     bool adaptive_seqlen = false,
-                    bool enable_multi_stream = false);
+                    bool enable_multi_stream = false,
+                    int64_t gm_default_size = 0);
 
   void SetExternalStream(void* external_stream);
 

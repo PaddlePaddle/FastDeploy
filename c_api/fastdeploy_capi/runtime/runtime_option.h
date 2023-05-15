@@ -131,8 +131,8 @@ FASTDEPLOY_CAPI_EXPORT extern void FD_C_RuntimeOptionWrapperUseKunlunXin(
     __fd_keep FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     int kunlunxin_id, int l3_workspace_size, FD_C_Bool locked,
     FD_C_Bool autotune, const char* autotune_file, const char* precision,
-    int gm_default_size,
-    FD_C_Bool adaptive_seqlen, FD_C_Bool enable_multi_stream);
+    FD_C_Bool adaptive_seqlen, FD_C_Bool enable_multi_stream,
+    int64_t gm_default_size);
 
 /** Use Sophgo to inference
  *
