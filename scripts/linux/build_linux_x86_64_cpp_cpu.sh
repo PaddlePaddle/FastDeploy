@@ -69,7 +69,7 @@ __build_fastdeploy_linux_x86_64_shared() {
         -DENABLE_BENCHMARK=ON \
         -DENABLE_FLYCV=OFF \
         -DWITH_FLYCV_STATIC=OFF \
-        -DBUILD_EXAMPLES=ON \
+        -DBUILD_EXAMPLES=OFF \
         -DCMAKE_INSTALL_PREFIX=${FASDEPLOY_INSTALL_DIR} \
         -Wno-dev ../../.. && make -j8 && make install
 
@@ -93,7 +93,7 @@ __build_fastdeploy_linux_x86_64_shared_custom_paddle() {
         -DPADDLEINFERENCE_VERSION=${PADDLEINFERENCE_VERSION} \
         -DENABLE_FLYCV=OFF \
         -DWITH_FLYCV_STATIC=OFF \
-        -DBUILD_EXAMPLES=ON \
+        -DBUILD_EXAMPLES=OFF \
         -DCMAKE_INSTALL_PREFIX=${FASDEPLOY_INSTALL_DIR} \
         -Wno-dev ../../.. && make -j8 && make install
 

@@ -70,7 +70,7 @@ __build_fastdeploy_linux_x86_64_gpu_shared() {
         -DENABLE_PADDLE2ONNX=ON \
         -DENABLE_VISION=ON \
         -DENABLE_BENCHMARK=OFF \
-        -DBUILD_EXAMPLES=ON \
+        -DBUILD_EXAMPLES=OFF \
         -DCMAKE_INSTALL_PREFIX=${FASDEPLOY_INSTALL_DIR} \
         -Wno-dev ../../.. && make -j8 && make install
 
@@ -95,7 +95,7 @@ __build_fastdeploy_linux_x86_64_gpu_shared_custom_paddle() {
         -DENABLE_PADDLE2ONNX=ON \
         -DENABLE_VISION=ON \
         -DENABLE_BENCHMARK=OFF \
-        -DBUILD_EXAMPLES=ON \
+        -DBUILD_EXAMPLES=OFF \
         -DCMAKE_INSTALL_PREFIX=${FASDEPLOY_INSTALL_DIR} \
         -Wno-dev ../../.. && make -j8 && make install
 

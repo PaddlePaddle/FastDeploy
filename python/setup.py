@@ -90,6 +90,7 @@ setup_configs["PADDLEINFERENCE_DIRECTORY"] = os.getenv(
     "PADDLEINFERENCE_DIRECTORY", "")
 setup_configs["PADDLEINFERENCE_VERSION"] = os.getenv("PADDLEINFERENCE_VERSION",
                                                      "")
+setup_configs["PADDLEINFERENCE_URL"] = os.getenv("PADDLEINFERENCE_URL", "")
 
 setup_configs["RKNN2_TARGET_SOC"] = os.getenv("RKNN2_TARGET_SOC", "")
 if setup_configs["RKNN2_TARGET_SOC"] != "" or setup_configs[
