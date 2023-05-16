@@ -55,6 +55,7 @@ endif()
 ############################# Basic Options for FastDeploy ################################
 option(WITH_GPU "Whether WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernce-gpu/poros-gpu" OFF)
 option(WITH_IPU "Whether WITH_IPU=ON, will enable paddle-infernce-ipu" OFF)
+option(WITH_OPENCL "Whether WITH_OPENCL=ON, will enable paddle-lite-gpu" OFF)
 option(ENABLE_ORT_BACKEND "Whether to enable onnxruntime backend." OFF)
 option(ENABLE_TRT_BACKEND "Whether to enable tensorrt backend." OFF)
 option(ENABLE_PADDLE_BACKEND "Whether to enable paddle backend." OFF)
@@ -63,6 +64,7 @@ option(ENABLE_OPENVINO_BACKEND "Whether to enable openvino backend." OFF)
 option(ENABLE_RKNPU2_BACKEND "Whether to enable RKNPU2 backend." OFF)
 option(ENABLE_SOPHGO_BACKEND "Whether to enable SOPHON backend." OFF)
 option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
+option(ENABLE_HORIZON_BACKEND "Whether to enable HORIZON backend." OFF)
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
@@ -165,6 +167,7 @@ file(GLOB_RECURSE DEPLOY_POROS_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fast
 file(GLOB_RECURSE DEPLOY_TRT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/tensorrt/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/tensorrt/*.cpp)
 file(GLOB_RECURSE DEPLOY_OPENVINO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/openvino/*.cc)
 file(GLOB_RECURSE DEPLOY_RKNPU2_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/rknpu2/*.cc)
+file(GLOB_RECURSE DEPLOY_HORIZON_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/horizon/*.cc)
 file(GLOB_RECURSE DEPLOY_SOPHGO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/sophgo/*.cc)
 file(GLOB_RECURSE DEPLOY_LITE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/lite/*.cc)
 file(GLOB_RECURSE DEPLOY_ENCRYPTION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/encryption/*.cc)
@@ -185,7 +188,7 @@ list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS}
                                  ${DEPLOY_OPENVINO_SRCS} ${DEPLOY_LITE_SRCS}
                                  ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS}
                                  ${DEPLOY_PIPELINE_SRCS} ${DEPLOY_RKNPU2_SRCS}
-                                 ${DEPLOY_SOPHGO_SRCS} ${DEPLOY_ENCRYPTION_SRCS})
+                                 ${DEPLOY_SOPHGO_SRCS} ${DEPLOY_ENCRYPTION_SRCS} ${DEPLOY_HORIZON_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -251,6 +254,13 @@ if(ENABLE_RKNPU2_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_RKNPU2_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/rknpu2.cmake)
   list(APPEND DEPEND_LIBS ${RKNN_RT_LIB})
+endif()
+
+if(ENABLE_HORIZON_BACKEND)
+  add_definitions(-DENABLE_HORIZON_BACKEND)
+  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_HORIZON_SRCS})
+  include(${PROJECT_SOURCE_DIR}/cmake/horizon.cmake)
+  list(APPEND DEPEND_LIBS ${BPU_libs})
 endif()
 
 if(ENABLE_SOPHGO_BACKEND)
@@ -323,6 +333,10 @@ if(WITH_GPU)
   message(STATUS "CUDA compiler: ${CMAKE_CUDA_COMPILER}, version: "
                   "${CMAKE_CUDA_COMPILER_ID} ${CMAKE_CUDA_COMPILER_VERSION}")
   include(${PROJECT_SOURCE_DIR}/cmake/cuda.cmake)
+endif()
+
+if(WITH_OPENCL)
+  add_definitions(-DWITH_OPENCL)
 endif()
 
 if(ENABLE_TRT_BACKEND)

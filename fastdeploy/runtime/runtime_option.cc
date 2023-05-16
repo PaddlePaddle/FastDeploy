@@ -46,9 +46,14 @@ void RuntimeOption::SetEncryptionKey(const std::string& encryption_key) {
 }
 
 void RuntimeOption::UseGpu(int gpu_id) {
-#ifdef WITH_GPU
+#if defined(WITH_GPU) || defined(WITH_OPENCL)
   device = Device::GPU;
   device_id = gpu_id;
+  
+#if defined(WITH_OPENCL) && defined(ENABLE_LITE_BACKEND)
+  paddle_lite_option.device = device;
+#endif
+  
 #else
   FDWARNING << "The FastDeploy didn't compile with GPU, will force to use CPU."
             << std::endl;
@@ -65,6 +70,10 @@ void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
   device = Device::RKNPU;
 }
 
+void RuntimeOption::UseHorizon(){
+  device = Device::SUNRISENPU;
+}
+
 void RuntimeOption::UseTimVX() {
   device = Device::TIMVX;
   paddle_lite_option.device = device;
@@ -75,7 +84,8 @@ void RuntimeOption::UseKunlunXin(int kunlunxin_id, int l3_workspace_size,
                                  const std::string& autotune_file,
                                  const std::string& precision,
                                  bool adaptive_seqlen,
-                                 bool enable_multi_stream) {
+                                 bool enable_multi_stream,
+                                 int64_t gm_default_size) {
   device = Device::KUNLUNXIN;
   paddle_lite_option.device = device;
   paddle_lite_option.device_id = kunlunxin_id;
@@ -86,6 +96,7 @@ void RuntimeOption::UseKunlunXin(int kunlunxin_id, int l3_workspace_size,
   paddle_lite_option.kunlunxin_precision = precision;
   paddle_lite_option.kunlunxin_adaptive_seqlen = adaptive_seqlen;
   paddle_lite_option.kunlunxin_enable_multi_stream = enable_multi_stream;
+  paddle_lite_option.kunlunxin_gm_default_size = gm_default_size;
 }
 
 void RuntimeOption::UseAscend() {
@@ -182,6 +193,14 @@ void RuntimeOption::UseLiteBackend() {
   backend = Backend::LITE;
 #else
   FDASSERT(false, "The FastDeploy didn't compile with Paddle Lite.");
+#endif
+}
+
+void RuntimeOption::UseHorizonNPUBackend(){
+#ifdef ENABLE_HORIZON_BACKEND
+  backend = Backend::HORIZONNPU;
+#else
+  FDASSERT(false, "The FastDeploy didn't compile with horizon");
 #endif
 }
 

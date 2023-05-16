@@ -10,6 +10,7 @@ set(NEED_ABI0 @NEED_ABI0@)
 # Hardware and Language API
 set(WITH_GPU @WITH_GPU@)
 set(WITH_IPU @WITH_IPU@)
+set(WITH_OPENCL @WITH_OPENCL@)
 set(WITH_ASCEND @WITH_ASCEND@)
 set(WITH_DIRECTML @WITH_DIRECTML@)
 set(WITH_TIMVX @WITH_TIMVX@)
@@ -23,6 +24,7 @@ set(RKNN2_TARGET_SOC "@RKNN2_TARGET_SOC@")
 # Inference backend and FastDeploy Moudle
 set(ENABLE_ORT_BACKEND @ENABLE_ORT_BACKEND@)
 set(ENABLE_RKNPU2_BACKEND @ENABLE_RKNPU2_BACKEND@)
+set(ENABLE_HORIZON_BACKEND @ENABLE_HORIZON_BACKEND@)
 set(ENABLE_SOPHGO_BACKEND @ENABLE_SOPHGO_BACKEND@)
 set(ENABLE_LITE_BACKEND @ENABLE_LITE_BACKEND@)
 set(ENABLE_PADDLE_BACKEND @ENABLE_PADDLE_BACKEND@)
@@ -167,6 +169,21 @@ if(ENABLE_RKNPU2_BACKEND)
   list(APPEND FASTDEPLOY_LIBS ${RKNPU2_LIB})
 endif()
 
+if(ENABLE_HORIZON_BACKEND)
+  set(DNN_PATH ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/dnn)
+  set(APPSDK_PATH ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/appsdk/appuser/)
+
+  set(DNN_LIB_PATH ${DNN_PATH}/lib)
+  set(APPSDK_LIB_PATH ${APPSDK_PATH}/lib/hbbpu)
+  set(BPU_libs dnn cnn_intf hbrt_bernoulli_aarch64)
+
+  link_directories(${DNN_LIB_PATH}
+                  ${APPSDK_PATH}/lib/hbbpu
+                  ${APPSDK_PATH}/lib)
+
+  list(APPEND FASTDEPLOY_LIBS ${BPU_libs})
+
+endif()
 if(ENABLE_LITE_BACKEND)
   set(LITE_DIR ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/${PADDLELITE_FILENAME})
   if(ANDROID)
