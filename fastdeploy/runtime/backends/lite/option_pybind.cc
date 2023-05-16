@@ -53,6 +53,8 @@ void BindLiteOption(pybind11::module& m) {
                      &LiteBackendOption::kunlunxin_autotune_file)
       .def_readwrite("kunlunxin_precision",
                      &LiteBackendOption::kunlunxin_precision)
+      .def_readwrite("kunlunxin_gm_default_size",
+                     &LiteBackendOption::kunlunxin_gm_default_size)
       .def_readwrite("kunlunxin_adaptive_seqlen",
                      &LiteBackendOption::kunlunxin_adaptive_seqlen)
       .def_readwrite("kunlunxin_enable_multi_stream",

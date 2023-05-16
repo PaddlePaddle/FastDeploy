@@ -96,6 +96,7 @@ void LiteBackend::ConfigureKunlunXin(const LiteBackendOption& option) {
                                 option.kunlunxin_autotune_file);
   config_.set_xpu_multi_encoder_method(option.kunlunxin_precision,
                                        option.kunlunxin_adaptive_seqlen);
+  config_.set_xpu_gm_workspace_method(option.kunlunxin_gm_default_size);
   if (option.kunlunxin_enable_multi_stream) {
     config_.enable_xpu_multi_stream();
   }

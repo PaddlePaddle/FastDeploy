@@ -108,11 +108,12 @@ public class RuntimeOption {
   UseKunlunXin(int kunlunxin_id = 0, int l3_workspace_size = 0xfffc00,
                bool locked = false, bool autotune = true,
                string autotune_file = "", string precision = "int16",
-               bool adaptive_seqlen = false, bool enable_multi_stream = false) {
+               bool adaptive_seqlen = false, bool enable_multi_stream = false,
+               int64_t gm_default_size = 0) {
     FD_C_RuntimeOptionWrapperUseKunlunXin(
         fd_runtime_option_wrapper, kunlunxin_id, l3_workspace_size, locked,
-        autotune, autotune_file, precision, adaptive_seqlen,
-        enable_multi_stream);
+        autotune, autotune_file, precision,  adaptive_seqlen,
+        enable_multi_stream, gm_default_size);
   }
 
   /// Use Sophgo to inference
@@ -366,7 +367,8 @@ public class RuntimeOption {
   private static extern void FD_C_RuntimeOptionWrapperUseKunlunXin(
       IntPtr fd_runtime_option_wrapper, int kunlunxin_id, int l3_workspace_size,
       bool locked, bool autotune, string autotune_file, string precision,
-      bool adaptive_seqlen, bool enable_multi_stream);
+      bool adaptive_seqlen, bool enable_multi_stream,
+      Int64 gm_default_size);
 
   [DllImport("fastdeploy.dll",
              EntryPoint = "FD_C_RuntimeOptionWrapperUseSophgo")]
