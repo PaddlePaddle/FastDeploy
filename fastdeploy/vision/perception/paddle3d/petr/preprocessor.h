@@ -41,7 +41,7 @@ class FASTDEPLOY_DECL PetrPreprocessor : public ProcessorManager  {
    */
   bool Apply(FDMatBatch* image_batch, std::vector<FDTensor>* outputs);
 
-  void normalize(cv::Mat *im, const std::vector<float> &mean,
+  void Normalize(cv::Mat *im, const std::vector<float> &mean,
                const std::vector<float> &std, float &scale);
 
   void mat_to_vec(const cv::Mat *im, float *data);

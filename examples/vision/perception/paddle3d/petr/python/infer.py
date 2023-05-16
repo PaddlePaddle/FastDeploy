@@ -31,12 +31,12 @@ def build_option(args):
 
 args = parse_arguments()
 
-model_file = os.path.join(args.model, "petrv2.pdmodel")
-params_file = os.path.join(args.model, "petrv2_dn.pdiparams")
+model_file = os.path.join(args.model, "petrv2_inference.pdmodel")
+params_file = os.path.join(args.model, "petrv2_inference.pdiparams")
 config_file = os.path.join(args.model, "infer_cfg.yml")
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.perception.Smoke(
+model = fd.vision.perception.Petr(
     model_file, params_file, config_file, runtime_option=runtime_option)
 
 # 预测图片检测结果

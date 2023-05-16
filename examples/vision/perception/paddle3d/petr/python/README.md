@@ -1,39 +1,35 @@
 English | [简体中文](README_CN.md)
-# Smoke Python Deployment Example
+# Petr Python Deployment Example
 
 Before deployment, the following two steps need to be confirmed
 
 - 1. The hardware and software environment meets the requirements, refer to [FastDeploy environment requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 - 2. FastDeploy Python whl package installation, refer to [FastDeploy Python Installation](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-This directory provides an example of `infer.py` to quickly complete the deployment of Smoke on CPU/GPU. Execute the following script to complete
+This directory provides an example of `infer.py` to quickly complete the deployment of Petr on CPU/GPU. Execute the following script to complete
 
 ```bash
 #Download deployment sample code
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vision/vision/paddle3d/smoke/python
+cd examples/vision/vision/paddle3d/petr/python
 
-wget https://bj.bcebos.com/fastdeploy/models/smoke.tar.gz
-tar -xf smoke.tar.gz
-wget https://bj.bcebos.com/fastdeploy/models/smoke_test.png
+wget https://bj.bcebos.com/fastdeploy/models/petr.tar.gz
+tar -xf petr.tar.gz
+wget https://bj.bcebos.com/fastdeploy/models/petr_test.png
 
 # CPU reasoning
-python infer.py --model smoke --image smoke_test.png --device cpu
+python infer.py --model petr --image petr_test.png --device cpu
 # GPU inference
-python infer.py --model smoke --image smoke_test.png --device gpu
+python infer.py --model petr --image petr_test.png --device gpu
 ```
 
-The visual result after running is shown in the figure below
-
-<img width="640" src="https://user-images.githubusercontent.com/30516196/230387825-53ac0a09-4137-4e49-9564-197cbc30ff08.png">
-
-## Smoke Python interface
+## Petr Python interface
 
 ```python
-fastdeploy.vision.detection.Smoke(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.Petr(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
-Smoke model loading and initialization.
+Petr model loading and initialization.
 
 **parameter**
 > * **model_file**(str): model file path
@@ -45,7 +41,7 @@ Smoke model loading and initialization.
 ### predict function
 
 > ```python
-> Smoke. predict(image_data)
+> Petr. predict(image_data)
 > ```
 >
 > Model prediction interface, the input image directly outputs the detection result.
@@ -61,7 +57,7 @@ Smoke model loading and initialization.
 
 ## Other documents
 
-- [Smoke Model Introduction](..)
-- [Smoke C++ deployment](../cpp)
+- [Petr Model Introduction](..)
+- [Petr C++ deployment](../cpp)
 - [Description of model prediction results](../../../../../docs/api/vision_results/)
 - [How to switch model inference backend engine](../../../../../docs/en/faq/how_to_change_backend.md)

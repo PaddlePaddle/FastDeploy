@@ -136,11 +136,6 @@ bool PetrPreprocessor::Apply(FDMatBatch* image_batch,
 
   auto* timestamp_ptr = reinterpret_cast<float*>((*outputs)[2].MutableData());
 
-  // std::ofstream file;
-  // file.open("out_fd_pre.txt");
-  // FDMat* mat = &(image_batch->mats->at(0));
-  // file << *(mat->GetOpenCVMat());
-
   for (size_t i = 0; i < image_batch->mats->size(); ++i) {
     FDMat* mat = &(image_batch->mats->at(i));
     for (size_t j = 0; j < processors_.size(); ++j) {
@@ -184,7 +179,7 @@ bool PetrPreprocessor::Apply(FDMatBatch* image_batch,
   return true;
 }
 
-void PetrPreprocessor::normalize(cv::Mat* im, const std::vector<float>& mean,
+void PetrPreprocessor::Normalize(cv::Mat* im, const std::vector<float>& mean,
                                  const std::vector<float>& std, float& scale) {
   if (scale) {
     (*im).convertTo(*im, CV_32FC3, scale);
