@@ -84,7 +84,8 @@ void RuntimeOption::UseKunlunXin(int kunlunxin_id, int l3_workspace_size,
                                  const std::string& autotune_file,
                                  const std::string& precision,
                                  bool adaptive_seqlen,
-                                 bool enable_multi_stream) {
+                                 bool enable_multi_stream,
+                                 int64_t gm_default_size) {
   device = Device::KUNLUNXIN;
   paddle_lite_option.device = device;
   paddle_lite_option.device_id = kunlunxin_id;
@@ -95,6 +96,7 @@ void RuntimeOption::UseKunlunXin(int kunlunxin_id, int l3_workspace_size,
   paddle_lite_option.kunlunxin_precision = precision;
   paddle_lite_option.kunlunxin_adaptive_seqlen = adaptive_seqlen;
   paddle_lite_option.kunlunxin_enable_multi_stream = enable_multi_stream;
+  paddle_lite_option.kunlunxin_gm_default_size = gm_default_size;
 }
 
 void RuntimeOption::UseAscend() {

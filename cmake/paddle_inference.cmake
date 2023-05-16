@@ -13,6 +13,9 @@
 # limitations under the License.
 include(ExternalProject)
 
+# The priority strategy for Paddle inference is as follows:
+# PADDLEINFERENCE_DIRECTORY > custom PADDLEINFERENCE_URL > default PADDLEINFERENCE_URL.
+
 if(WITH_GPU AND WITH_IPU)
   message(FATAL_ERROR "Cannot build with WITH_GPU=ON and WITH_IPU=ON on the same time.")
 endif()
@@ -86,55 +89,61 @@ if(PADDLEINFERENCE_DIRECTORY)
     execute_process(COMMAND rm -rf ${THIRD_PARTY_PATH}/install/paddle_inference/paddle/lib/*.a)
   endif()
 else()
-  # Use default Paddle Inference libs.
-  set(PADDLEINFERENCE_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
-  if(WIN32)
-    if (WITH_GPU)
-      set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-gpu-trt8.5.2.2-mkl-avx-0.0.0.575cafb44b.zip")
-      set(PADDLEINFERENCE_VERSION "0.0.0.575cafb44b")
-    else()
-      set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-mkl-avx-0.0.0.cbdba50933.zip")
-      set(PADDLEINFERENCE_VERSION "0.0.0.cbdba50933")
-    endif()
-  elseif(APPLE)
-    if(CURRENT_OSX_ARCH MATCHES "arm64")
-      message(FATAL_ERROR "Paddle Backend doesn't support Mac OSX with Arm64 now.")
-      set(PADDLEINFERENCE_FILE "paddle_inference-osx-arm64-openblas-0.0.0.660f781b77.tgz")
-    else()
-      # TODO(qiuyanjun): Should remove this old paddle inference lib
-      # set(PADDLEINFERENCE_FILE "paddle_inference-osx-x86_64-2.4-dev3.tgz")
-      set(PADDLEINFERENCE_FILE "paddle_inference-osx-x86_64-openblas-0.0.0.660f781b77.tgz")
-    endif()
-    set(PADDLEINFERENCE_VERSION "0.0.0.660f781b77")
-  else()
-    # Linux with x86 CPU/Arm CPU/GPU/IPU ...
-    if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
-      message(FATAL_ERROR "Paddle Backend doesn't support linux aarch64 now.")
-    else()
-      if(WITH_GPU)
-        set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-gpu-trt8.5.2.2-mkl-avx-0.0.0.660f781b77.tgz")
-        set(PADDLEINFERENCE_VERSION "0.0.0.660f781b77")
+
+  # Custom Paddle Inference URL
+  if (NOT PADDLEINFERENCE_URL)
+
+    # Use default Paddle Inference libs.
+    set(PADDLEINFERENCE_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
+    if(WIN32)
+      if (WITH_GPU)
+        set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-gpu-trt8.5.2.2-mkl-avx-0.0.0.575cafb44b.zip")
+        set(PADDLEINFERENCE_VERSION "0.0.0.575cafb44b")
       else()
-        set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-mkl-avx-0.0.0.660f781b77.tgz")
-        set(PADDLEINFERENCE_VERSION "0.0.0.660f781b77")
+        set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-mkl-avx-0.0.0.cbdba50933.zip")
+        set(PADDLEINFERENCE_VERSION "0.0.0.cbdba50933")
       endif()
-      if (WITH_IPU)
-        set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-ipu-2.4-dev1.tgz")
-        # TODO(qiuyanjun): Should use the commit id to tag the version
-        set(PADDLEINFERENCE_VERSION "2.4-dev1")
+    elseif(APPLE)
+      if(CURRENT_OSX_ARCH MATCHES "arm64")
+        message(FATAL_ERROR "Paddle Backend doesn't support Mac OSX with Arm64 now.")
+        set(PADDLEINFERENCE_FILE "paddle_inference-osx-arm64-openblas-0.0.0.660f781b77.tgz")
+      else()
+        # TODO(qiuyanjun): Should remove this old paddle inference lib
+        # set(PADDLEINFERENCE_FILE "paddle_inference-osx-x86_64-2.4-dev3.tgz")
+        set(PADDLEINFERENCE_FILE "paddle_inference-osx-x86_64-openblas-0.0.0.660f781b77.tgz")
       endif()
-
-      if(NEED_ABI0)
-        if(WITH_GPU OR WITH_PU)
-          message(WARNING "While NEED_ABI0=ON, only support CPU now, will fallback to CPU.")
+      set(PADDLEINFERENCE_VERSION "0.0.0.660f781b77")
+    else()
+      # Linux with x86 CPU/Arm CPU/GPU/IPU ...
+      if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
+        message(FATAL_ERROR "Paddle Backend doesn't support linux aarch64 now.")
+      else()
+        if(WITH_GPU)
+          set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-gpu-trt8.5.2.2-mkl-avx-0.0.0.660f781b77.tgz")
+          set(PADDLEINFERENCE_VERSION "0.0.0.660f781b77")
+        else()
+          set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-mkl-avx-0.0.0.660f781b77.tgz")
+          set(PADDLEINFERENCE_VERSION "0.0.0.660f781b77")
         endif()
-        set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-2.4.0-abi0.tgz")
-        set(PADDLEINFERENCE_VERSION "2.4.0-abi0")
+        if (WITH_IPU)
+          set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-ipu-2.4-dev1.tgz")
+          # TODO(qiuyanjun): Should use the commit id to tag the version
+          set(PADDLEINFERENCE_VERSION "2.4-dev1")
+        endif()
+
+        if(NEED_ABI0)
+          if(WITH_GPU OR WITH_PU)
+            message(WARNING "While NEED_ABI0=ON, only support CPU now, will fallback to CPU.")
+          endif()
+          set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-2.4.0-abi0.tgz")
+          set(PADDLEINFERENCE_VERSION "2.4.0-abi0")
+        endif()
       endif()
     endif()
-  endif()
-  set(PADDLEINFERENCE_URL "${PADDLEINFERENCE_URL_BASE}${PADDLEINFERENCE_FILE}")
+    set(PADDLEINFERENCE_URL "${PADDLEINFERENCE_URL_BASE}${PADDLEINFERENCE_FILE}")
 
+  endif(PADDLEINFERENCE_URL)
+  
   ExternalProject_Add(
     ${PADDLEINFERENCE_PROJECT}
     ${EXTERNAL_PROJECT_LOG_ARGS}
