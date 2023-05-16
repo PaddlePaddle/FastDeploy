@@ -61,6 +61,11 @@ struct LiteBackendOption {
   Device device = Device::CPU;
   // Index of inference device
   int device_id = 0;
+  // Whether to use light api
+  bool use_light_api = false;
+  // TODO(qiuyanjun): add opencl binary path and cache settings.
+  std::string opencl_cache_dir = "/data/local/tmp/";
+  std::string opencl_tuned_file = "/data/local/tmp/opencl_tuned_kernels.bin";
 
   /// kunlunxin_l3_workspace_size
   int kunlunxin_l3_workspace_size = 0xfffc00;
