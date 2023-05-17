@@ -48,8 +48,9 @@ class LiteBackend : public BaseBackend {
   std::vector<TensorInfo> GetOutputInfos() override;
 
  private:
+  // Build CxxConfig from option for Paddle Lite full api.
   void BuildOption(const LiteBackendOption& option);
-
+  // Configure many hardwares for Paddle Lite full api.
   void ConfigureCpu(const LiteBackendOption& option);
   void ConfigureGpu(const LiteBackendOption& option);
   void ConfigureTimvx(const LiteBackendOption& option);
@@ -59,6 +60,7 @@ class LiteBackend : public BaseBackend {
 
   paddle::lite_api::CxxConfig config_;
   std::shared_ptr<paddle::lite_api::PaddlePredictor> predictor_;
+  paddle::lite_api::MobileConfig mobile_config_;
   std::vector<TensorInfo> inputs_desc_;
   std::vector<TensorInfo> outputs_desc_;
   std::map<std::string, int> inputs_order_;

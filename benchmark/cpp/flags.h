@@ -33,6 +33,12 @@ DEFINE_string(config_path, "config.txt", "Path of benchmark config.");
 DEFINE_int32(warmup, -1, "Number of warmup for profiling.");
 DEFINE_int32(repeat, -1, "Number of repeats for profiling.");
 DEFINE_int32(xpu_l3_cache, -1, "Size xpu l3 cache for profiling.");
+DEFINE_string(model_file, "UNKNOWN",
+              "Optional, set specific model file,"
+              "eg, model.pdmodel, model.onnx");
+DEFINE_string(params_file, "",
+              "Optional, set specific params file,"
+              "eg, model.pdiparams.");
 
 static void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path "
@@ -50,8 +56,12 @@ static void PrintBenchmarkInfo(std::unordered_map<std::string,
   std::vector<std::string> model_names;
   fastdeploy::benchmark::Split(FLAGS_model, model_names, sep);
   if (model_names.empty()) {
-    std::cout << "Directory of the inference model is invalid!!!" << std::endl;
-    return;
+    if (FLAGS_model_file != "UNKNOWN") {
+      model_names.push_back(FLAGS_model_file);
+    } else {
+      std::cout << "[WARNING] Directory of the inference model is empty!!!" 
+                << std::endl;
+    }
   }
   // Save benchmark info
   int warmup = std::stoi(config_info["warmup"]);
@@ -65,7 +75,9 @@ static void PrintBenchmarkInfo(std::unordered_map<std::string,
   std::stringstream ss;
   ss.precision(3);
   ss << "\n======= Model Info =======\n";
-  ss << "model_name: " << model_names[model_names.size() - 1] << std::endl;
+  if (!model_names.empty()) {
+    ss << "model_name: " << model_names[model_names.size() - 1] << std::endl;
+  }
   ss << "profile_mode: " << config_info["profile_mode"] << std::endl;
   if (config_info["profile_mode"] == "runtime") {
     ss << "include_h2d_d2h: " << config_info["include_h2d_d2h"] << std::endl;

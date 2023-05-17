@@ -94,20 +94,39 @@ bool LiteBackend::Init(const RuntimeOption& runtime_option) {
     return false;
   }
 
-  config_.set_model_file(runtime_option.model_file);
-  config_.set_param_file(runtime_option.params_file);
-  BuildOption(runtime_option.paddle_lite_option);
-  predictor_ =
-      paddle::lite_api::CreatePaddlePredictor<paddle::lite_api::CxxConfig>(
-          config_);
-  if (option_.optimized_model_dir != "") {
-    FDINFO << "Optimzed model dir is not empty, will save optimized model to: "
-           << option_.optimized_model_dir << std::endl;
-    predictor_->SaveOptimizedModel(
-        option_.optimized_model_dir,
-        paddle::lite_api::LiteModelType::kNaiveBuffer);
+  if (runtime_option.params_file == "") {
+    // Use light api for Arm CPU via MobileConfig.    
+    FDASSERT(runtime_option.device == Device::CPU, 
+      "In FastDeploy, Paddle Lite light API is only support for Arm CPU now!")
+    mobile_config_.set_model_from_file(runtime_option.model_file);
+    mobile_config_.set_threads(runtime_option.paddle_lite_option.cpu_threads);
+    mobile_config_.set_power_mode(static_cast<paddle::lite_api::PowerMode>(
+                                  runtime_option.paddle_lite_option.power_mode));
+    // TODO(qiuyanjun): Add OpenCL support for mobile gpu. 
+    // Paddle-Lite/blob/develop/lite/api/tools/benchmark/benchmark.h#L265 
+    // mobile_config_.set_opencl_tune(
+    //    tune_mode, opencl_cache_dir, opencl_tuned_file);
+    // mobile_config_.set_opencl_precision(gpu_precision);
+    predictor_ =
+        paddle::lite_api::CreatePaddlePredictor<paddle::lite_api::MobileConfig>(
+            mobile_config_);                              
+  } else {
+    // Use full api for many hardwares via CxxConfig.
+    config_.set_model_file(runtime_option.model_file);
+    config_.set_param_file(runtime_option.params_file);
+    BuildOption(runtime_option.paddle_lite_option);
+    predictor_ =
+        paddle::lite_api::CreatePaddlePredictor<paddle::lite_api::CxxConfig>(
+            config_);
+    if (option_.optimized_model_dir != "") {
+      FDINFO << "Optimzed model dir is not empty, will save optimized model to: "
+            << option_.optimized_model_dir << std::endl;
+      predictor_->SaveOptimizedModel(
+          option_.optimized_model_dir,
+          paddle::lite_api::LiteModelType::kNaiveBuffer);
+    }
   }
-
+  
   inputs_desc_.clear();
   outputs_desc_.clear();
   inputs_order_.clear();
