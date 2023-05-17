@@ -38,7 +38,7 @@ wget https://bj.bcebos.com/fastdeploy/models/petr_test.png
 ### Petr 类
 
 ```c++
-fastdeploy::vision::detection::Petr(
+fastdeploy::vision::perception::Petr(
         const string& model_file,
         const string& params_file,
         const string& config_file,
