@@ -28,7 +28,7 @@ python infer.py --model petr --image petr_test.png --device gpu
 ## Petr Python接口
 
 ```python
-fastdeploy.vision.detection.Petr(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.perception.Petr(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
 Petr模型加载和初始化。
