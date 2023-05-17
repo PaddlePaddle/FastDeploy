@@ -38,7 +38,7 @@ The above commands are only applicable to Linux or MacOS. For the usage of SDK u
 ### Class Petr
 
 ```c++
-fastdeploy::vision::detection::Petr(
+fastdeploy::vision::perception::Petr(
         const string& model_file,
         const string& params_file,
         const string& config_file,
