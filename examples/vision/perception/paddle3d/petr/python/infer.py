@@ -43,8 +43,3 @@ model = fd.vision.perception.Petr(
 im = cv2.imread(args.image)
 result = model.predict(im)
 print(result)
-
-# 预测结果可视化
-vis_im = fd.vision.vis_perception(im, result, config_file)
-cv2.imwrite("visualized_result.jpg", vis_im)
-print("Visualized result save in ./visualized_result.jpg")

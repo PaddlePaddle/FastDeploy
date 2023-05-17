@@ -31,7 +31,7 @@ void InitAndInfer(const std::string& model_dir, const std::string& images_dir,
   assert(model.Initialized());
 
   std::vector<cv::Mat> im_batch;
-  for(int i = 0; i < 12; i++){
+  for (int i = 0; i < 12; i++) {
     auto image_file = images_dir + sep + "image" + std::to_string(i) + ".png";
     auto im = cv::imread(image_file);
     im_batch.emplace_back(im);
@@ -43,10 +43,6 @@ void InitAndInfer(const std::string& model_dir, const std::string& images_dir,
     return;
   }
   std::cout << res[0].Str() << std::endl;
-
-  auto vis_im = fastdeploy::vision::VisPerception(im_batch[0], res[0], config_file);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
