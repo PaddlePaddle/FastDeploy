@@ -97,7 +97,7 @@ bool LiteBackend::Init(const RuntimeOption& runtime_option) {
   if (runtime_option.params_file == "") {
     // Use light api for Arm CPU via MobileConfig.    
     FDASSERT(runtime_option.device == Device::CPU, 
-      "Paddle Lite light API is only support for Arm CPU now!")
+      "In FastDeploy, Paddle Lite light API is only support for Arm CPU now!")
     mobile_config_.set_model_from_file(runtime_option.model_file);
     mobile_config_.set_threads(runtime_option.paddle_lite_option.cpu_threads);
     mobile_config_.set_power_mode(static_cast<paddle::lite_api::PowerMode>(
