@@ -94,8 +94,7 @@ bool LiteBackend::Init(const RuntimeOption& runtime_option) {
     return false;
   }
 
-  if (runtime_option.paddle_lite_option.use_light_api 
-      && runtime_option.params_file == "") {
+  if (runtime_option.params_file == "") {
     // Use light api for Arm CPU via MobileConfig.    
     FDASSERT(runtime_option.device == Device::CPU, 
       "Paddle Lite light API is only support for Arm CPU now!")

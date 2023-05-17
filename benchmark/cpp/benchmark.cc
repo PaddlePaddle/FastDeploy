@@ -128,8 +128,7 @@ static void RuntimeProfiling(int argc, char* argv[]) {
                 << std::endl;
         return;
       } else {
-        option.paddle_lite_option.use_light_api = true;
-        std::cout << "[INFO] Using the lite light api for: " 
+        std::cout << "[INFO] Will using the lite light api for: " 
                   << model_file << std::endl;
       }
     }
