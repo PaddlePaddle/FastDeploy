@@ -148,7 +148,7 @@ bool PetrPreprocessor::Apply(FDMatBatch* image_batch,
         // crop and normalize after Resize
         auto img = *(mat->GetOpenCVMat());
         cv::Mat crop_img = img(cv::Range(130, 450), cv::Range(0, 800));
-        normalize(&crop_img, mean_, std_, scale_);
+        Normalize(&crop_img, mean_, std_, scale_);
         FDMat fd_mat = WrapMat(crop_img);
         image_batch->mats->at(i) = fd_mat;
       }
