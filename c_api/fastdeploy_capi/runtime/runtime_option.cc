@@ -108,7 +108,7 @@ void FD_C_RuntimeOptionWrapperUseKunlunXin(
                                std::string(precision), 
                                bool(adaptive_seqlen),
                                bool(enable_multi_stream),
-                               gm_default_size);
+                               int64_t(gm_default_size));
 }
 
 void FD_C_RuntimeOptionWrapperUseSophgo(
