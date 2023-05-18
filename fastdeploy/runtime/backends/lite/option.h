@@ -61,6 +61,9 @@ struct LiteBackendOption {
   Device device = Device::CPU;
   // Index of inference device
   int device_id = 0;
+  // TODO(qiuyanjun): add opencl binary path and cache settings.
+  std::string opencl_cache_dir = "/data/local/tmp/";
+  std::string opencl_tuned_file = "/data/local/tmp/opencl_tuned_kernels.bin";
 
   /// kunlunxin_l3_workspace_size
   int kunlunxin_l3_workspace_size = 0xfffc00;
@@ -72,6 +75,8 @@ struct LiteBackendOption {
   std::string kunlunxin_autotune_file = "";
   /// kunlunxin_precision
   std::string kunlunxin_precision = "int16";
+  /// kunlunxin_gm_default_size 
+  int kunlunxin_gm_default_size = 0;
   /// kunlunxin_adaptive_seqlen
   bool kunlunxin_adaptive_seqlen = false;
   /// kunlunxin_enable_multi_stream
