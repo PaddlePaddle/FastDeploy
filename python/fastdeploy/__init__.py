@@ -43,7 +43,6 @@ if os.name != "nt" and os.path.exists(trt_directory):
                 break
     logging.basicConfig(level=logging.NOTSET)
 
-
 from .code_version import version, git_version, extra_version_info
 from .code_version import enable_trt_backend, enable_paddle_backend, with_gpu
 
@@ -56,68 +55,69 @@ sys_platform = platform.platform().lower()
 
 
 def get_paddle_version():
-  paddle_version = ""
-  try:
-    import pkg_resources
-    paddle_version = pkg_resources.require(
-      "paddlepaddle-gpu")[0].version.split(".post")[0]
-  except:
+    paddle_version = ""
     try:
-      paddle_version = pkg_resources.require(
-        "paddlepaddle")[0].version.split(".post")[0]
+        import pkg_resources
+        paddle_version = pkg_resources.require("paddlepaddle-gpu")[
+            0].version.split(".post")[0]
     except:
-      pass
-  return paddle_version      
+        try:
+            paddle_version = pkg_resources.require("paddlepaddle")[
+                0].version.split(".post")[0]
+        except:
+            pass
+    return paddle_version
 
 
 def should_import_paddle():
-  if "paddle2.4" in extra_version_info:
-    paddle_version = get_paddle_version()
-    if paddle_version != "" and paddle_version <= '2.4.2' and paddle_version != "0.0.0":
-      return True
-  return False    
+    if ("paddle2.4" in extra_version_info) or ("post24" in extra_version_info):
+        paddle_version = get_paddle_version()
+        if paddle_version != "" and paddle_version <= '2.4.2' and paddle_version != "0.0.0":
+            return True
+    return False
 
 
 def should_set_tensorrt():
-  if with_gpu == 'ON' and enable_paddle_backend == 'ON' and enable_trt_backend == 'ON':
-    return True
-  return False  
+    if with_gpu == 'ON' and enable_paddle_backend == 'ON' and enable_trt_backend == 'ON':
+        return True
+    return False
 
 
 def tensorrt_is_avaliable():
-  # Note(qiuyanjun): Only support linux now.
-  found_trt_lib = False
-  if ('linux' in sys_platform) and ('LD_LIBRARY_PATH' in os.environ.keys()):
-    for lib_path in os.environ['LD_LIBRARY_PATH'].split(':'):
-      if os.path.exists(os.path.join(lib_path, 'libnvinfer.so')):
-        found_trt_lib = True
-        break
-  return found_trt_lib 
+    # Note(qiuyanjun): Only support linux now.
+    found_trt_lib = False
+    if ('linux' in sys_platform) and ('LD_LIBRARY_PATH' in os.environ.keys()):
+        for lib_path in os.environ['LD_LIBRARY_PATH'].split(':'):
+            if os.path.exists(os.path.join(lib_path, 'libnvinfer.so')):
+                found_trt_lib = True
+                break
+    return found_trt_lib
 
 
 try:
-  # windows: no conflict between fastdeploy and paddle.
-  # linux: must import paddle first to solve the conflict.
-  # macos: still can not solve the conflict between fastdeploy and paddle, 
-  #        due to the global flags redefined in paddle/paddle_inference so.
-  #        we got the error (ERROR: flag 'xxx' was defined more than once).
-  if "linux" in sys_platform:
-    if should_import_paddle():
-      import paddle # need import paddle first for paddle2.4.x
-      # check whether tensorrt in LD_LIBRARY_PATH for fastdeploy
-      if should_set_tensorrt() and (not tensorrt_is_avaliable()):
-        if os.path.exists(trt_directory):
-          logging.info(
-           "\n[WARNING] Can not find TensorRT lib in LD_LIBRARY_PATH for FastDeploy! \
+    # windows: no conflict between fastdeploy and paddle.
+    # linux: must import paddle first to solve the conflict.
+    # macos: still can not solve the conflict between fastdeploy and paddle,
+    #        due to the global flags redefined in paddle/paddle_inference so.
+    #        we got the error (ERROR: flag 'xxx' was defined more than once).
+    if "linux" in sys_platform:
+        if should_import_paddle():
+            import paddle  # need import paddle first for paddle2.4.x
+            # check whether tensorrt in LD_LIBRARY_PATH for fastdeploy
+            if should_set_tensorrt() and (not tensorrt_is_avaliable()):
+                if os.path.exists(trt_directory):
+                    logging.info(
+                        "\n[WARNING] Can not find TensorRT lib in LD_LIBRARY_PATH for FastDeploy! \
             \n[WARNING] Please export [ YOUR CUSTOM TensorRT ] lib path to LD_LIBRARY_PATH first, or run the command: \
-            \n[WARNING] Linux: 'export LD_LIBRARY_PATH=$(python -c 'from fastdeploy import trt_directory; print(trt_directory)'):$LD_LIBRARY_PATH'")
-        else:  
-          logging.info(
-           "\n[WARNING] Can not find TensorRT lib in LD_LIBRARY_PATH for FastDeploy! \
-            \n[WARNING] Please export [YOUR CUSTOM TensorRT] lib path to LD_LIBRARY_PATH first.")   
+            \n[WARNING] Linux: 'export LD_LIBRARY_PATH=$(python -c 'from fastdeploy import trt_directory; print(trt_directory)'):$LD_LIBRARY_PATH'"
+                    )
+                else:
+                    logging.info(
+                        "\n[WARNING] Can not find TensorRT lib in LD_LIBRARY_PATH for FastDeploy! \
+            \n[WARNING] Please export [YOUR CUSTOM TensorRT] lib path to LD_LIBRARY_PATH first."
+                    )
 except:
-  pass
-
+    pass
 
 from .c_lib_wrap import (
     ModelFormat,
