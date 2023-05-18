@@ -242,6 +242,7 @@ class RuntimeOption:
         :param precision: (str)Calculation accuracy of multi_encoder
         :param adaptive_seqlen: (bool)adaptive_seqlen Is the input of multi_encoder variable length
         :param enable_multi_stream: (bool)Whether to enable the multi stream of KunlunXin XPU.
+        :param gm_default_size The default size of context global memory of KunlunXin XPU.
         """
         return self._option.use_kunlunxin(device_id, l3_workspace_size, locked,
                                           autotune, autotune_file, precision,

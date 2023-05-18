@@ -75,12 +75,12 @@ struct LiteBackendOption {
   std::string kunlunxin_autotune_file = "";
   /// kunlunxin_precision
   std::string kunlunxin_precision = "int16";
-  /// kunlunxin_gm_default_size 
-  int kunlunxin_gm_default_size = 0;
   /// kunlunxin_adaptive_seqlen
   bool kunlunxin_adaptive_seqlen = false;
   /// kunlunxin_enable_multi_stream
   bool kunlunxin_enable_multi_stream = false;
+  /// kunlunxin_gm_default_size 
+  int64_t kunlunxin_gm_default_size = 0;
 
   /// Optimized model dir for CxxConfig
   std::string optimized_model_dir = "";

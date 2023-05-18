@@ -126,6 +126,7 @@ FASTDEPLOY_CAPI_EXPORT extern void FD_C_RuntimeOptionWrapperUseAscend(
 /// \param[in] adaptive_seqlen Is the input of multi_encoder variable length
 /// \param[in] enable_multi_stream Whether to enable the multi stream of
 ///        KunlunXin XPU.
+/// \param[in] gm_default_size The default size of context global memory of KunlunXin XPU.
 ///
 FASTDEPLOY_CAPI_EXPORT extern void FD_C_RuntimeOptionWrapperUseKunlunXin(
     __fd_keep FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
