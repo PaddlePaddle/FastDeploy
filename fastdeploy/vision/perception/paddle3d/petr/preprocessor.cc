@@ -167,11 +167,6 @@ bool PetrPreprocessor::Apply(FDMatBatch* image_batch,
   }
   memcpy(timestamp_ptr, timestamp.data(), batch * sizeof(float));
 
-  std::ofstream file;
-  file.open("out_fd_pre.txt");
-  FDMat* mat = &(image_batch->mats->at(0));
-  file << *(mat->GetOpenCVMat());
-
   FDTensor* tensor = image_batch->Tensor();
   (*outputs)[0].SetExternalData(tensor->Shape(), tensor->Dtype(),
                                 tensor->Data(), tensor->device,

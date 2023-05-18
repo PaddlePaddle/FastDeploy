@@ -44,8 +44,6 @@ class FASTDEPLOY_DECL PetrPreprocessor : public ProcessorManager  {
   void Normalize(cv::Mat *im, const std::vector<float> &mean,
                const std::vector<float> &std, float &scale);
 
-  void mat_to_vec(const cv::Mat *im, float *data);
-
  protected:
   bool BuildPreprocessPipelineFromConfig();
   std::vector<std::shared_ptr<Processor>> processors_;
@@ -61,8 +59,6 @@ class FASTDEPLOY_DECL PetrPreprocessor : public ProcessorManager  {
   std::vector<float> std_;
 
   std::vector<float> input_k_data_;
-
-  std::vector<float> input_ratio_data_;
 };
 
 }  // namespace perception
