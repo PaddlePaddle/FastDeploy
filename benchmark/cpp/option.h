@@ -53,6 +53,11 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
       if (config_info["use_fp16"] == "true") {
         option->trt_option.enable_fp16 = true;
       }
+    } else if (config_info["backend"] == "lite") {
+      option->UsePaddleLiteBackend();
+      if (config_info["use_fp16"] == "true") {
+        option->paddle_lite_option.enable_fp16 = true;
+      }
     } else if (config_info["backend"] == "default") {
       PrintBenchmarkInfo(config_info);
       return true;
@@ -103,6 +108,9 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
       if (config_info["use_fp16"] == "true") {
         option->paddle_lite_option.enable_fp16 = true;
       }
+    } else if (config_info["backend"] == "sophgo") {
+      option->UseSophgo();
+      option->UseSophgoBackend();
     } else if (config_info["backend"] == "default") {
       PrintBenchmarkInfo(config_info);
       return true;

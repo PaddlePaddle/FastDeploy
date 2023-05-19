@@ -82,6 +82,27 @@ bool PPDetBase::BatchPredict(const std::vector<cv::Mat>& imgs,
   return true;
 }
 
+bool PPDetBase::CheckArch() {
+  // Add "PicoDet" arch for backward compability with the
+  // old ppdet model, such as picodet from PaddleClas
+  // PP-ShiTuV2 pipeline.
+  std::vector<std::string> archs = {
+      "SOLOv2", "YOLO",   "SSD",    "RetinaNet", "RCNN",   "Face",
+      "GFL",    "YOLOX",  "YOLOv5", "YOLOv6",    "YOLOv7", "RTMDet",
+      "FCOS",   "TTFNet", "TOOD",   "DETR",      "PicoDet"};
+  auto arch_ = preprocessor_.GetArch();
+  for (auto item : archs) {
+    if (arch_ == item) {
+      return true;
+    }
+  }
+  FDWARNING << "Please set model arch,"
+            << "support value : SOLOv2, YOLO, SSD, RetinaNet, "
+            << "RCNN, Face , GFL , RTMDet ,"
+            << "FCOS , TTFNet , TOOD , DETR, PicoDet" << std::endl;
+  return false;
+}
+
 }  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy
