@@ -31,14 +31,10 @@ namespace fastdeploy {
 class TVMBackend : public BaseBackend {
  public:
   TVMBackend() = default;
-  ~TVMBackend() override = default;
+  virtual ~TVMBackend() = default;
   bool Init(const RuntimeOption& runtime_option) override;
-  int NumInputs() const override {
-    return static_cast<int>(inputs_desc_.size());
-  }
-  int NumOutputs() const override {
-    return static_cast<int>(outputs_desc_.size());
-  }
+  int NumInputs() const override { return inputs_desc_.size(); }
+  int NumOutputs() const override { return outputs_desc_.size(); }
   TensorInfo GetInputInfo(int index) override { return inputs_desc_[index]; }
   TensorInfo GetOutputInfo(int index) override { return outputs_desc_[index]; }
   std::vector<TensorInfo> GetInputInfos() override { return inputs_desc_; }
