@@ -313,6 +313,12 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 //   THROW_IF_BACKEND_MODEL_ERROR(ParseUnsignedLongLongValue(
                 //       value_string,
                 //       &runtime_options_->trt_max_workspace_size));
+              } else if (param_key == "workspace_size") {
+                int max_workspace_size = 1 << 30;
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseIntValue(value_string, &max_workspace_size));
+                runtime_options_->trt_option.max_workspace_size =
+                    max_workspace_size;
               } else if (param_key == "cache_file") {
                 runtime_options_->trt_option.serialize_file = value_string;
               } else if (param_key == "use_paddle") {
