@@ -50,6 +50,12 @@ then
 fi
 
 echo "[Execute] Will try to export all the library directories to environments, if not work, please try to export these path by your self."
-NEW_LIB_PATH=$(tr ":" "\n" <<< "${IMPORT_PATH}:$LD_LIBRARY_PATH" | sort | uniq | tr "\n" ":")
-
-export LD_LIBRARY_PATH=$NEW_LIB_PATH
+PLATFORM=`uname`
+if [[ "$PLATFORM" = "Linux" ]];then
+  NEW_LIB_PATH=$(tr ":" "\n" <<< "${IMPORT_PATH}:$LD_LIBRARY_PATH" | sort | uniq | tr "\n" ":")
+  export LD_LIBRARY_PATH=$NEW_LIB_PATH
+fi
+if [[ "$PLATFORM" = "Darwin" ]];then
+  NEW_LIB_PATH=$(tr ":" "\n" <<< "${IMPORT_PATH}:$DYLD_LIBRARY_PATH" | sort | uniq | tr "\n" ":")
+  export DYLD_LIBRARY_PATH=$NEW_LIB_PATH
+fi
