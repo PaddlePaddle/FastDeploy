@@ -226,7 +226,8 @@ class RuntimeOption:
                       autotune_file="",
                       precision="int16",
                       adaptive_seqlen=False,
-                      enable_multi_stream=False):
+                      enable_multi_stream=False,
+                      gm_default_size=0):
         """Inference with KunlunXin XPU
 
         :param device_id: (int)The index of KunlunXin XPU will be used for inference, default 0
@@ -241,10 +242,12 @@ class RuntimeOption:
         :param precision: (str)Calculation accuracy of multi_encoder
         :param adaptive_seqlen: (bool)adaptive_seqlen Is the input of multi_encoder variable length
         :param enable_multi_stream: (bool)Whether to enable the multi stream of KunlunXin XPU.
+        :param gm_default_size The default size of context global memory of KunlunXin XPU.
         """
         return self._option.use_kunlunxin(device_id, l3_workspace_size, locked,
                                           autotune, autotune_file, precision,
-                                          adaptive_seqlen, enable_multi_stream)
+                                          adaptive_seqlen, enable_multi_stream,
+                                          gm_default_size)
 
     def use_cpu(self):
         """Inference with CPU

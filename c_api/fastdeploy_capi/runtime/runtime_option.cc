@@ -99,13 +99,16 @@ void FD_C_RuntimeOptionWrapperUseKunlunXin(
     __fd_keep FD_C_RuntimeOptionWrapper* fd_c_runtime_option_wrapper,
     int kunlunxin_id, int l3_workspace_size, FD_C_Bool locked,
     FD_C_Bool autotune, const char* autotune_file, const char* precision,
-    FD_C_Bool adaptive_seqlen, FD_C_Bool enable_multi_stream) {
+    FD_C_Bool adaptive_seqlen, FD_C_Bool enable_multi_stream, 
+    int64_t gm_default_size) {
   auto& runtime_option = CHECK_AND_CONVERT_FD_TYPE(RuntimeOptionWrapper,
                                                    fd_c_runtime_option_wrapper);
   runtime_option->UseKunlunXin(kunlunxin_id, l3_workspace_size, bool(locked),
                                bool(autotune), std::string(autotune_file),
-                               std::string(precision), bool(adaptive_seqlen),
-                               bool(enable_multi_stream));
+                               std::string(precision), 
+                               bool(adaptive_seqlen),
+                               bool(enable_multi_stream),
+                               int64_t(gm_default_size));
 }
 
 void FD_C_RuntimeOptionWrapperUseSophgo(
