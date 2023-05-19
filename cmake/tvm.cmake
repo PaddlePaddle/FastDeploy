@@ -20,6 +20,16 @@ download_and_decompress(${TVM_URL} ${CMAKE_CURRENT_BINARY_DIR}/tvm ${THIRD_PARTY
 set(TVM_RUNTIME_PATH "${THIRD_PARTY_PATH}/install/tvm")
 execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory "${TVM_RUNTIME_PATH}")
 
+# copy dlpack to third_party
+execute_process(COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${PROJECT_SOURCE_DIR}/third_party/dlpack/include"
+        "${THIRD_PARTY_PATH}/install/tvm/include")
+
+# copy dmlc-core to third_party
+execute_process(COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${PROJECT_SOURCE_DIR}/third_party/dmlc-core/include"
+        "${THIRD_PARTY_PATH}/install/tvm/include")
+
 # include lib
 if (EXISTS ${TVM_RUNTIME_PATH})
     if (${CMAKE_SYSTEM} MATCHES "Darwin")

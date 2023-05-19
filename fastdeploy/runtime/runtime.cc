@@ -165,6 +165,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     CreatePorosBackend();
   } else if (option.backend == Backend::HORIZONNPU) {
     CreateHorizonBackend();
+  } else if (option.backend == Backend::TVM) {
+    CreateTVMBackend();
   } else {
     std::string msg = Str(GetAvailableBackends());
     FDERROR << "The compiled FastDeploy only supports " << msg << ", "
@@ -288,6 +290,19 @@ void Runtime::CreateOpenVINOBackend() {
 #endif
   FDINFO << "Runtime initialized with Backend::OPENVINO in " << option.device
          << "." << std::endl;
+}
+
+void Runtime::CreateTVMBackend() {
+#ifdef ENABLE_TVM_BACKEND
+  backend_ = utils::make_unique<TVMBackend>();
+  FDASSERT(backend_->Init(option), "Failed to initialize TVM backend.");
+#else
+  FDASSERT(false,
+           "TVMBackend is not available, please compiled with "
+           "ENABLE_TVM_BACKEND=ON.");
+#endif
+  FDINFO << "Runtime initialized with Backend::TVM in " << option.device << "."
+         << std::endl;
 }
 
 void Runtime::CreateOrtBackend() {
