@@ -17,6 +17,7 @@
 namespace fastdeploy {
 
 void BindSmoke(pybind11::module& m);
+void BindPetr(pybind11::module& m);
 
 void BindPerception(pybind11::module& m) {
   auto perception_module =
