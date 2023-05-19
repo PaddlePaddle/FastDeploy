@@ -2,7 +2,7 @@
 
 PLATFORM=`uname`
 FASTDEPLOY_LIBRARY_PATH=${BASH_SOURCE:-$0}
-if [[ "$PLATFORM" == "Linux" ]];then
+if [[ "$PLATFORM" = "Linux" ]];then
     FASTDEPLOY_LIBRARY_PATH=`readlink -f ${FASTDEPLOY_LIBRARY_PATH}`
 fi
 FASTDEPLOY_LIBRARY_PATH=$(cd `dirname ${FASTDEPLOY_LIBRARY_PATH}`; pwd)
@@ -22,23 +22,23 @@ else
 fi
 
 for SO_FILE in $ALL_SO_FILES;do
-    LIBS_DIRECOTRIES+=(${SO_FILE%/*})
+    LIBS_DIRECTORIES+=(${SO_FILE%/*})
 done
 
 # Find all the .dylib files' path
 # ALL_DYLIB_FILES=(`find $FASTDEPLOY_LIBRARY_PATH -name "*.dylib*"`)
 for DYLIB_FILE in $ALL_DYLIB_FILES;do
-    LIBS_DIRECOTRIES+=(${DYLIB_FILE%/*})
+    LIBS_DIRECTORIES+=(${DYLIB_FILE%/*})
 done
 
 # Remove the dumplicate directories
-LIBS_DIRECOTRIES=($(awk -v RS=' ' '!a[$1]++' <<< ${LIBS_DIRECOTRIES[@]}))
+LIBS_DIRECTORIES=($(awk -v RS=' ' '!a[$1]++' <<< ${LIBS_DIRECTORIES[@]}))
 
 # Print the dynamic library location and output the configuration file
 IMPORT_PATH=""
 output_file=${FASTDEPLOY_LIBRARY_PATH}/fastdeploy_libs.conf
 rm -rf $output_file
-for LIB_DIR in ${LIBS_DIRECOTRIES[@]};do
+for LIB_DIR in ${LIBS_DIRECTORIES[@]};do
     echo "Find Library Directory: $LIB_DIR"
     echo "$LIB_DIR" >> $output_file
     IMPORT_PATH=${LIB_DIR}":"$IMPORT_PATH
