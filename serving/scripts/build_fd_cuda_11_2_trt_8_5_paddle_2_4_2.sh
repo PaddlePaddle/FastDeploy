@@ -47,7 +47,7 @@ docker run -it --rm --name build_fd_libs \
             export ENABLE_VISION=ON;
             export ENABLE_TEXT=ON;
             export PADDLEINFERENCE_URL=https://bj.bcebos.com/fastdeploy/third_libs/paddle_inference-linux-x64-gpu-trt8.5.2.2-mkl-avx-2.4.2.tgz;
-            export PADDLEINFERENCE_VERSION=paddle2.4.2;
+            export PADDLEINFERENCE_VERSION=post242;
             python setup.py build;
             python setup.py bdist_wheel;
             cd /workspace/fastdeploy;
