@@ -176,6 +176,7 @@ bool SophgoBackend::Infer(std::vector<FDTensor>& inputs,
   bm_tensor_t input_tensors[input_size];
   bm_status_t status = BM_SUCCESS;
 
+  RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
   bm_data_type_t* input_dtypes = net_info_->input_dtypes;
   for (int i = 0; i < input_size; i++) {
     status = bm_malloc_device_byte(handle_, &input_tensors[i].device_mem,
@@ -198,12 +199,14 @@ bool SophgoBackend::Infer(std::vector<FDTensor>& inputs,
     assert(BM_SUCCESS == status);
   }
 
+  RUNTIME_PROFILE_LOOP_BEGIN(1)
   bool launch_status = bmrt_launch_tensor_ex(
       p_bmrt_, net_name_.c_str(), input_tensors, net_info_->input_num,
       output_tensors, net_info_->output_num, true, false);
   assert(launch_status);
   status = bm_thread_sync(handle_);
   assert(status == BM_SUCCESS);
+  RUNTIME_PROFILE_LOOP_END
 
   outputs->resize(outputs_desc_.size());
   bm_data_type_t* output_dtypes = net_info_->output_dtypes;
@@ -231,6 +234,7 @@ bool SophgoBackend::Infer(std::vector<FDTensor>& inputs,
   for (int i = 0; i < output_size; i++) {
     bm_free_device(handle_, output_tensors[i].device_mem);
   }
+   RUNTIME_PROFILE_LOOP_H2D_D2H_END
 
   return true;
 }

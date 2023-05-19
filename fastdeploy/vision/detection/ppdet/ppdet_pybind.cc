@@ -78,6 +78,11 @@ void BindPPDet(pybind11::module& m) {
               vision::detection::NMSOption option) {
              self.SetNMSOption(option);
            })
+      .def("set_nms_rotated_option",
+           [](vision::detection::PaddleDetPostprocessor& self,
+              vision::detection::NMSRotatedOption option) {
+             self.SetNMSRotatedOption(option);
+           })
       .def("apply_nms",
            [](vision::detection::PaddleDetPostprocessor& self) {
              self.ApplyNMS();
@@ -233,5 +238,31 @@ void BindPPDet(pybind11::module& m) {
       m, "SOLOv2")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>());
+  
+  pybind11::class_<vision::detection::PaddleDetectionModel, vision::detection::PPDetBase>(
+      m, "PaddleDetectionModel")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+  
+  pybind11::class_<vision::detection::PPYOLOER, vision::detection::PPDetBase>(
+      m, "PPYOLOER")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+
+  pybind11::class_<vision::detection::NMSRotatedOption>(m, "NMSRotatedOption")
+      .def(pybind11::init())
+      .def_readwrite("background_label",
+                     &vision::detection::NMSRotatedOption::background_label)
+      .def_readwrite("keep_top_k",
+                     &vision::detection::NMSRotatedOption::keep_top_k)
+      .def_readwrite("nms_eta", &vision::detection::NMSRotatedOption::nms_eta)
+      .def_readwrite("nms_threshold",
+                     &vision::detection::NMSRotatedOption::nms_threshold)
+      .def_readwrite("nms_top_k",
+                     &vision::detection::NMSRotatedOption::nms_top_k)
+      .def_readwrite("normalized",
+                     &vision::detection::NMSRotatedOption::normalized)
+      .def_readwrite("score_threshold",
+                     &vision::detection::NMSRotatedOption::score_threshold);
 }
 }  // namespace fastdeploy

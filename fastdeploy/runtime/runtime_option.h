@@ -73,6 +73,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
                      fastdeploy::rknpu2::CpuName::RK356X,
                  fastdeploy::rknpu2::CoreMask rknpu2_core =
                      fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO);
+  // Use Horizon NPU to inference
+  void UseHorizon();
   /// Use TimVX e.g RV1126/A311D to inference
   void UseTimVX();
   /// Use Huawei Ascend to inference
@@ -104,13 +106,15 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// \param adaptive_seqlen Is the input of multi_encoder variable length
   /// \param enable_multi_stream Whether to enable the multi stream of
   ///        KunlunXin XPU.
+  /// \param gm_default_size The default size of global memory of KunlunXin XPU.
   ///
   void UseKunlunXin(int kunlunxin_id = 0, int l3_workspace_size = 0xfffc00,
                     bool locked = false, bool autotune = true,
                     const std::string& autotune_file = "",
                     const std::string& precision = "int16",
                     bool adaptive_seqlen = false,
-                    bool enable_multi_stream = false);
+                    bool enable_multi_stream = false,
+                    int64_t gm_default_size = 0);
 
   void SetExternalStream(void* external_stream);
 
@@ -277,6 +281,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetOrtGraphOptLevel(int level = -1);
   void UsePaddleBackend();
   void UseLiteBackend();
+  void UseHorizonNPUBackend();
 };
 
 }  // namespace fastdeploy

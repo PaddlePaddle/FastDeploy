@@ -18,5 +18,5 @@
 #endif
 
 #ifndef ENABLE_TEXT
-#define ENABLE_TEXT
+/* #undef ENABLE_TEXT */
 #endif
