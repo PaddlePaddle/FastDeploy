@@ -1145,16 +1145,16 @@ TRITONSERVER_Error* ModelInstanceState::ReadOutputTensors(
     size_t total_batch_size, TRITONBACKEND_Request** requests,
     const uint32_t request_count,
     std::vector<TRITONBACKEND_Response*>* responses) {
-  // r22.03
-  // BackendOutputResponder responder(
-  //     requests, request_count, responses,
-  //     model_state_->TritonMemoryManager(), model_state_->MaxBatchSize() > 0,
-  //     model_state_->EnablePinnedOutput(), CudaStream());
-  // r21.10
+  // r22.12
   BackendOutputResponder responder(
-      requests, request_count, responses, StateForModel()->MaxBatchSize(),
-      StateForModel()->TritonMemoryManager(),
-      StateForModel()->EnablePinnedOutput(), CudaStream());
+      requests, request_count, responses,
+      model_state_->TritonMemoryManager(), model_state_->MaxBatchSize() > 0,
+      model_state_->EnablePinnedOutput(), CudaStream());
+  // r21.10
+  // BackendOutputResponder responder(
+  //     requests, request_count, responses, StateForModel()->MaxBatchSize(),
+  //     StateForModel()->TritonMemoryManager(),
+  //     StateForModel()->EnablePinnedOutput(), CudaStream());
 
   // Use to hold string output contents
   bool cuda_copy = false;

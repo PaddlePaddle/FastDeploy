@@ -86,14 +86,14 @@ nvidia-docker run -i --rm --name ${docker_name} \
            -e "http_proxy=${http_proxy}" \
            -e "https_proxy=${https_proxy}" \
            -e "trt_version=${trt_version}"\
-           nvcr.io/nvidia/tritonserver:21.10-py3-min \
+           nvidia/cuda:11.6.1-cudnn8-devel-ubuntu20.04 \
            bash -c \
            'export https_proxy_tmp=${https_proxy}
             export http_proxy_tmp=${http_proxy}
             cd /workspace/fastdeploy/python;
             rm -rf .setuptools-cmake-build dist build fastdeploy/libs/third_libs;
             apt-get update;
-            apt-get install -y --no-install-recommends patchelf python3-dev python3-pip rapidjson-dev;
+            apt-get install -y --no-install-recommends patchelf python3-dev python3-pip rapidjson-dev git;
             unset http_proxy
             unset https_proxy
             ln -s /usr/bin/python3 /usr/bin/python;
@@ -117,7 +117,7 @@ nvidia-docker run -i --rm --name ${docker_name} \
             rm -rf build; mkdir build; cd build;
             export https_proxy=${https_proxy_tmp}
             export http_proxy=${http_proxy_tmp}
-            cmake .. -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy_install -DTRITON_COMMON_REPO_TAG=r21.10 -DTRITON_CORE_REPO_TAG=r21.10 -DTRITON_BACKEND_REPO_TAG=r21.10;
+            cmake .. -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy_install -DTRITON_COMMON_REPO_TAG=r22.12 -DTRITON_CORE_REPO_TAG=r22.12 -DTRITON_BACKEND_REPO_TAG=r22.12;
             make -j`nproc`'
 
 echo "build FD GPU library done"
