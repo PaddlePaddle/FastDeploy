@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
     option.trt_option.SetShape("scale_factor", {1, 2}, {1, 2}, {1, 2});
   }
   auto layout_model = vision::detection::PicoDet(
-      model_file, params_file, config_file option, model_format);
+      model_file, params_file, config_file, option, model_format);
   vision::DetectionResult res;
   // Run profiling
   BENCHMARK_MODEL(layout_model, layout_model.Predict(im, &res))
