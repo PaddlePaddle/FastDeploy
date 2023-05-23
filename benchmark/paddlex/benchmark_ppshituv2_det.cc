@@ -60,6 +60,7 @@ int main(int argc, char* argv[]) {
   vision::DetectionResult res;
   // Run profiling
   BENCHMARK_MODEL(model, model.Predict(im, &res))
+  // std::cout << res.Str() << std::endl;
   auto vis_im = vision::VisDetection(im, res, 0.5f);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;

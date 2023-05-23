@@ -57,6 +57,7 @@ int main(int argc, char* argv[]) {
       model_file, params_file, config_file, option, model_format);
   vision::SegmentationResult res;
   BENCHMARK_MODEL(model_ppseg, model_ppseg.Predict(im, &res))
+  // std::cout << res.Str() << std::endl;
   auto vis_im = vision::VisSegmentation(im, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;

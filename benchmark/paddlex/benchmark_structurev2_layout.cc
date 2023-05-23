@@ -55,6 +55,7 @@ int main(int argc, char* argv[]) {
   vision::DetectionResult res;
   // Run profiling
   BENCHMARK_MODEL(layout_model, layout_model.Predict(im, &res))
+  // std::cout << res.Str() << std::endl;
   std::vector<std::string> labels = {
       "text",          "title",  "figure", "figure_caption", "table",
       "table_caption", "header", "footer", "reference",      "equation"};

@@ -54,8 +54,9 @@ int main(int argc, char *argv[]) {
   auto model_ppocr_table = vision::ocr::StructureV2Table(
       model_file, params_file, FLAGS_table_char_dict_path, option,
       model_format);
-  fastdeploy::vision::OCRResult result;
-  BENCHMARK_MODEL(model_ppocr_table, model_ppocr_table.Predict(im, &result));
+  fastdeploy::vision::OCRResult res;
+  BENCHMARK_MODEL(model_ppocr_table, model_ppocr_table.Predict(im, &res));
+// std::cout << res.Str() << std::endl;
 #endif
   return 0;
 }

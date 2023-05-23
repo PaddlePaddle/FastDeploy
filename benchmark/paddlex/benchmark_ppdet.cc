@@ -59,6 +59,7 @@ int main(int argc, char* argv[]) {
     model_ppdet.GetPostprocessor().ApplyNMS();
   }
   BENCHMARK_MODEL(model_ppdet, model_ppdet.Predict(im, &res))
+  // std::cout << res.Str() << std::endl;
   auto vis_im = vision::VisDetection(im, res, 0.3);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;

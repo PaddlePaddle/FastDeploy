@@ -67,6 +67,7 @@ int main(int argc, char* argv[]) {
       model_file, params_file, config_file, option, model_format);
   vision::ClassifyResult res;
   BENCHMARK_MODEL(model_ppcls, model_ppcls.Predict(im, &res))
+// std::cout << res.Str() << std::endl;
 #endif
   return 0;
 }
