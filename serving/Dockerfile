@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-FROM nvidia/cuda:11.6.1-cudnn8-devel-ubuntu20.04
+FROM nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04
 
 ARG http_proxy
 ARG https_proxy

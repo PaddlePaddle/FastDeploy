@@ -86,7 +86,7 @@ nvidia-docker run -i --rm --name ${docker_name} \
            -e "http_proxy=${http_proxy}" \
            -e "https_proxy=${https_proxy}" \
            -e "trt_version=${trt_version}"\
-           nvidia/cuda:11.6.1-cudnn8-devel-ubuntu20.04 \
+           nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04  \
            bash -c \
            'export https_proxy_tmp=${https_proxy}
             export http_proxy_tmp=${http_proxy}
