@@ -82,6 +82,23 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
                  "fallback to CPU with Paddle Inference Backend."
               << std::endl;
 #endif
+  } else if (option.device == Device::KUNLUNXIN) {
+#ifdef WITH_KUNLUNXIN
+    config_.SetXpuDeviceId(option.xpu_option.kunlunxin_device_id);
+    config_.EnableXpu(option.xpu_option.kunlunxin_l3_workspace_size,
+                      option.xpu_option.kunlunxin_locked,
+                      option.xpu_option.kunlunxin_autotune,
+                      option.xpu_option.kunlunxin_autotune_file,
+                      option.xpu_option.kunlunxin_precision,
+                      option.xpu_option.kunlunxin_adaptive_seqlen,
+                      option.xpu_option.kunlunxin_enable_multi_stream);
+    config_.SetXpuConfig(option.xpu_option.kunlunxin_quant_post_dynamic_weight_bits,
+                         option.xpu_option.kunlunxin_quant_post_dynamic_op_types);
+#else
+    FDWARNING << "The FastDeploy is not compiled with KUNLUNXIN device, so will "
+                 "fallback to CPU with Paddle Inference Backend."
+              << std::endl;
+#endif
   } else {
     config_.DisableGpu();
     if (option.enable_mkldnn) {

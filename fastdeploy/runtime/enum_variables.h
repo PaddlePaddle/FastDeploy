@@ -99,7 +99,7 @@ static std::map<Device, std::vector<Backend>>
   {Device::SUNRISENPU, {Backend::HORIZONNPU}},
   {Device::IPU, {Backend::PDINFER}},
   {Device::TIMVX, {Backend::LITE}},
-  {Device::KUNLUNXIN, {Backend::LITE}},
+  {Device::KUNLUNXIN, {Backend::LITE, Backend::PDINFER}},
   {Device::ASCEND, {Backend::LITE}},
   {Device::SOPHGOTPUD, {Backend::SOPHGOTPU}},
   {Device::DIRECTML, {Backend::ORT}}
