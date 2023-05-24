@@ -92,12 +92,14 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
                       option.xpu_option.kunlunxin_precision,
                       option.xpu_option.kunlunxin_adaptive_seqlen,
                       option.xpu_option.kunlunxin_enable_multi_stream);
-    config_.SetXpuConfig(option.xpu_option.kunlunxin_quant_post_dynamic_weight_bits,
-                         option.xpu_option.kunlunxin_quant_post_dynamic_op_types);
+    config_.SetXpuConfig(
+        option.xpu_option.kunlunxin_quant_post_dynamic_weight_bits,
+        option.xpu_option.kunlunxin_quant_post_dynamic_op_types);
 #else
-    FDWARNING << "The FastDeploy is not compiled with KUNLUNXIN device, so will "
-                 "fallback to CPU with Paddle Inference Backend."
-              << std::endl;
+    FDWARNING
+        << "The FastDeploy is not compiled with KUNLUNXIN device, so will "
+           "fallback to CPU with Paddle Inference Backend."
+        << std::endl;
 #endif
   } else {
     config_.DisableGpu();
@@ -106,6 +108,7 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
       config_.SetMkldnnCacheCapacity(option.mkldnn_cache_size);
     }
   }
+
   if (!option.enable_log_info) {
     config_.DisableGlogInfo();
   }
