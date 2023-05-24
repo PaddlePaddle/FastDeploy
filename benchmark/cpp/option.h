@@ -16,6 +16,22 @@
 
 #include "fastdeploy/vision.h"
 
+static void UpdateBaseCustomFlags(
+  std::unordered_map<std::string, std::string>& config_info) {
+  if (FLAGS_warmup > -1) {
+    config_info["warmup"] = std::to_string(FLAGS_warmup);
+  }
+  if (FLAGS_repeat > -1) {
+    config_info["repeat"] = std::to_string(FLAGS_repeat);
+  }
+  if (FLAGS_device_id > -1) {
+    config_info["device_id"] = std::to_string(FLAGS_device_id);
+  }
+  if (FLAGS_use_fp16) {
+    config_info["use_fp16"] = "true";
+  }
+}
+
 static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
                         int argc, char* argv[], bool remove_flags) {
   google::ParseCommandLineFlags(&argc, &argv, remove_flags);
@@ -23,14 +39,10 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
   std::unordered_map<std::string, std::string> config_info;
   fastdeploy::benchmark::ResultManager::LoadBenchmarkConfig(
                             FLAGS_config_path, &config_info);
+  UpdateBaseCustomFlags(config_info);
   int warmup = std::stoi(config_info["warmup"]);
   int repeat = std::stoi(config_info["repeat"]);
-  if (FLAGS_warmup != -1) {
-    warmup = FLAGS_warmup;
-  }
-  if (FLAGS_repeat != -1) {
-    repeat = FLAGS_repeat;
-  }
+
   if (config_info["profile_mode"] == "runtime") {
     option->EnableProfiling(config_info["include_h2d_d2h"] == "true",
                             repeat, warmup);
