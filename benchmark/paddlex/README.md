@@ -1,4 +1,4 @@
-# FastDeploy C++ Benchmarks
+# FastDeploy & PaddleX C++ Benchmarks
 
 ## 1. 编译选项  
 以下选项为benchmark相关的编译选项，在编译用来跑benchmark的sdk时，必须开启。  
@@ -82,9 +82,9 @@ make install
 cd ..  
 export FD_GPU_SDK=${PWD}/build/compiled_fastdeploy_sdk
 ```  
-### 3.3 编译 Benchmark 示例  
+### 3.3 编译 PaddleX Benchmark 示例  
 ```bash  
-cd benchmark/cpp
+cd benchmark/paddlex
 mkdir build && cd build  
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${FD_GPU_SDK}  
 make -j4
@@ -211,3 +211,4 @@ benchmark: ./benchmark -[info|diff|check|dump|mem] -model xxx -config_path xxx -
 ```bash
 ./benchmark --info --model picodet_l_640_coco_lcnet --config_path config/config.arm.lite.fp32.txt
 ```
+注：更多benchmark使用文档，请参考[benchmark/cpp](../cpp/).
