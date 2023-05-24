@@ -25,7 +25,7 @@ version information: Paddle Inference==2.4-dev5, ONNXRuntime==1.12.0, OpenVINO==
 
 ### Python SDK
 
-Install the released version（the newest 1.0.6 for now）
+Install the released version（the newest 1.0.7 for now）
 
 ```
 pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
@@ -45,12 +45,12 @@ conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=
 
 ### C++ SDK
 
-Install the released version（Latest 1.0.6）
+Install the released version（Latest 1.0.7）
 
 | Platform    | File                                                                                                                  | Description                                               |
 |:----------- |:--------------------------------------------------------------------------------------------------------------------- |:--------------------------------------------------------- |
-| Linux x64 | [fastdeploy-linux-x64-gpu-1.0.6.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-1.0.6.tgz) | g++ 8.2, CUDA 11.2, cuDNN 8.2 |
-| Windows x64 | [fastdeploy-win-x64-gpu-1.0.6.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-1.0.6.zip) | Visual Studio 16 2019, CUDA 11.2, cuDNN 8.2 |
+| Linux x64 | [fastdeploy-linux-x64-gpu-1.0.7.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-1.0.7.tgz) | g++ 8.2, CUDA 11.2, cuDNN 8.2 |
+| Windows x64 | [fastdeploy-win-x64-gpu-1.0.7.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-1.0.7.zip) | Visual Studio 16 2019, CUDA 11.2, cuDNN 8.2 |
 
 Install the Develop version（Nightly build）
 
@@ -74,7 +74,7 @@ version information: Paddle Inference==2.4-dev5, ONNXRuntime==1.12.0, OpenVINO==
 
 ### Python SDK
 
-Install the released version（Latest 1.0.6 for now）
+Install the released version（Latest 1.0.7 for now）
 
 ```
 pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
@@ -88,27 +88,27 @@ pip install fastdeploy-python==0.0.0 -f https://www.paddlepaddle.org.cn/whl/fast
 
 ### C++ SDK
 
-Install the released version（Latest 1.0.6 for now, Android is 1.0.6）
+Install the released version（Latest 1.0.7 for now, Android is 1.0.7）
 
 | Platform      | File                                                                                                                  | Description                    |
 |:------------- |:--------------------------------------------------------------------------------------------------------------------- |:------------------------------ |
-| Linux x64 | [fastdeploy-linux-x64-1.0.6.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-1.0.6.tgz) | g++ 8.2 |
-| Windows x64 | [fastdeploy-win-x64-1.0.6.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-1.0.6.zip) | Visual Studio 16 2019 |
-| Mac OSX x64 | [fastdeploy-osx-x86_64-1.0.6.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-x86_64-1.0.6.tgz) | clang++ 10.0.0|
-| Mac OSX arm64 | [fastdeploy-osx-arm64-1.0.6.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-arm64-1.0.6.tgz) | clang++ 13.0.0 |
-| Linux aarch64 | [fastdeploy-linux-aarch64-1.0.6.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-1.0.6.tgz) | gcc 6.3 |  
-| Android armv7&v8 | [fastdeploy-android-1.0.6-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-1.0.6-shared.tgz) | CV API, NDK 25, clang++, support arm64-v8a and armeabi-v7a  |
-| Android armv7&v8 | [fastdeploy-android-with-text-1.0.6-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-with-text-1.0.6-shared.tgz) | contains Text API, such as FastTokenizer and UIE, CV API, NDK 25, clang++, support arm64-v8a and armeabi-v7a  |
-| Android armv7&v8 | [fastdeploy-android-with-text-only-1.0.6-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-with-text-only-1.0.6-shared.tgz) | only contains Text API, such as FastTokenizer and UIE, NDK 25, clang++, does not contain CV API, support arm64-v8a and armeabi-v7a  |
+| Linux x64 | [fastdeploy-linux-x64-1.0.7.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-1.0.7.tgz) | g++ 8.2 |
+| Windows x64 | [fastdeploy-win-x64-1.0.7.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-1.0.7.zip) | Visual Studio 16 2019 |
+| Mac OSX x64 | [fastdeploy-osx-x86_64-1.0.7.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-x86_64-1.0.7.tgz) | clang++ 10.0.0|
+| Mac OSX arm64 | [fastdeploy-osx-arm64-1.0.7.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-arm64-1.0.7.tgz) | clang++ 13.0.0 |
+| Linux aarch64 | [fastdeploy-linux-aarch64-1.0.7.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-1.0.7.tgz) | gcc 6.3 |  
+| Android armv7&v8 | [fastdeploy-android-1.0.7-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-1.0.7-shared.tgz) | CV API, NDK 25, clang++, support arm64-v8a and armeabi-v7a  |
+| Android armv7&v8 | [fastdeploy-android-with-text-1.0.7-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-with-text-1.0.7-shared.tgz) | contains Text API, such as FastTokenizer and UIE, CV API, NDK 25, clang++, support arm64-v8a and armeabi-v7a  |
+| Android armv7&v8 | [fastdeploy-android-with-text-only-1.0.7-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-with-text-only-1.0.7-shared.tgz) | only contains Text API, such as FastTokenizer and UIE, NDK 25, clang++, does not contain CV API, support arm64-v8a and armeabi-v7a  |
 
 ## Java SDK
 
-Install the released version（Android is 1.0.6 pre-release）
+Install the released version（Android is 1.0.7 pre-release）
 
 | Platform | File | Description |
 | :--- | :--- | :---- |
-| Android Java SDK | [fastdeploy-android-sdk-1.0.6.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-1.0.6.aar) | CV API, NDK 20, minSdkVersion 15, targetSdkVersion 28 |
-| Android Java SDK | [fastdeploy-android-sdk-with-text-1.0.6.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-with-text-1.0.6.aar) | contains Text API, such as FastTokenizer and UIE, CV API, NDK 20, minSdkVersion 15, targetSdkVersion 28 |
+| Android Java SDK | [fastdeploy-android-sdk-1.0.7.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-1.0.7.aar) | CV API, NDK 20, minSdkVersion 15, targetSdkVersion 28 |
+| Android Java SDK | [fastdeploy-android-sdk-with-text-1.0.7.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-with-text-1.0.7.aar) | contains Text API, such as FastTokenizer and UIE, CV API, NDK 20, minSdkVersion 15, targetSdkVersion 28 |
 
 Install the Develop version（Nightly build）
 
