@@ -5,7 +5,9 @@ namespace fastdeploy {
 bool TVMBackend::Init(const fastdeploy::RuntimeOption& runtime_option) {
   if (!(Supported(runtime_option.model_format, Backend::TVM) &&
         Supported(runtime_option.device, Backend::TVM))) {
-    FDERROR << "TVMBackend doesn't support this model format or device."
+    FDERROR << "TVMBackend only supports model "
+               "ModelFormat::TVMFormat/Backend::TVM, but now its "
+            << runtime_option.model_format << "/" << runtime_option.device
             << std::endl;
     return false;
   }

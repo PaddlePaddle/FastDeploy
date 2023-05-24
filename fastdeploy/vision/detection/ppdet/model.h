@@ -93,8 +93,7 @@ class FASTDEPLOY_DECL PPYOLOE : public PPDetBase {
                   model_format) {
     valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
                           Backend::LITE, Backend::TVM};
-    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT,
-                          Backend::TVM};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_timvx_backends = {Backend::LITE};
     valid_kunlunxin_backends = {Backend::LITE};
     valid_rknpu_backends = {Backend::RKNPU2};

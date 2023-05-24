@@ -32,14 +32,10 @@ void TVMInfer(const std::string& model_dir, const std::string& image_file) {
   auto im = cv::imread(image_file);
 
   fastdeploy::vision::DetectionResult res;
-  fastdeploy::TimeCounter tc;
-  tc.Start();
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  tc.End();
-  tc.PrintInfo("PPYOLOE in TVM");
 
   std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::VisDetection(im, res, 0.5);
