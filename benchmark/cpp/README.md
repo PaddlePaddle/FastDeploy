@@ -174,12 +174,16 @@ FastDeploy除了提供包含模型前后处理在内的benchmark_xxx外，也提
 benchmark: ./benchmark -[info|diff|check|dump|mem] -model xxx -config_path xxx -[shapes|dtypes|names|tensors] -[model_file|params_file|model_format]
 ...
 ```
-- 单输入示例：
+- 单输入示例：--model，指定模型文件夹，其中包括*.pdmodel/pdiparams文件
 ```bash
 ./benchmark --model ResNet50_vd_infer --config_path config/config.x86.ov.fp32.txt --shapes 1,3,224,224 --names inputs --dtypes FP32
 ```  
+- 单输入示例：--model_file, --params_file，指定具体的模型文件和参数文件
+```bash
+./benchmark --model_file MobileNetV1_ssld_infer/inference.pdmodel --params_file MobileNetV1_ssld_infer/inference.pdiparams --config_path config/config.x86.ov.fp32.txt --shapes 1,3,224,224 --names inputs --dtypes FP32
+```  
 - 多输入示例：  
-```bash 
+```bash
 ./benchmark --model yolov5_s_300e_coco --config_path config/config.arm.lite.fp32.txt --shapes 1,3,640,640:1,2 --names image:scale_factor --dtypes FP32:FP32
 ```
 - Paddle-TRT示例 ：
@@ -187,7 +191,7 @@ benchmark: ./benchmark -[info|diff|check|dump|mem] -model xxx -config_path xxx -
 ./benchmark --model ResNet50_vd_infer --config_path config/config.gpu.paddle_trt.fp16.txt --trt_shapes 1,3,224,224:1,3,224,224:1,3,224,224 --names inputs --dtypes FP32
 ```
 - TensorRT/Paddle-TRT多输入示例：  
-```bash 
+```bash
 ./benchmark --model rtdetr_r50vd_6x_coco --trt_shapes 1,2:1,2:1,2:1,3,640,640:1,3,640,640:1,3,640,640:1,2:1,2:1,2 --names im_shape:image:scale_factor --shapes 1,2:1,3,640,640:1,2  --config_path config/config.gpu.paddle_trt.fp32.txt --dtypes FP32:FP32:FP32
 ```
 - 支持FD全部后端和全部模型格式：--model_file, --params_file(optional), --model_format
@@ -200,14 +204,14 @@ benchmark: ./benchmark -[info|diff|check|dump|mem] -model xxx -config_path xxx -
 ./benchmark --mem --model ResNet50_vd_infer --config_path config/config.x86.ov.fp32.txt --shapes 1,3,224,224 --names inputs --dtypes FP32
 ```
 - 推理并dump 输出 tensor用作对比： --dump
-```bash 
+```bash
 ./benchmark --dump --model ResNet50_vd_infer --config_path config/config.x86.ov.fp32.txt --shapes 1,3,224,224 --names inputs --dtypes FP32
 ```
-- 对比两个 dumped 的tensor :  --diff 
+- 对比两个 dumped 的tensor :  --diff
 ```bash
 ./benchmark --diff --tensors ov_linear_77.tmp_1.txt:lite_linear_77.tmp_1.txt
 ```
 - 显示模型的输入信息： --info
 ```bash
-./benchmark --info --model picodet_l_640_coco_lcnet --config_path config/config.arm.lite.fp32.txt 
+./benchmark --info --model picodet_l_640_coco_lcnet --config_path config/config.arm.lite.fp32.txt
 ```

@@ -19,25 +19,48 @@
 namespace vision = fastdeploy::vision;
 namespace benchmark = fastdeploy::benchmark;
 
-DEFINE_string(shapes, "1,3,224,224", "Set input shape for model.");
-DEFINE_string(names, "DEFAULT", "Set input names for model.");
-DEFINE_string(dtypes, "FP32", "Set input dtypes for model.");
+DEFINE_string(shapes, "1,3,224,224",
+              "Required, set input shape for model."
+              "default 1,3,224,224");
+DEFINE_string(names, "DEFAULT", "Required, set input names for model.");
+DEFINE_string(dtypes, "FP32",
+              "Required, set input dtypes for model."
+              "default FP32.");
 DEFINE_string(trt_shapes, "1,3,224,224:1,3,224,224:1,3,224,224",
-              "Set min/opt/max shape for trt/paddle_trt backend."
-              "eg:--trt_shape 1,3,224,224:1,3,224,224:1,3,224,224");
-DEFINE_int32(batch, 1, "trt max batch size, default=1");
-DEFINE_bool(dump, false, "whether to dump output tensors.");
-DEFINE_bool(info, false, "only check the input infos of model");
-DEFINE_bool(diff, false, "check the diff between two tensors.");
+              "Optional, set min/opt/max shape for trt/paddle_trt."
+              "default 1,3,224,224:1,3,224,224:1,3,224,224");
+DEFINE_int32(batch, 1,
+             "Optional, set trt max batch size, "
+             "default 1");
+DEFINE_bool(dump, false,
+            "Optional, whether to dump output tensors, "
+            "default false.");
+DEFINE_bool(info, false,
+            "Optional, only check the input infos of model."
+            "default false.");
+DEFINE_bool(diff, false,
+            "Optional, check the diff between two tensors."
+            "default false.");
 DEFINE_string(tensors, "tensor_a.txt:tensor_b.txt",
-              "The paths to dumped tensors.");
-DEFINE_bool(mem, false, "Whether to force to collect memory info.");
-DEFINE_int32(interval, -1, "Sampling interval for collect memory info.");
+              "Optional, the paths to dumped tensors, "
+              "default tensor_a.txt:tensor_b.txt");
+DEFINE_bool(mem, false,
+            "Optional, whether to force to collect memory info, "
+            "default false.");
+DEFINE_int32(interval, -1,
+             "Optional, sampling interval for collect memory info, "
+             "default false.");
 DEFINE_string(model_format, "PADDLE",
               "Optional, set specific model format,"
-              "eg, PADDLE/ONNX/RKNN/TORCHSCRIPT/SOPHGO");
-DEFINE_bool(disable_mkldnn, false, "disable mkldnn for paddle backend");
-DEFINE_string(optimized_model_dir, "", "Set optimized model dir for lite backend.");
+              "eg, PADDLE/ONNX/RKNN/TORCHSCRIPT/SOPHGO"
+              "default PADDLE.");
+DEFINE_bool(disable_mkldnn, false,
+            "Optional, disable mkldnn for paddle backend. "
+            "default false.");
+DEFINE_string(optimized_model_dir, "",
+              "Optional, set optimized model dir for lite."
+              "eg: model.opt.nb, "
+              "default ''");
 
 #if defined(ENABLE_BENCHMARK)
 static std::vector<int64_t> GetInt64Shape(const std::vector<int>& shape) {
@@ -93,7 +116,7 @@ static void RuntimeProfiling(int argc, char* argv[]) {
   std::unordered_map<std::string, std::string> config_info;
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
-
+  UpdateBaseCustomFlags(config_info);  // see flags.h
   // Init log recorder
   std::stringstream ss;
   ss.precision(6);
@@ -124,12 +147,12 @@ static void RuntimeProfiling(int argc, char* argv[]) {
         FLAGS_params_file == "") {
       if (config_info["backend"] != "lite") {
         std::cout << "[ERROR] params_file can not be empty for PADDLE"
-                << " format, Please, set your custom params_file manually."
-                << std::endl;
+                  << " format, Please, set your custom params_file manually."
+                  << std::endl;
         return;
       } else {
-        std::cout << "[INFO] Will using the lite light api for: " 
-                  << model_file << std::endl;
+        std::cout << "[INFO] Will using the lite light api for: " << model_file
+                  << std::endl;
       }
     }
   } else {
@@ -148,8 +171,7 @@ static void RuntimeProfiling(int argc, char* argv[]) {
   // Set opt model dir
   if (config_info["backend"] == "lite") {
     if (FLAGS_optimized_model_dir != "") {
-      option.paddle_lite_option.optimized_model_dir = 
-        FLAGS_optimized_model_dir;
+      option.paddle_lite_option.optimized_model_dir = FLAGS_optimized_model_dir;
     } else {
       option.paddle_lite_option.optimized_model_dir = FLAGS_model;
     }
