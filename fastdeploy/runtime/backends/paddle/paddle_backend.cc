@@ -296,22 +296,22 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
     ShareTensorFromFDTensor(handle.get(), inputs[i]);
   }
   // prebinded output only support for GPU
-  if (!copy_to_fd) {
-    for (size_t i = 0; i < (*outputs).size(); ++i) {
-      auto output_name = (*outputs)[i].name;
-      // if a output is not prebinded,
-      // the name of output is expected to be empty.
-      // We skip here
-      if (output_name.empty()) {
-        continue;
-      }
-      // Record the prebinded output_name.
-      // Those outputs do not need PaddleTensorToFDTensor
-      // after predictor_.Run()
-      auto handle = predictor_->GetOutputHandle(output_name);
-      ShareOutTensorFromFDTensor(handle.get(), (*outputs)[i]);
-    }
-  }
+  // if (!copy_to_fd) {
+  //   for (size_t i = 0; i < (*outputs).size(); ++i) {
+  //     auto output_name = (*outputs)[i].name;
+  //     // if a output is not prebinded,
+  //     // the name of output is expected to be empty.
+  //     // We skip here
+  //     if (output_name.empty()) {
+  //       continue;
+  //     }
+  //     // Record the prebinded output_name.
+  //     // Those outputs do not need PaddleTensorToFDTensor
+  //     // after predictor_.Run()
+  //     auto handle = predictor_->GetOutputHandle(output_name);
+  //     ShareOutTensorFromFDTensor(handle.get(), (*outputs)[i]);
+  //   }
+  // }
 
   RUNTIME_PROFILE_LOOP_BEGIN(1)
   predictor_->Run();
