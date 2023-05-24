@@ -118,7 +118,7 @@ void ShareOutTensorFromFDTensor(paddle_infer::Tensor* tensor,
     } else {
       tensor->CopyFromCpu(static_cast<const uint8_t*>(fd_tensor.Data()));
     }
-    return;                          
+    return;
   }
   FDASSERT(false, "Unexpected data type(%s) while infer with PaddleBackend.",
            Str(fd_tensor.dtype).c_str());
@@ -177,12 +177,11 @@ void PaddleTensorToFDTensor(std::unique_ptr<paddle_infer::Tensor>& tensor,
       device = Device::GPU;
     } else if (place == paddle_infer::PlaceType::kXPU) {
       device = Device::KUNLUNXIN;
-      FDASSERT(false, "Currently, copy_to_fd=false, FDTensor SetExternalData "
-                       "is not support for Device::KUNLUNXIN now!")
+      FDASSERT(false,
+               "Currently, copy_to_fd=false, FDTensor SetExternalData "
+               "is not support for Device::KUNLUNXIN now!")
     }
     fd_tensor->name = tensor->name();
-    // TODO(qiuyanjun): may need to support fd_tensor 
-    // SetExternalData for XPU.
     fd_tensor->SetExternalData(shape, fd_dtype, out_data, device);
   }
 }
