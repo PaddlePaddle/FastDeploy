@@ -1,13 +1,17 @@
 PROJECT(infer_demo C CXX)
-CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 # specify the decompress directory of FastDeploy SDK
 option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
 include(${FASTDEPLOY_INSTALL_DIR}/utils/gflags.cmake)
 include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 
 include_directories(${FASTDEPLOY_INCS})
+# include common use benchmark/cpp headers.
+include_directories(${PROJECT_SOURCE_DIR}/../cpp)
 
-add_executable(benchmark ${PROJECT_SOURCE_DIR}/benchmark.cc)
+# add common use benchmark bin from fastdeploy
+add_executable(benchmark ${PROJECT_SOURCE_DIR}/../cpp/benchmark.cc)
+# add specific use benchmark bins for paddlex
 add_executable(benchmark_ppcls ${PROJECT_SOURCE_DIR}/benchmark_ppcls.cc)
 add_executable(benchmark_ppseg ${PROJECT_SOURCE_DIR}/benchmark_ppseg.cc)
 add_executable(benchmark_ppdet ${PROJECT_SOURCE_DIR}/benchmark_ppdet.cc)
