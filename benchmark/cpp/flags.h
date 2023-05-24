@@ -27,18 +27,40 @@ static const char sep = '\\';
 static const char sep = '/';
 #endif
 
-DEFINE_string(model, "", "Directory of the inference model.");
-DEFINE_string(image, "", "Path of the image file.");
-DEFINE_string(config_path, "config.txt", "Path of benchmark config.");
-DEFINE_int32(warmup, -1, "Number of warmup for profiling.");
-DEFINE_int32(repeat, -1, "Number of repeats for profiling.");
-DEFINE_int32(xpu_l3_cache, -1, "Size xpu l3 cache for profiling.");
+DEFINE_string(model, "",
+              "Required, directory of the inference model."
+              "This dir should contains files like: "
+              "inference.pdmodel, inference.pdiparams, "
+              "inference.yml etc.");
+DEFINE_string(image, "",
+              "Required, path of the image file.");
+DEFINE_string(config_path, "config.txt",
+              "Required, path of benchmark config.");
+DEFINE_int32(warmup, -1,
+             "Optional, number of warmup for profiling, default -1."
+             "will force to override the value in config file.");
+DEFINE_int32(repeat, -1,
+             "Optional, number of repeats for profiling, default -1."
+             "will force to override the value in config file.");
+DEFINE_int32(xpu_l3_cache, -1,
+             "Optional, size xpu l3 cache for profiling, default -1."
+              "will force to override the value in config file ");
+DEFINE_bool(use_fp16, false,
+            "Optional, whether to use fp16, default false."
+            "will force to override fp16 option in config file.");
 DEFINE_string(model_file, "UNKNOWN",
-              "Optional, set specific model file,"
-              "eg, model.pdmodel, model.onnx");
+              "Optional, set specific model file, default 'UNKNOWN'"
+              "eg, model.pdmodel, model.onnx, Only support for pure runtime "
+              "benchmark bin without pre/post processes.");
 DEFINE_string(params_file, "",
-              "Optional, set specific params file,"
-              "eg, model.pdiparams.");
+              "Optional, set specific params file, default ''"
+              "eg, model.pdiparams. Only support for pure runtime "
+              "benchmark bin without pre/post processes.");
+DEFINE_int32(device_id, -1,
+             "Optional, set specific device id for GPU/XPU, default -1."
+             "will force to override the value in config file "
+             "eg, 0/1/2/...");
+
 
 static void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path "
@@ -59,19 +81,14 @@ static void PrintBenchmarkInfo(std::unordered_map<std::string,
     if (FLAGS_model_file != "UNKNOWN") {
       model_names.push_back(FLAGS_model_file);
     } else {
-      std::cout << "[WARNING] Directory of the inference model is empty!!!" 
+      std::cout << "[WARNING] Directory of the inference model is empty!!!"
                 << std::endl;
     }
   }
   // Save benchmark info
   int warmup = std::stoi(config_info["warmup"]);
   int repeat = std::stoi(config_info["repeat"]);
-  if (FLAGS_warmup != -1) {
-    warmup = FLAGS_warmup;
-  }
-  if (FLAGS_repeat != -1) {
-    repeat = FLAGS_repeat;
-  }
+
   std::stringstream ss;
   ss.precision(3);
   ss << "\n======= Model Info =======\n";
