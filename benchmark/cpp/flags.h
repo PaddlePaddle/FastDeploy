@@ -64,7 +64,6 @@ DEFINE_bool(enable_log_info, false,
             "Optional, whether to enable log info for paddle backend,"
             "default false.");
 
-
 static void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path "
                "--config_path config.txt[Path of benchmark config.] "
