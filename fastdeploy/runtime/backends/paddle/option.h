@@ -45,6 +45,33 @@ struct IpuOption {
   bool ipu_enable_half_partial;
 };
 
+/*! @brief Option object to configure KUNLUNXIN XPU
+ */
+struct XpuOption {
+  /// kunlunxin device id
+  int kunlunxin_device_id = 0;
+  /// EnableXpu
+  /// kunlunxin_l3_workspace_size
+  int kunlunxin_l3_workspace_size = 0xfffc00;
+  /// kunlunxin_locked
+  bool kunlunxin_locked = false;
+  /// kunlunxin_autotune
+  bool kunlunxin_autotune = true;
+  /// kunlunxin_autotune_file
+  std::string kunlunxin_autotune_file = "";
+  /// kunlunxin_precision
+  std::string kunlunxin_precision = "int16";
+  /// kunlunxin_adaptive_seqlen
+  bool kunlunxin_adaptive_seqlen = false;
+  /// kunlunxin_enable_multi_stream
+  bool kunlunxin_enable_multi_stream = false;
+  /// SetXpuConfig
+  /// quant post dynamic weight bits
+  int kunlunxin_quant_post_dynamic_weight_bits = -1;
+  /// quant post dynamic op types
+  std::vector<std::string> kunlunxin_quant_post_dynamic_op_types = {};
+};
+
 /*! @brief Option object to configure Paddle Inference backend
  */
 struct PaddleBackendOption {
@@ -63,6 +90,10 @@ struct PaddleBackendOption {
    * @brief IPU option, this will configure the IPU hardware, if inference model in IPU
    */
   IpuOption ipu_option;
+  /*
+   * @brief XPU option, this will configure the  KUNLUNXIN XPU hardware, if inference model in XPU
+   */
+  XpuOption xpu_option;
 
   /// Collect shape for model while enable_trt is true
   bool collect_trt_shape = false;
@@ -84,13 +115,22 @@ struct PaddleBackendOption {
   }
 
   void SetIpuConfig(bool enable_fp16, int replica_num,
-                                   float available_memory_proportion,
-                                   bool enable_half_partial) {
+                    float available_memory_proportion,
+                    bool enable_half_partial) {
     ipu_option.ipu_enable_fp16 = enable_fp16;
     ipu_option.ipu_replica_num = replica_num;
     ipu_option.ipu_available_memory_proportion =
         available_memory_proportion;
     ipu_option.ipu_enable_half_partial = enable_half_partial;
+  }
+
+  void SetXpuConfig(
+      int quant_post_dynamic_weight_bits = -1,
+      const std::vector<std::string>& quant_post_dynamic_op_types = {}) {
+    xpu_option.kunlunxin_quant_post_dynamic_weight_bits =
+      quant_post_dynamic_weight_bits;
+    xpu_option.kunlunxin_quant_post_dynamic_op_types =
+      quant_post_dynamic_op_types;
   }
 
   // The belowing parameters may be removed, please do not
@@ -99,6 +139,7 @@ struct PaddleBackendOption {
   bool enable_pinned_memory = false;
   void* external_stream_ = nullptr;
   Device device = Device::CPU;
+  /// device id for CPU/GPU
   int device_id = 0;
   std::vector<std::string> trt_disabled_ops_{};
   int cpu_thread_num = 8;
