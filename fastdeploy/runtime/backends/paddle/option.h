@@ -66,7 +66,7 @@ struct XpuOption {
   /// kunlunxin_enable_multi_stream
   bool kunlunxin_enable_multi_stream = false;
   /// SetXpuConfig
-  /// quant post dynamic weight bits 
+  /// quant post dynamic weight bits
   int kunlunxin_quant_post_dynamic_weight_bits = -1;
   /// quant post dynamic op types
   std::vector<std::string> kunlunxin_quant_post_dynamic_op_types = {};
@@ -127,9 +127,9 @@ struct PaddleBackendOption {
   void SetXpuConfig(
       int quant_post_dynamic_weight_bits = -1,
       const std::vector<std::string>& quant_post_dynamic_op_types = {}) {
-    xpu_option.kunlunxin_quant_post_dynamic_weight_bits = 
+    xpu_option.kunlunxin_quant_post_dynamic_weight_bits =
       quant_post_dynamic_weight_bits;
-    xpu_option.kunlunxin_quant_post_dynamic_op_types = 
+    xpu_option.kunlunxin_quant_post_dynamic_op_types =
       quant_post_dynamic_op_types;
   }
 

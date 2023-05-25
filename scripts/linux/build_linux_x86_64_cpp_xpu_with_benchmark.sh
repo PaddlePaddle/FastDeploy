@@ -54,9 +54,9 @@ __build_fastdeploy_linux_x86_64_xpu_shared() {
 
   cmake -DCMAKE_BUILD_TYPE=Release \
         -DWITH_KUNLUNXIN=ON \
-        -DWITH_GPU=OFF \
         -DENABLE_ORT_BACKEND=OFF \
         -DENABLE_PADDLE_BACKEND=ON \
+        -DENABLE_LITE_BACKEND=OFF \
         -DENABLE_VISION=ON \
         -DENABLE_BENCHMARK=ON \
         -DBUILD_EXAMPLES=OFF \
