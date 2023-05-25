@@ -60,7 +60,9 @@ DEFINE_int32(device_id, -1,
              "Optional, set specific device id for GPU/XPU, default -1."
              "will force to override the value in config file "
              "eg, 0/1/2/...");
-
+DEFINE_bool(enable_log_info, false,
+            "Optional, whether to enable log info for paddle backend,"
+            "default false.");
 
 static void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path "

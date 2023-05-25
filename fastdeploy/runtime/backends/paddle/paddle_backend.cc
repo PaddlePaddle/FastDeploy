@@ -78,9 +78,28 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
                          option.ipu_option.ipu_available_memory_proportion,
                          option.ipu_option.ipu_enable_half_partial);
 #else
-    FDWARNING << "The FastDeploy is not compiled with IPU backend, so will "
+    FDWARNING << "The FastDeploy is not compiled with IPU device, so will "
                  "fallback to CPU with Paddle Inference Backend."
               << std::endl;
+#endif
+  } else if (option.device == Device::KUNLUNXIN) {
+#ifdef WITH_KUNLUNXIN
+    config_.EnableXpu(option.xpu_option.kunlunxin_l3_workspace_size,
+                      option.xpu_option.kunlunxin_locked,
+                      option.xpu_option.kunlunxin_autotune,
+                      option.xpu_option.kunlunxin_autotune_file,
+                      option.xpu_option.kunlunxin_precision,
+                      option.xpu_option.kunlunxin_adaptive_seqlen,
+                      option.xpu_option.kunlunxin_enable_multi_stream);
+    config_.SetXpuConfig(
+        option.xpu_option.kunlunxin_quant_post_dynamic_weight_bits,
+        option.xpu_option.kunlunxin_quant_post_dynamic_op_types);
+    config_.SetXpuDeviceId(option.xpu_option.kunlunxin_device_id);
+#else
+    FDWARNING
+        << "The FastDeploy is not compiled with KUNLUNXIN device, so will "
+           "fallback to CPU with Paddle Inference Backend."
+        << std::endl;
 #endif
   } else {
     config_.DisableGpu();
@@ -89,6 +108,7 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
       config_.SetMkldnnCacheCapacity(option.mkldnn_cache_size);
     }
   }
+
   if (!option.enable_log_info) {
     config_.DisableGlogInfo();
   }
@@ -106,6 +126,7 @@ bool PaddleBackend::Init(const RuntimeOption& runtime_option) {
   }
 
   auto option = runtime_option;
+  // Collect basic paddle inference option and trt option.
   option.paddle_infer_option.model_file = runtime_option.model_file;
   option.paddle_infer_option.params_file = runtime_option.params_file;
   option.paddle_infer_option.model_from_memory_ =
@@ -117,6 +138,10 @@ bool PaddleBackend::Init(const RuntimeOption& runtime_option) {
   option.paddle_infer_option.external_stream_ = runtime_option.external_stream_;
   option.paddle_infer_option.trt_option = runtime_option.trt_option;
   option.paddle_infer_option.trt_option.gpu_id = runtime_option.device_id;
+  // Note(qiuyanjun): For Ipu option and XPU option, please check the
+  // details of RuntimeOption::UseIpu() and RuntimeOption::UseKunlunXin().
+  // Futhermore, please check paddle_infer_option.SetIpuConfig() and
+  // paddle_infer_option.SetXpuConfig() for more details of extra configs.
   return InitFromPaddle(option.model_file, option.params_file,
                         option.model_from_memory_, option.paddle_infer_option);
 }

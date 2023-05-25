@@ -79,14 +79,18 @@ void RuntimeOption::UseTimVX() {
   paddle_lite_option.device = device;
 }
 
-void RuntimeOption::UseKunlunXin(int kunlunxin_id, int l3_workspace_size,
+void RuntimeOption::UseKunlunXin(int kunlunxin_id, 
+                                 int l3_workspace_size,
                                  bool locked, bool autotune,
                                  const std::string& autotune_file,
                                  const std::string& precision,
                                  bool adaptive_seqlen,
                                  bool enable_multi_stream,
                                  int64_t gm_default_size) {
+#ifdef WITH_KUNLUNXIN                                
   device = Device::KUNLUNXIN;
+  
+#ifdef ENABLE_LITE_BACKEND  
   paddle_lite_option.device = device;
   paddle_lite_option.device_id = kunlunxin_id;
   paddle_lite_option.kunlunxin_l3_workspace_size = l3_workspace_size;
@@ -97,6 +101,42 @@ void RuntimeOption::UseKunlunXin(int kunlunxin_id, int l3_workspace_size,
   paddle_lite_option.kunlunxin_adaptive_seqlen = adaptive_seqlen;
   paddle_lite_option.kunlunxin_enable_multi_stream = enable_multi_stream;
   paddle_lite_option.kunlunxin_gm_default_size = gm_default_size;
+#endif
+#ifdef ENABLE_PADDLE_BACKEND  
+  paddle_infer_option.device = device;
+  paddle_infer_option.xpu_option.kunlunxin_device_id = kunlunxin_id;
+  paddle_infer_option.xpu_option.kunlunxin_l3_workspace_size = l3_workspace_size;
+  paddle_infer_option.xpu_option.kunlunxin_locked = locked;
+  paddle_infer_option.xpu_option.kunlunxin_autotune = autotune;
+  paddle_infer_option.xpu_option.kunlunxin_autotune_file = autotune_file;
+  paddle_infer_option.xpu_option.kunlunxin_precision = precision;
+  paddle_infer_option.xpu_option.kunlunxin_adaptive_seqlen = adaptive_seqlen;
+  paddle_infer_option.xpu_option.kunlunxin_enable_multi_stream = enable_multi_stream;
+  // paddle_infer_option.xpu_option.kunlunxin_gm_default_size = gm_default_size;
+  // use paddle_infer_option.xpu_option.SetXpuConfig() for more options.
+#endif
+
+#else
+  FDWARNING << "The FastDeploy didn't compile with KUNLUNXIN, will force to use CPU."
+            << std::endl;
+  device = Device::CPU;
+#endif
+}
+
+void RuntimeOption::UseIpu(int device_num, int micro_batch_size,
+                           bool enable_pipelining, int batches_per_step) {
+#ifdef WITH_IPU
+  device = Device::IPU;
+  paddle_infer_option.ipu_option.ipu_device_num = device_num;
+  paddle_infer_option.ipu_option.ipu_micro_batch_size = micro_batch_size;
+  paddle_infer_option.ipu_option.ipu_enable_pipelining = enable_pipelining;
+  paddle_infer_option.ipu_option.ipu_batches_per_step = batches_per_step;
+  // use paddle_infer_option.ipu_option.SetIpuConfig() for more options.
+#else
+  FDWARNING << "The FastDeploy didn't compile with IPU, will force to use CPU."
+            << std::endl;
+  device = Device::CPU;
+#endif
 }
 
 void RuntimeOption::UseAscend() {
@@ -482,21 +522,6 @@ void RuntimeOption::DisablePaddleTrtOPs(const std::vector<std::string>& ops) {
                "`runtime_option.paddle_infer_option.DisableTrtOps` instead."
             << std::endl;
   paddle_infer_option.DisableTrtOps(ops);
-}
-
-void RuntimeOption::UseIpu(int device_num, int micro_batch_size,
-                           bool enable_pipelining, int batches_per_step) {
-#ifdef WITH_IPU
-  device = Device::IPU;
-  ipu_device_num = device_num;
-  ipu_micro_batch_size = micro_batch_size;
-  ipu_enable_pipelining = enable_pipelining;
-  ipu_batches_per_step = batches_per_step;
-#else
-  FDWARNING << "The FastDeploy didn't compile with IPU, will force to use CPU."
-            << std::endl;
-  device = Device::CPU;
-#endif
 }
 
 }  // namespace fastdeploy
