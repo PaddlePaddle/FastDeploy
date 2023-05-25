@@ -49,11 +49,11 @@ void RuntimeOption::UseGpu(int gpu_id) {
 #if defined(WITH_GPU) || defined(WITH_OPENCL)
   device = Device::GPU;
   device_id = gpu_id;
-  
+
 #if defined(WITH_OPENCL) && defined(ENABLE_LITE_BACKEND)
   paddle_lite_option.device = device;
 #endif
-  
+
 #else
   FDWARNING << "The FastDeploy didn't compile with GPU, will force to use CPU."
             << std::endl;
@@ -70,9 +70,7 @@ void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
   device = Device::RKNPU;
 }
 
-void RuntimeOption::UseHorizon(){
-  device = Device::SUNRISENPU;
-}
+void RuntimeOption::UseHorizon() { device = Device::SUNRISENPU; }
 
 void RuntimeOption::UseTimVX() {
   device = Device::TIMVX;
@@ -84,8 +82,7 @@ void RuntimeOption::UseKunlunXin(int kunlunxin_id,
                                  bool locked, bool autotune,
                                  const std::string& autotune_file,
                                  const std::string& precision,
-                                 bool adaptive_seqlen,
-                                 bool enable_multi_stream,
+                                 bool adaptive_seqlen, bool enable_multi_stream,
                                  int64_t gm_default_size) {
 #ifdef WITH_KUNLUNXIN                                
   device = Device::KUNLUNXIN;
@@ -236,7 +233,7 @@ void RuntimeOption::UseLiteBackend() {
 #endif
 }
 
-void RuntimeOption::UseHorizonNPUBackend(){
+void RuntimeOption::UseHorizonNPUBackend() {
 #ifdef ENABLE_HORIZON_BACKEND
   backend = Backend::HORIZONNPU;
 #else
@@ -522,6 +519,14 @@ void RuntimeOption::DisablePaddleTrtOPs(const std::vector<std::string>& ops) {
                "`runtime_option.paddle_infer_option.DisableTrtOps` instead."
             << std::endl;
   paddle_infer_option.DisableTrtOps(ops);
+}
+
+void RuntimeOption::UseTVMBackend() {
+#ifdef ENABLE_TVM_BACKEND
+  backend = Backend::TVM;
+#else
+  FDASSERT(false, "The FastDeploy didn't compile with TVMBackend.");
+#endif
 }
 
 }  // namespace fastdeploy
