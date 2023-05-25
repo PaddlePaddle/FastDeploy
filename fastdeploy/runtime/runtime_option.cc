@@ -81,8 +81,7 @@ void RuntimeOption::UseKunlunXin(int kunlunxin_id, int l3_workspace_size,
                                  bool locked, bool autotune,
                                  const std::string& autotune_file,
                                  const std::string& precision,
-                                 bool adaptive_seqlen,
-                                 bool enable_multi_stream,
+                                 bool adaptive_seqlen, bool enable_multi_stream,
                                  int64_t gm_default_size) {
   device = Device::KUNLUNXIN;
   paddle_lite_option.device = device;
@@ -484,7 +483,7 @@ void RuntimeOption::DisablePaddleTrtOPs(const std::vector<std::string>& ops) {
 
 void RuntimeOption::UseTVMBackend() {
 #ifdef ENABLE_TVM_BACKEND
-  backend = TVM;
+  backend = Backend::TVM;
 #else
   FDASSERT(false, "The FastDeploy didn't compile with TVMBackend.");
 #endif
