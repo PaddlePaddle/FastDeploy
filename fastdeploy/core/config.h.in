@@ -72,3 +72,7 @@
 #ifndef ENABLE_HORIZON_BACKEND
 #cmakedefine ENABLE_HORIZON_BACKEND
 #endif
+
+#ifndef ENABLE_TVM_BACKEND
+#cmakedefine ENABLE_TVM_BACKEND
+#endif

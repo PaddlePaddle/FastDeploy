@@ -32,8 +32,10 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
     out << "Backend::POROS";
   } else if (backend == Backend::LITE) {
     out << "Backend::PDLITE";
-  } else if(backend == Backend::HORIZONNPU){
+  } else if (backend == Backend::HORIZONNPU) {
     out << "Backend::HORIZONNPU";
+  } else if (backend == Backend::TVM) {
+    out << "Backend::TVM";
   } else {
     out << "UNKNOWN-Backend";
   }
@@ -88,8 +90,9 @@ std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
     out << "ModelFormat::TORCHSCRIPT";
   } else if (format == ModelFormat::HORIZON) {
     out << "ModelFormat::HORIZON";
-  }
-  else {
+  } else if (format == ModelFormat::TVMFormat) {
+    out << "ModelFormat::TVMFormat";
+  } else {
     out << "UNKNOWN-ModelFormat";
   }
   return out;
@@ -123,6 +126,9 @@ std::vector<Backend> GetAvailableBackends() {
 #endif
 #ifdef ENABLE_SOPHGO_BACKEND
   backends.push_back(Backend::SOPHGOTPU);
+#endif
+#ifdef ENABLE_TVM_BACKEND
+  backends.push_back(Backend::TVM);
 #endif
   return backends;
 }

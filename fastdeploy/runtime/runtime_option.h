@@ -31,6 +31,7 @@
 #include "fastdeploy/runtime/backends/rknpu2/option.h"
 #include "fastdeploy/runtime/backends/sophgo/option.h"
 #include "fastdeploy/runtime/backends/tensorrt/option.h"
+#include "fastdeploy/runtime/backends/tvm/option.h"
 #include "fastdeploy/benchmark/option.h"
 
 namespace fastdeploy {
@@ -160,6 +161,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   LiteBackendOption paddle_lite_option;
   /// Option to configure RKNPU2 backend
   RKNPU2BackendOption rknpu2_option;
+  /// Option to configure TVM backend
+  TVMBackendOption tvm_option;
 
   //  \brief Set the profile mode as 'true'.
   //
@@ -282,6 +285,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void UsePaddleBackend();
   void UseLiteBackend();
   void UseHorizonNPUBackend();
+  void UseTVMBackend();
 };
 
 }  // namespace fastdeploy
