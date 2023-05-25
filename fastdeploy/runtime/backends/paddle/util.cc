@@ -19,6 +19,8 @@ namespace fastdeploy {
 paddle_infer::PlaceType ConvertFDDeviceToPlace(Device device) {
   if (device == Device::GPU) {
     return paddle_infer::PlaceType::kGPU;
+  } else if (device == Device::KUNLUNXIN) {
+    return paddle_infer::PlaceType::kXPU;
   }
   return paddle_infer::PlaceType::kCPU;
 }
@@ -52,9 +54,21 @@ void ShareTensorFromFDTensor(paddle_infer::Tensor* tensor,
       tensor->CopyFromCpu(static_cast<const int64_t*>(fd_tensor.Data()));
     }
     return;
+  } else if (fd_tensor.dtype == FDDataType::INT8) {
+    if (place == paddle_infer::PlaceType::kGPU) {
+      tensor->ShareExternalData(static_cast<const int8_t*>(fd_tensor.Data()),
+                                shape, place);
+    } else {
+      tensor->CopyFromCpu(static_cast<const int8_t*>(fd_tensor.Data()));
+    }
+    return;
   } else if (fd_tensor.dtype == FDDataType::UINT8) {
-    tensor->ShareExternalData(static_cast<const uint8_t*>(fd_tensor.Data()),
-                              shape, paddle_infer::PlaceType::kCPU);
+    if (place == paddle_infer::PlaceType::kGPU) {
+      tensor->ShareExternalData(static_cast<const uint8_t*>(fd_tensor.Data()),
+                                shape, place);
+    } else {
+      tensor->CopyFromCpu(static_cast<const uint8_t*>(fd_tensor.Data()));
+    }
     return;
   }
   FDASSERT(false, "Unexpected data type(%s) while infer with PaddleBackend.",
@@ -89,9 +103,21 @@ void ShareOutTensorFromFDTensor(paddle_infer::Tensor* tensor,
       tensor->CopyToCpu(static_cast<int64_t*>(fd_tensor.MutableData()));
     }
     return;
+  } else if (fd_tensor.dtype == FDDataType::INT8) {
+    if (place == paddle_infer::PlaceType::kGPU) {
+      tensor->ShareExternalData(static_cast<const int8_t*>(fd_tensor.Data()),
+                                shape, place);
+    } else {
+      tensor->CopyFromCpu(static_cast<const int8_t*>(fd_tensor.Data()));
+    }
+    return;
   } else if (fd_tensor.dtype == FDDataType::UINT8) {
-    tensor->ShareExternalData(static_cast<uint8_t*>(fd_tensor.MutableData()),
-                              shape, paddle_infer::PlaceType::kCPU);
+    if (place == paddle_infer::PlaceType::kGPU) {
+      tensor->ShareExternalData(static_cast<const uint8_t*>(fd_tensor.Data()),
+                                shape, place);
+    } else {
+      tensor->CopyFromCpu(static_cast<const uint8_t*>(fd_tensor.Data()));
+    }
     return;
   }
   FDASSERT(false, "Unexpected data type(%s) while infer with PaddleBackend.",
@@ -149,6 +175,11 @@ void PaddleTensorToFDTensor(std::unique_ptr<paddle_infer::Tensor>& tensor,
     Device device = Device::CPU;
     if (place == paddle_infer::PlaceType::kGPU) {
       device = Device::GPU;
+    } else if (place == paddle_infer::PlaceType::kXPU) {
+      device = Device::KUNLUNXIN;
+      FDASSERT(false,
+               "Currently, copy_to_fd=false, FDTensor SetExternalData "
+               "is not support for Device::KUNLUNXIN now!")
     }
     fd_tensor->name = tensor->name();
     fd_tensor->SetExternalData(shape, fd_dtype, out_data, device);
