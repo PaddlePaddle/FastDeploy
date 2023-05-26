@@ -7,7 +7,7 @@
 
 例如一个Paddle模型，有两个输入*input0* 和 *input1*，一个输出*output0*，输入输出都是float32类型的tensor，最大batch为8.则最小的配置如下:
 
-```json
+```
   backend: "fastdeploy"
   max_batch_size: 8
   input [
