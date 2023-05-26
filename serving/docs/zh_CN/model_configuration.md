@@ -137,7 +137,7 @@ optimization {
         parameters { key: "enable_multi_stream" value: "0" }
         parameters { key: "gm_default_size" value: "0" }
       }
-    ],
+    ]
   }
 }
 ```

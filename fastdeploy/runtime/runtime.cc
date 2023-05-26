@@ -204,7 +204,14 @@ bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
 }
 
 bool Runtime::Infer() {
-  bool result = backend_->Infer(input_tensors_, &output_tensors_, false);
+  bool result = false;
+  if (option.device == Device::KUNLUNXIN) {
+    // FDTensor SetExternalData is not support for Device::KUNLUNXIN
+    result = backend_->Infer(input_tensors_, &output_tensors_, true);
+  } else {
+    result = backend_->Infer(input_tensors_, &output_tensors_, true);
+  }
+
   for (auto& tensor : output_tensors_) {
     tensor.device_id = option.device_id;
   }

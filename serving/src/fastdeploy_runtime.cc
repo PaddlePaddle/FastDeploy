@@ -258,9 +258,6 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
               } else if (param_key == "kunlunxin_id") {
                 THROW_IF_BACKEND_MODEL_ERROR(
                     ParseIntValue(value_string, &kunlunxin_id));
-              } else if (param_key == "kunlunxin_id") {
-                THROW_IF_BACKEND_MODEL_ERROR(
-                    ParseIntValue(value_string, &kunlunxin_id));
               } else if (param_key == "l3_workspace_size") {
                 THROW_IF_BACKEND_MODEL_ERROR(
                     ParseIntValue(value_string, &l3_workspace_size));
@@ -288,6 +285,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 kunlunxin_id, l3_workspace_size, locked, autotune,
                 autotune_file, precision, adaptive_seqlen, enable_multi_stream,
                 int64_t(gm_default_size));
+            std::cout << "runtime_options_->UseKunlunXin()" << std::endl;
           }
         } else {
           // parse parameters for cpu only
@@ -512,8 +510,9 @@ TRITONSERVER_Error* ModelState::LoadModel(
       runtime_options_->UseCpu();
     }
 #else
-    if (runtime_options_->device != fastdeploy::Device::IPU) {
-      // If Device is set to IPU, just skip CPU setting.
+    if ((runtime_options_->device != fastdeploy::Device::IPU) &&
+        (runtime_options_->device != fastdeploy::Device::KUNLUNXIN)) {
+      // If Device is set to IPU/XPU, just skip CPU setting.
       runtime_options_->UseCpu();
     }
 #endif  // TRITON_ENABLE_GPU
