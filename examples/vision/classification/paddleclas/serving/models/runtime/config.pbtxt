@@ -30,9 +30,10 @@ instance_group [
     # The number of instances is 1
     count: 1
     # Use GPU, CPU inference option is:KIND_CPU
-    kind: KIND_GPU
+    # kind: KIND_GPU
+    kind: KIND_CPU
     # The instance is deployed on the 0th GPU card
-    gpus: [0]
+    # gpus: [0]
   }
 ]
 
@@ -58,3 +59,20 @@ optimization {
   }
   ]
 }}
+
+# optimization {
+#   execution_accelerators {
+#   cpu_execution_accelerator: [{
+#     name: "paddle_xpu",
+#     parameters { key: "cpu_threads" value: "4" }
+#     parameters { key: "use_paddle_log" value: "1" }
+#     parameters { key: "kunlunxin_id" value: "0" }
+#     parameters { key: "l3_workspace_size" value: "62914560" }
+#     parameters { key: "locked" value: "0" }
+#     parameters { key: "autotune" value: "1" }
+#     parameters { key: "precision" value: "int16" }
+#     parameters { key: "adaptive_seqlen" value: "0" }
+#     parameters { key: "enable_multi_stream" value: "0" }
+#     parameters { key: "gm_default_size" value: "0" }
+#     }]
+# }}
