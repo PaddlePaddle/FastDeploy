@@ -117,9 +117,9 @@ optimization {
 optimization {
   execution_accelerators {
     # XPU推理配置通过CPU Execution启动， 配合KIND_CPU使用
-    cpu_execution_accelerator : [
+    cpu_execution_accelerator: [
       {
-        name : "paddle_xpu"
+        name: "paddle_xpu",
         # CPU相关配置
         # cpu_threads: CPU计算线程数
         # use_paddle_log: 开启paddle log信息
