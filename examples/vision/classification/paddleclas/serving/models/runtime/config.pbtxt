@@ -10,7 +10,7 @@ input [
     name: "inputs"
     # input type such as TYPE_FP32、TYPE_UINT8、TYPE_INT8、TYPE_INT16、TYPE_INT32、TYPE_INT64、TYPE_FP16、TYPE_STRING
     data_type: TYPE_FP32
-    # input shape， The batch dimension is omitted and the actual shape is [batch, c, h, w]
+    # input shape, The batch dimension is omitted and the actual shape is [batch, c, h, w]
     dims: [ 3, 224, 224 ]
   }
 ]
@@ -30,10 +30,10 @@ instance_group [
     # The number of instances is 1
     count: 1
     # Use GPU, CPU inference option is:KIND_CPU
-    # kind: KIND_GPU
-    kind: KIND_CPU
+    kind: KIND_GPU
+    # kind: KIND_CPU
     # The instance is deployed on the 0th GPU card
-    # gpus: [0]
+    gpus: [0]
   }
 ]
 
@@ -59,6 +59,18 @@ optimization {
   }
   ]
 }}
+
+# instance_group [
+#   {
+#     # The number of instances is 1
+#     count: 1
+#     # Use GPU, CPU inference option is:KIND_CPU
+#     # kind: KIND_GPU
+#     kind: KIND_CPU
+#     # The instance is deployed on the 0th GPU card
+#     # gpus: [0]
+#   }
+# ]
 
 # optimization {
 #   execution_accelerators {
