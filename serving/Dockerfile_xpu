@@ -24,6 +24,8 @@ ENV TZ=Asia/Shanghai \
     https_proxy=$https_proxy \
     no_proxy=$no_proxy
 
+# Note: Here, use nightly built of paddle for xpu tritron server image 
+# to avoid the so confilcts between paddle and fastdeploy-python.
 RUN apt-get update && apt-get install -y --no-install-recommends apt-utils libgomp1 ffmpeg libsm6 libxext6 vim wget \
     && python3 -m pip install -U pip \
     && python3 -m pip install python -m pip install paddlepaddle==0.0.0 -f https://www.paddlepaddle.org.cn/whl/linux/cpu-mkl/develop.html \
