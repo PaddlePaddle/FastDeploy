@@ -285,7 +285,6 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 kunlunxin_id, l3_workspace_size, locked, autotune,
                 autotune_file, precision, adaptive_seqlen, enable_multi_stream,
                 int64_t(gm_default_size));
-            std::cout << "runtime_options_->UseKunlunXin()" << std::endl;
           }
         } else {
           // parse parameters for cpu only
