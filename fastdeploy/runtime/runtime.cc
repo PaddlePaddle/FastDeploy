@@ -209,7 +209,7 @@ bool Runtime::Infer() {
     // FDTensor SetExternalData is not support for Device::KUNLUNXIN
     result = backend_->Infer(input_tensors_, &output_tensors_, true);
   } else {
-    result = backend_->Infer(input_tensors_, &output_tensors_, true);
+    result = backend_->Infer(input_tensors_, &output_tensors_, false);
   }
 
   for (auto& tensor : output_tensors_) {
