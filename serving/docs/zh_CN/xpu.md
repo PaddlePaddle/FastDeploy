@@ -5,8 +5,8 @@ FastDeploy XPU Triton Server通过Paddle Inference调用XPU进行推理，并且
 
 - 下载FastDeploy XPU Triton Server镜像  
 ```bash
-docker pull paddlepaddle/fastdeploy:1.0.7-xpu-21.10  # 稳定版
-docker pull paddlepaddle/fastdeploy:0.0.0-xpu-21.10  # develop版本
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.7-xpu-21.10  # 稳定版
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:0.0.0-xpu-21.10  # develop版本
 ```  
 
 - 下载部署示例代码
@@ -29,7 +29,7 @@ mv ResNet50_vd_infer/inference.pdiparams models/runtime/1/model.pdiparams
 
 ## 2. 启动容器
 ```bash
-docker run -itd --name fd_xpu_server -v `pwd`/:/serving --net=host --privileged paddlepaddle/fastdeploy:1.0.7-xpu-21.10 /bin/bash
+docker run -itd --name fd_xpu_server -v `pwd`/:/serving --net=host --privileged registry.baidubce.com/paddlepaddle/fastdeploy:1.0.7-xpu-21.10 /bin/bash
 ```
 
 ## 3. 验证XPU是否可正常调用  
@@ -47,7 +47,7 @@ I0529 11:07:46.889616   222 analysis_predictor.cc:1705] ======= optimize end ===
 I0529 11:07:46.890262   222 naive_executor.cc:160] ---  skip [feed], feed -> inputs
 I0529 11:07:46.890703   222 naive_executor.cc:160] ---  skip [save_infer_model/scale_0.tmp_1], fetch -> fetch
 [INFO] fastdeploy/runtime/runtime.cc(286)::CreatePaddleBackend	Runtime initialized with Backend::PDINFER in Device::KUNLUNXIN.
-[INFO] fastdeploy/runtime/backends/paddle/paddle_backend.cc(341)::Infer	Running profiling for Runtime without H2D and D2H, Repeats: 1000, Warmup: 20
+[INFO] fastdeploy/runtime/backends/paddle/paddle_backend.cc(341)::Infer	Running profiling for Runtime without H2D and D2H, Repeats: 1000, Warmup: 200
 Runtime(ms): 0.706382ms.
 ```
 显示启动的设备类型为：Device::KUNLUNXIN。FastDeploy Benchmark工具使用文档，请参考[benchmark](https://github.com/PaddlePaddle/FastDeploy/tree/develop/benchmark/cpp).
@@ -129,10 +129,6 @@ fastdeployserver --model-repository=/serving/models --backend-config=python,shm-
 输出：
 ```
 [INFO] fastdeploy/runtime/runtime.cc(286)::CreatePaddleBackend	Runtime initialized with Backend::PDINFER in Device::KUNLUNXIN.
-I0529 03:54:40.484810 385 model_repository_manager.cc:1183] successfully loaded 'runtime' version 1
-I0529 03:54:40.484995 385 model_repository_manager.cc:1022] loading: paddlecls:1
-I0529 03:54:40.585203 385 model_repository_manager.cc:1183] successfully loaded 'paddlecls' version 1
-I0529 03:54:40.585300 385 server.cc:549]
 .....
 I0529 03:54:40.585326 385 server.cc:592]
 +-------------+---------+--------+
