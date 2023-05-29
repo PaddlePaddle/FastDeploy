@@ -57,7 +57,7 @@ OCR_DECLARE_DESTROY_WRAPPER_FUNCTION(Recognizer, fd_c_recognizer_wrapper);
  * \param[in] fd_c_recognizer_wrapper pointer to FD_C_RecognizerWrapper object
  * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
  * \param[in] text The text result of rec model will be written into this parameter.
- * \param[in] rec_score The sccore result of rec model will be written into this parameter.
+ * \param[in] rec_score The score result of rec model will be written into this parameter.
  * \return true if the prediction is successed, otherwise false.
  */
 
@@ -79,7 +79,7 @@ OCR_DECLARE_INITIALIZED_FUNCTION(Recognizer, fd_c_recognizer_wrapper);
  * \param[in] fd_c_recognizer_wrapper pointer to FD_C_RecognizerWrapper object
  * \param[in] imgs The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
  * \param[in] texts The list of text results of rec model will be written into this vector.
- * \param[in] rec_scores The list of sccore result of rec model will be written into this vector.
+ * \param[in] rec_scores The list of score result of rec model will be written into this vector.
  *
  * \return true if the prediction successed, otherwise false
  */
@@ -194,7 +194,7 @@ OCR_DECLARE_DESTROY_WRAPPER_FUNCTION(DBDetector, fd_c_dbdetector_wrapper);
  *
  * \param[in] fd_c_dbdetector_wrapper pointer to FD_C_DBDetectorWrapper object
  * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
- * \param[in] boxes_result The output of OCR detection model result will be writen to this structure.
+ * \param[in] boxes_result The output of OCR detection model result will be written to this structure.
  * \return true if the prediction is successed, otherwise false.
  */
 
@@ -215,7 +215,7 @@ OCR_DECLARE_INITIALIZED_FUNCTION(DBDetector, fd_c_dbdetector_wrapper);
  *
  * \param[in] fd_c_dbdetector_wrapper pointer to FD_C_DBDetectorWrapper object
  * \param[in] imgs The list input of image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
- * \param[in] det_results The output of OCR detection model result will be writen to this structure.
+ * \param[in] det_results The output of OCR detection model result will be written to this structure.
  *
  * \return true if the prediction is successed, otherwise false.
  */
@@ -256,7 +256,7 @@ OCR_DECLARE_DESTROY_WRAPPER_FUNCTION(StructureV2Table, fd_c_structurev2table_wra
  *
  * \param[in] fd_c_structurev2table_wrapper pointer to FD_C_StructureV2TableWrapper object
  * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
- * \param[in] boxes_result The output of OCR table model result will be writen to this structure.
+ * \param[in] boxes_result The output of OCR table model result will be written to this structure.
  * \return true if the prediction is successed, otherwise false.
  */
 
@@ -277,7 +277,7 @@ OCR_DECLARE_INITIALIZED_FUNCTION(StructureV2Table, fd_c_structurev2table_wrapper
  *
  * \param[in] fd_c_structurev2table_wrapper pointer to FD_C_StructureV2TableWrapper object
  * \param[in] imgs The list input of image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
- * \param[in] det_results The output of OCR table model result will be writen to this structure.
+ * \param[in] det_results The output of OCR table model result will be written to this structure.
  *
  * \return true if the prediction is successed, otherwise false.
  */
@@ -316,7 +316,7 @@ OCR_DECLARE_DESTROY_WRAPPER_FUNCTION(PPOCRv2, fd_c_ppocrv2_wrapper);
  *
  * \param[in] fd_c_ppocrv2_wrapper pointer to FD_C_PPOCRv2Wrapper object
  * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
- * \param[in] result The output OCR result will be writen to this structure.
+ * \param[in] result The output OCR result will be written to this structure.
  * \return true if the prediction successed, otherwise false.
  */
 
@@ -337,7 +337,7 @@ OCR_DECLARE_INITIALIZED_FUNCTION(PPOCRv2, fd_c_ppocrv2_wrapper);
  *
  * \param[in] fd_c_ppocrv2_wrapper pointer to FD_C_PPOCRv2Wrapper object
  * \param[in] imgs The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
- * \param[in] batch_result The output list of OCR result will be writen to this structure.
+ * \param[in] batch_result The output list of OCR result will be written to this structure.
  * \return true if the prediction successed, otherwise false.
  */
 
@@ -375,7 +375,7 @@ OCR_DECLARE_DESTROY_WRAPPER_FUNCTION(PPOCRv3, fd_c_ppocrv3_wrapper);
  *
  * \param[in] fd_c_ppocrv3_wrapper pointer to FD_C_PPOCRv3Wrapper object
  * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
- * \param[in] result The output OCR result will be writen to this structure.
+ * \param[in] result The output OCR result will be written to this structure.
  * \return true if the prediction successed, otherwise false.
  */
 
@@ -396,7 +396,7 @@ OCR_DECLARE_INITIALIZED_FUNCTION(PPOCRv3, fd_c_ppocrv3_wrapper);
  *
  * \param[in] fd_c_ppocrv3_wrapper pointer to FD_C_PPOCRv3Wrapper object
  * \param[in] imgs The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
- * \param[in] batch_result The output list of OCR result will be writen to this structure.
+ * \param[in] batch_result The output list of OCR result will be written to this structure.
  * \return true if the prediction successed, otherwise false.
  */
 
@@ -433,7 +433,7 @@ OCR_DECLARE_DESTROY_WRAPPER_FUNCTION(PPStructureV2Table, fd_c_ppstructurev2table
  *
  * \param[in] fd_c_ppstructurev2table_wrapper pointer to FD_C_PPStructureV2TableWrapper object
  * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
- * \param[in] result The output OCR result will be writen to this structure.
+ * \param[in] result The output OCR result will be written to this structure.
  * \return true if the prediction successed, otherwise false.
  */
 
@@ -454,7 +454,7 @@ OCR_DECLARE_INITIALIZED_FUNCTION(PPStructureV2Table, fd_c_ppstructurev2table_wra
  *
  * \param[in] fd_c_ppstructurev2table_wrapper pointer to FD_C_PPStructureV2TableWrapper object
  * \param[in] imgs The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
- * \param[in] batch_result The output list of OCR result will be writen to this structure.
+ * \param[in] batch_result The output list of OCR result will be written to this structure.
  * \return true if the prediction successed, otherwise false.
  */
 
