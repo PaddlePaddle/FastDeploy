@@ -1,5 +1,5 @@
 # FastDeploy XPU Triton Server使用文档
-FastDeploy XPU Triton Server通过Paddle Inference调用XPU进行推理，并且已经接入到 Triton Server。在FastDeploy XPU Triton Server中，使用XPU推理需要通过CPU instance_group和cpu_execution_accelerator进行配置和调用。本文档以PaddleClas为例，讲述如果把一个CPU/GPU Triton服务，改造成XPU Triton服务。
+FastDeploy XPU Triton Server通过Paddle Inference调用XPU进行推理，并且已经接入到 Triton Server。在FastDeploy XPU Triton Server中，使用XPU推理需要通过CPU instance_group和cpu_execution_accelerator进行配置和调用。本文档以PaddleClas为例，讲述如何把一个CPU/GPU Triton服务，改造成XPU Triton服务。
 
 ## 1. 准备服务化镜像  
 
