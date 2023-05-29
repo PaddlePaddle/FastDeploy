@@ -171,6 +171,8 @@ output_name: CLAS_RESULT
 cd /serving
 # 后台挂载
 nohup fastdeployserver --model-repository=/serving/models --backend-config=python,shm-default-byte-size=10485760 > log.txt 2>&1 &
+# 安装客户端依赖
+python3 -m pip install tritonclient\[all\]
 # 发送请求
 unset http_proxy
 unset https_proxy
