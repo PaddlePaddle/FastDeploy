@@ -15,12 +15,6 @@ docker pull paddlepaddle/fastdeploy:0.0.0-xpu-21.10  # develop版本
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd  FastDeploy/examples/vision/classification/paddleclas/serving
 
-# 如果您希望从PaddleClas下载示例代码，请运行
-git clone https://github.com/PaddlePaddle/PaddleClas.git
-# 注意：如果当前分支找不到下面的fastdeploy测试代码，请切换到develop分支
-git checkout develop
-cd PaddleClas/deploy/fastdeploy/serving
-
 # 下载ResNet50_vd模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz
 tar -xvf ResNet50_vd_infer.tgz
