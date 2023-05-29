@@ -1,0 +1,47 @@
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+ARG http_proxy
+ARG https_proxy
+ARG no_proxy
+
+FROM paddlepaddle/fastdeploy:21.10-cpu-only-min
+
+ENV TZ=Asia/Shanghai \
+    DEBIAN_FRONTEND=noninteractive \
+    http_proxy=$http_proxy \
+    https_proxy=$https_proxy \
+    no_proxy=$no_proxy
+
+# Note: Here, use nightly built of paddle for xpu tritron server image 
+# to avoid the so confilcts between paddle and fastdeploy-python.
+RUN apt-get update && apt-get install -y --no-install-recommends apt-utils libgomp1 ffmpeg libsm6 libxext6 vim wget \
+    && python3 -m pip install -U pip \
+    && python3 -m pip install paddlepaddle==0.0.0 -f https://www.paddlepaddle.org.cn/whl/linux/cpu-mkl/develop.html \
+    && python3 -m pip install paddlenlp fast-tokenizer-python
+
+COPY python/dist/*.whl /opt/fastdeploy/ 
+RUN python3 -m pip install  /opt/fastdeploy/*.whl \
+    && rm -rf /opt/fastdeploy/*.whl
+
+COPY serving/build/libtriton_fastdeploy.so /opt/tritonserver/backends/fastdeploy/
+COPY build/fastdeploy_install /opt/fastdeploy/
+COPY benchmark/cpp /opt/fastdeploy/benchmark/cpp
+
+RUN mv /opt/tritonserver/bin/tritonserver /opt/tritonserver/bin/fastdeployserver
+ENV LD_LIBRARY_PATH="/opt/fastdeploy/lib:/opt/fastdeploy/third_libs/install/opencv/lib64:/opt/fastdeploy/third_libs/install/paddle2onnx/lib:/opt/fastdeploy/third_libs/install/paddle_inference/paddle/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mkldnn/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mklml/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/xpu/lib:$LD_LIBRARY_PATH"
+# unset proxy
+ENV http_proxy=
+ENV https_proxy=
+ENV no_proxy=
