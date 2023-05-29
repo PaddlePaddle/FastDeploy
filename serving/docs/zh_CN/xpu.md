@@ -147,11 +147,23 @@ output_name: CLAS_RESULT
 {'label_ids': [153], 'scores': [0.6862289905548096]}
 ```
 
-## 7. 配置修改
+## 7. 容器内自测  
+如果是想在容器内自测，则运行以下命令：  
+```bash
+cd /serving
+# 后台挂载
+nohup fastdeployserver --model-repository=/serving/models --backend-config=python,shm-default-byte-size=10485760 > log.txt 2>&1 &
+# 发送请求
+unset http_proxy
+unset https_proxy
+python3 paddlecls_grpc_client.py
+```
+
+## 8. 配置修改
 
 当前默认配置在GPU上运行TensorRT引擎， 如果要在CPU或其他推理引擎上运行。 需要修改`models/runtime/config.pbtxt`中配置，详情请参考[配置文档](./model_configuration.md)
 
-## 8. 常见问题
+## 9. 常见问题
 - [如何编写客户端 HTTP/GRPC 请求](https://github.com/PaddlePaddle/FastDeploy/blob/develop/serving/docs/zh_CN/client.md)
 - [如何编译服务化部署镜像](https://github.com/PaddlePaddle/FastDeploy/blob/develop/serving/docs/zh_CN/compile.md)
 - [服务化部署原理及动态Batch介绍](https://github.com/PaddlePaddle/FastDeploy/blob/develop/serving/docs/zh_CN/demo.md)
