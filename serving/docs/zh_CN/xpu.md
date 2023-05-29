@@ -52,7 +52,7 @@ Runtime(ms): 0.706382ms.
 ```
 显示启动的设备类型为：Device::KUNLUNXIN。FastDeploy Benchmark工具使用文档，请参考[benchmark](https://github.com/PaddlePaddle/FastDeploy/tree/develop/benchmark/cpp).
 
-## 4. 配置Tritron Model Config  
+## 4. 配置Triton Model Config  
 ```protobuf
 # XPU服务化案例: examples/vision/classification/serving/models/runtime/config.pbtxt
 # 将XPU部分的注释撤销，并注释掉原来的GPU设置，修改为：
