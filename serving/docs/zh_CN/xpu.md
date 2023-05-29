@@ -179,7 +179,7 @@ python3 paddlecls_grpc_client.py
 
 ## 8. 配置修改
 
-当前默认配置在GPU上运行TensorRT引擎， 如果要在CPU或其他推理引擎上运行。 需要修改`models/runtime/config.pbtxt`中配置，详情请参考[配置文档](./model_configuration.md)
+当前默认配置在XPU运行Paddle Inference引擎， 如果要在CPU/GPU其他推理引擎上运行。 需要修改`models/runtime/config.pbtxt`中配置，详情请参考[配置文档](./model_configuration.md).
 
 ## 9. 常见问题
 - [如何编写客户端 HTTP/GRPC 请求](https://github.com/PaddlePaddle/FastDeploy/blob/develop/serving/docs/zh_CN/client.md)
