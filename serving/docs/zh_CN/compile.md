@@ -65,6 +65,19 @@ cd ../
 docker build -t paddlepaddle/fastdeploy:x.y.z-ipu-only-21.10 -f serving/Dockerfile_ipu .
 ```
 
+### 制作XPU镜像
+
+```
+# 进入serving目录执行脚本编译fastdeploy和服务化的backend
+cd serving
+bash scripts/build_fd_xpu.sh
+
+# 退出到FastDeploy主目录，制作镜像
+# x.y.z为FastDeploy版本号，可根据情况自己确定。比如: 1.0.6
+cd ../
+docker build -t paddlepaddle/fastdeploy:x.y.z-xpu-21.10 -f serving/Dockerfile_xpu .
+```
+
 ## 非镜像方式编译
 
 - [FastDeploy Serving CentOS编译教程](./compile_without_docker_centos.md)

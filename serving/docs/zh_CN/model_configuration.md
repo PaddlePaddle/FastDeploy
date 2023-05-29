@@ -112,6 +112,37 @@ optimization {
 }
 ```
 
+#### 配置使用Paddle+XPU引擎
+```
+optimization {
+  execution_accelerators {
+    # XPU推理配置通过CPU Execution启动， 配合KIND_CPU使用
+    cpu_execution_accelerator: [
+      {
+        name: "paddle_xpu",
+        # CPU相关配置
+        # cpu_threads: CPU计算线程数
+        # use_paddle_log: 开启paddle log信息
+        parameters { key: "cpu_threads" value: "4" }
+        parameters { key: "use_paddle_log" value: "0" }
+        # XPU相关配置
+        # kunlunxin_id: 使用的XPU卡号
+        # l3_workspace_size: L3缓存size
+        parameters { key: "kunlunxin_id" value: "0" }
+        parameters { key: "l3_workspace_size" value: "0xfffc00" }
+        parameters { key: "locked" value: "0" }
+        parameters { key: "autotune" value: "1" }
+        parameters { key: "precision" value: "int16" }
+        parameters { key: "adaptive_seqlen" value: "0" }
+        parameters { key: "enable_multi_stream" value: "0" }
+        parameters { key: "gm_default_size" value: "0" }
+      }
+    ]
+  }
+}
+```
+
+
 ### 配置使用ONNXRuntime引擎
 除去配置 *Instance Groups*，决定模型运行在CPU还是GPU上。ONNXRuntime引擎中，还可以进行如下配置，具体例子可参照[YOLOv5的Runtime配置](../../../examples/vision/detection/yolov5/serving/models/runtime/config.pbtxt):
 
