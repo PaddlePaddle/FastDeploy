@@ -32,7 +32,7 @@ mv ResNet50_vd_infer/inference.pdiparams models/runtime/1/model.pdiparams
 docker run -itd --name fd_xpu_server -v `pwd`/:/serving --net=host --privileged registry.baidubce.com/paddlepaddle/fastdeploy:1.0.7-xpu-21.10 /bin/bash
 ```
 
-## 3. 验证XPU是否可正常调用  
+## 3. 验证XPU可用性
 ```bash
 docker exec -it fd_xpu_server /bin/bash
 cd /opt/fastdeploy/benchmark/cpp/build
