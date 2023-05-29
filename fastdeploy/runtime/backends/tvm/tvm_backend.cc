@@ -59,14 +59,13 @@ bool TVMBackend::InitInputAndOutputTensor() {
 bool TVMBackend::BuildModel(const RuntimeOption& runtime_option) {
   // load in the library
   tvm::runtime::Module mod_factory =
-      tvm::runtime::Module::LoadFromFile(runtime_option.model_file + ".so");
+      tvm::runtime::Module::LoadFromFile(runtime_option.model_file);
 
   // create the graph executor module
   gmod_ = mod_factory.GetFunction("default")(dev_);
 
   // load params
-  std::ifstream params_in(runtime_option.model_file + ".params",
-                          std::ios::binary);
+  std::ifstream params_in(runtime_option.params_file, std::ios::binary);
   std::string params_data((std::istreambuf_iterator<char>(params_in)),
                           std::istreambuf_iterator<char>());
   params_in.close();

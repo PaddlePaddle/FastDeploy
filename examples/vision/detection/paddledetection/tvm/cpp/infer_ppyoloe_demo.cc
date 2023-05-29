@@ -15,8 +15,8 @@
 #include "fastdeploy/vision.h"
 
 void TVMInfer(const std::string& model_dir, const std::string& image_file) {
-  auto model_file = model_dir + "/tvm_model";
-  auto params_file = "";
+  auto model_file = model_dir + "/tvm_model.so";
+  auto params_file = "tvm_model.params";
   auto config_file = model_dir + "/infer_cfg.yml";
 
   auto option = fastdeploy::RuntimeOption();

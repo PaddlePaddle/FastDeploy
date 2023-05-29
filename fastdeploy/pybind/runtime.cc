@@ -136,6 +136,7 @@ void BindRuntime(pybind11::module& m) {
       .value("PDINFER", Backend::PDINFER)
       .value("RKNPU2", Backend::RKNPU2)
       .value("SOPHGOTPU", Backend::SOPHGOTPU)
+      .value("TVM", Backend::TVM)
       .value("LITE", Backend::LITE);
   pybind11::enum_<ModelFormat>(m, "ModelFormat", pybind11::arithmetic(),
                                "ModelFormat for inference.")
@@ -143,7 +144,8 @@ void BindRuntime(pybind11::module& m) {
       .value("TORCHSCRIPT", ModelFormat::TORCHSCRIPT)
       .value("RKNN", ModelFormat::RKNN)
       .value("SOPHGO", ModelFormat::SOPHGO)
-      .value("ONNX", ModelFormat::ONNX);
+      .value("ONNX", ModelFormat::ONNX)
+      .value("TVMFormat", ModelFormat::TVMFormat);
   pybind11::enum_<Device>(m, "Device", pybind11::arithmetic(),
                           "Device for inference.")
       .value("CPU", Device::CPU)
