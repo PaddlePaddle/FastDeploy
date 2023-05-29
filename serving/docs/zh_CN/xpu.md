@@ -1,4 +1,4 @@
-# FastDeploy XPU Triton Server使用方式  
+# FastDeploy XPU Triton Server使用文档
 FastDeploy XPU Triton Server通过Paddle Inference调用XPU进行推理，并且已经接入到 Triton Server。在FastDeploy XPU Triton Server中，使用XPU推理需要通过CPU instance_group和cpu_execution_accelerator进行配置和调用。本文档以PaddleClas为例，讲述如果把一个CPU/GPU Triton服务，改造成XPU Triton服务。
 
 ## 1. 准备服务化镜像  
@@ -18,7 +18,6 @@ cd  FastDeploy/examples/vision/classification/paddleclas/serving
 # 下载ResNet50_vd模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz
 tar -xvf ResNet50_vd_infer.tgz
-wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
 # 将配置文件放入预处理目录
 mv ResNet50_vd_infer/inference_cls.yaml models/preprocess/1/inference_cls.yaml
@@ -51,12 +50,12 @@ I0529 11:07:46.890703   222 naive_executor.cc:160] ---  skip [save_infer_model/s
 [INFO] fastdeploy/runtime/backends/paddle/paddle_backend.cc(341)::Infer	Running profiling for Runtime without H2D and D2H, Repeats: 1000, Warmup: 20
 Runtime(ms): 0.706382ms.
 ```
+显示启动的设备类型为：Device::KUNLUNXIN。FastDeploy Benchmark工具使用文档，请参考[benchmark](https://github.com/PaddlePaddle/FastDeploy/tree/develop/benchmark/cpp).
 
 ## 4. 配置Tritron Model Config  
-```
-# xpu服务化案例: examples/vision/classification/serving/models/runtime/config.pbtxt
-# 将xpu部分的注释撤销，并注释掉原来的GPU设置，修改为：
-
+```protobuf
+# XPU服务化案例: examples/vision/classification/serving/models/runtime/config.pbtxt
+# 将XPU部分的注释撤销，并注释掉原来的GPU设置，修改为：
 # # Number of instances of the model
 # instance_group [
 #   {
@@ -127,11 +126,33 @@ optimization {
 ```bash
 fastdeployserver --model-repository=/serving/models --backend-config=python,shm-default-byte-size=10485760
 ```  
+输出：
+```
+[INFO] fastdeploy/runtime/runtime.cc(286)::CreatePaddleBackend	Runtime initialized with Backend::PDINFER in Device::KUNLUNXIN.
+I0529 03:54:40.484810 385 model_repository_manager.cc:1183] successfully loaded 'runtime' version 1
+I0529 03:54:40.484995 385 model_repository_manager.cc:1022] loading: paddlecls:1
+I0529 03:54:40.585203 385 model_repository_manager.cc:1183] successfully loaded 'paddlecls' version 1
+I0529 03:54:40.585300 385 server.cc:549]
+.....
+I0529 03:54:40.585326 385 server.cc:592]
++-------------+---------+--------+
+| Model       | Version | Status |
++-------------+---------+--------+
+| paddlecls   | 1       | READY  |
+| postprocess | 1       | READY  |
+| preprocess  | 1       | READY  |
+| runtime     | 1       | READY  |
++-------------+---------+--------+
+......
+I0529 03:54:40.586430 385 grpc_server.cc:4117] Started GRPCInferenceService at 0.0.0.0:8001
+I0529 03:54:40.586657 385 http_server.cc:2815] Started HTTPService at 0.0.0.0:8000
+I0529 03:54:40.627382 385 http_server.cc:167] Started Metrics Service at 0.0.0.0:8002
+```
 
 ## 6. 客户端请求  
-在物理机器中执行以下命令，发送grpc请求并输出结果
-```
-#下载测试图片
+在物理机器中执行以下命令，发送grpc请求并输出结果:
+```bash
+# 下载测试图片
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
 # 安装客户端依赖
@@ -142,10 +163,11 @@ python3 paddlecls_grpc_client.py
 ```
 
 发送请求成功后，会返回json格式的检测结果并打印输出:
-```
+```bash
 output_name: CLAS_RESULT
-{'label_ids': [153], 'scores': [0.6862289905548096]}
+{'label_ids': [153], 'scores': [0.6858349442481995]}
 ```
+以上测试结果为Paddle Inference Backend + XPU R200下的输出。
 
 ## 7. 容器内自测  
 如果是想在容器内自测，则运行以下命令：  
