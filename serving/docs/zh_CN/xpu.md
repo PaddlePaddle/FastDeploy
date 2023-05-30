@@ -36,6 +36,7 @@ docker run -itd --name fd_xpu_server -v `pwd`/:/serving --net=host --privileged 
 ```bash
 docker exec -it fd_xpu_server /bin/bash
 cd /opt/fastdeploy/benchmark/cpp/build
+
 # 设置XPU L3 Cache (R200是63Mb)
 export XPU_PADDLE_L3_SIZE=67104768  
 # 运行benchmark验证
