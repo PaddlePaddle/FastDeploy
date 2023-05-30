@@ -44,3 +44,7 @@ fastdeploy/LICENSE
 fastdeploy/ThirdPartyNotices.txt
 FastDeployCSharp.cmake
 python/fastdeploy/code_version.py
+*.pdmodel
+*.pdiparams
+*.pdiparams.info
+log.txt
