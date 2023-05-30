@@ -34,6 +34,7 @@ static void UpdateBaseCustomFlags(
   if (FLAGS_xpu_l3_cache >= 0) {
     config_info["xpu_l3_cache"] = std::to_string(FLAGS_xpu_l3_cache);
   }
+  // update custom options for paddle backend
   if (FLAGS_enable_log_info) {
     config_info["enable_log_info"] = "true";
   } else {
