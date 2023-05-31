@@ -14,7 +14,7 @@
 # limitations under the License.
 
 
-echo "start build FD XPU library"
+echo "start build FD XPU AUTH library"
 
 docker run -i --rm --name build_fd_xpu_auth_dev \
            -v `pwd`/..:/workspace/fastdeploy \
@@ -55,22 +55,7 @@ docker run -i --rm --name build_fd_xpu_auth_dev \
             export http_proxy=${http_proxy_tmp}
             cmake .. -DTRITON_ENABLE_GPU=OFF -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy_install -DTRITON_COMMON_REPO_TAG=r21.10 -DTRITON_CORE_REPO_TAG=r21.10 -DTRITON_BACKEND_REPO_TAG=r21.10;
             make -j`nproc`;
-            cd /workspace/fastdeploy/benchmark/cpp;
-            rm -rf build; mkdir build; cd build;
-            unset http_proxy
-            unset https_proxy
-            cmake .. -DFASTDEPLOY_INSTALL_DIR=/workspace/fastdeploy/build/fastdeploy_install;
-            make -j`nproc`;
-            wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_infer.tgz && tar -zxvf ResNet50_infer.tgz;
-            wget https://bj.bcebos.com/paddlehub/fastdeploy/000000014439.jpg;
-            rm -f ResNet50_infer.tgz;
-            rm -rf CMakeFiles;
-            echo $PADDLEINFERENCE_URL
-            echo $FD_ENCRYPT_AUTH_SO_NAME
-            ls /home/users/yanzikui/wenxin/baidu/xpu/bkcl/output/so/*;
-            ldd /workspace/fastdeploy/build/fastdeploy_install/third_libs/install/paddle_inference/paddle/lib/libpaddle_inference.so
-            which openssl
-            openssl version
+            echo $PADDLEINFERENCE_URL;
             '
 
-echo "build FD XPU library done"
+echo "build FD XPU AUTH library done"
