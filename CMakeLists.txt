@@ -520,7 +520,7 @@ endif()
 
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
-if(ENABLE_PADDLE_BACKEND)
+if(ENABLE_PADDLE_BACKEND AND PADDLEINFERENCE_WITH_ENCRYPT_AUTH)
   link_directories(${LEVELDB_LIB_DIR})
   target_link_libraries(${LIBRARY_NAME} ${LEVELDB_LIB_DIR}/libleveldb.a)
   set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS

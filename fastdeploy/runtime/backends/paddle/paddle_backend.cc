@@ -179,11 +179,48 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
     FDASSERT(ReadBinaryFromFile(model, &model_content),
              "Failed to read file %s.", model.c_str());
   }
-  auto reader =
-      paddle2onnx::PaddleReader(model_content.c_str(), model_content.size());
-  // If it's a quantized model, and use cpu with mkldnn, automaticaly switch to
-  // int8 mode
-  if (reader.is_quantize_model) {
+  // auto reader =
+  //     paddle2onnx::PaddleReader(model_content.c_str(), model_content.size());
+  // // If it's a quantized model, and use cpu with mkldnn, automaticaly switch
+  // to
+  // // int8 mode
+  // if (reader.is_quantize_model) {
+  //   if (option.device == Device::GPU) {
+  //     FDWARNING << "The loaded model is a quantized model, while inference on
+  //     "
+  //                  "GPU, please use TensorRT backend to get better
+  //                  performance."
+  //               << std::endl;
+  //     if (option.enable_trt) {
+  //       bool use_static = false;
+  //       if (option.trt_option.serialize_file != "") {
+  //         FDWARNING
+  //             << "Detect that tensorrt cache file has been set to "
+  //             << option.trt_option.serialize_file
+  //             << ", but while enable paddle2trt, please notice that the cache
+  //             "
+  //                "file will save to the directory where paddle model saved."
+  //             << std::endl;
+  //         use_static = true;
+  //       }
+  //       config_.EnableTensorRtEngine(option.trt_option.max_workspace_size,
+  //                                    option.trt_option.max_batch_size, 3,
+  //                                    paddle_infer::PrecisionType::kInt8,
+  //                                    use_static, false);
+  //       SetTRTDynamicShapeToConfig(option);
+  //     }
+  //   }
+  //   if (option.enable_mkldnn) {
+  //     config_.EnableMkldnnInt8();
+  //   } else {
+  //     FDWARNING << "The loaded model is a quantized model, while inference on
+  //     "
+  //                  "CPU, please enable MKLDNN to get better performance."
+  //               << std::endl;
+  //   }
+  // }
+
+  if (option.is_quantize_model) {
     if (option.device == Device::GPU) {
       FDWARNING << "The loaded model is a quantized model, while inference on "
                    "GPU, please use TensorRT backend to get better performance."
@@ -215,25 +252,26 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
     }
   }
 
-  inputs_desc_.resize(reader.num_inputs);
-  for (int i = 0; i < reader.num_inputs; ++i) {
-    std::string name(reader.inputs[i].name);
-    std::vector<int64_t> shape(reader.inputs[i].shape,
-                               reader.inputs[i].shape + reader.inputs[i].rank);
-    inputs_desc_[i].name = name;
-    inputs_desc_[i].shape.assign(shape.begin(), shape.end());
-    inputs_desc_[i].dtype = ReaderDataTypeToFD(reader.inputs[i].dtype);
-  }
-  outputs_desc_.resize(reader.num_outputs);
-  for (int i = 0; i < reader.num_outputs; ++i) {
-    std::string name(reader.outputs[i].name);
-    std::vector<int64_t> shape(
-        reader.outputs[i].shape,
-        reader.outputs[i].shape + reader.outputs[i].rank);
-    outputs_desc_[i].name = name;
-    outputs_desc_[i].shape.assign(shape.begin(), shape.end());
-    outputs_desc_[i].dtype = ReaderDataTypeToFD(reader.outputs[i].dtype);
-  }
+  // inputs_desc_.resize(reader.num_inputs);
+  // for (int i = 0; i < reader.num_inputs; ++i) {
+  //   std::string name(reader.inputs[i].name);
+  //   std::vector<int64_t> shape(reader.inputs[i].shape,
+  //                              reader.inputs[i].shape +
+  //                              reader.inputs[i].rank);
+  //   inputs_desc_[i].name = name;
+  //   inputs_desc_[i].shape.assign(shape.begin(), shape.end());
+  //   inputs_desc_[i].dtype = ReaderDataTypeToFD(reader.inputs[i].dtype);
+  // }
+  // outputs_desc_.resize(reader.num_outputs);
+  // for (int i = 0; i < reader.num_outputs; ++i) {
+  //   std::string name(reader.outputs[i].name);
+  //   std::vector<int64_t> shape(
+  //       reader.outputs[i].shape,
+  //       reader.outputs[i].shape + reader.outputs[i].rank);
+  //   outputs_desc_[i].name = name;
+  //   outputs_desc_[i].shape.assign(shape.begin(), shape.end());
+  //   outputs_desc_[i].dtype = ReaderDataTypeToFD(reader.outputs[i].dtype);
+  // }
   if (option.collect_trt_shape) {
     // Set the shape info file.
     std::string curr_model_dir = "./";
@@ -284,6 +322,40 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
     }
   }
   predictor_ = paddle_infer::CreatePredictor(config_);
+
+  auto input_names = predictor_->GetInputNames();
+  auto output_names = predictor_->GetOutputNames();
+  auto input_dtypes = predictor_->GetInputTypes();
+  auto output_dtypes = predictor_->GetOutputTypes();
+  auto input_shapes = predictor_->GetInputTensorShape();
+  auto output_shapes = predictor_->GetOutputTensorShape();
+
+  inputs_desc_.resize(input_names.size());
+  for (int i = 0; i < input_names.size(); ++i) {
+    inputs_desc_[i].name = input_names[i];
+    auto iter = input_shapes.find(inputs_desc_[i].name);
+    FDASSERT(iter != input_shapes.end(), "Cannot find shape for input %s.",
+             inputs_desc_[i].name.c_str());
+    inputs_desc_[i].shape.assign(iter->second.begin(), iter->second.end());
+    auto iter1 = input_dtypes.find(inputs_desc_[i].name);
+    FDASSERT(iter1 != input_dtypes.end(), "Cannot find data type for input %s.",
+             inputs_desc_[i].name.c_str());
+    inputs_desc_[i].dtype = PaddleDataTypeToFD(iter1->second);
+  }
+  outputs_desc_.resize(output_names.size());
+  for (int i = 0; i < output_names.size(); ++i) {
+    outputs_desc_[i].name = output_names[i];
+    auto iter = output_shapes.find(outputs_desc_[i].name);
+    FDASSERT(iter != output_shapes.end(), "Cannot find shape for output %s.",
+             outputs_desc_[i].name.c_str());
+    outputs_desc_[i].shape.assign(iter->second.begin(), iter->second.end());
+    auto iter1 = output_dtypes.find(outputs_desc_[i].name);
+    FDASSERT(iter1 != output_dtypes.end(),
+             "Cannot find data type for output %s.",
+             outputs_desc_[i].name.c_str());
+    outputs_desc_[i].dtype = PaddleDataTypeToFD(iter1->second);
+  }
+
   initialized_ = true;
   return true;
 }
