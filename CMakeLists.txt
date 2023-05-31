@@ -243,6 +243,10 @@ if(ENABLE_PADDLE_BACKEND)
   if(external_ort_FOUND)
     list(APPEND DEPEND_LIBS external_p2o external_ort)
   endif()
+  if(PADDLEINFERENCE_WITH_ENCRYPT_AUTH)
+    list(APPEND DEPEND_LIBS ${ENCRYPT_AUTH_LIBS})
+    list(APPEND DEPEND_LIBS -lssl -lcrypto)
+  endif()
 endif()
 
 if(ENABLE_OPENVINO_BACKEND)
@@ -515,6 +519,14 @@ if(MSVC)
 endif()
 
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
+
+if(ENABLE_PADDLE_BACKEND)
+  link_directories(${LEVELDB_LIB_DIR})
+  target_link_libraries(${LIBRARY_NAME} ${LEVELDB_LIB_DIR}/libleveldb.a)
+  set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS
+                        "-Wl,--whole-archive ${LEVELDB_LIB_DIR}/libleveldb.a -Wl,-no-whole-archive")
+endif()
+
 if(ANDROID)
   set_android_extra_libraries_target()
 endif()
