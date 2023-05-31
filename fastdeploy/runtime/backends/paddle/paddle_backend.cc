@@ -84,6 +84,9 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
 #endif
   } else if (option.device == Device::KUNLUNXIN) {
 #ifdef WITH_KUNLUNXIN
+    // Note(qiuyanjun): For Paddle XPU L3 Cache, please set
+    // export XPU_PADDLE_L3_SIZE=67104768 (XPU R200)
+    // export FLAGS_fuse_multi_transformer_quant_type="float"
     config_.EnableXpu(option.xpu_option.kunlunxin_l3_workspace_size,
                       option.xpu_option.kunlunxin_locked,
                       option.xpu_option.kunlunxin_autotune,
@@ -117,6 +120,9 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   } else {
     config_.SetCpuMathLibraryNumThreads(option.cpu_thread_num);
   }
+  // Note: SwitchIrOptim is enabled by default for paddle inference
+  // backend. So, we don't need to set it manually.
+  // config_.SwitchIrOptim(option.switch_ir_optimize);
 }
 
 bool PaddleBackend::Init(const RuntimeOption& runtime_option) {
