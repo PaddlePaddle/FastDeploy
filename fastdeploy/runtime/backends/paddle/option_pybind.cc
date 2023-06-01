@@ -15,7 +15,6 @@
 #include "fastdeploy/pybind/main.h"
 #include "fastdeploy/runtime/backends/paddle/option.h"
 
-
 namespace fastdeploy {
 
 void BindIpuOption(pybind11::module& m) {

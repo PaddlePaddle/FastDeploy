@@ -40,20 +40,20 @@ docker run -i --rm --name build_fd_xpu_auth_dev \
             unset https_proxy
             python setup.py build;
             python setup.py bdist_wheel;
-            cd /workspace/fastdeploy;
-            rm -rf build; mkdir build; cd build;
-            cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy_install -DWITH_KUNLUNXIN=ON -DENABLE_PADDLE_BACKEND=ON -DPADDLEINFERENCE_URL=${PADDLEINFERENCE_URL} -DPADDLEINFERENCE_WITH_ENCRYPT_AUTH=ON -DENABLE_VISION=ON -DENABLE_BENCHMARK=ON -DLIBRARY_NAME=fastdeploy_runtime;
-            make -j`nproc`;
-            make install;
-            # fix the link error of libbkcl.so
-            mkdir -p /home/users/yanzikui/wenxin/baidu/xpu/bkcl/output/so;
-            cp /workspace/fastdeploy/build/fastdeploy_install/third_libs/install/paddle_inference/third_party/install/xpu/lib/libbkcl.so /home/users/yanzikui/wenxin/baidu/xpu/bkcl/output/so;
-            cd /workspace/fastdeploy/serving;
-            rm -rf build; mkdir build; cd build;
-            export https_proxy=${https_proxy_tmp}
-            export http_proxy=${http_proxy_tmp}
-            cmake .. -DTRITON_ENABLE_GPU=OFF -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy_install -DTRITON_COMMON_REPO_TAG=r21.10 -DTRITON_CORE_REPO_TAG=r21.10 -DTRITON_BACKEND_REPO_TAG=r21.10;
-            make -j`nproc`;
+            # cd /workspace/fastdeploy;
+            # rm -rf build; mkdir build; cd build;
+            # cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy_install -DWITH_KUNLUNXIN=ON -DENABLE_PADDLE_BACKEND=ON -DPADDLEINFERENCE_URL=${PADDLEINFERENCE_URL} -DPADDLEINFERENCE_WITH_ENCRYPT_AUTH=ON -DENABLE_VISION=ON -DENABLE_BENCHMARK=ON -DLIBRARY_NAME=fastdeploy_runtime;
+            # make -j`nproc`;
+            # make install;
+            # # fix the link error of libbkcl.so
+            # mkdir -p /home/users/yanzikui/wenxin/baidu/xpu/bkcl/output/so;
+            # cp /workspace/fastdeploy/build/fastdeploy_install/third_libs/install/paddle_inference/third_party/install/xpu/lib/libbkcl.so /home/users/yanzikui/wenxin/baidu/xpu/bkcl/output/so;
+            # cd /workspace/fastdeploy/serving;
+            # rm -rf build; mkdir build; cd build;
+            # export https_proxy=${https_proxy_tmp}
+            # export http_proxy=${http_proxy_tmp}
+            # cmake .. -DTRITON_ENABLE_GPU=OFF -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy_install -DTRITON_COMMON_REPO_TAG=r21.10 -DTRITON_CORE_REPO_TAG=r21.10 -DTRITON_BACKEND_REPO_TAG=r21.10;
+            # make -j`nproc`;
             echo $PADDLEINFERENCE_URL;
             '
 
