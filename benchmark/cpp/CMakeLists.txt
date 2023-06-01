@@ -4,7 +4,6 @@ CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
 include(${FASTDEPLOY_INSTALL_DIR}/utils/gflags.cmake)
 include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
-
 include_directories(${FASTDEPLOY_INCS})
 
 add_executable(benchmark ${PROJECT_SOURCE_DIR}/benchmark.cc)
