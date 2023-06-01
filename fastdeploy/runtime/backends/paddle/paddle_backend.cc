@@ -179,46 +179,6 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
     FDASSERT(ReadBinaryFromFile(model, &model_content),
              "Failed to read file %s.", model.c_str());
   }
-  // auto reader =
-  //     paddle2onnx::PaddleReader(model_content.c_str(), model_content.size());
-  // // If it's a quantized model, and use cpu with mkldnn, automaticaly switch
-  // to
-  // // int8 mode
-  // if (reader.is_quantize_model) {
-  //   if (option.device == Device::GPU) {
-  //     FDWARNING << "The loaded model is a quantized model, while inference on
-  //     "
-  //                  "GPU, please use TensorRT backend to get better
-  //                  performance."
-  //               << std::endl;
-  //     if (option.enable_trt) {
-  //       bool use_static = false;
-  //       if (option.trt_option.serialize_file != "") {
-  //         FDWARNING
-  //             << "Detect that tensorrt cache file has been set to "
-  //             << option.trt_option.serialize_file
-  //             << ", but while enable paddle2trt, please notice that the cache
-  //             "
-  //                "file will save to the directory where paddle model saved."
-  //             << std::endl;
-  //         use_static = true;
-  //       }
-  //       config_.EnableTensorRtEngine(option.trt_option.max_workspace_size,
-  //                                    option.trt_option.max_batch_size, 3,
-  //                                    paddle_infer::PrecisionType::kInt8,
-  //                                    use_static, false);
-  //       SetTRTDynamicShapeToConfig(option);
-  //     }
-  //   }
-  //   if (option.enable_mkldnn) {
-  //     config_.EnableMkldnnInt8();
-  //   } else {
-  //     FDWARNING << "The loaded model is a quantized model, while inference on
-  //     "
-  //                  "CPU, please enable MKLDNN to get better performance."
-  //               << std::endl;
-  //   }
-  // }
 
   if (option.is_quantize_model) {
     if (option.device == Device::GPU) {
@@ -252,26 +212,6 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
     }
   }
 
-  // inputs_desc_.resize(reader.num_inputs);
-  // for (int i = 0; i < reader.num_inputs; ++i) {
-  //   std::string name(reader.inputs[i].name);
-  //   std::vector<int64_t> shape(reader.inputs[i].shape,
-  //                              reader.inputs[i].shape +
-  //                              reader.inputs[i].rank);
-  //   inputs_desc_[i].name = name;
-  //   inputs_desc_[i].shape.assign(shape.begin(), shape.end());
-  //   inputs_desc_[i].dtype = ReaderDataTypeToFD(reader.inputs[i].dtype);
-  // }
-  // outputs_desc_.resize(reader.num_outputs);
-  // for (int i = 0; i < reader.num_outputs; ++i) {
-  //   std::string name(reader.outputs[i].name);
-  //   std::vector<int64_t> shape(
-  //       reader.outputs[i].shape,
-  //       reader.outputs[i].shape + reader.outputs[i].rank);
-  //   outputs_desc_[i].name = name;
-  //   outputs_desc_[i].shape.assign(shape.begin(), shape.end());
-  //   outputs_desc_[i].dtype = ReaderDataTypeToFD(reader.outputs[i].dtype);
-  // }
   if (option.collect_trt_shape) {
     // Set the shape info file.
     std::string curr_model_dir = "./";

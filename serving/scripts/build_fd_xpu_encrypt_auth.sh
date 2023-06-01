@@ -36,7 +36,6 @@ docker run -i --rm --name build_fd_xpu_auth_dev \
             export ENABLE_OPENVINO_BACKEND=OFF;
             export ENABLE_VISION=ON;
             export ENABLE_TEXT=ON;
-            export PADDLEINFERENCE_WITH_ENCRYPT_AUTH=ON;
             unset http_proxy
             unset https_proxy
             python setup.py build;

@@ -20,6 +20,7 @@ if(WITH_GPU AND WITH_IPU)
   message(FATAL_ERROR "Cannot build with WITH_GPU=ON and WITH_IPU=ON on the same time.")
 endif()
 
+# Custom options for Paddle Inference backend
 option(PADDLEINFERENCE_DIRECTORY "Directory of custom Paddle Inference library" OFF)
 option(PADDLEINFERENCE_WITH_ENCRYPT_AUTH "Whether the Paddle Inference is built with FD encryption and auth" OFF)
 
@@ -28,11 +29,7 @@ set(PADDLEINFERENCE_PREFIX_DIR ${THIRD_PARTY_PATH}/paddle_inference)
 set(PADDLEINFERENCE_SOURCE_DIR
     ${THIRD_PARTY_PATH}/paddle_inference/src/${PADDLEINFERENCE_PROJECT})
 set(PADDLEINFERENCE_INSTALL_DIR ${THIRD_PARTY_PATH}/install/paddle_inference)
-# set(PADDLEINFERENCE_INC_DIR
-#     "${PADDLEINFERENCE_INSTALL_DIR}/paddle/include"
-#     CACHE PATH "paddle_inference include directory." FORCE)
-# NOTE: The head path need by paddle inference is xxx/paddle_inference,
-# not xxx/paddle_inference/paddle/include
+
 set(PADDLEINFERENCE_INC_DIR "${PADDLEINFERENCE_INSTALL_DIR}"
     CACHE PATH "paddle_inference include directory." FORCE)    
 set(PADDLEINFERENCE_LIB_DIR
@@ -42,7 +39,6 @@ set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}"
                       "${PADDLEINFERENCE_LIB_DIR}")
 
 if(PADDLEINFERENCE_DIRECTORY)
-  # set(PADDLEINFERENCE_INC_DIR ${PADDLEINFERENCE_DIRECTORY}/paddle/include)
   set(PADDLEINFERENCE_INC_DIR ${PADDLEINFERENCE_DIRECTORY})
 endif()
 
@@ -217,3 +213,13 @@ if(PADDLEINFERENCE_WITH_ENCRYPT_AUTH)
   add_dependencies(external_fdmodel_model ${PADDLEINFERENCE_PROJECT})
   list(APPEND ENCRYPT_AUTH_LIBS external_fdmodel external_fdmodel_auth external_fdmodel_model)
 endif()
+
+function(enable_paddle_encrypt_auth_link_policy LIBRARY_NAME)
+  if(ENABLE_PADDLE_BACKEND AND PADDLEINFERENCE_WITH_ENCRYPT_AUTH)
+    link_directories(${LEVELDB_LIB_DIR})
+    target_link_libraries(${LIBRARY_NAME} ${ENCRYPT_AUTH_LIBS} -lssl -lcrypto)
+    target_link_libraries(${LIBRARY_NAME} ${LEVELDB_LIB_DIR}/libleveldb.a)
+    set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS
+                          "-Wl,--whole-archive ${LEVELDB_LIB_DIR}/libleveldb.a -Wl,-no-whole-archive")
+  endif()
+endfunction()

@@ -252,6 +252,12 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
               } else if (param_key == "is_clone") {
                 THROW_IF_BACKEND_MODEL_ERROR(
                     ParseBoolValue(value_string, &is_clone_));
+              } else if (param_key == "delete_passes") {
+                std::vector<std::string> delete_passes;
+                SplitStringByDelimiter(value_string, ' ', &delete_passes);
+                for (auto&& pass : delete_passes) {
+                  runtime_options_->paddle_infer_option.DeletePass(pass);
+                }
               } else if (param_key == "encryption_key") {
                 runtime_options_->SetEncryptionKey(value_string);
                 // parse common settings for xpu device.

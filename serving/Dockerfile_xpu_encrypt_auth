@@ -37,7 +37,6 @@ RUN python3 -m pip install  /opt/fastdeploy/*.whl \
 
 COPY serving/build/libtriton_fastdeploy.so /opt/tritonserver/backends/fastdeploy/
 COPY build/fastdeploy_install /opt/fastdeploy/
-COPY benchmark/cpp /opt/fastdeploy/benchmark/cpp
 # Fix the link error of libbkcl.so
 COPY build/third_libs/install/paddle_inference/third_party/install/xpu/lib/libbkcl.so /home/users/yanzikui/wenxin/baidu/xpu/bkcl/output/so/libbkcl.so
 
