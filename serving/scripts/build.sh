@@ -117,7 +117,7 @@ nvidia-docker run -i --rm --name ${docker_name} \
             rm -rf build; mkdir build; cd build;
             export https_proxy=${https_proxy_tmp}
             export http_proxy=${http_proxy_tmp}
-            cmake .. -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy_install -DTRITON_COMMON_REPO_TAG=r22.12 -DTRITON_CORE_REPO_TAG=r22.12 -DTRITON_BACKEND_REPO_TAG=r22.12;
+            cmake .. -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy_install -DTRITON_COMMON_REPO_TAG=r21.10 -DTRITON_CORE_REPO_TAG=r21.10 -DTRITON_BACKEND_REPO_TAG=r21.10;
             make -j`nproc`'
 
 echo "build FD GPU library done"

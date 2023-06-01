@@ -20,18 +20,16 @@ if(WITH_GPU AND WITH_IPU)
   message(FATAL_ERROR "Cannot build with WITH_GPU=ON and WITH_IPU=ON on the same time.")
 endif()
 
+# Custom options for Paddle Inference backend
 option(PADDLEINFERENCE_DIRECTORY "Directory of custom Paddle Inference library" OFF)
+option(PADDLEINFERENCE_WITH_ENCRYPT_AUTH "Whether the Paddle Inference is built with FD encryption and auth" OFF)
 
 set(PADDLEINFERENCE_PROJECT "extern_paddle_inference")
 set(PADDLEINFERENCE_PREFIX_DIR ${THIRD_PARTY_PATH}/paddle_inference)
 set(PADDLEINFERENCE_SOURCE_DIR
     ${THIRD_PARTY_PATH}/paddle_inference/src/${PADDLEINFERENCE_PROJECT})
 set(PADDLEINFERENCE_INSTALL_DIR ${THIRD_PARTY_PATH}/install/paddle_inference)
-# set(PADDLEINFERENCE_INC_DIR
-#     "${PADDLEINFERENCE_INSTALL_DIR}/paddle/include"
-#     CACHE PATH "paddle_inference include directory." FORCE)
-# NOTE: The head path need by paddle inference is xxx/paddle_inference,
-# not xxx/paddle_inference/paddle/include
+
 set(PADDLEINFERENCE_INC_DIR "${PADDLEINFERENCE_INSTALL_DIR}"
     CACHE PATH "paddle_inference include directory." FORCE)    
 set(PADDLEINFERENCE_LIB_DIR
@@ -41,7 +39,6 @@ set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}"
                       "${PADDLEINFERENCE_LIB_DIR}")
 
 if(PADDLEINFERENCE_DIRECTORY)
-  # set(PADDLEINFERENCE_INC_DIR ${PADDLEINFERENCE_DIRECTORY}/paddle/include)
   set(PADDLEINFERENCE_INC_DIR ${PADDLEINFERENCE_DIRECTORY})
 endif()
 
@@ -70,8 +67,13 @@ else()
   set(OMP_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mklml/lib/libiomp5.so")
   set(P2O_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/paddle2onnx/lib/libpaddle2onnx.so")
   set(ORT_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/onnxruntime/lib/libonnxruntime.so")
+  if(PADDLEINFERENCE_WITH_ENCRYPT_AUTH)
+    set(FDMODEL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/fdmodel/lib/libfastdeploy_wenxin.so")
+    set(FDMODEL_AUTH_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/fdmodel/lib/libfastdeploy_auth.so")
+    set(FDMODEL_MODEL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/fdmodel/lib/libfastdeploy_model.so.2.0.0")
+    set(LEVELDB_LIB_DIR "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/leveldb/lib")
+  endif()
 endif(WIN32)
-
 
 if(PADDLEINFERENCE_DIRECTORY)
   # Use custom Paddle Inference libs.
@@ -194,3 +196,30 @@ add_library(external_omp STATIC IMPORTED GLOBAL)
 set_property(TARGET external_omp PROPERTY IMPORTED_LOCATION
                                         ${OMP_LIB})
 add_dependencies(external_omp ${PADDLEINFERENCE_PROJECT})
+
+set(ENCRYPT_AUTH_LIBS )
+if(PADDLEINFERENCE_WITH_ENCRYPT_AUTH)
+  add_library(external_fdmodel STATIC IMPORTED GLOBAL)
+  set_property(TARGET external_fdmodel PROPERTY IMPORTED_LOCATION
+                                            ${FDMODEL_LIB})
+  add_library(external_fdmodel_auth STATIC IMPORTED GLOBAL)
+  set_property(TARGET external_fdmodel_auth PROPERTY IMPORTED_LOCATION
+                                            ${FDMODEL_AUTH_LIB}) 
+  add_library(external_fdmodel_model STATIC IMPORTED GLOBAL)
+  set_property(TARGET external_fdmodel_model PROPERTY IMPORTED_LOCATION
+                                              ${FDMODEL_MODEL_LIB})                                                                                                                            
+  add_dependencies(external_fdmodel ${PADDLEINFERENCE_PROJECT})
+  add_dependencies(external_fdmodel_auth ${PADDLEINFERENCE_PROJECT})
+  add_dependencies(external_fdmodel_model ${PADDLEINFERENCE_PROJECT})
+  list(APPEND ENCRYPT_AUTH_LIBS external_fdmodel external_fdmodel_auth external_fdmodel_model)
+endif()
+
+function(enable_paddle_encrypt_auth_link_policy LIBRARY_NAME)
+  if(ENABLE_PADDLE_BACKEND AND PADDLEINFERENCE_WITH_ENCRYPT_AUTH)
+    link_directories(${LEVELDB_LIB_DIR})
+    target_link_libraries(${LIBRARY_NAME} ${ENCRYPT_AUTH_LIBS} -lssl -lcrypto)
+    target_link_libraries(${LIBRARY_NAME} ${LEVELDB_LIB_DIR}/libleveldb.a)
+    set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS
+                          "-Wl,--whole-archive ${LEVELDB_LIB_DIR}/libleveldb.a -Wl,-no-whole-archive")
+  endif()
+endfunction()

@@ -33,7 +33,7 @@ ENV PATH=/home/cmake-3.18.6-Linux-x86_64/bin:$PATH
 
 
 #install triton
-ENV TAG=r22.12
+ENV TAG=r21.10
 RUN git clone https://github.com/triton-inference-server/server.git -b $TAG && \
    cd server && \
    mkdir -p build/tritonserver/install && \
