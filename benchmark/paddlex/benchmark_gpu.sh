@@ -13,11 +13,13 @@ fi
 ./benchmark_ppcls --model PP-LCNet_x1_0 --image ppcls_cls_demo.JPEG --config_path $CONFIG_PATH
 ./benchmark_ppcls --model SwinTransformer-Base --image ppcls_cls_demo.JPEG --config_path $CONFIG_PATH
 ./benchmark_ppcls --model ResNet50 --image ppcls_cls_demo.JPEG --config_path $CONFIG_PATH
+./benchmark_ppcls --model CLIP_vit_base_patch16_224 --image ppcls_cls_demo.JPEG --config_path $CONFIG_PATH
 
 # PaddleDetection
 ./benchmark_ppdet --model PP-YOLOE+_crn_l_80e --image ppdet_det_img.jpg --config_path $CONFIG_PATH
 ./benchmark_ppdet --model rt_detr_hgnetv2_l --image ppdet_det_img.jpg --config_path $CONFIG_PATH
 ./benchmark_ppdet --model PP-PicoDet_s_320_lcnet --image ppdet_det_img.jpg --config_path $CONFIG_PATH
+./benchmark_ppdet --model dino_r50_4scale --image ppdet_det_img.jpg --config_path $CONFIG_PATH
 
 # PaddleSeg
 ./benchmark_ppseg --model OCRNet_HRNetW48 --image ppseg_cityscapes_demo.png --config_path $CONFIG_PATH
