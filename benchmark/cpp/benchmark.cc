@@ -303,13 +303,40 @@ static void showInputInfos(int argc, char* argv[]) {
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
   std::string model_name, params_name, config_name;
+  std::string model_file, params_file;
   auto model_format = fastdeploy::ModelFormat::PADDLE;
-  if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
-                               &model_format, config_info, false)) {
-    return;
+  if (FLAGS_model_file != "UNKNOWN") {
+    // Set model file/param/format via command line
+    if (FLAGS_model != "") {
+      model_file = FLAGS_model + sep + FLAGS_model_file;
+      params_file = FLAGS_model + sep + FLAGS_params_file;
+    } else {
+      model_file = FLAGS_model_file;
+      params_file = FLAGS_params_file;
+    }
+    model_format = GetModelFormat(FLAGS_model_format);
+    if (model_format == fastdeploy::ModelFormat::PADDLE &&
+        FLAGS_params_file == "") {
+      if (config_info["backend"] != "lite") {
+        std::cout << "[ERROR] params_file can not be empty for PADDLE"
+                  << " format, Please, set your custom params_file manually."
+                  << std::endl;
+        return;
+      } else {
+        std::cout << "[INFO] Will using the lite light api for: " << model_file
+                  << std::endl;
+      }
+    }
+  } else {
+    // Set model file/param/format via model dir (only support
+    // for Paddle model format now)
+    if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
+                                 &model_format, config_info, false)) {
+      return;
+    }
+    model_file = FLAGS_model + sep + model_name;
+    params_file = FLAGS_model + sep + params_name;
   }
-  auto model_file = FLAGS_model + sep + model_name;
-  auto params_file = FLAGS_model + sep + params_name;
 
   option.SetModelPath(model_file, params_file, model_format);
 
