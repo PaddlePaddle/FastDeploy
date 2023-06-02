@@ -36,7 +36,7 @@ download ResNet50.tgz
 
 # PaddleDetection
 download PP-YOLOE+_crn_l_80e.tgz
-download RT-DETR_R50vd_6x.tgz
+download rt_detr_hgnetv2_l.tgz
 download PP-PicoDet_s_320_lcnet.tgz
 
 # PaddleSeg
@@ -48,6 +48,8 @@ download SegFormer-B0.tgz
 # PaddleOCR
 download PP-OCRv4-mobile-rec.tgz
 download PP-OCRv4-server-rec.tgz
+download PP-OCRv4-mobile-det.tgz
+download PP-OCRv4-server-det.tgz
 
 # PP-ShiTuV2
 download PP-ShiTuv2-rec.tgz
@@ -70,6 +72,7 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy_paddlex_2_0/ppseg_ade_val_512x51
 
 # PaddleOCR
 wget https://bj.bcebos.com/paddlehub/fastdeploy_paddlex_2_0/ppocrv4_word_1.jpg
+wget https://bj.bcebos.com/paddlehub/fastdeploy_paddlex_2_0/ppocrv4_det_1.jpg
 wget https://bj.bcebos.com/paddlehub/fastdeploy_paddlex_2_0/ppocr_keys_v1.txt
 
 # PP-ShiTuV2
