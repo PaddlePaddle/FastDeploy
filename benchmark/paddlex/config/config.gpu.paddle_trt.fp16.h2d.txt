@@ -1,0 +1,14 @@
+device: gpu
+device_id: 0
+cpu_thread_nums: 1
+warmup: 200
+repeat: 1000
+backend: paddle_trt
+profile_mode: runtime
+include_h2d_d2h: true
+use_fp16: true
+collect_memory_info: false
+sampling_interval: 1
+precision_compare: false
+xpu_l3_cache: 0
+result_path: benchmark_gpu_paddle_trt_fp16_h2d.txt

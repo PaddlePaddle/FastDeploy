@@ -1,0 +1,16 @@
+build
+*.jpg
+*.jpeg
+*.JPEG
+*.png
+*.PNG
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.pdmodel
+*.pdiparams
+*.pdiparams.info
+*.yaml
+*.yml
+log.txt
