@@ -18,7 +18,7 @@ fi
 
 # PaddleDetection
 ./benchmark_ppdet --model PP-YOLOE+_crn_l_80e --image ppdet_det_img.jpg --config_path $CONFIG_PATH
-./benchmark_ppdet --model RT-DETR_R50vd_6x --image ppdet_det_img.jpg --config_path $CONFIG_PATH
+./benchmark_ppdet --model rt_detr_hgnetv2_l --image ppdet_det_img.jpg --config_path $CONFIG_PATH
 ./benchmark_ppdet --model PP-PicoDet_s_320_lcnet --image ppdet_det_img.jpg --config_path $CONFIG_PATH
 
 # PaddleSeg
@@ -30,6 +30,8 @@ fi
 # PaddleOCR
 ./benchmark_ppocr_rec --model PP-OCRv4-mobile-rec --image ppocrv4_word_1.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH
 ./benchmark_ppocr_rec --model PP-OCRv4-server-rec --image ppocrv4_word_1.jpg --rec_label_file ppocr_keys_v1.txt --config_path $CONFIG_PATH
+./benchmark_ppocr_det --model PP-OCRv4-mobile-det --image ppocrv4_det_1.jpg --config_path $CONFIG_PATH
+./benchmark_ppocr_det --model PP-OCRv4-server-det --image ppocrv4_det_1.jpg --config_path $CONFIG_PATH
 
 # PP-ShiTuV2
 ./benchmark_ppshituv2_rec --model PP-ShiTuv2-rec --image ppshituv2_wangzai.png --config_path $CONFIG_PATH
