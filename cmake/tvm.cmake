@@ -30,7 +30,7 @@ set(DLPACK_PATH "${THIRD_PARTY_PATH}/install/dlpack")
 execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory "${DLPACK_PATH}")
 execute_process(COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${PROJECT_SOURCE_DIR}/third_party/dlpack"
-        "${THIRD_PARTY_PATH}/install/")
+        "${THIRD_PARTY_PATH}/install/dlpack")
 include_directories(${DLPACK_PATH}/include)
 
 set(DMLC_CORE_PATH "${THIRD_PARTY_PATH}/install/dmlc-core")

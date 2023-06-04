@@ -4,7 +4,7 @@
 
 本目录下提供`infer_ppyoloe_demo.cc`快速完成PPDetection模型使用TVM加速部署的示例。
 
-## 转换模型并运行
+## 运行
 
 ```bash
 # build example

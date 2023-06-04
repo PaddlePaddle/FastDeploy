@@ -244,10 +244,9 @@ class RuntimeOption:
         :param enable_multi_stream: (bool)Whether to enable the multi stream of KunlunXin XPU.
         :param gm_default_size The default size of context global memory of KunlunXin XPU.
         """
-        return self._option.use_kunlunxin(device_id, l3_workspace_size, locked,
-                                          autotune, autotune_file, precision,
-                                          adaptive_seqlen, enable_multi_stream,
-                                          gm_default_size)
+        return self._option.use_kunlunxin(
+            device_id, l3_workspace_size, locked, autotune, autotune_file,
+            precision, adaptive_seqlen, enable_multi_stream, gm_default_size)
 
     def use_cpu(self):
         """Inference with CPU
@@ -271,7 +270,7 @@ class RuntimeOption:
 
     def disable_valid_backend_check(self):
         """ Disable checking validity of backend during inference
-        """        
+        """
         return self._option.disable_valid_backend_check()
 
     def enable_valid_backend_check(self):
@@ -315,6 +314,11 @@ class RuntimeOption:
         """Use ONNX Runtime backend, support inference Paddle/ONNX model on CPU/Nvidia GPU.
         """
         return self._option.use_ort_backend()
+
+    def use_tvm_backend(self):
+        """Use TVM Runtime backend, support inference TVM model on CPU.
+        """
+        return self._option.use_tvm_backend()
 
     def use_trt_backend(self):
         """Use TensorRT backend, support inference Paddle/ONNX model on Nvidia GPU.
