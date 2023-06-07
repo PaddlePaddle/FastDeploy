@@ -49,6 +49,14 @@
 #include "fastdeploy/runtime/backends/sophgo/sophgo_backend.h"
 #endif
 
+#ifdef ENABLE_HORIZON_BACKEND
+#include "fastdeploy/runtime/backends/horizon/horizon_backend.h"
+#endif
+
+#ifdef ENABLE_TVM_BACKEND
+#include "fastdeploy/runtime/backends/tvm/tvm_backend.h"
+#endif
+
 namespace fastdeploy {
 
 bool AutoSelectBackend(RuntimeOption& option) {
@@ -155,6 +163,10 @@ bool Runtime::Init(const RuntimeOption& _option) {
     CreateSophgoNPUBackend();
   } else if (option.backend == Backend::POROS) {
     CreatePorosBackend();
+  } else if (option.backend == Backend::HORIZONNPU) {
+    CreateHorizonBackend();
+  } else if (option.backend == Backend::TVM) {
+    CreateTVMBackend();
   } else {
     std::string msg = Str(GetAvailableBackends());
     FDERROR << "The compiled FastDeploy only supports " << msg << ", "
@@ -192,7 +204,15 @@ bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
 }
 
 bool Runtime::Infer() {
-  bool result = backend_->Infer(input_tensors_, &output_tensors_, false);
+  bool result = false;
+  if (option.device == Device::KUNLUNXIN) {
+    // FDTensor SetExternalData is not support for Device::KUNLUNXIN
+    // now, so, we need to set copy_to_fd as 'true'.
+    result = backend_->Infer(input_tensors_, &output_tensors_, true);
+  } else {
+    result = backend_->Infer(input_tensors_, &output_tensors_, false);
+  }
+
   for (auto& tensor : output_tensors_) {
     tensor.device_id = option.device_id;
   }
@@ -280,6 +300,19 @@ void Runtime::CreateOpenVINOBackend() {
          << "." << std::endl;
 }
 
+void Runtime::CreateTVMBackend() {
+#ifdef ENABLE_TVM_BACKEND
+  backend_ = utils::make_unique<TVMBackend>();
+  FDASSERT(backend_->Init(option), "Failed to initialize TVM backend.");
+#else
+  FDASSERT(false,
+           "TVMBackend is not available, please compiled with "
+           "ENABLE_TVM_BACKEND=ON.");
+#endif
+  FDINFO << "Runtime initialized with Backend::TVM in " << option.device << "."
+         << std::endl;
+}
+
 void Runtime::CreateOrtBackend() {
 #ifdef ENABLE_ORT_BACKEND
   backend_ = utils::make_unique<OrtBackend>();
@@ -332,6 +365,18 @@ void Runtime::CreateRKNPU2Backend() {
            "ENABLE_RKNPU2_BACKEND=ON.");
 #endif
   FDINFO << "Runtime initialized with Backend::RKNPU2 in " << option.device
+         << "." << std::endl;
+}
+
+void Runtime::CreateHorizonBackend() {
+#ifdef ENABLE_HORIZON_BACKEND
+  backend_ = utils::make_unique<HorizonBackend>();
+  FDASSERT(backend_->Init(option), "Failed to initialize Horizon backend.");
+#else
+  FDASSERT(false, "HorizonBackend is not available, please compiled with ",
+           " ENABLE_HORIZON_BACKEND=ON.");
+#endif
+  FDINFO << "Runtime initialized with Backend::HORIZONNPU in " << option.device
          << "." << std::endl;
 }
 

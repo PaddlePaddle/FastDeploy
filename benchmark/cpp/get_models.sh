@@ -102,19 +102,18 @@ download_common_file() {
 }
 
 # PaddleDetection
+download_fd_model_zxvf ppyoloe_crn_l_300e_coco.tgz
+download_fd_model_zxvf picodet_l_640_coco_lcnet.tgz
+download_fd_model_zxvf ppyoloe_plus_crn_m_80e_coco.tgz
+download_fd_model_zxvf yolox_s_300e_coco.tgz
+download_fd_model_zxvf yolov5_s_300e_coco.tgz
+download_fd_model_zxvf yolov6_s_300e_coco.tgz
+download_fd_model_zxvf yolov7_l_300e_coco.tgz
+download_fd_model_zxvf yolov8_s_500e_coco.tgz
 
-download_fd_model_zxvf ppyoloe_crn_l_300e_coco_no_nms.tgz
-download_fd_model_zxvf picodet_l_640_coco_lcnet_no_nms.tgz
-download_fd_model_zxvf ppyoloe_plus_crn_m_80e_coco_no_nms.tgz
-download_fd_model_zxvf yolox_s_300e_coco_no_nms.tgz
-download_fd_model_zxvf yolov5_s_300e_coco_no_nms.tgz
-download_fd_model_zxvf yolov6_s_300e_coco_no_nms.tgz
-download_fd_model_zxvf yolov7_l_300e_coco_no_nms.tgz
-download_fd_model_zxvf yolov8_s_500e_coco_no_nms.tgz
 download_fd_model_zxvf ppyolo_r50vd_dcn_1x_coco.tgz
 download_fd_model_zxvf ppyolov2_r101vd_dcn_365e_coco.tgz
 download_fd_model_zxvf yolov3_darknet53_270e_coco.tgz
-download_fd_model_zxvf yolox_s_300e_coco.tgz
 download_fd_model_zxvf faster_rcnn_r50_vd_fpn_2x_coco.tgz
 download_fd_model_zxvf mask_rcnn_r50_1x_coco.tgz
 download_fd_model_zxvf ssd_mobilenet_v1_300_120e_voc.tgz
@@ -123,10 +122,8 @@ download_fd_model_zxvf ssdlite_mobilenet_v1_300_coco.tgz
 download_fd_model_zxvf rtmdet_l_300e_coco.tgz
 download_fd_model_zxvf rtmdet_s_300e_coco.tgz
 download_fd_model_zxvf yolov5_l_300e_coco.tgz
-download_fd_model_zxvf yolov5_s_300e_coco.tgz
 download_fd_model_zxvf yolov6_l_300e_coco.tgz
 download_fd_model_zxvf yolov6_s_400e_coco.tgz
-download_fd_model_zxvf yolov7_l_300e_coco.tgz
 download_fd_model_zxvf cascade_rcnn_r50_fpn_1x_coco.tgz
 download_fd_model_zxvf cascade_rcnn_r50_vd_fpn_ssld_2x_coco.tgz
 download_fd_model_zxvf faster_rcnn_enhance_3x_coco.tgz
@@ -140,10 +137,27 @@ download_fd_model_zxvf ttfnet_darknet53_1x_coco.tgz
 download_fd_model_zxvf yolov8_x_500e_coco.tgz
 download_fd_model_zxvf yolov8_l_500e_coco.tgz
 download_fd_model_zxvf yolov8_m_500e_coco.tgz
-download_fd_model_zxvf yolov8_s_500e_coco.tgz
 download_fd_model_zxvf yolov8_n_500e_coco.tgz
 download_fd_model_zxvf picodet_l_320_coco_lcnet.tgz
 download_fd_model_zxvf yolov7_x_300e_coco.tgz
+
+download_fd_model_zxvf ppyoloe_crn_l_300e_coco_trt_nms.tgz
+download_fd_model_zxvf picodet_l_640_coco_lcnet_trt_nms.tgz
+download_fd_model_zxvf ppyoloe_plus_crn_m_80e_coco_trt_nms.tgz
+download_fd_model_zxvf yolox_s_300e_coco_trt_nms.tgz
+download_fd_model_zxvf yolov5_s_300e_coco_trt_nms.tgz
+download_fd_model_zxvf yolov6_s_300e_coco_trt_nms.tgz
+download_fd_model_zxvf yolov7_l_300e_coco_trt_nms.tgz
+download_fd_model_zxvf yolov8_s_500e_coco_trt_nms.tgz
+
+download_fd_model_zxvf ppyoloe_crn_l_300e_coco_no_nms.tgz
+download_fd_model_zxvf picodet_l_640_coco_lcnet_no_nms.tgz
+download_fd_model_zxvf ppyoloe_plus_crn_m_80e_coco_no_nms.tgz
+download_fd_model_zxvf yolox_s_300e_coco_no_nms.tgz
+download_fd_model_zxvf yolov5_s_300e_coco_no_nms.tgz
+download_fd_model_zxvf yolov6_s_300e_coco_no_nms.tgz
+download_fd_model_zxvf yolov7_l_300e_coco_no_nms.tgz
+download_fd_model_zxvf yolov8_s_500e_coco_no_nms.tgz
 
 # PaddleClas
 download_fd_model_zxvf PPLCNet_x1_0_infer.tgz
@@ -198,6 +212,7 @@ download_common_model_xvf https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP
 download_common_model_xvf https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar ch_ppocr_mobile_v2.0_cls_infer.tar
 download_common_model_xvf https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_det_infer.tar ch_PP-OCRv2_det_infer.tar
 download_common_model_xvf https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_rec_infer.tar ch_PP-OCRv2_rec_infer.tar
+download_common_model_xvf https://paddleocr.bj.bcebos.com/ppstructure/models/slanet/en_ppstructure_mobile_v2.0_SLANet_infer.tar en_ppstructure_mobile_v2.0_SLANet_infer.tar
 
 # download images
 download_common_file https://bj.bcebos.com/paddlehub/fastdeploy/rec_img.jpg rec_img.jpg

@@ -86,14 +86,14 @@ nvidia-docker run -i --rm --name ${docker_name} \
            -e "http_proxy=${http_proxy}" \
            -e "https_proxy=${https_proxy}" \
            -e "trt_version=${trt_version}"\
-           nvcr.io/nvidia/tritonserver:21.10-py3-min \
+           nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04  \
            bash -c \
            'export https_proxy_tmp=${https_proxy}
             export http_proxy_tmp=${http_proxy}
             cd /workspace/fastdeploy/python;
             rm -rf .setuptools-cmake-build dist build fastdeploy/libs/third_libs;
             apt-get update;
-            apt-get install -y --no-install-recommends patchelf python3-dev python3-pip rapidjson-dev;
+            apt-get install -y --no-install-recommends patchelf python3-dev python3-pip rapidjson-dev git;
             unset http_proxy
             unset https_proxy
             ln -s /usr/bin/python3 /usr/bin/python;

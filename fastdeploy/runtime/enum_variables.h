@@ -35,9 +35,11 @@ enum Backend {
   PDINFER,  ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
   POROS,    ///< Poros, support TorchScript format model, CPU / Nvidia GPU
   OPENVINO,   ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
-  LITE,       ///< Paddle Lite, support Paddle format model, ARM CPU only
+  LITE,       ///< Paddle Lite, support Paddle format model, ARM CPU / ARM GPU
   RKNPU2,     ///< RKNPU2, support RKNN format model, Rockchip NPU only
   SOPHGOTPU,  ///< SOPHGOTPU, support SOPHGO format model, Sophgo TPU only
+  HORIZONNPU,     ///< HORIZONNPU, support Horizon format model, Horizon NPU
+  TVM,  ///< TVMBackend, support TVM format model, CPU / Nvidia GPU
 };
 
 /**
@@ -60,7 +62,8 @@ enum FASTDEPLOY_DECL Device {
   KUNLUNXIN,
   ASCEND,
   SOPHGOTPUD,
-  DIRECTML
+  DIRECTML,
+  SUNRISENPU,
 };
 
 /*! Deep learning model format */
@@ -71,6 +74,8 @@ enum ModelFormat {
   RKNN,         ///< Model with RKNN format
   TORCHSCRIPT,  ///< Model with TorchScript format
   SOPHGO,       ///< Model with SOPHGO format
+  HORIZON,      ///< Model with HORIZON format
+  TVMFormat,    ///< Model with TVM format
 };
 
 /// Describle all the supported backends for specified model format
@@ -80,20 +85,24 @@ static std::map<ModelFormat, std::vector<Backend>>
                       Backend::ORT, Backend::OPENVINO, Backend::TRT}},
   {ModelFormat::ONNX, {Backend::ORT, Backend::OPENVINO, Backend::TRT}},
   {ModelFormat::RKNN, {Backend::RKNPU2}},
+  {ModelFormat::HORIZON, {Backend::HORIZONNPU}},
   {ModelFormat::TORCHSCRIPT, {Backend::POROS}},
-  {ModelFormat::SOPHGO, {Backend::SOPHGOTPU}}
+  {ModelFormat::SOPHGO, {Backend::SOPHGOTPU}},
+  {ModelFormat::TVMFormat, {Backend::TVM}}
 };
 
 /// Describle all the supported backends for specified device
 static std::map<Device, std::vector<Backend>>
     s_default_backends_by_device = {
   {Device::CPU, {Backend::LITE, Backend::PDINFER, Backend::ORT,
-                Backend::OPENVINO, Backend::POROS}},
-  {Device::GPU, {Backend::PDINFER, Backend::ORT, Backend::TRT, Backend::POROS}},
+                Backend::OPENVINO, Backend::POROS, Backend::TVM}},
+  {Device::GPU, {Backend::LITE, Backend::PDINFER, Backend::ORT,
+                Backend::TRT, Backend::POROS, Backend::TVM}},
   {Device::RKNPU, {Backend::RKNPU2}},
+  {Device::SUNRISENPU, {Backend::HORIZONNPU}},
   {Device::IPU, {Backend::PDINFER}},
   {Device::TIMVX, {Backend::LITE}},
-  {Device::KUNLUNXIN, {Backend::LITE}},
+  {Device::KUNLUNXIN, {Backend::LITE, Backend::PDINFER}},
   {Device::ASCEND, {Backend::LITE}},
   {Device::SOPHGOTPUD, {Backend::SOPHGOTPU}},
   {Device::DIRECTML, {Backend::ORT}}

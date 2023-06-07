@@ -15,6 +15,7 @@
 #pragma once
 #include "fastdeploy/vision/detection/ppdet/base.h"
 #include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms_rotated.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -61,12 +62,12 @@ class FASTDEPLOY_DECL SOLOv2 : public PPDetBase {
    * \param[in] model_format Model format of the loaded model, default is Paddle format
    */
   SOLOv2(const std::string& model_file, const std::string& params_file,
-          const std::string& config_file,
-          const RuntimeOption& custom_option = RuntimeOption(),
-          const ModelFormat& model_format = ModelFormat::PADDLE)
+         const std::string& config_file,
+         const RuntimeOption& custom_option = RuntimeOption(),
+         const ModelFormat& model_format = ModelFormat::PADDLE)
       : PPDetBase(model_file, params_file, config_file, custom_option,
                   model_format) {
-    valid_cpu_backends = { Backend::PDINFER};
+    valid_cpu_backends = {Backend::PDINFER};
     valid_gpu_backends = {Backend::PDINFER, Backend::TRT};
     initialized = Initialize();
   }
@@ -91,13 +92,14 @@ class FASTDEPLOY_DECL PPYOLOE : public PPDetBase {
       : PPDetBase(model_file, params_file, config_file, custom_option,
                   model_format) {
     valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
-                          Backend::LITE};
+                          Backend::LITE, Backend::TVM};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_timvx_backends = {Backend::LITE};
     valid_kunlunxin_backends = {Backend::LITE};
     valid_rknpu_backends = {Backend::RKNPU2};
     valid_ascend_backends = {Backend::LITE};
     valid_sophgonpu_backends = {Backend::SOPHGOTPU};
+    valid_horizon_backends = {Backend::HORIZONNPU};
     initialized = Initialize();
   }
 
@@ -437,6 +439,52 @@ class FASTDEPLOY_DECL GFL : public PPDetBase {
   }
 
   virtual std::string ModelName() const { return "PaddleDetection/GFL"; }
+};
+
+class FASTDEPLOY_DECL PaddleDetectionModel : public PPDetBase {
+ public:
+  PaddleDetectionModel(const std::string& model_file,
+                       const std::string& params_file,
+                       const std::string& config_file,
+                       const RuntimeOption& custom_option = RuntimeOption(),
+                       const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    CheckArch();
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
+                          Backend::LITE};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_timvx_backends = {Backend::LITE};
+    valid_kunlunxin_backends = {Backend::LITE};
+    valid_rknpu_backends = {Backend::RKNPU2};
+    valid_ascend_backends = {Backend::LITE};
+    valid_sophgonpu_backends = {Backend::SOPHGOTPU};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetectionModel"; }
+};
+
+class FASTDEPLOY_DECL PPYOLOER : public PPDetBase {
+ public:
+  PPYOLOER(const std::string& model_file, const std::string& params_file,
+           const std::string& config_file,
+           const RuntimeOption& custom_option = RuntimeOption(),
+           const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                  model_format) {
+    valid_cpu_backends = {Backend::PDINFER, Backend::OPENVINO, Backend::ORT,
+                          Backend::LITE};
+    valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+    valid_timvx_backends = {Backend::LITE};
+    valid_kunlunxin_backends = {Backend::LITE};
+    valid_rknpu_backends = {Backend::RKNPU2};
+    valid_ascend_backends = {Backend::LITE};
+    valid_sophgonpu_backends = {Backend::SOPHGOTPU};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PPYOLOER"; }
 };
 
 }  // namespace detection

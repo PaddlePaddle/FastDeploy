@@ -41,7 +41,7 @@ def parse_arguments():
         required=True,
         type=int,
         default=300,
-        help="number of iterations for computing performace.")
+        help="number of iterations for computing performance.")
     parser.add_argument(
         "--device",
         default="cpu",

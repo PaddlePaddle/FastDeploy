@@ -59,7 +59,7 @@ class Vad : public fastdeploy::FastDeployModel {
   std::vector<fastdeploy::FDTensor> inputTensors_;
   std::vector<fastdeploy::FDTensor> outputTensors_;
   // model states
-  bool triggerd_ = false;
+  bool triggered_ = false;
   unsigned int speech_start_ = 0;
   unsigned int speech_end_ = 0;
   unsigned int temp_end_ = 0;

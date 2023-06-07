@@ -62,18 +62,26 @@ void BindVision(pybind11::module& m) {
       .def(pybind11::init())
       .def_readwrite("label_ids", &vision::ClassifyResult::label_ids)
       .def_readwrite("scores", &vision::ClassifyResult::scores)
+      .def_readwrite("feature", &vision::ClassifyResult::feature)
       .def(pybind11::pickle(
           [](const vision::ClassifyResult& c) {
-            return pybind11::make_tuple(c.label_ids, c.scores);
+            if (c.feature.empty()) {
+              return pybind11::make_tuple(c.label_ids, c.scores);
+            }
+            return pybind11::make_tuple(c.label_ids, c.scores, c.feature);
           },
           [](pybind11::tuple t) {
-            if (t.size() != 2)
+            if ((t.size() != 2) && (t.size() != 3)) {
               throw std::runtime_error(
                   "vision::ClassifyResult pickle with invalid state!");
+            }
 
             vision::ClassifyResult c;
             c.label_ids = t[0].cast<std::vector<int32_t>>();
             c.scores = t[1].cast<std::vector<float>>();
+            if (t.size() == 3) {
+              c.feature = t[2].cast<std::vector<float>>();
+            }
 
             return c;
           }))
@@ -84,13 +92,14 @@ void BindVision(pybind11::module& m) {
       .def(pybind11::init())
       .def_readwrite("boxes", &vision::DetectionResult::boxes)
       .def_readwrite("scores", &vision::DetectionResult::scores)
+      .def_readwrite("rotated_boxes", &vision::DetectionResult::rotated_boxes)
       .def_readwrite("label_ids", &vision::DetectionResult::label_ids)
       .def_readwrite("masks", &vision::DetectionResult::masks)
       .def_readwrite("contain_masks", &vision::DetectionResult::contain_masks)
       .def(pybind11::pickle(
           [](const vision::DetectionResult& d) {
-            return pybind11::make_tuple(d.boxes, d.scores, d.label_ids, d.masks,
-                                        d.contain_masks);
+            return pybind11::make_tuple(d.boxes, d.scores, d.rotated_boxes,
+                                        d.label_ids, d.masks, d.contain_masks);
           },
           [](pybind11::tuple t) {
             if (t.size() != 5)
@@ -99,6 +108,7 @@ void BindVision(pybind11::module& m) {
 
             vision::DetectionResult d;
             d.boxes = t[0].cast<std::vector<std::array<float, 4>>>();
+            d.rotated_boxes = t[0].cast<std::vector<std::array<float, 8>>>();
             d.scores = t[1].cast<std::vector<float>>();
             d.label_ids = t[2].cast<std::vector<int32_t>>();
             d.masks = t[3].cast<std::vector<vision::Mask>>();

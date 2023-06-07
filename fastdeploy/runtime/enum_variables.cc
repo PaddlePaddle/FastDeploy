@@ -32,6 +32,10 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
     out << "Backend::POROS";
   } else if (backend == Backend::LITE) {
     out << "Backend::PDLITE";
+  } else if (backend == Backend::HORIZONNPU) {
+    out << "Backend::HORIZONNPU";
+  } else if (backend == Backend::TVM) {
+    out << "Backend::TVM";
   } else {
     out << "UNKNOWN-Backend";
   }
@@ -48,6 +52,9 @@ std::ostream& operator<<(std::ostream& out, const Device& d) {
       break;
     case Device::RKNPU:
       out << "Device::RKNPU";
+      break;
+    case Device::SUNRISENPU:
+      out << "Device::SUNRISENPU";
       break;
     case Device::SOPHGOTPUD:
       out << "Device::SOPHGOTPUD";
@@ -81,6 +88,10 @@ std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
     out << "ModelFormat::SOPHGO";
   } else if (format == ModelFormat::TORCHSCRIPT) {
     out << "ModelFormat::TORCHSCRIPT";
+  } else if (format == ModelFormat::HORIZON) {
+    out << "ModelFormat::HORIZON";
+  } else if (format == ModelFormat::TVMFormat) {
+    out << "ModelFormat::TVMFormat";
   } else {
     out << "UNKNOWN-ModelFormat";
   }
@@ -110,8 +121,14 @@ std::vector<Backend> GetAvailableBackends() {
 #ifdef ENABLE_RKNPU2_BACKEND
   backends.push_back(Backend::RKNPU2);
 #endif
+#ifdef ENABLE_HORIZON_BACKEND
+  backends.push_back(Backend::HORIZONNPU);
+#endif
 #ifdef ENABLE_SOPHGO_BACKEND
   backends.push_back(Backend::SOPHGOTPU);
+#endif
+#ifdef ENABLE_TVM_BACKEND
+  backends.push_back(Backend::TVM);
 #endif
   return backends;
 }
