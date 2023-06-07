@@ -23,10 +23,34 @@ namespace fastdeploy {
 void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   option_ = option;
   if (option.device == Device::GPU) {
-    config_.EnableUseGpu(option.gpu_mem_init_size, option.device_id);
+
+
+    auto inference_precision = paddle_infer::PrecisionType::kFloat32;
+    if (option_.inference_precision == "float32"){
+      FDINFO<<"Will inference_precision float32"<<std::endl;
+      inference_precision = paddle_infer::PrecisionType::kFloat32;
+    } else if (option_.inference_precision == "float16"){
+      FDINFO<<"Will inference_precision float16"<<std::endl;
+      inference_precision = paddle_infer::PrecisionType::kHalf;
+    } else if (option_.inference_precision == "bfloat16"){
+      FDINFO<<"Will inference_precision bfloat16"<<std::endl;
+      inference_precision = paddle_infer::PrecisionType::kBf16;
+    } else if (option_.inference_precision == "int8"){
+      FDINFO<<"Will inference_precision int8"<<std::endl;
+      inference_precision = paddle_infer::PrecisionType::kInt8;
+    } else {
+      FDERROR<<"paddle inference only support precision in float32, float16, bfloat16 and int8"<<std::endl;
+    }
+    config_.Exp_DisableMixedPrecisionOps({"feed","fetch"});
+    config_.EnableUseGpu(option.gpu_mem_init_size, option.device_id, inference_precision);
+    // config_.EnableUseGpu(option.gpu_mem_init_size, option.device_id);
     if (option_.switch_ir_debug) {
       FDINFO << "Will Enable ir_debug for Paddle Backend." << std::endl;
       config_.SwitchIrDebug();
+    }
+    if (option_.enable_inference_cutlass){
+      FDINFO<<"Will enable_inference_cutlass"<<std::endl;
+      config_.Exp_EnableUseCutlass();
     }
     if (option_.external_stream_) {
       FDINFO << "Will use external stream for Paddle Backend." << std::endl;
@@ -171,7 +195,9 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
     config_.EnableMemoryOptim();
   }
   BuildOption(option);
-
+  if (option.enable_memory_optimize) {
+    config_.EnableMemoryOptim();
+  }
   // The input/output information get from predictor is not right, use
   // PaddleReader instead now
   std::string model_content = model;
@@ -211,7 +237,6 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
                 << std::endl;
     }
   }
-
   if (option.collect_trt_shape) {
     // Set the shape info file.
     std::string curr_model_dir = "./";
@@ -261,8 +286,10 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
       pass_builder->DeletePass(option.delete_pass_names[i]);
     }
   }
+  if (option.enable_log_info){
+    FDINFO<<"Finish paddle inference config with summary as: "<<std::endl<<config_.Summary()<<std::endl;
+  }
   predictor_ = paddle_infer::CreatePredictor(config_);
-
   auto input_names = predictor_->GetInputNames();
   auto output_names = predictor_->GetOutputNames();
   auto input_dtypes = predictor_->GetInputTypes();

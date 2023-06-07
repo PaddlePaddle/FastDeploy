@@ -125,6 +125,7 @@ inline bool Supported(ModelFormat format, Backend backend) {
                       << format << "." << std::endl;
   return false;
 }
+<<<<<<< HEAD
 
 inline bool Supported(Device device, Backend backend) {
   auto iter = s_default_backends_by_device.find(device);
@@ -143,7 +144,26 @@ inline bool Supported(Device device, Backend backend) {
           << device << "." << std::endl;
   return false;
 }
+=======
+>>>>>>> 602364ba... add option for inference precision and cutlass
 
+inline bool Supported(Device device, Backend backend) {
+  auto iter = s_default_backends_by_device.find(device);
+  if (iter == s_default_backends_by_device.end()) {
+    FDERROR << "Didn't find device is registered in " <<
+              "s_default_backends_by_device." << std::endl;
+    return false;
+  }
+  for (size_t i = 0; i < iter->second.size(); ++i) {
+    if (iter->second[i] == backend) {
+      return true;
+    }
+  }
+  std::string msg = Str(iter->second);
+  FDERROR << backend << " only supports " << msg << ", but now it's "
+          << device << "." << std::endl;
+  return false;
+}
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const Backend& b);
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const Device& d);
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& o, const ModelFormat& f);
