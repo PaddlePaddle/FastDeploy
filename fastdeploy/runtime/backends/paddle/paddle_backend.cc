@@ -191,9 +191,6 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
   } else {
     config_.SetModel(model, params);
   }
-  if (option.enable_memory_optimize) {
-    config_.EnableMemoryOptim();
-  }
   BuildOption(option);
   if (option.enable_memory_optimize) {
     config_.EnableMemoryOptim();
