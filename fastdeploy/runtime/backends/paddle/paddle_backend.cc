@@ -191,10 +191,10 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
   } else {
     config_.SetModel(model, params);
   }
-  BuildOption(option);
   if (option.enable_memory_optimize) {
     config_.EnableMemoryOptim();
   }
+  BuildOption(option);
   // The input/output information get from predictor is not right, use
   // PaddleReader instead now
   std::string model_content = model;
