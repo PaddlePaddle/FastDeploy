@@ -125,7 +125,6 @@ inline bool Supported(ModelFormat format, Backend backend) {
                       << format << "." << std::endl;
   return false;
 }
-<<<<<<< HEAD
 
 inline bool Supported(Device device, Backend backend) {
   auto iter = s_default_backends_by_device.find(device);
@@ -144,8 +143,6 @@ inline bool Supported(Device device, Backend backend) {
           << device << "." << std::endl;
   return false;
 }
-=======
->>>>>>> 602364ba... add option for inference precision and cutlass
 
 inline bool Supported(Device device, Backend backend) {
   auto iter = s_default_backends_by_device.find(device);

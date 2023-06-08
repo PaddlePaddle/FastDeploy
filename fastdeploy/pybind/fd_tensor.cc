@@ -258,8 +258,6 @@ void BindFDTensor(pybind11::module& m) {
                fd_data_type = FDDataType::INT32;
              } else if (data_type == "INT64") {
                fd_data_type = FDDataType::INT64;
-             } else if (data_type == "BF16"){
-               fd_data_type = FDDataType::INT16;
              } else {
                FDASSERT(false,
                         "FDTensor.from_external_data, datatype \"%s\" is not "
