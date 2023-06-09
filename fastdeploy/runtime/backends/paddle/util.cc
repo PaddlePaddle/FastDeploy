@@ -130,7 +130,7 @@ void PaddleTensorToFDTensor(std::unique_ptr<paddle_infer::Tensor>& tensor,
   std::vector<int64_t> shape;
   auto tmp_shape = tensor->shape();
   shape.assign(tmp_shape.begin(), tmp_shape.end());
-  if (copy_to_fd) {
+  if (copy_to_fd) {    
     fd_tensor->Resize(shape, fd_dtype, tensor->name());
     if (fd_tensor->dtype == FDDataType::FP32) {
       tensor->CopyToCpu(static_cast<float*>(fd_tensor->MutableData()));
