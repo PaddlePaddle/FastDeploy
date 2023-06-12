@@ -266,9 +266,13 @@ void BindFDTensor(pybind11::module& m) {
              }
 
              Device fd_data_place;
+	     bool copy = false;
              if (data_place.find("gpu") != data_place.npos) {
                fd_data_place = Device::GPU;
-             } else {
+             } else if (data_place.find("cpu") != data_place.npos) {
+	       copy = true;
+	       fd_data_place = Device::CPU;
+	     } else {
                FDASSERT(false,
                         ("Device type " + data_place +
                          " is not support by FDTensor.from_external_data.")
@@ -277,9 +281,7 @@ void BindFDTensor(pybind11::module& m) {
              void* data_ptr = nullptr;
              data_ptr = reinterpret_cast<void*>(data_addr);
              FDTensor fd_tensor(name);
-             fd_tensor.SetExternalData(shape, fd_data_type,
-                                       static_cast<void*>(data_ptr),
-                                       fd_data_place, device_id);
+	     fd_tensor.SetData(shape, fd_data_type, static_cast<void*>(data_ptr), copy, fd_data_place, device_id);
              return fd_tensor;
            })
       .def("to_dlpack", &FDTensorToDLPack)
