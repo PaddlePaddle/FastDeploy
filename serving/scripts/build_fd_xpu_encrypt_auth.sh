@@ -41,8 +41,11 @@ docker run -i --rm --name build_fd_xpu_auth_dev \
             python setup.py build;
             python setup.py bdist_wheel;
             cd /workspace/fastdeploy;
+            wget ${PADDLEINFERENCE_URL} && tar -zxvf ${PADDLEINFERENCE_URL##*/}
+            mv ${PADDLEINFERENCE_URL##*/} paddle_inference
+            PADDLEINFERENCE_DIRECTORY=${PWD}/paddle_inference
             rm -rf build; mkdir build; cd build;
-            cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy_install -DWITH_KUNLUNXIN=ON -DENABLE_PADDLE_BACKEND=ON -DPADDLEINFERENCE_URL=${PADDLEINFERENCE_URL} -DPADDLEINFERENCE_WITH_ENCRYPT=ON -DPADDLEINFERENCE_WITH_AUTH=ON -DENABLE_VISION=ON -DENABLE_BENCHMARK=ON -DLIBRARY_NAME=fastdeploy_runtime;
+            cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy_install -DWITH_KUNLUNXIN=ON -DENABLE_PADDLE_BACKEND=ON -DPADDLEINFERENCE_DIRECTORY=${PADDLEINFERENCE_DIRECTORY} -DENABLE_BENCHMARK=ON -DLIBRARY_NAME=fastdeploy_runtime;
             make -j`nproc`;
             make install;
             # fix the link error of libbkcl.so

@@ -520,12 +520,9 @@ if(MSVC)
 endif()
 
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
-# Note(qiuyanjun): Currently, we need to manually link the whole
-# leveldb static lib into fastdeploy lib if PADDLEINFERENCE_WITH_ENCRYPT_AUTH
-# is 'ON'. Will remove this policy while the bug of paddle inference lib with
-# auth & encrypt fixed.
+
 if(ENABLE_PADDLE_BACKEND)
-  enable_paddle_encrypt_auth_link_policy(${LIBRARY_NAME})
+  set_paddle_encrypt_auth_link_policy(${LIBRARY_NAME})
 endif()
 
 if(ANDROID)

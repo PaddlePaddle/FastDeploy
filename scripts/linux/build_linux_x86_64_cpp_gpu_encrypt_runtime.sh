@@ -21,7 +21,7 @@ set +x
 # -------------------------------------------------------------------------------
 readonly ROOT_PATH=$(pwd)
 readonly BUILD_ROOT=build/Linux
-readonly BUILD_DIR="${BUILD_ROOT}/x86_64_gpu"
+readonly BUILD_DIR="${BUILD_ROOT}/x86_64_gpu"  
 
 # -------------------------------------------------------------------------------
 #                                 tasks
@@ -73,12 +73,10 @@ __build_fastdeploy_linux_x86_64_gpu_shared_custom_paddle() {
         -DENABLE_ORT_BACKEND=ON \
         -DENABLE_TRT_BACKEND=ON \
         -DENABLE_PADDLE_BACKEND=ON \
-        -DPADDLEINFERENCE_URL=${PADDLEINFERENCE_URL} \
+        -DPADDLEINFERENCE_DIRECTORY=${PADDLEINFERENCE_DIRECTORY} \
         -DPADDLEINFERENCE_VERSION=${PADDLEINFERENCE_VERSION} \
         -DENABLE_OPENVINO_BACKEND=ON \
         -DENABLE_PADDLE2ONNX=ON \
-        -DPADDLEINFERENCE_WITH_ENCRYPT=ON \
-        -DPADDLEINFERENCE_WITH_AUTH=OFF \
         -DENABLE_VISION=OFF \
         -DENABLE_BENCHMARK=OFF \
         -DBUILD_EXAMPLES=OFF \
@@ -88,7 +86,7 @@ __build_fastdeploy_linux_x86_64_gpu_shared_custom_paddle() {
         -Wno-dev ../../.. && make -j8 && make install
 
   echo "-- [INFO][built][x86_64_gpu}][${FASDEPLOY_INSTALL_DIR}]"
-  echo "-- [INFO][${PADDLEINFERENCE_URL}][${PADDLEINFERENCE_VERSION}]"
+  echo "-- [INFO][${PADDLEINFERENCE_DIRECTORY}][${PADDLEINFERENCE_VERSION}]"
 }
 
 main() {
@@ -101,7 +99,7 @@ main() {
 main
 
 # Usage:
-# export PADDLEINFERENCE_URL=xxx
+# export PADDLEINFERENCE_DIRECTORY=xxx
 # export PADDLEINFERENCE_VERSION=xxx
 # export CUDA_DIRECTOY=/usr/local/cuda
 # export TRT_DIRECTORY=/home/qiuyanjun/TensorRT-8.5.2.2

@@ -22,8 +22,6 @@ endif()
 
 # Custom options for Paddle Inference backend
 option(PADDLEINFERENCE_DIRECTORY "Directory of custom Paddle Inference library" OFF)
-option(PADDLEINFERENCE_WITH_ENCRYPT "Whether the Paddle Inference is built with FD encryption only" OFF)
-option(PADDLEINFERENCE_WITH_AUTH "Whether the Paddle Inference is built with FD encryption and auth" OFF)
 
 set(PADDLEINFERENCE_PROJECT "extern_paddle_inference")
 set(PADDLEINFERENCE_PREFIX_DIR ${THIRD_PARTY_PATH}/paddle_inference)
@@ -44,42 +42,6 @@ if(PADDLEINFERENCE_DIRECTORY)
 endif()
 
 include_directories(${PADDLEINFERENCE_INC_DIR})
-if(WIN32)
-  set(PADDLEINFERENCE_COMPILE_LIB
-      "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/paddle_inference.lib"
-      CACHE FILEPATH "paddle_inference compile library." FORCE)
-  set(DNNL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mkldnn/lib/mkldnn.lib")
-  set(OMP_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mklml/lib/libiomp5md.lib")
-  set(P2O_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/paddle2onnx/lib/paddle2onnx.lib")
-  set(ORT_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/onnxruntime/lib/onnxruntime.lib")
-elseif(APPLE)
-  set(PADDLEINFERENCE_COMPILE_LIB
-      "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.dylib"
-      CACHE FILEPATH "paddle_inference compile library." FORCE)
-  set(DNNL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mkldnn/lib/libdnnl.so.2")
-  set(OMP_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mklml/lib/libiomp5.so")
-  set(P2O_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/paddle2onnx/lib/libpaddle2onnx.dylib")
-  set(ORT_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/onnxruntime/lib/libonnxruntime.dylib")
-else()
-  set(PADDLEINFERENCE_COMPILE_LIB
-      "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so"
-      CACHE FILEPATH "paddle_inference compile library." FORCE)
-  set(DNNL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mkldnn/lib/libdnnl.so.2")
-  set(OMP_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mklml/lib/libiomp5.so")
-  set(P2O_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/paddle2onnx/lib/libpaddle2onnx.so")
-  set(ORT_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/onnxruntime/lib/libonnxruntime.so")
-  if(PADDLEINFERENCE_WITH_ENCRYPT)
-    set(FDMODEL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/fdmodel/lib/libfastdeploy_wenxin.so")
-    set(FDMODEL_MODEL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/fdmodel/lib/libfastdeploy_model.so.2.0.0")
-    if(WITH_KUNLUNXIN)
-      set(LEVELDB_LIB_DIR "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/leveldb/lib")
-    endif()
-  endif()
-  if(PADDLEINFERENCE_WITH_AUTH)
-    set(FDMODEL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/fdmodel/lib/libfastdeploy_wenxin.so")
-    set(FDMODEL_AUTH_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/fdmodel/lib/libfastdeploy_auth.so")
-  endif()
-endif(WIN32)
 
 if(PADDLEINFERENCE_DIRECTORY)
   # Use custom Paddle Inference libs.
@@ -174,6 +136,51 @@ else()
 
 endif(PADDLEINFERENCE_DIRECTORY)
 
+# check libs
+set(PADDLEINFERENCE_WITH_AUTH OFF)
+set(PADDLEINFERENCE_WITH_ENCRYPT OFF)
+if(WIN32)
+  set(PADDLEINFERENCE_COMPILE_LIB
+      "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/paddle_inference.lib"
+      CACHE FILEPATH "paddle_inference compile library." FORCE)
+  set(DNNL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mkldnn/lib/mkldnn.lib")
+  set(OMP_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mklml/lib/libiomp5md.lib")
+  set(P2O_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/paddle2onnx/lib/paddle2onnx.lib")
+  set(ORT_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/onnxruntime/lib/onnxruntime.lib")
+elseif(APPLE)
+  set(PADDLEINFERENCE_COMPILE_LIB
+      "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.dylib"
+      CACHE FILEPATH "paddle_inference compile library." FORCE)
+  set(DNNL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mkldnn/lib/libdnnl.so.2")
+  set(OMP_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mklml/lib/libiomp5.so")
+  set(P2O_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/paddle2onnx/lib/libpaddle2onnx.dylib")
+  set(ORT_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/onnxruntime/lib/libonnxruntime.dylib")
+else()
+  set(PADDLEINFERENCE_COMPILE_LIB
+      "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so"
+      CACHE FILEPATH "paddle_inference compile library." FORCE)
+  set(DNNL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mkldnn/lib/libdnnl.so.2")
+  set(OMP_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mklml/lib/libiomp5.so")
+  set(P2O_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/paddle2onnx/lib/libpaddle2onnx.so")
+  set(ORT_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/onnxruntime/lib/libonnxruntime.so")
+  # Check whether the encrypt and auth tools exists. only support PADDLEINFERENCE_DIRECTORY now.
+  if(PADDLEINFERENCE_DIRECTORY)
+    set(FDMODEL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/fdmodel/lib/libfastdeploy_wenxin.so")
+    set(FDMODEL_MODEL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/fdmodel/lib/libfastdeploy_model.so.2.0.0")
+    set(FDMODEL_AUTH_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/fdmodel/lib/libfastdeploy_auth.so")
+    set(FDMODEL_LEVELDB_LIB_DIR "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/leveldb")
+    set(FDMODEL_LEVELDB_LIB_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/leveldb/lib/libleveldb.a")
+    if((EXISTS ${FDMODEL_LIB}) AND (EXISTS ${FDMODEL_MODEL_LIB}))
+      set(PADDLEINFERENCE_WITH_ENCRYPT ON CACHE BOOL "" FORCE)
+      message(STATUS "Detected ${FDMODEL_LIB} and ${FDMODEL_MODEL_LIB} exists, fource PADDLEINFERENCE_WITH_ENCRYPT=${PADDLEINFERENCE_WITH_ENCRYPT}")
+    endif()
+    if((EXISTS ${FDMODEL_LIB}) AND (EXISTS ${FDMODEL_AUTH_LIB}))
+      set(PADDLEINFERENCE_WITH_AUTH ON CACHE BOOL "" FORCE)
+      message(STATUS "Detected ${FDMODEL_LIB} and ${FDMODEL_AUTH_LIB} exists, fource PADDLEINFERENCE_WITH_AUTH=${PADDLEINFERENCE_WITH_AUTH}")
+    endif()
+  endif()
+endif(WIN32)
+
 # Path Paddle Inference ELF lib file
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
   add_custom_target(patchelf_paddle_inference ALL COMMAND  bash -c "PATCHELF_EXE=${PATCHELF_EXE} python ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_inference.py ${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so" DEPENDS ${LIBRARY_NAME})
@@ -214,8 +221,6 @@ if(PADDLEINFERENCE_WITH_ENCRYPT)
   add_library(external_fdmodel_model STATIC IMPORTED GLOBAL)
   set_property(TARGET external_fdmodel_model PROPERTY IMPORTED_LOCATION
                                               ${FDMODEL_MODEL_LIB})                                                                                                                            
-  add_dependencies(external_fdmodel ${PADDLEINFERENCE_PROJECT})
-  add_dependencies(external_fdmodel_model ${PADDLEINFERENCE_PROJECT})
   list(APPEND ENCRYPT_AUTH_LIBS external_fdmodel external_fdmodel_model)
 endif()  
 
@@ -223,18 +228,22 @@ if(PADDLEINFERENCE_WITH_AUTH)
   add_library(external_fdmodel_auth STATIC IMPORTED GLOBAL)
   set_property(TARGET external_fdmodel_auth PROPERTY IMPORTED_LOCATION
                                             ${FDMODEL_AUTH_LIB}) 
-  add_dependencies(external_fdmodel_auth ${PADDLEINFERENCE_PROJECT})
   list(APPEND ENCRYPT_AUTH_LIBS external_fdmodel_auth)
 endif()
 
-function(enable_paddle_encrypt_auth_link_policy LIBRARY_NAME)
+function(set_paddle_encrypt_auth_link_policy LIBRARY_NAME)
   if(ENABLE_PADDLE_BACKEND AND (PADDLEINFERENCE_WITH_ENCRYPT OR PADDLEINFERENCE_WITH_AUTH))
-    if(WITH_KUNLUNXIN)
-      link_directories(${LEVELDB_LIB_DIR})
-      target_link_libraries(${LIBRARY_NAME} ${ENCRYPT_AUTH_LIBS} -lssl -lcrypto)
-      target_link_libraries(${LIBRARY_NAME} ${LEVELDB_LIB_DIR}/libleveldb.a)
+    target_link_libraries(${LIBRARY_NAME} ${ENCRYPT_AUTH_LIBS})
+    # Note(qiuyanjun): Currently, for XPU, we need to manually link the whole
+    # leveldb static lib into fastdeploy lib if PADDLEINFERENCE_WITH_ENCRYPT
+    # or PADDLEINFERENCE_WITH_AUTH is 'ON'. Will remove this policy while 
+    # the bug of paddle inference lib with auth & encrypt fixed.
+    if((EXISTS ${FDMODEL_LEVELDB_LIB_LIB}) AND WITH_KUNLUNXIN)
+      target_link_libraries(${LIBRARY_NAME} -lssl -lcrypto)
+      link_directories(${FDMODEL_LEVELDB_LIB_DIR})
+      target_link_libraries(${LIBRARY_NAME} ${FDMODEL_LEVELDB_LIB_LIB})
       set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS
-                            "-Wl,--whole-archive ${LEVELDB_LIB_DIR}/libleveldb.a -Wl,-no-whole-archive")
+                            "-Wl,--whole-archive ${FDMODEL_LEVELDB_LIB_LIB} -Wl,-no-whole-archive")
     endif()
   endif()
 endfunction()
