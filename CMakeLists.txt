@@ -392,7 +392,6 @@ if(ENABLE_TRT_BACKEND)
     if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
       file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
     endif()
-    message(STATUS "${PYTHON_EXECUTABLE} ${Python_EXECUTABLE}")
     
     if (NOT Python_EXECUTABLE)
       find_package(Python COMPONENTS Interpreter Development REQUIRED)
