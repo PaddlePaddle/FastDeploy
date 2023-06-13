@@ -48,3 +48,6 @@ python/fastdeploy/code_version.py
 *.pdiparams
 *.pdiparams.info
 log.txt
+serving/build
+serving/build.encrypt
+serving/build.encrypt.auth
