@@ -61,24 +61,38 @@ void AdaptivePool2dKernel::CpuAdaptivePool(
 }
 
 void AdaptivePool2dKernel::Compute(OrtKernelContext* context) {
+#if ORT_API_VERSION >= 14
   Ort::KernelContext ort_context{context};
-
-  auto input = ort_context.GetInput(0);
+  Ort::ConstValue input = ort_context.GetInput(0);
+#else
+  Ort::CustomOpApi api{ort_};
+  const Ort::Value input{
+      const_cast<OrtValue*>(api.KernelContext_GetInput(context, 0))};
+#endif
   auto input_data = input.GetTensorData<float>();
-
   auto input_dim = input.GetTensorTypeAndShapeInfo().GetShape();
+
   output_size_[0] = input_dim[0];
   std::vector<int64_t> input_size;
   for (auto i : input_dim) {
     input_size.push_back(i);
   }
 
+#if ORT_API_VERSION >= 14
   auto output = ort_context.GetOutput(0, output_size_);
-
+#else
+  Ort::Value output{api.KernelContext_GetOutput(context, 0, output_size_.data(),
+                                                output_size_.size())};
+#endif
   float* output_data = output.GetTensorMutableData<float>();
   if (!strcmp(this->provider_, "CUDAExecutionProvider")) {
 #ifdef WITH_GPU
-    auto compute_stream = ort_context.GetGPUComputeStream();
+    auto compute_stream =
+#if ORT_API_VERSION >= 14
+        ort_context.GetGPUComputeStream();
+#else
+        api.KernelContext_GetGPUComputeStream(context);
+#endif
     CudaAdaptivePool(input_size, output_size_, output_data, input_data,
                      compute_stream, pooling_type_);
 #else
@@ -92,9 +106,16 @@ void AdaptivePool2dKernel::Compute(OrtKernelContext* context) {
 }
 
 void AdaptivePool2dKernel::GetAttribute(const OrtKernelInfo* info) {
+#if ORT_API_VERSION >= 14
   Ort::ConstKernelInfo ort_info{info};
   pooling_type_ = ort_info.GetAttribute<std::string>("pooling_type");
   output_size_ = ort_info.GetAttributes<int64_t>("output_size");
+#else
+  Ort::CustomOpApi api{ort_};
+  pooling_type_ = api.KernelInfoGetAttribute<std::string>(info, "pooling_type");
+  output_size_ =
+      api.KernelInfoGetAttribute<std::vector<int64_t>>(info, "output_size");
+#endif
   FDASSERT(output_size_.size() == 4 && output_size_[2] > 0 &&
                output_size_[3] > 0,
            "The output size of adaptive pool must be positive.");
