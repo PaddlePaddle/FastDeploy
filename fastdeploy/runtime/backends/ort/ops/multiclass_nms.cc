@@ -166,7 +166,7 @@ void MultiClassNmsKernel::Compute(OrtKernelContext* context) {
   const Ort::Value boxes{
       const_cast<OrtValue*>(api.KernelContext_GetInput(context, 0))};
   const Ort::Value scores{
-      const_cast<OrtValue*>(api.KernelContext_GetInput(context, 0))};
+      const_cast<OrtValue*>(api.KernelContext_GetInput(context, 1))};
 #endif
 
   auto boxes_data = boxes.GetTensorData<float>();
