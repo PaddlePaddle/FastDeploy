@@ -30,11 +30,10 @@ struct MultiClassNmsKernel {
   int64_t nms_top_k;
   bool normalized;
   float score_threshold;
-  Ort::CustomOpApi ort_;
+  OrtApi ort_;
 
  public:
-  MultiClassNmsKernel(Ort::CustomOpApi ort, const OrtKernelInfo* info)
-      : ort_(ort) {
+  MultiClassNmsKernel(OrtApi ort, const OrtKernelInfo* info) : ort_(ort) {
     GetAttribute(info);
   }
 
@@ -50,7 +49,7 @@ struct MultiClassNmsKernel {
 
 struct MultiClassNmsOp
     : Ort::CustomOpBase<MultiClassNmsOp, MultiClassNmsKernel> {
-  void* CreateKernel(Ort::CustomOpApi api, const OrtKernelInfo* info) const {
+  void* CreateKernel(OrtApi api, const OrtKernelInfo* info) const {
     return new MultiClassNmsKernel(api, info);
   }
 
