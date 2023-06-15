@@ -163,9 +163,9 @@ void MultiClassNmsKernel::Compute(OrtKernelContext* context) {
   Ort::ConstValue scores = ort_context.GetInput(1);
 #else
   Ort::CustomOpApi api{ort_};
-  const Ort::Value boxes{
+  Ort::Unowned<const Ort::Value> boxes{
       const_cast<OrtValue*>(api.KernelContext_GetInput(context, 0))};
-  const Ort::Value scores{
+  Ort::Unowned<const Ort::Value> scores{
       const_cast<OrtValue*>(api.KernelContext_GetInput(context, 1))};
 #endif
 
@@ -191,7 +191,7 @@ void MultiClassNmsKernel::Compute(OrtKernelContext* context) {
 #if ORT_API_VERSION >= 14
   auto out_num_rois = ort_context.GetOutput(2, out_num_rois_dims);
 #else
-  Ort::Value out_num_rois{api.KernelContext_GetOutput(
+  Ort::Unowned<Ort::Value> out_num_rois{api.KernelContext_GetOutput(
       context, 2, out_num_rois_dims.data(), out_num_rois_dims.size())};
 #endif
   int32_t* out_num_rois_data = out_num_rois.GetTensorMutableData<int32_t>();
@@ -216,9 +216,9 @@ void MultiClassNmsKernel::Compute(OrtKernelContext* context) {
   auto out_box = ort_context.GetOutput(0, out_box_dims);
   auto out_index = ort_context.GetOutput(1, out_index_dims);
 #else
-  Ort::Value out_box{api.KernelContext_GetOutput(
+  Ort::Unowned<Ort::Value> out_box{api.KernelContext_GetOutput(
       context, 0, out_box_dims.data(), out_box_dims.size())};
-  Ort::Value out_index{api.KernelContext_GetOutput(
+  Ort::Unowned<Ort::Value> out_index{api.KernelContext_GetOutput(
       context, 1, out_index_dims.data(), out_index_dims.size())};
 #endif
 
@@ -267,8 +267,8 @@ void MultiClassNmsKernel::GetAttribute(const OrtKernelInfo* info) {
   keep_top_k = ort_info.GetAttribute<int64_t>("keep_top_k");
   nms_eta = ort_info.GetAttribute<float>("nms_eta");
   nms_threshold = ort_info.GetAttribute<float>("nms_threshold");
-  nms_top_k = ort_info.GetAttribute<float>("nms_top_k");
-  normalized = ort_info.GetAttribute<float>("normalized");
+  nms_top_k = ort_info.GetAttribute<int64_t>("nms_top_k");
+  normalized = ort_info.GetAttribute<int64_t>("normalized");
   score_threshold = ort_info.GetAttribute<float>("score_threshold");
 #else
   Ort::CustomOpApi api{ort_};

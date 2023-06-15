@@ -66,7 +66,7 @@ void AdaptivePool2dKernel::Compute(OrtKernelContext* context) {
   Ort::ConstValue input = ort_context.GetInput(0);
 #else
   Ort::CustomOpApi api{ort_};
-  const Ort::Value input{
+  Ort::Unowned<const Ort::Value> input{
       const_cast<OrtValue*>(api.KernelContext_GetInput(context, 0))};
 #endif
   auto input_data = input.GetTensorData<float>();
@@ -81,8 +81,8 @@ void AdaptivePool2dKernel::Compute(OrtKernelContext* context) {
 #if ORT_API_VERSION >= 14
   auto output = ort_context.GetOutput(0, output_size_);
 #else
-  Ort::Value output{api.KernelContext_GetOutput(context, 0, output_size_.data(),
-                                                output_size_.size())};
+  Ort::Unowned<Ort::Value> output{api.KernelContext_GetOutput(
+      context, 0, output_size_.data(), output_size_.size())};
 #endif
   float* output_data = output.GetTensorMutableData<float>();
   if (!strcmp(this->provider_, "CUDAExecutionProvider")) {
