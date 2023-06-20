@@ -19,9 +19,9 @@
 namespace vision = fastdeploy::vision;
 namespace benchmark = fastdeploy::benchmark;
 
-DEFINE_string(trt_shape, "1,3,256,256:1,3,1024,1024:1,3,2048,2048",
+DEFINE_string(trt_shape, "1,3,512,512:1,3,512,512:1,3,512,512",
               "Set min/opt/max shape for trt/paddle_trt backend."
-              "eg:--trt_shape 1,3,256,256:1,3,1024,1024:1,3,2048,2048");
+              "eg:--trt_shape 1,3,512,512:1,3,512,512:1,3,512,512");
 
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
@@ -52,6 +52,12 @@ int main(int argc, char* argv[]) {
         benchmark::ResultManager::GetInputShapes(FLAGS_trt_shape);
     option.trt_option.SetShape("x", trt_shapes[0], trt_shapes[1],
                                trt_shapes[2]);
+    // option.paddle_infer_option.delete_pass_names = {
+    //   "add_support_int8_pass",
+    //   "conv_elementwise_add_fuse_pass",
+    //   "conv_bn_fuse_pass",
+    //   // "tensorrt_subgraph_pass",
+    // }; 
   }
   auto model_ppseg = vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option, model_format);
