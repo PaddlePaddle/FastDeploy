@@ -67,6 +67,7 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy_paddlex_2_0/ppcls_cls_demo.JPEG
 
 # PaddleDetection
 wget https://bj.bcebos.com/paddlehub/fastdeploy_paddlex_2_0/ppdet_det_img.jpg
+wget https://bj.bcebos.com/paddlehub/fastdeploy_paddlex_2_0/ppdet_det_img_800x800.jpg
 
 # PaddleSeg
 wget https://bj.bcebos.com/paddlehub/fastdeploy_paddlex_2_0/ppseg_cityscapes_demo.png
