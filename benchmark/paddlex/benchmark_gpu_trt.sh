@@ -23,6 +23,7 @@ fi
 ./benchmark_ppdet --model PP-PicoDet_s_320_lcnet --image ppdet_det_img.jpg --config_path $CONFIG_PATH --trt_shape 1,3,320,320:1,3,320,320:1,3,320,320
 ./benchmark_ppdet --model dino_r50_4scale --image ppdet_det_img.jpg --config_path $CONFIG_PATH --trt_shape 1,3,800,800:1,3,800,800:1,3,800,800
 
+
 # PaddleSeg
 ./benchmark_ppseg --model OCRNet_HRNetW48 --image ppseg_cityscapes_demo_512x512.png --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
 ./benchmark_ppseg --model PP-LiteSeg-STDC1 --image ppseg_cityscapes_demo_512x512.png --config_path $CONFIG_PATH --trt_shape 1,3,512,512:1,3,512,512:1,3,512,512
