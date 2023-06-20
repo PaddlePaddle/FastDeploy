@@ -35,6 +35,8 @@ void BindGeneration(pybind11::module& m);
 void BindVisualize(pybind11::module& m);
 void BindPerception(pybind11::module& m);
 
+void BindStructureTest(pybind11::module& m);
+
 void BindVision(pybind11::module& m) {
   pybind11::class_<vision::Mask>(m, "Mask")
       .def(pybind11::init())
