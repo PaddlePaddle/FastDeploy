@@ -70,6 +70,8 @@
 #include "fastdeploy/vision/tracking/pptracking/model.h"
 #include "fastdeploy/vision/generation/contrib/animegan.h"
 
+#include "fastdeploy/vision/structure_test/ser_vi_layoutxlm_xfund/model.h"
+
 #endif
 
 #include "fastdeploy/vision/visualize/visualize.h"

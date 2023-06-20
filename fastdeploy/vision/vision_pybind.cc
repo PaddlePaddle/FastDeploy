@@ -270,5 +270,7 @@ void BindVision(pybind11::module& m) {
   BindGeneration(m);
   BindVisualize(m);
   BindPerception(m);
+
+  BindStructureTest(m);
 }
 }  // namespace fastdeploy
