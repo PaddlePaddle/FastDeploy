@@ -36,10 +36,15 @@ download ResNet50.tgz
 download CLIP_vit_base_patch16_224.tgz
 
 # PaddleDetection
-download PP-YOLOE+_crn_l_80e.tgz
 download rt_detr_hgnetv2_l.tgz
-download PP-PicoDet_s_320_lcnet.tgz
 download dino_r50_4scale.tgz
+download PP-PicoDet_s_320_lcnet.tgz # normal nms
+download PP-YOLOE+_crn_l_80e.tgz
+download PP-PicoDet_s_320_lcnet_with_nms.tgz
+download PP-PicoDet_s_320_lcnet_without_nms.tgz
+download PP-YOLOE+_crn_l_80e_with_nms.tgz
+download PP-YOLOE+_crn_l_80e_without_nms.tgz
+download PP-YOLOE+_crn_l_80e_with_trt_nms.tgz
 
 # PaddleSeg
 download OCRNet_HRNetW48.tgz
