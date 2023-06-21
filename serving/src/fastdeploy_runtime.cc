@@ -405,7 +405,21 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
               } else if (param_key == "cache_file") {
                 runtime_options_->trt_option.serialize_file = value_string;
               } else if (param_key == "use_paddle") {
-                runtime_options_->EnablePaddleToTrt();
+                // `RuntimeOption::EnablePaddleToTrt` will be removed in v1.2.0
+                bool use_paddle;
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &use_paddle));
+                if (use_paddle) {
+                  // runtime_options_->EnablePaddleToTrt();
+                  runtime_options_->UsePaddleInferBackend();
+                  runtime_options_->paddle_infer_option.enable_trt = true;  
+                }
+              } else if (param_key == "use_paddle_trt") {
+                // Use new option setting policy to set paddle_trt backend
+                bool use_paddle_trt;
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &use_paddle_trt));
+                runtime_options_->paddle_infer_option.enable_trt = use_paddle_trt;
               } else if (param_key == "use_paddle_log") {
                 bool use_paddle_log;
                 THROW_IF_BACKEND_MODEL_ERROR(
