@@ -411,7 +411,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                     ParseBoolValue(value_string, &use_paddle));
                 if (use_paddle) {
                   // runtime_options_->EnablePaddleToTrt();
-                  runtime_option_->UsePaddleInferBackend();
+                  runtime_options_->UsePaddleInferBackend();
                   runtime_options_->paddle_infer_option.enable_trt = true;  
                 }
               } else if (param_key == "use_paddle_trt") {
