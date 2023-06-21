@@ -20,6 +20,12 @@ namespace vision = fastdeploy::vision;
 namespace benchmark = fastdeploy::benchmark;
 
 DEFINE_bool(no_nms, false, "Whether the model contains nms.");
+DEFINE_string(trt_shape, "1,3,640,640:1,3,640,640:1,3,640,640",
+              "Set min/opt/max shape for trt/paddle_trt backend."
+              "eg:--trt_shape 1,3,640,640:1,3,640,640:1,3,640,640");
+DEFINE_string(input_name, "image",
+              "Set input name for trt/paddle_trt backend."
+              "eg:--input_names x");
 
 int main(int argc, char* argv[]) {
 #if defined(ENABLE_BENCHMARK) && defined(ENABLE_VISION)
@@ -46,8 +52,10 @@ int main(int argc, char* argv[]) {
   }
   if (config_info["backend"] == "paddle_trt" ||
       config_info["backend"] == "trt") {
-    option.trt_option.SetShape("image", {1, 3, 640, 640}, {1, 3, 640, 640},
-                               {1, 3, 640, 640});
+    std::vector<std::vector<int32_t>> trt_shapes =
+        benchmark::ResultManager::GetInputShapes(FLAGS_trt_shape);
+    option.trt_option.SetShape(FLAGS_input_name, trt_shapes[0], trt_shapes[1],
+                               trt_shapes[2]);
     option.trt_option.SetShape("scale_factor", {1, 2}, {1, 2}, {1, 2});
     option.trt_option.SetShape("im_shape", {1, 2}, {1, 2}, {1, 2});
   }
