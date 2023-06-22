@@ -1,4 +1,5 @@
 # Run all models specify hardware and specify backend
+set -x
 
 CONFIG_PATH="config.gpu.paddle_trt.fp32.txt"
 if [ ! "$1" = "$CONFIG_PATH" ]; then
@@ -46,3 +47,5 @@ fi
 # PP-StructureV2
 ./benchmark_structurev2_layout --model PP-Structurev2-layout --image structurev2_layout_val_0002.jpg --config_path $CONFIG_PATH
 ./benchmark_structurev2_table --model PP-Structurev2-SLANet --image structurev2_table.jpg --table_char_dict_path table_structure_dict_ch.txt --config_path $CONFIG_PATH
+
+set +x
