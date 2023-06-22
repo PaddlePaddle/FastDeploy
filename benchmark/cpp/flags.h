@@ -63,7 +63,10 @@ DEFINE_int32(device_id, -1,
 DEFINE_bool(enable_log_info, false,
             "Optional, whether to enable log info for paddle backend,"
             "default false.");
-
+DEFINE_int32(max_workspace_size, -1,
+             "Optional, set max workspace size for tensorrt, default -1."
+             "will force to override the value in config file "
+             "eg, 2147483647(2GB)");
 static void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path "
                "--config_path config.txt[Path of benchmark config.] "
