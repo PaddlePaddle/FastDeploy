@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/ocr/ppocr/ser_vi_layoutxlm.h"
+#include "fastdeploy/vision/ocr/ppocr/structurev2_ser_vi_layoutxlm.h"
 
 #include "fastdeploy/utils/unique_ptr.h"
 
