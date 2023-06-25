@@ -249,7 +249,7 @@ function(set_paddle_encrypt_auth_link_policy LIBRARY_NAME)
   endif()
 endfunction()
 
-# Backward compatiable for 2.4.x
+# Backward compatible for 2.4.x
 string(FIND ${PADDLEINFERENCE_VERSION} "2.4" PADDLEINFERENCE_USE_2_4_x)
 string(FIND ${PADDLEINFERENCE_VERSION} "2.5" PADDLEINFERENCE_USE_2_5_x)
 string(FIND ${PADDLEINFERENCE_VERSION} "0.0.0" PADDLEINFERENCE_USE_DEV)
