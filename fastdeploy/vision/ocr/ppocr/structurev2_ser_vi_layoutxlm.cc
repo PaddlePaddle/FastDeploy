@@ -20,11 +20,10 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-SERViLayoutXLMModel::SERViLayoutXLMModel(const std::string& model_file,
-                                         const std::string& params_file,
-                                         const std::string& config_file,
-                                         const RuntimeOption& custom_option,
-                                         const ModelFormat& model_format) {
+StructureV2SERViLayoutXLMModel::StructureV2SERViLayoutXLMModel(
+    const std::string& model_file, const std::string& params_file,
+    const std::string& config_file, const RuntimeOption& custom_option,
+    const ModelFormat& model_format) {
   if (model_format == ModelFormat::PADDLE) {
     valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT,
                           Backend::LITE};
@@ -51,14 +50,16 @@ SERViLayoutXLMModel::SERViLayoutXLMModel(const std::string& model_file,
   initialized = Initialize();
 }
 
-std::unique_ptr<SERViLayoutXLMModel> SERViLayoutXLMModel::Clone() const {
-  std::unique_ptr<SERViLayoutXLMModel> clone_model =
-      utils::make_unique<SERViLayoutXLMModel>(SERViLayoutXLMModel(*this));
+std::unique_ptr<StructureV2SERViLayoutXLMModel>
+StructureV2SERViLayoutXLMModel::Clone() const {
+  std::unique_ptr<StructureV2SERViLayoutXLMModel> clone_model =
+      utils::make_unique<StructureV2SERViLayoutXLMModel>(
+          StructureV2SERViLayoutXLMModel(*this));
   clone_model->SetRuntime(clone_model->CloneRuntime());
   return clone_model;
 }
 
-bool SERViLayoutXLMModel::Initialize() {
+bool StructureV2SERViLayoutXLMModel::Initialize() {
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;

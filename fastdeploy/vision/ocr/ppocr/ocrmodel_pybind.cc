@@ -523,25 +523,29 @@ void BindPPOCRModel(pybind11::module& m) {
         return results;
       });
 
-  pybind11::class_<vision::ocr::SERViLayoutXLMModel, FastDeployModel>(
-      m, "SERViLayoutXLMModel")
+  pybind11::class_<vision::ocr::StructureV2SERViLayoutXLMModel,
+                   FastDeployModel>(m, "StructureV2SERViLayoutXLMModel")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>())
       .def("clone",
-           [](vision::ocr::SERViLayoutXLMModel& self) { return self.Clone(); })
+           [](vision::ocr::StructureV2SERViLayoutXLMModel& self) {
+             return self.Clone();
+           })
       .def("predict",
-           [](vision::ocr::SERViLayoutXLMModel& self, pybind11::array& data) {
+           [](vision::ocr::StructureV2SERViLayoutXLMModel& self,
+              pybind11::array& data) {
              throw std::runtime_error(
-                 "SERViLayoutXLMModel do not support predict.");
+                 "StructureV2SERViLayoutXLMModel do not support predict.");
            })
-      .def("batch_predict",
-           [](vision::ocr::SERViLayoutXLMModel& self,
-              std::vector<pybind11::array>& data) {
-             throw std::runtime_error(
-                 "SERViLayoutXLMModel do not support batch_predict.");
-           })
+      .def(
+          "batch_predict",
+          [](vision::ocr::StructureV2SERViLayoutXLMModel& self,
+             std::vector<pybind11::array>& data) {
+            throw std::runtime_error(
+                "StructureV2SERViLayoutXLMModel do not support batch_predict.");
+          })
       .def("infer",
-           [](vision::ocr::SERViLayoutXLMModel& self,
+           [](vision::ocr::StructureV2SERViLayoutXLMModel& self,
               std::map<std::string, pybind11::array>& data) {
              std::vector<FDTensor> inputs(data.size());
              int index = 0;
@@ -573,7 +577,7 @@ void BindPPOCRModel(pybind11::module& m) {
              return results;
            })
       .def("get_input_info",
-           [](vision::ocr::SERViLayoutXLMModel& self, int& index) {
+           [](vision::ocr::StructureV2SERViLayoutXLMModel& self, int& index) {
              return self.InputInfoOfRuntime(index);
            });
 }

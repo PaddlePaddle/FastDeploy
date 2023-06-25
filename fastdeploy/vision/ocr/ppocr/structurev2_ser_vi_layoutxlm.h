@@ -22,9 +22,9 @@ namespace vision {
  *
  */
 namespace ocr {
-/*! @brief SERViLayoutxlm serials model object used when to load a SERViLayoutxlm model exported by SERViLayoutxlm repository
+/*! @brief StructureV2SERViLayoutXLM model object used when to load a StructureV2SERViLayoutXLM model exported by StructureV2SERViLayoutXLMModel repository
  */
-class FASTDEPLOY_DECL SERViLayoutXLMModel : public FastDeployModel {
+class FASTDEPLOY_DECL StructureV2SERViLayoutXLMModel : public FastDeployModel {
  public:
   /** \brief Set path of model file and configuration file, and the configuration of runtime
    *
@@ -34,20 +34,22 @@ class FASTDEPLOY_DECL SERViLayoutXLMModel : public FastDeployModel {
    * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
    * \param[in] model_format Model format of the loaded model, default is Paddle format
    */
-  SERViLayoutXLMModel(const std::string& model_file,
+  StructureV2SERViLayoutXLMModel(const std::string& model_file,
                   const std::string& params_file,
                   const std::string& config_file,
                   const RuntimeOption& custom_option = RuntimeOption(),
                   const ModelFormat& model_format = ModelFormat::PADDLE);
 
-  /** \brief Clone a new SERViLayoutXLMModel with less memory usage when multiple instances of the same model are created
+  /** \brief Clone a new StructureV2SERViLayoutXLMModel with less memory usage when multiple instances of the same model are created
    *
-   * \return new SERViLayoutXLMModel* type unique pointer
+   * \return new StructureV2SERViLayoutXLMModel* type unique pointer
    */
-  virtual std::unique_ptr<SERViLayoutXLMModel> Clone() const;
+  virtual std::unique_ptr<StructureV2SERViLayoutXLMModel> Clone() const;
 
   /// Get model's name
-  virtual std::string ModelName() const { return "SERViLayoutXLMModel"; }
+  virtual std::string ModelName() const {
+    return "StructureV2SERViLayoutXLMModel";
+}
 
  protected:
   bool Initialize();

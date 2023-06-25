@@ -1139,7 +1139,7 @@ class PPStructureV2TableSystem(PPStructureV2Table):
         return super(PPStructureV2TableSystem, self).predict(input_image)
 
 
-class SERViLayoutXLMModelPreprocessor():
+class StructureV2SERViLayoutXLMModelPreprocessor():
     def __init__(self, ser_dict_path, use_gpu=True):
         """Create a preprocessor for Ser-Vi-LayoutXLM model.
         :param: ser_dict_path: (str) class file path
@@ -1224,7 +1224,7 @@ class SERViLayoutXLMModelPreprocessor():
         return data
 
 
-class SERViLayoutXLMModelPostprocessor():
+class StructureV2SERViLayoutXLMModelPostprocessor():
     def __init__(self, class_path):
         """Create a postprocessor for Ser-Vi-LayoutXLM model.
         :param: class_path: (string) class file path
@@ -1238,7 +1238,7 @@ class SERViLayoutXLMModelPostprocessor():
         return self.postprocessor_op(preds, batch, *args, **kwargs)
 
 
-class SERViLayoutXLMModel(FastDeployModel):
+class StructureV2SERViLayoutXLMModel(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file,
@@ -1256,18 +1256,20 @@ class SERViLayoutXLMModel(FastDeployModel):
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU.
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model.
         """
-        super(SERViLayoutXLMModel, self).__init__(runtime_option)
+        super(StructureV2SERViLayoutXLMModel, self).__init__(runtime_option)
 
         assert self._runtime_option.backend != 0, \
             "Runtime Option required backend setting."
-        self._model = C.vision.ocr.SERViLayoutXLMModel(
+        self._model = C.vision.ocr.StructureV2SERViLayoutXLMModel(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
 
         assert self.initialized, "SERViLayoutXLM model initialize failed."
 
-        self.preprocessor = SERViLayoutXLMModelPreprocessor(ser_dict_path)
-        self.postprocesser = SERViLayoutXLMModelPostprocessor(class_path)
+        self.preprocessor = StructureV2SERViLayoutXLMModelPreprocessor(
+            ser_dict_path)
+        self.postprocesser = StructureV2SERViLayoutXLMModelPostprocessor(
+            class_path)
 
         self.input_name_0 = self._model.get_input_info(0).name
         self.input_name_1 = self._model.get_input_info(1).name
