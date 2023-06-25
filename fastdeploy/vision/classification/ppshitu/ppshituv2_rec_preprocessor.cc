@@ -37,7 +37,10 @@ bool PPShiTuV2RecognizerPreprocessor::BuildPreprocessPipelineFromConfig() {
             << ", maybe you should check this file." << std::endl;
     return false;
   }
-  auto preprocess_cfg = cfg["PreProcess"]["transform_ops"];
+  // auto preprocess_cfg = cfg["PreProcess"]["transform_ops"];
+  // We use the key 'RecPreProcess' to denote the preprocess 
+  // operators for PP-ShiTuV2 recognizer.
+  auto preprocess_cfg = cfg["RecPreProcess"]["transform_ops"];
   processors_.push_back(std::make_shared<BGR2RGB>());
   for (const auto& op : preprocess_cfg) {
     FDASSERT(op.IsMap(),
