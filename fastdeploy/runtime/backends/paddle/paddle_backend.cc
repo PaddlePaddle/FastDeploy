@@ -48,9 +48,14 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
       FDINFO << "Will Enable ir_debug for Paddle Backend." << std::endl;
       config_.SwitchIrDebug();
     }
-    if (option_.enable_inference_cutlass){
+    if (option_.enable_inference_cutlass) {
+#ifdef PADDLEINFERENCE_API_COMPAT_2_4_x
+      FDWARNING << "Your are using Paddle infernence 2.4.x, cutlass is not supported!" 
+                << std::endl;
+#else    
       FDINFO << "Will enable_inference_cutlass" << std::endl;
       config_.Exp_EnableUseCutlass();
+#endif
     }
     if (option_.external_stream_) {
       FDINFO << "Will use external stream for Paddle Backend." << std::endl;
@@ -291,9 +296,37 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
   auto input_names = predictor_->GetInputNames();
   auto output_names = predictor_->GetOutputNames();
   auto input_dtypes = predictor_->GetInputTypes();
-  auto output_dtypes = predictor_->GetOutputTypes();
+
+#ifdef PADDLEINFERENCE_API_COMPAT_2_4_x
+  // Note: GetInputTensorShape, GetOutputTensorShape and GetOutputTypes
+  // are not supported when Paddle Inference API version is 2.4.x.
+  std::map<std::string, std::vector<int64_t>> input_shapes;
+  std::map<std::string, std::vector<int64_t>> output_shapes;
+  std::map<std::string, paddle_infer::DataType> output_dtypes;
+  // Get the all the input shape info.
+  for (size_t i = 0; i < input_names.size(); ++i) {
+    std::vector<int64_t> shape;
+    auto handle = predictor_->GetInputHandle(input_names[i]);
+    for (int j = 0; j < handle->shape().size(); ++j) {
+      shape.push_back(static_cast<int64_t>(handle->shape()[j])); // int32 -> int64
+    }
+    input_shapes[input_names[i]] = shape;
+  }
+  // Get the all the output shape and dtype info.
+  for (size_t i = 0; i < output_names.size(); ++i) {
+    std::vector<int64_t> shape;
+    auto handle = predictor_->GetOutputHandle(output_names[i]);
+    for (int j = 0; j < handle->shape().size(); ++j) {
+      shape.push_back(static_cast<int64_t>(handle->shape()[j])); // int32 -> int64
+    }
+    output_shapes[output_names[i]] = shape;
+    output_dtypes[output_names[i]] = handle->type();
+  }
+#else
   auto input_shapes = predictor_->GetInputTensorShape();
   auto output_shapes = predictor_->GetOutputTensorShape();
+  auto output_dtypes = predictor_->GetOutputTypes();
+#endif
 
   inputs_desc_.resize(input_names.size());
   for (int i = 0; i < input_names.size(); ++i) {
