@@ -24,22 +24,22 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   option_ = option;
   if (option.device == Device::GPU) {
 
-
     auto inference_precision = paddle_infer::PrecisionType::kFloat32;
     if (option_.inference_precision == "float32"){
-      FDINFO<<"Will inference_precision float32"<<std::endl;
+      FDINFO << "Will inference_precision float32" << std::endl;
       inference_precision = paddle_infer::PrecisionType::kFloat32;
     } else if (option_.inference_precision == "float16"){
-      FDINFO<<"Will inference_precision float16"<<std::endl;
+      FDINFO << "Will inference_precision float16" <<std::endl;
       inference_precision = paddle_infer::PrecisionType::kHalf;
     } else if (option_.inference_precision == "bfloat16"){
-      FDINFO<<"Will inference_precision bfloat16"<<std::endl;
+      FDINFO << "Will inference_precision bfloat16" << std::endl;
       inference_precision = paddle_infer::PrecisionType::kBf16;
     } else if (option_.inference_precision == "int8"){
-      FDINFO<<"Will inference_precision int8"<<std::endl;
+      FDINFO << "Will inference_precision int8" << std::endl;
       inference_precision = paddle_infer::PrecisionType::kInt8;
     } else {
-      FDERROR<<"paddle inference only support precision in float32, float16, bfloat16 and int8"<<std::endl;
+      FDERROR << "paddle inference only support precision in float32," 
+              << " float16, bfloat16 and int8" << std::endl;
     }
     config_.Exp_DisableMixedPrecisionOps({"feed","fetch"});
     config_.EnableUseGpu(option.gpu_mem_init_size, option.device_id, inference_precision);
@@ -49,7 +49,7 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
       config_.SwitchIrDebug();
     }
     if (option_.enable_inference_cutlass){
-      FDINFO<<"Will enable_inference_cutlass"<<std::endl;
+      FDINFO << "Will enable_inference_cutlass" << std::endl;
       config_.Exp_EnableUseCutlass();
     }
     if (option_.external_stream_) {
@@ -284,7 +284,8 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
     }
   }
   if (option.enable_log_info){
-    FDINFO<<"Finish paddle inference config with summary as: "<<std::endl<<config_.Summary()<<std::endl;
+    FDINFO << "Finish paddle inference config with summary as: "
+           << std::endl << config_.Summary() <<std::endl;
   }
   predictor_ = paddle_infer::CreatePredictor(config_);
   auto input_names = predictor_->GetInputNames();
