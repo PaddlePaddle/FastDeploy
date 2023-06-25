@@ -69,8 +69,7 @@
 #include "fastdeploy/vision/sr/ppsr/model.h"
 #include "fastdeploy/vision/tracking/pptracking/model.h"
 #include "fastdeploy/vision/generation/contrib/animegan.h"
-
-#include "fastdeploy/vision/structure_test/ser_vi_layoutxlm_xfund/model.h"
+#include "fastdeploy/vision/ocr/ppocr/ser_vi_layoutxlm.h"
 
 #endif
 

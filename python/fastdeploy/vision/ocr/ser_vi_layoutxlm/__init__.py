@@ -27,7 +27,7 @@ from .operators import *
 from pathlib import Path
 
 
-class SER_Preprocessor():
+class SERViLayoutXLMModelPreprocessor():
     def __init__(self, ser_dict_path):
         self._manager = None
         self.ocr_engine = PaddleOCR(
@@ -104,7 +104,7 @@ class SER_Preprocessor():
         return data
 
 
-class SER_Postprocessor():
+class SERViLayoutXLMModelPostprocessor():
     def __init__(self, class_path):
         self.postprocessor_op = VQASerTokenLayoutLMPostProcess(class_path)
 
@@ -112,7 +112,7 @@ class SER_Postprocessor():
         return self.postprocessor_op(preds, batch, *args, **kwargs)
 
 
-class SERViLayoutxlmModel(FastDeployModel):
+class SERViLayoutXLMModel(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file,
@@ -121,18 +121,18 @@ class SERViLayoutxlmModel(FastDeployModel):
                  config_file="",
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
-        super(SERViLayoutxlmModel, self).__init__(runtime_option)
+        super(SERViLayoutXLMModel, self).__init__(runtime_option)
 
         assert self._runtime_option.backend != 0, \
             "Runtime Option required backend setting."
-        self._model = C.vision.structure_test.SERViLayoutxlmModel(
+        self._model = C.vision.ocr.SERViLayoutXLMModel(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
 
-        assert self.initialized, "SERViLayoutxlm model initialize failed."
+        assert self.initialized, "SERViLayoutXLM model initialize failed."
 
-        self.preprocessor = SER_Preprocessor(ser_dict_path)
-        self.postprocesser = SER_Postprocessor(class_path)
+        self.preprocessor = SERViLayoutXLMModelPreprocessor(ser_dict_path)
+        self.postprocesser = SERViLayoutXLMModelPostprocessor(class_path)
 
         self.input_name_0 = self._model.get_input_info(0).name
         self.input_name_1 = self._model.get_input_info(1).name

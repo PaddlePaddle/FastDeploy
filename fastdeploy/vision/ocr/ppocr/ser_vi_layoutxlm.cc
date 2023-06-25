@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/structure_test/ser_vi_layoutxlm_xfund/model.h"
+#include "fastdeploy/vision/ocr/ppocr/ser_vi_layoutxlm.h"
 
 #include "fastdeploy/utils/unique_ptr.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace structure_test {
+namespace ocr {
 
-SERViLayoutxlmModel::SERViLayoutxlmModel(const std::string& model_file,
+SERViLayoutXLMModel::SERViLayoutXLMModel(const std::string& model_file,
                                          const std::string& params_file,
                                          const std::string& config_file,
                                          const RuntimeOption& custom_option,
@@ -51,14 +51,14 @@ SERViLayoutxlmModel::SERViLayoutxlmModel(const std::string& model_file,
   initialized = Initialize();
 }
 
-std::unique_ptr<SERViLayoutxlmModel> SERViLayoutxlmModel::Clone() const {
-  std::unique_ptr<SERViLayoutxlmModel> clone_model =
-      utils::make_unique<SERViLayoutxlmModel>(SERViLayoutxlmModel(*this));
+std::unique_ptr<SERViLayoutXLMModel> SERViLayoutXLMModel::Clone() const {
+  std::unique_ptr<SERViLayoutXLMModel> clone_model =
+      utils::make_unique<SERViLayoutXLMModel>(SERViLayoutXLMModel(*this));
   clone_model->SetRuntime(clone_model->CloneRuntime());
   return clone_model;
 }
 
-bool SERViLayoutxlmModel::Initialize() {
+bool SERViLayoutXLMModel::Initialize() {
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
@@ -66,6 +66,6 @@ bool SERViLayoutxlmModel::Initialize() {
   return true;
 }
 
-}  // namespace structure_test
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy

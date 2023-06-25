@@ -32,8 +32,6 @@ from .utils import fd_result_to_json
 from .visualize import *
 from .. import C
 
-from . import structure_test
-
 
 def enable_flycv():
     return C.vision.enable_flycv()

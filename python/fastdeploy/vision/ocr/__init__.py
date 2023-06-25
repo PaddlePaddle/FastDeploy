@@ -14,3 +14,4 @@
 from __future__ import absolute_import
 
 from .ppocr import *
+from .ser_vi_layoutxlm import *
