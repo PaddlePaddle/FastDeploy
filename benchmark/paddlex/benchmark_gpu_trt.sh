@@ -21,10 +21,10 @@ fi
 # PaddleDetection
 ./benchmark_ppdet --model rt_detr_hgnetv2_l --image ppdet_det_img.jpg --config_path $CONFIG_PATH
 ./benchmark_ppdet --model dino_r50_4scale --image ppdet_det_img_800x800.jpg --config_path $CONFIG_PATH --trt_shape 1,3,800,800:1,3,800,800:1,3,800,800 --max_workspace_size 2147483647
-./benchmark_ppdet --model PP-PicoDet_s_320_lcnet --image ppdet_det_img.jpg --config_path $CONFIG_PATH --trt_shape 1,3,320,320:1,3,320,320:1,3,320,320
+# ./benchmark_ppdet --model PP-PicoDet_s_320_lcnet --image ppdet_det_img.jpg --config_path $CONFIG_PATH --trt_shape 1,3,320,320:1,3,320,320:1,3,320,320
 ./benchmark_ppdet --model PP-PicoDet_s_320_lcnet_with_nms --image ppdet_det_img.jpg --config_path $CONFIG_PATH --trt_shape 1,3,320,320:1,3,320,320:1,3,320,320
 ./benchmark_ppdet --model PP-PicoDet_s_320_lcnet_without_nms --image ppdet_det_img.jpg --config_path $CONFIG_PATH --trt_shape 1,3,320,320:1,3,320,320:1,3,320,320 --no_nms
-./benchmark_ppdet --model PP-YOLOE+_crn_l_80e --image ppdet_det_img.jpg --config_path $CONFIG_PATH
+# ./benchmark_ppdet --model PP-YOLOE+_crn_l_80e --image ppdet_det_img.jpg --config_path $CONFIG_PATH
 ./benchmark_ppdet --model PP-YOLOE+_crn_l_80e_with_nms --image ppdet_det_img.jpg --config_path $CONFIG_PATH
 ./benchmark_ppdet --model PP-YOLOE+_crn_l_80e_with_trt_nms --image ppdet_det_img.jpg --config_path $CONFIG_PATH
 ./benchmark_ppdet --model PP-YOLOE+_crn_l_80e_without_nms --image ppdet_det_img.jpg --config_path $CONFIG_PATH --no_nms
