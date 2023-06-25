@@ -22,6 +22,7 @@ endif()
 
 # Custom options for Paddle Inference backend
 option(PADDLEINFERENCE_DIRECTORY "Directory of custom Paddle Inference library" OFF)
+option(PADDLEINFERENCE_API_COMPAT_2_4_x "Whether using Paddle Inference 2.4.x" OFF)
 
 set(PADDLEINFERENCE_PROJECT "extern_paddle_inference")
 set(PADDLEINFERENCE_PREFIX_DIR ${THIRD_PARTY_PATH}/paddle_inference)
@@ -247,3 +248,18 @@ function(set_paddle_encrypt_auth_link_policy LIBRARY_NAME)
     endif()
   endif()
 endfunction()
+
+# Backward compatible for 2.4.x
+string(FIND ${PADDLEINFERENCE_VERSION} "2.4" PADDLEINFERENCE_USE_2_4_x)
+string(FIND ${PADDLEINFERENCE_VERSION} "2.5" PADDLEINFERENCE_USE_2_5_x)
+string(FIND ${PADDLEINFERENCE_VERSION} "0.0.0" PADDLEINFERENCE_USE_DEV)
+
+if((NOT (PADDLEINFERENCE_USE_2_4_x EQUAL -1)) 
+    AND (PADDLEINFERENCE_USE_2_5_x EQUAL -1) AND (PADDLEINFERENCE_USE_DEV EQUAL -1))
+  set(PADDLEINFERENCE_API_COMPAT_2_4_x ON CACHE BOOL "" FORCE)
+  message(WARNING "You are using PADDLEINFERENCE_USE_2_4_x:${PADDLEINFERENCE_VERSION}, force PADDLEINFERENCE_API_COMPAT_2_4_x=ON")
+endif()
+
+if(PADDLEINFERENCE_API_COMPAT_2_4_x)
+  add_definitions(-DPADDLEINFERENCE_API_COMPAT_2_4_x)
+endif()
