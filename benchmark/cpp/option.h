@@ -34,6 +34,11 @@ static void UpdateBaseCustomFlags(
   if (FLAGS_xpu_l3_cache >= 0) {
     config_info["xpu_l3_cache"] = std::to_string(FLAGS_xpu_l3_cache);
   }
+  if (FLAGS_max_workspace_size > 0) {
+    config_info["max_workspace_size"] = std::to_string(FLAGS_max_workspace_size);
+  } else {
+    config_info["max_workspace_size"] = "-1";
+  }
   // update custom options for paddle backend
   if (FLAGS_enable_log_info) {
     config_info["enable_log_info"] = "true";
@@ -59,6 +64,11 @@ static bool CreateRuntimeOption(fastdeploy::RuntimeOption* option,
   }
   if (config_info["enable_log_info"] == "true") {
     option->paddle_infer_option.enable_log_info = true;
+  }
+  if (config_info["max_workspace_size"] != "-1") {
+    int max_workspace_size = std::stoi(config_info["max_workspace_size"]);
+    option->paddle_infer_option.trt_option.max_workspace_size = max_workspace_size;
+    option->trt_option.max_workspace_size = max_workspace_size;
   }
   if (config_info["device"] == "gpu") {
     option->UseGpu(std::stoi(config_info["device_id"]));
