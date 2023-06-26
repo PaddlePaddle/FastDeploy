@@ -2,7 +2,6 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import paddle
 import copy
 import numpy as np
 import json
@@ -302,6 +301,7 @@ class VQATokenPad(object):
                  return_special_tokens_mask=False,
                  infer_mode=False,
                  **kwargs):
+
         self.max_seq_len = max_seq_len
         self.pad_to_max_seq_len = max_seq_len
         self.return_attention_mask = return_attention_mask
@@ -309,10 +309,11 @@ class VQATokenPad(object):
         self.truncation_strategy = truncation_strategy
         self.return_overflowing_tokens = return_overflowing_tokens
         self.return_special_tokens_mask = return_special_tokens_mask
-        self.pad_token_label_id = paddle.nn.CrossEntropyLoss().ignore_index
         self.infer_mode = infer_mode
 
     def __call__(self, data):
+        import paddle
+        self.pad_token_label_id = paddle.nn.CrossEntropyLoss().ignore_index
         needs_to_be_padded = self.pad_to_max_seq_len and len(data[
             "input_ids"]) < self.max_seq_len
 
@@ -512,6 +513,7 @@ class VQASerTokenLayoutLMPostProcess(object):
                 self.id2label_map_for_show[val] = key
 
     def __call__(self, preds, batch=None, *args, **kwargs):
+        import paddle
         if isinstance(preds, tuple):
             preds = preds[0]
         if isinstance(preds, paddle.Tensor):
