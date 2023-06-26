@@ -125,7 +125,7 @@ bool RKNPU2Backend::Init(const RuntimeOption& runtime_option) {
   }
 
   if (!InitInputAndOutputNumber()) {
-    FDERROR << "Get SDK and device version failed" << std::endl;
+    FDERROR << "Init input and output number failed" << std::endl;
     return false;
   }
 
