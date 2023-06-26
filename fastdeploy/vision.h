@@ -58,6 +58,7 @@
 #include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
 #include "fastdeploy/vision/ocr/ppocr/structurev2_table.h"
 #include "fastdeploy/vision/ocr/ppocr/structurev2_layout.h"
+#include "fastdeploy/vision/ocr/ppocr/structurev2_ser_vi_layoutxlm.h"
 #include "fastdeploy/vision/ocr/ppocr/ppocr_v2.h"
 #include "fastdeploy/vision/ocr/ppocr/ppocr_v3.h"
 #include "fastdeploy/vision/ocr/ppocr/ppocr_v4.h"

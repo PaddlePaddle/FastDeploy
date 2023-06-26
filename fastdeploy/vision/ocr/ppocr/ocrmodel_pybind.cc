@@ -522,5 +522,63 @@ void BindPPOCRModel(pybind11::module& m) {
         self.BatchPredict(images, &results);
         return results;
       });
+
+  pybind11::class_<vision::ocr::StructureV2SERViLayoutXLMModel,
+                   FastDeployModel>(m, "StructureV2SERViLayoutXLMModel")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>())
+      .def("clone",
+           [](vision::ocr::StructureV2SERViLayoutXLMModel& self) {
+             return self.Clone();
+           })
+      .def("predict",
+           [](vision::ocr::StructureV2SERViLayoutXLMModel& self,
+              pybind11::array& data) {
+             throw std::runtime_error(
+                 "StructureV2SERViLayoutXLMModel do not support predict.");
+           })
+      .def(
+          "batch_predict",
+          [](vision::ocr::StructureV2SERViLayoutXLMModel& self,
+             std::vector<pybind11::array>& data) {
+            throw std::runtime_error(
+                "StructureV2SERViLayoutXLMModel do not support batch_predict.");
+          })
+      .def("infer",
+           [](vision::ocr::StructureV2SERViLayoutXLMModel& self,
+              std::map<std::string, pybind11::array>& data) {
+             std::vector<FDTensor> inputs(data.size());
+             int index = 0;
+             for (auto iter = data.begin(); iter != data.end(); ++iter) {
+               std::vector<int64_t> data_shape;
+               data_shape.insert(data_shape.begin(), iter->second.shape(),
+                                 iter->second.shape() + iter->second.ndim());
+               auto dtype = NumpyDataTypeToFDDataType(iter->second.dtype());
+
+               inputs[index].Resize(data_shape, dtype);
+               memcpy(inputs[index].MutableData(), iter->second.mutable_data(),
+                      iter->second.nbytes());
+               inputs[index].name = iter->first;
+               index += 1;
+             }
+
+             std::vector<FDTensor> outputs(self.NumOutputsOfRuntime());
+             self.Infer(inputs, &outputs);
+
+             std::vector<pybind11::array> results;
+             results.reserve(outputs.size());
+             for (size_t i = 0; i < outputs.size(); ++i) {
+               auto numpy_dtype = FDDataTypeToNumpyDataType(outputs[i].dtype);
+               results.emplace_back(
+                   pybind11::array(numpy_dtype, outputs[i].shape));
+               memcpy(results[i].mutable_data(), outputs[i].Data(),
+                      outputs[i].Numel() * FDDataTypeSize(outputs[i].dtype));
+             }
+             return results;
+           })
+      .def("get_input_info",
+           [](vision::ocr::StructureV2SERViLayoutXLMModel& self, int& index) {
+             return self.InputInfoOfRuntime(index);
+           });
 }
 }  // namespace fastdeploy
