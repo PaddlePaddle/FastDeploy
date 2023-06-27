@@ -50,7 +50,7 @@ struct OrtBackendOption {
   bool enable_fp16 = false;
 
   std::vector<std::string> ort_disabled_ops_{};
-  void DisableOrtOps(const std::vector<std::string>& ops) {
+  void DisableOrtFP16OpTypes(const std::vector<std::string>& ops) {
     ort_disabled_ops_.insert(ort_disabled_ops_.end(), ops.begin(), ops.end());
   }
 };
