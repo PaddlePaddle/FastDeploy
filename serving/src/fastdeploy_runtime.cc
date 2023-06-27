@@ -439,6 +439,12 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 SplitStringByDelimiter(value_string, ' ', &disable_trt_ops);
                 runtime_options_->paddle_infer_option.DisableTrtOps(
                     disable_trt_ops);
+              } else if (param_key == "disable_ort_fp16_op_types") {
+                std::vector<std::string> disable_ort_fp16_op_types;
+                SplitStringByDelimiter(value_string, ' ',
+                                       &disable_ort_fp16_op_types);
+                runtime_options_->ort_option.DisableOrtFP16OpTypes(
+                    disable_ort_fp16_op_types);
               } else if (param_key == "delete_passes") {
                 std::vector<std::string> delete_passes;
                 SplitStringByDelimiter(value_string, ' ', &delete_passes);
