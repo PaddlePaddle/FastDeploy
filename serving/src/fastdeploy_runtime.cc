@@ -388,6 +388,8 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 } else if (value_string == "pd_fp16") {
                   // TODO(liqi): paddle inference don't currently have interface
                   // for fp16.
+                } else if (value_string == "ort_fp16") {
+                  runtime_options_->ort_option.enable_fp16 = true;
                 }
                 // } else if( param_key == "max_batch_size") {
                 //   THROW_IF_BACKEND_MODEL_ERROR(ParseUnsignedLongLongValue(
@@ -412,14 +414,15 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 if (use_paddle) {
                   // runtime_options_->EnablePaddleToTrt();
                   runtime_options_->UsePaddleInferBackend();
-                  runtime_options_->paddle_infer_option.enable_trt = true;  
+                  runtime_options_->paddle_infer_option.enable_trt = true;
                 }
               } else if (param_key == "use_paddle_trt") {
                 // Use new option setting policy to set paddle_trt backend
                 bool use_paddle_trt;
                 THROW_IF_BACKEND_MODEL_ERROR(
                     ParseBoolValue(value_string, &use_paddle_trt));
-                runtime_options_->paddle_infer_option.enable_trt = use_paddle_trt;
+                runtime_options_->paddle_infer_option.enable_trt =
+                    use_paddle_trt;
               } else if (param_key == "use_paddle_log") {
                 bool use_paddle_log;
                 THROW_IF_BACKEND_MODEL_ERROR(
