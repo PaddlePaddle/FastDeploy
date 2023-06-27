@@ -12,11 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#if defined(WITH_GPU)
+
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 
+#if defined(PADDLEINFERENCE_API_COMPAT_2_4_x)
 #include "paddle/include/experimental/ext_all.h"
-// #include "paddle/extension.h"
+#else
+#include "paddle/extension.h"
+#endif
 
 std::vector<paddle::Tensor> postprocess_gpu(
     const std::vector<paddle::Tensor> &hm,
@@ -104,3 +109,5 @@ PD_BUILD_OP(centerpoint_postprocess)
             "with_velocity: bool"})
     .SetInferShapeFn(PD_INFER_SHAPE(PostProcessInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(PostProcessInferDtype));
+
+#endif // WITH_GPU

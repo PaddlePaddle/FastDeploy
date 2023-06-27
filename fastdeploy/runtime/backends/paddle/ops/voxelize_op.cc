@@ -14,8 +14,13 @@
 
 #include <vector>
 
+#if defined(WITH_GPU)
+
+#if defined(PADDLEINFERENCE_API_COMPAT_2_4_x)
 #include "paddle/include/experimental/ext_all.h"
-// #include "paddle/extension.h"
+#else
+#include "paddle/extension.h"
+#endif
 
 template <typename T, typename T_int>
 bool hard_voxelize_cpu_kernel(
@@ -190,3 +195,5 @@ PD_BUILD_OP(hard_voxelize)
             "max_num_points_in_voxel: int", "max_voxels: int"})
     .SetInferShapeFn(PD_INFER_SHAPE(HardInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(HardInferDtype));
+
+#endif  // WITH_GPU

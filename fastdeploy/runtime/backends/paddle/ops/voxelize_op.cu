@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#if defined(PADDLEINFERENCE_API_COMPAT_2_4_x)
 #include "paddle/include/experimental/ext_all.h"
-// #include "paddle/extension.h"
+#else
+#include "paddle/extension.h"
+#endif
 
 #define CHECK_INPUT_CUDA(x) \
   PD_CHECK(x.is_gpu() || x.is_gpu_pinned(), #x " must be a GPU Tensor.")
