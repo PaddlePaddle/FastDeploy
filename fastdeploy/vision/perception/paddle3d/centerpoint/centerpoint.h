@@ -15,7 +15,6 @@
 #pragma once
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/perception/paddle3d/centerpoint/preprocessor.h"
-#include "fastdeploy/vision/perception/paddle3d/centerpoint/postprocessor.h"
 
 namespace fastdeploy {
 namespace vision {
