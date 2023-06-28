@@ -252,53 +252,53 @@ convert_fd_model() {
 }
 
 # PaddleDetection
-download_fd_model_zxvf ppyoloe_crn_l_300e_coco.tgz
-download_fd_model_zxvf picodet_l_640_coco_lcnet.tgz
-download_fd_model_zxvf ppyoloe_plus_crn_m_80e_coco.tgz
-download_fd_model_zxvf yolox_s_300e_coco.tgz
-download_fd_model_zxvf yolov5_s_300e_coco.tgz
-download_fd_model_zxvf yolov6_s_300e_coco.tgz
-download_fd_model_zxvf yolov7_l_300e_coco.tgz
-download_fd_model_zxvf yolov8_s_500e_coco.tgz
+# download_fd_model_zxvf ppyoloe_crn_l_300e_coco.tgz
+# download_fd_model_zxvf picodet_l_640_coco_lcnet.tgz
+# download_fd_model_zxvf ppyoloe_plus_crn_m_80e_coco.tgz
+# download_fd_model_zxvf yolox_s_300e_coco.tgz
+# download_fd_model_zxvf yolov5_s_300e_coco.tgz
+# download_fd_model_zxvf yolov6_s_300e_coco.tgz
+# download_fd_model_zxvf yolov7_l_300e_coco.tgz
+# download_fd_model_zxvf yolov8_s_500e_coco.tgz
 
-download_fd_model_zxvf ppyolo_r50vd_dcn_1x_coco.tgz
-download_fd_model_zxvf ppyolov2_r101vd_dcn_365e_coco.tgz
-download_fd_model_zxvf yolov3_darknet53_270e_coco.tgz
-download_fd_model_zxvf faster_rcnn_r50_vd_fpn_2x_coco.tgz
-download_fd_model_zxvf mask_rcnn_r50_1x_coco.tgz
-download_fd_model_zxvf ssd_mobilenet_v1_300_120e_voc.tgz
-download_fd_model_zxvf ssd_vgg16_300_240e_voc.tgz
-download_fd_model_zxvf ssdlite_mobilenet_v1_300_coco.tgz
-download_fd_model_zxvf rtmdet_l_300e_coco.tgz
-download_fd_model_zxvf rtmdet_s_300e_coco.tgz
-download_fd_model_zxvf yolov5_l_300e_coco.tgz
-download_fd_model_zxvf yolov6_l_300e_coco.tgz
-download_fd_model_zxvf yolov6_s_400e_coco.tgz
-download_fd_model_zxvf cascade_rcnn_r50_fpn_1x_coco.tgz
-download_fd_model_zxvf cascade_rcnn_r50_vd_fpn_ssld_2x_coco.tgz
-download_fd_model_zxvf faster_rcnn_enhance_3x_coco.tgz
-download_fd_model_zxvf fcos_r50_fpn_1x_coco.tgz
-download_fd_model_zxvf gfl_r50_fpn_1x_coco.tgz
-download_fd_model_zxvf ppyoloe_crn_l_80e_sliced_visdrone_640_025.tgz
-download_fd_model_zxvf retinanet_r101_fpn_2x_coco.tgz
-download_fd_model_zxvf retinanet_r50_fpn_1x_coco.tgz
-download_fd_model_zxvf tood_r50_fpn_1x_coco.tgz
-download_fd_model_zxvf ttfnet_darknet53_1x_coco.tgz
-download_fd_model_zxvf yolov8_x_500e_coco.tgz
-download_fd_model_zxvf yolov8_l_500e_coco.tgz
-download_fd_model_zxvf yolov8_m_500e_coco.tgz
-download_fd_model_zxvf yolov8_n_500e_coco.tgz
-download_fd_model_zxvf picodet_l_320_coco_lcnet.tgz
-download_fd_model_zxvf yolov7_x_300e_coco.tgz
+# download_fd_model_zxvf ppyolo_r50vd_dcn_1x_coco.tgz
+# download_fd_model_zxvf ppyolov2_r101vd_dcn_365e_coco.tgz
+# download_fd_model_zxvf yolov3_darknet53_270e_coco.tgz
+# download_fd_model_zxvf faster_rcnn_r50_vd_fpn_2x_coco.tgz
+# download_fd_model_zxvf mask_rcnn_r50_1x_coco.tgz
+# download_fd_model_zxvf ssd_mobilenet_v1_300_120e_voc.tgz
+# download_fd_model_zxvf ssd_vgg16_300_240e_voc.tgz
+# download_fd_model_zxvf ssdlite_mobilenet_v1_300_coco.tgz
+# download_fd_model_zxvf rtmdet_l_300e_coco.tgz
+# download_fd_model_zxvf rtmdet_s_300e_coco.tgz
+# download_fd_model_zxvf yolov5_l_300e_coco.tgz
+# download_fd_model_zxvf yolov6_l_300e_coco.tgz
+# download_fd_model_zxvf yolov6_s_400e_coco.tgz
+# download_fd_model_zxvf cascade_rcnn_r50_fpn_1x_coco.tgz
+# download_fd_model_zxvf cascade_rcnn_r50_vd_fpn_ssld_2x_coco.tgz
+# download_fd_model_zxvf faster_rcnn_enhance_3x_coco.tgz
+# download_fd_model_zxvf fcos_r50_fpn_1x_coco.tgz
+# download_fd_model_zxvf gfl_r50_fpn_1x_coco.tgz
+# download_fd_model_zxvf ppyoloe_crn_l_80e_sliced_visdrone_640_025.tgz
+# download_fd_model_zxvf retinanet_r101_fpn_2x_coco.tgz
+# download_fd_model_zxvf retinanet_r50_fpn_1x_coco.tgz
+# download_fd_model_zxvf tood_r50_fpn_1x_coco.tgz
+# download_fd_model_zxvf ttfnet_darknet53_1x_coco.tgz
+# download_fd_model_zxvf yolov8_x_500e_coco.tgz
+# download_fd_model_zxvf yolov8_l_500e_coco.tgz
+# download_fd_model_zxvf yolov8_m_500e_coco.tgz
+# download_fd_model_zxvf yolov8_n_500e_coco.tgz
+# download_fd_model_zxvf picodet_l_320_coco_lcnet.tgz
+# download_fd_model_zxvf yolov7_x_300e_coco.tgz
 
-download_fd_model_zxvf ppyoloe_crn_l_300e_coco_trt_nms.tgz
-download_fd_model_zxvf picodet_l_640_coco_lcnet_trt_nms.tgz
-download_fd_model_zxvf ppyoloe_plus_crn_m_80e_coco_trt_nms.tgz
-download_fd_model_zxvf yolox_s_300e_coco_trt_nms.tgz
-download_fd_model_zxvf yolov5_s_300e_coco_trt_nms.tgz
-download_fd_model_zxvf yolov6_s_300e_coco_trt_nms.tgz
-download_fd_model_zxvf yolov7_l_300e_coco_trt_nms.tgz
-download_fd_model_zxvf yolov8_s_500e_coco_trt_nms.tgz
+# download_fd_model_zxvf ppyoloe_crn_l_300e_coco_trt_nms.tgz
+# download_fd_model_zxvf picodet_l_640_coco_lcnet_trt_nms.tgz
+# download_fd_model_zxvf ppyoloe_plus_crn_m_80e_coco_trt_nms.tgz
+# download_fd_model_zxvf yolox_s_300e_coco_trt_nms.tgz
+# download_fd_model_zxvf yolov5_s_300e_coco_trt_nms.tgz
+# download_fd_model_zxvf yolov6_s_300e_coco_trt_nms.tgz
+# download_fd_model_zxvf yolov7_l_300e_coco_trt_nms.tgz
+# download_fd_model_zxvf yolov8_s_500e_coco_trt_nms.tgz
 
 download_fd_model_zxvf ppyoloe_crn_l_300e_coco_no_nms.tgz
 download_fd_model_zxvf picodet_l_640_coco_lcnet_no_nms.tgz
@@ -385,15 +385,35 @@ if [ "$CONVERT_FLAG" = "convert" ]; then
    convert_fd_model yolov7_l_300e_coco_no_nms -in image:1,3,640,640 scale_factor:1,2
    convert_fd_model yolov8_s_500e_coco_no_nms -in image:1,3,640,640 scale_factor:1,2
 
-   convert_fd_model PPLCNet_x1_0_infer -in 1,3,224,224
-   convert_fd_model PPLCNetV2_base_infer -in 1,3,224,224
-   convert_fd_model MobileNetV1_x0_25_infer -in 1,3,224,224
-   convert_fd_model MobileNetV1_ssld_infer -in 1,3,224,224
-   convert_fd_model MobileNetV3_large_x1_0_ssld_infer -in 1,3,224,224
-   convert_fd_model ShuffleNetV2_x2_0_infer -in 1,3,224,224
-   convert_fd_model ResNet50_vd_infer -in 1,3,224,224
-   convert_fd_model EfficientNetB0_small_infer -in 1,3,224,224
-   convert_fd_model PPHGNet_tiny_ssld_infer -in 1,3,224,224
+   convert_fd_model PPLCNet_x1_0_infer.tgz -in 1,3,224,224
+   convert_fd_model PPLCNetV2_base_infer.tgz -in 1,3,224,224
+   convert_fd_model EfficientNetB7_infer.tgz -in 1,3,224,224
+   convert_fd_model GhostNet_x0_5_infer.tgz -in 1,3,224,224
+   convert_fd_model GhostNet_x1_3_infer.tgz -in 1,3,224,224
+   convert_fd_model GhostNet_x1_3_ssld_infer.tgz -in 1,3,224,224
+   convert_fd_model MobileNetV1_x0_25_infer.tgz -in 1,3,224,224
+   convert_fd_model MobileNetV1_ssld_infer.tgz -in 1,3,224,224
+   convert_fd_model MobileNetV2_x0_25_infer.tgz -in 1,3,224,224
+   convert_fd_model MobileNetV2_ssld_infer.tgz -in 1,3,224,224
+   convert_fd_model MobileNetV3_small_x0_35_ssld_infer.tgz -in 1,3,224,224
+   convert_fd_model MobileNetV3_large_x1_0_ssld_infer.tgz -in 1,3,224,224
+   convert_fd_model ShuffleNetV2_x0_25_infer.tgz -in 1,3,224,224
+   convert_fd_model ShuffleNetV2_x2_0_infer.tgz -in 1,3,224,224
+   convert_fd_model SqueezeNet1_1_infer.tgz -in 1,3,224,224
+   convert_fd_model InceptionV3_infer.tgz -in 1,3,299,299
+   convert_fd_model ResNet50_vd_infer.tgz -in 1,3,224,224
+   convert_fd_model ResNet50_infer.tgz -in 1,3,224,224
+   convert_fd_model PPHGNet_tiny_ssld_infer.tgz -in 1,3,224,224
+   convert_fd_model PPHGNet_base_ssld_infer.tgz -in 1,3,224,224
+   convert_fd_model EfficientNetB0_infer.tgz -in 1,3,224,224
+   convert_fd_model MobileNetV2_infer.tgz -in 1,3,224,224
+   convert_fd_model MobileNetV3_small_x1_0_infer.tgz -in 1,3,224,224
+   convert_fd_model ViT_large_patch16_224_infer.tgz -in 1,3,224,224
+   convert_fd_model ResNeXt50_32x4d_infer.tgz -in 1,3,224,224
+   convert_fd_model DenseNet121_infer.tgz -in 1,3,224,224
+   convert_fd_model PPHGNet_small_infer.tgz -in 1,3,224,224
+   convert_fd_model person_exists_infer.tgz -in 1,3,224,224
+   convert_fd_model EfficientNetB0_small_infer.tgz -in 1,3,224,224
 
    convert_fd_model PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer -in 1,3,512,512
    convert_fd_model PP_HumanSegV1_Lite_infer -in 1,3,192,192
@@ -404,6 +424,10 @@ if [ "$CONVERT_FLAG" = "convert" ]; then
    convert_fd_model PPHumanMatting
    convert_fd_model PP-Matting-512
    convert_fd_model PPModnet_MobileNetV2 -in 1,3,512,512
+   convert_fd_model Unet_cityscapes_with_argmax_infer.tgz -in 1,3,512,512
+   convert_fd_model PP_HumanSegV1_Server_with_argmax_infer.tgz -in 1,3,512,512
+   convert_fd_model FCN_HRNet_W18_cityscapes_with_argmax_infer.tgz -in 1,3,512,512
+   convert_fd_model PP_HumanSegV2_Mobile_192x192_with_argmax_infer.tgz -in 1,3,192,192
 
    convert_fd_model ch_PP-OCRv3_det_infer -in x:1,3,960,608
    convert_fd_model ch_PP-OCRv3_rec_infer -in x:1,3,48,572
