@@ -385,35 +385,35 @@ if [ "$CONVERT_FLAG" = "convert" ]; then
    convert_fd_model yolov7_l_300e_coco_no_nms -in image:1,3,640,640 scale_factor:1,2
    convert_fd_model yolov8_s_500e_coco_no_nms -in image:1,3,640,640 scale_factor:1,2
 
-   convert_fd_model PPLCNet_x1_0_infer.tgz -in 1,3,224,224
-   convert_fd_model PPLCNetV2_base_infer.tgz -in 1,3,224,224
-   convert_fd_model EfficientNetB7_infer.tgz -in 1,3,224,224
-   convert_fd_model GhostNet_x0_5_infer.tgz -in 1,3,224,224
-   convert_fd_model GhostNet_x1_3_infer.tgz -in 1,3,224,224
-   convert_fd_model GhostNet_x1_3_ssld_infer.tgz -in 1,3,224,224
-   convert_fd_model MobileNetV1_x0_25_infer.tgz -in 1,3,224,224
-   convert_fd_model MobileNetV1_ssld_infer.tgz -in 1,3,224,224
-   convert_fd_model MobileNetV2_x0_25_infer.tgz -in 1,3,224,224
-   convert_fd_model MobileNetV2_ssld_infer.tgz -in 1,3,224,224
-   convert_fd_model MobileNetV3_small_x0_35_ssld_infer.tgz -in 1,3,224,224
-   convert_fd_model MobileNetV3_large_x1_0_ssld_infer.tgz -in 1,3,224,224
-   convert_fd_model ShuffleNetV2_x0_25_infer.tgz -in 1,3,224,224
-   convert_fd_model ShuffleNetV2_x2_0_infer.tgz -in 1,3,224,224
-   convert_fd_model SqueezeNet1_1_infer.tgz -in 1,3,224,224
-   convert_fd_model InceptionV3_infer.tgz -in 1,3,299,299
-   convert_fd_model ResNet50_vd_infer.tgz -in 1,3,224,224
-   convert_fd_model ResNet50_infer.tgz -in 1,3,224,224
-   convert_fd_model PPHGNet_tiny_ssld_infer.tgz -in 1,3,224,224
-   convert_fd_model PPHGNet_base_ssld_infer.tgz -in 1,3,224,224
-   convert_fd_model EfficientNetB0_infer.tgz -in 1,3,224,224
-   convert_fd_model MobileNetV2_infer.tgz -in 1,3,224,224
-   convert_fd_model MobileNetV3_small_x1_0_infer.tgz -in 1,3,224,224
-   convert_fd_model ViT_large_patch16_224_infer.tgz -in 1,3,224,224
-   convert_fd_model ResNeXt50_32x4d_infer.tgz -in 1,3,224,224
-   convert_fd_model DenseNet121_infer.tgz -in 1,3,224,224
-   convert_fd_model PPHGNet_small_infer.tgz -in 1,3,224,224
-   convert_fd_model person_exists_infer.tgz -in 1,3,224,224
-   convert_fd_model EfficientNetB0_small_infer.tgz -in 1,3,224,224
+   convert_fd_model PPLCNet_x1_0_infer -in 1,3,224,224
+   convert_fd_model PPLCNetV2_base_infer -in 1,3,224,224
+   convert_fd_model EfficientNetB7_infer -in 1,3,224,224
+   convert_fd_model GhostNet_x0_5_infer -in 1,3,224,224
+   convert_fd_model GhostNet_x1_3_infer -in 1,3,224,224
+   convert_fd_model GhostNet_x1_3_ssld_infer -in 1,3,224,224
+   convert_fd_model MobileNetV1_x0_25_infer -in 1,3,224,224
+   convert_fd_model MobileNetV1_ssld_infer -in 1,3,224,224
+   convert_fd_model MobileNetV2_x0_25_infer -in 1,3,224,224
+   convert_fd_model MobileNetV2_ssld_infer -in 1,3,224,224
+   convert_fd_model MobileNetV3_small_x0_35_ssld_infer -in 1,3,224,224
+   convert_fd_model MobileNetV3_large_x1_0_ssld_infer -in 1,3,224,224
+   convert_fd_model ShuffleNetV2_x0_25_infer -in 1,3,224,224
+   convert_fd_model ShuffleNetV2_x2_0_infer -in 1,3,224,224
+   convert_fd_model SqueezeNet1_1_infer -in 1,3,224,224
+   convert_fd_model InceptionV3_infer -in 1,3,299,299
+   convert_fd_model ResNet50_vd_infer -in 1,3,224,224
+   convert_fd_model ResNet50_infer -in 1,3,224,224
+   convert_fd_model PPHGNet_tiny_ssld_infer -in 1,3,224,224
+   convert_fd_model PPHGNet_base_ssld_infer -in 1,3,224,224
+   convert_fd_model EfficientNetB0_infer -in 1,3,224,224
+   convert_fd_model MobileNetV2_infer -in 1,3,224,224
+   convert_fd_model MobileNetV3_small_x1_0_infer -in 1,3,224,224
+   convert_fd_model ViT_large_patch16_224_infer -in 1,3,224,224
+   convert_fd_model ResNeXt50_32x4d_infer -in 1,3,224,224
+   convert_fd_model DenseNet121_infer -in 1,3,224,224
+   convert_fd_model PPHGNet_small_infer -in 1,3,224,224
+   convert_fd_model person_exists_infer -in 1,3,224,224
+   convert_fd_model EfficientNetB0_small_infer -in 1,3,224,224
 
    convert_fd_model PP_LiteSeg_B_STDC2_cityscapes_with_argmax_infer -in 1,3,512,512
    convert_fd_model PP_HumanSegV1_Lite_infer -in 1,3,192,192
@@ -424,10 +424,10 @@ if [ "$CONVERT_FLAG" = "convert" ]; then
    convert_fd_model PPHumanMatting
    convert_fd_model PP-Matting-512
    convert_fd_model PPModnet_MobileNetV2 -in 1,3,512,512
-   convert_fd_model Unet_cityscapes_with_argmax_infer.tgz -in 1,3,512,512
-   convert_fd_model PP_HumanSegV1_Server_with_argmax_infer.tgz -in 1,3,512,512
-   convert_fd_model FCN_HRNet_W18_cityscapes_with_argmax_infer.tgz -in 1,3,512,512
-   convert_fd_model PP_HumanSegV2_Mobile_192x192_with_argmax_infer.tgz -in 1,3,192,192
+   convert_fd_model Unet_cityscapes_with_argmax_infer -in 1,3,512,512
+   convert_fd_model PP_HumanSegV1_Server_with_argmax_infer -in 1,3,512,512
+   convert_fd_model FCN_HRNet_W18_cityscapes_with_argmax_infer -in 1,3,512,512
+   convert_fd_model PP_HumanSegV2_Mobile_192x192_with_argmax_infer -in 1,3,192,192
 
    convert_fd_model ch_PP-OCRv3_det_infer -in x:1,3,960,608
    convert_fd_model ch_PP-OCRv3_rec_infer -in x:1,3,48,572
