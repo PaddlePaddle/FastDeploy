@@ -23,7 +23,7 @@ endif()
 # Custom options for Paddle Inference backend
 option(PADDLEINFERENCE_DIRECTORY "Directory of custom Paddle Inference library" OFF)
 option(PADDLEINFERENCE_API_COMPAT_2_4_x "Whether using Paddle Inference 2.4.x" OFF)
-option(PADDLEINFERENCE_API_COMPAT_2_4_5 "Whether using Paddle Inference 2.5.x" OFF)
+option(PADDLEINFERENCE_API_COMPAT_2_5_x "Whether using Paddle Inference 2.5.x" OFF)
 option(PADDLEINFERENCE_API_COMPAT_DEV "Whether using Paddle Inference latest dev" OFF)
 option(PADDLEINFERENCE_API_CUSTOM_OP "Whether building with custom paddle ops" OFF)
 
