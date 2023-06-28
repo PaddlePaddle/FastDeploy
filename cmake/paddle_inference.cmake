@@ -281,6 +281,17 @@ if(PADDLEINFERENCE_API_COMPAT_DEV)
   add_definitions(-DPADDLEINFERENCE_API_COMPAT_DEV)
 endif()
 
+# TODO: support for latest dev
+if(PADDLEINFERENCE_API_COMPAT_2_5_x)
+  # no c++ standard policy conflicts vs c++ 11
+  set(PADDLEINFERENCE_API_CUSTOM_OP ON CACHE BOOL "" FORCE)
+  # add paddle_inference/paddle/include path for custom ops
+  # the extension.h and it's deps headers are located in 
+  # paddle/include/paddle directory.
+  include_directories(${PADDLEINFERENCE_INC_DIR}/paddle/include)
+  message(WARNING "You are using PADDLEINFERENCE_API_COMPAT_2_5_x:${PADDLEINFERENCE_VERSION}, force PADDLEINFERENCE_API_CUSTOM_OP=${PADDLEINFERENCE_API_CUSTOM_OP}")
+endif()
+
 # Compatible for custom paddle ops
 function(set_paddle_custom_ops_compatible_policy)
   if(PADDLEINFERENCE_API_CUSTOM_OP AND (NOT MSVC))

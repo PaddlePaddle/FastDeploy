@@ -14,10 +14,11 @@
 
 #if defined(PADDLEINFERENCE_API_COMPAT_2_4_x)
 #include "paddle/include/experimental/ext_all.h"
+#elif defined(PADDLEINFERENCE_API_COMPAT_2_5_x)
+#include "paddle/include/paddle/extension.h"
 #else
 #include "paddle/extension.h"
 #endif
-
 
 #define CHECK_INPUT_CUDA(x) PD_CHECK(x.is_gpu(), #x " must be a GPU Tensor.")
 
