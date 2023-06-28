@@ -34,6 +34,7 @@
 #include "fastdeploy/runtime/backends/mnn/option.h"
 #include "fastdeploy/runtime/backends/ncnn/option.h"
 #include "fastdeploy/runtime/backends/tnn/option.h"
+#include "fastdeploy/runtime/backends/tvm/option.h"
 #include "fastdeploy/benchmark/option.h"
 
 namespace fastdeploy {
@@ -175,6 +176,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   NCNNBackendOption ncnn_option;
   /// Option to configure TNN backend
   TNNBackendOption tnn_option;
+  /// Option to configure TVM backend
+  TVMBackendOption tvm_option;
 
   //  \brief Set the profile mode as 'true'.
   //
@@ -297,6 +300,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void UsePaddleBackend();
   void UseLiteBackend();
   void UseHorizonNPUBackend();
+  void UseTVMBackend();
 };
 
 }  // namespace fastdeploy

@@ -52,25 +52,25 @@ void LiteBackend::ConfigureCpu(const LiteBackendOption& option) {
 void LiteBackend::ConfigureGpu(const LiteBackendOption& option) {
   std::vector<paddle::lite_api::Place> valid_places;
   if (option.enable_fp16) {
-    valid_places.emplace_back(paddle::lite_api::Place{
-        TARGET(kOpenCL), PRECISION(kFP16), DATALAYOUT(kImageDefault)});
-    valid_places.emplace_back(paddle::lite_api::Place{
-        TARGET(kOpenCL), PRECISION(kFP16), DATALAYOUT(kImageFolder)});
+    valid_places.emplace_back(paddle::lite_api::Place{TARGET(kOpenCL),
+        PRECISION(kFP16), DATALAYOUT(kImageDefault)});
+    valid_places.emplace_back(paddle::lite_api::Place{TARGET(kOpenCL),
+        PRECISION(kFP16), DATALAYOUT(kImageFolder)});
   }
-  valid_places.emplace_back(
-      paddle::lite_api::Place{TARGET(kOpenCL), PRECISION(kFloat)});
-  valid_places.emplace_back(paddle::lite_api::Place{
-      TARGET(kOpenCL), PRECISION(kAny), DATALAYOUT(kImageDefault)});
-  valid_places.emplace_back(paddle::lite_api::Place{
-      TARGET(kOpenCL), PRECISION(kAny), DATALAYOUT(kImageFolder)});
-  valid_places.emplace_back(
-      paddle::lite_api::Place{TARGET(kOpenCL), PRECISION(kAny)});
-  valid_places.emplace_back(
-      paddle::lite_api::Place{TARGET(kOpenCL), PRECISION(kInt32)});
-  valid_places.emplace_back(
-      paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
-  valid_places.emplace_back(
-      paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
+  valid_places.emplace_back(paddle::lite_api::Place{TARGET(kOpenCL),
+      PRECISION(kFloat)});
+  valid_places.emplace_back(paddle::lite_api::Place{TARGET(kOpenCL),
+      PRECISION(kAny), DATALAYOUT(kImageDefault)});
+  valid_places.emplace_back(paddle::lite_api::Place{TARGET(kOpenCL),
+      PRECISION(kAny), DATALAYOUT(kImageFolder)});
+  valid_places.emplace_back(paddle::lite_api::Place{TARGET(kOpenCL),
+      PRECISION(kAny)});
+  valid_places.emplace_back(paddle::lite_api::Place{TARGET(kOpenCL),
+      PRECISION(kInt32)});
+  valid_places.emplace_back(paddle::lite_api::Place{TARGET(kARM),
+      PRECISION(kInt8)});
+  valid_places.emplace_back(paddle::lite_api::Place{TARGET(kARM),
+      PRECISION(kFloat)});
   config_.set_valid_places(valid_places);
 }
 

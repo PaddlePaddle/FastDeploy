@@ -315,6 +315,11 @@ class RuntimeOption:
         """
         return self._option.use_ort_backend()
 
+    def use_tvm_backend(self):
+        """Use TVM Runtime backend, support inference TVM model on CPU.
+        """
+        return self._option.use_tvm_backend()
+
     def use_trt_backend(self):
         """Use TensorRT backend, support inference Paddle/ONNX model on Nvidia GPU.
         """

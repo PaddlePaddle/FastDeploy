@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-FROM nvidia/cuda:11.6.1-cudnn8-devel-ubuntu20.04
+FROM nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04
 
 ARG http_proxy
 ARG https_proxy
@@ -33,7 +33,7 @@ ENV PATH=/home/cmake-3.18.6-Linux-x86_64/bin:$PATH
 
 
 #install triton
-ENV TAG=r22.12
+ENV TAG=r21.10
 RUN git clone https://github.com/triton-inference-server/server.git -b $TAG && \
    cd server && \
    mkdir -p build/tritonserver/install && \
@@ -81,3 +81,8 @@ COPY build/fastdeploy_install/* /opt/fastdeploy/
 # Set environment variable
 ENV LD_LIBRARY_PATH="/opt/fastdeploy/lib:/opt/fastdeploy/third_libs/install/onnxruntime/lib:/opt/fastdeploy/third_libs/install/paddle2onnx/lib:/opt/fastdeploy/third_libs/install/paddle_inference/paddle/lib:/opt/fastdeploy/third_libs/install/openvino/runtime/lib/:/opt/fastdeploy/third_libs/install/tensorrt/lib/:/opt/fastdeploy/third_libs/install/opencv/lib64/:$LD_LIBRARY_PATH"
 ENV PATH="/opt/tritonserver/bin:$PATH"
+
+ENV http_proxy=
+ENV https_proxy=
+ENV no_proxy=
+ENV TZ=Asia/Shanghai

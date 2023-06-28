@@ -79,7 +79,7 @@ struct LiteBackendOption {
   bool kunlunxin_adaptive_seqlen = false;
   /// kunlunxin_enable_multi_stream
   bool kunlunxin_enable_multi_stream = false;
-  /// kunlunxin_gm_default_size
+  /// kunlunxin_gm_default_size 
   int64_t kunlunxin_gm_default_size = 0;
 
   /// Optimized model dir for CxxConfig

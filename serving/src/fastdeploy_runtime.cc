@@ -199,6 +199,9 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
           runtime_options_->UseOrtBackend();
         } else if (name == "paddle") {
           runtime_options_->UsePaddleBackend();
+        } else if (name == "paddle_xpu") {
+          // Note(qiuyanjun): use XPU via paddle inference backend.
+          runtime_options_->UsePaddleInferBackend();
         } else if (name == "openvino") {
           runtime_options_->UseOpenVINOBackend();
         } else if (name != "") {
@@ -212,44 +215,124 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
         }
 
         triton::common::TritonJson::Value params;
-        if (ea.Find("parameters", &params)) {
-          std::vector<std::string> param_keys;
-          THROW_IF_BACKEND_MODEL_ERROR(params.Members(&param_keys));
-          for (const auto& param_key : param_keys) {
-            std::string value_string;
-            THROW_IF_BACKEND_MODEL_ERROR(
-                params.MemberAsString(param_key.c_str(), &value_string));
-            if (param_key == "cpu_threads") {
-              int cpu_thread_num;
+        if (name == "paddle_xpu") {
+          // parse parameters for cpu host + xpu device.
+          if (ea.Find("parameters", &params)) {
+            std::vector<std::string> param_keys;
+            THROW_IF_BACKEND_MODEL_ERROR(params.Members(&param_keys));
+            // default settings for XPU.
+            int kunlunxin_id = 0;
+            int l3_workspace_size = 0xfffc00;
+            bool locked = false;
+            bool autotune = true;
+            std::string autotune_file = "";
+            std::string precision = "int16";
+            bool adaptive_seqlen = false;
+            bool enable_multi_stream = false;
+            // for future use (only support lite backend now).
+            int gm_default_size = 0;
+            // common settings for cpu host.
+            int cpu_thread_num = -1;
+            bool use_paddle_log = false;
+
+            for (const auto& param_key : param_keys) {
+              std::string value_string;
               THROW_IF_BACKEND_MODEL_ERROR(
-                  ParseIntValue(value_string, &cpu_thread_num));
-              runtime_options_->SetCpuThreadNum(cpu_thread_num);
-            } else if (param_key == "use_mkldnn") {
-              bool pd_enable_mkldnn;
+                  params.MemberAsString(param_key.c_str(), &value_string));
+              // parse common settings for cpu host.
+              if (param_key == "cpu_threads") {
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseIntValue(value_string, &cpu_thread_num));
+                runtime_options_->SetCpuThreadNum(cpu_thread_num);
+              } else if (param_key == "use_paddle_log") {
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &use_paddle_log));
+                runtime_options_->paddle_infer_option.enable_log_info =
+                    use_paddle_log;
+              } else if (param_key == "is_clone") {
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &is_clone_));
+              } else if (param_key == "delete_passes") {
+                std::vector<std::string> delete_passes;
+                SplitStringByDelimiter(value_string, ' ', &delete_passes);
+                for (auto&& pass : delete_passes) {
+                  runtime_options_->paddle_infer_option.DeletePass(pass);
+                }
+              } else if (param_key == "encryption_key") {
+                runtime_options_->SetEncryptionKey(value_string);
+                // parse common settings for xpu device.
+              } else if (param_key == "kunlunxin_id") {
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseIntValue(value_string, &kunlunxin_id));
+              } else if (param_key == "l3_workspace_size") {
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseIntValue(value_string, &l3_workspace_size));
+              } else if (param_key == "locked") {
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &locked));
+              } else if (param_key == "autotune") {
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &autotune));
+              } else if (param_key == "precision") {
+                precision = value_string;
+              } else if (param_key == "adaptive_seqlen") {
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &adaptive_seqlen));
+              } else if (param_key == "enable_multi_stream") {
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &enable_multi_stream));
+              } else if (param_key == "gm_default_size") {
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseIntValue(value_string, &gm_default_size));
+              }
+            }
+            // initialize xpu device settings
+            runtime_options_->UseKunlunXin(
+                kunlunxin_id, l3_workspace_size, locked, autotune,
+                autotune_file, precision, adaptive_seqlen, enable_multi_stream,
+                int64_t(gm_default_size));
+          }
+        } else {
+          // parse parameters for cpu only
+          if (ea.Find("parameters", &params)) {
+            std::vector<std::string> param_keys;
+            THROW_IF_BACKEND_MODEL_ERROR(params.Members(&param_keys));
+            for (const auto& param_key : param_keys) {
+              std::string value_string;
               THROW_IF_BACKEND_MODEL_ERROR(
-                  ParseBoolValue(value_string, &pd_enable_mkldnn));
-              runtime_options_->SetPaddleMKLDNN(pd_enable_mkldnn);
-            } else if (param_key == "use_paddle_log") {
-              bool use_paddle_log;
-              THROW_IF_BACKEND_MODEL_ERROR(
-                  ParseBoolValue(value_string, &use_paddle_log));
-              runtime_options_->paddle_infer_option.enable_log_info =
-                  use_paddle_log;
-            } else if (param_key == "num_streams") {
-              int num_streams;
-              THROW_IF_BACKEND_MODEL_ERROR(
-                  ParseIntValue(value_string, &num_streams));
-              runtime_options_->openvino_option.num_streams = num_streams;
-            } else if (param_key == "is_clone") {
-              THROW_IF_BACKEND_MODEL_ERROR(
-                  ParseBoolValue(value_string, &is_clone_));
-            } else if (param_key == "use_ipu") {
-              // runtime_options_->UseIpu();
-            } else if (param_key == "encryption_key") {
-              runtime_options_->SetEncryptionKey(value_string);
+                  params.MemberAsString(param_key.c_str(), &value_string));
+              if (param_key == "cpu_threads") {
+                int cpu_thread_num;
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseIntValue(value_string, &cpu_thread_num));
+                runtime_options_->SetCpuThreadNum(cpu_thread_num);
+              } else if (param_key == "use_mkldnn") {
+                bool pd_enable_mkldnn;
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &pd_enable_mkldnn));
+                runtime_options_->SetPaddleMKLDNN(pd_enable_mkldnn);
+              } else if (param_key == "use_paddle_log") {
+                bool use_paddle_log;
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &use_paddle_log));
+                runtime_options_->paddle_infer_option.enable_log_info =
+                    use_paddle_log;
+              } else if (param_key == "num_streams") {
+                int num_streams;
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseIntValue(value_string, &num_streams));
+                runtime_options_->openvino_option.num_streams = num_streams;
+              } else if (param_key == "is_clone") {
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &is_clone_));
+              } else if (param_key == "use_ipu") {
+                // runtime_options_->UseIpu();
+              } else if (param_key == "encryption_key") {
+                runtime_options_->SetEncryptionKey(value_string);
+              }
             }
           }
-        }
+        }  // end 'name == "paddle_xpu"'
       }
     }
   }
@@ -322,7 +405,21 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
               } else if (param_key == "cache_file") {
                 runtime_options_->trt_option.serialize_file = value_string;
               } else if (param_key == "use_paddle") {
-                runtime_options_->EnablePaddleToTrt();
+                // `RuntimeOption::EnablePaddleToTrt` will be removed in v1.2.0
+                bool use_paddle;
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &use_paddle));
+                if (use_paddle) {
+                  // runtime_options_->EnablePaddleToTrt();
+                  runtime_options_->UsePaddleInferBackend();
+                  runtime_options_->paddle_infer_option.enable_trt = true;  
+                }
+              } else if (param_key == "use_paddle_trt") {
+                // Use new option setting policy to set paddle_trt backend
+                bool use_paddle_trt;
+                THROW_IF_BACKEND_MODEL_ERROR(
+                    ParseBoolValue(value_string, &use_paddle_trt));
+                runtime_options_->paddle_infer_option.enable_trt = use_paddle_trt;
               } else if (param_key == "use_paddle_log") {
                 bool use_paddle_log;
                 THROW_IF_BACKEND_MODEL_ERROR(
@@ -422,7 +519,7 @@ TRITONSERVER_Error* ModelState::LoadModel(
       }
     }
 
-    // GPU
+// GPU
 #ifdef TRITON_ENABLE_GPU
     if ((instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
         (instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
@@ -432,8 +529,9 @@ TRITONSERVER_Error* ModelState::LoadModel(
       runtime_options_->UseCpu();
     }
 #else
-    if (runtime_options_->device != fastdeploy::Device::IPU) {
-      // If Device is set to IPU, just skip CPU setting.
+    if ((runtime_options_->device != fastdeploy::Device::IPU) &&
+        (runtime_options_->device != fastdeploy::Device::KUNLUNXIN)) {
+      // If Device is set to IPU/XPU, just skip CPU setting.
       runtime_options_->UseCpu();
     }
 #endif  // TRITON_ENABLE_GPU
@@ -972,7 +1070,7 @@ void ModelInstanceState::ProcessRequests(TRITONBACKEND_Request** requests,
       SetInputTensors(total_batch_size, requests, request_count, &responses,
                       &collector, &cuda_copy));
 
-  // Wait for any in-flight input tensor copies to complete.
+// Wait for any in-flight input tensor copies to complete.
 #ifdef TRITON_ENABLE_GPU
   if (cuda_copy) {
     cudaStreamSynchronize(CudaStream());
@@ -1146,6 +1244,12 @@ TRITONSERVER_Error* ModelInstanceState::ReadOutputTensors(
     const uint32_t request_count,
     std::vector<TRITONBACKEND_Response*>* responses) {
   // r22.12
+  // BackendOutputResponder responder(
+  //     requests, request_count, responses,
+  //     model_state_->TritonMemoryManager(), model_state_->MaxBatchSize() > 0,
+  //     model_state_->EnablePinnedOutput(), CudaStream());
+
+  // r21.10
   BackendOutputResponder responder(
       requests, request_count, responses,
       model_state_->TritonMemoryManager(), model_state_->MaxBatchSize() > 0,

@@ -62,6 +62,7 @@ void BindOption(pybind11::module& m) {
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
       .def("use_paddle_backend", &RuntimeOption::UsePaddleBackend)
       .def("use_poros_backend", &RuntimeOption::UsePorosBackend)
+      .def("use_tvm_backend", &RuntimeOption::UseTVMBackend)
       .def("use_ort_backend", &RuntimeOption::UseOrtBackend)
       .def("use_trt_backend", &RuntimeOption::UseTrtBackend)
       .def("use_openvino_backend", &RuntimeOption::UseOpenVINOBackend)

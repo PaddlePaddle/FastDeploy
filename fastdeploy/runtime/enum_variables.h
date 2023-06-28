@@ -42,6 +42,7 @@ enum Backend {
   NCNN,  ///< NCNN, support NCNN_MODEL format model, ARM CPU only
   TNN,  ///< TNN, support TNN_MODEL format model, ARM CPU only
   HORIZONNPU,     ///< HORIZONNPU, support Horizon format model, Horizon NPU
+  TVM,  ///< TVMBackend, support TVM format model, CPU / Nvidia GPU
 };
 
 /**
@@ -80,6 +81,7 @@ enum ModelFormat {
   NCNN_MODEL,    ///< Model with NCNN format
   TNN_MODEL,    ///< Model with TNN format
   HORIZON,      ///< Model with HORIZON format
+  TVMFormat,    ///< Model with TVM format
 };
 
 /// Describle all the supported backends for specified model format
@@ -95,16 +97,16 @@ static std::map<ModelFormat, std::vector<Backend>>
   {ModelFormat::MNN_MODEL, {Backend::MNN}},
   {ModelFormat::NCNN_MODEL, {Backend::NCNN}},
   {ModelFormat::TNN_MODEL, {Backend::TNN}},
+  {ModelFormat::TVMFormat, {Backend::TVM}}
 };
 
 /// Describle all the supported backends for specified device
 static std::map<Device, std::vector<Backend>>
     s_default_backends_by_device = {
   {Device::CPU, {Backend::LITE, Backend::PDINFER, Backend::ORT,
-                 Backend::OPENVINO, Backend::POROS, Backend::MNN,
-                 Backend::NCNN, Backend::TNN}},
-  {Device::GPU, {Backend::LITE, Backend::PDINFER, Backend::ORT, Backend::TRT,
-                 Backend::POROS}},
+                Backend::OPENVINO, Backend::POROS, Backend::TVM}},
+  {Device::GPU, {Backend::LITE, Backend::PDINFER, Backend::ORT,
+                Backend::TRT, Backend::POROS, Backend::TVM}},
   {Device::RKNPU, {Backend::RKNPU2}},
   {Device::SUNRISENPU, {Backend::HORIZONNPU}},
   {Device::IPU, {Backend::PDINFER}},

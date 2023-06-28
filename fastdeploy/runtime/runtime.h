@@ -121,6 +121,7 @@ struct FASTDEPLOY_DECL Runtime {
   void CreateMNNBackend();
   void CreateNCNNBackend();
   void CreateTNNBackend();
+  void CreateTVMBackend();
   std::unique_ptr<BaseBackend> backend_;
   std::vector<FDTensor> input_tensors_;
   std::vector<FDTensor> output_tensors_;

@@ -69,6 +69,10 @@
 #cmakedefine WITH_DIRECTML
 #endif
 
+#ifndef WITH_DIRECTML
+#cmakedefine WITH_DIRECTML
+#endif
+
 #ifndef ENABLE_VISION
 #cmakedefine ENABLE_VISION
 #endif
@@ -87,4 +91,8 @@
 
 #ifndef ENABLE_HORIZON_BACKEND
 #cmakedefine ENABLE_HORIZON_BACKEND
+#endif
+
+#ifndef ENABLE_TVM_BACKEND
+#cmakedefine ENABLE_TVM_BACKEND
 #endif

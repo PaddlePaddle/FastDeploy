@@ -51,6 +51,10 @@ void BindPaddleOption(pybind11::module& m) {
                      &PaddleBackendOption::mkldnn_cache_size)
       .def_readwrite("gpu_mem_init_size",
                      &PaddleBackendOption::gpu_mem_init_size)
+      .def_readwrite("is_quantize_model",
+                     &PaddleBackendOption::is_quantize_model)
+      .def_readwrite("inference_precision", &PaddleBackendOption::inference_precision)
+      .def_readwrite("enable_inference_cutlass",&PaddleBackendOption::enable_inference_cutlass)
       .def("disable_trt_ops", &PaddleBackendOption::DisableTrtOps)
       .def("delete_pass", &PaddleBackendOption::DeletePass)
       .def("set_ipu_config", &PaddleBackendOption::SetIpuConfig);

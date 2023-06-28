@@ -63,6 +63,7 @@ option(ENABLE_POROS_BACKEND "Whether to enable poros backend." OFF)
 option(ENABLE_OPENVINO_BACKEND "Whether to enable openvino backend." OFF)
 option(ENABLE_RKNPU2_BACKEND "Whether to enable RKNPU2 backend." OFF)
 option(ENABLE_SOPHGO_BACKEND "Whether to enable SOPHON backend." OFF)
+option(ENABLE_TVM_BACKEND "Whether to enable TVM backend." OFF)
 option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
 option(ENABLE_MNN_BACKEND "Whether to enable MNN backend." OFF)
 option(ENABLE_NCNN_BACKEND "Whether to enable NCNN backend." OFF)
@@ -172,6 +173,7 @@ file(GLOB_RECURSE DEPLOY_OPENVINO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/f
 file(GLOB_RECURSE DEPLOY_RKNPU2_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/rknpu2/*.cc)
 file(GLOB_RECURSE DEPLOY_HORIZON_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/horizon/*.cc)
 file(GLOB_RECURSE DEPLOY_SOPHGO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/sophgo/*.cc)
+file(GLOB_RECURSE DEPLOY_TVM_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/tvm/*.cc)
 file(GLOB_RECURSE DEPLOY_LITE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/lite/*.cc)
 file(GLOB_RECURSE DEPLOY_MNN_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/mnn/*.cc)
 file(GLOB_RECURSE DEPLOY_NCNN_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/ncnn/*.cc)
@@ -197,7 +199,8 @@ list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS}
                                  ${DEPLOY_TEXT_SRCS} ${DEPLOY_PIPELINE_SRCS}
                                  ${DEPLOY_RKNPU2_SRCS} ${DEPLOY_SOPHGO_SRCS}
                                  ${DEPLOY_ENCRYPTION_SRCS}
-                                 ${DEPLOY_HORIZON_SRCS})
+                                 ${DEPLOY_HORIZON_SRCS}
+                                 ${DEPLOY_TVM_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -270,6 +273,14 @@ if(ENABLE_HORIZON_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_HORIZON_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/horizon.cmake)
   list(APPEND DEPEND_LIBS ${BPU_libs})
+endif()
+
+if(ENABLE_TVM_BACKEND)
+  set(CMAKE_CXX_STANDARD 17)
+  add_definitions(-DENABLE_TVM_BACKEND)
+  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TVM_SRCS})
+  include(${PROJECT_SOURCE_DIR}/cmake/tvm.cmake)
+  list(APPEND DEPEND_LIBS ${TVM_RUNTIME_LIB})
 endif()
 
 if(ENABLE_SOPHGO_BACKEND)
@@ -411,7 +422,11 @@ if(ENABLE_TRT_BACKEND)
     if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
       file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
     endif()
-    find_package(Python COMPONENTS Interpreter Development REQUIRED)
+    
+    if (NOT Python_EXECUTABLE)
+      find_package(Python COMPONENTS Interpreter Development REQUIRED)
+    endif()
+
     message(STATUS "Copying ${TRT_DIRECTORY}/lib to ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib ...")
     execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/copy_directory.py ${TRT_DIRECTORY}/lib ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib)
     file(GLOB_RECURSE TRT_STATIC_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib/*.a)
@@ -534,6 +549,11 @@ if(MSVC)
 endif()
 
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
+
+if(ENABLE_PADDLE_BACKEND)
+  set_paddle_encrypt_auth_link_policy(${LIBRARY_NAME})
+endif()
+
 if(ANDROID)
   set_android_extra_libraries_target()
 endif()
