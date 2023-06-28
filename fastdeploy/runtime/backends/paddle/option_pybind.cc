@@ -47,6 +47,8 @@ void BindPaddleOption(pybind11::module& m) {
       .def_readwrite("ipu_option", &PaddleBackendOption::ipu_option)
       .def_readwrite("collect_trt_shape",
                      &PaddleBackendOption::collect_trt_shape)
+      .def_readwrite("collect_trt_shape_by_device",
+                     &PaddleBackendOption::collect_trt_shape_by_device)               
       .def_readwrite("mkldnn_cache_size",
                      &PaddleBackendOption::mkldnn_cache_size)
       .def_readwrite("gpu_mem_init_size",

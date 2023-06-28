@@ -36,7 +36,9 @@ include(${PROJECT_SOURCE_DIR}/cmake/utils.cmake)
 
 # Set C++11 as standard for the whole project
 if(NOT MSVC)
-  set(CMAKE_CXX_STANDARD 11)
+  if(NOT DEFINED CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 11)
+  endif()
   set(CMAKE_CXX_FLAGS "-Wno-format -g0 -O3")
   if(NEED_ABI0)
     add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
@@ -177,21 +179,26 @@ file(GLOB_RECURSE DEPLOY_PIPELINE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/f
 file(GLOB_RECURSE DEPLOY_VISION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cc)
 file(GLOB_RECURSE DEPLOY_TEXT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/text/*.cc)
 file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*_pybind.cc)
+file(GLOB_RECURSE DEPLOY_PADDLE_CUSTOM_OP_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/paddle/ops/*.cc)
 if(WITH_GPU)
   file(GLOB_RECURSE DEPLOY_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cu)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_CUDA_SRCS})
+  file(GLOB_RECURSE DEPLOY_PADDLE_CUSTOM_OP_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/paddle/ops/*.cu)
+  list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_PADDLE_CUSTOM_OP_CUDA_SRCS})
   file(GLOB_RECURSE DEPLOY_VISION_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cu)
   list(APPEND DEPLOY_VISION_SRCS ${DEPLOY_VISION_CUDA_SRCS})
   file(GLOB_RECURSE DEPLOY_TEXT_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/text/*.cu)
   list(APPEND DEPLOY_TEXT_SRCS ${DEPLOY_TEXT_CUDA_SRCS})
 endif()
+list(REMOVE_ITEM DEPLOY_PADDLE_SRCS ${DEPLOY_PADDLE_CUSTOM_OP_SRCS})
 list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS}
                                  ${DEPLOY_POROS_SRCS} ${DEPLOY_TRT_SRCS}
                                  ${DEPLOY_OPENVINO_SRCS} ${DEPLOY_LITE_SRCS}
                                  ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS}
                                  ${DEPLOY_PIPELINE_SRCS} ${DEPLOY_RKNPU2_SRCS}
                                  ${DEPLOY_SOPHGO_SRCS} ${DEPLOY_ENCRYPTION_SRCS}
-                                  ${DEPLOY_HORIZON_SRCS} ${DEPLOY_TVM_SRCS})
+                                 ${DEPLOY_HORIZON_SRCS} ${DEPLOY_TVM_SRCS}
+                                 ${DEPLOY_PADDLE_CUSTOM_OP_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -242,6 +249,13 @@ if(ENABLE_PADDLE_BACKEND)
   endif()
   if(external_ort_FOUND)
     list(APPEND DEPEND_LIBS external_p2o external_ort)
+  endif()
+  if(PADDLEINFERENCE_API_CUSTOM_OP)
+    set_paddle_custom_ops_compatible_policy()
+    list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_PADDLE_CUSTOM_OP_SRCS})
+    if(WITH_GPU)
+      list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_PADDLE_CUSTOM_OP_CUDA_SRCS})
+    endif()
   endif()
 endif()
 
@@ -521,7 +535,7 @@ endif()
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
 if(ENABLE_PADDLE_BACKEND)
-  set_paddle_encrypt_auth_link_policy(${LIBRARY_NAME})
+  set_paddle_encrypt_auth_compatible_policy(${LIBRARY_NAME})
 endif()
 
 if(ANDROID)
@@ -751,3 +765,4 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     message(FATAL_ERROR "[ERROR] FastDeploy require g++ version >= 5.4.0, but now your g++ version is ${CMAKE_CXX_COMPILER_VERSION}, this may cause failure! Use -DCMAKE_CXX_COMPILER to define path of your compiler.")
   endif()
 endif()
+

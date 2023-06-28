@@ -5,15 +5,20 @@ set +x
 # -------------------------------------------------------------------------------
 #                        readonly global variables
 # -------------------------------------------------------------------------------
-readonly ROOT_PATH=$(pwd)
-readonly BUILD_ROOT=build/Linux
-readonly BUILD_DIR="${BUILD_ROOT}/x86_64_gpu"
-readonly PADDLEINFERENCE_DIRECTORY=$1
-readonly PADDLEINFERENCE_VERSION=$2
+ROOT_PATH=$(pwd)
+BUILD_ROOT=build/Linux
+BUILD_DIR="${BUILD_ROOT}/x86_64_gpu"
+PADDLEINFERENCE_DIRECTORY=$1
+PADDLEINFERENCE_VERSION=$2
+PADDLEINFERENCE_API_CUSTOM_OP=$3
 
 BUILD_WITH_CUSTOM_PADDLE='OFF'
-if [[ "$PADDLEINFERENCE_DIRECTORY" != "" ]]; then
+if [[ -d "$1" ]]; then
   BUILD_WITH_CUSTOM_PADDLE='ON'
+else  
+  if [[ "$1" == "ON" ]]; then 
+    PADDLEINFERENCE_API_CUSTOM_OP='ON'
+  fi
 fi
 
 # -------------------------------------------------------------------------------
@@ -71,6 +76,7 @@ __build_fastdeploy_linux_x86_64_gpu_shared() {
         -DENABLE_VISION=ON \
         -DENABLE_BENCHMARK=ON \
         -DBUILD_EXAMPLES=OFF \
+        -DPADDLEINFERENCE_API_CUSTOM_OP=${PADDLEINFERENCE_API_CUSTOM_OP:-"OFF"} \
         -DCMAKE_INSTALL_PREFIX=${FASDEPLOY_INSTALL_DIR} \
         -Wno-dev ../../.. && make -j8 && make install
 
@@ -91,6 +97,7 @@ __build_fastdeploy_linux_x86_64_gpu_shared_custom_paddle() {
         -DENABLE_PADDLE_BACKEND=ON \
         -DPADDLEINFERENCE_DIRECTORY=${PADDLEINFERENCE_DIRECTORY} \
         -DPADDLEINFERENCE_VERSION=${PADDLEINFERENCE_VERSION} \
+        -DPADDLEINFERENCE_API_CUSTOM_OP=${PADDLEINFERENCE_API_CUSTOM_OP:-"OFF"} \
         -DENABLE_OPENVINO_BACKEND=ON \
         -DENABLE_PADDLE2ONNX=ON \
         -DENABLE_VISION=ON \
@@ -118,5 +125,5 @@ main() {
 main
 
 # Usage:
-# ./scripts/linux/build_linux_x86_64_cpp_gpu.sh
-# ./scripts/linux/build_linux_x86_64_cpp_gpu.sh paddle_inference-linux-x64-gpu-trt8.5.2.2-mkl-avx-2.4.2 paddle2.4.2
+# ./scripts/linux/build_linux_x86_64_cpp_gpu_with_benchmark.sh
+# ./scripts/linux/build_linux_x86_64_cpp_gpu_with_benchmark.sh $PADDLEINFERENCE_DIRECTORY $PADDLEINFERENCE_VERSION
