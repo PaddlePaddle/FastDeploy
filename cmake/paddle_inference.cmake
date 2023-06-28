@@ -233,7 +233,8 @@ if(PADDLEINFERENCE_WITH_AUTH)
   list(APPEND ENCRYPT_AUTH_LIBS external_fdmodel_auth)
 endif()
 
-function(set_paddle_encrypt_auth_link_policy LIBRARY_NAME)
+# Compatible policy for paddle with encrypt and auth
+function(set_paddle_encrypt_auth_compatible_policy LIBRARY_NAME)
   if(ENABLE_PADDLE_BACKEND AND (PADDLEINFERENCE_WITH_ENCRYPT OR PADDLEINFERENCE_WITH_AUTH))
     target_link_libraries(${LIBRARY_NAME} ${ENCRYPT_AUTH_LIBS})
     # Note(qiuyanjun): Currently, for XPU, we need to manually link the whole
@@ -250,7 +251,7 @@ function(set_paddle_encrypt_auth_link_policy LIBRARY_NAME)
   endif()
 endfunction()
 
-# Backward compatible for 2.4.x
+# Compatible policy for 2.4.x/2.5.x and latest dev.
 string(FIND ${PADDLEINFERENCE_VERSION} "2.4" PADDLEINFERENCE_USE_2_4_x)
 string(FIND ${PADDLEINFERENCE_VERSION} "2.5" PADDLEINFERENCE_USE_2_5_x)
 string(FIND ${PADDLEINFERENCE_VERSION} "0.0.0" PADDLEINFERENCE_USE_DEV)
@@ -281,9 +282,10 @@ if(PADDLEINFERENCE_API_COMPAT_DEV)
   add_definitions(-DPADDLEINFERENCE_API_COMPAT_DEV)
 endif()
 
-# TODO: support for latest dev
+# Compatible policy for custom paddle ops
 if(PADDLEINFERENCE_API_COMPAT_2_5_x)
   # no c++ standard policy conflicts vs c++ 11
+  # TODO: support custom ops for latest dev
   set(PADDLEINFERENCE_API_CUSTOM_OP ON CACHE BOOL "" FORCE)
   # add paddle_inference/paddle/include path for custom ops
   # the extension.h and it's deps headers are located in 
@@ -292,7 +294,6 @@ if(PADDLEINFERENCE_API_COMPAT_2_5_x)
   message(WARNING "You are using PADDLEINFERENCE_API_COMPAT_2_5_x:${PADDLEINFERENCE_VERSION}, force PADDLEINFERENCE_API_CUSTOM_OP=${PADDLEINFERENCE_API_CUSTOM_OP}")
 endif()
 
-# Compatible for custom paddle ops
 function(set_paddle_custom_ops_compatible_policy)
   if(PADDLEINFERENCE_API_CUSTOM_OP AND (NOT MSVC))
     # TODO: add non c++ 14 policy for latest dev

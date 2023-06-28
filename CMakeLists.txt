@@ -535,7 +535,7 @@ endif()
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
 if(ENABLE_PADDLE_BACKEND)
-  set_paddle_encrypt_auth_link_policy(${LIBRARY_NAME})
+  set_paddle_encrypt_auth_compatible_policy(${LIBRARY_NAME})
 endif()
 
 if(ANDROID)
