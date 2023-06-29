@@ -22,7 +22,11 @@ endif()
 
 # Custom options for Paddle Inference backend
 option(PADDLEINFERENCE_DIRECTORY "Directory of custom Paddle Inference library" OFF)
+option(PADDLEINFERENCE_API_CUSTOM_OP "Whether building with custom paddle ops" OFF)
 option(PADDLEINFERENCE_API_COMPAT_2_4_x "Whether using Paddle Inference 2.4.x" OFF)
+option(PADDLEINFERENCE_API_COMPAT_2_5_x "Whether using Paddle Inference 2.5.x" OFF)
+option(PADDLEINFERENCE_API_COMPAT_DEV "Whether using Paddle Inference latest dev" OFF)
+option(PADDLEINFERENCE_API_COMPAT_CUDA_SM_80 "Whether using Paddle Inference with CUDA sm_80(A100)" OFF)
 
 set(PADDLEINFERENCE_PROJECT "extern_paddle_inference")
 set(PADDLEINFERENCE_PREFIX_DIR ${THIRD_PARTY_PATH}/paddle_inference)
@@ -93,11 +97,16 @@ else()
       else()
         # x86_64
         if(WITH_GPU)
-          set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-gpu-trt8.5.2.2-mkl-avx-0.0.0.660f781b77.tgz")
-          set(PADDLEINFERENCE_VERSION "0.0.0.660f781b77")
+          if(PADDLEINFERENCE_API_COMPAT_CUDA_SM_80)
+            set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-gpu-trt8.5.2.2-mkl-sm70.sm75.sm80.sm86.nodist-2.5.0.558ae9cd11.tgz")
+            set(PADDLEINFERENCE_VERSION "2.5.0.558ae9cd11")
+          else()
+            set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-gpu-trt8.5.2.2-mkl-sm61.sm70.sm75.sm86.nodist-2.5.0.558ae9cd11.tgz")
+            set(PADDLEINFERENCE_VERSION "2.5.0.558ae9cd11")
+          endif()
         else()
-          set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-mkl-avx-0.0.0.660f781b77.tgz")
-          set(PADDLEINFERENCE_VERSION "0.0.0.660f781b77")
+          set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-mkl-2.5.0.558ae9cd11.tgz")
+          set(PADDLEINFERENCE_VERSION "2.5.0.558ae9cd11")
         endif()
         if(WITH_IPU)
           set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-ipu-2.4-dev1.tgz")
@@ -173,18 +182,26 @@ else()
     set(FDMODEL_LEVELDB_LIB_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/leveldb/lib/libleveldb.a")
     if((EXISTS ${FDMODEL_LIB}) AND (EXISTS ${FDMODEL_MODEL_LIB}))
       set(PADDLEINFERENCE_WITH_ENCRYPT ON CACHE BOOL "" FORCE)
-      message(STATUS "Detected ${FDMODEL_LIB} and ${FDMODEL_MODEL_LIB} exists, fource PADDLEINFERENCE_WITH_ENCRYPT=${PADDLEINFERENCE_WITH_ENCRYPT}")
+      message(STATUS "Detected ${FDMODEL_LIB} and ${FDMODEL_MODEL_LIB} exists, force PADDLEINFERENCE_WITH_ENCRYPT=${PADDLEINFERENCE_WITH_ENCRYPT}")
     endif()
     if((EXISTS ${FDMODEL_LIB}) AND (EXISTS ${FDMODEL_AUTH_LIB}))
       set(PADDLEINFERENCE_WITH_AUTH ON CACHE BOOL "" FORCE)
-      message(STATUS "Detected ${FDMODEL_LIB} and ${FDMODEL_AUTH_LIB} exists, fource PADDLEINFERENCE_WITH_AUTH=${PADDLEINFERENCE_WITH_AUTH}")
+      message(STATUS "Detected ${FDMODEL_LIB} and ${FDMODEL_AUTH_LIB} exists, force PADDLEINFERENCE_WITH_AUTH=${PADDLEINFERENCE_WITH_AUTH}")
     endif()
   endif()
 endif(WIN32)
 
 # Path Paddle Inference ELF lib file
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
-  add_custom_target(patchelf_paddle_inference ALL COMMAND  bash -c "PATCHELF_EXE=${PATCHELF_EXE} python ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_inference.py ${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so" DEPENDS ${LIBRARY_NAME})
+  set(PATCHELF_SCRIPT ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_inference.py)
+  set(PATCHELF_TARGET ${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so)
+  add_custom_target(
+    patchelf_paddle_inference ALL COMMAND  bash -c 
+    "PATCHELF_EXE=${PATCHELF_EXE} python  ${PATCHELF_SCRIPT} ${PATCHELF_TARGET}" 
+    DEPENDS ${LIBRARY_NAME}
+  )
+  unset(PATCHELF_SCRIPT)
+  unset(PATCHELF_TARGET)
 endif()
 
 add_library(external_paddle_inference STATIC IMPORTED GLOBAL)
@@ -232,7 +249,8 @@ if(PADDLEINFERENCE_WITH_AUTH)
   list(APPEND ENCRYPT_AUTH_LIBS external_fdmodel_auth)
 endif()
 
-function(set_paddle_encrypt_auth_link_policy LIBRARY_NAME)
+# Compatible policy for paddle with encrypt and auth
+function(set_paddle_encrypt_auth_compatible_policy LIBRARY_NAME)
   if(ENABLE_PADDLE_BACKEND AND (PADDLEINFERENCE_WITH_ENCRYPT OR PADDLEINFERENCE_WITH_AUTH))
     target_link_libraries(${LIBRARY_NAME} ${ENCRYPT_AUTH_LIBS})
     # Note(qiuyanjun): Currently, for XPU, we need to manually link the whole
@@ -249,13 +267,20 @@ function(set_paddle_encrypt_auth_link_policy LIBRARY_NAME)
   endif()
 endfunction()
 
-# Backward compatible for 2.4.x
-string(FIND ${PADDLEINFERENCE_VERSION} "2.4" PADDLEINFERENCE_USE_2_4_x)
-string(FIND ${PADDLEINFERENCE_VERSION} "2.5" PADDLEINFERENCE_USE_2_5_x)
-string(FIND ${PADDLEINFERENCE_VERSION} "0.0.0" PADDLEINFERENCE_USE_DEV)
+# Compatible policy for 2.4.x/2.5.x and latest dev.
+string(REGEX MATCH "0.0.0" PADDLEINFERENCE_USE_DEV ${PADDLEINFERENCE_VERSION})
+string(REGEX MATCH "2.4|post24|post2.4" PADDLEINFERENCE_USE_2_4_x ${PADDLEINFERENCE_VERSION})
+string(REGEX MATCH "2.5|post25|post2.5" PADDLEINFERENCE_USE_2_5_x ${PADDLEINFERENCE_VERSION})
 
-if((NOT (PADDLEINFERENCE_USE_2_4_x EQUAL -1)) 
-    AND (PADDLEINFERENCE_USE_2_5_x EQUAL -1) AND (PADDLEINFERENCE_USE_DEV EQUAL -1))
+if(PADDLEINFERENCE_USE_DEV)
+  set(PADDLEINFERENCE_API_COMPAT_DEV ON CACHE BOOL "" FORCE)
+endif()
+
+if(PADDLEINFERENCE_USE_2_5_x)
+  set(PADDLEINFERENCE_API_COMPAT_2_5_x ON CACHE BOOL "" FORCE)
+endif()
+
+if(PADDLEINFERENCE_USE_2_4_x AND (NOT PADDLEINFERENCE_API_COMPAT_2_5_x) AND (NOT PADDLEINFERENCE_API_COMPAT_DEV))
   set(PADDLEINFERENCE_API_COMPAT_2_4_x ON CACHE BOOL "" FORCE)
   message(WARNING "You are using PADDLEINFERENCE_USE_2_4_x:${PADDLEINFERENCE_VERSION}, force PADDLEINFERENCE_API_COMPAT_2_4_x=ON")
 endif()
@@ -263,3 +288,55 @@ endif()
 if(PADDLEINFERENCE_API_COMPAT_2_4_x)
   add_definitions(-DPADDLEINFERENCE_API_COMPAT_2_4_x)
 endif()
+
+if(PADDLEINFERENCE_API_COMPAT_2_5_x)
+  add_definitions(-DPADDLEINFERENCE_API_COMPAT_2_5_x)
+endif()
+
+if(PADDLEINFERENCE_API_COMPAT_DEV)
+  add_definitions(-DPADDLEINFERENCE_API_COMPAT_DEV)
+endif()
+
+# Compatible policy for custom paddle ops
+if(PADDLEINFERENCE_API_COMPAT_2_5_x)
+  # no c++ standard policy conflicts vs c++ 11
+  # TODO: support custom ops for latest dev
+  set(PADDLEINFERENCE_API_CUSTOM_OP ON CACHE BOOL "" FORCE)
+  # add paddle_inference/paddle/include path for custom ops
+  # the extension.h and it's deps headers are located in 
+  # paddle/include/paddle directory.
+  include_directories(${PADDLEINFERENCE_INC_DIR}/paddle/include)
+  message(WARNING "You are using PADDLEINFERENCE_API_COMPAT_2_5_x:${PADDLEINFERENCE_VERSION}, force PADDLEINFERENCE_API_CUSTOM_OP=${PADDLEINFERENCE_API_CUSTOM_OP}")
+endif()
+
+function(set_paddle_custom_ops_compatible_policy)
+  if(PADDLEINFERENCE_API_CUSTOM_OP AND (NOT MSVC))
+    # TODO: add non c++ 14 policy for latest dev
+    if(NOT PADDLEINFERENCE_API_COMPAT_2_5_x)
+      # gcc c++ 14 policy for 2.4.x
+      if(NOT DEFINED CMAKE_CXX_STANDARD)
+        set(CMAKE_CXX_STANDARD 14 PARENT_SCOPE)
+        message(WARNING "Found PADDLEINFERENCE_API_CUSTOM_OP=ON, but CMAKE_CXX_STANDARD is not defined, use c++ 14 by default!")
+      elseif(NOT (CMAKE_CXX_STANDARD EQUAL 14))
+        set(CMAKE_CXX_STANDARD 14 PARENT_SCOPE)
+        message(WARNING "Found PADDLEINFERENCE_API_CUSTOM_OP=ON, force use c++ 14!")
+      endif()
+    endif()
+    if(WITH_GPU)
+      # cuda c++ 14 policy for 2.4.x
+      if(NOT PADDLEINFERENCE_API_COMPAT_2_5_x)
+        if(NOT DEFINED CMAKE_CUDA_STANDARD)
+          set(CMAKE_CUDA_STANDARD 14 PARENT_SCOPE)
+          message(WARNING "Found PADDLEINFERENCE_API_CUSTOM_OP=ON and WITH_GPU=ON, but CMAKE_CUDA_STANDARD is not defined, use c++ 14 by default!")
+        elseif(NOT (CMAKE_CUDA_STANDARD EQUAL 14))
+          set(CMAKE_CUDA_STANDARD 14 PARENT_SCOPE)
+          message(WARNING "Found PADDLEINFERENCE_API_CUSTOM_OP=ON and WITH_GPU=ON, force use c++ 14!")
+        endif()
+      endif()
+      # compile flags for paddle custom ops
+      add_definitions(-DPADDLE_WITH_CUDA)
+      add_definitions(-DPADDLE_ON_INFERENCE)
+      add_definitions(-DPADDLE_NO_PYTHON)
+    endif()
+  endif()
+endfunction()

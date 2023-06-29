@@ -61,6 +61,9 @@ DEFINE_string(optimized_model_dir, "",
               "Optional, set optimized model dir for lite."
               "eg: model.opt.nb, "
               "default ''");
+DEFINE_bool(collect_trt_shape_by_device, false,
+            "Optional, whether collect trt shape by device. "
+            "default false.");
 
 #if defined(ENABLE_BENCHMARK)
 static std::vector<int64_t> GetInt64Shape(const std::vector<int>& shape) {
@@ -188,6 +191,8 @@ static void RuntimeProfiling(int argc, char* argv[]) {
   // Set tensorrt shapes
   if (config_info["backend"] == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
+    option.paddle_infer_option.collect_trt_shape_by_device = 
+      FLAGS_collect_trt_shape_by_device;
   }
   if (config_info["backend"] == "paddle_trt" ||
       config_info["backend"] == "trt") {

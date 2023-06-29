@@ -103,6 +103,8 @@ struct PaddleBackendOption {
 
   /// Collect shape for model while enable_trt is true
   bool collect_trt_shape = false;
+  /// Collect shape for model by device (for some custom ops)
+  bool collect_trt_shape_by_device = false;
   /// Cache input shape for mkldnn while the input data will change dynamiclly
   int mkldnn_cache_size = -1;
   /// initialize memory size(MB) for GPU
