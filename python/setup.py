@@ -58,17 +58,12 @@ setup_configs["LIBRARY_NAME"] = PACKAGE_NAME
 setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
 # Backend options
 setup_configs["ENABLE_TVM_BACKEND"] = os.getenv("ENABLE_TVM_BACKEND", "OFF")
-setup_configs["ENABLE_RKNPU2_BACKEND"] = os.getenv("ENABLE_RKNPU2_BACKEND",
-                                                   "OFF")
-setup_configs["ENABLE_SOPHGO_BACKEND"] = os.getenv("ENABLE_SOPHGO_BACKEND",
-                                                   "OFF")
+setup_configs["ENABLE_RKNPU2_BACKEND"] = os.getenv("ENABLE_RKNPU2_BACKEND", "OFF")
+setup_configs["ENABLE_SOPHGO_BACKEND"] = os.getenv("ENABLE_SOPHGO_BACKEND", "OFF")
 setup_configs["ENABLE_ORT_BACKEND"] = os.getenv("ENABLE_ORT_BACKEND", "OFF")
-setup_configs["ENABLE_OPENVINO_BACKEND"] = os.getenv("ENABLE_OPENVINO_BACKEND",
-                                                     "OFF")
-setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND",
-                                                   "OFF")
-setup_configs["ENABLE_POROS_BACKEND"] = os.getenv("ENABLE_POROS_BACKEND",
-                                                  "OFF")
+setup_configs["ENABLE_OPENVINO_BACKEND"] = os.getenv("ENABLE_OPENVINO_BACKEND", "OFF")
+setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND", "OFF")
+setup_configs["ENABLE_POROS_BACKEND"] = os.getenv("ENABLE_POROS_BACKEND", "OFF")
 setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
 setup_configs["ENABLE_LITE_BACKEND"] = os.getenv("ENABLE_LITE_BACKEND", "OFF")
 setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "OFF")
@@ -88,15 +83,16 @@ setup_configs["WITH_KUNLUNXIN"] = os.getenv("WITH_KUNLUNXIN", "OFF")
 setup_configs["RKNN2_TARGET_SOC"] = os.getenv("RKNN2_TARGET_SOC", "")
 # Custom deps settings
 setup_configs["TRT_DIRECTORY"] = os.getenv("TRT_DIRECTORY", "UNDEFINED")
-setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY",
-                                            "/usr/local/cuda")
+setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY", "/usr/local/cuda")
 setup_configs["OPENCV_DIRECTORY"] = os.getenv("OPENCV_DIRECTORY", "")
 setup_configs["ORT_DIRECTORY"] = os.getenv("ORT_DIRECTORY", "")
-setup_configs["PADDLEINFERENCE_DIRECTORY"] = os.getenv(
-    "PADDLEINFERENCE_DIRECTORY", "")
-setup_configs["PADDLEINFERENCE_VERSION"] = os.getenv("PADDLEINFERENCE_VERSION",
-                                                     "")
+setup_configs["PADDLEINFERENCE_DIRECTORY"] = os.getenv("PADDLEINFERENCE_DIRECTORY", "")
+setup_configs["PADDLEINFERENCE_VERSION"] = os.getenv("PADDLEINFERENCE_VERSION", "")
 setup_configs["PADDLEINFERENCE_URL"] = os.getenv("PADDLEINFERENCE_URL", "")
+setup_configs["PADDLEINFERENCE_API_COMPAT_2_4_x"] = os.getenv("PADDLEINFERENCE_API_COMPAT_2_4_x", "OFF")
+setup_configs["PADDLEINFERENCE_API_COMPAT_2_5_x"] = os.getenv("PADDLEINFERENCE_API_COMPAT_2_5_x", "OFF")
+setup_configs["PADDLEINFERENCE_API_COMPAT_DEV"] = os.getenv("PADDLEINFERENCE_API_COMPAT_DEV", "OFF")
+setup_configs["PADDLEINFERENCE_API_CUSTOM_OP"] = os.getenv("PADDLEINFERENCE_API_CUSTOM_OP", "OFF")
 setup_configs["PADDLE2ONNX_URL"] = os.getenv("PADDLE2ONNX_URL", "")
 setup_configs["PADDLELITE_URL"] = os.getenv("PADDLELITE_URL", "")
 # Other settings

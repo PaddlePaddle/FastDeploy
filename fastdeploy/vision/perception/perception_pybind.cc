@@ -23,5 +23,6 @@ void BindPerception(pybind11::module& m) {
   auto perception_module =
       m.def_submodule("perception", "3D object perception models.");
   BindSmoke(perception_module);
+  BindPetr(perception_module);
 }
 }  // namespace fastdeploy

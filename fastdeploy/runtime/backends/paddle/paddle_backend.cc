@@ -256,6 +256,12 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
       } else {
         analysis_config.SetModel(model, params);
       }
+      if (option.collect_trt_shape_by_device) {
+        if (option.device == Device::GPU) {
+          analysis_config.EnableUseGpu(option.gpu_mem_init_size, option.device_id, 
+                                       paddle_infer::PrecisionType::kFloat32);
+        }
+      }
       analysis_config.CollectShapeRangeInfo(shape_range_info);
       auto predictor_tmp = paddle_infer::CreatePredictor(analysis_config);
       std::map<std::string, std::vector<int>> max_shape;
