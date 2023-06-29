@@ -176,18 +176,26 @@ else()
     set(FDMODEL_LEVELDB_LIB_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/leveldb/lib/libleveldb.a")
     if((EXISTS ${FDMODEL_LIB}) AND (EXISTS ${FDMODEL_MODEL_LIB}))
       set(PADDLEINFERENCE_WITH_ENCRYPT ON CACHE BOOL "" FORCE)
-      message(STATUS "Detected ${FDMODEL_LIB} and ${FDMODEL_MODEL_LIB} exists, fource PADDLEINFERENCE_WITH_ENCRYPT=${PADDLEINFERENCE_WITH_ENCRYPT}")
+      message(STATUS "Detected ${FDMODEL_LIB} and ${FDMODEL_MODEL_LIB} exists, force PADDLEINFERENCE_WITH_ENCRYPT=${PADDLEINFERENCE_WITH_ENCRYPT}")
     endif()
     if((EXISTS ${FDMODEL_LIB}) AND (EXISTS ${FDMODEL_AUTH_LIB}))
       set(PADDLEINFERENCE_WITH_AUTH ON CACHE BOOL "" FORCE)
-      message(STATUS "Detected ${FDMODEL_LIB} and ${FDMODEL_AUTH_LIB} exists, fource PADDLEINFERENCE_WITH_AUTH=${PADDLEINFERENCE_WITH_AUTH}")
+      message(STATUS "Detected ${FDMODEL_LIB} and ${FDMODEL_AUTH_LIB} exists, force PADDLEINFERENCE_WITH_AUTH=${PADDLEINFERENCE_WITH_AUTH}")
     endif()
   endif()
 endif(WIN32)
 
 # Path Paddle Inference ELF lib file
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
-  add_custom_target(patchelf_paddle_inference ALL COMMAND  bash -c "PATCHELF_EXE=${PATCHELF_EXE} python ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_inference.py ${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so" DEPENDS ${LIBRARY_NAME})
+  set(PATCHELF_SCRIPT ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_inference.py)
+  set(PATCHELF_TARGET ${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so)
+  add_custom_target(
+    patchelf_paddle_inference ALL COMMAND  bash -c 
+    "PATCHELF_EXE=${PATCHELF_EXE} python  ${PATCHELF_SCRIPT} ${PATCHELF_TARGET}" 
+    DEPENDS ${LIBRARY_NAME}
+  )
+  unset(PATCHELF_SCRIPT)
+  unset(PATCHELF_TARGET)
 endif()
 
 add_library(external_paddle_inference STATIC IMPORTED GLOBAL)
