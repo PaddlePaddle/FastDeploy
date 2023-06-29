@@ -96,7 +96,7 @@ else()
       else()
         # x86_64
         if(WITH_GPU)
-          set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-gpu-trt8.5.2.2-mkl-sm70.sm75.sm80.sm86.nodist-2.5.0.558ae9cd11.tgz")
+          set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-gpu-trt8.5.2.2-mkl-sm61.sm70.sm75.sm86.nodist-2.5.0.558ae9cd11.tgz")
           set(PADDLEINFERENCE_VERSION "2.5.0.558ae9cd11")
         else()
           set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-mkl-2.5.0.558ae9cd11.tgz")
