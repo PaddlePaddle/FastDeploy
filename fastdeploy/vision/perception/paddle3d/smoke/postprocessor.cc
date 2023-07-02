@@ -50,6 +50,15 @@ bool SmokePostprocessor::Run(const std::vector<FDTensor>& tensors,
     result->observation_angle.push_back(vec[1]);
     result->yaw_angle.push_back(vec[12]);
   }
+
+  result->valid.push_back(true);   // 0 scores
+  result->valid.push_back(true);   // 1 label_ids
+  result->valid.push_back(true);   // 2 boxes
+  result->valid.push_back(true);   // 3 center
+  result->valid.push_back(true);   // 4 observation_angle
+  result->valid.push_back(true);   // 5 yaw_angle
+  result->valid.push_back(false);  // 6 velocity
+
   return true;
 }
 
