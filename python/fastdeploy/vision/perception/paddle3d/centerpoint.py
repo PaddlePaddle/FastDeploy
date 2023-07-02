@@ -83,10 +83,10 @@ class Centerpoint(FastDeployModel):
         """
         return self._model.preprocessor
 
-    # @property
-    # def postprocessor(self):
-    #     """Get CenterpointPostprocessor object of the loaded model
+    @property
+    def postprocessor(self):
+        """Get CenterpointPostprocessor object of the loaded model
 
-    #     :return CenterpointPostprocessor
-    #     """
-    #     return self._model.postprocessor
+        :return CenterpointPostprocessor
+        """
+        return self._model.postprocessor

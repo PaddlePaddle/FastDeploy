@@ -15,6 +15,7 @@
 #pragma once
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/perception/paddle3d/centerpoint/preprocessor.h"
+#include "fastdeploy/vision/perception/paddle3d/centerpoint/postprocessor.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -43,7 +44,7 @@ class FASTDEPLOY_DECL Centerpoint : public FastDeployModel {
    * \param[in] result The output perception result will be writen to this structure
    * \return true if the prediction successed, otherwise false
    */
-  virtual bool Predict(std::string point_dir, std::vector<FDTensor>* result);
+  virtual bool Predict(std::string point_dir, PerceptionResult* result);
 
   /** \brief Predict the perception results for a batch of input images
    *
@@ -52,7 +53,7 @@ class FASTDEPLOY_DECL Centerpoint : public FastDeployModel {
    * \return true if the prediction successed, otherwise false
    */
   virtual bool BatchPredict(std::vector<std::string> points_dir,
-                            std::vector<std::vector<FDTensor>>* results);
+                            std::vector<PerceptionResult>* results);
 
   /// Get preprocessor reference of Centerpoint
   virtual CenterpointPreprocessor& GetPreprocessor() {
@@ -60,15 +61,16 @@ class FASTDEPLOY_DECL Centerpoint : public FastDeployModel {
   }
 
   /// Get postprocessor reference of Centerpoint
-//   virtual CenterpointPostprocessor& GetPostprocessor() {
-//     return postprocessor_;
-//   }
+  virtual CenterpointPostprocessor& GetPostprocessor() {
+    return postprocessor_;
+  }
 
  protected:
   bool Initialize();
   CenterpointPreprocessor preprocessor_;
-//   CenterpointPostprocessor postprocessor_;
+  CenterpointPostprocessor postprocessor_;
   bool initialized_ = false;
+  std::vector<std::vector<FDTensor>> ouput_tensors;
 };
 
 }  // namespace perception

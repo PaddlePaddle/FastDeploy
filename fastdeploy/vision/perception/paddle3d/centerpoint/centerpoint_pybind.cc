@@ -38,20 +38,20 @@ void BindCenterpoint(pybind11::module& m) {
                           ModelFormat>())
       .def("predict",
            [](vision::perception::Centerpoint& self, std::string point_dir) {
-             std::vector<FDTensor> result;
+             vision::PerceptionResult result;
              self.Predict(point_dir, &result);
              return result;
            })
       .def("batch_predict",
            [](vision::perception::Centerpoint& self,
-              std::vector<std::string> points_dir) {
-             std::vector<std::vector<FDTensor>> results;
+              std::vector<std::string>& points_dir) {
+             std::vector<vision::PerceptionResult> results;
              self.BatchPredict(points_dir, &results);
              return results;
            })
       .def_property_readonly("preprocessor",
-                             &vision::perception::Centerpoint::GetPreprocessor);
-  // .def_property_readonly("postprocessor",
-  //                         &vision::perception::Centerpoint::GetPostprocessor);
+                             &vision::perception::Centerpoint::GetPreprocessor)
+      .def_property_readonly(
+          "postprocessor", &vision::perception::Centerpoint::GetPostprocessor);
 }
 }  // namespace fastdeploy

@@ -42,11 +42,12 @@ bool Centerpoint::Initialize() {
 }
 
 bool Centerpoint::Predict(const std::string point_dir,
-                          std::vector<FDTensor>* result) {
-  std::vector<std::vector<FDTensor>> results;
+                          PerceptionResult* result) {
+  std::vector<PerceptionResult> results;
   if (!BatchPredict({point_dir}, &results)) {
     return false;
   }
+
   if (results.size()) {
     *result = std::move(results[0]);
   }
@@ -54,7 +55,7 @@ bool Centerpoint::Predict(const std::string point_dir,
 }
 
 bool Centerpoint::BatchPredict(std::vector<std::string> points_dir,
-                               std::vector<std::vector<FDTensor>>* results) {
+                               std::vector<PerceptionResult>* results) {
   int64_t num_point_dim = 5;
   int with_timelag = 0;
   if (!preprocessor_.Run(points_dir, num_point_dim, with_timelag,
@@ -62,22 +63,27 @@ bool Centerpoint::BatchPredict(std::vector<std::string> points_dir,
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
   }
+
+  results->resize(reused_input_tensors_.size());
   for (int index = 0; index < reused_input_tensors_.size(); ++index) {
     std::vector<FDTensor> input_tensor;
     input_tensor.push_back(reused_input_tensors_[index]);
+
     input_tensor[0].name = InputInfoOfRuntime(0).name;
 
     if (!Infer(input_tensor, &reused_output_tensors_)) {
       FDERROR << "Failed to inference by runtime." << std::endl;
       return false;
     }
-    results->push_back(reused_output_tensors_);
-    // if (!postprocessor_.Run(reused_output_tensors_, results)) {
-    //     FDERROR << "Failed to postprocess the inference results by runtime."
-    //             << std::endl;
-    //     return false;}
-  }
 
+    (*results)[index].Clear();
+    (*results)[index].Reserve(reused_output_tensors_[0].shape[0]);
+    if (!postprocessor_.Run(reused_output_tensors_, &((*results)[index]))) {
+      FDERROR << "Failed to postprocess the inference results by runtime."
+              << std::endl;
+      return false;
+    }
+  }
   return true;
 }
 
