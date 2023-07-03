@@ -15,3 +15,4 @@
 from __future__ import absolute_import
 from .paddle3d.smoke import *
 from .paddle3d.petr import *
+from .paddle3d.centerpoint import *

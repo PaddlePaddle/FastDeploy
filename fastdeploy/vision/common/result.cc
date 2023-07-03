@@ -227,6 +227,7 @@ PerceptionResult::PerceptionResult(const PerceptionResult& res) {
                            res.observation_angle.end());
   yaw_angle.assign(res.yaw_angle.begin(), res.yaw_angle.end());
   velocity.assign(res.velocity.begin(), res.velocity.end());
+  valid.assign(res.valid.begin(), res.valid.end());
 }
 
 PerceptionResult& PerceptionResult::operator=(PerceptionResult&& other) {
@@ -238,6 +239,7 @@ PerceptionResult& PerceptionResult::operator=(PerceptionResult&& other) {
     observation_angle = std::move(other.observation_angle);
     yaw_angle = std::move(other.yaw_angle);
     velocity = std::move(other.velocity);
+    valid = std::move(other.valid);
   }
   return *this;
 }
@@ -250,6 +252,7 @@ void PerceptionResult::Free() {
   std::vector<float>().swap(observation_angle);
   std::vector<float>().swap(yaw_angle);
   std::vector<std::array<float, 3>>().swap(velocity);
+  std::vector<bool>().swap(valid);
 }
 
 void PerceptionResult::Clear() {
@@ -260,6 +263,7 @@ void PerceptionResult::Clear() {
   observation_angle.clear();
   yaw_angle.clear();
   velocity.clear();
+  valid.clear();
 }
 
 void PerceptionResult::Reserve(int size) {
@@ -284,22 +288,52 @@ void PerceptionResult::Resize(int size) {
 
 std::string PerceptionResult::Str() {
   std::string out;
-  out =
-      "PerceptionResult: [xmin, ymin, xmax, ymax, w, h, l, cx, cy, cz, "
-      "yaw_angle, "
-      "ob_angle, score, label_id]\n";
-  for (size_t i = 0; i < boxes.size(); ++i) {
-    out = out + std::to_string(boxes[i][0]) + "," +
-          std::to_string(boxes[i][1]) + ", " + std::to_string(boxes[i][2]) +
-          ", " + std::to_string(boxes[i][3]) + ", " +
-          std::to_string(boxes[i][4]) + ", " + std::to_string(boxes[i][5]) +
-          ", " + std::to_string(boxes[i][6]) + ", " +
-          std::to_string(center[i][0]) + ", " + std::to_string(center[i][1]) +
-          ", " + std::to_string(center[i][2]) + ", " +
-          std::to_string(yaw_angle[i]) + ", " +
-          std::to_string(observation_angle[i]) + ", " +
-          std::to_string(scores[i]) + ", " + std::to_string(label_ids[i]);
+  out = "PerceptionResult: [";
+  if (valid[2]) {
+    out += "xmin, ymin, xmax, ymax, w, h, l,";
+  }
+  if (valid[3]) {
+    out += " cx, cy, cz,";
+  }
+  if (valid[5]) {
+    out += " yaw_angle,";
+  }
+  if (valid[4]) {
+    out += " ob_angle,";
+  }
+  if (valid[0]) {
+    out += " score,";
+  }
+  if (valid[1]) {
+    out += " label_id,";
+  }
+  out += "]\n";
 
+  for (size_t i = 0; i < boxes.size(); ++i) {
+    if (valid[2]) {
+      out = out + std::to_string(boxes[i][0]) + "," +
+            std::to_string(boxes[i][1]) + ", " + std::to_string(boxes[i][2]) +
+            ", " + std::to_string(boxes[i][3]) + ", " +
+            std::to_string(boxes[i][4]) + ", " + std::to_string(boxes[i][5]) +
+            ", " + std::to_string(boxes[i][6]) + ", ";
+    }
+    if (valid[3]) {
+      out = out + std::to_string(center[i][0]) + ", " +
+            std::to_string(center[i][1]) + ", " + std::to_string(center[i][2]) +
+            ", ";
+    }
+    if (valid[5]) {
+      out = out + std::to_string(yaw_angle[i]) + ", ";
+    }
+    if (valid[4]) {
+      out = out + std::to_string(observation_angle[i]) + ", ";
+    }
+    if (valid[0]) {
+      out = out + std::to_string(scores[i]) + ", ";
+    }
+    if (valid[1]) {
+      out = out + std::to_string(label_ids[i]);
+    }
     out += "\n";
   }
   return out;
@@ -672,8 +706,8 @@ std::string OCRResult::Str() {
       out = out + "]";
 
       if (rec_scores.size() > 0) {
-        out = out + "rec text: " + text[n] + " rec score:" +
-              std::to_string(rec_scores[n]) + " ";
+        out = out + "rec text: " + text[n] +
+              " rec score:" + std::to_string(rec_scores[n]) + " ";
       }
       if (cls_labels.size() > 0) {
         out = out + "cls label: " + std::to_string(cls_labels[n]) +
@@ -713,8 +747,8 @@ std::string OCRResult::Str() {
              cls_scores.size() > 0) {
     std::string out;
     for (int i = 0; i < rec_scores.size(); i++) {
-      out = out + "rec text: " + text[i] + " rec score:" +
-            std::to_string(rec_scores[i]) + " ";
+      out = out + "rec text: " + text[i] +
+            " rec score:" + std::to_string(rec_scores[i]) + " ";
       out = out + "cls label: " + std::to_string(cls_labels[i]) +
             " cls score: " + std::to_string(cls_scores[i]);
       out = out + "\n";
@@ -733,8 +767,8 @@ std::string OCRResult::Str() {
              cls_scores.size() == 0) {
     std::string out;
     for (int i = 0; i < rec_scores.size(); i++) {
-      out = out + "rec text: " + text[i] + " rec score:" +
-            std::to_string(rec_scores[i]) + " ";
+      out = out + "rec text: " + text[i] +
+            " rec score:" + std::to_string(rec_scores[i]) + " ";
       out = out + "\n";
     }
     return out;
@@ -781,9 +815,9 @@ std::string HeadPoseResult::Str() {
   std::string out;
 
   out = "HeadPoseResult: [yaw, pitch, roll]\n";
-  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" + "pitch: " +
-        std::to_string(euler_angles[1]) + "\n" + "roll: " +
-        std::to_string(euler_angles[2]) + "\n";
+  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" +
+        "pitch: " + std::to_string(euler_angles[1]) + "\n" +
+        "roll: " + std::to_string(euler_angles[2]) + "\n";
   return out;
 }
 
