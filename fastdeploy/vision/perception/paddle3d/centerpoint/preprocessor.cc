@@ -22,9 +22,9 @@ CenterpointPreprocessor::CenterpointPreprocessor(
   initialized_ = true;
 }
 
-bool CenterpointPreprocessor::read_point(const std::string &file_path,
-                                         const int64_t num_point_dim,
-                                         void **buffer, int64_t *num_points) {
+bool CenterpointPreprocessor::ReadPoint(const std::string &file_path,
+                                        const int64_t num_point_dim,
+                                        void **buffer, int64_t *num_points) {
   std::ifstream file_in(file_path, std::ios::in | std::ios::binary);
   if (num_point_dim < 4) {
     FDERROR << "Point dimension must not be less than 4, but received "
@@ -59,9 +59,9 @@ bool CenterpointPreprocessor::read_point(const std::string &file_path,
   return true;
 }
 
-bool CenterpointPreprocessor::insert_time_to_points(const int64_t num_points,
-                                                    const int64_t num_point_dim,
-                                                    float *points) {
+bool CenterpointPreprocessor::InsertTimeToPoints(const int64_t num_points,
+                                                 const int64_t num_point_dim,
+                                                 float *points) {
   for (int64_t i = 0; i < num_points; ++i) {
     *(points + i * num_point_dim + 4) = 0.;
   }
@@ -77,13 +77,13 @@ bool CenterpointPreprocessor::Apply(std::vector<std::string> &points_dir,
     std::vector<int64_t> points_shape;
     void *buffer = nullptr;
     int64_t num_points;
-    if (!read_point(file_path, num_point_dim, &buffer, &num_points)) {
+    if (!ReadPoint(file_path, num_point_dim, &buffer, &num_points)) {
       return false;
     }
     float *points = static_cast<float *>(buffer);
 
     if (!with_timelag && num_point_dim == 5 || num_point_dim > 5) {
-      insert_time_to_points(num_points, num_point_dim, points);
+      InsertTimeToPoints(num_points, num_point_dim, points);
     }
     points_shape.push_back(num_points);
     points_shape.push_back(num_point_dim);

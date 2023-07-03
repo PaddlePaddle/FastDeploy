@@ -166,14 +166,16 @@ struct FASTDEPLOY_DECL PerceptionResult : public BaseResult {
   // vx, vy, vz
   std::vector<std::array<float, 3>> velocity;
 
+  // valid results for func Str(): True for printing
+  // 0 scores
+  // 1 label_ids
+  // 2 boxes
+  // 3 center
+  // 4 observation_angle
+  // 5 yaw_angle
+  // 6 velocity
   std::vector<bool> valid;
-    // 0 scores
-    // 1 label_ids
-    // 2 boxes
-    // 3 center
-    // 4 observation_angle
-    // 5 yaw_angle
-    // 6 velocity
+
 
   /// Copy constructor
   PerceptionResult(const PerceptionResult& res);
