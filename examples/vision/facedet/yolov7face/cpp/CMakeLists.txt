@@ -4,7 +4,7 @@ CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 # Specifies the path to the fastdeploy library after you have downloaded it
 option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
 
-include(../../../../../FastDeploy.cmake)
+include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 
 # Add the FastDeploy dependency header
 include_directories(${FASTDEPLOY_INCS})
