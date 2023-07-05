@@ -36,6 +36,7 @@
 #include "fastdeploy/vision/detection/contrib/rknpu2/model.h"
 #include "fastdeploy/vision/perception/paddle3d/smoke/smoke.h"
 #include "fastdeploy/vision/perception/paddle3d/petr/petr.h"
+#include "fastdeploy/vision/perception/paddle3d/centerpoint/centerpoint.h"
 #include "fastdeploy/vision/detection/ppdet/model.h"
 #include "fastdeploy/vision/facealign/contrib/face_landmark_1000.h"
 #include "fastdeploy/vision/facealign/contrib/pfld.h"
