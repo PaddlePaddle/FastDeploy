@@ -78,6 +78,9 @@ class OrtBackend : public BaseBackend {
   // the ONNX model file name,
   // when ONNX is bigger than 2G, we will set this name
   std::string model_file_name;
+  // recored if the model has been converted to fp16
+  bool converted_to_fp16 = false;
+
 #ifndef NON_64_PLATFORM
   Ort::CustomOpDomain custom_op_domain_ = Ort::CustomOpDomain("Paddle");
 #endif
