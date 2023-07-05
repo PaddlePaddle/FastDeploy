@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/runtime/backends/ort/option.h"
 #include "fastdeploy/pybind/main.h"
+#include "fastdeploy/runtime/backends/ort/option.h"
 
 namespace fastdeploy {
 
@@ -29,7 +29,9 @@ void BindOrtOption(pybind11::module& m) {
       .def_readwrite("execution_mode", &OrtBackendOption::execution_mode)
       .def_readwrite("device", &OrtBackendOption::device)
       .def_readwrite("device_id", &OrtBackendOption::device_id)
-      .def_readwrite("enable_fp16", &OrtBackendOption::enable_fp16);
+      .def_readwrite("enable_fp16", &OrtBackendOption::enable_fp16)
+      .def("disable_ort_fp16_op_types",
+           &OrtBackendOption::DisableOrtFP16OpTypes);
 }
 
 }  // namespace fastdeploy
