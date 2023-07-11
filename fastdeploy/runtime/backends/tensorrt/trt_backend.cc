@@ -475,11 +475,10 @@ void TrtBackend::SetInputs(const std::vector<FDTensor>& inputs) {
         //                          item.Nbytes() / 2, cudaMemcpyHostToDevice,
         //                          stream_) == 0,
         //          "Error occurs while copy memory from CPU to GPU.");
-        // WARN: For cudaMemcpyHostToDevice direction, cudaMemcpyAsync need 
-        // page-locked host memory to avoid any overlap to occur. The page-locked 
-        // feature may not guarentee for FDTensor now. Reference: 
-        // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html
-        // #creation-and-destruction
+        // WARN: For cudaMemcpyHostToDevice direction, cudaMemcpyAsync need page-locked host 
+        // memory to avoid any overlap to occur. The page-locked feature need by cudaMemcpyAsync 
+        // may not guarantee by FDTensor now. Reference: 
+        // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#creation-and-destruction  
         FDASSERT(cudaMemcpy(inputs_device_buffer_[item.name].data(),
                             static_cast<void*>(casted_data.data()),
                             item.Nbytes() / 2, cudaMemcpyHostToDevice) == 0,
@@ -489,11 +488,10 @@ void TrtBackend::SetInputs(const std::vector<FDTensor>& inputs) {
         //                          item.Data(), item.Nbytes(),
         //                          cudaMemcpyHostToDevice, stream_) == 0,
         //          "Error occurs while copy memory from CPU to GPU.");
-        // WARN: For cudaMemcpyHostToDevice direction, cudaMemcpyAsync need 
-        // page-locked host memory to avoid any overlap to occur. The page-locked 
-        // feature may not guarentee for FDTensor now. Reference: 
-        // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html
-        // #creation-and-destruction
+        // WARN: For cudaMemcpyHostToDevice direction, cudaMemcpyAsync need page-locked host 
+        // memory to avoid any overlap to occur. The page-locked feature need by cudaMemcpyAsync 
+        // may not guarantee by FDTensor now. Reference: 
+        // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#creation-and-destruction 
         FDASSERT(cudaMemcpy(inputs_device_buffer_[item.name].data(),
                             item.Data(), item.Nbytes(),
                             cudaMemcpyHostToDevice) == 0,
