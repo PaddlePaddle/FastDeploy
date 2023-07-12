@@ -51,7 +51,7 @@ class FASTDEPLOY_DECL CenterpointPreprocessor : public ProcessorManager  {
   std::vector<std::shared_ptr<Processor>> processors_;
   bool ReadPoint(const std::string &file_path,
                 const int64_t num_point_dim,
-                void **buffer, int64_t *num_points);
+                std::vector<float> &data, int64_t *num_points);
   bool InsertTimeToPoints(const int64_t num_points,
                              const int64_t num_point_dim,
                              float *points);
