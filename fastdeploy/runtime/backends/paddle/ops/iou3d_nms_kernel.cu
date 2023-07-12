@@ -22,8 +22,16 @@ All Rights Reserved 2019-2020.
 #define THREADS_PER_BLOCK 16
 #define DIVUP(m, n) ((m) / (n) + ((m) % (n) > 0))
 
-const int THREADS_PER_BLOCK_NMS = sizeof(int64_t) * 8;
-const float EPS = 1e-8;
+static const int THREADS_PER_BLOCK_NMS = sizeof(int64_t) * 8;
+#if defined(_WIN32)
+#if defined(EPS)
+#undef EPS
+#endif
+#define EPS 1e-8
+#else
+static const float EPS = 1e-8;
+#endif
+
 struct Point {
   float x, y;
   __device__ Point() {}
