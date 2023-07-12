@@ -27,7 +27,7 @@
 
 #define DIVUP(m, n) ((m) / (n) + ((m) % (n) > 0))
 
-const int THREADS_PER_BLOCK_NMS = sizeof(int64_t) * 8;
+static const int THREADS_PER_BLOCK_NMS = sizeof(int64_t) * 8;
 
 void NmsLauncher(const cudaStream_t &stream, const float *bboxes,
                  const int *index, const int64_t *sorted_index,
