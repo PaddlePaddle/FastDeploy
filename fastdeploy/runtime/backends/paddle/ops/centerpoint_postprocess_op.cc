@@ -25,6 +25,9 @@
 #include "paddle/extension.h"
 #endif
 
+namespace fastdeploy {
+namespace paddle_custom_ops {
+
 std::vector<paddle::Tensor> postprocess_gpu(
     const std::vector<paddle::Tensor> &hm,
     const std::vector<paddle::Tensor> &reg,
@@ -97,11 +100,14 @@ std::vector<paddle::DataType> PostProcessInferDtype(
   return {reg_dtype[0], hm_dtype[0], paddle::DataType::INT64};
 }
 
+}  // namespace fastdeploy
+}  // namespace paddle_custom_ops
+
 PD_BUILD_OP(centerpoint_postprocess)
     .Inputs({paddle::Vec("HM"), paddle::Vec("REG"), paddle::Vec("HEIGHT"),
              paddle::Vec("DIM"), paddle::Vec("VEL"), paddle::Vec("ROT")})
     .Outputs({"BBOXES", "SCORES", "LABELS"})
-    .SetKernelFn(PD_KERNEL(centerpoint_postprocess))
+    .SetKernelFn(PD_KERNEL(fastdeploy::paddle_custom_ops::centerpoint_postprocess))
     .Attrs({"voxel_size: std::vector<float>",
             "point_cloud_range: std::vector<float>",
             "post_center_range: std::vector<float>",
@@ -109,7 +115,7 @@ PD_BUILD_OP(centerpoint_postprocess)
             "score_threshold: float", "nms_iou_threshold: float",
             "nms_pre_max_size: int", "nms_post_max_size: int",
             "with_velocity: bool"})
-    .SetInferShapeFn(PD_INFER_SHAPE(PostProcessInferShape))
-    .SetInferDtypeFn(PD_INFER_DTYPE(PostProcessInferDtype));
+    .SetInferShapeFn(PD_INFER_SHAPE(fastdeploy::paddle_custom_ops::PostProcessInferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(fastdeploy::paddle_custom_ops::PostProcessInferDtype));
 
 #endif // WITH_GPU
