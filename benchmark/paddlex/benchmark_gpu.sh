@@ -41,9 +41,17 @@ fi
 
 # PP-ShiTuV2
 ./benchmark_ppshituv2_rec --model PP-ShiTuv2-rec --image ppshituv2_wangzai.png --config_path $CONFIG_PATH
+./benchmark_ppshituv2_det --model PP-ShiTuv2-det --image ppdet_det_img.jpg --config_path $CONFIG_PATH
 
 # PP-StructureV2
 ./benchmark_structurev2_layout --model PP-Structurev2-layout --image structurev2_layout_val_0002.jpg --config_path $CONFIG_PATH
 ./benchmark_structurev2_table --model PP-Structurev2-SLANet --image structurev2_table.jpg --table_char_dict_path table_structure_dict_ch.txt --config_path $CONFIG_PATH
+./benchmark --model PP-Structurev2-vi-layoutxlm --shapes "1,512:1,512,4:1,512:1,512" --trt_shapes "1,512:1,512:1,512:1,512,4:1,512,4:1,512,4:1,512:1,512:1,512:1,512:1,512:1,512" --names "x_0:x_1:x_2:x_3" --dtypes "INT64:INT64:INT64:INT64" --disable_mkldnn --custom_tensor_value 0.2 --config_path $CONFIG_PATH
+
+# Paddle3D
+./benchmark --model PETRv1_v99 --shapes "1,6,3,320,800:1,6,4,4" --names "images:img2lidars" --dtypes "FP32:FP32" --disable_mkldnn --config_path $CONFIG_PATH 
+./benchmark --model PETRv2_v99 --shapes "1,12,3,320,800:1,12,4,4:1,12" --names "images:img2lidars:timestamps" --dtypes "FP32:FP32:FP32" --disable_mkldnn --config_path $CONFIG_PATH 
+./benchmark_pp3d_centerpoint --model CenterPoint-Pillars-02Voxel --image paddle3d_centerpoint_n008_LIDAR_TOP__1533151603547590.pcd.bin --config_path $CONFIG_PATH 
+./benchmark_pp3d_cadnn --model CADNN_OCRNet-HRNetW18 --image paddle3d_cadnn_kitti_000780.png --config_path $CONFIG_PATH
 
 set +x
