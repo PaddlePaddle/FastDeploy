@@ -28,7 +28,9 @@ namespace paddle_custom_ops {
 #define CHECK_INPUT_BATCHSIZE(x) \
   PD_CHECK(x.shape()[0] == 1, #x " batch size must be 1.")
 
-#define DIVUP(m, n) ((m) / (n) + ((m) % (n) > 0))
+// #define DIVUP(m, n) ((m) / (n) + ((m) % (n) > 0))
+__host__ __device__ static inline int DIVUP(const int m, const int n) 
+{ return ((m) / (n) + ((m) % (n) > 0)); }
 
 static const int THREADS_PER_BLOCK_NMS = sizeof(int64_t) * 8;
 

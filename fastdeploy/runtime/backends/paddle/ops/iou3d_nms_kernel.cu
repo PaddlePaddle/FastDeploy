@@ -23,9 +23,11 @@ All Rights Reserved 2019-2020.
 namespace fastdeploy {
 namespace paddle_custom_ops {
 
-#define THREADS_PER_BLOCK 16
-#define DIVUP(m, n) ((m) / (n) + ((m) % (n) > 0))
+// #define DIVUP(m, n) ((m) / (n) + ((m) % (n) > 0))
+__host__ __device__ static inline int DIVUP(const int m, const int n) 
+{ return ((m) / (n) + ((m) % (n) > 0)); }
 
+static const int THREADS_PER_BLOCK = 16;
 static const int THREADS_PER_BLOCK_NMS = sizeof(int64_t) * 8;
 #if defined(_WIN32)
 #if defined(EPS)
