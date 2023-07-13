@@ -20,6 +20,9 @@
 #include "paddle/extension.h"
 #endif
 
+namespace fastdeploy {
+namespace paddle_custom_ops {
+
 #define CHECK_INPUT_CUDA(x) PD_CHECK(x.is_gpu(), #x " must be a GPU Tensor.")
 
 #define CHECK_INPUT_BATCHSIZE(x) \
@@ -284,3 +287,6 @@ std::vector<paddle::Tensor> postprocess_gpu(
   auto out_bboxes = paddle::experimental::concat(bboxes, 0);
   return {out_bboxes, out_scores, out_labels};
 }
+
+}  // namespace fastdeploy
+}  // namespace paddle_custom_ops

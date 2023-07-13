@@ -14,8 +14,6 @@
 
 #include <vector>
 
-#if defined(WITH_GPU)
-
 #if defined(PADDLEINFERENCE_API_COMPAT_2_4_x)
 #include "paddle/include/experimental/ext_all.h"
 #elif defined(PADDLEINFERENCE_API_COMPAT_2_5_x)
@@ -23,6 +21,9 @@
 #else
 #include "paddle/extension.h"
 #endif
+
+namespace fastdeploy {
+namespace paddle_custom_ops {
 
 template <typename T, typename T_int>
 bool hard_voxelize_cpu_kernel(
@@ -147,7 +148,8 @@ std::vector<paddle::Tensor> hard_voxelize_cpu(
   return {voxels, coords, num_points_per_voxel, num_voxels};
 }
 
-#ifdef PADDLE_WITH_CUDA
+
+#if defined(PADDLE_WITH_CUDA) && defined(WITH_GPU)
 std::vector<paddle::Tensor> hard_voxelize_cuda(
     const paddle::Tensor &points, const std::vector<float> &voxel_size,
     const std::vector<float> &point_cloud_range, int max_num_points_in_voxel,
@@ -161,7 +163,7 @@ std::vector<paddle::Tensor> hard_voxelize(
   if (points.is_cpu()) {
     return hard_voxelize_cpu(points, voxel_size, point_cloud_range,
                              max_num_points_in_voxel, max_voxels);
-#ifdef PADDLE_WITH_CUDA
+#if defined(PADDLE_WITH_CUDA) && defined(WITH_GPU)
   } else if (points.is_gpu() || points.is_gpu_pinned()) {
     return hard_voxelize_cuda(points, voxel_size, point_cloud_range,
                               max_num_points_in_voxel, max_voxels);
@@ -188,14 +190,15 @@ std::vector<paddle::DataType> HardInferDtype(paddle::DataType points_dtype) {
           paddle::DataType::INT32};
 }
 
+}  // namespace fastdeploy
+}  // namespace paddle_custom_ops
+
 PD_BUILD_OP(hard_voxelize)
     .Inputs({"POINTS"})
     .Outputs({"VOXELS", "COORS", "NUM_POINTS_PER_VOXEL", "num_voxels"})
-    .SetKernelFn(PD_KERNEL(hard_voxelize))
+    .SetKernelFn(PD_KERNEL(fastdeploy::paddle_custom_ops::hard_voxelize))
     .Attrs({"voxel_size: std::vector<float>",
             "point_cloud_range: std::vector<float>",
             "max_num_points_in_voxel: int", "max_voxels: int"})
-    .SetInferShapeFn(PD_INFER_SHAPE(HardInferShape))
-    .SetInferDtypeFn(PD_INFER_DTYPE(HardInferDtype));
-
-#endif  // WITH_GPU
+    .SetInferShapeFn(PD_INFER_SHAPE(fastdeploy::paddle_custom_ops::HardInferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(fastdeploy::paddle_custom_ops::HardInferDtype));

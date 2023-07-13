@@ -111,6 +111,8 @@ struct PaddleBackendOption {
   int gpu_mem_init_size = 100;
   /// The option to enable fixed size optimization for transformer model
   bool enable_fixed_size_opt = false;
+  /// min_subgraph_size for paddle-trt
+  int trt_min_subgraph_size = 3;
 
   /// Disable type of operators run on TensorRT
   void DisableTrtOps(const std::vector<std::string>& ops) {

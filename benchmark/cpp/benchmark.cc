@@ -64,6 +64,12 @@ DEFINE_string(optimized_model_dir, "",
 DEFINE_bool(collect_trt_shape_by_device, false,
             "Optional, whether collect trt shape by device. "
             "default false.");
+DEFINE_double(custom_tensor_value, 1.0,
+              "Optional, set the value for fd tensor, "
+              "default 1.0");
+DEFINE_bool(collect_trt_shape_by_custom_tensor_value, false,
+            "Optional, whether collect trt shape by custom tensor value. "
+            "default false.");
 
 #if defined(ENABLE_BENCHMARK)
 static std::vector<int64_t> GetInt64Shape(const std::vector<int>& shape) {
@@ -208,6 +214,23 @@ static void RuntimeProfiling(int argc, char* argv[]) {
     for (int i = 0; i < input_shapes.size(); ++i) {
       option.trt_option.SetShape(input_names[i], trt_shapes[i * 3],
                                  trt_shapes[i * 3 + 1], trt_shapes[i * 3 + 2]);
+      // Set custom input data for collect trt shapes
+      if (FLAGS_collect_trt_shape_by_custom_tensor_value) {
+        int min_shape_num = std::accumulate(trt_shapes[i * 3].begin(),
+                                            trt_shapes[i * 3].end(), 1,
+                                            std::multiplies<int>());
+        int opt_shape_num = std::accumulate(trt_shapes[i * 3 + 1].begin(),
+                                            trt_shapes[i * 3 + 1].end(), 1,
+                                            std::multiplies<int>());
+        int max_shape_num = std::accumulate(trt_shapes[i * 3 + 2].begin(),
+                                            trt_shapes[i * 3 + 2].end(), 1,
+                                            std::multiplies<int>());                                                                        
+        std::vector<float> min_input_data(min_shape_num, FLAGS_custom_tensor_value);                     
+        std::vector<float> opt_input_data(opt_shape_num, FLAGS_custom_tensor_value);                     
+        std::vector<float> max_input_data(max_shape_num, FLAGS_custom_tensor_value);                     
+        option.trt_option.SetInputData(input_names[i], min_input_data, 
+                                       opt_input_data, max_input_data);
+      }
     }
   }
 
@@ -232,8 +255,9 @@ static void RuntimeProfiling(int argc, char* argv[]) {
   // Feed inputs, all values set as 1.
   std::vector<fastdeploy::FDTensor> inputs(runtime.NumInputs());
   for (int i = 0; i < inputs.size(); ++i) {
-    fastdeploy::function::Full(1, GetInt64Shape(input_shapes[i]), &inputs[i],
-                               input_dtypes[i]);
+    fastdeploy::function::Full(
+      FLAGS_custom_tensor_value, GetInt64Shape(input_shapes[i]),
+      &inputs[i], input_dtypes[i]);
     inputs[i].name = input_names[i];
   }
 
