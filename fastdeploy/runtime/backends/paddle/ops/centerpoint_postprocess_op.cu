@@ -220,7 +220,7 @@ std::vector<paddle::Tensor> postprocess_gpu(
 
     // nms
     // in NmsLauncher, rot = - theta - pi / 2
-    const int col_blocks = DIVUP(num_bboxes_for_nms, THREADS_PER_BLOCK_NMS);
+    int col_blocks = DIVUP(num_bboxes_for_nms, THREADS_PER_BLOCK_NMS);
     auto nms_mask = paddle::empty({num_bboxes_for_nms * col_blocks},
                                   paddle::DataType::INT64, paddle::GPUPlace());
     int64_t *nms_mask_data = nms_mask.data<int64_t>();

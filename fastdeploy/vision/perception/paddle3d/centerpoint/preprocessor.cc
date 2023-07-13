@@ -24,8 +24,7 @@ CenterpointPreprocessor::CenterpointPreprocessor(
 
 bool CenterpointPreprocessor::ReadPoint(const std::string &file_path,
                                         const int64_t num_point_dim,
-                                        std::vector<float> &data,
-                                        int64_t *num_points) {
+                                        std::vector<float> &data, int64_t *num_points) {
   std::ifstream file_in(file_path, std::ios::in | std::ios::binary);
   if (num_point_dim < 4) {
     FDERROR << "Point dimension must not be less than 4, but received "
