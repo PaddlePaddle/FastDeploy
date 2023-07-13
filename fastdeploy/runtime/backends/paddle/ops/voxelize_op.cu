@@ -20,6 +20,9 @@
 #include "paddle/extension.h"
 #endif
 
+namespace fastdeploy {
+namespace paddle_custom_ops {
+
 #define CHECK_INPUT_CUDA(x) \
   PD_CHECK(x.is_gpu() || x.is_gpu_pinned(), #x " must be a GPU Tensor.")
 
@@ -349,3 +352,6 @@ std::vector<paddle::Tensor> hard_voxelize_cuda(
 
   return {voxels, coords, num_points_per_voxel, num_voxels};
 }
+
+}  // namespace fastdeploy
+}  // namespace paddle_custom_ops

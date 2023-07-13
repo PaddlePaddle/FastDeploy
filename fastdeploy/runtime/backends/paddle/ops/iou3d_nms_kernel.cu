@@ -19,6 +19,10 @@ All Rights Reserved 2019-2020.
 */
 
 #include <stdio.h>
+
+namespace fastdeploy {
+namespace paddle_custom_ops {
+
 #define THREADS_PER_BLOCK 16
 #define DIVUP(m, n) ((m) / (n) + ((m) % (n) > 0))
 
@@ -315,3 +319,6 @@ void NmsLauncher(const cudaStream_t &stream, const float *bboxes,
       num_bboxes, num_bboxes_for_nms, nms_overlap_thresh, decode_bboxes_dims,
       bboxes, index, sorted_index, mask);
 }
+
+}  // namespace fastdeploy
+}  // namespace paddle_custom_ops
