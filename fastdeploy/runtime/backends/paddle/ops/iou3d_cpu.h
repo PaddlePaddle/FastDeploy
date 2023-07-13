@@ -12,21 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/pybind/main.h"
+#pragma once
+
+#if defined(PADDLEINFERENCE_API_COMPAT_2_4_x)
+#include "paddle/include/experimental/ext_all.h"
+#elif defined(PADDLEINFERENCE_API_COMPAT_2_5_x)
+#include "paddle/include/paddle/extension.h"
+#else
+#include "paddle/extension.h"
+#endif
+
+#include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
+namespace paddle_custom_ops {
 
-void BindSmoke(pybind11::module& m);
-void BindPetr(pybind11::module& m);
-void BindCenterpoint(pybind11::module& m);
-void BindCaddn(pybind11::module& m);
+FASTDEPLOY_DECL int boxes_iou_bev_cpu(
+  paddle::Tensor boxes_a_tensor, paddle::Tensor boxes_b_tensor,
+  paddle::Tensor ans_iou_tensor);
 
-void BindPerception(pybind11::module& m) {
-  auto perception_module =
-      m.def_submodule("perception", "3D object perception models.");
-  BindSmoke(perception_module);
-  BindPetr(perception_module);
-  BindCenterpoint(perception_module);
-  BindCaddn(perception_module);
-}
 }  // namespace fastdeploy
+}  // namespace paddle_custom_ops

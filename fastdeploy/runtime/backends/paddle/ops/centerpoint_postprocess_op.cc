@@ -119,3 +119,4 @@ PD_BUILD_OP(centerpoint_postprocess)
     .SetInferDtypeFn(PD_INFER_DTYPE(fastdeploy::paddle_custom_ops::PostProcessInferDtype));
 
 #endif // WITH_GPU
+
