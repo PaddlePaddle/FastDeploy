@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle2onnx/optimizer/convert_fp32_to_fp16.h"
+
 #include "paddle2onnx/utils/utils.h"
 
 namespace paddle2onnx {
@@ -528,9 +529,8 @@ void ConvertFp32ToFp16::ConvertAttribute(ONNX_NAMESPACE::ModelProto* model) {
                     std::find(keep_type_node->input().begin(),
                               keep_type_node->input().end(),
                               n->output()[0]) != keep_type_node->input().end();
-                if (is_pre_node &&
-                    std::find(node_list.begin(), node_list.end(), n) ==
-                        node_list.end()) {
+                if (is_pre_node && std::find(node_list.begin(), node_list.end(),
+                                             n) == node_list.end()) {
                   node_list.push_back(keep_type_node);
                   Assert(
                       n->op_type() == "Constant",
@@ -604,9 +604,8 @@ void ConvertFp32ToFp16::ConvertAttribute(ONNX_NAMESPACE::ModelProto* model) {
           bool skip =
               std::find(graph_io_to_skip.begin(), graph_io_to_skip.end(),
                         input->name()) != graph_io_to_skip.end();
-          if (!skip &&
-              input->type().tensor_type().elem_type() ==
-                  ONNX_NAMESPACE::TensorProto::FLOAT) {
+          if (!skip && input->type().tensor_type().elem_type() ==
+                           ONNX_NAMESPACE::TensorProto::FLOAT) {
             input->mutable_type()->mutable_tensor_type()->set_elem_type(
                 ONNX_NAMESPACE::TensorProto::FLOAT16);
             value_info_list.push_back(input);
@@ -617,9 +616,8 @@ void ConvertFp32ToFp16::ConvertAttribute(ONNX_NAMESPACE::ModelProto* model) {
           bool skip =
               std::find(graph_io_to_skip.begin(), graph_io_to_skip.end(),
                         output->name()) != graph_io_to_skip.end();
-          if (!skip &&
-              output->type().tensor_type().elem_type() ==
-                  ONNX_NAMESPACE::TensorProto::FLOAT) {
+          if (!skip && output->type().tensor_type().elem_type() ==
+                           ONNX_NAMESPACE::TensorProto::FLOAT) {
             output->mutable_type()->mutable_tensor_type()->set_elem_type(
                 ONNX_NAMESPACE::TensorProto::FLOAT16);
             value_info_list.push_back(output);
@@ -819,9 +817,8 @@ bool ConvertFp32ToFp16::IsFP16Model(const ONNX_NAMESPACE::ModelProto& model) {
 }
 
 void ConvertFp32ToFp16::Convert(ONNX_NAMESPACE::ModelProto* model) {
-  if (op_block_list_.empty()) {
-    op_block_list_ = DEFAULT_OP_BLOCK_LIST;
-  }
+  op_block_list_.insert(op_block_list_.end(), DEFAULT_OP_BLOCK_LIST.begin(),
+                        DEFAULT_OP_BLOCK_LIST.end());
   if (custom_ops_.size()) {
     op_block_list_.insert(op_block_list_.end(), custom_ops_.begin(),
                           custom_ops_.end());

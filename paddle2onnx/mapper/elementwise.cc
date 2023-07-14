@@ -108,9 +108,8 @@ void ElementWiseModMapper::Opset10() {
   auto abs_y_node = helper_->MakeNode("Abs", {input_y_info[0].name});
 
   auto dtype = input_y_info[0].dtype;
-  std::vector<float> val_0 = {0.0};
 
-  std::string zero_node = helper_->Constant(GetOnnxDtype(dtype), val_0);
+  std::string zero_node = helper_->Constant({}, GetOnnxDtype(dtype), 0.0);
 
   auto mod_node =
       helper_->MakeNode("Mod", {abs_x_node->output(0), abs_y_node->output(0)});
