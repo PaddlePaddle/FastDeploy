@@ -56,24 +56,25 @@ int main(int argc, char* argv[]) {
   }
   if (config_info["backend"] == "paddle_trt" ||
       config_info["backend"] == "trt") {
-    // use custom data to perform collect shapes.  
-    option.trt_option.SetShape("images", {1, 3, 375, 1242},
-      {1, 3, 375, 1242}, {1, 3, 375, 1242});
-    option.trt_option.SetShape("trans_lidar_to_cam", {1, 4, 4},
-      {1, 4, 4}, {1, 4, 4});
-    option.trt_option.SetShape("trans_cam_to_img", {1, 3, 4},
-      {1, 3, 4}, {1, 3, 4});
+    // use custom data to perform collect shapes.
+    option.trt_option.SetShape("images", {1, 3, 375, 1242}, {1, 3, 375, 1242},
+                               {1, 3, 375, 1242});
+    option.trt_option.SetShape("trans_lidar_to_cam", {1, 4, 4}, {1, 4, 4},
+                               {1, 4, 4});
+    option.trt_option.SetShape("trans_cam_to_img", {1, 3, 4}, {1, 3, 4},
+                               {1, 3, 4});
     std::vector<float> image_data;
-    image_data.assign(im.data, im.data + 1*3*375*1242);
-    option.trt_option.SetInputData("trans_lidar_to_cam", lidar_data);  
-    option.trt_option.SetInputData("trans_cam_to_img", cam_data);  
-    option.trt_option.SetInputData("images", image_data);  
+    image_data.assign(im.data, im.data + 1 * 3 * 375 * 1242);
+    option.trt_option.SetInputData("trans_lidar_to_cam", lidar_data);
+    option.trt_option.SetInputData("trans_cam_to_img", cam_data);
+    option.trt_option.SetInputData("images", image_data);
   }
-  auto model_cadnn = vision::perception::Caddn(
-      model_file, params_file, "", option, model_format);
+  auto model_cadnn = vision::perception::Caddn(model_file, params_file, "",
+                                               option, model_format);
   vision::PerceptionResult res;
   // Run profiling
-  BENCHMARK_MODEL(model_cadnn, model_cadnn.Predict(im, cam_data, lidar_data, &res))
+  BENCHMARK_MODEL(model_cadnn,
+                  model_cadnn.Predict(im, cam_data, lidar_data, &res))
   std::cout << res.Str() << std::endl;
 #endif
 
