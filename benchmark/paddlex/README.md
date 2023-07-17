@@ -131,10 +131,11 @@ tar -zxvf MobileNetV3_small_x1_0.tgz
 ## 4. 各个硬件上的一键运行脚本  
 
 在准备好相关的环境配置和SDK后，可以使用本目录提供的脚本一键运行后的benchmark数据。
-- 获取模型和资源文件  
+- 获取模型和资源文件
 ```bash
 ./get_models.sh
 ```  
+
 - 运行benchmark脚本  
 ```bash
 # x86 CPU Paddle backend fp32

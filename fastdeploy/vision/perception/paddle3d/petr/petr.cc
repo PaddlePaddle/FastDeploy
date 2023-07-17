@@ -19,8 +19,8 @@ namespace vision {
 namespace perception {
 
 Petr::Petr(const std::string& model_file, const std::string& params_file,
-             const std::string& config_file, const RuntimeOption& custom_option,
-             const ModelFormat& model_format)
+           const std::string& config_file, const RuntimeOption& custom_option,
+           const ModelFormat& model_format)
     : preprocessor_(config_file) {
   valid_cpu_backends = {Backend::PDINFER};
   valid_gpu_backends = {Backend::PDINFER};
@@ -41,29 +41,38 @@ bool Petr::Initialize() {
   return true;
 }
 
-bool Petr::Predict(const cv::Mat& im, PerceptionResult* result) {
-  std::vector<PerceptionResult> results;
-  if (!BatchPredict({im}, &results)) {
-    return false;
-  }
-  if (results.size()) {
-    *result = std::move(results[0]);
-  }
-  return true;
+bool Petr::Predict(const cv::Mat& images, PerceptionResult* results) {
+  FDERROR << "Petr inference only support 6(V1) or 12(V2) images" << std::endl;
+  return false;
 }
 
 bool Petr::BatchPredict(const std::vector<cv::Mat>& images,
-                         std::vector<PerceptionResult>* results) {
+                        std::vector<PerceptionResult>* results) {
+  if ((images.size() != 6) && (images.size() != 12)) {
+    FDERROR << "Petr only support 6(V1) or 12(V2) images";
+    return false;
+  }
   std::vector<FDMat> fd_images = WrapMat(images);
 
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
   }
-
+   
+  // Note: un-commented the codes below to show the debug info. 
+  // reused_input_tensors_[0].PrintInfo();
+  // reused_input_tensors_[1].PrintInfo();
+  // reused_input_tensors_[2].PrintInfo();
+  
   reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
   reused_input_tensors_[1].name = InputInfoOfRuntime(1).name;
-  reused_input_tensors_[2].name = InputInfoOfRuntime(2).name;
+  if (images.size() == 12) {
+    // for Petr V2 timestamp
+    reused_input_tensors_[2].name = InputInfoOfRuntime(2).name;
+  } else {
+    // for Petr V1
+    reused_input_tensors_.pop_back();
+  }
 
   if (!Infer(reused_input_tensors_, &reused_output_tensors_)) {
     FDERROR << "Failed to inference by runtime." << std::endl;

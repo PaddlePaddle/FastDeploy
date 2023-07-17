@@ -29,7 +29,7 @@ fi
 
 # PaddleSeg
 ./benchmark_ppseg --model OCRNet_HRNetW48 --image ppseg_cityscapes_demo_512x512.png --config_path $CONFIG_PATH
-./benchmark_ppseg --model PP-LiteSeg-STDC1 --image ppseg_cityscapes_demo_512x512.png --config_path $CONFIG_PATH 
+./benchmark_ppseg --model PP-LiteSeg-STDC1 --image ppseg_cityscapes_demo_512x512.png --config_path $CONFIG_PATH
 ./benchmark_ppseg --model SegFormer-B0 --image ppseg_cityscapes_demo_512x512.png --config_path $CONFIG_PATH
 ./benchmark_ppseg --model PP-MobileSeg-Base --image ppseg_ade_val_512x512.png --config_path $CONFIG_PATH
 
@@ -49,9 +49,9 @@ fi
 ./benchmark --model PP-Structurev2-vi-layoutxlm --shapes "1,512:1,512,4:1,512:1,512" --trt_shapes "1,512:1,512:1,512:1,512,4:1,512,4:1,512,4:1,512:1,512:1,512:1,512:1,512:1,512" --names "x_0:x_1:x_2:x_3" --dtypes "INT64:INT64:INT64:INT64" --disable_mkldnn --custom_tensor_value 0.2 --config_path $CONFIG_PATH
 
 # Paddle3D
-./benchmark --model PETRv1_v99 --shapes "1,6,3,320,800:1,6,4,4" --names "images:img2lidars" --dtypes "FP32:FP32" --disable_mkldnn --config_path $CONFIG_PATH 
-./benchmark --model PETRv2_v99 --shapes "1,12,3,320,800:1,12,4,4:1,12" --names "images:img2lidars:timestamps" --dtypes "FP32:FP32:FP32" --disable_mkldnn --config_path $CONFIG_PATH 
-./benchmark_pp3d_centerpoint --model CenterPoint-Pillars-02Voxel --image paddle3d_centerpoint_n008_LIDAR_TOP__1533151603547590.pcd.bin --config_path $CONFIG_PATH 
-./benchmark_pp3d_cadnn --model CADNN_OCRNet-HRNetW18 --image paddle3d_cadnn_kitti_000780.png --config_path $CONFIG_PATH
+./benchmark --model PETRv1_v99 --shapes "1,6,3,320,800:1,6,4,4" --names "images:img2lidars" --dtypes "FP32:FP32" --disable_mkldnn --config_path $CONFIG_PATH
+./benchmark --model PETRv2_v99 --shapes "1,12,3,320,800:1,12,4,4:1,12" --names "images:img2lidars:timestamps" --dtypes "FP32:FP32:FP32" --disable_mkldnn --config_path $CONFIG_PATH
+./benchmark_pp3d_centerpoint --model CenterPoint-Pillars-02Voxel --image paddle3d_centerpoint_n008_LIDAR_TOP__1533151603547590.pcd.bin --config_path $CONFIG_PATH
+./benchmark_pp3d_caddn --model CADDN_OCRNet-HRNetW18 --image paddle3d_caddn_kitti_000780.png --config_path $CONFIG_PATH
 
 set +x

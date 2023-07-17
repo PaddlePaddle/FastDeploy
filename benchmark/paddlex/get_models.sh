@@ -68,7 +68,7 @@ download PP-Structurev2-SLANet.tgz
 download PP-Structurev2-vi-layoutxlm.tgz
 
 # Paddle3D
-download CADNN_OCRNet-HRNetW18.tgz
+download CADDN_OCRNet-HRNetW18.tgz
 download CenterPoint-Pillars-02Voxel.tgz
 download PETRv1_v99.tgz
 download PETRv2_v99.tgz
