@@ -36,13 +36,6 @@ void ArgMaxMapper::Opset7() {
     input = helper_->Flatten(input_info[0].name);
   }
 
-  // Make sure the output tensor has to be 1D-Tensor
-  bool need_unsqueeze = false;
-  if (flatten_ || input_info[0].shape.size() <= 1) {
-    if (!keepdims_) {
-      need_unsqueeze = true;
-    }
-  }
   if (IsAttrVar("axis")) {
     auto axis_info = GetAttrVar("axis");
     std::vector<int64_t> temp;
@@ -60,13 +53,17 @@ void ArgMaxMapper::Opset7() {
   auto arg_node = helper_->MakeNode("ArgMax", {input});
   AddAttribute(arg_node, "axis", axis_);
   AddAttribute(arg_node, "keepdims", static_cast<int64_t>(keepdims_));
-  if (!need_unsqueeze) {
-    helper_->AutoCast(arg_node->output(0), output_info[0].name,
-                      P2ODataType::INT64, output_info[0].dtype);
-  } else {
-    auto out = helper_->Unsqueeze(arg_node->output(0), {0});
+  if (keepdims_) {
+    std::vector<int64_t> shape(input_info[0].Rank(), 1);
+    std::string out = arg_node->output(0);
+    if (flatten_) {
+      out = helper_->Reshape(arg_node->output(0), shape);
+    }
     helper_->AutoCast(out, output_info[0].name, P2ODataType::INT64,
                       output_info[0].dtype);
+  } else {
+    helper_->AutoCast(arg_node->output(0), output_info[0].name,
+                      P2ODataType::INT64, output_info[0].dtype);
   }
 }
 

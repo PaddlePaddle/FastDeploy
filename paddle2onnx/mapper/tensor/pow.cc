@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle2onnx/mapper/tensor/pow.h"
+
 #include <unordered_set>
 
 namespace paddle2onnx {
@@ -22,16 +23,17 @@ void PowMapper::Opset7() {
   auto input_info = GetInput("X");
   auto output_info = GetOutput("Out");
 
-  auto factor_node = helper_->Constant(ONNX_NAMESPACE::TensorProto::FLOAT,
-                                           std::vector<float>(1, factor_));
+  auto factor_node =
+      helper_->Constant({}, ONNX_NAMESPACE::TensorProto::FLOAT, factor_);
   if (input_info[0].dtype != P2ODataType::FP32) {
-       std::string x_cast_name = helper_->AutoCast(
+    std::string x_cast_name = helper_->AutoCast(
         {input_info[0].name}, input_info[0].dtype, P2ODataType::FP32);
-     auto node = helper_->MakeNode("Pow", {x_cast_name, factor_node});
-     helper_->AutoCast(node->output(0), {output_info[0].name}, P2ODataType::FP32,
+    auto node = helper_->MakeNode("Pow", {x_cast_name, factor_node});
+    helper_->AutoCast(node->output(0), {output_info[0].name}, P2ODataType::FP32,
                       input_info[0].dtype);
   } else {
-      helper_->MakeNode("Pow", {input_info[0].name, factor_node}, {output_info[0].name});
+    helper_->MakeNode("Pow", {input_info[0].name, factor_node},
+                      {output_info[0].name});
   }
 }
 

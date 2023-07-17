@@ -20,15 +20,22 @@
 
 namespace paddle2onnx {
 
-class Transpose2Mapper : public Mapper {
+class PadMapper : public Mapper {
  public:
-  Transpose2Mapper(const PaddleParser& p, OnnxHelper* helper, int64_t block_id,
-                   int64_t op_id)
-      : Mapper(p, helper, block_id, op_id) {}
+  PadMapper(const PaddleParser& p, OnnxHelper* helper, int64_t block_id,
+            int64_t op_id)
+      : Mapper(p, helper, block_id, op_id) {
+    GetAttr("pad_value", &pad_value_);
+    GetAttr("paddings", &paddings_);
+  }
   void Opset7();
+  void Opset11();
 
  private:
-  std::vector<int64_t> axis_ = {};
+  std::vector<int64_t> ConvertPaddingParameter(
+      const std::vector<int64_t>& paddings);
+  std::vector<int64_t> paddings_;
+  float pad_value_;
 };
 
 }  // namespace paddle2onnx

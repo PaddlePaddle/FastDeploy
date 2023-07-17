@@ -25,17 +25,33 @@ int32_t CumsumMapper::GetMinOpset(bool verbose) {
 void CumsumMapper::Opset11() {
   auto input_info = GetInput("X");
   auto output_info = GetOutput("Out");
-  std::string axis_node;
-  if (IsAttrVar("axis")) {
-    auto axis_info = GetAttrVar("axis");
-    axis_node = helper_->AutoCast(axis_info[0].name, axis_info[0].dtype,
-                                  P2ODataType::INT64);
+  if (input_info[0].Rank() == 0) {
+    auto axis_node = helper_->Constant({}, GetOnnxDtype(P2ODataType::INT64), 0);
+    auto unsqueeze_node = helper_->Unsqueeze(input_info[0].name, {0});
+    auto cumsum_node = helper_->MakeNode("CumSum", {unsqueeze_node, axis_node});
+    if (flatten_) {
+      helper_->AutoCast(cumsum_node->output(0), output_info[0].name,
+                        input_info[0].dtype, output_info[0].dtype);
+    } else {
+      helper_->Squeeze(cumsum_node->output(0), output_info[0].name, {0});
+    }
   } else {
-    GetAttr("axis", &axis_);
-    axis_node = helper_->Constant({1}, GetOnnxDtype(P2ODataType::INT64), axis_);
+    std::string axis_node;
+    if (IsAttrVar("axis")) {
+      auto axis_info = GetAttrVar("axis");
+      axis_node = helper_->AutoCast(axis_info[0].name, axis_info[0].dtype,
+                                    P2ODataType::INT64);
+    } else {
+      GetAttr("axis", &axis_);
+      axis_node =
+          helper_->Constant({}, GetOnnxDtype(P2ODataType::INT64), axis_);
+    }
+    std::string input_node = input_info[0].name;
+    if (flatten_) {
+      input_node = helper_->Reshape(input_info[0].name, {-1});
+    }
+    helper_->MakeNode("CumSum", {input_node, axis_node}, {output_info[0].name});
   }
-  helper_->MakeNode("CumSum", {input_info[0].name, axis_node},
-                    {output_info[0].name});
 }
 
 }  // namespace paddle2onnx

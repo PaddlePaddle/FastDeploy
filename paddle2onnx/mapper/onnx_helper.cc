@@ -74,7 +74,7 @@ void AddAttribute(std::shared_ptr<ONNX_NAMESPACE::NodeProto> node,
   for (auto& item : values) {
     attr->add_floats(item);
   }
-  attr->set_type(ONNX_NAMESPACE::AttributeProto::FLOAT);
+  attr->set_type(ONNX_NAMESPACE::AttributeProto::FLOATS);
 }
 
 void AddAttribute(std::shared_ptr<ONNX_NAMESPACE::NodeProto> node,
