@@ -129,6 +129,12 @@ def arg_parser():
         type=ast.literal_eval,
         default=False,
         help="Whether export FP16 model for ORT-GPU, default False")
+    parser.add_argument(
+        "--custom_ops",
+        type=_text_type,
+        default="{}",
+        help="Ops that needs to be converted to custom op, e.g --custom_ops '{\"paddle_op\":\"onnx_op\"}', default {}"
+    )
     return parser
 
 
@@ -144,12 +150,14 @@ def c_paddle_to_onnx(model_file,
                      deploy_backend="onnxruntime",
                      calibration_file="",
                      external_file="",
-                     export_fp16_model=False):
+                     export_fp16_model=False,
+                     custom_ops={}):
     import paddle2onnx.paddle2onnx_cpp2py_export as c_p2o
     onnx_model_str = c_p2o.export(
         model_file, params_file, opset_version, auto_upgrade_opset, verbose,
-        enable_onnx_checker, enable_experimental_op, enable_optimize, {},
-        deploy_backend, calibration_file, external_file, export_fp16_model)
+        enable_onnx_checker, enable_experimental_op, enable_optimize,
+        custom_ops, deploy_backend, calibration_file, external_file,
+        export_fp16_model)
     if save_file is not None:
         with open(save_file, "wb") as f:
             f.write(onnx_model_str)
@@ -235,6 +243,8 @@ def main():
             os.mkdir(base_path)
         external_file = os.path.join(base_path, args.external_filename)
 
+        custom_ops_dict = eval(args.custom_ops)
+
         calibration_file = args.save_calibration_file
         c_paddle_to_onnx(
             model_file=model_file,
@@ -249,7 +259,8 @@ def main():
             deploy_backend=args.deploy_backend,
             calibration_file=calibration_file,
             external_file=external_file,
-            export_fp16_model=args.export_fp16_model)
+            export_fp16_model=args.export_fp16_model,
+            custom_ops=custom_ops_dict)
         logging.info("===============Make PaddlePaddle Better!================")
         logging.info("A little survey: https://iwenjuan.baidu.com/?code=r8hu2s")
         return

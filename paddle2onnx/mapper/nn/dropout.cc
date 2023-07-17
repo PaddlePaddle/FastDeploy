@@ -55,9 +55,8 @@ void DropoutMapper::Opset7() {
     } else {
       GetAttr("dropout_prob", &dropout_prob_);
     }
-    std::vector<float> value = {1 - dropout_prob_};
-    std::string scale_node =
-        helper_->Constant(GetOnnxDtype(input_info[0].dtype), value);
+    std::string scale_node = helper_->Constant(
+        {}, GetOnnxDtype(input_info[0].dtype), 1 - dropout_prob_);
     helper_->MakeNode("Mul", {input_info[0].name, scale_node},
                       {output_info[0].name});
   }

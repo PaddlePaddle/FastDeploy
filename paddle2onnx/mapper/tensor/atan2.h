@@ -13,22 +13,17 @@
 // limitations under the License.
 
 #pragma once
-#include <string>
-#include <vector>
-
 #include "paddle2onnx/mapper/mapper.h"
 
 namespace paddle2onnx {
 
-class Transpose2Mapper : public Mapper {
+class Atan2Mapper : public Mapper {
  public:
-  Transpose2Mapper(const PaddleParser& p, OnnxHelper* helper, int64_t block_id,
-                   int64_t op_id)
+  Atan2Mapper(const PaddleParser& p, OnnxHelper* helper, int64_t block_id,
+              int64_t op_id)
       : Mapper(p, helper, block_id, op_id) {}
-  void Opset7();
-
- private:
-  std::vector<int64_t> axis_ = {};
+  void Opset9();
+  int32_t GetMinOpset(bool verbose = false);
 };
 
 }  // namespace paddle2onnx

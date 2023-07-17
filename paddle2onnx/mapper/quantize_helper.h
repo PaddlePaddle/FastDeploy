@@ -84,6 +84,8 @@ struct QuantizeModelProcessor {
   // Add QDQ for RKNN
   void AddQDQForRKNN();
 
+  void RemoveIdentityOp();
+
   // Add quantize related op in model according to tensor names
   void AddQDQInModel(const std::vector<std::string>& tensors_to_be_quantize);
 
