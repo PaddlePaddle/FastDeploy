@@ -14,12 +14,12 @@
 
 #pragma once
 #include <onnx/onnx_pb.h>
+#include <onnx/shape_inference/implementation.h>
 
 #include <cmath>
 #include <fstream>
 #include <iomanip>
 
-#include <onnx/shape_inference/implementation.h>
 #include "paddle2onnx/mapper/mapper.h"
 #include "paddle2onnx/parser/parser.h"
 namespace paddle2onnx {
@@ -136,6 +136,11 @@ struct ConvertFp32ToFp16 {
         custom_ops_.push_back(op.second);
       }
     }
+  }
+
+  void AddDisabledOpTypes(const std::vector<std::string>& disable_fp16_ops) {
+    op_block_list_.insert(op_block_list_.end(), disable_fp16_ops.begin(),
+                          disable_fp16_ops.end());
   }
   // If the input ONNX model is a FP16 model, return True
   bool IsFP16Model(const ONNX_NAMESPACE::ModelProto& model);

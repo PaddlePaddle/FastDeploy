@@ -156,11 +156,11 @@ void Pool2dMapper::NoAdaptivePool(const std::vector<TensorInfo>& input_info,
       pads_[i] = copy[index[i]];
     }
   }
-  if (input_shape[2] > 0 && input_shape[2] + pads_[0] < k_size_[0]) {
-    k_size_[0] = input_shape[2] + pads_[0];
+  if (input_shape[2] > 0 && input_shape[2] + pads_[0] + pads_[2] < k_size_[0]) {
+    k_size_[0] = input_shape[2] + pads_[0] + pads_[2];
   }
-  if (input_shape[3] > 0 && input_shape[3] + pads_[1] < k_size_[1]) {
-    k_size_[1] = input_shape[3] + pads_[1];
+  if (input_shape[3] > 0 && input_shape[3] + pads_[1] + pads_[3] < k_size_[1]) {
+    k_size_[1] = input_shape[3] + pads_[1] + pads_[3];
   }
 
   int64_t max_ksize = *std::max_element(std::begin(k_size_), std::end(k_size_));

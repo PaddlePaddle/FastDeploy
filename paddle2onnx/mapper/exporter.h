@@ -66,7 +66,8 @@ struct ModelExporter {
   void ExportLoop(const PaddleParser& parser, OnnxHelper* helper,
                   int32_t opset_version, int64_t block_id, int64_t op_id,
                   bool verbose);
-
+  void CovertCustomOps(const PaddleParser& parser, OnnxHelper* helper,
+                       int64_t block_id, int64_t op_id);
   ONNX_NAMESPACE::ModelProto Optimize(const ONNX_NAMESPACE::ModelProto& model);
 
  public:
@@ -115,8 +116,8 @@ struct ModelExporter {
                   const std::string& deploy_backend = "onnxruntime",
                   std::string* calibration_cache = nullptr,
                   const std::string& external_file = "",
-                  bool* save_external = nullptr,
-                  bool export_fp16_model = false);
+                  bool* save_external = nullptr, bool export_fp16_model = false,
+                  std::vector<std::string> disable_fp16_op_types = {});
 };
 
 }  // namespace paddle2onnx

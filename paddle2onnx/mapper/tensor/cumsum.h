@@ -24,12 +24,15 @@ class CumsumMapper : public Mapper {
  public:
   CumsumMapper(const PaddleParser& p, OnnxHelper* helper, int64_t block_id,
                int64_t op_id)
-      : Mapper(p, helper, block_id, op_id) {}
+      : Mapper(p, helper, block_id, op_id) {
+    GetAttr("flatten", &flatten_);
+  }
   int32_t GetMinOpset(bool verbose = false);
   void Opset11();
 
  private:
   int64_t axis_;
+  bool flatten_;
 };
 
 }  // namespace paddle2onnx

@@ -33,7 +33,9 @@ int32_t FlipMapper::GetMinOpset(bool verbose) {
 void FlipMapper::Opset7() {
   auto input_info = GetInput("X");
   auto output_info = GetOutput("Out");
-
+  if (input_info[0].Rank() == 0) {
+    helper_->MakeNode("Identity", {input_info[0].name}, {output_info[0].name});
+  }
   std::string input_name = input_info[0].name;
   bool need_convert = false;
   if (input_info[0].dtype == P2ODataType::BOOL ||

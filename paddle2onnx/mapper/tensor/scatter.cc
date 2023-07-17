@@ -36,9 +36,14 @@ void ScatterMapper::Opset11() {
   std::string ids_node = helper_->AutoCast(
       input_ids_info[0].name, input_ids_info[0].dtype, P2ODataType::INT64);
 
-  std::vector<int64_t> shape_val = {input_ids_info[0].shape[0], 1};
-  std::string shape_node =
-      helper_->Constant(GetOnnxDtype(P2ODataType::INT64), shape_val);
+  std::string shape_node;
+  if (input_ids_info[0].Rank() == 0) {
+    std::vector<int64_t> shape = {1};
+    shape_node = helper_->Constant(GetOnnxDtype(P2ODataType::INT64), shape);
+  } else {
+    std::vector<int64_t> shape = {input_ids_info[0].shape[0], 1};
+    shape_node = helper_->Constant(GetOnnxDtype(P2ODataType::INT64), shape);
+  }
 
   auto reshape_index_node =
       helper_->MakeNode("Reshape", {ids_node, shape_node});
@@ -54,7 +59,7 @@ void ScatterMapper::Opset11() {
     AddAttribute(scatter_nd_node, "reduction", "add");
 
     std::string zero_node = helper_->Constant(
-        {1}, GetOnnxDtype(input_x_info[0].dtype), static_cast<float>(0));
+        {}, GetOnnxDtype(input_x_info[0].dtype), static_cast<float>(0));
 
     auto equal_node =
         helper_->MakeNode("Equal", {scatter_nd_node->output(0), zero_node});
@@ -62,15 +67,16 @@ void ScatterMapper::Opset11() {
     std::string condition_node = helper_->AutoCast(
         equal_node->output(0), P2ODataType::INT64, P2ODataType::BOOL);
 
-    helper_->MakeNode("Where", {condition_node, input_x_info[0].name,
-                                scatter_nd_node->output(0)},
-                      {output_info[0].name});
-
-  } else {
-    auto node = helper_->MakeNode(
-        "ScatterND", {input_x_info[0].name, reshape_index_node->output(0),
-                      input_updates_info[0].name},
+    helper_->MakeNode(
+        "Where",
+        {condition_node, input_x_info[0].name, scatter_nd_node->output(0)},
         {output_info[0].name});
+  } else {
+    auto node =
+        helper_->MakeNode("ScatterND",
+                          {input_x_info[0].name, reshape_index_node->output(0),
+                           input_updates_info[0].name},
+                          {output_info[0].name});
   }
 }
 

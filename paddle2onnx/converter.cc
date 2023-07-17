@@ -137,7 +137,8 @@ PADDLE2ONNX_DECL bool Export(
     bool enable_onnx_checker, bool enable_experimental_op, bool enable_optimize,
     CustomOp* ops, int op_count, const char* deploy_backend,
     char** calibration_cache, int* calibration_size, const char* external_file,
-    bool* save_external, bool export_fp16_model) {
+    bool* save_external, bool export_fp16_model, char** disable_fp16_op_types,
+    int disable_fp16_op_types_count) {
   auto parser = PaddleParser();
   P2OLogger(verbose) << "Start to parsing Paddle model..." << std::endl;
   if (!parser.Init(model, params)) {
@@ -158,12 +159,20 @@ PADDLE2ONNX_DECL bool Export(
       me.custom_ops[op_name] = export_op_name;
     }
   }
-
+  // Add disabled fp16 op information
+  std::vector<std::string> disable_op_types;
+  if (disable_fp16_op_types != nullptr && disable_fp16_op_types_count > 0) {
+    for (int i = 0; i < disable_fp16_op_types_count; ++i) {
+      std::string disable_op_type(disable_fp16_op_types[i],
+                                  strlen(disable_fp16_op_types[i]));
+      disable_op_types.push_back(disable_op_type);
+    }
+  }
   std::string calibration_str;
   std::string result = me.Run(
       parser, opset_version, auto_upgrade_opset, verbose, enable_onnx_checker,
       enable_experimental_op, enable_optimize, deploy_backend, &calibration_str,
-      external_file, save_external, export_fp16_model);
+      external_file, save_external, export_fp16_model, disable_op_types);
   if (result.empty()) {
     P2OLogger(verbose) << "The exported ONNX model is invalid!" << std::endl;
     return false;
@@ -193,7 +202,8 @@ PADDLE2ONNX_DECL bool Export(
     bool enable_experimental_op, bool enable_optimize, CustomOp* ops,
     int op_count, const char* deploy_backend, char** calibration_cache,
     int* calibration_size, const char* external_file, bool* save_external,
-    bool export_fp16_model) {
+    bool export_fp16_model, char** disable_fp16_op_types,
+    int disable_fp16_op_types_count) {
   auto parser = PaddleParser();
   P2OLogger(verbose) << "Start to parsing Paddle model..." << std::endl;
   if (!parser.Init(model_buffer, model_size, params_buffer, params_size)) {
@@ -214,11 +224,20 @@ PADDLE2ONNX_DECL bool Export(
       me.custom_ops[op_name] = export_op_name;
     }
   }
+  // Add disabled fp16 op information
+  std::vector<std::string> disable_op_types;
+  if (disable_fp16_op_types != nullptr && disable_fp16_op_types_count > 0) {
+    for (int i = 0; i < disable_fp16_op_types_count; ++i) {
+      std::string disable_op_type(disable_fp16_op_types[i],
+                                  strlen(disable_fp16_op_types[i]));
+      disable_op_types.push_back(disable_op_type);
+    }
+  }
   std::string calibration_str;
   std::string result = me.Run(
       parser, opset_version, auto_upgrade_opset, verbose, enable_onnx_checker,
       enable_experimental_op, enable_optimize, deploy_backend, &calibration_str,
-      external_file, save_external, export_fp16_model);
+      external_file, save_external, export_fp16_model, disable_op_types);
   if (result.empty()) {
     P2OLogger(verbose) << "The exported ONNX model is invalid!" << std::endl;
     return false;

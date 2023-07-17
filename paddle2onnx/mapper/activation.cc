@@ -186,7 +186,7 @@ void SwishMapper::Opset7() {
   auto output_info = GetOutput("Out");
 
   std::string beta_node =
-      helper_->Constant({1}, GetOnnxDtype(input_info[0].dtype), beta_);
+      helper_->Constant({}, GetOnnxDtype(input_info[0].dtype), beta_);
   // TODO(jiangjiajun) eliminate multiply with a constant of value 1
   // TODO(jiangjiajun) eliminate add with a constant of value 0
   auto beta_x_node = helper_->MakeNode("Mul", {input_info[0].name, beta_node});
@@ -200,9 +200,9 @@ void HardSwishMapper::Opset7() {
   auto output_info = GetOutput("Out");
 
   std::string scale_node =
-      helper_->Constant({1}, GetOnnxDtype(input_info[0].dtype), scale_);
+      helper_->Constant({}, GetOnnxDtype(input_info[0].dtype), scale_);
   std::string offset_node =
-      helper_->Constant({1}, GetOnnxDtype(input_info[0].dtype), offset_);
+      helper_->Constant({}, GetOnnxDtype(input_info[0].dtype), offset_);
 
   auto add_node = helper_->MakeNode("Add", {input_info[0].name, offset_node});
   auto clip_node =
@@ -239,11 +239,11 @@ void GeluMapper::Opset9() {
   double scale_value = 0.5;
   double const_1_value = 1.0;
   auto sqrt_2 =
-      helper_->Constant({1}, ONNX_NAMESPACE::TensorProto::FLOAT, sqrt_2_value);
+      helper_->Constant({}, ONNX_NAMESPACE::TensorProto::FLOAT, sqrt_2_value);
   auto scale =
-      helper_->Constant({1}, ONNX_NAMESPACE::TensorProto::FLOAT, scale_value);
+      helper_->Constant({}, ONNX_NAMESPACE::TensorProto::FLOAT, scale_value);
   auto const_1 =
-      helper_->Constant({1}, ONNX_NAMESPACE::TensorProto::FLOAT, const_1_value);
+      helper_->Constant({}, ONNX_NAMESPACE::TensorProto::FLOAT, const_1_value);
 
   auto input_name = helper_->AutoCast(input_info[0].name, input_info[0].dtype,
                                       P2ODataType::FP32);
@@ -268,26 +268,34 @@ void GeluMapper::Opset9() {
 void SoftMaxMapper::Opset7() {
   auto input_info = GetInput("X");
   auto output_info = GetOutput("Out");
-  if (axis_ < 0) {
-    axis_ = axis_ + output_info[0].Rank();
-  }
-  if (axis_ == output_info[0].Rank() - 1) {
-    auto node = helper_->MakeNode("Softmax", {input_info[0].name},
-                                  {output_info[0].name});
-    AddAttribute(node, "axis", axis_);
+  if (input_info[0].Rank() == 0) {
+    auto unsqueeze = helper_->Unsqueeze(input_info[0].name, {0});
+    auto node = helper_->MakeNode("Softmax", {unsqueeze});
+    AddAttribute(node, "axis", static_cast<int64_t>(0));
+    helper_->Squeeze(node->output(0), output_info[0].name, {0});
   } else {
-    std::vector<int64_t> perm = Arange(0, output_info[0].Rank());
-    perm[output_info[0].Rank() - 1] = axis_;
-    perm[axis_] = output_info[0].Rank() - 1;
-    auto transpose_node = helper_->MakeNode("Transpose", {input_info[0].name});
-    AddAttribute(transpose_node, "perm", perm);
-    auto softmax_node =
-        helper_->MakeNode("Softmax", {transpose_node->output(0)});
-    int64_t axis_last = -1;
-    AddAttribute(softmax_node, "axis", axis_last);
-    auto transpose_node_last = helper_->MakeNode(
-        "Transpose", {softmax_node->output(0)}, {output_info[0].name});
-    AddAttribute(transpose_node_last, "perm", perm);
+    if (axis_ < 0) {
+      axis_ = axis_ + output_info[0].Rank();
+    }
+    if (axis_ == output_info[0].Rank() - 1) {
+      auto node = helper_->MakeNode("Softmax", {input_info[0].name},
+                                    {output_info[0].name});
+      AddAttribute(node, "axis", axis_);
+    } else {
+      std::vector<int64_t> perm = Arange(0, output_info[0].Rank());
+      perm[output_info[0].Rank() - 1] = axis_;
+      perm[axis_] = output_info[0].Rank() - 1;
+      auto transpose_node =
+          helper_->MakeNode("Transpose", {input_info[0].name});
+      AddAttribute(transpose_node, "perm", perm);
+      auto softmax_node =
+          helper_->MakeNode("Softmax", {transpose_node->output(0)});
+      int64_t axis_last = -1;
+      AddAttribute(softmax_node, "axis", axis_last);
+      auto transpose_node_last = helper_->MakeNode(
+          "Transpose", {softmax_node->output(0)}, {output_info[0].name});
+      AddAttribute(transpose_node_last, "perm", perm);
+    }
   }
 }
 
@@ -296,9 +304,16 @@ void SoftMaxMapper::Opset13() {
   GetAttr("axis", &axis);
   auto input_info = GetInput("X");
   auto output_info = GetOutput("Out");
-  auto node =
-      helper_->MakeNode("Softmax", {input_info[0].name}, {output_info[0].name});
-  AddAttribute(node, "axis", axis);
+  if (input_info[0].Rank() == 0) {
+    auto unsqueeze = helper_->Unsqueeze(input_info[0].name, {0});
+    auto node = helper_->MakeNode("Softmax", {unsqueeze});
+    AddAttribute(node, "axis", static_cast<int64_t>(0));
+    helper_->Squeeze(node->output(0), output_info[0].name, {0});
+  } else {
+    auto node = helper_->MakeNode("Softmax", {input_info[0].name},
+                                  {output_info[0].name});
+    AddAttribute(node, "axis", axis);
+  }
 }
 
 void BReluMapper::Opset7() {
@@ -357,7 +372,6 @@ void SizeMapper::Opset7() {
   auto out_info = GetOutput("Out");
   auto output =
       helper_->MakeNode("Size", {GetInput("Input")[0].name})->output(0);
-  output = helper_->Reshape(output, {-1});
   output = helper_->AutoCast(output, out_info[0].name, P2ODataType::INT64,
                              out_info[0].dtype);
 }
@@ -382,21 +396,28 @@ void LogSigmoidMapper::Opset7() {
 void LogSoftmaxMapper::Opset7() {
   auto input_info = GetInput("X");
   auto axis = axis_;
-  if (axis < 0) {
-    axis += input_info[0].Rank();
-  }
-  if (axis == input_info[0].Rank() - 1) {
-    auto node = helper_->MakeNode("LogSoftmax", {input_info[0].name},
-                                  {GetOutput("Out")[0].name});
-    AddAttribute(node, "axis", axis);
+  if (input_info[0].Rank() == 0) {
+    auto unsqueeze = helper_->Unsqueeze(input_info[0].name, {0});
+    auto node = helper_->MakeNode("LogSoftmax", {unsqueeze});
+    AddAttribute(node, "axis", static_cast<int64_t>(0));
+    helper_->Squeeze(node->output(0), GetOutput("Out")[0].name, {0});
   } else {
-    auto perm = Arange(0, input_info[0].Rank());
-    perm[input_info[0].Rank() - 1] = axis;
-    perm[axis] = input_info[0].Rank() - 1;
-    auto output = helper_->Transpose(input_info[0].name, perm);
-    auto node = helper_->MakeNode("LogSoftmax", {output});
-    AddAttribute(node, "axis", int64_t(-1));
-    helper_->Transpose(node->output(0), GetOutput("Out")[0].name, perm);
+    if (axis < 0) {
+      axis += input_info[0].Rank();
+    }
+    if (axis == input_info[0].Rank() - 1) {
+      auto node = helper_->MakeNode("LogSoftmax", {input_info[0].name},
+                                    {GetOutput("Out")[0].name});
+      AddAttribute(node, "axis", axis);
+    } else {
+      auto perm = Arange(0, input_info[0].Rank());
+      perm[input_info[0].Rank() - 1] = axis;
+      perm[axis] = input_info[0].Rank() - 1;
+      auto output = helper_->Transpose(input_info[0].name, perm);
+      auto node = helper_->MakeNode("LogSoftmax", {output});
+      AddAttribute(node, "axis", int64_t(-1));
+      helper_->Transpose(node->output(0), GetOutput("Out")[0].name, perm);
+    }
   }
 }
 
@@ -420,7 +441,7 @@ void ThresholdedReluMapper::Opset10() {
 void Log1PMapper::Opset7() {
   auto x_info = GetInput("X");
   auto out_info = GetOutput("Out");
-  auto one = helper_->Constant({1}, GetOnnxDtype(x_info[0].dtype), float(1.0));
+  auto one = helper_->Constant({}, GetOnnxDtype(x_info[0].dtype), float(1.0));
   auto input = helper_->MakeNode("Add", {x_info[0].name, one})->output(0);
   helper_->MakeNode("Log", {input}, {out_info[0].name});
 }
@@ -429,7 +450,7 @@ void Log2Mapper::Opset7() {
   auto x_info = GetInput("X");
   auto out_info = GetOutput("Out");
   double ln2 = 0.693147180559945309;
-  auto ln2_tensor = helper_->Constant({1}, GetOnnxDtype(x_info[0].dtype), ln2);
+  auto ln2_tensor = helper_->Constant({}, GetOnnxDtype(x_info[0].dtype), ln2);
   auto output = helper_->MakeNode("Log", {x_info[0].name})->output(0);
   helper_->MakeNode("Div", {output, ln2_tensor}, {out_info[0].name});
 }
@@ -438,8 +459,7 @@ void Log10Mapper::Opset7() {
   auto x_info = GetInput("X");
   auto out_info = GetOutput("Out");
   double ln10 = 2.30258509299404568401;
-  auto ln10_tensor =
-      helper_->Constant({1}, GetOnnxDtype(x_info[0].dtype), ln10);
+  auto ln10_tensor = helper_->Constant({}, GetOnnxDtype(x_info[0].dtype), ln10);
   auto output = helper_->MakeNode("Log", {x_info[0].name})->output(0);
   helper_->MakeNode("Div", {output, ln10_tensor}, {out_info[0].name});
 }
