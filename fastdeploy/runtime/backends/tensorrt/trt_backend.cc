@@ -470,16 +470,32 @@ void TrtBackend::SetInputs(const std::vector<FDTensor>& inputs) {
       if (item.dtype == FDDataType::INT64) {
         int64_t* data = static_cast<int64_t*>(const_cast<void*>(item.Data()));
         std::vector<int32_t> casted_data(data, data + item.Numel());
-        FDASSERT(cudaMemcpyAsync(inputs_device_buffer_[item.name].data(),
-                                 static_cast<void*>(casted_data.data()),
-                                 item.Nbytes() / 2, cudaMemcpyHostToDevice,
-                                 stream_) == 0,
-                 "Error occurs while copy memory from CPU to GPU.");
+        // FDASSERT(cudaMemcpyAsync(inputs_device_buffer_[item.name].data(),
+        //                          static_cast<void*>(casted_data.data()),
+        //                          item.Nbytes() / 2, cudaMemcpyHostToDevice,
+        //                          stream_) == 0,
+        //          "Error occurs while copy memory from CPU to GPU.");
+        // WARN: For cudaMemcpyHostToDevice direction, cudaMemcpyAsync need page-locked host 
+        // memory to avoid any overlap to occur. The page-locked feature need by cudaMemcpyAsync 
+        // may not guarantee by FDTensor now. Reference: 
+        // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#creation-and-destruction  
+        FDASSERT(cudaMemcpy(inputs_device_buffer_[item.name].data(),
+                            static_cast<void*>(casted_data.data()),
+                            item.Nbytes() / 2, cudaMemcpyHostToDevice) == 0,
+                 "Error occurs while copy memory from CPU to GPU.");         
       } else {
-        FDASSERT(cudaMemcpyAsync(inputs_device_buffer_[item.name].data(),
-                                 item.Data(), item.Nbytes(),
-                                 cudaMemcpyHostToDevice, stream_) == 0,
-                 "Error occurs while copy memory from CPU to GPU.");
+        // FDASSERT(cudaMemcpyAsync(inputs_device_buffer_[item.name].data(),
+        //                          item.Data(), item.Nbytes(),
+        //                          cudaMemcpyHostToDevice, stream_) == 0,
+        //          "Error occurs while copy memory from CPU to GPU.");
+        // WARN: For cudaMemcpyHostToDevice direction, cudaMemcpyAsync need page-locked host 
+        // memory to avoid any overlap to occur. The page-locked feature need by cudaMemcpyAsync 
+        // may not guarantee by FDTensor now. Reference: 
+        // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#creation-and-destruction 
+        FDASSERT(cudaMemcpy(inputs_device_buffer_[item.name].data(),
+                            item.Data(), item.Nbytes(),
+                            cudaMemcpyHostToDevice) == 0,
+                 "Error occurs while copy memory from CPU to GPU.");         
       }
     }
     // binding input buffer

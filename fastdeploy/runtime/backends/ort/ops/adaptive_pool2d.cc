@@ -17,13 +17,6 @@
 #include "adaptive_pool2d.h"
 
 namespace fastdeploy {
-struct OrtTensorDimensions : std::vector<int64_t> {
-  OrtTensorDimensions(Ort::CustomOpApi ort, const OrtValue* value) {
-    OrtTensorTypeAndShapeInfo* info = ort.GetTensorTypeAndShape(value);
-    std::vector<int64_t>::operator=(ort.GetTensorShape(info));
-    ort.ReleaseTensorTypeAndShapeInfo(info);
-  }
-};
 
 void AdaptivePool2dKernel::CpuAdaptivePool(
     const std::vector<int64_t>& input_size,
@@ -68,25 +61,38 @@ void AdaptivePool2dKernel::CpuAdaptivePool(
 }
 
 void AdaptivePool2dKernel::Compute(OrtKernelContext* context) {
-  const OrtValue* input = ort_.KernelContext_GetInput(context, 0);
+#if ORT_API_VERSION >= 14
+  Ort::KernelContext ort_context{context};
+  Ort::ConstValue input = ort_context.GetInput(0);
+#else
+  Ort::CustomOpApi api{ort_};
+  Ort::Unowned<const Ort::Value> input{
+      const_cast<OrtValue*>(api.KernelContext_GetInput(context, 0))};
+#endif
+  auto input_data = input.GetTensorData<float>();
+  auto input_dim = input.GetTensorTypeAndShapeInfo().GetShape();
 
-  const float* input_data =
-      reinterpret_cast<const float*>(ort_.GetTensorData<float>(input));
-
-  OrtTensorDimensions input_dim(ort_, input);
   output_size_[0] = input_dim[0];
   std::vector<int64_t> input_size;
   for (auto i : input_dim) {
     input_size.push_back(i);
   }
 
-  OrtValue* output = ort_.KernelContext_GetOutput(
-      context, 0, output_size_.data(), output_size_.size());
-
-  float* output_data = ort_.GetTensorMutableData<float>(output);
+#if ORT_API_VERSION >= 14
+  auto output = ort_context.GetOutput(0, output_size_);
+#else
+  Ort::Unowned<Ort::Value> output{api.KernelContext_GetOutput(
+      context, 0, output_size_.data(), output_size_.size())};
+#endif
+  float* output_data = output.GetTensorMutableData<float>();
   if (!strcmp(this->provider_, "CUDAExecutionProvider")) {
 #ifdef WITH_GPU
-    auto compute_stream = ort_.KernelContext_GetGPUComputeStream(context);
+    auto compute_stream =
+#if ORT_API_VERSION >= 14
+        ort_context.GetGPUComputeStream();
+#else
+        api.KernelContext_GetGPUComputeStream(context);
+#endif
     CudaAdaptivePool(input_size, output_size_, output_data, input_data,
                      compute_stream, pooling_type_);
 #else
@@ -100,13 +106,19 @@ void AdaptivePool2dKernel::Compute(OrtKernelContext* context) {
 }
 
 void AdaptivePool2dKernel::GetAttribute(const OrtKernelInfo* info) {
-  pooling_type_ =
-      ort_.KernelInfoGetAttribute<std::string>(info, "pooling_type");
+#if ORT_API_VERSION >= 14
+  Ort::ConstKernelInfo ort_info{info};
+  pooling_type_ = ort_info.GetAttribute<std::string>("pooling_type");
+  output_size_ = ort_info.GetAttributes<int64_t>("output_size");
+#else
+  Ort::CustomOpApi api{ort_};
+  pooling_type_ = api.KernelInfoGetAttribute<std::string>(info, "pooling_type");
   output_size_ =
-      ort_.KernelInfoGetAttribute<std::vector<int64_t>>(info, "output_size");
-  FDASSERT(
-      output_size_.size() == 4 && output_size_[2] > 0 && output_size_[3] > 0,
-      "The output size of adaptive pool must be positive.");
+      api.KernelInfoGetAttribute<std::vector<int64_t>>(info, "output_size");
+#endif
+  FDASSERT(output_size_.size() == 4 && output_size_[2] > 0 &&
+               output_size_[3] > 0,
+           "The output size of adaptive pool must be positive.");
 }
 }  // namespace fastdeploy
 

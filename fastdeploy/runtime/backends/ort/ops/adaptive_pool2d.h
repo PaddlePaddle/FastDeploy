@@ -33,12 +33,12 @@ struct AdaptivePool2dKernel {
  protected:
   std::string pooling_type_ = "avg";
   std::vector<int64_t> output_size_ = {};
-  Ort::CustomOpApi ort_;
+  OrtApi ort_;
   void* compute_stream_;
   const char* provider_;
 
  public:
-  AdaptivePool2dKernel(Ort::CustomOpApi ort, const OrtKernelInfo* info,
+  AdaptivePool2dKernel(OrtApi ort, const OrtKernelInfo* info,
                        const char* provider)
       : ort_(ort) {
     GetAttribute(info);
@@ -57,7 +57,7 @@ struct AdaptivePool2dKernel {
 struct AdaptivePool2dOp
     : Ort::CustomOpBase<AdaptivePool2dOp, AdaptivePool2dKernel> {
   explicit AdaptivePool2dOp(const char* provider) : provider_(provider) {}
-  void* CreateKernel(Ort::CustomOpApi api, const OrtKernelInfo* info) const {
+  void* CreateKernel(OrtApi api, const OrtKernelInfo* info) const {
     return new AdaptivePool2dKernel(api, info, provider_);
   }
 

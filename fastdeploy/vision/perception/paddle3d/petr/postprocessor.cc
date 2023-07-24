@@ -23,7 +23,7 @@ namespace perception {
 PetrPostprocessor::PetrPostprocessor() {}
 
 bool PetrPostprocessor::Run(const std::vector<FDTensor>& tensors,
-                             std::vector<PerceptionResult>* results) {
+                            std::vector<PerceptionResult>* results) {
   results->resize(1);
   (*results)[0].Clear();
   (*results)[0].Reserve(tensors[0].shape[0]);
@@ -39,8 +39,8 @@ bool PetrPostprocessor::Run(const std::vector<FDTensor>& tensors,
     // item 7       :  box3d yaw angle
     // item 8 ~ 9   :  speed x,y
     std::vector<float> vec(data_0 + i, data_0 + i + 9);
-    result->boxes.emplace_back(std::array<float, 7>{
-        0, 0, 0, 0, vec[0], vec[1], vec[2]});
+    result->boxes.emplace_back(
+        std::array<float, 7>{0, 0, 0, 0, vec[0], vec[1], vec[2]});
     result->center.emplace_back(std::array<float, 3>{vec[3], vec[4], vec[5]});
     result->yaw_angle.push_back(vec[6]);
     result->velocity.push_back(std::array<float, 3>{vec[7], vec[8]});
@@ -50,11 +50,21 @@ bool PetrPostprocessor::Run(const std::vector<FDTensor>& tensors,
     std::vector<float> vec(data_1 + i, data_1 + i + 1);
     result->scores.push_back(vec[0]);
   }
-  const long long* data_2 = reinterpret_cast<const long long*>(tensors[2].Data());
+  const long long* data_2 =
+      reinterpret_cast<const long long*>(tensors[2].Data());
   for (int i = 0; i < tensors[2].shape[0]; i++) {
     std::vector<long long> vec(data_2 + i, data_2 + i + 1);
     result->label_ids.push_back(vec[0]);
-  } 
+  }
+
+  result->valid.push_back(true);   // 0 scores
+  result->valid.push_back(true);   // 1 label_ids
+  result->valid.push_back(true);   // 2 boxes
+  result->valid.push_back(true);   // 3 center
+  result->valid.push_back(false);  // 4 observation_angle
+  result->valid.push_back(true);   // 5 yaw_angle
+  result->valid.push_back(true);   // 6 velocity
+
   return true;
 }
 

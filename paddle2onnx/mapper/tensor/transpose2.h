@@ -24,13 +24,11 @@ class Transpose2Mapper : public Mapper {
  public:
   Transpose2Mapper(const PaddleParser& p, OnnxHelper* helper, int64_t block_id,
                    int64_t op_id)
-      : Mapper(p, helper, block_id, op_id) {
-    GetAttr("axis", &axis_);
-  }
+      : Mapper(p, helper, block_id, op_id) {}
   void Opset7();
 
  private:
-  std::vector<int64_t> axis_;
+  std::vector<int64_t> axis_ = {};
 };
 
 }  // namespace paddle2onnx

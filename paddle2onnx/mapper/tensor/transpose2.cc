@@ -23,7 +23,11 @@ REGISTER_MAPPER(transpose2, Transpose2Mapper)
 void Transpose2Mapper::Opset7() {
   auto input_info = GetInput("X");
   auto output_info = GetOutput("Out");
-
+  if (input_info[0].Rank() == 0) {
+    helper_->MakeNode("Identity", {input_info[0].name}, {output_info[0].name});
+    return;
+  }
+  GetAttr("axis", &axis_);
   auto node = helper_->MakeNode("Transpose", {input_info[0].name},
                                 {output_info[0].name});
   AddAttribute(node, "perm", axis_);

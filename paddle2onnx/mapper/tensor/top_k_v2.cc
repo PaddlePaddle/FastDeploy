@@ -21,7 +21,12 @@ void TopKV2Mapper::Opset11() {
   auto x_info = GetInput("X");
   auto output_info = GetOutput("Out");
   auto indices_info = GetOutput("Indices");
-
+  if (x_info[0].Rank() == 0) {
+    helper_->MakeNode("Identity", {x_info[0].name}, {output_info[0].name});
+    helper_->Constant(indices_info[0].name, {},
+                      ONNX_NAMESPACE::TensorProto::INT64, 0);
+    return;
+  }
   std::string k = "";
   if (HasInput("K")) {
     auto k_info = GetInput("K");

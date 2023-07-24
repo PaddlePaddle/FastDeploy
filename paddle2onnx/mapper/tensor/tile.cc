@@ -49,7 +49,12 @@ void TileMapper::Opset7() {
     }
     repeats = helper_->Constant(ONNX_NAMESPACE::TensorProto::INT64, values);
   }
-  helper_->MakeNode("Tile", {x_info[0].name, repeats}, {out_info[0].name});
+  if (x_info[0].Rank() == 0) {
+    auto unsqueeze = helper_->Unsqueeze(x_info[0].name, {0});
+    helper_->MakeNode("Tile", {unsqueeze, repeats}, {out_info[0].name});
+  } else {
+    helper_->MakeNode("Tile", {x_info[0].name, repeats}, {out_info[0].name});
+  }
 }
 
 }  // namespace paddle2onnx

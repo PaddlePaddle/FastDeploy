@@ -61,6 +61,15 @@ DEFINE_string(optimized_model_dir, "",
               "Optional, set optimized model dir for lite."
               "eg: model.opt.nb, "
               "default ''");
+DEFINE_bool(collect_trt_shape_by_device, false,
+            "Optional, whether collect trt shape by device. "
+            "default false.");
+DEFINE_double(custom_tensor_value, 1.0,
+              "Optional, set the value for fd tensor, "
+              "default 1.0");
+DEFINE_bool(collect_trt_shape_by_custom_tensor_value, false,
+            "Optional, whether collect trt shape by custom tensor value. "
+            "default false.");
 
 #if defined(ENABLE_BENCHMARK)
 static std::vector<int64_t> GetInt64Shape(const std::vector<int>& shape) {
@@ -188,6 +197,8 @@ static void RuntimeProfiling(int argc, char* argv[]) {
   // Set tensorrt shapes
   if (config_info["backend"] == "paddle_trt") {
     option.paddle_infer_option.collect_trt_shape = true;
+    option.paddle_infer_option.collect_trt_shape_by_device = 
+      FLAGS_collect_trt_shape_by_device;
   }
   if (config_info["backend"] == "paddle_trt" ||
       config_info["backend"] == "trt") {
@@ -203,6 +214,23 @@ static void RuntimeProfiling(int argc, char* argv[]) {
     for (int i = 0; i < input_shapes.size(); ++i) {
       option.trt_option.SetShape(input_names[i], trt_shapes[i * 3],
                                  trt_shapes[i * 3 + 1], trt_shapes[i * 3 + 2]);
+      // Set custom input data for collect trt shapes
+      if (FLAGS_collect_trt_shape_by_custom_tensor_value) {
+        int min_shape_num = std::accumulate(trt_shapes[i * 3].begin(),
+                                            trt_shapes[i * 3].end(), 1,
+                                            std::multiplies<int>());
+        int opt_shape_num = std::accumulate(trt_shapes[i * 3 + 1].begin(),
+                                            trt_shapes[i * 3 + 1].end(), 1,
+                                            std::multiplies<int>());
+        int max_shape_num = std::accumulate(trt_shapes[i * 3 + 2].begin(),
+                                            trt_shapes[i * 3 + 2].end(), 1,
+                                            std::multiplies<int>());                                                                        
+        std::vector<float> min_input_data(min_shape_num, FLAGS_custom_tensor_value);                     
+        std::vector<float> opt_input_data(opt_shape_num, FLAGS_custom_tensor_value);                     
+        std::vector<float> max_input_data(max_shape_num, FLAGS_custom_tensor_value);                     
+        option.trt_option.SetInputData(input_names[i], min_input_data, 
+                                       opt_input_data, max_input_data);
+      }
     }
   }
 
@@ -227,8 +255,9 @@ static void RuntimeProfiling(int argc, char* argv[]) {
   // Feed inputs, all values set as 1.
   std::vector<fastdeploy::FDTensor> inputs(runtime.NumInputs());
   for (int i = 0; i < inputs.size(); ++i) {
-    fastdeploy::function::Full(1, GetInt64Shape(input_shapes[i]), &inputs[i],
-                               input_dtypes[i]);
+    fastdeploy::function::Full(
+      FLAGS_custom_tensor_value, GetInt64Shape(input_shapes[i]),
+      &inputs[i], input_dtypes[i]);
     inputs[i].name = input_names[i];
   }
 
@@ -303,13 +332,40 @@ static void showInputInfos(int argc, char* argv[]) {
   benchmark::ResultManager::LoadBenchmarkConfig(FLAGS_config_path,
                                                 &config_info);
   std::string model_name, params_name, config_name;
+  std::string model_file, params_file;
   auto model_format = fastdeploy::ModelFormat::PADDLE;
-  if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
-                               &model_format, config_info, false)) {
-    return;
+  if (FLAGS_model_file != "UNKNOWN") {
+    // Set model file/param/format via command line
+    if (FLAGS_model != "") {
+      model_file = FLAGS_model + sep + FLAGS_model_file;
+      params_file = FLAGS_model + sep + FLAGS_params_file;
+    } else {
+      model_file = FLAGS_model_file;
+      params_file = FLAGS_params_file;
+    }
+    model_format = GetModelFormat(FLAGS_model_format);
+    if (model_format == fastdeploy::ModelFormat::PADDLE &&
+        FLAGS_params_file == "") {
+      if (config_info["backend"] != "lite") {
+        std::cout << "[ERROR] params_file can not be empty for PADDLE"
+                  << " format, Please, set your custom params_file manually."
+                  << std::endl;
+        return;
+      } else {
+        std::cout << "[INFO] Will using the lite light api for: " << model_file
+                  << std::endl;
+      }
+    }
+  } else {
+    // Set model file/param/format via model dir (only support
+    // for Paddle model format now)
+    if (!UpdateModelResourceName(&model_name, &params_name, &config_name,
+                                 &model_format, config_info, false)) {
+      return;
+    }
+    model_file = FLAGS_model + sep + model_name;
+    params_file = FLAGS_model + sep + params_name;
   }
-  auto model_file = FLAGS_model + sep + model_name;
-  auto params_file = FLAGS_model + sep + params_name;
 
   option.SetModelPath(model_file, params_file, model_format);
 

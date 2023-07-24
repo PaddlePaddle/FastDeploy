@@ -121,6 +121,7 @@ void BindVision(pybind11::module& m) {
 
   pybind11::class_<vision::PerceptionResult>(m, "PerceptionResult")
       .def(pybind11::init())
+      .def_readwrite("valid", &vision::PerceptionResult::valid)
       .def_readwrite("scores", &vision::PerceptionResult::scores)
       .def_readwrite("label_ids", &vision::PerceptionResult::label_ids)
       .def_readwrite("boxes", &vision::PerceptionResult::boxes)

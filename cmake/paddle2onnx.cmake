@@ -27,7 +27,7 @@ set(PADDLE2ONNX_LIB_DIR
 set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}"
                       "${PADDLE2ONNX_LIB_DIR}")
 
-include_directories(${PADDLE2ONNX_INC_DIR})
+include_directories(BEFORE ${PADDLE2ONNX_INC_DIR})
 if(WIN32)
   set(PADDLE2ONNX_COMPILE_LIB
       "${PADDLE2ONNX_INSTALL_DIR}/lib/paddle2onnx.lib"
@@ -45,7 +45,7 @@ endif(WIN32)
 if (NOT PADDLE2ONNX_URL)
   # Use default paddle2onnx url if custom url is not setting
   set(PADDLE2ONNX_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
-  set(PADDLE2ONNX_VERSION "1.0.7")
+  set(PADDLE2ONNX_VERSION "1.0.8rc")
   if(WIN32)
     set(PADDLE2ONNX_FILE "paddle2onnx-win-x64-${PADDLE2ONNX_VERSION}.zip")
     if(NOT CMAKE_CL_64)

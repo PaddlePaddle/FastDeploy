@@ -18,10 +18,15 @@ namespace fastdeploy {
 
 void BindSmoke(pybind11::module& m);
 void BindPetr(pybind11::module& m);
+void BindCenterpoint(pybind11::module& m);
+void BindCaddn(pybind11::module& m);
 
 void BindPerception(pybind11::module& m) {
   auto perception_module =
       m.def_submodule("perception", "3D object perception models.");
   BindSmoke(perception_module);
+  BindPetr(perception_module);
+  BindCenterpoint(perception_module);
+  BindCaddn(perception_module);
 }
 }  // namespace fastdeploy
