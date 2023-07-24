@@ -16,7 +16,7 @@
 
 echo "start build FD XPU AUTH library"
 
-docker run -i --rm --name build_fd_xpu_auth_dev \
+docker run -i --rm --name build_fd_xpu_auth_108_dev \
            -v `pwd`/..:/workspace/fastdeploy \
            -e "http_proxy=${http_proxy}" \
            -e "https_proxy=${https_proxy}" \
@@ -41,8 +41,9 @@ docker run -i --rm --name build_fd_xpu_auth_dev \
             python setup.py build;
             python setup.py bdist_wheel;
             cd /workspace/fastdeploy;
-            wget ${PADDLEINFERENCE_URL} && tar -zxvf ${PADDLEINFERENCE_URL##*/}
-            mv ${PADDLEINFERENCE_URL##*/} paddle_inference
+            wget -q ${PADDLEINFERENCE_URL} && tar -zxvf ${PADDLEINFERENCE_URL##*/};
+            tmp_dir=${PADDLEINFERENCE_URL##*/}
+            mv ${tmp_dir%.*} paddle_inference
             PADDLEINFERENCE_DIRECTORY=${PWD}/paddle_inference
             rm -rf build; mkdir build; cd build;
             cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy_install -DWITH_KUNLUNXIN=ON -DENABLE_PADDLE_BACKEND=ON -DPADDLEINFERENCE_DIRECTORY=${PADDLEINFERENCE_DIRECTORY} -DENABLE_BENCHMARK=ON -DLIBRARY_NAME=fastdeploy_runtime;
