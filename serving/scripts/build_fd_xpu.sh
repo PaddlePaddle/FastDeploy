@@ -16,7 +16,7 @@
 
 echo "start build FD XPU library"
 
-docker run -i --rm --name build_fd_xpu \
+docker run -i --rm --name build_fd_xpu_108 \
            -v `pwd`/..:/workspace/fastdeploy \
            -e "http_proxy=${http_proxy}" \
            -e "https_proxy=${https_proxy}" \
