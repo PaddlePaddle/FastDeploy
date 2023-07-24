@@ -268,10 +268,12 @@ function(set_paddle_encrypt_auth_compatible_policy LIBRARY_NAME)
 endfunction()
 
 # Compatible policy for 2.4.x/2.5.x and latest dev.
-string(REGEX MATCH "0.0.0" PADDLEINFERENCE_USE_DEV ${PADDLEINFERENCE_VERSION})
-string(REGEX MATCH "2.4|post24|post2.4" PADDLEINFERENCE_USE_2_4_x ${PADDLEINFERENCE_VERSION})
-string(REGEX MATCH "2.5|post25|post2.5" PADDLEINFERENCE_USE_2_5_x ${PADDLEINFERENCE_VERSION})
-
+if (NOT WITH_KUNLUNXIN)
+  string(REGEX MATCH "0.0.0" PADDLEINFERENCE_USE_DEV ${PADDLEINFERENCE_VERSION})
+  string(REGEX MATCH "2.4|post24|post2.4" PADDLEINFERENCE_USE_2_4_x ${PADDLEINFERENCE_VERSION})
+  string(REGEX MATCH "2.5|post25|post2.5" PADDLEINFERENCE_USE_2_5_x ${PADDLEINFERENCE_VERSION})
+endif()
+  
 if(PADDLEINFERENCE_USE_DEV)
   set(PADDLEINFERENCE_API_COMPAT_DEV ON CACHE BOOL "" FORCE)
 endif()
@@ -298,7 +300,7 @@ if(PADDLEINFERENCE_API_COMPAT_DEV)
 endif()
 
 # Compatible policy for custom paddle ops
-if(PADDLEINFERENCE_API_COMPAT_2_5_x)
+if(PADDLEINFERENCE_API_COMPAT_2_5_x AND (NOT WITH_KUNLUNXIN))
   # no c++ standard policy conflicts vs c++ 11
   # TODO: support custom ops for latest dev
   set(PADDLEINFERENCE_API_CUSTOM_OP ON CACHE BOOL "" FORCE)
@@ -310,7 +312,7 @@ if(PADDLEINFERENCE_API_COMPAT_2_5_x)
 endif()
 
 function(set_paddle_custom_ops_compatible_policy)
-  if(PADDLEINFERENCE_API_CUSTOM_OP)
+  if(PADDLEINFERENCE_API_CUSTOM_OP AND (NOT WITH_KUNLUNXIN))
     if(NOT MSVC)
       # TODO: add non c++ 14 policy for latest dev
       if(NOT PADDLEINFERENCE_API_COMPAT_2_5_x)
