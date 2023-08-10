@@ -45,8 +45,8 @@ sudo apt-get install libxslt1-dev zlib1g zlib1g-dev libglib2.0-0 libsm6 libgl1-m
 pip install numpy==1.16.6
 
 # 安装rknn_toolkit2-1.3.0_11912b58-cp38-cp38-linux_x86_64.whl
-wget https://bj.bcebos.com/fastdeploy/third_libs/rknn_toolkit2-1.4.2b3+0bdd72ff-cp36-cp36m-linux_x86_64.whl
-pip install rknn_toolkit2-1.4.2b3+0bdd72ff-cp36-cp36m-linux_x86_64.whl
+wget https://bj.bcebos.com/fastdeploy/third_libs/rknn_toolkit2-1.5.1b19+4c81851a-cp36-cp36m-linux_x86_64.whl
+pip install rknn_toolkit2-1.5.1b19+4c81851a-cp36-cp36m-linux_x86_64.whl
 ```
 
 ## 编译安装FastDeploy C++ SDK

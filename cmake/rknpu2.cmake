@@ -1,7 +1,7 @@
 # get RKNPU2_URL
 set(RKNPU2_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
-set(RKNPU2_VERSION "1.4.2b0")
-set(RKNPU2_FILE "rknpu2_runtime-linux-aarch64-${RKNPU2_VERSION}-${RKNN2_TARGET_SOC}.tgz")
+set(RKNPU2_VERSION "1.5.1b19")
+set(RKNPU2_FILE "rknpu2_runtime-linux-aarch64-${RKNPU2_VERSION}-${RKNN2_TARGET_SOC}.tar.gz")
 set(RKNPU2_URL "${RKNPU2_URL_BASE}${RKNPU2_FILE}")
 
 # download_and_decompress
