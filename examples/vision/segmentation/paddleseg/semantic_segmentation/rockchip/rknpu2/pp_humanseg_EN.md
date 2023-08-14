@@ -32,7 +32,7 @@ paddle2onnx --model_dir Portrait_PP_HumanSegV2_Lite_256x144_infer \
 cp -r ./Portrait_PP_HumanSegV2_Lite_256x144_infer /path/to/Fastdeploy
 # Convert model, the model will be generated in the Portrait_PP_HumanSegV2_Lite_256x144_infer directory.
 python tools/rknpu2/export.py \
-        --config_path tools/rknpu2/config/Portrait_PP_HumanSegV2_Lite_256x144_infer.yaml \
+        --config_path tools/rknpu2/config/Portrait_PP_HumanSegV2_Lite_256x144_infer_unquantized.yaml \
         --target_platform rk3588
 ```
 

@@ -1,0 +1,15 @@
+mean:
+  -
+    - 127.5
+    - 127.5
+    - 127.5
+std:
+  -
+    - 127.5
+    - 127.5
+    - 127.5
+model_path: "./PPOCRV3_rec_QAT/PPOCRV3_rec_QAT.onnx"
+outputs_nodes:
+do_quantization: False
+dataset:
+output_folder: "./PPOCRV3_rec_QAT"
