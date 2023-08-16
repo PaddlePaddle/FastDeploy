@@ -248,7 +248,7 @@ bool SophgoBackend::Infer(std::vector<FDTensor>& inputs,
  ***************************************************************/
 FDDataType SophgoBackend::SophgoTensorTypeToFDDataType(bm_data_type_t type) {
   if (type == BM_FLOAT16) {
-    return FDDataType::FP32;
+    return FDDataType::FP16;
   }
   if (type == BM_FLOAT32) {
     return FDDataType::FP32;
