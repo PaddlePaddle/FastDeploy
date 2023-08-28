@@ -603,7 +603,7 @@ install(
 
 if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/")
- endif()
+endif()
 
 if(NOT ANDROID)
   install(
