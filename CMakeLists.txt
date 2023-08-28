@@ -601,6 +601,10 @@ install(
   PATTERN "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/*/*.h"
 )
 
+if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/")
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/")
+ endif()
+
 if(NOT ANDROID)
   install(
     DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install
