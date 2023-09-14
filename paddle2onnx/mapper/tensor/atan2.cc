@@ -57,7 +57,7 @@ void Atan2Mapper::Opset9() {
       helper_->AutoCast(minus_node->output(0), dtype, P2ODataType::BOOL);
 
   std::string pi_node =
-      helper_->Constant(GetOnnxDtype(dtype), std::vector<float>{M_PI});
+      helper_->Constant(GetOnnxDtype(dtype), std::vector<float>{static_cast<float>(M_PI)});
 
   auto sign_node = helper_->MakeNode("Sign", {input_x_name});
 
