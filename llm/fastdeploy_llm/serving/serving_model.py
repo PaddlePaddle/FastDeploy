@@ -44,12 +44,20 @@ class ServingModel:
         assert not self.stop_queue, "The serving model is stopped, cannot accept new requests now."
         assert task.text.strip() != "", "The request's text cannot be empty."
         try:
-            token_ids = self.model.data_processor.encode(task.text)
-            assert len(
-                token_ids
-            ) <= self.config.max_seq_len, "The request's token number({}) is exceed the setting max_seq_len({}).".format(
-                len(token_ids), self.config.max_seq_len)
-            task.token_ids = token_ids
+            if not hasattr(task, "token_ids"):
+                task.token_ids = self.model.data_processor.encode(task.text)
+            if self.config.is_ptuning:
+                assert len(
+                    task.token_ids
+                ) + self.config.max_prefix_len <= self.config.max_seq_len, "The request's token number({}) + max_prefix_len({}) = {} is exceeding the setting max_seq_len({}).".format(
+                    len(task.token_ids), self.config.max_prefix_len,
+                    len(task.token_ids) + self.config.max_prefix_len,
+                    self.config.max_seq_len)
+            else:
+                assert len(
+                    task.token_ids
+                ) <= self.config.max_seq_len, "The request's token number({}) is exceed the setting max_seq_len({}).".format(
+                    len(task.token_ids), self.config.max_seq_len)
             self.requests_queue.put(task, timeout=0.5)
         except Exception as e:
             raise Exception(
