@@ -33,6 +33,8 @@ class TaskResult:
         self.completion_token_nums = 0
         self.prompt_token_ids = list()
         self.completion_tokens = list()
+        self.decode_prefix_offset = 0
+        self.decode_read_offset = 0
 
     def add_token(self, token_id, token_text):
         self.completion_token_nums += 1

@@ -247,7 +247,14 @@ class Model:
                     if token_id not in self.config.eos_token_id:
                         # TODO There's some differs between decode and batch decode
                         # will fix it latter
-                        decode_token_str = self.data_processor.decode(token_id)
+                        previous_token_ids = [
+                            t[0] for t in tasks[b].result.completion_tokens
+                        ]
+                        decode_token_str, tasks[b].result.decode_prefix_offset, tasks[
+                            b].result.decode_read_offset = self.data_processor.decode_token(
+                                previous_token_ids + [token_id],
+                                tasks[b].result.decode_prefix_offset,
+                                tasks[b].result.decode_read_offset)
                         tasks[b].add_generated_token(
                             token_id,
                             decode_token_str,
