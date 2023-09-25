@@ -106,6 +106,8 @@ class TritonPythonModel:
     def execute(self, requests):
         for request in requests:
             request_tensor = pb_utils.get_input_tensor_by_name(request, "IN")
+
+            # 1. validate the request data
             try:
                 data = json.loads(request_tensor.as_numpy()[0])
             except Exception as e:
@@ -118,6 +120,8 @@ class TritonPythonModel:
                     error_res,
                     flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
                 continue
+
+            # 2. check if exists task id conflict
             task = Task()
             task.task_id = str(uuid.uuid4())
             if task.task_id in self.response_handler:
@@ -128,6 +132,9 @@ class TritonPythonModel:
                 res_sender.send(
                     error_res,
                     flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+                continue
+
+            # 3. validate the deserializing process
             try:
                 task.from_dict(data)
             except Exception as e:
@@ -138,8 +145,9 @@ class TritonPythonModel:
                 res_sender.send(
                     error_res,
                     flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+                continue
 
-            task.call_back_func = stream_call_back
+            # 4. validate the parameters in task
             try:
                 task.check(self.config.max_dec_len)
             except Exception as e:
@@ -153,6 +161,7 @@ class TritonPythonModel:
                     flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
                 continue
 
+            # 5. check if the requests queue is full
             if self.model.requests_queue.qsize() > self.config.max_queue_num:
                 error_res = pb_utils.InferenceResponse(error=pb_utils.TritonError(
                     "The queue is full now(size={}), please wait for a while.".
@@ -161,6 +170,38 @@ class TritonPythonModel:
                 res_sender.send(
                     error_res,
                     flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+                continue
+
+            # 6. if the model is a ptuning model, requires model_id
+            if self.config.is_ptuning and task.model_id is None:
+                error_res = pb_utils.InferenceResponse(
+                    error=pb_utils.TritonError(
+                        "The request should define model_id, now the model_id is None"
+                    ))
+                res_sender = request.get_response_sender()
+                res_sender.send(
+                    error_res,
+                    flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+                continue
+
+            # 7. check if the prefix embedding is exist
+            if self.config.is_ptuning and task.model_id is not None:
+                np_file_path = os.path.join(self.config.model_prompt_dir_path,
+                                            "8-{}".format(task.model_id), "1",
+                                            "task_prompt_embeddings.npy")
+                if not os.path.exists(np_file_path):
+                    error_res = pb_utils.InferenceResponse(
+                        error=pb_utils.TritonError(
+                            "There's no prefix embedding for model_id={}.".
+                            format(self.model_id)))
+                    res_sender = request.get_response_sender()
+                    res_sender.send(
+                        error_res,
+                        flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+                    continue
+
+            # 8. Add task to requests queue
+            task.call_back_func = stream_call_back
             try:
                 self.model.add_request(task)
             except Exception as e:
