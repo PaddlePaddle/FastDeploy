@@ -49,7 +49,6 @@ def get_prefix_caches(model_prompt_dir_path, model_id, num_layers,
         else:
             prefix_prompt = np.load(model_prompt_path)
             # for all_gather prompt
-            # prefix_prompt: (used in EB10b) [num_layers, 2, num\_head, cache\_len, head\_dim]
             worker_range = prefix_prompt.shape[3] // fleet.worker_num()
             start_index = fleet.worker_index() * worker_range
             end_index = (fleet.worker_index() + 1) * worker_range
