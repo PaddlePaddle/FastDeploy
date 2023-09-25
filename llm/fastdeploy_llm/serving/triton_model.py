@@ -97,6 +97,7 @@ class TritonPythonModel:
             config.max_prefix_len = int(parse(parameters, "MAX_PREFIX_LEN"))
         config.load_environment_variables()
 
+        self.config = config
         self.response_handler = dict()
         self.model = ServingModel(config)
         self.model.model.stream_sender = self.response_handler
@@ -140,7 +141,7 @@ class TritonPythonModel:
 
             task.call_back_func = stream_call_back
             try:
-                task.check(self.model.max_dec_len)
+                task.check(self.config.max_dec_len)
             except Exception as e:
                 error_res = pb_utils.InferenceResponse(
                     error=pb_utils.TritonError(
@@ -152,7 +153,7 @@ class TritonPythonModel:
                     flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
                 continue
 
-            if self.model.requests_queue.qsize() > self.model.max_queue_num:
+            if self.model.requests_queue.qsize() > self.config.max_queue_num:
                 error_res = pb_utils.InferenceResponse(error=pb_utils.TritonError(
                     "The queue is full now(size={}), please wait for a while.".
                     format(self.model.max_queue_num)))
