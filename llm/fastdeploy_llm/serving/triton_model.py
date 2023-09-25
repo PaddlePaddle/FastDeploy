@@ -172,19 +172,7 @@ class TritonPythonModel:
                     flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
                 continue
 
-            # 6. if the model is a ptuning model, requires model_id
-            if self.config.is_ptuning and task.model_id is None:
-                error_res = pb_utils.InferenceResponse(
-                    error=pb_utils.TritonError(
-                        "The request should define model_id, now the model_id is None"
-                    ))
-                res_sender = request.get_response_sender()
-                res_sender.send(
-                    error_res,
-                    flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
-                continue
-
-            # 7. check if the prefix embedding is exist
+            # 6. check if the prefix embedding is exist
             if self.config.is_ptuning and task.model_id is not None:
                 np_file_path = os.path.join(self.config.model_prompt_dir_path,
                                             "8-{}".format(task.model_id), "1",
@@ -193,14 +181,14 @@ class TritonPythonModel:
                     error_res = pb_utils.InferenceResponse(
                         error=pb_utils.TritonError(
                             "There's no prefix embedding for model_id={}.".
-                            format(self.model_id)))
+                            format(task.model_id)))
                     res_sender = request.get_response_sender()
                     res_sender.send(
                         error_res,
                         flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
                     continue
 
-            # 8. Add task to requests queue
+            # 7. Add task to requests queue
             task.call_back_func = stream_call_back
             try:
                 self.model.add_request(task)
