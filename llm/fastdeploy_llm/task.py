@@ -123,6 +123,8 @@ class Task:
             self.eos_token_id = data["eos_token_ids"]
         else:
             self.eos_token_id = data["eos_token_id"]
+        if "token_ids" in data:
+            self.token_ids = data["token_ids"]
         if "model_id" in data:
             self.model_id = data["model_id"]
         self.status = TaskStatus.NEW
