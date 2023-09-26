@@ -315,8 +315,9 @@ def dy_input_preprocess(inputs):
                                        shape=[length, length],
                                        dtype=args.dtype))
                 position_ids[i, :max_prefix_len] = 0
-                position_ids[i, max_prefix_len:max_prefix_len +
-                             length] = paddle.arange(length)
+                position_ids[i, max_prefix_len:max_prefix_len + inputs[
+                    "input_ids"].shape[1]] = paddle.arange(inputs["input_ids"]
+                                                           .shape[1])
                 tgt_generation_mask[i, 0, 0, :max_prefix_len +
                                     length] = paddle.ones(
                                         shape=[1, max_prefix_len + length],

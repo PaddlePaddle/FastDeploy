@@ -17,6 +17,7 @@ import logging
 import threading
 import time
 from typing import (Any, Generator, Optional, Union)
+from logging.handlers import TimedRotatingFileHandler
 
 import colorlog
 
@@ -42,9 +43,13 @@ _LOG_CONFIG = {
 
 
 class Logger(object):
-    _DEFAULT_NAME: str = 'FastDeployLLM'
+    _DEFAULT_NAME: str = 'FastDeploy'
 
-    def __init__(self, name: Optional[str]=None) -> None:
+    def __init__(self,
+                 name: Optional[str]=None,
+                 log_file=None,
+                 time_rotation=7,
+                 level=logging.INFO) -> None:
         """Initialize the instance based on a given name.
 
         Args:
@@ -62,11 +67,18 @@ class Logger(object):
                 for key, conf in _LOG_CONFIG.items()
             }, )
 
-        self.handler = logging.StreamHandler()
+        if log_file is not None:
+            self.handler = TimedRotatingFileHandler(
+                log_file,
+                when="midnight",
+                backupCount=time_rotation,
+                encoding="utf-8")
+        else:
+            self.handler = logging.StreamHandler()
         self.handler.setFormatter(self.format)
 
         self.logger.addHandler(self.handler)
-        self.logger.setLevel(logging.INFO)
+        self.logger.setLevel(level)
         self.logger.propagate = False
         self._is_enabled = True
 

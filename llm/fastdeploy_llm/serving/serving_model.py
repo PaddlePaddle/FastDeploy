@@ -41,6 +41,7 @@ class ServingModel:
                                 int(self.config.stop_threshold * 1.5))
 
     def add_request(self, task):
+        logger.debug("Receive task = {}".format(task))
         assert not self.stop_queue, "The serving model is stopped, cannot accept new requests now."
         assert task.text.strip() != "", "The request's text cannot be empty."
         try:
@@ -59,6 +60,8 @@ class ServingModel:
                 ) <= self.config.max_seq_len, "The request's token number({}) is exceed the setting max_seq_len({}).".format(
                     len(task.token_ids), self.config.max_seq_len)
             self.requests_queue.put(task, timeout=0.5)
+            logger.debug("Task with task_id={} is put into requests queue.".
+                         format(task.task_id))
         except Exception as e:
             raise Exception(
                 "There's error while inserting request, error={}.".format(e))
@@ -115,7 +118,12 @@ class ServingModel:
                 format(get_tasks_num,
                        batch_tasks.size(),
                        batch_tasks.unfinished_size(), stop_nums))
+            logger.debug(
+                "BatchTasks with task_id={} is send to engine to predict.".
+                format([t.task_id for t in batch_tasks.tasks]))
             self.model.predict(batch_tasks, stop_nums)
+            logger.debug("The last batch tasks' status = {}.".format(
+                [t.status for t in batch_tasks.tasks]))
             logger.info("Waiting for new requests...")
 
     def start(self):
