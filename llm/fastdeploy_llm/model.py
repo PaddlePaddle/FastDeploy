@@ -99,6 +99,9 @@ class Model:
         for i in range(5):
             output_datas[keys[i]] = np.zeros(
                 [self.config.max_batch_size + 1, 1], dtype=np.int64)
+        if "chatglm" in self.config.architecture:
+            output_datas["tgt_pos"] = np.zeros(
+                [self.config.max_batch_size + 1, 2, 1], dtype=np.int64)
         output_datas_size = len(pickle.dumps(output_datas)) + 6
         self.shm_output_data = shared_memory.SharedMemory(
             create=True, size=output_datas_size, name="shm_infer_output_data")
@@ -286,7 +289,12 @@ class Model:
         for i in range(len(tasks)):
             tasks[i].decode_status["finished_id"] = int(info["finished_ids"][
                 i])
-            tasks[i].decode_status["tgt_pos"] = int(info["tgt_pos"][i])
+            # TODO JiangJiajun
+            if "chatglm" in self.config.architecture:
+                tasks[i].decode_status["tgt_pos"] = int(info["tgt_pos"][i][0])
+            else:
+                tasks[i].decode_status["tgt_pos"] = int(info["tgt_pos"][i])
+
             tasks[i].decode_status["step_idx"] = int(info["step_idx"][i])
             tasks[i].decode_status["seq_lens_decoder"] = int(info[
                 "seq_lens_decoder"][i])
@@ -324,8 +332,26 @@ class Model:
                 texts.append(task.text)
             else:
                 texts.append("me")
+                if hasattr(task, "token_ids"):
+                    del task.token_ids
+                    del task.position_ids
 
-        input_ids, lens = self.data_processor.batch_encode_tasks(tasks)
+        padding = True if "chatglm" in self.config.architecture else False
+        max_length = self.config.max_seq_len if "chatglm" in self.config.architecture else None
+        input_ids, lens, position_ids = self.data_processor.batch_encode_tasks(
+            tasks, padding=padding, max_length=max_length)
+
+        # TODO JiangJiajun
+        if "chatglm" in self.config.architecture:
+            inst_data_pos = list()
+            max_len = max(map(len, input_ids))
+            for i in range(len(position_ids)):
+                inst_data_pos.append(
+                    np.array([
+                        list(inst) + [0] * (max_len - len(inst))
+                        for inst in position_ids[i]
+                    ]))
+            position_ids = np.array(inst_data_pos).astype("int64")
 
         for i in range(len(tasks)):
             tasks[i].prompt_token_nums = lens[i]
@@ -348,6 +374,7 @@ class Model:
         inputs["min_length"] = np.array(
             [task.min_dec_len for task in tasks]).astype('int64').reshape(-1,
                                                                           1)
+        inputs["position_ids"] = position_ids
         # TODO Lite model exists different method
         # TODO Doesn't support eos_token id now
         inputs["eos_token_id"] = np.array(
@@ -391,18 +418,22 @@ class Model:
                     sequence_lengths_decoder[i] = self.config.max_prefix_len
                 else:
                     sequence_lengths_decoder[i] = 0
-                # if not tasks[i].is_pad:
-                #     sequence_lengths_encoder[i] = 0
-                # else:
-                #     sequence_lengths_encoder[i] = length
                 tgt_ids[i] = inputs["input_ids"][i][length - 1]
                 stop_flags[i] = 1
             elif tasks[i].status == TaskStatus.NEW:
-                tgt_pos.append(length - 1)
+                if "chatglm" in self.config.architecture:
+                    tgt_pos += [length, 1]
+                else:
+                    tgt_pos.append(length - 1)
                 sequence_lengths_encoder[i] = length
+
                 if self.config.is_ptuning:
-                    sequence_lengths_decoder[
-                        i] = length + self.config.max_prefix_len
+                    if not getattr(tasks[i], "is_pad", False):
+                        sequence_lengths_decoder[
+                            i] = length + self.config.max_prefix_len
+                    else:
+                        sequence_lengths_decoder[i] = 0
+                        stop_flags[i] = 1
                 else:
                     if not getattr(tasks[i], "is_pad", False):
                         sequence_lengths_decoder[i] = length
@@ -412,7 +443,10 @@ class Model:
                 tgt_ids[i] = inputs["input_ids"][i][length - 1]
                 dyinput_flags[i] = 1
         del inputs["num_input_tokens"]
-        tgt_pos = np.array(tgt_pos).astype("int64").reshape(-1, 1)
+        if "chatglm" in self.config.architecture:
+            tgt_pos = np.array(tgt_pos).astype("int64").reshape(-1, 2, 1)
+        else:
+            tgt_pos = np.array(tgt_pos).astype("int64").reshape(-1, 1)
         sequence_lengths_encoder = np.array(sequence_lengths_encoder).astype(
             "int32").reshape(-1, 1)
         sequence_lengths_decoder = np.array(sequence_lengths_decoder).astype(

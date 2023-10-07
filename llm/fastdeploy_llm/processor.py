@@ -44,6 +44,8 @@ class DataProcessor:
     def __init__(self, model_dir):
         self.tokenizer = paddlenlp.transformers.AutoTokenizer.from_pretrained(
             model_dir)
+        self.pad_token_id = self.tokenizer(
+            [self.tokenizer.pad_token], return_tensors="np")["input_ids"][0][0]
 
     def decode(self, tokens):
         if not isinstance(tokens, list):
@@ -58,28 +60,24 @@ class DataProcessor:
         return self.tokenizer.decode_token(all_input_ids, prefix_offset,
                                            read_offset)
 
-    def encode(self, text):
+    def encode(self, text, padding=False, max_length=None):
         tokens = self.tokenizer(
-            text,
-            return_tensors="np",
-            padding=False,
-            return_attention_mask=False,
-            return_token_type_ids=False, )
-        return tokens["input_ids"][0]
+            text, return_tensors="np", padding=padding, max_length=max_length)
+        return tokens["input_ids"][0], tokens["position_ids"][0]
 
-    def batch_encode_tasks(self, tasks):
+    def batch_encode_tasks(self, tasks, padding=False, max_length=None):
         """
         预处理，数据都在tasks中
         """
         input_ids = list()
-        real_tokens_len = list()
+        position_ids = list()
         for task in tasks:
             if hasattr(task, "token_ids"):
                 token_ids = task.token_ids
                 if task.status != TaskStatus.NEW:
                     token_ids = token_ids[:2]
                 input_ids.append(token_ids)
-                real_tokens_len.append(len(token_ids))
+                position_ids.append(task.position_ids)
             else:
                 text = task.text
                 if task.status != TaskStatus.NEW:
@@ -87,13 +85,15 @@ class DataProcessor:
                 tokens = self.tokenizer(
                     text,
                     return_tensors="np",
-                    padding=False,
                     return_attention_mask=False,
-                    return_token_type_ids=False, )
+                    return_token_type_ids=False,
+                    padding=padding,
+                    max_length=max_length)
                 input_ids.append(tokens["input_ids"][0])
-                real_tokens_len.append(len(tokens["input_ids"][0]))
-        input_ids = pad_batch_data(input_ids)
-        return input_ids, real_tokens_len
+                position_ids.append(tokens["position_ids"][0])
+        input_ids, real_tokens_len = pad_batch_data(
+            input_ids, pad_id=self.pad_token_id, return_seq_len=True)
+        return input_ids, real_tokens_len.tolist(), position_ids
 
     def batch_encode(self, texts):
         """

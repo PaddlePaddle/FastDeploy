@@ -46,7 +46,8 @@ class ServingModel:
         assert task.text.strip() != "", "The request's text cannot be empty."
         try:
             if not hasattr(task, "token_ids"):
-                task.token_ids = self.model.data_processor.encode(task.text)
+                task.token_ids, task.position_ids = self.model.data_processor.encode(
+                    task.text, padding=True)
             if self.config.is_ptuning:
                 assert len(
                     task.token_ids

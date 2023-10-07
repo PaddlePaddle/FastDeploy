@@ -154,18 +154,24 @@ pre_ids = paddle.to_tensor(np.full((args.batch_size, 2048), -1, dtype='int64'))
 tgt_generation_mask = paddle.zeros(
     shape=[args.batch_size, 1, 1, args.max_seq_len + args.max_dec_len],
     dtype=args.dtype)
-position_ids = paddle.full(
-    shape=[args.batch_size, args.max_seq_len], fill_value=0, dtype='int64')
 if "chatglm" in args.architecture:
-    attention_mask = paddle.ones(
-        shape=(args.batch_size, 1, args.max_seq_len, args.max_seq_len),
+    #TODO JiangJiajun
+    attention_mask = paddle.zeros(
+        shape=(args.batch_size, 1, args.max_seq_len + args.max_dec_len,
+               args.max_seq_len + args.max_dec_len),
         dtype=args.dtype)
-    tgt_pos = paddle.ones(shape=(args.batch_size, 2, 1), dtype=args.dtype)
+    tgt_pos = paddle.ones(shape=(args.batch_size, 2, 1), dtype="int64")
+    position_ids = paddle.full(
+        shape=[args.batch_size, 2, args.max_seq_len],
+        fill_value=0,
+        dtype='int64')
 else:
     attention_mask = paddle.zeros(
         shape=(args.batch_size, 1, args.max_seq_len + args.max_dec_len,
                args.max_seq_len + args.max_dec_len),
         dtype=args.dtype)
+    position_ids = paddle.full(
+        shape=[args.batch_size, args.max_seq_len], fill_value=0, dtype='int64')
 
 
 #count = 0
@@ -259,20 +265,32 @@ class InferenceEngine(object):
         """
         predict
         """
+        #        dump_data = dict()
+
         for k, v in batch_data_dict.items():
             input_tensor = self.predictor.get_input_handle(k)
             if isinstance(v, paddle.Tensor):
                 input_tensor.share_external_data(v)
+#                dump_data[k] = v.numpy()
             else:
                 input_tensor.copy_from_cpu(v)
+#                dump_data[k] = v
 
+#        cache_dumps = list()
         for i in range(args.num_layers):
             input_tensor = self.predictor.get_input_handle('cache_kvs_' + str(
                 i))
             input_tensor.share_external_data(cache_kvs[i])
 
+#            cache_dumps.append(cache_kvs[i].numpy())
+
         input_tensor = self.predictor.get_input_handle('pre_ids')
         input_tensor.share_external_data(pre_ids)
+        #        dump_data["pre_ids"] = pre_ids.numpy()
+        #        import pickle
+        #        with open("dump_data.pkl", "wb") as f:
+        #            pickle.dump([dump_data, cache_dumps], f)
+
         self.predictor.run()
         # NOTE: The order of return values is refered from:
         # PaddleNLP/paddlenlp/experimental/transformers/generation_utils.py
@@ -294,6 +312,9 @@ def dy_input_preprocess(inputs):
     stop_flags = inputs["dyinput_flags"]
     dec_length = inputs["seq_len_decoder"]
     bsz = len(stop_flags)
+
+    tmp = np.zeros(shape=[args.batch_size, 2, args.max_seq_len], dtype="int64")
+
     for i in range(bsz):
         if stop_flags[i] == 1:
             length = int(dec_length[i, 0])
@@ -323,16 +344,25 @@ def dy_input_preprocess(inputs):
                                         shape=[1, max_prefix_len + length],
                                         dtype=args.dtype)
             else:
-                position_ids[i, :length] = paddle.arange(length)
-                attention_mask[i, 0, :length, :length] = paddle.tril(
-                    paddle.ones(
-                        shape=[length, length], dtype=args.dtype))
+                if "chatglm" in args.architecture:
+                    attention_mask[i, 0, :length, :length] = 0
+                    attention_mask[i, 0, :length - 1, length - 1] = 1
+                    tgt_pos[i, 0, 0] = paddle.to_tensor(
+                        [length], dtype="int64")
+                else:
+                    position_ids[i, :length] = paddle.arange(length)
+                    attention_mask[i, 0, :length, :length] = paddle.tril(
+                        paddle.ones(
+                            shape=[length, length], dtype=args.dtype))
                 tgt_generation_mask[i, 0, 0, :length] = paddle.ones(
                     shape=[1, length], dtype=args.dtype)
             pre_ids[i:i + 1] = -1
     del inputs["dyinput_flags"]
-    inputs["position_ids"] = position_ids
+    #TODO jiangjiajun
+    if "chatglm" not in args.architecture:
+        inputs["position_ids"] = position_ids
     inputs["tgt_generation_mask"] = tgt_generation_mask
+    inputs["tgt_pos"] = tgt_pos
     if args.is_ptuning:
         prefix_caches = []
         for model_id in inputs['model_id']:
@@ -411,6 +441,9 @@ def run(infer_engine):
         # Update flag, and start new generation
         flag_end_array[rank] = 1
         flag_begin_array[rank] = 0
+
+        # TODO ========
+        break
 
 
 def main():
