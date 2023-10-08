@@ -265,31 +265,20 @@ class InferenceEngine(object):
         """
         predict
         """
-        #        dump_data = dict()
-
         for k, v in batch_data_dict.items():
             input_tensor = self.predictor.get_input_handle(k)
             if isinstance(v, paddle.Tensor):
                 input_tensor.share_external_data(v)
-#                dump_data[k] = v.numpy()
             else:
                 input_tensor.copy_from_cpu(v)
-#                dump_data[k] = v
 
-#        cache_dumps = list()
         for i in range(args.num_layers):
             input_tensor = self.predictor.get_input_handle('cache_kvs_' + str(
                 i))
             input_tensor.share_external_data(cache_kvs[i])
 
-#            cache_dumps.append(cache_kvs[i].numpy())
-
         input_tensor = self.predictor.get_input_handle('pre_ids')
         input_tensor.share_external_data(pre_ids)
-        #        dump_data["pre_ids"] = pre_ids.numpy()
-        #        import pickle
-        #        with open("dump_data.pkl", "wb") as f:
-        #            pickle.dump([dump_data, cache_dumps], f)
 
         self.predictor.run()
         # NOTE: The order of return values is refered from:
@@ -312,8 +301,6 @@ def dy_input_preprocess(inputs):
     stop_flags = inputs["dyinput_flags"]
     dec_length = inputs["seq_len_decoder"]
     bsz = len(stop_flags)
-
-    tmp = np.zeros(shape=[args.batch_size, 2, args.max_seq_len], dtype="int64")
 
     for i in range(bsz):
         if stop_flags[i] == 1:
@@ -361,8 +348,9 @@ def dy_input_preprocess(inputs):
     # ChatGLM doesn't use pre-allocated position_ids
     if "chatglm" not in args.architecture:
         inputs["position_ids"] = position_ids
+    if "chatglm" in args.architecture:
+        inputs["tgt_pos"] = tgt_pos
     inputs["tgt_generation_mask"] = tgt_generation_mask
-    inputs["tgt_pos"] = tgt_pos
     if args.is_ptuning:
         prefix_caches = []
         for model_id in inputs['model_id']:
