@@ -174,7 +174,6 @@ else:
         shape=[args.batch_size, args.max_seq_len], fill_value=0, dtype='int64')
 
 
-#count = 0
 class DygraphEngine(object):
     def __init__(self, model_dir, architecture, mp_degree):
         if mp_degree == 1:
@@ -271,7 +270,6 @@ class InferenceEngine(object):
                 input_tensor.share_external_data(v)
             else:
                 input_tensor.copy_from_cpu(v)
-
         for i in range(args.num_layers):
             input_tensor = self.predictor.get_input_handle('cache_kvs_' + str(
                 i))
@@ -348,9 +346,9 @@ def dy_input_preprocess(inputs):
     # ChatGLM doesn't use pre-allocated position_ids
     if "chatglm" not in args.architecture:
         inputs["position_ids"] = position_ids
+    inputs["tgt_generation_mask"] = tgt_generation_mask
     if "chatglm" in args.architecture:
         inputs["tgt_pos"] = tgt_pos
-    inputs["tgt_generation_mask"] = tgt_generation_mask
     if args.is_ptuning:
         prefix_caches = []
         for model_id in inputs['model_id']:
