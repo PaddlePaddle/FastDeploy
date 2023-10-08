@@ -99,7 +99,7 @@ class Model:
         for i in range(5):
             output_datas[keys[i]] = np.zeros(
                 [self.config.max_batch_size + 1, 1], dtype=np.int64)
-        if "chatglm" in self.config.architecture:
+        if self.config.is_arch("chatglm"):
             output_datas["tgt_pos"] = np.zeros(
                 [self.config.max_batch_size + 1, 2, 1], dtype=np.int64)
         output_datas_size = len(pickle.dumps(output_datas)) + 6
@@ -290,7 +290,7 @@ class Model:
             tasks[i].decode_status["finished_id"] = int(info["finished_ids"][
                 i])
             # TODO JiangJiajun
-            if "chatglm" in self.config.architecture:
+            if self.config.is_arch("chatglm"):
                 tasks[i].decode_status["tgt_pos"] = int(info["tgt_pos"][i][0])
             else:
                 tasks[i].decode_status["tgt_pos"] = int(info["tgt_pos"][i])
@@ -336,13 +336,14 @@ class Model:
                     del task.token_ids
                     del task.position_ids
 
-        padding = True if "chatglm" in self.config.architecture else False
-        max_length = self.config.max_seq_len if "chatglm" in self.config.architecture else None
+        padding = True if self.config.is_arch("chatglm") else False
+        max_length = self.config.max_seq_len if self.config.is_arch(
+            "chatglm") else None
         input_ids, lens, position_ids = self.data_processor.batch_encode_tasks(
             tasks, padding=padding, max_length=max_length)
 
         # TODO JiangJiajun
-        if "chatglm" in self.config.architecture:
+        if self.config.is_arch("chatglm"):
             inst_data_pos = list()
             max_len = max(map(len, input_ids))
             for i in range(len(position_ids)):
@@ -404,6 +405,8 @@ class Model:
             length = inputs["num_input_tokens"][i]
             if tasks[i].status == TaskStatus.DECODING:
                 tgt_pos.append(tasks[i].decode_status["tgt_pos"])
+                if self.config.is_arch("chatglm"):
+                    tgt_pos.append(1)
                 sequence_lengths_encoder[i] = 0
                 sequence_lengths_decoder[i] = tasks[i].decode_status[
                     "seq_lens_decoder"]
@@ -412,7 +415,11 @@ class Model:
                 tgt_ids[i] = tasks[i].decode_status["finished_id"]
                 step_idx[i] = tasks[i].decode_status["step_idx"]
             elif tasks[i].status == TaskStatus.FINISHED:
-                tgt_pos.append(length - 1)
+                if self.config.is_arch("chatglm"):
+                    tgt_pos.append(length)
+                    tgt_pos.append(1)
+                else:
+                    tgt_pos.append(length - 1)
                 sequence_lengths_encoder[i] = 0
                 if self.config.is_ptuning:
                     sequence_lengths_decoder[i] = self.config.max_prefix_len
@@ -421,7 +428,7 @@ class Model:
                 tgt_ids[i] = inputs["input_ids"][i][length - 1]
                 stop_flags[i] = 1
             elif tasks[i].status == TaskStatus.NEW:
-                if "chatglm" in self.config.architecture:
+                if self.config.is_arch("chatglm"):
                     tgt_pos += [length, 1]
                 else:
                     tgt_pos.append(length - 1)
@@ -443,7 +450,7 @@ class Model:
                 tgt_ids[i] = inputs["input_ids"][i][length - 1]
                 dyinput_flags[i] = 1
         del inputs["num_input_tokens"]
-        if "chatglm" in self.config.architecture:
+        if self.config.is_arch("chatglm"):
             tgt_pos = np.array(tgt_pos).astype("int64").reshape(-1, 2, 1)
         else:
             tgt_pos = np.array(tgt_pos).astype("int64").reshape(-1, 1)

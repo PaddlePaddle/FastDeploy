@@ -358,7 +358,7 @@ def dy_input_preprocess(inputs):
                     shape=[1, length], dtype=args.dtype)
             pre_ids[i:i + 1] = -1
     del inputs["dyinput_flags"]
-    #TODO jiangjiajun
+    # ChatGLM doesn't use pre-allocated position_ids
     if "chatglm" not in args.architecture:
         inputs["position_ids"] = position_ids
     inputs["tgt_generation_mask"] = tgt_generation_mask
@@ -441,9 +441,6 @@ def run(infer_engine):
         # Update flag, and start new generation
         flag_end_array[rank] = 1
         flag_begin_array[rank] = 0
-
-        # TODO ========
-        break
 
 
 def main():
