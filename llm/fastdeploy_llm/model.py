@@ -334,25 +334,11 @@ class Model:
                 texts.append("me")
                 if hasattr(task, "token_ids"):
                     del task.token_ids
+                if hasattr(task, "position_ids"):
                     del task.position_ids
 
-        padding = True if self.config.is_arch("chatglm") else False
-        max_length = self.config.max_seq_len if self.config.is_arch(
-            "chatglm") else None
         input_ids, lens, position_ids = self.data_processor.batch_encode_tasks(
-            tasks, padding=padding, max_length=max_length)
-
-        # TODO JiangJiajun
-        if self.config.is_arch("chatglm"):
-            inst_data_pos = list()
-            max_len = max(map(len, input_ids))
-            for i in range(len(position_ids)):
-                inst_data_pos.append(
-                    np.array([
-                        list(inst) + [0] * (max_len - len(inst))
-                        for inst in position_ids[i]
-                    ]))
-            position_ids = np.array(inst_data_pos).astype("int64")
+            tasks, padding=True)
 
         for i in range(len(tasks)):
             tasks[i].prompt_token_nums = lens[i]
@@ -375,7 +361,6 @@ class Model:
         inputs["min_length"] = np.array(
             [task.min_dec_len for task in tasks]).astype('int64').reshape(-1,
                                                                           1)
-        inputs["position_ids"] = position_ids
         # TODO Lite model exists different method
         # TODO Doesn't support eos_token id now
         inputs["eos_token_id"] = np.array(

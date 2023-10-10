@@ -160,7 +160,6 @@ if "chatglm" in args.architecture:
         shape=(args.batch_size, 1, args.max_seq_len + args.max_dec_len,
                args.max_seq_len + args.max_dec_len),
         dtype=args.dtype)
-    tgt_pos = paddle.ones(shape=(args.batch_size, 2, 1), dtype="int64")
     position_ids = paddle.full(
         shape=[args.batch_size, 2, args.max_seq_len],
         fill_value=0,
@@ -296,9 +295,34 @@ def dy_input_preprocess(inputs):
     """
     prepare input for dybatch inference
     """
+
+    def generate_position_ids_for_chatglm(seq_len_list):
+        if isinstance(seq_len_list, np.ndarray):
+            seq_len_list = seq_len_list.flatten().tolist()
+        max_len = max(seq_len_list)
+        position_ids = list()
+        for i in range(len(seq_len_list)):
+            seq_length = max(seq_len_list[i], 2)
+            position_id = np.arange(seq_length, dtype=np.int64)
+            position_id[seq_length - 1:] = seq_length - 2
+            block_position_id = np.concatenate([
+                np.zeros(
+                    seq_length - 1, dtype=np.int64), np.arange(
+                        1, 2, dtype=np.int64)
+            ])
+            position_id = np.stack([position_id, block_position_id], axis=0)
+            position_id = np.array([
+                list(inst) + [0] * (max_len - len(inst))
+                for inst in position_id
+            ])
+            position_ids.append(position_id)
+        return np.array(position_ids).astype(np.int64)
+
     stop_flags = inputs["dyinput_flags"]
     dec_length = inputs["seq_len_decoder"]
     bsz = len(stop_flags)
+
+    tgt_pos = paddle.ones(shape=(bsz, 2, 1), dtype="int64")
 
     for i in range(bsz):
         if stop_flags[i] == 1:
@@ -349,6 +373,7 @@ def dy_input_preprocess(inputs):
     inputs["tgt_generation_mask"] = tgt_generation_mask
     if "chatglm" in args.architecture:
         inputs["tgt_pos"] = tgt_pos
+        inputs["position_ids"] = generate_position_ids_for_chatglm(dec_length)
     if args.is_ptuning:
         prefix_caches = []
         for model_id in inputs['model_id']:
