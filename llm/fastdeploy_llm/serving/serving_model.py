@@ -23,6 +23,11 @@ class ServingModel:
     def __init__(self, config):
         self.config = config
 
+        if self.config.is_arch("chatglm"):
+            logger.warning(
+                "Dynamic batching will be disabled for model ChatGLM now!")
+            self.config.disable_dynamic_batching = 1
+
         logger.info("=============== Debug Information ===============")
         for k, v in self.config.__dict__.items():
             logger.info("{:<20}:{:<6}{}".format(k, "", v))
@@ -46,7 +51,8 @@ class ServingModel:
         assert task.text.strip() != "", "The request's text cannot be empty."
         try:
             if not hasattr(task, "token_ids"):
-                task.token_ids = self.model.data_processor.encode(task.text)
+                task.token_ids, task.position_ids = self.model.data_processor.encode(
+                    task.text, padding=True)
             if self.config.is_ptuning:
                 assert len(
                     task.token_ids

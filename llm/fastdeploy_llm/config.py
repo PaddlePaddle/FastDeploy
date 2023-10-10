@@ -94,6 +94,9 @@ class Config:
                                                 "./prompt_embedding")
         self.max_prefix_len = config.get("max_prefix_len", 128)
 
+    def is_arch(self, arch):
+        return arch in self.architecture
+
     def load_environment_variables(self):
         # If environment variables are set, override the value in configuration file
         if os.getenv("BATCH_SIZE", None):
