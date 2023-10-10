@@ -87,6 +87,12 @@ void BindPPDet(pybind11::module& m) {
            [](vision::detection::PaddleDetPostprocessor& self) {
              self.ApplyNMS();
            })
+      .def("apply_nms",
+           [](vision::detection::PaddleDetPostprocessor& self,
+              vision::detection::NMSOption& option) {
+             self.ApplyNMS();
+             self.SetNMSOption(option);
+           })
       .def("run", [](vision::detection::PaddleDetPostprocessor& self,
                      std::vector<pybind11::array>& input_array) {
         std::vector<vision::DetectionResult> results;
