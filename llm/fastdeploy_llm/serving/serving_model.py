@@ -23,9 +23,10 @@ class ServingModel:
     def __init__(self, config):
         self.config = config
 
-        if self.config.is_arch("chatglm"):
+        if self.config.is_arch("chatglm") or self.config.is_arch("bloom"):
             logger.warning(
-                "Dynamic batching will be disabled for model ChatGLM now!")
+                "Dynamic batching will be disabled for model ChatGLM/BLOOM now!"
+            )
             self.config.disable_dynamic_batching = 1
 
         logger.info("=============== Debug Information ===============")
@@ -163,4 +164,8 @@ class ServingModel:
         logger.info("Engine is finished now, will stop now.")
         self.stop_runner = True
         self.model.kill_engine()
-        logger.info("Engine is killed.")
+        logger.info(
+            "Engine is killed, will terminate the current process in 10 seconds..."
+        )
+        time.sleep(10)
+        logger.info("ByeBye.")
