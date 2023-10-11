@@ -283,6 +283,15 @@ class Model:
             else:
                 if not self._is_engine_busy():
                     break
+                ret = self.engine_proc.poll()
+                if ret is not None:
+                    logger.error(
+                        "The inference engine is not alive, check log/workerlog for more details."
+                    )
+                    raise Exception(
+                        "The inference engine is not alive, check log/workerlog for more details."
+                    )
+
         remove_files(".", "real_time_save.temp_ids_rank_*")
         self._clear_request()
         info = self._get_engine_info()
