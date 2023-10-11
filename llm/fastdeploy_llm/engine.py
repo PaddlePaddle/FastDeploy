@@ -255,8 +255,11 @@ class InferenceEngine(object):
             dist_config.set_ranks(self.nranks, self.rank)
             dist_config.set_endpoints(trainer_endpoints, current_endpoint)
             dist_config.enable_dist_model(True)
-            dist_config.set_comm_init_config(
-                os.path.join(args.model_dir, "rank_mapping.csv"))
+            parent_dir = os.path.abspath(os.path.join(self.model_dir, ".."))
+            mapping_file = os.path.join(parent_dir, "rank_mapping.csv")
+            if not os.path.exists(mapping_file):
+                raise Exception("There's no file {}.".format(mapping_file))
+            dist_config.set_comm_init_config(mapping_file)
             config.set_dist_config(dist_config)
             print(
                 f'Init distributed config with {dist_config}, mp_degree: {self.mp_degree}',
