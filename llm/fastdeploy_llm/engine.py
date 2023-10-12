@@ -255,8 +255,11 @@ class InferenceEngine(object):
             dist_config.set_ranks(self.nranks, self.rank)
             dist_config.set_endpoints(trainer_endpoints, current_endpoint)
             dist_config.enable_dist_model(True)
-            dist_config.set_comm_init_config(
-                os.path.join(args.model_dir, "rank_mapping.csv"))
+            parent_dir = os.path.abspath(os.path.join(self.model_dir, ".."))
+            mapping_file = os.path.join(parent_dir, "rank_mapping.csv")
+            if not os.path.exists(mapping_file):
+                raise Exception("There's no file {}.".format(mapping_file))
+            dist_config.set_comm_init_config(mapping_file)
             config.set_dist_config(dist_config)
             print(
                 f'Init distributed config with {dist_config}, mp_degree: {self.mp_degree}',
@@ -373,13 +376,14 @@ def dy_input_preprocess(inputs):
     """
     stop_flags = inputs["dyinput_flags"]
     dec_length = inputs["seq_len_decoder"]
+    enc_length = inputs["seq_len_encoder"]
     bsz = len(stop_flags)
 
     tgt_pos = paddle.ones(shape=(bsz, 2, 1), dtype="int64")
 
     for i in range(bsz):
         if stop_flags[i] == 1:
-            length = int(dec_length[i, 0])
+            length = int(enc_length[i, 0])
             if args.is_ptuning:
                 model_id = inputs['model_id'][i]
                 if "chatglm" in args.architecture:
@@ -454,7 +458,7 @@ def dy_input_preprocess(inputs):
     inputs["tgt_generation_mask"] = tgt_generation_mask
     if "chatglm" in args.architecture:
         inputs["tgt_pos"] = tgt_pos
-        inputs["position_ids"] = generate_position_ids_for_chatglm(dec_length)
+        inputs["position_ids"] = generate_position_ids_for_chatglm(enc_length)
     if args.is_ptuning:
         prefix_caches = []
         for model_id in inputs['model_id']:
