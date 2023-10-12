@@ -257,7 +257,7 @@ class InferenceEngine(object):
             dist_config.enable_dist_model(True)
             parent_dir = os.path.abspath(os.path.join(self.model_dir, ".."))
             mapping_file = os.path.join(parent_dir, "rank_mapping.csv")
-            if not os.path.exists(mapping_file):
+            if self.mp_degree > 1 and not os.path.exists(mapping_file):
                 raise Exception("There's no file {}.".format(mapping_file))
             dist_config.set_comm_init_config(mapping_file)
             config.set_dist_config(dist_config)
