@@ -373,13 +373,14 @@ def dy_input_preprocess(inputs):
     """
     stop_flags = inputs["dyinput_flags"]
     dec_length = inputs["seq_len_decoder"]
+    enc_length = inputs["seq_len_encoder"]
     bsz = len(stop_flags)
 
     tgt_pos = paddle.ones(shape=(bsz, 2, 1), dtype="int64")
 
     for i in range(bsz):
         if stop_flags[i] == 1:
-            length = int(dec_length[i, 0])
+            length = int(enc_length[i, 0])
             if args.is_ptuning:
                 model_id = inputs['model_id'][i]
                 if "chatglm" in args.architecture:
@@ -454,7 +455,7 @@ def dy_input_preprocess(inputs):
     inputs["tgt_generation_mask"] = tgt_generation_mask
     if "chatglm" in args.architecture:
         inputs["tgt_pos"] = tgt_pos
-        inputs["position_ids"] = generate_position_ids_for_chatglm(dec_length)
+        inputs["position_ids"] = generate_position_ids_for_chatglm(enc_length)
     if args.is_ptuning:
         prefix_caches = []
         for model_id in inputs['model_id']:
