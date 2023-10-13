@@ -323,6 +323,7 @@ def generate_position_ids_for_chatglm(seq_len_list):
 
 def update_mask_for_bloom(inputs):
     import math
+    global attention_mask
 
     def get_alibi_slopes(num_heads):
         closest_power_of_2 = 2**math.floor(math.log2(num_heads))
@@ -365,6 +366,7 @@ def update_mask_for_bloom(inputs):
     inputs["attention_mask"] = (
         alibi_encoder + (1 - inputs["attention_mask"]
                          ) * paddle.finfo(inputs["attention_mask"].dtype).min)
+    attention_mask = inputs["attention_mask"]
     inputs["tgt_generation_mask"] = (
         alibi_decoder + (1 - inputs["tgt_generation_mask"]) *
         paddle.finfo(inputs["tgt_generation_mask"].dtype).min)
@@ -401,6 +403,10 @@ def dy_input_preprocess(inputs):
                         shape=[1, length + max_prefix_len], dtype=args.dtype
                     )
                 else:
+                    if "bloom" in args.architecture:
+                         attention_mask[i, :, :length, :length] = paddle.tril(
+                            paddle.ones(
+                              shape=[length, length], dtype=args.dtype))
                     if not model_id:
                         attention_mask[i, 0, :length, :
                                     max_prefix_len] = paddle.zeros(
@@ -446,6 +452,7 @@ def dy_input_preprocess(inputs):
                     tgt_generation_mask[i, 0, 0, :length] = paddle.ones(
                         shape=[1, length], dtype=args.dtype)
                 else:
+
                     position_ids[i, :length] = paddle.arange(length)
                     attention_mask[i, 0, :length, :length] = paddle.tril(
                         paddle.ones(
@@ -455,7 +462,8 @@ def dy_input_preprocess(inputs):
                 if "bloom" in args.architecture:
                     arange_tensor_encoder[i, :, :length] = paddle.arange(
                         length).astype(args.dtype)
-            pre_ids[i:i + 1] = -1
+            if "bloom" not in args.architecture:  # to check, whether chatglm and llama both not need this
+                pre_ids[i:i + 1] = -1
     del inputs["dyinput_flags"]
     # ChatGLM doesn't use pre-allocated position_ids
     if "chatglm" not in args.architecture:
