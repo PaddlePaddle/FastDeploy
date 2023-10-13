@@ -51,16 +51,32 @@ def parse(parameters_config, name, default_value=None):
 
 @app.post("/generate")
 async def generate(request: Request) -> Response:
-    request_dict = await request.json()
+    try:
+        request_dict = await request.json()
+    except Exception as e:
+        logger.info("Got an illegal request, error={}".format(e))
+        return Response(status_code=499)
+
     task = Task()
     task.task_id = str(uuid.uuid4())
 
-    task.from_dict(request_dict)
+    try:
+        task.from_dict(request_dict)
+    except Exception as e:
+        logger.info(
+            "There's error while deserializing data from request, error={}".
+            format(e))
+        return Response(status_code=499)
 
-    task.check(server_config.max_dec_len)
+    try:
+        task.check(server_config.max_dec_len)
+    except Exception as e:
+        logger.info("There's error while checking task, error={}".format(e))
+        return Response(status_code=499)
+
     if model.requests_queue.qsize() > server_config.max_queue_num:
-        print("The queue is full now(size={}), please wait for a while.".
-              format(model.max_queue_num))
+        logger.info("The queue is full now(size={}), please wait for a while.".
+                    format(model.max_queue_num))
         return Response(status_code=499)
 
     results_generator = model.generate(task)
