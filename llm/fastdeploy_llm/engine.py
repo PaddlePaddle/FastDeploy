@@ -386,7 +386,7 @@ def dy_input_preprocess(inputs):
         if stop_flags[i] == 1:
             attention_mask[i] = 0
             tgt_generation_mask[i] = 0
-            length = int(dec_length[i, 0])
+            length = int(enc_length[i, 0])
             if args.is_ptuning:
                 model_id = inputs['model_id'][i]
                 if "chatglm" in args.architecture:
