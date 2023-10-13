@@ -17,6 +17,8 @@ from fastdeploy_llm.task import TaskStatus, BatchTask, Task
 from fastdeploy_llm.model import Model
 from fastdeploy_llm.utils.logging_util import logger
 from fastdeploy_llm.config import Config
+import asyncio
+TIMEOUT_TO_PREVENT_DEADLOCK = 1  # seconds
 
 
 class ServingModel:
@@ -45,6 +47,61 @@ class ServingModel:
 
         self.max_need_num = min(self.config.max_batch_size,
                                 int(self.config.stop_threshold * 1.5))
+
+        self.request_events = {}
+        self.request_outputs = {}
+
+    async def engine_step(self):
+        await asyncio.sleep(0)
+        # Notify the waiting coroutines that there are new outputs ready.
+        for task_id, _ in self.request_outputs.items():
+            self.request_events[task_id].set()
+
+    async def generate(self, task):
+        def stream_call_back(call_back_task, token_tuple, index, is_last_token,
+                             sender):
+            if is_last_token:
+                out = dict()
+                out["result"] = call_back_task.result.get_completion()
+                out["req_id"] = call_back_task.task_id
+                out["is_end"] = is_last_token
+                self.request_outputs[call_back_task.task_id] = out
+
+        task.call_back_func = stream_call_back
+        task_id = task.task_id
+        request_event = asyncio.Event()
+        self.request_events[task_id] = request_event
+
+        self.add_request(task)
+
+        while True:
+            if task_id not in self.request_events:
+                # The request has been aborted.
+                return
+
+            await self.engine_step()
+
+            # Wait for new output. The group_event will be set in engine_step
+            # when there is new output available for the sequence group.
+            # Added a timeout to prevent deadlock.
+            try:
+                await asyncio.wait_for(
+                    request_event.wait(), timeout=TIMEOUT_TO_PREVENT_DEADLOCK)
+            except asyncio.TimeoutError:
+                continue
+            # Reset the event to wait for the next output.
+            request_event.clear()
+
+            # Decode and return new outputs.
+            request_output = self.request_outputs[task_id]
+            yield request_output
+
+            # Once finished, release the resources of the sequence group.
+            if request_output["is_end"]:
+                del self.request_outputs[task_id]
+                del self.request_events[task_id]
+                await self.engine_step()
+                break
 
     def add_request(self, task):
         logger.debug("Receive task = {}".format(task))
