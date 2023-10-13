@@ -438,6 +438,10 @@ def dy_input_preprocess(inputs):
                         "input_ids"].shape[1]] = paddle.arange(inputs["input_ids"]
                                                             .shape[1])
                     if "bloom" in args.architecture:
+                        tgt_generation_mask[i, :, 0, :max_prefix_len +
+                                            length] = paddle.ones(
+                                                shape=[1, max_prefix_len + length],
+                                                dtype=args.dtype)
                         arange_tensor_encoder[i, :, :length + max_prefix_len] = paddle.arange(
                             length + max_prefix_len).astype(args.dtype)
                         inputs["tgt_pos"] = inputs["tgt_pos"] + max_prefix_len
