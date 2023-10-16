@@ -1,11 +1,29 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import queue
 import json
 import sys
 from functools import partial
-
+import os
+import time
 import numpy as np
+import subprocess
 import tritonclient.grpc as grpcclient
 from tritonclient.utils import *
+
+import api_client
 
 class UserData:
     def __init__(self):
@@ -26,6 +44,7 @@ class grpcClient:
 		model_name: str,
 		model_version: str = "1",
         timeout: int = 100,
+        openai_port: int = None
     ):
         """
         Args:
@@ -33,6 +52,7 @@ class grpcClient:
             model_name (`str`)
             model_version (`str`): default "1"
             timeout (`int`): inference timeout in seconds
+            openai_port (`int`) 
         """
         self._model_name = model_name
         self._model_version = model_version
@@ -48,7 +68,13 @@ class grpcClient:
         self.inputs = [grpcclient.InferInput("IN", [1], np_to_triton_dtype(np.object_))]
         self.outputs = [grpcclient.InferRequestedOutput("OUT")]
         self.has_init = False
-        self.user_data = UserData()    
+        self.user_data = UserData()
+
+        if openai_port is not None:
+            pd_cmd = "python3 api_client.py --url {0} --port {1} --model {2}".format(base_url, openai_port, model_name)
+            subprocess.Popen(pd_cmd, shell=True, stdout=subprocess.PIPE,
+                                               stderr=subprocess.STDOUT, preexec_fn=os.setsid)
+            time.sleep(5)
 
     def _verify_triton_state(self, triton_client):
         if not triton_client.is_server_live():
@@ -71,10 +97,10 @@ class grpcClient:
         penalty_score: float = 1.0,
         frequency_score: float = 0.99,
         eos_token_id: int =2,
-        presence_score: float = 0.0
+        presence_score: float = 0.0,
+        stream: bool=False
     ):
         
-        #text = data_process(prompt)
         req_dict = {
             "text": prompt,
             "topp": top_p,
@@ -89,7 +115,6 @@ class grpcClient:
             }
 
         try:
-            # Establish stream
             if not self.has_init:
                 self._client.start_stream(callback=partial(callback, self.user_data))
                 self.has_init = True
@@ -105,8 +130,10 @@ class grpcClient:
                                             inputs=self.inputs,
                                             request_id=request_id,
                                             outputs=self.outputs)
-            # Retrieve results...
-            completion = ""
+            if stream:
+                completion = []
+            else:
+                completion = ""
             while True:
                 data_item = self.user_data._completed_requests.get(timeout=self.timeout)
                 if type(data_item) == InferenceServerException:
@@ -114,11 +141,13 @@ class grpcClient:
                 else:
                     results = data_item.as_numpy("OUT")[0]
                     data = json.loads(results)
-                    completion += data["result"]
+                    if stream:
+                        completion.append(data["result"])
+                    else:
+                        completion += data["result"]
                     if data.get("is_end", False):
                         break
             return completion
         except Exception as e:
             print(f"Client infer error: {e}")
             raise e
-

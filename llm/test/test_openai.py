@@ -1,29 +1,32 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import openai
-import subprocess
-import os
-import time
-import signal
+from fastdeploy_llm.Client import grpcClient
 
 model = "llama-ptuning"
 port = 2001
 url = "0.0.0.0:8812"
 
-pd_cmd = "python3 api_client.py --url {0} --port {1} --model {2}".format(url, port, model)
-print("pd_cmd: ", pd_cmd)
-pd_process = subprocess.Popen(pd_cmd, shell=True, stdout=subprocess.PIPE,
-                                           stderr=subprocess.STDOUT, preexec_fn=os.setsid)
-
-time.sleep( 5 )
+client = grpcClient(base_url= url, model_name= model, openai_port= port)
 
 # Modify OpenAI's API key and API base.
 openai.api_key = "EMPTY"
-openai.api_base = "http://0.0.0.0:"+str(port)+"/v1"
+openai.api_base = "http://0.0.0.0:" + str(port) + "/v1"
 
 
 # Completion API
-# 
-stream = False
-
 completion = openai.Completion.create(
     model=model,
     prompt="A robot may not injure a human being"
@@ -33,8 +36,6 @@ print("Completion results:")
 print(completion)
 
 # ChatCompletion API
-# 
-
 chat_completion = openai.ChatCompletion.create(
     model=model,
     messages=[{
@@ -55,4 +56,3 @@ chat_completion = openai.ChatCompletion.create(
 print("Chat completion results:")
 print(chat_completion)
 
-os.killpg(os.getpgid(pd_process.pid), signal.SIGTERM) 

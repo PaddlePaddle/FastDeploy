@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import json
 import logging
 from logging.handlers import TimedRotatingFileHandler
@@ -12,9 +26,8 @@ from tornado import web
 from tornado.concurrent import run_on_executor
 from concurrent.futures import ThreadPoolExecutor
 
-from conversation import *
+from utils.conversation import *
 from Client import *
-
 
 
 parse = argparse.ArgumentParser()
@@ -24,9 +37,6 @@ parse.add_argument(
     '--port', type=int, help='openai http port', default=2001)
 parse.add_argument(
     '--model', type=str, help='model name', default="model")
-
-
-
 
 def parse_parameters(parameters_config, name, default_value):
         if name not in parameters_config:
@@ -90,7 +100,7 @@ class ChatCompletionApiHandler(web.RequestHandler):
                     out_json = create_error_response(4000102,"result is empty")
                 else:
                     out_json = {"outputs" : [data],
-                                "status": 0}
+                                    "status": 0}
                 result_str = json.dumps(out_json, ensure_ascii=False)
             else:
                 result_str = json.dumps(err, ensure_ascii=False)
@@ -160,9 +170,12 @@ class ChatCompletionApiHandler(web.RequestHandler):
             temperature = parse_parameters(body, 'temperature', 1.0),
             max_dec_len = parse_parameters(body, 'max_tokens', 1024),
             frequency_score= parse_parameters(body, 'frequency_penalty', 0.99),
-            presence_score= parse_parameters(body, 'presence_penalty', 0.0)
+            presence_score= parse_parameters(body, 'presence_penalty', 0.0),
+            stream= parse_parameters(body, 'stream', False)
         )
         return result
+
+
 
 
 class CompletionApiHandler(web.RequestHandler):
@@ -269,7 +282,8 @@ class CompletionApiHandler(web.RequestHandler):
             temperature = parse_parameters(body, 'temperature', 1.0),
             max_dec_len = parse_parameters(body, 'max_tokens', 1024),
             frequency_score= parse_parameters(body, 'frequency_penalty', 0.99),
-            presence_score= parse_parameters(body, 'presence_penalty', 0.0)
+            presence_score= parse_parameters(body, 'presence_penalty', 0.0),
+            stream= parse_parameters(body, 'stream', False)
         )
         return result
 
