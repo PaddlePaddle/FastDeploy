@@ -155,9 +155,7 @@ if __name__ == "__main__":
     config.disable_dynamic_batching = args.disable_dynamic_batching
 
     server_config = config
-    response_handler = dict()
     model = FastAPIModel(config)
-    model.model.stream_sender = response_handler
     model.start()
 
     uvicorn.run(app,
