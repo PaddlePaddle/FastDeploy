@@ -325,6 +325,7 @@ def generate_position_ids_for_chatglm(seq_len_list):
 def update_mask_for_bloom(inputs):
     import math
     global attention_mask
+    global tgt_generation_mask
 
     def get_alibi_slopes(num_heads):
         closest_power_of_2 = 2**math.floor(math.log2(num_heads))
@@ -368,6 +369,7 @@ def update_mask_for_bloom(inputs):
         alibi_encoder + (1 - inputs["attention_mask"]
                          ) * paddle.finfo(inputs["attention_mask"].dtype).min)
     attention_mask = inputs["attention_mask"]
+    tgt_generation_mask  = inputs["tgt_generation_mask"]
     inputs["tgt_generation_mask"] = (
         alibi_decoder + (1 - inputs["tgt_generation_mask"]) *
         paddle.finfo(inputs["tgt_generation_mask"].dtype).min)
@@ -411,7 +413,7 @@ def dy_input_preprocess(inputs):
                             paddle.ones(
                               shape=[length, length], dtype=args.dtype))
                     if not model_id:
-                        attention_mask[i, 0, :length, :
+                        attention_mask[i, :, :length, :
                                     max_prefix_len] = paddle.zeros(
                                         [1, length, max_prefix_len],
                                         dtype=args.dtype)
@@ -419,7 +421,7 @@ def dy_input_preprocess(inputs):
                         shape=[1, length], dtype=args.dtype
                     )
                     else:
-                        attention_mask[i, 0, :length, :
+                        attention_mask[i, :, :length, :
                                     max_prefix_len] = paddle.ones(
                                         [1, length, max_prefix_len],
                                         dtype=args.dtype)
@@ -428,7 +430,7 @@ def dy_input_preprocess(inputs):
                                                 shape=[1, max_prefix_len + length],
                                                 dtype=args.dtype)
                     
-                    attention_mask[i, 0, :length, max_prefix_len:max_prefix_len +
+                    attention_mask[i, :, :length, max_prefix_len:max_prefix_len +
                                 length] = paddle.tril(
                                     paddle.ones(
                                         shape=[length, length],
@@ -444,7 +446,6 @@ def dy_input_preprocess(inputs):
                                                 dtype=args.dtype)
                         arange_tensor_encoder[i, :, :length + max_prefix_len] = paddle.arange(
                             length + max_prefix_len).astype(args.dtype)
-                        inputs["tgt_pos"] = inputs["tgt_pos"] + max_prefix_len
 
                         
             else:
@@ -497,6 +498,8 @@ def dy_input_preprocess(inputs):
     inputs["attention_mask"] = attention_mask
 
     if "bloom" in args.architecture:
+        if args.is_ptuning:
+            inputs["tgt_pos"] = inputs["tgt_pos"] + max_prefix_len
         inputs["arange_tensor_encoder"] = arange_tensor_encoder
         update_mask_for_bloom(inputs)
 
