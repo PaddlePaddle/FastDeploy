@@ -54,6 +54,8 @@ class ServingModel:
             if not hasattr(task, "token_ids"):
                 task.token_ids, task.position_ids = self.model.data_processor.encode(
                     task.text, padding=True)
+            else:
+                task.position_ids = None
             if self.config.is_ptuning:
                 assert len(
                     task.token_ids
