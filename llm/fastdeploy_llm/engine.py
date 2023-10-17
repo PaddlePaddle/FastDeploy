@@ -325,6 +325,7 @@ def generate_position_ids_for_chatglm(seq_len_list):
 def update_mask_for_bloom(inputs):
     import math
     global attention_mask
+    global tgt_generation_mask
 
     def get_alibi_slopes(num_heads):
         closest_power_of_2 = 2**math.floor(math.log2(num_heads))
@@ -368,6 +369,7 @@ def update_mask_for_bloom(inputs):
         alibi_encoder + (1 - inputs["attention_mask"]
                          ) * paddle.finfo(inputs["attention_mask"].dtype).min)
     attention_mask = inputs["attention_mask"]
+    tgt_generation_mask  = inputs["tgt_generation_mask"]
     inputs["tgt_generation_mask"] = (
         alibi_decoder + (1 - inputs["tgt_generation_mask"]) *
         paddle.finfo(inputs["tgt_generation_mask"].dtype).min)
