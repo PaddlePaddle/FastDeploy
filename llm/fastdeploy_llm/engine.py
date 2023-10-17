@@ -446,7 +446,6 @@ def dy_input_preprocess(inputs):
                                                 dtype=args.dtype)
                         arange_tensor_encoder[i, :, :length + max_prefix_len] = paddle.arange(
                             length + max_prefix_len).astype(args.dtype)
-                        inputs["tgt_pos"] = inputs["tgt_pos"] + max_prefix_len
 
                         
             else:
@@ -499,6 +498,8 @@ def dy_input_preprocess(inputs):
     inputs["attention_mask"] = attention_mask
 
     if "bloom" in args.architecture:
+        if args.is_ptuning:
+            inputs["tgt_pos"] = inputs["tgt_pos"] + max_prefix_len
         inputs["arange_tensor_encoder"] = arange_tensor_encoder
         update_mask_for_bloom(inputs)
 
