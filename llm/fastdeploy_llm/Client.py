@@ -25,7 +25,9 @@ from tritonclient.utils import *
 
 import api_client
 
+
 class UserData:
+
     def __init__(self):
         self._completed_requests = queue.Queue()
 
@@ -38,14 +40,13 @@ def callback(user_data, result, error):
 
 
 class grpcClient:
-    def __init__(
-        self,
-        base_url: str,
-		model_name: str,
-		model_version: str = "1",
-        timeout: int = 100,
-        openai_port: int = None
-    ):
+
+    def __init__(self,
+                 base_url: str,
+                 model_name: str,
+                 model_version: str = "1",
+                 timeout: int = 100,
+                 openai_port: int = None):
         """
         Args:
             base_url (`str`): inference server grpc url
@@ -57,23 +58,29 @@ class grpcClient:
         self._model_name = model_name
         self._model_version = model_version
         self.timeout = timeout
-        self._client = grpcclient.InferenceServerClient(
-            base_url, verbose=False)
-        
+        self._client = grpcclient.InferenceServerClient(base_url,
+                                                        verbose=False)
+
         error = self._verify_triton_state(self._client)
         if error:
             raise RuntimeError(
                 f"Could not communicate to Triton Server: {error}")
 
-        self.inputs = [grpcclient.InferInput("IN", [1], np_to_triton_dtype(np.object_))]
+        self.inputs = [
+            grpcclient.InferInput("IN", [1], np_to_triton_dtype(np.object_))
+        ]
         self.outputs = [grpcclient.InferRequestedOutput("OUT")]
         self.has_init = False
         self.user_data = UserData()
 
         if openai_port is not None:
-            pd_cmd = "python3 api_client.py --url {0} --port {1} --model {2}".format(base_url, openai_port, model_name)
-            subprocess.Popen(pd_cmd, shell=True, stdout=subprocess.PIPE,
-                                               stderr=subprocess.STDOUT, preexec_fn=os.setsid)
+            pd_cmd = "python3 api_client.py --url {0} --port {1} --model {2}".format(
+                base_url, openai_port, model_name)
+            subprocess.Popen(pd_cmd,
+                             shell=True,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT,
+                             preexec_fn=os.setsid)
             time.sleep(5)
 
     def _verify_triton_state(self, triton_client):
@@ -85,22 +92,20 @@ class grpcClient:
                                               self._model_version):
             return f"Model {self._model_name}:{self._model_version} is not ready"
         return None
-    
-    def generate(
-        self,
-        prompt: str,
-        request_id: str = "0",
-        top_p: float = 0.0,
-        temperature: float = 1.0,
-        max_dec_len: int = 1024,
-        min_dec_len: int = 2,
-        penalty_score: float = 1.0,
-        frequency_score: float = 0.99,
-        eos_token_id: int =2,
-        presence_score: float = 0.0,
-        stream: bool=False
-    ):
-        
+
+    def generate(self,
+                 prompt: str,
+                 request_id: str = "0",
+                 top_p: float = 0.0,
+                 temperature: float = 1.0,
+                 max_dec_len: int = 1024,
+                 min_dec_len: int = 2,
+                 penalty_score: float = 1.0,
+                 frequency_score: float = 0.99,
+                 eos_token_id: int = 2,
+                 presence_score: float = 0.0,
+                 stream: bool = False):
+
         req_dict = {
             "text": prompt,
             "topp": top_p,
@@ -112,15 +117,19 @@ class grpcClient:
             "eos_token_id": eos_token_id,
             "model_test": "test",
             "presence_score": presence_score
-            }
+        }
 
         try:
             if not self.has_init:
-                self._client.start_stream(callback=partial(callback, self.user_data))
+                self._client.start_stream(
+                    callback=partial(callback, self.user_data))
                 self.has_init = True
             else:
                 self.user_data.reset()
-                self.inputs = [grpcclient.InferInput("IN", [1], np_to_triton_dtype(np.object_))]
+                self.inputs = [
+                    grpcclient.InferInput("IN", [1],
+                                          np_to_triton_dtype(np.object_))
+                ]
                 self.outputs = [grpcclient.InferRequestedOutput("OUT")]
 
             in_data = np.array([json.dumps(req_dict)], dtype=np.object_)
@@ -135,9 +144,11 @@ class grpcClient:
             else:
                 completion = ""
             while True:
-                data_item = self.user_data._completed_requests.get(timeout=self.timeout)
+                data_item = self.user_data._completed_requests.get(
+                    timeout=self.timeout)
                 if type(data_item) == InferenceServerException:
-                    print('Exception:', 'status', data_item.status(), 'msg', data_item.message())
+                    print('Exception:', 'status', data_item.status(), 'msg',
+                          data_item.message())
                 else:
                     results = data_item.as_numpy("OUT")[0]
                     data = json.loads(results)

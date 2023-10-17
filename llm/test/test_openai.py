@@ -19,18 +19,15 @@ model = "llama-ptuning"
 port = 2001
 url = "0.0.0.0:8812"
 
-client = grpcClient(base_url= url, model_name= model, openai_port= port)
+client = grpcClient(base_url=url, model_name=model, openai_port=port)
 
 # Modify OpenAI's API key and API base.
 openai.api_key = "EMPTY"
 openai.api_base = "http://0.0.0.0:" + str(port) + "/v1"
 
-
 # Completion API
 completion = openai.Completion.create(
-    model=model,
-    prompt="A robot may not injure a human being"
-)
+    model=model, prompt="A robot may not injure a human being")
 
 print("Completion results:")
 print(completion)
@@ -55,4 +52,3 @@ chat_completion = openai.ChatCompletion.create(
     }])
 print("Chat completion results:")
 print(chat_completion)
-
