@@ -413,7 +413,7 @@ def dy_input_preprocess(inputs):
                             paddle.ones(
                               shape=[length, length], dtype=args.dtype))
                     if not model_id:
-                        attention_mask[i, 0, :length, :
+                        attention_mask[i, :, :length, :
                                     max_prefix_len] = paddle.zeros(
                                         [1, length, max_prefix_len],
                                         dtype=args.dtype)
@@ -421,7 +421,7 @@ def dy_input_preprocess(inputs):
                         shape=[1, length], dtype=args.dtype
                     )
                     else:
-                        attention_mask[i, 0, :length, :
+                        attention_mask[i, :, :length, :
                                     max_prefix_len] = paddle.ones(
                                         [1, length, max_prefix_len],
                                         dtype=args.dtype)
@@ -430,7 +430,7 @@ def dy_input_preprocess(inputs):
                                                 shape=[1, max_prefix_len + length],
                                                 dtype=args.dtype)
                     
-                    attention_mask[i, 0, :length, max_prefix_len:max_prefix_len +
+                    attention_mask[i, :, :length, max_prefix_len:max_prefix_len +
                                 length] = paddle.tril(
                                     paddle.ones(
                                         shape=[length, length],
