@@ -95,7 +95,7 @@ class Config:
         elif "n_head" in config:
             self.num_attention_heads = config["n_head"]
         else:
-            raise Exception("Cannot find num_attention_hjeads in {}.".format(
+            raise Exception("Cannot find num_attention_heads in {}.".format(
                 os.path.join(model_dir, "config.json")))
 
         self.hidden_size = int(config["hidden_size"])
