@@ -450,11 +450,8 @@ def dy_input_preprocess(inputs):
                         
             else:
                 if "chatglm" in args.architecture:
-                    # todo： check alignment with paddlenlp: 
-                    # attention_mask[i, 0, :length, :length] = 1 
-                    # attention_mask[i, 0, :length - 1, length - 1] = 0
-                    attention_mask[i, 0, :length, :length] = 0
-                    attention_mask[i, 0, :length - 1, length - 1] = 1
+                    attention_mask[i, 0, :length, :length] = 1 
+                    attention_mask[i, 0, :length - 1, length - 1] = 0
                     tgt_pos[i, 0, 0] = paddle.to_tensor(
                         [length], dtype="int64")
                     tgt_generation_mask[i, 0, 0, :length] = paddle.ones(
