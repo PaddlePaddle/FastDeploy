@@ -23,11 +23,11 @@ class ServingModel:
     def __init__(self, config):
         self.config = config
 
-        if self.config.is_arch("chatglm") or self.config.is_arch("bloom"):
-            logger.warning(
-                "Dynamic batching will be disabled for model ChatGLM/BLOOM now!"
-            )
-            self.config.disable_dynamic_batching = 1
+        # if self.config.is_arch("chatglm") or self.config.is_arch("bloom"):
+        #     logger.warning(
+        #         "Dynamic batching will be disabled for model ChatGLM/BLOOM now!"
+        #     )
+        #     self.config.disable_dynamic_batching = 1
 
         logger.info("=============== Debug Information ===============")
         for k, v in self.config.__dict__.items():
