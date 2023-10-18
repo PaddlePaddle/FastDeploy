@@ -49,7 +49,7 @@ def parse_args():
     parser.add_argument(
         '-m', '--model_dir', type=str, default='./output', help='model dir')
     parser.add_argument(
-        '-mp', '--mp_degree', type=int, default=8, help='mp degree')
+        '-mp', '--mp_degree', type=int, default=1, help='mp degree')
     parser.add_argument(
         '-bs', '--batch_size', type=int, default=34, help='batch size')
     parser.add_argument(
@@ -172,6 +172,11 @@ else:
     position_ids = paddle.full(
         shape=[args.batch_size, args.max_seq_len], fill_value=0, dtype='int64')
 
+if "bloom" in args.architecture:
+    arange_tensor_encoder = paddle.zeros(
+        shape=(args.batch_size, 1, args.max_seq_len + args.max_dec_len),
+        dtype=args.dtype)
+
 
 class DygraphEngine(object):
     def __init__(self, model_dir, architecture, mp_degree):
@@ -250,8 +255,12 @@ class InferenceEngine(object):
             dist_config.set_ranks(self.nranks, self.rank)
             dist_config.set_endpoints(trainer_endpoints, current_endpoint)
             dist_config.enable_dist_model(True)
-            dist_config.set_comm_init_config(
-                os.path.join(args.model_dir, "rank_mapping.csv"))
+            parent_dir = os.path.abspath(os.path.join(self.model_dir, ".."))
+            mapping_file = os.path.join(parent_dir, "rank_mapping.csv")
+
+            if self.mp_degree > 1 and not os.path.exists(mapping_file):
+                raise Exception("There's no file {}.".format(mapping_file))
+            dist_config.set_comm_init_config(mapping_file)
             config.set_dist_config(dist_config)
             print(
                 f'Init distributed config with {dist_config}, mp_degree: {self.mp_degree}',
@@ -291,81 +300,175 @@ class InferenceEngine(object):
         ), tgt_pos.copy_to_cpu()
 
 
+def generate_position_ids_for_chatglm(seq_len_list):
+    if isinstance(seq_len_list, np.ndarray):
+        seq_len_list = seq_len_list.flatten().tolist()
+    max_len = max(seq_len_list)
+    position_ids = list()
+    for i in range(len(seq_len_list)):
+        seq_length = max(seq_len_list[i], 2)
+        position_id = np.arange(seq_length, dtype=np.int64)
+        position_id[seq_length - 1:] = seq_length - 2
+        block_position_id = np.concatenate([
+            np.zeros(
+                seq_length - 1, dtype=np.int64), np.arange(
+                    1, 2, dtype=np.int64)
+        ])
+        position_id = np.stack([position_id, block_position_id], axis=0)
+        position_id = np.array([
+            list(inst) + [0] * (max_len - len(inst)) for inst in position_id
+        ])
+        position_ids.append(position_id)
+    return np.array(position_ids).astype(np.int64)
+
+
+def update_mask_for_bloom(inputs):
+    import math
+    global attention_mask
+    global tgt_generation_mask
+
+    def get_alibi_slopes(num_heads):
+        closest_power_of_2 = 2**math.floor(math.log2(num_heads))
+        base = 2**(-(2**-(math.log2(closest_power_of_2) - 3)))
+        powers = np.arange(1, 1 + closest_power_of_2)
+        slopes = np.power(base, powers)
+
+        if closest_power_of_2 != num_heads:
+            extra_base = 2**(-(2**-(math.log2(2 * closest_power_of_2) - 3)))
+            num_remaining_heads = min(closest_power_of_2,
+                                      num_heads - closest_power_of_2)
+            extra_powers = np.arange(1, 1 + 2 * num_remaining_heads, 2)
+            slopes = np.concatante(
+                [slopes, np.power(extra_base, extra_powers)], axis=0)
+
+        return slopes.astype("float32")
+
+    arange_tensor_encoder = inputs["arange_tensor_encoder"]
+    del inputs["arange_tensor_encoder"]
+
+    alibi_slopes = get_alibi_slopes(args.num_attention_heads)
+    inputs["position_ids"] = paddle.to_tensor(alibi_slopes, dtype="float32")
+    alibi = alibi_slopes[..., None] * arange_tensor_encoder
+    alibi = alibi[:, :, None, :]
+
+    if args.mp_degree > 1:
+        raise Exception("Doesn't support mp_degree > 1, bot now it's {}.".
+                        format(args.mp_degree))
+
+    alibi_encoder = alibi.expand([
+        args.batch_size, args.num_attention_heads // args.mp_degree,
+        args.max_seq_len + args.max_dec_len,
+        args.max_seq_len + args.max_dec_len
+    ])
+    alibi_decoder = alibi.expand([
+        args.batch_size, args.num_attention_heads // args.mp_degree, 1,
+        args.max_seq_len + args.max_dec_len
+    ])
+
+    inputs["attention_mask"] = (
+        alibi_encoder + (1 - inputs["attention_mask"]
+                         ) * paddle.finfo(inputs["attention_mask"].dtype).min)
+    attention_mask = inputs["attention_mask"]
+    tgt_generation_mask  = inputs["tgt_generation_mask"]
+    inputs["tgt_generation_mask"] = (
+        alibi_decoder + (1 - inputs["tgt_generation_mask"]) *
+        paddle.finfo(inputs["tgt_generation_mask"].dtype).min)
+
+
 def dy_input_preprocess(inputs):
     """
     prepare input for dybatch inference
     """
-
-    def generate_position_ids_for_chatglm(seq_len_list):
-        if isinstance(seq_len_list, np.ndarray):
-            seq_len_list = seq_len_list.flatten().tolist()
-        max_len = max(seq_len_list)
-        position_ids = list()
-        for i in range(len(seq_len_list)):
-            seq_length = max(seq_len_list[i], 2)
-            position_id = np.arange(seq_length, dtype=np.int64)
-            position_id[seq_length - 1:] = seq_length - 2
-            block_position_id = np.concatenate([
-                np.zeros(
-                    seq_length - 1, dtype=np.int64), np.arange(
-                        1, 2, dtype=np.int64)
-            ])
-            position_id = np.stack([position_id, block_position_id], axis=0)
-            position_id = np.array([
-                list(inst) + [0] * (max_len - len(inst))
-                for inst in position_id
-            ])
-            position_ids.append(position_id)
-        return np.array(position_ids).astype(np.int64)
-
     stop_flags = inputs["dyinput_flags"]
     dec_length = inputs["seq_len_decoder"]
+    enc_length = inputs["seq_len_encoder"]
     bsz = len(stop_flags)
 
     tgt_pos = paddle.ones(shape=(bsz, 2, 1), dtype="int64")
 
     for i in range(bsz):
         if stop_flags[i] == 1:
-            length = int(dec_length[i, 0])
+            attention_mask[i] = 0
+            tgt_generation_mask[i] = 0
+            length = int(enc_length[i, 0])
             if args.is_ptuning:
                 model_id = inputs['model_id'][i]
-                if not model_id:
-                    attention_mask[i, 0, :length, :
-                                   max_prefix_len] = paddle.zeros(
-                                       [1, length, max_prefix_len],
-                                       dtype=args.dtype)
-                else:
-                    attention_mask[i, 0, :length, :
-                                   max_prefix_len] = paddle.ones(
-                                       [1, length, max_prefix_len],
-                                       dtype=args.dtype)
-                attention_mask[i, 0, :length, max_prefix_len:max_prefix_len +
-                               length] = paddle.tril(
-                                   paddle.ones(
-                                       shape=[length, length],
-                                       dtype=args.dtype))
-                position_ids[i, :max_prefix_len] = 0
-                position_ids[i, max_prefix_len:max_prefix_len + inputs[
-                    "input_ids"].shape[1]] = paddle.arange(inputs["input_ids"]
-                                                           .shape[1])
-                tgt_generation_mask[i, 0, 0, :max_prefix_len +
-                                    length] = paddle.ones(
-                                        shape=[1, max_prefix_len + length],
-                                        dtype=args.dtype)
-            else:
                 if "chatglm" in args.architecture:
-                    attention_mask[i, 0, :length, :length] = 0
-                    attention_mask[i, 0, :length - 1, length - 1] = 1
+                    attention_mask[i, 0, :length, : length+max_prefix_len] = 1
+                    attention_mask[i, 0, :length - 1,  length+max_prefix_len - 1] = 0
                     tgt_pos[i, 0, 0] = paddle.to_tensor(
                         [length], dtype="int64")
+                    
+                    if not model_id:
+                        tgt_generation_mask[i, 0, 0, max_prefix_len : length + max_prefix_len] = paddle.ones(
+                        shape=[1, length], dtype=args.dtype
+                    )
+                    else:
+                        tgt_generation_mask[i, 0, 0, : length + max_prefix_len] = paddle.ones(
+                        shape=[1, length + max_prefix_len], dtype=args.dtype
+                    )
                 else:
+                    if "bloom" in args.architecture:
+                         attention_mask[i, :, :length, :length] = paddle.tril(
+                            paddle.ones(
+                              shape=[length, length], dtype=args.dtype))
+                    if not model_id:
+                        attention_mask[i, :, :length, :
+                                    max_prefix_len] = paddle.zeros(
+                                        [1, length, max_prefix_len],
+                                        dtype=args.dtype)
+                        tgt_generation_mask[i, 0, 0, max_prefix_len : length + max_prefix_len] = paddle.ones(
+                        shape=[1, length], dtype=args.dtype
+                    )
+                    else:
+                        attention_mask[i, :, :length, :
+                                    max_prefix_len] = paddle.ones(
+                                        [1, length, max_prefix_len],
+                                        dtype=args.dtype)
+                        tgt_generation_mask[i, 0, 0, :max_prefix_len +
+                                            length] = paddle.ones(
+                                                shape=[1, max_prefix_len + length],
+                                                dtype=args.dtype)
+                    
+                    attention_mask[i, :, :length, max_prefix_len:max_prefix_len +
+                                length] = paddle.tril(
+                                    paddle.ones(
+                                        shape=[length, length],
+                                        dtype=args.dtype))
+                    position_ids[i, :max_prefix_len] = 0
+                    position_ids[i, max_prefix_len:max_prefix_len + inputs[
+                        "input_ids"].shape[1]] = paddle.arange(inputs["input_ids"]
+                                                            .shape[1])
+                    if "bloom" in args.architecture:
+                        tgt_generation_mask[i, :, 0, :max_prefix_len +
+                                            length] = paddle.ones(
+                                                shape=[1, max_prefix_len + length],
+                                                dtype=args.dtype)
+                        arange_tensor_encoder[i, :, :length + max_prefix_len] = paddle.arange(
+                            length + max_prefix_len).astype(args.dtype)
+
+                        
+            else:
+                if "chatglm" in args.architecture:
+                    attention_mask[i, 0, :length, :length] = 1 
+                    attention_mask[i, 0, :length - 1, length - 1] = 0
+                    tgt_pos[i, 0, 0] = paddle.to_tensor(
+                        [length], dtype="int64")
+                    tgt_generation_mask[i, 0, 0, :length] = paddle.ones(
+                        shape=[1, length], dtype=args.dtype)
+                else:
+
                     position_ids[i, :length] = paddle.arange(length)
                     attention_mask[i, 0, :length, :length] = paddle.tril(
                         paddle.ones(
                             shape=[length, length], dtype=args.dtype))
-                tgt_generation_mask[i, 0, 0, :length] = paddle.ones(
-                    shape=[1, length], dtype=args.dtype)
-            pre_ids[i:i + 1] = -1
+                    tgt_generation_mask[i, 0, 0, :length] = paddle.ones(
+                        shape=[1, length], dtype=args.dtype)
+                if "bloom" in args.architecture:
+                    arange_tensor_encoder[i, :, :length] = paddle.arange(
+                        length).astype(args.dtype)
+            if "bloom" not in args.architecture:  # to check, whether chatglm and llama both not need this
+                pre_ids[i:i + 1] = -1
     del inputs["dyinput_flags"]
     # ChatGLM doesn't use pre-allocated position_ids
     if "chatglm" not in args.architecture:
@@ -373,7 +476,7 @@ def dy_input_preprocess(inputs):
     inputs["tgt_generation_mask"] = tgt_generation_mask
     if "chatglm" in args.architecture:
         inputs["tgt_pos"] = tgt_pos
-        inputs["position_ids"] = generate_position_ids_for_chatglm(dec_length)
+        inputs["position_ids"] = generate_position_ids_for_chatglm(enc_length)
     if args.is_ptuning:
         prefix_caches = []
         for model_id in inputs['model_id']:
@@ -390,6 +493,13 @@ def dy_input_preprocess(inputs):
             inputs[f"pre_caches_{index}"] = new_prefix_caches[index]
         del inputs['model_id']
     inputs["attention_mask"] = attention_mask
+
+    if "bloom" in args.architecture:
+        if args.is_ptuning:
+            inputs["tgt_pos"] = inputs["tgt_pos"] + max_prefix_len
+        inputs["arange_tensor_encoder"] = arange_tensor_encoder
+        update_mask_for_bloom(inputs)
+
     return inputs
 
 

@@ -63,7 +63,7 @@ class DataProcessor:
     def encode(self, text, padding=False, max_length=None):
         tokens = self.tokenizer(
             text, return_tensors="np", padding=padding, max_length=max_length)
-        return tokens["input_ids"][0], tokens["position_ids"][0]
+        return tokens["input_ids"][0], None
 
     def batch_encode_tasks(self, tasks, padding=False, max_length=None):
         """
@@ -90,7 +90,7 @@ class DataProcessor:
                     padding=padding,
                     max_length=max_length)
                 input_ids.append(tokens["input_ids"][0])
-                position_ids.append(tokens["position_ids"][0])
+                position_ids.append(None)
         input_ids, real_tokens_len = pad_batch_data(
             input_ids, pad_id=self.pad_token_id, return_seq_len=True)
         return input_ids, real_tokens_len.tolist(), position_ids
