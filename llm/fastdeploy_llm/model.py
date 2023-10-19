@@ -402,7 +402,6 @@ class Model:
                     tgt_pos += [
                         tasks[i].decode_status["seq_lens_decoder"] -
                         tasks[i].decode_status["step_idx"] + 1,
-                        tasks[i].decode_status["step_idx"] + 1
                     ]
                 else:
                     tgt_pos.append(tasks[i].decode_status["tgt_pos"])
