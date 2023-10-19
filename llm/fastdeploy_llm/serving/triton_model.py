@@ -122,11 +122,12 @@ class TritonPythonModel:
                 continue
 
             # 2. validate the deserializing process
+            task = Task()
             try:
                 task.from_dict(data)
             except Exception as e:
                 error_res = pb_utils.InferenceResponse(error=pb_utils.TritonError(
-                    "There's error while deserializing data from reqeust, error={}".
+                    "There's error while deserializing data from request, error={}".
                     format(e)))
                 res_sender = request.get_response_sender()
                 res_sender.send(
@@ -135,7 +136,6 @@ class TritonPythonModel:
                 continue
 
             # 3. check if exists task id conflict
-            task = Task()
             if task.task_id is None:
                 task.task_id = str(uuid.uuid4())
             if task.task_id in self.response_handler:
