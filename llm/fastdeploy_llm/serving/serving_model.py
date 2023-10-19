@@ -23,9 +23,9 @@ class ServingModel:
     def __init__(self, config):
         self.config = config
 
-        if self.config.is_arch("chatglm") or self.config.is_arch("bloom"):
+        if self.config.is_arch("bloom"):
             logger.warning(
-                "Dynamic batching will be disabled for model ChatGLM/BLOOM now!"
+                "Dynamic batching will be disabled for model BLOOM now!"
             )
             self.config.disable_dynamic_batching = 1
 
