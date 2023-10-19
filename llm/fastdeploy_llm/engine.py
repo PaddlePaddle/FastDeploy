@@ -475,7 +475,7 @@ def dy_input_preprocess(inputs):
         inputs["position_ids"] = position_ids
     inputs["tgt_generation_mask"] = tgt_generation_mask
     if "chatglm" in args.architecture:
-        inputs["tgt_pos"] = tgt_pos
+        # inputs["tgt_pos"] = tgt_pos
         inputs["position_ids"] = generate_position_ids_for_chatglm(enc_length)
     if args.is_ptuning:
         prefix_caches = []
