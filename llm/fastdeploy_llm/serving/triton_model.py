@@ -126,7 +126,7 @@ class TritonPythonModel:
                 task.from_dict(data)
             except Exception as e:
                 error_res = pb_utils.InferenceResponse(error=pb_utils.TritonError(
-                    "There's error while deserializing data from reqeust, error={}".
+                    "There's error while deserializing data from request, error={}".
                     format(e)))
                 res_sender = request.get_response_sender()
                 res_sender.send(
