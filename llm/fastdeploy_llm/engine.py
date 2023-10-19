@@ -368,11 +368,11 @@ def update_mask_for_bloom(inputs):
     inputs["attention_mask"] = (
         alibi_encoder + (1 - inputs["attention_mask"]
                          ) * paddle.finfo(inputs["attention_mask"].dtype).min)
-    attention_mask = inputs["attention_mask"]
-    tgt_generation_mask  = inputs["tgt_generation_mask"]
     inputs["tgt_generation_mask"] = (
         alibi_decoder + (1 - inputs["tgt_generation_mask"]) *
         paddle.finfo(inputs["tgt_generation_mask"].dtype).min)
+    attention_mask = inputs["attention_mask"]
+    tgt_generation_mask  = inputs["tgt_generation_mask"]
 
 
 def dy_input_preprocess(inputs):
