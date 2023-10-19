@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .model import Model
-from .serving.serving_model import ServingModel
-from .task import Task, BatchTask
-from .config import Config
-from . import utils
-from . import Client
+from fastdeploy_llm.Client import grpcClient
+
+client = grpcClient(base_url="0.0.0.0:8812",
+                    model_name="llama-ptuning",
+                    timeout=100)
+result = client.generate("Hello, how are you")
+print(result)
