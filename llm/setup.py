@@ -16,7 +16,7 @@ import setuptools
 
 setuptools.setup(
     name="fastdeploy-llm",
-    version="0.0.3",
+    version="0.0.4",
     author="fastdeploy",
     author_email="fastdeploy@baidu.com",
     description="FastDeploy for Large Language Model",
@@ -28,5 +28,6 @@ setuptools.setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ],
+    extras_require={"client": ['grpcio', 'tritonclient']},
     license='Apache 2.0')
 #    entry_points={'console_scripts': ['x2paddle=x2paddle.convert:main', ]})

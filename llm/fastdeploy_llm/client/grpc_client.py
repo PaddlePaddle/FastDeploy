@@ -20,9 +20,12 @@ import os
 import time
 import numpy as np
 import subprocess
-import tritonclient.grpc as grpcclient
-from tritonclient.utils import *
 from fastdeploy_llm.utils.logging_util import logger
+try:
+    import tritonclient.grpc as grpcclient
+    from tritonclient.utils import *
+except:
+    pass
 
 
 class UserData:
@@ -69,6 +72,9 @@ class GrpcClient:
                  eos_token_id: int=2,
                  presence_score: float=0.0,
                  stream: bool=False):
+        import tritonclient.grpc as grpcclient
+        from tritonclient.utils import *
+
         user_data = UserData()
         req_dict = {
             "text": prompt,
@@ -135,6 +141,9 @@ class GrpcClient:
                        eos_token_id: int=2,
                        presence_score: float=0.0,
                        stream: bool=False):
+        import tritonclient.grpc as grpcclient
+        from tritonclient.utils import *
+
         user_data = UserData()
         req_dict = {
             "text": prompt,
