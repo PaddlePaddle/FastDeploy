@@ -15,7 +15,6 @@ import re
 
 import numpy as np
 
-import paddlenlp
 from fastdeploy_llm.task import Task, TaskStatus
 
 
@@ -42,6 +41,7 @@ class DataProcessor:
     """
 
     def __init__(self, model_dir):
+        import paddlenlp
         self.tokenizer = paddlenlp.transformers.AutoTokenizer.from_pretrained(
             model_dir)
         self.pad_token_id = self.tokenizer(
