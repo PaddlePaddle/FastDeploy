@@ -402,7 +402,7 @@ class Model:
                     tgt_pos += [
                         tasks[i].decode_status["seq_lens_decoder"] -
                         tasks[i].decode_status["step_idx"] + 1,
-                        tasks[i].decode_status["step_idx"]
+                        tasks[i].decode_status["step_idx"] + 1
                     ]
                 else:
                     tgt_pos.append(tasks[i].decode_status["tgt_pos"])
@@ -460,7 +460,6 @@ class Model:
         tgt_ids = np.array(tgt_ids).astype("int64").reshape(-1, 1)
         stop_flags = np.array(stop_flags).astype("bool").reshape(-1, 1)
         step_idx = np.array(step_idx).astype("int64").reshape(-1, 1)
-        dyinput_flags = np.array(dyinput_flags, dtype='bool')
 
         finished_num = np.sum(stop_flags)
         if stop_nums < finished_num:

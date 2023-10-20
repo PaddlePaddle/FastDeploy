@@ -365,12 +365,21 @@ def update_mask_for_bloom(inputs):
         args.max_seq_len + args.max_dec_len
     ])
 
-    inputs["attention_mask"] = (
-        alibi_encoder + (1 - inputs["attention_mask"]
-                         ) * paddle.finfo(inputs["attention_mask"].dtype).min)
-    inputs["tgt_generation_mask"] = (
-        alibi_decoder + (1 - inputs["tgt_generation_mask"]) *
-        paddle.finfo(inputs["tgt_generation_mask"].dtype).min)
+    if inputs["attention_mask"].shape[1] == 1:
+        inputs["attention_mask"] = paddle.repeat_interleave(
+            inputs["attention_mask"].cast("float32"), 32,
+            axis=1).cast("float16")
+        inputs["tgt_generation_mask"] = paddle.repeat_interleave(
+            inputs["tgt_generation_mask"].cast("float32"), 32,
+            axis=1).cast("float16")
+    for i, flag in enumerate(inputs["dyinput_flags"]):
+        if flag == 1:
+            inputs["attention_mask"][i] = (
+                alibi_encoder[i] + (1 - inputs["attention_mask"][i]) *
+                paddle.finfo(inputs["attention_mask"].dtype).min)
+            inputs["tgt_generation_mask"][i] = (
+                alibi_decoder[i] + (1 - inputs["tgt_generation_mask"][i]) *
+                paddle.finfo(inputs["tgt_generation_mask"].dtype).min)
     attention_mask = inputs["attention_mask"]
     tgt_generation_mask = inputs["tgt_generation_mask"]
 
@@ -459,17 +468,16 @@ def dy_input_preprocess(inputs):
                         shape=[1, length], dtype=args.dtype)
                 else:
                     position_ids[i, :length] = paddle.arange(length)
-                    attention_mask[i, 0, :length, :length] = paddle.tril(
+                    attention_mask[i, :, :length, :length] = paddle.tril(
                         paddle.ones(
                             shape=[length, length], dtype=args.dtype))
-                    tgt_generation_mask[i, 0, 0, :length] = paddle.ones(
+                    tgt_generation_mask[i, :, 0, :length] = paddle.ones(
                         shape=[1, length], dtype=args.dtype)
                 if "bloom" in args.architecture:
                     arange_tensor_encoder[i, :, :length] = paddle.arange(
                         length).astype(args.dtype)
             if "bloom" not in args.architecture:  # to check, whether chatglm and llama both not need this
                 pre_ids[i:i + 1] = -1
-    del inputs["dyinput_flags"]
     # ChatGLM doesn't use pre-allocated position_ids
     if "chatglm" not in args.architecture:
         inputs["position_ids"] = position_ids
@@ -495,9 +503,13 @@ def dy_input_preprocess(inputs):
 
     if "bloom" in args.architecture:
         if args.is_ptuning:
-            inputs["tgt_pos"] = inputs["tgt_pos"] + max_prefix_len
+            for i, flag in enumerate(inputs["dyinput_flags"]):
+                if flag == 1:
+                    inputs["tgt_pos"][i] = inputs["tgt_pos"][
+                        i] + max_prefix_len
         inputs["arange_tensor_encoder"] = arange_tensor_encoder
         update_mask_for_bloom(inputs)
+    del inputs["dyinput_flags"]
 
     return inputs
 
