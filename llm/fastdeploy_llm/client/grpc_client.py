@@ -73,7 +73,7 @@ class GrpcClient:
                  presence_score: float=0.0,
                  stream: bool=False):
         import tritonclient.grpc as grpcclient
-        from tritonclient.utils import *
+        #from tritonclient.utils import *
 
         user_data = UserData()
         req_dict = {
@@ -142,7 +142,7 @@ class GrpcClient:
                        presence_score: float=0.0,
                        stream: bool=False):
         import tritonclient.grpc as grpcclient
-        from tritonclient.utils import *
+        #from tritonclient.utils import *
 
         user_data = UserData()
         req_dict = {
