@@ -298,9 +298,9 @@ class Model:
         for i in range(len(tasks)):
             tasks[i].decode_status["finished_id"] = int(info["finished_ids"][
                 i])
-            # TODO JiangJiajun
             if self.config.is_arch("chatglm"):
-                tasks[i].decode_status["tgt_pos"] = int(info["tgt_pos"][i][0])
+                tasks[i].decode_status["tgt_pos"] = info["tgt_pos"][i].flatten(
+                ).tolist()
             else:
                 tasks[i].decode_status["tgt_pos"] = int(info["tgt_pos"][i])
 
@@ -398,9 +398,14 @@ class Model:
                 inputs["model_id"].append(tasks[i].model_id)
             length = inputs["num_input_tokens"][i]
             if tasks[i].status == TaskStatus.DECODING:
-                tgt_pos.append(tasks[i].decode_status["tgt_pos"])
                 if self.config.is_arch("chatglm"):
-                    tgt_pos.append(1)
+                    tgt_pos += [
+                        tasks[i].decode_status["seq_lens_decoder"] -
+                        tasks[i].decode_status["step_idx"] + 1,
+                        tasks[i].decode_status["step_idx"]
+                    ]
+                else:
+                    tgt_pos.append(tasks[i].decode_status["tgt_pos"])
                 sequence_lengths_encoder[i] = 0
                 sequence_lengths_decoder[i] = tasks[i].decode_status[
                     "seq_lens_decoder"]
