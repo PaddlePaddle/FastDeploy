@@ -18,6 +18,7 @@ from collections import OrderedDict
 import numpy as np
 import paddle
 import paddle.distributed.fleet as fleet
+from fastdeploy_llm.utils.logging_util import logger
 
 
 def is_exist(model_prompt_path):
@@ -47,15 +48,18 @@ def get_prefix_caches(model_prompt_dir_path, model_id, num_layers,
         if model_id_index in model_prompt_dict:
             prefix_prompt_split = model_prompt_dict[model_id_index]
         else:
-            prefix_prompt = np.load(model_prompt_path)
-            # for all_gather prompt
-            worker_range = prefix_prompt.shape[3] // fleet.worker_num()
-            start_index = fleet.worker_index() * worker_range
-            end_index = (fleet.worker_index() + 1) * worker_range
-            prefix_prompt_split = paddle.to_tensor(
-                prefix_prompt[:, :, :, start_index:end_index, :])
-            model_prompt_dict[model_id_index] = prefix_prompt_split
-
+            try:
+                prefix_prompt = np.load(model_prompt_path)
+                # for all_gather prompt
+                worker_range = prefix_prompt.shape[3] // fleet.worker_num()
+                start_index = fleet.worker_index() * worker_range
+                end_index = (fleet.worker_index() + 1) * worker_range
+                prefix_prompt_split = paddle.to_tensor(
+                    prefix_prompt[:, :, :, start_index:end_index, :])
+                model_prompt_dict[model_id_index] = prefix_prompt_split
+            except:
+                logger.error("Exception happend while load prefix cache: {}, will fallback to situation without prefix.".format(model_prompt_path)) 
+                return np.zeros([num_layers, 2, num_attention_heads, prompt_num // fleet.worker_num(), hidden_size // num_attention_heads], dtype=float_type)
         return prefix_prompt_split.astype(float_type).numpy()
     else:
         # Construct an embedding with no prefix caches

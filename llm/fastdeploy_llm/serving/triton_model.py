@@ -110,6 +110,8 @@ class TritonPythonModel:
             # 1. validate the request data
             try:
                 data = json.loads(request_tensor.as_numpy()[0])
+                if isinstance(data, list):
+                    data = data[0]
             except Exception as e:
                 error_res = pb_utils.InferenceResponse(
                     error=pb_utils.TritonError(
