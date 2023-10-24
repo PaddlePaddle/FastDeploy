@@ -321,6 +321,15 @@ def generate_position_ids_for_chatglm(seq_len_list):
         position_ids.append(position_id)
     return np.array(position_ids).astype(np.int64)
 
+def generate_position_ids_for_gpt(seq_len_list):
+    if isinstance(seq_len_list, np.ndarray):
+        seq_len_list = seq_len_list.flatten().tolist()
+    position_ids = paddle.arange(sum(seq_len_list), dtype="int64")
+    pre_len = seq_len_list[0]
+    for length in seq_len_list[1:]:
+        position_ids[pre_len : length + pre_len] = position_ids[pre_len : length + pre_len] - pre_len
+        pre_len += length
+    return position_ids
 
 def update_mask_for_bloom(inputs):
     import math
@@ -484,6 +493,8 @@ def dy_input_preprocess(inputs):
     inputs["tgt_generation_mask"] = tgt_generation_mask
     if "chatglm" in args.architecture:
         inputs["position_ids"] = generate_position_ids_for_chatglm(enc_length)
+    if "gpt" in args.architecture:
+        inputs["position_ids"] = generate_position_ids_for_gpt(enc_length)
     if args.is_ptuning:
         prefix_caches = []
         for model_id in inputs['model_id']:

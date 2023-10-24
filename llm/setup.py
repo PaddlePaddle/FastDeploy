@@ -16,7 +16,7 @@ import setuptools
 
 setuptools.setup(
     name="fastdeploy-llm",
-    version="0.0.6",
+    version="0.0.7",
     author="fastdeploy",
     author_email="fastdeploy@baidu.com",
     description="FastDeploy for Large Language Model",
