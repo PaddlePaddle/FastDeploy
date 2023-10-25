@@ -89,7 +89,6 @@ class TritonPythonModel:
         config.disable_dynamic_batching = int(
             parse(parameters, "DISABLE_DYNAMIC_BATCHING", 0))
         config.max_queue_num = int(parse(parameters, "MAX_QUEUE_NUM", 512))
-        config.eos_token_id = set([int(parse(parameters, "EOS_TOKEN_ID"))])
         config.is_ptuning = int(parse(parameters, "IS_PTUNING", 0))
         if config.is_ptuning:
             config.model_prompt_dir_path = parse(parameters,
