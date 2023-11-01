@@ -48,6 +48,8 @@ struct OrtBackendOption {
   void* external_stream_ = nullptr;
   /// Use fp16 to infer
   bool enable_fp16 = false;
+  /// file path for optimized model
+  std::string optimized_model_filepath;
 
   std::vector<std::string> ort_disabled_ops_{};
   void DisableOrtFP16OpTypes(const std::vector<std::string>& ops) {
