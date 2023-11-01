@@ -48,8 +48,6 @@ bool OrtBackend::BuildOption(const OrtBackendOption& option) {
   }
   if (!option.optimized_model_filepath.empty()) {
     session_options_.SetOptimizedModelFilePath(option.optimized_model_filepath.c_str());
-    FDINFO << "Optimized model file path is: " << option.optimized_model_filepath 
-           << std::endl;
   }
 
 #ifdef WITH_DIRECTML
