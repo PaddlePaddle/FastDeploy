@@ -108,6 +108,8 @@ struct FASTDEPLOY_DECL Runtime {
     return backend_->benchmark_result_.time_of_runtime;
   }
 
+  bool Initialized() const { return backend_->Initialized(); }
+
  private:
   void CreateOrtBackend();
   void CreatePaddleBackend();
