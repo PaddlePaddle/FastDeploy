@@ -53,11 +53,11 @@ python -m paddle2onnx.optimize --input_model ch_PP-OCRv3_rec_infer/ch_PP-OCRv3_r
                                --input_shape_dict "{'x':[1,3,48,320]}"
 
 # 在rockchip/rknpu2_tools/目录下, 我们为用户提供了转换ONNX模型到RKNN模型的工具
-python rockchip/rknpu2_tools/export.py --config_path tools/rknpu2/config/ppocrv3_det.yaml \
+python rockchip/rknpu2_tools/export.py --config_path tools/rknpu2/config/ppocrv3_det_unquantized.yaml \
                               --target_platform rk3588
-python rockchip/rknpu2_tools/export.py --config_path tools/rknpu2/config/ppocrv3_rec.yaml \
+python rockchip/rknpu2_tools/export.py --config_path tools/rknpu2/config/ppocrv3_rec_unquantized.yaml \
                               --target_platform rk3588
-python rockchip/rknpu2_tools/export.py --config_path tools/rknpu2/config/ppocrv3_cls.yaml \
+python rockchip/rknpu2_tools/export.py --config_path tools/rknpu2/config/ppocrv3_cls_unquantized.yaml \
                               --target_platform rk3588
 ```
 
