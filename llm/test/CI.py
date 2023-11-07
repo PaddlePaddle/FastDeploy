@@ -9,11 +9,25 @@ import sys
 import wget
 import compute_diff
 def main():
+    #安装PaddleNLP/FastDeploy包
+    current_file_path = os.path.abspath(os.getcwd())
+    os.system(command="git clone https://github.com/PaddlePaddle/PaddleNLP.git")
+    os.system(command="git clone -b llm https://github.com/PaddlePaddle/FastDeploy.git")
+    os.chdir(f'{current_file_path}/PaddleNLP')
+    os.system('python3 setup.py bdist_wheel')
+    wheel_name = os.listdir(f'{current_file_path}/PaddleNLP/dist/')[0]
+    os.chdir(f"{current_file_path}/PaddleNLP/dist")
+    os.system(f'pip install {wheel_name}')
+    os.chdir(f'{current_file_path}/PaddleNLP/csrc')
+    os.system(f'python3 setup_cuda.py install --user')
+    os.system(f"{current_file_path}")
+
+
     #以下跑程序都用绝对路径
-    inference_model_path='inference_model' #推理模型导出存放文件
-    pre_result_path='pre_result'  #预存对比结果的文件
+    inference_model_path=f'{current_file_path}/inference_model' #推理模型导出存放文件
+    pre_result_path=f'{current_file_path}/pre_result'  #预存对比结果的文件
     #输出表格数据的文件路径
-    out_path='results.txt'
+    out_path=f'{current_file_path}/results.txt'
     if os.path.exists(out_path):    #原本存在，则删除，后面写文件会创建一个新的文件夹
         os.remove(out_path)
     #从网上下载测试结果，分别为NLP预存tar包和FD预存tar包，存入pre_result_path
@@ -51,6 +65,7 @@ def main():
         ptuning_model_path=os.path.join(inference_model_path,f"{ptuning_model_name[i]}")
         noptuning_model_path_list.append(noptuning_model_path)
         ptuning_model_path_list.append(ptuning_model_path)
+        os.chdir(f"{current_file_path}/PaddleNLP/llm")
         #非P-Tuning
         if not os.path.exists(noptuning_model_path):
             os.system(command=f"python3 export_model.py --model_name_or_path {export_model_name[i]} --output_path  {noptuning_model_path} --dtype float16 --inference_model")
@@ -66,7 +81,7 @@ def main():
     target_name='task_prompt_embeddings.npy'
     precache_path_list=[]
     for i in range(num_model):
-        precache_path=f"precache_{ptuning_model_name[i]}"
+        precache_path=f"{current_file_path}/precache_{ptuning_model_name[i]}"
         precache_path_list.append(precache_path)
         precache_path_FD=os.path.join(precache_path,'8-test','1')
         if os.path.exists(precache_path_FD):
@@ -79,13 +94,13 @@ def main():
 
     #下载测试文件
     inputs_url = 'https://bj.bcebos.com/paddle2onnx/third_libs/inputs_63.jsonl'
-    inputs_name='inputs_base.jsonl'
+    inputs_name=f'{current_file_path}/inputs_base.jsonl'
     inputs_path=inputs_name
     if os.path.exists(inputs_path):
         os.system(command=f"rm -f {inputs_path}")
     wget.download(inputs_url,out=inputs_path)
     inputs_PT_url= 'https://bj.bcebos.com/paddle2onnx/third_libs/ptuning_inputs.json'
-    inputs_PT_name = 'inputs_precache.jsonl'
+    inputs_PT_name = f'{current_file_path}/inputs_precache.jsonl'
     inputs_PT_path=inputs_PT_name
     if os.path.exists(inputs_PT_path):
         os.system(command=f"rm -f {inputs_PT_path}")
@@ -103,7 +118,7 @@ def main():
     #清空共享内存
     os.system(command='rm -rf /dev/shm')
     #创建res文件进行结果存储,若已存在文件则将文件结果删除
-    res_path='res'
+    res_path=f'{current_file_path}/FastDeploy/llm/res'
     if os.path.exists(res_path):
         os.system(command=f"rm -f {res_path}/*")
     else:
@@ -111,7 +126,7 @@ def main():
     #删除运行时模型输出文件
     os.system(command=f"rm -f real_time_save.temp_ids_rank_0_step*")
     #创建存放FD测试结果文件夹
-    FD_result_path='FD_result'
+    FD_result_path=f'{current_file_path}/FD_result'
     if os.path.exists(FD_result_path):
         os.system(command=f"rm -rf {FD_result_path}")
     os.mkdir(FD_result_path)
@@ -126,6 +141,8 @@ def main():
     mopt=['NLP','NLP','FD']
     bug_flag=0
     #总共需要三个维度，模型名称，模型类型（非ptuning,ptuning without precache,ptuning with precache),参数设置（bs=1,bs=4,bs=4动插）
+    os.system(f'cp {current_file_path}/test_serving.py {current_file_path}/FastDeploy/llm/test_serving.py')
+    os.system(f'cp {current_file_path}/read_serving.py {current_file_path}/FastDeploy/llm/read_serving.py')
 
     #写入文件表头,获取非P-Tuning情况
     with open(out_path,'a+') as f:
@@ -133,7 +150,7 @@ def main():
         #f.write("模型\t\tbs=1（与PaddleNLP对比)\t\tbs=4（与PaddleNLP对比)\t\tbs=4 stop=2(动态插入，与FD上一版本进行对比\n")
         #f.write('%-24s%-24s%-24s%-24s' % ("模型", "bs=1（与PaddleNLP对比)", "bs=4（与PaddleNLP对比)", "bs=4 stop=2(动态插入，与FD上一版本进行对比"))
         f.write('%-30s%-30s%-30s%-30s\n' % ("model", "bs=1(compare with PaddleNLP)", "bs=4(compare with PaddleNLP)","bs=4 stop=2(compare with FD)"))
-
+    os.chdir(f"{current_file_path}/FastDeploy/llm")
     for model_index in range(len(noptuning_model_path_list)):  #遍历模型路径
         for i in range(3): #遍历参数设置
             os.system(f"python3 test_serving.py {noptuning_model_path_list[model_index]} {inputs_path} {batch_size[i]} {disdy[i]} 0 0 {res_path}")  #倒数二三个参数表示ptuning/precache
@@ -204,6 +221,7 @@ def main():
             f.write('%-30s%-30s%-30s%-30s%-30s\n' % (ptuning_model_name[model_index], 'yes', pre_PT[0], pre_PT[1], pre_PT[2]))
 
         pre_PT = []
+    os.system(f"{current_file_path}")
 
     return bug_flag
 

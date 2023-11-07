@@ -1,6 +1,7 @@
 #!/bin/bash
 
-python3 -u IC.py
+pip install wget
+python3 -u CI.py
 result=$?
 if [ ${result} -eq 0 ];then
   echo "通过测试"
