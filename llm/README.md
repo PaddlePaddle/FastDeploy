@@ -64,6 +64,6 @@ for i, ipt in enumerate(inputs):
     model.add_request(task)
 
 model.start()
-import time
-time.sleep(10000)
+# 停止接收新的请求，处理完请求后，全部自行退出
+model.stop()
 ```
