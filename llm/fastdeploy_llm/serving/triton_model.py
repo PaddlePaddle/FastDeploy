@@ -38,7 +38,7 @@ def stream_call_back(call_back_task, token_tuple, index, is_last_token,
     out["req_id"] = call_back_task.task_id
     out["token_ids"] = [token_tuple[0]]
     out['send_idx'] = index
-    out["is_end"] = is_last_token
+    out["is_end"] = 1 if is_last_token else 0
     out_tensor = pb_utils.Tensor(
         "OUT", np.array(
             [json.dumps(out)], dtype=np.object_))
