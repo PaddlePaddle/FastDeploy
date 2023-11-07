@@ -43,6 +43,19 @@ def launch(device_ids, **kwargs: dict):
 
     pd_cmd = "python3 -m paddle.distributed.launch --devices {} {} {}".format(
         device_ids, infer_script_path, ' '.join(args))
+    
+    multicard = True
+    try:
+        ids = eval(device_ids)
+        if isinstance(ids, int):
+            multicard = False
+    except:
+        pass
+
+    if os.getenv("DISABLE_DISTRIBUTED_LAUNCH", "OFF") == ON and not multicard:
+        logger.info("Since DISABLE_DISTRIBUTED_LAUNCH=ON and the model is running with single card, will disable paddle.distributed.launch.")
+        pd_cmd = "python3 {} {}".format(infer_script_path, ' '.join(args))
+
     logger.info("Launch model with command: {}".format(pd_cmd))
     logger.info("Model is initializing...")
     p = subprocess.Popen(
