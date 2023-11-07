@@ -52,7 +52,7 @@ def launch(device_ids, **kwargs: dict):
     except:
         pass
 
-    if os.getenv("DISABLE_DISTRIBUTED_LAUNCH", "OFF") == ON and not multicard:
+    if os.getenv("DISABLE_DISTRIBUTED_LAUNCH", "OFF") == "ON" and not multicard:
         logger.info("Since DISABLE_DISTRIBUTED_LAUNCH=ON and the model is running with single card, will disable paddle.distributed.launch.")
         pd_cmd = "python3 {} {}".format(infer_script_path, ' '.join(args))
 
