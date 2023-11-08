@@ -52,7 +52,7 @@ def _reserve_port(port):
 
 def serve(args):
     with _reserve_port(args.grpc_port) as port:
-        bind_address = "localhost:{}".format(port)
+        bind_address = "0.0.0.0:{}".format(port)
         print("Binding to '%s'", bind_address)
         sys.stdout.flush()
         workers = []

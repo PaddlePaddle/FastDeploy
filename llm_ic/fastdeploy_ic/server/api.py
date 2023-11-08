@@ -62,7 +62,7 @@ class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
             await data_manager.remove_req_id_from_map(model_id, req_id) 
             return
         except:
-          if data_manager.check_req_id_exist(model_id, req_id):  # clear resource about this req
+          if await data_manager.check_req_id_exist(model_id, req_id):  # clear resource about this req
               await data_manager.clear_response(model_id, req_id)
               await data_manager.remove_req_id_from_map(model_id, req_id)
           logger.info("ModelStreamInfer: req_id {}: Failed to read response data from inference server".format(req_id))
