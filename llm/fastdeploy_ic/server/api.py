@@ -1,0 +1,167 @@
+import time
+
+import grpc
+import json
+import asyncio
+
+import fastdeploy_ic.proto.ic_pb2_grpc as ic_pb2_grpc
+import fastdeploy_ic.proto.ic_pb2 as ic_pb2
+from fastdeploy_ic.data.manager import DataManager
+from fastdeploy_ic.config import GlobalConfig
+from fastdeploy_ic.utils import get_logger
+
+logger = get_logger("ic_server", "ic_server.log")
+
+global_config = GlobalConfig()
+redis_config = {
+  'host': global_config.redis_host,
+  'port': global_config.redis_port,
+  'db': global_config.redis_db,
+  'username': global_config.redis_username, 
+  'password': global_config.redis_password
+}
+data_manager = DataManager(redis_config)
+
+class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
+  async def ModelStreamInfer(self, request, context):
+    """
+    Provided for request sender.
+    """
+    try:
+      model_id = request.model_id
+      req_id = json.loads(request.input)['req_id']
+      # Check whether req_id is repeated
+      # Warning: We only simply check whether there is any same req_id has been in, 
+      #   but we can not prevent two requests with the same req_id coming simultaneously.
+      #   To achieve this, we should add lock to query and insert query into redis, which will influence performance. 
+      #   Currently, we assume different req_ids are confirmed by users.
+      if await data_manager.check_req_id_exist(model_id, req_id):
+        logger.info("ModelStreamInfer: req_id {}: has existed in other task".format(req_id))
+        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "ModelStreamInfer: req_id {}: has existed in other task".format(req_id))
+      # 1. push request to redis
+      await data_manager.enque_request(model_id, request)
+      # 2. response stream results
+      response_start_time = time.time()
+      while True:
+        if time.time() - response_start_time > global_config.resonpse_timeout:
+            if data_manager.check_req_id_exist(model_id, req_id):  # clear resource about this req
+              await data_manager.remove_request(model_id, request)
+              await data_manager.clear_response(model_id, req_id)
+              await data_manager.remove_req_id_from_map(model_id, req_id)
+            logger.info("ModelStreamInfer: req_id {}: Get response from inference server timeout".format(req_id))
+            await context.abort(grpc.StatusCode.DEADLINE_EXCEEDED, "ModelStreamInfer: req_id {}: Get response from inference server timeout".format(req_id))
+        data = await data_manager.deque_response(model_id, req_id)
+        if data is None:
+          await asyncio.sleep(1)
+          continue
+        logger.info("ModelStreamInfer: req_id {}: response data: {}".format(req_id, data))
+        yield data
+        try:
+          if json.loads(data.output)['is_end'] == 1: # this request is done
+            # clear resource about this req, only req_id in map should be removed
+            await data_manager.remove_req_id_from_map(model_id, req_id) 
+            return
+        except:
+          if data_manager.check_req_id_exist(model_id, req_id):  # clear resource about this req
+              await data_manager.clear_response(model_id, req_id)
+              await data_manager.remove_req_id_from_map(model_id, req_id)
+          logger.info("ModelStreamInfer: req_id {}: Failed to read response data from inference server".format(req_id))
+          await context.abort(grpc.StatusCode.INTERNAL, "ModelStreamInfer: req_id {}: Failed to read response data from inference server".format(req_id))
+    except Exception as e:
+      # if redis operation failed, should arrive here    
+      # Log the error message, and signal users internal error (we can not expose origin redis error to users)
+      logger.info("ModelStreamInfer: exception: {}".format(e))
+      await context.abort(grpc.StatusCode.INTERNAL, "Internal error happened")
+
+  async def ModelFetchRequest(self, request, context):
+    """
+    Provide for inference service.
+    """
+    # provide two types for providing tasks
+    # 1. ByRequest
+    # 2. ByToken
+    try:
+      model_ids = request.model_id
+      strategy = request.strategy
+      requests = []
+      for model_id in model_ids:
+        if strategy == ic_pb2.FetchStrategy.ByRequest:
+          requests.extend(await data_manager.get_requests_by_number(model_id, request.max_request_num))
+          
+        else:
+          by_token_params = request.by_token_params
+          requests.extend(await data_manager.get_requests_by_block(model_id, request.max_request_num,
+                              by_token_params.block_num, by_token_params.block_size, by_token_params.dec_token_num))
+      
+      fetch_request_result = ic_pb2.ModelFetchRequestResult()
+      fetch_request_result.requests.extend(requests)
+      logger.info("ModelFetchRequest: return requests: {}".format(requests))
+    except Exception as e:
+      # if operation failed, should arrive here    
+      # Log the error message, and signal users internal error
+      logger.info("ModelFetchRequest: exception: {}".format(e))
+      await context.abort(grpc.StatusCode.INTERNAL, "Internal error happened")
+    return fetch_request_result
+
+
+  async def ModelSendResponse(self, response_iterator, context):
+    """
+    Provide for inference service.
+    """
+    # Get response from inference server
+    try:
+      response_start_time = time.time()
+      async for response in response_iterator:
+        try:
+          res = json.loads(response.output)
+          model_id = res['ic_req_data']['model_id']
+          req_id = res['req_id']
+        except:
+          logger.info("ModelSendResponse: req_id {}: Failed to read response data from inference server".format(req_id))
+          await context.abort(grpc.StatusCode.INTERNAL, "ModelSendResponse: req_id {}: Failed to read response data from inference server".format(req_id))
+        await data_manager.enque_response(model_id, req_id, response)
+        logger.info("ModelSendResponse: req_id {}: response data: {}".format(req_id, res))
+        if res['is_end'] == 1:
+            return ic_pb2.ModelSendResponseResult()
+        if time.time() - response_start_time > global_config.resonpse_timeout:
+          await data_manager.clear_response(model_id, req_id)
+          logger.info("ModelSendResponse: req_id {}: Get response from inference server timeout".format(req_id))
+          await context.abort(grpc.StatusCode.DEADLINE_EXCEEDED, "ModelSendResponse: req_id {}: Get response from inference server timeout".format(req_id))
+    except Exception as e:
+      # if operation failed, should arrive here    
+      # Log the error message, and signal users internal error
+      logger.info("ModelSendResponse: exception: {}".format(e))
+      await context.abort(grpc.StatusCode.INTERNAL, "Internal error happened")
+
+  async def ModelSendResponseList(self, response_list_iterator, context):
+    """
+    Provide for inference service.
+    """
+    # Get response from inference server
+    try:
+      response_start_time = time.time()
+      async for response_list in response_list_iterator:
+        for response in response_list:
+          try:
+            res = json.loads(response.output)
+            model_id = res['ic_req_data']['model_id']
+            req_id = res['req_id']
+          except:
+            logger.info("ModelSendResponseList: req_id {}: Failed to read response data from inference server".format(req_id))
+            await context.abort(grpc.StatusCode.INTERNAL, "ModelSendResponseList: req_id {}: Failed to read response data from inference server".format(req_id))
+          await data_manager.enque_response(model_id, req_id, response)
+          logger.info("ModelSendResponseList: req_id {}: response data: {}".format(req_id, res))
+          if res['is_end'] == 1:
+              break
+          if time.time() - response_start_time > global_config.resonpse_timeout:
+            await data_manager.clear_response(model_id, req_id)
+            logger.info("ModelSendResponseList: req_id {}: Get response from inference server timeout".format(req_id))
+            await context.abort(grpc.StatusCode.DEADLINE_EXCEEDED, "ModelSendResponseList: req_id {}: Get response from inference server timeout".format(req_id))
+    except Exception as e:
+      # if operation failed, should arrive here    
+      # Log the error message, and signal users internal error
+      logger.info("ModelSendResponseList: exception: {}".format(e))
+      await context.abort(grpc.StatusCode.INTERNAL, "Internal error happened")
+    return ic_pb2.ModelSendResponseResult()
+
+
