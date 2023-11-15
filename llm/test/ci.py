@@ -1,4 +1,4 @@
-#命令行提供：1.PaddleNLP/llm的路径   2.${Fastdeploy}/llm的路径   3.关于存放（Paddlenlp结果和FD_DY结果的数据文件）
+#命令行提供：1.PaddleNLP/llm的路径   2.{Fastdeploy}/llm的路径   3.关于存放（Paddlenlp结果和FD_DY结果的数据文件）
 #存放的数据文件包括：NLP-llama-7b-fp16-bs1,NLP-llama-7b-fp16-bs4,NLP-llama-7b-ptuning-fp16-bs1,NLP-llama-7b-ptuning-fp16-bs4,NLP-llama-7b-ptuning-fp16-bs1-noprecache,NLP-llama-7b-ptuning-fp16-bs4-noprecache,
 #NLP-belle-7b-2m-fp16-bs1,NLP-belle-7b-2m-fp16-bs4,NLP-belle-7b-2m-ptuning-fp16-bs1,NLP-belle-7b-2m-ptuning-fp16-bs4,NLP-belle-7b-2m-ptuning-fp16-bs1-noprecache,NLP-belle-7b-2m-ptuning-fp16-bs4-noprecache
 #FD-llama-7b-fp16-bs4-dy,FD-llama-7b-ptuning-fp16-bs4-dy,FD-llama-7b-ptuning-fp16-bs4-dy-noprecache,FD-chatglm-6b-fp16-bs4-dy,FD-chatglm-6b-ptuning-fp16-bs4-dy,FD-chatglm-6b-ptuning-fp16-bs4-dy-noprecache,FD-belle-7b-2m-fp16-bs4-dy,FD-belle-7b-2m-ptuning-fp16-bs4-dy,FD-belle-7b-2m-ptuning-fp16-bs4-dy-noprecache
@@ -111,10 +111,10 @@ def main():
     for model_index in range(len(noptuning_model_path_list)):  #遍历模型路径
         for i in range(3):  #遍历参数设置
             os.system(
-                f"${py_version} test_serving.py {noptuning_model_path_list[model_index]} {inputs_path} {batch_size[i]} {disdy[i]} 0 0 {res_path}"
+                f"{py_version} test_serving.py {noptuning_model_path_list[model_index]} {inputs_path} {batch_size[i]} {disdy[i]} 0 0 {res_path}"
             )  #倒数二三个参数表示ptuning/precache
             os.system(
-                f"${py_version} read_serving.py {res_path} {FD_result_path}/{noptuning_model_name[model_index]}-{opts[i]}.txt"
+                f"{py_version} read_serving.py {res_path} {FD_result_path}/{noptuning_model_name[model_index]}-{opts[i]}.txt"
             )
             file1 = os.path.join(
                 pre_result_path,
@@ -150,10 +150,10 @@ def main():
     for model_index in range(len(ptuning_model_path_list)):  #遍历模型名称
         for i in range(3):  #遍历参数设置
             os.system(
-                f"${py_version} test_serving.py {ptuning_model_path_list[model_index]} {inputs_path} {batch_size[i]} {disdy[i]} 1 0 {res_path}"
+                f"{py_version} test_serving.py {ptuning_model_path_list[model_index]} {inputs_path} {batch_size[i]} {disdy[i]} 1 0 {res_path}"
             )  #倒数二三个参数表示ptuning/precache
             os.system(
-                f"${py_version} read_serving.py {res_path} {FD_result_path}/{ptuning_model_name[model_index]}-{opts[i]}-noprecache.txt"
+                f"{py_version} read_serving.py {res_path} {FD_result_path}/{ptuning_model_name[model_index]}-{opts[i]}-noprecache.txt"
             )
             file1 = os.path.join(
                 pre_result_path,
@@ -178,10 +178,10 @@ def main():
     for model_index in range(len(ptuning_model_path_list)):  #遍历模型名称
         for i in range(3):  #遍历参数设置
             os.system(
-                f"${py_version} test_serving.py {ptuning_model_path_list[model_index]} {inputs_PT_path} {batch_size[i]} {disdy[i]} 1 1 {res_path} {precache_path_list[model_index]}"
+                f"{py_version} test_serving.py {ptuning_model_path_list[model_index]} {inputs_PT_path} {batch_size[i]} {disdy[i]} 1 1 {res_path} {precache_path_list[model_index]}"
             )  #倒数二三个参数表示ptuning/precache
             os.system(
-                f"${py_version} read_serving.py {res_path} {FD_result_path}/{ptuning_model_name[model_index]}-{opts[i]}.txt"
+                f"{py_version} read_serving.py {res_path} {FD_result_path}/{ptuning_model_name[model_index]}-{opts[i]}.txt"
             )
             file1 = os.path.join(
                 pre_result_path,
