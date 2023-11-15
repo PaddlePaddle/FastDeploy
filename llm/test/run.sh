@@ -2,7 +2,8 @@
 
 current_directory=$PWD
 
-#环境安装 主要是安装paddlenlp算子
+#环境安装 主要是wget的安装和paddlenlp算子
+pip install wget
 cd ${paddlenlp}/csrc
 ${py_version} setup_cuda.py install --user
 
@@ -40,8 +41,8 @@ done
 mkdir inference_model
 cd ${paddlenlp}/llm
 for((i=0;i<${#export_model_name[*]};i++));do
-${py_version} export_model.py --model_name_path ${export_model_name[i]} --output_path  ${current_directory}/inference_model/${noptuning_model_name[i]} --dtype float16 --inference_model
-${py_version} export_model.py --model_name_path ${export_model_name[i]} --output_path  ${current_directory}/inference_model/${ptuning_model_name[i]} --dtype float16 --inference_model --export_precache 1
+${py_version} export_model.py --model_name_or_path ${export_model_name[i]} --output_path  ${current_directory}/inference_model/${noptuning_model_name[i]} --dtype float16 --inference_model
+${py_version} export_model.py --model_name_or_path ${export_model_name[i]} --output_path  ${current_directory}/inference_model/${ptuning_model_name[i]} --dtype float16 --inference_model --export_precache 1
 done
 cd $current_directory
 #开启测试
