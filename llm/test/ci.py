@@ -70,8 +70,6 @@ def main():
     #分三种情况   bs=1  bs=4   bs=4stop=2
     opts = ['bs1', 'bs4', 'bs4-dy']
 
-    #清空共享内存
-    os.system(command='rm -rf /dev/shm')
     #创建res文件进行结果存储,若已存在文件则将文件结果删除
     res_path = f'{fastdeploy}/llm/res'
     if os.path.exists(res_path):
@@ -126,7 +124,7 @@ def main():
             no_PT.append(diff_rate)
             os.system(command=f"rm -f {res_path}/*")
             os.system(command=f"rm -f real_time_save.temp_ids_rank_0_step_*")
-            os.system(command="rm -rf /dev/shm/*")
+
         with open(out_path, 'a+') as f:
             #f.write(f"{noptuning_model_name[model_index]}\t\t{no_PT[0]}\t\t{no_PT[1]}\t\t{no_PT[2]}\n")
             f.write('%-30s%-30s%-30s%-30s\n' %
@@ -166,7 +164,7 @@ def main():
             PT.append(diff_rate)
             os.system(command=f"rm -f {res_path}/*")
             os.system(command=f"rm -f real_time_save.temp_ids_rank_0_step_*")
-            os.system(command="rm -rf /dev/shm/*")
+
         with open(out_path, 'a+') as f:
             #f.write(f"{ptuning_model_name[model_index]}\t\t否\t\t{PT[0]}\t\t{PT[1]}\t\t{PT[2]}\n")
             f.write('%-30s%-30s%-30s%-30s%-30s\n' % (
@@ -193,7 +191,6 @@ def main():
             pre_PT.append(diff_rate)
             os.system(command=f"rm -f {res_path}/*")
             os.system(command=f"rm -f real_time_save.temp_ids_rank_0_step_*")
-            os.system(command="rm -rf /dev/shm/*")
 
         with open(out_path, 'a+') as f:
             #f.write(f"{ptuning_model_name[model_index]}\t\t是\t\t{pre_PT[0]}\t\t{pre_PT[1]}\t\t{pre_PT[2]}\n")
