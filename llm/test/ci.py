@@ -1,4 +1,4 @@
-#命令行提供：1.PaddleNLP/llm的路径   2.Fastdeploy/llm的路径   3.关于存放（Paddlenlp结果和FD_DY结果的数据文件）
+#命令行提供：1.PaddleNLP/llm的路径   2.{Fastdeploy}/llm的路径   3.关于存放（Paddlenlp结果和FD_DY结果的数据文件）
 #存放的数据文件包括：NLP-llama-7b-fp16-bs1,NLP-llama-7b-fp16-bs4,NLP-llama-7b-ptuning-fp16-bs1,NLP-llama-7b-ptuning-fp16-bs4,NLP-llama-7b-ptuning-fp16-bs1-noprecache,NLP-llama-7b-ptuning-fp16-bs4-noprecache,
 #NLP-belle-7b-2m-fp16-bs1,NLP-belle-7b-2m-fp16-bs4,NLP-belle-7b-2m-ptuning-fp16-bs1,NLP-belle-7b-2m-ptuning-fp16-bs4,NLP-belle-7b-2m-ptuning-fp16-bs1-noprecache,NLP-belle-7b-2m-ptuning-fp16-bs4-noprecache
 #FD-llama-7b-fp16-bs4-dy,FD-llama-7b-ptuning-fp16-bs4-dy,FD-llama-7b-ptuning-fp16-bs4-dy-noprecache,FD-chatglm-6b-fp16-bs4-dy,FD-chatglm-6b-ptuning-fp16-bs4-dy,FD-chatglm-6b-ptuning-fp16-bs4-dy-noprecache,FD-belle-7b-2m-fp16-bs4-dy,FD-belle-7b-2m-ptuning-fp16-bs4-dy,FD-belle-7b-2m-ptuning-fp16-bs4-dy-noprecache
@@ -11,8 +11,11 @@ import compute_diff
 
 
 def main():
-
+    #获取安装包路径环境变量
     current_file_path = os.path.abspath(os.getcwd())
+    py_version = os.environ.get('py_version')
+    paddlenlp = os.environ.get('paddlenlp')
+    fastdeploy = os.environ.get('fastdeploy')
 
     #以下跑程序都用绝对路径
     inference_model_path = f'{current_file_path}/inference_model'  #推理模型导出存放文件
@@ -21,23 +24,7 @@ def main():
     out_path = f'{current_file_path}/results.txt'
     if os.path.exists(out_path):  #原本存在，则删除，后面写文件会创建一个新的文件夹
         os.remove(out_path)
-    #从网上下载测试结果，分别为NLP预存tar包和FD预存tar包，存入pre_result_path
-    if os.path.exists(pre_result_path):
-        os.system(command=f"rm -rf {pre_result_path}")
-    os.mkdir(pre_result_path)
-    NLP_name = 'paddlenlp_llm_results'
-    FD_name = 'fastdeploy_llm_dynamic_batching_results'
-    NLP_url = f'https://bj.bcebos.com/paddle2onnx/third_libs/{NLP_name}.tar'
-    FD_url = f'https://bj.bcebos.com/paddle2onnx/third_libs/{FD_name}.tar'
 
-    wget.download(NLP_url)
-    wget.download(FD_url)
-    os.system(command=f"tar -xvf {NLP_name}.tar ")
-    os.system(command=f"tar -xvf {FD_name}.tar ")
-    os.system(command=f"mv {NLP_name}/* {pre_result_path}")
-    os.system(command=f"mv {FD_name}/* {pre_result_path}")
-    os.system(command=f"rm -f {NLP_name}.tar")
-    os.system(command=f"rm -f {FD_name}.tar")
     #准备工作，导出模型
     export_model_name = [
         'linly-ai/chinese-llama-2-7b', 'THUDM/chatglm-6b',
@@ -51,14 +38,9 @@ def main():
         'belle-7b-2m-ptuning-fp16'
     ]
     num_model = len(export_model_name)
-    #存放模型的绝对路径
+    #设置存放模型的绝对路径
     noptuning_model_path_list = []
     ptuning_model_path_list = []
-    #非P-Tuning导出以及P-Tuning导出
-    #判断存放模型文件是否存在
-    if os.path.exists(inference_model_path):
-        os.system(command=f"rm -rf {inference_model_path}")
-    os.mkdir(inference_model_path)
     for i in range(num_model):
         noptuning_model_path = os.path.join(inference_model_path,
                                             f"{noptuning_model_name[i]}")
@@ -66,54 +48,18 @@ def main():
                                           f"{ptuning_model_name[i]}")
         noptuning_model_path_list.append(noptuning_model_path)
         ptuning_model_path_list.append(ptuning_model_path)
-        os.chdir(f"{current_file_path}/PaddleNLP/llm")
-        #非P-Tuning
-        if not os.path.exists(noptuning_model_path):
-            os.system(
-                command=f"python3 export_model.py --model_name_or_path {export_model_name[i]} --output_path  {noptuning_model_path} --dtype float16 --inference_model"
-            )
-        #P-Tuning
-        if not os.path.exists(ptuning_model_path):
-            os.system(
-                command=f"python3 export_model.py --model_name_or_path {export_model_name[i]} --output_path  {ptuning_model_path} --dtype float16 --inference_model --export_precache 1"
-            )
-        #模型会导出到 PaddleNLP/llm/inference_model/
 
-        #下载precache
-        #在Fastdeploy/llm中创建三个文件夹，存放三个模型的precache
-
-    precache_url = [
-        'https://bj.bcebos.com/fastdeploy/llm/llama-7b-precache.npy',
-        'https://bj.bcebos.com/fastdeploy/llm/chatglm-6b-precache.npy',
-        'https://bj.bcebos.com/fastdeploy/llm/bloom-7b-precache.npy'
-    ]
-    target_name = 'task_prompt_embeddings.npy'
+    #设置存放模型路径
     precache_path_list = []
     for i in range(num_model):
         precache_path = f"{current_file_path}/precache_{ptuning_model_name[i]}"
         precache_path_list.append(precache_path)
-        precache_path_FD = os.path.join(precache_path, '8-test', '1')
-        if os.path.exists(precache_path_FD):
-            continue
-        else:
-            os.system(command=f"mkdir -p {precache_path_FD}")
-            wget.download(
-                precache_url[i],
-                out=os.path.join(precache_path, '8-test', '1', target_name))
 
-    #下载测试文件
-    inputs_url = 'https://bj.bcebos.com/paddle2onnx/third_libs/inputs_63.jsonl'
+    #设置测试文件路径
     inputs_name = f'{current_file_path}/inputs_base.jsonl'
     inputs_path = inputs_name
-    if os.path.exists(inputs_path):
-        os.system(command=f"rm -f {inputs_path}")
-    wget.download(inputs_url, out=inputs_path)
-    inputs_PT_url = 'https://bj.bcebos.com/paddle2onnx/third_libs/ptuning_inputs.json'
     inputs_PT_name = f'{current_file_path}/inputs_precache.jsonl'
     inputs_PT_path = inputs_PT_name
-    if os.path.exists(inputs_PT_path):
-        os.system(command=f"rm -f {inputs_PT_path}")
-    wget.download(inputs_PT_url, out=inputs_PT_path)
 
     #进入Fastdeploy/llm进行测试
     #分三个list进行结果存储(只存储一个模型的一行）
@@ -127,7 +73,7 @@ def main():
     #清空共享内存
     os.system(command='rm -rf /dev/shm')
     #创建res文件进行结果存储,若已存在文件则将文件结果删除
-    res_path = f'{current_file_path}/FastDeploy/llm/res'
+    res_path = f'{fastdeploy}/llm/res'
     if os.path.exists(res_path):
         os.system(command=f"rm -f {res_path}/*")
     else:
@@ -140,10 +86,6 @@ def main():
         os.system(command=f"rm -rf {FD_result_path}")
     os.mkdir(FD_result_path)
     #测试非ptuning并保存diff率
-    # python3 test_serving.py /work/model_pkg/belle-7b-2m-fp16 inputs_63.jsonl 4 1
-    # python3 read_serving.py res fd_result/llama-6b-fp16-bs1.txt
-    # python3 print_diff.py  nlp_result/chatglm-6b-fp16-bs4.txt  fd_result/chatglm-6b-fp16-bs4-dy.txt
-    # NLP-belle-7b-2m-fp16-bs1
 
     batch_size = [1, 4, 4]
     disdy = [1, 1, 0]
@@ -151,10 +93,10 @@ def main():
     bug_flag = 0
     #总共需要三个维度，模型名称，模型类型（非ptuning,ptuning without precache,ptuning with precache),参数设置（bs=1,bs=4,bs=4动插）
     os.system(
-        f'cp {current_file_path}/test_serving.py {current_file_path}/FastDeploy/llm/test_serving.py'
+        f'cp {current_file_path}/test_serving.py {fastdeploy}/llm/test_serving.py'
     )
     os.system(
-        f'cp {current_file_path}/read_serving.py {current_file_path}/FastDeploy/llm/read_serving.py'
+        f'cp {current_file_path}/read_serving.py {fastdeploy}/llm/read_serving.py'
     )
 
     #写入文件表头,获取非P-Tuning情况
@@ -165,14 +107,14 @@ def main():
         f.write('%-30s%-30s%-30s%-30s\n' % (
             "model", "bs=1(compare with PaddleNLP)",
             "bs=4(compare with PaddleNLP)", "bs=4 stop=2(compare with FD)"))
-    os.chdir(f"{current_file_path}/FastDeploy/llm")
+    os.chdir(f"{fastdeploy}/llm")
     for model_index in range(len(noptuning_model_path_list)):  #遍历模型路径
         for i in range(3):  #遍历参数设置
             os.system(
-                f"python3 test_serving.py {noptuning_model_path_list[model_index]} {inputs_path} {batch_size[i]} {disdy[i]} 0 0 {res_path}"
+                f"{py_version} test_serving.py {noptuning_model_path_list[model_index]} {inputs_path} {batch_size[i]} {disdy[i]} 0 0 {res_path}"
             )  #倒数二三个参数表示ptuning/precache
             os.system(
-                f"python3 read_serving.py {res_path} {FD_result_path}/{noptuning_model_name[model_index]}-{opts[i]}.txt"
+                f"{py_version} read_serving.py {res_path} {FD_result_path}/{noptuning_model_name[model_index]}-{opts[i]}.txt"
             )
             file1 = os.path.join(
                 pre_result_path,
@@ -208,10 +150,10 @@ def main():
     for model_index in range(len(ptuning_model_path_list)):  #遍历模型名称
         for i in range(3):  #遍历参数设置
             os.system(
-                f"python3 test_serving.py {ptuning_model_path_list[model_index]} {inputs_path} {batch_size[i]} {disdy[i]} 1 0 {res_path}"
+                f"{py_version} test_serving.py {ptuning_model_path_list[model_index]} {inputs_path} {batch_size[i]} {disdy[i]} 1 0 {res_path}"
             )  #倒数二三个参数表示ptuning/precache
             os.system(
-                f"python3 read_serving.py {res_path} {FD_result_path}/{ptuning_model_name[model_index]}-{opts[i]}-noprecache.txt"
+                f"{py_version} read_serving.py {res_path} {FD_result_path}/{ptuning_model_name[model_index]}-{opts[i]}-noprecache.txt"
             )
             file1 = os.path.join(
                 pre_result_path,
@@ -236,10 +178,10 @@ def main():
     for model_index in range(len(ptuning_model_path_list)):  #遍历模型名称
         for i in range(3):  #遍历参数设置
             os.system(
-                f"python3 test_serving.py {ptuning_model_path_list[model_index]} {inputs_PT_path} {batch_size[i]} {disdy[i]} 1 1 {res_path} {precache_path_list[model_index]}"
+                f"{py_version} test_serving.py {ptuning_model_path_list[model_index]} {inputs_PT_path} {batch_size[i]} {disdy[i]} 1 1 {res_path} {precache_path_list[model_index]}"
             )  #倒数二三个参数表示ptuning/precache
             os.system(
-                f"python3 read_serving.py {res_path} {FD_result_path}/{ptuning_model_name[model_index]}-{opts[i]}.txt"
+                f"{py_version} read_serving.py {res_path} {FD_result_path}/{ptuning_model_name[model_index]}-{opts[i]}.txt"
             )
             file1 = os.path.join(
                 pre_result_path,
