@@ -2,8 +2,7 @@
 
 current_directory=$PWD
 
-#环境安装 主要是wget的安装和paddlenlp算子
-pip install wget
+#环境安装 主要是安装paddle算子
 cd ${paddlenlp}/csrc
 ${py_version} setup_cuda.py install --user
 
