@@ -11,8 +11,8 @@ ${py_version} setup_cuda.py install --user
 #模型文件下载
 cd $current_directory
 #下载解压预存结果
-NLP_name='paddlenlp_llm_results'
-FD_name='fastdeploy_llm_dynamic_batching_results'
+NLP_name="paddlenlp_llm_results"
+FD_name="fastdeploy_llm_dynamic_batching_results"
 wget https://bj.bcebos.com/paddle2onnx/third_libs/${NLP_name}.tar
 wget https://bj.bcebos.com/paddle2onnx/third_libs/${FD_name}.tar
 tar -xvf https://bj.bcebos.com/paddle2onnx/third_libs/${NLP_name}.tar
@@ -26,11 +26,11 @@ rm -f ${FD_name}.tar
 wget -O inputs_base.jsonl https://bj.bcebos.com/paddle2onnx/third_libs/inputs_63.jsonl
 wget -O inputs_precache.jsonl https://bj.bcebos.com/paddle2onnx/third_libs/ptuning_inputs.json
 #下载precache文件以及导出静态模型
-export_model_name=('linly-ai/chinese-llama-2-7b' 'THUDM/chatglm-6b' 'bellegroup/belle-7b-2m')
-precache_url=('https://bj.bcebos.com/fastdeploy/llm/llama-7b-precache.npy' 'https://bj.bcebos.com/fastdeploy/llm/chatglm-6b-precache.npy' 'https://bj.bcebos.com/fastdeploy/llm/bloom-7b-precache.npy')
-noptuning_model_name=('llama-7b-fp16' 'chatglm-6b-fp16' 'belle-7b-2m-fp16')
-ptuning_model_name=('llama-7b-ptuning-fp16' 'chatglm-6b-ptuning-fp16' 'belle-7b-2m-ptuning-fp16')
-target_name='task_prompt_embeddings.npy'
+export_model_name=("linly-ai/chinese-llama-2-7b" "THUDM/chatglm-6b" "bellegroup/belle-7b-2m")
+precache_url=("https://bj.bcebos.com/fastdeploy/llm/llama-7b-precache.npy" "https://bj.bcebos.com/fastdeploy/llm/chatglm-6b-precache.npy" "https://bj.bcebos.com/fastdeploy/llm/bloom-7b-precache.npy")
+noptuning_model_name=("llama-7b-fp16" "chatglm-6b-fp16" "belle-7b-2m-fp16")
+ptuning_model_name=("llama-7b-ptuning-fp16" "chatglm-6b-ptuning-fp16" "belle-7b-2m-ptuning-fp16")
+target_name="task_prompt_embeddings.npy"
 for((i=0;i<${#precache_url[*]};i++));do
   mkdir -p precache_${ptuning_model_name[i]}/8-test/1
   cd precache_${ptuning_model_name[i]}/8-test/1
