@@ -13,7 +13,7 @@ def get_diff(file1, file2):
 
     diff_rate = f"{diff_lines}/{total_lines}"
     if diff_lines == 0:
-        is_diff = 0
-    else:
         is_diff = 1
+    else:
+        is_diff = 0
     return is_diff, diff_rate
