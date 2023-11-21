@@ -3,6 +3,7 @@ import time
 import grpc
 import json
 import asyncio
+from aioredis import RedisError
 
 import fastdeploy_ic.proto.ic_pb2_grpc as ic_pb2_grpc
 import fastdeploy_ic.proto.ic_pb2 as ic_pb2
@@ -61,11 +62,12 @@ class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
           continue
         try:
           output_dict = json.loads(data.output)
-          if time.time() - output_dict['ic_timestamp_tag'] > global_config.resonpse_timeout: # the response is invalid because of timeout, even maybe from previous request with same req_id
-            continue
-          del output_dict['ic_timestamp_tag']
-          data.output = json.dumps(output_dict)
-          logger.info("ModelStreamInfer: req_id {}: response data: {}".format(req_id, data))
+          if 'ic_timestamp_tag' in output_dict:
+            if time.time() - output_dict['ic_timestamp_tag'] > global_config.resonpse_timeout: # the response is invalid because of timeout, even maybe from previous request with same req_id
+              continue
+            del output_dict['ic_timestamp_tag']
+            data.output = json.dumps(output_dict)
+          logger.info("ModelStreamInfer: req_id {}: response data: {}".format(req_id, output_dict))
           yield data
           # two cases denote the request is done
           # 1. something error returned by server, but not normal result
@@ -74,13 +76,13 @@ class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
             # clear resource about this req, only req_id in map should be removed
             await data_manager.remove_req_id_from_map(model_id, req_id) 
             return
-        except:
+        except Exception as e:
           if await data_manager.check_req_id_exist(model_id, req_id):  # clear resource about this req
               await data_manager.clear_response(model_id, req_id)
               await data_manager.remove_req_id_from_map(model_id, req_id)
-          logger.info("ModelStreamInfer: req_id {}: Failed to read response data from inference server".format(req_id))
+          logger.info("ModelStreamInfer: req_id {}: Failed to read response data from inference server, exception {}".format(req_id, e))
           await context.abort(grpc.StatusCode.INTERNAL, "ModelStreamInfer: req_id {}: Failed to read response data from inference server".format(req_id))
-    except Exception as e:
+    except RedisError as e:
       # if redis operation failed, should arrive here    
       # Log the error message, and signal users internal error (we can not expose origin redis error to users)
       logger.info("ModelStreamInfer: exception: {}".format(e))
@@ -109,7 +111,7 @@ class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
       fetch_request_result = ic_pb2.ModelFetchRequestResult()
       fetch_request_result.requests.extend(requests)
       logger.info("ModelFetchRequest: return requests: {}".format(requests))
-    except Exception as e:
+    except RedisError as e:
       # if operation failed, should arrive here    
       # Log the error message, and signal users internal error
       logger.info("ModelFetchRequest: exception: {}".format(e))
@@ -146,7 +148,7 @@ class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
           await data_manager.clear_response(model_id, req_id)
           logger.info("ModelSendResponse: req_id {}: Get response from inference server timeout".format(req_id))
           await context.abort(grpc.StatusCode.DEADLINE_EXCEEDED, "ModelSendResponse: req_id {}: Get response from inference server timeout".format(req_id))
-    except Exception as e:
+    except RedisError as e:
       # if operation failed, should arrive here    
       # Log the error message, and signal users internal error
       logger.info("ModelSendResponse: exception: {}".format(e))
@@ -182,7 +184,7 @@ class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
             await data_manager.clear_response(model_id, req_id)
             logger.info("ModelSendResponseList: req_id {}: Get response from inference server timeout".format(req_id))
             await context.abort(grpc.StatusCode.DEADLINE_EXCEEDED, "ModelSendResponseList: req_id {}: Get response from inference server timeout".format(req_id))
-    except Exception as e:
+    except RedisError as e:
       # if operation failed, should arrive here    
       # Log the error message, and signal users internal error
       logger.info("ModelSendResponseList: exception: {}".format(e))
