@@ -15,8 +15,8 @@ NLP_name="paddlenlp_llm_results"
 FD_name="fastdeploy_llm_dynamic_batching_results"
 wget https://bj.bcebos.com/paddle2onnx/third_libs/${NLP_name}.tar
 wget https://bj.bcebos.com/paddle2onnx/third_libs/${FD_name}.tar
-tar -xvf https://bj.bcebos.com/paddle2onnx/third_libs/${NLP_name}.tar
-tar -xvf https://bj.bcebos.com/paddle2onnx/third_libs/${FD_name}.tar
+tar -xvf ${NLP_name}.tar
+tar -xvf ${FD_name}.tar
 mkdir pre_result
 mv ${NLP_name}/* pre_result/
 mv ${FD_name}/* pre_result/
