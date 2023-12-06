@@ -1,4 +1,5 @@
 import os
+import multiprocessing
 import json
 
 class GlobalConfig():
@@ -20,6 +21,9 @@ class GlobalConfig():
 
         # Response
         self.resonpse_timeout = int(os.getenv('RESPONSE_TIMEOUT', default="120"))
+
+        # Server
+        self.num_process = int(os.getenv('NUM_PROCESS', default=multiprocessing.cpu_count()))
 
         # Logger
         self.log_dir = os.getenv('IC_LOG_DIR', default='ic_logs')

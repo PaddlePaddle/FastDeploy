@@ -12,9 +12,11 @@ import asyncio
 import grpc
 
 import fastdeploy_ic.proto.ic_pb2_grpc as ic_pb2_grpc
+from fastdeploy_ic.config import GlobalConfig
 from .api import GRPCInferenceServiceServicer
 
-_PROCESS_COUNT = multiprocessing.cpu_count()
+global_config = GlobalConfig()
+_PROCESS_COUNT = global_config.num_process
 _THREAD_CONCURRENCY = _PROCESS_COUNT
 
 

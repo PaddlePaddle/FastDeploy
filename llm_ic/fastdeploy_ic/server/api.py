@@ -45,6 +45,7 @@ class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
         logger.info("ModelStreamInfer: req_id {}: has existed in other task".format(req_id))
         await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "ModelStreamInfer: req_id {}: has existed in other task".format(req_id))
       # 1. push request to redis
+      await data_manager.add_req_id_to_map(model_id, req_id)
       await data_manager.enque_request(model_id, request)
       # 2. response stream results
       response_start_time = time.time()
@@ -76,6 +77,7 @@ class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
             # clear resource about this req, only req_id in map should be removed
             await data_manager.remove_req_id_from_map(model_id, req_id) 
             return
+          
         except Exception as e:
           if await data_manager.check_req_id_exist(model_id, req_id):  # clear resource about this req
               await data_manager.clear_response(model_id, req_id)
@@ -162,7 +164,7 @@ class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
     try:
       response_start_time = time.time()
       async for response_list in response_list_iterator:
-        for response in response_list:
+        for response in response_list.response_list:
           try:
             res = json.loads(response.output)
             model_id = res['ic_req_data']['model_id']
