@@ -38,7 +38,7 @@ def stream_call_back(call_back_task, token_tuple, index, is_last_token,
     out["req_id"] = call_back_task.task_id
     out["token_ids"] = [token_tuple[0]]
     out['send_idx'] = index
-    out["is_end"] = 1 if is_last_token else 0
+    out["is_end"] = is_last_token
     out_tensor = pb_utils.Tensor(
         "OUT", np.array(
             [json.dumps(out)], dtype=np.object_))
@@ -209,4 +209,11 @@ class TritonPythonModel:
     def finalize(self):
         logger.info("The triton server is going to terminating...")
         self.model.stop()
+        os.system("""
+                    bash -c 'pids=$(ps auxww | grep -E "triton_python_backend_stub|multiprocessing.resource_tracker|engine.py" | grep -v grep | awk '"'"'{print $2}'"'"'); 
+                    echo $pids; 
+                    for pid in ${pids[@]}; do 
+                    kill -9 ${pid} 
+                    done;'
+                    """)
         logger.info("The triton server is terminated, byebye.")
