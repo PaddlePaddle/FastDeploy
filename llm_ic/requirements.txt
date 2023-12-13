@@ -1,3 +1,0 @@
-aioredis
-colorlog
-grpcio
