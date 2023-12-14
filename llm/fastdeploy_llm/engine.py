@@ -548,11 +548,6 @@ def run(infer_engine):
     flag_ready_array[rank] = 1  # init done
 
     while 1:
-        if serving_pid > 0 and (not is_process_running(serving_pid)):
-            print(
-                "[IMPORTANT] The serving process {} is not running, will terminate engine now.".
-                format(serving_pid))
-            break
         if flag_begin_array[rank] != 1:
             continue
 

@@ -41,14 +41,17 @@ def launch(device_ids, **kwargs: dict):
             + "launch_infer.launch, please set them and try again".format(
                 missing_args))
 
-    pd_cmd = "python3 -m paddle.distributed.launch --devices {} {} {}".format(
-        device_ids, infer_script_path, ' '.join(args))
+    #pd_cmd = "python3 -m paddle.distributed.launch --devices {} {} {}".format(
+    #    device_ids, infer_script_path, ' '.join(args))
+    pd_cmd = "python3 {} {}".format(infer_script_path, ' '.join(args))
     logger.info("Launch model with command: {}".format(pd_cmd))
     logger.info("Model is initializing...")
+    log_home = os.getenv("LOG_HOME", ".")
+    infer_logger = open('{}/infer.log'.format(log_home), 'a')
     p = subprocess.Popen(
         pd_cmd,
         shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stdout=infer_logger,
+        stderr=infer_logger,
         preexec_fn=os.setsid)
     return p

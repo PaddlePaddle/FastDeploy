@@ -19,8 +19,10 @@ import threading
 import time
 import numpy as np
 import functools
+from collections import defaultdict
 from fastdeploy_llm.serving.serving_model import ServingModel
-from fastdeploy_llm.utils.logging_util import logger
+from fastdeploy_llm.utils.logging_util import logger, warning_logger
+from fastdeploy_llm.utils.logging_util import error_format, ErrorCode,  ErrorType
 from fastdeploy_llm.task import Task, BatchTask
 import fastdeploy_llm as fdlm
 
@@ -38,11 +40,14 @@ def stream_call_back(call_back_task, token_tuple, index, is_last_token,
     out["req_id"] = call_back_task.task_id
     out["token_ids"] = [token_tuple[0]]
     out['send_idx'] = index
-    out["is_end"] = 1 if is_last_token else 0
+    out["is_end"] = is_last_token
     out_tensor = pb_utils.Tensor(
         "OUT", np.array(
             [json.dumps(out)], dtype=np.object_))
     if is_last_token:
+        all_token_ids = [t[0] for t in call_back_task.result.completion_tokens] + [token_tuple[0]]
+        all_strs = "".join([t[1] for t in call_back_task.result.completion_tokens]) + token_tuple[1]
+        logger.info("Model output for req_id: {}  results_all: {} tokens_all: {}".format(call_back_task.task_id, all_strs, all_token_ids))
         sender[call_back_task.task_id].send(
             pb_utils.InferenceResponse([out_tensor]),
             flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
@@ -68,10 +73,14 @@ class TritonPythonModel:
         using_decoupled = pb_utils.using_decoupled_model_transaction_policy(
             self.model_config)
         if not using_decoupled:
-            raise pb_utils.TritonModelException(
-                """the model `{}` can generate any number of responses per request,
+            error_type = ErrorType.Server
+            error_code = ErrorCode.S0001
+            error_info = """the model `{}` can generate any number of responses per request,
                 enable decoupled transaction policy in model configuration to
-                serve this model""".format(args["model_name"]))
+                serve this model""".format(args["model_name"])
+            error_msg = error_format.format(error_type.name, error_code.name, error_info)
+            warning_logger.error(error_msg)
+            raise pb_utils.TritonModelException(error_msg)
 
         parameters = self.model_config["parameters"]
 
@@ -112,10 +121,13 @@ class TritonPythonModel:
                 if isinstance(data, list):
                     data = data[0]
             except Exception as e:
+                error_type = ErrorType.Query
+                error_code = ErrorCode.C0000
+                error_info = "Cannot load json data from request, received data = {} error={}.".format(request_tensor, e)
+                error_msg = error_format.format(error_type.name, error_code.name, error_info)
+                warning_logger.error(error_msg)
                 error_res = pb_utils.InferenceResponse(
-                    error=pb_utils.TritonError(
-                        "Cannot load json data from request, error={}.".format(
-                            e)))
+                    error=pb_utils.TritonError(error_msg))
                 res_sender = request.get_response_sender()
                 res_sender.send(
                     error_res,
@@ -127,9 +139,13 @@ class TritonPythonModel:
             try:
                 task.from_dict(data)
             except Exception as e:
-                error_res = pb_utils.InferenceResponse(error=pb_utils.TritonError(
-                    "There's error while deserializing data from request, error={}".
-                    format(e)))
+                error_type = ErrorType.Query
+                error_code = ErrorCode.C0001
+                error_info = "There's error while deserializing data from request, received data = {} error={}".format(data, e)
+                error_msg = error_format.format(error_type.name, error_code.name, error_info)
+                warning_logger.error(error_msg)
+                error_res = pb_utils.InferenceResponse(
+                    error=pb_utils.TritonError(error_msg))
                 res_sender = request.get_response_sender()
                 res_sender.send(
                     error_res,
@@ -140,9 +156,13 @@ class TritonPythonModel:
             if task.task_id is None:
                 task.task_id = str(uuid.uuid4())
             if task.task_id in self.response_handler:
+                error_type = ErrorType.Query
+                error_code = ErrorCode.C0001
+                error_info = "Task id conflict with {}.".format(task.task_id)
+                error_msg = error_format.format(error_type.name, error_code.name, error_info)
+                warning_logger.error(error_msg)
                 error_res = pb_utils.InferenceResponse(
-                    error=pb_utils.TritonError(
-                        "Task id conflict with {}.".format(task.task_id)))
+                    error=pb_utils.TritonError(error_msg))
                 res_sender = request.get_response_sender()
                 res_sender.send(
                     error_res,
@@ -153,10 +173,13 @@ class TritonPythonModel:
             try:
                 task.check(self.config.max_dec_len)
             except Exception as e:
+                error_type = ErrorType.Query
+                error_code = ErrorCode.C0001
+                error_info = "There's error while checking task, task={} error={}".format(task, e)
+                error_msg = error_format.format(error_type.name, error_code.name, error_info)
+                warning_logger.error(error_msg)
                 error_res = pb_utils.InferenceResponse(
-                    error=pb_utils.TritonError(
-                        "There's error while checking task, error={}".format(
-                            e)))
+                    error=pb_utils.TritonError(error_msg))
                 res_sender = request.get_response_sender()
                 res_sender.send(
                     error_res,
@@ -165,9 +188,12 @@ class TritonPythonModel:
 
             # 5. check if the requests queue is full
             if self.model.requests_queue.qsize() > self.config.max_queue_num:
-                error_res = pb_utils.InferenceResponse(error=pb_utils.TritonError(
-                    "The queue is full now(size={}), please wait for a while.".
-                    format(self.model.max_queue_num)))
+                error_type = ErrorType.Server
+                error_code = ErrorCode.S0000
+                error_info = "The queue is full now(size={}), please wait for a while.".format(self.model.max_queue_num)
+                error_msg = error_format.format(error_type.name, error_code.name, error_info)
+                warning_logger.error(error_msg)
+                error_res = pb_utils.InferenceResponse(error=pb_utils.TritonError(error_msg))
                 res_sender = request.get_response_sender()
                 res_sender.send(
                     error_res,
@@ -195,10 +221,12 @@ class TritonPythonModel:
             try:
                 self.model.add_request(task)
             except Exception as e:
-                error_res = pb_utils.InferenceResponse(
-                    error=pb_utils.TritonError(
-                        "There's error while inserting new request, error={}".
-                        format(e)))
+                error_type = ErrorType.Query
+                error_code = ErrorCode.C0001
+                error_info = "There's error while inserting new request, task={} error={}".format(task, e)
+                error_msg = error_format.format(error_type.name, error_code.name, error_info)
+                warning_logger.error(error_msg)
+                error_res = pb_utils.InferenceResponse(error=pb_utils.TritonError(error_msg))
                 res_sender = request.get_response_sender()
                 res_sender.send(
                     error_res,
@@ -208,5 +236,16 @@ class TritonPythonModel:
 
     def finalize(self):
         logger.info("The triton server is going to terminating...")
+        info_type = ErrorType.Server
+        info_code = ErrorCode.S0002
+        info_msg = error_format.format(info_type.name, info_code.name, "The triton server is going to terminating...")
+        warning_logger.info(info_msg)
         self.model.stop()
+        os.system("""
+                    bash -c 'pids=$(ps auxww | grep -E "triton_python_backend_stub|multiprocessing.resource_tracker|engine.py" | grep -v grep | awk '"'"'{print $2}'"'"'); 
+                    echo $pids; 
+                    for pid in ${pids[@]}; do 
+                    kill -9 ${pid} 
+                    done;'
+                    """)
         logger.info("The triton server is terminated, byebye.")
