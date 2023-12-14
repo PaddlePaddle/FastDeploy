@@ -25,6 +25,7 @@ class Config:
         self.model_dir = model_dir
         is_static, rank = check_model(model_dir)
 
+        self.log_home = os.getenv("LOG_HOME", ".")
         if os.getenv("ENABLE_DEBUG_LOG", "0") == "1":
             logger.info(
                 "Detect enviroment variable `ENABLE_DEBUG_LOG`, all the debug log information will output to fastdeploy_llm_serving.log."
