@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import contextlib
 import logging
 import threading
@@ -172,5 +173,22 @@ class Logger(object):
         self.handler.terminator = old_terminator
 
 
-logger = Logger()
-warning_logger = Logger(name="fastDeploy_llm_serving_warning")
+log_home = os.getenv("LOG_HOME", ".")
+
+if os.getenv("ENABLE_DEBUG_LOG", "0") == "1":
+    logger = Logger(
+        name="fastdeploy_llm_serving",
+        log_file=os.path.join(log_home, "fastdeploy_llm_serving.log"),
+        time_rotation=7,
+        level=logging.DEBUG)
+else:
+    logger = Logger(
+        log_file=os.path.join(log_home, "fastdeploy_llm_serving.log"),
+        time_rotation=7,
+        level=logging.INFO)
+
+warning_logger = Logger(
+    name="fastDeploy_llm_serving_warning",
+    log_file=os.path.join(log_home, "fastdeploy_llm_serving_warning.log"),
+    time_rotation=7,
+    level=logging.DEBUG)

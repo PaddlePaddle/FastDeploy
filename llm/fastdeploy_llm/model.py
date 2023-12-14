@@ -165,10 +165,10 @@ class Model:
             ret = self.engine_proc.poll()
             if ret is not None:
                 logger.error(
-                    "The engine launch failed, check log/workerlog for more details."
+                    "The engine launch failed, check log/infer.log for more details."
                 )
                 raise Exception(
-                    "The engine launch failed, check log/workerlog for more details."
+                    "The engine launch failed, check log/infer.log for more details."
                 )
         logger.info("Paddle Inference Engine intialized successed!")
 
