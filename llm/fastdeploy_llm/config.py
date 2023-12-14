@@ -36,6 +36,7 @@ class Config:
                 "Detect enviroment variable `ENABLE_DEBUG_LOG`, all the debug log information will output to fastdeploy_llm_serving.log."
             )
             fastdeploy_llm.utils.logging_util.logger = Logger(
+                name="fastdeploy_llm_serving",
                 log_file=os.path.join(self.log_home, "fastdeploy_llm_serving.log"),
                 time_rotation=7,
                 level=logging.DEBUG)
