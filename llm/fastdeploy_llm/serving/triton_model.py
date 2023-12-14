@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import json
+import queue
 import os
 import uuid
 import threading
@@ -123,7 +124,7 @@ class TritonPythonModel:
             except Exception as e:
                 error_type = ErrorType.Query
                 error_code = ErrorCode.C0000
-                error_info = "Cannot load json data from request, received data = {} error={}.".format(request_tensor, e)
+                error_info = "Cannot load json data from request, received data = {} error={}.".format(request_tensor.as_numpy(), e)
                 error_msg = error_format.format(error_type.name, error_code.name, error_info)
                 warning_logger.error(error_msg)
                 error_res = pb_utils.InferenceResponse(
@@ -190,7 +191,7 @@ class TritonPythonModel:
             if self.model.requests_queue.qsize() > self.config.max_queue_num:
                 error_type = ErrorType.Server
                 error_code = ErrorCode.S0000
-                error_info = "The queue is full now(size={}), please wait for a while.".format(self.model.max_queue_num)
+                error_info = "The queue is full now(size={}), please wait for a while.".format(self.config.max_queue_num)
                 error_msg = error_format.format(error_type.name, error_code.name, error_info)
                 warning_logger.error(error_msg)
                 error_res = pb_utils.InferenceResponse(error=pb_utils.TritonError(error_msg))
@@ -220,6 +221,26 @@ class TritonPythonModel:
             task.call_back_func = stream_call_back
             try:
                 self.model.add_request(task)
+            except queue.Full as e:
+                # Log error for Server
+                error_type = ErrorType.Server
+                error_code = ErrorCode.S0000
+                error_info = "The queue is full now(size={}), please scale service.".format(self.config.max_queue_num)
+                error_msg = error_format.format(error_type.name, error_code.name, error_info)
+                warning_logger.error(error_msg)
+                # Log error for query
+                error_type = ErrorType.Query
+                error_code = ErrorCode.C0001
+                error_info = "There's error while inserting new request, task={} error={}".format(task, "service too busy")
+                error_msg = error_format.format(error_type.name, error_code.name, error_info)
+                warning_logger.error(error_msg)
+                error_res = pb_utils.InferenceResponse(error=pb_utils.TritonError(error_msg))
+                res_sender = request.get_response_sender()
+                res_sender.send(
+                    error_res,
+                    flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+                continue
+
             except Exception as e:
                 error_type = ErrorType.Query
                 error_code = ErrorCode.C0001
