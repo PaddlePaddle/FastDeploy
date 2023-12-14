@@ -25,12 +25,18 @@ class Config:
         self.model_dir = model_dir
         is_static, rank = check_model(model_dir)
 
+        self.log_home = os.getenv("LOG_HOME", ".")
+        fastdeploy_llm.utils.logging_util.warning_logger = Logger(
+                name="fastDeploy_llm_serving_warning",
+                log_file=os.path.join(self.log_home, "fastdeploy_llm_serving_warning.log"),
+                time_rotation=7,
+                level=logging.DEBUG)
         if os.getenv("ENABLE_DEBUG_LOG", "0") == "1":
             logger.info(
                 "Detect enviroment variable `ENABLE_DEBUG_LOG`, all the debug log information will output to fastdeploy_llm_serving.log."
             )
             fastdeploy_llm.utils.logging_util.logger = Logger(
-                log_file="fastdeploy_llm_serving.log",
+                log_file=os.path.join(self.log_home, "fastdeploy_llm_serving.log"),
                 time_rotation=7,
                 level=logging.DEBUG)
         else:
@@ -38,7 +44,7 @@ class Config:
                 "The logging level is set as INFO, if more information needed, please execute `export ENABLE_DEBUG_LOG=1` before launching service."
             )
             fastdeploy_llm.utils.logging_util.logger = Logger(
-                log_file="fastdeploy_llm_serving.log",
+                log_file=os.path.join(self.log_home, "fastdeploy_llm_serving.log"),
                 time_rotation=7,
                 level=logging.INFO)
 

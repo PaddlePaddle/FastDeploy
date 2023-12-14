@@ -46,7 +46,8 @@ def launch(device_ids, **kwargs: dict):
     pd_cmd = "python3 {} {}".format(infer_script_path, ' '.join(args))
     logger.info("Launch model with command: {}".format(pd_cmd))
     logger.info("Model is initializing...")
-    infer_logger = open('modelmatrix/log/infer.log', 'a')
+    log_home = os.getenv("LOG_HOME", ".")
+    infer_logger = open('{}/infer.log'.format(log_home), 'a')
     p = subprocess.Popen(
         pd_cmd,
         shell=True,

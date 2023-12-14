@@ -173,3 +173,4 @@ class Logger(object):
 
 
 logger = Logger()
+warning_logger = Logger(name="fastDeploy_llm_serving_warning")
