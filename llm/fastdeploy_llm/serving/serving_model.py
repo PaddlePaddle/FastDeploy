@@ -44,30 +44,26 @@ class ServingModel:
         logger.debug("Receive task = {}".format(task))
         assert not self.stop_queue, "The serving model is stopped, cannot accept new requests now."
         assert task.text.strip() != "", "The request's text cannot be empty."
-        try:
-            if not hasattr(task, "token_ids"):
-                task.token_ids, task.position_ids = self.model.data_processor.encode(
-                    task.text, padding=True)
-            else:
-                task.position_ids = None
-            if self.config.is_ptuning:
-                assert len(
-                    task.token_ids
-                ) + self.config.max_prefix_len <= self.config.max_seq_len, "The request's token number({}) + max_prefix_len({}) = {} is exceeding the setting max_seq_len({}).".format(
-                    len(task.token_ids), self.config.max_prefix_len,
-                    len(task.token_ids) + self.config.max_prefix_len,
-                    self.config.max_seq_len)
-            else:
-                assert len(
-                    task.token_ids
-                ) <= self.config.max_seq_len, "The request's token number({}) is exceed the setting max_seq_len({}).".format(
-                    len(task.token_ids), self.config.max_seq_len)
-            self.requests_queue.put(task, timeout=0.5)
-            logger.debug("Task with task_id={} is put into requests queue.".
-                         format(task.task_id))
-        except Exception as e:
-            raise Exception(
-                "There's error while inserting request, error={}.".format(e))
+        if not hasattr(task, "token_ids"):
+            task.token_ids, task.position_ids = self.model.data_processor.encode(
+                task.text, padding=True)
+        else:
+            task.position_ids = None
+        if self.config.is_ptuning:
+            assert len(
+                task.token_ids
+            ) + self.config.max_prefix_len <= self.config.max_seq_len, "The request's token number({}) + max_prefix_len({}) = {} is exceeding the setting max_seq_len({}).".format(
+                len(task.token_ids), self.config.max_prefix_len,
+                len(task.token_ids) + self.config.max_prefix_len,
+                self.config.max_seq_len)
+        else:
+            assert len(
+                task.token_ids
+            ) <= self.config.max_seq_len, "The request's token number({}) is exceed the setting max_seq_len({}).".format(
+                len(task.token_ids), self.config.max_seq_len)
+        self.requests_queue.put(task, timeout=0.5)
+        logger.debug("Task with task_id={} is put into requests queue.".
+                        format(task.task_id))
 
     def runner(self):
         batch_tasks = BatchTask(self.config.max_batch_size)
