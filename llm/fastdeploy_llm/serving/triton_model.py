@@ -46,7 +46,7 @@ def stream_call_back(call_back_task, token_tuple, index, is_last_token,
             [json.dumps(out)], dtype=np.object_))
     if is_last_token:
         all_token_ids = [t[0] for t in call_back_task.result.completion_tokens] + [token_tuple[0]]
-        all_strs = "".join[t[1] for t in call_back_task.result.completion_tokens] + token_tuple[1]
+        all_strs = "".join([t[1] for t in call_back_task.result.completion_tokens]) + token_tuple[1]
         logger.info("Model output for req_id: {}  results_all: {} tokens_all: {}".format(call_back_task.task_id, all_strs, all_token_ids))
         sender[call_back_task.task_id].send(
             pb_utils.InferenceResponse([out_tensor]),
