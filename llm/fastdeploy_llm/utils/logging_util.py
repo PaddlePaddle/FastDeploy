@@ -16,6 +16,7 @@ import contextlib
 import logging
 import threading
 import time
+from enum import Enum
 from typing import (Any, Generator, Optional, Union)
 from logging.handlers import TimedRotatingFileHandler
 
@@ -40,6 +41,23 @@ _LOG_CONFIG = {
         'color': 'bold_red'
     },
 }
+
+
+
+
+error_format = """Error: Type {} Code {} Describe: {}"""
+
+class ErrorCode(Enum):
+    C0000 = 0  # 客户端发送的query格式错误
+    C0001 = 1  # 客户端发送的query有效性校验
+    S0000 = 2  # 服务负载过大
+    S0001 = 3  # 服务没能正常启动
+    S0002 = 4  # 服务退出
+
+class ErrorType(Enum):
+    Query = 0  # Query错误
+    Server = 1  # Server错误
+
 
 
 class Logger(object):
