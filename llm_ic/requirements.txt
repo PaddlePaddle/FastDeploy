@@ -1,3 +1,4 @@
 aioredis
 colorlog
 grpcio
+protobuf

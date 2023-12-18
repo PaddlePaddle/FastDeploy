@@ -15,7 +15,7 @@
 import setuptools
 
 setuptools.setup(
-    name="fastdeploy-ic",
+    name="fastdeploy_ic",
     version="0.0.9",
     author="fastdeploy",
     author_email="fastdeploy@baidu.com",
@@ -28,6 +28,6 @@ setuptools.setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ],
-    install_requires=["colorlog"],
+    install_requires=["colorlog", "aioredis", "grpcio", "protobuf"],
     extras_require={"client": ['grpcio', 'tritonclient']},
     license='Apache 2.0')

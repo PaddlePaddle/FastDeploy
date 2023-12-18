@@ -41,12 +41,13 @@ class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
       #   but we can not prevent two requests with the same req_id coming simultaneously.
       #   To achieve this, we should add lock to query and insert query into redis, which will influence performance. 
       #   Currently, we assume different req_ids are confirmed by users.
-      if await data_manager.check_req_id_exist(model_id, req_id):
-        logger.info("ModelStreamInfer: req_id {}: has existed in other task".format(req_id))
-        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "ModelStreamInfer: req_id {}: has existed in other task".format(req_id))
+      # if await data_manager.check_req_id_exist(model_id, req_id):
+      #   logger.info("ModelStreamInfer: req_id {}: has existed in other task".format(req_id))
+      #   await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "ModelStreamInfer: req_id {}: has existed in other task".format(req_id))
       # 1. push request to redis
       await data_manager.add_req_id_to_map(model_id, req_id)
       await data_manager.enque_request(model_id, request)
+      logger.info("ModelStreamInfer: req_id {}: enqued request".format(req_id))
       # 2. response stream results
       response_start_time = time.time()
       while True:
