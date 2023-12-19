@@ -19,14 +19,26 @@ def retry_wrapper(f):
             except asyncio.CancelledError:
                 logger.info("{} occured asyncio.CancelledError, retry times: {}".format(f.__name__, i+1))
                 continue
+            except aioredis.ConnectionError:
+                args[0].renew_client()
+                logger.info("{} occured aioredis.ConnectionError, retry times: {}".format(f.__name__, i+1))
+                continue
+            except aioredis.TimeoutError:
+                args[0].renew_client()
+                logger.info("{} occured aioredis.TimeoutError, retry times: {}".format(f.__name__, i+1))
+                continue
     return wrapper
 
 
 
 class DataManager:
     def __init__(self, redis_conf) -> None:
+        self.redis_conf = redis_conf
         self.client = aioredis.Redis(**redis_conf)
         self.internal_check_key_prefix = '__keymap_'
+    
+    def renew_client(self):
+        self.client = aioredis.Redis(**self.redis_conf)
     
     @retry_wrapper
     async def check_req_id_exist(self, model_id, req_id):

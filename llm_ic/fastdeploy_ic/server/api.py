@@ -21,9 +21,11 @@ redis_config = {
   'username': global_config.redis_username, 
   'password': global_config.redis_password
 }
-data_manager = DataManager(redis_config)
 
 class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
+  def __init__(self):
+    self.data_manager = DataManager(redis_config)  
+
   async def ModelStreamInfer(self, request, context):
     """
     Provided for request sender.
@@ -41,24 +43,24 @@ class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
       #   but we can not prevent two requests with the same req_id coming simultaneously.
       #   To achieve this, we should add lock to query and insert query into redis, which will influence performance. 
       #   Currently, we assume different req_ids are confirmed by users.
-      # if await data_manager.check_req_id_exist(model_id, req_id):
+      # if await self.data_manager.check_req_id_exist(model_id, req_id):
       #   logger.info("ModelStreamInfer: req_id {}: has existed in other task".format(req_id))
       #   await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "ModelStreamInfer: req_id {}: has existed in other task".format(req_id))
       # 1. push request to redis
-      await data_manager.add_req_id_to_map(model_id, req_id)
-      await data_manager.enque_request(model_id, request)
+      await self.data_manager.add_req_id_to_map(model_id, req_id)
+      await self.data_manager.enque_request(model_id, request)
       logger.info("ModelStreamInfer: req_id {}: enqued request".format(req_id))
       # 2. response stream results
       response_start_time = time.time()
       while True:
         if time.time() - response_start_time > global_config.resonpse_timeout:
-            if await data_manager.check_req_id_exist(model_id, req_id):  # clear resource about this req
-              await data_manager.remove_request(model_id, request)
-              await data_manager.clear_response(model_id, req_id)
-              await data_manager.remove_req_id_from_map(model_id, req_id)
+            if await self.data_manager.check_req_id_exist(model_id, req_id):  # clear resource about this req
+              await self.data_manager.remove_request(model_id, request)
+              await self.data_manager.clear_response(model_id, req_id)
+              await self.data_manager.remove_req_id_from_map(model_id, req_id)
             logger.info("ModelStreamInfer: req_id {}: Get response from inference server timeout".format(req_id))
             await context.abort(grpc.StatusCode.DEADLINE_EXCEEDED, "ModelStreamInfer: req_id {}: Get response from inference server timeout".format(req_id))
-        data = await data_manager.deque_response(model_id, req_id)
+        data = await self.data_manager.deque_response(model_id, req_id)
         if data is None:
           await asyncio.sleep(1)
           continue
@@ -76,19 +78,23 @@ class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
           # 2. is_end is 1
           if ('is_end' not in output_dict) or (output_dict['is_end'] == 1): 
             # clear resource about this req, only req_id in map should be removed
-            await data_manager.remove_req_id_from_map(model_id, req_id) 
+            await self.data_manager.remove_req_id_from_map(model_id, req_id) 
             return
           
         except Exception as e:
-          if await data_manager.check_req_id_exist(model_id, req_id):  # clear resource about this req
-              await data_manager.clear_response(model_id, req_id)
-              await data_manager.remove_req_id_from_map(model_id, req_id)
+          if await self.data_manager.check_req_id_exist(model_id, req_id):  # clear resource about this req
+              await self.data_manager.clear_response(model_id, req_id)
+              await self.data_manager.remove_req_id_from_map(model_id, req_id)
           logger.info("ModelStreamInfer: req_id {}: Failed to read response data from inference server, exception {}".format(req_id, e))
           await context.abort(grpc.StatusCode.INTERNAL, "ModelStreamInfer: req_id {}: Failed to read response data from inference server".format(req_id))
     except RedisError as e:
       # if redis operation failed, should arrive here    
       # Log the error message, and signal users internal error (we can not expose origin redis error to users)
       logger.info("ModelStreamInfer: exception: {}".format(e))
+      await context.abort(grpc.StatusCode.INTERNAL, "Internal error happened")
+    
+    except Exception as e:
+      logger.info("ModelStreamInfer: exception: type {}: {}".format(type(e), e))
       await context.abort(grpc.StatusCode.INTERNAL, "Internal error happened")
 
   async def ModelFetchRequest(self, request, context):
@@ -104,11 +110,11 @@ class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
       requests = []
       for model_id in model_ids:
         if strategy == ic_pb2.FetchStrategy.ByRequest:
-          requests.extend(await data_manager.get_requests_by_number(model_id, request.max_request_num))
+          requests.extend(await self.data_manager.get_requests_by_number(model_id, request.max_request_num))
           
         else:
           by_token_params = request.by_token_params
-          requests.extend(await data_manager.get_requests_by_block(model_id, request.max_request_num,
+          requests.extend(await self.data_manager.get_requests_by_block(model_id, request.max_request_num,
                               by_token_params.block_num, by_token_params.block_size, by_token_params.dec_token_num))
       
       fetch_request_result = ic_pb2.ModelFetchRequestResult()
@@ -143,12 +149,12 @@ class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
         except:
           logger.info("ModelSendResponse: req_id {}: Failed to read response data from inference server".format(req_id))
           await context.abort(grpc.StatusCode.INTERNAL, "ModelSendResponse: req_id {}: Failed to read response data from inference server".format(req_id))
-        await data_manager.enque_response(model_id, req_id, response)
+        await self.data_manager.enque_response(model_id, req_id, response)
         logger.info("ModelSendResponse: req_id {}: response data: {}".format(req_id, res))
         if ('is_end' not in res) or (res['is_end'] == 1):
             return ic_pb2.ModelSendResponseResult()
         if time.time() - response_start_time > global_config.resonpse_timeout:
-          await data_manager.clear_response(model_id, req_id)
+          await self.data_manager.clear_response(model_id, req_id)
           logger.info("ModelSendResponse: req_id {}: Get response from inference server timeout".format(req_id))
           await context.abort(grpc.StatusCode.DEADLINE_EXCEEDED, "ModelSendResponse: req_id {}: Get response from inference server timeout".format(req_id))
     except RedisError as e:
@@ -179,12 +185,12 @@ class GRPCInferenceServiceServicer(ic_pb2_grpc.GRPCInferenceServiceServicer):
           except:
             logger.info("ModelSendResponseList: req_id {}: Failed to read response data from inference server".format(req_id))
             await context.abort(grpc.StatusCode.INTERNAL, "ModelSendResponseList: req_id {}: Failed to read response data from inference server".format(req_id))
-          await data_manager.enque_response(model_id, req_id, response)
+          await self.data_manager.enque_response(model_id, req_id, response)
           logger.info("ModelSendResponseList: req_id {}: response data: {}".format(req_id, res))
           if ('is_end' not in res) or (res['is_end'] == 1):
               break
           if time.time() - response_start_time > global_config.resonpse_timeout:
-            await data_manager.clear_response(model_id, req_id)
+            await self.data_manager.clear_response(model_id, req_id)
             logger.info("ModelSendResponseList: req_id {}: Get response from inference server timeout".format(req_id))
             await context.abort(grpc.StatusCode.DEADLINE_EXCEEDED, "ModelSendResponseList: req_id {}: Get response from inference server timeout".format(req_id))
     except RedisError as e:
