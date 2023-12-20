@@ -40,20 +40,20 @@ void ScaleMapper::Opset7() {
               scale_info[0].name, scale_info[0].dtype, P2ODataType::FP32);
           out = helper_->MakeNode("Mul", {out, scale})->output(0);
         } else {
-          auto scale = helper_->Constant(ONNX_NAMESPACE::TensorProto::FLOAT,
-                                         std::vector<float>(1, scale_));
+          auto scale =
+              helper_->Constant({}, ONNX_NAMESPACE::TensorProto::FLOAT, scale_);
           out = helper_->MakeNode("Mul", {out, scale})->output(0);
         }
       }
       if (!is_bias_0) {
-        auto bias = helper_->Constant(ONNX_NAMESPACE::TensorProto::FLOAT,
-                                      std::vector<float>(1, bias_));
+        auto bias =
+            helper_->Constant({}, ONNX_NAMESPACE::TensorProto::FLOAT, bias_);
         out = helper_->MakeNode("Add", {out, bias})->output(0);
       }
     } else {
       if (!is_bias_0) {
-        auto bias = helper_->Constant(ONNX_NAMESPACE::TensorProto::FLOAT,
-                                      std::vector<float>(1, bias_));
+        auto bias =
+            helper_->Constant({}, ONNX_NAMESPACE::TensorProto::FLOAT, bias_);
         out = helper_->MakeNode("Add", {out, bias})->output(0);
       }
       if (!is_scale_1 || HasInput("ScaleTensor")) {
@@ -63,8 +63,8 @@ void ScaleMapper::Opset7() {
               scale_info[0].name, scale_info[0].dtype, P2ODataType::FP32);
           out = helper_->MakeNode("Mul", {out, scale})->output(0);
         } else {
-          auto scale = helper_->Constant(ONNX_NAMESPACE::TensorProto::FLOAT,
-                                         std::vector<float>(1, scale_));
+          auto scale =
+              helper_->Constant({}, ONNX_NAMESPACE::TensorProto::FLOAT, scale_);
           out = helper_->MakeNode("Mul", {out, scale})->output(0);
         }
       }

@@ -23,10 +23,39 @@ namespace fastdeploy {
 void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   option_ = option;
   if (option.device == Device::GPU) {
-    config_.EnableUseGpu(option.gpu_mem_init_size, option.device_id);
+
+    auto inference_precision = paddle_infer::PrecisionType::kFloat32;
+    if (option_.inference_precision == "float32"){
+      FDINFO << "Will inference_precision float32" << std::endl;
+      inference_precision = paddle_infer::PrecisionType::kFloat32;
+    } else if (option_.inference_precision == "float16"){
+      FDINFO << "Will inference_precision float16" <<std::endl;
+      inference_precision = paddle_infer::PrecisionType::kHalf;
+    } else if (option_.inference_precision == "bfloat16"){
+      FDINFO << "Will inference_precision bfloat16" << std::endl;
+      inference_precision = paddle_infer::PrecisionType::kBf16;
+    } else if (option_.inference_precision == "int8"){
+      FDINFO << "Will inference_precision int8" << std::endl;
+      inference_precision = paddle_infer::PrecisionType::kInt8;
+    } else {
+      FDERROR << "paddle inference only support precision in float32," 
+              << " float16, bfloat16 and int8" << std::endl;
+    }
+    config_.Exp_DisableMixedPrecisionOps({"feed","fetch"});
+    config_.EnableUseGpu(option.gpu_mem_init_size, option.device_id, inference_precision);
+    // config_.EnableUseGpu(option.gpu_mem_init_size, option.device_id);
     if (option_.switch_ir_debug) {
       FDINFO << "Will Enable ir_debug for Paddle Backend." << std::endl;
       config_.SwitchIrDebug();
+    }
+    if (option_.enable_inference_cutlass) {
+#ifdef PADDLEINFERENCE_API_COMPAT_2_4_x
+      FDWARNING << "Your are using Paddle infernence 2.4.x, cutlass is not supported!" 
+                << std::endl;
+#else    
+      FDINFO << "Will enable_inference_cutlass" << std::endl;
+      config_.Exp_EnableUseCutlass();
+#endif
     }
     if (option_.external_stream_) {
       FDINFO << "Will use external stream for Paddle Backend." << std::endl;
@@ -59,7 +88,8 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
         config_.SetOptimCacheDir(opt_cache_dir);
       }
       config_.EnableTensorRtEngine(option.trt_option.max_workspace_size,
-                                   option.trt_option.max_batch_size, 3,
+                                   option.trt_option.max_batch_size, 
+                                   option.trt_min_subgraph_size,
                                    precision, use_static);
       SetTRTDynamicShapeToConfig(option);
       if (option_.enable_fixed_size_opt) {
@@ -84,6 +114,9 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
 #endif
   } else if (option.device == Device::KUNLUNXIN) {
 #ifdef WITH_KUNLUNXIN
+    // Note(qiuyanjun): For Paddle XPU L3 Cache, please set
+    // export XPU_PADDLE_L3_SIZE=67104768 (XPU R200)
+    // export FLAGS_fuse_multi_transformer_quant_type="float"
     config_.EnableXpu(option.xpu_option.kunlunxin_l3_workspace_size,
                       option.xpu_option.kunlunxin_locked,
                       option.xpu_option.kunlunxin_autotune,
@@ -117,6 +150,9 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   } else {
     config_.SetCpuMathLibraryNumThreads(option.cpu_thread_num);
   }
+  // Note: SwitchIrOptim is enabled by default for paddle inference
+  // backend. So, we don't need to set it manually.
+  // config_.SwitchIrOptim(option.switch_ir_optimize);
 }
 
 bool PaddleBackend::Init(const RuntimeOption& runtime_option) {
@@ -165,7 +201,6 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
     config_.EnableMemoryOptim();
   }
   BuildOption(option);
-
   // The input/output information get from predictor is not right, use
   // PaddleReader instead now
   std::string model_content = model;
@@ -173,11 +208,8 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
     FDASSERT(ReadBinaryFromFile(model, &model_content),
              "Failed to read file %s.", model.c_str());
   }
-  auto reader =
-      paddle2onnx::PaddleReader(model_content.c_str(), model_content.size());
-  // If it's a quantized model, and use cpu with mkldnn, automaticaly switch to
-  // int8 mode
-  if (reader.is_quantize_model) {
+
+  if (option.is_quantize_model) {
     if (option.device == Device::GPU) {
       FDWARNING << "The loaded model is a quantized model, while inference on "
                    "GPU, please use TensorRT backend to get better performance."
@@ -194,7 +226,8 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
           use_static = true;
         }
         config_.EnableTensorRtEngine(option.trt_option.max_workspace_size,
-                                     option.trt_option.max_batch_size, 3,
+                                     option.trt_option.max_batch_size,
+                                     option.trt_min_subgraph_size,
                                      paddle_infer::PrecisionType::kInt8,
                                      use_static, false);
         SetTRTDynamicShapeToConfig(option);
@@ -207,26 +240,6 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
                    "CPU, please enable MKLDNN to get better performance."
                 << std::endl;
     }
-  }
-
-  inputs_desc_.resize(reader.num_inputs);
-  for (int i = 0; i < reader.num_inputs; ++i) {
-    std::string name(reader.inputs[i].name);
-    std::vector<int64_t> shape(reader.inputs[i].shape,
-                               reader.inputs[i].shape + reader.inputs[i].rank);
-    inputs_desc_[i].name = name;
-    inputs_desc_[i].shape.assign(shape.begin(), shape.end());
-    inputs_desc_[i].dtype = ReaderDataTypeToFD(reader.inputs[i].dtype);
-  }
-  outputs_desc_.resize(reader.num_outputs);
-  for (int i = 0; i < reader.num_outputs; ++i) {
-    std::string name(reader.outputs[i].name);
-    std::vector<int64_t> shape(
-        reader.outputs[i].shape,
-        reader.outputs[i].shape + reader.outputs[i].rank);
-    outputs_desc_[i].name = name;
-    outputs_desc_[i].shape.assign(shape.begin(), shape.end());
-    outputs_desc_[i].dtype = ReaderDataTypeToFD(reader.outputs[i].dtype);
   }
   if (option.collect_trt_shape) {
     // Set the shape info file.
@@ -244,6 +257,12 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
                                        params.c_str(), params.size());
       } else {
         analysis_config.SetModel(model, params);
+      }
+      if (option.collect_trt_shape_by_device) {
+        if (option.device == Device::GPU) {
+          analysis_config.EnableUseGpu(option.gpu_mem_init_size, option.device_id, 
+                                       paddle_infer::PrecisionType::kFloat32);
+        }
       }
       analysis_config.CollectShapeRangeInfo(shape_range_info);
       auto predictor_tmp = paddle_infer::CreatePredictor(analysis_config);
@@ -277,7 +296,72 @@ bool PaddleBackend::InitFromPaddle(const std::string& model,
       pass_builder->DeletePass(option.delete_pass_names[i]);
     }
   }
+  if (option.enable_log_info){
+    FDINFO << "Finish paddle inference config with summary as: "
+           << std::endl << config_.Summary() <<std::endl;
+  }
   predictor_ = paddle_infer::CreatePredictor(config_);
+  auto input_names = predictor_->GetInputNames();
+  auto output_names = predictor_->GetOutputNames();
+  auto input_dtypes = predictor_->GetInputTypes();
+
+#ifdef PADDLEINFERENCE_API_COMPAT_2_4_x
+  // Note: GetInputTensorShape, GetOutputTensorShape and GetOutputTypes
+  // are not supported when Paddle Inference API version is 2.4.x.
+  std::map<std::string, std::vector<int64_t>> input_shapes;
+  std::map<std::string, std::vector<int64_t>> output_shapes;
+  std::map<std::string, paddle_infer::DataType> output_dtypes;
+  // Get the all the input shape info.
+  for (size_t i = 0; i < input_names.size(); ++i) {
+    std::vector<int64_t> shape;
+    auto handle = predictor_->GetInputHandle(input_names[i]);
+    for (int j = 0; j < handle->shape().size(); ++j) {
+      shape.push_back(static_cast<int64_t>(handle->shape()[j])); // int32 -> int64
+    }
+    input_shapes[input_names[i]] = shape;
+  }
+  // Get the all the output shape and dtype info.
+  for (size_t i = 0; i < output_names.size(); ++i) {
+    std::vector<int64_t> shape;
+    auto handle = predictor_->GetOutputHandle(output_names[i]);
+    for (int j = 0; j < handle->shape().size(); ++j) {
+      shape.push_back(static_cast<int64_t>(handle->shape()[j])); // int32 -> int64
+    }
+    output_shapes[output_names[i]] = shape;
+    output_dtypes[output_names[i]] = handle->type();
+  }
+#else
+  auto input_shapes = predictor_->GetInputTensorShape();
+  auto output_shapes = predictor_->GetOutputTensorShape();
+  auto output_dtypes = predictor_->GetOutputTypes();
+#endif
+
+  inputs_desc_.resize(input_names.size());
+  for (int i = 0; i < input_names.size(); ++i) {
+    inputs_desc_[i].name = input_names[i];
+    auto iter = input_shapes.find(inputs_desc_[i].name);
+    FDASSERT(iter != input_shapes.end(), "Cannot find shape for input %s.",
+             inputs_desc_[i].name.c_str());
+    inputs_desc_[i].shape.assign(iter->second.begin(), iter->second.end());
+    auto iter1 = input_dtypes.find(inputs_desc_[i].name);
+    FDASSERT(iter1 != input_dtypes.end(), "Cannot find data type for input %s.",
+             inputs_desc_[i].name.c_str());
+    inputs_desc_[i].dtype = PaddleDataTypeToFD(iter1->second);
+  }
+  outputs_desc_.resize(output_names.size());
+  for (int i = 0; i < output_names.size(); ++i) {
+    outputs_desc_[i].name = output_names[i];
+    auto iter = output_shapes.find(outputs_desc_[i].name);
+    FDASSERT(iter != output_shapes.end(), "Cannot find shape for output %s.",
+             outputs_desc_[i].name.c_str());
+    outputs_desc_[i].shape.assign(iter->second.begin(), iter->second.end());
+    auto iter1 = output_dtypes.find(outputs_desc_[i].name);
+    FDASSERT(iter1 != output_dtypes.end(),
+             "Cannot find data type for output %s.",
+             outputs_desc_[i].name.c_str());
+    outputs_desc_[i].dtype = PaddleDataTypeToFD(iter1->second);
+  }
+
   initialized_ = true;
   return true;
 }

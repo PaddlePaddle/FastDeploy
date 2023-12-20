@@ -20,10 +20,14 @@ namespace vision {
 cv::Mat VisOcr(const cv::Mat& im, const OCRResult& ocr_result,
                const float score_threshold) {
   auto vis_im = im.clone();
+  bool have_score = 
+    (ocr_result.boxes.size() == ocr_result.rec_scores.size());
 
   for (int n = 0; n < ocr_result.boxes.size(); n++) {
-    if (ocr_result.rec_scores[n] < score_threshold) {
-      continue;
+    if (have_score) {
+      if (ocr_result.rec_scores[n] < score_threshold) {
+        continue;
+      }
     }
     cv::Point rook_points[4];
 

@@ -31,6 +31,16 @@ namespace fastdeploy {
 std::vector<OrtCustomOp*> OrtBackend::custom_operators_ =
     std::vector<OrtCustomOp*>();
 
+std::wstring ToWstring(const std::string &str) {
+  unsigned len = str.size() * 2;
+  setlocale(LC_CTYPE, "");
+  wchar_t *p = new wchar_t[len];
+  mbstowcs(p, str.c_str(), len);
+  std::wstring wstr(p);
+  delete[] p;
+  return wstr;
+}
+
 bool OrtBackend::BuildOption(const OrtBackendOption& option) {
   option_ = option;
   if (option.graph_optimization_level >= 0) {
@@ -45,6 +55,14 @@ bool OrtBackend::BuildOption(const OrtBackendOption& option) {
   }
   if (option.execution_mode >= 0) {
     session_options_.SetExecutionMode(ExecutionMode(option.execution_mode));
+  }
+  if (!option.optimized_model_filepath.empty()) {
+#if (defined(_WIN32) || defined(_WIN64))      
+    session_options_.SetOptimizedModelFilePath(
+      ToWstring(option.optimized_model_filepath).c_str());
+#else
+    session_options_.SetOptimizedModelFilePath(option.optimized_model_filepath.c_str());
+#endif    
   }
 
 #ifdef WITH_DIRECTML
@@ -180,16 +198,26 @@ bool OrtBackend::InitFromPaddle(const std::string& model_buffer,
   strcpy(ops[0].export_op_name, "MultiClassNMS");
   strcpy(ops[1].op_name, "pool2d");
   strcpy(ops[1].export_op_name, "AdaptivePool2d");
+  converted_to_fp16 = option.enable_fp16;
 
+  std::vector<char*> disable_fp16_ops;
+  for (auto i = 0; i < option.ort_disabled_ops_.size(); i++) {
+    auto one_type = option.ort_disabled_ops_[i];
+    char* charStr = new char[one_type.size() + 1];
+    std::strcpy(charStr, one_type.c_str());
+    disable_fp16_ops.push_back(charStr);
+  }
   if (!paddle2onnx::Export(
           model_buffer.c_str(), model_buffer.size(), params_buffer.c_str(),
           params_buffer.size(), &model_content_ptr, &model_content_size, 11,
           true, verbose, true, true, true, ops.data(), 2, "onnxruntime",
-          nullptr, 0, "", &save_external, false)) {
+          nullptr, 0, "", &save_external, option.enable_fp16,
+          disable_fp16_ops.data(), option.ort_disabled_ops_.size())) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;
   }
+
   std::string onnx_model_proto(model_content_ptr,
                                model_content_ptr + model_content_size);
   delete[] model_content_ptr;
@@ -219,7 +247,7 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
     return false;
   }
   std::string onnx_model_buffer;
-  if (option.enable_fp16) {
+  if (!converted_to_fp16 && option.enable_fp16) {
     if (option.device == Device::CPU) {
       FDWARNING << "Turning on FP16 on CPU may result in slower inference."
                 << std::endl;

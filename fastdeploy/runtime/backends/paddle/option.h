@@ -85,6 +85,12 @@ struct PaddleBackendOption {
   bool enable_memory_optimize = true;
   /// Whether enable ir debug, default false
   bool switch_ir_debug = false;
+  /// Whether enable ir optimize, default true
+  bool switch_ir_optimize = true;
+  /// Whether the load model is quantized model
+  bool is_quantize_model = false;
+  std::string inference_precision = "float32";
+  bool enable_inference_cutlass = false;
 
   /*
    * @brief IPU option, this will configure the IPU hardware, if inference model in IPU
@@ -97,12 +103,16 @@ struct PaddleBackendOption {
 
   /// Collect shape for model while enable_trt is true
   bool collect_trt_shape = false;
+  /// Collect shape for model by device (for some custom ops)
+  bool collect_trt_shape_by_device = false;
   /// Cache input shape for mkldnn while the input data will change dynamiclly
   int mkldnn_cache_size = -1;
   /// initialize memory size(MB) for GPU
   int gpu_mem_init_size = 100;
   /// The option to enable fixed size optimization for transformer model
   bool enable_fixed_size_opt = false;
+  /// min_subgraph_size for paddle-trt
+  int trt_min_subgraph_size = 3;
 
   /// Disable type of operators run on TensorRT
   void DisableTrtOps(const std::vector<std::string>& ops) {
