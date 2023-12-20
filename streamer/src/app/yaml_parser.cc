@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "app/yaml_parser.h"
+
 #include "gstreamer/utils.h"
 
 namespace fastdeploy {
@@ -28,7 +29,7 @@ YamlParser::YamlParser(const std::string& config_file) {
   config_file_ = config_file;
 }
 
-void YamlParser::ParseAppConfg(AppConfig& app_config) {
+void YamlParser::ParseAppConfig(AppConfig& app_config) {
   ValidateConfig();
   auto elem = yaml_config_["app"];
 
@@ -41,9 +42,11 @@ void YamlParser::ParseAppConfg(AppConfig& app_config) {
     FDASSERT(false, "Unsupported app type: %s.", type_str.c_str());
   }
 
-  app_config.enable_perf_measurement = elem["enable-perf-measurement"].as<bool>();
+  app_config.enable_perf_measurement =
+      elem["enable-perf-measurement"].as<bool>();
   if (app_config.enable_perf_measurement) {
-    app_config.perf_interval_sec = elem["perf-measurement-interval-sec"].as<int>();
+    app_config.perf_interval_sec =
+        elem["perf-measurement-interval-sec"].as<int>();
   }
   app_config_ = app_config;
 }
@@ -78,7 +81,8 @@ std::string YamlParser::YamlToPipelineDescStr() {
   return pipeline_desc;
 }
 
-void YamlParser::ParseElement(const std::string& name, const YAML::Node& properties) {
+void YamlParser::ParseElement(const std::string& name,
+                              const YAML::Node& properties) {
   if (name == "app") return;
 
   if (name == "nvurisrcbin_list") {
@@ -93,9 +97,10 @@ void YamlParser::ParseElement(const std::string& name, const YAML::Node& propert
   elem_descs_.push_back(elem_desc);
 }
 
-void YamlParser::ParseNvUriSrcBinList(const std::string& name, const YAML::Node& properties) {
+void YamlParser::ParseNvUriSrcBinList(const std::string& name,
+                                      const YAML::Node& properties) {
   std::string elem_name = "nvurisrcbin";
-  
+
   auto uri_list = properties["uri-list"].as<std::vector<std::string>>();
   auto pad_prefix = properties["pad-prefix"].as<std::string>();
   for (size_t i = 0; i < uri_list.size(); i++) {
@@ -111,7 +116,8 @@ void YamlParser::ParseNvUriSrcBinList(const std::string& name, const YAML::Node&
   }
 }
 
-std::string YamlParser::ParseProperty(const YAML::Node& name, const YAML::Node& value) {
+std::string YamlParser::ParseProperty(const YAML::Node& name,
+                                      const YAML::Node& value) {
   std::string prop_name = name.as<std::string>();
   std::string prop_value = value.as<std::string>();
 

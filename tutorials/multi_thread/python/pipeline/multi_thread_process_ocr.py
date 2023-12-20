@@ -253,7 +253,7 @@ if __name__ == '__main__':
         thread_num = args.thread_num
         image_num_each_thread = int(len(imgs_list) / thread_num)
         # unless you want independent model in each thread, actually model.clone()
-        # is the same as model when creating thead because of the existence of
+        # is the same as model when creating thread because of the existence of
         # GIL(Global Interpreter Lock) in python. In addition, model.clone() will consume
         # additional memory to store independent member variables
         for i in range(thread_num):
