@@ -64,6 +64,11 @@ def parse_args():
         default=64,
         help='num_attention_heads')
     parser.add_argument(
+        '--num_key_value_heads',
+        type=int,
+        default=4,
+        help='num_key_value_heads')
+    parser.add_argument(
         '--hidden_size', type=int, default=8192, help='hidden_size')
     parser.add_argument(
         '--architecture',
@@ -140,15 +145,28 @@ if args.is_ptuning:
 
 cache_kvs = []
 for _ in range(args.num_layers):
-    cache_kvs.append(
-        paddle.cast(
-            paddle.to_tensor(
-                np.zeros(
-                    (2, args.batch_size, args.num_attention_heads // nranks,
+    if 'llama' in args.architecture:
+        ## llama in PaddleNLP after https://github.com/PaddlePaddle/PaddleNLP/pull/7516/files changed cache kv shape
+        cache_kvs.append(
+            paddle.cast(
+                paddle.to_tensor(
+                    np.zeros(
+                        (2, args.batch_size, args.num_key_value_heads,
                      args.max_seq_len + args.max_dec_len, args.hidden_size //
                      args.num_attention_heads),
-                    dtype='float32')),
-            args.dtype))
+                        dtype='float32')),
+                args.dtype))
+    
+    else:
+        cache_kvs.append(
+            paddle.cast(
+                paddle.to_tensor(
+                    np.zeros(
+                        (2, args.batch_size, args.num_attention_heads // nranks,
+                        args.max_seq_len + args.max_dec_len, args.hidden_size //
+                        args.num_attention_heads),
+                        dtype='float32')),
+                args.dtype))
 
 pre_ids = paddle.to_tensor(np.full((args.batch_size, 2048), -1, dtype='int64'))
 tgt_generation_mask = paddle.zeros(

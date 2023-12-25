@@ -25,7 +25,8 @@ from fastdeploy_llm.utils.launch_infer import launch
 from fastdeploy_llm.utils.utils import deserialize_from_file, get_files, remove_files
 from fastdeploy_llm.config import Config
 from fastdeploy_llm.task import Task, TaskStatus
-from fastdeploy_llm.utils.logging_util import logger
+from fastdeploy_llm.utils.logging_util import logger, warning_logger
+from fastdeploy_llm.utils.logging_util import error_format, ErrorCode,  ErrorType
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -229,6 +230,7 @@ class Model:
 
     def _update_task_results(self, tasks):
         step_index = 1
+        last_response_time = time.time()
         while True:
             filepath = f"./real_time_save.temp_ids_rank_0_step_{step_index}"
             if os.path.exists(filepath):
@@ -240,6 +242,7 @@ class Model:
                     except:
                         fin.close()
                 token_ids = deserialize_from_file(fin)
+                last_response_time = time.time()
                 fin.close()
                 step_index += 1
                 for b, token_id in enumerate(token_ids):
@@ -283,6 +286,12 @@ class Model:
             else:
                 if not self._is_engine_busy():
                     break
+                if time.time() - last_response_time > self.config.inference_response_timeout:
+                    error_type = ErrorType.Server
+                    error_code = ErrorCode.S0003
+                    error_info = "Inference engine output token timeout due to some unexpectable exceptions."
+                    error_msg = error_format.format(error_type.name, error_code.name, error_info)
+                    warning_logger.error(error_msg)
                 ret = self.engine_proc.poll()
                 if ret is not None:
                     logger.error(
