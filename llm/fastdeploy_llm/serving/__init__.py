@@ -12,4 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .triton_model import TritonPythonModel
+from .triton_model_stream import TritonPythonModelStream
+from .triton_model_nonstream import TritonPythonModelNonStream

@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import json
-import queue
 import os
 import uuid
 import threading
@@ -22,10 +21,10 @@ import numpy as np
 import functools
 from collections import defaultdict
 from fastdeploy_llm.serving.serving_model import ServingModel
-from fastdeploy_llm.utils.logging_util import logger, warning_logger
-from fastdeploy_llm.utils.logging_util import error_format, ErrorCode,  ErrorType
+from fastdeploy_llm.utils.logging_util import logger
 from fastdeploy_llm.task import Task, BatchTask
 import fastdeploy_llm as fdlm
+import queue
 
 # Only working in triton python backend
 try:
@@ -34,28 +33,28 @@ except:
     pass
 
 
+response_dict = {}
+response_finished_queue = queue.Queue()
+
+
 def stream_call_back(call_back_task, token_tuple, index, is_last_token,
                      sender):
-    out = dict()
-    out["result"] = token_tuple[1]
-    out["req_id"] = call_back_task.task_id
-    out["token_ids"] = [token_tuple[0]]
-    out['send_idx'] = index
-    out["is_end"] = is_last_token
-    out_tensor = pb_utils.Tensor(
-        "OUT", np.array(
-            [json.dumps(out)], dtype=np.object_))
     if is_last_token:
         all_token_ids = [t[0] for t in call_back_task.result.completion_tokens] + [token_tuple[0]]
         all_strs = "".join([t[1] for t in call_back_task.result.completion_tokens]) + token_tuple[1]
-        logger.info("Model output for req_id: {}  results_all: {} tokens_all: {}".format(call_back_task.task_id, all_strs, all_token_ids))
-        sender[call_back_task.task_id].send(
-            pb_utils.InferenceResponse([out_tensor]),
-            flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
-        del sender[call_back_task.task_id]
-    else:
-        sender[call_back_task.task_id].send(
-            pb_utils.InferenceResponse([out_tensor]))
+        out = dict()
+        out["result"] = all_strs
+        out["req_id"] = call_back_task.task_id
+        out["token_ids"] = all_token_ids
+        out['send_idx'] = 0  # 整句返回
+        out["is_end"] = True
+        out_tensor = pb_utils.Tensor(
+            "OUT", np.array(
+                [json.dumps(out)], dtype=np.object_))
+        response_dict[call_back_task.task_id] = out_tensor
+        response_finished_queue.put(call_back_task.task_id)
+        
+        logger.info("Model output for req_id: {}  results_all: {} tokens_all: {}".format(call_back_task.task_id, all_strs, all_token_ids)) 
 
 
 def parse(parameters_config, name, default_value=None):
@@ -68,21 +67,9 @@ def parse(parameters_config, name, default_value=None):
     return parameters_config[name]["string_value"]
 
 
-class TritonPythonModel:
+class TritonPythonModelNonStream:
     def initialize(self, args):
         self.model_config = json.loads(args["model_config"])
-        using_decoupled = pb_utils.using_decoupled_model_transaction_policy(
-            self.model_config)
-        if not using_decoupled:
-            error_type = ErrorType.Server
-            error_code = ErrorCode.S0001
-            error_info = """the model `{}` can generate any number of responses per request,
-                enable decoupled transaction policy in model configuration to
-                serve this model""".format(args["model_name"])
-            error_msg = error_format.format(error_type.name, error_code.name, error_info)
-            warning_logger.error(error_msg)
-            raise pb_utils.TritonModelException(error_msg)
-
         parameters = self.model_config["parameters"]
 
         config = fdlm.Config(
@@ -106,6 +93,7 @@ class TritonPythonModel:
             config.max_prefix_len = int(parse(parameters, "MAX_PREFIX_LEN"))
         config.load_environment_variables()
 
+        self.wait_time_out = 60
         self.config = config
         self.response_handler = dict()
         self.model = ServingModel(config)
@@ -113,7 +101,9 @@ class TritonPythonModel:
         self.model.start()
 
     def execute(self, requests):
-        for request in requests:
+        responses = []
+        inflight_valid_tasks = {}
+        for i, request in enumerate(requests):
             request_tensor = pb_utils.get_input_tensor_by_name(request, "IN")
 
             # 1. validate the request data
@@ -129,10 +119,7 @@ class TritonPythonModel:
                 warning_logger.error(error_msg)
                 error_res = pb_utils.InferenceResponse(
                     error=pb_utils.TritonError(error_msg))
-                res_sender = request.get_response_sender()
-                res_sender.send(
-                    error_res,
-                    flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+                responses.append(error_res)
                 continue
 
             # 2. validate the deserializing process
@@ -147,10 +134,7 @@ class TritonPythonModel:
                 warning_logger.error(error_msg)
                 error_res = pb_utils.InferenceResponse(
                     error=pb_utils.TritonError(error_msg))
-                res_sender = request.get_response_sender()
-                res_sender.send(
-                    error_res,
-                    flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+                responses.append(error_res)
                 continue
 
             # 3. check if exists task id conflict
@@ -164,10 +148,7 @@ class TritonPythonModel:
                 warning_logger.error(error_msg)
                 error_res = pb_utils.InferenceResponse(
                     error=pb_utils.TritonError(error_msg))
-                res_sender = request.get_response_sender()
-                res_sender.send(
-                    error_res,
-                    flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+                responses.append(error_res)
                 continue
 
             # 4. validate the parameters in task
@@ -181,10 +162,7 @@ class TritonPythonModel:
                 warning_logger.error(error_msg)
                 error_res = pb_utils.InferenceResponse(
                     error=pb_utils.TritonError(error_msg))
-                res_sender = request.get_response_sender()
-                res_sender.send(
-                    error_res,
-                    flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+                responses.append(error_res)
                 continue
 
             # 5. check if the requests queue is full
@@ -195,10 +173,7 @@ class TritonPythonModel:
                 error_msg = error_format.format(error_type.name, error_code.name, error_info)
                 warning_logger.error(error_msg)
                 error_res = pb_utils.InferenceResponse(error=pb_utils.TritonError(error_msg))
-                res_sender = request.get_response_sender()
-                res_sender.send(
-                    error_res,
-                    flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+                responses.append(error_res)
                 continue
 
             # 6. check if the prefix embedding is exist
@@ -211,10 +186,7 @@ class TritonPythonModel:
                         error=pb_utils.TritonError(
                             "There's no prefix embedding for model_id={}.".
                             format(task.model_id)))
-                    res_sender = request.get_response_sender()
-                    res_sender.send(
-                        error_res,
-                        flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+                    responses.append(error_res)
                     continue
 
             # 7. Add task to requests queue
@@ -235,10 +207,7 @@ class TritonPythonModel:
                 error_msg = error_format.format(error_type.name, error_code.name, error_info)
                 warning_logger.error(error_msg)
                 error_res = pb_utils.InferenceResponse(error=pb_utils.TritonError(error_msg))
-                res_sender = request.get_response_sender()
-                res_sender.send(
-                    error_res,
-                    flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+                responses.append(error_res)
                 continue
 
             except Exception as e:
@@ -248,12 +217,34 @@ class TritonPythonModel:
                 error_msg = error_format.format(error_type.name, error_code.name, error_info)
                 warning_logger.error(error_msg)
                 error_res = pb_utils.InferenceResponse(error=pb_utils.TritonError(error_msg))
-                res_sender = request.get_response_sender()
-                res_sender.send(
-                    error_res,
-                    flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+                responses.append(error_res)
                 continue
-            self.response_handler[task.task_id] = request.get_response_sender()
+            inflight_valid_tasks[task.task_id] = i
+            responses.append(None) # we use None as placeholder, fill it later
+            self.response_handler[task.task_id] = None  # for compatibility
+        
+        wait_time_start = time.time()
+        while True:
+            if len(inflight_valid_tasks) == 0:
+                break
+            try:
+                task_id = response_finished_queue.get(timeout=self.wait_time_out)
+                index = inflight_valid_tasks[task_id]
+                responses[index] = response_dict[task_id]
+                del inflight_valid_tasks[task_id]
+                del response_dict[task_id]
+            except:
+                for task_id, index in inflight_valid_tasks.items():
+                    error_type = ErrorType.Query
+                    error_code = ErrorCode.C0001
+                    error_info = "Timeout for getting inference result."
+                    error_msg = error_format.format(error_type.name, error_code.name, error_info)
+                    warning_logger.error(error_msg)
+                    error_res = pb_utils.InferenceResponse(error=pb_utils.TritonError(error_msg))
+                    responses[index] = error_res
+                    break
+      
+        return responses
 
     def finalize(self):
         logger.info("The triton server is going to terminating...")
@@ -270,3 +261,4 @@ class TritonPythonModel:
                     done;'
                     """)
         logger.info("The triton server is terminated, byebye.")
+
