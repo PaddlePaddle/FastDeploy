@@ -81,7 +81,7 @@ class ServingModel:
                         task = self.requests_queue.get() # only block when get first data
                     else:
                         task = self.requests_queue.get(timeout=0.01)  # wait only 10ms for batch
-                        get_tasks.append(task)
+                    get_tasks.append(task)
                 except Exception as e:
                     break
 

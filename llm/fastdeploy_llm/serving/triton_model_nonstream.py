@@ -21,7 +21,8 @@ import numpy as np
 import functools
 from collections import defaultdict
 from fastdeploy_llm.serving.serving_model import ServingModel
-from fastdeploy_llm.utils.logging_util import logger
+from fastdeploy_llm.utils.logging_util import logger, warning_logger
+from fastdeploy_llm.utils.logging_util import error_format, ErrorCode,  ErrorType
 from fastdeploy_llm.task import Task, BatchTask
 import fastdeploy_llm as fdlm
 import queue
@@ -51,7 +52,8 @@ def stream_call_back(call_back_task, token_tuple, index, is_last_token,
         out_tensor = pb_utils.Tensor(
             "OUT", np.array(
                 [json.dumps(out)], dtype=np.object_))
-        response_dict[call_back_task.task_id] = out_tensor
+        response = pb_utils.InferenceResponse([out_tensor])
+        response_dict[call_back_task.task_id] = response
         response_finished_queue.put(call_back_task.task_id)
         
         logger.info("Model output for req_id: {}  results_all: {} tokens_all: {}".format(call_back_task.task_id, all_strs, all_token_ids)) 
@@ -233,6 +235,7 @@ class TritonPythonModelNonStream:
                 responses[index] = response_dict[task_id]
                 del inflight_valid_tasks[task_id]
                 del response_dict[task_id]
+                del self.response_handler[task_id]
             except:
                 for task_id, index in inflight_valid_tasks.items():
                     error_type = ErrorType.Query
