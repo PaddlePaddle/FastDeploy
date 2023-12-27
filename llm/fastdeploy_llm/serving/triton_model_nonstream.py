@@ -56,8 +56,8 @@ def stream_call_back(call_back_task, token_tuple, index, is_last_token,
         response_dict[call_back_task.task_id] = response
         response_finished_queue.put(call_back_task.task_id)
         
-        logger.info("Model output for req_id: {}  results_all: {} tokens_all: {} inference_cost_time: {} s".format(
-            call_back_task.task_id, all_strs, all_token_ids, time.time() - call_back_task.inference_start_time)) 
+        logger.info("Model output for req_id: {}  results_all: {} tokens_all: {} inference_cost_time: {} ms".format(
+            call_back_task.task_id, all_strs, all_token_ids, (time.time() - call_back_task.inference_start_time) * 1000)) 
 
 
 def parse(parameters_config, name, default_value=None):
@@ -251,7 +251,7 @@ class TritonPythonModelNonStream:
                     responses[index] = error_res
                     break
         for task_id, start_time in request_start_time_dict.items():
-            logger.info("req_id: {} has sent back to client, request_cost_time: {}".format(task_id, time.time() - start_time))
+            logger.info("req_id: {} has sent back to client, request_cost_time: {} ms".format(task_id, (time.time() - start_time) * 1000))
         return responses
 
     def finalize(self):

@@ -124,7 +124,7 @@ class ServingModel:
             logger.debug(
                 "BatchTasks with task_id={} is send to engine to predict.".
                 format([t.task_id for t in batch_tasks.tasks]))
-            for task in get_tasks:
+            for task in batch_tasks.tasks:
                 task.set_inference_start_time(time.time())
             self.model.predict(batch_tasks, stop_nums)
             logger.debug("The last batch tasks' status = {}.".format(
