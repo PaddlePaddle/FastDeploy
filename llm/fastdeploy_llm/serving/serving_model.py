@@ -77,13 +77,17 @@ class ServingModel:
             get_tasks = list()
             for i in range(get_tasks_num):
                 try:
-                    task = self.requests_queue.get(timeout=0.1)
+                    if i == 0:
+                        task = self.requests_queue.get() # only block when get first data
+                    else:
+                        task = self.requests_queue.get(timeout=0.01)  # wait only 10ms for batch
                     get_tasks.append(task)
                 except Exception as e:
                     break
-            if len(get_tasks) == 0 and batch_tasks.unfinished_size() == 0:
-                time.sleep(0.1)
-                continue
+
+            # if len(get_tasks) == 0 and batch_tasks.unfinished_size() == 0: # should not arrive here for performance 
+            #     time.sleep(0.1)
+            #     continue
 
             sender_size = 0
             if self.model.stream_sender is not None:
@@ -120,6 +124,8 @@ class ServingModel:
             logger.debug(
                 "BatchTasks with task_id={} is send to engine to predict.".
                 format([t.task_id for t in batch_tasks.tasks]))
+            for task in batch_tasks.tasks:
+                task.set_inference_start_time(time.time())
             self.model.predict(batch_tasks, stop_nums)
             logger.debug("The last batch tasks' status = {}.".format(
                 [t.status for t in batch_tasks.tasks]))

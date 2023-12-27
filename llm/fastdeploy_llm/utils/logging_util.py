@@ -54,6 +54,7 @@ class ErrorCode(Enum):
     S0000 = 2  # 服务负载过大
     S0001 = 3  # 服务没能正常启动
     S0002 = 4  # 服务退出
+    S0003 = 5  # 服务异常，推理引擎吐出结果超时
 
 class ErrorType(Enum):
     Query = 0  # Query错误

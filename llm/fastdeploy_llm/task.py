@@ -69,6 +69,14 @@ class Task:
         self.task_id = task_id
         # model_id is using to specify the prefix cache when is_ptuning is on
         self.model_id = None
+        self.inference_start_time = 0
+        self.request_start_time = 0
+    
+    def set_request_start_time(self, start_time):
+        self.request_start_time = start_time
+    
+    def set_inference_start_time(self, start_time):
+        self.inference_start_time = start_time
 
     def clear(self):
         self.status = TaskStatus.NEW

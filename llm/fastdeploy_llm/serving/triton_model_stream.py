@@ -48,7 +48,8 @@ def stream_call_back(call_back_task, token_tuple, index, is_last_token,
     if is_last_token:
         all_token_ids = [t[0] for t in call_back_task.result.completion_tokens] + [token_tuple[0]]
         all_strs = "".join([t[1] for t in call_back_task.result.completion_tokens]) + token_tuple[1]
-        logger.info("Model output for req_id: {}  results_all: {} tokens_all: {}".format(call_back_task.task_id, all_strs, all_token_ids))
+        logger.info("Model output for req_id: {}  results_all: {} tokens_all: {} inference_cost_time: {} s request_cost_time: {} s".format(
+            call_back_task.task_id, all_strs, all_token_ids, time.time() - call_back_task.inference_start_time, time.time() - call_back_task.request_start_time))
         sender[call_back_task.task_id].send(
             pb_utils.InferenceResponse([out_tensor]),
             flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
@@ -68,7 +69,7 @@ def parse(parameters_config, name, default_value=None):
     return parameters_config[name]["string_value"]
 
 
-class TritonPythonModel:
+class TritonPythonModelStream:
     def initialize(self, args):
         self.model_config = json.loads(args["model_config"])
         using_decoupled = pb_utils.using_decoupled_model_transaction_policy(
@@ -139,6 +140,7 @@ class TritonPythonModel:
             task = Task()
             try:
                 task.from_dict(data)
+                task.set_request_start_time(time.time())
             except Exception as e:
                 error_type = ErrorType.Query
                 error_code = ErrorCode.C0001

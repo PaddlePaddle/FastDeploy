@@ -100,6 +100,7 @@ class Config:
         self.model_prompt_dir_path = config.get("prompt_dir_path",
                                                 "./prompt_embedding")
         self.max_prefix_len = config.get("max_prefix_len", 128)
+        self.inference_response_timeout = 20   # timeout for inference engine output every token
 
     def is_arch(self, arch):
         return arch in self.architecture
@@ -158,3 +159,10 @@ class Config:
                 "detect environment DISABLE_DYNAMIC_BATCHING={}, will reset `disable_dynamic_batching` to {}!".
                 format(self.disable_dynamic_batching,
                        self.disable_dynamic_batching))
+        
+        if os.getenv("INFERENCE_RESPONSE_TIMEOUT", None):
+            self.inference_response_timeout = int(os.getenv("INFERENCE_RESPONSE_TIMEOUT"))
+            logger.warning(
+                "detect environment INFERENCE_RESPONSE_TIMEOUT={}, will reset `inference_response_timeout` to {}!".
+                format(self.inference_response_timeout,
+                       self.inference_response_timeout))
