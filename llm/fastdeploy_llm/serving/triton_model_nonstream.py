@@ -56,7 +56,8 @@ def stream_call_back(call_back_task, token_tuple, index, is_last_token,
         response_dict[call_back_task.task_id] = response
         response_finished_queue.put(call_back_task.task_id)
         
-        logger.info("Model output for req_id: {}  results_all: {} tokens_all: {}".format(call_back_task.task_id, all_strs, all_token_ids)) 
+        logger.info("Model output for req_id: {}  results_all: {} tokens_all: {} inference_cost_time: {} s".format(
+            call_back_task.task_id, all_strs, all_token_ids, time.time() - call_back_task.inference_start_time)) 
 
 
 def parse(parameters_config, name, default_value=None):
@@ -105,6 +106,7 @@ class TritonPythonModelNonStream:
     def execute(self, requests):
         responses = []
         inflight_valid_tasks = {}
+        request_start_time_dict = {}
         for i, request in enumerate(requests):
             request_tensor = pb_utils.get_input_tensor_by_name(request, "IN")
 
@@ -128,6 +130,8 @@ class TritonPythonModelNonStream:
             task = Task()
             try:
                 task.from_dict(data)
+                request_start_time = time.time()
+                task.set_request_start_time(request_start_time)
             except Exception as e:
                 error_type = ErrorType.Query
                 error_code = ErrorCode.C0001
@@ -142,6 +146,7 @@ class TritonPythonModelNonStream:
             # 3. check if exists task id conflict
             if task.task_id is None:
                 task.task_id = str(uuid.uuid4())
+            request_start_time_dict[task.task_id] = request_start_time
             if task.task_id in self.response_handler:
                 error_type = ErrorType.Query
                 error_code = ErrorCode.C0001
@@ -225,7 +230,6 @@ class TritonPythonModelNonStream:
             responses.append(None) # we use None as placeholder, fill it later
             self.response_handler[task.task_id] = None  # for compatibility
         
-        wait_time_start = time.time()
         while True:
             if len(inflight_valid_tasks) == 0:
                 break
@@ -246,7 +250,8 @@ class TritonPythonModelNonStream:
                     error_res = pb_utils.InferenceResponse(error=pb_utils.TritonError(error_msg))
                     responses[index] = error_res
                     break
-      
+        for task_id, start_time in request_start_time_dict.items():
+            logger.info("req_id: {} has sent back to client, request_cost_time: {}".format(task_id, time.time() - start_time))
         return responses
 
     def finalize(self):
