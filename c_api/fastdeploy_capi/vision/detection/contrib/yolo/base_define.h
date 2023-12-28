@@ -34,10 +34,17 @@ FD_C_Destroy##model_type##Wrapper(__fd_take FD_C_##model_type##Wrapper* wrapper_
       FD_C_DetectionResult* fd_c_detection_result, float conf_threshold,       \
       float nms_threshold)
 
+#define YOLO_DECLARE_SETPRESIZE_FUNCTION(model_type, wrapper_var_name) \
+  FASTDEPLOY_CAPI_EXPORT extern void FD_C_##model_type##WrapperSetPreSize( \
+                            __fd_take FD_C_##model_type##Wrapper* wrapper_var_name, \
+                            int iWidth, int iHeight)
+
 #define YOLO_DECLARE_INITIALIZED_FUNCTION(model_type, wrapper_var_name)  FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_##model_type##WrapperInitialized( \
     __fd_keep FD_C_##model_type##Wrapper* wrapper_var_name)
 
-
+#define YOLO_DECLARE_SET_PRESIZE_FUNCTION(model_type, wrapper_var_name) FASTDEPLOY_CAPI_EXPORT extern void FD_C_##model_type##WrapperSetPreSize( \
+                            __fd_keep FD_C_##model_type##Wrapper* wrapper_var_name, \
+                            int iWidth, int iHeight)
 #define YOLO_DECLARE_BATCH_PREDICT_FUNCTION(model_type, wrapper_var_name) FASTDEPLOY_CAPI_EXPORT extern FD_C_Bool FD_C_##model_type##WrapperBatchPredict( \
                             __fd_keep FD_C_##model_type##Wrapper* wrapper_var_name, \
                             FD_C_OneDimMat imgs, \
@@ -137,3 +144,12 @@ FD_C_Destroy##model_type##Wrapper(__fd_take FD_C_##model_type##Wrapper* wrapper_
   }\
   return successful; \
 }
+
+#define YOLO_DECLARE_AND_IMPLEMENT_SETPRESIZE_FUNCTION(model_type, wrapper_var_name) void FD_C_##model_type##WrapperSetPreSize( \
+    FD_C_##model_type##Wrapper* wrapper_var_name, int iWidth, int iHeight) { \
+      if (iWidth > 0 && iHeight > 0) { \
+        auto& model = \
+            CHECK_AND_CONVERT_FD_TYPE(model_type##Wrapper, wrapper_var_name); \
+        model->SetPreSize(iWidth, iHeight); \
+      } \
+    }

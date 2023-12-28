@@ -38,6 +38,10 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
 
   std::string ModelName() const { return "yolov5"; }
 
+    void SetPreSize(int iWidth, int iHeight){
+    std::vector<int> vecPreSize = {iWidth, iHeight};
+    preprocessor_.SetSize(vecPreSize);
+  }
   /** \brief DEPRECATED Predict the detection result for an input image, remove at 1.0 version
    *
    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format

@@ -67,6 +67,7 @@ YOLO_DECLARE_PREDICT_FUNCTION(YOLOv5, fd_c_yolov5_wrapper);
 
 YOLO_DECLARE_INITIALIZED_FUNCTION(YOLOv5, fd_c_yolov5_wrapper);
 
+YOLO_DECLARE_SETPRESIZE_FUNCTION(YOLOv5, fd_c_yolov5_wrapper);
 /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] fd_c_yolov5_wrapper pointer to FD_C_YOLOv5Wrapper object
