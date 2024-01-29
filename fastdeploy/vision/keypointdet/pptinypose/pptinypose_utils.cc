@@ -101,7 +101,7 @@ void GetFinalPredictions(const std::vector<float>& heatmap,
     coords[j * 2 + 1] = idx / heatmap_width;
     int px = int(coords[j * 2] + 0.5);
     int py = int(coords[j * 2 + 1] + 0.5);
-    if (DARK && px > 1 && px < heatmap_width - 2) {
+    if (DARK && px > 1 && px < heatmap_width - 2 && py > 1 && py < heatmap_height - 2) {
       utils::DarkParse(heatmap, dim, &coords, px, py, index, j);
     } else {
       if (px > 0 && px < heatmap_width - 1) {
