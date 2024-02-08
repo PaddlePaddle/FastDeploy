@@ -68,7 +68,7 @@ StructureV2TablePostprocessor::StructureV2TablePostprocessor(
 bool StructureV2TablePostprocessor::SingleBatchPostprocessor(
     const float* structure_probs, const float* bbox_preds, size_t slice_dim,
     size_t prob_dim, size_t box_dim, int img_width, int img_height,
-    std::vector<std::array<int, 8>>* boxes_result,
+    std::vector<std::vector<std::array<int, 2>>>* boxes_result,
     std::vector<std::string>* structure_list_result) {
   structure_list_result->push_back("<html>");
   structure_list_result->push_back("<body>");
@@ -93,24 +93,24 @@ bool StructureV2TablePostprocessor::SingleBatchPostprocessor(
     std::string text = dict_character[structure_idx];
     if (std::find(td_tokens.begin(), td_tokens.end(), text) !=
         td_tokens.end()) {
-      std::array<int, 8> bbox;
+      std::vector<std::array<int, 2>> bbox;
       // box dim: en->4, ch->8
       if (box_dim == 4) {
-        bbox[0] = bbox_preds[i * box_dim] * img_width;
-        bbox[1] = bbox_preds[i * box_dim + 1] * img_height;
+        bbox[0][0] = bbox_preds[i * box_dim] * img_width;
+        bbox[0][1] = bbox_preds[i * box_dim + 1] * img_height;
 
-        bbox[2] = bbox_preds[i * box_dim + 2] * img_width;
-        bbox[3] = bbox_preds[i * box_dim + 1] * img_height;
+        bbox[1][0] = bbox_preds[i * box_dim + 2] * img_width;
+        bbox[1][1] = bbox_preds[i * box_dim + 1] * img_height;
 
-        bbox[4] = bbox_preds[i * box_dim + 2] * img_width;
-        bbox[5] = bbox_preds[i * box_dim + 3] * img_height;
+        bbox[2][0] = bbox_preds[i * box_dim + 2] * img_width;
+        bbox[2][1] = bbox_preds[i * box_dim + 3] * img_height;
 
-        bbox[6] = bbox_preds[i * box_dim] * img_width;
-        bbox[7] = bbox_preds[i * box_dim + 3] * img_height;
+        bbox[3][0] = bbox_preds[i * box_dim] * img_width;
+        bbox[3][1] = bbox_preds[i * box_dim + 3] * img_height;
       } else {
         for (int k = 0; k < 8; k++) {
           float bbox_pred = bbox_preds[i * box_dim + k];
-          bbox[k] =
+          bbox[k / 2][k % 2] =
               int(k % 2 == 0 ? bbox_pred * img_width : bbox_pred * img_height);
         }
       }
@@ -128,7 +128,7 @@ bool StructureV2TablePostprocessor::SingleBatchPostprocessor(
 
 bool StructureV2TablePostprocessor::Run(
     const std::vector<FDTensor>& tensors,
-    std::vector<std::vector<std::array<int, 8>>>* bbox_batch_list,
+    std::vector<std::vector<std::vector<std::array<int, 2>>>>* bbox_batch_list,
     std::vector<std::vector<std::string>>* structure_batch_list,
     const std::vector<std::array<int, 4>>& batch_det_img_info) {
   // Table have 2 output tensors.

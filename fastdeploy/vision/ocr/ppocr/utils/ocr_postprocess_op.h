@@ -37,7 +37,7 @@ class PostProcessor {
   void GetContourArea(const std::vector<std::vector<float>> &box,
                       float unclip_ratio, float &distance);
 
-  cv::RotatedRect UnClip(std::vector<std::vector<float>> box,
+  std::vector<std::vector<cv::Point>>  UnClip(std::vector<std::vector<float>> box,
                          const float &unclip_ratio);
 
   float **Mat2Vec(cv::Mat mat);
@@ -45,18 +45,22 @@ class PostProcessor {
   std::vector<std::vector<int>> OrderPointsClockwise(
       std::vector<std::vector<int>> pts);
 
-  std::vector<std::vector<float>> GetMiniBoxes(cv::RotatedRect box,
+  std::vector<std::vector<float>> GetMiniBoxes(std::vector<cv::Point> box,
                                                float &ssid);
 
   float BoxScoreFast(std::vector<std::vector<float>> box_array, cv::Mat pred);
   float PolygonScoreAcc(std::vector<cv::Point> contour, cv::Mat pred);
 
-  std::vector<std::vector<std::vector<int>>> BoxesFromBitmap(
+  std::vector<std::vector<std::array<int, 2>>> BoxesFromBitmap(
       const cv::Mat pred, const cv::Mat bitmap, const float &box_thresh,
       const float &det_db_unclip_ratio, const std::string &det_db_score_mode);
 
-  std::vector<std::vector<std::vector<int>>> FilterTagDetRes(
-      std::vector<std::vector<std::vector<int>>> boxes,
+  std::vector<std::vector<std::array<int, 2>>> PloygonsFromBitmap(
+    const cv::Mat pred, const cv::Mat bitmap, const float &box_thresh,
+    const float &det_db_unclip_ratio, const std::string &det_db_score_mode);
+
+  std::vector<std::vector<std::array<int, 2>>> FilterTagDetRes(
+      std::vector<std::vector<std::array<int, 2>>> boxes,
       const std::array<int, 4>& det_img_info);
 
  private:

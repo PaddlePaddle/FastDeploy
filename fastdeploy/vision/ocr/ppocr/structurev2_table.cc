@@ -65,9 +65,9 @@ std::unique_ptr<StructureV2Table> StructureV2Table::Clone() const {
 }
 
 bool StructureV2Table::Predict(const cv::Mat& img,
-                               std::vector<std::array<int, 8>>* boxes_result,
+                               std::vector<std::vector<std::array<int, 2>>>* boxes_result,
                                std::vector<std::string>* structure_result) {
-  std::vector<std::vector<std::array<int, 8>>> det_results;
+  std::vector<std::vector<std::vector<std::array<int, 2>>>> det_results;
   std::vector<std::vector<std::string>> structure_results;
   if (!BatchPredict({img}, &det_results, &structure_results)) {
     return false;
@@ -89,7 +89,7 @@ bool StructureV2Table::Predict(const cv::Mat& img,
 bool StructureV2Table::BatchPredict(
     const std::vector<cv::Mat>& images,
     std::vector<vision::OCRResult>* ocr_results) {
-  std::vector<std::vector<std::array<int, 8>>> det_results;
+  std::vector<std::vector<std::vector<std::array<int, 2>>>> det_results;
   std::vector<std::vector<std::string>> structure_results;
   if (!BatchPredict(images, &det_results, &structure_results)) {
     return false;
@@ -104,7 +104,7 @@ bool StructureV2Table::BatchPredict(
 
 bool StructureV2Table::BatchPredict(
     const std::vector<cv::Mat>& images,
-    std::vector<std::vector<std::array<int, 8>>>* det_results,
+    std::vector<std::vector<std::vector<std::array<int, 2>>>>* det_results,
     std::vector<std::vector<std::string>>* structure_results) {
   std::vector<FDMat> fd_images = WrapMat(images);
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {

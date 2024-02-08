@@ -19,7 +19,7 @@ namespace vision {
 namespace ocr {
 
 cv::Mat GetRotateCropImage(const cv::Mat& srcimage,
-                           const std::array<int, 8>& box) {
+                           const std::vector<std::array<int, 2>>& box) {
   cv::Mat image;
   srcimage.copyTo(image);
 
@@ -27,12 +27,12 @@ cv::Mat GetRotateCropImage(const cv::Mat& srcimage,
 
   for (int i = 0; i < 4; ++i) {
     std::vector<int> tmp;
-    tmp.push_back(box[2 * i]);
-    tmp.push_back(box[2 * i + 1]);
+    tmp.push_back(box[i][0]);
+    tmp.push_back(box[i][1]);
     points.push_back(tmp);
   }
-  int x_collect[4] = {box[0], box[2], box[4], box[6]};
-  int y_collect[4] = {box[1], box[3], box[5], box[7]};
+  int x_collect[4] = {box[0][1], box[0][2], box[0][4], box[0][6]};
+  int y_collect[4] = {box[1][1], box[1][3], box[1][5], box[1][7]};
   int left = int(*std::min_element(x_collect, x_collect + 4));
   int right = int(*std::max_element(x_collect, x_collect + 4));
   int top = int(*std::min_element(y_collect, y_collect + 4));

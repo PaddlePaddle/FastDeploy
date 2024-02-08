@@ -20,7 +20,7 @@ namespace vision {
 cv::Mat VisOcr(const cv::Mat& im, const OCRResult& ocr_result,
                const float score_threshold) {
   auto vis_im = im.clone();
-  bool have_score = 
+  bool have_score =
     (ocr_result.boxes.size() == ocr_result.rec_scores.size());
 
   for (int n = 0; n < ocr_result.boxes.size(); n++) {
@@ -29,15 +29,18 @@ cv::Mat VisOcr(const cv::Mat& im, const OCRResult& ocr_result,
         continue;
       }
     }
-    cv::Point rook_points[4];
 
-    for (int m = 0; m < 4; m++) {
-      rook_points[m] = cv::Point(int(ocr_result.boxes[n][m * 2]),
-                                 int(ocr_result.boxes[n][m * 2 + 1]));
+    int point_num = ocr_result.boxes[n].size();
+
+    cv::Point rook_points[point_num];
+
+    for (int m = 0; m < point_num; m++) {
+      rook_points[m] = cv::Point(int(ocr_result.boxes[n][m][0]),
+                                 int(ocr_result.boxes[n][m][1]));
     }
 
     const cv::Point* ppt[1] = {rook_points};
-    int npt[] = {4};
+    int npt[] = {point_num};
     cv::polylines(vis_im, ppt, npt, 1, 1, CV_RGB(0, 255, 0), 2, 8, 0);
   }
 
@@ -52,15 +55,17 @@ cv::Mat Visualize::VisOcr(const cv::Mat& im, const OCRResult& ocr_result) {
   auto vis_im = im.clone();
 
   for (int n = 0; n < ocr_result.boxes.size(); n++) {
-    cv::Point rook_points[4];
 
-    for (int m = 0; m < 4; m++) {
-      rook_points[m] = cv::Point(int(ocr_result.boxes[n][m * 2]),
-                                 int(ocr_result.boxes[n][m * 2 + 1]));
+    int point_num = ocr_result.boxes[n].size();
+    cv::Point rook_points[point_num];
+
+    for (int m = 0; m < point_num; m++) {
+      rook_points[m] = cv::Point(int(ocr_result.boxes[n][m][0]),
+                                 int(ocr_result.boxes[n][m][1]));
     }
 
     const cv::Point* ppt[1] = {rook_points};
-    int npt[] = {4};
+    int npt[] = {point_num};
     cv::polylines(vis_im, ppt, npt, 1, 1, CV_RGB(0, 255, 0), 2, 8, 0);
   }
 

@@ -26,7 +26,7 @@ namespace vision {
  */
 class FASTDEPLOY_DECL ProcessorManager {
  public:
-  ~ProcessorManager();
+  virtual ~ProcessorManager();
 
   /** \brief Use CUDA to boost the performance of processors
    *

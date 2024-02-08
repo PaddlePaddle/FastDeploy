@@ -288,7 +288,7 @@ FD_C_Bool FD_C_DBDetectorWrapperBatchPredict(
     FD_C_DBDetectorWrapper* fd_c_dbdetector_wrapper, FD_C_OneDimMat imgs,
     FD_C_ThreeDimArrayInt32* det_results) {
   std::vector<cv::Mat> imgs_vec;
-  std::vector<std::vector<std::array<int, 8>>> det_results_out;
+  std::vector<std::vector<std::vector<std::array<int, 2>>>> det_results_out;
   for (int i = 0; i < imgs.size; i++) {
     imgs_vec.push_back(*(reinterpret_cast<cv::Mat*>(imgs.data[i])));
   }

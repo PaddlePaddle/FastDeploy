@@ -28,15 +28,15 @@ namespace vision {
 namespace ocr {
 
 FASTDEPLOY_DECL cv::Mat GetRotateCropImage(const cv::Mat& srcimage,
-                           const std::array<int, 8>& box);
+                           const std::vector<std::array<int, 2>>& box);
 
-FASTDEPLOY_DECL void SortBoxes(std::vector<std::array<int, 8>>* boxes);
+FASTDEPLOY_DECL void SortBoxes(std::vector<std::vector<std::array<int, 2>>>* boxes);
 
 FASTDEPLOY_DECL std::vector<int> ArgSort(const std::vector<float> &array);
 
 FASTDEPLOY_DECL std::vector<float> Softmax(std::vector<float> &src);
 
-FASTDEPLOY_DECL std::vector<int> Xyxyxyxy2Xyxy(std::array<int, 8> &box);
+FASTDEPLOY_DECL std::vector<int> Xyxyxyxy2Xyxy(std::vector<std::array<int, 2>> &box);
 
 FASTDEPLOY_DECL float Dis(std::vector<int> &box1, std::vector<int> &box2);
 

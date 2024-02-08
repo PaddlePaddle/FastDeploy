@@ -18,28 +18,28 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-bool CompareBox(const std::array<int, 8>& result1,
-                const std::array<int, 8>& result2) {
-  if (result1[1] < result2[1]) {
+bool CompareBox(const std::vector<std::array<int, 2>>& result1,
+                const std::vector<std::array<int, 2>>& result2) {
+  if (result1[0][1] < result2[0][1]) {
     return true;
-  } else if (result1[1] == result2[1]) {
-    return result1[0] < result2[0];
+  } else if (result1[0][1] == result2[0][1]) {
+    return result1[0][0] < result2[0][0];
   } else {
     return false;
   }
 }
 
-void SortBoxes(std::vector<std::array<int, 8>>* boxes) {
+void SortBoxes(std::vector<std::vector<std::array<int, 2>>>* boxes) {
   std::sort(boxes->begin(), boxes->end(), CompareBox);
 
   if (boxes->size() == 0) {
     return;
   }
-  
+
   for (int i = 0; i < boxes->size() - 1; i++) {
     for (int j = i; j >=0 ; j--){
-        if (std::abs((*boxes)[j + 1][1] - (*boxes)[j][1]) < 10 &&
-        ((*boxes)[j + 1][0] < (*boxes)[j][0])) {
+        if (std::abs((*boxes)[j + 1][0][1] - (*boxes)[j][0][1]) < 10 &&
+        ((*boxes)[j + 1][0][0] < (*boxes)[j][0][0])) {
           std::swap((*boxes)[i], (*boxes)[i + 1]);
         }
     }

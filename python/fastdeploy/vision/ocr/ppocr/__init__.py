@@ -191,6 +191,23 @@ class DBDetectorPostprocessor:
             bool), "The value to set `use_dilation` must be type of bool."
         self._postprocessor.use_dilation = value
 
+    @property
+    def det_db_use_ploy(self):
+        """
+        Return the det_db_use_ploy of DBDetectorPostprocessor
+        """
+        return self._postprocessor.det_db_use_ploy
+
+    @det_db_use_ploy.setter
+    def det_db_use_ploy(self, value):
+        """Set the det_db_use_ploy for DBDetectorPostprocessor
+
+        :param: value : the det_db_use_ploy value
+        """
+        assert isinstance(
+            value,
+            bool), "The value to set `det_db_use_ploy` must be type of bool."
+        self._postprocessor.det_db_use_ploy = value
 
 class DBDetector(FastDeployModel):
     def __init__(self,
@@ -322,6 +339,16 @@ class DBDetector(FastDeployModel):
             bool), "The value to set `use_dilation` must be type of bool."
         self._model.postprocessor.use_dilation = value
 
+    @property
+    def det_db_use_ploy(self):
+        return self._model.postprocessor.det_db_use_ploy
+
+    @det_db_use_ploy.setter
+    def det_db_use_ploy(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `det_db_use_ploy` must be type of bool."
+        self._model.postprocessor.det_db_use_ploy = value
 
 class ClassifierPreprocessor(ProcessorManager):
     def __init__(self):
