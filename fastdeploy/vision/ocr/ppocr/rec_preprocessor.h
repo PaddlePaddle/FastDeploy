@@ -75,9 +75,9 @@ class FASTDEPLOY_DECL RecognizerPreprocessor : public ProcessorManager {
   std::vector<int> GetRecImageShape() { return rec_image_shape_; }
 
   /// This function will disable normalize in preprocessing step.
-  void DisableNormalize() { disable_permute_ = true; }
+  void DisableNormalize() { disable_normalize_ = true; }
   /// This function will disable hwc2chw in preprocessing step.
-  void DisablePermute() { disable_normalize_ = true; }
+  void DisablePermute() { disable_permute_ = true; }
 
  private:
   void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
