@@ -117,14 +117,6 @@ class ModelExecutor:
         self.model.start()
 
     def execute(self, req_dict):
-        if self.model is None:
-            error_type = ErrorType.Query
-            error_code = ErrorCode.C0001
-            error_info = "Model is not ready"
-            error_msg = error_format.format(error_type.name, error_code.name, error_info)
-            warning_logger.error(error_msg)
-            response_dict[req_dict['req_id']] = error_msg
-            return
         # 1. validate the deserializing process
         task = Task()
         try:
@@ -138,20 +130,19 @@ class ModelExecutor:
             error_msg = error_format.format(error_type.name, error_code.name, error_info)
             warning_logger.error(error_msg)
             response_dict[req_dict['req_id']] = error_msg
-            return
+            return task
 
         # 3. check if exists task id conflict
         if task.task_id is None:
             task.task_id = str(uuid.uuid4())
         request_start_time_dict[task.task_id] = request_start_time
-        if task.task_id in self.response_handler:
+        if task.task_id in event_dict:
             error_type = ErrorType.Query
             error_code = ErrorCode.C0001
             error_info = "Task id conflict with {}.".format(task.task_id)
             error_msg = error_format.format(error_type.name, error_code.name, error_info)
             warning_logger.error(error_msg)
-            response_dict[req_dict['req_id']] = error_msg
-            return 
+            return None
 
         # 4. validate the parameters in task
         try:
@@ -163,7 +154,7 @@ class ModelExecutor:
             error_msg = error_format.format(error_type.name, error_code.name, error_info)
             warning_logger.error(error_msg)
             response_dict[req_dict['req_id']] = error_msg
-            return 
+            return task
 
         # 5. check if the requests queue is full
         if self.model.requests_queue.qsize() > self.config.max_queue_num:
@@ -173,7 +164,7 @@ class ModelExecutor:
             error_msg = error_format.format(error_type.name, error_code.name, error_info)
             warning_logger.error(error_msg)
             response_dict[req_dict['req_id']] = error_msg
-            return
+            return task
 
         # 6. check if the prefix embedding is exist
         if self.config.is_ptuning and task.model_id is not None:
@@ -182,7 +173,7 @@ class ModelExecutor:
                                         "task_prompt_embeddings.npy")
             if not os.path.exists(np_file_path):
                 response_dict[req_dict['req_id']] = error_msg
-                return 
+                return task
 
         # 7. Add task to requests queue
         task.call_back_func = stream_call_back
@@ -202,7 +193,7 @@ class ModelExecutor:
             error_msg = error_format.format(error_type.name, error_code.name, error_info)
             warning_logger.error(error_msg)
             response_dict[req_dict['req_id']] = error_msg
-            return 
+            return task
 
         except Exception as e:
             error_type = ErrorType.Query
@@ -211,7 +202,7 @@ class ModelExecutor:
             error_msg = error_format.format(error_type.name, error_code.name, error_info)
             warning_logger.error(error_msg)
             response_dict[req_dict['req_id']] = error_msg
-            return
+            return task
         
         return task
 
@@ -231,14 +222,28 @@ class ModelExecutor:
             error_msg = error_format.format(error_type.name, error_code.name, error_info)
             warning_logger.error(error_msg)
             raise HTTPException(status_code=400, detail=error_msg)
+        if self.model is None:
+            error_type = ErrorType.Query
+            error_code = ErrorCode.C0001
+            error_info = "Model is not ready"
+            error_msg = error_format.format(error_type.name, error_code.name, error_info)
+            warning_logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg)
         task = self.execute(input_dict)
+        if task is None:  # task id conflict
+            error_type = ErrorType.Query
+            error_code = ErrorCode.C0001
+            error_info = "Task id conflict"
+            error_msg = error_format.format(error_type.name, error_code.name, error_info)
+            raise HTTPException(status_code=400, detail=error_msg)
+
         event_dict[task.task_id] = asyncio.Event() 
         try:
             await asyncio.wait_for(event_dict[task.task_id].wait(), self.wait_time_out)  
         except:
             error_type = ErrorType.Query
             error_code = ErrorCode.C0001
-            error_info = "Timeout for getting inference result."
+            error_info = "Timeout for getting inference result, task={}".format(task)
             error_msg = error_format.format(error_type.name, error_code.name, error_info)
             warning_logger.error(error_msg)
             raise HTTPException(status_code=400, detail=error_msg)
@@ -270,7 +275,8 @@ async def watch_result():
                     event_dict[task_id].set()
                 
             for task_id in response_checked_dict:
-                del response_dict[task_id]
+                if task_id in response_dict:
+                    del response_dict[task_id]
 
 
 model_dir = os.getenv("MODEL_DIR", None)
