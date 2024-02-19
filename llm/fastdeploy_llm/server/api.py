@@ -265,8 +265,9 @@ async def watch_result():
         await asyncio.sleep(0.01) # 10ms查询一次结果
         if response_dict:
             for task_id in response_dict:
-                response_checked_dict[task_id] = response_dict[task_id]
-                event_dict[task_id].set()
+                if task_id in event_dict:
+                    response_checked_dict[task_id] = response_dict[task_id]
+                    event_dict[task_id].set()
                 
             for task_id in response_checked_dict:
                 del response_dict[task_id]
