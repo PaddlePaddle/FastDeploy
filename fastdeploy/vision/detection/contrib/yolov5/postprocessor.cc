@@ -88,7 +88,7 @@ bool YOLOv5Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<
     }
 
     if ((*results)[bs].boxes.size() == 0) {
-      return true;
+      continue;
     }
 
     utils::NMS(&((*results)[bs]), nms_threshold_);
