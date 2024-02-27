@@ -105,7 +105,7 @@ bool YOLOv5SegPostprocessor::Run(
     }
 
     if ((*results)[bs].boxes.size() == 0) {
-      return true;
+      continue;
     }
     // get box index after nms
     std::vector<int> index;

@@ -75,7 +75,7 @@ bool Yolov7FacePostprocessor::Run(const std::vector<FDTensor>& infer_result,
     }
 
     if ((*results)[bs].boxes.size() == 0) {
-      return true;
+      continue;
     }
   
     utils::NMS(&((*results)[bs]), nms_threshold_);
