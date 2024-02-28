@@ -258,10 +258,67 @@ class ModelExecutor:
         API for detecting http app status.
         """
         if self.model.model._is_engine_initialized() and (self.model.model.engine_proc.poll() is None):
-            logger.info("check_live: True") 
-            return Response(status_code=200)
+            # 引擎进程未退出
+            # 判断是否推理在正常进行
+            # 1. current_start_inference_time表示当前推理的开始时间 previous_start_inference_time表示上次推理的开始时间
+            # 代码逻辑约定，当没有新请求或者当前请求推理结束的时候，current_start_inference_time和previous_start_inference_time是相同的
+            # 当前请求正在推理的时候，current_start_inference_time和previous_start_inference_time是不同的
+            with self.model.model.hang_detection_lock:
+                previous_start_inference_time = self.model.model.previous_start_inference_time
+                current_start_inference_time = self.model.model.previous_start_inference_time
+            if previous_start_inference_time == current_start_inference_time:
+                #（1） 没有新请求或者新请求推理完毕：等待10s，两者还相同，判定正常
+                time.sleep(10)
+                with self.model.model.hang_detection_lock:
+                    new_previous_start_inference_time = self.model.model.previous_start_inference_time
+                    new_current_start_inference_time = self.model.model.current_start_inference_time
+                if new_previous_start_inference_time == new_current_start_inference_time:
+                    logger.info("check_live: True") 
+                    return Response(status_code=200)
+                else:
+                    # 两者不同，说明进入了推理阶段
+                    # new_current_start_inference_time肯定和current_start_inference_time不同
+                    # 再等20s，正常的话肯定在处理新请求或者是旧请求已经结束
+                    current_start_inference_time = new_current_start_inference_time
+                    time.sleep(20)
+                    with self.model.model.hang_detection_lock:
+                        new_current_start_inference_time = self.model.model.current_start_inference_time
+                        new_previous_start_inference_time = self.model.model.previous_start_inference_time
+                    # 推理完了，且没有新的请求
+                    if new_previous_start_inference_time == new_current_start_inference_time:
+                        logger.info("check_live: True") 
+                        return Response(status_code=200)
+                    else:
+                        # 不同，可能是当前推理没结束，或者结束了又进入了新的推理。第一种情况判定为hang死，第二种情况判定为正常
+                        if new_current_start_inference_time == current_start_inference_time:
+                            warning_logger.error("check_live: False") 
+                            return Response(status_code=500)
+                        else:
+                            logger.info("check_live: True") 
+                            return Response(status_code=200)
+
+            else:
+                # 两者不同，说明进入了推理阶段
+                # 再等20s，正常的话肯定在处理新请求或者是旧请求已经结束
+                time.sleep(20)
+                with self.model.model.hang_detection_lock:
+                    new_current_start_inference_time = self.model.model.current_start_inference_time
+                    new_previous_start_inference_time = self.model.model.previous_start_inference_time
+                # 推理完了，且没有新的请求
+                if new_previous_start_inference_time == new_current_start_inference_time:
+                    logger.info("check_live: True") 
+                    return Response(status_code=200)
+                else:
+                    # 不同，可能是当前推理没结束，或者结束了又进入了新的推理。第一种情况判定为hang死，第二种情况判定为正常
+                    if new_current_start_inference_time == current_start_inference_time:
+                        warning_logger.error("check_live: False") 
+                        return Response(status_code=500)
+                    else:
+                        logger.info("check_live: True") 
+                        return Response(status_code=200)
+
         else:
-            logger.info("check_live: False") 
+            warning_logger.error("check_live: False") 
             return Response(status_code=500)
 
 

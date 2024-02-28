@@ -52,6 +52,5 @@ def launch(device_ids, **kwargs: dict):
         pd_cmd,
         shell=True,
         stdout=infer_logger,
-        stderr=infer_logger,
-        preexec_fn=os.setsid)
+        stderr=infer_logger)
     return p

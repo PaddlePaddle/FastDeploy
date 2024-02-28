@@ -27,8 +27,8 @@ def main():
         if os.path.exists(pgid_file_path):
             with open(pgid_file_path, 'r') as f:
                 pgid = f.read().strip()  
-                # 发送 SIGTERM 信号以停止服务  
-                os.killpg(int(pgid), signal.SIGTERM)  
+                # 发送 SIGINT 信号以停止服务  
+                os.killpg(int(pgid), signal.SIGINT)  
         return
     if os.getenv("MODEL_DIR", None) is None:
         raise ValueError("Environment variable MODEL_DIR must be set")

@@ -183,6 +183,9 @@ class Model:
         # stream_sender is a reserved value for serving frameworks such as triton
         # to send generated tokens streamly
         self.stream_sender = None
+        self.previous_start_inference_time = time.time()
+        self.current_start_inference_time = self.previous_start_inference_time
+        self.hang_detection_lock = threading.Lock()
 
     def _pad_noencoder_batch_task(self, batch_tasks):
         new_task_counter = 0
@@ -223,6 +226,7 @@ class Model:
         if self._pad_noencoder_batch_task(batch_tasks):
             stop_num += 1
         inputs = self._prepare_inputs(batch_tasks.tasks, stop_num)
+        
         self._request_to_engine(inputs)
         self._notify_engine()
         return self.thread_executor.submit(self._update_task_results,
@@ -230,7 +234,9 @@ class Model:
 
     def _update_task_results(self, tasks):
         step_index = 1
-        last_response_time = time.time()
+        last_response_time = None
+        with self.hang_detection_lock:
+            self.current_start_inference_time = time.time()
         while True:
             filepath = f"./real_time_save.temp_ids_rank_0_step_{step_index}"
             if os.path.exists(filepath):
@@ -286,19 +292,20 @@ class Model:
             else:
                 if not self._is_engine_busy():
                     break
-                if time.time() - last_response_time > self.config.inference_response_timeout:
-                    error_type = ErrorType.Server
-                    error_code = ErrorCode.S0003
-                    error_info = "Inference engine output token timeout due to some unexpectable exceptions."
-                    error_msg = error_format.format(error_type.name, error_code.name, error_info)
-                    warning_logger.error(error_msg)
+                if last_response_time is not None:
+                    if time.time() - last_response_time > self.config.inference_response_timeout:
+                        error_type = ErrorType.Server
+                        error_code = ErrorCode.S0003
+                        error_info = "Inference engine output token timeout due to some unexpectable exceptions."
+                        error_msg = error_format.format(error_type.name, error_code.name, error_info)
+                        warning_logger.error(error_msg)
                 ret = self.engine_proc.poll()
                 if ret is not None:
                     logger.error(
-                        "The inference engine is not alive, check log/workerlog for more details."
+                        "The inference engine is not alive, check log/infer.log for more details."
                     )
                     raise Exception(
-                        "The inference engine is not alive, check log/workerlog for more details."
+                        "The inference engine is not alive, check log/infer.log for more details."
                     )
 
         remove_files(".", "real_time_save.temp_ids_rank_*")
@@ -329,6 +336,8 @@ class Model:
                     tasks[i].status = TaskStatus.FINISHED
             else:
                 tasks[i].status = TaskStatus.DECODING
+        with self.hang_detection_lock:
+            self.previous_start_inference_time = self.current_start_inference_time
 
     def _get_engine_info(self):
         output_size = bytes(self.shm_output_data.buf[:4])
