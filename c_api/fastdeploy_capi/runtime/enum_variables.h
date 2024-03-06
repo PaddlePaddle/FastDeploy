@@ -28,20 +28,20 @@ FD_ENUM(FD_C_ModelFormat){
 };
 
 FD_ENUM(FD_C_rknpu2_CpuName){
-    FD_C_ModelFormat_RK356X = 0, /* run on RK356X. */
-    FD_C_ModelFormat_RK3588 = 1, /* default,run on RK3588. */
+    FD_C_ModelFormat_RK356X = 0, ///< run on RK356X.
+    FD_C_ModelFormat_RK3588 = 1, ///< default,run on RK3588.
     FD_C_ModelFormat_UNDEFINED,
 };
 
 FD_ENUM(FD_C_rknpu2_CoreMask){
-    FD_C_ModelFormat_RKNN_NPU_CORE_AUTO = 0,  //< default, run on NPU core randomly.
-    FD_C_ModelFormat_RKNN_NPU_CORE_0 = 1,     //< run on NPU core 0.
-    FD_C_ModelFormat_RKNN_NPU_CORE_1 = 2,     //< run on NPU core 1.
-    FD_C_ModelFormat_RKNN_NPU_CORE_2 = 4,     //< run on NPU core 2.
+    FD_C_ModelFormat_RKNN_NPU_CORE_AUTO = 0,  ///< default, run on NPU core randomly.
+    FD_C_ModelFormat_RKNN_NPU_CORE_0 = 1,     ///< run on NPU core 0.
+    FD_C_ModelFormat_RKNN_NPU_CORE_1 = 2,     ///< run on NPU core 1.
+    FD_C_ModelFormat_RKNN_NPU_CORE_2 = 4,     ///< run on NPU core 2.
     FD_C_ModelFormat_RKNN_NPU_CORE_0_1 = FD_C_ModelFormat_RKNN_NPU_CORE_0 |
-                        FD_C_ModelFormat_RKNN_NPU_CORE_1,  //< run on NPU core 1 and core 2.
+                        FD_C_ModelFormat_RKNN_NPU_CORE_1,  ///< run on NPU core 1 and core 2.
     FD_C_ModelFormat_RKNN_NPU_CORE_0_1_2 = FD_C_ModelFormat_RKNN_NPU_CORE_0_1 |
-                          FD_C_ModelFormat_RKNN_NPU_CORE_2,  //< run on NPU core 1 and core 2.
+                          FD_C_ModelFormat_RKNN_NPU_CORE_2,  ///< run on NPU core 1 and core 2.
     FD_C_ModelFormat_RKNN_NPU_CORE_UNDEFINED,
 };
 
