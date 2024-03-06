@@ -16,9 +16,7 @@ import logging
 import os
 import sys
 
-
 try:
     from .libs.streamer_main import *
 except:
-    raise RuntimeError("FastDeploy Streamer initalized failed!")
-
+    raise RuntimeError("FastDeploy Streamer initialized failed!")

@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include "fd_streamer.h"
-#include "app/yaml_parser.h"
+
 #include "app/video_analytics.h"
 #include "app/video_decoder.h"
+#include "app/yaml_parser.h"
 #include "fastdeploy/utils/unique_ptr.h"
 
 namespace fastdeploy {
@@ -24,7 +25,7 @@ namespace streamer {
 bool FDStreamer::Init(const std::string& config_file) {
   AppConfig app_config;
   YamlParser parser(config_file);
-  parser.ParseAppConfg(app_config);
+  parser.ParseAppConfig(app_config);
   if (app_config.type == AppType::VIDEO_ANALYTICS) {
     app_ = utils::make_unique<VideoAnalyticsApp>(app_config);
     auto casted_app = dynamic_cast<VideoAnalyticsApp*>(app_.get());
@@ -39,13 +40,9 @@ bool FDStreamer::Init(const std::string& config_file) {
   return true;
 }
 
-bool FDStreamer::Run() {
-  return app_->Run();
-}
+bool FDStreamer::Run() { return app_->Run(); }
 
-bool FDStreamer::RunAsync() {
-  return app_->RunAsync();
-}
+bool FDStreamer::RunAsync() { return app_->RunAsync(); }
 
 bool FDStreamer::TryPullFrame(FDTensor& tensor, int timeout_ms) {
   auto casted_app = dynamic_cast<VideoDecoderApp*>(app_.get());

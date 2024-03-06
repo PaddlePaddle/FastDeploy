@@ -31,7 +31,7 @@ class YamlParser {
    */
   explicit YamlParser(const std::string& config_file);
 
-  void ParseAppConfg(AppConfig& app_config);
+  void ParseAppConfig(AppConfig& app_config);
 
   void ValidateConfig();
 
