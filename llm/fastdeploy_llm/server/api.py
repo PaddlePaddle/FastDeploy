@@ -104,7 +104,7 @@ class ModelExecutor:
                 config.max_prefix_len = int(parse(parameters, "MAX_PREFIX_LEN"))
         config.load_environment_variables()
 
-        self.wait_time_out = 60
+        self.wait_time_out = config.inference_response_timeout
         self.config = config
         self.response_handler = dict()
         self.model = None
