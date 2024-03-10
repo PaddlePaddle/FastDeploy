@@ -1,0 +1,99 @@
+syntax = "proto3";
+package language_inference;
+
+// Inference Server GRPC endpoints.
+service GRPCInferenceService
+{
+  // 模型推理请求入口，给上层dispatch调用
+  // 输入一个请求，流式返回多个response
+  rpc ModelStreamInfer(ModelInferRequest) returns (stream ModelInferResponse) {}
+
+  // 拉取一个请求，给inference server调用
+  rpc ModelFetchRequest(ModelFetchRequestParams) returns (ModelFetchRequestResult) {}
+
+  // 发送请求的返回结果，给inference server调用
+  // response是流式的发送
+  rpc ModelSendResponse(stream ModelInferResponse) returns (ModelSendResponseResult) {}
+
+  // 批量发送请求的返回结果，给inference server调用
+  // response是流式的发送
+  rpc ModelSendResponseList(stream ModelInferResponseList) returns (ModelSendResponseResult) {}
+}
+
+message ModelFetchRequestParams
+{
+  // 模型全局唯一id
+  repeated string model_id = 1;
+
+  // 一次返回的最大请求数
+  int32 max_request_num = 2;
+  
+  FetchStrategy strategy = 3;
+  
+  ByTokenParams by_token_params = 4;
+}
+// 根据 token 数量拉取请求的计算公式:
+// 每个query需要的block数量: block_num = ceil((text_words_num + dec_token_num)/block_size)
+
+enum FetchStrategy {
+    // 根据 request 数量拉取请求
+    ByRequest = 0; // 默认值
+    
+    // 根据 token 数量拉取请求
+    ByToken = 1;
+}
+
+message ByTokenParams
+{
+    // 可用的 block 数量
+    int32 block_num = 1;
+    
+    // 每个 block 能支持的 token 数量
+    int32 block_size = 2;
+    
+    // 每个 query 需要给输出预留的 token 数量
+    int32 dec_token_num = 3;
+}
+
+message ModelFetchRequestResult
+{
+  // 获取到的请求数组
+  repeated ModelInferRequest requests = 1;
+}
+
+// 无需关心SendResponse的返回值
+message ModelSendResponseResult {
+}
+
+message ModelInferRequest
+{
+  // 模型唯一id
+  string model_id = 1;
+
+  // 请求唯一id，必须全局唯一
+  string request_id = 2;
+
+  // 串联上下游日志的id，用于定位问题
+  string trace_id = 3;
+
+  // 语言模型输入
+  string input = 4;
+}
+
+message ModelInferResponseList{
+  repeated ModelInferResponse response_list = 1;
+}
+
+message ModelInferResponse
+{
+  // 请求唯一id
+  string request_id = 1;
+
+  // 返回的句子id，表示第几句，用于去重和排序
+  int32 sentence_id = 2;
+
+  // 语言模型输出
+  string output = 3;
+}
+
+

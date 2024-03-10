@@ -1,0 +1,4 @@
+aioredis
+colorlog
+grpcio
+protobuf
