@@ -93,7 +93,7 @@ bool YOLOv8Postprocessor::Run(
     }
 
     if ((*results)[bs].boxes.size() == 0) {
-      return true;
+      continue;
     }
 
     utils::NMS(&((*results)[bs]), nms_threshold_);
