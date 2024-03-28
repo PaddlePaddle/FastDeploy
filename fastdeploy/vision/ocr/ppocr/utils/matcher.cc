@@ -18,9 +18,9 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-std::vector<int> Xyxyxyxy2Xyxy(std::array<int, 8> &box) {
-  int x_collect[4] = {box[0], box[2], box[4], box[6]};
-  int y_collect[4] = {box[1], box[3], box[5], box[7]};
+std::vector<int> Xyxyxyxy2Xyxy(std::vector<std::array<int, 2>> &box) {
+  int x_collect[4] = {box[0][0], box[1][0], box[2][0], box[3][0]};
+  int y_collect[4] = {box[0][1], box[1][1], box[2][1], box[3][1]};
   int left = int(*std::min_element(x_collect, x_collect + 4));
   int right = int(*std::max_element(x_collect, x_collect + 4));
   int top = int(*std::min_element(y_collect, y_collect + 4));

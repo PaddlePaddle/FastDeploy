@@ -17,7 +17,7 @@
 
 namespace fastdeploy {
 void BindPPOCRModel(pybind11::module& m) {
-  m.def("sort_boxes", [](std::vector<std::array<int, 8>>& boxes) {
+  m.def("sort_boxes", [](std::vector<std::vector<std::array<int, 2>>>& boxes) {
     vision::ocr::SortBoxes(&boxes);
     return boxes;
   });
@@ -77,12 +77,14 @@ void BindPPOCRModel(pybind11::module& m) {
       .def_property("use_dilation",
                     &vision::ocr::DBDetectorPostprocessor::GetUseDilation,
                     &vision::ocr::DBDetectorPostprocessor::SetUseDilation)
-
+      .def_property("det_db_use_ploy",
+                    &vision::ocr::DBDetectorPostprocessor::GetDetDBUsePloy,
+                    &vision::ocr::DBDetectorPostprocessor::SetDetDBUsePloy)
       .def("run",
            [](vision::ocr::DBDetectorPostprocessor& self,
               std::vector<FDTensor>& inputs,
               const std::vector<std::array<int, 4>>& batch_det_img_info) {
-             std::vector<std::vector<std::array<int, 8>>> results;
+             std::vector<std::vector<std::vector<std::array<int, 2>>>> results;
 
              if (!self.Run(inputs, &results, batch_det_img_info)) {
                throw std::runtime_error(
@@ -95,7 +97,7 @@ void BindPPOCRModel(pybind11::module& m) {
            [](vision::ocr::DBDetectorPostprocessor& self,
               std::vector<pybind11::array>& input_array,
               const std::vector<std::array<int, 4>>& batch_det_img_info) {
-             std::vector<std::vector<std::array<int, 8>>> results;
+             std::vector<std::vector<std::vector<std::array<int, 2>>>> results;
              std::vector<FDTensor> inputs;
              PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
              if (!self.Run(inputs, &results, batch_det_img_info)) {
@@ -355,7 +357,7 @@ void BindPPOCRModel(pybind11::module& m) {
            [](vision::ocr::StructureV2TablePostprocessor& self,
               std::vector<FDTensor>& inputs,
               const std::vector<std::array<int, 4>>& batch_det_img_info) {
-             std::vector<std::vector<std::array<int, 8>>> boxes;
+             std::vector<std::vector<std::vector<std::array<int, 2>>>> boxes;
              std::vector<std::vector<std::string>> structure_list;
 
              if (!self.Run(inputs, &boxes, &structure_list,
@@ -372,7 +374,7 @@ void BindPPOCRModel(pybind11::module& m) {
               const std::vector<std::array<int, 4>>& batch_det_img_info) {
              std::vector<FDTensor> inputs;
              PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
-             std::vector<std::vector<std::array<int, 8>>> boxes;
+             std::vector<std::vector<std::vector<std::array<int, 2>>>> boxes;
              std::vector<std::vector<std::string>> structure_list;
 
              if (!self.Run(inputs, &boxes, &structure_list,

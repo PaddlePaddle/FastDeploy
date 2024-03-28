@@ -223,7 +223,7 @@ struct FASTDEPLOY_DECL KeyPointDetectionResult : public BaseResult {
 };
 
 struct FASTDEPLOY_DECL OCRResult : public BaseResult {
-  std::vector<std::array<int, 8>> boxes;
+  std::vector<std::vector<std::array<int, 2>>> boxes;
 
   std::vector<std::string> text;
   std::vector<float> rec_scores;
@@ -231,7 +231,7 @@ struct FASTDEPLOY_DECL OCRResult : public BaseResult {
   std::vector<float> cls_scores;
   std::vector<int32_t> cls_labels;
 
-  std::vector<std::array<int, 8>> table_boxes;
+  std::vector<std::vector<std::array<int, 2>>> table_boxes;
   std::vector<std::string> table_structure;
   std::string table_html;
 

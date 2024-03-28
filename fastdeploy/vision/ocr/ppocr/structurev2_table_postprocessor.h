@@ -40,7 +40,7 @@ class FASTDEPLOY_DECL StructureV2TablePostprocessor {
    * \return true if the postprocess successed, otherwise false
    */
   bool Run(const std::vector<FDTensor>& tensors,
-              std::vector<std::vector<std::array<int, 8>>>* bbox_batch_list,
+              std::vector<std::vector<std::vector<std::array<int, 2>>>>* bbox_batch_list,
               std::vector<std::vector<std::string>>* structure_batch_list,
               const std::vector<std::array<int, 4>>& batch_det_img_info);
 
@@ -53,7 +53,7 @@ class FASTDEPLOY_DECL StructureV2TablePostprocessor {
                                 size_t box_dim,
                                 int img_width,
                                 int img_height,
-                                std::vector<std::array<int, 8>>* boxes_result,
+                                std::vector<std::vector<std::array<int, 2>>>* boxes_result,
                                 std::vector<std::string>* structure_list_result);
 
   bool merge_no_span_structure{true};

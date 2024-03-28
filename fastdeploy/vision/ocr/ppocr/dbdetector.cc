@@ -63,8 +63,8 @@ std::unique_ptr<DBDetector> DBDetector::Clone() const {
 }
 
 bool DBDetector::Predict(const cv::Mat& img,
-                         std::vector<std::array<int, 8>>* boxes_result) {
-  std::vector<std::vector<std::array<int, 8>>> det_results;
+                         std::vector<std::vector<std::array<int, 2>>>* boxes_result) {
+  std::vector<std::vector<std::vector<std::array<int, 2>>>> det_results;
   if (!BatchPredict({img}, &det_results)) {
     return false;
   }
@@ -81,7 +81,7 @@ bool DBDetector::Predict(const cv::Mat& img, vision::OCRResult* ocr_result) {
 
 bool DBDetector::BatchPredict(const std::vector<cv::Mat>& images,
                               std::vector<vision::OCRResult>* ocr_results) {
-  std::vector<std::vector<std::array<int, 8>>> det_results;
+  std::vector<std::vector<std::vector<std::array<int, 2>>>> det_results;
   if (!BatchPredict(images, &det_results)) {
     return false;
   }
@@ -94,7 +94,7 @@ bool DBDetector::BatchPredict(const std::vector<cv::Mat>& images,
 
 bool DBDetector::BatchPredict(
     const std::vector<cv::Mat>& images,
-    std::vector<std::vector<std::array<int, 8>>>* det_results) {
+    std::vector<std::vector<std::vector<std::array<int, 2>>>>* det_results) {
   std::vector<FDMat> fd_images = WrapMat(images);
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
     FDERROR << "Failed to preprocess input image." << std::endl;

@@ -22,7 +22,7 @@ namespace ocr {
 
 void PostProcessor::GetContourArea(const std::vector<std::vector<float>> &box,
                                    float unclip_ratio, float &distance) {
-  int pts_num = 4;
+  int pts_num = box.size();
   float area = 0.0f;
   float dist = 0.0f;
   for (int i = 0; i < pts_num; i++) {
@@ -38,7 +38,7 @@ void PostProcessor::GetContourArea(const std::vector<std::vector<float>> &box,
   distance = area * unclip_ratio / dist;
 }
 
-cv::RotatedRect PostProcessor::UnClip(std::vector<std::vector<float>> box,
+std::vector<std::vector<cv::Point>> PostProcessor::UnClip(std::vector<std::vector<float>> box,
                                       const float &unclip_ratio) {
   float distance = 1.0;
 
@@ -46,28 +46,25 @@ cv::RotatedRect PostProcessor::UnClip(std::vector<std::vector<float>> box,
 
   ClipperLib::ClipperOffset offset;
   ClipperLib::Path p;
-  p << ClipperLib::IntPoint(int(box[0][0]), int(box[0][1]))
-    << ClipperLib::IntPoint(int(box[1][0]), int(box[1][1]))
-    << ClipperLib::IntPoint(int(box[2][0]), int(box[2][1]))
-    << ClipperLib::IntPoint(int(box[3][0]), int(box[3][1]));
+
+  for (int i = 0; i < box.size(); i++) {
+    p << ClipperLib::IntPoint(int(box[i][0]), int(box[i][1]));
+  }
   offset.AddPath(p, ClipperLib::jtRound, ClipperLib::etClosedPolygon);
 
   ClipperLib::Paths soln;
   offset.Execute(soln, distance);
-  std::vector<cv::Point2f> points;
+  std::vector<std::vector<cv::Point>> paths;
 
   for (int j = 0; j < soln.size(); j++) {
-    for (int i = 0; i < soln[soln.size() - 1].size(); i++) {
-      points.emplace_back(soln[j][i].X, soln[j][i].Y);
+    std::vector<cv::Point> path;
+    for (int i = 0; i < soln[j].size(); i++) {
+      path.emplace_back(soln[j][i].X, soln[j][i].Y);
     }
+    paths.push_back(path);
   }
-  cv::RotatedRect res;
-  if (points.size() <= 0) {
-    res = cv::RotatedRect(cv::Point2f(0, 0), cv::Size2f(1, 1), 0);
-  } else {
-    res = cv::minAreaRect(points);
-  }
-  return res;
+
+  return paths;
 }
 
 float **PostProcessor::Mat2Vec(cv::Mat mat) {
@@ -123,8 +120,9 @@ bool PostProcessor::XsortInt(std::vector<int> a, std::vector<int> b) {
   return false;
 }
 
-std::vector<std::vector<float>> PostProcessor::GetMiniBoxes(cv::RotatedRect box,
+std::vector<std::vector<float>> PostProcessor::GetMiniBoxes(std::vector<cv::Point> contour,
                                                             float &ssid) {
+  cv::RotatedRect box = cv::minAreaRect(contour);
   ssid = std::max(box.size.width, box.size.height);
 
   cv::Mat points;
@@ -242,7 +240,7 @@ float PostProcessor::BoxScoreFast(std::vector<std::vector<float>> box_array,
   return score;
 }
 
-std::vector<std::vector<std::vector<int>>> PostProcessor::BoxesFromBitmap(
+std::vector<std::vector<std::array<int, 2>>> PostProcessor::PloygonsFromBitmap(
     const cv::Mat pred, const cv::Mat bitmap, const float &box_thresh,
     const float &det_db_unclip_ratio, const std::string &det_db_score_mode) {
   const int min_size = 3;
@@ -260,15 +258,83 @@ std::vector<std::vector<std::vector<int>>> PostProcessor::BoxesFromBitmap(
   int num_contours =
       contours.size() >= max_candidates ? max_candidates : contours.size();
 
-  std::vector<std::vector<std::vector<int>>> boxes;
+  std::vector<std::vector<std::array<int, 2>>> boxes;
+
+  for (int _i = 0; _i < num_contours; _i++) {
+    std::vector<cv::Point> contour = contours[_i];
+    double epsilon = 0.002 * cv::arcLength(contour, true);
+    std::vector<cv::Point> approx;
+    cv::approxPolyDP(contour, approx, epsilon, true);
+    if (approx.size() < 4) continue;
+
+    float score = PolygonScoreAcc(contours[_i], pred);
+    if (score < box_thresh) continue;
+
+    std::vector<std::vector<float>> box;
+    for(int i=0; i < approx.size(); i++) {
+      box.push_back({float(approx[i].x), float(approx[i].y)});
+    }
+
+    // start for unclip
+    std::vector<std::vector<cv::Point>> paths = UnClip(box, det_db_unclip_ratio);
+    if (paths.size() > 1) continue;
+
+    std::vector<cv::Point> path = paths[0];
+
+    // end for unclip
+
+    float ssid;
+    GetMiniBoxes(path, ssid);
+
+    if (ssid < min_size + 2) continue;
+
+    int dest_width = pred.cols;
+    int dest_height = pred.rows;
+    std::vector<std::array<int, 2>> intcliparray;
+
+    for (int num_pt = 0; num_pt < path.size(); num_pt++) {
+      std::array<int, 2> a{
+          int(clampf(
+              roundf(path[num_pt].x / float(width) * float(dest_width)),
+              0, float(dest_width))),
+          int(clampf(
+              roundf(path[num_pt].y / float(height) * float(dest_height)),
+              0, float(dest_height)))};
+      intcliparray.push_back(a);
+    }
+
+    boxes.push_back(intcliparray);
+
+  }  // end for
+  return boxes;
+}
+
+std::vector<std::vector<std::array<int, 2>>> PostProcessor::BoxesFromBitmap(
+    const cv::Mat pred, const cv::Mat bitmap, const float &box_thresh,
+    const float &det_db_unclip_ratio, const std::string &det_db_score_mode) {
+  const int min_size = 3;
+  const int max_candidates = 1000;
+
+  int width = bitmap.cols;
+  int height = bitmap.rows;
+
+  std::vector<std::vector<cv::Point>> contours;
+  std::vector<cv::Vec4i> hierarchy;
+
+  cv::findContours(bitmap, contours, hierarchy, cv::RETR_LIST,
+                   cv::CHAIN_APPROX_SIMPLE);
+
+  int num_contours =
+      contours.size() >= max_candidates ? max_candidates : contours.size();
+
+  std::vector<std::vector<std::array<int, 2>>> boxes;
 
   for (int _i = 0; _i < num_contours; _i++) {
     if (contours[_i].size() <= 2) {
       continue;
     }
     float ssid;
-    cv::RotatedRect box = cv::minAreaRect(contours[_i]);
-    auto array = GetMiniBoxes(box, ssid);
+    auto array = GetMiniBoxes(contours[_i], ssid);
 
     auto box_for_unclip = array;
     // end get_mini_box
@@ -286,23 +352,19 @@ std::vector<std::vector<std::vector<int>>> PostProcessor::BoxesFromBitmap(
     if (score < box_thresh) continue;
 
     // start for unclip
-    cv::RotatedRect points = UnClip(box_for_unclip, det_db_unclip_ratio);
-    if (points.size.height < 1.001 && points.size.width < 1.001) {
-      continue;
-    }
+    std::vector<std::vector<cv::Point>> paths = UnClip(box_for_unclip, det_db_unclip_ratio);
     // end for unclip
 
-    cv::RotatedRect clipbox = points;
-    auto cliparray = GetMiniBoxes(clipbox, ssid);
+    auto cliparray = GetMiniBoxes(paths[0], ssid);
 
     if (ssid < min_size + 2) continue;
 
     int dest_width = pred.cols;
     int dest_height = pred.rows;
-    std::vector<std::vector<int>> intcliparray;
+    std::vector<std::array<int, 2>> intcliparray;
 
     for (int num_pt = 0; num_pt < 4; num_pt++) {
-      std::vector<int> a{
+      std::array<int, 2> a{
           int(clampf(
               roundf(cliparray[num_pt][0] / float(width) * float(dest_width)),
               0, float(dest_width))),
@@ -317,18 +379,18 @@ std::vector<std::vector<std::vector<int>>> PostProcessor::BoxesFromBitmap(
   return boxes;
 }
 
-std::vector<std::vector<std::vector<int>>> PostProcessor::FilterTagDetRes(
-    std::vector<std::vector<std::vector<int>>> boxes,
+std::vector<std::vector<std::array<int, 2>>> PostProcessor::FilterTagDetRes(
+    std::vector<std::vector<std::array<int, 2>>> boxes,
     const std::array<int,4>& det_img_info) {
   int oriimg_w = det_img_info[0];
   int oriimg_h = det_img_info[1];
   float ratio_w = float(det_img_info[2])/float(oriimg_w);
   float ratio_h = float(det_img_info[3])/float(oriimg_h);
 
-  std::vector<std::vector<std::vector<int>>> root_points;
   for (int n = 0; n < boxes.size(); n++) {
-    boxes[n] = OrderPointsClockwise(boxes[n]);
-    for (int m = 0; m < boxes[0].size(); m++) {
+    // boxes[n] = OrderPointsClockwise(boxes[n]);
+
+    for (int m = 0; m < boxes[n].size(); m++) {
       boxes[n][m][0] /= ratio_w;
       boxes[n][m][1] /= ratio_h;
 
@@ -337,16 +399,7 @@ std::vector<std::vector<std::vector<int>>> PostProcessor::FilterTagDetRes(
     }
   }
 
-  for (int n = 0; n < boxes.size(); n++) {
-    int rect_width, rect_height;
-    rect_width = int(sqrt(pow(boxes[n][0][0] - boxes[n][1][0], 2) +
-                          pow(boxes[n][0][1] - boxes[n][1][1], 2)));
-    rect_height = int(sqrt(pow(boxes[n][0][0] - boxes[n][3][0], 2) +
-                           pow(boxes[n][0][1] - boxes[n][3][1], 2)));
-    if (rect_width <= 4 || rect_height <= 4) continue;
-    root_points.push_back(boxes[n]);
-  }
-  return root_points;
+  return boxes;
 }
 
 }  // namespace ocr

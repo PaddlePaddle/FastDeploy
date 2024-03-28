@@ -23,7 +23,7 @@ namespace ocr {
 bool DBDetectorPostprocessor::SingleBatchPostprocessor(
     const float* out_data, int n2, int n3,
     const std::array<int, 4>& det_img_info,
-    std::vector<std::array<int, 8>>* boxes_result) {
+    std::vector<std::vector<std::array<int, 2>>>* boxes_result) {
   int n = n2 * n3;
 
   // prepare bitmap
@@ -47,22 +47,27 @@ bool DBDetectorPostprocessor::SingleBatchPostprocessor(
     cv::dilate(bit_map, bit_map, dila_ele);
   }
 
-  std::vector<std::vector<std::vector<int>>> boxes;
+  std::vector<std::vector<std::array<int, 2>>> boxes;
 
-  boxes = util_post_processor_.BoxesFromBitmap(
+  if (det_db_use_ploy_)
+  {
+    boxes = util_post_processor_.PloygonsFromBitmap(
       pred_map, bit_map, det_db_box_thresh_, det_db_unclip_ratio_,
       det_db_score_mode_);
+  } else {
+    boxes = util_post_processor_.BoxesFromBitmap(
+        pred_map, bit_map, det_db_box_thresh_, det_db_unclip_ratio_,
+        det_db_score_mode_);
+  }
 
   boxes = util_post_processor_.FilterTagDetRes(boxes, det_img_info);
 
   // boxes to boxes_result
   for (int i = 0; i < boxes.size(); i++) {
-    std::array<int, 8> new_box;
+    std::vector<std::array<int, 2>> new_box;
     int k = 0;
     for (auto& vec : boxes[i]) {
-      for (auto& e : vec) {
-        new_box[k++] = e;
-      }
+        new_box.emplace_back(vec);
     }
     boxes_result->emplace_back(new_box);
   }
@@ -72,7 +77,7 @@ bool DBDetectorPostprocessor::SingleBatchPostprocessor(
 
 bool DBDetectorPostprocessor::Run(
     const std::vector<FDTensor>& tensors,
-    std::vector<std::vector<std::array<int, 8>>>* results,
+    std::vector<std::vector<std::vector<std::array<int, 2>>>>* results,
     const std::vector<std::array<int, 4>>& batch_det_img_info) {
   // DBDetector have only 1 output tensor.
   const FDTensor& tensor = tensors[0];

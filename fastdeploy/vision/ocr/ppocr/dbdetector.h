@@ -60,7 +60,7 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
    * \return true if the prediction is successed, otherwise false.
    */
   virtual bool Predict(const cv::Mat& img,
-                       std::vector<std::array<int, 8>>* boxes_result);
+                       std::vector<std::vector<std::array<int, 2>>>* boxes_result);
 
   /** \brief Predict the input image and get OCR detection model result.
    *
@@ -77,7 +77,7 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
    * \return true if the prediction is successed, otherwise false.
    */
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
-          std::vector<std::vector<std::array<int, 8>>>* det_results);
+          std::vector<std::vector<std::vector<std::array<int, 2>>>>* det_results);
 
   /** \brief BatchPredict the input image and get OCR detection model result.
    *

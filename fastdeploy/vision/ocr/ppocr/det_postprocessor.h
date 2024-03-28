@@ -33,7 +33,7 @@ class FASTDEPLOY_DECL DBDetectorPostprocessor {
    * \return true if the postprocess successed, otherwise false
    */
   bool Run(const std::vector<FDTensor>& tensors,
-           std::vector<std::vector<std::array<int, 8>>>* results,
+           std::vector<std::vector<std::vector<std::array<int, 2>>>>* results,
            const std::vector<std::array<int, 4>>& batch_det_img_info);
 
   /// Set det_db_thresh for the detection postprocess, default is 0.3
@@ -67,6 +67,10 @@ class FASTDEPLOY_DECL DBDetectorPostprocessor {
   /// Get use_dilation of the detection postprocess
   int GetUseDilation() const { return use_dilation_; }
 
+  /// Set det_db_use_ploy for the detection postprocess, default is fasle
+  void SetDetDBUsePloy(int det_db_use_ploy) { det_db_use_ploy_ = det_db_use_ploy; }
+  /// Get det_db_use_ploy of the detection postprocess
+  int GetDetDBUsePloy() const { return det_db_use_ploy_; }
 
  private:
   double det_db_thresh_ = 0.3;
@@ -74,10 +78,11 @@ class FASTDEPLOY_DECL DBDetectorPostprocessor {
   double det_db_unclip_ratio_ = 1.5;
   std::string det_db_score_mode_ = "slow";
   bool use_dilation_ = false;
+  bool det_db_use_ploy_ = false;
   PostProcessor util_post_processor_;
   bool SingleBatchPostprocessor(const float* out_data, int n2, int n3,
                                 const std::array<int, 4>& det_img_info,
-                                std::vector<std::array<int, 8>>* boxes_result);
+                                std::vector<std::vector<std::array<int, 2>>>* boxes_result);
 };
 
 }  // namespace ocr

@@ -695,11 +695,11 @@ std::string OCRResult::Str() {
     std::string out;
     for (int n = 0; n < boxes.size(); n++) {
       out = out + "det boxes: [";
-      for (int i = 0; i < 4; i++) {
-        out = out + "[" + std::to_string(boxes[n][i * 2]) + "," +
-              std::to_string(boxes[n][i * 2 + 1]) + "]";
+      for (int i = 0; i < boxes[n].size(); i++) {
+        out = out + "[" + std::to_string(boxes[n][i][0]) + "," +
+              std::to_string(boxes[n][i][1]) + "]";
 
-        if (i != 3) {
+        if (i != boxes[n].size() - 1) {
           out = out + ",";
         }
       }
@@ -720,8 +720,8 @@ std::string OCRResult::Str() {
       for (int n = 0; n < boxes.size(); n++) {
         out = out + "table boxes: [";
         for (int i = 0; i < 4; i++) {
-          out = out + "[" + std::to_string(table_boxes[n][i * 2]) + "," +
-                std::to_string(table_boxes[n][i * 2 + 1]) + "]";
+          out = out + "[" + std::to_string(table_boxes[n][i][0]) + "," +
+                std::to_string(table_boxes[n][i][1]) + "]";
 
           if (i != 3) {
             out = out + ",";
@@ -778,8 +778,8 @@ std::string OCRResult::Str() {
     for (int n = 0; n < table_boxes.size(); n++) {
       out = out + "table boxes: [";
       for (int i = 0; i < 4; i++) {
-        out = out + "[" + std::to_string(table_boxes[n][i * 2]) + "," +
-              std::to_string(table_boxes[n][i * 2 + 1]) + "]";
+        out = out + "[" + std::to_string(table_boxes[n][i][0]) + "," +
+              std::to_string(table_boxes[n][i][1]) + "]";
 
         if (i != 3) {
           out = out + ",";
