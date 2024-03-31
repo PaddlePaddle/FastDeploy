@@ -40,12 +40,12 @@ docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.7-gpu-cuda11.4-trt
 
 ### 服务化部署示例
 
-| 任务场景 | 模型  |
-|---|---|
-| Classification | [PaddleClas](../examples/vision/classification/paddleclas/serving/README.md) |
+| 任务场景 | 模型                                                                                |
+|---|-----------------------------------------------------------------------------------|
+| Classification | [PaddleClas](../examples/vision/classification/paddleclas/serving/README.md)      |
 | Detection | [PaddleDetection](../examples/vision/detection/paddledetection/serving/README.md) |
-| Detection | [ultralytics/YOLOv5](../examples/vision/detection/yolov5/serving/README.md) |
-| NLP |	[PaddleNLP/ERNIE-3.0](../examples/text/ernie-3.0/serving/README.md)|
-| NLP |	[PaddleNLP/UIE](../examples/text/uie/serving/README.md)|
-| Speech |	[PaddleSpeech/PP-TTS](../examples/audio/pp-tts/serving/README.md)|
-| OCR |	[PaddleOCR/PP-OCRv3](../examples/vision/ocr/PP-OCRv3/serving/README.md)|
+| Detection | [ultralytics/YOLOv5](../examples/vision/detection/yolov5/serving/README.md)       |
+| NLP | 	[PaddleNLP/ERNIE-3.0](../examples/text/ernie-3.0/serving/README.md)              |
+| NLP | 	[PaddleNLP/UIE](../examples/text/uie/serving/README.md)                          |
+| Speech | 	[PaddleSpeech/PP-TTS](../examples/audio/pp-tts/serving/README.md)                |
+| OCR | 	[PaddleOCR/PP-OCRv3](../examples/vision/ocr/PP-OCR/serving/fastdeploy_serving/README.md)  |
