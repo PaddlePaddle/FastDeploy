@@ -28,7 +28,7 @@ namespace function {
     @param seed The seed of random generator.
     @param dtype The data type of the output Tensor.
 */
-void GaussianRandom(const std::vector<int64_t>& shape, FDTensor* out,
+FASTDEPLOY_DECL void GaussianRandom(const std::vector<int64_t>& shape, FDTensor* out,
                     FDDataType dtype = FDDataType::FP32, float mean = 0.0f,
                     float std = 1.0f, int seed = 0);
 
