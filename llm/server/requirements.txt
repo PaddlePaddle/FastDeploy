@@ -1,0 +1,22 @@
+# model server
+paddlenlp==2.7.2
+sentencepiece
+pycryptodome
+tritonclient[all]==2.41.1
+opencv-python
+patchify
+transformers
+
+# http server
+fastapi
+httpx
+openai==1.9.0
+asyncio
+uvicorn
+shortuuid
+
+# parameter search
+pynvml
+
+# paddlenlp
+tiktoken

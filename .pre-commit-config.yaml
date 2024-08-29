@@ -1,6 +1,6 @@
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: a11d9314b22d8f8c7556443875b731ef05965464
+    rev: ed714747d7acbc5790b171702bb012af3b0fe145
     hooks:
     -   id: check-merge-conflict
     -   id: check-symlinks
@@ -9,8 +9,8 @@ repos:
     -   id: detect-private-key
     -   id: check-symlinks
     -   id: check-added-large-files
--   repo: local
 
+-   repo: local
     hooks:
     -   id: copyright_checker
         name: copyright_checker
