@@ -32,69 +32,7 @@
 Note:
 1. 请保证 shm-size >= 5，不然可能会导致服务启动失败
 
-更多关于 FastDeploy 的使用方法，请查看[服务化部署流程](https://console.cloud.baidu-int.com/devops/icode/repos/baidu/fastdeploy/serving/blob/opensource/docs/FastDeploy_usage_tutorial.md)
-
-# benchmark 测试
-
-我们在 `Llama-3-8B-Instruct` 模型不同的精度下，对 FastDeploy 的性能进行测试，测试结果如下表所示：
-
-<table align="center" border="1" style="text-align: center; vertical-align: middle;">
-    <tr>
-        <th align="center">框架</th>
-        <th align="center">精度</th>
-        <th align="center">QPS</th>
-        <th align="center">tokens/s</th>
-        <th align="center">整句时延</th>
-    </tr>
-    <tr>
-        <td rowspan="3">FastDeploy</td>
-        <td>FP16/BF16</td>
-        <td>16.21</td>
-        <td>3171.09</td>
-        <td>7.15</td>
-    </tr>
-    <tr>
-        <td>WINT8</td>
-        <td>14.84</td>
-        <td>2906.27</td>
-        <td>7.95</td>
-    </tr>
-    <tr>
-        <td>W8A8C8-INT8</td>
-        <td>20.60</td>
-        <td>4031.75</td>
-        <td>5.61</td>
-    </tr>
-    <tr>
-        <td rowspan="3">vLLM</td>
-        <td>FP16/BF16</td>
-        <td>9.07</td>
-        <td>1766.11</td>
-        <td>13.32</td>
-    </tr>
-    <tr>
-        <td>WINT8</td>
-        <td>8.23</td>
-        <td>1602.96</td>
-        <td>14.85</td>
-    </tr>
-    <tr>
-        <td>W8A8C8-INT8</td>
-        <td>9.41</td>
-        <td>1831.81</td>
-        <td>12.76</td>
-    </tr>
-</table>
-
-- 测试环境：
-  - GPU：NVIDIA A100-SXM4-80GB
-  - cuda 版本：11.6
-  - cudnn 版本：8.4.0
-  - Batch Size: 128
-  - 请求并发量：128
-  - vLLM 版本：v0.5.3
-  - TRT-LLM 版本：v0.11.0
-  - 数据集：[ShareGPT_V3_unfiltered_cleaned_split.json](https://huggingface.co/datasets/learnanything/sharegpt_v3_unfiltered_cleaned_split/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json)
+更多关于 FastDeploy 的使用方法，请查看[服务化部署流程](https://github.com/PaddlePaddle/FastDeploy/blob/develop/llm/docs/FastDeploy_usage_tutorial.md)
 
 # License
 
