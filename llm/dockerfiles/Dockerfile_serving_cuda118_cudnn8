@@ -1,15 +1,16 @@
 FROM registry.baidubce.com/paddlepaddle/fastdeploy:llm-base-gcc12.3-cuda11.8-cudnn8-nccl2.15.5
 
 WORKDIR /opt/output/
-COPY ./server/ /opt/output/Serving
+COPY ./server/ /opt/output/Serving/
 COPY ./client/ /opt/output/client/
+
+ENV LD_LIBRARY_PATH "/usr/local/cuda-11.8/compat/:$LD_LIBRARY_PATH"
 
 RUN python3 -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu118/ \
     && python3 -m pip install paddlenlp==3.0.0b0 \
     && python3 -m pip install --no-cache-dir sentencepiece pycryptodome tritonclient[all]==2.41.1 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-ENV LD_LIBRARY_PATH "/usr/local/cuda-11.8/compat/:$LD_LIBRARY_PATH"
 RUN git clone https://gitee.com/paddlepaddle/PaddleNLP.git && cd PaddleNLP/csrc \
     && python3 setup_cuda.py build && python3 setup_cuda.py install --user \
     && cp -r /opt/output/PaddleNLP/paddlenlp /usr/local/lib/python3.10/dist-packages/ \

@@ -13,8 +13,9 @@
 - [服务测试](#服务测试)
   - [Python 客户端](#Python-客户端)
   - [HTTP调用](#HTTP调用)
-  - [请求参数介绍](#请求参数介绍)
   - [返回示例](#返回示例)
+- [模型配置参数介绍](#模型配置参数介绍)
+- [请求参数介绍](#请求参数介绍)
 
 ## 部署环境准备
 
@@ -33,12 +34,12 @@ cd /home/workspace/models_dir
 
 # 模型内目录结构需要整理成特定格式，如下是单卡部署的模型目录结构
 # /opt/output/Serving/models
-# ├── config.json                # 模型配置文件（必选）
-# ├── xxxx.model                 # 词表模型文件（必选）
-# ├── special_tokens_map.json    # 词表配置文件（必选）
-# ├── tokenizer_config.json      # 词表配置文件（必选）
+# ├── config.json                # 模型配置文件
+# ├── xxxx.model                 # 词表模型文件
+# ├── special_tokens_map.json    # 词表配置文件
+# ├── tokenizer_config.json      # 词表配置文件
 # ├── rank_mapping.csv           # 多卡模型会有此文件，如为单卡模型，则无此文件（可选，仅在多卡部署模式下需要）
-# └── rank_0                     # 保存模型结构和权重文件的目录（必选）
+# └── rank_0                     # 保存模型结构和权重文件的目录
 #     ├── model.pdiparams
 #     └── model.pdmodel
 ```
@@ -114,6 +115,8 @@ export MAX_CACHED_TASK_NUM="128"  # 服务缓存队列最大长度，队列达�
 export PUSH_MODE_HTTP_WORKERS="1" # HTTP服务进程数，在 PUSH_MODE_HTTP_PORT 配置的情况下有效，最高设置到8即可，默认为1
 ```
 
+更多请求参数请参考[模型配置参数介绍](#模型配置参数介绍)
+
 ### 启动FastDeploy
 
 ```
@@ -165,7 +168,7 @@ import uuid
 import json
 import requests
 
-url = f"http://0.0.0.0:{PUSH_MODE_HTTP_PORT}/v1/chat/completions"
+url = f"http://127.0.0.1:{PUSH_MODE_HTTP_PORT}/v1/chat/completions"
 req_id = str(uuid.uuid1())
 data = {
         "text": "Hello, how are you?",
@@ -179,7 +182,47 @@ for line in res.iter_lines():
     print(json.loads(line))
 ```
 
-### 请求参数介绍
+更多请求参数请参考[请求参数介绍](#请求参数介绍)
+
+### 返回示例
+
+```
+如果stream为True，流式返回
+    如果正常，返回{'token': xxx, 'is_end': xxx, 'send_idx': xxx, ..., 'error_msg': '', 'error_code': 0}
+    如果异常，返回{'error_msg': xxx, 'error_code': xxx}，error_msg字段不为空，error_code字段不为0
+
+如果stream为False，非流式返回
+    如果正常，返回{'tokens_all': xxx, ..., 'error_msg': '', 'error_code': 0}
+    如果异常，返回{'error_msg': xxx, 'error_code': xxx}，error_msg字段不为空，error_code字段不为0
+```
+
+## 模型配置参数介绍
+
+| 字段名 | 字段类型 | 说明 | 是否必填 | 默认值 | 备注 |
+| :---: | :-----: | :---: | :---: | :-----: | :----: |
+| MP_NUM |  int  | 模型并行度 | 否 | 8 | CUDA_VISIBLE_DEVICES 需配置对应卡数 |
+| CUDA_VISIBLE_DEVICES | str | 使用 GPU 编号 | 否 | 0,1,2,3,4,5,6,7 |  |
+| HTTP_PORT | int | 探活服务的http端口 | 是 | 无 | 当前仅用于健康检查、探活 |
+| GRPC_PORT | int | 模型推服务的grpc端口 | 是 | 无 |   |
+| METRICS_PORT | int | 模型服务中监督指标的端口 | 是 | 无 |   |
+| INFER_QUEUE_PORT | int | 模型服务内部使用的端口 | 否 | 56666 |   |
+| PUSH_MODE_HTTP_PORT | int | 服务请求HTTP端口号 | 否 | -1 | 如不配置，服务只支持GRPC协议 ｜
+| DISABLE_STREAMING | int | 是否使用流式返回 | 否 | 0 |  |
+| MAX_SEQ_LEN | int | 最大输入序列长度 | 否 | 8192 | 服务会拒绝input token数量超过MAX_SEQ_LEN的请求，并返回错误提示 |
+| MAX_DEC_LEN | int | 最大decoer序列长度 | 否 | 1024 | 服务会拒绝请求中max_dec_len/min_dec_len超过此参数的请求，并返回错误提示 |
+| BATCH_SIZE | int | 最大Batch Size | 否 | 50 | 模型可同时并发处理的最大输入数量，不能高于128 |
+| BLOCK_BS | int | 缓存Block支持的最大Query Batch Size | 否 | 50 | 如果出现out of memeory 错误，尝试减少该数值 |
+| BLOCK_RATIO | float |  | 否 | 0.75 | 建议配置 输入平均Token数/（输入+输出平均Token数) |
+| MAX_CACHED_TASK_NUM | int | 服务缓存队列最大长度 | 否 | 128 | 队列达到上限后，会拒绝新的请求 |
+| PUSH_MODE_HTTP_WORKERS | int | HTTP服务进程数 | 否 | 1 | 在 PUSH_MODE_HTTP_PORT 配置的情况下有效，高并发下提高该数值，建议最高配置为8 |
+| USE_WARMUP | int | 是否进行 warmup | 否 | 0 |  |
+| USE_HF_TOKENIZER | int | 是否进行使用huggingface的词表 | 否 | 0 |   |
+| USE_CACHE_KV_INT8 | int | 是否将INT8配置为KV Cache的类型 | 否 | 0 | c8量化模型需要配置为1 |
+| MODEL_DIR | str | 模型文件路径 | 否 | /models/ |  |
+| FD_MODEL_CONFIG_PATH | str | 模型config文件路径 | 否 | ${model_dir}/config.json |  |
+| DISTRIBUTED_CONFIG | str | 模型分布式配置文件路径 | 否 | ${model_dir}/rank_mapping.csv |  |
+
+## 请求参数介绍
 
 | 字段名 | 字段类型 | 说明 | 是否必填 | 默认值 | 备注 |
 | :---: | :-----: | :---: | :---: | :-----: | :----: |
@@ -195,19 +238,8 @@ for line in res.iter_lines():
 | stream | bool | 是否流式返回 | 否 | False |  |
 | return_all_tokens | bool | 是否一次性返回所有结果 | 否 | False | 与stream参数差异见表后备注 |
 | timeout | int | 请求等待的超时时间，单位是秒 | 否 | 300 |  |
+| return_usage | bool | 是否返回输入、输出 token 数量 | 否 | False |  |
 
 * 在正确配置PUSH_MODE_HTTP_PORT字段下，服务支持 GRPC 和 HTTP 两种请求服务
   * stream 参数仅对 HTTP 请求生效
   * return_all_tokens 参数对 GRPC 和 HTTP 请求均有效
-
-### 返回示例
-
-```
-如果stream为True，流式返回
-    如果正常，返回{'token': xxx, 'is_end': xxx, 'send_idx': xxx, ..., 'error_msg': '', 'error_code': 0}
-    如果异常，返回{'error_msg': xxx, 'error_code': xxx}，error_msg字段不为空，error_code字段不为0
-
-如果stream为False，非流式返回
-    如果正常，返回{'tokens_all': xxx, 'tokens_all_num': xxx, ..., 'error_msg': '', 'error_code': 0}
-    如果异常，返回{'error_msg': xxx, 'error_code': xxx}，error_msg字段不为空，error_code字段不为0
-```

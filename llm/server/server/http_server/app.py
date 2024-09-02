@@ -18,27 +18,25 @@ import os
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
-from server.http_server.api import (
-    Req,
-    chat_completion_generator,
-    chat_completion_result,
-)
+from server.http_server.api import (Req, chat_completion_generator,
+                                    chat_completion_result)
 from server.utils import http_server_logger
 
 http_server_logger.info(f"create fastapi app...")
 app = FastAPI()
 
+
 @app.post("/v1/chat/completions")
 def create_chat_completion(req: Req):
     """
-    服务端路由函数
-    返回：
-        如果stream为True，流式返回
-            如果正常，返回{'token': xxx, 'is_end': xxx, 'send_idx': xxx, ..., 'error_msg': '', 'error_code': 0}
-            如果异常，返回{'error_msg': xxx, 'error_code': xxx}，error_msg字段不为空，error_code字段不为0
-        如果stream为False，非流式返回
-            如果正常，返回{'result': xxx, 'error_msg': '', 'error_code': 0}
-            如果异常，返回{'result': '', 'error_msg': xxx, 'error_code': xxx}，error_msg字段不为空，error_code字段不为0
+    HTTP Server for chat completion
+    Return:
+        In Stream:
+            Normal, return {'token': xxx, 'is_end': xxx, 'send_idx': xxx, ..., 'error_msg': '', 'error_code': 0}
+            Others, return {'error_msg': xxx, 'error_code': xxx}, error_msg not None, error_code != 0
+        Not In Stream:
+            Normal, return {'tokens_all': xxx, ..., 'error_msg': '', 'error_code': 0}
+            Others, return {'error_msg': xxx, 'error_code': xxx}, error_msg not None, error_code != 0
     """
     try:
         http_server_logger.info(f"receive request: {req.req_id}")
@@ -59,11 +57,12 @@ def create_chat_completion(req: Req):
         http_server_logger.info(f"finish request: {req.req_id}")
         return resp
 
+
 def launch_http_server(port: int, workers: int) -> None:
     """
-    启动http服务
+    launch http server
     """
-    http_server_logger.info(f"launch http server... port: {port}, workers: {workers}")
+    http_server_logger.info(f"launch http server with port: {port}, workers: {workers}")
     try:
         uvicorn.run(app="server.http_server.app:app",
                     host='0.0.0.0',
@@ -73,13 +72,14 @@ def launch_http_server(port: int, workers: int) -> None:
     except Exception as e:
         http_server_logger.error(f"launch http server error, {e}")
 
+
 def main():
-    """main函数"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", default=9904, type=int, help="port to the http server")
     parser.add_argument("--workers", default=1, type=int, help="set the number of workers for the http service")
     args = parser.parse_args()
     launch_http_server(port=args.port, workers=args.workers)
+
 
 if __name__ == "__main__":
     main()

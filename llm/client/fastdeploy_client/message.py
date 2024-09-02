@@ -14,8 +14,7 @@
 
 class ChatMessage(object):
     """
-    多轮对话数据结构，当使用这个与ChatBot对话时
-    会将对话记录存储在此结构体内，支持多轮
+    multi-turn chat message with ChatBot
     """
     def __init__(self, prompt=None):
         if prompt is not None:
@@ -25,7 +24,7 @@ class ChatMessage(object):
 
     def add_user_message(self, content):
         """
-        添加一个用户消息
+        add user message
         """
         if len(self.message) > 0 and self.message[-1]["role"] != "assistant":
             raise Exception("Cannot add user message, because the role of the "
@@ -34,7 +33,7 @@ class ChatMessage(object):
 
     def add_assistant_message(self, content):
         """
-        添加一个assistant消息
+        add assistant message
         """
         if len(self.message) > 0 and self.message[-1]["role"] != "user":
             raise Exception("Cannot add user message, because the role of the "
@@ -43,7 +42,7 @@ class ChatMessage(object):
 
     def next_prompt(self, content):
         """
-        添加一个新的对话，保留用于兼容。
+        add user message and return a new prompt
         """
         self.add_user_message(content)
 

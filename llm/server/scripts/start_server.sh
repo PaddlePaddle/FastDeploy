@@ -14,8 +14,8 @@ export FLAGS_gemm_use_half_precision_compute_type=0
 export NVIDIA_TF32_OVERRIDE=0
 
 # Model hyperparameters
-export MP_NUM=${MP_NUM:-"1"}                                # GPU num
-export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-"0"}    # GPU
+export MP_NUM=${MP_NUM:-"1"}                                # Number of GPUs
+export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-"0"}    # GPU ids
 export MAX_SEQ_LEN=${MAX_SEQ_LEN:-"8192"}
 export MAX_DEC_LEN=${MAX_DEC_LEN:-"2048"}
 export BATCH_SIZE=${BATCH_SIZE:-"20"}
@@ -44,7 +44,6 @@ mkdir -p log
 rm -rf console.log log/*
 rm -rf /dev/shm/*
 
-# 启动服务
 echo "start serving ..."
 
 tritonserver --exit-timeout-secs 100 --cuda-memory-pool-byte-size 0:0 --cuda-memory-pool-byte-size 1:0 \
@@ -55,4 +54,5 @@ tritonserver --exit-timeout-secs 100 --cuda-memory-pool-byte-size 0:0 --cuda-mem
                  --grpc-port=${GRPC_PORT} \
                  --metrics-port=${METRICS_PORT} \
                  --log-file log/server.log --log-info true  > log/console.log 2>&1 &
-echo "模型服务的启动日志，请查看" ${PWD}"/log/server.log 和 "${PWD}"/log/workerlog.0 "
+
+echo "The logs for the model service, please check" ${PWD}"/log/server.log and "${PWD}"/log/workerlog.0"

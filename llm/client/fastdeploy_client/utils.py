@@ -13,5 +13,7 @@
 # limitations under the License.
 
 def is_enable_benchmark(**kwargs):
-    """是否是benchmark模式"""
+    """
+    Check if enable benchmark
+    """
     return "benchmark" in kwargs and kwargs["benchmark"] == 1

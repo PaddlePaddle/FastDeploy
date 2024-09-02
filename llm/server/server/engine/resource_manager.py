@@ -24,46 +24,71 @@ from server.utils import model_server_logger
 
 class ResourceManager(object):
     """
-    用于记录和分配引擎的资源
+    record and allocate resources for the engine
     """
     def __init__(self, cfg):
         self.cfg = cfg
         self.stop_flags = [True] * cfg.max_batch_size
         self.free_list = list(range(cfg.max_block_num - 1, -1, -1))
         self.tasks_list = [None] * self.cfg.max_batch_size
-        # 引擎当前的batch情况
+        # current batch status of the engine
         self.real_bsz = 0
         model_server_logger.info(f"{self.info()}")
 
     def get_required_block_number(self, input_token_num):
         """
-        计算需要多少Block资源
+        Calculate Block resources are needed
+
+        Args:
+            input_token_num (int): input token number
+
+        Returns:
+            int: block number
         """
         block_num = (input_token_num + self.cfg.block_size - 1 + self.cfg.dec_token_num) // self.cfg.block_size
         return block_num
 
     def get_encoder_block_number(self, input_token_num):
         """
-        获取编码器所需的block数目
+        get the number of blocks for the encoder
+
+        Args:
+            input_token_num (int): input token number
+
+        Returns:
+            int: encoder block number
         """
         enc_block_num = (input_token_num + self.cfg.block_size - 1) // self.cfg.block_size
         return enc_block_num
 
     def get_decoder_block_number(self):
         """
-        获取解码器所需的block数目
+        get the number of blocks for the decoder
+
+        Returns:
+            int: decoder block number
         """
         return (self.cfg.dec_token_num + self.cfg.block_size - 1) // self.cfg.block_size
 
     def total_block_number(self):
         """
-        返回服务启动时预分配的block数量
+        the number of pre allocated blocks at service startup
+
+        Returns:
+            int: total block number
         """
         return self.cfg.max_block_num
 
     def _get_block_tables(self, input_token_num, required_type="all"):
         """
-        分配显存资源
+        allocate memory resources
+
+        Args:
+            input_token_num (int): input token number
+            required_type (str): required type
+
+        Returns:
+            list: block list
         """
         if required_type == "all":
             block_num = self.get_required_block_number(input_token_num)
@@ -86,29 +111,43 @@ class ResourceManager(object):
 
     def _recycle_block_tables(self, block_tables):
         """
-        回收显存资源blocks
+        Recycling memory resource blocks
+
+        Args:
+            block_tables (list): block list
         """
         ori_number = len(self.free_list)
         self.free_list.extend(block_tables)
-        # self.free_list = list(set(self.free_list + block_tables))
         cur_number = len(self.free_list)
         model_server_logger.info(f"recycle {cur_number - ori_number} blocks.")
 
     def available_batch(self):
         """
-        引擎当前可用最大Batch
+        available batch size for engine
+
+        Returns:
+            int: available batch size
         """
         return np.sum(self.stop_flags)
 
     def availabel_block_num(self):
         """
-        引擎当前可用的block数量
+        available block size for engine
+
+        Returns:
+            int: available block size
         """
         return len(self.free_list)
 
     def is_resource_sufficient(self, input_token_num):
         """
-        判断当前可用资源是否满足新的需求
+        check current available resources meet the new requirements
+
+        Args:
+            input_token_num (int): input token number
+
+        Returns:
+            bool: whether current available resources meet the new requirements
         """
         if self.available_batch() < 1:
             return False
@@ -119,11 +158,17 @@ class ResourceManager(object):
 
     def allocate_resources_for_new_tasks(self, tasks):
         """
-        为新任务分配资源
+        allocate resources for new tasks
+
+        Args:
+            tasks (list): task list
+
+        Returns:
+            list: processed task list
         """
 
-        allocated_position = 0 # 新任务插入的位置
-        processing_task_index = 0 # 当前正在处理的任务index
+        allocated_position = 0
+        processing_task_index = 0
         processed_tasks = list()
         while allocated_position < self.cfg.max_batch_size:
             if processing_task_index >= len(tasks):
@@ -172,7 +217,7 @@ class ResourceManager(object):
                 allocated_position += 1
             processing_task_index += 1
 
-        # 统计引擎正在推理时的batch size
+        # batch size when the statistical engine is inferring
         for i in range(self.cfg.max_batch_size - 1, -1, -1):
             if not self.stop_flags[i]:
                 self.real_bsz = i + 1
@@ -184,6 +229,12 @@ class ResourceManager(object):
         return processed_tasks
 
     def info(self):
+        """
+        get resource manager info
+
+        Returns:
+            str: resource manager info
+        """
         info = f"ResourceManager info, " \
                f"total_block_number: {self.total_block_number()}, total_batch_number: {len(self.stop_flags)}, " \
                f"availabel_block_num: {self.availabel_block_num()}, available_batch: {self.available_batch()}"

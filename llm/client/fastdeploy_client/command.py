@@ -21,7 +21,10 @@ from fastdeploy_client.chatbot import ChatBot
 
 def _get_service_configuration():
     """
-    从环境变量获取服务配置信息
+    get service url from environment
+
+    Returns:
+        tuple: (hostname, port)
     """
     url = os.getenv("FASTDEPLOY_MODEL_URL")
 
@@ -38,7 +41,7 @@ def _get_service_configuration():
 
 def stream_generate(prompt):
     """
-    命令工具：流式返回
+    Streaming interface
     """
     hostname, port = _get_service_configuration()
     chatbot = ChatBot(hostname=hostname, port=port)
@@ -49,7 +52,7 @@ def stream_generate(prompt):
 
 def generate(prompt):
     """
-    命令工具：整句返回
+    entire sentence interface
     """
     hostname, port = _get_service_configuration()
     chatbot = ChatBot(hostname=hostname, port=port)
@@ -58,9 +61,6 @@ def generate(prompt):
 
 
 def main():
-    """
-    命令工具主入口
-    """
     if len(sys.argv) < 2 or sys.argv[1] not in ["generate", "stream_generate"]:
         logging.error("Usage 1: fdclient generate \"Hello, How are you?\"")
         return

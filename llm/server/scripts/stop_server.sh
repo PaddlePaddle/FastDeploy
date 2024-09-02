@@ -3,7 +3,7 @@
 pids=($(ps aux | grep -E 'tritonserver' | grep -v grep | awk '{print $2}'))
 
 if [ ${#pids[@]} -eq 0 ]; then
-    echo "未找到 tritonserver 相关进程"
+    echo "Can not find tritonserver."
     timeout=1
 else
     timeout=300
@@ -11,7 +11,7 @@ fi
 
 # kill processor
 for pid in "${pids[@]}"; do
-    echo "正在中断进程 $pid"
+    echo "killing $pid"
     kill -2 "$pid"
 done
 
@@ -29,9 +29,8 @@ while : ; do
   elapsed_time=$((current_time - start_time))
 
   if [ $elapsed_time -ge $timeout ]; then
-    echo "tritonserver进程超时未退出"
-    echo "强制杀死所有有关进程"
-    pids=$(ps auxww | grep -E "tritonserver|triton_python_backend_stub|new_infer.py|infer|multiprocessing.resource_tracker|paddle.distributed.launch|task_queue_manager|app.py|memory_log.py|spawn_main" | grep -v grep | grep -v start_both | awk '{print $2}');
+    echo "forcibly kill all process ..."
+    pids=$(ps auxww | grep -E "tritonserver|triton_python_backend_stub|infer|multiprocessing.resource_tracker|paddle.distributed.launch|task_queue_manager|app.py|spawn_main" | grep -v grep | grep -v start_both | awk '{print $2}');
     echo $pids;
     for pid in ${pids[@]}; do
     kill -9 ${pid}
@@ -39,14 +38,14 @@ while : ; do
     break
   fi
 
-  pids=$(ps auxww | grep -E "tritonserver|triton_python_backend_stub|new_infer.py|multiprocessing.resource_tracker|paddle.distributed.launch|app.py|memory_log.py|spawn_main" | grep -v grep | awk '{print $2}');
+  pids=$(ps auxww | grep -E "tritonserver|triton_python_backend_stub|multiprocessing.resource_tracker|paddle.distributed.launch|app.py|spawn_main" | grep -v grep | awk '{print $2}');
   array=($(echo "$pids" | tr ' ' '\n'))
 
   if [ ${#array[*]} -ne 0 ]; then
-    echo "进程还没有清理干净, 等待清理完毕"
+    echo "cleaning process, please wait ..."
     sleep 1
   else
-    echo "进程已经清理干净"
+    echo "clean finished."
     break
   fi
 done
@@ -65,5 +64,5 @@ for in_pid in ${health_checker_pids[@]}; do
 done
 echo 'end kill health checker'
 
-echo "所有进程已终止"
+echo "all process terminated."
 exit 0

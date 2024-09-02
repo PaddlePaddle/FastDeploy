@@ -26,10 +26,7 @@ from collections import Counter, deque
 from datetime import datetime
 
 import numpy as np
-from server.checker import (
-    add_default_params,
-    check_basic_params,
-)
+from server.checker import add_default_params, check_basic_params
 from server.engine import engine
 from server.engine.config import Config
 from server.utils import error_logger, model_server_logger
@@ -50,7 +47,7 @@ if sys.stdout.encoding is None:
 
 class TritonConfig(Config):
     """
-    Triton Inference Server额外增加的配置参数
+    Triton Inference Server config
     """
     def __init__(self, base_config):
         super().__init__()
@@ -60,16 +57,13 @@ class TritonConfig(Config):
 
 class TritonTokenProcessor(engine.TokenProcessor):
     """
-    创建Triton服务的Processor
+    initialize Triton Processor
     """
     def __init__(self, cfg, triton_server):
         super().__init__(cfg)
         self.triton_server = triton_server
-        # 缓存的结果
         self.cached_generated_tokens = queue.Queue()
-        # Token缓存，针对部分特殊Token累积后再发送
         self.token_buffer = dict()
-        # Score缓存，针对部分特殊Token累积后再发送
         self.score_buffer = dict()
 
         self.push_mode_sender_thread = threading.Thread(target=self._push_mode_sender_thread, args=())
@@ -77,6 +71,9 @@ class TritonTokenProcessor(engine.TokenProcessor):
         self.push_mode_sender_thread.start()
 
     def _push_mode_sender_thread(self):
+        """
+        push mode sender thread
+        """
         while True:
             try:
                 batch_result = self.cached_generated_tokens.get()
@@ -84,24 +81,26 @@ class TritonTokenProcessor(engine.TokenProcessor):
                     req_id = result["req_id"]
                     is_end = result.get("is_end", 0)
                     return_all_tokens = result.get("return_all_tokens", False)
-                    # 非流式返回下仅返回最后一个Token结果
                     if is_end == 0 and (return_all_tokens or self.cfg.disable_streaming):
                         continue
                     if return_all_tokens and "topk_tokens" in result:
                         del result["topk_tokens"]
                     result = self.triton_server.data_processor.process_response(result)
+                    if "usage" in result:
+                        result["usage"]["prompt_tokens"] = self.triton_server.task_info[req_id]["prompt_tokens"]
                     model_server_logger.debug(f"Send result to client under push mode: {result}")
                     with self.triton_server.thread_lock:
                         _send_result([result], self.triton_server.response_sender[req_id], is_end)
                         if is_end == 1:
                             del self.triton_server.response_sender[req_id]
+                            del self.triton_server.task_info[req_id]
                             self.triton_server._update_metrics()
             except Exception as e:
                     model_server_logger.error("Unexcepted error happend: {}, {}".format(e, str(traceback.format_exc())))
 
     def postprocess(self, batch_result, exist_finished_task=False):
         """
-        生成单步结果后处理函数
+        single postprocess for triton
         """
         try:
             self.cached_generated_tokens.put(batch_result)
@@ -113,25 +112,24 @@ class TritonTokenProcessor(engine.TokenProcessor):
 
 class TritonServer(object):
     """
-    Triton框架服务实现
+    Triton Server
     """
 
     def initialize(self, args):
         """
-        Triton服务初始化
+        Triton initialization
         """
-        # 开启探活服务
+        # start health checker
         use_custom_health_checker = int(os.getenv("USE_CUSTOM_HEALTH_CHECKER", 1))
-        # 环境变量USE_CUSTOM_HEALTH_CHECKER：控制是否使用自定义的探活接口
-        # 使用自定义的探活接口时候，tritonserver自身的探活服务需要被关闭，当USE_CUSTOM_HEALTH_CHECKER为1时，需要--allow-http设置为false
-        # 当USE_CUSTOM_HEALTH_CHECKER为0时，tritonserver自身的探活服务需要打开，设置--http-port=${HTTP_PORT}
+        # if set USE_CUSTOM_HEALTH_CHECKER=1, use custom health checker, need set --allow-http=false
+        # else use tritonserver's health checker, need set --http-port=${HTTP_PORT}
         if use_custom_health_checker:
             http_port = os.getenv("HTTP_PORT")
             if http_port is None:
                 raise Exception("HTTP_PORT must be set")
             from server.triton_server_helper import start_health_checker
             multiprocessing.Process(target=start_health_checker, args=(int(http_port), )).start()
-            time.sleep(1)  # 等待1s，保证需要的共享内存已经创建
+            time.sleep(1)
 
         model_config = json.loads(args["model_config"])
         using_decoupled = pb_utils.using_decoupled_model_transaction_policy(
@@ -142,7 +140,7 @@ class TritonServer(object):
                 enable decoupled transaction policy in model configuration to
                 serve this model""".format(args["model_name"]))
 
-        # 添加metrics指标，可以通过 METRICS_PORT 获取服务状态
+        # add metrics，use METRICS_PORT get server metrics
         self.metric_family = pb_utils.MetricFamily(
             name="inference_server_metrics",
             description="Metrics for monitoring inference server status",
@@ -165,15 +163,14 @@ class TritonServer(object):
                 labels={"available_resource": "available_resource"}),
         }
 
-        # Triton服务所需变量
-        # response_sender的线程锁，避免多线程访问或读写时的问题
+        # response_sender thread lock
         self.thread_lock = threading.Lock()
 
         base_config = Config()
         self.cfg = TritonConfig(base_config)
         self.cfg.print(file="log/fastdeploy_init.info")
 
-        # 初始化底层引擎
+        # init engine
         self.token_processor = TritonTokenProcessor(self.cfg, self)
         self.engine = engine.Engine(self.cfg, self.token_processor)
         model_server_logger.info("Creat engine...")
@@ -186,7 +183,8 @@ class TritonServer(object):
 
     def execute(self, requests):
         """
-        Triton服务主函数，处理Triton框架接收的请求
+        Triton service main function,
+        handling requests received by the Triton framework
         """
         if len(requests) != 1:
             raise pb_utils.TritonModelException(
@@ -202,7 +200,7 @@ class TritonServer(object):
 
     def finalize(self):
         """
-        Triton服务退出函数
+        Triton service exit function
         """
         model_server_logger.info("Triton service will be terminated...")
         wait_time = 300
@@ -226,7 +224,6 @@ class TritonServer(object):
         self.data_processor = DataProcessor()
         model_server_logger.info("create data processor success")
 
-        # 是否开启HTTP协议支持
         if self.cfg.push_mode_http_port < 0:
             model_server_logger.info("HTTP server for push mode is disabled.")
         else:
@@ -251,11 +248,9 @@ class TritonServer(object):
                 model_server_logger.error(error_msg)
             model_server_logger.info("init push server success")
 
-            # 需要维护每个请求的通信句柄
             self.response_sender = dict()
-            # 请求队列，从左侧插入，从右侧取出
+            self.task_info = dict()
             self.cached_task_deque = deque()
-            # 持续监控引擎和请求队列，当引擎有资源时，从请求队列中获取数据，插入到引擎内
             self.enable_insert_task_push_mode = True
             self.insert_task_to_engine_thread = threading.Thread(
                 target=self._insert_task_push_mode, args=())
@@ -264,10 +259,13 @@ class TritonServer(object):
 
     def _process_task_push_mode(self, tasks, current_response_sender):
         """
-        针对推模式，对请求进行检查，如果没问题则插入到cached_task_deque中。
+        check request and insert into cached_task_deque
+
+        Args:
+            tasks (list): list of request
+            current_response_sender: response sender for current request
         """
         try:
-            # 基础检查，如果检查失败，则直接返回错误信息
             tik = time.time()
             req_id = tasks[0]["req_id"]
             cached_task_num = len(self.cached_task_deque)
@@ -299,17 +297,14 @@ class TritonServer(object):
                     _send_error(error_msg, current_response_sender, req_id=req_id)
                     return
 
-            # 添加默认参数
             task = add_default_params(task)
 
-            # 拼接和tokenizer处理，默认支持截断
             if int(task.get("enable_text_truncate", 1)):
                 real_seq_len = self.cfg.max_seq_len - task.get("max_dec_len", 800)
                 task = self.data_processor.process_request(task, max_seq_len=real_seq_len)
             else:
                 task = self.data_processor.process_request(task)
 
-            # 检查输入长度
             input_ids_len = len(task["input_ids"])
             if "max_dec_len" not in task:
                 task["max_dec_len"] = min(self.cfg.max_seq_len - input_ids_len, self.cfg.dec_len_limit)
@@ -336,8 +331,8 @@ class TritonServer(object):
                 return
 
             with self.thread_lock:
-                # 插入缓存队列
                 self.response_sender[task_id] = current_response_sender
+                self.task_info[task_id] = {"prompt_tokens": input_ids_len}
 
             task["preprocess_end_time"] = datetime.now()
             self.cached_task_deque.appendleft(task)
@@ -352,10 +347,8 @@ class TritonServer(object):
 
     def _insert_task_push_mode(self):
         """
-        推push模式下的持续处理缓存task的线程，一旦有资源将缓存task插入到引擎中。
-        1. 所有接收到的请求会先插入到cached_task_deque
-        2. _insert_task_push_mode线程持续监控引擎
-        3. 一旦有资源可用，从cached_task_deque取出数据，提交给引擎
+        Insert task to engine thread, monitor cached_task_deque.
+        if the engine has resource, insert task to engine
         """
         try:
             while self.enable_insert_task_push_mode:
@@ -384,7 +377,6 @@ class TritonServer(object):
                         i_bs += 1
                     if i_bs >= self.cfg.max_batch_size:
                         break
-                    # 此处无需加锁，execute中插入cached_task_deque的方向与-1的方向不同
                     input_token_num = len(self.cached_task_deque[-1]["input_ids"])
                     if not self.engine.is_resource_sufficient(input_token_num):
                         break
@@ -405,7 +397,7 @@ class TritonServer(object):
 
     def _update_metrics(self):
         """
-        更新监控指标
+        update metrics
         """
         block_num = self.engine.available_block_num()
         batch_size = self.engine.available_batch()
@@ -418,7 +410,7 @@ class TritonServer(object):
 
     def _get_current_server_info(self):
         """
-        获取服务当前资源信息
+        get server info
         """
         available_batch_size = min(self.cfg.max_prefill_batch,
                                    self.engine.available_batch())
@@ -436,12 +428,12 @@ class TritonServer(object):
 
 def _send_result(result_dict, sender, end_flag=0):
     """
-    向推理引擎发送推理结果。
+    Send inference result
 
     Args:
-        result_dict (dict): 推理结果，以字典形式存储。
-        sender (grpc.aio.ServerReaderWriter): gRPC的ServerReaderWriter对象，用于发送推理结果。
-        end_flag (int, optional): 标志位，用于标识是否发送结束信号。默认为0。
+        result_dict (dict): result of inference
+        sender (grpc.aio.ServerReaderWriter): gRPC ServerReaderWriter object.
+        end_flag (int, optional): flag of end. Defaults to 0.
     """
     response = None
     if result_dict:
@@ -455,12 +447,13 @@ def _send_result(result_dict, sender, end_flag=0):
 
 def _send_error(error_msg, sender, error_code=200, req_id=None):
     """
-    向发送方发送错误信息
+    Send error inference result
 
     Args:
-        error_msg (str): 错误信息
-        sender (str): 发送方标识
-        error_code (int, optional): 错误码. Defaults to 200.
+        error_msg (str): error message
+        sender (grpc.aio.ServerReaderWriter): gRPC ServerReaderWriter object.
+        error_code (int, optional): error code. Defaults to 200.
+        req_id (str, optional): request id. Defaults to None
     """
     if not isinstance(error_msg, str):
         error_msg = str(error_msg)

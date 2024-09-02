@@ -15,14 +15,9 @@
 import os
 import threading
 import time
+from multiprocessing.managers import (AcquirerProxy, BaseManager, ListProxy,
+                                      Value, ValueProxy)
 from queue import Queue
-from multiprocessing.managers import (
-    AcquirerProxy,
-    BaseManager,
-    ListProxy,
-    Value,
-    ValueProxy,
-)
 
 from server.utils import get_logger
 
@@ -31,7 +26,7 @@ logger = get_logger("infer_server", "task_queue_manager.log")
 
 class QueueManager(BaseManager):
     """
-    基础类
+    base class for queue manager
     """
 
     pass
@@ -39,12 +34,13 @@ class QueueManager(BaseManager):
 
 class TaskQueueManager(object):
     """
-    管理类
+    task queue manager
     """
 
     def __init__(self, rank=0, mp_num=8, port=56666):
         """
-        初始化函数，用于创建对象时进行初始化操作。
+        Initialization function, used to perform initialization
+        operations when creating objects
         """
         self.max_get_num = int(os.getenv("ENGINE_MAX_NEED_NUM", 0))
         QueueManager.register('get_list')
@@ -72,7 +68,10 @@ class TaskQueueManager(object):
 
     def empty(self):
         """
-        暴露至推理端，用于判断队列是否为空
+        check the queue is empty for infer
+
+        Returns:
+            bool: True if the queue is empty, otherwise False
         """
         try:
             return len(self.list) == 0
@@ -82,7 +81,10 @@ class TaskQueueManager(object):
 
     def put(self, item):
         """
-        向队列中添加数据
+        put item to queue
+
+        Args:
+            item (any): the item to put into queue
         """
         self.lock.acquire()
         if 0 < self.value.get() < self.total_num:
@@ -100,13 +102,16 @@ class TaskQueueManager(object):
 
     def get(self):
         """
-        从队列中获取数据
+        get item from queue
+
+        Returns:
+            list: the item from queue
+            bool: True if the queue is empty, otherwise False
         """
         input_list = []
         read_finish = False
         self.lock.acquire()
         if self.value.get() & self.position == 0 and len(self.list) > 0:
-            # 控制进入引擎的输入数量. 默认服务中所有输入都拷贝进引擎一起处理
             if self.max_get_num > 0:
                 input_list.extend(self.list[: self.max_get_num])
             else:
@@ -128,10 +133,11 @@ class TaskQueueManager(object):
 
 def launch_queue_service(port, num_workers):
     """
-    启动进程间通信队列服务
+    Start the process communication queue service
 
-    port: 监听端口号
-    num_workers: infer进程的数量
+    Args:
+        port (int): the port to listen
+        num_workers (int): the number of infer process
     """
     try:
         logger.info(f"start launch queue service, port:{port}")
