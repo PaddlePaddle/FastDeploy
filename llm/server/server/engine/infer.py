@@ -18,20 +18,19 @@ import json
 import os
 import sys
 import time
-import numpy as np
-from multiprocessing import shared_memory
 from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import shared_memory
 
+import numpy as np
 import paddle
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
-from paddlenlp_ops import step_paddle
 from paddlenlp.utils.llm_utils import get_rotary_position_embedding
-
-from server.utils import get_logger
-from server.engine.config import Config
-from task_queue_manager import TaskQueueManager
+from paddlenlp_ops import step_paddle
 from server.data.processor import DataProcessor
+from server.engine.config import Config
+from server.utils import get_logger
+from task_queue_manager import TaskQueueManager
 
 File_Path = os.path.realpath(sys.argv[0])
 Dir_Path = os.path.dirname(File_Path)
@@ -42,7 +41,8 @@ class ModelRunner:
     def __init__(self, args):
         self.args = args
 
-        self.MAX_INFER_SEED = 9223372036854775806 # 2**63 - 1
+        # 2**63 - 1
+        self.MAX_INFER_SEED = 9223372036854775806
 
         self.config = Config()
         self.model_cfg = self.config.get_model_config()
@@ -77,12 +77,18 @@ class ModelRunner:
 
     def read_model_config(self):
         """
-        读取通用模型配置文件
+        load model config file from json file
+
+        Returns:
+            model_config_json: dict, model config file
         """
         model_config_json = json.load(open(self.config_file, 'r', encoding='utf-8'))
         return model_config_json
 
     def get_value(self, cfg, names):
+        """
+        get value from config file by key names
+        """
         if not isinstance(names, list):
             names = [names]
         for name in names:
@@ -95,7 +101,7 @@ class ModelRunner:
 
     def format_print_configuration(self):
         """
-        输出配置信息
+        print model config
         """
         logger.info("===============   Model Information   ==============")
         for k, v in self.model_cfg.items():
@@ -106,6 +112,9 @@ class ModelRunner:
         logger.info("=====================================================\n")
 
     def load_model_init_val(self):
+        """
+        initialize model config from config file
+        """
         self.top_p = self.model_cfg.get("top_p", 0.0)
         self.temperature = self.model_cfg.get("temperature", 1.0)
         self.rope_theta = self.model_cfg.get('rope_theta', 10000.0)
@@ -117,15 +126,14 @@ class ModelRunner:
         self.max_length = self.model_cfg.get('max_length', 1024)
 
         data_processor = DataProcessor()
-        # 允许用户配置一个额外的 eos_token 长度
+        # reserve an eos token for request
         self.eos_tokens_lens = data_processor.get_eos_tokens_lens() + 1
         self.pad_token_id = data_processor.get_pad_id()
 
     def init_dist_env(self, seed=20):
         """
-        初始化分布式环境
+        init distributed env
         """
-        # start to init distributed env
         strategy = fleet.DistributedStrategy()
 
         strategy.hybrid_configs = {
@@ -140,7 +148,7 @@ class ModelRunner:
         fleet.init(is_collective=True, strategy=strategy)
 
     def init_inputs(self):
-        # 初始化输入，所有输入都share进引擎
+        # init all inputs
         if "num_key_value_heads" in self.model_cfg and \
                 self.model_cfg["num_key_value_heads"] is not None and \
                 int(self.model_cfg["num_key_value_heads"]) > 0:
@@ -165,109 +173,82 @@ class ModelRunner:
 
         pre_max_block_num = (self.args.max_seq_len + self.args.block_size - 1) // self.args.block_size + self.args.enc_dec_block_num
         self.share_inputs["block_tables"] = paddle.full(
-                shape=[self.args.max_batch_size, pre_max_block_num],
-                fill_value=-1,
-                dtype="int32")
+                        shape=[self.args.max_batch_size, pre_max_block_num], fill_value=-1, dtype="int32")
 
         self.share_inputs['pre_ids'] = paddle.to_tensor(
-            np.full((self.args.max_batch_size, self.args.max_dec_len), -1, dtype='int64'))
+                        np.full((self.args.max_batch_size, self.args.max_dec_len), -1, dtype='int64'))
 
         tmp_position_ids = paddle.arange(self.args.max_seq_len).reshape((1, -1))
         self.share_inputs['rope_emb'] = get_rotary_position_embedding(tmp_position_ids,
-                        self.args.hidden_size // self.args.num_attention_heads, self.rope_theta, self.rope_scaling)
+                        self.args.hidden_size // self.args.num_attention_heads,
+                        self.rope_theta, self.rope_scaling)
         self.share_inputs['input_ids'] = paddle.full(
                         shape=[self.args.max_batch_size, self.args.max_seq_len],
-                        fill_value=self.pad_token_id,
-                        dtype='int64')
-        self.share_inputs['top_p'] = paddle.full(shape=[self.args.max_batch_size, 1],
-                                            fill_value=self.top_p,
-                                            dtype="float32")
-        self.share_inputs['temperature'] = paddle.full(shape=[self.args.max_batch_size, 1],
-                                                fill_value=self.temperature,
-                                                dtype="float32")
+                        fill_value=self.pad_token_id, dtype='int64')
+        self.share_inputs['top_p'] = paddle.full(
+                            shape=[self.args.max_batch_size, 1], fill_value=self.top_p, dtype="float32")
+        self.share_inputs['temperature'] = paddle.full(
+                            shape=[self.args.max_batch_size, 1], fill_value=self.temperature, dtype="float32")
         self.share_inputs['eos_token_id'] = paddle.to_tensor(
-                        np.zeros((self.eos_tokens_lens, 1)).reshape(-1, 1).astype("int64"))
-        self.share_inputs['penalty_score'] = paddle.full(shape=[self.args.max_batch_size, 1],
-                                                    fill_value=self.penalty_score,
-                                                    dtype="float32")
-        self.share_inputs['frequency_score'] = paddle.full(shape=[self.args.max_batch_size, 1],
-                                                    fill_value=self.frequency_score,
-                                                    dtype="float32")
-        self.share_inputs['presence_score'] = paddle.full(shape=[self.args.max_batch_size, 1],
-                                                    fill_value=self.presence_score,
-                                                    dtype="float32")
+                            np.zeros((self.eos_tokens_lens, 1)).reshape(-1, 1).astype("int64"))
+        self.share_inputs['penalty_score'] = paddle.full(
+                            shape=[self.args.max_batch_size, 1], fill_value=self.penalty_score, dtype="float32")
+        self.share_inputs['frequency_score'] = paddle.full(
+                            shape=[self.args.max_batch_size, 1], fill_value=self.frequency_score, dtype="float32")
+        self.share_inputs['presence_score'] = paddle.full(
+                            shape=[self.args.max_batch_size, 1], fill_value=self.presence_score, dtype="float32")
         self.share_inputs['seq_lens_this_time'] = paddle.full(
-                                shape=[self.args.max_batch_size, 1], fill_value=0, dtype="int32")
-        self.share_inputs['seq_lens_encoder'] = paddle.full(shape=[self.args.max_batch_size, 1],
-                                                    fill_value=0,
-                                                    dtype="int32")
+                            shape=[self.args.max_batch_size, 1], fill_value=0, dtype="int32")
+        self.share_inputs['seq_lens_encoder'] = paddle.full(
+                            shape=[self.args.max_batch_size, 1], fill_value=0, dtype="int32")
         self.share_inputs['step_seq_lens_encoder'] = paddle.full(
-                                shape=[self.args.max_batch_size, 1], fill_value=0, dtype="int32")
-        self.share_inputs['seq_lens_decoder'] = paddle.full(shape=[self.args.max_batch_size, 1],
-                                                    fill_value=0,
-                                                    dtype="int32")
-        self.share_inputs['step_idx'] = paddle.full(shape=[self.args.max_batch_size, 1],
-                                            fill_value=0,
-                                            dtype="int64")
-        self.share_inputs['min_length'] = paddle.full(shape=[self.args.max_batch_size, 1],
-                                                fill_value=self.min_length,
-                                                dtype="int64")
-        self.share_inputs['max_length'] = paddle.full(shape=[self.args.max_batch_size, 1],
-                                                fill_value=self.max_length,
-                                                dtype="int64")
-        self.share_inputs['not_need_stop'] = paddle.full(shape=[1],
-                                                    fill_value=False,
-                                                    dtype="bool")
-        self.share_inputs['stop_flags'] = paddle.full(shape=[self.args.max_batch_size, 1],
-                                                fill_value=True,
-                                                dtype="bool")
-        self.share_inputs['stop_nums'] = paddle.full(shape=[1],
-                                                fill_value=self.args.max_batch_size,
-                                                dtype="int64")
-        self.share_inputs['bad_tokens'] = paddle.full(shape=[1],
-                                                fill_value=-1,
-                                                dtype="int64")
-        self.share_inputs['next_tokens'] = paddle.full(shape=[self.args.max_batch_size, 1],
-                                                fill_value=-1,
-                                                dtype="int64")
-        self.share_inputs['is_block_step'] = paddle.full(shape=[self.args.max_batch_size],
-                                                    fill_value=False,
-                                                    dtype="bool")
-        self.share_inputs['encoder_block_lens'] = paddle.full(shape=[self.args.max_batch_size],
-                                                        fill_value=0,
-                                                        dtype="int32")
-        self.share_inputs['step_block_list'] = paddle.full(shape=[self.args.max_batch_size],
-                                                    fill_value=-1,
-                                                    dtype="int32")
+                            shape=[self.args.max_batch_size, 1], fill_value=0, dtype="int32")
+        self.share_inputs['seq_lens_decoder'] = paddle.full(
+                            shape=[self.args.max_batch_size, 1], fill_value=0, dtype="int32")
+        self.share_inputs['step_idx'] = paddle.full(
+                            shape=[self.args.max_batch_size, 1], fill_value=0, dtype="int64")
+        self.share_inputs['min_length'] = paddle.full(
+                            shape=[self.args.max_batch_size, 1], fill_value=self.min_length, dtype="int64")
+        self.share_inputs['max_length'] = paddle.full(
+                            shape=[self.args.max_batch_size, 1], fill_value=self.max_length, dtype="int64")
+        self.share_inputs['not_need_stop'] = paddle.full(
+                            shape=[1], fill_value=False, dtype="bool")
+        self.share_inputs['stop_flags'] = paddle.full(
+                            shape=[self.args.max_batch_size, 1], fill_value=True, dtype="bool")
+        self.share_inputs['stop_nums'] = paddle.full(
+                            shape=[1], fill_value=self.args.max_batch_size, dtype="int64")
+        self.share_inputs['bad_tokens'] = paddle.full(
+                            shape=[1], fill_value=-1, dtype="int64")
+        self.share_inputs['next_tokens'] = paddle.full(
+                            shape=[self.args.max_batch_size, 1], fill_value=-1, dtype="int64")
+        self.share_inputs['is_block_step'] = paddle.full(
+                            shape=[self.args.max_batch_size], fill_value=False, dtype="bool")
+        self.share_inputs['encoder_block_lens'] = paddle.full(
+                            shape=[self.args.max_batch_size], fill_value=0, dtype="int32")
+        self.share_inputs['step_block_list'] = paddle.full(
+                            shape=[self.args.max_batch_size], fill_value=-1, dtype="int32")
         self.share_inputs['step_lens'] = paddle.full(shape=[1], fill_value=0, dtype="int32")
-        self.share_inputs['recover_block_list'] = paddle.full(shape=[self.args.max_batch_size],
-                                                        fill_value=-1,
-                                                        dtype="int32")
-        self.share_inputs['recover_lens'] = paddle.full(shape=[1],
-                                                fill_value=0,
-                                                dtype="int32")
-        self.share_inputs['need_block_list'] = paddle.full(shape=[self.args.max_batch_size],
-                                                    fill_value=-1,
-                                                    dtype="int32")
-        self.share_inputs['need_block_len'] = paddle.full(shape=[1],
-                                                    fill_value=0,
-                                                    dtype="int32")
-        self.share_inputs['used_list_len'] = paddle.full(shape=[self.args.max_batch_size],
-                                                    fill_value=0,
-                                                    dtype="int32")
-        self.share_inputs['infer_seed'] = paddle.full(shape=[self.args.max_batch_size, 1],
-                                                    fill_value=0,
-                                                    dtype="int64")
+        self.share_inputs['recover_block_list'] = paddle.full(
+                            shape=[self.args.max_batch_size], fill_value=-1, dtype="int32")
+        self.share_inputs['recover_lens'] = paddle.full(
+                            shape=[1], fill_value=0, dtype="int32")
+        self.share_inputs['need_block_list'] = paddle.full(
+                            shape=[self.args.max_batch_size], fill_value=-1, dtype="int32")
+        self.share_inputs['need_block_len'] = paddle.full(
+                            shape=[1], fill_value=0, dtype="int32")
+        self.share_inputs['used_list_len'] = paddle.full(
+                            shape=[self.args.max_batch_size], fill_value=0, dtype="int32")
+        self.share_inputs['infer_seed'] = paddle.full(
+                            shape=[self.args.max_batch_size, 1], fill_value=0, dtype="int64")
         free_list = list(range(int(self.args.max_block_num * self.args.block_ratio)))
         self.free_list_len = len(free_list)
         self.share_inputs['free_list'] = paddle.to_tensor(free_list, dtype="int32")
-        self.share_inputs['free_list_len'] = paddle.full(shape=[1],
-                                                    fill_value=self.free_list_len,
-                                                    dtype="int32")
+        self.share_inputs['free_list_len'] = paddle.full(
+                            shape=[1], fill_value=self.free_list_len, dtype="int32")
 
     def dy_input_preprocess(self, tasks):
         """
-        动态插入部分额外处理
+        dynamic insertion
         """
         for i in range(len(tasks)):
             task = tasks[i]
@@ -309,7 +290,7 @@ class ModelRunner:
 
     def step_cuda(self, seq_lens_this_time):
         """
-        block调度
+        step cuda
         """
         step_paddle(self.share_inputs['stop_flags'], seq_lens_this_time,
                     self.share_inputs['step_seq_lens_encoder'],
@@ -327,7 +308,11 @@ class ModelRunner:
 
     def initialize_engine_ready_check_flag(self):
         """
-        初始化共享内存中引擎准备就绪标志变量
+        initialize engine ready flag in shared memory
+
+        Returns:
+            shm_engine_ready_check_flag: engine ready flag
+            engine_ready_check_flag_array: engine ready flag array
         """
         engine_ready_check_flag = np.zeros([1], dtype=np.int32)
         shm_engine_ready_check_flag = shared_memory.SharedMemory(
@@ -339,7 +324,10 @@ class ModelRunner:
 
     def initialize_engine_live_flag(self):
         """
-        创建用来表明当前infer引擎进程存在的共享内存变量
+        initialize infer live flag in shared memory
+
+        Returns:
+            infer_live_flag_shm: infer live flag
         """
         infer_live_flag_shm = shared_memory.SharedMemory(create=True,
                                             size=1,
@@ -348,7 +336,10 @@ class ModelRunner:
 
     def initialize_engine_healthy_recorded_time_flag(self):
         """
-        初始化共享内存中记录引擎健康的时间戳变量
+        initialize engine healthy recorded time flag in shared memory
+
+        Returns:
+            shm_engine_healthy_recorded_time: engine healthy recorded time flag
         """
         engine_healthy_recorded_time = np.zeros([1], dtype=float)
         shm_engine_healthy_recorded_time = shared_memory.SharedMemory(
@@ -359,26 +350,28 @@ class ModelRunner:
         return shm_engine_healthy_recorded_time, engine_healthy_recorded_time_array
 
     def run(self):
-        # 共享内存设置 #
+        """
+        run infer
+        """
         flag_array = np.zeros([1], dtype=np.int32)
         shm_flag_broadcast = shared_memory.SharedMemory(
-            name=self.config.get_unique_name("shm_pd_infer_flag_broadcast"))
+                        name=self.config.get_unique_name("shm_pd_infer_flag_broadcast"))
         flag_broadcast_array = np.ndarray(flag_array.shape,
-                                        dtype=flag_array.dtype,
-                                        buffer=shm_flag_broadcast.buf)
+                                            dtype=flag_array.dtype,
+                                            buffer=shm_flag_broadcast.buf)
 
         flag_array = np.zeros([self.nranks], dtype=np.int32)
         shm_flag_ready = shared_memory.SharedMemory(name=self.config.get_unique_name("shm_flag_infer_ready"))
         flag_ready_array = np.ndarray(flag_array.shape,
-                                    dtype=flag_array.dtype,
-                                    buffer=shm_flag_ready.buf)
-        flag_ready_array[self.rank] = 1  # 已初始化完毕
+                                        dtype=flag_array.dtype,
+                                        buffer=shm_flag_ready.buf)
+        flag_ready_array[self.rank] = 1
 
         flag_array = np.zeros([1], dtype=np.int32)
         shm_flag_has_block_step = shared_memory.SharedMemory(name=self.config.get_unique_name("shm_flag_has_block_step"))
         flag_has_block_step_array = np.ndarray(flag_array.shape,
-                                           dtype=flag_array.dtype,
-                                           buffer=shm_flag_has_block_step.buf)
+                                                dtype=flag_array.dtype,
+                                                buffer=shm_flag_has_block_step.buf)
 
         use_custom_health_checker = self.config.use_custom_health_checker
         if use_custom_health_checker:
@@ -386,23 +379,19 @@ class ModelRunner:
             engine_ready_check_flag_array[0] = 1
             shm_engine_healthy_recorded_time_array, engine_healthy_recorded_time_array = self.initialize_engine_healthy_recorded_time_flag()
             engine_healthy_recorded_time_array[0] = time.time()
-            # 创建代表infer存活的共享变量
             infer_live_flag_shm = self.initialize_engine_live_flag()
-
         infer_seed_increment = paddle.full(shape=[self.args.max_batch_size, 1],
                                             fill_value=4,
                                             dtype="int64")
-
         thread_executor = ThreadPoolExecutor(max_workers=1)
         seq_lens_this_time = None
         real_bsz = None
 
-        while 1:
+        while True:
             if use_custom_health_checker:
                 engine_healthy_recorded_time_array[0] = time.time()
 
             if self.rank == 0:
-                # 队列不为空, 可取出数据
                 if not self.infer_queue.empty():
                     flag_broadcast_array[0] = 1
 
@@ -427,7 +416,6 @@ class ModelRunner:
                     )
 
                 self.dy_input_preprocess(req_dicts)
-                # 特殊处理seq_lens
                 seq_lens_this_time = copy.deepcopy(
                     self.share_inputs['seq_lens_this_time'][:real_bsz])
                 self.infer_engine.seq_lens_handle.share_external_data(
@@ -440,12 +428,10 @@ class ModelRunner:
 
                 time.sleep(0.001)
                 continue
-            self.infer_engine.predictor.run()
 
-            # 自增随机种子，让每次计算的种子不一样
+            self.infer_engine.predictor.run()
             self.share_inputs['infer_seed'].add_(infer_seed_increment)
             self.share_inputs['infer_seed'][:] %= self.MAX_INFER_SEED
-
             if self.free_list_len > 0:
                 self.step_cuda(seq_lens_this_time)
 
@@ -459,9 +445,6 @@ class InferenceEngine(object):
         mp_degree (int): model parallel size
     """
     def __init__(self, model_dir, share_inputs, cache_kvs, config, mp_degree=1):
-        """
-        初始化模型目录，并设置多进程环境。
-        """
         self.config = config
         self.model_dir = model_dir
         self.mp_degree = mp_degree
@@ -480,13 +463,14 @@ class InferenceEngine(object):
         self.share_data()
 
     def _init_predictor(self):
-        """predictor init"""
+        """
+        predictor init
+        """
         device_id = self.rank % 8
         self.model_file = os.path.join(self.model_dir, f"model.pdmodel")
         self.param_file = os.path.join(self.model_dir, f"model.pdiparams")
         config = paddle.inference.Config(self.model_file, self.param_file)
 
-        # config.enable_memory_optim()
         config.switch_ir_optim(False)
         config.enable_use_gpu(100, device_id)
 
@@ -507,7 +491,7 @@ class InferenceEngine(object):
                 )
                 dist_config.set_comm_init_config(
                     os.path.join(Dir_Path + "/config", "rank_mapping_mp{}.csv".format(self.nranks)))
-            # dist_config.set_comm_init_config(os.path.join(Dir_Path + "/config", "rank_mapping.csv"))
+
             config.set_dist_config(dist_config)
         self.predictor = paddle.inference.create_predictor(config)
         self.input_names = self.predictor.get_input_names()
@@ -515,7 +499,7 @@ class InferenceEngine(object):
 
     def share_data(self):
         """
-        分享不拷贝数据
+        share data
         """
         for name in self.input_names:
             if "caches" in name:
@@ -542,7 +526,7 @@ class InferenceEngine(object):
 
 def parse_args():
     """
-    从命令行解析参数
+    parse args from command line
     """
     parser = argparse.ArgumentParser("FastDeploy LLM Inference")
     parser.add_argument('-m',
@@ -596,7 +580,7 @@ def parse_args():
 
 def main():
     """
-    启动推理引擎并进行预测
+    start model runner
     """
     args = parse_args()
     model_runner = ModelRunner(args)

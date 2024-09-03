@@ -27,14 +27,12 @@ from tritonclient import utils as triton_utils
 
 
 class Req(BaseModel):
-    """请求参数的类"""
-    # 传入模型服务的请求参数
     req_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     input_ids: Optional[List[int]] = None
     text: Optional[str] = None
     messages: Optional[List] = None
     max_dec_len: Optional[int] = None
-    seq_len: Optional[int] = None  # 保留seq_len为了兼容支持
+    seq_len: Optional[int] = None
     min_dec_len: Optional[int] = None
     temperature: Optional[float] = None
     topp: Optional[float] = None
@@ -45,12 +43,19 @@ class Req(BaseModel):
     return_all_tokens: Optional[bool] = None
     eos_token_ids: Optional[List[int]] = None
     benchmark: bool = False
-    # http服务使用的请求参数
+    return_usage: Optional[bool] = False
     stream: bool = False
     timeout: int = 300
 
     def to_dict_for_infer(self):
-        """将请求参数转化为字典，去掉为None的字段，避免传递给模型服务出错"""
+        """
+        Convert the request parameters into a dictionary
+
+        Returns:
+            dict: request parameters in dict format
+        """
+        self.compatible_with_OpenAI()
+
         req_dict = {}
         for key, value in self.dict().items():
             if value is not None:
@@ -60,23 +65,24 @@ class Req(BaseModel):
 
 def chat_completion_generator(infer_grpc_url: str, req: Req, yield_json: bool) -> Dict:
     """
-    基于Triton推理服务的聊天补全结果的生成器。
+    Chat completion generator based on Triton inference service.
+
     Args:
-        infer_grpc_url (str): Triton推理服务的gRPC URL。
-        req (Request): 聊天补全请求。
-        yield_json (bool): 是否返回json格式，否则返回Resp类
+        infer_grpc_url (str): Triton gRPC URL。
+        req (Request): request parameters
+        yield_json (bool): Whether to return the result in json format
+
     Returns:
-        dict: 聊天补全结果的生成器。
-            如果正常，返回{'token': xxx, 'is_end': xxx, 'send_idx': xxx, ..., 'error_msg': '', 'error_code': 0}
-            如果异常，返回{'error_msg': xxx, 'error_code': xxx}，error_msg字段不为空，error_code字段不为0
+        dict: chat completion result.
+            Normal, return {'token': xxx, 'is_end': xxx, 'send_idx': xxx, ..., 'error_msg': '', 'error_code': 0}
+            Others, return {'error_msg': xxx, 'error_code': xxx}, error_msg not None, error_code != 0
     """
     class _TritonOutputData:
-        """接收Triton服务返回的数据"""
         def __init__(self):
             self._completed_requests = queue.Queue()
 
     def _triton_callback(output_data, result, error):
-        """Triton客户端的回调函数"""
+        """Triton callback function"""
         if error:
             output_data._completed_requests.put(error)
         else:
@@ -88,7 +94,6 @@ def chat_completion_generator(infer_grpc_url: str, req: Req, yield_json: bool) -
         else:
             return resp_dict
 
-    # 准备请求数据
     timeout = req.timeout
     req_id = req.req_id
     req_dict = req.to_dict_for_infer()
@@ -99,16 +104,13 @@ def chat_completion_generator(infer_grpc_url: str, req: Req, yield_json: bool) -
     outputs = [grpcclient.InferRequestedOutput("OUT")]
     output_data = _TritonOutputData()
 
-    # 建立连接
     with grpcclient.InferenceServerClient(url=infer_grpc_url, verbose=False) as triton_client:
         triton_client.start_stream(callback=partial(_triton_callback, output_data))
 
-        # 发送请求
         triton_client.async_stream_infer(model_name="model",
                                             inputs=inputs,
                                             request_id=req_dict['req_id'],
                                             outputs=outputs)
-        # 处理返回结果
         while True:
             output_item = output_data._completed_requests.get(timeout=timeout)
             if type(output_item) == triton_utils.InferenceServerException:
@@ -126,38 +128,35 @@ def chat_completion_generator(infer_grpc_url: str, req: Req, yield_json: bool) -
                 if (result.get("error_msg") or result.get("error_code")) or result.get("is_end") == 1:
                     break
 
-        # 手动关闭连接
         triton_client.stop_stream()
         triton_client.close()
 
 def chat_completion_result(infer_grpc_url: str, req: Req) -> Dict:
     """
-    获取非流式生成结果
+    Chat completion result with not streaming mode
+
     Args:
-        infer_grpc_url (str): gRPC服务地址
-        req (Req): 请求参数对象
+        infer_grpc_url (str): Triton gRPC URL
+        req (Req): request parameters
+
     Returns:
-        dict: 聊天补全结果的生成器。
-            如果正常，返回{'result': xxx, 'error_msg': '', 'error_code': 0}
-            如果异常，返回{'result': '', 'error_msg': xxx, 'error_code': xxx}，error_msg字段不为空，error_code字段不为0
+        dict: chat completion result.
+            Normal, return {'tokens_all': xxx, ..., 'error_msg': '', 'error_code': 0}
+            Others, return {'error_msg': xxx, 'error_code': xxx}, error_msg not None, error_code != 0
     """
-    result = None
+    result = ""
     error_resp = None
     for resp in chat_completion_generator(infer_grpc_url, req, yield_json=False):
         if resp.get("error_msg") or resp.get("error_code"):
             error_resp = resp
             error_resp["result"] = ""
         else:
-            if resp.get('is_end') == 1:
-                result = resp
-                for key in ['token', 'is_end', 'send_idx', 'return_all_tokens', 'token']:
-                    if key in result:
-                        del result[key]
-    if not result:
-        error_resp = {
-            "error_msg": "HTTP parsing data error",
-            "error_code": 500,
-            "result": "",
-            "is_end": 1,
-        }
-    return error_resp if error_resp else result
+            result += resp.get("token")
+        usage = resp.get("usage", None)
+
+    if error_resp:
+        return error_resp
+    response = {'result': result, 'error_msg': '', 'error_code': 0}
+    if req.return_usage:
+        response["usage"] = usage
+    return response

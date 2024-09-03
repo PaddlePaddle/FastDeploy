@@ -20,3 +20,4 @@ pynvml
 
 # paddlenlp
 tiktoken
+transformers

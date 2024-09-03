@@ -14,19 +14,15 @@
 
 import os
 from abc import ABC, abstractmethod
-from paddlenlp.utils.llm_utils import get_eos_token_id
-from paddlenlp.transformers import (
-    LlamaTokenizer,
-    Llama3Tokenizer,
-    AutoTokenizer,
-)
 
-from server.utils import data_processor_logger
+from paddlenlp.transformers import Llama3Tokenizer, LlamaTokenizer
+from paddlenlp.utils.llm_utils import get_eos_token_id
 from server.engine.config import Config
+from server.utils import data_processor_logger
 
 
 class BaseDataProcessor(ABC):
-    """Data processor的基类"""
+    """base class for data processor"""
 
     def __init__(self):
         """
@@ -75,59 +71,54 @@ class BaseDataProcessor(ABC):
 
     def text2ids(self, text):
         """
-        将文本转换为对应的 ID
+        text to token ids
 
         Args:
-            text (str): 待转换的文本。
+            text (str): text
 
         Returns:
-            List[int]: 转换后的 ID 列表。
+            List[int]: token ids list
         """
         raise NotImplementedError
 
     def messages2ids(self, messages):
         """
-        将多轮对话转换为对话ID序列。
+        Convert multi-turn messages into ID sequences.
 
         Args:
-            messages (List[List[Dict[str, Any]]]): 对话列表，每个对话是一个字典。
+            messages (List[List[Dict[str, Any]]]): multi-turn messages.
 
         Returns:
-            List[int]: 对话ID序列，每个ID是一个整数。
-
+            List[int]: ID sequences
         """
         raise NotImplementedError
 
     def ids2tokens(self, token_ids, task_id=None):
         """
-        将 token ids 解码为字符串
+        token ids to strings
 
         Args:
-            token_ids (List[int]): 包含 token ids 的列表
-			task_id (str): 当前task_ids对应的任务ID
+            token_ids (List[int]): token ids
+			task_id (str): task id
 
         Returns:
-            List[str]: 解码后的 tokenized 字符串列表
+            List[str]: strings
         """
         raise NotImplementedError
 
     @abstractmethod
     def _load_tokenizer(self):
         """
-        加载分词器。
+        load tokenizer
+
         Returns:
-            tokenizer: 分词器。
+            tokenizer (AutoTokenizer)
         """
         raise NotImplementedError
 
 
 class DataProcessor(BaseDataProcessor):
-    """继承自Data processor的基类"""
-
     def __init__(self):
-        """
-        初始化函数。
-        """
         self.config = Config()
         max_length = self.config.get_model_config().get('max_length', 1024)
         self.src_length = max_length - self.config.seq_len_limit
@@ -182,6 +173,7 @@ class DataProcessor(BaseDataProcessor):
 
         token_ids = response_dict.get("token_ids", [])
         response_dict["token"] = self.ids2tokens(token_ids, response_dict["req_id"])
+        response_dict["usage"] = {"completion_tokens" : response_dict["send_idx"] + 1}
 
         if is_end:
             response_dict["tokens_all"] = self.clear_request_status(req_id)
@@ -189,54 +181,91 @@ class DataProcessor(BaseDataProcessor):
 
     def text2ids(self, text):
         """
-        text to ids
-        """
-        if self.tokenizer.chat_template is not None:
-            text = [text] if isinstance(text, str) else text
-            text = [self.tokenizer.apply_chat_template(sentence, tokenize=False) for sentence in text]
+        text to token ids
 
-        tokens = self.tokenizer(
-            text,
-            return_tensors="np",
-            padding=True,
-            truncation=True,
-            max_length=self.src_length,
-            add_special_tokens=self.tokenizer.chat_template is None,
-        )
+        Args:
+            text (str): text
+
+        Returns:
+            List[int]: token ids list
+        """
+        if self.config.use_hf_tokenizer:
+            tokens = self.tokenizer(
+                text,
+                return_tensors="np",
+                padding=True,
+                truncation=True,
+            )
+        else:
+            if self.tokenizer.chat_template is not None:
+                text = [text] if isinstance(text, str) else text
+                text = [self.tokenizer.apply_chat_template(sentence, tokenize=False) for sentence in text]
+
+            tokens = self.tokenizer(
+                text,
+                return_tensors="np",
+                padding=True,
+                truncation=True,
+                max_length=self.src_length,
+                add_special_tokens=self.tokenizer.chat_template is None,
+            )
         return tokens["input_ids"][0]
 
     def messages2ids(self, messages):
         """
-        将多轮对话转换为对话ID序列。
+        Convert multi-turn messages into ID sequences.
 
         Args:
-            messages (List[List[Dict[str, Any]]]): 对话列表，每个对话是一个字典。
+            messages (List[List[Dict[str, Any]]]): multi-turn messages.
 
         Returns:
-            List[int]: 对话ID序列，每个ID是一个整数。
-
+            List[int]: ID sequences
         """
         return
 
     def ids2tokens(self, token_id, task_id):
         """
-        ids to tokens
-        """
-        if task_id not in self.decode_status:
-            # 记录deocde的prefix offset & read offset & history token ids & history token strings
-            self.decode_status[task_id] = [0, 0, [], []]
+        token ids to strings
 
-        prefix_offset = self.decode_status[task_id][0]
-        read_offset = self.decode_status[task_id][1]
-        previous_token_ids = self.decode_status[task_id][2]
-        decode_str, prefix_offset, read_offset = self.tokenizer.decode_token(
-            previous_token_ids + token_id, prefix_offset, read_offset)
-        self.decode_status[task_id][0] = prefix_offset
-        self.decode_status[task_id][1] = read_offset
-        self.decode_status[task_id][2] += token_id
-        self.decode_status[task_id][3].append(decode_str)
-        # 此处为流式返回中的每个token字符串结果,可自行添加处理
-        return decode_str
+        Args:
+            token_ids (List[int]): token ids
+			task_id (str): task id
+
+        Returns:
+            List[str]: strings
+        """
+        if self.config.use_hf_tokenizer:
+            if task_id not in self.decode_status:
+                # history token ids & history token strings & befer decode str
+                self.decode_status[task_id] = [[], [], ""]
+
+            previous_token_ids = self.decode_status[task_id][0]
+            decode_str = self.tokenizer.batch_decode([previous_token_ids + token_id],
+                                        skip_special_tokens=True,
+                                        clean_up_tokenization_spaces=False)
+            if isinstance(decode_str, list) and len(decode_str):
+                new_str = decode_str[0].replace(self.decode_status[task_id][2], "", 1)
+                self.decode_status[task_id][1].append(new_str)
+                self.decode_status[task_id][2] = decode_str[0]
+            else:
+                new_str = ""
+            self.decode_status[task_id][0] += token_id
+            return new_str
+        else:
+            if task_id not in self.decode_status:
+                # prefix offset & read offset & history token ids & history token strings
+                self.decode_status[task_id] = [0, 0, [], []]
+
+            prefix_offset = self.decode_status[task_id][0]
+            read_offset = self.decode_status[task_id][1]
+            previous_token_ids = self.decode_status[task_id][2]
+            decode_str, prefix_offset, read_offset = self.tokenizer.decode_token(
+                previous_token_ids + token_id, prefix_offset, read_offset)
+            self.decode_status[task_id][0] = prefix_offset
+            self.decode_status[task_id][1] = read_offset
+            self.decode_status[task_id][2] += token_id
+            self.decode_status[task_id][3].append(decode_str)
+            return decode_str
 
     def _load_tokenizer(self):
         """
@@ -245,33 +274,56 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             tokenizer (AutoTokenizer)
         """
-        return AutoTokenizer.from_pretrained(self.config.model_dir)
+        if self.config.use_hf_tokenizer:
+            from transformers import AutoTokenizer
+            return AutoTokenizer.from_pretrained(self.config.model_dir, use_fast=False)
+        else:
+            from paddlenlp.transformers import AutoTokenizer
+            return AutoTokenizer.from_pretrained(self.config.model_dir)
 
     def clear_request_status(self, task_id):
         """
         clear request status
+
+        Args:
+            task_id (str): task id
+
+        Returns:
+            results_all (str): all token strings
         """
         results_all = ""
         if task_id in self.decode_status:
-            results_all = "".join(self.decode_status[task_id][3])
+            if self.config.use_hf_tokenizer:
+                results_all = self.decode_status[task_id][2]
+            else:
+                results_all = "".join(self.decode_status[task_id][3])
             del self.decode_status[task_id]
         return results_all
 
     def get_eos_tokens_lens(self):
         """
         get eos_token_id lens
+
+        Returns:
+            int: eos_token_id lens
         """
         return len(get_eos_token_id(self.tokenizer, self.config.generation_config))
 
     def get_eos_tokens(self):
         """
         get all eos_token_id
+
+        Returns:
+            List[int]: eos_token_id list
         """
         return get_eos_token_id(self.tokenizer, self.config.generation_config)
 
     def get_pad_id(self):
         """
         get pad_token_id, if not pad_token_id, use eos_token
+
+        Returns:
+            int: pad_token_id
         """
         if isinstance(self.tokenizer, (LlamaTokenizer, Llama3Tokenizer)) and not self.tokenizer.pad_token_id:
             return self.tokenizer.eos_token

@@ -12,29 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import multiprocessing
 import os
 import signal
 import subprocess
 import time
 import uuid
 import weakref
-import multiprocessing
-import numpy as np
 from datetime import datetime
 from multiprocessing import shared_memory
 
-from server.engine.task_queue_manager import (
-    TaskQueueManager,
-    launch_queue_service,
-)
+import numpy as np
 from server.engine.resource_manager import ResourceManager
+from server.engine.task_queue_manager import (TaskQueueManager,
+                                              launch_queue_service)
 from server.engine.token_processor import TokenProcessor, WarmUpTokenProcessor
 from server.utils import model_server_logger
 
 
 class Engine(object):
     """
-    底层推理引擎，维护队列用于引擎使用
+    Engine Class
     """
     def __init__(self, cfg, token_processor):
         self.cfg = cfg
@@ -44,31 +42,25 @@ class Engine(object):
         self.is_started = False
 
         self._init_engine_flags()
-        # 此处函数可考虑是否注释，添加后，如果引擎结束
-        # 会自动结束队列进程和推理infer进程
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
     def start(self):
         """
-        初始化引擎所需的各进程
+        initialize engine and start sub services
         """
         assert not self.is_started, "The engine is already started.!"
         start_time = time.time()
-        # 启动队列进程（服务层与引擎层通信）服务
         self.queue_service = self._start_tasks_queue_service()
         self.tasks_queue = TaskQueueManager(mp_num=self.cfg.mp_num, port=self.cfg.infer_port)
 
-        # 由于BeamSearch在后处理时依赖queue与infer.py进行通信
-        # 此处将tasks_queue共享给TokenProcessor
         self.token_processor.tasks_queue = self.tasks_queue
-
         self.infer_proc = self._start_infer_service()
         model_server_logger.info("Waitting infer processes ready...")
         while not self._infer_processes_ready():
             time.sleep(1)
         self.is_started = True
 
-        # 启动warmup
+        # start warmup
         if self.cfg.use_warmup:
             model_server_logger.info("Start warmup")
             self._set_warmup_token_processor()
@@ -76,19 +68,19 @@ class Engine(object):
             self._del_warmup_token_processor()
             model_server_logger.info("Warmup finish")
 
-        # 启动TokenProcessor子线程
+        # start TokenProcessor thread
         self.token_processor.run()
         model_server_logger.info("Infer processes are launched with {} seconds.".format(time.time() - start_time))
 
     def warmup(self):
         """
-        通过构造测试数据进行推理，确保推理过程中不会出现OOM，能够正常进行推理
+        construct test tasks and avoid out of memory problem in the infer process
         """
-        # 获取eos_token_id
+        # get eos_token_id
         from server.data.processor import DataProcessor
         eos_token_ids = DataProcessor().get_eos_tokens()
 
-       # 构造测试任务数据
+       # construct test tasks
         res_task = []
         for j in range(2 * self.cfg.max_batch_size):
             data = {
@@ -109,19 +101,24 @@ class Engine(object):
             }
             res_task.append(data)
 
-        # 插入任务
         for x in res_task:
             while self.available_batch() == 0 or not self.insert_tasks([x]):
                 time.sleep(0.0002)
 
         self.token_processor._is_blocking = False
-        # 等待所有数据推理结束
+        # wait for all tasks finished
         while not self.all_tasks_finished():
             time.sleep(1)
 
     def insert_tasks(self, tasks):
         """
-        插入任务到引擎队列
+        insert tasks to the engine
+
+        Args:
+            tasks: list of tasks
+
+        Returns:
+            return: True if success, False otherwise
         """
         if not isinstance(tasks, list):
             tasks = [tasks]
@@ -144,11 +141,13 @@ class Engine(object):
                 tasks[i]["input_ids"] = tasks[i]["input_ids"][:self.cfg.max_seq_len - 1]
             if "seq_len" in tasks[i] and "max_dec_len" not in tasks[i]:
                 tasks[i]["max_dec_len"] = tasks[i]["seq_len"]
+
             # max_dec_len + input_token_num > MAX_SEQ_LEN
             if input_token_num + tasks[i]["max_dec_len"] > self.cfg.max_seq_len:
                 tasks[i]["max_dec_len"] = self.cfg.max_seq_len - input_token_num
                 model_server_logger.warning("Force max_dec_len to be {} for req_id={}.".format(
                     tasks[i]["max_dec_len"], tasks[i]["req_id"]))
+
             # min_dec_len + input_token_num > MAX_SEQ_LEN
             if input_token_num + tasks[i]["min_dec_len"] > self.cfg.max_seq_len:
                 tasks[i]["min_dec_len"] = self.cfg.max_seq_len - input_token_num
@@ -170,67 +169,94 @@ class Engine(object):
 
     def task_is_finished(self, index):
         """
-        判断相应位置的任务是否完成
+        judge if the task is finished
+
+        Args:
+            index: task index
+
+        Returns:
+            return: True if finished, False otherwise
         """
         assert index < len(self.resource_manager.stop_flags)
         return self.resource_manager.stop_flags[index]
 
     def is_queue_empty(self):
         """
-        判断引擎队列是否为空
+        judge if the queue is empty
+
+        Returns:
+            return: True if empty, False otherwise
         """
         return self.tasks_queue.empty()
 
     def is_resource_sufficient(self, input_token_num):
         """
-        根据输入的token id长度，判断引擎资源是否充足
+        judge if the resource is sufficient
+
+        Args:
+            input_token_num: input token number
+
+        Returns:
+            return: True if sufficient, False otherwise
         """
         return self.resource_manager.is_resource_sufficient(input_token_num)
 
     def all_tasks_finished(self):
         """
-        判断是否所有的引擎正在计算的任务已完成
+        judge if all tasks are finished
+
+        Returns:
+            return: True if all finished, False otherwise
         """
         return np.sum(self.resource_manager.stop_flags) == len(self.resource_manager.stop_flags)
 
     def available_batch(self):
         """
-        引擎当前可用的最大Batch
+        available batch size of the engine
+
+        Returns:
+            return: available batch size
         """
         return self.resource_manager.available_batch()
 
     def available_block_num(self):
         """
-        引擎当前可用的block数量
+        available block number of the engine
+
+        Returns:
+            return: available block number
         """
         return self.resource_manager.availabel_block_num()
 
     def _set_warmup_token_processor(self):
         """
-        设置token_processor，用于warmup阶段
+        set token_processor for warmup
         """
         self.token_processor_backup = self.token_processor
         self.token_processor = WarmUpTokenProcessor(self.cfg)
-        # 设置resource_manager
         self.token_processor.set_resource_manager(self.resource_manager)
         self.token_processor.tasks_queue = self.tasks_queue
-        # 启动TokenProcessor子线程
+
+        # start TokenProcessor thread
         self.token_processor.run()
 
     def _del_warmup_token_processor(self):
         """
-        删除token_processor，用于正常推理阶段
+        delete token_processor for warmup
         """
-        # 停止worker 线程
         self.token_processor.stop()
         del self.token_processor
-        # 恢复token_processor
+
+        # reset token_processor
         self.token_processor = self.token_processor_backup
         del self.token_processor_backup
 
     def _infer_processes_ready(self):
         """
-        判断引擎是否初始化完成
+        judge if all infer processes are ready
+
+        Returns:
+            return: True if all ready, False otherwise
         """
         if np.sum(self.flag_ready_array) == self.cfg.mp_num:
             return True
@@ -238,7 +264,7 @@ class Engine(object):
 
     def _clear_engine_flags(self):
         """
-        清除共享内存
+        clear engine flags
         """
         try:
             self.shm_flag_ready.close()
@@ -250,9 +276,8 @@ class Engine(object):
 
     def _init_engine_flags(self):
         """
-        初始化各共享内存，用于指示引擎状态
+        Initialize shared memory to indicate engine status
         """
-        # 标记是否启动
         flag_array = np.zeros([self.cfg.mp_num], dtype=np.int32)
         try:
             tmp = shared_memory.SharedMemory(
@@ -270,7 +295,7 @@ class Engine(object):
         )
         self.flag_ready_array[:] = 0
 
-        # 广播读取数据
+        # broadcast flag for engine
         broadcast_flag_array = np.zeros([1], dtype=np.int32)
         try:
             tmp = shared_memory.SharedMemory(
@@ -292,7 +317,6 @@ class Engine(object):
         )
         self.flag_broadcast_array[0] = 0
 
-        # 标记引擎是否有调度出去的query
         has_block_step_flag_array = np.zeros([1], dtype=np.int32)
         try:
             tmp = shared_memory.SharedMemory(
@@ -314,6 +338,9 @@ class Engine(object):
         self.flag_has_block_step_array[:] = 0
 
     def _exit_sub_services(self):
+        """
+        exit sub services
+        """
         if hasattr(self, "queue_service") and self.queue_service is not None:
             self.queue_service.terminate()
             self.queue_service.join()
@@ -321,6 +348,12 @@ class Engine(object):
             os.killpg(self.infer_proc.pid, signal.SIGTERM)
 
     def _start_tasks_queue_service(self):
+        """
+        start tasks queue service
+
+        Returns:
+            p: process handle
+        """
         p = multiprocessing.Process(target=launch_queue_service, args=(self.cfg.infer_port, self.cfg.mp_num))
         p.start()
         time.sleep(0.3)
@@ -335,7 +368,10 @@ class Engine(object):
 
     def _start_gpu_infer_service(self):
         """
-        GPU模型推理进程启动
+        start gpu infer service
+
+        Returns:
+            p: process handle
         """
         current_file_path = os.path.abspath(__file__)
         current_dir_path = os.path.split(current_file_path)[0]
@@ -360,6 +396,6 @@ class Engine(object):
 
     def _start_infer_service(self):
         """
-        启动模型推理进程
+        start infer service
         """
         return self._start_gpu_infer_service()

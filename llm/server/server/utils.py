@@ -18,19 +18,17 @@ import logging
 import os
 import pickle
 import re
+import subprocess
 import time
 from datetime import datetime
 from enum import Enum
 from logging.handlers import BaseRotatingHandler
 from pathlib import Path
-import subprocess
 
 
 class DailyRotatingFileHandler(BaseRotatingHandler):
     """
-    - 可以支持多进程
-    - 只支持自然日分割
-    - 暂不支持UTC
+    like `logging.TimedRotatingFileHandler`, but this class support multi-process
     """
 
     def __init__(
@@ -53,7 +51,7 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
 
     def shouldRollover(self, record):
         """
-        判断是否该滚动日志，如果当前时间对应的日志文件名与当前打开的日志文件名不一致，则需要滚动日志
+        check scroll through the log
         """
         if self.current_filename != self._compute_fn():
             return True
@@ -61,7 +59,7 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
 
     def doRollover(self):
         """
-        滚动日志
+        scroll log
         """
         if self.stream:
             self.stream.close()
@@ -77,20 +75,19 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
 
     def _compute_fn(self):
         """
-        计算当前时间对应的日志文件名
+        Calculate the log file name corresponding current time
         """
         return self.base_filename + "." + time.strftime(self.suffix, time.localtime())
 
     def _open(self):
         """
-        打开新的日志文件，同时更新base_filename指向的软链，修改软链不会对日志记录产生任何影响
+        open new log file
         """
         if self.encoding is None:
             stream = open(str(self.current_log_path), self.mode)
         else:
             stream = codecs.open(str(self.current_log_path), self.mode, self.encoding)
 
-        # 删除旧的软链
         if self.base_log_path.exists():
             try:
                 if (
@@ -109,7 +106,7 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
 
     def delete_expired_files(self):
         """
-        删除过期的日志
+        delete expired log files
         """
         if self.backup_count <= 0:
             return
@@ -135,7 +132,7 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
 
 def get_logger(name, file_name, without_formater=False):
     """
-    获取logger
+    get logger
     """
     log_dir = os.getenv("FD_LOG_DIR", default="log")
     is_debug = int(os.getenv("FD_DEBUG", default=0))
@@ -158,16 +155,11 @@ def get_logger(name, file_name, without_formater=False):
     handler.propagate = False
     return logger
 
-# 实例化单例logger
-model_server_logger = get_logger("model_server", "infer_server.log")
-http_server_logger = get_logger("http_server", "http_server.log")
-data_processor_logger = get_logger("data_processor", "data_processor.log")
-monitor_logger = get_logger("monitor_logger", "monitor_logger.log", True)
-error_logger = get_logger("error_logger", "error_logger.log", True)
-
 
 def str_to_datetime(date_string):
-    """datetime字符串转datetime对象"""
+    """
+    string to datetime class object
+    """
     if "." in date_string:
         return datetime.strptime(date_string, "%Y-%m-%d %H:%M:%S.%f")
     else:
@@ -176,14 +168,14 @@ def str_to_datetime(date_string):
 
 def datetime_diff(datetime_start, datetime_end):
     """
-    计算两个日期时间之间的差值（以秒为单位）。
+    Calculate the difference between two dates and times(s)
 
     Args:
-        datetime_start (Union[str, datetime.datetime]): 开始时间，可以是字符串或datetime.datetime对象。
-        datetime_end (Union[str, datetime.datetime]): 结束时间，可以是字符串或datetime.datetime对象。
+        datetime_start (Union[str, datetime.datetime]): start time
+        datetime_end (Union[str, datetime.datetime]): end time
 
     Returns:
-        float: 日期时间差值，以秒为单位。
+        float: date time difference(s)
     """
     if isinstance(datetime_start, str):
         datetime_start = str_to_datetime(datetime_start)
@@ -194,3 +186,10 @@ def datetime_diff(datetime_start, datetime_end):
     else:
         cost = datetime_start - datetime_end
     return cost.total_seconds()
+
+
+model_server_logger = get_logger("model_server", "infer_server.log")
+http_server_logger = get_logger("http_server", "http_server.log")
+data_processor_logger = get_logger("data_processor", "data_processor.log")
+monitor_logger = get_logger("monitor_logger", "monitor_logger.log", True)
+error_logger = get_logger("error_logger", "error_logger.log", True)
