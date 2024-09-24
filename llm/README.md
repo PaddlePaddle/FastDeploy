@@ -1,5 +1,5 @@
 
-<h1 align="center"><b><em>飞桨大模型高性能部署工具FastDeploy</em></b></h1>
+<h1 align="center"><b><em>FastDeploy大模型服务化部署</em></b></h1>
 
 *FastDeploy基于英伟达Triton框架专为服务器场景的大模型服务化部署而设计的解决方案。它提供了支持gRPC、HTTP协议的服务接口，以及流式Token输出能力。底层推理引擎支持连续批处理、weight only int8、后训练量化（PTQ）等加速优化策略，为用户带来易用且高性能的部署体验。*
 
