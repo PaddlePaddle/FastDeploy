@@ -125,8 +125,8 @@ class DataProcessor(BaseDataProcessor):
 
         self.decode_status = dict()
         self.tokenizer = self._load_tokenizer()
-        data_processor_logger.info(f"tokenizer infomation: bos_token is {self.tokenizer.bos_token}, {self.tokenizer.bos_token_id}, "+
-                    f"eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id}, ")
+        data_processor_logger.info(f"tokenizer infomation: bos_token is {self.tokenizer.bos_token}, {self.tokenizer.bos_token_id}, \
+                                eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id} ")
 
     def process_request(self, request, max_seq_len=None):
         """
@@ -143,14 +143,19 @@ class DataProcessor(BaseDataProcessor):
             request["eos_token_ids"] = []
         request["eos_token_ids"].extend(get_eos_token_id(self.tokenizer, self.config.generation_config))
 
-        if "input_ids" in request:
-            input_ids = request["input_ids"]
-        else:
-            input_ids = self.text2ids(request['text'])
+        if "input_ids" not in request or \
+            (isinstance(request["input_ids"], (list, tuple)) and len(request["input_ids"]) == 0):
+            if "text" in request:
+                request["input_ids"] = self.text2ids(request["text"])
+            elif "messages" in request:
+                if self.tokenizer.chat_template is None:
+                    raise ValueError(f"This model does not support chat_template.")
+                request["input_ids"] = self.messages2ids(request["messages"])
+            else:
+                raise ValueError(f"The request should have `input_ids`, `text` or `messages`: {request}.")
 
-        if max_seq_len is not None and len(input_ids) > max_seq_len:
-            input_ids = input_ids[:max_seq_len-1]
-        request["input_ids"] = input_ids
+        if max_seq_len is not None and len(request["input_ids"]) > max_seq_len:
+            request["input_ids"] = request["input_ids"][:max_seq_len-1]
         data_processor_logger.info(f"processed request: {request}")
         return request
 
@@ -221,7 +226,8 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             List[int]: ID sequences
         """
-        return
+        message_result = self.tokenizer.apply_chat_template(messages, return_tensors="pd")
+        return message_result["input_ids"][0]
 
     def ids2tokens(self, token_id, task_id):
         """

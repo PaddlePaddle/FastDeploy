@@ -66,7 +66,7 @@ ls /fastdeploy/models/
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/llm
 
-docker build -f ./dockerfiles/Dockerfile_serving_cuda123_cudnn9 -t llm-serving-cu123-self .
+docker build --network=host -f ./dockerfiles/Dockerfile_serving_cuda123_cudnn9 -t llm-serving-cu123-self .
 ```
 
 创建自己的镜像后，可以基于该镜像[创建容器](#创建容器)
@@ -194,6 +194,77 @@ for line in res.iter_lines():
 如果stream为False，非流式返回
     如果正常，返回{'tokens_all': xxx, ..., 'error_msg': '', 'error_code': 0}
     如果异常，返回{'error_msg': xxx, 'error_code': xxx}，error_msg字段不为空，error_code字段不为0
+```
+
+### OpenAI 客户端
+
+我们提供了 OpenAI 客户端的支持，使用方法如下：
+
+提示：使用 OpenAI 客户端需要配置 `PUSH_MODE_HTTP_PORT`！
+
+```
+import openai
+
+client = openai.Client(base_url="http://127.0.0.1:{PUSH_MODE_HTTP_PORT}/v1/chat/completions", api_key="EMPTY_API_KEY")
+
+# 非流式返回
+response = client.completions.create(
+	model="default",
+	prompt="Hello, how are you?",
+  max_tokens=50,
+  stream=False,
+)
+
+print(response)
+print("\n")
+
+# 流式返回
+response = client.completions.create(
+	model="default",
+	prompt="Hello, how are you?",
+  max_tokens=100,
+  stream=True,
+)
+
+for chunk in response:
+  if chunk.choices[0] is not None:
+    print(chunk.choices[0].text, end='')
+print("\n")
+
+# Chat completion
+# 非流式返回
+response = client.chat.completions.create(
+    model="default",
+    messages=[
+        {"role": "user", "content": "Hello, who are you"},
+        {"role": "system", "content": "I'm a helpful AI assistant."},
+        {"role": "user", "content": "List 3 countries and their capitals."},
+    ],
+    temperature=0,
+    max_tokens=64,
+    stream=False,
+)
+
+print(response)
+print("\n")
+
+# 流式返回
+response = client.chat.completions.create(
+    model="default",
+    messages=[
+        {"role": "user", "content": "Hello, who are you"},
+        {"role": "system", "content": "I'm a helpful AI assistant."},
+        {"role": "user", "content": "List 3 countries and their capitals."},
+    ],
+    temperature=0,
+    max_tokens=64,
+    stream=True,
+)
+
+for chunk in response:
+  if chunk.choices[0].delta is not None:
+    print(chunk.choices[0].delta.content, end='')
+print("\n")
 ```
 
 ## 模型配置参数介绍

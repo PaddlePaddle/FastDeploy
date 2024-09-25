@@ -16,6 +16,7 @@ import json
 import queue
 import time
 import uuid
+import shortuuid
 from datetime import datetime
 from functools import partial
 from typing import Dict, List, Optional
@@ -46,6 +47,7 @@ class Req(BaseModel):
     return_usage: Optional[bool] = False
     stream: bool = False
     timeout: int = 300
+    model: str = None
 
     def to_dict_for_infer(self):
         """
@@ -54,13 +56,36 @@ class Req(BaseModel):
         Returns:
             dict: request parameters in dict format
         """
-        self.compatible_with_OpenAI()
-
         req_dict = {}
         for key, value in self.dict().items():
             if value is not None:
                 req_dict[key] = value
         return req_dict
+
+    def load_openai_request(self, request_dict: dict):
+        """
+        Convert openai request to Req
+        official OpenAI API documentation: https://platform.openai.com/docs/api-reference/completions/create
+        """
+        convert_dict = {
+            "text": "prompt",
+            "frequency_score": "frequency_penalty",
+            "max_dec_len": "max_tokens",
+            "stream": "stream",
+            "return_all_tokens": "best_of",
+            "temperature": "temperature",
+            "topp": "top_p",
+            "presence_score": "presence_penalty",
+            "eos_token_ids": "stop",
+            "req_id": "id",
+            "model": "model",
+            "messages": "messages",
+        }
+
+        self.__setattr__("req_id", f"chatcmpl-{shortuuid.random()}")
+        for key, value in convert_dict.items():
+            if request_dict.get(value, None):
+                self.__setattr__(key, request_dict.get(value))
 
 
 def chat_completion_generator(infer_grpc_url: str, req: Req, yield_json: bool) -> Dict:

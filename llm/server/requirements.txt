@@ -1,5 +1,4 @@
 # model server
-paddlenlp==2.7.2
 sentencepiece
 pycryptodome
 tritonclient[all]==2.41.1
@@ -10,7 +9,7 @@ transformers
 # http server
 fastapi
 httpx
-openai==1.9.0
+openai==1.44.1
 asyncio
 uvicorn
 shortuuid
@@ -20,4 +19,3 @@ pynvml
 
 # paddlenlp
 tiktoken
-transformers
