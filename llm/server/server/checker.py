@@ -40,8 +40,6 @@ def check_basic_params(req_dict):
             error_msg.append("The `input_ids` in input parameters must be a list")
         if "messages" in req_dict:
             msg_len = len(req_dict["messages"])
-            if msg_len % 2 == 0:
-                error_msg.append(f"The number of the message {msg_len} must be odd")
             if not all("content" in item for item in req_dict["messages"]):
                 error_msg.append("The item in messages must include `content`")
 
