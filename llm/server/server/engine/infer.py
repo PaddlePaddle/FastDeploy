@@ -26,9 +26,10 @@ import paddle
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
 from paddlenlp.trl.llm_utils import get_rotary_position_embedding
-from paddlenlp_ops import step_paddle
+from paddlenlp_ops import step_paddle, speculate_step_paddle
 from server.data.processor import DataProcessor
 from server.engine.config import Config
+from server.engine.proposers import InferenceWithReferenceProposer
 from server.utils import get_logger
 from task_queue_manager import TaskQueueManager
 
@@ -66,6 +67,15 @@ class ModelRunner:
         self.share_inputs = {}
         self.cache_kvs = {}
         self.init_inputs()
+
+        # whether use speculate decoding
+        if self.config.speculate_method is not None and self.config.speculate_method == "inference_with_reference":
+            self.proposer = InferenceWithReferenceProposer(
+                self.config.speculate_max_draft_token_num,
+                self.config.speculate_max_ngram_size,
+                self.args.max_batch_size)
+        else:
+            self.proposer = None
 
         self.infer_queue = TaskQueueManager(rank=self.rank, mp_num=self.nranks, port=self.config.infer_port)
 
@@ -263,6 +273,20 @@ class ModelRunner:
                 shape=[self.args.max_batch_size, 1], fill_value=-1, dtype="int64")
             self.share_inputs["ori_seq_lens_encoder"] = paddle.full(
                 shape=[self.args.max_batch_size, 1], fill_value=0, dtype="int32")
+        # speculate decoding input
+        if self.config.speculate_method is not None:
+            self.share_inputs["input_ids_cpu"] = paddle.full(
+                shape=[self.args.max_batch_size, self.args.max_seq_len], fill_value=1, dtype='int64').cpu()
+            self.share_inputs["accept_tokens"] = paddle.full(
+                shape=[self.args.max_batch_size, self.config.speculate_max_draft_token_num + 1], fill_value=0, dtype="int64"
+            )
+            self.share_inputs["accept_num"] = paddle.full(shape=[self.args.max_batch_size], fill_value=0, dtype="int32")
+            self.share_inputs["draft_tokens"] = paddle.full(
+                shape=[self.args.max_batch_size, self.config.speculate_max_draft_token_num + 1], fill_value=0, dtype="int64"
+            )
+            self.share_inputs["actual_draft_token_num"] = paddle.full(
+                shape=[self.args.max_batch_size], fill_value=self.config.speculate_max_draft_token_num, dtype="int32"
+            )
 
     def dy_input_preprocess(self, tasks):
         """
@@ -318,23 +342,46 @@ class ModelRunner:
                                                         task["stop_seqs_len"], dtype="int32")
                 self.share_inputs['stop_seqs'][:stop_seqs_num, :len(task['stop_seqs'][0])] = np.array(
                                                         task["stop_seqs"], dtype="int64")
+            if self.proposer is not None:
+                if self.config.speculate_method == "inference_with_reference":
+                    speculate_update_input_ids_cpu(self.share_inputs['input_ids_cpu'], task['input_ids'], idx, self.args.max_seq_len)
+                    self.share_inputs["draft_tokens"][idx:idx + 1] = np.zeros([self.config.speculate_max_draft_token_num + 1])
+                    self.share_inputs["actual_draft_token_num"][idx:idx + 1] = np.array([self.config.speculate_max_draft_token_num])
+                    self.proposer.update(idx, length)
+
     def step_cuda(self, seq_lens_this_time):
         """
         step cuda
         """
-        step_paddle(self.share_inputs['stop_flags'], seq_lens_this_time,
-                    self.share_inputs['step_seq_lens_encoder'],
-                    self.share_inputs['seq_lens_encoder'],
-                    self.share_inputs['seq_lens_decoder'], self.share_inputs["block_tables"],
-                    self.share_inputs['encoder_block_lens'],
-                    self.share_inputs["is_block_step"], self.share_inputs['step_block_list'],
-                    self.share_inputs['step_lens'], self.share_inputs['recover_block_list'],
-                    self.share_inputs['recover_lens'], self.share_inputs['need_block_list'],
-                    self.share_inputs['need_block_len'], self.share_inputs['used_list_len'],
-                    self.share_inputs['free_list'], self.share_inputs['free_list_len'],
-                    self.share_inputs['input_ids'], self.share_inputs['pre_ids'],
-                    self.share_inputs['step_idx'], self.share_inputs['next_tokens'],
-                    self.args.block_size, self.args.enc_dec_block_num, self.args.first_token_id)
+        if self.config.speculate_method is None:
+            step_paddle(self.share_inputs['stop_flags'], seq_lens_this_time,
+                        self.share_inputs['step_seq_lens_encoder'],
+                        self.share_inputs['seq_lens_encoder'],
+                        self.share_inputs['seq_lens_decoder'], self.share_inputs["block_tables"],
+                        self.share_inputs['encoder_block_lens'],
+                        self.share_inputs["is_block_step"], self.share_inputs['step_block_list'],
+                        self.share_inputs['step_lens'], self.share_inputs['recover_block_list'],
+                        self.share_inputs['recover_lens'], self.share_inputs['need_block_list'],
+                        self.share_inputs['need_block_len'], self.share_inputs['used_list_len'],
+                        self.share_inputs['free_list'], self.share_inputs['free_list_len'],
+                        self.share_inputs['input_ids'], self.share_inputs['pre_ids'],
+                        self.share_inputs['step_idx'], self.share_inputs['next_tokens'],
+                        self.args.block_size, self.args.enc_dec_block_num, self.args.first_token_id)
+        else:
+            speculate_step_paddle(self.share_inputs['stop_flags'], seq_lens_this_time,
+                                  self.share_inputs['step_seq_lens_encoder'],
+                                  self.share_inputs['seq_lens_encoder'],
+                                  self.share_inputs['seq_lens_decoder'], self.share_inputs["block_tables"],
+                                  self.share_inputs['encoder_block_lens'],
+                                  self.share_inputs["is_block_step"], self.share_inputs['step_block_list'],
+                                  self.share_inputs['step_lens'], self.share_inputs['recover_block_list'],
+                                  self.share_inputs['recover_lens'], self.share_inputs['need_block_list'],
+                                  self.share_inputs['need_block_len'], self.share_inputs['used_list_len'],
+                                  self.share_inputs['free_list'], self.share_inputs['free_list_len'],
+                                  self.share_inputs['input_ids'], self.share_inputs['pre_ids'],
+                                  self.share_inputs['step_idx'], self.share_inputs['next_tokens'],
+                                  self.args.block_size, self.args.enc_dec_block_num, self.args.first_token_id,
+                                  self.config.speculate_max_draft_token_num)
 
     def initialize_engine_ready_check_flag(self):
         """
@@ -434,6 +481,9 @@ class ModelRunner:
                     self.share_inputs["seq_lens_this_time"][:real_bsz] = seq_lens_this_time
 
                 tasks, read_finish = self.infer_queue.get()
+                logger.info(f'tasks: {tasks}')
+                logger.info(f'read_finish: {read_finish}')
+
                 if read_finish:
                     flag_broadcast_array[0] = 0
 
@@ -442,7 +492,7 @@ class ModelRunner:
                     real_bsz = int(bsz)
                     req_dicts.extend(req_dict)
                     logger.info(
-                        f'rank: {self.rank}, real_bsz: {real_bsz}, query_num: {len(req_dicts)}'
+                        f'req_dict: {req_dict} rank: {self.rank}, real_bsz: {real_bsz}, query_num: {len(req_dicts)}'
                     )
 
                 self.dy_input_preprocess(req_dicts)
@@ -459,10 +509,36 @@ class ModelRunner:
                 time.sleep(0.001)
                 continue
 
+            if self.proposer is not None:
+                logger.info("start run proposer")
+                logger.info(f'before draft_tokens: {self.share_inputs["draft_tokens"]}')
+                logger.info(f'before accept_tokens: {self.share_inputs["accept_tokens"]}')
+
+                self.proposer.run(
+                    self.share_inputs,
+                    real_batch_size=self.args.max_batch_size,
+                    seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
+                )
+                logger.info(f'after draft_tokens: {self.share_inputs["draft_tokens"]}')
+                logger.info("finish run proposer")
+            logger.info(f'input_ids: {self.share_inputs["input_ids"]}')
+            logger.info(f'input_ids_cpu: {self.share_inputs["input_ids_cpu"]}')
+            logger.info(f'seq_lens_this_time: {self.share_inputs["seq_lens_this_time"]}')
+            logger.info(f'seq_lens_encoder: {self.share_inputs["seq_lens_encoder"]}')
+            logger.info(f'seq_lens_decoder: {self.share_inputs["seq_lens_decoder"]}')
+            logger.info(f'step_idx: {self.share_inputs["step_idx"]}')
+            logger.info(f'next_tokens: {self.share_inputs["next_tokens"]}')
+            logger.info(f'before block_tables: {self.share_inputs["block_tables"]}')
+
             self.infer_engine.predictor.run()
+            logger.info(f'after accept_tokens: {self.share_inputs["accept_tokens"]}')
+            logger.info(f'after accept_num: {self.share_inputs["accept_num"]}')
+            logger.info(f'after block_tables: {self.share_inputs["block_tables"]}')
+
             self.share_inputs['infer_seed'].add_(infer_seed_increment)
             self.share_inputs['infer_seed'][:] %= self.MAX_INFER_SEED
             if self.free_list_len > 0:
+                logger.info(f'free_list_len > 0')
                 self.step_cuda(seq_lens_this_time)
 
 
