@@ -62,7 +62,7 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/dict/l
 # 运行部署示例
 # 在CPU上使用Paddle Inference推理
 ./infer_demo ./ch_PP-OCRv3_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv3_rec_infer ./ppocr_keys_v1.txt ./12.jpg 0
-# 在CPU上使用OenVINO推理
+# 在CPU上使用OpenVINO推理
 ./infer_demo ./ch_PP-OCRv3_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv3_rec_infer ./ppocr_keys_v1.txt ./12.jpg 1
 # 在CPU上使用ONNX Runtime推理
 ./infer_demo ./ch_PP-OCRv3_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv3_rec_infer ./ppocr_keys_v1.txt ./12.jpg 2
@@ -110,7 +110,7 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/dict/l
 |数字选项|含义|
 |:---:|:---:|
 |0| 在CPU上使用Paddle Inference推理 |
-|1| 在CPU上使用OenVINO推理 |
+|1| 在CPU上使用OpenVINO推理 |
 |2| 在CPU上使用ONNX Runtime推理 |
 |3| 在CPU上使用Paddle Lite推理 |
 |4| 在GPU上使用Paddle Inference推理 |
