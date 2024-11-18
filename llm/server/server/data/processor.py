@@ -16,7 +16,7 @@ import os
 from abc import ABC, abstractmethod
 
 from paddlenlp.transformers import Llama3Tokenizer, LlamaTokenizer
-from paddlenlp.utils.llm_utils import get_eos_token_id
+from paddlenlp.trl.llm_utils import get_eos_token_id
 from server.engine.config import Config
 from server.utils import data_processor_logger
 
@@ -282,7 +282,7 @@ class DataProcessor(BaseDataProcessor):
         """
         if self.config.use_hf_tokenizer:
             from transformers import AutoTokenizer
-            return AutoTokenizer.from_pretrained(self.config.model_dir, use_fast=False)
+            return AutoTokenizer.from_pretrained(self.config.model_dir, use_fast=False, vocab_file=os.path.join(self.config.model_dir, "sentencepiece.bpe.model"))
         else:
             from paddlenlp.transformers import AutoTokenizer
             return AutoTokenizer.from_pretrained(self.config.model_dir)

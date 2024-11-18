@@ -25,7 +25,7 @@ import numpy as np
 import paddle
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
-from paddlenlp.utils.llm_utils import get_rotary_position_embedding
+from paddlenlp.trl.llm_utils import get_rotary_position_embedding
 from paddlenlp_ops import step_paddle
 from server.data.processor import DataProcessor
 from server.engine.config import Config
