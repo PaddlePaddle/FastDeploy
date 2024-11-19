@@ -19,7 +19,7 @@
 #include <string_view>
 
 #ifdef _WIN32
-#include <stringapiset.h>
+#include <Windows.h>
 #endif
 
 namespace fastdeploy {
