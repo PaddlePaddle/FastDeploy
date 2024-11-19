@@ -90,14 +90,14 @@ bool ReadBinaryFromFile(const std::string& path, std::string* contents)
   if (fileSize != -1) {
     result.resize(fileSize);
     file.seekg(0, std::ios::beg);
-    file.read(reinterpret_cast<char*>(result.data()), fileSize);
+    file.read(const_cast<char*>(result.data()), fileSize);
   }
   else {
     // no size available, read to EOF
     constexpr auto chunksize = 4096;
     std::string chunk(chunksize, 0);
     while (!file.fail()) {
-      file.read(reinterpret_cast<char*>(chunk.data()), chunksize);
+      file.read(const_cast<char*>(chunk.data()), chunksize);
       result.insert(result.end(), chunk.data(), chunk.data() + file.gcount());
     }
   }
