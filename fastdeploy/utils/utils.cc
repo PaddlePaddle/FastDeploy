@@ -16,7 +16,6 @@
 
 #include <sstream>
 #include <fstream>
-#include <filesystem>
 #include <string_view>
 
 #ifdef _WIN32
@@ -55,7 +54,12 @@ FDLogger& FDLogger::operator<<(std::ostream& (*os)(std::ostream&)) {
   return *this;
 }
 
-using os_string = std::filesystem::path::string_type;
+// using os_string = std::filesystem::path::string_type;
+#ifdef _WIN32
+using os_string = std::wstring;
+#else
+using os_string = std::string;
+#endif
 
 os_string to_osstring(std::string_view utf8_str)
 {
@@ -74,12 +78,13 @@ bool ReadBinaryFromFile(const std::string& path, std::string* contents)
   if (!contents) {
     return false;
   }
+  auto& result = *contents;
+  result.clear();
+
   std::ifstream file(to_osstring(path), std::ios::binary | std::ios::ate);
   if (!file.is_open()) {
     return false;
   }
-  auto& result = *contents;
-  result.clear();
 
   auto fileSize = file.tellg();
   if (fileSize != -1) {
