@@ -141,7 +141,10 @@ void RuntimeOption::UseAscend() {
   paddle_lite_option.device = device;
 }
 
-void RuntimeOption::UseDirectML() { device = Device::DIRECTML; }
+void RuntimeOption::UseDirectML(int adapter_id) {
+  device = Device::DIRECTML;
+  device_id = adapter_id;
+}
 
 void RuntimeOption::UseSophgo() {
   device = Device::SOPHGOTPUD;

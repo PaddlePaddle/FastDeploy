@@ -98,7 +98,7 @@ bool OrtBackend::BuildOption(const OrtBackendOption& option) {
           "DML", ORT_API_VERSION, reinterpret_cast<const void**>(&ortDmlApi));
       OrtStatus* onnx_dml_status =
           ortDmlApi->SessionOptionsAppendExecutionProvider_DML(session_options_,
-                                                               0);
+                                                               option_.device_id);
       if (onnx_dml_status != nullptr) {
         FDERROR
             << "DirectML is not support in your machine, the program will exit."
