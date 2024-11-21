@@ -2,37 +2,51 @@
 ## 目录
 
 - [部署环境准备](#部署环境准备)
+  - [基础环境](#基础环境)
   - [准备部署镜像](#准备部署镜像)
   - [准备模型](#准备模型)
   - [创建容器](#创建容器)
-  - [基于dockerfile创建自己的镜像](#基于dockerfile创建自己的镜像)
 - [启动服务](#启动服务)
   - [配置参数](#配置参数)
-  - [启动FastDeploy](#启动FastDeploy)
+  - [启动服务](#启动服务)
   - [服务状态查询](#服务状态查询)
 - [服务测试](#服务测试)
   - [Python 客户端](#Python-客户端)
   - [HTTP调用](#HTTP调用)
   - [返回示例](#返回示例)
+- [基于dockerfile创建自己的镜像](#基于dockerfile创建自己的镜像)
 - [模型配置参数介绍](#模型配置参数介绍)
 - [请求参数介绍](#请求参数介绍)
 
 ## 部署环境准备
 
+### 基础环境
+  目前 FastDeploy 仅支持在 Linux 系统下部署，部署之前请确保系统有正确的 GPU 环境。
+
+  - 安装 docker
+    请参考 [Install Docker Engine](https://docs.docker.com/engine/install/) 选择对应的 Linux 平台安装 docker 环境。
+
+  - 安装 NVIDIA Container Toolkit
+    请参考 [Installing the NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#installing-the-nvidia-container-toolkit) 了解并安装 NVIDIA Container Toolkit。
+
+    NVIDIA Container Toolkit 安装成功后，参考 [Running a Sample Workload with Docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/sample-workload.html#running-a-sample-workload-with-docker) 测试 NVIDIA Container Toolkit 是否可以正常使用。
+
 ### 准备部署镜像
 
-为了方便部署，我们提供了cuda12.3的镜像，可以直接拉取镜像，或者使用dockerfile[构建自定义镜像](#基于dockerfile创建自己的镜像)
+为了方便部署，我们提供了 cuda12.3 的镜像，可以直接拉取镜像，或者使用dockerfile[构建自定义镜像](#基于dockerfile创建自己的镜像)
 ```
-docker pull registry.baidubce.com/paddlepaddle/fastdeploy:llm-serving-cuda123-cudnn9-v1.0
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:llm-serving-cuda123-cudnn9-v1.2
 ```
 
 ### 准备模型
 
-模型放在对应文件夹下，以 `/home/workspace/models_dir` 为例
+FastDeploy 为 PaddleNLP 静态图模型提供了高效的部署方案，模型静态图导出方案请参考：[LLaMA](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/docs/predict/llama.md)、[Qwen](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/docs/predict/qwen.md)、[Mixtral](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/docs/predict/mixtral.md) ...
+导出后的模型放在任意文件夹下，以 `/home/workspace/models_dir` 为例
+
 ```
 cd /home/workspace/models_dir
 
-# 模型内目录结构需要整理成特定格式，如下是单卡部署的模型目录结构
+# 导出的模型目录结构格式如下所示，理论上无缝支持 PaddleNLP 导出静态图模型，无需修改模型目录结构
 # /opt/output/Serving/models
 # ├── config.json                # 模型配置文件
 # ├── xxxx.model                 # 词表模型文件
@@ -46,32 +60,22 @@ cd /home/workspace/models_dir
 
 ### 创建容器
 
+将模型目录挂载到容器中，默认模型挂载地址为 `/models/`，服务启动时可通过 `MODEL_DIR` 环境变量自定义挂载地址。
 ```
 docker run --gpus all \
     --name fastdeploy_serving \
     --privileged \
     --cap-add=SYS_PTRACE \
     --network=host \
-    --shm-size=10G \
-    -v /home/workspace/models_dir:/fastdeploy/models/ \
-    -dit registry.baidubce.com/paddlepaddle/fastdeploy:llm-serving-cuda123-cudnn9-v1.0 bash
+    --shm-size=5G \
+    -v /home/workspace/models_dir:/models/ \
+    -dit registry.baidubce.com/paddlepaddle/fastdeploy:llm-serving-cuda123-cudnn9-v1.2 bash
 
 # 进入容器，检查GPU环境和模型挂载是否正常
 docker exec -it fastdeploy_serving /bin/bash
 nvidia-smi
-ls /fastdeploy/models/
+ls /models/
 ```
-
-## 基于dockerfile创建自己的镜像
-
-```
-git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd FastDeploy/llm
-
-docker build --network=host -f ./dockerfiles/Dockerfile_serving_cuda123_cudnn9 -t llm-serving-cu123-self .
-```
-
-创建自己的镜像后，可以基于该镜像[创建容器](#创建容器)
 
 ## 启动服务
 
@@ -118,7 +122,7 @@ export PUSH_MODE_HTTP_WORKERS="1" # HTTP服务进程数，在 PUSH_MODE_HTTP_POR
 
 更多请求参数请参考[模型配置参数介绍](#模型配置参数介绍)
 
-### 启动FastDeploy
+### 启动服务
 
 ```
 cd /opt/output/Serving
@@ -171,14 +175,30 @@ import requests
 
 url = f"http://127.0.0.1:{PUSH_MODE_HTTP_PORT}/v1/chat/completions"
 req_id = str(uuid.uuid1())
-data = {
-        "text": "Hello, how are you?",
-        "req_id": req_id,
-        "max_dec_len": 64,
-        "stream": True,
-    }
+data_single = {
+    "text": "Hello, how are you?",
+    "req_id": req_id,
+    "max_dec_len": 64,
+    "stream": True,
+  }
 # 逐token返回
-res = requests.post(url, json=data, stream=True)
+res = requests.post(url, json=data_single, stream=True)
+for line in res.iter_lines():
+    print(json.loads(line))
+
+# 多轮对话
+data_multi = {
+    messages=[
+      {"role": "user", "content": "Hello, who are you"},
+      {"role": "system", "content": "I'm a helpful AI assistant."},
+      {"role": "user", "content": "List 3 countries and their capitals."},
+    ],
+    "req_id": req_id,
+    "max_dec_len": 64,
+    "stream": True,
+  }
+# 逐token返回
+res = requests.post(url, json=data_multi, stream=True)
 for line in res.iter_lines():
     print(json.loads(line))
 ```
@@ -267,6 +287,17 @@ for chunk in response:
     print(chunk.choices[0].delta.content, end='')
 print("\n")
 ```
+
+## 基于dockerfile创建自己的镜像
+
+为了方便用户构建自定义服务，我们提供了基于dockerfile创建自己的镜像的脚本。
+```
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy/llm
+
+docker build --network=host -f ./dockerfiles/Dockerfile_serving_cuda123_cudnn9 -t llm-serving-cu123-self .
+```
+创建自己的镜像后，可以基于该镜像[创建容器](#创建容器)
 
 ## 模型配置参数介绍
 
