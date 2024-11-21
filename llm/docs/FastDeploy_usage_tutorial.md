@@ -299,7 +299,8 @@ print("\n")
 | 字段名 | 字段类型 | 说明 | 是否必填 | 默认值 | 备注 |
 | :---: | :-----: | :---: | :---: | :-----: | :----: |
 | req_id |  str  | 请求ID，用于标识一个请求。建议设置req_id，保证其唯一性   | 否 | 随机id | 如果推理服务中同时有两个相同req_id的请求，会返回req_id重复的错误信息 |
-| text   | str  | 请求的文本 | 是 | 无 |  |
+| text   | str  | 请求的文本 | 否 | 无 | text 和 messages 必须有一个 |
+| messages | str | 多轮对话文本 ｜ 否 | 无 | 多轮对话以list方式存储 |
 | max_dec_len | int  | 最大生成token的长度，如果请求的文本token长度加上max_dec_len大于模型的max_seq_len，会返回长度超限的错误信息 | 否 | max_seq_len减去文本token长度 |  |
 | min_dec_len | int | 最小生成token的长度，最小是1 | 否 | 1 |  |
 | topp | float | 控制随机性参数，数值越大则随机性越大，范围是0~1 | 否 | 0.7 |  |
