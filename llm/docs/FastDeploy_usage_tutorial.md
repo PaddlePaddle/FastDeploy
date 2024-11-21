@@ -144,7 +144,7 @@ health接口：（模型是否准备好推理）
 from fastdeploy_client.chatbot import ChatBot
 
 hostname = "127.0.0.1"          # 服务部署的hostname
-port = 8000                     # 服务配置的GRPC_PORT
+port = 8811                     # 服务配置的GRPC_PORT
 
 chatbot = ChatBot(hostname=hostname, port=port)
 
@@ -153,7 +153,7 @@ result = chatbot.generate("你好", topp=0.8, max_dec_len=128, timeout=120)
 print(result)
 
 # 流式接口
-chatbot = ChatBot(hostname=hostname, port=port, model_id=model_id, mode=mode)
+chatbot = ChatBot(hostname=hostname, port=port)
 stream_result = chatbot.stream_generate("你好", max_dec_len=128, timeout=120)
 for res in stream_result:
     print(res)
