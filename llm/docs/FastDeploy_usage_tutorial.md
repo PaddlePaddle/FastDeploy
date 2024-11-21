@@ -278,7 +278,7 @@ print("\n")
 | GRPC_PORT | int | 模型推服务的grpc端口 | 是 | 无 |   |
 | METRICS_PORT | int | 模型服务中监督指标的端口 | 是 | 无 |   |
 | INFER_QUEUE_PORT | int | 模型服务内部使用的端口 | 否 | 56666 |   |
-| PUSH_MODE_HTTP_PORT | int | 服务请求HTTP端口号 | 否 | -1 | 如不配置，服务只支持GRPC协议 ｜
+| PUSH_MODE_HTTP_PORT | int | 服务请求HTTP端口号 | 否 | -1 | 如不配置，服务只支持GRPC协议 |
 | DISABLE_STREAMING | int | 是否使用流式返回 | 否 | 0 |  |
 | MAX_SEQ_LEN | int | 最大输入序列长度 | 否 | 8192 | 服务会拒绝input token数量超过MAX_SEQ_LEN的请求，并返回错误提示 |
 | MAX_DEC_LEN | int | 最大decoer序列长度 | 否 | 1024 | 服务会拒绝请求中max_dec_len/min_dec_len超过此参数的请求，并返回错误提示 |
@@ -300,7 +300,7 @@ print("\n")
 | :---: | :-----: | :---: | :---: | :-----: | :----: |
 | req_id |  str  | 请求ID，用于标识一个请求。建议设置req_id，保证其唯一性   | 否 | 随机id | 如果推理服务中同时有两个相同req_id的请求，会返回req_id重复的错误信息 |
 | text   | str  | 请求的文本 | 否 | 无 | text 和 messages 必须有一个 |
-| messages | str | 多轮对话文本 ｜ 否 | 无 | 多轮对话以list方式存储 |
+| messages | str | 多轮对话文本 | 否 | 无 | 多轮对话以list方式存储 |
 | max_dec_len | int  | 最大生成token的长度，如果请求的文本token长度加上max_dec_len大于模型的max_seq_len，会返回长度超限的错误信息 | 否 | max_seq_len减去文本token长度 |  |
 | min_dec_len | int | 最小生成token的长度，最小是1 | 否 | 1 |  |
 | topp | float | 控制随机性参数，数值越大则随机性越大，范围是0~1 | 否 | 0.7 |  |
