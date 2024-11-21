@@ -49,6 +49,8 @@ cd /home/workspace/models_dir
 ```
 docker run --gpus all \
     --name fastdeploy_serving \
+    --privileged \
+    --cap-add=SYS_PTRACE \
     --network=host \
     --shm-size=10G \
     -v /home/workspace/models_dir:/fastdeploy/models/ \
@@ -93,8 +95,7 @@ export CUDA_VISIBLE_DEVICES=0
 # 默认关闭
 # export DISABLE_STREAMING=1
 
-# 配置数据服务。需要自行修改HTTP_PORT、GRPC_PORT、METRICS_PORT和INFER_QUEUE_PORT。
-# 请事先检查端口可用：执行`netstat -tuln | grep <端口号>`，如果没有log输出，则表示该端口未被占用。
+# 配置数据服务。需要自行修改HTTP_PORT、GRPC_PORT、METRICS_PORT和INFER_QUEUE_PORT。(请事先检查端口可用)
 export HTTP_PORT="8751"                         # 探活服务的http端口（当前仅用于健康检查、探活）
 export GRPC_PORT="8752"                         # 模型推服务的grpc端口
 export METRICS_PORT="8753"                      # 模型服务中监督指标的端口
