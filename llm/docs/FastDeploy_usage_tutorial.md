@@ -48,7 +48,7 @@ FastDeploy 为 PaddleNLP 静态图模型提供了高效的部署方案，模型�
 ```
 cd /home/workspace/models_dir
 
-# 导出的模型目录结构格式如下所示，理论上无缝支持 PaddleNLP 导出的静态图模型，无需修改模型目录结构
+# 导出的模型目录结构如下所示，理论上无缝支持 PaddleNLP 导出的静态图模型，无需修改模型目录结构
 # /opt/output/Serving/models
 # ├── config.json                # 模型配置文件
 # ├── xxxx.model                 # 词表模型文件
