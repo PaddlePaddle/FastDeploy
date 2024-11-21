@@ -33,7 +33,7 @@
 
 ### 准备部署镜像
 
-为了方便部署，我们提供了 cuda12.3 的镜像，可以直接拉取镜像，或者使用dockerfile[构建自定义镜像](#基于dockerfile创建自己的镜像)
+为了方便部署，我们提供了 cuda12.3 的镜像，可以直接拉取镜像，或者使用我们提供的 `Dockerfile` [构建自定义镜像](#基于dockerfile创建自己的镜像)
 ```
 docker pull registry.baidubce.com/paddlepaddle/fastdeploy:llm-serving-cuda123-cudnn9-v1.2
 ```
@@ -41,6 +41,7 @@ docker pull registry.baidubce.com/paddlepaddle/fastdeploy:llm-serving-cuda123-cu
 ### 准备模型
 
 FastDeploy 为 PaddleNLP 静态图模型提供了高效的部署方案，模型静态图导出方案请参考：[LLaMA](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/docs/predict/llama.md)、[Qwen](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/docs/predict/qwen.md)、[Mixtral](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/docs/predict/mixtral.md) ...
+
 导出后的模型放在任意文件夹下，以 `/home/workspace/models_dir` 为例
 
 ```
@@ -59,6 +60,8 @@ cd /home/workspace/models_dir
 ```
 
 ### 创建容器
+
+创建容器之前，请检查 Docker 版本和 GPU 环境，确保 Docker 支持 `--gpus all` 参数。
 
 将模型目录挂载到容器中，默认模型挂载地址为 `/models/`，服务启动时可通过 `MODEL_DIR` 环境变量自定义挂载地址。
 ```
@@ -100,11 +103,11 @@ export CUDA_VISIBLE_DEVICES=0
 # export DISABLE_STREAMING=1
 
 # 配置数据服务。需要自行修改HTTP_PORT、GRPC_PORT、METRICS_PORT和INFER_QUEUE_PORT。(请事先检查端口可用)
-export HTTP_PORT="8751"                         # 探活服务的http端口（当前仅用于健康检查、探活）
-export GRPC_PORT="8752"                         # 模型推服务的grpc端口
-export METRICS_PORT="8753"                      # 模型服务中监督指标的端口
-export INFER_QUEUE_PORT="8754"                  # 模型服务内部使用的端口
-export PUSH_MODE_HTTP_PORT="8143"               # 服务请求HTTP端口号，如不配置，默认为-1，即服务只支持GRPC协议
+export HTTP_PORT="8110"                         # 探活服务的http端口（当前仅用于健康检查、探活）
+export GRPC_PORT="8811"                         # 模型推服务的grpc端口
+export METRICS_PORT="8722"                      # 模型服务中监督指标的端口
+export INFER_QUEUE_PORT="8813"                  # 模型服务内部使用的端口
+export PUSH_MODE_HTTP_PORT="9965"               # 服务请求HTTP端口号，如不配置，默认为-1，即服务只支持GRPC协议
 
 # MAX_SEQ_LEN: 服务会拒绝input token数量超过MAX_SEQ_LEN的请求，并返回错误提示
 # MAX_DEC_LEN: 服务会拒绝请求中max_dec_len/min_dec_len超过此参数的请求，并返回错误提示
@@ -154,12 +157,12 @@ port = 8811                     # 服务配置的GRPC_PORT
 chatbot = ChatBot(hostname=hostname, port=port)
 
 # 非流式接口
-result = chatbot.generate("你好", topp=0.8, max_dec_len=128, timeout=120)
+result = chatbot.generate("hello", topp=0.8, max_dec_len=128, timeout=120)
 print(result)
 
 # 流式接口
 chatbot = ChatBot(hostname=hostname, port=port)
-stream_result = chatbot.stream_generate("你好", max_dec_len=128, timeout=120)
+stream_result = chatbot.stream_generate("hello", max_dec_len=128, timeout=120)
 for res in stream_result:
     print(res)
 ```
@@ -173,7 +176,8 @@ import uuid
 import json
 import requests
 
-url = f"http://127.0.0.1:{PUSH_MODE_HTTP_PORT}/v1/chat/completions"
+push_mode_http_port = "9965"    # 服务配置的PUSH_MODE_HTTP_PORT
+url = f"http://127.0.0.1:{push_mode_http_port}/v1/chat/completions"
 req_id = str(uuid.uuid1())
 data_single = {
     "text": "Hello, how are you?",
@@ -188,7 +192,7 @@ for line in res.iter_lines():
 
 # 多轮对话
 data_multi = {
-    messages=[
+    "messages": [
       {"role": "user", "content": "Hello, who are you"},
       {"role": "system", "content": "I'm a helpful AI assistant."},
       {"role": "user", "content": "List 3 countries and their capitals."},
@@ -226,7 +230,8 @@ for line in res.iter_lines():
 ```
 import openai
 
-client = openai.Client(base_url="http://127.0.0.1:{PUSH_MODE_HTTP_PORT}/v1/chat/completions", api_key="EMPTY_API_KEY")
+push_mode_http_port = "9965"    # 服务配置的PUSH_MODE_HTTP_PORT
+client = openai.Client(base_url=f"http://127.0.0.1:{push_mode_http_port}/v1/chat/completions", api_key="EMPTY_API_KEY")
 
 # 非流式返回
 response = client.completions.create(
