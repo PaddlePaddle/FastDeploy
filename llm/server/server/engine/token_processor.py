@@ -41,7 +41,7 @@ class TokenProcessor(object):
         self.tokens_counter = Counter()
 
         if self.cfg.speculate_method is not None:
-            self.output_tokens = paddle.full(shape=[SPECULATE_MAX_BSZ * MAX_DRAFT_TOKEN_NUM + MAX_DRAFT_TOKEN_NUM + 2], fill_value=2, dtype="int64")
+            self.output_tokens = paddle.full(shape=[SPECULATE_MAX_BSZ * MAX_DRAFT_TOKEN_NUM + SPECULATE_MAX_BSZ + 2], fill_value=2, dtype="int64")
         else:
             self.output_tokens = paddle.full(shape=[self.cfg.max_batch_size + 2, 1], fill_value=2, dtype="int64")
         self.worker = None
@@ -302,6 +302,7 @@ class TokenProcessor(object):
         batch post-processing function
         """
         tokens = self.output_tokens.numpy()
+        model_server_logger.info(f"speculate_result tokens: {self.output_tokens.tolist()}")
         batch = self.output_tokens[1]
         output_token_msg_id = int(self.output_tokens[0])
         accept_num = tokens[2 : batch + 2]
@@ -370,6 +371,21 @@ class WarmUpTokenProcessor(TokenProcessor):
                 if self.output_tokens[0, 0] == -2:
                     continue
                 self._process_batch_output()
+            except Exception as e:
+                model_server_logger.info("while get input_data error: {0} {1}".format(e, str(traceback.format_exc())))
+
+    def process_speculate_results(self):
+        """
+        read tokens from paddle inference engine and process
+        """
+        while self._is_running:
+            try:
+                rank_id = 0
+                speculate_get_output(self.output_tokens, rank_id, self._is_blocking)
+
+                if self.output_tokens[0] == -2:
+                    continue
+                self._process_speculate_output()
             except Exception as e:
                 model_server_logger.info("while get input_data error: {0} {1}".format(e, str(traceback.format_exc())))
 

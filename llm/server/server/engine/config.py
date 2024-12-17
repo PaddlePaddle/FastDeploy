@@ -93,9 +93,7 @@ class Config:
         self.use_cache_kv_int4 = int(os.getenv("USE_CACHE_KV_INT4", 0))
         
         # speculate decoding config
-        self.speculate_method = str(env.get("SPECULATE_METHOD", None))
-        self.speculate_max_draft_token_num = int(os.getenv("SPECULATE_MAX_DRAFT_TOKEN_NUM", 5))
-        self.speculate_max_ngram_size = int(os.getenv("SPECULATE_MAX_NGRAM_SIZE", 2))
+        self.speculate_method = str(os.getenv("SPECULATE_METHOD", None))
 
         # infer config
         self.max_batch_size = int(env.get("BATCH_SIZE", 50))

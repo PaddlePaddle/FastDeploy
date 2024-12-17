@@ -69,11 +69,16 @@ class ModelRunner:
         self.init_inputs()
 
         # whether use speculate decoding
-        if self.config.speculate_method is not None and self.config.speculate_method == "inference_with_reference":
-            self.proposer = InferenceWithReferenceProposer(
-                self.config.speculate_max_draft_token_num,
-                self.config.speculate_max_ngram_size,
-                self.args.max_batch_size)
+        logger.info(f'speculate_method: {self.config.speculate_method}')
+        if self.config.speculate_method is not None:
+            if self.config.speculate_method == "inference_with_reference":
+                self.proposer = InferenceWithReferenceProposer(
+                    self.model_cfg["speculate_max_draft_token_num"],
+                    self.model_cfg["speculate_max_ngram_size"],
+                    self.args.max_batch_size,
+                    self.args.max_seq_len)
+            else:
+                raise NotImplementedError(f'Not support {self.config.speculate_method}, only support inference_with_reference now.')
         else:
             self.proposer = None
 
@@ -274,18 +279,17 @@ class ModelRunner:
             self.share_inputs["ori_seq_lens_encoder"] = paddle.full(
                 shape=[self.args.max_batch_size, 1], fill_value=0, dtype="int32")
         # speculate decoding input
+        logger.info(f'Speculative method: {self.config.speculate_method}')
         if self.config.speculate_method is not None:
-            self.share_inputs["input_ids_cpu"] = paddle.full(
-                shape=[self.args.max_batch_size, self.args.max_seq_len], fill_value=1, dtype='int64').cpu()
             self.share_inputs["accept_tokens"] = paddle.full(
-                shape=[self.args.max_batch_size, self.config.speculate_max_draft_token_num + 1], fill_value=0, dtype="int64"
+                shape=[self.args.max_batch_size, self.model_cfg["speculate_max_draft_token_num"] + 1], fill_value=0, dtype="int64"
             )
             self.share_inputs["accept_num"] = paddle.full(shape=[self.args.max_batch_size], fill_value=0, dtype="int32")
             self.share_inputs["draft_tokens"] = paddle.full(
-                shape=[self.args.max_batch_size, self.config.speculate_max_draft_token_num + 1], fill_value=0, dtype="int64"
+                shape=[self.args.max_batch_size, self.model_cfg["speculate_max_draft_token_num"] + 1], fill_value=0, dtype="int64"
             )
             self.share_inputs["actual_draft_token_num"] = paddle.full(
-                shape=[self.args.max_batch_size], fill_value=self.config.speculate_max_draft_token_num, dtype="int32"
+                shape=[self.args.max_batch_size], fill_value=self.model_cfg["speculate_max_draft_token_num"], dtype="int32"
             )
 
     def dy_input_preprocess(self, tasks):
@@ -344,10 +348,8 @@ class ModelRunner:
                                                         task["stop_seqs"], dtype="int64")
             if self.proposer is not None:
                 if self.config.speculate_method == "inference_with_reference":
-                    speculate_update_input_ids_cpu(self.share_inputs['input_ids_cpu'], task['input_ids'], idx, self.args.max_seq_len)
-                    self.share_inputs["draft_tokens"][idx:idx + 1] = np.zeros([self.config.speculate_max_draft_token_num + 1])
-                    self.share_inputs["actual_draft_token_num"][idx:idx + 1] = np.array([self.config.speculate_max_draft_token_num])
-                    self.proposer.update(idx, length)
+                    self.share_inputs["draft_tokens"][idx:idx + 1] = np.zeros([self.model_cfg["speculate_max_draft_token_num"] + 1])
+                    self.share_inputs["actual_draft_token_num"][idx:idx + 1] = np.array([self.model_cfg["speculate_max_draft_token_num"]])
 
     def step_cuda(self, seq_lens_this_time):
         """
@@ -381,7 +383,7 @@ class ModelRunner:
                                   self.share_inputs['input_ids'], self.share_inputs['pre_ids'],
                                   self.share_inputs['step_idx'], self.share_inputs['next_tokens'],
                                   self.args.block_size, self.args.enc_dec_block_num, self.args.first_token_id,
-                                  self.config.speculate_max_draft_token_num)
+                                  self.model_cfg["speculate_max_draft_token_num"])
 
     def initialize_engine_ready_check_flag(self):
         """
@@ -512,7 +514,6 @@ class ModelRunner:
             if self.proposer is not None:
                 logger.info("start run proposer")
                 logger.info(f'before draft_tokens: {self.share_inputs["draft_tokens"]}')
-                logger.info(f'before accept_tokens: {self.share_inputs["accept_tokens"]}')
 
                 self.proposer.run(
                     self.share_inputs,
@@ -521,19 +522,19 @@ class ModelRunner:
                 )
                 logger.info(f'after draft_tokens: {self.share_inputs["draft_tokens"]}')
                 logger.info("finish run proposer")
-            logger.info(f'input_ids: {self.share_inputs["input_ids"]}')
-            logger.info(f'input_ids_cpu: {self.share_inputs["input_ids_cpu"]}')
-            logger.info(f'seq_lens_this_time: {self.share_inputs["seq_lens_this_time"]}')
-            logger.info(f'seq_lens_encoder: {self.share_inputs["seq_lens_encoder"]}')
-            logger.info(f'seq_lens_decoder: {self.share_inputs["seq_lens_decoder"]}')
-            logger.info(f'step_idx: {self.share_inputs["step_idx"]}')
-            logger.info(f'next_tokens: {self.share_inputs["next_tokens"]}')
-            logger.info(f'before block_tables: {self.share_inputs["block_tables"]}')
+            # logger.info(f'input_ids: {self.share_inputs["input_ids"]}')
+            # logger.info(f'input_ids_cpu: {self.share_inputs["input_ids_cpu"]}')
+            # logger.info(f'seq_lens_this_time: {self.share_inputs["seq_lens_this_time"]}')
+            # logger.info(f'seq_lens_encoder: {self.share_inputs["seq_lens_encoder"]}')
+            # logger.info(f'seq_lens_decoder: {self.share_inputs["seq_lens_decoder"]}')
+            # logger.info(f'step_idx: {self.share_inputs["step_idx"]}')
+            # logger.info(f'next_tokens: {self.share_inputs["next_tokens"]}')
+            # logger.info(f'before block_tables: {self.share_inputs["block_tables"]}')
 
             self.infer_engine.predictor.run()
             logger.info(f'after accept_tokens: {self.share_inputs["accept_tokens"]}')
             logger.info(f'after accept_num: {self.share_inputs["accept_num"]}')
-            logger.info(f'after block_tables: {self.share_inputs["block_tables"]}')
+            # logger.info(f'after block_tables: {self.share_inputs["block_tables"]}')
 
             self.share_inputs['infer_seed'].add_(infer_seed_increment)
             self.share_inputs['infer_seed'][:] %= self.MAX_INFER_SEED

@@ -16,7 +16,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 import paddle
-from paddlenlp_ops import ngram_match
 
 
 class Proposer(ABC):
@@ -43,7 +42,7 @@ class InferenceWithReferenceProposer(Proposer):
     It match tokens in the input and output as draft tokens.
     """
 
-    def __init__(self, max_draft_token_num: int, max_ngram_size: int, max_batch_size: int):
+    def __init__(self, max_draft_token_num: int, max_ngram_size: int, max_batch_size: int, max_seq_len: int, **kwargs):
         """
         Args:
         max_draft_token_num (int):
@@ -54,34 +53,33 @@ class InferenceWithReferenceProposer(Proposer):
             The hyperparameter of n in the paper.
         max_batch_size (int):
             The maximum batch size.
+        max_seq_len (int):
+            The maximum sequence length.
         """
         super().__init__()
         self.max_ngram_size = max_ngram_size
         self.input_ids_len = paddle.zeros(shape=[max_batch_size, 1], dtype="int64").cpu()
+        self.input_ids_cpu = paddle.zeros(shape=[max_batch_size, max_seq_len], dtype="int64").cpu()
         self.max_batch_size = max_batch_size
         self.max_draft_token_num = max_draft_token_num
-        # self.input_ids_cpu = paddle.full(shape=[max_batch_size, max_seq_len], fill_value=1, dtype="int64").cpu()
 
-    def update(self, bid: int, seq_len: int):
-        """
-        Used when inserting a new query to update the length of the input_ids.
-        """
-        self.input_ids_len[bid] = seq_len
-
-    def run(self, share_inputs: dict[str, paddle.Tensor], **kargs):
+    def run(self, model_inputs: dict[str, paddle.Tensor], **kargs):
         """
         Use ngram_match to get draft tokens from the input and output.
         """
-        draft_tokens = share_inputs["draft_tokens"].cpu()
+        draft_tokens = model_inputs["draft_tokens"].cpu()
         seq_lens_this_time = kargs["seq_lens_this_time"].cpu()
-        seq_lens_encoder = share_inputs["seq_lens_encoder"].cpu()
-        seq_lens_decoder = share_inputs["seq_lens_decoder"].cpu()
+        seq_lens_encoder = model_inputs["seq_lens_encoder"].cpu()
+        seq_lens_decoder = model_inputs["seq_lens_decoder"].cpu()
+
+        from paddlenlp_ops import ngram_match
+
         ngram_match(
-            share_inputs["input_ids_cpu"],
+            self.input_ids_cpu,
             self.input_ids_len.cpu(),
-            share_inputs["pre_ids"].cpu(),
-            share_inputs["step_idx"].cpu(),
-            share_inputs["actual_draft_token_num"].cpu(),
+            model_inputs["pre_ids"].cpu(),
+            model_inputs["step_idx"].cpu(),
+            model_inputs["actual_draft_token_num"].cpu(),
             draft_tokens,
             seq_lens_this_time,
             seq_lens_encoder,
@@ -90,6 +88,7 @@ class InferenceWithReferenceProposer(Proposer):
             self.max_ngram_size,
             self.max_draft_token_num,
         )
-        share_inputs["draft_tokens"][:] = draft_tokens.cuda()
-        share_inputs["seq_lens_encoder"][:] = seq_lens_encoder.cuda()
+
+        model_inputs["draft_tokens"][:] = draft_tokens.cuda()
+        model_inputs["seq_lens_encoder"][:] = seq_lens_encoder.cuda()
         kargs["seq_lens_this_time"][:] = seq_lens_this_time.cuda()
