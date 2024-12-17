@@ -91,9 +91,6 @@ class Config:
         self.block_size = int(env.get("BLOCK_SIZE", 64))
         self.use_cache_kv_int8 = int(os.getenv("USE_CACHE_KV_INT8", 0))
         self.use_cache_kv_int4 = int(os.getenv("USE_CACHE_KV_INT4", 0))
-        
-        # speculate decoding config
-        self.speculate_method = str(os.getenv("SPECULATE_METHOD", None))
 
         # infer config
         self.max_batch_size = int(env.get("BATCH_SIZE", 50))

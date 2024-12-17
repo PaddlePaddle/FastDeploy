@@ -22,9 +22,8 @@ from datetime import datetime
 import numpy as np
 from paddlenlp_ops import get_output, speculate_get_output
 from server.utils import datetime_diff, model_server_logger, monitor_logger
+from paddlenlp.utils.env import MAX_DRAFT_TOKENS, SPECULATE_MAX_BSZ
 
-SPECULATE_MAX_BSZ = 256
-MAX_DRAFT_TOKEN_NUM = 6
 
 class TokenProcessor(object):
     """
@@ -40,8 +39,9 @@ class TokenProcessor(object):
 
         self.tokens_counter = Counter()
 
-        if self.cfg.speculate_method is not None:
-            self.output_tokens = paddle.full(shape=[SPECULATE_MAX_BSZ * MAX_DRAFT_TOKEN_NUM + SPECULATE_MAX_BSZ + 2], fill_value=2, dtype="int64")
+        self.is_speculate_decoding = self.cfg.get_model_config().get("speculate_method") is not None
+        if self.is_speculate_decoding:
+            self.output_tokens = paddle.full(shape=[SPECULATE_MAX_BSZ * MAX_DRAFT_TOKENS + SPECULATE_MAX_BSZ + 2], fill_value=2, dtype="int64")
         else:
             self.output_tokens = paddle.full(shape=[self.cfg.max_batch_size + 2, 1], fill_value=2, dtype="int64")
         self.worker = None
@@ -71,7 +71,7 @@ class TokenProcessor(object):
         if self.worker is not None:
             raise Exception("Worker is already running!")
 
-        if self.cfg.speculate_method is not None:
+        if self.is_speculate_decoding:
             self.worker = threading.Thread(target=self.process_speculate_results, args=())
         else:
             self.worker = threading.Thread(target=self.process_sampling_results, args=())
@@ -302,7 +302,6 @@ class TokenProcessor(object):
         batch post-processing function
         """
         tokens = self.output_tokens.numpy()
-        model_server_logger.info(f"speculate_result tokens: {self.output_tokens.tolist()}")
         batch = self.output_tokens[1]
         output_token_msg_id = int(self.output_tokens[0])
         accept_num = tokens[2 : batch + 2]
@@ -317,7 +316,7 @@ class TokenProcessor(object):
             if self.resource_manager.stop_flags[i]:
                 continue
 
-            token_ids = tokens[2 + SPECULATE_MAX_BSZ + i * MAX_DRAFT_TOKEN_NUM: 2 + SPECULATE_MAX_BSZ + i * MAX_DRAFT_TOKEN_NUM + accept_num[i]].tolist()
+            token_ids = tokens[2 + SPECULATE_MAX_BSZ + i * MAX_DRAFT_TOKENS: 2 + SPECULATE_MAX_BSZ + i * MAX_DRAFT_TOKENS + accept_num[i]].tolist()
             # 跳过非法token
             if len(token_ids) == 0 or token_ids[-1] == 0:
                 continue
