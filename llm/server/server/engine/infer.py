@@ -481,9 +481,6 @@ class ModelRunner:
                     self.share_inputs["seq_lens_this_time"][:real_bsz] = seq_lens_this_time
 
                 tasks, read_finish = self.infer_queue.get()
-                logger.info(f'tasks: {tasks}')
-                logger.info(f'read_finish: {read_finish}')
-
                 if read_finish:
                     flag_broadcast_array[0] = 0
 
