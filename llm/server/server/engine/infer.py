@@ -490,7 +490,7 @@ class ModelRunner:
                     real_bsz = int(bsz)
                     req_dicts.extend(req_dict)
                     logger.info(
-                        f'req_dict: {req_dict} rank: {self.rank}, real_bsz: {real_bsz}, query_num: {len(req_dicts)}'
+                        f'rank: {self.rank}, real_bsz: {real_bsz}, query_num: {len(req_dicts)}'
                     )
 
                 self.dy_input_preprocess(req_dicts)
