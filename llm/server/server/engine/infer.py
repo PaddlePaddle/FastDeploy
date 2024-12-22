@@ -29,7 +29,7 @@ from paddlenlp.trl.llm_utils import get_rotary_position_embedding
 from paddlenlp_ops import step_paddle, speculate_step_paddle
 from server.data.processor import DataProcessor
 from server.engine.config import Config
-from server.engine.proposers import InferenceWithReferenceProposer
+from paddlenlp.experimental.transformers import InferenceWithReferenceProposer
 from server.utils import get_logger
 from task_queue_manager import TaskQueueManager
 
@@ -518,6 +518,7 @@ class ModelRunner:
             self.share_inputs['infer_seed'].add_(infer_seed_increment)
             self.share_inputs['infer_seed'][:] %= self.MAX_INFER_SEED
             if self.free_list_len > 0:
+                logger.info('You got into step CUDA!!!')
                 self.step_cuda(seq_lens_this_time)
 
 
