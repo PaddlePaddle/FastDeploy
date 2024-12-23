@@ -508,7 +508,6 @@ class ModelRunner:
             self.share_inputs['infer_seed'].add_(infer_seed_increment)
             self.share_inputs['infer_seed'][:] %= self.MAX_INFER_SEED
             if self.free_list_len > 0:
-                logger.info('You got into step CUDA!!!')
                 self.step_cuda(seq_lens_this_time)
 
 
