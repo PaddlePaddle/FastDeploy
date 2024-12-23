@@ -19,7 +19,7 @@ from datetime import datetime
 
 from paddlenlp.generation import GenerationConfig
 from server.utils import model_server_logger
-
+from dataclasses import dataclass
 
 class Config:
     """
@@ -203,6 +203,26 @@ class Config:
         model_config_json = json.load(open(self.model_config_path, 'r', encoding='utf-8'))
         return model_config_json
 
+    def get_speculate_config(self):
+        """
+        get speculate_decoding related config
+
+        Returns:
+            SpeculateConfig: the speculate related config
+        """
+        speculate_config = SpeculateConfig()
+        if self.model_cfg.get("speculate_method") is not None:
+            speculate_config.speculate_method = self.model_cfg["speculate_method"]
+            speculate_config.speculate_max_draft_token_num = self.model_cfg[
+                "speculate_max_draft_token_num"]
+            speculate_config.speculate_max_ngram_size = self.model_cfg[
+                "speculate_max_ngram_size"]
+
+        if speculate_config.speculate_method is not in ["none", "inference_with_reference"]:
+            model_server_logger.error(f"Unsupport speculate method: {speculate_config.speculate_method}")
+
+        return speculate_config
+
     def read_from_config(self):
         """
         reset model config from json file
@@ -234,3 +254,10 @@ class Config:
 
     def __str__(self) -> str:
         return json.dumps(self.__dict__, indent=4)
+
+
+@dataclass
+class SpeculateConfig:
+    speculate_method: str = None
+    speculate_max_draft_token_num: int = 1
+    speculate_max_ngram_size: int = 1
