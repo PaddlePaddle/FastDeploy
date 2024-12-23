@@ -48,7 +48,7 @@ class ModelRunner:
         self.config = Config()
         self.model_cfg = self.config.get_model_config()
         self.speculate_config = self.config.get_speculate_config()
-        self.is_speculate_decoding = self.speculate_config.speculate_method is not None
+        self.is_speculate_decoding = self.speculate_config.speculate_method != "None"
         self.format_print_configuration()
 
         self.args.num_layers = self.get_value(self.model_cfg, ["num_hidden_layers", "num_layers"])
@@ -71,7 +71,7 @@ class ModelRunner:
         self.init_inputs()
 
         if self.is_speculate_decoding:
-            logger.info(f'Using speculating decoding, method: {self.speculate_config.speculate_method}.')
+            logger.info(f'Using speculate decoding, method: {self.speculate_config.speculate_method}.')
             if self.speculate_config.speculate_method == "inference_with_reference":
                 self.proposer = InferenceWithReferenceProposer(
                     self.speculate_config.speculate_max_draft_token_num,
@@ -371,7 +371,7 @@ class ModelRunner:
                     self.share_inputs['free_list'], self.share_inputs['free_list_len'],
                     self.share_inputs['input_ids'], self.share_inputs['pre_ids'],
                     self.share_inputs['step_idx'], self.share_inputs['next_tokens'],
-                    self.args.block_size, self.args.enc_dec_block_num, self.args.first_token_id
+                    self.args.block_size, self.args.enc_dec_block_num, self.args.first_token_id,
                     speculate_step_token_num)
 
     def initialize_engine_ready_check_flag(self):
