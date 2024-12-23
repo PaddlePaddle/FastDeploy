@@ -21,6 +21,7 @@ from paddlenlp.generation import GenerationConfig
 from server.utils import model_server_logger
 from dataclasses import dataclass
 
+
 class Config:
     """
     initial configuration
