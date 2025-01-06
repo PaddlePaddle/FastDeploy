@@ -282,7 +282,7 @@ class DataProcessor(BaseDataProcessor):
         """
         if self.config.use_hf_tokenizer:
             from transformers import AutoTokenizer
-            return AutoTokenizer.from_pretrained(self.config.model_dir, use_fast=False, vocab_file=os.path.join(self.config.model_dir, "sentencepiece.bpe.model"))
+            return AutoTokenizer.from_pretrained(self.config.model_dir, use_fast=False)
         else:
             from paddlenlp.transformers import AutoTokenizer
             return AutoTokenizer.from_pretrained(self.config.model_dir)
