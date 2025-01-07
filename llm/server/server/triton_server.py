@@ -103,7 +103,7 @@ class TritonTokenProcessor(engine.TokenProcessor):
             is_end = batch_result[i].get("is_end", 0)
             token_ids = batch_result[i]["token_ids"]
             return_all_tokens = batch_result[i].get("return_all_tokens", False)
-            cache_special_token = False if is_end == 1 else (13 <= token_ids[0] <= 268)
+            cache_special_token = False if is_end == 1 else True
             if is_end != 1 and (cache_special_token or return_all_tokens or self.cfg.disable_streaming):
                 if batch_result[i]["req_id"] not in self.token_buffer:
                     self.token_buffer[batch_result[i]["req_id"]] = list()
