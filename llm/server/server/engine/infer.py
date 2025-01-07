@@ -251,10 +251,10 @@ class ModelRunner:
         self.share_inputs['free_list_len'] = paddle.full(
                             shape=[1], fill_value=self.free_list_len, dtype="int32")
 
-        self.share_inputs['stop_seqs_len'] = paddle.full(shape=[max_stop_seqs_num,],
+        self.share_inputs['stop_seqs_len'] = paddle.full(shape=[self.max_stop_seqs_num,],
                                             fill_value=0,
                                             dtype="int32")
-        self.share_inputs['stop_seqs'] = paddle.full(shape=[max_stop_seqs_num, stop_seqs_max_len],
+        self.share_inputs['stop_seqs'] = paddle.full(shape=[self.max_stop_seqs_num, self.stop_seqs_max_len],
                                                 fill_value=-1,
                                                 dtype="int64")
 
@@ -312,11 +312,11 @@ class ModelRunner:
 
             if "stop_seqs_len" in task:
                 stop_seqs_num = len(task["stop_seqs_len"])
-                for i in range(stop_seqs_num, max_stop_seqs_num):
+                for i in range(stop_seqs_num, self.max_stop_seqs_num):
                     task["stop_seqs_len"].append(0)
-                share_inputs['stop_seqs_len'][:] = np.array(
+                self.share_inputs['stop_seqs_len'][:] = np.array(
                                                         task["stop_seqs_len"], dtype="int32")
-                share_inputs['stop_seqs'][:stop_seqs_num, :len(task['stop_seqs'][0])] = np.array(
+                self.share_inputs['stop_seqs'][:stop_seqs_num, :len(task['stop_seqs'][0])] = np.array(
                                                         task["stop_seqs"], dtype="int64")
     def step_cuda(self, seq_lens_this_time):
         """
