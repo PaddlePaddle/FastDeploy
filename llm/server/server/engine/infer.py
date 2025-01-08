@@ -52,6 +52,11 @@ class ModelRunner:
         self.args.num_attention_heads = self.get_value(self.model_cfg, ["num_attention_heads", "n_head"])
         self.args.hidden_size = self.model_cfg["hidden_size"]
 
+        self.reduce_dialogue_repetition = int(os.environ.get("REDUCE_DIALOGUE_REPETITION", 0))
+
+        self.max_stop_seqs_num = int(os.getenv("MAX_STOP_SEQS_NUM", 5))
+        self.stop_seqs_max_len = int(os.getenv("STOP_SEQS_MAX_LEN", 8))
+
         self.nranks = dist.get_world_size()
         self.init_dist_env()
         self.rank = fleet.worker_index()
@@ -246,6 +251,19 @@ class ModelRunner:
         self.share_inputs['free_list_len'] = paddle.full(
                             shape=[1], fill_value=self.free_list_len, dtype="int32")
 
+        self.share_inputs['stop_seqs_len'] = paddle.full(shape=[self.max_stop_seqs_num,],
+                                            fill_value=0,
+                                            dtype="int32")
+        self.share_inputs['stop_seqs'] = paddle.full(shape=[self.max_stop_seqs_num, self.stop_seqs_max_len],
+                                                fill_value=-1,
+                                                dtype="int64")
+
+        if self.reduce_dialogue_repetition:
+            self.share_inputs["first_token_ids"] = paddle.full(
+                shape=[self.args.max_batch_size, 1], fill_value=-1, dtype="int64")
+            self.share_inputs["ori_seq_lens_encoder"] = paddle.full(
+                shape=[self.args.max_batch_size, 1], fill_value=0, dtype="int32")
+
     def dy_input_preprocess(self, tasks):
         """
         dynamic insertion
@@ -279,6 +297,10 @@ class ModelRunner:
             self.share_inputs['max_length'][idx:idx + 1] = max_dec_len
             self.share_inputs['stop_flags'][idx:idx + 1] = False
 
+            if self.reduce_dialogue_repetition:
+                self.share_inputs['first_token_ids'][idx:idx + 1] =  self.share_inputs['input_ids'][idx:idx + 1, :1]
+                self.share_inputs["ori_seq_lens_encoder"][idx:idx + 1] = length
+
             if "infer_seed" in task:
                 self.share_inputs['infer_seed'][idx:idx + 1] = task['infer_seed']
 
@@ -288,6 +310,14 @@ class ModelRunner:
             self.share_inputs["block_tables"][idx:idx + 1, :encoder_block_num] = np.array(
                                             task['block_tables'], dtype="int32")
 
+            if "stop_seqs_len" in task:
+                stop_seqs_num = len(task["stop_seqs_len"])
+                for i in range(stop_seqs_num, self.max_stop_seqs_num):
+                    task["stop_seqs_len"].append(0)
+                self.share_inputs['stop_seqs_len'][:] = np.array(
+                                                        task["stop_seqs_len"], dtype="int32")
+                self.share_inputs['stop_seqs'][:stop_seqs_num, :len(task['stop_seqs'][0])] = np.array(
+                                                        task["stop_seqs"], dtype="int64")
     def step_cuda(self, seq_lens_this_time):
         """
         step cuda
@@ -473,6 +503,11 @@ class InferenceEngine(object):
 
         config.switch_ir_optim(False)
         config.enable_use_gpu(100, device_id)
+
+        pir_flag = int(os.environ.get("FLAGS_enable_pir_api", 0))
+        if pir_flag == 1:
+            config.enable_new_executor()
+            config.enable_new_ir()
 
         # distributed config
         if self.mp_degree > 1:
