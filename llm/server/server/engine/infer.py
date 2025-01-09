@@ -500,8 +500,8 @@ class ModelRunner:
             if self.proposer is not None:
                 self.proposer.run(
                     self.share_inputs,
-                    real_batch_size=self.args.max_batch_size,
-                    seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
+                    real_batch_size=seq_lens_this_time.shape[0],
+                    seq_lens_this_time=seq_lens_this_time,
                 )
 
             self.infer_engine.predictor.run()
