@@ -29,6 +29,7 @@ from paddlenlp.trl.llm_utils import get_rotary_position_embedding
 from paddlenlp_ops import step_paddle
 from server.data.processor import DataProcessor
 from server.engine.config import Config
+from paddlenlp.experimental.transformers import InferenceWithReferenceProposer
 from server.utils import get_logger
 from task_queue_manager import TaskQueueManager
 
@@ -46,6 +47,8 @@ class ModelRunner:
 
         self.config = Config()
         self.model_cfg = self.config.get_model_config()
+        self.speculate_config = self.config.get_speculate_config()
+        self.is_speculate_decoding = self.speculate_config.speculate_method != "None"
         self.format_print_configuration()
 
         self.args.num_layers = self.get_value(self.model_cfg, ["num_hidden_layers", "num_layers"])
@@ -66,6 +69,17 @@ class ModelRunner:
         self.share_inputs = {}
         self.cache_kvs = {}
         self.init_inputs()
+
+        if self.is_speculate_decoding:
+            logger.info(f'Using speculate decoding, method: {self.speculate_config.speculate_method}.')
+            if self.speculate_config.speculate_method == "inference_with_reference":
+                self.proposer = InferenceWithReferenceProposer(
+                    self.speculate_config.speculate_max_draft_token_num,
+                    self.speculate_config.speculate_max_ngram_size,
+                    self.args.max_batch_size,
+                    self.args.max_seq_len)
+        else:
+            self.proposer = None
 
         self.infer_queue = TaskQueueManager(rank=self.rank, mp_num=self.nranks, port=self.config.infer_port)
 
@@ -263,6 +277,18 @@ class ModelRunner:
                 shape=[self.args.max_batch_size, 1], fill_value=-1, dtype="int64")
             self.share_inputs["ori_seq_lens_encoder"] = paddle.full(
                 shape=[self.args.max_batch_size, 1], fill_value=0, dtype="int32")
+        # speculate decoding input
+        if self.is_speculate_decoding:
+            self.share_inputs["accept_tokens"] = paddle.full(
+                shape=[self.args.max_batch_size, self.speculate_config.speculate_max_draft_token_num + 1], fill_value=0, dtype="int64"
+            )
+            self.share_inputs["accept_num"] = paddle.full(shape=[self.args.max_batch_size], fill_value=0, dtype="int32")
+            self.share_inputs["draft_tokens"] = paddle.full(
+                shape=[self.args.max_batch_size, self.speculate_config.speculate_max_draft_token_num + 1], fill_value=0, dtype="int64"
+            )
+            self.share_inputs["actual_draft_token_num"] = paddle.full(
+                shape=[self.args.max_batch_size], fill_value=self.speculate_config.speculate_max_draft_token_num, dtype="int32"
+            )
 
     def dy_input_preprocess(self, tasks):
         """
@@ -318,10 +344,21 @@ class ModelRunner:
                                                         task["stop_seqs_len"], dtype="int32")
                 self.share_inputs['stop_seqs'][:stop_seqs_num, :len(task['stop_seqs'][0])] = np.array(
                                                         task["stop_seqs"], dtype="int64")
+
+            if self.is_speculate_decoding:
+                self.share_inputs["draft_tokens"][idx:idx + 1] = np.zeros([self.speculate_config.speculate_max_draft_token_num + 1])
+                self.share_inputs["actual_draft_token_num"][idx:idx + 1] = np.array([self.speculate_config.speculate_max_draft_token_num])
+
     def step_cuda(self, seq_lens_this_time):
         """
         step cuda
         """
+        # whether speculate decoding
+        if self.is_speculate_decoding:
+            speculate_step_token_num = self.speculate_config.speculate_max_draft_token_num + 1
+        else:
+            speculate_step_token_num = 0
+
         step_paddle(self.share_inputs['stop_flags'], seq_lens_this_time,
                     self.share_inputs['step_seq_lens_encoder'],
                     self.share_inputs['seq_lens_encoder'],
@@ -334,7 +371,8 @@ class ModelRunner:
                     self.share_inputs['free_list'], self.share_inputs['free_list_len'],
                     self.share_inputs['input_ids'], self.share_inputs['pre_ids'],
                     self.share_inputs['step_idx'], self.share_inputs['next_tokens'],
-                    self.args.block_size, self.args.enc_dec_block_num, self.args.first_token_id)
+                    self.args.block_size, self.args.enc_dec_block_num, self.args.first_token_id,
+                    speculate_step_token_num)
 
     def initialize_engine_ready_check_flag(self):
         """
@@ -458,6 +496,13 @@ class ModelRunner:
 
                 time.sleep(0.001)
                 continue
+
+            if self.proposer is not None:
+                self.proposer.run(
+                    self.share_inputs,
+                    real_batch_size=seq_lens_this_time.shape[0],
+                    seq_lens_this_time=seq_lens_this_time,
+                )
 
             self.infer_engine.predictor.run()
             self.share_inputs['infer_seed'].add_(infer_seed_increment)
