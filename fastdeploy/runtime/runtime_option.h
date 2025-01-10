@@ -82,7 +82,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void UseAscend();
 
   /// Use onnxruntime DirectML to inference
-  void UseDirectML();
+  void UseDirectML(int adapter_id = 0);
 
   /// Use Sophgo to inference
   void UseSophgo();
