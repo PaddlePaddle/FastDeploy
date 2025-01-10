@@ -166,7 +166,7 @@ class TokenProcessor(object):
                     info_dict["cache_waiting_cost_time"] = datetime_diff(task["preprocess_end_time"],
                                                                         task["schedule_start_time"])
                 info_dict["inference_time_cost"] = task["inference_time_cost"]
-                info_dict["version"] = "4.6"
+                info_dict["version"] = "OpenSource"
                 info_dict["timestamp"] = time.time()
                 monitor_logger.info(f"{info_dict}")
                 break
