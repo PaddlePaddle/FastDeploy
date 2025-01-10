@@ -15,6 +15,12 @@
 #include "fastdeploy/utils/utils.h"
 
 #include <sstream>
+#include <fstream>
+#include <string_view>
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 
 namespace fastdeploy {
 
@@ -48,18 +54,53 @@ FDLogger& FDLogger::operator<<(std::ostream& (*os)(std::ostream&)) {
   return *this;
 }
 
-bool ReadBinaryFromFile(const std::string& file, std::string* contents) {
-  std::ifstream fin(file, std::ios::in | std::ios::binary);
-  if (!fin.is_open()) {
-    FDERROR << "Failed to open file: " << file << " to read." << std::endl;
+// using os_string = std::filesystem::path::string_type;
+#ifdef _WIN32
+using os_string = std::wstring;
+#else
+using os_string = std::string;
+#endif
+
+os_string to_osstring(std::string_view utf8_str)
+{
+#ifdef _WIN32
+    int len = MultiByteToWideChar(CP_UTF8, 0, utf8_str.data(), (int)utf8_str.size(), nullptr, 0);
+    os_string result(len, 0);
+    MultiByteToWideChar(CP_UTF8, 0, utf8_str.data(), (int)utf8_str.size(), result.data(), len);
+    return result;
+#else
+    return std::string(utf8_str);
+#endif
+}
+
+bool ReadBinaryFromFile(const std::string& path, std::string* contents)
+{
+  if (!contents) {
     return false;
   }
-  fin.seekg(0, std::ios::end);
-  contents->clear();
-  contents->resize(fin.tellg());
-  fin.seekg(0, std::ios::beg);
-  fin.read(&(contents->at(0)), contents->size());
-  fin.close();
+  auto& result = *contents;
+  result.clear();
+
+  std::ifstream file(to_osstring(path), std::ios::binary | std::ios::ate);
+  if (!file.is_open()) {
+    return false;
+  }
+
+  auto fileSize = file.tellg();
+  if (fileSize != -1) {
+    result.resize(fileSize);
+    file.seekg(0, std::ios::beg);
+    file.read(const_cast<char*>(result.data()), fileSize);
+  }
+  else {
+    // no size available, read to EOF
+    constexpr auto chunksize = 4096;
+    std::string chunk(chunksize, 0);
+    while (!file.fail()) {
+      file.read(const_cast<char*>(chunk.data()), chunksize);
+      result.insert(result.end(), chunk.data(), chunk.data() + file.gcount());
+    }
+  }
   return true;
 }
 
