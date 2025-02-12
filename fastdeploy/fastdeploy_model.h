@@ -47,7 +47,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   std::vector<Backend> valid_timvx_backends = {};
     /** Model's valid directml backends. This member defined all the onnxruntime directml backends have successfully tested for the model
    */
-  std::vector<Backend> valid_directml_backends = {};
+  std::vector<Backend> valid_directml_backends = {Backend::ORT};
   /** Model's valid ascend backends. This member defined all the cann backends have successfully tested for the model
    */
   std::vector<Backend> valid_ascend_backends = {};

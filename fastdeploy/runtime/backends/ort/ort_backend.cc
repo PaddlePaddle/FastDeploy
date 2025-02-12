@@ -98,7 +98,7 @@ bool OrtBackend::BuildOption(const OrtBackendOption& option) {
           "DML", ORT_API_VERSION, reinterpret_cast<const void**>(&ortDmlApi));
       OrtStatus* onnx_dml_status =
           ortDmlApi->SessionOptionsAppendExecutionProvider_DML(session_options_,
-                                                               0);
+                                                               option_.device_id);
       if (onnx_dml_status != nullptr) {
         FDERROR
             << "DirectML is not support in your machine, the program will exit."
@@ -260,8 +260,13 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
     }
     char* model_content_ptr;
     int model_content_size = 0;
+#ifdef ENABLE_PADDLE2ONNX
     paddle2onnx::ConvertFP32ToFP16(model_file.c_str(), model_file.size(),
                                    &model_content_ptr, &model_content_size);
+#else
+    FDERROR << "Didn't compile with ENABLE_PADDLE2ONNX, FP16 is not supported" << std::endl;
+    return false;
+#endif
     std::string onnx_model_proto(model_content_ptr,
                                  model_content_ptr + model_content_size);
     delete[] model_content_ptr;

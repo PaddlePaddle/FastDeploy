@@ -30,6 +30,8 @@ docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.7-gpu-cuda11.4-trt
 用户也可根据自身需求，参考如下文档自行编译镜像
 - [FastDeploy服务化部署镜像编译说明](docs/zh_CN/compile.md)
 
+> **注意：** 该镜像已预配置代理。如果您的环境不需要代理，可以通过执行命令`unset https_proxy`和`unset http_proxy`来禁用代理。
+
 ## 其它文档
 - [模型仓库目录说明](docs/zh_CN/model_repository.md) (说明如何准备模型仓库目录)
 - [模型配置说明](docs/zh_CN/model_configuration.md)  (说明runtime的配置选项)

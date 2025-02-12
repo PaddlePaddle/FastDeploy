@@ -15,9 +15,9 @@
     # 挂载模型文件
     export MODEL_PATH=${PWD}/Llama-3-8B-A8W8C8
 
-    docker run --gpus all --shm-size 5G --network=host \
+    docker run --gpus all --shm-size 5G --network=host --privileged --cap-add=SYS_PTRACE \
     -v ${MODEL_PATH}:/models/ \
-    -dit registry.baidubce.com/paddlepaddle/fastdeploy:llm-serving-cuda123-cudnn9-v1.0 \
+    -dit registry.baidubce.com/paddlepaddle/fastdeploy:llm-serving-cuda123-cudnn9-v1.2 \
     bash -c 'export USE_CACHE_KV_INT8=1 && cd /opt/output/Serving && bash start_server.sh; exec bash'
   ```
 

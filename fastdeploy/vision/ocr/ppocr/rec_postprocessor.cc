@@ -15,17 +15,21 @@
 #include "fastdeploy/vision/ocr/ppocr/rec_postprocessor.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
+#include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
 std::vector<std::string> ReadDict(const std::string& path) {
-  std::ifstream in(path);
+  std::string content;
+  ReadBinaryFromFile(path, &content);
+  std::stringstream in(std::move(content));
   FDASSERT(in, "Cannot open file %s to read.", path.c_str());
   std::string line;
   std::vector<std::string> m_vec;
   while (getline(in, line)) {
+    if (!line.empty() && *line.rbegin() == '\r') line.pop_back();
     m_vec.push_back(line);
   }
   m_vec.insert(m_vec.begin(), "#");  // blank char for ctc

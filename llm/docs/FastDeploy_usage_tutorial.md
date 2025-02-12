@@ -2,37 +2,53 @@
 ## 目录
 
 - [部署环境准备](#部署环境准备)
+  - [基础环境](#基础环境)
   - [准备部署镜像](#准备部署镜像)
   - [准备模型](#准备模型)
   - [创建容器](#创建容器)
-  - [基于dockerfile创建自己的镜像](#基于dockerfile创建自己的镜像)
 - [启动服务](#启动服务)
   - [配置参数](#配置参数)
-  - [启动FastDeploy](#启动FastDeploy)
+  - [启动服务](#启动服务)
   - [服务状态查询](#服务状态查询)
 - [服务测试](#服务测试)
   - [Python 客户端](#Python-客户端)
   - [HTTP调用](#HTTP调用)
+  - [OpenAI 客户端](#OpenAI-客户端)
   - [返回示例](#返回示例)
+- [基于dockerfile创建自己的镜像](#基于dockerfile创建自己的镜像)
 - [模型配置参数介绍](#模型配置参数介绍)
 - [请求参数介绍](#请求参数介绍)
 
 ## 部署环境准备
 
+### 基础环境
+  目前 FastDeploy 仅支持在 Linux 系统下部署，部署之前请确保系统有正确的 GPU 环境。
+
+  - 安装 docker
+    请参考 [Install Docker Engine](https://docs.docker.com/engine/install/) 选择对应的 Linux 平台安装 docker 环境。
+
+  - 安装 NVIDIA Container Toolkit
+    请参考 [Installing the NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#installing-the-nvidia-container-toolkit) 了解并安装 NVIDIA Container Toolkit。
+
+    NVIDIA Container Toolkit 安装成功后，参考 [Running a Sample Workload with Docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/sample-workload.html#running-a-sample-workload-with-docker) 测试 NVIDIA Container Toolkit 是否可以正常使用。
+
 ### 准备部署镜像
 
-为了方便部署，我们提供了cuda12.3的镜像，可以直接拉取镜像，或者使用dockerfile[构建自定义镜像](#基于dockerfile创建自己的镜像)
+为了方便部署，我们提供了 cuda12.3 的镜像，可以直接拉取镜像，或者使用我们提供的 `Dockerfile` [构建自定义镜像](#基于dockerfile创建自己的镜像)
 ```
-docker pull registry.baidubce.com/paddlepaddle/fastdeploy:llm-serving-cuda123-cudnn9-v1.0
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:llm-serving-cuda123-cudnn9-v1.2
 ```
 
 ### 准备模型
 
-模型放在对应文件夹下，以 `/home/workspace/models_dir` 为例
+FastDeploy 为 PaddleNLP 静态图模型提供了高效的部署方案，模型静态图导出方案请参考：[LLaMA](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/docs/predict/llama.md)、[Qwen](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/docs/predict/qwen.md)、[Mixtral](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/docs/predict/mixtral.md) ...
+
+导出后的模型放在任意文件夹下，以 `/home/workspace/models_dir` 为例
+
 ```
 cd /home/workspace/models_dir
 
-# 模型内目录结构需要整理成特定格式，如下是单卡部署的模型目录结构
+# 导出的模型目录结构如下所示，理论上无缝支持 PaddleNLP 导出的静态图模型，无需修改模型目录结构
 # /opt/output/Serving/models
 # ├── config.json                # 模型配置文件
 # ├── xxxx.model                 # 词表模型文件
@@ -46,30 +62,24 @@ cd /home/workspace/models_dir
 
 ### 创建容器
 
+创建容器之前，请检查 Docker 版本和 GPU 环境，确保 Docker 支持 `--gpus all` 参数。
+
+将模型目录挂载到容器中，默认模型挂载地址为 `/models/`，服务启动时可通过 `MODEL_DIR` 环境变量自定义挂载地址。
 ```
 docker run --gpus all \
     --name fastdeploy_serving \
+    --privileged \
+    --cap-add=SYS_PTRACE \
     --network=host \
-    --shm-size=10G \
-    -v /home/workspace/models_dir:/fastdeploy/models/ \
-    -dit registry.baidubce.com/paddlepaddle/fastdeploy:llm-serving-cuda123-cudnn9-v1.0 bash
+    --shm-size=5G \
+    -v /home/workspace/models_dir:/models/ \
+    -dit registry.baidubce.com/paddlepaddle/fastdeploy:llm-serving-cuda123-cudnn9-v1.2 bash
 
 # 进入容器，检查GPU环境和模型挂载是否正常
 docker exec -it fastdeploy_serving /bin/bash
 nvidia-smi
-ls /fastdeploy/models/
+ls /models/
 ```
-
-## 基于dockerfile创建自己的镜像
-
-```
-git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd FastDeploy/llm
-
-docker build --network=host -f ./dockerfiles/Dockerfile_serving_cuda123_cudnn9 -t llm-serving-cu123-self .
-```
-
-创建自己的镜像后，可以基于该镜像[创建容器](#创建容器)
 
 ## 启动服务
 
@@ -93,13 +103,12 @@ export CUDA_VISIBLE_DEVICES=0
 # 默认关闭
 # export DISABLE_STREAMING=1
 
-# 配置数据服务。需要自行修改HTTP_PORT、GRPC_PORT、METRICS_PORT和INFER_QUEUE_PORT。
-# 请事先检查端口可用：执行`netstat -tuln | grep <端口号>`，如果没有log输出，则表示该端口未被占用。
-export HTTP_PORT="8751"                         # 探活服务的http端口（当前仅用于健康检查、探活）
-export GRPC_PORT="8752"                         # 模型推服务的grpc端口
-export METRICS_PORT="8753"                      # 模型服务中监督指标的端口
-export INFER_QUEUE_PORT="8754"                  # 模型服务内部使用的端口
-export PUSH_MODE_HTTP_PORT="8143"               # 服务请求HTTP端口号，如不配置，默认为-1，即服务只支持GRPC协议
+# 配置数据服务。需要自行修改HTTP_PORT、GRPC_PORT、METRICS_PORT和INFER_QUEUE_PORT。(请事先检查端口可用)
+export HTTP_PORT="8110"                         # 探活服务的http端口（当前仅用于健康检查、探活）
+export GRPC_PORT="8811"                         # 模型推服务的grpc端口
+export METRICS_PORT="8722"                      # 模型服务中监督指标的端口
+export INFER_QUEUE_PORT="8813"                  # 模型服务内部使用的端口
+export PUSH_MODE_HTTP_PORT="9965"               # 服务请求HTTP端口号，如不配置，默认为-1，即服务只支持GRPC协议
 
 # MAX_SEQ_LEN: 服务会拒绝input token数量超过MAX_SEQ_LEN的请求，并返回错误提示
 # MAX_DEC_LEN: 服务会拒绝请求中max_dec_len/min_dec_len超过此参数的请求，并返回错误提示
@@ -117,7 +126,7 @@ export PUSH_MODE_HTTP_WORKERS="1" # HTTP服务进程数，在 PUSH_MODE_HTTP_POR
 
 更多请求参数请参考[模型配置参数介绍](#模型配置参数介绍)
 
-### 启动FastDeploy
+### 启动服务
 
 ```
 cd /opt/output/Serving
@@ -130,10 +139,12 @@ bash start_server.sh
 
 ```
 # port为上面启动服务时候指定的HTTP_PORT
+  > 测试前请确保服务IP和端口正确
+
 live接口： (服务是否能正常接收请求）
-  http://{ip}:{HTTP_PORT}/v2/health/live
+  http://127.0.0.1:8110/v2/health/live
 health接口：（模型是否准备好推理）
-  http://{ip}:{HTTP_PORT}/v2/health/ready
+  http://127.0.0.1:8110/v2/health/ready
 ```
 
 ## 服务测试
@@ -144,17 +155,17 @@ health接口：（模型是否准备好推理）
 from fastdeploy_client.chatbot import ChatBot
 
 hostname = "127.0.0.1"          # 服务部署的hostname
-port = 8000                     # 服务配置的GRPC_PORT
+port = 8811                     # 服务配置的GRPC_PORT
 
 chatbot = ChatBot(hostname=hostname, port=port)
 
 # 非流式接口
-result = chatbot.generate("你好", topp=0.8, max_dec_len=128, timeout=120)
+result = chatbot.generate("hello", topp=0.8, max_dec_len=128, timeout=120)
 print(result)
 
 # 流式接口
-chatbot = ChatBot(hostname=hostname, port=port, model_id=model_id, mode=mode)
-stream_result = chatbot.stream_generate("你好", max_dec_len=128, timeout=120)
+chatbot = ChatBot(hostname=hostname, port=port)
+stream_result = chatbot.stream_generate("hello", max_dec_len=128, timeout=120)
 for res in stream_result:
     print(res)
 ```
@@ -168,16 +179,33 @@ import uuid
 import json
 import requests
 
-url = f"http://127.0.0.1:{PUSH_MODE_HTTP_PORT}/v1/chat/completions"
+push_mode_http_port = "9965"    # 服务配置的PUSH_MODE_HTTP_PORT
+url = f"http://127.0.0.1:{push_mode_http_port}/v1/chat/completions"
 req_id = str(uuid.uuid1())
-data = {
-        "text": "Hello, how are you?",
-        "req_id": req_id,
-        "max_dec_len": 64,
-        "stream": True,
-    }
+data_single = {
+    "text": "Hello, how are you?",
+    "req_id": req_id,
+    "max_dec_len": 64,
+    "stream": True,
+  }
 # 逐token返回
-res = requests.post(url, json=data, stream=True)
+res = requests.post(url, json=data_single, stream=True)
+for line in res.iter_lines():
+    print(json.loads(line))
+
+# 多轮对话
+data_multi = {
+    "messages": [
+      {"role": "user", "content": "Hello, who are you"},
+      {"role": "system", "content": "I'm a helpful AI assistant."},
+      {"role": "user", "content": "List 3 countries and their capitals."},
+    ],
+    "req_id": req_id,
+    "max_dec_len": 64,
+    "stream": True,
+  }
+# 逐token返回
+res = requests.post(url, json=data_multi, stream=True)
 for line in res.iter_lines():
     print(json.loads(line))
 ```
@@ -205,7 +233,8 @@ for line in res.iter_lines():
 ```
 import openai
 
-client = openai.Client(base_url="http://127.0.0.1:{PUSH_MODE_HTTP_PORT}/v1/chat/completions", api_key="EMPTY_API_KEY")
+push_mode_http_port = "9965"    # 服务配置的PUSH_MODE_HTTP_PORT
+client = openai.Client(base_url=f"http://127.0.0.1:{push_mode_http_port}/v1/chat/completions", api_key="EMPTY_API_KEY")
 
 # 非流式返回
 response = client.completions.create(
@@ -267,6 +296,17 @@ for chunk in response:
 print("\n")
 ```
 
+## 基于dockerfile创建自己的镜像
+
+为了方便用户构建自定义服务，我们提供了基于dockerfile创建自己的镜像的脚本。
+```
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy/llm
+
+docker build --network=host -f ./dockerfiles/Dockerfile_serving_cuda123_cudnn9 -t llm-serving-cu123-self .
+```
+创建自己的镜像后，可以基于该镜像[创建容器](#创建容器)
+
 ## 模型配置参数介绍
 
 | 字段名 | 字段类型 | 说明 | 是否必填 | 默认值 | 备注 |
@@ -277,7 +317,7 @@ print("\n")
 | GRPC_PORT | int | 模型推服务的grpc端口 | 是 | 无 |   |
 | METRICS_PORT | int | 模型服务中监督指标的端口 | 是 | 无 |   |
 | INFER_QUEUE_PORT | int | 模型服务内部使用的端口 | 否 | 56666 |   |
-| PUSH_MODE_HTTP_PORT | int | 服务请求HTTP端口号 | 否 | -1 | 如不配置，服务只支持GRPC协议 ｜
+| PUSH_MODE_HTTP_PORT | int | 服务请求HTTP端口号 | 否 | -1 | 如不配置，服务只支持GRPC协议 |
 | DISABLE_STREAMING | int | 是否使用流式返回 | 否 | 0 |  |
 | MAX_SEQ_LEN | int | 最大输入序列长度 | 否 | 8192 | 服务会拒绝input token数量超过MAX_SEQ_LEN的请求，并返回错误提示 |
 | MAX_DEC_LEN | int | 最大decoer序列长度 | 否 | 1024 | 服务会拒绝请求中max_dec_len/min_dec_len超过此参数的请求，并返回错误提示 |
@@ -298,7 +338,8 @@ print("\n")
 | 字段名 | 字段类型 | 说明 | 是否必填 | 默认值 | 备注 |
 | :---: | :-----: | :---: | :---: | :-----: | :----: |
 | req_id |  str  | 请求ID，用于标识一个请求。建议设置req_id，保证其唯一性   | 否 | 随机id | 如果推理服务中同时有两个相同req_id的请求，会返回req_id重复的错误信息 |
-| text   | str  | 请求的文本 | 是 | 无 |  |
+| text   | str  | 请求的文本 | 否 | 无 | text 和 messages 必须有一个 |
+| messages | str | 多轮对话文本 | 否 | 无 | 多轮对话以list方式存储 |
 | max_dec_len | int  | 最大生成token的长度，如果请求的文本token长度加上max_dec_len大于模型的max_seq_len，会返回长度超限的错误信息 | 否 | max_seq_len减去文本token长度 |  |
 | min_dec_len | int | 最小生成token的长度，最小是1 | 否 | 1 |  |
 | topp | float | 控制随机性参数，数值越大则随机性越大，范围是0~1 | 否 | 0.7 |  |

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/runtime/enum_variables.h"
+#include "fastdeploy/core/config.h"
 
 namespace fastdeploy {
 std::ostream& operator<<(std::ostream& out, const Backend& backend) {

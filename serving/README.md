@@ -37,6 +37,8 @@ Users can also compile the image by themselves according to their own needs, ref
 
 - [FastDeploy Serving Deployment Image Compilation](docs/EN/compile-en.md)
 
+> **Note:** The proxy settings have been pre-configured for this image. If these settings are not required for your environment, you can disable the proxy by executing the commands `unset https_proxy` and `unset http_proxy`.
+
 ## Other Tutorials
 
 - [How to Prepare Serving Model Repository](docs/EN/model_repository-en.md)
