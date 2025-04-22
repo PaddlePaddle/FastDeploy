@@ -129,6 +129,7 @@ bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images,
     std::vector<cv::Mat> image_list;
     if (boxes.size() == 0) {
       image_list.emplace_back(img);
+      ocr_result.boxes.emplace_back(std::array<int, 8>{0, 0, img.cols, 0, img.cols, img.rows, 0, img.rows});
     }else{
       image_list.resize(boxes.size());
       for (size_t i_box = 0; i_box < boxes.size(); ++i_box) {
