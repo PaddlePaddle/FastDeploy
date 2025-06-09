@@ -1,69 +1,160 @@
-build
-cmake-build-debug
-cmake-build-release
-.vscode
-FastDeploy.cmake
-build-debug.sh
-*dist
-fastdeploy.egg-info
-fastdeploy_python.egg-info
-fastdeploy_gpu_python.egg-info
-.setuptools-cmake-build
-fastdeploy/version.py
-fastdeploy/core/config.h
-python/fastdeploy/c_lib_wrap.py
-python/fastdeploy/LICENSE*
-python/build_cpu.sh
-python/fastdeploy/ThirdPartyNotices*
-*.so*
-fpython/astdeploy/libs/third_libs
-fastdeploy/core/config.h
-fastdeploy/pybind/main.cc
-python/fastdeploy/libs/lib*
-python/fastdeploy/libs/third_libs
-__pycache__
-build_fd_android.sh
-python/scripts/process_libraries.py
-.vs
-.idea
-.DS_Store
-miniprogram_npm
-node_modules
-.DS_Store
-dist
-etc
-lib
-dist-ssr
-coverage
-*.local
-yalc.*
-.yalc
-examples/vision/collect_quantize_cc.sh
-examples/vision/tests_quantize
-fastdeploy/LICENSE
-fastdeploy/ThirdPartyNotices.txt
-FastDeployCSharp.cmake
-python/fastdeploy/code_version.py
-*.pdmodel
-*.pdiparams
-*.pdiparams.info
-log.txt
-serving/build
-serving/build.encrypt
-serving/build.encrypt.auth
-output
-res
-tmp
+# Virtualenv
+/.venv/
+/venv/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+/bin/
+/build/
+/develop-eggs/
+dist/
+/eggs/
+/lib/
+/lib64/
+/output/
+/parts/
+/sdist/
+/var/
+*.egg-info/
+.installed.cfg
+*.egg
+.eggs
+
+# AUTHORS and ChangeLog will be generated while packaging
+/AUTHORS
+/ChangeLog
+
+# BCloud / BuildSubmitter
+/build_submitter.*
+/logger_client_log
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+.tox/
+.coverage
+.cache
+.pytest_cache
+nosetests.xml
+coverage.xml
+
+# Translations
+*.mo
+*.pot
+*.doctree
+
+# Sphinx documentation
+/docs/_build/
+
+.env
 log
-nohup.out
-llm/server/__pycache__
-llm/server/data/__pycache__
-llm/server/engine/__pycache__
-llm/server/http_server/__pycache__
-llm/server/log/
-llm/client/build/
-llm/client/dist/
-llm/client/fastdeploy_client.egg-info/
-llm/client/fastdeploy_client/tests/log/
-*.pyc
+.vscode
+.idea
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Django stuff:
 *.log
+local_settings.py
+db.sqlite3
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# celery beat schedule file
+celerybeat-schedule
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pycharm
+.DS_Store
+.idea/
+FETCH_HEAD
+
+#log
+log/
+
+checkpoints/
+checkpoints_origin/
+result/
+result_lora/
+
+# npu kernel cache
+kernel_meta*
+
+# building custom ops cache and auto-generated codes
+*.o
+fastdeploy_ops.py
+version.txt
+EGG-INFO/
+
+# fp8 generated codes
+autogen/
+fp8_fp8_gemm_scale_bias_act.cu
+fp8_fp8_dual_gemm_scale_bias_act.cu
+visitor_fp8_gemm_fused.cu
+
+# third party
+custom_ops/third_party
+
+fastdeploy/model_executor/ops/base
+fastdeploy/model_executor/ops/gpu/deep_gemm
+
+gemm_profiles.json
+nohup.out
+
+#fp8_deep_gemm
+custom_ops/gpu_ops/fp8_deep_gemm/deep_gemm/include/cutlass
+custom_ops/gpu_ops/fp8_deep_gemm/deep_gemm/include/cute
+
+# buff
+custom_ops/tmp*
