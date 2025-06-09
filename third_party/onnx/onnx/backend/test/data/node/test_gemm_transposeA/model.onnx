@@ -1,22 +1,0 @@
-backend-test:
-!
-a
-b
-cy"Gemm*
-transA test_gemm_transposeAZ
-a
-
-
-Z
-b
-
-
-Z
-c
-
-
-b
-y
-
-
-B

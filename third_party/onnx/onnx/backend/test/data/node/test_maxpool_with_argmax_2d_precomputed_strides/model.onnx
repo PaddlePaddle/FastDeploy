@@ -1,24 +1,0 @@
-backend-test:Û
-Q
-xyz"MaxPool*
-kernel_shape@@ *
-storage_order *
-strides@@ /test_maxpool_with_argmax_2d_precomputed_stridesZ
-x
-
-
-
-
-b
-y
-
-
-
-
-b
-z
-
-
-
-
-B	

@@ -1,7 +1,0 @@
-BasedOnStyle: Google
-AllowShortBlocksOnASingleLine: false
-AllowShortCaseLabelsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: Empty
-AllowShortLoopsOnASingleLine: false
-AllowShortIfStatementsOnASingleLine: false
-
