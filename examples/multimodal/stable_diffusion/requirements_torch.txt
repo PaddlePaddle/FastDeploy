@@ -1,5 +1,0 @@
-onnx
-torch
-diffusers
-transformers
-scipy

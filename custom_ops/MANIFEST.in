@@ -1,0 +1,2 @@
+recursive-include third_party/x86-simd-sort *.so *.h
+recursive-include third_party/xFasterTransformer *.so *.h
