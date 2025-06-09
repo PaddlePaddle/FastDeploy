@@ -1,18 +1,0 @@
-backend-test:œ
-J
-xy"MaxPool*
-	ceil_mode *
-kernel_shape@@ *
-strides@@ test_maxpool_2d_ceilZ
-x
-
-
-
-
-b
-y
-
-
-
-
-B

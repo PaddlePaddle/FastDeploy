@@ -1,8 +1,0 @@
-numpy == 1.21.5
-protobuf == 3.16.0
-pytest
-nbval
-ipython
-wheel
-setuptools
-twine
