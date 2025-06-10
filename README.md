@@ -57,7 +57,7 @@ pip install dist/fastdeploy-2.0.0a0-py3-none-any.whl
 
 在安装后，执行如下命令快速部署Qwen2模型, 更多参数的配置与含义参考[参数说明](docs/serving.md).
 
-```
+``` shell
 # 下载与解压Qwen模型
 wget https://fastdeploy.bj.bcebos.com/llm/models/Qwen2-7B-Instruct.tar.gz && tar xvf Qwen2-7B-Instruct.tar.gz
 # 指定单卡部署
@@ -65,7 +65,7 @@ python -m fastdeploy.entrypoints.openai.api_server --model ./Qwen2-7B-Instruct -
 ```
 
 使用如下命令请求模型服务
-```
+``` shell
 curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
@@ -75,7 +75,7 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
 }'
 ```
 响应结果如下所示
-```
+``` json
 {
     "id": "chatcmpl-db662f47-7c8c-4945-9a7a-db563b2ddd8d",
     "object": "chat.completion",
