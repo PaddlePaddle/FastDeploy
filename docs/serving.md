@@ -3,7 +3,7 @@
 使用如下命令进行服务部署
 
 ```bash
-python -m fastdeploy.entrypoints.openai.api_server --model ernie-45-turbo --port 8188 --tensor-parallel-size 8
+python -m fastdeploy.entrypoints.openai.api_server --model qwen2 --port 8188 --tensor-parallel-size 1
 ```
 
 其中api_server支持的参数包括
