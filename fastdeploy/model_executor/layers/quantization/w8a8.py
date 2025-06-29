@@ -16,11 +16,12 @@
 from typing import Optional
 
 import paddle
-from paddlenlp.utils.log import logger
+from paddleformers.utils.log import logger
 
 import fastdeploy
 from fastdeploy.platforms.utils import convert_to_npu_dequant_scale
 
+from ..utils import get_tensor
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 
@@ -29,14 +30,18 @@ class W8A8Config(QuantConfigBase):
     quantization config for weight 8bits and activation 8bits
     """
 
-    def __init__(self, weight_scale_dict, act_scale_dict,
-                 use_gemm_dequant) -> None:
+    def __init__(self, weight_scale_dict, act_scale_dict, use_gemm_dequant,
+                 use_smooth_quant) -> None:
         super().__init__()
         self.weight_scale_dict = weight_scale_dict
         self.act_scale_dict = act_scale_dict
         self.use_gemm_dequant = use_gemm_dequant
+        self.use_smooth_quant = use_smooth_quant
+        self.quant_max_bound = 127
+        self.quant_min_bound = -127
+        self.quant_round_type = 0
 
-    def get_name(self) -> str:
+    def name(self) -> str:
         return "w8a8"
 
     @classmethod
@@ -61,12 +66,17 @@ class W8A8LinearMethod(QuantMethodBase):
     ) -> None:
         super().__init__()
         self.quant_config = quant_config
+        self.smooth_quant_method = SmoothQuantLinearMethod(quant_config)
 
     def create_weights(self, layer):
-        weight_scale = self.quant_config.weight_scale_dict.get(
-            layer.prefix + ".weight_quanter")
+        layer.linear_weight_shape.reverse()
+        layer.weight_dtype = "int8"
+        if self.quant_config.use_smooth_quant:
+            self.smooth_quant_method.create_weights(layer)
+        weight_scale = self.quant_config.weight_scale_dict.get(layer.prefix +
+                                                               ".weight_scale")
         in_scale = self.quant_config.act_scale_dict.get(layer.prefix +
-                                                        ".activation_quanter")
+                                                        ".activation_scale")
         self.skip_quant = False
         if weight_scale is None or in_scale is None:
             self.skip_quant = True
@@ -86,13 +96,15 @@ class W8A8LinearMethod(QuantMethodBase):
             convert_to_npu_dequant_scale(linear_out_scale))
 
     def process_loaded_weights(self, layer, weights) -> None:
+        if self.quant_config.use_smooth_quant:
+            self.smooth_quant_method.process_loaded_weights(layer, weights)
         if self.skip_quant:
             logger.debug(f"{layer.prefix} skip quant")
             weight_tensor = weights.cast(layer._dtype)
             layer.linear_weight.set_value(weight_tensor)
         else:
             weight_tensor = weights.transpose([1, 0])
-            weight_tensor = paddle.cast(weight_tensor, layer.weight_dtype)
+            weight_tensor = paddle.cast(weight_tensor, "int8")
             layer.linear_weight.set_value(weight_tensor)
 
     def apply(self, layer, x):
@@ -107,3 +119,53 @@ class W8A8LinearMethod(QuantMethodBase):
             linear_out = fastdeploy.model_executor.ops.gpu.dequant_int8(
                 linear_out, layer.linear_out_scale, layer._dtype)
         return linear_out
+
+
+class SmoothQuantLinearMethod(QuantMethodBase):
+    """
+    SmoothQuant Method
+    """
+
+    def __init__(
+        self,
+        quant_config: QuantConfigBase,
+    ) -> None:
+        super().__init__()
+        self.quant_config = quant_config
+
+    def create_weights(self, layer):
+        linear_shift_shape = [layer.output_size]
+        linear_smooth_shape = [layer.output_size]
+        layer.linear_shift = self.create_parameter(
+            shape=linear_shift_shape,
+            dtype=layer._dtype,
+            is_bias=False,
+        )
+        layer.linear_smooth = layer.create_parameter(
+            shape=linear_smooth_shape,
+            dtype=layer._dtype,
+            is_bias=False,
+        )
+
+    def process_loaded_weights(self, layer, weights) -> None:
+        if layer.shift_key in layer.state_dict:
+            shift_tensor = get_tensor(layer.state_dict.pop(
+                layer.shift_key)).astype(paddle.get_default_dtype())
+        else:
+            shift_tensor = paddle.zeros(
+                shape=layer.linear_shift_shape,
+                dtype=paddle.get_default_dtype(),
+            )
+        layer.linear_shift.set_value(shift_tensor)
+        if layer.smooth_key in layer.state_dict:
+            smooth_tensor = get_tensor(layer.state_dict.pop(
+                layer.smooth_key)).astype(paddle.get_default_dtype())
+        else:
+            smooth_tensor = paddle.ones(
+                shape=[layer.linear_smooth_shape],
+                dtype=paddle.get_default_dtype(),
+            )
+        layer.linear_smooth.set_value(smooth_tensor)
+
+    def apply(self, layer, x):
+        pass

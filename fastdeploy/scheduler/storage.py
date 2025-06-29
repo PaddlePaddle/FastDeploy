@@ -15,14 +15,14 @@
 """
 
 
-from typing import Optional, List
-from redis.typing import Number
+from typing import Optional, List, Union, Awaitable
+from redis.typing import Number, FieldT, KeyT, EncodableT, ResponseT
 import redis
 from packaging import version
 import re
 
 
-LUA_SCRIPT_LPOP = """
+LUA_LPOP = """
 local key = KEYS[1]
 local count = tonumber(ARGV[1])
 local elements = redis.call('LRANGE', key, 0, count - 1)
@@ -33,21 +33,54 @@ end
 return elements
 """
 
+LUA_ZINCRBY = """
+local key = KEYS[1]
+local amount = tonumber(ARGV[1])
+local value = ARGV[2]
+local rem_amount = ARGV[5] == 'NIL' and nil or tonumber(ARGV[3])
+
+local currentAmount = redis.call('ZINCRBY',key, amount, value)
+currentAmount = tonumber(currentAmount) or 0
+
+if rem_amount ~= nil and currentAmount == rem_amount then
+    redis.call('ZREM', key, value)
+    currentAmount = 0
+end
+
+return currentAmount
+"""
+
+
 class AdaptedRedis(redis.Redis):
     """
-        AdaptedRedis class: Adapt to different versions of Redis
+    A Redis client adapter that provides version-compatible operations.
+    
+    This class extends the standard Redis client to:
+    - Handle version-specific behavior differences
+    - Add TTL support for list operations
+    - Provide atomic operations with expiration
+    - Implement custom Lua scripts for enhanced functionality
     """
 
     def __init__(self, **kwargs):
+        """
+        Initialize the AdaptedRedis client.
+        
+        Args:
+            **kwargs: Standard Redis client connection parameters
+        """
         super().__init__(**kwargs)
 
         self._old_version = False
         self._parse_version()
-        self._warm_up()
+        self._register_script()
 
     def _parse_version(self):
         """
-            parse version
+        Parse and store the Redis server version.
+        
+        Determines if the server is an older version that requires
+        special handling for certain operations.
         """
         server_info = self.info(section='server')
         version_string = server_info['redis_version']
@@ -66,24 +99,120 @@ class AdaptedRedis(redis.Redis):
 
         self.version = redis_version
 
-    def _warm_up(self):
+    def _register_script(self):
         """
-            preload some lua scripts
+        Register custom Lua scripts for enhanced Redis operations.
+        
+        Scripts include:
+        - Atomic LPOP with count (for older Redis versions)
+        - ZINCRBY with removal threshold
         """
         if self._old_version:
-            self._lpop = self.register_script(LUA_SCRIPT_LPOP)
+            self._lpop = self.register_script(LUA_LPOP)
+        self._zincrby = self.register_script(LUA_ZINCRBY)
 
-    def lpop(self, name: str, count: Optional[int] = None):
+    def rpush(self, name: str, *values: FieldT, ttl: Optional[float] = None) -> Union[Awaitable[int], int]:
         """
-            similar to redis lpop
+        RPUSH operation with optional TTL.
+        
+        Args:
+            name: List key
+            *values: Values to push
+            ttl: Optional time-to-live in seconds
+            
+        Returns:
+            Length of the list after push
         """
-        if self._old_version and count is not None:
-            return self._lpop(keys=[name], args=[count])
-        return super().lpop(name, count)
+        if ttl is None:
+            return super().rpush(name, *values)
+
+        with self.pipeline() as pipe:
+            pipe.multi()
+            pipe.rpush(name, *values)
+            pipe.expire(name, ttl)
+            result = pipe.execute()
+            return result[0]
+
+    def zincrby(self,
+                name: KeyT,
+                amount: float,
+                value: EncodableT,
+                rem_amount: Optional[float] = None,
+                ttl: Optional[float] = None) -> ResponseT:
+        """
+        Atomic ZINCRBY with removal threshold and optional TTL.
+        
+        Args:
+            name: Sorted set key
+            amount: Increment amount
+            value: Member to increment
+            rem_amount: Optional threshold for member removal
+            ttl: Optional time-to-live in seconds
+            
+        Returns:
+            New score of the member
+        """
+        amount = str(amount)
+
+        if ttl is None:
+            if rem_amount is None:
+                return super().zincrby(name, amount, value)
+            rem_amount = 'NIL' if rem_amount is None else str(rem_amount)
+            return self._zincrby(keys=[name], args=[amount, value, rem_amount])
+
+        with self.pipeline() as pipe:
+            pipe.multi()
+            if rem_amount is None:
+                pipe.zincrby(name, amount, value)
+            else:
+                rem_amount = 'NIL' if rem_amount is None else str(rem_amount)
+                self._zincrby(keys=[name], args=[
+                              amount, value, rem_amount], client=pipe)
+            pipe.expire(name, ttl)
+            result = pipe.execute()
+            return result[0]
+
+    def lpop(self,
+             name: str,
+             count: Optional[int] = None,
+             ttl: Optional[float] = None,
+             ) -> Union[Awaitable[Union[str, List, None]], Union[str, List, None]]:
+        """
+        LPOP operation with count support and optional TTL.
+        
+        Args:
+            name: List key
+            count: Number of elements to pop
+            ttl: Optional time-to-live in seconds
+            
+        Returns:
+            Popped elements (single or list)
+        """
+        if ttl is None:
+            if self._old_version and count is not None:
+                return self._lpop(keys=[name], args=[count])
+            return super().lpop(name, count)
+
+        with self.pipeline() as pipe:
+            pipe.multi()
+            if self._old_version and count is not None:
+                self._lpop(keys=[name], args=[count], client=pipe)
+            else:
+                pipe.lpop(name, count)
+            pipe.expire(name, ttl)
+            result = pipe.execute()
+            return result[0]
 
     def blpop(self, keys: List, timeout: Optional[Number] = 0):
         """
-            similar to redis blpop
+        BLPOP operation with version-specific timeout handling.
+        
+        Args:
+            keys: List of keys to pop from
+            timeout: Maximum wait time in seconds
+            
+        Returns:
+            Tuple of (key, value) or None if timeout
         """
         if self._old_version:
             if timeout > 0 and timeout < 1:

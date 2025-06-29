@@ -11,16 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """ UT for air_topp_sampling kernel """
 
-import paddle
+import subprocess
 import unittest
+
 import numpy as np
+import paddle
+
 import fastdeploy.model_executor.ops.gpu
 
 
 class Test(unittest.TestCase):
+
     def setUp(self):
         """
         Initialize.
@@ -29,22 +32,32 @@ class Test(unittest.TestCase):
         np.random.seed(42)
         print(paddle.device.cuda.get_device_properties())
         print(paddle.__git_commit__)
+        nvcc_output = subprocess.check_output(["nvcc", "--version"],
+                                              universal_newlines=True)
+        output = nvcc_output.split()
+        release_idx = output.index("release") + 1
+        self.nvcc_cuda_version = float(output[release_idx].split(",")[0])
 
     def test_air_topp_sampling(self):
         """
         Check air_topp_sampling output with paddle.tensor.top_p_sampling.
         """
-        prop = paddle.device.cuda.get_device_properties()
-        cc = prop.major * 10 + prop.minor
-        if cc < 89:
-            self.skipTest("air_topp_sampling only support sm89+")
-        x = paddle.randn([1, 100])
+        if self.nvcc_cuda_version < 12.0:
+            self.skipTest("air_topp_sampling only support cu12+")
+        bsz = 8
+        vocab_size = 103424
+        x = paddle.randn([bsz, vocab_size])
         x = paddle.nn.functional.softmax(x)
         x = paddle.cast(x, "float32")
-        top_ps = paddle.to_tensor(np.random.uniform(0, 1, [1]).astype(np.float32))
-        out = fastdeploy.model_executor.ops.gpu.air_topp_sampling(
-            x.cuda(), top_ps.cuda(), None, None, seed=0, k=1, mode="truncated"
-        )
+        top_ps = paddle.to_tensor(
+            np.random.uniform(0, 1, [bsz]).astype(np.float32))
+        _, next_tokens = fastdeploy.model_executor.ops.gpu.air_topp_sampling(
+            x.cuda(), top_ps.cuda(), None, None, seed=0, k=1, mode="truncated")
+        print(next_tokens)
+        less_than_zero = next_tokens >= 0
+        greater_than_vocab_size = next_tokens <= vocab_size
+        accuracy = paddle.logical_and(less_than_zero, greater_than_vocab_size)
+        print(f'Accuracy of results: {accuracy}')
 
 
 if __name__ == "__main__":

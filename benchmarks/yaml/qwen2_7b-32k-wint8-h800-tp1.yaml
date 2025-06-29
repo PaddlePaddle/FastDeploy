@@ -1,0 +1,5 @@
+max_model_len: 32768
+max_num_seqs: 128
+kv_cache_ratio: 0.75
+tensor_parallel_size: 1
+quantization: wint8

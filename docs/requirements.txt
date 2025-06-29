@@ -1,0 +1,5 @@
+mkdocs
+mkdocs-get-deps
+mkdocs-material
+mkdocs-material-extensions
+mkdocs-multilang

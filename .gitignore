@@ -121,7 +121,7 @@ dmypy.json
 FETCH_HEAD
 
 #log
-log/
+log*/
 
 checkpoints/
 checkpoints_origin/
@@ -158,3 +158,7 @@ custom_ops/gpu_ops/fp8_deep_gemm/deep_gemm/include/cute
 
 # buff
 custom_ops/tmp*
+
+build
+
+.ccls-cache

@@ -43,7 +43,9 @@
 #include "cutlass/trace.h"
 
 #include "cutlass_extensions/gemm/kernel/gemm_moe_problem_visitor.h"
-#include "paddle/phi/kernels/fusion/cutlass/cutlass_extensions/tile_interleaved_layout.h"
+#include "cutlass_extensions/gemm/threadblock/wint2x_tile_dequanter.h"
+#include "cutlass_extensions/tile_interleaved_layout.h"
+
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace cutlass {
@@ -156,9 +158,6 @@ struct MoeFCGemm {
   using LayoutC = typename MapArguments::LayoutC;
   using ElementScale = ElementC;
 
-  static ComplexTransform const kTransformA = MapArguments::kTransformA;
-  static ComplexTransform const kTransformB = MapArguments::kTransformB;
-
   // Type definitions about the mainloop.
   using Operator = typename Mma::Operator;
   using OperatorClass = typename Mma::Operator::OperatorClass;
@@ -209,6 +208,13 @@ struct MoeFCGemm {
     int64_t gemm_n;
     int64_t gemm_k;
 
+    WintQuantMethod quant_method;
+
+    // Extra arguments for wint2.0
+    uint8_t* local_scale;
+    float* code_scale;
+    float* code_zp;
+
     // Only used by device-level operator
     GemmCoord* host_problem_sizes;
 
@@ -230,6 +236,10 @@ struct MoeFCGemm {
           total_rows(-1),
           gemm_n(0),
           gemm_k(0),
+          quant_method(WintQuantMethod::kNone),
+          local_scale(nullptr),
+          code_scale(nullptr),
+          code_zp(nullptr),
           host_problem_sizes(nullptr) {}
 
     /// Ctor
@@ -246,6 +256,10 @@ struct MoeFCGemm {
               int64_t total_rows,
               int64_t gemm_n,
               int64_t gemm_k,
+              WintQuantMethod quant_method,
+              const uint8_t* local_scale,
+              const float* code_scale,
+              const float* code_zp,
               GemmCoord* host_problem_sizes = nullptr)
         : problem_count(problem_count),
           threadblock_count(threadblock_count),
@@ -259,8 +273,12 @@ struct MoeFCGemm {
           total_rows(total_rows),
           gemm_n(gemm_n),
           gemm_k(gemm_k),
+          quant_method(quant_method),
+          local_scale(const_cast<uint8_t*>(local_scale)),
+          code_scale(const_cast<float*>(code_scale)),
+          code_zp(const_cast<float*>(code_zp)),
           host_problem_sizes(nullptr) {
-      if (platform::is_same<uint8_t, ElementB>::value ||
+      if (quant_method != WintQuantMethod::kNone || platform::is_same<uint8_t, ElementB>::value ||
           platform::is_same<uint4b_t, ElementB>::value) {
         assert(weight_scales);
       }
@@ -284,6 +302,8 @@ struct MoeFCGemm {
     ElementC* ptr_C;
     ElementC* ptr_D;
 
+    WintQuantMethod quant_method;
+
     //
     // Methods
     //
@@ -294,7 +314,8 @@ struct MoeFCGemm {
           ptr_B(nullptr),
           weight_scales(nullptr),
           ptr_C(nullptr),
-          ptr_D(nullptr) {}
+          ptr_D(nullptr),
+          quant_method(WintQuantMethod::kNone) {}
 
     CUTLASS_HOST_DEVICE
     Params(Arguments const& args,
@@ -313,7 +334,8 @@ struct MoeFCGemm {
           ptr_B(args.ptr_B),
           weight_scales(args.weight_scales),
           ptr_C(args.ptr_C),
-          ptr_D(args.ptr_D) {}
+          ptr_D(args.ptr_D),
+          quant_method(args.quant_method) {}
 
     CUTLASS_HOST_DEVICE
     void update(Arguments const& args,
@@ -334,6 +356,7 @@ struct MoeFCGemm {
       weight_scales = args.weight_scales;
       ptr_C = args.ptr_C;
       ptr_D = args.ptr_D;
+      quant_method = args.quant_method;
     }
   };
 
@@ -358,7 +381,7 @@ struct MoeFCGemm {
   }
 
   static Status can_implement(Arguments const& args) {
-    if (platform::is_same<uint8_t, ElementB>::value ||
+    if (args.quant_method != WintQuantMethod::kNone || platform::is_same<uint8_t, ElementB>::value ||
         platform::is_same<uint4b_t, ElementB>::value) {
       if (args.weight_scales == nullptr) {
         CUTLASS_TRACE_HOST(
@@ -394,6 +417,7 @@ struct MoeFCGemm {
 
   template <typename dummy>
   struct KernelRunner<true, dummy> {
+
     CUTLASS_DEVICE
     static void run_kernel(Params const& params,
                            SharedStorage& shared_storage) {  // NOLINT
@@ -401,12 +425,14 @@ struct MoeFCGemm {
       // These types shadow the type-level definitions and support the ability
       // to implement a 'transposed' GEMM that computes the transposed problems.
       //
+
       using ElementA = typename Mma::IteratorA::Element;
       using LayoutA = typename Mma::IteratorA::Layout;
       using ElementB = typename Mma::IteratorB::Element;
       using LayoutB = typename Mma::IteratorB::Layout;
       using ElementC = typename Epilogue::OutputTileIterator::Element;
       using LayoutC = typename Epilogue::OutputTileIterator::Layout;
+
       static constexpr int kInterleave =
           Mma::IteratorB::Shape::kRow / Mma::Shape::kK;
       static_assert(
@@ -435,6 +461,7 @@ struct MoeFCGemm {
 
         GemmCoord grid_shape = problem_visitor.grid_shape(problem_size);
 
+        // threadblock_offset of C
         cutlass::gemm::GemmCoord threadblock_offset(
             int(cta_idx / grid_shape.n()) * Mma::Shape::kM,  // NOLINT
             int(cta_idx % grid_shape.n()) * Mma::Shape::kN,  // NOLINT
@@ -450,6 +477,7 @@ struct MoeFCGemm {
           rows_to_jump = problem_idx * (params.problem_visitor.total_rows / params.problem_visitor.problem_count);
         }
 
+        // begin address offset for A for current tile
         ElementA* ptr_A =
             reinterpret_cast<ElementA*>(params.ptr_A) + rows_to_jump * gemm_k;
         typename LayoutA::LongIndex ldm_A = gemm_k;
@@ -463,14 +491,17 @@ struct MoeFCGemm {
                 : gemm_k * kInterleave;
 
         // Compute initial location in logical coordinates
+        // the begin threadblock_offset of A, which holds the same row id with C
         cutlass::MatrixCoord tb_offset_A{
             threadblock_offset.m(),
             0,
         };
 
+        // the begin threadblock_offset of B, which holds the same column id with C
         cutlass::MatrixCoord tb_offset_B{0,
                                          threadblock_offset.n() / kInterleave};
 
+        // the begin threadblock_offset of scale, which holds the same column id with C, but with no row id
         cutlass::MatrixCoord tb_offset_scale{0, threadblock_offset.n()};
 
         // Compute position within threadblock
@@ -602,6 +633,381 @@ struct MoeFCGemm {
     static constexpr bool compile_needed =
         platform::is_same<KernelArch, arch::Sm80>::value;
     KernelRunner<compile_needed>::run_kernel(params, shared_storage);
+#else
+    CUTLASS_NOT_IMPLEMENTED();
+#endif
+  }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
+template <typename Mma_,  ///! Threadblock-scoped matrix multiply-accumulate
+          typename Epilogue_,            ///! Epilogue
+          typename ThreadblockSwizzle_,  ///! Threadblock swizzling function
+          typename KernelArch,  ///! The Architecture this kernel is compiled
+                                /// for. Used since SIMT kernels lose top-level
+                                /// arch.
+          GroupScheduleMode GroupScheduleMode_  ///! Type of scheduling to //
+                                                /// NOLINT perform
+          >
+struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, KernelArch, GroupScheduleMode_> {
+ public:
+  using Base = MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, KernelArch, GroupScheduleMode_>;
+  using Mma = Mma_;
+  using Epilogue = Epilogue_;
+  using EpilogueOutputOp = typename Epilogue::OutputOp;
+  using ThreadblockSwizzle = ThreadblockSwizzle_;
+  static GroupScheduleMode const kGroupScheduleMode = GroupScheduleMode_;
+  static bool const kTransposed = false;
+
+  // Optional transpose
+  using MapArguments = typename Base::MapArguments;
+
+  // Public-facing type definitions related to operand element type, layout, and
+  // complex conjugate operation. Must interact with the 'kTransposed' notion.
+  static_assert(!kTransposed, "Transpose problem not supported");
+
+  using ElementA = typename MapArguments::ElementA;
+  using LayoutA = typename MapArguments::LayoutA;
+  using ElementB = typename MapArguments::ElementB;
+  using LayoutB = typename MapArguments::LayoutB;
+  using ElementC = typename Epilogue::OutputTileIterator::Element;
+  using LayoutC = typename MapArguments::LayoutC;
+  using ElementScale = ElementC;
+
+  // Type definitions about the mainloop.
+  using Operator = typename Mma::Operator;
+  using OperatorClass = typename Mma::Operator::OperatorClass;
+  using ThreadblockShape = typename Mma::Shape;
+  using WarpShape = typename Mma::Operator::Shape;
+  using InstructionShape = typename Mma::Policy::Operator::InstructionShape;
+  using ArchTag = typename Mma::ArchTag;
+
+  static int const kStages = Mma::kStages;
+  static int const kAlignmentA = MapArguments::kAlignmentA;
+  static int const kAlignmentB = MapArguments::kAlignmentB;
+  static int const kAlignmentC =
+      Epilogue::OutputTileIterator::kElementsPerAccess;
+
+  /// Warp count (concept: GemmShape)
+  using WarpCount = typename Mma::WarpCount;
+  static int const kThreadCount = 32 * WarpCount::kCount;
+
+  using ProblemVisitor = typename Base::ProblemVisitor;
+  using Arguments = typename Base::Arguments;
+
+  //
+  // Structure for precomputing values in host memory and passing to kernels
+  //
+
+  /// Parameters structure
+  struct Params : Base::Params {
+    // Extra arguments for wint2.0
+    uint8_t* local_scale;
+    float* code_scale;
+    float* code_zp;
+
+    //
+    // Methods
+    //
+
+    CUTLASS_HOST_DEVICE
+    Params() : Base::Params(), local_scale(nullptr), code_scale(nullptr), code_zp(nullptr) {}
+
+    CUTLASS_HOST_DEVICE
+    Params(Arguments const& args,
+           void* workspace = nullptr,
+           int tile_count = 0)  // NOLINT
+        : Base::Params(args, workspace, tile_count),
+          local_scale(args.local_scale),
+          code_scale(args.code_scale),
+          code_zp(args.code_zp) {}
+
+    CUTLASS_HOST_DEVICE
+    void update(Arguments const& args,
+                void* workspace = nullptr,
+                int tile_count = 0) {
+      Base::update(args, workspace, tile_count);
+
+      local_scale = args.local_scale;
+      code_scale = args.code_scale;
+      code_zp = args.code_zp;
+    }
+  };
+
+  /// Shared memory storage structure
+  using SharedStorage = typename Base::SharedStorage;
+
+ public:
+
+  //
+  // Methods
+  //
+
+  CUTLASS_DEVICE
+  Wint2xMoeFCGemm() {}
+
+  static Status can_implement(Arguments const& args) {
+    if (args.quant_method != WintQuantMethod::kWeightOnlyInt2) {
+      CUTLASS_TRACE_HOST(
+          "Wint2xMoeFCGemm::can_implement() - only support weight_only_int2!");
+      return Status::kInvalid;
+    } else if (args.weight_scales == nullptr || args.local_scale == nullptr) {
+      CUTLASS_TRACE_HOST(
+          "Wint2xMoeFCGemm::can_implement() - weight_scales and local_scale is expected to be not nullptr!");
+      return Status::kInvalid;
+    }
+    return Status::kSuccess;
+  }
+
+  // The dummy template parameter is not used and exists so that we can compile
+  // this code using a standard earlier than C++17. Prior to C++17, fully
+  // specialized templates HAD to exists in a namespace
+  template <WintQuantMethod QuantMethod, bool B, typename dummy = void>
+  struct KernelRunner {
+    CUTLASS_DEVICE
+    static void run_kernel(Params const& params,
+                           SharedStorage& shared_storage) {  // NOLINT
+      CUTLASS_NOT_IMPLEMENTED();
+    }
+  };
+
+  template <WintQuantMethod QuantMethod, typename dummy>
+  struct KernelRunner<QuantMethod, true, dummy> {
+    using WeightQuantTraits = WintQuantTraits<ElementA, QuantMethod>;
+    using QuantArguments = typename WeightQuantTraits::Arguments;
+
+    CUTLASS_DEVICE
+    static QuantArguments get_quant_args(Params const& params, int32_t problem_idx, const int64_t gemm_k, const int64_t gemm_n) {
+      QuantArguments quant_args;
+      if constexpr (QuantMethod == WintQuantMethod::kWeightOnlyInt2) {
+        quant_args.local_scale_ptr = params.local_scale + problem_idx * gemm_k * gemm_n / 128;
+        quant_args.code_scale_ptr = params.code_scale + problem_idx * gemm_n;
+        quant_args.code_zp_ptr = params.code_zp + problem_idx * gemm_n;
+      }
+      return quant_args;
+    }
+
+    CUTLASS_DEVICE
+    static void run_kernel(Params const& params,
+                           SharedStorage& shared_storage) {  // NOLINT
+      //
+      // These types shadow the type-level definitions and support the ability
+      // to implement a 'transposed' GEMM that computes the transposed problems.
+      //
+
+      using ElementA = typename Mma::IteratorA::Element;
+      using LayoutA = typename Mma::IteratorA::Layout;
+      using ElementB = typename Mma::IteratorB::Element;
+      using LayoutB = typename Mma::IteratorB::Layout;
+      using ElementC = typename Epilogue::OutputTileIterator::Element;
+      using LayoutC = typename Epilogue::OutputTileIterator::Layout;
+      using QuantElementB = typename WeightQuantTraits::WeightType;
+      using MmaElementB = typename WeightQuantTraits::MmaWeightType;
+
+      static constexpr int kInterleave =
+          Mma::IteratorB::Shape::kRow / Mma::Shape::kK;
+      static_assert(
+          platform::is_same<LayoutB, layout::RowMajor>::value &&
+                  kInterleave == 1 ||
+              platform::is_same<LayoutB, layout::ColumnMajor>::value &&
+                  kInterleave >= 1,
+          "B must be row major/col major OR col major interleaved.");
+
+      // LayoutB should be RowMajor
+      using TileDequanterB = cutlass::gemm::threadblock::TileDequanter<ElementA, ElementScale, ThreadblockShape::kK, ThreadblockShape::kN, kStages, kThreadCount, QuantMethod>;
+
+      //
+      // Problem visitor.
+      //
+      ProblemVisitor problem_visitor(
+          params.problem_visitor, shared_storage.problem_visitor, blockIdx.x);
+
+      const int64_t gemm_k = params.problem_visitor.gemm_k;
+      const int64_t gemm_n = params.problem_visitor.gemm_n;
+      // wint2.5 and wint2.0 is quantized and packed along k dimension with group_size 64.
+      const int64_t quant_gemm_k = WintQuantTraits<ElementA, QuantMethod>::CaclPackedDim(gemm_k);
+      int64_t bytes_per_expert_matrix = (quant_gemm_k * gemm_n / 8) * cutlass::sizeof_bits<QuantElementB>::value;
+
+      // Outer 'persistent' loop to iterate over tiles
+      while (problem_visitor.next_tile()) {
+        GemmCoord problem_size = problem_visitor.problem_size();
+        int32_t problem_idx = problem_visitor.problem_index();
+        int32_t cta_idx = int32_t(problem_visitor.threadblock_idx());
+
+        GemmCoord grid_shape = problem_visitor.grid_shape(problem_size);
+
+        // threadblock_offset of C
+        cutlass::gemm::GemmCoord threadblock_offset(
+            int(cta_idx / grid_shape.n()) * Mma::Shape::kM,  // NOLINT
+            int(cta_idx % grid_shape.n()) * Mma::Shape::kN,  // NOLINT
+            0);
+
+        // begin address offset for weight_scale.
+        ElementScale* weight_scale_ptr =
+            params.weight_scales ? params.weight_scales + problem_idx * problem_size.n() : nullptr;
+        // the begin threadblock_offset of scale, which holds the same column id with C, but with no row id
+        cutlass::MatrixCoord tb_offset_scale{0, threadblock_offset.n()};
+
+        // Load element pointers. Exchange pointers and strides if working on
+        // the transpose
+        int64_t rows_to_jump = 0;
+
+        if (params.problem_visitor.total_rows < 0) {
+          rows_to_jump = problem_idx == 0 ? 0 : params.problem_visitor.last_row_for_problem[problem_idx - 1];
+        } else {
+          rows_to_jump = problem_idx * (params.problem_visitor.total_rows / params.problem_visitor.problem_count);
+        }
+
+        // begin address offset for A for current tile
+        ElementA* ptr_A =
+            reinterpret_cast<ElementA*>(params.ptr_A) + rows_to_jump * gemm_k;
+        typename LayoutA::LongIndex ldm_A = gemm_k;
+
+        // Compute initial location in logical coordinates
+        // the begin threadblock_offset of A, which holds the same row id with C
+        cutlass::MatrixCoord tb_offset_A{
+            threadblock_offset.m(),
+            0,
+        };
+
+        // begin address offset for B for current problem_idx, totally num_experts problems
+        char* byte_ptr_B = ((char*)params.ptr_B) +                 // NOLINT
+                           problem_idx * bytes_per_expert_matrix;  // NOLINT
+
+        typename LayoutB::LongIndex ldm_B =
+            platform::is_same<layout::RowMajor, LayoutB>::value
+                ? gemm_n
+                : gemm_k * kInterleave;
+        typename LayoutB::LongIndex ldm_B_shared = TileDequanterB::kColumns;
+
+        // the begin threadblock_offset of B, which holds the same column id with C
+        cutlass::MatrixCoord tb_offset_B{0,
+                                         threadblock_offset.n() / kInterleave};
+
+        cutlass::MatrixCoord extent_B{problem_size.k() * kInterleave, problem_size.n() / kInterleave};
+        cutlass::MatrixCoord extent_B_shared{TileDequanterB::kRows, TileDequanterB::kColumns};
+
+        MmaElementB* smem_unzip_B_ptr = nullptr;
+        if constexpr (QuantMethod == WintQuantMethod::kWeightOnlyInt2) {
+          smem_unzip_B_ptr = shared_storage.main_loop.operand_unzip_B_ptr();
+        }
+        QuantArguments quant_args = get_quant_args(params, problem_idx, gemm_k, gemm_n);
+        TileDequanterB tile_dequanter_B(smem_unzip_B_ptr,
+                                        byte_ptr_B,
+                                        ldm_B,
+                                        extent_B,
+                                        tb_offset_B,
+                                        weight_scale_ptr,
+                                        tb_offset_scale,
+                                        quant_args);
+        MmaElementB* ptr_B = tile_dequanter_B.GetOutPtr();
+
+        // Compute position within threadblock
+        int thread_idx = threadIdx.x;
+
+        // Construct iterators to A and B operands
+        typename Mma::IteratorA iterator_A(LayoutA(ldm_A),
+                                           ptr_A,
+                                           {problem_size.m(), problem_size.k()},
+                                           thread_idx,
+                                           tb_offset_A);
+
+        typename Mma::IteratorB iterator_B(
+            LayoutB(TileDequanterB::kUseSharedMemory ? ldm_B_shared : ldm_B),
+            ptr_B,
+            TileDequanterB::kUseSharedMemory ? extent_B_shared : extent_B,
+            thread_idx,
+            TileDequanterB::kUseSharedMemory ? cutlass::make_Coord(0, 0) : tb_offset_B);
+
+        typename Mma::FragmentC accumulators;
+
+        accumulators.clear();
+
+        // Broadcast the warp_id computed by lane 0 to ensure dependent code
+        // is compiled as warp-uniform.
+        int warp_idx = __shfl_sync(0xffffffff, threadIdx.x / 32, 0);
+
+        int lane_idx = threadIdx.x % 32;
+
+        //
+        // Matrix multiply phase
+        //
+
+        // Construct thread-scoped matrix multiply
+        Mma mma(shared_storage.main_loop, thread_idx, warp_idx, lane_idx);
+
+        // Compute threadblock-scoped matrix multiply-add
+        int gemm_k_iterations =
+            (problem_size.k() + Mma::Shape::kK - 1) / Mma::Shape::kK;
+
+        // Wait for all threads to finish their epilogue phases from the
+        // previous tile.
+        __syncthreads();
+
+        // Compute threadblock-scoped matrix multiply-add
+        mma(gemm_k_iterations,
+            accumulators,
+            iterator_A,
+            iterator_B,
+            tile_dequanter_B,
+            accumulators);
+
+        //
+        // Epilogue
+        //
+
+        EpilogueOutputOp output_op(params.output_op);
+
+        ElementC* ptr_C =
+            params.ptr_C ? reinterpret_cast<ElementC*>(params.ptr_C) + problem_idx * gemm_n : nullptr;
+        ElementC* ptr_D =
+            reinterpret_cast<ElementC*>(params.ptr_D) + rows_to_jump * gemm_n;
+
+        LayoutC layout_C(0);
+        LayoutC layout_D(gemm_n);
+
+        typename Epilogue::OutputTileIterator::Params params_C(layout_C);
+        typename Epilogue::OutputTileIterator::Params params_D(layout_D);
+
+        // Tile iterator loading from source tensor.
+        typename Epilogue::OutputTileIterator iterator_C(
+            params_C,
+            ptr_C,
+            problem_size.mn(),
+            thread_idx,
+            threadblock_offset.mn());
+
+        // Tile iterator writing to destination tensor.
+        typename Epilogue::OutputTileIterator iterator_D(
+            params_D,
+            ptr_D,
+            problem_size.mn(),
+            thread_idx,
+            threadblock_offset.mn());
+
+        Epilogue epilogue(
+            shared_storage.epilogue, thread_idx, warp_idx, lane_idx);
+
+        // Execute the epilogue operator to update the destination tensor.
+        epilogue(output_op, iterator_D, accumulators, iterator_C);
+
+        // Next tile
+        problem_visitor.advance(gridDim.x);
+      }
+    }
+  };
+
+  /*
+    To improve compilation speed, we do not compile the device operator if the
+    CUDA_ARCH does not correspond to the ArchTag of the cutlass kernel operator.
+  */
+  /// Executes one GEMM
+  CUTLASS_DEVICE
+  void operator()(Params const& params,
+                  SharedStorage& shared_storage) {  // NOLINT
+#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800) && (__CUDA_ARCH__ < 910)
+    KernelRunner<WintQuantMethod::kWeightOnlyInt2, true>::run_kernel(params, shared_storage);
 #else
     CUTLASS_NOT_IMPLEMENTED();
 #endif

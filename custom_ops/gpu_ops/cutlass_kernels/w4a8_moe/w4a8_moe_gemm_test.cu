@@ -13,58 +13,60 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 // #include "paddle/phi/core/enforce.h"
-#include <chrono>
-#include <iomanip>
-#include <random>
-#include <sstream>
-#include <string>
 #include "ctime"
 #include "iostream"
 #include "stdint.h"
 #include "stdlib.h"
-#include "weight_process_utils.h"
-#include <fstream>
-#include <sstream>
-#include <cuda_fp16.h>
-#include <cuda_bf16.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/file.h>
 #include "w4a4_gemm_configs.h"
 #include "w4a8_moe_gemm_kernel.h"
+#include "weight_process_utils.h"
+#include <chrono>
+#include <cuda_bf16.h>
+#include <cuda_fp16.h>
+#include <fcntl.h>
+#include <fstream>
+#include <iomanip>
+#include <random>
+#include <sstream>
+#include <string>
+#include <sys/file.h>
+#include <unistd.h>
 // #include "paddle/phi/common/data_type.h"
 #include "cutlass/numeric_types.h"
 #include "cutlass/trace.h"
 #define USE_NVTX
 
 #ifdef USE_NVTX
+#if (__CUDACC_VER_MAJOR__ * 10000 + __CUDACC_VER_MINOR__ * 100 >= 120900)
+#include "nvtx3/nvToolsExt.h"
+#else
 #include "nvToolsExt.h"
-// DECLARE_string(cutlass_w4a8_best_config);
+#endif
 
-const uint32_t colors[] = { 0xff00ff00, 0xff0000ff, 0xffffff00, 0xffff00ff, 0xff00ffff, 0xffff0000, 0xffffffff };
-const int num_colors = sizeof(colors)/sizeof(uint32_t);
-
+const uint32_t colors[] = {0xff00ff00, 0xff0000ff, 0xffffff00, 0xffff00ff,
+                           0xff00ffff, 0xffff0000, 0xffffffff};
+const int num_colors = sizeof(colors) / sizeof(uint32_t);
 
 using CutlassTileConfig = CutlassTileConfig;
 using SplitKStyle = SplitKStyle;
 using CutlassGemmConfig = CutlassGemmConfig;
 
-
-#define PUSH_RANGE(name,cid) { \
-    int color_id = cid; \
-    color_id = color_id%num_colors;\
-    nvtxEventAttributes_t eventAttrib = {0}; \
-    eventAttrib.version = NVTX_VERSION; \
-    eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE; \
-    eventAttrib.colorType = NVTX_COLOR_ARGB; \
-    eventAttrib.color = colors[color_id]; \
-    eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII; \
-    eventAttrib.message.ascii = name; \
-    nvtxRangePushEx(&eventAttrib); \
-}
+#define PUSH_RANGE(name, cid)                                                  \
+  {                                                                            \
+    int color_id = cid;                                                        \
+    color_id = color_id % num_colors;                                          \
+    nvtxEventAttributes_t eventAttrib = {0};                                   \
+    eventAttrib.version = NVTX_VERSION;                                        \
+    eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;                          \
+    eventAttrib.colorType = NVTX_COLOR_ARGB;                                   \
+    eventAttrib.color = colors[color_id];                                      \
+    eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII;                         \
+    eventAttrib.message.ascii = name;                                          \
+    nvtxRangePushEx(&eventAttrib);                                             \
+  }
 #define POP_RANGE nvtxRangePop();
 #else
-#define PUSH_RANGE(name,cid)
+#define PUSH_RANGE(name, cid)
 #define POP_RANGE
 #endif
 
@@ -77,9 +79,7 @@ using CutlassGemmConfig = CutlassGemmConfig;
 // }
 
 template <typename T>
-static void PrintMatrix(const T* mat_d,
-                        int num,
-                        std::string name,
+static void PrintMatrix(const T *mat_d, int num, std::string name,
                         int numOfCols) {
   std::vector<T> tmp(num);
   cudaMemcpy(tmp.data(), mat_d, sizeof(T) * num, cudaMemcpyDeviceToHost);
@@ -102,19 +102,19 @@ static void PrintMatrix(const T* mat_d,
   outfile.close();
 }
 
-uint as_uint(const float x) { return *(uint*)&x; }
+uint as_uint(const float x) { return *(uint *)&x; }
 uint16_t ConvertFloat2Half(const float x) {
-  const uint b = as_uint(x) + 0x00001000;  // round-to-nearest-even: add last
-                                           // bit after truncated mantissa
-  const uint e = (b & 0x7F800000) >> 23;   // exponent
-  const uint m = b & 0x007FFFFF;  // mantissa; in line below: 0x007FF000 =
-                                  // 0x00800000-0x00001000 = decimal indicator
-                                  // flag - initial rounding
+  const uint b = as_uint(x) + 0x00001000; // round-to-nearest-even: add last
+                                          // bit after truncated mantissa
+  const uint e = (b & 0x7F800000) >> 23;  // exponent
+  const uint m = b & 0x007FFFFF; // mantissa; in line below: 0x007FF000 =
+                                 // 0x00800000-0x00001000 = decimal indicator
+                                 // flag - initial rounding
   return (b & 0x80000000) >> 16 |
          (e > 112) * ((((e - 112) << 10) & 0x7C00) | m >> 13) |
          ((e < 113) & (e > 101)) *
              ((((0x007FF000 + m) >> (125 - e)) + 1) >> 1) |
-         (e > 143) * 0x7FFF;  // sign : normalized : denormalized : saturate
+         (e > 143) * 0x7FFF; // sign : normalized : denormalized : saturate
 }
 
 inline float fp32_from_bits(uint32_t w) {
@@ -274,9 +274,7 @@ float CPUHalfConvert2Float(const uint16_t h) {
   return fp32_from_bits(result);
 }
 
-static void PrintHalfMatrix(const int16_t* mat_d,
-                            int num,
-                            std::string name,
+static void PrintHalfMatrix(const int16_t *mat_d, int num, std::string name,
                             int numOfCols) {
   std::vector<int16_t> tmp(num);
   cudaMemcpy(tmp.data(), mat_d, sizeof(int16_t) * num, cudaMemcpyDeviceToHost);
@@ -298,9 +296,7 @@ static void PrintHalfMatrix(const int16_t* mat_d,
 }
 
 template <typename T>
-static void PrintMatrixCPU(const T* mat,
-                           int num,
-                           std::string name,
+static void PrintMatrixCPU(const T *mat, int num, std::string name,
                            int numOfCols) {
   std::ofstream outfile;
   outfile.open(name + ".txt", std::ios::out);
@@ -319,17 +315,15 @@ static void PrintMatrixCPU(const T* mat,
   outfile.close();
 }
 
-static void PrintMatrixCPU_int4(const int8_t * mat,
-                                int num,
-                           std::string name,
-                           int numOfCols){
+static void PrintMatrixCPU_int4(const int8_t *mat, int num, std::string name,
+                                int numOfCols) {
   std::ofstream outfile;
   outfile.open(name + ".txt", std::ios::out);
   std::stringstream ss;
   for (int i = 0; i < num / 2; ++i) {
     int32_t output_value = mat[i] & 0x0F;
     ss << static_cast<int>(output_value) << " ";
-    output_value = (mat[i]>>4) & 0x0F;
+    output_value = (mat[i] >> 4) & 0x0F;
     ss << static_cast<int>(output_value) << " ";
     if ((i * 2) % numOfCols == numOfCols - 2) {
       ss << std::endl;
@@ -337,12 +331,9 @@ static void PrintMatrixCPU_int4(const int8_t * mat,
   }
   outfile << ss.str();
   outfile.close();
-
 }
 template <typename T>
-static void PrintHalfMatrixCPU(const T* mat,
-                               int num,
-                               std::string name,
+static void PrintHalfMatrixCPU(const T *mat, int num, std::string name,
                                int numOfCols) {
   std::ofstream outfile;
   outfile.open(name + ".txt", std::ios::out);
@@ -358,8 +349,8 @@ static void PrintHalfMatrixCPU(const T* mat,
 }
 
 template <typename T, typename outputT>
-void naive_matmul(
-    const T* a, const T* b, outputT* c, size_t m, size_t n, size_t k) {
+void naive_matmul(const T *a, const T *b, outputT *c, size_t m, size_t n,
+                  size_t k) {
   for (int ik = 0; ik < k; ik++) {
     for (int im = 0; im < m; im++) {
       for (int in = 0; in < n; in++) {
@@ -370,39 +361,37 @@ void naive_matmul(
 }
 
 template <typename T, typename outputT, typename ScaleType = uint16_t>
-void naive_matmul_fused_dequantize_nf4(const T* a,
-                                   const T* b,
-                                   const ScaleType* col_scale,
-                                   const ScaleType* row_scale,
-                                   const int32_t* nf4_look_up_table,
-                                   outputT* c,
-                                   size_t num_experts,
-                                   int64_t* total_rows_before_experts,
-                                   size_t total_rows,
-                                   size_t n,
-                                   size_t k) {
-    // PrintMatrixCPU<T>(
-    //     a, total_rows * k, "naive_matmul_a", k);
-    // PrintMatrixCPU<T>(
-    //     b, num_experts*k*n, "naive_matmul_b", n);
-    // PrintMatrixCPU<outputT>(
-    //     c, total_rows * n, "naive_matmul_c", n);
-    // PrintMatrixCPU<ScaleType>(
-    //     row_scale, total_rows, "naive_matmul_row_scale", 1);
+void naive_matmul_fused_dequantize_nf4(const T *a, const T *b,
+                                       const ScaleType *col_scale,
+                                       const ScaleType *row_scale,
+                                       const int32_t *nf4_look_up_table,
+                                       outputT *c, size_t num_experts,
+                                       int64_t *total_rows_before_experts,
+                                       size_t total_rows, size_t n, size_t k) {
+  // PrintMatrixCPU<T>(
+  //     a, total_rows * k, "naive_matmul_a", k);
+  // PrintMatrixCPU<T>(
+  //     b, num_experts*k*n, "naive_matmul_b", n);
+  // PrintMatrixCPU<outputT>(
+  //     c, total_rows * n, "naive_matmul_c", n);
+  // PrintMatrixCPU<ScaleType>(
+  //     row_scale, total_rows, "naive_matmul_row_scale", 1);
 
-    // PrintMatrixCPU<ScaleType>(
-    //     col_scale, num_experts * n, "naive_matmul_col_scale", n);
+  // PrintMatrixCPU<ScaleType>(
+  //     col_scale, num_experts * n, "naive_matmul_col_scale", n);
 
-    // PrintMatrixCPU<int32_t>(
-    //     nf4_look_up_table, 16, "naive_matmul_nf4_lut", 1);
-    // std::cout<<"####nf4_look_up_table"<<std::endl;
-    // for(int i=0;i<16;++i){
-    //   std::cout<<nf4_look_up_table[i]<<" ";
-    // }
-    // std::cout<<std::endl;
-  // static constexpr uint32_t loop_up_table[15]{0x03020100,0x07060504,0x0B0A0908,0x0F0E0D0C};
-  // static constexpr uint32_t loop_up_table[16]{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
-  // const int8_t* loop_up_table_int8 = reinterpret_cast<const int8_t*>(&loop_up_table);
+  // PrintMatrixCPU<int32_t>(
+  //     nf4_look_up_table, 16, "naive_matmul_nf4_lut", 1);
+  // std::cout<<"####nf4_look_up_table"<<std::endl;
+  // for(int i=0;i<16;++i){
+  //   std::cout<<nf4_look_up_table[i]<<" ";
+  // }
+  // std::cout<<std::endl;
+  // static constexpr uint32_t
+  // loop_up_table[15]{0x03020100,0x07060504,0x0B0A0908,0x0F0E0D0C}; static
+  // constexpr uint32_t
+  // loop_up_table[16]{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}; const int8_t*
+  // loop_up_table_int8 = reinterpret_cast<const int8_t*>(&loop_up_table);
   for (int ie = 0; ie < num_experts; ie++) {
     int im_start, im_end;
     if (ie == 0) {
@@ -422,9 +411,10 @@ void naive_matmul_fused_dequantize_nf4(const T* a,
           // std::cout<<static_cast<int32_t>(a_val)<<", ";
           // std::cout<<static_cast<int32_t>(b[ie * n * k + ik * n + in])<<", ";
           // std::cout<<static_cast<int32_t>(b_val)<<", ";
-          // std::cout<<static_cast<int32_t>(nf4_look_up_table[b_val])<<", " << std::endl;
-          // std::cout<<nf4_look_up_table[1]<<", ";
-          int32_t b_val_int32 = nf4_look_up_table ? nf4_look_up_table[b_val] : static_cast<int32_t>(b_val);
+          // std::cout<<static_cast<int32_t>(nf4_look_up_table[b_val])<<", " <<
+          // std::endl; std::cout<<nf4_look_up_table[1]<<", ";
+          int32_t b_val_int32 = nf4_look_up_table ? nf4_look_up_table[b_val]
+                                                  : static_cast<int32_t>(b_val);
           int32_t matmul_res = static_cast<int32_t>(a_val) * b_val_int32;
           // std::cout<<matmul_res<<", ";
           accum_val += matmul_res;
@@ -433,30 +423,29 @@ void naive_matmul_fused_dequantize_nf4(const T* a,
         }
         // std::cout<<"\n";
         uint16_t r_val = ConvertFloat2Half(row_scale ? row_scale[im] : 1.0);
-        float row_scale_val = static_cast<float>(*reinterpret_cast<half*>(&r_val));
+        float row_scale_val =
+            static_cast<float>(*reinterpret_cast<half *>(&r_val));
         // float row_scale_val = 1.0;
-        uint16_t c_val = ConvertFloat2Half(col_scale ? col_scale[ie * n + in] * 112 : 1.0);
-        float col_scale_val = static_cast<float>(*reinterpret_cast<half*>(&c_val));
+        uint16_t c_val =
+            ConvertFloat2Half(col_scale ? col_scale[ie * n + in] * 112 : 1.0);
+        float col_scale_val =
+            static_cast<float>(*reinterpret_cast<half *>(&c_val));
         // printf("##### (%d,%d) accu_val = %d\n",im,in, accum_val);
-        uint16_t res = ConvertFloat2Half(static_cast<float>(accum_val) * col_scale_val * row_scale_val);
-        c[im * n + in] = static_cast<outputT>(*reinterpret_cast<half*>(&res));
+        uint16_t res = ConvertFloat2Half(static_cast<float>(accum_val) *
+                                         col_scale_val * row_scale_val);
+        c[im * n + in] = static_cast<outputT>(*reinterpret_cast<half *>(&res));
       }
     }
   }
-      // PrintMatrixCPU<outputT>(
-      //   c, total_rows * n, "naive_matmul_c_computed", n);
+  // PrintMatrixCPU<outputT>(
+  //   c, total_rows * n, "naive_matmul_c_computed", n);
 }
 
 // Author (zhengzekang): we use float to monitor half matmul in CPU.
-void CheckHalfDiff(int16_t* device_res,
-                   float* host_result,
-                   size_t elem_cnt,
-                   float atol,
-                   float rtol) {
+void CheckHalfDiff(int16_t *device_res, float *host_result, size_t elem_cnt,
+                   float atol, float rtol) {
   std::vector<int16_t> device_data(elem_cnt);
-  cudaMemcpy(device_data.data(),
-             device_res,
-             sizeof(int16_t) * elem_cnt,
+  cudaMemcpy(device_data.data(), device_res, sizeof(int16_t) * elem_cnt,
              cudaMemcpyDeviceToHost);
 
   for (size_t i = 0; i < elem_cnt; i++) {
@@ -470,16 +459,12 @@ void CheckHalfDiff(int16_t* device_res,
       printf(
           "Here in Idx: %d, CUDA result is: %f, Host result is: %f, absolute "
           "diff val is: %f \n",
-          i,
-          device_res_val,
-          host_res_val,
-          absolute_diff);
+          i, device_res_val, host_res_val, absolute_diff);
       return;
     }
   }
   printf("======= Check Success! =======\n");
 }
-
 
 // uint16_t float_to_half(const float x) { // IEEE-754 16-bit floating-point
 // format (without infinity): 1-5-10, exp-15, +-131008.0, +-6.1035156E-5,
@@ -495,7 +480,7 @@ void CheckHalfDiff(int16_t* device_res,
 // }
 
 template <typename T>
-__global__ void CUDAPrintHalfMatrix(T* output, int m, int n) {
+__global__ void CUDAPrintHalfMatrix(T *output, int m, int n) {
   for (int row_idx = 0; row_idx < m; row_idx++) {
     for (int col_idx = 0; col_idx < n; col_idx++) {
       // printf("%d ", static_cast<int32_t>(static_cast<float>(output[row_idx *
@@ -506,62 +491,64 @@ __global__ void CUDAPrintHalfMatrix(T* output, int m, int n) {
   }
 }
 
-
-CutlassGemmConfig GetGemmConfig(int token_nums, std::vector<int> & gemm_config_tuple){
+CutlassGemmConfig GetGemmConfig(int token_nums,
+                                std::vector<int> &gemm_config_tuple) {
   int len_of_gemm_config_tuple = gemm_config_tuple.size();
-  if(len_of_gemm_config_tuple == 0){
-    CutlassGemmConfig gemm_config = CutlassGemmConfig{CutlassTileConfig::Undefined,SplitKStyle::NO_SPLIT_K,-1,-1};
+  if (len_of_gemm_config_tuple == 0) {
+    CutlassGemmConfig gemm_config = CutlassGemmConfig{
+        CutlassTileConfig::Undefined, SplitKStyle::NO_SPLIT_K, -1, -1};
     return gemm_config;
   }
   CutlassGemmConfig gemm_config = CutlassGemmConfig{
-    CutlassTileConfig(gemm_config_tuple[len_of_gemm_config_tuple - 4]),
-    SplitKStyle(gemm_config_tuple[len_of_gemm_config_tuple - 3]),
-    gemm_config_tuple[len_of_gemm_config_tuple - 2],
-    gemm_config_tuple[len_of_gemm_config_tuple-1]
-  };
+      CutlassTileConfig(gemm_config_tuple[len_of_gemm_config_tuple - 4]),
+      SplitKStyle(gemm_config_tuple[len_of_gemm_config_tuple - 3]),
+      gemm_config_tuple[len_of_gemm_config_tuple - 2],
+      gemm_config_tuple[len_of_gemm_config_tuple - 1]};
   //                    0,1,2,3          ,4            ,5             ,6
   // gemm_config_tuple:[m,n,k,tile_config,split_k_style,split_k_factor,stages]
-  for(int i=0; i<len_of_gemm_config_tuple; i+=7){
-    gemm_config.tile_config = CutlassTileConfig(gemm_config_tuple[i+3]); // tile_config
-    gemm_config.split_k_style = SplitKStyle(gemm_config_tuple[i+4]);       // split_k_style
-    gemm_config.split_k_factor = gemm_config_tuple[i+5];                    // split_k_factor
-    gemm_config.stages = gemm_config_tuple[i+6];                        // stages
+  for (int i = 0; i < len_of_gemm_config_tuple; i += 7) {
+    gemm_config.tile_config =
+        CutlassTileConfig(gemm_config_tuple[i + 3]); // tile_config
+    gemm_config.split_k_style =
+        SplitKStyle(gemm_config_tuple[i + 4]);             // split_k_style
+    gemm_config.split_k_factor = gemm_config_tuple[i + 5]; // split_k_factor
+    gemm_config.stages = gemm_config_tuple[i + 6];         // stages
     // make sure we have at least one tuned config
-    if(token_nums <= gemm_config_tuple[i+0]){
-        break;
+    if (token_nums <= gemm_config_tuple[i + 0]) {
+      break;
     }
   }
   return gemm_config;
 }
 
-
-template<typename T, typename U=T>
-void get_tensor_from_file(const std::string file_path, int64_t numel, T* tensor_ptr){
+template <typename T, typename U = T>
+void get_tensor_from_file(const std::string file_path, int64_t numel,
+                          T *tensor_ptr) {
   std::fstream datafile;
   datafile.open(file_path, std::ios_base::in | std::ios_base::out);
 
   int index = 0;
   std::string line;
   while (std::getline(datafile, line)) {
-      std::istringstream iss(line);
-      if(index == 0){
-        std::cout<<file_path<<" line zero:"<<line<<std::endl;
+    std::istringstream iss(line);
+    if (index == 0) {
+      std::cout << file_path << " line zero:" << line << std::endl;
+    }
+    U number;
+    while (iss >> number) {
+      tensor_ptr[index] = static_cast<T>(number);
+      if (index == 0) {
+        std::cout << file_path << ": " << number << "-"
+                  << static_cast<U>(tensor_ptr[0]) << std::endl;
       }
-      U number;
-      while (iss >> number) {
-          tensor_ptr[index] = static_cast<T>(number);
-          if(index==0){
-              std::cout<<file_path<<": " << number<<"-"<<static_cast<U>(tensor_ptr[0])<<std::endl;
-
-          }
-          index++;
-      }
+      index++;
+    }
   }
-  std::cout<<file_path<<": "<<tensor_ptr[0]<<std::endl;
+  std::cout << file_path << ": " << tensor_ptr[0] << std::endl;
   datafile.close();
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
   std::uniform_real_distribution<float> uniform(-0.02, 0.02);
   std::default_random_engine random_engine(0);
 
@@ -573,28 +560,29 @@ int main(int argc, char* argv[]) {
   size_t tokens_per_expert = strtol(argv[4], nullptr, 0);
   size_t total_rows = num_experts * tokens_per_expert;
   std::vector<int64_t> total_rows_before_experts;
-  std::cout<<"total_rows_before_experts:  ";
-  for(int i = 0; i < num_experts; ++i){
-    total_rows_before_experts.push_back(tokens_per_expert*(i+1));
-    std::cout<<total_rows_before_experts[i]<<" ";
+  std::cout << "total_rows_before_experts:  ";
+  for (int i = 0; i < num_experts; ++i) {
+    total_rows_before_experts.push_back(tokens_per_expert * (i + 1));
+    std::cout << total_rows_before_experts[i] << " ";
   }
-  std::cout<<std::endl;
+  std::cout << std::endl;
 
   bool do_check = false;
   if (argc >= 6) {
     do_check = strtol(argv[5], nullptr, 0);
   }
   if (do_check) {
-      std::cout<<"####do check#####"<<std::endl;
+    std::cout << "####do check#####" << std::endl;
   }
-  std::cout<<"num_experts: "<<num_experts<<" n: "<<n<<" k: "<<k<<std::endl;
+  std::cout << "num_experts: " << num_experts << " n: " << n << " k: " << k
+            << std::endl;
 
   bool do_gemm_config_searching = false;
   if (argc >= 7) {
     do_gemm_config_searching = strtol(argv[6], nullptr, 0);
   }
   if (do_gemm_config_searching) {
-    std::cout<<"####do gemm config searching#####"<<std::endl;
+    std::cout << "####do gemm config searching#####" << std::endl;
   }
 
   bool is_encryption = false;
@@ -603,73 +591,70 @@ int main(int argc, char* argv[]) {
   }
 
   std::string gemm_config_search_log_file = "";
-  if (argc >= 8){
+  if (argc >= 8) {
     gemm_config_search_log_file = argv[8];
   }
 
   std::ifstream gemm_config_file(gemm_config_search_log_file);
 
   std::string a_data_file = "";
-  if(argc >= 9){
+  if (argc >= 9) {
     a_data_file = argv[9];
   }
 
   std::string b_data_file = "";
-  if(argc >= 10){
+  if (argc >= 10) {
     b_data_file = argv[10];
   }
 
-
   std::string row_scale_data_file = "";
-  if(argc >= 11){
+  if (argc >= 11) {
     row_scale_data_file = argv[11];
   }
 
-
   std::string col_scale_data_file = "";
-  if(argc >= 12){
+  if (argc >= 12) {
     col_scale_data_file = argv[12];
   }
   std::vector<int> config_vec;
 
   if (gemm_config_file.is_open()) {
-      std::string line;
-      while (std::getline(gemm_config_file, line)) {
-          // using printf() in all tests for consistency
-          // printf("%s", line.c_str());
-          if(line.find("#####best_gemm_config_tuple#####")!=std::string::npos){
-            std::cout<<line<<std::endl;
-            std::string config_str = line.substr(32, std::string::npos);
-            std::istringstream in_str(config_str);
-            int temp;
-            while(in_str >> temp) {
-              config_vec.push_back(temp);
-            }
-          }
+    std::string line;
+    while (std::getline(gemm_config_file, line)) {
+      // using printf() in all tests for consistency
+      // printf("%s", line.c_str());
+      if (line.find("#####best_gemm_config_tuple#####") != std::string::npos) {
+        std::cout << line << std::endl;
+        std::string config_str = line.substr(32, std::string::npos);
+        std::istringstream in_str(config_str);
+        int temp;
+        while (in_str >> temp) {
+          config_vec.push_back(temp);
+        }
       }
-      gemm_config_file.close();
+    }
+    gemm_config_file.close();
   }
   // auto best_gemm_config = GetGemmConfig(m, config_vec);
   const auto kWarmTime = 1;
   const auto kTestTime = 100;
-  auto mixed_gemm_runner =
-      W4A8MoeGemmRunner<half, int8_t, cutlass::uint4b_t>();
+  auto mixed_gemm_runner = W4A8MoeGemmRunner<half, int8_t, cutlass::uint4b_t>();
 
   // int mixgemm_max_size = std::max(m, k);
-  int mixgemm_workspace_size_bytes = 1 * 1024*1024*1024; // 1G workspace
-  std::cout<<"mixgemm_workspace_size_bytes: "<<mixgemm_workspace_size_bytes<<std::endl;
-  char* mixgemm_workspace_data;
+  int mixgemm_workspace_size_bytes = 1 * 1024 * 1024 * 1024; // 1G workspace
+  std::cout << "mixgemm_workspace_size_bytes: " << mixgemm_workspace_size_bytes
+            << std::endl;
+  char *mixgemm_workspace_data;
   cudaMalloc(&mixgemm_workspace_data, mixgemm_workspace_size_bytes);
   cudaDeviceSynchronize();
-
 
   std::cout << "do init of a and b in cpu" << std::endl;
   std::vector<int8_t> a_int(total_rows * k);
   if (do_check) {
-    if(a_data_file==""){
+    if (a_data_file == "") {
       for (int i = 0; i < total_rows * k; i++) {
-                  // a_int[i] = 1;
-                  a_int[i] = rand() % 16;
+        // a_int[i] = 1;
+        a_int[i] = rand() % 16;
         // a_int[i] = rand() % 128 - 64;
         // if(i>=k){
         //   // a_int[i] = a_int[i%k];
@@ -677,16 +662,17 @@ int main(int argc, char* argv[]) {
         // }
       }
     } else {
-      std::cout<<"get a data from: "<< a_data_file << std::endl;
-      get_tensor_from_file<int8_t, int32_t>(a_data_file, total_rows*k, a_int.data());
+      std::cout << "get a data from: " << a_data_file << std::endl;
+      get_tensor_from_file<int8_t, int32_t>(a_data_file, total_rows * k,
+                                            a_int.data());
     }
     // PrintMatrixCPU<int8_t>(a_int.data(),total_rows*k,"a_int8_cpu",n);
   }
 
   std::vector<int8_t> b_int(num_experts * k * n);
   if (do_check) {
-    for (int ii = 0 ; ii < num_experts; ++ii) {
-      for (int i = ii*k*n; i < (ii+1)*k * n; i++) {
+    for (int ii = 0; ii < num_experts; ++ii) {
+      for (int i = ii * k * n; i < (ii + 1) * k * n; i++) {
         // author zhengzekang
         b_int[i] = rand() % 16;
         // b_int[i] = 1;
@@ -706,99 +692,103 @@ int main(int argc, char* argv[]) {
         // }
       }
     }
-    // PrintMatrixCPU<int8_t>(b_int.data(),num_experts * k * n,"b_int8_cpu_init",n);
+    // PrintMatrixCPU<int8_t>(b_int.data(),num_experts * k *
+    // n,"b_int8_cpu_init",n);
   }
-
-
 
   std::vector<int32_t> nf4_look_up_table(16);
   std::vector<int8_t> nf4_look_up_table_compress(16);
   if (do_check) {
-    for(int i=0;i<4;++i){
-      nf4_look_up_table_compress[i]=0;
+    for (int i = 0; i < 4; ++i) {
+      nf4_look_up_table_compress[i] = 0;
     }
-    for(int i=0;i<16;++i){
-      int32_t left4i=i<<4;
-      int8_t tmp = * reinterpret_cast<int8_t*>(&(left4i));
+    for (int i = 0; i < 16; ++i) {
+      int32_t left4i = i << 4;
+      int8_t tmp = *reinterpret_cast<int8_t *>(&(left4i));
       int32_t tmp_int32 = static_cast<int32_t>(tmp);
-      nf4_look_up_table[i]=tmp_int32;
+      nf4_look_up_table[i] = tmp_int32;
     }
-    for(int i=0;i<16;++i){
-      nf4_look_up_table_compress[i] = (static_cast<int8_t>(nf4_look_up_table[i]));
+    for (int i = 0; i < 16; ++i) {
+      nf4_look_up_table_compress[i] =
+          (static_cast<int8_t>(nf4_look_up_table[i]));
     }
-    std::cout<<"####nf4_look_up_table"<<std::endl;
-    for(int i=0;i<16;++i){
-      std::cout<<nf4_look_up_table[i]<<" ";
+    std::cout << "####nf4_look_up_table" << std::endl;
+    for (int i = 0; i < 16; ++i) {
+      std::cout << nf4_look_up_table[i] << " ";
     }
-    std::cout<<std::endl;
+    std::cout << std::endl;
   }
 
-  // printf("nf4 compress table:%08x,%08x,%08x,%08x \n",nf4_look_up_table_compress[0],
+  // printf("nf4 compress table:%08x,%08x,%08x,%08x
+  // \n",nf4_look_up_table_compress[0],
   //                                                    nf4_look_up_table_compress[1],
   //                                                    nf4_look_up_table_compress[2],
   //                                                    nf4_look_up_table_compress[3]);
-
 
   std::cout << "finish init of a and b in cpu" << std::endl;
   cudaDeviceSynchronize();
 
   std::vector<int8_t> packed_b_int(num_experts * k * n / 2);
   if (do_check) {
-    for (int ie = 0 ; ie < num_experts; ++ie) {
+    for (int ie = 0; ie < num_experts; ++ie) {
       int offset = ie * k * n / 2;
-      for (int packed_i = 0; packed_i < k * n / 2; packed_i++){
+      for (int packed_i = 0; packed_i < k * n / 2; packed_i++) {
         packed_b_int[offset + packed_i] = 0;
-        packed_b_int[offset + packed_i] |= b_int[(offset + packed_i)*2] & 0x0f;
-        packed_b_int[offset + packed_i] |= (b_int[(offset + packed_i)*2 + 1] & 0x0f) << 4;
+        packed_b_int[offset + packed_i] |=
+            b_int[(offset + packed_i) * 2] & 0x0f;
+        packed_b_int[offset + packed_i] |=
+            (b_int[(offset + packed_i) * 2 + 1] & 0x0f) << 4;
       }
     }
   }
 
   std::vector<int8_t> b_int_processed(num_experts * k * n / 2);
-  std::vector<int8_t> b_int_processed_2(num_experts * k * n/2);
-  std::vector<int8_t> b_int_processed_3(num_experts * k * n/2);
+  std::vector<int8_t> b_int_processed_2(num_experts * k * n / 2);
+  std::vector<int8_t> b_int_processed_3(num_experts * k * n / 2);
   if (do_check) {
     printf("do check\n");
-    if(b_data_file == "") {
-      for (int ie = 0; ie < num_experts ; ie++) {
+    if (b_data_file == "") {
+      for (int ie = 0; ie < num_experts; ie++) {
         // PrintMatrixCPU_int4(packed_b_int.data(),num_experts*k*n,"w4a8_packed_b_int4",n);
-        permute_B_rows_for_mixed_gemm_int4<4>(b_int_processed.data() + ie * k * n / 2,
-                                      packed_b_int.data() + ie * k * n / 2,
-                                      std::vector<size_t>{k, n},
-                                      (int64_t)80);
+        permute_B_rows_for_mixed_gemm_int4<4>(
+            b_int_processed.data() + ie * k * n / 2,
+            packed_b_int.data() + ie * k * n / 2, std::vector<size_t>{k, n},
+            (int64_t)80);
 
         // PrintMatrixCPU_int4(b_int_processed.data(),num_experts*k*n,"w4a8_permuted_int4",n);
 
-        std::cout<<"before subbyte_transpose_impl_int4"<<std::endl;
+        std::cout << "before subbyte_transpose_impl_int4" << std::endl;
         subbyte_transpose_impl_int4(b_int_processed_2.data() + ie * k * n / 2,
-                                  b_int_processed.data() + ie * k * n / 2,
-                                  std::vector<size_t>{k, n});
+                                    b_int_processed.data() + ie * k * n / 2,
+                                    std::vector<size_t>{k, n});
         // PrintMatrixCPU_int4(b_int_processed_2.data(),num_experts*k*n,"w4a8_subbyte_transpose_impl_int4",k);
 
-        interleave_column_major_tensor_int4(b_int_processed_3.data() + ie * k * n / 2,
-                                            b_int_processed_2.data() + ie * k * n / 2,
-                                            std::vector<size_t>{k, n});
+        interleave_column_major_tensor_int4(
+            b_int_processed_3.data() + ie * k * n / 2,
+            b_int_processed_2.data() + ie * k * n / 2,
+            std::vector<size_t>{k, n});
         // PrintMatrixCPU_int4(b_int_processed_3.data(),num_experts*k*n,"w4a8_interleave_column_major_tensor_int4",k);
 
-        add_bias_and_interleave_int4s_inplace(b_int_processed_3.data() + ie * k * n / 2, k * n);
+        add_bias_and_interleave_int4s_inplace(
+            b_int_processed_3.data() + ie * k * n / 2, k * n);
       }
     } else {
-      get_tensor_from_file<int8_t, int32_t>(b_data_file,num_experts*k*n/2, b_int_processed_3.data());
+      get_tensor_from_file<int8_t, int32_t>(
+          b_data_file, num_experts * k * n / 2, b_int_processed_3.data());
     }
-      // PrintMatrixCPU_int4(b_int_processed_3.data(),
-      //                     num_experts*k*n/2,
-      //                     "w4a8_add_bias_and_interleave_int4s_inplace",
-      //                     k);
+    // PrintMatrixCPU_int4(b_int_processed_3.data(),
+    //                     num_experts*k*n/2,
+    //                     "w4a8_add_bias_and_interleave_int4s_inplace",
+    //                     k);
 
     // PrintMatrixCPU<int8_t>(b_int_processed_3.data(),num_experts*k*n/2,"b_int8_cpu",n);
 
     // TODO(zhengzekang): temporary use uint16_t instead of half.
   }
-  std::cout<<"done weight interleaved;"<<std::endl;
-  std::cout<<"begin init c: m: "<<total_rows<<" n: "<<n<<std::endl;
+  std::cout << "done weight interleaved;" << std::endl;
+  std::cout << "begin init c: m: " << total_rows << " n: " << n << std::endl;
 
-
-  std::cout<<"#### 1"<<std::endl;
+  std::cout << "#### 1" << std::endl;
   std::vector<float> c_float(total_rows * n);
 
   if (do_check) {
@@ -807,7 +797,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  std::cout<<"#### 2"<<std::endl;
+  std::cout << "#### 2" << std::endl;
 
   std::vector<uint16_t> c_half(total_rows * n);
   if (do_check) {
@@ -816,11 +806,11 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  std::cout<<"#### 3"<<std::endl;
+  std::cout << "#### 3" << std::endl;
 
   std::vector<float> row_scale_float(total_rows);
   if (do_check) {
-    if(row_scale_data_file==""){
+    if (row_scale_data_file == "") {
       for (int32_t i = 0; i < row_scale_float.size(); i++) {
         // row_scale_float[i] = 0.1;
         // row_scale_float[i] = uniform(random_engine) * 0.1;
@@ -830,28 +820,30 @@ int main(int argc, char* argv[]) {
         // }
       }
     } else {
-      get_tensor_from_file<float>(row_scale_data_file,total_rows,row_scale_float.data());
+      get_tensor_from_file<float>(row_scale_data_file, total_rows,
+                                  row_scale_float.data());
     }
     // PrintMatrixCPU<float>(row_scale_float.data(),total_rows,"row_scale_float_cpu",total_rows);
   }
 
-  std::vector<float> col_scale_float(num_experts*n);
+  std::vector<float> col_scale_float(num_experts * n);
   if (do_check) {
-    if(col_scale_data_file == "") {
+    if (col_scale_data_file == "") {
       for (int32_t i = 0; i < col_scale_float.size(); i++) {
         // col_scale_float[i] = 0.04;
-        col_scale_float[i] = uniform(random_engine) * 0.06 * uniform(random_engine) * 0.1;
+        col_scale_float[i] =
+            uniform(random_engine) * 0.06 * uniform(random_engine) * 0.1;
         // col_scale_float[i] = 0;
         // if(i<1){
         //   col_scale_float[i] = 1;
         // }
       }
     } else {
-      get_tensor_from_file<float>(col_scale_data_file,num_experts*n,col_scale_float.data());
+      get_tensor_from_file<float>(col_scale_data_file, num_experts * n,
+                                  col_scale_float.data());
     }
     // PrintMatrixCPU<float>(col_scale_float.data(),num_experts*n,"col_scale_float_cpu",n);
   }
-
 
   std::vector<uint16_t> row_scale_half(total_rows);
   if (do_check) {
@@ -861,8 +853,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-
-  std::vector<uint16_t> col_scale_half(num_experts*n);
+  std::vector<uint16_t> col_scale_half(num_experts * n);
   if (do_check) {
     for (int32_t i = 0; i < col_scale_float.size(); i++) {
       // col_scale_float[i] = 1;
@@ -870,85 +861,75 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  std::cout<<"done c init"<<std::endl;
+  std::cout << "done c init" << std::endl;
 
-  void* d_a_int;
-  void* d_b_int;
-  void* d_c_int;
-  void* d_col_scale_half;
-  void* d_row_scale_half;
-  void* d_nf4_look_up_table;
-  void* d_total_rows_before_experts;
+  void *d_a_int;
+  void *d_b_int;
+  void *d_c_int;
+  void *d_col_scale_half;
+  void *d_row_scale_half;
+  void *d_nf4_look_up_table;
+  void *d_total_rows_before_experts;
   cudaMalloc(&d_a_int, total_rows * k * sizeof(int8_t));
   cudaMalloc(&d_b_int, num_experts * k * n / 2 * sizeof(int8_t));
   cudaMalloc(&d_c_int, total_rows * n * sizeof(uint16_t));
 
   cudaMalloc(&d_row_scale_half, total_rows * sizeof(uint16_t));
   cudaMalloc(&d_col_scale_half, num_experts * n * sizeof(uint16_t));
-  cudaMalloc(&d_nf4_look_up_table, 4*sizeof(uint32_t));
+  cudaMalloc(&d_nf4_look_up_table, 4 * sizeof(uint32_t));
   cudaMalloc(&d_total_rows_before_experts, num_experts * sizeof(int64_t));
-  cudaMemcpy(
-      d_a_int, a_int.data(), total_rows * k * sizeof(int8_t), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_b_int,
-             b_int_processed_3.data(),
-             num_experts * k * n / 2 * sizeof(int8_t),
+  cudaMemcpy(d_a_int, a_int.data(), total_rows * k * sizeof(int8_t),
              cudaMemcpyHostToDevice);
+  cudaMemcpy(d_b_int, b_int_processed_3.data(),
+             num_experts * k * n / 2 * sizeof(int8_t), cudaMemcpyHostToDevice);
 
-  cudaMemcpy(d_row_scale_half,
-             row_scale_half.data(),
-             total_rows * sizeof(uint16_t),
+  cudaMemcpy(d_row_scale_half, row_scale_half.data(),
+             total_rows * sizeof(uint16_t), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_col_scale_half, col_scale_half.data(),
+             num_experts * n * sizeof(uint16_t), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_nf4_look_up_table, nf4_look_up_table_compress.data(),
+             4 * sizeof(uint32_t), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_c_int, c_half.data(), total_rows * n * sizeof(uint16_t),
              cudaMemcpyHostToDevice);
-  cudaMemcpy(d_col_scale_half,
-             col_scale_half.data(),
-             num_experts * n * sizeof(uint16_t),
-             cudaMemcpyHostToDevice);
-  cudaMemcpy(d_nf4_look_up_table,
-             nf4_look_up_table_compress.data(),
-             4 * sizeof(uint32_t),
-             cudaMemcpyHostToDevice);
-  cudaMemcpy(d_c_int, c_half.data(), total_rows * n * sizeof(uint16_t), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_total_rows_before_experts, total_rows_before_experts.data(), num_experts * sizeof(int64_t), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_total_rows_before_experts, total_rows_before_experts.data(),
+             num_experts * sizeof(int64_t), cudaMemcpyHostToDevice);
 
   cudaDeviceSynchronize();
   cudaError_t result = cudaGetLastError();
 
   if (result != cudaSuccess) {
     // Call cudaGetLastError() to clear the error bit
-    CUTLASS_TRACE_HOST(" before kernel  grid launch failed with error " << cudaGetErrorString(result));
+    CUTLASS_TRACE_HOST(" before kernel  grid launch failed with error "
+                       << cudaGetErrorString(result));
   } else {
     CUTLASS_TRACE_HOST("after init");
   }
 
   std::cout << "=== do warm up for " << kWarmTime << " times" << std::endl;
-  auto test_config = CutlassGemmConfig{CutlassTileConfig::CtaShape64x128x64_WarpShape64x32x64,SplitKStyle::NO_SPLIT_K,1,5};
+  auto test_config =
+      CutlassGemmConfig{CutlassTileConfig::CtaShape64x128x64_WarpShape64x32x64,
+                        SplitKStyle::NO_SPLIT_K, 1, 5};
   std::cout << "=== do warm up end" << std::endl;
   for (int i = 0; i < kWarmTime; i++) {
     printf("warm up %d\n", i);
-    mixed_gemm_runner.moe_gemm(reinterpret_cast<const int8_t*>(d_a_int),
-                           reinterpret_cast<const cutlass::uint4b_t*>((void*)d_b_int),
-                           cutlass::epilogue::QuantMode::PerTokenChannelQuant,
-                           reinterpret_cast<const half*>(d_col_scale_half),
-                           reinterpret_cast<const half*>(d_row_scale_half),
-                           reinterpret_cast<const int32_t*>(d_nf4_look_up_table),
-                           reinterpret_cast<half*>(d_c_int),
-                           reinterpret_cast<int64_t*>(d_total_rows_before_experts),
-                           -1,
-                           total_rows,
-                           n,
-                           k,
-                           mixgemm_workspace_data,
-                           mixgemm_workspace_size_bytes,
-                           num_experts,
-                           0,
-                           test_config);
+    mixed_gemm_runner.moe_gemm(
+        reinterpret_cast<const int8_t *>(d_a_int),
+        reinterpret_cast<const cutlass::uint4b_t *>((void *)d_b_int),
+        cutlass::epilogue::QuantMode::PerTokenChannelQuant,
+        reinterpret_cast<const half *>(d_col_scale_half),
+        reinterpret_cast<const half *>(d_row_scale_half),
+        reinterpret_cast<const int32_t *>(d_nf4_look_up_table),
+        reinterpret_cast<half *>(d_c_int),
+        reinterpret_cast<int64_t *>(d_total_rows_before_experts), -1,
+        total_rows, n, k, mixgemm_workspace_data, mixgemm_workspace_size_bytes,
+        num_experts, 0, test_config);
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
       std::cout << "error: " << cudaGetErrorString(err) << std::endl;
     } else {
-      std::cout<<"cuda success" <<std::endl;
+      std::cout << "cuda success" << std::endl;
     }
   }
-
 
   // if (gemm_config_search_log_file != ""){
   //   if(kTestTime > 0){
@@ -959,18 +940,25 @@ int main(int argc, char* argv[]) {
   //         std::string nvtx_name = "int4_gemm_" + std::to_string(m) + "-"
   //                                         + std::to_string(n) + "-"
   //                                         + std::to_string(k) + "-"
-  //                                         + std::to_string(static_cast<std::underlying_type<CutlassTileConfig>::type>(best_gemm_config.tile_config)) + "-"
-  //                                         + std::to_string(static_cast<std::underlying_type<CutlassTileConfig>::type>(best_gemm_config.split_k_style))+"-"
-  //                                                 + std::to_string(best_gemm_config.split_k_factor)+"-"
-  //                                                 + std::to_string(best_gemm_config.stages);
+  //                                         +
+  //                                         std::to_string(static_cast<std::underlying_type<CutlassTileConfig>::type>(best_gemm_config.tile_config))
+  //                                         + "-"
+  //                                         +
+  //                                         std::to_string(static_cast<std::underlying_type<CutlassTileConfig>::type>(best_gemm_config.split_k_style))+"-"
+  //                                                 +
+  //                                                 std::to_string(best_gemm_config.split_k_factor)+"-"
+  //                                                 +
+  //                                                 std::to_string(best_gemm_config.stages);
   //         PUSH_RANGE(nvtx_name.c_str(), 1)
   //       }
   //   mixed_gemm_runner.moe_gemm(reinterpret_cast<const int8_t*>(d_a_int),
-  //                          reinterpret_cast<const cutlass::uint4b_t*>((void*)d_b_int),
+  //                          reinterpret_cast<const
+  //                          cutlass::uint4b_t*>((void*)d_b_int),
   //                          QuantMode::PerTokenChannelQuant,
   //                          reinterpret_cast<const half*>(d_col_scale_half),
   //                          reinterpret_cast<const half*>(d_row_scale_half),
-  //                          reinterpret_cast<const int32_t*>(d_nf4_look_up_table),
+  //                          reinterpret_cast<const
+  //                          int32_t*>(d_nf4_look_up_table),
   //                          reinterpret_cast<half*>(d_c_int),
   //                          total_rows_before_exports,
   //                          m,
@@ -987,80 +975,88 @@ int main(int argc, char* argv[]) {
   //     }
   //     cudaDeviceSynchronize();
   //     auto stop = std::chrono::system_clock::now();
-  //     auto duration = std::chrono::duration_cast<std::chrono::microseconds>((stop - start));
-  //     // std::cout<<"avg time for "<<kTestTime<<" run:"<<duration.count()/(float)kTestTime<<" microseconds."<<std::endl;
+  //     auto duration =
+  //     std::chrono::duration_cast<std::chrono::microseconds>((stop - start));
+  //     // std::cout<<"avg time for "<<kTestTime<<"
+  //     run:"<<duration.count()/(float)kTestTime<<" microseconds."<<std::endl;
   //   }
   //   cudaDeviceSynchronize();
   //   return 0;
   // }
 
-
-
-
   CutlassGemmConfig best_config = test_config;
   float best_time = 999999999;
-  if(do_gemm_config_searching) {
-    std::cout<< "====== do_gemm_config_searching ====" << std::endl;
+  if (do_gemm_config_searching) {
+    std::cout << "====== do_gemm_config_searching ====" << std::endl;
     std::vector<CutlassTileConfig> all_cutlass_tile_configs{
-      CutlassTileConfig::CtaShape16x128x64_WarpShape16x32x64,
-      CutlassTileConfig::CtaShape32x128x64_WarpShape32x32x64,
-      CutlassTileConfig::CtaShape64x128x64_WarpShape64x32x64,
-      CutlassTileConfig::CtaShape32x256x64_WarpShape32x64x64,
-      CutlassTileConfig::CtaShape64x256x64_WarpShape64x64x64,
-      CutlassTileConfig::CtaShape32x512x64_WarpShape32x128x64,
-      CutlassTileConfig::CtaShape128x128x64_WarpShape128x32x64,
-      CutlassTileConfig::CtaShape32x512x64_WarpShape32x128x64,
+        CutlassTileConfig::CtaShape16x128x64_WarpShape16x32x64,
+        CutlassTileConfig::CtaShape32x128x64_WarpShape32x32x64,
+        CutlassTileConfig::CtaShape64x128x64_WarpShape64x32x64,
+        CutlassTileConfig::CtaShape32x256x64_WarpShape32x64x64,
+        CutlassTileConfig::CtaShape64x256x64_WarpShape64x64x64,
+        CutlassTileConfig::CtaShape32x512x64_WarpShape32x128x64,
+        CutlassTileConfig::CtaShape128x128x64_WarpShape128x32x64,
+        CutlassTileConfig::CtaShape32x512x64_WarpShape32x128x64,
     };
     std::vector<SplitKStyle> all_split_k_style{SplitKStyle::NO_SPLIT_K};
 
-
-    for (auto & tile_config : all_cutlass_tile_configs ){
-      for (auto & split_k_style : all_split_k_style){
-        for (int stages = 3; stages<=7; ++stages){
-          for (int split_k_factor = 1; split_k_factor <=1; split_k_factor*=2){
-            auto test_gemm_config = CutlassGemmConfig{tile_config,split_k_style,split_k_factor,stages};
+    for (auto &tile_config : all_cutlass_tile_configs) {
+      for (auto &split_k_style : all_split_k_style) {
+        for (int stages = 3; stages <= 7; ++stages) {
+          for (int split_k_factor = 1; split_k_factor <= 1;
+               split_k_factor *= 2) {
+            auto test_gemm_config = CutlassGemmConfig{
+                tile_config, split_k_style, split_k_factor, stages};
             cudaEvent_t begin, end;
             cudaDeviceSynchronize();
             cudaEventCreate(&begin);
             cudaEventCreate(&end);
             cudaEventRecord(begin, 0);
-            for (int i = 0; i<kTestTime; ++i){
+            for (int i = 0; i < kTestTime; ++i) {
 
-    mixed_gemm_runner.moe_gemm(reinterpret_cast<const int8_t*>(d_a_int),
-                           reinterpret_cast<const cutlass::uint4b_t*>((void*)d_b_int),
-                           cutlass::epilogue::QuantMode::PerTokenChannelQuant,
-                           reinterpret_cast<const half*>(d_col_scale_half),
-                           reinterpret_cast<const half*>(d_row_scale_half),
-                           reinterpret_cast<const int32_t*>(d_nf4_look_up_table),
-                           reinterpret_cast<half*>(d_c_int),
-                           reinterpret_cast<int64_t*>(d_total_rows_before_experts),
-                           -1,
-                           total_rows,
-                           n,
-                           k,
-                           mixgemm_workspace_data,
-                           mixgemm_workspace_size_bytes,
-                           num_experts,
-                           0,
-                           test_gemm_config);
+              mixed_gemm_runner.moe_gemm(
+                  reinterpret_cast<const int8_t *>(d_a_int),
+                  reinterpret_cast<const cutlass::uint4b_t *>((void *)d_b_int),
+                  cutlass::epilogue::QuantMode::PerTokenChannelQuant,
+                  reinterpret_cast<const half *>(d_col_scale_half),
+                  reinterpret_cast<const half *>(d_row_scale_half),
+                  reinterpret_cast<const int32_t *>(d_nf4_look_up_table),
+                  reinterpret_cast<half *>(d_c_int),
+                  reinterpret_cast<int64_t *>(d_total_rows_before_experts), -1,
+                  total_rows, n, k, mixgemm_workspace_data,
+                  mixgemm_workspace_size_bytes, num_experts, 0,
+                  test_gemm_config);
             }
             cudaEventRecord(end, 0);
             auto cuda_error = cudaDeviceSynchronize();
             float cost_time;
             cudaEventElapsedTime(&cost_time, begin, end);
-            float avg_time = cost_time/static_cast<float>(kTestTime) * 1000;
+            float avg_time = cost_time / static_cast<float>(kTestTime) * 1000;
             if (cuda_error != cudaSuccess) {
               avg_time = 999999999;
-              std::cout<<"#### test gemm_config, error "
-                     << " with split-k factor: "<<test_gemm_config.split_k_factor<<" tile_config: "<<static_cast<std::underlying_type<CutlassTileConfig>::type>(test_gemm_config.tile_config)
-                     << " split_k_style: "<<static_cast<std::underlying_type<CutlassTileConfig>::type>(test_gemm_config.split_k_style)<<" stages: "<< test_gemm_config.stages <<std::endl;
-
+              std::cout
+                  << "#### test gemm_config, error "
+                  << " with split-k factor: " << test_gemm_config.split_k_factor
+                  << " tile_config: "
+                  << static_cast<std::underlying_type<CutlassTileConfig>::type>(
+                         test_gemm_config.tile_config)
+                  << " split_k_style: "
+                  << static_cast<std::underlying_type<CutlassTileConfig>::type>(
+                         test_gemm_config.split_k_style)
+                  << " stages: " << test_gemm_config.stages << std::endl;
             }
-            std::cout<<"#### test gemm_config, avg_time: "<<avg_time
-                     << " with split-k factor: "<<test_gemm_config.split_k_factor<<" tile_config: "<<static_cast<std::underlying_type<CutlassTileConfig>::type>(test_gemm_config.tile_config)
-                     << " split_k_style: "<<static_cast<std::underlying_type<CutlassTileConfig>::type>(test_gemm_config.split_k_style)<<" stages: "<< test_gemm_config.stages <<std::endl;
+            std::cout
+                << "#### test gemm_config, avg_time: " << avg_time
+                << " with split-k factor: " << test_gemm_config.split_k_factor
+                << " tile_config: "
+                << static_cast<std::underlying_type<CutlassTileConfig>::type>(
+                       test_gemm_config.tile_config)
+                << " split_k_style: "
+                << static_cast<std::underlying_type<CutlassTileConfig>::type>(
+                       test_gemm_config.split_k_style)
+                << " stages: " << test_gemm_config.stages << std::endl;
 
-            if(avg_time<best_time){
+            if (avg_time < best_time) {
               best_time = avg_time;
               best_config = test_gemm_config;
             }
@@ -1069,51 +1065,62 @@ int main(int argc, char* argv[]) {
       }
     }
   }
-  std::cout<<"#### best gemm_config for total_rows: "<<total_rows << "num_experts:" << num_experts
-           << " n: "<<n
-           << " k: "<<k
-           << " avg_time: "<<best_time
-           << " with split-k factor: "<<best_config.split_k_factor<<" tile_config: "<<static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.tile_config)
-           << " split_k_style: "<<static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.split_k_style)<<" stages: "<< best_config.stages <<std::endl;
-  std::cout<<"#####best_gemm_config_tuple##### "<<total_rows<<" "
-                                                <<n<<" "
-                                                <<k<<" "
-                                                <<num_experts<<" "
-                                                <<static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.tile_config)<<" "
-                                                <<static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.split_k_style)<<" "
-                                                <<best_config.split_k_factor<<" "
-                                                <<best_config.stages<<std::endl;
+  std::cout << "#### best gemm_config for total_rows: " << total_rows
+            << "num_experts:" << num_experts << " n: " << n << " k: " << k
+            << " avg_time: " << best_time
+            << " with split-k factor: " << best_config.split_k_factor
+            << " tile_config: "
+            << static_cast<std::underlying_type<CutlassTileConfig>::type>(
+                   best_config.tile_config)
+            << " split_k_style: "
+            << static_cast<std::underlying_type<CutlassTileConfig>::type>(
+                   best_config.split_k_style)
+            << " stages: " << best_config.stages << std::endl;
+  std::cout << "#####best_gemm_config_tuple##### " << total_rows << " " << n
+            << " " << k << " " << num_experts << " "
+            << static_cast<std::underlying_type<CutlassTileConfig>::type>(
+                   best_config.tile_config)
+            << " "
+            << static_cast<std::underlying_type<CutlassTileConfig>::type>(
+                   best_config.split_k_style)
+            << " " << best_config.split_k_factor << " " << best_config.stages
+            << std::endl;
 
-
-  // std::string output_config_path = is_encryption ? "moe_w4a8_tuned_config.config" : "moe_w4a8_tuned_config.csv";
+  // std::string output_config_path = is_encryption ?
+  // "moe_w4a8_tuned_config.config" : "moe_w4a8_tuned_config.csv";
   std::string output_config_path = "moe_w4a8_tuned_config.csv";
-  int fd = open(output_config_path.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
-    if (fd == -1) {
-        perror("open error");
-        return 1;
+  int fd =
+      open(output_config_path.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
+  if (fd == -1) {
+    perror("open error");
+    return 1;
   }
   std::ofstream outfile;
   if (flock(fd, LOCK_EX) == -1) {
-      perror("flock error");
-      close(fd);
-      return 1;
+    perror("flock error");
+    close(fd);
+    return 1;
   }
   outfile.open(output_config_path, std::ios::app);
-  outfile << total_rows << ","
-          << n << ","
-          << k << ","
-          << num_experts << ","
-          << static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.tile_config) << ","
-          << static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.split_k_style)<< ","
-          << best_config.split_k_factor << ","
-          << best_config.stages <<"\n";
+  outfile << total_rows << "," << n << "," << k << "," << num_experts << ","
+          << static_cast<std::underlying_type<CutlassTileConfig>::type>(
+                 best_config.tile_config)
+          << ","
+          << static_cast<std::underlying_type<CutlassTileConfig>::type>(
+                 best_config.split_k_style)
+          << "," << best_config.split_k_factor << "," << best_config.stages
+          << "\n";
 
   // if (!is_encryption) {
   //   outfile << tokens_per_expert << ","
   //           << n << ","
   //           << k << ","
-  //           << static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.tile_config) << ","
-  //           << static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.split_k_style)<< ","
+  //           <<
+  //           static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.tile_config)
+  //           << ","
+  //           <<
+  //           static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.split_k_style)<<
+  //           ","
   //           << best_config.split_k_factor << ","
   //           << best_config.stages <<"\n";
   // } else {
@@ -1121,8 +1128,12 @@ int main(int argc, char* argv[]) {
   //   ss << tokens_per_expert << ","
   //     << n << ","
   //     << k << ","
-  //     << static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.tile_config) << ","
-  //     << static_cast<std::underlying_type<SplitKStyle>::type>(best_config.split_k_style) << ","
+  //     <<
+  //     static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.tile_config)
+  //     << ","
+  //     <<
+  //     static_cast<std::underlying_type<SplitKStyle>::type>(best_config.split_k_style)
+  //     << ","
   //     << best_config.split_k_factor << ","
   //     << best_config.stages;
   //   std::string encrypted_str = paddle::operators::base64_encode(ss.str());
@@ -1130,84 +1141,76 @@ int main(int argc, char* argv[]) {
   // }
   outfile.flush();
   if (flock(fd, LOCK_UN) == -1) {
-      perror("flock error (unlock)");
-      // 注意：即使解锁失败，也应尽量关闭文件描述符
+    perror("flock error (unlock)");
+    // 注意：即使解锁失败，也应尽量关闭文件描述符
   }
   outfile.close();
   close(fd);
 
-
-
   if (do_check) {
     std::cout << "=== do accuracy check " << std::endl;
-    cudaMemset(d_c_int, 0, total_rows*n*sizeof(uint16_t));
-    PrintHalfMatrix(static_cast<int16_t*>(d_c_int),
-                    total_rows * n,
-                    "CUDA_c_dequantize_fp16_output_before_gemm",
-                    n);
+    cudaMemset(d_c_int, 0, total_rows * n * sizeof(uint16_t));
+    PrintHalfMatrix(static_cast<int16_t *>(d_c_int), total_rows * n,
+                    "CUDA_c_dequantize_fp16_output_before_gemm", n);
 
-    mixed_gemm_runner.moe_gemm(reinterpret_cast<const int8_t*>(d_a_int),
-                          reinterpret_cast<const cutlass::uint4b_t*>((void*)d_b_int),
-                          cutlass::epilogue::QuantMode::PerChannelQuant,
-                          reinterpret_cast<const half*>(d_col_scale_half),
-                          nullptr, // reinterpret_cast<const half*>(d_row_scale_half),
-                          nullptr, // reinterpret_cast<const int32_t*>(d_nf4_look_up_table),
-                          reinterpret_cast<half*>(d_c_int),
-                          reinterpret_cast<int64_t*>(d_total_rows_before_experts),
-                          -1,
-                          total_rows,
-                          n,
-                          k,
-                          mixgemm_workspace_data,
-                          mixgemm_workspace_size_bytes,
-                          num_experts,
-                          0);
+    mixed_gemm_runner.moe_gemm(
+        reinterpret_cast<const int8_t *>(d_a_int),
+        reinterpret_cast<const cutlass::uint4b_t *>((void *)d_b_int),
+        cutlass::epilogue::QuantMode::PerChannelQuant,
+        reinterpret_cast<const half *>(d_col_scale_half),
+        nullptr, // reinterpret_cast<const half*>(d_row_scale_half),
+        nullptr, // reinterpret_cast<const int32_t*>(d_nf4_look_up_table),
+        reinterpret_cast<half *>(d_c_int),
+        reinterpret_cast<int64_t *>(d_total_rows_before_experts), -1,
+        total_rows, n, k, mixgemm_workspace_data, mixgemm_workspace_size_bytes,
+        num_experts, 0);
     cudaDeviceSynchronize();
-    // PrintMatrix<int32_t>(reinterpret_cast<const int32_t*>(d_nf4_look_up_table),4,"d_nf4_look_up_table",1);
+    // PrintMatrix<int32_t>(reinterpret_cast<const
+    // int32_t*>(d_nf4_look_up_table),4,"d_nf4_look_up_table",1);
     printf("##### d_nf4_look_up_table address: %p \n", d_nf4_look_up_table);
 
-    naive_matmul_fused_dequantize_nf4<int8_t, float, float>(a_int.data(),
-                                                        b_int.data(),
-                                                        col_scale_float.data(),
-                                                        nullptr, // row_scale_float.data(),
-                                                        nullptr, // nf4_look_up_table.data(),
-                                                        c_float.data(),
-                                                        num_experts,
-                                                        total_rows_before_experts.data(),
-                                                        total_rows,
-                                                        n,
-                                                        k);
-    PrintMatrixCPU<float>(
-        c_float.data(), total_rows * n, "CPU_c_fake_fp16_dequantize_output_base", n);
-    PrintHalfMatrix(static_cast<int16_t*>(d_c_int),
-                    total_rows * n,
-                    "CUDA_c_dequantize_fp16_output",
-                    n);
-    CheckHalfDiff(
-        static_cast<int16_t*>(d_c_int), c_float.data(), total_rows * n, 1e-4, 1e-2);
+    naive_matmul_fused_dequantize_nf4<int8_t, float, float>(
+        a_int.data(), b_int.data(), col_scale_float.data(),
+        nullptr, // row_scale_float.data(),
+        nullptr, // nf4_look_up_table.data(),
+        c_float.data(), num_experts, total_rows_before_experts.data(),
+        total_rows, n, k);
+    PrintMatrixCPU<float>(c_float.data(), total_rows * n,
+                          "CPU_c_fake_fp16_dequantize_output_base", n);
+    PrintHalfMatrix(static_cast<int16_t *>(d_c_int), total_rows * n,
+                    "CUDA_c_dequantize_fp16_output", n);
+    CheckHalfDiff(static_cast<int16_t *>(d_c_int), c_float.data(),
+                  total_rows * n, 1e-4, 1e-2);
   }
-
 
   // if(kTestTime > 0){
   //   cudaDeviceSynchronize();
   //   auto start = std::chrono::system_clock::now();
   //   for (int i = 0; i < kTestTime; i++) {
   //     if(i == 0){
-  //       std::string nvtx_name = "int4_gemm_" + std::to_string(tokens_per_expert) + "-"
+  //       std::string nvtx_name = "int4_gemm_" +
+  //       std::to_string(tokens_per_expert) + "-"
   //                                       + std::to_string(n) + "-"
   //                                       + std::to_string(k) + "-"
-  //                                       + std::to_string(static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.tile_config)) + "-"
-  //                                       + std::to_string(static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.split_k_style))+"-"
-  //                                               + std::to_string(best_config.split_k_factor)+"-"
-  //                                               + std::to_string(best_config.stages);
+  //                                       +
+  //                                       std::to_string(static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.tile_config))
+  //                                       + "-"
+  //                                       +
+  //                                       std::to_string(static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.split_k_style))+"-"
+  //                                               +
+  //                                               std::to_string(best_config.split_k_factor)+"-"
+  //                                               +
+  //                                               std::to_string(best_config.stages);
   //       PUSH_RANGE(nvtx_name.c_str(), 1)
   //     }
   //   mixed_gemm_runner.moe_gemm(reinterpret_cast<const int8_t*>(d_a_int),
-  //                         reinterpret_cast<const cutlass::uint4b_t*>((void*)d_b_int),
+  //                         reinterpret_cast<const
+  //                         cutlass::uint4b_t*>((void*)d_b_int),
   //                         cutlass::epilogue::QuantMode::PerTokenChannelQuant,
   //                         reinterpret_cast<const half*>(d_col_scale_half),
   //                         reinterpret_cast<const half*>(d_row_scale_half),
-  //                         reinterpret_cast<const int32_t*>(d_nf4_look_up_table),
+  //                         reinterpret_cast<const
+  //                         int32_t*>(d_nf4_look_up_table),
   //                         reinterpret_cast<half*>(d_c_int),
   //                         reinterpret_cast<int64_t*>(d_total_rows_before_experts),
   //                         total_rows,
@@ -1224,8 +1227,10 @@ int main(int argc, char* argv[]) {
   //   }
   //   cudaDeviceSynchronize();
   //   auto stop = std::chrono::system_clock::now();
-  //   auto duration = std::chrono::duration_cast<std::chrono::microseconds>((stop - start));
-  //   std::cout<<"avg time for "<<kTestTime<<" run:"<<duration.count()/(float)kTestTime<<" microseconds."<<std::endl;
+  //   auto duration =
+  //   std::chrono::duration_cast<std::chrono::microseconds>((stop - start));
+  //   std::cout<<"avg time for "<<kTestTime<<"
+  //   run:"<<duration.count()/(float)kTestTime<<" microseconds."<<std::endl;
   // }
   // cudaDeviceSynchronize();
   return 0;

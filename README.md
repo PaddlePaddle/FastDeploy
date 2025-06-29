@@ -1,9 +1,8 @@
-# FastDeploy 2.0: 大模型推理部署
-
 <p align="center">
-    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-dfd.svg"></a>
-    <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><img src="https://img.shields.io/github/v/release/PaddlePaddle/FastDeploy?color=ffa"></a>
-    <a href=""><img src="https://img.shields.io/badge/python-3.10+-aff.svg"></a>
+  <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><img src="https://github.com/user-attachments/assets/42b0039f-39e3-4279-afda-6d1865dfbffb" width="500"></a>
+</p>
+<p align="center">
+    <a href=""><img src="https://img.shields.io/badge/python-3.10-aff.svg"></a>
     <a href=""><img src="https://img.shields.io/badge/os-linux-pink.svg"></a>
     <a href="https://github.com/PaddlePaddle/FastDeploy/graphs/contributors"><img src="https://img.shields.io/github/contributors/PaddlePaddle/FastDeploy?color=9ea"></a>
     <a href="https://github.com/PaddlePaddle/FastDeploy/commits"><img src="https://img.shields.io/github/commit-activity/m/PaddlePaddle/FastDeploy?color=3af"></a>
@@ -11,105 +10,78 @@
     <a href="https://github.com/PaddlePaddle/FastDeploy/stargazers"><img src="https://img.shields.io/github/stars/PaddlePaddle/FastDeploy?color=ccf"></a>
 </p>
 
-FastDeploy升级2.0版本支持多种大模型推理（当前仅支持Qwen2，更多模型即将更新支持)，其推理部署功能涵盖：
+<p align="center">
+    <a href="docs/get_started/installation/README.md"><b> Installation </b></a>
+    |
+    <a href="docs/get_started.md"><b> Quick Start </b></a>
+    |
+    <a href="docs/supported_models.md"><b> Supported Models </b></a>
+</p>
 
-- 一行命令即可快速实现模型的服务化部署，并支持流式生成
-- 利用张量并行技术加速模型推理
-- 支持 PagedAttention 与 continuous batching（动态批处理）
-- 兼容 OpenAI 的 HTTP 协议
-- 提供 Weight only int8/int4 无损压缩方案
-- 支持 Prometheus Metrics 指标
+--------------------------------------------------------------------------------
+# FastDeploy 2.0: Inference and Deployment Toolkit for LLMs and VLMs based on PaddlePaddle
 
-> 注意: 如果你还在使用FastDeploy部署小模型(如PaddleClas/PaddleOCR等CV套件模型)，请checkout [release/1.1.0分支](https://github.com/PaddlePaddle/FastDeploy/tree/release/1.1.0)。
+## News
 
-## 环境依赖
-- A800/H800/H100
-- Python>=3.10
-- CUDA>=12.3
-- CUDNN>=9.5
-- Linux X64
+**[2025-06] 🔥 Released FastDeploy v2.0:** Supports inference and deployment for ERNIE 4.5. Furthermore, we open-source an industrial-grade PD disaggregation with context caching, dynamic role switching for effective resource utilization to further enhance inference performance for MoE models.
 
-## 安装
+## About
 
-### Docker安装(推荐)
-```
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy:2.0.0.0-alpha
-```
+**FastDeploy** is an inference and deployment toolkit for large language models and visual language models based on PaddlePaddle. It delivers **production-ready, out-of-the-box deployment solutions** with core acceleration technologies:
 
-### 源码安装
-#### 安装PaddlePaddle
-> 注意安装nightly build版本，代码版本需新于2025.05.30，详见[PaddlePaddle安装](https://www.paddlepaddle.org.cn/en/install/quick?docurl=/documentation/docs/en/develop/install/pip/linux-pip_en.html)，指定安装CUDA 12.6 develop(Nightly build)版本。
-```
-python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
-```
+- 🚀 **Load-Balanced PD Disaggregation**: Industrial-grade solution featuring context caching and dynamic instance role switching. Optimizes resource utilization while balancing SLO compliance and throughput.
+- 🔄 **Unified KV Cache Transmission**: Lightweight high-performance transport library with intelligent NVLink/RDMA selection.
+- 🤝 **OpenAI API Server and vLLM Compatible**: One-command deployment with [vLLM](https://github.com/vllm-project/vllm/) interface compatibility.
+- 🧮 **Comprehensive Quantization Format Support**: W8A16, W8A8, W4A16, W4A8, W2A16, FP8, and more.
+- ⏩ **Advanced Acceleration Techniques**: Speculative decoding, Multi-Token Prediction (MTP) and Chunked Prefill.
+- 🖥️ **Multi-Hardware Support**: NVIDIA GPU, Kunlunxin XPU, Hygon DCU, Ascend NPU, Iluvatar GPU, Enflame GCU, MetaX GPU etc.
 
-#### 编译安装FastDeploy
+## Requirements
 
-```
-# 编译
-cd FastDeploy
-bash build.sh
-# 安装
-pip install dist/fastdeploy-2.0.0a0-py3-none-any.whl
-```
+- OS: Linux
+- Python: 3.10 ~ 3.12
 
-## 快速使用
+## Installation
 
-在安装后，执行如下命令快速部署Qwen2模型, 更多参数的配置与含义参考[参数说明](docs/serving.md).
+FastDeploy supports inference deployment on **NVIDIA GPUs**, **Kunlunxin XPUs**, **Iluvatar GPUs**, **Enflame GCUs**, and other hardware. For detailed installation instructions:
 
-``` shell
-# 下载与解压Qwen模型
-wget https://fastdeploy.bj.bcebos.com/llm/models/Qwen2-7B-Instruct.tar.gz && tar xvf Qwen2-7B-Instruct.tar.gz
-# 指定单卡部署
-python -m fastdeploy.entrypoints.openai.api_server --model ./Qwen2-7B-Instruct --port 8188 --tensor-parallel-size 1
-```
+- [NVIDIA GPU](./docs/installation/nvidia_cuda.md)
+- [Kunlunxin XPU](./docs/en/get_started/installation/kunlunxin_xpu.md)
+- [Iluvatar GPU](./docs/en/get_started/installation/iluvatar_gpu.md)
+- [Enflame GCU](./docs/en/get_started/installation/Enflame_gcu.md)
 
-使用如下命令请求模型服务
-``` shell
-curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
--H "Content-Type: application/json" \
--d '{
-  "messages": [
-    {"role": "user", "content": "你好，你的名字是什么？"}
-  ]
-}'
-```
-响应结果如下所示
-``` json
-{
-    "id": "chatcmpl-db662f47-7c8c-4945-9a7a-db563b2ddd8d",
-    "object": "chat.completion",
-    "created": 1749451045,
-    "model": "default",
-    "choices": [
-        {
-            "index": 0,
-            "message": {
-                "role": "assistant",
-                "content": "你好！我叫通义千问。",
-                "reasoning_content": null
-            },
-            "finish_reason": "stop"
-        }
-    ],
-    "usage": {
-        "prompt_tokens": 25,
-        "total_tokens": 35,
-        "completion_tokens": 10,
-        "prompt_tokens_details": null
-    }
-}
-```
-FastDeploy提供与OpenAI完全兼容的服务API(字段`model`与`api_key`目前不支持，设定会被忽略)，用户也可基于openai python api请求服务。
+**Note:** We are actively working on expanding hardware support. Additional hardware platforms including Ascend NPU, Hygon DCU, and MetaX GPU are currently under development and testing. Stay tuned for updates!
 
-## 部署文档
-- [本地部署](docs/offline_inference.md)
-- [服务部署](docs/serving.md)
-- [服务metrics](docs/metrics.md)
+## Get Started
 
-# 代码说明
-- [代码目录说明](docs/code_guide.md)
-- FastDeploy的使用中存在任何建议和问题，欢迎通过issue反馈。
+Learn how to use FastDeploy through our documentation:
+- [10-Minutes Quick Deployment](./docs/get_started/quick_start.md)
+- [ERNIE-4.5 Large Language Model Deployment](./docs/get_started/ernie-4.5.md)
+- [ERNIE-4.5-VL Multimodal Model Deployment](./docs/get_started/ernie-4.5-vl.md)
+- [Offline Inference Development](./docs/offline_inference.md)
+- [Online Service Deployment](./docs/serving/README.md)
+- [Full Supported Models List](./docs/supported_models.md)
 
-# 开源说明
-FastDeploy遵循[Apache-2.0开源协议](./LICENSE)。 在本项目的开发中，为了对齐[vLLM](https://github.com/vllm-project/vllm)使用接口，参考和直接使用了部分vLLM代码，在此表示感谢。
+## Supported Models
+
+| Model | Data Type | PD Disaggregation | Chunked Prefill | Prefix Caching |  MTP | CUDA Graph | Maximum Context Length |
+|:--- | :------- | :---------- | :-------- | :-------- | :----- | :----- | :----- |
+|ERNIE-4.5-300B-A47B | BF16/WINT4/WINT8/W4A8C8/WINT2/FP8 | ✅（WINT4/W4A8C8/Expert Parallelism)| ✅ | ✅|✅(WINT4)| WIP |128K |
+|ERNIE-4.5-300B-A47B-Base| BF16/WINT4/WINT8 | ✅（WINT4/Expert Parallelism)| ✅ | ✅|✅(WINT4)| ❌ | 128K |
+|ERNIE-4.5-VL-424B-A47B | BF16/WINT4/WINT8 | WIP | ✅ | WIP | ❌ | WIP |128K |
+|ERNIE-4.5-VL-28B-A3B | BF16/WINT4/WINT8 | ❌ | ✅ | WIP | ❌ | WIP |128K |
+|ERNIE-4.5-21B-A3B | BF16/WINT4/WINT8/FP8  |  ❌ |  ✅ |  ✅ | WIP | ✅|128K |
+|ERNIE-4.5-21B-A3B-Base | BF16/WINT4/WINT8/FP8  |  ❌ |  ✅ |  ✅ | WIP | ✅|128K |
+|ERNIE-4.5-0.3B | BF16/WINT8/FP8  |  ❌ |  ✅ |  ✅ | ❌ | ✅| 128K |
+
+## Advanced Usage
+
+- [Quantization](./docs/quantization/README.md)
+- [PD Disaggregation Deployment](./docs/features/pd_disaggregation.md)
+- [Speculative Decoding](./docs/features/speculative_decoding.md)
+- [Prefix Caching](./docs/features/prefix_caching.md)
+- [Chunked Prefill](./docs/features/chunked_prefill.md)
+
+## Acknowledgement
+
+FastDeploy is licensed under the [Apache-2.0 open-source license](./LICENSE). During development, portions of [vLLM](https://github.com/vllm-project/vllm) code were referenced and incorporated to maintain interface compatibility, for which we express our gratitude.

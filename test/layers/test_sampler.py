@@ -34,14 +34,14 @@ def _create_penalty_tensor(batch_size: int,
                        dtype="float32")
 
 
-def _create_prompt_tokens_tensor(
+def _create_tokens_tensor(
     batch_size: int,
     max_seq_len: int,
 ) -> paddle.Tensor:
-    prompt_tokens = paddle.full(shape=[batch_size, max_seq_len],
+    pre_token_ids = paddle.full(shape=[batch_size, max_seq_len],
                                 fill_value=-1,
                                 dtype="int64")
-    return prompt_tokens
+    return pre_token_ids
 
 
 def _create_default_sampling_metadata(
@@ -60,7 +60,7 @@ def _create_default_sampling_metadata(
         step_idx=paddle.full(shape=[batch_size, 1],
                              fill_value=0,
                              dtype="int64"),
-        prompt_token_ids=_create_prompt_tokens_tensor(batch_size, max_seq_len),
+        pre_token_ids=_create_tokens_tensor(batch_size, max_seq_len),
         frequency_penalties=_create_penalty_tensor(batch_size, 0.0),
         presence_penalties=_create_penalty_tensor(batch_size, 0.0),
         repetition_penalties=_create_penalty_tensor(batch_size, 1.0),

@@ -17,6 +17,7 @@
 #pragma once
 
 #include "cutlass/numeric_conversion.h"
+#include "cutlass_extensions/wint_type_traits.h"
 #include "helper.h"
 #include "moe/fused_moe_helper.h"
 
@@ -71,9 +72,9 @@ void FusedMoeKernel(const paddle::Tensor& input,
 
     auto* output_data = output->data<data_t>();
 
-    auto fp16_moe_gemm_runner = MoeGemmRunner<DataType_, DataType_>();
-    auto int8_moe_gemm_runner = MoeGemmRunner<DataType_, uint8_t>();
-    auto int4_moe_gemm_runner = MoeGemmRunner<DataType_, cutlass::uint4b_t>();
+    auto fp16_moe_gemm_runner = MoeGemmRunner<DataType_, cutlass::WintQuantTraits<DataType_, cutlass::WintQuantMethod::kNone>>();
+    auto int8_moe_gemm_runner = MoeGemmRunner<DataType_, cutlass::WintQuantTraits<DataType_, cutlass::WintQuantMethod::kWeightOnlyInt8>>();
+    auto int4_moe_gemm_runner = MoeGemmRunner<DataType_, cutlass::WintQuantTraits<DataType_, cutlass::WintQuantMethod::kWeightOnlyInt4>>();
 
     using NvType = typename traits_::DataType;
     auto moe_compute = MoeHelper<data_t, NvType>(quant_method,

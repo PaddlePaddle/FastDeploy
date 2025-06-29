@@ -1,0 +1,5 @@
+aiohttp
+tqdm
+numpy
+Pillow
+pyyaml

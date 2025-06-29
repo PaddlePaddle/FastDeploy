@@ -1,0 +1,9 @@
+enable_mm: True
+max_model_len: 32768
+max_num_seqs: 56
+gpu_memory_utilization: 0.9
+kv_cache_ratio: 0.8
+tensor_parallel_size: 8
+quantization: wint4
+limit_mm_per_prompt: '{"image": 100, "video": 100}'
+reasoning_parser: ernie-45-vl

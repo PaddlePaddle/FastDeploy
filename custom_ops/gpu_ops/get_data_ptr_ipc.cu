@@ -16,7 +16,7 @@
 #include "helper.h"
 
 namespace {
-int sharedMemoryOpen(const char *name, size_t sz, sharedMemoryInfo *info) {
+int sharedMemoryOpen2(const char *name, size_t sz, sharedMemoryInfo *info) {
     info->size = sz;
     info->shmFd = shm_open(name, O_RDWR, 0777);
     if (info->shmFd < 0) {
@@ -40,7 +40,7 @@ std::vector<paddle::Tensor> GetDataPtrIpc(const paddle::Tensor &tmp_input,
     auto out_data_ptr_tensor_ptr = out_data_ptr_tensor.data<int64_t>();
     volatile shmStruct *shm = NULL;
     sharedMemoryInfo info;
-    if (sharedMemoryOpen(shm_name.c_str(), sizeof(shmStruct), &info) != 0) {
+    if (sharedMemoryOpen2(shm_name.c_str(), sizeof(shmStruct), &info) != 0) {
         printf("Failed to create shared memory slab\n");
         printf("Func GetDataPtrIpc. Shm_name: %s\n", shm_name.c_str());
         exit(EXIT_FAILURE);

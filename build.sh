@@ -17,8 +17,9 @@
 BUILD_WHEEL=${1:-1}
 PYTHON_VERSION=${2:-"python"}
 export python=$PYTHON_VERSION
-CPU_USE_BF16=${3:-"false"}
-BUILDING_ARCS=${4:-""}
+FD_CPU_USE_BF16=${3:-"false"}
+FD_BUILDING_ARCS=${4:-""}
+
 
 # paddle distributed use to set archs
 unset PADDLE_CUDA_ARCH_LIST
@@ -30,12 +31,8 @@ EGG_DIR="fastdeploy.egg-info"
 
 # custom_ops directory config
 OPS_SRC_DIR="custom_ops"
-OPS_BUILD_DIR="build"
-OPS_EGG_DIR="efficitentllm_ops.egg-info"
 OPS_TMP_DIR_BASE="tmp_base"
 OPS_TMP_DIR="tmp"
-
-TEST_DIR="tests"
 
 # command line log config
 RED='\033[0;31m'
@@ -44,13 +41,14 @@ GREEN='\033[1;32m'
 BOLD='\033[1m'
 NONE='\033[0m'
 
+DEVICE_TYPE="gpu"
 
 function python_version_check() {
   PY_MAIN_VERSION=`${python} -V 2>&1 | awk '{print $2}' | awk -F '.' '{print $1}'`
   PY_SUB_VERSION=`${python} -V 2>&1 | awk '{print $2}' | awk -F '.' '{print $2}'`
   echo -e "find python version ${PY_MAIN_VERSION}.${PY_SUB_VERSION}"
-  if [ $PY_MAIN_VERSION -ne "3" -o $PY_SUB_VERSION -lt "8" ]; then
-    echo -e "${RED}FAIL:${NONE} please use Python >= 3.8"
+  if [ $PY_MAIN_VERSION -ne "3" -o $PY_SUB_VERSION -lt "9" ]; then
+    echo -e "${RED}FAIL:${NONE} please use Python >= 3.9"
     exit 1
   fi
 }
@@ -75,6 +73,7 @@ function copy_ops(){
     WHEEL_CPU_NAME="fastdeploy_cpu_ops-${OPS_VERSION}-${PY_VERSION}-${SYSTEM_VERSION}-${PROCESSOR_VERSION}.egg"
     is_rocm=`$python -c "import paddle; print(paddle.is_compiled_with_rocm())"`
     if [ "$is_rocm" = "True" ]; then
+      DEVICE_TYPE="rocm"
       cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/gpu
       echo -e "ROCM ops have been copy to fastdeploy"
       return
@@ -82,6 +81,7 @@ function copy_ops(){
     mkdir -p ../fastdeploy/model_executor/ops/base
     is_cuda=`$python -c "import paddle; print(paddle.is_compiled_with_cuda())"`
     if [ "$is_cuda" = "True" ]; then
+      DEVICE_TYPE="gpu"
       cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
       cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/gpu
       echo -e "BASE and CUDA ops have been copy to fastdeploy"
@@ -90,6 +90,7 @@ function copy_ops(){
 
     is_xpu=`$python -c "import paddle; print(paddle.is_compiled_with_xpu())"`
     if [ "$is_xpu" = "True" ]; then
+      DEVICE_TYPE="xpu"
       cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/xpu
       echo -e "xpu ops have been copy to fastdeploy"
       return
@@ -97,20 +98,14 @@ function copy_ops(){
 
     is_npu=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device('npu'))"`
     if [ "$is_npu" = "True" ]; then
+      DEVICE_TYPE="npu"
       cp -r ${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/npu
       echo -e "npu ops have been copy to fastdeploy"
       return
     fi
 
+    DEVICE_TYPE="cpu"
     cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
-    cd ${OPS_TMP_DIR}/${WHEEL_CPU_NAME}/xFasterTransformer/build/
-    for file in *_pd_.so; do
-      mv "$file" "${file/_pd_/}"
-    done
-    cd ../../x86-simd-sort/builddir/
-    for file in *_pd_.so; do
-      mv "$file" "${file/_pd_/}"
-    done
     cd ../../../../
     cp -r ${OPS_TMP_DIR}/${WHEEL_CPU_NAME}/* ../fastdeploy/model_executor/ops/cpu
     echo -e "BASE and CPU ops have been copy to fastdeploy"
@@ -122,15 +117,30 @@ function build_and_install_ops() {
   export no_proxy=bcebos.com,paddlepaddle.org.cn,${no_proxy}
   echo -e "${BLUE}[build]${NONE} build and install fastdeploy_base_ops..."
   ${python} setup_ops_base.py install --install-lib ${OPS_TMP_DIR_BASE}
+  find ${OPS_TMP_DIR_BASE} -type f -name "*.o" -exec rm -f {} \;
   echo -e "${BLUE}[build]${NONE} build and install fastdeploy_ops..."
-  if [ "$CPU_USE_BF16" == "true" ]; then
-      CPU_USE_BF16=True ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
-      :
-  elif [ "$CPU_USE_BF16" == "false" ]; then
+  TMP_DIR_REAL_PATH=`readlink -f ${OPS_TMP_DIR}`
+  is_xpu=`$python -c "import paddle; print(paddle.is_compiled_with_xpu())"`
+  if [ "$is_xpu" = "True" ]; then
+    cd xpu_ops/src
+    bash build.sh ${TMP_DIR_REAL_PATH}
+    cd ../..
+  elif [ "$FD_CPU_USE_BF16" == "true" ]; then
+    if [ "$FD_BUILDING_ARCS" == "" ]; then
+      FD_CPU_USE_BF16=True ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
+    else
+      FD_BUILDING_ARCS=${FD_BUILDING_ARCS} FD_CPU_USE_BF16=True ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
+    fi
+    find ${OPS_TMP_DIR} -type f -name "*.o" -exec rm -f {} \;
+  elif [ "$FD_CPU_USE_BF16" == "false" ]; then
+    if [ "$FD_BUILDING_ARCS" == "" ]; then
       ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
-      :
+    else
+      FD_BUILDING_ARCS=${FD_BUILDING_ARCS} ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
+    fi
+    find ${OPS_TMP_DIR} -type f -name "*.o" -exec rm -f {} \;
   else
-      echo "Error: Invalid parameter '$CPU_USE_BF16'. Please use true or false."
+      echo "Error: Invalid parameter '$FD_CPU_USE_BF16'. Please use true or false."
       exit 1
   fi
   if [ $? -ne 0 ]; then
@@ -146,11 +156,7 @@ function build_and_install_ops() {
 
 function build_and_install() {
   echo -e "${BLUE}[build]${NONE} building fastdeploy wheel..."
-  if [ "$BUILDING_ARCS" == "" ]; then
-      ${python} setup.py bdist_wheel --python-tag py3
-  else
-      BUILDING_ARCS=${BUILDING_ARCS} ${python} setup.py bdist_wheel --python-tag py3
-  fi
+  ${python} setup.py bdist_wheel --python-tag=py3
 
   if [ $? -ne 0 ]; then
     echo -e "${RED}[FAIL]${NONE} build fastdeploy wheel failed"
@@ -174,10 +180,12 @@ function cleanup() {
   rm -rf $BUILD_DIR $EGG_DIR
   if [ `${python} -m pip list | grep fastdeploy | wc -l` -gt 0  ]; then
     echo -e "${BLUE}[init]${NONE} uninstalling fastdeploy..."
-    ${python} -m pip uninstall -y fastdeploy
+    ${python} -m pip uninstall -y fastdeploy-${DEVICE_TYPE}
   fi
 
   rm -rf $OPS_SRC_DIR/$BUILD_DIR $OPS_SRC_DIR/$EGG_DIR
+  rm -rf $OPS_SRC_DIR/$OPS_TMP_DIR_BASE
+  rm -rf $OPS_SRC_DIR/$OPS_TMP_DIR
 }
 
 function abort() {
@@ -187,7 +195,7 @@ function abort() {
   cur_dir=`basename "$pwd"`
 
   rm -rf $BUILD_DIR $EGG_DIR $DIST_DIR
-  ${python} -m pip uninstall -y fastdeploy
+  ${python} -m pip uninstall -y fastdeploy-${DEVICE_TYPE}
 
   rm -rf $OPS_SRC_DIR/$BUILD_DIR $OPS_SRC_DIR/$EGG_DIR
 }

@@ -97,6 +97,7 @@ struct RemoteCacheKvIpc {
 
     static RemoteCacheKvIpc::save_cache_kv_complete_signal_layerwise_meta_data open_shm_and_get_complete_signal_meta_data(
         const int rank_id,
+        const int device_id,
         const bool keep_pd_step_flag);
     static void CUDART_CB save_cache_kv_complete_signal_layerwise(void* meta_data);
     static void CUDART_CB save_cache_kv_complete_signal_layerwise_per_query(void* meta_data);

@@ -23,11 +23,12 @@ import paddle
 @dataclass
 class SamplingMetadata:
     """
+    metadata for sampling.
     """
 
     temperature: paddle.Tensor
 
-    prompt_token_ids: paddle.Tensor
+    pre_token_ids: paddle.Tensor
     eos_token_ids: paddle.Tensor
     frequency_penalties: paddle.Tensor
     presence_penalties: paddle.Tensor

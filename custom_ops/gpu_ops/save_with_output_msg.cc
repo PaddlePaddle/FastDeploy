@@ -66,6 +66,10 @@ void save_kernel(const paddle::Tensor& x,
             << std::endl;
 #endif
     }
+#ifdef SAVE_WITH_OUTPUT_DEBUG
+        std::cout << "msg_queue_id is: "
+                  << msg_queue_id << std::endl;
+#endif
     static key_t key = ftok("/dev/shm", msg_queue_id);
 
     static int msgid = msgget(key, IPC_CREAT | 0666);

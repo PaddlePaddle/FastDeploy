@@ -14,15 +14,16 @@
 # limitations under the License.
 """
 
-import os
 from abc import ABC, abstractmethod
 
 import numpy as np
-from paddlenlp.generation import GenerationConfig
-from paddlenlp.transformers import Llama3Tokenizer, LlamaTokenizer
+from paddleformers.generation import GenerationConfig
+from paddleformers.transformers import Llama3Tokenizer, LlamaTokenizer
 
+from fastdeploy import envs
 from fastdeploy.utils import data_processor_logger
 
+_SAMPLING_EPS = 1e-5
 
 class BaseDataProcessor(ABC):
     """base class for data processor"""
@@ -50,6 +51,27 @@ class BaseDataProcessor(ABC):
             f"eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id}, "
             f"mask_token is {self.tokenizer.mask_token}, {self.tokenizer.mask_token_id}"
         ))
+
+    def _apply_default_parameters(self, request):
+        """
+        Apply default value for parameters in request
+        """
+
+        def set_value(req, key, value):
+            value = getattr(self.generation_config, key, value)
+            if isinstance(req, dict):
+                if key not in req:
+                    req[key] = value
+            else:
+                if req.get(key) is None:
+                    req.set(key, value)
+
+        set_value(request, "top_p", 0.7)
+        set_value(request, "temperature", 1.0)
+        set_value(request, "repetition_penalty", 1.0)
+        set_value(request, "frequency_penalty", 0.0)
+        set_value(request, "presence_penalty", 0.0)
+        return request
 
     @abstractmethod
     def process_request(self, request, **kwargs):
@@ -129,7 +151,7 @@ class BaseDataProcessor(ABC):
 
 class DataProcessor(BaseDataProcessor):
 
-    def __init__(self, model_name_or_path):
+    def __init__(self, model_name_or_path, reasoning_parser_obj=None):
         """
             Initializes the DecodeStatus object.
 
@@ -145,6 +167,7 @@ class DataProcessor(BaseDataProcessor):
         """
 
         self.model_name_or_path = model_name_or_path
+
         self._init_config()
 
         self.decode_status = dict()
@@ -154,12 +177,15 @@ class DataProcessor(BaseDataProcessor):
                                 eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id} "
         )
 
-        from paddlenlp.trl.llm_utils import get_eos_token_id
+        from paddleformers.trl.llm_utils import get_eos_token_id
 
         self.eos_token_ids = get_eos_token_id(self.tokenizer,
                                               self.generation_config)
         self.eos_token_id_len = len(self.eos_token_ids)
         self.pad_token_id = self.get_pad_id()
+        self.reasoning_parser = None
+        if reasoning_parser_obj:
+            self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
         self.tokenizer.pad_token_id = self.pad_token_id
 
     def _init_config(self):
@@ -175,7 +201,7 @@ class DataProcessor(BaseDataProcessor):
         Raises:
             无异常抛出。
         """
-        self.use_hf_tokenizer = int(os.getenv("USE_HF_TOKENIZER", "0")) == 1
+        self.use_hf_tokenizer = int(envs.FD_USE_HF_TOKENIZER) == 1
 
         # Generation config
         try:
@@ -187,7 +213,7 @@ class DataProcessor(BaseDataProcessor):
             )
             self.generation_config = None
 
-    def process_request(self, request, max_model_len=None):
+    def process_request(self, request, max_model_len=None, **kwargs):
         """
         Preprocess the request
 
@@ -198,6 +224,7 @@ class DataProcessor(BaseDataProcessor):
             bool: Whether preprocessing is successful
             str: error message
         """
+        request = self._apply_default_parameters(request)
         if request.get("eos_token_ids") is None or len(
                 request.eos_token_ids) == 0:
             request.eos_token_ids = self.eos_token_ids
@@ -217,20 +244,23 @@ class DataProcessor(BaseDataProcessor):
                 if self.tokenizer.chat_template is None:
                     raise ValueError(
                         "This model does not support chat_template.")
-                request.prompt_token_ids = self.messages2ids(request.messages)
+                task = request.to_dict()
+                task['enable_thinking'] = kwargs.get("enable_thinking", True)
+                request.prompt_token_ids = self.messages2ids(task)
             else:
                 raise ValueError(
                     f"The request should have `input_ids`, `text` or `messages`: {request}."
                 )
-
-        if max_model_len is not None and len(
-                request.prompt_token_ids) > max_model_len:
-            request.prompt_token_ids = request.prompt_token_ids[:
-                                                                max_model_len -
-                                                                1]
+        if request.get("max_tokens") is None:
+            request.set("max_tokens",
+                        max(1, max_model_len - len(request.prompt_token_ids)))
+        if request.get("temperature") < _SAMPLING_EPS:
+            # zero temperature is equivalent to greedy sampling
+            request.set("temperature", 1)
+        data_processor_logger.info(f"Processed request {request}")
         return request
 
-    def process_request_dict(self, request, max_model_len=None):
+    def process_request_dict(self, request, max_model_len=None, **kwargs):
         """
         Preprocess the request
 
@@ -241,6 +271,7 @@ class DataProcessor(BaseDataProcessor):
             bool: Whether preprocessing is successful
             str: error message
         """
+        request = self._apply_default_parameters(request)
         if not request.get('eos_token_ids'):
             request['eos_token_ids'] = self.eos_token_ids
 
@@ -251,6 +282,7 @@ class DataProcessor(BaseDataProcessor):
             request['stop_token_ids'] = stop_seqs
             request['stop_seqs_len'] = stop_seqs_len
 
+        data_processor_logger.info(f"Processing request {request}")
         # 处理prompt_token_ids
         if not request.get('prompt_token_ids'):
             if 'prompt' in request:
@@ -261,19 +293,19 @@ class DataProcessor(BaseDataProcessor):
                 if self.tokenizer.chat_template is None:
                     raise ValueError(
                         "This model does not support chat_template.")
-                request['prompt_token_ids'] = self.messages2ids(
-                    request['messages']).tolist()
+                request['prompt_token_ids'] = self.messages2ids(request)
             else:
                 raise ValueError(
                     f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}"
                 )
 
-        # 截断超过长度限制的prompt
-        if max_model_len is not None and len(
-                request['prompt_token_ids']) > max_model_len:
-            request['prompt_token_ids'] = request[
-                'prompt_token_ids'][:max_model_len - 1]
-
+        if request.get("max_tokens") is None:
+            request["max_tokens"] = max(
+                1, max_model_len - len(request['prompt_token_ids']))
+        if request.get("temperature") < _SAMPLING_EPS:
+            # zero temperature is equivalent to greedy sampling
+            request["temperature"] = 1
+        data_processor_logger.info(f"Processed request {request}")
         return request
 
     def process_response(self, response_dict, **kwargs):
@@ -286,24 +318,26 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-        is_end = response_dict.finished
         req_id = response_dict.request_id
-
         token_ids = response_dict.outputs.token_ids
-        response_dict.outputs.text = self.ids2tokens(token_ids, req_id)
-        response_dict.usage = {
-            "completion_tokens": response_dict.outputs.index + 1
-        }
+        if token_ids[-1] == self.tokenizer.eos_token_id:
+            token_ids = token_ids[:-1]
+        full_text = self.tokenizer.decode(token_ids)
 
-        if is_end:
-            self.clear_request_status(req_id)
-            data_processor_logger.debug(
-                "Request id: {} has been completed.".format(token_ids))
-            response_dict.outputs.text = self.ids2tokens(token_ids, req_id)
-            self.clear_request_status(req_id)
+        # 模型支持思考,并且支持思考
+        if self.reasoning_parser:
+            reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
+                full_text, response_dict)
+            response_dict.outputs.text = text
+            response_dict.outputs.reasoning_content = reasoning_content
+        else:
+            # 模型不支持思考,并且没单独设置enable_thinking为false
+            response_dict.outputs.text = full_text
+        data_processor_logger.info(f"req_id:{req_id}, token)ids: {token_ids}")
+
         return response_dict
 
-    def process_response_dict(self, response_dict, stream=True):
+    def process_response_dict_normal(self, response_dict, **kwargs):
         """
         Preprocess the response
 
@@ -313,23 +347,85 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
+        token_ids = response_dict["outputs"]["token_ids"]
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
+        if is_end and len(token_ids) > 0:
+            if token_ids[-1] == self.tokenizer.eos_token_id:
+                token_ids = token_ids[:-1]
+        delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
+        if is_end:
+            full_text = previous_texts + delta_text
+            if self.reasoning_parser:
+                reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
+                    full_text, response_dict)
+                response_dict["outputs"]["text"] = text
+                response_dict["outputs"][
+                    "reasoning_content"] = reasoning_content
+            else:
+                response_dict["outputs"]["text"] = full_text
+            data_processor_logger.info(
+                f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}"
+            )
+            del self.decode_status[req_id]
+        return response_dict
 
+    def process_response_dict_streaming(self, response_dict, **kwargs):
+        """
+        Preprocess the response
+
+        Args:
+            response_dict (Dict): response for engine, contain ids fields
+
+        Returns:
+            Dict: response contain text fields
+        """
+        enable_thinking = kwargs.get("enable_thinking")
+        is_end = response_dict["finished"]
+        req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
 
-        if is_end:
-            data_processor_logger.debug(
-                "Request id: {} has been completed.".format(token_ids))
-            full_text = self.clear_request_status(req_id)
-            if not stream:
-                response_dict["outputs"]["text"] = full_text
-            else:
-                response_dict["outputs"]["text"] = ""
+        if is_end and len(token_ids) > 0:
+            if token_ids[-1] == self.tokenizer.eos_token_id:
+                token_ids = token_ids[:-1]
+        delta_text, previous_token_ids, previous_texts = self.ids2tokens(
+            token_ids, req_id)
+
+        if enable_thinking and self.reasoning_parser:
+            reasoning_content, text = self.reasoning_parser.extract_reasoning_content_streaming(
+                previous_texts, previous_texts + delta_text, delta_text,
+                previous_token_ids, previous_token_ids + token_ids, token_ids)
+            response_dict["outputs"]["text"] = text
+            response_dict["outputs"]["reasoning_content"] = reasoning_content
         else:
-            response_dict["outputs"]["text"] = self.ids2tokens(
-                token_ids, req_id)
+            response_dict["outputs"]["text"] = delta_text
+        if is_end:
+            data_processor_logger.info(
+                f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}"
+            )
+            del self.decode_status[req_id]
         return response_dict
+
+    def process_response_dict(self, response_dict, **kwargs):
+        """
+        Preprocess the response
+
+        Args:
+            response_dict (Dict): response for engine, contain ids fields
+
+        Returns:
+            Dict: response contain text fields
+        """
+        enable_thinking = kwargs.pop("enable_thinking", True)
+        if enable_thinking is None:
+            enable_thinking = True
+        stream = kwargs.get("stream", True)
+        if stream:
+            return self.process_response_dict_streaming(
+                response_dict, enable_thinking=enable_thinking, **kwargs)
+        else:
+            return self.process_response_dict_normal(
+                response_dict=response_dict, enable_thinking=enable_thinking)
 
     def text2ids(self, text, max_model_len, raw_request=True):
         """
@@ -349,28 +445,20 @@ class DataProcessor(BaseDataProcessor):
                 truncation=True,
             )
         else:
-            if not raw_request or self.tokenizer.chat_template is None:
-                text = [text] if isinstance(text, str) else text
-                chat_template = False
-            elif self.tokenizer.chat_template is not None:
-                text = [text] if isinstance(text, str) else text
-                text = [
-                    self.tokenizer.apply_chat_template(sentence,
-                                                       tokenize=False)
-                    for sentence in text
-                ]
-                chat_template = True
+            text = [text] if isinstance(text, str) else text
+
             tokens = self.tokenizer(
                 text,
                 return_tensors="np",
                 padding=True,
                 truncation=True,
                 max_length=max_model_len,
-                add_special_tokens=chat_template,
+                add_special_tokens=False,
             )
+
         return tokens["input_ids"][0]
 
-    def messages2ids(self, messages):
+    def messages2ids(self, request):
         """
         Convert multi-turn messages into ID sequences.
 
@@ -380,9 +468,21 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             List[int]: ID sequences
         """
-        message_result = self.tokenizer.apply_chat_template(
-            messages, return_tensors="pd")
-        return np.array(message_result["input_ids"][0])
+
+        spliced_message = self.tokenizer.apply_chat_template(
+            request,
+            tokenize=False,
+            split_special_tokens=False,
+            add_special_tokens=False,
+            return_tensors="pd")
+        req_id = None
+        tokens = self.tokenizer.tokenize(spliced_message)
+        if isinstance(request, dict):
+            req_id = request.get("request_id", None)
+        token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+        data_processor_logger.info(
+            f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
+        return token_ids
 
     def ids2tokens(self, token_id, task_id):
         """
@@ -417,18 +517,20 @@ class DataProcessor(BaseDataProcessor):
         else:
             if task_id not in self.decode_status:
                 # prefix offset & read offset & history token ids & history token strings
-                self.decode_status[task_id] = [0, 0, [], []]
+                self.decode_status[task_id] = [0, 0, [], ""]
 
             prefix_offset = self.decode_status[task_id][0]
             read_offset = self.decode_status[task_id][1]
             previous_token_ids = self.decode_status[task_id][2]
+            previous_texts = self.decode_status[task_id][3]
             decode_str, prefix_offset, read_offset = self.tokenizer.decode_token(
                 previous_token_ids + token_id, prefix_offset, read_offset)
             self.decode_status[task_id][0] = prefix_offset
             self.decode_status[task_id][1] = read_offset
             self.decode_status[task_id][2] += token_id
-            self.decode_status[task_id][3].append(decode_str)
-            return decode_str
+            self.decode_status[task_id][3] += decode_str
+
+            return decode_str, previous_token_ids, previous_texts
 
     def _load_tokenizer(self):
         """
@@ -437,13 +539,12 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             tokenizer (AutoTokenizer)
         """
-
         if self.use_hf_tokenizer:
             from transformers import AutoTokenizer
             return AutoTokenizer.from_pretrained(self.model_name_or_path,
                                                  use_fast=False)
         else:
-            from paddlenlp.transformers import AutoTokenizer
+            from paddleformers.transformers import AutoTokenizer
             return AutoTokenizer.from_pretrained(self.model_name_or_path,
                                                  padding_side="left",
                                                  use_fast=True)

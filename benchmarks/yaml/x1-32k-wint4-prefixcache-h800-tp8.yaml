@@ -1,0 +1,10 @@
+enable_prefix_caching: True
+num_gpu_blocks_override: 8000
+max_model_len: 32768
+max_num_seqs: 64
+gpu_memory_utilization: 0.85
+kv_cache_ratio: 0.5
+tensor_parallel_size: 8
+swap_space: 200
+cache_queue_port: 55664
+reasoning_parser: ernie-x1

@@ -96,7 +96,10 @@ std::vector<std::vector<int64_t>> MoeExpertReduceInferShape(
     const std::vector<int64_t> &permute_indices_per_token_shape,
     const std::vector<int64_t> &top_k_indices_shape,
     const paddle::optional<std::vector<int64_t>> &ffn2_bias_shape) {
-  return {ffn_out_shape};
+  const int moe_topk = top_k_indices_shape[1];
+  auto out_shape = ffn_out_shape;
+  if (out_shape[0] != -1) out_shape[0] /= moe_topk;
+  return {out_shape};
 }
 
 std::vector<paddle::DataType> MoeExpertReduceInferDtype(

@@ -23,13 +23,13 @@
 
 using cache_write_complete_signal_type = RemoteCacheKvIpc::save_cache_kv_complete_signal_layerwise_meta_data;
 
-paddle::Tensor OpenShmAndGetMetaSignalFunc(const int rank, const bool keep_pd_step_flag) {
+paddle::Tensor OpenShmAndGetMetaSignalFunc(const int rank, const int device_id, const bool keep_pd_step_flag) {
     cache_write_complete_signal_type kv_signal_metadata;
     const char* fmt_write_cache_completed_signal_str = std::getenv("FLAGS_fmt_write_cache_completed_signal");
     if (fmt_write_cache_completed_signal_str &&
         (std::strcmp(fmt_write_cache_completed_signal_str, "true") == 0 ||
          std::strcmp(fmt_write_cache_completed_signal_str, "1") == 0)) {
-        kv_signal_metadata = RemoteCacheKvIpc::open_shm_and_get_complete_signal_meta_data(rank, keep_pd_step_flag);
+        kv_signal_metadata = RemoteCacheKvIpc::open_shm_and_get_complete_signal_meta_data(rank, device_id, keep_pd_step_flag);
     }
 
     auto kv_signal_metadata_out = paddle::full({3}, -1, paddle::DataType::INT64, paddle::CPUPlace());
@@ -59,23 +59,23 @@ void InitKVSignalPerQuery(const paddle::Tensor &seq_lens_encoder_tensor,
     }
 }
 
-std::vector<paddle::Tensor> OpenShmAndGetMetaSignal(const int rank, const bool keep_pd_step_flag) {
-    return {OpenShmAndGetMetaSignalFunc(rank, keep_pd_step_flag)};
+std::vector<paddle::Tensor> OpenShmAndGetMetaSignal(const int rank, const int device_id, const bool keep_pd_step_flag) {
+    return {OpenShmAndGetMetaSignalFunc(rank, device_id, keep_pd_step_flag)};
 }
 
 
-std::vector<std::vector<int64_t>> OpenShmAndGetMetaSignalShape(const int rank, const bool keep_pd_step_flag) {
+std::vector<std::vector<int64_t>> OpenShmAndGetMetaSignalShape(const int rank, const int device_id, const bool keep_pd_step_flag) {
     return {{3}};
 }
 
-std::vector<paddle::DataType> OpenShmAndGetMetaSignalDtype(const int rank, const bool keep_pd_step_flag) {
+std::vector<paddle::DataType> OpenShmAndGetMetaSignalDtype(const int rank, const int device_id, const bool keep_pd_step_flag) {
     return {paddle::DataType::INT64};
 }
 
 PD_BUILD_STATIC_OP(open_shm_and_get_meta_signal)
     .Inputs({})
     .Outputs({"kv_signal_metadata"})
-    .Attrs({"rank: int", "keep_pd_step_flag: bool"})
+    .Attrs({"rank: int", "device_id: int", "keep_pd_step_flag: bool"})
     .SetKernelFn(PD_KERNEL(OpenShmAndGetMetaSignal))
     .SetInferShapeFn(PD_INFER_SHAPE(OpenShmAndGetMetaSignalShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(OpenShmAndGetMetaSignalDtype));

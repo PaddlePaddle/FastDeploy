@@ -23,6 +23,7 @@ import numpy as np
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import ZmqClient, IPCSignal
+from fastdeploy.metrics.work_metrics import work_process_metrics
 from fastdeploy.utils import api_server_logger, EngineError
 
 
@@ -30,9 +31,16 @@ class EngineClient:
     """
     EngineClient is a class that handles the communication between the client and the server.
     """
-    def __init__(self, tokenizer, max_model_len, tensor_parallel_size, pid, enable_mm=False):
-        input_processor =  InputPreprocessor(tokenizer, enable_mm)
+
+    def __init__(self, tokenizer, max_model_len, tensor_parallel_size, pid, limit_mm_per_prompt, mm_processor_kwargs,
+                 enable_mm=False, reasoning_parser=None):
+        input_processor = InputPreprocessor(tokenizer,
+                                            reasoning_parser,
+                                            limit_mm_per_prompt,
+                                            mm_processor_kwargs,
+                                            enable_mm)
         self.enable_mm = enable_mm
+        self.reasoning_parser = reasoning_parser
         self.data_processor = input_processor.create_processor()
         self.max_model_len = max_model_len
         self.worker_healthy_live_recorded_time_array = np.zeros(shape=[tensor_parallel_size], dtype=np.int32)
@@ -73,6 +81,7 @@ class EngineClient:
             prompts["max_tokens"] = self.max_model_len - 1
 
         self.add_requests(prompts)
+        return prompts["prompt_token_ids"]
 
     def add_requests(self, task):
         """
@@ -85,7 +94,6 @@ class EngineClient:
         Returns:
             None
         """
-        self.vaild_parameters(task)
 
         task["preprocess_start_time"] = time.time()
         try:
@@ -94,7 +102,15 @@ class EngineClient:
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
             task["max_tokens"] = min(self.max_model_len - input_ids_len , task.get("max_tokens"))
+            if task.get("reasoning_max_tokens", None) is None:
+                task["reasoning_max_tokens"] = max(int(task["max_tokens"] * 0.8), 1)
             min_tokens = task.get("min_tokens", 1)
+            if 'messages' in task:
+                del task['messages']
+            api_server_logger.info(f"task['max_tokens']:{task['max_tokens']}")
+            work_process_metrics.request_params_max_tokens.observe(task["max_tokens"])
+            work_process_metrics.prompt_tokens_total.inc(input_ids_len)
+            work_process_metrics.request_prompt_tokens.observe(input_ids_len)
         except Exception as e:
             api_server_logger.error(e)
             raise EngineError(str(e), error_code=400)
@@ -102,7 +118,7 @@ class EngineClient:
         if input_ids_len + min_tokens >= self.max_model_len:
             error_msg = (
                 f"Input text is too long, input_ids_len ({input_ids_len}) "
-                f"+ min_dec_len ({min_tokens}) >= max_model_len "
+                f"+ min_tokens({min_tokens}) >= max_model_len({self.max_model_len})"
             )
             api_server_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
@@ -120,6 +136,8 @@ class EngineClient:
             f"Cache request with request_id ({task.get('request_id')}), "
             f"cost {time.time() - preprocess_cost_time}"
         )
+
+        self.vaild_parameters(task)
         api_server_logger.debug(f"Recieve task: {task}")
         try:
             if not self.enable_mm:
@@ -143,6 +161,10 @@ class EngineClient:
         if data.get("max_tokens"):
             if data["max_tokens"] < 1 or data["max_tokens"] >= self.max_model_len:
                 raise ValueError(f"max_tokens can be defined [1, {self.max_model_len}).")
+
+        if data.get("reasoning_max_tokens"):
+            if data["reasoning_max_tokens"] > data["max_tokens"] or data["reasoning_max_tokens"] < 1:
+                raise ValueError("reasoning_max_tokens must be between max_tokens and 1")
 
         if data.get("top_p"):
             if data["top_p"] > 1 or data["top_p"] < 0:
@@ -246,4 +268,3 @@ class EngineClient:
             return False, "clear model weight timeout"
         time.sleep(1)
         return True, ""
-

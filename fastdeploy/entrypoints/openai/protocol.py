@@ -15,27 +15,20 @@
 """
 
 from __future__ import annotations
-import time
-from typing import Any, ClassVar, Literal, Optional, Union, List, Dict
 
-from fastapi import UploadFile
-from pydantic import (BaseModel, ConfigDict, Field, TypeAdapter,
-                      ValidationInfo, field_validator, model_validator)
-from typing_extensions import TypeAlias
+import json
+import time
+from typing import Any, List, Literal, Optional, Union
+
+from pydantic import BaseModel, Field, model_validator
 
 #from openai.types.chat import ChatCompletionMessageParam
-from fastdeploy.entrypoints.chat_utils import ChatCompletionMessageParam, parse_chat_messages
-from fastdeploy.engine.sampling_params import SamplingParams
+# from fastdeploy.entrypoints.chat_utils import ChatCompletionMessageParam
 
 
 class ErrorResponse(BaseModel):
     """
-    Standard error response format following OpenAI API specification.
-    
-    Attributes:
-        object (str): Always "error"
-        message (str): Human-readable error message
-        code (int): HTTP status code
+    Error response from OpenAI API.
     """
     object: str = "error"
     message: str
@@ -44,23 +37,14 @@ class ErrorResponse(BaseModel):
 
 class PromptTokenUsageInfo(BaseModel):
     """
-    Token usage information specific to prompt processing.
-    
-    Attributes:
-        cached_tokens (Optional[int]): Number of tokens served from cache
+    Prompt-related token usage info.
     """
     cached_tokens: Optional[int] = None
 
 
 class UsageInfo(BaseModel):
     """
-    Token usage statistics for API requests.
-    
-    Attributes:
-        prompt_tokens (int): Number of tokens in the prompt
-        total_tokens (int): Total tokens used (prompt + completion)
-        completion_tokens (Optional[int]): Tokens generated in completion
-        prompt_tokens_details (Optional[PromptTokenUsageInfo]): Detailed prompt token info
+    Usage info for a single request.
     """
     prompt_tokens: int = 0
     total_tokens: int = 0
@@ -68,45 +52,82 @@ class UsageInfo(BaseModel):
     prompt_tokens_details: Optional[PromptTokenUsageInfo] = None
 
 
+class FunctionCall(BaseModel):
+    """
+    Function call.
+    """
+    name: str
+    arguments: str
+
+
+class ToolCall(BaseModel):
+    """
+    Tool call.
+    """
+    id: str = None
+    type: Literal["function"] = "function"
+    function: FunctionCall
+    index: int
+
+
+class DeltaFunctionCall(BaseModel):
+    """
+    Delta function call.
+    """
+    name: Optional[str] = None
+    arguments: Optional[str] = None
+
+
+# a tool call delta where everything is optional
+class DeltaToolCall(BaseModel):
+    """
+    Delta tool call.
+    """
+    id: Optional[str] = None
+    type: Optional[Literal["function"]] = None
+    index: int
+    function: Optional[DeltaFunctionCall] = None
+
+
+class FunctionDefinition(BaseModel):
+    """
+    Function definition.
+    """
+    name: str
+    description: Optional[str] = None
+    parameters: Optional[dict[str, Any]] = None
+
+
+class ChatCompletionToolsParam(BaseModel):
+    """
+    Chat completion tools parameter.
+    """
+    type: Literal["function"] = "function"
+    function: FunctionDefinition
+
+
 class ChatMessage(BaseModel):
     """
-    Single message in a chat conversation.
-    
-    Attributes:
-        role (str): Role of the message sender (system/user/assistant)
-        content (str): Text content of the message
-        reasoning_content (Optional[str]): Additional reasoning/explanation
+    Chat message.
     """
     role: str
     content: str
     reasoning_content: Optional[str] = None
+    tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
 
 
 class ChatCompletionResponseChoice(BaseModel):
     """
-    Single choice in a chat completion response.
-    
-    Attributes:
-        index (int): Choice index
-        message (ChatMessage): Generated chat message
-        finish_reason (Optional[Literal["stop", "length"]]): Reason for stopping generation
+    Chat completion response choice.
     """
     index: int
     message: ChatMessage
-    finish_reason: Optional[Literal["stop", "length"]]
+    finish_reason: Optional[Literal["stop", "length", "tool_calls"]]
 
 
 class ChatCompletionResponse(BaseModel):
     """
-    Standard chat completion response format.
-    
-    Attributes:
-        id (str): Unique request identifier
-        object (str): Always "chat.completion"
-        created (int): Unix timestamp of creation
-        model (str): Model name used
-        choices (List[ChatCompletionResponseChoice]): Generated response choices
-        usage (UsageInfo): Token usage statistics
+    Chat completion response.
     """
     id: str
     object: str = "chat.completion"
@@ -118,47 +139,28 @@ class ChatCompletionResponse(BaseModel):
 
 class DeltaMessage(BaseModel):
     """
-    Incremental message update for streaming responses.
-    
-    Attributes:
-        role (Optional[str]): Role of the message sender
-        content (Optional[str]): Partial message content
-        token_ids (Optional[List[int]]): Token IDs for the delta content
-        reasoning_content (Optional[str]): Partial reasoning content
+    Delta message for chat completion stream response.
     """
     role: Optional[str] = None
     content: Optional[str] = None
     token_ids: Optional[List[int]] = None
     reasoning_content: Optional[str] = None
+    tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
 
 
 class ChatCompletionResponseStreamChoice(BaseModel):
     """
-    Streaming choice in a chat completion response.
-    
-    Attributes:
-        index (int): Choice index
-        delta (DeltaMessage): Incremental message update
-        finish_reason (Optional[Literal["stop", "length"]]): Reason for stopping
-        arrival_time (Optional[float]): Timestamp when chunk was generated
+    Chat completion response choice for stream response.
     """
     index: int
     delta: DeltaMessage
-    finish_reason: Optional[Literal["stop", "length"]] = None
+    finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
     arrival_time: Optional[float] = None
 
 
 class ChatCompletionStreamResponse(BaseModel):
     """
-    Streaming chat completion response format.
-    
-    Attributes:
-        id (str): Unique request identifier
-        object (str): Always "chat.completion.chunk"
-        created (int): Unix timestamp of creation
-        model (str): Model name used
-        choices (List[ChatCompletionResponseStreamChoice]): Streaming choices
-        usage (Optional[UsageInfo]): Token usage (if enabled in stream options)
+    Chat completion response for stream response.
     """
     id: str
     object: str = "chat.completion.chunk"
@@ -170,16 +172,7 @@ class ChatCompletionStreamResponse(BaseModel):
 
 class CompletionResponseChoice(BaseModel):
     """
-    Single choice in a text completion response.
-    
-    Attributes:
-        index (int): Choice index
-        text (str): Generated text
-        token_ids (Optional[List[int]]): Token IDs for generated text
-        arrival_time (Optional[float]): Timestamp when generated
-        logprobs (Optional[int]): Log probabilities
-        reasoning_content (Optional[str]): Additional reasoning
-        finish_reason (Optional[Literal["stop", "length"]]): Reason for stopping
+    Completion response choice.
     """
     index: int
     text: str
@@ -187,20 +180,13 @@ class CompletionResponseChoice(BaseModel):
     arrival_time: Optional[float] = None
     logprobs: Optional[int] = None
     reasoning_content: Optional[str] = None
-    finish_reason: Optional[Literal["stop", "length"]]
+    finish_reason: Optional[Literal["stop", "length", "tool_calls"]]
+    tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
 
 
 class CompletionResponse(BaseModel):
     """
-    Standard text completion response format.
-    
-    Attributes:
-        id (str): Unique request identifier
-        object (str): Always "text_completion"
-        created (int): Unix timestamp of creation
-        model (str): Model name used
-        choices (List[CompletionResponseChoice]): Generated response choices
-        usage (UsageInfo): Token usage statistics
+    Completion response.
     """
     id: str
     object: str = "text_completion"
@@ -212,16 +198,7 @@ class CompletionResponse(BaseModel):
 
 class CompletionResponseStreamChoice(BaseModel):
     """
-    Streaming choice in a text completion response.
-    
-    Attributes:
-        index (int): Choice index
-        text (str): Partial generated text
-        arrival_time (float): Timestamp when chunk was generated
-        token_ids (Optional[List[int]]): Token IDs for partial text
-        logprobs (Optional[float]): Log probabilities
-        reasoning_content (Optional[str]): Partial reasoning
-        finish_reason (Optional[Literal["stop", "length"]]): Reason for stopping
+    Completion response choice for stream response.
     """
     index: int
     text: str
@@ -229,20 +206,13 @@ class CompletionResponseStreamChoice(BaseModel):
     token_ids: Optional[List[int]] = None
     logprobs: Optional[float] = None
     reasoning_content: Optional[str] = None
-    finish_reason: Optional[Literal["stop", "length"]] = None
+    finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
+    tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
 
 
 class CompletionStreamResponse(BaseModel):
     """
-    Streaming text completion response format.
-    
-    Attributes:
-        id (str): Unique request identifier
-        object (str): Always "text_completion"
-        created (int): Unix timestamp of creation
-        model (str): Model name used
-        choices (List[CompletionResponseStreamChoice]): Streaming choices
-        usage (Optional[UsageInfo]): Token usage (if enabled in stream options)
+    Completion response for stream response.
     """
     id: str
     object: str = "text_completion"
@@ -254,41 +224,55 @@ class CompletionStreamResponse(BaseModel):
 
 class StreamOptions(BaseModel):
     """
-    Configuration options for streaming responses.
-    
-    Attributes:
-        include_usage (Optional[bool]): Whether to include usage stats
-        continuous_usage_stats (Optional[bool]): Whether to send incremental usage
+    Stream options.
     """
     include_usage: Optional[bool] = True
     continuous_usage_stats: Optional[bool] = False
 
 
+class StructuralTag(BaseModel):
+    """
+    Structural tag.
+    """
+    begin: str
+    structural_tag_schema: Optional[dict[str, Any]] = Field(default=None,
+                                                            alias="schema")
+    end: str
+
+
+class JsonSchemaResponseFormat(BaseModel):
+    """
+    Json schema for ResponseFormat.
+    """
+    name: str
+    description: Optional[str] = None
+    json_schema: Optional[dict[str, Any]] = Field(default=None, alias='schema')
+    strict: Optional[bool] = None
+
+
+class StructuralTagResponseFormat(BaseModel):
+    """
+    Structural tag for ResponseFormat.
+    """
+    type: Literal["structural_tag"]
+    structures: list[StructuralTag]
+    triggers: list[str]
+
+
+class ResponseFormat(BaseModel):
+    """
+    response_format type.
+    """
+    type: Literal["text", "json_object", "json_schema"]
+    json_schema: Optional[JsonSchemaResponseFormat] = None
+
+
+AnyResponseFormat = Union[ResponseFormat, StructuralTagResponseFormat]
+
 
 class CompletionRequest(BaseModel):
     """
-    Text completion request parameters following OpenAI API specification.
-    
-    Attributes:
-        model (Optional[str]): Model name (default: "default")
-        prompt (Union[List[int], List[List[int]], str, List[str]]): Input prompt(s)
-        best_of (Optional[int]): Number of samples to generate
-        echo (Optional[bool]): Whether to echo the prompt
-        frequency_penalty (Optional[float]): Penalize repeated tokens
-        logprobs (Optional[int]): Number of logprobs to return
-        max_tokens (Optional[int]): Maximum tokens to generate (default: 16)
-        n (int): Number of completions (default: 1)
-        presence_penalty (Optional[float]): Penalize new tokens
-        seed (Optional[int]): Random seed
-        stop (Optional[Union[str, List[str]]]): Stop sequences
-        stream (Optional[bool]): Whether to stream response
-        stream_options (Optional[StreamOptions]): Streaming configuration
-        suffix (Optional[dict]): Suffix to append
-        temperature (Optional[float]): Sampling temperature
-        top_p (Optional[float]): Nucleus sampling probability
-        user (Optional[str]): User identifier
-        repetition_penalty (Optional[float]): Repetition penalty factor
-        stop_token_ids (Optional[List[int]]): Token IDs to stop generation
+    Completion request to the engine.
     """
     # Ordered by official OpenAI API documentation
     # https://platform.openai.com/docs/api-reference/completions/create
@@ -296,11 +280,11 @@ class CompletionRequest(BaseModel):
     prompt: Union[List[int], List[List[int]], str, List[str]]
     best_of: Optional[int] = None
     echo: Optional[bool] = False
-    frequency_penalty: Optional[float] = 0.0
+    frequency_penalty: Optional[float] = None
     logprobs: Optional[int] = None
-    max_tokens: Optional[int] = 16
+    max_tokens: Optional[int] = None
     n: int = 1
-    presence_penalty: Optional[float] = 0.0
+    presence_penalty: Optional[float] = None
     seed: Optional[int] = None
     stop: Optional[Union[str, List[str]]] = Field(default_factory=list)
     stream: Optional[bool] = False
@@ -310,12 +294,17 @@ class CompletionRequest(BaseModel):
     top_p: Optional[float] = None
     user: Optional[str] = None
 
+    response_format: Optional[AnyResponseFormat] = None
+    guided_json: Optional[Union[str, dict, BaseModel]] = None
+    guided_regex: Optional[str] = None
+    guided_choice: Optional[list[str]] = None
+    guided_grammar: Optional[str] = None
 
     # doc: begin-completion-sampling-params
     repetition_penalty: Optional[float] = None
     stop_token_ids: Optional[List[int]] = Field(default_factory=list)
-    # doc: end-completion-sampling-params
 
+    # doc: end-completion-sampling-params
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
         """
@@ -340,8 +329,31 @@ class CompletionRequest(BaseModel):
             req_dict["prompt_token_ids"] = prompt
             del req_dict["prompt"]
 
-        return req_dict
+        guided_json_object = None
+        if self.response_format is not None:
+            if self.response_format.type == "json_object":
+                guided_json_object = True
+            elif self.response_format.type == "json_schema":
+                json_schema = self.response_format.json_schema.json_schema
+                assert json_schema is not None, "response_format.json_schema can not be None"
+                if isinstance(json_schema, (BaseModel, type(BaseModel))):
+                    self.guided_json = json_schema.model_json_schema()
+                else:
+                    self.guided_json = json_schema
 
+        if guided_json_object:
+            req_dict["guided_json_object"] = guided_json_object
+
+        guided_schema = [
+            "guided_json", "guided_regex", "guided_choice", "guided_grammar",
+            "structural_tag"
+        ]
+        for key in guided_schema:
+            item = getattr(self, key, None)
+            if item is not None:
+                req_dict[key] = item
+
+        return req_dict
 
     @model_validator(mode="before")
     @classmethod
@@ -353,44 +365,40 @@ class CompletionRequest(BaseModel):
             raise ValueError(
                 "Stream options can only be defined when `stream=True`.")
 
+        guided_count = sum([
+            "guided_json" in data and data["guided_json"] is not None,
+            "guided_regex" in data and data["guided_regex"] is not None,
+            "guided_choice" in data and data["guided_choice"] is not None,
+            "guided_grammar" in data and data["guided_grammar"] is not None
+        ])
+
+        if guided_count > 1:
+            raise ValueError(
+                "You can only use one kind of guided decoding "
+                "('guided_json', 'guided_regex', 'guided_choice', 'guided_grammar')."
+            )
+
         return data
 
 
 class ChatCompletionRequest(BaseModel):
     """
-    Chat completion request parameters following OpenAI API specification.
-    
-    Attributes:
-        messages (Union[List[ChatCompletionMessageParam], List[int]]): Conversation history
-        model (Optional[str]): Model name (default: "default")
-        frequency_penalty (Optional[float]): Penalize repeated tokens
-        max_tokens (Optional[int]): Deprecated - max tokens to generate
-        max_completion_tokens (Optional[int]): Max tokens in completion
-        n (Optional[int]): Number of completions (default: 1)
-        presence_penalty (Optional[float]): Penalize new tokens
-        seed (Optional[int]): Random seed
-        stop (Optional[Union[str, List[str]]]): Stop sequences
-        stream (Optional[bool]): Whether to stream response
-        stream_options (Optional[StreamOptions]): Streaming configuration
-        temperature (Optional[float]): Sampling temperature
-        top_p (Optional[float]): Nucleus sampling probability
-        user (Optional[str]): User identifier
-        metadata (Optional[dict]): Additional metadata
-        repetition_penalty (Optional[float]): Repetition penalty factor
-        stop_token_ids (Optional[List[int]]): Token IDs to stop generation
+    Chat completion request to the engine.
     """
     # Ordered by official OpenAI API documentation
     # https://platform.openai.com/docs/api-reference/chat/create
-    messages: Union[List[ChatCompletionMessageParam], List[int]]
+    messages: Union[List[Any], List[int]]
+    tools: Optional[List[ChatCompletionToolsParam]] = None
     model: Optional[str] = "default"
-    frequency_penalty: Optional[float] = 0.0
+    frequency_penalty: Optional[float] = None
     # remove max_tokens when field is removed from OpenAI API
     max_tokens: Optional[int] = Field(
         default=None,
-        deprecated='max_tokens is deprecated in favor of the max_completion_tokens field')
+        deprecated=
+        'max_tokens is deprecated in favor of the max_completion_tokens field')
     max_completion_tokens: Optional[int] = None
     n: Optional[int] = 1
-    presence_penalty: Optional[float] = 0.0
+    presence_penalty: Optional[float] = None
     seed: Optional[int] = None
     stop: Optional[Union[str, List[str]]] = Field(default_factory=list)
     stream: Optional[bool] = False
@@ -400,9 +408,17 @@ class ChatCompletionRequest(BaseModel):
     user: Optional[str] = None
     metadata: Optional[dict] = None
 
+    response_format: Optional[AnyResponseFormat] = None
+    guided_json: Optional[Union[str, dict, BaseModel]] = None
+    guided_regex: Optional[str] = None
+    guided_choice: Optional[list[str]] = None
+    guided_grammar: Optional[str] = None
+    structural_tag: Optional[str] = None
+
     # doc: begin-chat-completion-sampling-params
     repetition_penalty: Optional[float] = None
     stop_token_ids: Optional[List[int]] = Field(default_factory=list)
+
     # doc: end-chat-completion-sampling-params
 
     def to_dict_for_infer(self, request_id=None):
@@ -430,6 +446,36 @@ class ChatCompletionRequest(BaseModel):
             req_dict["prompt"] = req_dict["messages"][0]["content"]
             del req_dict["messages"]
 
+        guided_json_object = None
+        if self.response_format is not None:
+            if self.response_format.type == "json_object":
+                guided_json_object = True
+            elif self.response_format.type == "json_schema":
+                json_schema = self.response_format.json_schema.json_schema
+                assert json_schema is not None, "response_format.json_schema can not be None"
+                if isinstance(json_schema, (BaseModel, type(BaseModel))):
+                    self.guided_json = json_schema.model_json_schema()
+                else:
+                    self.guided_json = json_schema
+            elif self.response_format.type == "structural_tag":
+                structural_tag = self.response_format
+                assert structural_tag is not None and isinstance(
+                    structural_tag, StructuralTagResponseFormat)
+                self.structural_tag = json.dumps(
+                    structural_tag.model_dump(by_alias=True))
+
+        if guided_json_object:
+            req_dict["guided_json_object"] = guided_json_object
+
+        guided_schema = [
+            "guided_json", "guided_regex", "guided_choice", "guided_grammar",
+            "structural_tag"
+        ]
+        for key in guided_schema:
+            item = getattr(self, key, None)
+            if item is not None:
+                req_dict[key] = item
+
         return req_dict
 
     @model_validator(mode="before")
@@ -441,5 +487,19 @@ class ChatCompletionRequest(BaseModel):
         if data.get("stream_options") and not data.get("stream"):
             raise ValueError(
                 "Stream options can only be defined when `stream=True`.")
+
+        guided_count = sum([
+            "guided_json" in data and data["guided_json"] is not None,
+            "guided_regex" in data and data["guided_regex"] is not None,
+            "guided_choice" in data and data["guided_choice"] is not None,
+            "guided_grammar" in data and data["guided_grammar"] is not None,
+            "structural_tag" in data and data["structural_tag"] is not None
+        ])
+
+        if guided_count > 1:
+            raise ValueError(
+                "You can only use one kind of guided decoding "
+                "('guided_json', 'guided_regex', 'guided_choice', 'guided_grammar', 'structural_tag')."
+            )
 
         return data

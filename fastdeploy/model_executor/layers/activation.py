@@ -15,10 +15,13 @@
 """
 
 # cipher_token=WjI1fQOvhN  # do not edit this line
+from typing import Optional
+
+import paddle
 from paddle import nn
 from paddle.incubate.nn.functional import fused_bias_act
 
-from fastdeploy.config import LLMConfig
+from fastdeploy.config import FDConfig
 from fastdeploy.platforms import current_platform
 
 
@@ -29,28 +32,27 @@ class SiluAndMul(nn.Layer):
 
     def __init__(
         self,
-        llm_config: LLMConfig,
-        bias=None,
-        act_method="gelu",
-        dequant_scales=None,
-        shift=None,
-        smooth=None,
-        quant_scale=-1,
+        fd_config: FDConfig,
+        bias: paddle.Tensor = None,
+        act_method: str = "gelu",
+        dequant_scales: Optional[paddle.Tensor] = None,
+        shift: Optional[paddle.Tensor] = None,
+        smooth: Optional[paddle.Tensor] = None,
+        quant_scale: float = -1,
     ):
         """
         Initialize the activation layer with optional parameters for quantization, bias,
         activation method, and more.
 
         Args:
-            llm_config (Any): Arguments related to inference, including quantization
+            fd_config (Any): Arguments related to inference, including quantization
                 settings.
             bias (Optional[Tensor]): Optional bias term to be added to the output.
-            act_method (str, optional): Activation method to be applied.
-                Defaults to "gelu".
-            dequant_scales (Optional[List[float]]): Dequantization scales, used in
+            act_method (str): Activation method to be applied. Defaults to "gelu".
+            dequant_scales (Optional[Tensor]): Dequantization scales, used in
                 quantization scenarios.
-            shift (Optional[float]): Shift factor, used in quantization scenarios.
-            smooth (Optional[float]): Smoothing factor, used for specific activation
+            shift (Optional[Tensor]): Shift factor, used in quantization scenarios.
+            smooth (Optional[Tensor]): Smoothing factor, used for specific activation
                 functions.
             quant_scale (float, optional): Quantization scale, used in quantization
                 scenarios. Defaults to -1, indicating no quantization.
@@ -61,12 +63,13 @@ class SiluAndMul(nn.Layer):
         """
         super().__init__()
 
-        if current_platform.is_cuda():
+        if current_platform.is_cuda() or current_platform.is_xpu():
             self.forward = self.forward_cuda
         else:
             raise NotImplementedError
 
         self.bias = bias
+        act_method = act_method.lower()
         if act_method == "silu":
             act_method = "swiglu"
 
@@ -75,9 +78,9 @@ class SiluAndMul(nn.Layer):
         self.shift = shift
         self.smooth = smooth
         self.quant_scale = quant_scale
-        self.quant_round_type = llm_config.quant_config.quant_round_type
-        self.quant_max_bound = llm_config.quant_config.quant_max_bound
-        self.quant_min_bound = llm_config.quant_config.quant_min_bound
+        self.quant_round_type = fd_config.quant_config.quant_round_type if fd_config.quant_config else 0
+        self.quant_max_bound = fd_config.quant_config.quant_max_bound if fd_config.quant_config else 0
+        self.quant_min_bound = fd_config.quant_config.quant_min_bound if fd_config.quant_config else 0
 
         self._dtype = self._helper.get_default_dtype()
         if self._dtype == "bfloat16":
@@ -91,12 +94,12 @@ class SiluAndMul(nn.Layer):
                     bfloat16 as default dtype, but received {self._dtype}")
 
         # fp8 is not support smooth quantization
-        if "float8" in llm_config.model_config.act_dtype:
+        if fd_config.quant_config and "fp8" in fd_config.quant_config.name():
             self.dequant_scales = None
             self.shift = None
             self.smooth = None
 
-    def forward_cuda(self, x):
+    def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:
         """
         Forward propagation of the custom activation layer.
 

@@ -78,13 +78,13 @@ class ImageMediaIO(MediaIO[Image.Image]):
         """
         return self.load_bytes(base64.b64decode(data))
 
-    def load_file(self, filepath: Path) -> Image.Image:
+    def load_file(self, filepath: str) -> Image.Image:
         """
             加载文件，并转换为指定模式。
         如果文件不存在或无法打开，将抛出FileNotFoundError异常。
         
         Args:
-            filepath (Path): 文件路径（Pathlib.Path对象）。
+            filepath (str): 文件路径。
         
         Returns:
             Image.Image: 返回一个Image.Image对象，表示已经加载和转换的图像。

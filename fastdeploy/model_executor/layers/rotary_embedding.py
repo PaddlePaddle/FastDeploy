@@ -14,25 +14,25 @@
 # limitations under the License.
 """
 
-from typing import Any, Optional
+from typing import Optional
 
 import paddle
+
+from fastdeploy.config import ModelConfig
+from fastdeploy.platforms import current_platform
+
+from .utils import CpuGuard
 
 
 class ErnieRotaryEmbedding:
 
-    def __init__(self,
-                 rotary_dim,
-                 base,
-                 partial_rotary_factor,
-                 rope_scaling=None):
+    def __init__(self, rotary_dim, base, partial_rotary_factor):
         """
         Pre-calculate rotary position embedding for position_ids.
         """
         self.rotary_dim = rotary_dim
         self.base = base
         self.partial_rotary_factor = partial_rotary_factor
-        self.rope_scaling = rope_scaling
 
     def __call__(self, position_ids):
         bsz, max_seq_len = position_ids.shape[:2]
@@ -70,18 +70,13 @@ class ErnieRotaryEmbedding:
 
 class QwenRotaryEmbedding:
 
-    def __init__(self,
-                 rotary_dim,
-                 base,
-                 partial_rotary_factor,
-                 rope_scaling=None):
+    def __init__(self, rotary_dim, base, partial_rotary_factor):
         """
         Pre-calculate rotary position embedding for position_ids.
         """
         self.rotary_dim = rotary_dim
         self.base = base
         self.partial_rotary_factor = partial_rotary_factor
-        self.rope_scaling = rope_scaling
 
     def __call__(self, position_ids):
         bsz, max_seq_len = position_ids.shape[:2]
@@ -104,35 +99,72 @@ class QwenRotaryEmbedding:
         return rot_emb
 
 
+def get_rope_impl(
+    rotary_dim: int,
+    base: 10000.0,
+    position_ids,
+    model_config: Optional[ModelConfig] = None,
+    partial_rotary_factor=1,
+):
+    """
+    The real implementation of get_rope
+    """
+
+    architecture = model_config.architectures[0]
+    if model_config is not None and model_config is None or architecture.startswith(
+            "Qwen"):
+        rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base,
+                                               partial_rotary_factor)
+        rotary_emb = rotary_emb_layer(position_ids)
+    else:
+        rotary_emb_layer = ErnieRotaryEmbedding(rotary_dim, base,
+                                                partial_rotary_factor)
+        rotary_emb = rotary_emb_layer(position_ids)
+    return rotary_emb
+
+
+def get_rope_xpu(
+    rotary_dim: int,
+    base: 10000.0,
+    position_ids,
+    model_config: ModelConfig,
+    partial_rotary_factor=1,
+):
+    """
+    In XPU, cos and sin compute must be done on cpu
+    """
+    with CpuGuard():
+        position_ids = position_ids.cpu()
+        rotary_emb = get_rope_impl(rotary_dim, base, position_ids,
+                                   model_config, partial_rotary_factor)
+        return rotary_emb.to('xpu')
+
+
 def get_rope(
     rotary_dim: int,
     base: 10000.0,
     position_ids,
+    model_config: ModelConfig,
     partial_rotary_factor=1,
-    rope_scaling: Optional[dict[str, Any]] = None,
 ):
-    rope_type = rope_scaling.get("architectures", None)
-    if "Qwen2ForCausalLM" in rope_type:
-        rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base,
-                                               partial_rotary_factor,
-                                               rope_scaling)
-        rotary_emb = rotary_emb_layer(position_ids)
+    """
+    The warpper of get_rope
+    """
+    if current_platform.is_xpu():
+        return get_rope_xpu(rotary_dim, base, position_ids, model_config,
+                            partial_rotary_factor)
     else:
-        rotary_emb_layer = ErnieRotaryEmbedding(rotary_dim, base,
-                                                partial_rotary_factor,
-                                                rope_scaling)
-        rotary_emb = rotary_emb_layer(position_ids)
-    return rotary_emb
+        return get_rope_impl(rotary_dim, base, position_ids, model_config,
+                             partial_rotary_factor)
 
 
 class ErnieVlRotaryEmbedding3D:
 
     def __init__(self, rotary_dim, base, partial_rotary_factor, max_position,
-                 freq_allocation, rope_scaling):
+                 freq_allocation):
         self.rotary_dim = rotary_dim
         self.base = base
         self.paritial_rotary_factor = partial_rotary_factor
-        self.rope_scaling = rope_scaling
         self.max_position = max_position
         self.freq_allocation = freq_allocation
 
@@ -223,12 +255,10 @@ def get_rope_3d(
     paritial_rotary_factor: 1,
     max_position: 131072,
     freq_allocation: 2,
-    rope_scaling: Optional[dict[str, Any]] = None,
 ):
     rotary_emb3d_layer = ErnieVlRotaryEmbedding3D(rotary_dim, base,
                                                   paritial_rotary_factor,
                                                   max_position,
-                                                  freq_allocation,
-                                                  rope_scaling)
+                                                  freq_allocation)
     rotary_emb_3d = rotary_emb3d_layer(position_ids)
     return rotary_emb_3d

@@ -1,0 +1,12 @@
+max_model_len: 32768
+max_num_seqs: 256
+tensor_parallel_size: 8
+quantization: block_wise_fp8
+gpu_memory_utilization: 0.9
+kv_cache_ratio: 0.8
+enable_chunked_prefill: True
+max_num_batched_tokens: 1024
+max_num_partial_prefills: 3
+max_long_partial_prefills: 3
+enable_prefix_caching: True
+swap_space: 200

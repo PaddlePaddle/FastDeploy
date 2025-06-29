@@ -1,0 +1,13 @@
+max_model_len: 32768
+max_num_seqs: 256
+gpu_memory_utilization: 0.9
+kv_cache_ratio: 0.8
+tensor_parallel_size: 1
+data_parallel_size: 8
+num_gpu_blocks_override: 1024
+cache_queue_port: 55663
+splitwise_role: decode
+engine_worker_queue_port: 6678
+cache_transfer_protocol: "rdma"
+rdma_comm_ports: "7671,7672,7673,7674,7675,7676,7677,7678"
+pd_comm_port: "2334"

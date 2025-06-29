@@ -1,0 +1,6 @@
+max_model_len: 32768
+max_num_seqs: 8
+gpu_memory_utilization: 0.9
+tensor_parallel_size: 4
+quantization: wint8
+reasoning_parser: ernie-x1

@@ -13,74 +13,98 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-import shutil
+import os
+import threading
+import time
+from contextlib import asynccontextmanager
+from multiprocessing import current_process
+
 import uvicorn
 import zmq
-import os
-import sys
-import ctypes
-import signal
-from fastapi import FastAPI, APIRouter, Request
-import threading
 from fastapi import FastAPI, Request
-from multiprocessing import current_process
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from contextlib import asynccontextmanager
 from prometheus_client import CONTENT_TYPE_LATEST
-from fastdeploy.metrics.metrics import cleanup_prometheus_files, main_process_metrics, EXCLUDE_LABELS, \
-    get_filtered_metrics
-from fastdeploy.utils import FlexibleArgumentParser, api_server_logger, is_port_available
+
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
-from fastdeploy.entrypoints.openai.protocol import (
-    CompletionRequest,
-    ChatCompletionRequest,
-    ErrorResponse,
-    ChatCompletionResponse,
-    CompletionResponse
-)
-
-from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
-from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
 from fastdeploy.entrypoints.engine_client import EngineClient
+from fastdeploy.entrypoints.openai.protocol import (ChatCompletionRequest,
+                                                    ChatCompletionResponse,
+                                                    CompletionRequest,
+                                                    CompletionResponse,
+                                                    ErrorResponse)
+from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
+from fastdeploy.entrypoints.openai.serving_completion import \
+    OpenAIServingCompletion
+from fastdeploy.metrics.metrics import (EXCLUDE_LABELS,
+                                        cleanup_prometheus_files,
+                                        get_filtered_metrics,
+                                        main_process_metrics)
+from fastdeploy.utils import (FlexibleArgumentParser, api_server_logger,
+                              console_logger, is_port_available,
+                              retrive_model_from_server)
 
 parser = FlexibleArgumentParser()
-parser.add_argument("--port", default=9904, type=int, help="port to the http server")
-parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
+parser.add_argument("--port",
+                    default=8000,
+                    type=int,
+                    help="port to the http server")
+parser.add_argument("--host",
+                    default="0.0.0.0",
+                    type=str,
+                    help="host to the http server")
 parser.add_argument("--workers", default=1, type=int, help="number of workers")
-parser.add_argument("--metrics-port", default=8000, type=int, help="port for metrics server")
+parser.add_argument("--metrics-port",
+                    default=8001,
+                    type=int,
+                    help="port for metrics server")
+parser.add_argument("--controller-port",
+                    default=-1,
+                    type=int,
+                    help="port for controller server")
 parser = EngineArgs.add_cli_args(parser)
 args = parser.parse_args()
+args.model = retrive_model_from_server(args.model)
+
+llm_engine = None
 
 
 def load_engine():
     """
-    Initialize and load the LLM engine.
-    
-    Raises:
-        SystemExit: If engine initialization fails
+    load engine
     """
-    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}")
-    engine_args = EngineArgs.from_cli_args(args)
-    llm_engine = LLMEngine.from_engine_args(engine_args)
+    global llm_engine
+    if llm_engine is not None:
+        return llm_engine
 
-    if not llm_engine.start(api_server_pid=os.getpid()):
-        api_server_logger.error("Failed to initialize FastDeploy LLM engine, service exit now!")
-        exit(-1)
-    else:
-        api_server_logger.info(f"FastDeploy LLM engine initialized!\n")
+    api_server_logger.info(
+        f"FastDeploy LLM API server starting... {os.getpid()}")
+    engine_args = EngineArgs.from_cli_args(args)
+    engine = LLMEngine.from_engine_args(engine_args)
+
+    if not engine.start(api_server_pid=os.getpid()):
+        api_server_logger.error(
+            "Failed to initialize FastDeploy LLM engine, service exit now!")
+        return None
+
+    api_server_logger.info("FastDeploy LLM engine initialized!\n")
+    console_logger.info(
+        f"Launching metrics service at http://{args.host}:{args.metrics_port}/metrics"
+    )
+    console_logger.info(
+        f"Launching chat completion service at http://{args.host}:{args.port}/v1/chat/completions"
+    )
+    console_logger.info(
+        f"Launching completion service at http://{args.host}:{args.port}/v1/completions"
+    )
+    llm_engine = engine
+    return engine
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Async context manager for FastAPI application lifespan events.
-    
-    Args:
-        app (FastAPI): The FastAPI application instance
-        
-    Yields:
-        None: After setting up engine client and handlers
+    async context manager for FastAPI lifespan
     """
 
     if args.tokenizer is None:
@@ -90,7 +114,11 @@ async def lifespan(app: FastAPI):
     else:
         pid = os.getpid()
     api_server_logger.info(f"{pid}")
-    engine_client = EngineClient(args.tokenizer, args.max_model_len, args.tensor_parallel_size, pid, args.enable_mm)
+    engine_client = EngineClient(args.tokenizer, args.max_model_len,
+                                 args.tensor_parallel_size, pid,
+                                 args.limit_mm_per_prompt,
+                                 args.mm_processor_kwargs, args.enable_mm,
+                                 args.reasoning_parser)
     app.state.dynamic_load_weight = args.dynamic_load_weight
     chat_handler = OpenAIServingChat(engine_client, pid)
     completion_handler = OpenAIServingCompletion(engine_client, pid)
@@ -116,15 +144,7 @@ app = FastAPI(lifespan=lifespan)
 # TODO 传递真实引擎值 通过pid 获取状态
 @app.get("/health")
 def health(request: Request) -> Response:
-    """
-    Perform health check of the engine service.
-    
-    Args:
-        request (Request): FastAPI request object
-        
-    Returns:
-        Response: HTTP 200 if healthy, 404/304 if errors occur
-    """
+    """Health check."""
 
     status, msg = app.state.engine_client.check_health()
     if not status:
@@ -174,36 +194,21 @@ async def list_all_routes():
 
 @app.api_route("/ping", methods=["GET", "POST"])
 def ping(raw_request: Request) -> Response:
-    """
-    Ping endpoint for service availability check.
-    
-    Args:
-        raw_request (Request): FastAPI request object
-        
-    Returns:
-        Response: Same as health check response
-    """
+    """Ping check. Endpoint required for SageMaker"""
     return health(raw_request)
 
 
 @app.post("/v1/chat/completions")
 async def create_chat_completion(request: ChatCompletionRequest):
     """
-    Create chat completion based on the given request.
-    
-    Args:
-        request (ChatCompletionRequest): Chat completion request parameters
-        
-    Returns:
-        Union[JSONResponse, StreamingResponse]: Response containing either:
-            - Error details if failed
-            - Chat completion results
-            - Stream of completion events
+    Create a chat completion for the provided prompt and parameters.
     """
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
-            return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
+            return JSONResponse(
+                content={"error": "Worker Service Not Healthy"},
+                status_code=304)
     generator = await app.state.chat_handler.create_chat_completion(request)
 
     if isinstance(generator, ErrorResponse):
@@ -219,21 +224,14 @@ async def create_chat_completion(request: ChatCompletionRequest):
 @app.post("/v1/completions")
 async def create_completion(request: CompletionRequest):
     """
-    Create text completion based on the given request.
-    
-    Args:
-        request (CompletionRequest): Completion request parameters
-        
-    Returns:
-        Union[JSONResponse, StreamingResponse]: Response containing either:
-            - Error details if failed
-            - Completion results 
-            - Stream of completion events
+    Create a completion for the provided prompt and parameters.
     """
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
-            return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
+            return JSONResponse(
+                content={"error": "Worker Service Not Healthy"},
+                status_code=304)
 
     generator = await app.state.completion_handler.create_completion(request)
     if isinstance(generator, ErrorResponse):
@@ -248,13 +246,7 @@ async def create_completion(request: CompletionRequest):
 @app.get("/update_model_weight")
 def update_model_weight(request: Request) -> Response:
     """
-    Update model weights dynamically if enabled.
-    
-    Args:
-        request (Request): FastAPI request object
-        
-    Returns:
-        Response: HTTP 200 if successful, 404 if failed or disabled
+    update model weight
     """
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.update_model_weight()
@@ -262,45 +254,34 @@ def update_model_weight(request: Request) -> Response:
             return Response(content=msg, status_code=404)
         return Response(status_code=200)
     else:
-        return Response(content="Dynamic Load Weight Disabled.", status_code=404)
+        return Response(content="Dynamic Load Weight Disabled.",
+                        status_code=404)
+
 
 @app.get("/clear_load_weight")
 def clear_load_weight(request: Request) -> Response:
     """
-    Clear dynamically loaded model weights if enabled.
-    
-    Args:
-        request (Request): FastAPI request object
-        
-    Returns:
-        Response: HTTP 200 if successful, 404 if failed or disabled
+    clear model weight
     """
     if app.state.dynamic_load_weight:
-        status, msg =  app.state.engine_client.clear_load_weight()
+        status, msg = app.state.engine_client.clear_load_weight()
         if not status:
             return Response(content=msg, status_code=404)
         return Response(status_code=200)
     else:
-        return Response(content="Dynamic Load Weight Disabled.", status_code=404)
+        return Response(content="Dynamic Load Weight Disabled.",
+                        status_code=404)
+
 
 def launch_api_server(args) -> None:
     """
-    Launch the API server with given configuration.
-    
-    Args:
-        args: Command line arguments containing server configuration
-        
-    Raises:
-        Exception: If server launch fails
+    启动http服务
     """
-    api_server_logger.info(f"launch Fastdeploy api server... port: {args.port}")
+    api_server_logger.info(
+        f"launch Fastdeploy api server... port: {args.port}")
     api_server_logger.info(f"args: {args.__dict__}")
 
     try:
-        prom_dir = cleanup_prometheus_files(True)
-        os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
-        metrics_server_thread = threading.Thread(target=run_main_metrics_server, daemon=True)
-        metrics_server_thread.start()
         uvicorn.run(app="fastdeploy.entrypoints.openai.api_server:app",
                     host=args.host,
                     port=args.port,
@@ -310,53 +291,93 @@ def launch_api_server(args) -> None:
         api_server_logger.error(f"launch sync http server error, {e}")
 
 
-main_app = FastAPI()
+metrics_app = FastAPI()
 
 
-@main_app.get("/metrics")
+@metrics_app.get("/metrics")
 async def metrics():
     """
     metrics
     """
     metrics_text = get_filtered_metrics(
         EXCLUDE_LABELS,
-        extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=args.workers)
-    )
+        extra_register_func=lambda reg: main_process_metrics.register_all(
+            reg, workers=args.workers))
     return Response(metrics_text, media_type=CONTENT_TYPE_LATEST)
 
 
-def run_main_metrics_server():
+def run_metrics_server():
     """
-    Run metrics server in main process.
-    
-    Starts a Uvicorn server for Prometheus metrics endpoint.
+    run metrics server
     """
 
-    uvicorn.run(
-        main_app,
-        host="0.0.0.0",
-        port=args.metrics_port,
-        log_level="error"
-    )
+    uvicorn.run(metrics_app,
+                host="0.0.0.0",
+                port=args.metrics_port,
+                log_level="error")
+
+
+def launch_metrics_server():
+    """Metrics server running the sub thread"""
+    prom_dir = cleanup_prometheus_files(True)
+    os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
+    metrics_server_thread = threading.Thread(target=run_metrics_server,
+                                             daemon=True)
+    metrics_server_thread.start()
+    time.sleep(1)
+
+
+controller_app = FastAPI()
+
+
+@controller_app.post("/controller/reset_scheduler")
+def reset_scheduler():
+    """
+    reset scheduler
+    """
+    global llm_engine
+
+    if llm_engine is None:
+        return Response("Engine not loaded", status_code=500)
+    llm_engine.reset_scheduler()
+    return Response("Scheduler Reset Successfully", status_code=200)
+
+
+def run_controller_server():
+    """
+    run controller server
+    """
+    uvicorn.run(controller_app,
+                host="0.0.0.0",
+                port=args.controller_port,
+                log_level="error")
+
+
+def launch_controller_server():
+    """Controller server running the sub thread"""
+    if args.controller_port < 0:
+        return
+
+    controller_server_thread = threading.Thread(target=run_controller_server,
+                                                daemon=True)
+    controller_server_thread.start()
+    time.sleep(1)
 
 
 def main():
-    """
-    Main entry point for the API server.
-    
-    Steps:
-    1. Check port availability
-    2. Load LLM engine
-    3. Launch API server
-    
-    Raises:
-        Exception: If ports are unavailable
-    """
+    """main函数"""
     if not is_port_available(args.host, args.port):
         raise Exception(f"The parameter `port`:{args.port} is already in use.")
     if not is_port_available(args.host, args.metrics_port):
-        raise Exception(f"The parameter `metrics_port`:{args.metrics_port} is already in use.")
-    load_engine()
+        raise Exception(
+            f"The parameter `metrics_port`:{args.metrics_port} is already in use."
+        )
+
+    if load_engine() is None:
+        return
+
+    launch_controller_server()
+    launch_metrics_server()
     launch_api_server(args)
 
 

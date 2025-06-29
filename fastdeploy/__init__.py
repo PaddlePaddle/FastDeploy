@@ -15,7 +15,18 @@
 """
 
 import os
+
 # suppress warning log from paddlepaddle
 os.environ["GLOG_minloglevel"] = "2"
-from fastdeploy.entrypoints.llm import LLM
+# suppress log from aistudio
+os.environ["AISTUDIO_LOG"] = "critical"
 from fastdeploy.engine.sampling_params import SamplingParams
+from fastdeploy.entrypoints.llm import LLM
+
+__all__ = ['LLM', 'SamplingParams']
+
+try:
+    import use_triton_in_paddle
+    use_triton_in_paddle.make_triton_compatible_with_paddle()
+except ImportError:
+    pass

@@ -1,0 +1,47 @@
+site_name: 'FastDeploy 2.0: 大模型部署'
+nav:
+  - 'FastDeploy 2.0': index.md
+  - 快速开始:
+      - '10分钟上手ERNIE 4.5模型部署': get_started/quick_start.md 
+      - '10分钟上手ERNIE 4.5多模态模型部署': get_started/quick_start_vl.md
+      - 安装:
+          - 'Nvidia GPU安装': get_started/installation/nvidia_gpu.md
+          - 昆仑芯P800安装: get_started/installation/kunlunxin.md 
+      - ERNIE-X1思考模型部署: get_started/ernie-x1.md
+      - 'ERNIE-4.5-VL多模模型部署': get_started/ernie-4.5-vl.md
+      - 'ERNIE-4.5模型部署': get_started/ernie-4.5.md
+  - 服务化部署:
+      - 使用方式: serving/README.md
+      - 监控metrics: serving/metrics.md
+      - 负载调度: serving/scheduler.md
+  - 离线推理: offline_inference.md
+  - 部署特性: 
+      - 'Prefix Caching': features/prefix_caching.md
+      - '分离式部署': features/disaggregated.md
+      - 'Chunked Prefill与128K长文部署': features/chunked_prefill.md
+      - '多实例负载均衡': features/load_balance.md
+      - '投机解码': features/speculative_decoding.md
+      - '结构化输出': features/structured_outputs.md
+      - '思维链输出': features/reasoning_output.md
+      - 'Tool Calling': features/tool_calling.md
+  - 量化加速:
+      - 无损量化: quantization/inflight_quantization.md
+      - 'ERNIE-4.5 weight only int2规范说明': quantization/ernie_wint2.md
+  - 支持模型列表: supported_models.md
+  - Benchmark: benchmark.md
+  - 架构设计:
+      - 代码模块说明: design/code_guide.md
+      - AppendAttention: design/append_attention.md 
+  - 使用问题:
+      - FAQ: usage/faq.md
+      - 日志说明: usage/log.md
+      - 算子编译: usage/build_ops.md
+      - 自定义算子导入: usage/contribution_guide.md
+      - 增加硬件支持: usage/how_to_support_new_device.md
+theme: 
+  name: 'material'
+  highlightjs: true
+  icon: 
+    repo: fontawesome/brands/github
+repo_url: https://github.com/PaddlePaddle/FastDeploy
+repo_name: FastDeploy

@@ -15,12 +15,12 @@
 """
 
 from __future__ import annotations
+
 import time
+from dataclasses import asdict, dataclass, fields
+from typing import Any, Dict, Optional, Union
+
 import numpy
-from dataclasses import dataclass, asdict, fields
-from typing import TYPE_CHECKING, Optional, Union, Any
-from fastdeploy.engine.sampling_params import SamplingParams
-from fastdeploy.utils import data_processor_logger
 
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.utils import data_processor_logger
@@ -28,41 +28,33 @@ from fastdeploy.utils import data_processor_logger
 
 @dataclass
 class Request:
-    """A class representing an inference request to the LLM engine.
-    
-    Attributes:
-        request_id: Unique identifier for the request
-        prompt: Input prompt text or list of prompts
-        prompt_token_ids: Token IDs of the input prompt
-        prompt_token_ids_len: Length of prompt token IDs
-        messages: List of message dictionaries (for chat models)
-        history: Conversation history (for chat models)
-        system: System message (for chat models)
-        sampling_params: Parameters controlling text generation
-        eos_token_ids: List of end-of-sequence token IDs
-        arrival_time: Timestamp when request was received
-        preprocess_start_time: Timestamp when preprocessing started
-        preprocess_end_time: Timestamp when preprocessing completed
-        multimodal_inputs: Dictionary of multimodal inputs (images, audio etc.)
-        raw_request: Flag indicating if this is a raw request
-    """
-    def __init__(
-        self,
-        request_id: str,
-        prompt: Optional[Union[str, list[str]]],
-        prompt_token_ids: Optional[list[int]],
-        prompt_token_ids_len: Optional[int],
-        messages: Optional[list[list[dict[str, Any]]]],
-        history: Optional[list[list[str]]],
-        system: Optional[Union[str, list[str]]],
-        sampling_params: SamplingParams,
-        eos_token_ids: Optional[list[int]],
-        arrival_time: float,
-        preprocess_start_time: Optional[float] = None,
-        preprocess_end_time: Optional[float] = None,
-        multimodal_inputs: Optional[dict] = None,
-        raw_request: bool = True
-    ) -> None:
+
+    def __init__(self,
+                 request_id: str,
+                 prompt: Optional[Union[str, list[str]]],
+                 prompt_token_ids: Optional[list[int]],
+                 prompt_token_ids_len: Optional[int],
+                 messages: Optional[list[list[dict[str, Any]]]],
+                 history: Optional[list[list[str]]],
+                 tools: Optional[list[Dict]],
+                 system: Optional[Union[str, list[str]]],
+                 sampling_params: SamplingParams,
+                 eos_token_ids: Optional[list[int]],
+                 arrival_time: float,
+                 preprocess_start_time: Optional[float] = None,
+                 preprocess_end_time: Optional[float] = None,
+                 multimodal_inputs: Optional[dict] = None,
+                 multimodal_data: Optional[dict] = None,
+                 raw_request: bool = True,
+                 disaggregate_info: Optional[dict] = None,
+                 draft_token_ids: Optional[list[int]] = None,
+                 guided_json: Optional[Any] = None,
+                 guided_regex: Optional[Any] = None,
+                 guided_choice: Optional[Any] = None,
+                 guided_grammar: Optional[Any] = None,
+                 structural_tag: Optional[Any] = None,
+                 guided_json_object: Optional[bool] = None,
+                 enable_thinking: Optional[bool] = True) -> None:
         self.request_id = request_id
         self.prompt = prompt
         self.prompt_token_ids = prompt_token_ids
@@ -71,52 +63,66 @@ class Request:
         self.system = system
         self.sampling_params = sampling_params
         self.history = history
+        self.tools = tools
+        # model specific token ids: end of sentence token ids
         self.eos_token_ids = eos_token_ids
+        self.num_cached_tokens = 0
 
         self.arrival_time = arrival_time
         self.preprocess_start_time = preprocess_start_time
         self.preprocess_end_time = preprocess_end_time
         self.raw_request = raw_request
+        self.disaggregate_info = disaggregate_info
 
+        # speculative method in disaggregate-mode
+        self.draft_token_ids = draft_token_ids
+
+        # guided decoding related
+        self.guided_json = guided_json
+        self.guided_regex = guided_regex
+        self.guided_choice = guided_choice
+        self.guided_grammar = guided_grammar
+        self.structural_tag = structural_tag
+        self.guided_json_object = guided_json_object
 
         # Multi-modal related
         self.multimodal_inputs = multimodal_inputs
+        self.multimodal_data = multimodal_data
+
+        self.enable_thinking = enable_thinking
 
     @classmethod
     def from_dict(cls, d: dict):
-        """Create a Request instance from a dictionary.
-        
-        Args:
-            d: Dictionary containing request parameters
-            
-        Returns:
-            Request: A new Request instance initialized with values from the dictionary
-        """
         data_processor_logger.debug(f"{d}")
         sampling_params = SamplingParams.from_dict(d)
-        return cls(
-            request_id=d["request_id"],
-            prompt=d.get("prompt"),
-            prompt_token_ids=d.get("prompt_token_ids"),
-            prompt_token_ids_len=d.get("prompt_token_ids_len"),
-            messages=d.get("messages"),
-            system=d.get("system"),
-            history=d.get("history"),
-            sampling_params=sampling_params,
-            eos_token_ids=d.get("eos_token_ids"),
-            arrival_time=d.get("arrival_time", time.time()),
-            preprocess_start_time=d.get("preprocess_start_time"),
-            preprocess_end_time=d.get("preprocess_end_time"),
-            multimodal_inputs=d.get("multimodal_inputs"),
-            raw_request=d.get("raw_request", True)
-        )
+        return cls(request_id=d["request_id"],
+                   prompt=d.get("prompt"),
+                   prompt_token_ids=d.get("prompt_token_ids"),
+                   prompt_token_ids_len=d.get("prompt_token_ids_len"),
+                   messages=d.get("messages"),
+                   system=d.get("system"),
+                   history=d.get("history"),
+                   tools=d.get("tools"),
+                   sampling_params=sampling_params,
+                   eos_token_ids=d.get("eos_token_ids"),
+                   arrival_time=d.get("arrival_time", time.time()),
+                   preprocess_start_time=d.get("preprocess_start_time"),
+                   preprocess_end_time=d.get("preprocess_end_time"),
+                   multimodal_inputs=d.get("multimodal_inputs"),
+                   multimodal_data=d.get("multimodal_data"),
+                   disaggregate_info=d.get("disaggregate_info"),
+                   draft_token_ids=d.get("draft_token_ids"),
+                   raw_request=d.get("raw_request", True),
+                   guided_json=d.get("guided_json", None),
+                   guided_regex=d.get("guided_regex", None),
+                   guided_choice=d.get("guided_choice", None),
+                   guided_grammar=d.get("guided_grammar", None),
+                   structural_tag=d.get("structural_tag", None),
+                   guided_json_object=d.get("guided_json_object", None),
+                   enable_thinking=d.get("enable_thinking", True))
 
     def to_dict(self) -> dict:
-        """Convert the Request object into a serializable dictionary.
-        
-        Returns:
-            dict: A dictionary containing all request attributes and sampling parameters
-        """
+        """convert Request into a serializable dict """
         data = {
             "request_id": self.request_id,
             "prompt": self.prompt,
@@ -125,26 +131,30 @@ class Request:
             "messages": self.messages,
             "system": self.system,
             "history": self.history,
+            "tools": self.tools,
             "eos_token_ids": self.eos_token_ids,
             "arrival_time": self.arrival_time,
             "preprocess_start_time": self.preprocess_start_time,
             "preprocess_end_time": self.preprocess_end_time,
             "multimodal_inputs": self.multimodal_inputs,
-            "raw_request": self.raw_request
+            "multimodal_data": self.multimodal_data,
+            "raw_request": self.raw_request,
+            "disaggregate_info": self.disaggregate_info,
+            "draft_token_ids": self.draft_token_ids,
+            "enable_thinking": self.enable_thinking
         }
+        add_params = [
+            "guided_json", "guided_regex", "guided_choice", "guided_grammar",
+            "structural_tag", "guided_json_object"
+        ]
+        for param in add_params:
+            if getattr(self, param, None) is not None:
+                data[param] = getattr(self, param)
+
         data.update(asdict(self.sampling_params))
         return data
 
     def get(self, key: str, default_value=None):
-        """Get an attribute value from either the Request or its sampling parameters.
-        
-        Args:
-            key: Attribute name to retrieve
-            default_value: Default value to return if attribute not found
-            
-        Returns:
-            The attribute value if found, otherwise default_value
-        """
         if hasattr(self, key):
             return getattr(self, key)
         elif hasattr(self.sampling_params, key):
@@ -153,12 +163,6 @@ class Request:
             return default_value
 
     def set(self, key, value):
-        """Set an attribute value on either the Request or its sampling parameters.
-        
-        Args:
-            key: Attribute name to set
-            value: Value to assign to the attribute
-        """
         if hasattr(self.sampling_params, key):
             setattr(self.sampling_params, key, value)
         else:
@@ -168,6 +172,7 @@ class Request:
         return (f"Request(request_id={self.request_id}, "
                 f"prompt={self.prompt!r}, "
                 f"prompt_token_ids={self.prompt_token_ids}, "
+                f"draft_token_ids={self.draft_token_ids}, "
                 f"sampling_params={self.sampling_params})")
 
 
@@ -182,22 +187,42 @@ class CompletionOutput:
     """
 
     index: int
+    send_idx: int
     token_ids: list[int]
+    draft_token_ids: list[int] = None
     text: Optional[str] = None
     reasoning_content: Optional[str] = None
+
+    def to_dict(self):
+        """
+            convert CompletionOutput to a serialized dict
+        """
+        return {
+            "index": self.index,
+            "send_idx": self.send_idx,
+            "token_ids": self.token_ids,
+            "draft_token_ids": self.draft_token_ids,
+            "text": self.text,
+            "reasoning_content": self.reasoning_content
+        }
 
     @classmethod
     def from_dict(cls, req_dict: dict[str, Any]) -> 'CompletionOutput':
         """Create instance from dict arguments"""
-        return cls(**{
-            field.name: req_dict[field.name] if field.name in req_dict else field.default
-            for field in fields(cls)
-        })
+        return cls(
+            **{
+                field.name:
+                req_dict[field.name] if field.name in
+                req_dict else field.default
+                for field in fields(cls)
+            })
 
     def __repr__(self) -> str:
         return (f"CompletionOutput(index={self.index}, "
+                f"send_idx={self.send_idx}, "
                 f"text={self.text!r}, "
                 f"token_ids={self.token_ids}, "
+                f"draft_token_ids={self.draft_token_ids}, "
                 f"reasoning_content={self.reasoning_content!r}")
 
 
@@ -227,13 +252,31 @@ class RequestMetrics:
     model_execute_time: Optional[float] = None
     request_start_time: Optional[float] = None
 
+    def to_dict(self):
+        """
+        Convert the RequestMetrics object to a dictionary.
+        """
+        return {
+            "arrival_time": self.arrival_time,
+            "inference_start_time": self.inference_start_time,
+            "first_token_time": self.first_token_time,
+            "time_in_queue": self.time_in_queue,
+            "preprocess_cost_time": self.preprocess_cost_time,
+            "model_forward_time": self.model_forward_time,
+            "model_execute_time": self.model_execute_time,
+            "request_start_time": self.request_start_time
+        }
+
     @classmethod
     def from_dict(cls, req_dict: dict[str, Any]) -> 'RequestMetrics':
         """Create instance from dict arguments"""
-        return cls(**{
-            field.name: req_dict[field.name] if field.name in req_dict else field.default
-            for field in fields(cls)
-        })
+        return cls(
+            **{
+                field.name:
+                req_dict[field.name] if field.name in
+                req_dict else field.default
+                for field in fields(cls)
+            })
 
 
 class RequestOutput:
@@ -282,16 +325,8 @@ class RequestOutput:
         self.error_msg = error_msg
 
     def add(self, next_output: "RequestOutput") -> None:
-        """Merge another RequestOutput into this one.
-        
-        Args:
-            next_output: The RequestOutput to merge into this one
-            
-        Updates:
-            - Combines output sequences
-            - Updates finish status
-            - Calculates timing metrics
-        """
+        """Merge RequestOutput into this one"""
+
         self.prompt = next_output.prompt
         self.prompt_token_ids = next_output.prompt_token_ids
         self.finished |= next_output.finished
@@ -314,25 +349,13 @@ class RequestOutput:
 
     @classmethod
     def from_dict(cls, d: dict):
-        """Create a RequestOutput instance from a dictionary.
-        
-        Args:
-            d: Dictionary containing request output parameters
-            
-        Returns:
-            RequestOutput: A new RequestOutput instance initialized with values from the dictionary
-        """
+        """Create instance from dict arguments"""
         completion_output = CompletionOutput.from_dict(d.pop("outputs"))
         metrics = RequestMetrics.from_dict(d.pop("metrics"))
         return RequestOutput(**d, outputs=completion_output, metrics=metrics)
 
     def to_dict(self):
-        """Convert the RequestOutput object into a serializable dictionary.
-        
-        Returns:
-            dict: A dictionary containing all request output attributes,
-                  with token IDs converted to lists if necessary
-        """
+        """convert RequestOutput into a serializable dict """
         if self.prompt_token_ids is None:
             self.prompt_token_ids = []
 
@@ -343,11 +366,12 @@ class RequestOutput:
             "request_id": self.request_id,
             "prompt": self.prompt,
             "prompt_token_ids": self.prompt_token_ids,
-            "outputs": None if self.outputs is None else asdict(self.outputs),
+            "outputs":
+            None if self.outputs is None else self.outputs.to_dict(),
+            "metrics":
+            None if self.metrics is None else self.metrics.to_dict(),
             "finished": self.finished,
-            "metrics": None if self.metrics is None else asdict(self.metrics),
             "num_cached_tokens": self.num_cached_tokens,
             "error_code": self.error_code,
             "error_msg": self.error_msg,
         }
-

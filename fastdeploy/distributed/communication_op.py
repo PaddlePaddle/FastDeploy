@@ -18,8 +18,12 @@ import paddle
 import paddle.distributed as dist
 
 
+@paddle.jit.marker.unified
 def tensor_model_parallel_all_reduce(input_: paddle.Tensor) -> paddle.Tensor:
     """All-reduce the input tensor across model parallel group."""
-    hcg = dist.fleet.get_hybrid_communicate_group()
-    mp_group = hcg.get_model_parallel_group()
-    dist.all_reduce(input_, group=mp_group)
+    if paddle.in_dynamic_mode():
+        hcg = dist.fleet.get_hybrid_communicate_group()
+        mp_group = hcg.get_model_parallel_group()
+        dist.all_reduce(input_, group=mp_group)
+    else:
+        dist.all_reduce(input_)

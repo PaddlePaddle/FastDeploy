@@ -70,8 +70,15 @@ void GetOutputEp(const paddle::Tensor& x,
 #endif
         msg_queue_id = inference_msg_queue_id_from_env;
     }
-    static key_t key = ftok("/dev/shm", msg_queue_id);
-    static int msgid = msgget(key, IPC_CREAT | 0666);
+#ifdef GET_OUTPUT_DEBUG
+        std::cout << "msg_queue_id is: "
+                  << msg_queue_id << std::endl;
+#endif
+    // static key_t key = ftok("/dev/shm", msg_queue_id);
+    // static int msgid = msgget(key, IPC_CREAT | 0666);
+
+    key_t key = ftok("/dev/shm", msg_queue_id);
+    int msgid = msgget(key, IPC_CREAT | 0666);
 
 #ifdef GET_OUTPUT_DEBUG
     std::cout << "get_output_key: " << key << std::endl;

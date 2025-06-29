@@ -1,0 +1,28 @@
+FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:2.0.0
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+WORKDIR /workspace
+RUN rm -rf /workspace/FastDeploy
+COPY . /workspace/FastDeploy
+
+RUN echo "ulimit -u unlimited" >> /root/.bashrc
+RUN echo "ulimit -n 65536" >> /root/.bashrc
+
+# setting proxy
+ARG http_proxy=agent.baidu.com:8891
+ARG https_proxy=agent.baidu.com:8891
+ARG no_proxy=localhost,bj.bcebos.com,su.bcebos.com,pypi.tuna.tsinghua.edu.cn,paddle-ci.gz.bcebos.com
+
+# uninstall existing package
+RUN python -m pip uninstall paddlepaddle-gpu fastdeploy-gpu -y
+
+# install paddlepaddle
+RUN python -m pip install paddlepaddle-gpu==3.1.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+
+# build and install FastDeploy
+RUN cd FastDeploy && bash build.sh 1 python false [80,90] && python -m pip install --no-cache-dir dist/* && rm -rf /workspace/FastDeploy
+
+ENV http_proxy=""
+ENV https_proxy=""
+ENV no_proxy=""

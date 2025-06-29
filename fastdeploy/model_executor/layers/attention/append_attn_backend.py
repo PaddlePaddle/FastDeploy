@@ -16,25 +16,28 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+import os
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import paddle
 
 from fastdeploy.model_executor.layers.attention.ops import (
-    append_attention, get_block_shape_and_split_kv_block)
+    append_attention, get_block_shape_and_split_kv_block,
+    init_signal_layerwise, open_shm_and_get_meta_signal)
 
 if TYPE_CHECKING:
     from paddle._typing.dtype_like import _DTypeLiteral
 
+from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention import Attention
-from fastdeploy.model_executor.layers.attention.base_attention_backend import \
-    AttentionBackend
-from fastdeploy.worker.model_runner import ForwardMeta
+from fastdeploy.model_executor.layers.attention.base_attention_backend import (
+    AttentionBackend, AttentionMetadata)
+from fastdeploy.worker.forward_meta import ForwardMeta
 
 
 @dataclass
-class AppendAttentionMetadata:
+class AppendAttentionMetadata(AttentionMetadata):
     """
     AppendAttentionMetadata
     """
@@ -60,40 +63,65 @@ class AppendAttentionMetadata:
     decoder_block_shape_q: Optional[paddle.Tensor] = None
     _fuse_kernel_compute_dtype: str = "bf16"
 
+    # pd_disaggregation
+    kv_signal_metadata: Optional[paddle.Tensor] = None
+    kv_signal_data_list: List[paddle.Tensor] = field(default_factory=list)
+
 
 class AppendAttentionBackend(AttentionBackend):
     """
     AppendAttentionBackend backend implementation.
     """
 
-    def __init__(
-        self,
-        model_runner: "ModelRunner",
-    ):
+    def __init__(self, fd_config: FDConfig, kv_num_heads: int, num_heads: int,
+                 head_dim: int) -> None:
         """
         AppendAttentionBackend __init__
         """
         super().__init__()
         self.attention_metadata: AppendAttentionMetadata = None
-        self.block_size = model_runner.args.block_size
-        self.max_seq_len = model_runner.args.max_model_len
-        self.rope_theta = (10000.0 if model_runner.model_cfg.rope_theta is None
-                           else model_runner.model_cfg.rope_theta)
-        self.rope_3d = getattr(model_runner.model_cfg, "rope_3d", False)
-        self.causal = getattr(model_runner.model_cfg, "causal", True)
-        self.speculate_method = model_runner.args.speculate_method
-        self.speculate_max_draft_token_num = model_runner.args.speculate_max_draft_tokens
-        self.num_heads = model_runner.model_cfg.num_attention_heads // model_runner.nranks
-        self.kv_num_heads = int(
-            model_runner.model_cfg.num_key_value_heads) // model_runner.nranks
+        self.block_size: int = fd_config.parallel_config.block_size
+        self.max_seq_len: int = fd_config.parallel_config.max_model_len
+        self.rope_theta: float = (10000.0
+                                  if fd_config.model_config.rope_theta is None
+                                  else fd_config.model_config.rope_theta)
+        self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False)
+        self.causal: bool = getattr(fd_config.model_config, "causal", True)
+        self.speculative_method: str = fd_config.speculative_config.method
+        self.use_speculate: bool = self.speculative_method is not None
+        self.speculate_max_draft_token_num: int = fd_config.speculative_config.num_speculative_tokens
+        self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
+        self.rank: int = fd_config.parallel_config.tensor_parallel_rank
+
+        self.kv_num_heads: int = kv_num_heads
+        self.num_heads: int = num_heads
+        self.head_dim: int = fd_config.model_config.head_dim
+        self.num_layers: int = fd_config.model_config.num_layers
+        self.max_partition_size: int = int(
+            os.getenv("FLAGS_max_partition_size", 32768))
+
+        # pd_disaggregation
+        self.use_pd_disaggregation: int = int(
+            os.getenv("FLAGS_use_pd_disaggregation", 0))
+        self.start_layer_index: int = fd_config.model_config.start_layer_index
+        self.device_id: int = os.getenv("CUDA_VISIBLE_DEVICES", None)
+
+        if fd_config.parallel_config.expert_parallel_rank is None:
+            fd_config.parallel_config.expert_parallel_rank = 0
+        device_id = self.rank + fd_config.parallel_config.tensor_parallel_degree * \
+            fd_config.parallel_config.expert_parallel_rank
+        if self.device_id is None:
+            self.device_id = device_id
+        else:
+            self.device_id = self.device_id.split(",")[device_id]
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
         metadata = AppendAttentionMetadata()
         metadata.encoder_block_shape_q = 64
         metadata.decoder_block_shape_q = 16
-        metadata.max_partition_size = 32768
-        metadata.encoder_max_partition_size = 32768
+        metadata.max_partition_size = self.max_partition_size
+        metadata.encoder_max_partition_size = self.max_seq_len
         metadata._dtype = paddle.get_default_dtype()
         if metadata._dtype == "bfloat16":
             metadata._fuse_kernel_compute_dtype = "bf16"
@@ -128,37 +156,50 @@ class AppendAttentionBackend(AttentionBackend):
             self.block_size,
             self.speculate_max_draft_token_num + 1,
         )
-        self.attention_metadata = metadata
 
-    def get_attntion_meta(self):
+        # pd_disaggregation
+        metadata.kv_signal_data_list = [None] * self.num_layers
+        if self.use_pd_disaggregation:
+            metadata.kv_signal_metadata = open_shm_and_get_meta_signal(
+                self.rank, int(self.device_id), self.keep_pd_step_flag)
+        self.attention_metadata: AttentionMetadata = metadata
+        forward_meta.decoder_batch_ids.copy_(metadata.decoder_batch_ids, False)
+        forward_meta.decoder_tile_ids_per_batch.copy_(
+            metadata.decoder_tile_ids_per_batch, False)
+
+    def get_attntion_meta(self) -> AttentionMetadata:
         """get_attntion_meta"""
         return self.attention_metadata
 
-    @staticmethod
     def get_kv_cache_shape(
+        self,
         max_num_blocks: int,
-        block_size: int,
-        kv_num_head: int,
-        head_dim: int,
-    ):
+    ) -> Tuple[int, int, int, int]:
         """
-        get_kv_cache_shape
+        Caculate kv cache shape
         """
-        return (max_num_blocks, kv_num_head, block_size, head_dim)
+        return (max_num_blocks, self.kv_num_heads, self.block_size,
+                self.head_dim)
 
     def forward_mixed(
         self,
-        q,
-        k,
-        v,
-        qkv,
+        q: paddle.Tensor,
+        k: paddle.Tensor,
+        v: paddle.Tensor,
+        qkv: paddle.Tensor,
         layer: Attention,
         forward_meta: ForwardMeta,
-    ):
+    ) -> paddle.Tensor:
         """
         forward_mixed
         """
         metadata = self.attention_metadata
+
+        if self.use_pd_disaggregation:
+            metadata.kv_signal_data_list[
+                layer.layer_id] = init_signal_layerwise(
+                    metadata.kv_signal_metadata,
+                    layer.layer_id + self.start_layer_index)
 
         res = append_attention(
             qkv,
@@ -176,8 +217,8 @@ class AppendAttentionBackend(AttentionBackend):
             metadata.kv_batch_ids,
             metadata.kv_tile_ids_per_batch,
             metadata.kv_num_blocks,
-            metadata.decoder_batch_ids,
-            metadata.decoder_tile_ids_per_batch,
+            forward_meta.decoder_batch_ids,  # from buffer
+            forward_meta.decoder_tile_ids_per_batch,  # from buffer
             metadata.decoder_num_blocks,
             metadata.set_max_lengths,
             metadata.max_len_kv,
@@ -193,7 +234,7 @@ class AppendAttentionBackend(AttentionBackend):
             getattr(layer, "cache_v_zp", None),
             layer.linear_shift,
             layer.linear_smooth,
-            None,  # kv_signal_data,
+            metadata.kv_signal_data_list[layer.layer_id],
             metadata._fuse_kernel_compute_dtype,
             getattr(layer, "cache_quant_type_str", "none"),
             layer.use_neox_rotary_style,
@@ -208,7 +249,6 @@ class AppendAttentionBackend(AttentionBackend):
             metadata.encoder_max_partition_size,
             self.speculate_max_draft_token_num + 1,
             self.causal,
-            self.speculate_method is not None,
+            self.speculative_method is not None,
         )[0]
-
         return res
