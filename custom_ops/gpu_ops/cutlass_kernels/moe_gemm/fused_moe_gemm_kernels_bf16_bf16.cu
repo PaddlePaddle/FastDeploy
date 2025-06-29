@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- 
+
 #pragma once
 #include "cutlass_kernels/moe_gemm/fused_moe_gemm_kernels.h"
 #include "cutlass_kernels/moe_gemm/fused_moe_gemm_kernels_template.h"
@@ -22,7 +22,8 @@
 namespace phi {
 
 #ifdef PADDLE_CUDA_BF16
-template class MoeGemmRunner<__nv_bfloat16, __nv_bfloat16>;
+template class MoeGemmRunner<
+    __nv_bfloat16, cutlass::WintQuantTraits<__nv_bfloat16, cutlass::WintQuantMethod::kNone>>;
 #endif
 
-}  // namespace phi
+} // namespace phi

@@ -1,5 +1,0 @@
-FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:cuda126-dev
-RUN apt update && apt install -y lsof
-RUN wget https://raw.githubusercontent.com/PaddlePaddle/FastDeploy/refs/heads/develop/requirements.txt 
-RUN python -m pip install -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple && python -m pip install pytest
-RUN apt update && apt install -y python3.10-venv

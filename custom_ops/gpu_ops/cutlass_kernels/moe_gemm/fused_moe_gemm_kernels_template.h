@@ -24,9 +24,10 @@
 #include <math.h>
 #include <optional>
 #include <sstream>
-#include "cutlass/array.h"
-#include "cutlass/numeric_conversion.h"
 
+#include "cutlass/array.h"
+#include "cutlass/trace.h"
+#include "cutlass/numeric_conversion.h"
 #include "cutlass/gemm/device/gemm_grouped.h"
 #include "cutlass/gemm/kernel/default_gemm_grouped.h"
 
@@ -35,8 +36,11 @@
 
 #include "paddle/phi/kernels/fusion/cutlass/cutlass_extensions/compute_occupancy.h"
 #include "paddle/phi/kernels/fusion/cutlass/cutlass_extensions/epilogue_helpers.h"
-#include "paddle/phi/kernels/fusion/cutlass/cutlass_extensions/gemm/kernel/default_fpA_intB_traits.h"
-#include "paddle/phi/kernels/fusion/cutlass/cutlass_extensions/gemm/threadblock/default_mma.h"
+
+#include "cutlass_extensions/gemm/kernel/default_fpA_intB_traits.h"
+#include "cutlass_extensions/gemm/threadblock/default_mma.h"
+#include "cutlass_extensions/wint_type_traits.h"
+
 #include "cutlass_kernels/moe_gemm/fused_moe_cutlass_kernel.h"
 #include "cutlass_kernels/moe_gemm/fused_moe_gemm_kernels.h"
 
@@ -48,17 +52,47 @@
 #include "helper.h"
 
 namespace phi {
-// ============================= Variable batched Gemm things
-// ===========================
+
+template <typename MixedGemmArchTraits, cutlass::WintQuantMethod Method>
+struct CutlassLayoutB {
+  using Type = typename MixedGemmArchTraits::LayoutB;
+};
+
+template <typename MixedGemmArchTraits>
+struct CutlassLayoutB<MixedGemmArchTraits, cutlass::WintQuantMethod::kNone> {
+  using Type = cutlass::layout::RowMajor;
+};
+
+template <typename BaseGemmKernel, typename Arch, cutlass::WintQuantMethod Method>
+struct CutlassGemmKernel {
+  using Type =
+      cutlass::gemm::kernel::MoeFCGemm<typename BaseGemmKernel::Mma,
+                                       typename BaseGemmKernel::Epilogue,
+                                       typename BaseGemmKernel::ThreadblockSwizzle,
+                                       Arch,
+                                       BaseGemmKernel::kGroupScheduleMode>;
+};
+
+template <typename BaseGemmKernel, typename Arch>
+struct CutlassGemmKernel<BaseGemmKernel, Arch, cutlass::WintQuantMethod::kWeightOnlyInt2> {
+  using Type =
+      cutlass::gemm::kernel::Wint2xMoeFCGemm<typename BaseGemmKernel::Mma,
+                                             typename BaseGemmKernel::Epilogue,
+                                             typename BaseGemmKernel::ThreadblockSwizzle,
+                                             Arch,
+                                             BaseGemmKernel::kGroupScheduleMode>;
+};
+
+// ======================= Variable batched Gemm things =======================
 template <typename T,
-          typename WeightType,
+          typename WeightQuantTraits,
           typename arch,
           typename EpilogueTag,
           typename ThreadblockShape,
           typename WarpShape,
           int Stages>
 void generic_moe_gemm_kernelLauncher(const T* A,
-                                     const WeightType* B,
+                                     const typename WeightQuantTraits::WeightType* B,
                                      const T* weight_scales,
                                      const T* biases,
                                      T* C,
@@ -67,6 +101,7 @@ void generic_moe_gemm_kernelLauncher(const T* A,
                                      int64_t gemm_n,
                                      int64_t gemm_k,
                                      int num_experts,
+                                     const typename WeightQuantTraits::Arguments& quant_args_B,
                                      CutlassGemmConfig gemm_config,
                                      const int multi_processor_count,
                                      cudaStream_t stream,
@@ -86,44 +121,26 @@ void generic_moe_gemm_kernelLauncher(const T* A,
                 "Specialized for half, float");
 #endif
 
+  using WeightType = typename WeightQuantTraits::WeightType;
+
   static_assert(
       cutlass::platform::is_same<T, WeightType>::value ||
           cutlass::platform::is_same<WeightType, uint8_t>::value ||
-          cutlass::platform::is_same<WeightType, cutlass::uint4b_t>::value,
-      "");
+          cutlass::platform::is_same<WeightType, cutlass::uint4b_t>::value ||
+          cutlass::platform::is_same<WeightType, uint16_t>::value,
+      "Specialized for bfloat16, half, float, uint8_t (wint8), uint4b_t (wint4), uint16_t (wint2.5)");
 
   // The cutlass type for the input elements. This is needed to convert to
   // cutlass::half_t if necessary.
-  using ElementType_ = typename cutlass::platform::conditional<
-      cutlass::platform::is_same<T, half>::value,
-      cutlass::half_t,
-      T>::type;
-#ifdef PADDLE_CUDA_BF16
-  using ElementType = typename cutlass::platform::conditional<
-      cutlass::platform::is_same<ElementType_, __nv_bfloat16>::value,
-      cutlass::bfloat16_t,
-      ElementType_>::type;
-#else
-  using ElementType = ElementType_;
-#endif
-
-  using CutlassWeightType_ = typename cutlass::platform::conditional<
-      cutlass::platform::is_same<WeightType, half>::value,
-      cutlass::half_t,
-      WeightType>::type;
-#ifdef PADDLE_CUDA_BF16
-  using CutlassWeightType = typename cutlass::platform::conditional<
-      cutlass::platform::is_same<CutlassWeightType_, __nv_bfloat16>::value,
-      cutlass::bfloat16_t,
-      CutlassWeightType_>::type;
-#else
-  using CutlassWeightType = CutlassWeightType_;
-#endif
+  using ElementType = typename cutlass::CutlassDataType<T>::Type;
+  using CutlassWeightType = typename cutlass::CutlassDataType<typename WeightQuantTraits::WeightType>::Type;
+  using CutlassMmaWeightType = typename WeightQuantTraits::MmaWeightType;
+  using CutlassMmaKernelType = typename WeightQuantTraits::MmaKernelType;
 
   // We need separate config for each architecture since we will target
   // different tensorcore instructions. For float, we do not target TCs.
   using MixedGemmArchTraits = cutlass::gemm::kernel::
-      MixedGemmArchTraits<ElementType, CutlassWeightType, arch>;
+      MixedGemmArchTraits<ElementType, CutlassMmaKernelType, arch>;
   using ElementAccumulator = typename MixedGemmArchTraits::AccType;
 
   using EpilogueOp = typename Epilogue<ElementType,
@@ -132,13 +149,13 @@ void generic_moe_gemm_kernelLauncher(const T* A,
                                        EpilogueTag>::Op;
 
   // Finally, set up the kernel.
-  using GemmKernel_ = typename cutlass::gemm::kernel::DefaultGemmGrouped<
+  using BaseGemmKernel = typename cutlass::gemm::kernel::DefaultGemmGrouped<
       ElementType,
       cutlass::layout::RowMajor,
       cutlass::ComplexTransform::kNone,
       MixedGemmArchTraits::ElementsPerAccessA,
-      CutlassWeightType,
-      typename MixedGemmArchTraits::LayoutB,
+      CutlassMmaKernelType,
+      typename CutlassLayoutB<MixedGemmArchTraits, WeightQuantTraits::kQuantMethod>::Type,
       cutlass::ComplexTransform::kNone,
       MixedGemmArchTraits::ElementsPerAccessB,
       ElementType,
@@ -155,14 +172,7 @@ void generic_moe_gemm_kernelLauncher(const T* A,
       cutlass::gemm::kernel::GroupScheduleMode::kDeviceOnly,
       typename MixedGemmArchTraits::Operator>::GemmKernel;
 
-  using GemmKernel =
-      cutlass::gemm::kernel::MoeFCGemm<typename GemmKernel_::Mma,
-                                       typename GemmKernel_::Epilogue,
-                                       typename GemmKernel_::ThreadblockSwizzle,
-                                       arch,  // Ensure top level arch is used
-                                              // for dispatch
-                                       GemmKernel_::kGroupScheduleMode>;
-
+  using GemmKernel = typename CutlassGemmKernel<BaseGemmKernel, arch, WeightQuantTraits::kQuantMethod>::Type;
   using GemmGrouped = cutlass::gemm::device::GemmGrouped<GemmKernel>;
 
   if (kernel_occupancy != nullptr) {
@@ -181,19 +191,32 @@ void generic_moe_gemm_kernelLauncher(const T* A,
   typename EpilogueOp::Params epilogue_op(ElementAccumulator(1.f),
                                           ElementAccumulator(0.f));
 
+  const uint8_t* local_scale_B = nullptr;
+  const float* code_scale_B = nullptr;
+  const float* code_zp_B = nullptr;
+  if constexpr (WeightQuantTraits::kQuantMethod == cutlass::WintQuantMethod::kWeightOnlyInt2) {
+    local_scale_B = quant_args_B.local_scale_ptr;
+    code_scale_B = quant_args_B.code_scale_ptr;
+    code_zp_B = quant_args_B.code_zp_ptr;
+  }
+
   typename GemmGrouped::Arguments args(
       num_experts,
       threadblock_count,
       epilogue_op,
       reinterpret_cast<const ElementType*>(A),
-      reinterpret_cast<const CutlassWeightType*>(B),
+      reinterpret_cast<const CutlassMmaWeightType*>(B),
       reinterpret_cast<const ElementType*>(weight_scales),
       reinterpret_cast<const ElementType*>(biases),
       reinterpret_cast<ElementType*>(C),
       total_rows_before_expert,
       total_rows,
       gemm_n,
-      gemm_k);
+      gemm_k,
+      WeightQuantTraits::kQuantMethod,
+      local_scale_B,
+      code_scale_B,
+      code_zp_B);
 
   GemmGrouped gemm;
 
@@ -222,7 +245,7 @@ void generic_moe_gemm_kernelLauncher(const T* A,
 }
 
 template <typename T,
-          typename WeightType,
+          typename WeightQuantTraits,
           typename arch,
           typename EpilogueTag,
           typename ThreadblockShape,
@@ -231,7 +254,7 @@ template <typename T,
           typename Enable = void>
 struct dispatch_stages {
   static void dispatch(const T* A,
-                       const WeightType* B,
+                       const typename WeightQuantTraits::WeightType* B,
                        const T* weight_scales,
                        const T* biases,
                        T* C,
@@ -240,6 +263,7 @@ struct dispatch_stages {
                        int64_t gemm_n,
                        int64_t gemm_k,
                        int num_experts,
+                       const typename WeightQuantTraits::Arguments& quant_args_B,
                        CutlassGemmConfig gemm_config,
                        int multi_processor_count,
                        cudaStream_t stream,
@@ -253,20 +277,20 @@ struct dispatch_stages {
 };
 
 template <typename T,
-          typename WeightType,
+          typename WeightQuantTraits,
           typename arch,
           typename EpilogueTag,
           typename ThreadblockShape,
           typename WarpShape>
 struct dispatch_stages<T,
-                       WeightType,
+                       WeightQuantTraits,
                        arch,
                        EpilogueTag,
                        ThreadblockShape,
                        WarpShape,
                        2> {
   static void dispatch(const T* A,
-                       const WeightType* B,
+                       const typename WeightQuantTraits::WeightType* B,
                        const T* weight_scales,
                        const T* biases,
                        T* C,
@@ -275,12 +299,13 @@ struct dispatch_stages<T,
                        int64_t gemm_n,
                        int64_t gemm_k,
                        int num_experts,
+                       const typename WeightQuantTraits::Arguments& quant_args_B,
                        CutlassGemmConfig gemm_config,
                        int multi_processor_count,
                        cudaStream_t stream,
                        int* occupancy = nullptr) {
     generic_moe_gemm_kernelLauncher<T,
-                                    WeightType,
+                                    WeightQuantTraits,
                                     arch,
                                     EpilogueTag,
                                     ThreadblockShape,
@@ -295,6 +320,7 @@ struct dispatch_stages<T,
                                        gemm_n,
                                        gemm_k,
                                        num_experts,
+                                       quant_args_B,
                                        gemm_config,
                                        multi_processor_count,
                                        stream,
@@ -303,13 +329,13 @@ struct dispatch_stages<T,
 };
 
 template <typename T,
-          typename WeightType,
+          typename WeightQuantTraits,
           typename EpilogueTag,
           typename ThreadblockShape,
           typename WarpShape,
           int Stages>
 struct dispatch_stages<T,
-                       WeightType,
+                       WeightQuantTraits,
                        cutlass::arch::Sm80,
                        EpilogueTag,
                        ThreadblockShape,
@@ -317,7 +343,7 @@ struct dispatch_stages<T,
                        Stages,
                        typename std::enable_if<(Stages > 2)>::type> {
   static void dispatch(const T* A,
-                       const WeightType* B,
+                       const typename WeightQuantTraits::WeightType* B,
                        const T* weight_scales,
                        const T* biases,
                        T* C,
@@ -326,12 +352,13 @@ struct dispatch_stages<T,
                        int64_t gemm_n,
                        int64_t gemm_k,
                        int num_experts,
+                       const typename WeightQuantTraits::Arguments& quant_args_B,
                        CutlassGemmConfig gemm_config,
                        int multi_processor_count,
                        cudaStream_t stream,
                        int* occupancy = nullptr) {
     generic_moe_gemm_kernelLauncher<T,
-                                    WeightType,
+                                    WeightQuantTraits,
                                     cutlass::arch::Sm80,
                                     EpilogueTag,
                                     ThreadblockShape,
@@ -346,6 +373,7 @@ struct dispatch_stages<T,
                                             gemm_n,
                                             gemm_k,
                                             num_experts,
+                                            quant_args_B,
                                             gemm_config,
                                             multi_processor_count,
                                             stream,
@@ -354,13 +382,13 @@ struct dispatch_stages<T,
 };
 
 template <typename T,
-          typename WeightType,
+          typename WeightQuantTraits,
           typename arch,
           typename EpilogueTag,
           typename ThreadblockShape,
           typename WarpShape>
 void dispatch_gemm_config(const T* A,
-                          const WeightType* B,
+                          const typename WeightQuantTraits::WeightType* B,
                           const T* weight_scales,
                           const T* biases,
                           T* C,
@@ -369,6 +397,7 @@ void dispatch_gemm_config(const T* A,
                           int64_t gemm_n,
                           int64_t gemm_k,
                           int num_experts,
+                          const typename WeightQuantTraits::Arguments& quant_args_B,
                           CutlassGemmConfig gemm_config,
                           int multi_processor_count,
                           cudaStream_t stream,
@@ -376,7 +405,7 @@ void dispatch_gemm_config(const T* A,
 #define dispatch_stages_macro(STAGE)                           \
   case STAGE:                                                  \
     dispatch_stages<T,                                         \
-                    WeightType,                                \
+                    WeightQuantTraits,                         \
                     arch,                                      \
                     EpilogueTag,                               \
                     ThreadblockShape,                          \
@@ -391,6 +420,7 @@ void dispatch_gemm_config(const T* A,
                                      gemm_n,                   \
                                      gemm_k,                   \
                                      num_experts,              \
+                                     quant_args_B,             \
                                      gemm_config,              \
                                      multi_processor_count,    \
                                      stream,                   \
@@ -414,7 +444,7 @@ void dispatch_gemm_config(const T* A,
   case CutlassTileConfig::                                      \
       CtaShape##AA##x##BB##x##CC##_WarpShape##DD##x##EE##x##FF: \
     dispatch_gemm_config<T,                                     \
-                         WeightType,                            \
+                         WeightQuantTraits,                     \
                          arch,                                  \
                          EpilogueTag,                           \
                          cutlass::gemm::GemmShape<AA, BB, CC>,  \
@@ -425,10 +455,11 @@ void dispatch_gemm_config(const T* A,
         biases,                                                 \
         C,                                                      \
         total_rows_before_expert,                               \
-        total_rows,                                           \
+        total_rows,                                             \
         gemm_n,                                                 \
         gemm_k,                                                 \
         num_experts,                                            \
+        quant_args_B,                                           \
         gemm_config,                                            \
         multi_processor_count,                                  \
         stream,                                                 \
@@ -438,14 +469,14 @@ void dispatch_gemm_config(const T* A,
 // This overload will handle tensorop gemms. It is disabled via SFINAE for fp32.
 // This overload is only enabled when T == WeightType.
 template <typename T,
-          typename WeightType,
+          typename WeightQuantTraits,
           typename arch,
           typename EpilogueTag,
           typename std::enable_if<!std::is_same<T, float>::value &&
-                                  std::is_same<T, WeightType>::value>::type* =
+                                  std::is_same<T, typename WeightQuantTraits::WeightType>::value>::type* =
               nullptr>
 void dispatch_moe_gemm_to_cutlass(const T* A,
-                                  const WeightType* B,
+                                  const typename WeightQuantTraits::WeightType* B,
                                   const T* weight_scales,
                                   const T* biases,
                                   T* C,
@@ -454,6 +485,7 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
                                   int64_t gemm_n,
                                   int64_t gemm_k,
                                   int num_experts,
+                                  const typename WeightQuantTraits::Arguments& quant_args_B,
                                   CutlassGemmConfig gemm_config,
                                   int sm_version,
                                   int multi_processor_count,
@@ -474,7 +506,7 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
     default:
       throw std::runtime_error(
           "[dispatch_moe_gemm_to_cutlass] Config is invalid for same "
-          "type MoE tensorop GEMM.");
+          "type MoE tensorop GEMM for FP16/BF16.");
       break;
   }
 }
@@ -483,14 +515,14 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
 // Overload for quantize MoE GEMMs. We disable some warp configs here since they
 // will not be used and we can improve compile time
 template <typename T,
-          typename WeightType,
+          typename WeightQuantTraits,
           typename arch,
           typename EpilogueTag,
           typename std::enable_if<!std::is_same<T, float>::value &&
-                                  !std::is_same<T, WeightType>::value>::type* =
+                                  !std::is_same<T, typename WeightQuantTraits::WeightType>::value>::type* =
               nullptr>
 void dispatch_moe_gemm_to_cutlass(const T* A,
-                                  const WeightType* B,
+                                  const typename WeightQuantTraits::WeightType* B,
                                   const T* weight_scales,
                                   const T* biases,
                                   T* C,
@@ -499,28 +531,34 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
                                   int64_t gemm_n,
                                   int64_t gemm_k,
                                   int num_experts,
+                                  const typename WeightQuantTraits::Arguments& quant_args_B,
                                   CutlassGemmConfig gemm_config,
                                   int sm_version,
                                   int multi_processor_count,
                                   cudaStream_t stream,
                                   int* occupancy = nullptr) {
   if constexpr (std::is_same<arch, cutlass::arch::Sm70>::value) {
-    switch (gemm_config.tile_config) {
-      dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
-      dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
-      case CutlassTileConfig::Undefined:
-        throw std::runtime_error("[dispatch_moe_gemm_to_cutlass] gemm config undefined.");
-        break;
-      case CutlassTileConfig::ChooseWithHeuristic:
-        throw std::runtime_error(
-            "[dispatch_moe_gemm_to_cutlass] gemm config should have "
-            "already been set by heuristic.");
-        break;
-      default:
-        throw std::runtime_error(
-            "[dispatch_moe_gemm_to_cutlass] Config is invalid for "
-            "mixed type tensorop GEMM.");
-        break;
+    if constexpr (WeightQuantTraits::kQuantMethod != cutlass::WintQuantMethod::kWeightOnlyInt2) {
+      switch (gemm_config.tile_config) {
+        dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
+        dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
+        case CutlassTileConfig::Undefined:
+          throw std::runtime_error("[dispatch_moe_gemm_to_cutlass] gemm config undefined.");
+          break;
+        case CutlassTileConfig::ChooseWithHeuristic:
+          throw std::runtime_error(
+              "[dispatch_moe_gemm_to_cutlass] gemm config should have "
+              "already been set by heuristic.");
+          break;
+        default:
+          throw std::runtime_error(
+              "[dispatch_moe_gemm_to_cutlass] Config is invalid for "
+              "mixed type tensorop GEMM for sm70.");
+          break;
+      }
+    } else {
+      throw std::runtime_error(
+              "[dispatch_moe_gemm_to_cutlass] weight_only_int2 does not support sm70.");
     }
   } else {
     switch (gemm_config.tile_config) {
@@ -555,12 +593,12 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
 // This overload will handle simt gemms. It is disabled via SFINAE for tensorop.
 template <
     typename T,
-    typename WeightType,
+    typename WeightQuantTraits,
     typename arch,
     typename EpilogueTag,
     typename std::enable_if<std::is_same<T, float>::value>::type* = nullptr>
 void dispatch_moe_gemm_to_cutlass(const T* A,
-                                  const WeightType* B,
+                                  const typename WeightQuantTraits::WeightType* B,
                                   const T* weight_scales,
                                   const T* biases,
                                   T* C,
@@ -569,6 +607,7 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
                                   int64_t gemm_n,
                                   int64_t gemm_k,
                                   int num_experts,
+                                  const typename WeightQuantTraits::Arguments& quant_args_B,
                                   CutlassGemmConfig gemm_config,
                                   int sm_version,
                                   int multi_processor_count,
@@ -594,8 +633,8 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
   }
 }
 
-template <typename T, typename WeightType>
-MoeGemmRunner<T, WeightType>::MoeGemmRunner() {
+template <typename T, typename WeightQuantTraits>
+MoeGemmRunner<T, WeightQuantTraits>::MoeGemmRunner() {
   int device{-1};
   check_cuda_error(cudaGetDevice(&device));
   sm_ = getSMVersion();
@@ -603,11 +642,11 @@ MoeGemmRunner<T, WeightType>::MoeGemmRunner() {
       &multi_processor_count_, cudaDevAttrMultiProcessorCount, device));
 }
 
-template <typename T, typename WeightType>
+template <typename T, typename WeightQuantTraits>
 template <typename EpilogueTag>
-void MoeGemmRunner<T, WeightType>::dispatch_to_arch<EpilogueTag>(
+void MoeGemmRunner<T, WeightQuantTraits>::dispatch_to_arch<EpilogueTag>(
     const T* A,
-    const WeightType* B,
+    const typename WeightQuantTraits::WeightType* B,
     const T* weight_scales,
     const T* biases,
     T* C,
@@ -616,11 +655,12 @@ void MoeGemmRunner<T, WeightType>::dispatch_to_arch<EpilogueTag>(
     int64_t gemm_n,
     int64_t gemm_k,
     int num_experts,
+    const typename WeightQuantTraits::Arguments& quant_args_B,
     CutlassGemmConfig gemm_config,
     cudaStream_t stream,
     int* occupancy) {
 #define dispatch_moe_gemm_to_cutlass_macro(ARCH)                  \
-  dispatch_moe_gemm_to_cutlass<T, WeightType, ARCH, EpilogueTag>( \
+  dispatch_moe_gemm_to_cutlass<T, WeightQuantTraits, ARCH, EpilogueTag>( \
       A,                                                          \
       B,                                                          \
       weight_scales,                                              \
@@ -631,6 +671,7 @@ void MoeGemmRunner<T, WeightType>::dispatch_to_arch<EpilogueTag>(
       gemm_n,                                                     \
       gemm_k,                                                     \
       num_experts,                                                \
+      quant_args_B,                                               \
       gemm_config,                                                \
       sm_,                                                        \
       multi_processor_count_,                                     \
@@ -648,25 +689,28 @@ void MoeGemmRunner<T, WeightType>::dispatch_to_arch<EpilogueTag>(
   }
 }
 
-template <typename T, typename WeightType>
+template <typename T, typename WeightQuantTraits>
 template <typename EpilogueTag>
-void MoeGemmRunner<T, WeightType>::run_gemm<EpilogueTag>(
+void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
     const T* A,
-    const WeightType* B,
+    const typename WeightQuantTraits::WeightType* B,
     const T* weight_scales,
     const T* biases,
     T* C,
     int64_t* total_rows_before_expert,
     int64_t total_rows,
-    int64_t tune_total_rows,
+    int64_t actual_total_rows,
     int64_t gemm_n,
     int64_t gemm_k,
     int num_experts,
+    const typename WeightQuantTraits::Arguments& quant_args_B,
     cudaStream_t stream) {
-  static constexpr bool is_weight_only = !std::is_same<T, WeightType>::value;
+  static constexpr bool is_weight_only = !std::is_same<T, typename WeightQuantTraits::WeightType>::value;
   static constexpr bool only_simt_configs = std::is_same<T, float>::value;
+
   std::vector<CutlassGemmConfig> candidate_configs =
       get_candidate_configs(sm_, -1, is_weight_only, only_simt_configs, true);
+
   static constexpr int warm_time = 5;
   static constexpr int test_time = 10;
   auto& gemmConfigManager = GemmConfigManager::Instance();
@@ -676,17 +720,19 @@ void MoeGemmRunner<T, WeightType>::run_gemm<EpilogueTag>(
       gemm_n, gemm_k, GemmType::MOEGEMM, dtype, wdtype, num_experts};
   CutlassGemmConfig chosen_config;
   auto chosen_config_optional =
-      gemmConfigManager.getBestConfig(gemmId, tune_total_rows);
+      gemmConfigManager.getBestConfig(gemmId, actual_total_rows);
   if (chosen_config_optional != std::nullopt) {
     chosen_config = chosen_config_optional.value();
   } else {
+    size_t best_id = -1;
     float best_time = std::numeric_limits<float>::max();
     CutlassGemmConfig best_config;
     int profile_total_rows =
-        std::min(gemmConfigManager.nextPowerOfTwo(tune_total_rows),
+        std::min(gemmConfigManager.nextPowerOfTwo(actual_total_rows),
                  gemmConfigManager.getMaxProfileM());
     bool find_one = false;
-    for (size_t ii = 0; ii < candidate_configs.size(); ++ii) {
+    size_t num_candidate_configs_size = candidate_configs.size();
+    for (size_t ii = 0; ii < num_candidate_configs_size; ++ii) {
       try {
         for (int i = 0; i < warm_time; i++) {
           dispatch_to_arch<EpilogueTag>(A,
@@ -699,6 +745,7 @@ void MoeGemmRunner<T, WeightType>::run_gemm<EpilogueTag>(
                                         gemm_n,
                                         gemm_k,
                                         num_experts,
+                                        quant_args_B,
                                         candidate_configs[ii],
                                         stream);
         }
@@ -719,6 +766,7 @@ void MoeGemmRunner<T, WeightType>::run_gemm<EpilogueTag>(
                                         gemm_n,
                                         gemm_k,
                                         num_experts,
+                                        quant_args_B,
                                         candidate_configs[ii],
                                         stream);
         }
@@ -728,7 +776,9 @@ void MoeGemmRunner<T, WeightType>::run_gemm<EpilogueTag>(
         check_cuda_error(cudaEventElapsedTime(&elapsed, start, stop));
         check_cuda_error(cudaEventDestroy(start));
         check_cuda_error(cudaEventDestroy(stop));
+        //std::cout << "[TUNING] config: " << ii << ", time: " << elapsed << " ms" << std::endl;
         if (elapsed < best_time) {
+          best_id = ii;
           best_time = elapsed;
           best_config = candidate_configs[ii];
         }
@@ -739,6 +789,7 @@ void MoeGemmRunner<T, WeightType>::run_gemm<EpilogueTag>(
       }
     }
     if (find_one) {
+      //std::cout << "[TUNING] best_config: " << best_id << ", time: " << best_time << " ms" << std::endl;
       gemmConfigManager.addBestConfig(gemmId, profile_total_rows, best_config);
       chosen_config = best_config;
     } else {
@@ -756,23 +807,25 @@ void MoeGemmRunner<T, WeightType>::run_gemm<EpilogueTag>(
                                 gemm_n,
                                 gemm_k,
                                 num_experts,
+                                quant_args_B,
                                 chosen_config,
                                 stream);
 }
 
-template <typename T, typename WeightType>
-void MoeGemmRunner<T, WeightType>::moe_gemm_bias_act(
+template <typename T, typename WeightQuantTraits>
+void MoeGemmRunner<T, WeightQuantTraits>::moe_gemm_bias_act(
     const T* A,
-    const WeightType* B,
+    const typename WeightQuantTraits::WeightType* B,
     const T* weight_scales,
     const T* biases,
     T* C,
     int64_t* total_rows_before_expert,
     int64_t total_rows,
-    int64_t tune_total_rows,
+    int64_t actual_total_rows,
     int64_t gemm_n,
     int64_t gemm_k,
     int num_experts,
+    const typename WeightQuantTraits::Arguments& quant_args_B,
     std::string activation_type,
     cudaStream_t stream) {
   if (activation_type == "none") {
@@ -784,10 +837,11 @@ void MoeGemmRunner<T, WeightType>::moe_gemm_bias_act(
                                C,
                                total_rows_before_expert,
                                total_rows,
-                               tune_total_rows,
+                               actual_total_rows,
                                gemm_n,
                                gemm_k,
                                num_experts,
+                               quant_args_B,
                                stream);
     } else {
       run_gemm<EpilogueOpNoBias>(A,
@@ -797,27 +851,30 @@ void MoeGemmRunner<T, WeightType>::moe_gemm_bias_act(
                                  C,
                                  total_rows_before_expert,
                                  total_rows,
-                                 tune_total_rows,
+                                 actual_total_rows,
                                  gemm_n,
                                  gemm_k,
                                  num_experts,
+                                 quant_args_B,
                                  stream);
     }
   }
 }
 
-template <typename T, typename WeightType>
-void MoeGemmRunner<T, WeightType>::moe_gemm(const T* A,
-                                            const WeightType* B,
-                                            const T* weight_scales,
-                                            T* C,
-                                            int64_t* total_rows_before_expert,
-                                            int64_t total_rows,
-                                            int64_t tune_total_rows,
-                                            int64_t gemm_n,
-                                            int64_t gemm_k,
-                                            int num_experts,
-                                            cudaStream_t stream) {
+template <typename T, typename WeightQuantTraits>
+void MoeGemmRunner<T, WeightQuantTraits>::moe_gemm(
+    const T* A,
+    const typename WeightQuantTraits::WeightType* B,
+    const T* weight_scales,
+    T* C,
+    int64_t* total_rows_before_expert,
+    int64_t total_rows,
+    int64_t actual_total_rows,
+    int64_t gemm_n,
+    int64_t gemm_k,
+    int num_experts,
+    const typename WeightQuantTraits::Arguments& quant_args_B,
+    cudaStream_t stream) {
   run_gemm<EpilogueOpNoBias>(A,
                              B,
                              weight_scales,
@@ -825,10 +882,11 @@ void MoeGemmRunner<T, WeightType>::moe_gemm(const T* A,
                              C,
                              total_rows_before_expert,
                              total_rows,
-                             tune_total_rows,
+                             actual_total_rows,
                              gemm_n,
                              gemm_k,
                              num_experts,
+                             quant_args_B,
                              stream);
 }
 

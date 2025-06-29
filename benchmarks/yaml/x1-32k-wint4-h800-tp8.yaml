@@ -1,0 +1,6 @@
+tensor_parallel_size: 8
+max_model_len: 32768
+max_num_seqs: 32
+num_gpu_blocks_override: 4096
+kv_cache_ratio: 0.5
+reasoning_parser: ernie-x1

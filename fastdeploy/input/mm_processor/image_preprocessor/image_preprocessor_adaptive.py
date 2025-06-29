@@ -22,16 +22,16 @@ from typing import List, Optional, Union
 import numpy as np
 import paddle
 import PIL
-from paddlenlp.transformers.feature_extraction_utils import BatchFeature
-from paddlenlp.transformers.image_processing_utils import BaseImageProcessor
-from paddlenlp.transformers.image_transforms import (
+from paddleformers.transformers.feature_extraction_utils import BatchFeature
+from paddleformers.transformers.image_processing_utils import BaseImageProcessor
+from paddleformers.transformers.image_transforms import (
     convert_to_rgb,
     normalize,
     rescale,
     resize,
     to_channel_dimension_format,
 )
-from paddlenlp.transformers.image_utils import (
+from paddleformers.transformers.image_utils import (
     ChannelDimension,
     ImageInput,
     PILImageResampling,
@@ -42,7 +42,7 @@ from paddlenlp.transformers.image_utils import (
     to_numpy_array,
     valid_images,
 )
-from paddlenlp.transformers.tokenizer_utils_base import (
+from paddleformers.transformers.tokenizer_utils_base import (
     TensorType,
 )
 from PIL import Image
@@ -326,7 +326,7 @@ class AdaptiveImageProcessor(BaseImageProcessor):
                         max_pixels=self.max_pixels,
                     )
                 image = image.astype("uint8")  # TODO : 需要手动加上，否则多除255 导致结果会出错
-                # 直接fromarray，不要靠paddlenlp里面的
+                # 直接fromarray，不要靠paddleformers里面的
                 image = Image.fromarray(image)
                 image = resize(
                     image,

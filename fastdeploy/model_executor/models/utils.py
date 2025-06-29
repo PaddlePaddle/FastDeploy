@@ -16,60 +16,31 @@
 
 from __future__ import annotations
 
-import collections
 import hashlib
 import json
-import multiprocessing as mp
 import os
 import random
 import re
 import struct
 from functools import partial
-from typing import Callable, Optional
 
 import numpy as np
-from paddlenlp.transformers import PretrainedTokenizer
-from paddlenlp.transformers.model_utils import _add_variant
-from paddlenlp.transformers.utils import paddlenlp_load
-from paddlenlp.transformers.model_utils import load_tp_checkpoint
-from safetensors import safe_open
-
-from paddlenlp.utils.env import (
-    PADDLE_WEIGHTS_INDEX_NAME,
-    SAFE_MASTER_WEIGHTS_INDEX_NAME,
-    SAFE_PEFT_WEIGHTS_INDEX_NAME,
-    SAFE_WEIGHTS_INDEX_NAME,
-)
-from paddlenlp.utils.log import logger
-from tqdm import tqdm
-
 import paddle
 import paddle.distributed as dist
 from paddle.common_ops_import import convert_dtype
 from paddle.distributed import fleet
-from paddlenlp.transformers import PretrainedTokenizer
-from paddlenlp.transformers.model_utils import _add_variant, load_tp_checkpoint
-from paddlenlp.transformers.utils import paddlenlp_load
-from paddlenlp.utils.env import (PADDLE_WEIGHTS_INDEX_NAME,
-                                 SAFE_MASTER_WEIGHTS_INDEX_NAME,
-                                 SAFE_PEFT_WEIGHTS_INDEX_NAME,
-                                 SAFE_WEIGHTS_INDEX_NAME)
-from paddlenlp.utils.log import logger
+from paddleformers.transformers.model_utils import (_add_variant,
+                                                    load_tp_checkpoint)
+from paddleformers.transformers.utils import paddleformers_load
+from paddleformers.utils.env import (PADDLE_WEIGHTS_INDEX_NAME,
+                                     SAFE_MASTER_WEIGHTS_INDEX_NAME,
+                                     SAFE_PEFT_WEIGHTS_INDEX_NAME,
+                                     SAFE_WEIGHTS_INDEX_NAME)
+from paddleformers.utils.log import logger
 from safetensors import safe_open
 from tqdm import tqdm
 
-from fastdeploy.platforms import current_platform
-
-from .tokenizer import ErnieBotTokenizer
-import glob
-
-MODEL_LIB_NAMES = [
-    "ernie_bot.modeling",
-    "ernie_bot.modeling_pp",
-    "ernie_bot.modeling_moe",
-    "ernie_bot.modeling_rm",
-    "ernie_bot.proxy_distill",
-]
+from fastdeploy.config import ModelConfig
 
 MAX_BSZ = 512
 MAX_DRAFT_TOKENS = 6
@@ -122,7 +93,7 @@ def load_sharded_checkpoint(folder, variant=None, return_numpy=False):
         return paddle.load(lora_pdparams_file, return_numpy=return_numpy)
     if os.path.isfile(safetensors_file):
         try:
-            from paddlenlp.utils.safetensors import \
+            from paddleformers.utils.safetensors import \
                 fast_load_file as safe_load_file
         except ImportError:
             from safetensors.numpy import load_file as safe_load_file
@@ -169,7 +140,7 @@ def load_sharded_checkpoint(folder, variant=None, return_numpy=False):
 
     if load_safe:
         try:
-            from paddlenlp.utils.safetensors import \
+            from paddleformers.utils.safetensors import \
                 fast_load_file as safe_load_file
         except ImportError:
             from safetensors.numpy import load_file as safe_load_file
@@ -179,7 +150,7 @@ def load_sharded_checkpoint(folder, variant=None, return_numpy=False):
 
     shard_files = list(set(index["weight_map"].values()))
     loader = (safe_load_file if load_safe else partial(
-        paddlenlp_load, map_location="np" if return_numpy else "cpu"))
+        paddleformers_load, map_location="np" if return_numpy else "cpu"))
 
     ret = {}
     for shard_file in tqdm(shard_files):
@@ -227,40 +198,6 @@ def convert_ndarray_dtype(np_array: np.ndarray,
     return np_array.astype(target_dtype)
 
 
-def ernie_bot_postprocess_past_key_value(past_key_values):
-    """
-    ernie_bot_postprocess_past_key_values
-    """
-    Cache = collections.namedtuple("Cache", ["k", "v"])
-    # (layer_num, bs, prefixlen, head_num/tensor_parallel_degree, head_dim)*2
-    keys, values = paddle.transpose(past_key_values, perm=[2, 0, 1, 3,
-                                                           4]).split(2)
-
-    past_key_values = []
-    for k, v in zip(keys, values):
-        past_key_values.append(Cache(k, v))
-    return past_key_values
-
-
-def ernie_bot_pad_attention_mask(input_ids_shape, num_prefix_tokens,
-                                 attention_mask):
-    """
-    ernie_bot_pad_attention_mask
-    """
-    if attention_mask.dim() == 2:
-        attention_mask = attention_mask[:, None, None, :]
-        prefix_attention_mask = paddle.ones(
-            [input_ids_shape[0], 1, 1, num_prefix_tokens],
-            dtype=attention_mask.dtype,
-        )
-    else:
-        prefix_attention_mask = paddle.ones(
-            [input_ids_shape[0], 1, input_ids_shape[-1], num_prefix_tokens],
-            dtype=attention_mask.dtype,
-        )
-    return paddle.concat((prefix_attention_mask, attention_mask), axis=3)
-
-
 def set_seed(seed: int):
     """
     set random seed for all random modules
@@ -268,41 +205,6 @@ def set_seed(seed: int):
     paddle.seed(seed)
     random.seed(seed)
     np.random.seed(seed)
-
-
-def get_infer_model_path(input_dir, model_prefix, is_export: bool = False):
-    """when n_ranks = 1, infer_model_path is: `{input_dir}/{model_prefix}.pdiparams`
-       when n_ranks > 1, infer_model_path is: `{input_dir}/rank_{idx}/{model_prefix}.pdiparams`
-
-    Args:
-        input_dir (str): the base input_dir
-        model_prefix (str): the prefix name of model
-
-    Returns:
-        str: the path of infer model path
-    """
-    n_ranks = dist.get_world_size()
-    try:
-        local_rank = dist.ParallelEnv().dev_id
-    except Exception:
-        logger.info(
-            "`dist.ParallelEnv().dev_id` is not supported on CPU devices,so set local_rank = 0."
-        )
-        local_rank = 0
-    if n_ranks > 1:
-        return os.path.join(input_dir, f"rank_{local_rank}", model_prefix)
-
-    # if n_ranks director exist, return N-rank directory
-    sub_rank_dir = os.path.join(input_dir, f"rank_{local_rank}")
-
-    if is_export:
-        return os.path.join(sub_rank_dir, model_prefix)
-    else:
-        # when inference, return sub_rank_dir when exists
-        if os.path.exists(sub_rank_dir):
-            return os.path.join(sub_rank_dir, model_prefix)
-        else:
-            return os.path.join(input_dir, model_prefix)
 
 
 def pad_batch_data(insts, pad_id=0, return_seq_len=False, pad_style="right"):
@@ -348,40 +250,6 @@ def load_prefix_weights(
     return past_key_values
 
 
-def build_for_generation(model, tokenizer: PretrainedTokenizer,
-                         generation_kwargs: dict):
-    """build `ErnieBotForGenerationFuse` to generate tokens
-
-    Args:
-        model (_type_): ErnieBotModel or ErnieBotFusedModel
-        tokenizer (PretrainedTokenizer): pretrained tokenizer
-        generation_kwargs (dict): generation_kwargs for model
-
-    Returns:
-        PretrainedModel: ErnieBotForGenerationFuse
-    """
-    from ernie_bot.single_model_fused import ErnieBotForGenerationFuse
-
-    configs = {
-        "bos_token_id": tokenizer.bos_token_id,
-        "eos_token_id": tokenizer.eos_token_id,
-        "pad_token_id": tokenizer.pad_token_id,
-        "initializer_range": 0.02,
-        "fused_linear": False,
-        "min_dec_len": 1,
-        "max_dec_len": 1024,
-        "top_k": 0,
-        "top_p": 0.7,
-        "temperature": 0.95,
-        "use_topp_sampling": True,
-        "inference": True,
-    }
-    configs.update(generation_kwargs)
-    model = ErnieBotForGenerationFuse(model, configs=configs)
-    model.eval()
-    return model
-
-
 def init_distributed_env() -> tuple[int, int]:
     """init distributed envs, and only support mp in ErnieBotModel
 
@@ -405,86 +273,6 @@ def init_distributed_env() -> tuple[int, int]:
         tensor_parallel_rank = hcg.get_model_parallel_rank()
 
     return tensor_parallel_degree, tensor_parallel_rank
-
-
-def generate_rank_mapping(output_dir: str):
-    """generate current distributed rank mapping file
-
-    Args:
-        output_dir (str): the directory of rank_mapping file
-    """
-    os.makedirs(output_dir, exist_ok=True)
-
-    # must in distributed env
-    hcg = fleet.get_hybrid_communicate_group()
-    model_parallel_group = hcg.get_model_parallel_group()
-    ring_id = model_parallel_group.id
-
-    world_size = dist.get_world_size()
-    with open(os.path.join(output_dir, "rank_mapping.csv"), "w") as f:
-        f.write("[ring_id -> ranks]\n")
-        f.write(",".join(map(str, [0] + list(range(world_size)))) + "\n")
-        f.write(",".join(map(str, [ring_id] + list(range(world_size)))) + "\n")
-
-        f.write("[rank -> ring_ids]\n")
-        for i in range(world_size):
-            f.write(f"{i},0,{ring_id}\n")
-
-
-def save_infer_result(trainer, dev_ds, k=100, src_length=256, tgt_length=512):
-    """
-    save infer result into jsonl format
-    """
-    from predict_generation import Predictor, batchfy_text
-
-    all_instructions = []
-    all_answers = []
-    all_output = []
-
-    # top k instruction from dev_ds
-    for i, ds in enumerate(dev_ds.data):
-        if i == k:
-            break
-        if "instruction" in ds:
-            all_instructions.append(ds["instruction"])
-            all_answers.append(ds["output"])
-        elif "src" in ds:
-            if isinstance(ds["src"], list):
-                all_instructions.append(ds["src"][0])
-                all_answers.append(ds["tgt"][0])
-            else:
-                all_instructions.append(ds["src"])
-                all_answers.append(ds["tgt"])
-
-    batch_texts = batchfy_text(all_instructions,
-                               trainer.args.per_device_eval_batch_size)
-    predictor = Predictor(
-        tokenizer=trainer.tokenizer,
-        model=trainer.model,
-        src_length=src_length,
-        tgt_length=tgt_length,
-    )
-
-    # infer results
-    for bs, texts in enumerate(batch_texts):
-        outputs = predictor.predict(texts)
-        for i, (text, result) in enumerate(zip(texts, outputs["result"])):
-            out = {
-                "instruction":
-                text,
-                "answer":
-                all_answers[bs * trainer.args.per_device_eval_batch_size + i],
-                "output":
-                result,
-            }
-            all_output.append(out)
-
-    # save results
-    if trainer.args.tensor_parallel_rank == 0:
-        with open(os.path.join(trainer.args.output_dir, "infer_result.json"),
-                  "w") as f:
-            for out in all_output:
-                f.write(json.dumps(out, ensure_ascii=False) + "\n")
 
 
 def w4a8_weight_convert(state_dict):
@@ -617,122 +405,6 @@ def deserialize_from_file(fp):
     return data_arr
 
 
-def read_res(
-    model_name_or_path,
-    output_tensor_max_shape,
-    result_queue: mp.Queue,
-    msg_queue_id=None,
-    use_ep=False,
-    ep_just_for_test=False,
-    tokenizer=None,
-):
-    """Read result from queue."""
-    if msg_queue_id is None:
-        if (current_platform.is_cuda() and
-                current_platform.available()) or paddle.is_compiled_with_xpu():
-            from fastdeploy.model_executor.ops.gpu import get_output
-        elif paddle.is_compiled_with_custom_device("npu"):
-            from paddle_custom_device.npu import get_output
-        else:  # CPU
-            from fastdeploy.model_executor.ops.cpu import get_output
-    else:
-        if (current_platform.is_cuda() and
-                current_platform.available()) or paddle.is_compiled_with_xpu():
-            from fastdeploy.model_executor.ops.gpu import get_output_dynamic
-        elif paddle.is_compiled_with_custom_device("npu"):
-            from paddle_custom_device.npu import get_output_dynamic
-        else:  # CPU
-            from fastdeploy.model_executor.ops.cpu import get_output_dynamic
-
-    if tokenizer is None:
-        tokenizer = ErnieBotTokenizer.from_pretrained(model_name_or_path)
-
-    paddle.device.set_device("cpu")
-    paddle.disable_static()
-    output_tensor = paddle.full(output_tensor_max_shape,
-                                fill_value=2,
-                                dtype="int64")
-
-    while True:
-        outputs = []
-        while True:
-            if msg_queue_id is None:
-                get_output(output_tensor, 0, True)
-            else:
-                get_output_dynamic(output_tensor, 0, True, msg_queue_id)
-            if int(output_tensor[0, 0]) == -2:  # read none
-                continue
-            bsz = int(output_tensor[1, 0])
-            output_numpy = output_tensor[2:bsz + 2].numpy()
-            output_numpy[output_numpy == -1] = 2
-            outputs.append(output_numpy)
-
-            if int(output_tensor[0, 0]) < 0:
-                break
-        output = np.concatenate(outputs, axis=1)
-        seqs = tokenizer.batch_decode(
-            output.tolist(),
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False,
-        )
-        if use_ep and (not ep_just_for_test):
-            print("seqs: ", seqs)
-        for i, seq in enumerate(seqs):
-            result_queue.put([i, len(output.tolist()[i]), seq])
-
-
-def speculate_read_res(
-    model_name_or_path,
-    output_tensor_max_shape,
-    result_queue: mp.Queue,
-    msg_queue_id=None,
-):
-    """Read result from queue."""
-    if msg_queue_id is None:
-        from fastdeploy.model_executor.ops.gpu import speculate_get_output
-    else:
-        from fastdeploy.model_executor.ops.gpu import \
-            speculate_get_output_dynamic
-
-    tokenizer = ErnieBotTokenizer.from_pretrained(model_name_or_path)
-    paddle.device.set_device("cpu")
-    paddle.disable_static()
-    output_tensor = paddle.full(output_tensor_max_shape,
-                                fill_value=2,
-                                dtype="int64")
-    while True:
-        outputs = []
-        for _ in range(MAX_BSZ):
-            outputs.append([])
-
-        while True:
-            if msg_queue_id is None:
-                speculate_get_output(output_tensor, 0, True)
-            else:
-                speculate_get_output_dynamic(output_tensor, 0, True,
-                                             msg_queue_id)
-            if int(output_tensor[0]) == -2:  # read none
-                continue
-            bsz = int(output_tensor[1])
-            accept_num = output_tensor[2:bsz + 2].numpy()
-            for bi in range(bsz):
-                outputs[bi].extend(
-                    output_tensor.numpy()[2 + MAX_BSZ +
-                                          bi * MAX_DRAFT_TOKENS:2 + MAX_BSZ +
-                                          bi * MAX_DRAFT_TOKENS +
-                                          accept_num[bi]].tolist())
-            if int(output_tensor[0]) == -1:
-                break
-
-        seqs = tokenizer.batch_decode(
-            outputs,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False,
-        )
-        for i in range(bsz):
-            result_queue.put([i, len(outputs[i]), seqs[i]])
-
-
 def calculate_effective_tokens(training_args, train_dataset, max_seq_len):
     """
     Calculate the effective tokens during training.
@@ -761,466 +433,86 @@ def calculate_effective_tokens(training_args, train_dataset, max_seq_len):
     return total_effective_tokens, total_tokens
 
 
-def estimate_training(train_dataset, data_args, training_args, model_args):
-    """
-    根据训练数据估算训练所需的步数。
-
-    Args:
-        - None
-
-    Returns:
-        - dict: 返回一个字典，包含了训练所需的步骤数信息。
-
-    """
-    train_dataset.estimate = True
-    logger.info("Start to estimate max training steps...")
-    with open(data_args.train_task_config) as f:
-        train_task_group = json.load(f)
-
-    if len(train_task_group) > 1:
-        logger.warning(
-            "Suggest to use max_steps instead of num_train_epochs for multi source dataset."
-        )
-        logger.info(
-            "Multi source dataset detected, number of samples will be estimated by following rule. "
-            "num_samples = (source1_num_samples * prob1 + source2_num_samples * prob2 + ...) * epochs"
-        )
-
-    max_samples = train_dataset.max_estimate_samples
-
-    if training_args.max_estimate_samples != -1:
-        # Set estimate samples to max_estimate_samples
-        logger.warning(
-            "The results between sampling and non-sampling methods may differ."
-        )
-        train_dataset.max_estimate_samples = min(
-            training_args.max_estimate_samples,
-            train_dataset.max_estimate_samples)
-
-    if train_dataset.max_estimate_samples > 0:
-        train_batches = 0
-        train_tokens = 0
-        for sequences in train_dataset:
-            if not train_dataset.estimate:
-                break
-            train_batches += 1
-            for sequence in sequences:
-                train_tokens += len(sequence.token_ids)
-
-        train_tokens *= training_args.num_train_epochs
-        train_batches *= training_args.num_train_epochs
-        global_batch_size = (training_args.per_device_train_batch_size *
-                             training_args.gradient_accumulation_steps *
-                             max(training_args.data_parallel_degree, 1) *
-                             max(training_args.sharding_parallel_degree, 1))
-        max_steps = int(np.ceil(train_batches / global_batch_size))
-
-        if max_samples != train_dataset.max_estimate_samples:
-            max_steps *= max_samples / train_dataset.max_estimate_samples
-            train_tokens *= max_samples / train_dataset.max_estimate_samples
-            train_dataset.used_samples *= (max_samples /
-                                           train_dataset.max_estimate_samples)
-            train_dataset.unused_samples *= (
-                max_samples / train_dataset.max_estimate_samples)
-
-        res = {
-            "num_train_epochs":
-            int(training_args.num_train_epochs),
-            "max_steps":
-            int(np.ceil(max_steps)),
-            "train_tokens":
-            int(train_tokens),
-            "global_batch_size":
-            int(global_batch_size),
-            "gradient_accumulation_steps":
-            training_args.gradient_accumulation_steps,
-            "warmup_steps":
-            int(np.ceil(0.1 * max_steps)),
-            "per_device_train_batch_size":
-            int(training_args.per_device_train_batch_size),
-            "tensor_parallel_degree":
-            int(training_args.tensor_parallel_degree),
-            "pipeline_parallel_degree":
-            int(training_args.pipeline_parallel_degree),
-            "sharding_parallel_degree":
-            int(training_args.sharding_parallel_degree),
-            "seed":
-            training_args.seed,
-            "num_samples_each_epoch":
-            data_args.num_samples_each_epoch,
-            "example_from_same_task_prob":
-            data_args.example_from_same_task_prob,
-            "pseudo_sampling_prob":
-            data_args.pseudo_sampling_prob,
-            "trigger_data_prob":
-            data_args.trigger_data_prob,
-            "max_seq_len":
-            int(data_args.max_seq_len),
-            "valid":
-            True,
-            "train_samples":
-            int(max_samples * training_args.num_train_epochs),
-            "estimate_samples":
-            int(train_dataset.max_estimate_samples),
-            "actual_train_samples":
-            int(train_dataset.used_samples * training_args.num_train_epochs),
-            "skip_samples":
-            int(train_dataset.unused_samples * training_args.num_train_epochs),
-        }
-        if hasattr(training_args, "num_of_gpus"):
-            res["num_of_gpus"] = training_args.num_of_gpus
-
-        if train_batches / training_args.num_train_epochs / global_batch_size < 1:
-            logger.warning(
-                "This dataset is too small, you'd better enlarge your dataset."
-            )
-            res["valid"] = False
-
-        if getattr(training_args, "estimation_output_file", None):
-            with open(training_args.estimation_output_file,
-                      "w",
-                      encoding="utf-8") as f:
-                json.dump(res, f)
-
-        return max_steps
-    else:
-        res = {
-            "num_train_epochs":
-            int(training_args.num_train_epochs),
-            "max_steps":
-            0,
-            "gradient_accumulation_steps":
-            training_args.gradient_accumulation_steps,
-            "train_tokens":
-            0,
-            "per_device_train_batch_size":
-            int(training_args.per_device_train_batch_size),
-            "tensor_parallel_degree":
-            int(training_args.tensor_parallel_degree),
-            "pipeline_parallel_degree":
-            int(training_args.pipeline_parallel_degree),
-            "sharding_parallel_degree":
-            int(training_args.sharding_parallel_degree),
-            "num_samples_each_epoch":
-            data_args.num_samples_each_epoch,
-            "example_from_same_task_prob":
-            data_args.example_from_same_task_prob,
-            "pseudo_sampling_prob":
-            data_args.pseudo_sampling_prob,
-            "trigger_data_prob":
-            data_args.trigger_data_prob,
-            "max_seq_len":
-            int(data_args.max_seq_len),
-            "seed":
-            data_args.seed,
-            "valid":
-            False,
-            "train_samples":
-            0,
-        }
-        if hasattr(training_args, "num_of_gpus"):
-            res["num_of_gpus"] = training_args.num_of_gpus
-
-        if getattr(training_args, "estimation_output_file", None):
-            with open(training_args.estimation_output_file,
-                      "w",
-                      encoding="utf-8") as f:
-                json.dump(res, f)
-
-        logger.error("No valid data found, please check your dataset format.")
-        return 0
-
-
-def get_w4a8_gemm_config_tuple(file_root_path):
-    """读取预配置的gemm 配置表
-    Args:
-        file_root_path (str): the directory of w4a8_gemm_config files
-    """
-
-    def get_gemm_config_tuple_from_file(file):
-        gemm_tuple_list = []
-        for line in file:
-            line_split = line.split(" ")
-            gemm_tuple_list.append([
-                int(line_split[1]),
-                int(line_split[2]),
-                int(line_split[3]),
-                int(line_split[4]),
-                int(line_split[5]),
-                int(line_split[6]),
-                int(line_split[7]),
-            ])
-        gemm_tuple_list.sort(key=lambda x: x[0])
-        gemm_tuple_numpy = np.array(gemm_tuple_list, dtype="int32")
-        gemm_tuple_numpy = gemm_tuple_numpy.flatten()
-        return gemm_tuple_numpy
-
-    qkv_gemm_config_tuple = []
-    out_linear_gemm_config_tuple = []
-    ffn1_gemm_config_tuple = []
-    ffn2_gemm_config_tuple = []
-    try:
-        qkv_tuned_gemm_config_log_path = os.path.join(
-            f"{file_root_path}", "qkv_tuned_gemm_config.log")
-        with open(qkv_tuned_gemm_config_log_path) as file:
-            qkv_gemm_config_tuple = get_gemm_config_tuple_from_file(file)
-        out_linear_tuned_gemm_config_log_path = os.path.join(
-            f"{file_root_path}", "out_linear_tuned_gemm_config.log")
-        with open(out_linear_tuned_gemm_config_log_path) as file:
-            out_linear_gemm_config_tuple = get_gemm_config_tuple_from_file(
-                file)
-        ffn1_tuned_gemm_config_log_path = os.path.join(
-            f"{file_root_path}", "ffn1_tuned_gemm_config.log")
-        with open(ffn1_tuned_gemm_config_log_path) as file:
-            ffn1_gemm_config_tuple = get_gemm_config_tuple_from_file(file)
-        ffn2_tuned_gemm_config_log_path = os.path.join(
-            f"{file_root_path}", "ffn2_tuned_gemm_config.log")
-        with open(ffn2_tuned_gemm_config_log_path) as file:
-            ffn2_gemm_config_tuple = get_gemm_config_tuple_from_file(file)
-    except Exception:
-        logger.warning(
-            "Found gemm config for W4A8 failed, using empty gemm tuple list for W4A8"
-        )
-    w4a8_gemm_config = {}
-    w4a8_gemm_config["qkv_gemm_config_tuple"] = qkv_gemm_config_tuple
-    w4a8_gemm_config[
-        "out_linear_gemm_config_tuple"] = out_linear_gemm_config_tuple
-    w4a8_gemm_config["ffn1_gemm_config_tuple"] = ffn1_gemm_config_tuple
-    w4a8_gemm_config["ffn2_gemm_config_tuple"] = ffn2_gemm_config_tuple
-    return w4a8_gemm_config
-
-
-def update_refined_recompute(rr, sequence_parallel, lora=False):
-    """update refined recompute dict."""
-    # if rr is a dict, return it directly
-    if isinstance(rr, dict):
-        return rr
-    if rr == "":
-        return {}
-    else:
-
-        rr_res = {
-            "mlp_row_ln": 0,
-            "attention_row_ln": 0,
-            "attention_column_ln": 0,
-            "mlp_column_ln": 0,
-            "flash_attn": 0,
-        }
-        ops = rr.split(",")
-        for op in ops:
-            if ":" not in op:
-                raise ValueError(
-                    "Illegal refined_recompute input, please check.")
-            op_name, skip_num = op.split(":")[0], int(op.split(":")[1])
-            if op_name not in rr_res:
-                raise ValueError(
-                    f"Refined recompute do not support {op_name}, please check."
-                )
-
-            if op_name in [
-                    "mlp_row_ln",
-                    "attention_row_ln",
-                    "attention_column_ln",
-                    "mlp_column_ln",
-            ]:
-                if not sequence_parallel:
-                    logger.warning(
-                        f"Currently, the `{op_name}` op is only supported "
-                        "when `sequence_parallel=True`. This refined recompute op will be ignored."
-                    )
-                    continue
-                if lora:
-                    logger.warning(
-                        "Currently, LoRA does not support refined recompute "
-                        f"for the `{op_name}` op. This refined recompute op will be ignored."
-                    )
-                    continue
-            rr_res[op_name] = skip_num
-
-        return rr_res
-
-
-def model_convert_fp8(model_path, device=None):
-    """
-    Convert a model checkpoint from bf16/fp16 to fp8 format.
-    Args:
-        model_path (str): The path to the directory containing the model checkpoint files
-            (e.g., config.json and model_state.pdparams).
-        device (str, optional): The device to set for paddle, such as 'cpu' or 'gpu'.
-            If None, the default device is used.
-
-    Note:
-        This function requires non-smooth quantization 'act_scales' to be applied when using the converted model.
-    """
-    if device is not None:
-        paddle.device.set_device(device)
-
-    config_path = os.path.join(model_path, "config.json")
-    with open(config_path, "r") as model_config_file:
-        model_config = json.load(model_config_file)
-        nums_layers = model_config["num_layers"]
-
-    weight_scales_path = os.path.join(model_path, "weight_scales_0.json")
-    with open(weight_scales_path, "r") as weight_scales_file:
-        weight_scales = json.load(weight_scales_file)
-        if "ernie.decoder.layers." + str(
-                0) + ".gate.weight_quanter" in weight_scales:
-            logger.info("FP8 model checkpoint already converted")
-            return
-        else:
-            logger.info("Converting model checkpoint to fp8...")
-
-    ffn1_weights_name = ".linear1.weight"
-    ffn1_bias_name = ".linear1.bias"
-
-    gate_weights_name = ".gate.weight"
-    up_weights_name = ".up.weight"
-    gate_bias_name = ".gate.bias"
-    up_bias_name = ".up.bias"
-
-    params_states = paddle.load(
-        os.path.join(model_path, "model_state.pdparams"))
-    new_path = os.path.join(model_path, "model_state.pdparams")
-
-    for i in range(0, nums_layers):
-        ffn1_weights = params_states["ernie.decoder.layers." + str(i) +
-                                     ffn1_weights_name]
-        ffn1_weights_0 = ffn1_weights[:, ::2]
-        ffn1_weights_1 = ffn1_weights[:, 1::2]
-
-        ffn1_weights_0_range = paddle.abs(ffn1_weights_0).max()
-        ffn1_weights_1_range = paddle.abs(ffn1_weights_1).max()
-
-        weight_scales["ernie.decoder.layers." + str(i) +
-                      ".gate.weight_quanter"] = (paddle.cast(
-                          ffn1_weights_0_range, "float").numpy().tolist())
-        weight_scales["ernie.decoder.layers." + str(i) +
-                      ".up.weight_quanter"] = (paddle.cast(
-                          ffn1_weights_1_range, "float").numpy().tolist())
-        params_states["ernie.decoder.layers." + str(i) +
-                      gate_weights_name] = (ffn1_weights_0 * 448 /
-                                            ffn1_weights_0_range)
-        params_states["ernie.decoder.layers." + str(i) +
-                      up_weights_name] = (ffn1_weights_1 * 448 /
-                                          ffn1_weights_1_range)
-        del params_states["ernie.decoder.layers." + str(i) + ffn1_weights_name]
-
-        ffn1_bias = params_states["ernie.decoder.layers." + str(i) +
-                                  ffn1_bias_name]
-        params_states["ernie.decoder.layers." + str(i) +
-                      gate_bias_name] = ffn1_bias[::2]
-        params_states["ernie.decoder.layers." + str(i) +
-                      up_bias_name] = ffn1_bias[1::2]
-        del params_states["ernie.decoder.layers." + str(i) + ffn1_bias_name]
-
-    with open(model_path + "/weight_scales_0.json", "w") as weight_scales_file:
-        json.dump(weight_scales, weight_scales_file)
-
-    paddle.save(params_states, new_path)
-
-
-
-def load_ep_checkpoint(model_path, config, return_numpy=False, return_key_name=True):
+def load_ep_checkpoint(model_path: str,
+                       config: ModelConfig,
+                       return_numpy: bool = False,
+                       return_key_name: bool = True):
     """
     load ep checkpoint
     """
-    if return_key_name:
-        merge_path = os.path.join(model_path, "merged_tp1_state_split")
-        if os.path.isdir(merge_path):
-            # load keyname
+    # return_numpy=True cpu
+    # return_numpy=False gpu
+    with open(os.path.join(model_path, "model.safetensors.index.json"),
+              "r") as f:
+        weight_list = json.load(f)["weight_map"]
+    filtered_map = {k: v for k, v in weight_list.items() if "experts" not in k}
+    num_local_ffn_keys = []
 
-            state_dicts = []
-            files = glob.glob(model_path + "/merged_tp1_state_split/*")
-            for file_name in files:
-                try:
-                    state_dicts += [
-                        {file_name.split("/")[-1]: file_name}
-                    ]  # save {layer_name: weight_file_name}
-                except Exception:
-                    pass
-            new_state_dict = {}
-            for state_dict in state_dicts:
-                for key, value in state_dict.items():
-                    new_state_dict[key] = value
-            state_dict = new_state_dict
-        else:
-            with open(
-                os.path.join(model_path, "model.safetensors.index.json"), "r"
-            ) as f:
-                weight_map = json.load(f)["weight_map"]
-                state_dict = {
-                    k: "[" + k + "]" + os.path.join(model_path, v)
-                    for k, v in weight_map.items()
-                }
-            return state_dict
-    else:
-        # return_numpy=True cpu
-        # return_numpy=False gpu
-        with open(os.path.join(model_path, "model.safetensors.index.json"), "r") as f:
-            weight_list = json.load(f)["weight_map"]
-        filtered_map = {k: v for k, v in weight_list.items() if "experts" not in k}
-        num_local_ffn_keys = []
-        quant_suffix = (
-            "quant_weight"
-            if config.use_offline_quant and config.moe_quant_type != "default"
-            else ""
-        )
-        scale_suffix = (
-            "quant_scale"
-            if config.use_offline_quant and config.moe_quant_type != "default"
-            else ""
-        )
-
-        for i in range(config.moe_layer_start_index, config.num_layers):
-            for j in range(
+    for i in range(config.moe_layer_start_index, config.num_layers):
+        for j in range(
                 config.num_experts_start_offset,
                 config.num_experts_start_offset + config.num_experts_per_rank,
-            ):
-                ffn1_quant_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight.{quant_suffix}"
-                ffn2_quant_key = (
-                    f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight.{quant_suffix}"
-                )
-                ffn1_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight.{scale_suffix}"
-                ffn2_scale_key = (
-                    f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight.{scale_suffix}"
-                )
-                num_local_ffn_keys.append(ffn1_quant_key)
-                num_local_ffn_keys.append(ffn2_quant_key)
-                num_local_ffn_keys.append(ffn1_scale_key)
-                num_local_ffn_keys.append(ffn2_scale_key)
+        ):
+            ffn1_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight"
+            ffn2_key = (
+                f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight")
+            
+            ffn1_quant_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.quant_weight"
+            ffn2_quant_key = (
+                f"ernie.layers.{i}.mlp.experts.{j}.down_proj.quant_weight")
 
-        for k in num_local_ffn_keys:
-            if k in weight_list:
-                filtered_map[k] = weight_list[k]
+            ffn1_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight_scale"
+            ffn2_scale_key = (
+                f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight_scale")
+            num_local_ffn_keys.append(ffn1_key)
+            num_local_ffn_keys.append(ffn2_key)
+            num_local_ffn_keys.append(ffn1_quant_key)
+            num_local_ffn_keys.append(ffn2_quant_key)
+            num_local_ffn_keys.append(ffn1_scale_key)
+            num_local_ffn_keys.append(ffn2_scale_key)
 
-        state_dict = {}
-        for k, safetensor_path in filtered_map.items():
-            with safe_open(
-                os.path.join(model_path, safetensor_path), framework="np", device="cpu"
-            ) as f:
-                if k in f.keys():
+    for k in num_local_ffn_keys:
+        if k in weight_list:
+            filtered_map[k] = weight_list[k]
+
+    state_dict = {}
+    # Get all safetensor file paths that need to be opened
+    safetensor_paths = set(filtered_map.values())
+
+    # Open each safetensor file sequentially with progress bar
+    for safetensor_path in tqdm(safetensor_paths,
+                                desc="Loading safetensor files",
+                                unit="file"):
+        with safe_open(os.path.join(model_path, safetensor_path),
+                       framework="np",
+                       device="cpu") as f:
+            # Check if this file contains keys from filtered_map
+            for k in filtered_map:
+                if filtered_map[k] == safetensor_path and k in f.keys():
                     weight = f.get_tensor(k)
                     if not return_numpy:
                         weight = paddle.Tensor(weight, zero_copy=True)
                         weight = weight._copy_to(
-                            paddle.framework._current_expected_place(), False
-                        )
+                            paddle.framework._current_expected_place(), False)
                     state_dict[k] = weight
     return state_dict
 
 
-def get_safe_tensor_file(model_path):
+def get_safetensor_file(model_path):
     """
-    get_safe_tensor_file
+    get_safetensor_file
     """
     with open(os.path.join(model_path, "model.safetensors.index.json"),
               "r") as f:
         weight_map = json.load(f)["weight_map"]
-        safe_tensor_list = list(set(weight_map.values()))
-        key_name_list = list(set(weight_map.keys()))
-        safe_tensor_list = [os.path.join(model_path, v) for v in safe_tensor_list]
-
-    return key_name_list, safe_tensor_list
+    weight_files_in_index = set()
+    for weight_name in weight_map:
+        weight_files_in_index.add(
+            os.path.join(model_path, weight_map[weight_name]))
+    key_name_list = list(set(weight_map.keys()))
+    safetensor_list = list(weight_files_in_index)
+    safetensor_list.sort()
+    return key_name_list, safetensor_list
 
 
 def safetensors_weights_iterator(safe_tensor_list: list[str], ):
@@ -1232,48 +524,129 @@ def safetensors_weights_iterator(safe_tensor_list: list[str], ):
             desc="Loading safetensors checkpoint shards",
     ):
         with safe_open(st_file, framework="np") as f:
-            for name in f.keys():
+            for name in f.keys():  # noqa: SIM118
                 param = f.get_tensor(name)
                 yield name, param
 
 
-def get_state_dict(model_path, config):
+def fastsafetensors_weights_iterator(safetensor_list: list[str]):
     """
-    get_sate_dict
+    fastsafetensors_weights_iterator
+    """
+    from fastsafetensors import SafeTensorsFileLoader, SingleGroup
+    world_size = dist.get_world_size()
+    if world_size > 1:
+        dist.init_parallel_env()
+        pg = dist.get_group()
+        device = f"gpu:{pg.rank}" if paddle.is_compiled_with_cuda() else "cpu"
+    else:
+        pg = SingleGroup()
+        device = f"gpu:{pg.rank()}" if paddle.is_compiled_with_cuda(
+        ) else "cpu"
+
+    safetensor_files_sub_lists = [
+        safetensor_list[i:i + world_size]
+        for i in range(0, len(safetensor_list), world_size)
+    ]
+    for st_file in tqdm(
+            safetensor_files_sub_lists,
+            desc="Loading fastsafetensors checkpoint shards",
+    ):
+        loader = SafeTensorsFileLoader(pg,
+                                       device,
+                                       nogds=True,
+                                       debug_log=False,
+                                       framework="paddle")
+        rank_file_map = {i: [f] for i, f in enumerate(st_file)}
+        loader.add_filenames(rank_file_map)
+        try:
+            fb = loader.copy_files_to_device()
+            try:
+                keys = list(fb.key_to_rank_lidx.keys())
+                for k in keys:
+                    t = fb.get_tensor(k)
+                    yield k, t
+            finally:
+                fb.close()
+        finally:
+            loader.close()
+
+
+def get_state_dict(model_path, config, use_fastsafetensor=False):
+    """
+    get_state_dict
     """
     state_dict = {}
-    _, safe_tensor_list = get_safe_tensor_file(
+    _, safetensor_list = get_safetensor_file(
         os.path.join(model_path, f"rank{config.tensor_parallel_rank}"))
-    weights_iterator = safetensors_weights_iterator(safe_tensor_list)
+    if use_fastsafetensor:
+        weights_iterator = fastsafetensors_weights_iterator(safetensor_list)
+    else:
+        weights_iterator = safetensors_weights_iterator(safetensor_list)
+
     for name, weight in weights_iterator:
         state_dict[name] = weight
     return state_dict
 
 
-def load_checkpoint(model_path, cls, config, return_numpy=True):
+def apply_quant(name_action_quant_mappings, key, tensor, state_dict):
+    """
+    apply_quant
+    """
+    if key in name_action_quant_mappings:
+        action = name_action_quant_mappings.pop(key)
+        quant_weight_tensor, weight_scale_tensor = action(tensor)
+        if quant_weight_tensor is not None and weight_scale_tensor is not None:
+            state_dict[key + ".quant_weight"] = quant_weight_tensor
+            state_dict[key + ".weight_scale"] = weight_scale_tensor
+        else:
+            state_dict[key] = quant_weight_tensor
+    else:
+        state_dict[key] = tensor
+
+
+def load_checkpoint(model_path, cls, config, return_numpy=True, load_gpu=True):
     """
     load checkpoint
     """
-    if config.use_ep:
-        state_dict = load_ep_checkpoint(
-            model_path, config, return_numpy=True, return_key_name=True
-        )
+    if getattr(config, "parallel_config", None) is not None:
+        use_ep = getattr(config.parallel_config, "use_ep", False)
+        tensor_parallel_degree = config.parallel_config.tensor_parallel_degree
+    else:
+        use_ep = getattr(config, "use_ep", False)
+        tensor_parallel_degree = config.tensor_parallel_degree
+
+    if getattr(config, "model_config", None) is not None:
+        model_config = config.model_config
+    else:
+        model_config = config
+
+    if use_ep:
+        state_dict = load_ep_checkpoint(model_path,
+                                        config,
+                                        return_numpy=True,
+                                        return_key_name=True)
     else:
         rank_dirs = [
-            f
-            for f in os.listdir(model_path)
-            if f.startswith("rank") and os.path.isdir(os.path.join(model_path, f))
+            f for f in os.listdir(model_path) if f.startswith("rank")
+            and os.path.isdir(os.path.join(model_path, f))
         ]
         if len(rank_dirs) > 1:
-            if config.tensor_parallel_degree != len(rank_dirs):
+            if tensor_parallel_degree != len(rank_dirs):
                 raise ValueError(
                     f"Your model only supports loading with tp{len(rank_dirs)}"
                 )
-            state_dict = get_state_dict(model_path, config)
+            state_dict = get_state_dict(model_path, model_config)
         else:
-            state_dict = load_tp_checkpoint(
-                model_path, cls, config, return_numpy=return_numpy
-            )
+            state_dict = load_tp_checkpoint(model_path,
+                                            cls,
+                                            model_config,
+                                            return_numpy=return_numpy)
+            import re
+            for k, v in state_dict.items():
+                match = re.search(r'layers\.(\d+)', k)
+                if match and int(match.group(1)) > 0:
+                    continue
     return state_dict
 
 
@@ -1303,10 +676,12 @@ def parser_quant_type(quant_type):
         AssertionError: If the custom quantization type string format is incorrect.
     """
     default_type = paddle.get_default_dtype()
+    if quant_type == "default" or quant_type is None:
+        return default_type, default_type, default_type
     conver_dict = {
         "8": "int8",
         "4": "int4",
-        "16": paddle.get_default_dtype,
+        "16": paddle.get_default_dtype(),
         "fp8": "float8_e4m3fn",
         "fp16": "float16",
         "bf16": "bfloat16",
@@ -1319,6 +694,7 @@ def parser_quant_type(quant_type):
         cache_type = "fp8"
     elif "c4" in quant_type:
         cache_type = "int4"
+
     if "weight_only_int8" in quant_type or "wint8" in quant_type:
         return "int8", default_type, cache_type
     elif "weight_only_int4" in quant_type or "wint4" in quant_type:

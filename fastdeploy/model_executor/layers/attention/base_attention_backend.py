@@ -20,10 +20,16 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 import paddle
 
-from fastdeploy.worker.model_runner import ForwardMeta
+from fastdeploy.worker.forward_meta import ForwardMeta
+
+
+@dataclass
+class AttentionMetadata(ABC):
+    pass
 
 
 class AttentionBackend(ABC):
@@ -42,7 +48,7 @@ class AttentionBackend(ABC):
         qkv: paddle.Tensor,
         layer: paddle.nn.Layer,
         forward_meta: ForwardMeta,
-    ):
+    ) -> paddle.Tensor:
         """
         Run a forward.
         args:
@@ -88,7 +94,7 @@ class AttentionBackend(ABC):
         qkv: paddle.Tensor,
         layer: paddle.nn.Layer,
         forward_meta: ForwardMeta,
-    ):
+    ) -> paddle.Tensor:
         """Run a forward for mix."""
         raise NotImplementedError()
 
@@ -100,7 +106,7 @@ class AttentionBackend(ABC):
         qkv: paddle.Tensor,
         layer: paddle.nn.Layer,
         forward_meta: ForwardMeta,
-    ):
+    ) -> paddle.Tensor:
         """Run a forward for decode."""
         raise NotImplementedError()
 
@@ -112,6 +118,6 @@ class AttentionBackend(ABC):
         qkv: paddle.Tensor,
         layer: paddle.nn.Layer,
         forward_meta: ForwardMeta,
-    ):
+    ) -> paddle.Tensor:
         """Run a forward for extend."""
         raise NotImplementedError()

@@ -14,24 +14,74 @@
 # limitations under the License.
 """
 
-from typing import Callable, List, Tuple, Any, Dict, Optional
+from typing import Callable, List, Any, Dict, Optional
 import functools
 import threading
+import traceback
 from fastdeploy.utils import llm_logger
+
+
+class Task:
+    """
+    A container class representing a unit of work to be processed.
+
+    Attributes:
+        id: Unique identifier for the task
+        raw: The actual task payload/data
+        reason: Optional reason/status message for the task
+    """
+
+    def __init__(self, task_id: str,
+                 task: Any,
+                 reason: Optional[str] = None):
+        """
+        Initialize a Task instance.
+
+        Args:
+            task_id: Unique identifier for the task
+            task: The actual task payload/data
+            reason: Optional reason/status message
+        """
+
+        self.id = task_id
+        self.raw = task
+        self.reason = reason
+
+    def __repr__(self) -> str:
+        return f"task_id:{self.id} reason:{self.reason}"
 
 
 class Workers:
     """
-        Workers class
+    A thread pool implementation for parallel task processing.
+
+    Features:
+    - Configurable number of worker threads
+    - Task batching support
+    - Custom task filtering
+    - Thread-safe task queue
+    - Graceful shutdown
     """
 
     def __init__(self,
                  name: str,
-                 work: Callable[[List[Tuple[str, Any]]], Optional[List[Tuple[str, Any]]]],
-                 max_batch_size: int = 1):
-        self.name = name
-        self.work = work
-        self.max_batch_size = max_batch_size
+                 work: Callable[[List[Task]], Optional[List[Task]]],
+                 max_task_batch_size: int = 1,
+                 task_filters: Optional[List[Callable[[Task], bool]]] = None):
+        """
+        Initialize a Workers thread pool.
+
+        Args:
+            name: Identifier for the worker pool
+            work: The worker function that processes tasks
+            max_task_batch_size: Maximum tasks processed per batch
+            task_filters: Optional list of filter functions for task assignment
+        """
+
+        self.name: str = name
+        self.work: Callable[[List[Task]], Optional[List[Task]]] = work
+        self.max_task_batch_size: int = max_task_batch_size
+        self.task_filters: List[Callable[[Task], bool]] = task_filters
 
         self.mutex = threading.Lock()
         self.pool = []
@@ -39,48 +89,73 @@ class Workers:
         self.tasks_not_empty = threading.Condition(self.mutex)
         self.results_not_empty = threading.Condition(self.mutex)
 
-        self.tasks: List[Tuple[str, Any]] = []
-        self.results: List[Tuple[str, Any]] = []
-        self.running_tasks: Dict[int, List[Tuple[str, Any]]] = dict()
+        self.tasks: List[Task] = []
+        self.results: List[Task] = []
+        self.running_tasks: Dict[int, List[Task]] = dict()
 
         self.not_stop = threading.Condition(self.mutex)
         self.stop = False
-        self.stopped = 0
+        self.stopped_count = 0
 
-    def _stop(self, func: Callable):
+    def _get_tasks(self, worker_index: int, filter: Optional[Callable[[Task], bool]] = None):
         """
-            a stop decorator
-        """
-        @functools.wraps(func)
-        def wrapper():
-            if self.stop:
-                return True
-            return func()
-        return wrapper
+        Retrieve tasks from the queue for a worker thread.
 
-    def _worker(self, number: int):
+        Args:
+            worker_index: Index of the worker thread
+            filter: Optional filter function for task selection
+
+        Returns:
+            List of tasks assigned to the worker
         """
-            worker thread
+        if self.stop:
+            return True
+
+        if filter is None:
+            tasks = self.tasks[:self.max_task_batch_size]
+            del self.tasks[:self.max_task_batch_size]
+            self.running_tasks[worker_index] = tasks
+            return tasks
+
+        tasks = []
+        for i, task in enumerate(self.tasks):
+            if not filter(task):
+                continue
+            tasks.append((i, task))
+            if len(tasks) >= self.max_task_batch_size:
+                break
+
+        for i, _ in reversed(tasks):
+            del self.tasks[i]
+        tasks = [task for _, task in tasks]
+        self.running_tasks[worker_index] = tasks
+        return tasks
+
+    def _worker(self, worker_index: int):
+        """
+        Worker thread main loop.
+
+        Args:
+            worker_index: Index of the worker thread
         """
         with self.mutex:
-            self.running_tasks[number] = []
+            self.running_tasks[worker_index] = []
 
-        @self._stop
-        def _get_tasks():
-            self.running_tasks[number] = []
-            batch = min((len(self.tasks) + len(self.pool) - 1) //
-                        len(self.pool), self.max_batch_size)
-            tasks = self.tasks[:batch]
-            del self.tasks[:batch]
-            self.running_tasks[number] = tasks
-            return tasks
+        task_filter = None
+        task_filer_size = 0 if self.task_filters is None else len(
+            self.task_filters)
+        if task_filer_size > 0:
+            task_filter = self.task_filters[worker_index % task_filer_size]
 
         while True:
             with self.tasks_not_empty:
-                tasks = self.tasks_not_empty.wait_for(_get_tasks)
+                tasks = self.tasks_not_empty.wait_for(
+                    functools.partial(
+                        self._get_tasks, worker_index, task_filter))
+
                 if self.stop:
-                    self.stopped += 1
-                    if self.stopped == len(self.pool):
+                    self.stopped_count += 1
+                    if self.stopped_count == len(self.pool):
                         self.not_stop.notify_all()
                     return
 
@@ -88,52 +163,69 @@ class Workers:
             try:
                 results = self.work(tasks)
             except Exception as e:
-                llm_logger.info(f"Worker {self.name} execute error: {e}")
+                llm_logger.error(
+                    f"Worker {self.name} execute error: {e}, traceback: {traceback.format_exc()}")
+                continue
 
             if results is not None and len(results) > 0:
                 with self.mutex:
                     self.results += results
                     self.results_not_empty.notify_all()
 
-    def start(self, size: int):
+    def start(self, workers: int):
         """
-            start thread pood
+        Start the worker threads.
+
+        Args:
+            workers: Number of worker threads to start
         """
         with self.mutex:
-            remain = size - len(self.pool)
+            remain = workers - len(self.pool)
             if remain <= 0:
                 return
 
-            for i in range(remain):
-                t = threading.Thread(target=self._worker, args=(i,))
-                t.daemon = True
+            for _ in range(remain):
+                index = len(self.pool)
+                t = threading.Thread(target=self._worker,
+                                     args=(index,), daemon=True)
                 t.start()
                 self.pool.append(t)
 
     def terminate(self):
         """
-            terminame thread pool
+        Gracefully shutdown all worker threads.
+
+        Waits for all threads to complete current tasks before stopping.
         """
         with self.mutex:
             self.stop = True
             self.tasks_not_empty.notify_all()
             self.results_not_empty.notify_all()
 
-            self.not_stop.wait_for(lambda: self.stopped == len(self.pool))
+            self.not_stop.wait_for(
+                lambda: self.stopped_count == len(self.pool))
 
             self.pool = []
             self.tasks = []
             self.results = []
             self.running_tasks = dict()
             self.stop = False
-            self.stopped = 0
+            self.stopped_count = 0
 
-    def get_results(self, max_size: int, timeout: float) -> List[Tuple[str, Any]]:
+    def get_results(self, max_size: int, timeout: float) -> List[Task]:
         """
-            get results from thread pool.
+        Retrieve processed task results.
+
+        Args:
+            max_size: Maximum number of results to retrieve
+            timeout: Maximum wait time in seconds
+
+        Returns:
+            List of completed tasks/results
         """
-        @self._stop
         def _get_results():
+            if self.stop:
+                return True
             results = self.results[:max_size]
             del self.results[:max_size]
             return results
@@ -144,23 +236,27 @@ class Workers:
                 return []
             return results
 
-    def put_tasks(self, tasks: List[Tuple[str, Any]], deduplication: bool = False):
+    def add_tasks(self, tasks: List[Task], unique: bool = False):
         """
-            put tasks into thread pool.
+        Add new tasks to the worker pool.
+
+        Args:
+            tasks: List of tasks to add
+            unique: If True, only adds tasks with unique IDs
         """
         if len(tasks) == 0:
             return
 
         with self.mutex:
-            if not deduplication:
+            if not unique:
                 self.tasks += tasks
             else:
-                task_set = set([t[0] for t in self.tasks])
+                task_set = set([t.id for t in self.tasks])
                 for _, running in self.running_tasks.items():
-                    task_set.update([t[0] for t in running])
+                    task_set.update([t.id for t in running])
 
                 for task in tasks:
-                    if task[0] in task_set:
+                    if task.id in task_set:
                         continue
                     self.tasks.append(task)
             self.tasks_not_empty.notify_all()

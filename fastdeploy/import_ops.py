@@ -12,9 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """import ops"""
+import functools
 import importlib
 import inspect
 import os
+
+import paddle
 
 from fastdeploy.utils import llm_logger as logger
 
@@ -62,6 +65,24 @@ def rename_imported_op(old_name, new_name, global_ns):
     del global_ns[old_name]
 
 
+def wrap_unified_op(original_cpp_ext_op, original_custom_op):
+    """
+    Wrap a static operator into a unified operator with runtime dispatching.
+    Args:
+        original_cpp_ext_op: Original C++ extension operator function.
+        original_custom_op: Original custom operator function.
+    """
+
+    @paddle.jit.marker.unified
+    @functools.wraps(original_custom_op)
+    def unified_op(*args, **kwargs):
+        if paddle.in_dynamic_mode():
+            return original_cpp_ext_op(*args, **kwargs)
+        return original_custom_op(*args, **kwargs)
+
+    return unified_op
+
+
 def preprocess_static_op(global_ns):
     """
     Transforms operator/function references in the global namespace based on the presence of 'static_op_' prefixes.
@@ -72,16 +93,17 @@ def preprocess_static_op(global_ns):
     """
     static_op_prefix = "static_op_"
     static_op_names = [k for k in global_ns if k.startswith(static_op_prefix)]
-
-    dynamic_mode = int(os.getenv("ELLM_DYNAMIC_MODE", "1")) == 1
+    enforce_eager = int(os.getenv("FD_ENFORCE_EAGER", "0")) == 1
 
     for static_op in static_op_names:
         op_name = static_op[len(static_op_prefix):]
         has_dynamic_op = op_name in global_ns
 
         if has_dynamic_op:
-            if not dynamic_mode:
-                del global_ns[op_name]
-                global_ns[op_name] = global_ns[static_op]
+            if not enforce_eager:
+                original_cpp_ext_op = global_ns[op_name]
+                original_custom_op = global_ns[static_op]
+                global_ns[op_name] = wrap_unified_op(original_cpp_ext_op,
+                                                     original_custom_op)
         else:
             global_ns[op_name] = global_ns[static_op]

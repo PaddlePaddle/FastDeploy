@@ -15,6 +15,8 @@
 #include "helper.h"
 #include "save_with_output_msg.h"
 
+#define RECOVERY_STOP_SIGNAL -3
+
 __device__ bool in_need_block_list_schedule(const int &qid,
                                             int *need_block_list,
                                             const int &need_block_len) {
@@ -258,7 +260,7 @@ void Schedule(const paddle::Tensor &stop_flags,
         auto next_tokens = paddle::full({bsz}, -1, paddle::DataType::INT64, paddle::CPUPlace());
         for (int i = 0; i < step_lens_cpu.data<int>()[0]; i++) {
             const int step_bid = step_bs_list_cpu.data<int>()[i];
-            next_tokens.data<int64_t>()[step_bid] = -3; // need reschedule
+            next_tokens.data<int64_t>()[step_bid] = RECOVERY_STOP_SIGNAL; // need reschedule
         }
         const int rank_id = static_cast<int>(stop_flags.place().GetDeviceId());
         printf("reschedule rank_id: %d, step_lens: %d", rank_id, step_lens_cpu.data<int>()[0]);
@@ -290,8 +292,6 @@ void Schedule(const paddle::Tensor &stop_flags,
                     " INFERENCE_MSG_ID cannot be negative, please use other "
                     "number.");
             }
-
-        } else {
         }
         static key_t key = ftok("/dev/shm", msg_queue_id);
 

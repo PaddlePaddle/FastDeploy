@@ -88,6 +88,7 @@ void moe_topk_select_kernel(const T* input,
                                                                   k,
                                                                   num_rows);
           }
+          cudaGetLastError();
       }
       else {
           assert(k<=TPB);

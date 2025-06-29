@@ -47,12 +47,9 @@ class QuantConfigBase(ABC):
 
     def __init__(self):
         super().__init__()
-        self.quant_round_type = None
-        self.quant_max_bound = None
-        self.quant_min_bound = None
 
     @abstractmethod
-    def get_name(self) -> str:
+    def name(self) -> str:
         """Name of the quantization method."""
         raise NotImplementedError
 

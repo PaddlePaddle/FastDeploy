@@ -100,142 +100,72 @@ def sample_frames_from_video(frames: npt.NDArray,
     return sampled_frames
 
 
-class VideoMediaIO(MediaIO[npt.NDArray]):
+class VideoMediaIO(MediaIO[bytes]):
 
-    def __init__(
-        self,
-        image_io: ImageMediaIO,
-        *,
-        num_frames: int = 32,
-    ) -> None:
+    def __init__(self) -> None:
         """
             初始化一个 VideoMediaIO 对象。
         
         Args:
-            image_io (ImageMediaIO): 用于读取和写入图像的 ImageMediaIO 对象。
-            num_frames (int, optional): 视频中帧数，默认为 32。
-                ImageMediaIO 对象必须支持指定帧数。
+            无。
         
         Raises:
-            TypeError: 如果 image_io 不是 ImageMediaIO 类型。
-            ValueError: 如果 num_frames 小于等于 0。
+            无。
         
         Returns:
-            None: 无返回值，直接初始化并设置属性。
+            无。
         """
         super().__init__()
 
-        self.image_io = image_io
-        self.num_frames = num_frames
-
-    def load_bytes(self, data: bytes) -> npt.NDArray:
+    def load_bytes(self, data: bytes) -> bytes:
         """
-            从字节数据加载视频帧，并返回一个 numpy ndarray。
-        如果字节数据中的视频帧数量大于指定的 `num_frames`，则将其平均分布到这些帧上；否则，返回所有帧。
+            ERNIE-45-VL模型的前处理中包含抽帧操作，如果将视频帧加载为npt.NDArray格式会丢失FPS信息，因此目前
+        不对字节数据做任何操作。
         
         Args:
             data (bytes): 包含视频帧数据的字节对象。
         
         Returns:
-            npt.NDArray, shape=(num_frames, height, width, channels): 返回一个 numpy ndarray，其中包含了视频帧数据。
-            如果 `num_frames` 小于视频帧数量，则返回前 `num_frames` 帧；否则，返回所有帧。
-        
-        Raises:
-            None.
-        """
-        import decord
-        vr = decord.VideoReader(BytesIO(data), num_threads=1)
-        total_frame_num = len(vr)
-
-        num_frames = self.num_frames
-        if total_frame_num > num_frames:
-            uniform_sampled_frames = np.linspace(0,
-                                                 total_frame_num - 1,
-                                                 num_frames,
-                                                 dtype=int)
-            frame_idx = uniform_sampled_frames.tolist()
-        else:
-            frame_idx = list(range(0, total_frame_num))
-
-        return vr.get_batch(frame_idx).asnumpy()
-
-    def load_base64(self, media_type: str, data: str) -> npt.NDArray:
-        """
-        加载 base64 编码的数据，并返回 numpy ndarray。
-        
-            Args:
-                media_type (str): 媒体类型，目前仅支持 "video/jpeg"。
-                当为 "video/jpeg" 时，将解析每一帧的 base64 编码数据，并转换成 numpy ndarray。
-                data (str): base64 编码的字符串数据。
-        
-            Returns:
-                npt.NDArray, optional: 如果 media_type 为 "video/jpeg"，则返回 numpy ndarray 格式的视频数据；否则返回 None。
-        
-            Raises:
-                None.
-        """
-        if media_type.lower() == "video/jpeg":
-            load_frame = partial(
-                self.image_io.load_base64,
-                "image/jpeg",
-            )
-
-            return np.stack([
-                np.array(load_frame(frame_data))
-                for frame_data in data.split(",")
-            ])
-
-        return self.load_bytes(base64.b64decode(data))
-
-    def load_file(self, filepath: Path) -> npt.NDArray:
-        """
-            读取文件内容，并将其转换为numpy数组。
-        
-        Args:
-            filepath (Path): 文件路径对象，表示要读取的文件。
-        
-        Returns:
-            npt.NDArray, optional: 返回一个numpy数组，包含了文件内容。如果无法解析文件内容，则返回None。
+            bytes，字节数据原样返回。
         
         Raises:
             无。
         """
-        with filepath.open("rb") as f:
-            data = f.read()
+        return data
 
-        return self.load_bytes(data)
-
-    def encode_base64(
-        self,
-        media: npt.NDArray,
-        *,
-        video_format: str = "JPEG",
-    ) -> str:
+    def load_base64(self, media_type: str, data: str) -> bytes:
         """
-            将视频编码为Base64字符串，每一帧都是一个Base64字符串。
-        如果视频格式为"JPEG"，则每一帧都会被转换成JPEG图片并进行编码。
+        加载 base64 编码的数据，并返回bytes。
         
         Args:
-            media (npt.NDArray): 要编码的视频，形状为（H，W，C）或者（T，H，W，C），其中T为时间步长，H和W分别为高度和宽度，C为通道数。
-                当前仅支持JPEG格式。
-            video_format (str, optional, default="JPEG"): 视频格式，只支持"JPEG"。 Default to "JPEG".
-        
-        Raises:
-            NotImplementedError: 当前仅支持JPEG格式。
+            media_type (str): 媒体类型，目前不支持 "video/jpeg"。
+            data (str): base64 编码的字符串数据。
         
         Returns:
-            str: Base64字符串，每一帧都是一个Base64字符串，用","连接起来。
+            bytes, optional: 如果 media_type 不为 "video/jpeg"，则返回字节数据。
+        
+        Raises:
+            ValueError: 如果media_type是"video/jpeg"。
         """
-        video = media
+        if media_type.lower() == "video/jpeg":
+            raise ValueError("Video in JPEG format is not supported")
 
-        if video_format == "JPEG":
-            encode_frame = partial(
-                self.image_io.encode_base64,
-                image_format=video_format,
-            )
+        return base64.b64decode(data)
 
-            return ",".join(
-                encode_frame(Image.fromarray(frame)) for frame in video)
+    def load_file(self, filepath: str) -> bytes:
+        """
+            读取文件内容，并返回bytes。
+        
+        Args:
+            filepath (str): 文件路径，表示要读取的文件。
+        
+        Returns:
+            bytes, optional: 返回字节数据，包含了文件内容。
+        
+        Raises:
+            无。
+        """
+        with open(filepath, "rb") as f:
+            data = f.read()
 
-        msg = "Only JPEG format is supported for now."
-        raise NotImplementedError(msg)
+        return data

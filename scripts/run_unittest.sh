@@ -51,7 +51,7 @@ test_files=$(find test -type f -name "test*.py")
 # 遍历每个找到的测试文件
 for test_file in $test_files; do
     python $test_file
-    
+
     # 检查前一个命令的退出状态码
     if [ $? -ne 0 ]; then
         echo $test_file

@@ -23,7 +23,7 @@
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
 
-#define MAX_BSZ 512
+#define MAX_BSZ 256
 
 // #define SAVE_WITH_OUTPUT_DEBUG
 #define MAX_DRAFT_TOKENS 6
@@ -57,7 +57,7 @@ void MTPSaveFirstToken(const paddle::Tensor& x,
 #endif
         msg_queue_id = inference_msg_queue_id_from_env;
     }
-    
+
     static key_t key = ftok("./", msg_queue_id);
     static int msgid = msgget(key, IPC_CREAT | 0666);
 

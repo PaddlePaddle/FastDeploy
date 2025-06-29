@@ -1,0 +1,8 @@
+top_p: 0.8
+temperature: 0.8
+metadata:
+  min_tokens: 1
+max_tokens: 131071
+repetition_penalty: 1.0
+frequency_penalty: 0
+presence_penalty: 0

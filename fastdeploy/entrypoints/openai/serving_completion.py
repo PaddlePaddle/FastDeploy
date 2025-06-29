@@ -26,44 +26,31 @@ from typing import Optional, Union, cast, TypeVar, List
 import uuid
 from fastapi import Request
 
-from fastdeploy.entrypoints.openai.protocol import ErrorResponse, CompletionRequest, CompletionResponse, CompletionStreamResponse, CompletionResponseStreamChoice, CompletionResponseChoice,UsageInfo
+from fastdeploy.entrypoints.openai.protocol import (
+    ErrorResponse,
+    CompletionRequest,
+    CompletionResponse,
+    CompletionStreamResponse,
+    CompletionResponseStreamChoice,
+    CompletionResponseChoice,
+    UsageInfo,
+    DeltaToolCall,
+    DeltaFunctionCall,
+    ToolCall,
+    FunctionCall
+)
 from fastdeploy.utils import api_server_logger
 from fastdeploy.engine.request import RequestOutput
 
 
 class OpenAIServingCompletion:
-    """
-    Implementation of OpenAI-compatible text completion API endpoints.
-    
-    Handles both streaming and non-streaming text completion requests.
-    
-    Attributes:
-        engine_client: Client for communicating with the LLM engine
-        pid: Process ID for ZMQ communication
-    """
     def __init__(self, engine_client, pid):
-        """
-        Initialize the completion service.
-        
-        Args:
-            engine_client: Client for engine communication
-            pid: Process ID for ZMQ routing
-        """
         self.engine_client = engine_client
         self.pid = pid
 
     async def create_completion(self, request: CompletionRequest):
         """
-        Create text completion based on the given request.
-        
-        Args:
-            request (CompletionRequest): Completion request parameters
-            
-        Returns:
-            Union[AsyncGenerator, CompletionResponse, ErrorResponse]:
-                - Streaming generator if request.stream=True
-                - Full completion response if request.stream=False
-                - ErrorResponse if validation fails
+        Create a completion for the given prompt.
         """
         created_time = int(time.time())
         if request.user is not None:
@@ -97,14 +84,16 @@ class OpenAIServingCompletion:
         num_choices = len(request_prompts)
 
         api_server_logger.info(f"start inference for request {num_choices}")
-
+        prompt_batched_token_ids = []
         try:
             for idx, prompt in enumerate(request_prompts):
                 request_id_idx = f"{request_id}-{idx}"
                 current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                 try:
                     current_req_dict["arrival_time"] = time.time()
-                    self.engine_client.format_and_add_data(current_req_dict)
+                    prompt_batched_token_ids.append(
+                        self.engine_client.format_and_add_data(current_req_dict)
+                    )
                 except Exception as e:
                     return ErrorResponse(message=str(e), code=400)
 
@@ -116,7 +105,8 @@ class OpenAIServingCompletion:
                     num_choices = num_choices,
                     request_id=request_id,
                     created_time=created_time,
-                    model_name=request.model
+                    model_name=request.model,
+                    prompt_batched_token_ids=prompt_batched_token_ids
                 )
             else:
                 try:
@@ -125,12 +115,13 @@ class OpenAIServingCompletion:
                         num_choices=num_choices,
                         request_id=request_id,
                         created_time=created_time,
-                        model_name=request.model
+                        model_name=request.model,
+                        prompt_batched_token_ids=prompt_batched_token_ids
                     )
-                except ValueError as e:
+                except Exception as e:
                     return ErrorResponse(code=400, message=str(e))
 
-        except ValueError as e:
+        except Exception as e:
             return ErrorResponse(message=str(e), code=400)
 
 
@@ -141,25 +132,10 @@ class OpenAIServingCompletion:
         request_id: str,
         created_time: int,
         model_name: str,
+        prompt_batched_token_ids: list()
     ):
         """
-        Generate complete text response in one-shot mode.
-        
-        Args:
-            request (CompletionRequest): Original request parameters
-            num_choices (int): Number of prompt variations
-            request_id (str): Unique request identifier
-            created_time (int): Unix timestamp of creation
-            model_name (str): Name of the model being used
-            
-        Returns:
-            CompletionResponse: Complete text response with:
-                - Generated text
-                - Usage statistics
-                - Finish reason
-                
-        Raises:
-            ValueError: If engine communication fails or times out
+        Process the full completion request with multiple choices.
         """
         dealer = None
         try:
@@ -175,22 +151,28 @@ class OpenAIServingCompletion:
 
             valid_results = [dict()] * num_choices
             output_tokens = [0] * num_choices
+            current_waiting_time = 0
             while num_choices > 0:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=300)
+                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
+                    current_waiting_time = 0
                 except asyncio.TimeoutError:
-                    status, msg = self.engine_client.check_health()
-                    if not status:
-                        raise ValueError(f"Engine is not healthy: {msg}")
-                    else:
-                        continue
+                    current_waiting_time += 10
+                    if current_waiting_time == 300:
+                        status, msg = self.engine_client.check_health()
+                        if not status:
+                            raise ValueError(f"Engine is not healthy: {msg}")
+                        else:
+                            current_waiting_time = 0
+                    await asyncio.sleep(0.1)
+                    continue
                 data = json.loads(raw_data[-1].decode("utf-8"))
                 rid = int(data["request_id"].split("-")[-1])
                 if data.get("error_code", 200) != 200:
                     raise ValueError("{}".format(data["error_msg"]))
+
                 self.engine_client.data_processor.process_response_dict(
-                    data, stream=False
-                )
+                    data, stream=False)
                 output_tokens[rid] += len(data["outputs"]["token_ids"])
                 if data.get("finished", False):
                     data["output_token_ids"] = output_tokens[rid]
@@ -202,7 +184,8 @@ class OpenAIServingCompletion:
                 request=request,
                 request_id=request_id,
                 created_time=created_time,
-                model_name=model_name
+                model_name=model_name,
+                prompt_batched_token_ids=prompt_batched_token_ids
             )
         except Exception as e:
             api_server_logger.error(
@@ -220,27 +203,11 @@ class OpenAIServingCompletion:
         num_choices: int,
         request_id: str,
         created_time: int,
-        model_name: str
+        model_name: str,
+        prompt_batched_token_ids: list()
     ):
         """
-        Generator for streaming text completion responses.
-        
-        Args:
-            request (CompletionRequest): Original request parameters
-            num_choices (int): Number of prompt variations
-            request_id (str): Unique request identifier
-            created_time (int): Unix timestamp of creation
-            model_name (str): Name of the model being used
-            
-        Yields:
-            str: Server-Sent Events (SSE) formatted chunks containing:
-                - Partial completion results
-                - Usage statistics (if enabled)
-                - Error messages (if any)
-                
-        Note:
-            Uses ZMQ for inter-process communication with the engine.
-            Maintains streaming protocol compatibility with OpenAI API.
+        Process the stream completion request.
         """
         try:
             dealer = await aiozmq.create_zmq_stream(
@@ -259,16 +226,21 @@ class OpenAIServingCompletion:
                 max_streaming_response_tokens = request.suffix["max_streaming_response_tokens"]
             choices = []
 
-
+            current_waiting_time = 0
             while num_choices > 0:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=300)
+                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
+                    current_waiting_time = 0
                 except asyncio.TimeoutError:
-                    status, msg = self.engine_client.check_health()
-                    if not status:
-                        raise ValueError(f"Engine is not healthy: {msg}")
-                    else:
-                        continue
+                    current_waiting_time += 10
+                    if current_waiting_time == 300:
+                        status, msg = self.engine_client.check_health()
+                        if not status:
+                            raise ValueError(f"Engine is not healthy: {msg}")
+                        else:
+                            current_waiting_time = 0
+                    await asyncio.sleep(0.1)
+                    continue
 
 
                 res = json.loads(raw_data[-1].decode('utf-8'))
@@ -285,14 +257,15 @@ class OpenAIServingCompletion:
                             choices=[CompletionResponseStreamChoice(
                                 index=idx,
                                 text="",
-                                token_ids=list(res["prompt_token_ids"])
+                                token_ids=list(prompt_batched_token_ids[idx])
                             )]
                         )
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                     first_iteration[idx] = False
 
 
-                self.engine_client.data_processor.process_response_dict(res, stream=True)
+                self.engine_client.data_processor.process_response_dict(
+                    res, stream=True)
                 if res['metrics'].get('first_token_time') is not None:
                     arrival_time = res['metrics']['first_token_time']
                     inference_start_time[idx] = res['metrics']['inference_start_time']
@@ -306,12 +279,16 @@ class OpenAIServingCompletion:
                     index=idx,
                     text=output["text"],
                     token_ids=output.get("token_ids"),
+                    tool_calls=output.get("tool_call_content"),
                     reasoning_content=output.get("reasoning_content"),
                     arrival_time=arrival_time
                 ))
                 if res["finished"]:
                     if request.max_tokens is None or output_tokens[idx] + 1 != request.max_tokens:
                         chunk.choices[0].finish_reason = "stop"
+                        if self.engine_client.reasoning_parser == "ernie_x1" and \
+                                output.get("finish_reason", "") == "tool_calls":
+                            chunk.choices[0].finish_reason = "tool_calls"
                     else:
                         chunk.choices[0].finish_reason = "length"
 
@@ -337,7 +314,7 @@ class OpenAIServingCompletion:
                             model=model_name,
                             choices=[],
                             usage=UsageInfo(
-                                prompt_tokens=len(res.get("prompt_token_ids", [])),
+                                prompt_tokens=len(prompt_batched_token_ids[idx]),
                                 completion_tokens=output_tokens[idx]
                             )
                         )
@@ -360,28 +337,15 @@ class OpenAIServingCompletion:
         request_id: str,
         created_time: int,
         model_name: str,
+        prompt_batched_token_ids: list()
     ) -> CompletionResponse:
-        """
-        Convert raw engine outputs to OpenAI-compatible completion response.
-        
-        Args:
-            final_res_batch (List[RequestOutput]): Batch of engine responses
-            request (CompletionRequest): Original request parameters
-            request_id (str): Unique request identifier
-            created_time (int): Unix timestamp of creation
-            model_name (str): Name of the model being used
-            
-        Returns:
-            CompletionResponse: Formatted completion response with:
-                - Generated text choices
-                - Token usage statistics
-        """
         choices: List[CompletionResponseChoice] = []
         num_prompt_tokens = 0
         num_generated_tokens = 0
 
-        for final_res in final_res_batch:
-            prompt_token_ids = final_res["prompt_token_ids"]
+        for idx in range(len(final_res_batch)):
+            final_res = final_res_batch[idx]
+            prompt_token_ids = prompt_batched_token_ids[idx]
             assert prompt_token_ids is not None
             prompt_text = final_res["prompt"]
 
@@ -402,6 +366,7 @@ class OpenAIServingCompletion:
                 index=len(choices),
                 text=output_text,
                 reasoning_content=output.get('reasoning_content'),
+                tool_calls=output.get("tool_call_content"),
                 logprobs=None,
                 finish_reason=None
             )

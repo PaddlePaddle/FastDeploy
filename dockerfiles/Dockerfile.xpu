@@ -1,0 +1,43 @@
+FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddlenlp:llm-base-gcc12.3-xpu-xft20250402-v1.1
+
+WORKDIR /workspace
+
+RUN echo "\
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy main restricted universe multiverse \n\
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy-updates main restricted universe multiverse \n\
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy-backports main restricted universe multiverse" > /etc/apt/sources.list
+
+# setting proxy
+ENV http_proxy=http://agent.baidu.com:8891
+ENV https_proxy=http://agent.baidu.com:8891
+ENV no_proxy=localhost,bj.bcebos.com,su.bcebos.com,pypi.tuna.tsinghua.edu.cn,paddle-ci.gz.bcebos.com
+
+RUN apt-get update && apt-get install -y libibverbs-dev librdmacm-dev cmake pybind11-dev
+
+# uninstall existing package
+RUN python -m pip uninstall paddlepaddle-gpu paddlepaddle-xpu -y
+# install paddlepaddle
+RUN python -m pip install --no-cache-dir --progress-bar off --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+
+# get xtdk and xvllm and xre
+RUN mkdir -p /workspace/deps && cd /workspace/deps && wget https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/20250624/output.tar.gz && \
+    tar -zxf output.tar.gz  && mv output xvllm && \
+    wget https://klx-sdk-release-public.su.bcebos.com/xtdk_15fusion/dev/3.2.40.1/xtdk-llvm15-ubuntu2004_x86_64.tar.gz && \
+    tar -zxf xtdk-llvm15-ubuntu2004_x86_64.tar.gz && mv xtdk-llvm15-ubuntu2004_x86_64 xtdk && \
+    wget https://klx-sdk-release-public.su.bcebos.com/xre/kl3-release/5.0.21.21/xre-Linux-x86_64-5.0.21.21.tar.gz && \
+    tar -zxf xre-Linux-x86_64-5.0.21.21.tar.gz && mv xre-Linux-x86_64-5.0.21.21 xre
+
+ENV PATH=/workspace/deps/xre/bin:$PATH
+ENV CLANG_PATH=/workspace/deps/xtdk
+ENV XVLLM_PATH=/workspace/deps/xvllm
+
+ENV OPENBLAS_NUM_THREADS=1
+ENV OMP_NUM_THREADS=1
+ENV MKL_NUM_THREADS=1
+USER root
+COPY . /workspace/FastDeploy
+# build and install FastDeploy
+RUN cd /workspace/FastDeploy && bash build.sh && python -m pip install --no-cache-dir dist/* && rm -rf /workspace/FastDeploy
+
+ENV http_proxy=""
+ENV https_proxy=""

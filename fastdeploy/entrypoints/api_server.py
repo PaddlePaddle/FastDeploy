@@ -29,13 +29,7 @@ llm_engine = None
 
 def init_app(args):
     """
-    Initialize the LLMEngine instance.
-    
-    Args:
-        args: Command line arguments containing engine configuration
-        
-    Returns:
-        bool: True if initialization succeeded, False otherwise
+    init LLMEngine
     """
 
     global llm_engine
@@ -51,25 +45,13 @@ def init_app(args):
 
 @app.get("/health")
 async def health() -> Response:
-    """
-    Health check endpoint for the API server.
-    
-    Returns:
-        Response: HTTP 200 response if server is healthy
-    """
+    """Health check."""
     return Response(status_code=200)
 
 @app.post("/generate")
 async def generate(request: dict):
     """
-    Generate text based on the given request.
-    Supports both streaming and non-streaming modes.
-    
-    Args:
-        request: Dictionary containing generation parameters and input text
-        
-    Returns:
-        Response: Either a direct response (non-streaming) or streaming response
+    generate stream api
     """
     api_server_logger.info(f"Receive request: {request}")
     stream = request.get("stream", 0)
@@ -77,38 +59,32 @@ async def generate(request: dict):
     if not stream:
         output = {}
         try:
-            # Wrap generation in try block to handle exceptions
+            # 将生成过程包裹在try块中以捕获异常
             for result in llm_engine.generate(request, stream):
                 output = result
         except Exception as e:
-            # Log full exception stack trace
+            # 记录完整的异常堆栈信息
             api_server_logger.error(f"Error during generation: {str(e)}", exc_info=True)
-            # Return structured error message and terminate stream
+            # 返回结构化的错误消息并终止流
             output = {"error": str(e), "error_type": e.__class__.__name__}
         return output
 
     async def event_generator():
         try:
-            # Wrap generation in try block to handle exceptions
+            # 将生成过程包裹在try块中以捕获异常
             for result in llm_engine.generate(request, stream):
                 yield f"data: {json.dumps(result)}\n\n"
         except Exception as e:
-            # Log full exception stack trace
+            # 记录完整的异常堆栈信息
             api_server_logger.error(f"Error during generation: {str(e)}", exc_info=True)
-            # Return structured error message and terminate stream
+            # 返回结构化的错误消息并终止流
             error_msg = {"error": str(e), "error_type": e.__class__.__name__}
             yield  f"data: {json.dumps(error_msg)}\n\n"
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 def launch_api_server(args) -> None:
     """
-    Launch the FastDeploy API server.
-    
-    Args:
-        args: Command line arguments containing server configuration
-        
-    Raises:
-        Exception: If the specified port is already in use
+    启动http服务
     """
     if not is_port_available(args.host, args.port):
         raise Exception(f"The parameter `port`:{args.port} is already in use.")
@@ -131,10 +107,7 @@ def launch_api_server(args) -> None:
 
 
 def main():
-    """
-    Main entry point for the API server.
-    Parses command line arguments and launches the server.
-    """
+    """main函数"""
     parser = FlexibleArgumentParser()
     parser.add_argument("--port", default=9904, type=int, help="port to the http server")
     parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")

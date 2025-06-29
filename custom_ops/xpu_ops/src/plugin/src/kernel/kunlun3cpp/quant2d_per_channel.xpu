@@ -1,0 +1,1069 @@
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_debug.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/cluster_primitive_template.h"
+// TODO()
+//#include "xpu/quant_xpu.h"
+//#include "xpu_plugin.h"
+namespace xpu3 {
+namespace plugin {
+#define MAX_SM_SIZE 32768
+// One core has 32KB LM（gropu LM), MAX_LM_SIZE = (32 - 4)KB / 2 = 30720, 4KB is
+// the stack space
+#define MAX_BATCH 512
+#define BANK_CONFLICT_M 128
+// Calculate QX = clip(X*rscale)
+#define CALC_QUANT_VV_FP32(                                 \
+    in_ll, in_lh, in_hl, in_hh, sc_ll, sc_lh, sc_hl, sc_hh) \
+  /* x = x * rscale */                                      \
+  in_ll = vvmul_float32x16(sc_ll, in_ll);                   \
+  in_lh = vvmul_float32x16(sc_lh, in_lh);                   \
+  in_hl = vvmul_float32x16(sc_hl, in_hl);                   \
+  in_hh = vvmul_float32x16(sc_hh, in_hh);                   \
+  /* x = clip(x) */
+// .h begin
+#define SIMD_DOUBLE_INT4_SAVE_OPT(len, y_lm, y_tmp) \
+  mfence_lm();                                      \
+  for (int i = 0; i < len; i += 16) {               \
+    int idx = i >> 1;                               \
+    y_lm[idx] = y_tmp[i];                           \
+    y_lm[idx + 1] = y_tmp[i + 2];                   \
+    y_lm[idx + 2] = y_tmp[i + 4];                   \
+    y_lm[idx + 3] = y_tmp[i + 6];                   \
+    y_lm[idx + 4] = y_tmp[i + 8];                   \
+    y_lm[idx + 5] = y_tmp[i + 10];                  \
+    y_lm[idx + 6] = y_tmp[i + 12];                  \
+    y_lm[idx + 7] = y_tmp[i + 14];                  \
+  }                                                 \
+  mfence();
+static inline int8x64_t __device__ v4float2fix8_rn(float32x16_t x_ll,
+                                                   float32x16_t x_lh,
+                                                   float32x16_t x_hl,
+                                                   float32x16_t x_hh) {
+  int8x64_t ret;
+  __asm__ __volatile__(
+      "vfloat2fix8_ll.rn %0, %1\t\n"
+      "vfloat2fix8_lh.rn %0, %2\t\n"
+      "vfloat2fix8_hl.rn %0, %3\t\n"
+      "vfloat2fix8_hh.rn %0, %4\t\n"
+      : "=&v"(ret)
+      : "v"(x_ll), "v"(x_lh), "v"(x_hl), "v"(x_hh));
+  return ret;
+}
+static inline __device__ void cast_to_int8_lm_rn(float32x16_t a_ll,
+                                                 float32x16_t a_lh,
+                                                 float32x16_t a_hl,
+                                                 float32x16_t a_hh,
+                                                 int8_t* y) {
+  __asm__ __volatile__(
+      "vfloat2fix8_ll.rn vr0, %0\t\n"
+      "vfloat2fix8_lh.rn vr0, %1\t\n"
+      "vfloat2fix8_hl.rn vr0, %2\t\n"
+      "vfloat2fix8_hh.rn vr0, %3\t\n"
+      "vstore.mz vr0{mr1}, 0(%4)" ::"v"(a_ll),
+      "v"(a_lh),
+      "v"(a_hl),
+      "v"(a_hh),
+      "r"(y)
+      : "vr0");
+}
+template <typename T>
+__device__ inline __global_ptr__ T* ptr_offset(__global_ptr__ T* ptr,
+                                               int64_t m,
+                                               int64_t n,
+                                               int64_t k) {
+  return ptr + m * n + k;
+}
+template <>
+__device__ inline __global_ptr__ int4_t* ptr_offset<int4_t>(
+    __global_ptr__ int4_t* ptr, int64_t m, int64_t n, int64_t k) {
+  __global_ptr__ int8_t* int8_ptr =
+      reinterpret_cast<__global_ptr__ int8_t*>(ptr);
+  int64_t line_bytes = (n + 1) / 2;
+  return reinterpret_cast<__global_ptr__ int4_t*>(int8_ptr + m * line_bytes +
+                                                  (k + 1) / 2);
+}
+static __device__ int8x64_t vvint82int4x2(int8x64_t high, int8x64_t low) {
+  uint32x16_t l = reinterpret_cast<uint32x16_t>(low);
+  uint32x16_t h = reinterpret_cast<uint32x16_t>(high);
+  h = svsll_uint32x16_mz(4, h);
+  h = svand_uint32x16(uint32_t(0xf0f0f0f0), h);
+  l = svand_uint32x16(uint32_t(0x0f0f0f0f), l);
+  l = vvor_uint32x16_mz(l, h);
+  return reinterpret_cast<int8x64_t>(l);
+}
+static inline __device__ int8x64_t
+simd_double_int4_opt_10013223(float32x16_t x_ll,
+                              float32x16_t x_lh,
+                              float32x16_t x_hl,
+                              float32x16_t x_hh) {
+  int8x64_t x = v4float2fix8_rn(x_ll, x_lh, x_hl, x_hh);
+  x_ll = vshuffle2_float32x16(x_ll);
+  x_lh = vshuffle2_float32x16(x_lh);
+  x_hl = vshuffle2_float32x16(x_hl);
+  x_hh = vshuffle2_float32x16(x_hh);
+  int8x64_t x_shuffle = v4float2fix8_rn(x_ll, x_lh, x_hl, x_hh);
+  return vvint82int4x2(x_shuffle, x);
+}
+template <typename TX, typename TSCALE>
+__device__ static void quant_int4_per_channel(
+    const TX* x_lm,
+    __shared_ptr__ const TSCALE* scale_sm,
+    int4_t* y_lm,
+    int len) {
+  int8_t* y_tmp = reinterpret_cast<int8_t*>(y_lm);
+  constexpr float max_int4 = 7;
+  constexpr float min_int4 = -8;
+  float32x16_t x_ll, x_lh, x_hl, x_hh, sl, sh;
+  int roundsize64 = rounddown64(len);
+  int remain_size = len - roundsize64;
+  int mask_0, mask_1;
+  for (int i = 0; i < roundsize64; i += 64) {
+    // x = x * scale
+    vload2_lm(x_lm + i, x_ll, x_lh);
+    vload2_sm(scale_sm + i, sl, sh);
+    x_ll = vvmul_float32x16(x_ll, sl);
+    x_lh = vvmul_float32x16(x_lh, sh);
+    // round
+    // x = clip(x);
+    x_ll = svmax_float32x16(min_int4, x_ll);
+    x_ll = svmin_float32x16(max_int4, x_ll);
+    x_lh = svmax_float32x16(min_int4, x_lh);
+    x_lh = svmin_float32x16(max_int4, x_lh);
+    // x = x * scale
+    vload2_lm(x_lm + i + 32, x_hl, x_hh);
+    vload2_sm(scale_sm + i + 32, sl, sh);
+    x_hl = vvmul_float32x16(x_hl, sl);
+    x_hh = vvmul_float32x16(x_hh, sh);
+    // x = clip(x);
+    x_hl = svmax_float32x16(min_int4, x_hl);
+    x_hl = svmin_float32x16(max_int4, x_hl);
+    x_hh = svmax_float32x16(min_int4, x_hh);
+    x_hh = svmin_float32x16(max_int4, x_hh);
+    int8x64_t x_tmp = simd_double_int4_opt_10013223(x_ll, x_lh, x_hl, x_hh);
+    vstore_lm_int8x64_mh(y_tmp + i, x_tmp);
+  }
+  if (remain_size > 0) {
+    mask_0 = (remain_size >= 32) ? -1 : ~(-1 << remain_size);
+    mask_1 = (remain_size > 32) ? ~(-1 << (remain_size - 32)) : 0;
+    vload2_lm_mz(x_lm + roundsize64, x_ll, x_lh, mask_0);
+    vload2_sm_mz(scale_sm + roundsize64, sl, sh, mask_0);
+    x_ll = vvmul_float32x16(x_ll, sl);
+    x_lh = vvmul_float32x16(x_lh, sh);
+    // round
+    // x = clip(x);
+    x_ll = svmax_float32x16(min_int4, x_ll);
+    x_ll = svmin_float32x16(max_int4, x_ll);
+    x_lh = svmax_float32x16(min_int4, x_lh);
+    x_lh = svmin_float32x16(max_int4, x_lh);
+    // x = x * scale
+    vload2_lm_mz(x_lm + roundsize64 + 32, x_hl, x_hh, mask_1);
+    vload2_sm_mz(scale_sm + roundsize64 + 32, sl, sh, mask_1);
+    x_hl = vvmul_float32x16(x_hl, sl);
+    x_hh = vvmul_float32x16(x_hh, sh);
+    // x = clip(x);
+    x_hl = svmax_float32x16(min_int4, x_hl);
+    x_hl = svmin_float32x16(max_int4, x_hl);
+    x_hh = svmax_float32x16(min_int4, x_hh);
+    x_hh = svmin_float32x16(max_int4, x_hh);
+    int8x64_t x_tmp = simd_double_int4_opt_10013223(x_ll, x_lh, x_hl, x_hh);
+    vstore_lm_int8x64_mh(y_tmp + roundsize64, x_tmp);
+  }
+  SIMD_DOUBLE_INT4_SAVE_OPT(len, y_tmp, y_tmp);
+}
+// .h end
+template <typename TSRC, typename TDST>
+__device__ inline void static r_lm2sm_async(TSRC* src,
+                                            __shared_ptr__ TDST* dst,
+                                            int len,
+                                            float quant_max) {
+  constexpr int aligned = 8;
+  float32x16_t vx0, vx1;
+  TSRC quant_max_value = static_cast<TSRC>(quant_max);
+  int cut_len = (len / aligned) * aligned;
+  int left = len - cut_len;
+  if (left > 0) {
+    for (int i = cut_len; i < len; ++i) {
+      src[i] = quant_max_value / src[i];
+    }
+  }
+  for (int i = 0; i < cut_len; i += aligned) {
+#pragma unroll
+    for (int k = 0; k < aligned; ++k) {
+      src[i + k] = quant_max_value / src[i + k];
+    }
+  }
+  mfence_lm();
+  for (int i = 0; i < len; i += 32) {
+    vload2_lm(src + i, vx0, vx1);
+    vstore2_sm(dst + i, vx0, vx1);
+  }
+}
+template <typename T, typename TS>
+static __device__ void fix8_perchannel_quant(const T* input,
+                                             const __shared_ptr__ TS* scale,
+                                             int8_t* output,
+                                             int len) {
+  constexpr float int8_max = 127.0f;
+  constexpr float int8_min = -128.0f;
+  int align64 = rounddown64(len);
+  int remain_size = len - align64;
+  int mask64_0 = -1, mask64_1 = -1;
+  float32x16_t in_ll, in_lh, in_hl, in_hh;
+  float32x16_t sc_ll, sc_lh, sc_hl, sc_hh;
+  if (remain_size) {
+    mask64_0 = (remain_size >= 32) ? -1 : ~(-1 << remain_size);
+    mask64_1 = (remain_size > 32) ? ~(-1 << (remain_size - 32)) : 0;
+    vload2_lm_mz(input + align64, in_ll, in_lh, mask64_0);
+    vload2_lm_mz(input + align64 + 32, in_hl, in_hh, mask64_1);
+    vload2_sm_mz(scale + align64, sc_ll, sc_lh, mask64_0);
+    vload2_sm_mz(scale + align64 + 32, sc_hl, sc_hh, mask64_1);
+    CALC_QUANT_VV_FP32(in_ll, in_lh, in_hl, in_hh, sc_ll, sc_lh, sc_hl, sc_hh);
+    cast_to_int8_lm_rn(in_ll, in_lh, in_hl, in_hh, output + align64);
+  }
+  for (int i = 0; i < align64; i += 64) {
+    vload2_lm(input + i, in_ll, in_lh);
+    vload2_lm(input + i + 32, in_hl, in_hh);
+    vload2_sm(scale + i, sc_ll, sc_lh);
+    vload2_sm(scale + i + 32, sc_hl, sc_hh);
+    CALC_QUANT_VV_FP32(in_ll, in_lh, in_hl, in_hh, sc_ll, sc_lh, sc_hl, sc_hh);
+    cast_to_int8_lm_rn(in_ll, in_lh, in_hl, in_hh, output + i);
+  }
+  mfence_lm();
+}
+template <typename TX,
+          typename TSCALE,
+          typename TY,
+          typename std::enable_if<std::is_same<TY, int8_t>::value, TY>::type*
+              ptr = nullptr>
+__device__ inline int quant_to_buffer_per_channel(const TX* x,
+                                                  __shared_ptr__ TSCALE* scale,
+                                                  TY* y,
+                                                  int len) {
+  fix8_perchannel_quant<TX, TSCALE>(x, scale, y, len);
+  return len * sizeof(TY);
+}
+template <typename TX,
+          typename TSCALE,
+          typename TY,
+          typename std::enable_if<std::is_same<TY, int4_t>::value, TY>::type*
+              ptr = nullptr>
+__device__ inline int quant_to_buffer_per_channel(const TX* x,
+                                                  __shared_ptr__ TSCALE* scale,
+                                                  TY* y,
+                                                  int len) {
+  quant_int4_per_channel(x, scale, y, len);
+  return (len + 1) / 2;
+}
+template <typename TX, typename TSCALE, typename TY>
+__global__ void quant2d_per_channel_cluster(
+    const TX* x, const TSCALE* scale, TY* y, int64_t m, int64_t n) {
+  int cid = core_id();
+  int ncores = core_num();
+  int tid = cid * cluster_num() + cluster_id();
+  int nthreads = ncores * cluster_num();
+  int64_t mstart, nstart;
+  int64_t mend, nend;
+  constexpr float quant_max = std::is_same<TY, int4_t>::value ? 7.0f : 127.0f;
+  constexpr int LM_LEN = 1024 * sizeof(float) / sizeof(TX);
+  constexpr int PINGPONG_LM_LEN = LM_LEN / 2;
+  __simd__ __local__ TX lm_input_buff[LM_LEN];   // 4KB for input lm buff
+  __simd__ __local__ TY lm_output_buff[LM_LEN];  // 2KB for output lm buff
+  DoublePtr<PINGPONG_LM_LEN, LmPtr<TX>> lm_input_dp((LmPtr<TX>(lm_input_buff)));
+  DoublePtr<PINGPONG_LM_LEN, LmPtr<TY>> lm_output_dp(
+      (LmPtr<TY>(lm_output_buff)));
+  __simd__ __shared__ TSCALE
+      sm_scale_buff[MAX_SM_SIZE];  // maximum 128KB for scale sm buff
+  // n align to 32 for simd calc.
+  partition(cid, ncores, n, 32, &nstart, &nend);
+  int scale_readlen = nend - nstart;
+  __simd__ __shared_ptr__ TSCALE* core_sm_scale_buff = sm_scale_buff + nstart;
+  if (scale_readlen > 0) {
+    GM2LM(
+        scale + nstart, (TSCALE*)lm_input_buff, scale_readlen * sizeof(TSCALE));
+    r_lm2sm_async<TSCALE, TSCALE>((TSCALE*)lm_input_buff,
+                                  core_sm_scale_buff,
+                                  scale_readlen,
+                                  quant_max);  // taking the reciprocal of scale
+    mfence_lm();
+  }
+  mfence_sm();
+  sync_all();
+  // per-channel quantization calc
+  if (m % nthreads == 0 && m / nthreads == BANK_CONFLICT_M && n == 8192) {
+    partition(tid, nthreads, m, BANK_CONFLICT_M + 1, &mstart, &mend);
+  } else {
+    partition(tid, nthreads, m, 1, &mstart, &mend);
+  }
+  if ((mend - mstart) <= 0) return;
+  for (int m_ = mstart; m_ < mend; ++m_) {
+    int read_len = min(PINGPONG_LM_LEN, n);
+    lm_input_dp.gm_load(x + m_ * n + 0, read_len);
+    for (int n_ = 0; n_ < n; n_ += PINGPONG_LM_LEN) {
+      int next_n = n_ + PINGPONG_LM_LEN;
+      int next_read_len = min(PINGPONG_LM_LEN, n - next_n);
+      if (next_read_len > 0) {
+        lm_input_dp.next().gm_load_async(x + m_ * n + next_n, next_read_len);
+      }
+      // calc
+      int data_bytes = quant_to_buffer_per_channel(
+          lm_input_dp.ptr, sm_scale_buff + n_, lm_output_dp.ptr, read_len);
+      lm_output_dp.gm_store_async(ptr_offset<TY>(y, m_, n, n_), data_bytes);
+      lm_input_dp.toggle();
+      lm_output_dp.toggle();
+      read_len = next_read_len;
+    }
+  }
+}
+template <typename TX, typename TS>
+static inline __device__ void fix8_perchannel_quant_v2(
+    const TX* input,
+    const __shared_ptr__ TS* scale,
+    int8_t* output,
+    int len,
+    float32x16_t* v_list) {
+  for (int i = 0; i < len; i += 64) {
+    vload2_lm(input + i, v_list[0], v_list[1]);
+    vload2_lm(input + i + 32, v_list[2], v_list[3]);
+    vload2_sm(scale + i, v_list[4], v_list[5]);
+    vload2_sm(scale + i + 32, v_list[6], v_list[7]);
+    v_list[0] = vvmul_float32x16(v_list[4], v_list[0]);
+    v_list[1] = vvmul_float32x16(v_list[5], v_list[1]);
+    v_list[2] = vvmul_float32x16(v_list[6], v_list[2]);
+    v_list[3] = vvmul_float32x16(v_list[7], v_list[3]);
+    cast_to_int8_lm_rn(v_list[0], v_list[1], v_list[2], v_list[3], output + i);
+  }
+  mfence_lm();
+}
+template <typename TX>
+static inline __device__ void primitive_reduce_max_lm_perchannel(
+    const TX* lm_input, float32x16_t* vmax, float32x16_t* vx) {
+  vload2_lm(lm_input, vx[0], vx[1]);
+  vload2_lm(lm_input + 32, vx[2], vx[3]);
+  vx[0] = vabs_float32x16(vx[0]);
+  vx[1] = vabs_float32x16(vx[1]);
+  vx[2] = vabs_float32x16(vx[2]);
+  vx[3] = vabs_float32x16(vx[3]);
+  vmax[0] = vvmax_float32x16(vmax[0], vx[0]);
+  vmax[1] = vvmax_float32x16(vmax[1], vx[1]);
+  vmax[2] = vvmax_float32x16(vmax[2], vx[2]);
+  vmax[3] = vvmax_float32x16(vmax[3], vx[3]);
+  // if (len > 64) {
+  vload2_lm(lm_input + 64, vx[0], vx[1]);
+  vload2_lm(lm_input + 96, vx[2], vx[3]);
+  vx[0] = vabs_float32x16(vx[0]);
+  vx[1] = vabs_float32x16(vx[1]);
+  vx[2] = vabs_float32x16(vx[2]);
+  vx[3] = vabs_float32x16(vx[3]);
+  vmax[4] = vvmax_float32x16(vmax[4], vx[0]);
+  vmax[5] = vvmax_float32x16(vmax[5], vx[1]);
+  vmax[6] = vvmax_float32x16(vmax[6], vx[2]);
+  vmax[7] = vvmax_float32x16(vmax[7], vx[3]);
+  // }
+  mfence_lm();
+}
+template <typename TX, typename TSCALE, typename TY>
+__global__ void quant2d_per_channel_kernel(
+    const TX* x, TY* y, TSCALE* scale, int64_t m, int64_t n) {
+  int cid = core_id();
+  int ncores = core_num();
+  int64_t mstart, mend;
+  int64_t cluster_n_start, cluster_n_end;
+  int64_t i, cur_n;
+  int process_size;
+  constexpr int PINGPONG_LM_LEN = 512;
+  constexpr int LM_LEN = PINGPONG_LM_LEN * 2;
+  __simd__ __local__ TX lm_input_buff[LM_LEN];   // 2KB for input lm buff
+  __simd__ __local__ TY lm_output_buff[LM_LEN];  // 4KB for output lm buff
+  DoublePtr<PINGPONG_LM_LEN, LmPtr<TX>> lm_input_dp((LmPtr<TX>(lm_input_buff)));
+  DoublePtr<PINGPONG_LM_LEN, LmPtr<TY>> lm_output_dp(
+      (LmPtr<TY>(lm_output_buff)));
+  __simd__ __shared__ float
+      sm_scale_buff[PINGPONG_LM_LEN * 64];  // maximum 128KB for scale sm buff
+  __simd__ __shared__ TSCALE
+      sm_scale_result[PINGPONG_LM_LEN * 64];  // maximum 128KB for scale sm buff
+  float32x16_t vmax[8];
+  float32x16_t vx[4];
+  partition(
+      cluster_id(), cluster_num(), n, 64, &cluster_n_start, &cluster_n_end);
+  partition(cid, ncores, m, 2, &mstart, &mend);
+  // n align to 128 for simd calc.
+  for (cur_n = cluster_n_start; cur_n < cluster_n_end; cur_n += 128) {
+    process_size = min(cluster_n_end - cur_n, 128);
+    vmax[0] = vset_zero();
+    vmax[1] = vset_zero();
+    vmax[2] = vset_zero();
+    vmax[3] = vset_zero();
+    vmax[4] = vset_zero();
+    vmax[5] = vset_zero();
+    vmax[6] = vset_zero();
+    vmax[7] = vset_zero();
+    if (mstart < mend)  // time: 21236 of 48672 (22721 - 1485)
+      lm_input_dp.gm_load(x + mstart * n + cur_n, process_size * sizeof(TX));
+    for (i = mstart; i < mend; ++i) {
+      if (i + 1 < mend) {
+        lm_input_dp.next().gm_load_async(x + i * n + n + cur_n,
+                                         process_size * sizeof(TX));
+      }
+      primitive_reduce_max_lm_perchannel<TX>(lm_input_dp.ptr, vmax, vx);
+      lm_input_dp.toggle();
+    }
+    // time: 261 of 48672 (22982 - 22721)
+    vstore2_sm(sm_scale_buff + PINGPONG_LM_LEN * cid, vmax[0], vmax[1]);
+    vstore2_sm(sm_scale_buff + PINGPONG_LM_LEN * cid + 32, vmax[2], vmax[3]);
+    vstore2_sm(sm_scale_buff + PINGPONG_LM_LEN * cid + 64, vmax[4], vmax[5]);
+    vstore2_sm(sm_scale_buff + PINGPONG_LM_LEN * cid + 96, vmax[6], vmax[7]);
+    mfence_sm();
+    sync_cluster();
+    if (cid < 8) {  // time: 3506 of 48672 (26488 - 22982)
+      vmax[0] = vload_sm_float32x16(sm_scale_buff + cid * 16);
+      for (int i = 1; i < ncores; ++i) {
+        vx[0] =
+            vload_sm_float32x16(sm_scale_buff + cid * 16 + i * PINGPONG_LM_LEN);
+        vmax[0] = vvmax_float32x16(vmax[0], vx[0]);
+      }
+      vstore_sm_float32x16(sm_scale_result + cid * 16, vmax[0]);
+      mfence_sm();
+    }
+    sync_cluster();
+    if (cid == 0) {
+      SM2GM_ASYNC(
+          sm_scale_result, scale + cur_n, process_size * sizeof(TSCALE));
+    }
+    for (i = cid; i < process_size; ++i) {
+      float16 tmp_max_value_fp16 = sm_scale_result[i];
+      float tmp_max_val = float162float(tmp_max_value_fp16);
+      tmp_max_val = max(tmp_max_val, 1e-30f);
+      sm_scale_buff[i] = 127.0f / tmp_max_val;
+    }
+    mfence_lm_sm();
+    sync_cluster();
+    if (mstart < mend)  // time: 22184 of 48672 (48672 - 26488)
+      lm_input_dp.gm_load(x + mstart * n + cur_n, process_size * sizeof(TX));
+    for (i = mstart; i < mend; ++i) {
+      if (i + 1 < mend) {
+        lm_input_dp.next().gm_load_async(x + i * n + n + cur_n,
+                                         process_size * sizeof(TX));
+      }
+      fix8_perchannel_quant_v2(
+          lm_input_dp.ptr, sm_scale_buff, lm_output_dp.ptr, process_size, vmax);
+      lm_output_dp.gm_store_async(y + i * n + cur_n, process_size * sizeof(TY));
+      lm_input_dp.toggle();
+      lm_output_dp.toggle();
+    }
+  }
+  mfence();
+}
+template <typename TX, int MAX_LEN>
+typename std::enable_if<MAX_LEN == 16>::type static inline __device__
+reduce_max_lm_perchannel(const TX* lm_input,
+                         float32x16_t* vmax,
+                         float32x16_t* vx) {
+  vload2_lm_mz(lm_input, vx[0], vx[1], 0x0000FFFF);
+  vx[0] = vabs_float32x16(vx[0]);
+  vmax[0] = vvmax_float32x16(vmax[0], vx[0]);
+  // mfence_lm();
+}
+template <typename TX, int MAX_LEN>
+typename std::enable_if<MAX_LEN == 32>::type static inline __device__
+reduce_max_lm_perchannel(const TX* lm_input,
+                         float32x16_t* vmax,
+                         float32x16_t* vx) {
+  vload2_lm(lm_input, vx[0], vx[1]);
+  vx[0] = vabs_float32x16(vx[0]);
+  vx[1] = vabs_float32x16(vx[1]);
+  vmax[0] = vvmax_float32x16(vmax[0], vx[0]);
+  vmax[1] = vvmax_float32x16(vmax[1], vx[1]);
+}
+template <typename TX, int MAX_LEN>
+typename std::enable_if<MAX_LEN == 64>::type static inline __device__
+reduce_max_lm_perchannel(const TX* lm_input,
+                         float32x16_t* vmax,
+                         float32x16_t* vx) {
+  vload2_lm(lm_input, vx[0], vx[1]);
+  vload2_lm(lm_input + 32, vx[2], vx[3]);
+  vx[0] = vabs_float32x16(vx[0]);
+  vx[1] = vabs_float32x16(vx[1]);
+  vx[2] = vabs_float32x16(vx[2]);
+  vx[3] = vabs_float32x16(vx[3]);
+  vmax[0] = vvmax_float32x16(vmax[0], vx[0]);
+  vmax[1] = vvmax_float32x16(vmax[1], vx[1]);
+  vmax[2] = vvmax_float32x16(vmax[2], vx[2]);
+  vmax[3] = vvmax_float32x16(vmax[3], vx[3]);
+}
+template <typename TX, int MAX_LEN>
+typename std::enable_if<MAX_LEN == 128>::type static inline __device__
+reduce_max_lm_perchannel(const TX* lm_input,
+                         float32x16_t* vmax,
+                         float32x16_t* vx) {
+  vload2_lm(lm_input, vx[0], vx[1]);
+  vload2_lm(lm_input + 32, vx[2], vx[3]);
+  vx[0] = vabs_float32x16(vx[0]);
+  vx[1] = vabs_float32x16(vx[1]);
+  vx[2] = vabs_float32x16(vx[2]);
+  vx[3] = vabs_float32x16(vx[3]);
+  vmax[0] = vvmax_float32x16(vmax[0], vx[0]);
+  vmax[1] = vvmax_float32x16(vmax[1], vx[1]);
+  vmax[2] = vvmax_float32x16(vmax[2], vx[2]);
+  vmax[3] = vvmax_float32x16(vmax[3], vx[3]);
+  // if (len > 64) {
+  vload2_lm(lm_input + 64, vx[0], vx[1]);
+  vload2_lm(lm_input + 96, vx[2], vx[3]);
+  vx[0] = vabs_float32x16(vx[0]);
+  vx[1] = vabs_float32x16(vx[1]);
+  vx[2] = vabs_float32x16(vx[2]);
+  vx[3] = vabs_float32x16(vx[3]);
+  vmax[4] = vvmax_float32x16(vmax[4], vx[0]);
+  vmax[5] = vvmax_float32x16(vmax[5], vx[1]);
+  vmax[6] = vvmax_float32x16(vmax[6], vx[2]);
+  vmax[7] = vvmax_float32x16(vmax[7], vx[3]);
+  // }
+}
+template <int MAX_LEN>
+typename std::enable_if<MAX_LEN == 16>::type static inline __device__
+store_max_value_sm_perchannel(float32x16_t* vmax,
+                              __shared_ptr__ float* sm_scale_buff) {
+  vmax[0] = vvmax_float32x16(vmax[0], vmax[4]);
+  vmax[1] = vvmax_float32x16(vmax[1], vmax[5]);
+  vmax[2] = vvmax_float32x16(vmax[2], vmax[6]);
+  vmax[3] = vvmax_float32x16(vmax[3], vmax[7]);
+  vmax[0] = vvmax_float32x16(vmax[0], vmax[2]);
+  vmax[1] = vvmax_float32x16(vmax[1], vmax[3]);
+  vmax[0] = vvmax_float32x16(vmax[0], vmax[1]);
+  vstore_sm_float32x16(sm_scale_buff, vmax[0]);
+}
+template <int MAX_LEN>
+typename std::enable_if<MAX_LEN == 16>::type static inline __device__
+load_max_value_sm_perchannel(float32x16_t* vmax,
+                             __shared_ptr__ float* sm_scale_buff) {
+  vmax[0] = vload_sm_float32x16(sm_scale_buff);
+  vmax[1] = vmax[0];
+  vmax[2] = vmax[0];
+  vmax[3] = vmax[0];
+  vmax[4] = vmax[0];
+  vmax[5] = vmax[0];
+  vmax[6] = vmax[0];
+  vmax[7] = vmax[0];
+}
+template <int MAX_LEN>
+typename std::enable_if<MAX_LEN == 32>::type static inline __device__
+store_max_value_sm_perchannel(float32x16_t* vmax,
+                              __shared_ptr__ float* sm_scale_buff) {
+  vmax[0] = vvmax_float32x16(vmax[0], vmax[4]);
+  vmax[1] = vvmax_float32x16(vmax[1], vmax[5]);
+  vmax[2] = vvmax_float32x16(vmax[2], vmax[6]);
+  vmax[3] = vvmax_float32x16(vmax[3], vmax[7]);
+  vmax[0] = vvmax_float32x16(vmax[0], vmax[2]);
+  vmax[1] = vvmax_float32x16(vmax[1], vmax[3]);
+  vstore2_sm(sm_scale_buff, vmax[0], vmax[1]);
+}
+template <int MAX_LEN>
+typename std::enable_if<MAX_LEN == 32>::type static inline __device__
+load_max_value_sm_perchannel(float32x16_t* vmax,
+                             __shared_ptr__ float* sm_scale_buff) {
+  vload2_sm(sm_scale_buff, vmax[0], vmax[1]);
+  vmax[2] = vmax[0];
+  vmax[3] = vmax[1];
+  vmax[4] = vmax[0];
+  vmax[5] = vmax[1];
+  vmax[6] = vmax[2];
+  vmax[7] = vmax[3];
+}
+template <int MAX_LEN>
+typename std::enable_if<MAX_LEN == 64>::type static inline __device__
+store_max_value_sm_perchannel(float32x16_t* vmax,
+                              __shared_ptr__ float* sm_scale_buff) {
+  vmax[0] = vvmax_float32x16(vmax[0], vmax[4]);
+  vmax[1] = vvmax_float32x16(vmax[1], vmax[5]);
+  vmax[2] = vvmax_float32x16(vmax[2], vmax[6]);
+  vmax[3] = vvmax_float32x16(vmax[3], vmax[7]);
+  vstore2_sm(sm_scale_buff, vmax[0], vmax[1]);
+  vstore2_sm(sm_scale_buff + 32, vmax[2], vmax[3]);
+}
+template <int MAX_LEN>
+typename std::enable_if<MAX_LEN == 64>::type static inline __device__
+load_max_value_sm_perchannel(float32x16_t* vmax,
+                             __shared_ptr__ float* sm_scale_buff) {
+  vload2_sm(sm_scale_buff, vmax[0], vmax[1]);
+  vload2_sm(sm_scale_buff + 32, vmax[2], vmax[3]);
+  vmax[4] = vmax[0];
+  vmax[5] = vmax[1];
+  vmax[6] = vmax[2];
+  vmax[7] = vmax[3];
+}
+template <int MAX_LEN>
+typename std::enable_if<MAX_LEN == 128>::type static inline __device__
+store_max_value_sm_perchannel(float32x16_t* vmax,
+                              __shared_ptr__ float* sm_scale_buff) {
+  vstore2_sm(sm_scale_buff, vmax[0], vmax[1]);
+  vstore2_sm(sm_scale_buff + 32, vmax[2], vmax[3]);
+  vstore2_sm(sm_scale_buff + 64, vmax[4], vmax[5]);
+  vstore2_sm(sm_scale_buff + 96, vmax[6], vmax[7]);
+}
+template <int MAX_LEN>
+typename std::enable_if<MAX_LEN == 128>::type static inline __device__
+load_max_value_sm_perchannel(float32x16_t* vmax,
+                             __shared_ptr__ float* sm_scale_buff) {
+  vload2_sm(sm_scale_buff, vmax[0], vmax[1]);
+  vload2_sm(sm_scale_buff + 32, vmax[2], vmax[3]);
+  vload2_sm(sm_scale_buff + 64, vmax[4], vmax[5]);
+  vload2_sm(sm_scale_buff + 96, vmax[6], vmax[7]);
+}
+// typename std::enable_if<MAX_LEN == 128>::type
+template <typename TSCALE, int MAX_LEN, int NCORE = 64>
+static inline __device__ void reduce_max_between_cores(
+    __shared_ptr__ float* sm_scale_input,
+    __shared_ptr__ TSCALE* sm_scale_output,
+    float32x16_t* vmax) {
+  float max_value;
+  TSCALE tmp_max;
+  for (int i = core_id(); i < MAX_LEN; i += NCORE) {
+    max_value = sm_scale_input[i];
+    for (int j = 1; j < NCORE; ++j) {
+      max_value = max(max_value, sm_scale_input[j * MAX_LEN + i]);
+    }
+    tmp_max = static_cast<TSCALE>(max_value);
+    sm_scale_output[i] = tmp_max;
+    max_value = fmax(1e-30f, max_value);
+    sm_scale_input[i] = 127.0f / max_value;
+  }
+}
+template <typename TX,
+          typename TY,
+          typename std::enable_if<std::is_same<TY, int8_t>::value, TY>::type*
+              ptr = nullptr>
+static inline __device__ void quant_perchannel_from_vbuf(TX* input,
+                                                         TY* output,
+                                                         float32x16_t* vscales,
+                                                         float32x16_t* vx) {
+  vload2_lm(input, vx[0], vx[1]);
+  vload2_lm(input + 32, vx[2], vx[3]);
+  vx[0] = vvmul_float32x16(vscales[0], vx[0]);
+  vx[1] = vvmul_float32x16(vscales[1], vx[1]);
+  vx[2] = vvmul_float32x16(vscales[2], vx[2]);
+  vx[3] = vvmul_float32x16(vscales[3], vx[3]);
+  cast_to_int8_lm_rn(vx[0], vx[1], vx[2], vx[3], output);
+  vload2_lm(input + 64, vx[0], vx[1]);
+  vload2_lm(input + 96, vx[2], vx[3]);
+  vx[0] = vvmul_float32x16(vscales[4], vx[0]);
+  vx[1] = vvmul_float32x16(vscales[5], vx[1]);
+  vx[2] = vvmul_float32x16(vscales[6], vx[2]);
+  vx[3] = vvmul_float32x16(vscales[7], vx[3]);
+  cast_to_int8_lm_rn(vx[0], vx[1], vx[2], vx[3], output + 64);
+}
+template <typename TX,
+          typename TY,
+          typename std::enable_if<std::is_same<TY, int4_t>::value, TY>::type*
+              ptr = nullptr>
+static inline __device__ void quant_perchannel_from_vbuf(TX* input,
+                                                         TY* output,
+                                                         float32x16_t* vscales,
+                                                         float32x16_t* vx) {
+  __simd__ int8_t buf[128];
+  int8x64_t y_tmp;
+  int8_t* out_ptr = reinterpret_cast<int8_t*>(output);
+  vload2_lm(input, vx[0], vx[1]);
+  vload2_lm(input + 32, vx[2], vx[3]);
+  vx[0] = vvmul_float32x16(vscales[0], vx[0]);
+  vx[1] = vvmul_float32x16(vscales[1], vx[1]);
+  vx[2] = vvmul_float32x16(vscales[2], vx[2]);
+  vx[3] = vvmul_float32x16(vscales[3], vx[3]);
+  y_tmp = simd_double_int4_opt_10013223(vx[0], vx[1], vx[2], vx[3]);
+  vstore_lm_int8x64_mh(buf, y_tmp);
+  vload2_lm(input + 64, vx[0], vx[1]);
+  vload2_lm(input + 96, vx[2], vx[3]);
+  vx[0] = vvmul_float32x16(vscales[4], vx[0]);
+  vx[1] = vvmul_float32x16(vscales[5], vx[1]);
+  vx[2] = vvmul_float32x16(vscales[6], vx[2]);
+  vx[3] = vvmul_float32x16(vscales[7], vx[3]);
+  y_tmp = simd_double_int4_opt_10013223(vx[4], vx[5], vx[6], vx[7]);
+  vstore_lm_int8x64_mh(buf + 64, y_tmp);
+  SIMD_DOUBLE_INT4_SAVE_OPT(128, out_ptr, y_tmp);
+}
+template <typename TX, typename TSCALE, typename TY, int MAX_N>
+__global__ void quant2d_per_channel_cached(
+    const TX* x, TY* y, TSCALE* scale, int64_t m, int64_t n) {
+  int cid = core_id();
+  int ncores = core_num();
+  int tid = cid * cluster_num() + cluster_id();
+  int nthreads = ncores * cluster_num();
+  int64_t mstart, nstart;
+  int64_t mend, nend;
+  int64_t cluster_n_start, cluster_n_end;
+  int64_t i, cur_n;
+  int process_size;
+  constexpr int PINGPONG_LM_LEN = 512;
+  constexpr int LM_LEN = PINGPONG_LM_LEN * 2;
+  constexpr int INPUT_BUF_LEN = 4 * 1024;
+  constexpr int OUPUT_BUF_LEN = 2 * 1024;
+  constexpr int INPUT_MAX_LEN = INPUT_BUF_LEN / sizeof(TX);
+  constexpr int OUTPUT_MAX_LEN = OUPUT_BUF_LEN / sizeof(TY);
+  constexpr int INPUT_SIZE =
+      INPUT_MAX_LEN < OUTPUT_MAX_LEN ? INPUT_MAX_LEN : OUTPUT_MAX_LEN;
+  __simd__ __shared__ float
+      sm_scale_buff[MAX_N * 64];  // maximum 128KB for scale sm buff
+  __simd__ __shared__ TSCALE
+      sm_scale_result[MAX_N * 64];  // maximum 128KB for scale sm buff
+  __simd__ __local__ TX lm_input_buff[INPUT_SIZE];   // 4KB lm buffer for input
+  __simd__ __local__ TY lm_output_buff[INPUT_SIZE];  // 2KB lm buffer for output
+  float32x16_t vmax[8];
+  float32x16_t vx[4];
+  partition(
+      cluster_id(), cluster_num(), n, 64, &cluster_n_start, &cluster_n_end);
+  partition(cid, ncores, m, 2, &mstart, &mend);
+  for (cur_n = cluster_n_start; cur_n < cluster_n_end; cur_n += MAX_N) {
+    process_size = min(cluster_n_end - cur_n, MAX_N);
+    vmax[0] = vset_zero();
+    vmax[1] = vset_zero();
+    vmax[2] = vset_zero();
+    vmax[3] = vset_zero();
+    vmax[4] = vset_zero();
+    vmax[5] = vset_zero();
+    vmax[6] = vset_zero();
+    vmax[7] = vset_zero();  // time to : 1346 ns
+    for (i = mstart; i < mend; ++i) {
+      GM2LM_ASYNC(x + i * n + cur_n,
+                  lm_input_buff + MAX_N * (i - mstart),
+                  process_size * sizeof(TX));
+    }  // time to: 21999 ns  , 119111
+    int pad_end = min(128 + mend * MAX_N, INPUT_SIZE);
+    for (int t = mend * MAX_N; t < pad_end; t++) {
+      lm_input_buff[t] = 0.0f;
+    }
+    mfence_lm();  // time to: 23152   , 120855
+    for (i = mstart; i < mend; i += 128 / MAX_N) {
+      reduce_max_lm_perchannel<TX, 128>(
+          lm_input_buff + MAX_N * (i - mstart), vmax, vx);
+    }
+    mfence_lm_sm();  // time to: 23368 ns
+    store_max_value_sm_perchannel<MAX_N>(
+        vmax, sm_scale_buff + MAX_N * cid);  // time to: 11461
+    mfence_sm();                             // time to:
+    sync_cluster();                          // time to: 30767     139464
+    reduce_max_between_cores<TSCALE, MAX_N>(
+        sm_scale_buff, sm_scale_result, vmax);
+    mfence_sm();     // time to:
+    sync_cluster();  // time to: 42480
+    if (cid == 0) {
+      SM2GM_ASYNC(
+          sm_scale_result, scale + cur_n, process_size * sizeof(TSCALE));
+    }  // time to: 42646  , 175973
+    load_max_value_sm_perchannel<MAX_N>(vmax,
+                                        sm_scale_buff);  // time to: 169849
+    for (i = mstart; i < mend; i += 128 / MAX_N) {
+      quant_perchannel_from_vbuf<TX, TY>(lm_input_buff + MAX_N * (i - mstart),
+                                         lm_output_buff + MAX_N * (i - mstart),
+                                         vmax,
+                                         vx);
+    }
+    mfence_lm();
+    for (i = mstart; i < mend; ++i) {
+      LM2GM_ASYNC(lm_output_buff + MAX_N * (i - mstart),
+                  y + i * n + cur_n,
+                  process_size * sizeof(int8_t));
+    }
+  }
+  mfence();
+}
+template <typename T>
+static inline __device__ void buffer_abs(T* input_x, T* output_x, int len) {
+  float32x16_t vx0, vx1, vx2, vx3;
+  for (int i = 0; i < len; i += 64) {
+    vload2_lm(input_x + i, vx0, vx1);
+    vload2_lm(input_x + i + 32, vx2, vx3);
+    vx0 = vabs_float32x16(vx0);
+    vx1 = vabs_float32x16(vx1);
+    vx2 = vabs_float32x16(vx2);
+    vx3 = vabs_float32x16(vx3);
+    vstore2_lm(output_x + i, vx0, vx1);
+    vstore2_lm(output_x + i + 32, vx2, vx3);
+  }
+}
+template <>
+inline __device__ void buffer_abs(float16* input_x,
+                                  float16* output_x,
+                                  int len) {
+  float16x32_t vx0, vx1;
+  for (int i = 0; i < len; i += 64) {
+    vload2_lm(input_x + i, vx0, vx1);
+    vx0 = vabs_float16x32(vx0);
+    vx1 = vabs_float16x32(vx1);
+    vstore2_lm(output_x + i, vx0, vx1);
+  }
+}
+template <>
+inline __device__ void buffer_abs(bfloat16* input_x,
+                                  bfloat16* output_x,
+                                  int len) {
+  float32x16_t vx0, vx1, vx2, vx3;
+  for (int i = 0; i < len; i += 64) {
+    vload2_lm_unordered(input_x + i, vx0, vx1);
+    vload2_lm_unordered(input_x + i + 32, vx2, vx3);
+    vx0 = vabs_float32x16(vx0);
+    vx1 = vabs_float32x16(vx1);
+    vx2 = vabs_float32x16(vx2);
+    vx3 = vabs_float32x16(vx3);
+    vstore2_lm_unordered(output_x + i, vx0, vx1);
+    vstore2_lm_unordered(output_x + i + 32, vx2, vx3);
+  }
+}
+template <typename T>
+static inline __device__ void buffer_reduce_max_lm_perchannel(T* input_x,
+                                                              T* output_x,
+                                                              int len) {
+  float32x16_t vx0, vx1, vx2, vx3, vo0, vo1, vo2, vo3;
+  for (int i = 0; i < len; i += 64) {
+    vload2_lm(input_x + i, vx0, vx1);
+    vload2_lm(input_x + i + 32, vx2, vx3);
+    vload2_lm(output_x + i, vo0, vo1);
+    vload2_lm(output_x + i + 32, vo2, vo3);
+    vx0 = vabs_float32x16(vx0);
+    vx1 = vabs_float32x16(vx1);
+    vx2 = vabs_float32x16(vx2);
+    vx3 = vabs_float32x16(vx3);
+    vo0 = vvmax_float32x16(vx0, vo0);
+    vo1 = vvmax_float32x16(vx1, vo1);
+    vo2 = vvmax_float32x16(vx2, vo2);
+    vo3 = vvmax_float32x16(vx3, vo3);
+    vstore2_lm(output_x + i, vo0, vo1);
+    vstore2_lm(output_x + i + 32, vo2, vo3);
+  }
+}
+template <>
+inline __device__ void buffer_reduce_max_lm_perchannel(float16* input_x,
+                                                       float16* output_x,
+                                                       int len) {
+  float16x32_t vx0, vx1, vo0, vo1;
+  for (int i = 0; i < len; i += 64) {
+    vload2_lm(input_x + i, vx0, vx1);
+    vload2_lm(output_x + i, vo0, vo1);
+    vx0 = vabs_float16x32(vx0);
+    vx1 = vabs_float16x32(vx1);
+    vo0 = vvmax_float16x32(vx0, vo0);
+    vo1 = vvmax_float16x32(vx1, vo1);
+    vstore2_lm(output_x + i, vo0, vo1);
+  }
+}
+template <>
+inline __device__ void buffer_reduce_max_lm_perchannel(bfloat16* input_x,
+                                                       bfloat16* output_x,
+                                                       int len) {
+  float32x16_t vx0, vx1, vx2, vx3, vo0, vo1, vo2, vo3;
+  for (int i = 0; i < len; i += 64) {
+    vload2_lm_unordered(input_x + i, vx0, vx1);
+    vload2_lm_unordered(input_x + i + 32, vx2, vx3);
+    vload2_lm_unordered(output_x + i, vo0, vo1);
+    vload2_lm_unordered(output_x + i + 32, vo2, vo3);
+    vx0 = vabs_float32x16(vx0);
+    vx1 = vabs_float32x16(vx1);
+    vx2 = vabs_float32x16(vx2);
+    vx3 = vabs_float32x16(vx3);
+    vo0 = vvmax_float32x16(vx0, vo0);
+    vo1 = vvmax_float32x16(vx1, vo1);
+    vo2 = vvmax_float32x16(vx2, vo2);
+    vo3 = vvmax_float32x16(vx3, vo3);
+    vstore2_lm_unordered(output_x + i, vo0, vo1);
+    vstore2_lm_unordered(output_x + i + 32, vo2, vo3);
+  }
+}
+template <typename T, typename TSCALE>
+static inline __device__ void reduce_max_all_cores_perchannel(
+    __shared_ptr__ T* input_x,
+    __shared_ptr__ TSCALE* output_x,
+    __shared_ptr__ float* output_for_quant,
+    int len,
+    const int PROCESS_SIZE,
+    int cid,
+    int ncores,
+    float quant_max) {
+  float32x16_t vx0, vx1, vmax0, vmax1;
+  int i, j;
+  for (i = cid * 32; i < len; i += 32 * ncores) {
+    vload2_sm(input_x + i, vmax0, vmax1);
+    for (j = 1; j < 64; j++) {
+      vload2_sm(input_x + i + j * PROCESS_SIZE, vx0, vx1);
+      // vload2_sm(input_x + i, vx0, vx1);
+      vmax0 = vvmax_float32x16(vmax0, vx0);
+      vmax1 = vvmax_float32x16(vmax1, vx1);
+    }
+    vstore2_sm(output_x + i, vmax0, vmax1);
+    vstore2_sm(output_for_quant + i, vmax0, vmax1);
+  }
+  mfence_sm();
+  for (i = cid * 32; i < len; i += 32 * ncores) {
+    for (j = 0; j < 32; j += 4) {
+      output_for_quant[i + j] = quant_max / output_for_quant[i + j];
+      output_for_quant[i + j + 1] = quant_max / output_for_quant[i + j + 1];
+      output_for_quant[i + j + 2] = quant_max / output_for_quant[i + j + 2];
+      output_for_quant[i + j + 3] = quant_max / output_for_quant[i + j + 3];
+    }
+  }
+  mfence_sm();
+}
+template <typename T>
+static inline __device__ void copy_scale_to_sm(const T* lm_ptr,
+                                               __shared_ptr__ T* sm_ptr,
+                                               int len) {
+  float32x16_t vx0, vx1, vx2, vx3;
+  for (int i = 0; i < len; i += 64) {
+    vload2_lm(lm_ptr + i, vx0, vx1);
+    vload2_lm(lm_ptr + i + 32, vx2, vx3);
+    vstore2_sm(sm_ptr + i, vx0, vx1);
+    vstore2_sm(sm_ptr + i + 32, vx2, vx3);
+  }
+  mfence_sm();
+}
+template <>
+inline __device__ void copy_scale_to_sm(const float16* lm_ptr,
+                                        __shared_ptr__ float16* sm_ptr,
+                                        int len) {
+  float16x32_t vx0, vx1;
+  for (int i = 0; i < len; i += 64) {
+    vload2_lm(lm_ptr + i, vx0, vx1);
+    // vstore2_sm(sm_ptr + i, vx0, vx1);
+    vstore_sm_float16x32(sm_ptr + i, vx0);
+    vstore_sm_float16x32(sm_ptr + i + 32, vx1);
+  }
+  mfence_sm();
+}
+template <>
+inline __device__ void copy_scale_to_sm(const bfloat16* lm_ptr,
+                                        __shared_ptr__ bfloat16* sm_ptr,
+                                        int len) {
+  float32x16_t vx0, vx1, vx2, vx3;
+  for (int i = 0; i < len; i += 64) {
+    vload2_lm_unordered(lm_ptr + i, vx0, vx1);
+    vload2_lm_unordered(lm_ptr + i + 32, vx2, vx3);
+    vstore2_sm_unordered(sm_ptr + i, vx0, vx1);
+    vstore2_sm_unordered(sm_ptr + i + 32, vx2, vx3);
+  }
+  mfence_sm();
+}
+/***/
+template <typename TX, typename TSCALE, typename TY>
+__global__ void quant2d_per_channel_bign(
+    const TX* x, TY* y, TSCALE* scale, int64_t m, int64_t n) {
+  int cid = core_id();
+  int ncores = core_num();
+  int tid = cid * cluster_num() + cluster_id();
+  int nthreads = ncores * cluster_num();
+  constexpr float quant_max = std::is_same<TY, int4_t>::value ? 7.0f : 127.0f;
+  constexpr int BUFFER_LEN = 1024 * 2;
+  constexpr int INPUT_SIZE = BUFFER_LEN / sizeof(TX);
+  __simd__ __shared__ TX
+      sm_scale_buff[INPUT_SIZE * 64];  // maximum 128KB for scale sm buff
+  __simd__ __shared__ TSCALE
+      sm_scale_result[INPUT_SIZE];  // maximum 2KB/4KB for scale output to gm
+  __simd__ __shared__ float
+      sm_scale_quant[INPUT_SIZE];  // maximum 4KB for scale for quant
+  __simd__ __local__ TX
+      lm_input_buff[INPUT_SIZE * 2];  // 4KB lm buffer for input
+  __simd__ __local__ TX
+      max_values[INPUT_SIZE];  // 2KB lm buffer for max_value or quant
+  TY* lm_output_buff = static_cast<TY*>(static_cast<void*>(max_values));
+  DoublePtr<INPUT_SIZE, LmPtr<TX>> lm_input_dp((LmPtr<TX>(lm_input_buff)));
+  DoublePtr<INPUT_SIZE, LmPtr<TY>> lm_output_dp((LmPtr<TY>(lm_output_buff)));
+  int64_t cluster_n_start, cluster_n_end, mstart, mend, msize;
+  int64_t i, cur_n, t;
+  int process_size;
+  partition(
+      cluster_id(), cluster_num(), n, 64, &cluster_n_start, &cluster_n_end);
+  partition(cid, ncores, m, 1, &mstart, &mend);
+  for (cur_n = cluster_n_start; cur_n < cluster_n_end; cur_n += INPUT_SIZE) {
+    process_size = min(cluster_n_end - cur_n, INPUT_SIZE);
+    mfence_lm();
+    if ((mstart < mend) && (process_size > 0)) {
+      lm_input_dp.gm_load(x + mstart * n + cur_n, process_size);
+      if (mstart + 1 < mend) {
+        lm_input_dp.next().gm_load_async(x + mstart * n + n + cur_n,
+                                         process_size);
+      }
+      buffer_abs<TX>(lm_input_dp.ptr, max_values, process_size);
+      mfence_lm();
+      lm_input_dp.toggle();
+    }
+    for (i = mstart + 1; i < mend; ++i) {
+      if (i + 1 < mend) {
+        lm_input_dp.next().gm_load_async(x + i * n + n + cur_n, process_size);
+      }
+      buffer_reduce_max_lm_perchannel<TX>(
+          lm_input_dp.ptr, max_values, process_size);
+      mfence_lm();
+      lm_input_dp.toggle();
+    }
+    if (mstart < mend) {
+      copy_scale_to_sm<TX>(
+          max_values, sm_scale_buff + INPUT_SIZE * cid, process_size);
+    }
+    sync_cluster();
+    reduce_max_all_cores_perchannel<TX, TSCALE>(sm_scale_buff,
+                                                sm_scale_result,
+                                                sm_scale_quant,
+                                                process_size,
+                                                INPUT_SIZE,
+                                                cid,
+                                                ncores,
+                                                quant_max);
+    sync_cluster();
+    if (cid == 8) {
+      SM2GM_ASYNC(
+          sm_scale_result, scale + cur_n, process_size * sizeof(TSCALE));
+    }
+    if (mstart < mend)
+      lm_input_dp.gm_load(x + mstart * n + cur_n, process_size);
+    for (i = mstart; i < mend; ++i) {
+      if (i + 1 < mend) {
+        lm_input_dp.next().gm_load_async(x + i * n + n + cur_n, process_size);
+      }
+      int data_bytes = quant_to_buffer_per_channel(
+          lm_input_dp.ptr, sm_scale_quant, lm_output_dp.ptr, process_size);
+      lm_output_dp.gm_store_async(ptr_offset<TY>(y, i, n, cur_n), data_bytes);
+      lm_input_dp.toggle();
+      lm_output_dp.toggle();
+    }
+  }
+  mfence();
+}
+#define _XPU_DEF__QUANT2d_PER_CHANNEL_(TX, TSCALE, TY)                  \
+  template __global__ void quant2d_per_channel_cluster<TX, TSCALE, TY>( \
+      const TX* x, const TSCALE* scale, TY* y, int64_t m, int64_t n);
+_XPU_DEF__QUANT2d_PER_CHANNEL_(float16, float16, int8_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_(float16, float, int8_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_(bfloat16, float, int8_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_(float, float, int8_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_(float16, float16, int4_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_(float16, float, int4_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_(float, float, int4_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_(bfloat16, float, int4_t);
+#define _XPU_DEF__QUANT2d_PER_CHANNEL_KERNEL(TX, TSCALE, TY)           \
+  template __global__ void quant2d_per_channel_kernel<TX, TSCALE, TY>( \
+      const TX* x, TY* y, TSCALE* scale, int64_t m, int64_t n);
+_XPU_DEF__QUANT2d_PER_CHANNEL_KERNEL(float16, float, int8_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_KERNEL(float16, float16, int8_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_KERNEL(bfloat16, float, int8_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_KERNEL(float, float, int8_t);
+#define _XPU_DEF__QUANT2d_PER_CHANNEL_BIGN(TX, TSCALE, TY)           \
+  template __global__ void quant2d_per_channel_bign<TX, TSCALE, TY>( \
+      const TX* x, TY* y, TSCALE* scale, int64_t m, int64_t n);
+_XPU_DEF__QUANT2d_PER_CHANNEL_BIGN(float16, float, int8_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_BIGN(float16, float16, int8_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_BIGN(bfloat16, float, int8_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_BIGN(float, float, int8_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_BIGN(float16, float, int4_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_BIGN(float16, float16, int4_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_BIGN(bfloat16, float, int4_t);
+_XPU_DEF__QUANT2d_PER_CHANNEL_BIGN(float, float, int4_t);
+#define _XPU_DEF__QUANT2d_PER_CHANNEL_CACHED(TX, TSCALE, TY, MAX_N)           \
+  template __global__ void quant2d_per_channel_cached<TX, TSCALE, TY, MAX_N>( \
+      const TX* x, TY* y, TSCALE* scale, int64_t m, int64_t n);
+_XPU_DEF__QUANT2d_PER_CHANNEL_CACHED(float16, float, int8_t, 32);
+_XPU_DEF__QUANT2d_PER_CHANNEL_CACHED(bfloat16, float, int8_t, 32);
+_XPU_DEF__QUANT2d_PER_CHANNEL_CACHED(float, float, int8_t, 32);
+_XPU_DEF__QUANT2d_PER_CHANNEL_CACHED(float16, float, int8_t, 64);
+_XPU_DEF__QUANT2d_PER_CHANNEL_CACHED(bfloat16, float, int8_t, 64);
+_XPU_DEF__QUANT2d_PER_CHANNEL_CACHED(float, float, int8_t, 64);
+_XPU_DEF__QUANT2d_PER_CHANNEL_CACHED(float16, float, int8_t, 128);
+_XPU_DEF__QUANT2d_PER_CHANNEL_CACHED(bfloat16, float, int8_t, 128);
+_XPU_DEF__QUANT2d_PER_CHANNEL_CACHED(float, float, int8_t, 128);
+}  // namespace plugin
+}  // namespace xpu3

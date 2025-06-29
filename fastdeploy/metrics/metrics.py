@@ -21,14 +21,14 @@ import os
 import shutil
 from typing import Set, TYPE_CHECKING
 
-from prometheus_client import Gauge, Histogram, multiprocess, CollectorRegistry, generate_latest
+from prometheus_client import Gauge, Histogram, multiprocess, CollectorRegistry, generate_latest, Counter
 from prometheus_client.registry import Collector
 
+from fastdeploy.metrics import build_1_2_5_buckets
 from fastdeploy.metrics.work_metrics import work_process_metrics
-from fastdeploy.utils import api_server_logger
 
 if TYPE_CHECKING:
-    from prometheus_client import Gauge, Histogram
+    from prometheus_client import Gauge, Histogram, Counter
 
 
 def cleanup_prometheus_files(is_main):
@@ -78,7 +78,7 @@ class SimpleCollector(Collector):
                     Metric: Prometheus Metric objects that are not excluded.
                 """
         for metric in self.base_registry.collect():
-            if metric.name not in self.exclude_names:
+            if not any(name.startswith(metric.name) for name in self.exclude_names):
                 yield metric
 
 
@@ -107,6 +107,8 @@ REQUEST_LATENCY_BUCKETS = [
 ]
 
 
+
+
 class MetricsManager:
     """Prometheus Metrics Manager handles all metric updates """
 
@@ -118,6 +120,12 @@ class MetricsManager:
     time_per_output_token: 'Histogram'
     request_inference_time: 'Histogram'
     request_queue_time: 'Histogram'
+    gpu_cache_usage_perc: 'Gauge'
+    generation_tokens_total: 'Counter'
+    request_prefill_time: 'Histogram'
+    request_decode_time: 'Histogram'
+    request_generation_tokens: 'Histogram'
+    request_success_total: 'Counter'
 
     # 定义所有指标配置
     METRICS = {
@@ -165,6 +173,49 @@ class MetricsManager:
             'kwargs': {
                 'buckets': REQUEST_LATENCY_BUCKETS
             }
+        },
+        'gpu_cache_usage_perc': {
+            'type': Gauge,
+            'name': 'fastdeploy:gpu_cache_usage_perc',
+            'description': 'GPU KV-cache usage. 1 means 100 percent usage',
+            'kwargs': {}
+        },
+
+        'generation_tokens_total': {
+            'type': Counter,
+            'name': 'fastdeploy:generation_tokens_total',
+            'description': 'Total number of generation tokens processed',
+            'kwargs': {}
+        },
+        'request_prefill_time': {
+            'type': Histogram,
+            'name': 'fastdeploy:request_prefill_time_seconds',
+            'description': 'Time spent in prefill phase (from preprocess start to preprocess end)',
+            'kwargs': {
+                'buckets': REQUEST_LATENCY_BUCKETS
+            }
+        },
+        'request_decode_time': {
+            'type': Histogram,
+            'name': 'fastdeploy:request_decode_time_seconds',
+            'description': 'Time spent in decode phase (from first token to last token)',
+            'kwargs': {
+                'buckets': REQUEST_LATENCY_BUCKETS
+            }
+        },
+        'request_generation_tokens': {
+            'type': Histogram,
+            'name': 'fastdeploy:request_generation_tokens',
+            'description': 'Number of generation tokens processed.',
+            'kwargs': {
+                'buckets': build_1_2_5_buckets(33792)
+            }
+        },
+        'request_success_total': {
+            'type': Counter,
+            'name': 'fastdeploy:request_success_total',
+            'description': 'Total number of successfully processed requests',
+            'kwargs': {}
         }
     }
 
@@ -184,6 +235,9 @@ class MetricsManager:
             registry.register(getattr(self, metric_name))
         if workers == 1:
             registry.register(work_process_metrics.e2e_request_latency)
+            registry.register(work_process_metrics.request_params_max_tokens)
+            registry.register(work_process_metrics.prompt_tokens_total)
+            registry.register(work_process_metrics.request_prompt_tokens)
 
     @classmethod
     def get_excluded_metrics(cls) -> Set[str]:

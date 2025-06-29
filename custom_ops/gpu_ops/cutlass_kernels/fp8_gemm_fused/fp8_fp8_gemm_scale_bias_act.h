@@ -15,11 +15,12 @@
 #pragma once
 
 #include "fp8_common.h"
+#include "fuse_gemm_gelu_template.h"
 #include "fuse_gemm_noact_template.h"
 #include "fuse_gemm_relu_template.h"
-#include "fuse_gemm_gelu_template.h"
 
 #include "fuse_block_gemm_act_template_3x.h"
+#include "fuse_gemm_act_template_3x.h"
 
 bool fp8_fp8_gemm_scale_bias_act(GemmEpilogueAllParams params);
 

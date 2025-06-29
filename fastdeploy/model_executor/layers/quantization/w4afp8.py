@@ -23,16 +23,21 @@ from .quant_base import QuantConfigBase, QuantMethodBase
 
 QUANT_SCALING_FACTOR = 448
 
+
 class W4AFP8Config(QuantConfigBase):
     """
     quantization config for weight 4bits and activation fp8
     """
+
     def __init__(self, weight_scale_dict, act_scale_dict) -> None:
         super().__init__()
         self.weight_scale_dict = weight_scale_dict
         self.act_scale_dict = act_scale_dict
+        self.quant_max_bound = 448
+        self.quant_min_bound = -448
+        self.quant_round_type = 1
 
-    def get_name(self) -> str:
+    def name(self) -> str:
         return "w4afp8"
 
     @classmethod
@@ -49,6 +54,7 @@ class W4AFP8LinearMethod(QuantMethodBase):
     """
     W4 AFP8 quant method for linear
     """
+
     def __init__(
         self,
         quant_config: W4AFP8Config,
@@ -57,6 +63,9 @@ class W4AFP8LinearMethod(QuantMethodBase):
         self.quant_config = quant_config
 
     def create_weights(self, layer):
+        layer.linear_weight_shape.reverse()
+        layer.linear_weight_shape[0] //= 2
+        layer.weight_dtype = "int8"
         pass
 
     def process_loaded_weights(self, layer, weights) -> None:
@@ -78,11 +87,11 @@ class W4AFP8LinearMethod(QuantMethodBase):
             layer.linear_weight_scale,
             zero_points=None,
             bias=layer.linear_bias if layer.add_bias else None,
-            out_scale=self.quant_config.weight_scale_dict.get(
-                layer.prefix + ".weight_quanter") /
-            (self.quant_config.act_scale_dict.get(layer.prefix +
-                                                  ".activation_quanter") *
-             QUANT_SCALING_FACTOR * QUANT_SCALING_FACTOR),
+            out_scale=self.quant_config.weight_scale_dict.get(layer.prefix +
+                                                              ".weight_scale")
+            / (self.quant_config.act_scale_dict.get(layer.prefix +
+                                                    ".activation_scale") *
+               QUANT_SCALING_FACTOR * QUANT_SCALING_FACTOR),
             groupsize=0,
             out_dtype=layer._dtype,
         )

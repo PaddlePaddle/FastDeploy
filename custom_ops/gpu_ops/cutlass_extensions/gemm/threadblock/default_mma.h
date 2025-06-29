@@ -77,6 +77,7 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////
+
 /// Specialization for row-major output (OperatorClass TensorOp), fp16 activation & int4 weight, mma pipelined (stage=2)
 template <
     /// Layout type for A matrix operand
@@ -125,6 +126,7 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////
+
 /// Specialization for row-major output (OperatorClass TensorOp), fp16 activation & int8 weight, mma multistage
 /// (stage>=3)
 template <
@@ -148,7 +150,7 @@ template <
     typename InstructionShape,
     /// Operation performed by GEMM
     typename Operator,
-    ///
+    /// Number of stages used in the multistage mainloop
     int kStages,
     /// Shared memory clear option
     SharedMemoryClearOption SharedMemoryClear>
@@ -179,6 +181,7 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////
+
 /// Specialization for row-major output (OperatorClass TensorOp), fp16 activation & int4 weight, mma multistage
 /// (stage>=3)
 template <
@@ -234,6 +237,7 @@ public:
 
 #ifdef ENABLE_FP8
 ////////////////////////////////////////////////////////////////////////////////
+
 /// Specialization for row-major output (OperatorClass TensorOp), fp8 activation & int4 weight, mma multistage
 /// (stage>=3)
 template <
@@ -344,6 +348,131 @@ struct DefaultMma<half_t, LayoutA, kAlignmentA, half_t, LayoutB, kAlignmentB, El
     using ThreadblockMma = cutlass::gemm::threadblock::MmaMultistage<typename MmaCore::Shape, IteratorA,
         typename MmaCore::SmemIteratorA, MmaCore::kCacheOpA, IteratorB, typename MmaCore::SmemIteratorB,
         MmaCore::kCacheOpB, ElementAccumulator, layout::RowMajor, typename MmaCore::MmaPolicy, 2>;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+
+/// Specialization for row-major output (OperatorClass TensorOp), fbf16 activation & int2 weight, mma multistage
+
+template <
+    /// Layout type for A matrix operand
+    typename LayoutA,
+    /// Access granularity of A matrix in units of elements
+    int kAlignmentA,
+    /// Layout type for B matrix operand
+    typename LayoutB,
+    /// Access granularity of B matrix in units of elements
+    int kAlignmentB,
+    /// Element type for internal accumulation
+    typename ElementAccumulator,
+    /// Tag indicating architecture to tune for
+    typename ArchTag,
+    /// Threadblock-level tile size (concept: GemmShape)
+    typename ThreadblockShape,
+    /// Warp-level tile size (concept: GemmShape)
+    typename WarpShape,
+    /// Instruction-level tile size (concept: GemmShape)
+    typename InstructionShape,
+    /// Operation performed by GEMM
+    typename Operator>
+struct DefaultMma<cutlass::half_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB, ElementAccumulator,
+    layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape, WarpShape, InstructionShape, 2, Operator>
+{
+    static cutlass::arch::CacheOperation::Kind const CacheOpA =
+        ((sizeof_bits<half_t>::value * kAlignmentA) == 128) ? cutlass::arch::CacheOperation::Global
+            : cutlass::arch::CacheOperation::Always;
+
+    static cutlass::arch::CacheOperation::Kind const CacheOpB =
+        ((sizeof_bits<half_t>::value * kAlignmentB) == 128) ? cutlass::arch::CacheOperation::Global
+            : cutlass::arch::CacheOperation::Always;
+
+    // Define the MmaCore components
+    using MmaCore =
+        typename cutlass::gemm::threadblock::DefaultMmaCore<ThreadblockShape, WarpShape, InstructionShape, half_t,
+            LayoutA, half_t, LayoutB, ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, 3, Operator,
+            false, CacheOpA, CacheOpB>;
+
+    // Define iterators over tiles from the A operand
+    using ThreadMapA = typename MmaCore::IteratorThreadMapA;
+    using AccessTypeA = cutlass::Array<half_t, kAlignmentA>;
+    using IteratorA = cutlass::transform::threadblock::PredicatedTileAccessIterator<
+          cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>, half_t, LayoutA, 1, ThreadMapA,
+        AccessTypeA>;
+
+    // Define iterators over tiles from the B operand
+    using ThreadMapB = typename MmaCore::IteratorThreadMapB;
+    using AccessTypeB = cutlass::Array<half_t, kAlignmentB>;
+    using IteratorB = cutlass::transform::threadblock::PredicatedTileAccessIterator<
+        cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>, half_t, LayoutB, 0, ThreadMapB,
+        AccessTypeB>;
+
+    // Define the threadblock-scoped multistage matrix multiply
+    using ThreadblockMma = cutlass::gemm::threadblock::Wint2xMmaMultistage<typename MmaCore::Shape, IteratorA,
+        typename MmaCore::SmemIteratorA, MmaCore::kCacheOpA, IteratorB, typename MmaCore::SmemIteratorB,
+        MmaCore::kCacheOpB, ElementAccumulator, layout::RowMajor, typename MmaCore::MmaPolicy, 2>;
+};
+
+template <
+    /// Layout type for A matrix operand
+    typename LayoutA,
+    /// Access granularity of A matrix in units of elements
+    int kAlignmentA,
+    /// Layout type for B matrix operand
+    typename LayoutB,
+    /// Access granularity of B matrix in units of elements
+    int kAlignmentB,
+    /// Element type for internal accumulation
+    typename ElementAccumulator,
+    /// Tag indicating architecture to tune for
+    typename ArchTag,
+    /// Threadblock-level tile size (concept: GemmShape)
+    typename ThreadblockShape,
+    /// Warp-level tile size (concept: GemmShape)
+    typename WarpShape,
+    /// Instruction-level tile size (concept: GemmShape)
+    typename InstructionShape,
+    /// Operation performed by GEMM
+    typename Operator,
+    /// Number of stages used in the multistage mainloop
+    int kStages,
+    /// Shared memory clear option
+    SharedMemoryClearOption SharedMemoryClear>
+struct DefaultMma<half_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmentB, ElementAccumulator,
+    layout::RowMajor, arch::OpClassTensorOp, ArchTag, ThreadblockShape, WarpShape, InstructionShape, kStages, Operator,
+    false, SharedMemoryClear>
+{
+    static cutlass::arch::CacheOperation::Kind const CacheOpA =
+        ((sizeof_bits<half_t>::value * kAlignmentA) == 128) ? cutlass::arch::CacheOperation::Global
+            : cutlass::arch::CacheOperation::Always;
+
+    static cutlass::arch::CacheOperation::Kind const CacheOpB =
+        ((sizeof_bits<half_t>::value * kAlignmentB) == 128) ? cutlass::arch::CacheOperation::Global
+            : cutlass::arch::CacheOperation::Always;
+
+    // Define the MmaCore components
+    using MmaCore =
+        typename cutlass::gemm::threadblock::DefaultMmaCore<ThreadblockShape, WarpShape, InstructionShape, half_t,
+            LayoutA, half_t, LayoutB, ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, kStages, Operator,
+            false, CacheOpA, CacheOpB>;
+
+    // Define iterators over tiles from the A operand
+    using ThreadMapA = typename MmaCore::IteratorThreadMapA;
+    using AccessTypeA = cutlass::Array<half_t, kAlignmentA>;
+    using IteratorA = cutlass::transform::threadblock::PredicatedTileAccessIterator<
+          cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>, half_t, LayoutA, 1, ThreadMapA,
+        AccessTypeA>;
+
+    // Define iterators over tiles from the B operand
+    using ThreadMapB = typename MmaCore::IteratorThreadMapB;
+    using AccessTypeB = cutlass::Array<half_t, kAlignmentB>;
+    using IteratorB = cutlass::transform::threadblock::PredicatedTileAccessIterator<
+        cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>, half_t, LayoutB, 0, ThreadMapB,
+        AccessTypeB>;
+
+    // Define the threadblock-scoped multistage matrix multiply
+    using ThreadblockMma = cutlass::gemm::threadblock::Wint2xMmaMultistage<typename MmaCore::Shape, IteratorA,
+        typename MmaCore::SmemIteratorA, MmaCore::kCacheOpA, IteratorB, typename MmaCore::SmemIteratorB,
+        MmaCore::kCacheOpB, ElementAccumulator, layout::RowMajor, typename MmaCore::MmaPolicy, kStages, SharedMemoryClear>;
 };
 
 } // namespace threadblock

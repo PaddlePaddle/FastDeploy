@@ -15,7 +15,8 @@
 """
 from __future__ import annotations
 
-from typing import List, Tuple, Dict, Optional
+import copy
+import multiprocessing
 import os
 import re
 import signal
@@ -26,50 +27,42 @@ import time
 import traceback
 import uuid
 import weakref
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+import paddle
 import zmq
 from tqdm import tqdm
 
 from fastdeploy.engine.args_utils import EngineArgs
+from fastdeploy.engine.expert_service import start_expert_service
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.input.preprocess import InputPreprocessor
-from fastdeploy.inter_communicator import (EngineWorkerQueue, IPCSignal,
-                                           ZmqClient)
+from fastdeploy.inter_communicator import (EngineCacheQueue, EngineWorkerQueue,
+                                           IPCSignal, ZmqClient)
+from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.output.token_processor import (TokenProcessor,
                                                WarmUpTokenProcessor)
+from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, console_logger, llm_logger
 
 
 class LLMEngine(object):
     """
-    Main engine class for managing Large Language Model (LLM) inference operations.
-    
-    This class handles the complete lifecycle of LLM inference including:
-    - Initialization and configuration
-    - Request processing and scheduling
-    - Resource management
-    - Communication with worker processes
-    - Token generation and output handling
-    
-    Key Components:
-    - Scheduler: Manages request queue and task scheduling
-    - ResourceManager: Handles GPU memory allocation and block management
-    - TokenProcessor: Processes generated tokens and handles streaming output
-    - WorkerQueue: Facilitates communication between engine and worker processes
-    
+    Engine class responsible for managing the Large Language Model (LLM) operations.
+
     Attributes:
-        cfg (Config): Engine configuration parameters
-        scheduler (BaseScheduler): Task scheduler instance
-        input_processor (InputPreprocessor): Preprocesses input data
-        resource_manager (ResourceManager): Manages GPU resources
-        token_processor (TokenProcessor): Handles token generation
-        engine_worker_queue (EngineWorkerQueue): Worker communication queue
-        is_started (bool): Engine running status flag
-        do_profile (int): Profiling mode flag (0=disabled, 1=enabled)
-        worker_proc (subprocess.Popen): Worker process handle
-        zmq_server (ZmqClient): ZMQ communication server
+        cfg (Config): Configuration object containing all the parameters.
+        cached_generated_tokens (queue.Queue): Queue to store generated tokens.
+        scheduler (LocalScheduler or GlobalScheduler): Scheduling tasks.
+        input_processor (InputPreprocessor): Preprocessor for input data.
+        resource_manager (ResourceManager): Manager for resource allocation.
+        token_processor (TokenProcessor): Processor for token generation.
+        engine_worker_queue (EngineWorkerQueue): Queue for communication between engine and workers.
+        is_started (bool): Flag indicating if the engine has started.
+        do_profile (int): Flag indicating if profiling is enabled.
     """
 
     @classmethod
@@ -90,55 +83,93 @@ class LLMEngine(object):
 
     def __init__(self, cfg):
         """
-        Initialize the LLM engine with given configuration.
-        
-        Note: Prefer using from_engine_args() for most use cases as it provides
-        better configuration validation.
-        
-        Sets up:
-        - Task scheduler based on configuration
-        - Input preprocessing pipeline  
-        - Resource management system
-        - Token generation processor
-        - Worker communication queue
-        - Profiling and monitoring systems
-        
+        Initializes the LLMEngine with the provided configuration.
+
         Args:
-            cfg (Config): Complete engine configuration including:
-                         - Model parameters
-                         - Parallelism settings
-                         - Memory allocation
-                         - Performance tuning options
-                         
-        Raises:
-            ValueError: If required configuration parameters are missing or invalid
+            cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
+        self.running = True
         self.scheduler = cfg.scheduler_config.scheduler()
 
-        self.input_processor = InputPreprocessor(cfg.tokenizer, cfg.enable_mm)
-        self.resource_manager = ResourceManager(
-            cfg.max_num_seqs, cfg.cache_config)
-
-        self.token_processor = TokenProcessor(
-            cfg=self.cfg, cached_generated_tokens=self.scheduler)
-        self.token_processor.set_resource_manager(self.resource_manager)
-        time.sleep(1)  # TODO: Investigate the purpose of this sleep.
+        self.input_processor = InputPreprocessor(cfg.tokenizer,
+                                                 cfg.reasoning_parser,
+                                                 cfg.limit_mm_per_prompt,
+                                                 cfg.mm_processor_kwargs,
+                                                 cfg.enable_mm)
 
         address = ('0.0.0.0', self.cfg.engine_worker_queue_port)
-        self.engine_worker_queue = EngineWorkerQueue(
+        self.engine_worker_queue_server = EngineWorkerQueue(
             address=address,
             is_server=True,
-            num_client=self.cfg.tensor_parallel_size)
+            num_client=self.cfg.tensor_parallel_size,
+            local_data_parallel_size=self.cfg.parallel_config.
+            data_parallel_size)
+
+        self.engine_worker_queue = EngineWorkerQueue(
+            address=address,
+            is_server=False,
+            num_client=self.cfg.tensor_parallel_size,
+            client_id=0,
+            local_data_parallel_id=0)
+
+        if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != 'mixed':
+            self.cache_task_queue = EngineCacheQueue(
+                address=('127.0.0.1', self.cfg.cache_config.cache_queue_port),
+                authkey=b'cache_queue_service',
+                is_server=True,
+                num_client=self.cfg.tensor_parallel_size,
+                client_id=-1,
+                local_data_parallel_size=self.cfg.parallel_config.
+                data_parallel_size)
+
+        self.resource_manager = ResourceManager(cfg.max_num_seqs, cfg,
+                                                cfg.tensor_parallel_size,
+                                                cfg.splitwise_role)
+
+        os.environ['INFERENCE_MSG_QUEUE_ID'] = str(
+            self.cfg.engine_worker_queue_port)
+
+        self.split_connector = SplitwiseConnector(cfg, self.scheduler,
+                                                  self.engine_worker_queue,
+                                                  self.resource_manager)
+
+        self.token_processor = TokenProcessor(
+            cfg=self.cfg,
+            cached_generated_tokens=self.scheduler,
+            engine_worker_queue=self.engine_worker_queue,
+            split_connector=self.split_connector)
+        self.token_processor.set_resource_manager(self.resource_manager)
 
         self.is_started = False
+
+        self.waiting_requests = []
 
         if self.cfg.cache_config.num_gpu_blocks_override is None:
             self.do_profile = 1
         else:
             self.do_profile = 0
 
+        self.partial_chunked_tokens = [0] * (
+            self.cfg.max_num_partial_prefills + 1)
+        for idx in range(1, self.cfg.max_num_partial_prefills + 1):
+            self.partial_chunked_tokens[idx] = (self.cfg.max_num_batched_tokens // idx) \
+                // self.cfg.cache_config.block_size * self.cfg.cache_config.block_size
+
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
+
+        self.guided_decoding_checker = None
+        if self.cfg.guided_decoding_backend != "off":
+            self.guided_decoding_checker = schema_checker(
+                self.cfg.guided_decoding_backend,
+                disable_any_whitespace=self.cfg.disable_any_whitespace,
+            )
+
+    def reset_scheduler(self):
+        """
+        Reset the scheduler to its initial state.
+        """
+        self.scheduler.reset()
 
     def start(self, api_server_pid=None):
         """
@@ -162,6 +193,15 @@ class LLMEngine(object):
             self.zmq_server.create_router()
             time.sleep(3)
 
+        if self.do_profile == 0 and (
+                self.cfg.cache_config.enable_prefix_caching \
+                or self.cfg.splitwise_role != "mixed"):
+            device_ids = self.cfg.device_ids.split(",")
+            self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
+                self.cfg.cache_config, self.cfg.tensor_parallel_size,
+                device_ids, self.cfg.engine_worker_queue_port,
+                self.ipc_signal_suffix)
+
         self.worker_proc = self._start_worker_service()
         console_logger.info("Waitting worker processes ready...")
         time.sleep(5)
@@ -183,27 +223,56 @@ class LLMEngine(object):
         self.token_processor.tasks_queue = self.engine_worker_queue
 
         self.insert_task_to_worker_thread = threading.Thread(
-            target=self._insert_task_to_worker, args=())
-        self.insert_task_to_worker_thread.daemon = True
+            target=self._insert_task_to_worker, daemon=True)
         self.insert_task_to_worker_thread.start()
 
         if self.api_server_pid is not None:
             self.insert_task_to_scheduler_thread = threading.Thread(
-                target=self._insert_zmq_task_to_scheduler, args=())
-            self.insert_task_to_scheduler_thread.daemon = True
+                target=self._insert_zmq_task_to_scheduler, daemon=True)
             self.insert_task_to_scheduler_thread.start()
 
             self.receive_output_thread = threading.Thread(
-                target=self._zmq_send_generated_tokens, args=())
-            self.receive_output_thread.daemon = True
+                target=self._zmq_send_generated_tokens, daemon=True)
             self.receive_output_thread.start()
 
         # Start TokenProcessor thread
         self.token_processor.run()
 
-        # self.start_push_sender_thread()
         if self.do_profile:
             self._stop_profile()
+
+        if self.cfg.splitwise_role != "mixed":
+            # 单机逻辑
+            self.engine_worker_queue.available_prefill_instances.put(1)
+            self.split_mode_get_tasks()
+            if self.cfg.scheduler_config.name == "splitwise":
+                self.splitwise_receive_thread = threading.Thread(
+                    target=self.split_connector.start_receiver, args=())
+                self.splitwise_receive_thread.daemon = True
+                self.splitwise_receive_thread.start()
+
+            self.cfg.init_cache_info()
+
+            role = self.cfg.splitwise_role
+            host_ip = self.cfg.host_ip
+            disaggregate = self.cfg.disaggregate_info
+            if self.cfg.scheduler_config.name == "splitwise":
+                self.scheduler.start(role, host_ip, disaggregate)
+
+            time.sleep(1)
+
+            if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+                self.dp_processed = []
+                for i in range(1, self.cfg.parallel_config.data_parallel_size):
+                    time.sleep(1)
+                    self.dp_processed.append(
+                        multiprocessing.Process(target=start_expert_service,
+                                                args=(self.cfg, i,
+                                                      self.ipc_signal_suffix)))
+                    llm_logger.info(f"Engine is initialized successfully with {self.cfg.tensor_parallel_size}" \
+                + " data parallel id {}".format(i))
+                    self.dp_processed[-1].start()
+
         console_logger.info(
             "Worker processes are launched with {} seconds.".format(
                 time.time() - start_time))
@@ -214,56 +283,30 @@ class LLMEngine(object):
         Recieve output for zmq
         """
         assert self.api_server_pid is not None
-        while True:
+        while self.running:
             try:
-                def get_results_handler(request_ids):
-                    results = dict()
-                    try:
-                        results = self.scheduler.get_results(request_ids)
-                        for req_id, contents in results.items():
-                            results[req_id] = [data.to_dict()
-                                               for data in contents]
-                    except Exception as e:
-                        llm_logger.error(f"Get results handler error: {e}")
-                    return results
-
-                self.zmq_server.send_multipart2(get_results_handler)
+                results = self.scheduler.get_results()
+                for request_id, contents in results.items():
+                    for result in contents:
+                        self.zmq_server.send_multipart(request_id, result)
             except Exception as e:
                 llm_logger.error("Unexcepted error happend: {}, {}".format(
                     e, str(traceback.format_exc())))
 
-    def _get_generated_result(self, request_id):
+    def _get_generated_result(self):
         """
         Get result from scheduler, this function is called by generate()
         which is only used in offline inference.
         """
-        try:
-            acc = None
-            while True:
-                results = self.scheduler.get_results([request_id])
-                for _, contents in results.items():
-                    for result in contents:
-                        if acc is None:
-                            acc = result
-                        else:
-                            acc.add(result)
-
-                        if result.finished:
-                            yield acc
-                            return
-
-                        yield result
-
-        except Exception as e:
-            llm_logger.error("Unexcepted error happend: {}, {}".format(
-                e, str(traceback.format_exc())))
+        return self.scheduler.get_results()
 
     def _insert_task_to_worker(self):
         """
         Insert task to engine thread, monitor scheduler request queue.
         if the engine has resource, insert task to engine
         """
-        while True:
+        current_id = -1
+        while self.running:
             try:
                 if self.resource_manager.available_batch() == 0:
                     time.sleep(0.001)
@@ -271,30 +314,46 @@ class LLMEngine(object):
                 if self.engine_worker_queue.num_tasks() > 0:
                     time.sleep(0.001)
                     continue
+                if self.exist_prefill_task_signal.value[0] > 0:
+                    if self.cfg.splitwise_role == "mixed" or \
+                        self.split_connector.has_splitwise_tasks():
+                        time.sleep(0.005)
+                        continue
+                if self.engine_worker_queue.num_cache_infos() > 0:
+                    time.sleep(0.001)
+                    continue
+                if len(self.split_connector.current_request_ids) > 0:
+                    time.sleep(0.001)
+                    continue
 
                 num_prefill_batch = min(
                     int(self.resource_manager.available_batch()),
                     self.cfg.max_prefill_batch)
 
-                if self.cfg.enable_chunked_prefill:
-                    cur_max_num_batched_tokens = self.cfg.max_model_len * num_prefill_batch
-                else:
-                    cur_max_num_batched_tokens = self.cfg.max_num_batched_tokens
-
+                self.resource_manager.check_and_free_block_tables()
                 tasks = self.scheduler.get_requests(
                     available_blocks=self.resource_manager.available_block_num(
                     ),
                     block_size=self.cfg.cache_config.block_size,
                     reserved_output_blocks=self.cfg.cache_config.
                     enc_dec_block_num,
-                    max_num_batched_tokens=cur_max_num_batched_tokens,
+                    max_num_batched_tokens=self.cfg.max_num_batched_tokens,
                     batch=num_prefill_batch)
 
                 if len(tasks) == 0:
                     time.sleep(0.001)
                     continue
 
-                self.insert_tasks(tasks)
+                current_id = (current_id + 1) % 100003
+                if self.cfg.splitwise_role != "mixed":
+                    llm_logger.info("Inserting splitwise tasks")
+                    self.split_connector.send_splitwise_tasks(
+                        tasks, current_id)
+
+                self.insert_tasks(tasks, current_id)
+
+                main_process_metrics.num_requests_waiting.dec(len(tasks))
+                main_process_metrics.num_requests_running.inc(len(tasks))
             except Exception as e:
                 err_msg = "Error happend while insert task to engine: {}, {}.".format(
                     e, str(traceback.format_exc()))
@@ -305,7 +364,7 @@ class LLMEngine(object):
             return
 
         added_requests: Dict[str, int] = dict()
-        while True:
+        while self.running:
             try:
                 block = True if len(added_requests) == 0 else False
                 if not self.cfg.enable_mm:
@@ -317,13 +376,25 @@ class LLMEngine(object):
                         "Engine stops inserting zmq task into scheduler")
                     break
 
-                request = None
+                request, insert_task = None, []
+                results: List[Tuple[str, Optional[str]]] = list()
                 if data:
                     request = Request.from_dict(data)
-                    llm_logger.info(f"Receive request: {request}")
+                    llm_logger.debug(f"Receive request: {request}")
 
-                results: List[Tuple[str, Optional[str]]] = self.scheduler.put_requests(
-                    [] if request is None else [request])
+                    err_msg = None
+                    if self.guided_decoding_checker is not None:
+                        request, err_msg = self.guided_decoding_checker.schema_format(
+                            request)
+
+                    if err_msg is not None:
+                        llm_logger.error(err_msg)
+                        results.append((request.request_id, err_msg))
+                    else:
+                        insert_task.append(request)
+
+                response = self.scheduler.put_requests(insert_task)
+                results.extend(response)
 
                 if request:
                     if request.request_id not in added_requests:
@@ -335,23 +406,23 @@ class LLMEngine(object):
                     if added_requests[request_id] == 0:
                         added_requests.pop(request_id)
 
-                if failed is None:
-                    continue
+                    if failed is None:
+                        main_process_metrics.num_requests_waiting.inc(1)
+                        continue
 
-                error_result = RequestOutput(request_id=request_id,
-                                             finished=True,
-                                             error_code=500,
-                                             error_msg=failed)
-                # Since the request is not in scheduler
-                # Send result by zmq directly
-                self.zmq_server.send_multipart(
-                    request.request_id, error_result)
+                    error_result = RequestOutput(request_id=request_id,
+                                                 finished=True,
+                                                 error_code=500,
+                                                 error_msg=failed)
+                    # Since the request is not in scheduler
+                    # Send result by zmq directly
+                    self.zmq_server.send_multipart(request_id, error_result)
             except Exception as e:
                 llm_logger.error(
-                    f"Error happend while receving new request from zmq, details={e}"
-                )
+                    f"Error happend while receving new request from zmq, details={e}, "
+                    f"traceback={traceback.format_exc()}")
 
-    def add_requests(self, task, sampling_params=None):
+    def add_requests(self, task, sampling_params=None, **kwargs):
         """
         Add a new request to the queue.
 
@@ -365,17 +436,25 @@ class LLMEngine(object):
         # TODO 输入输出长度确认
 
         request = Request.from_dict(task)
+        llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
             request.sampling_params = sampling_params
         request.preprocess_start_time = time.time()
-        request = self.data_processor.process_request(request, self.cfg.max_model_len)
 
+        enable_thinking = None
+        if kwargs is not None:
+            enable_thinking = kwargs.get("enable_thinking", None)
+        request = self.data_processor.process_request(request,
+                                                      self.cfg.max_model_len, enable_thinking=enable_thinking)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
         input_ids_len = request.prompt_token_ids_len
         request.set(
             "max_tokens",
             min(self.cfg.max_model_len - input_ids_len,
                 request.get("max_tokens")))
+        if request.get("reasoning_max_tokens") is None:
+            default_reasoning_max_tokens = max(int(request.get("max_tokens") * 0.8), 1)
+            request.set("reasoning_max_tokens", default_reasoning_max_tokens)
         min_tokens = request.get("min_tokens")
         if input_ids_len + min_tokens >= self.cfg.max_model_len:
             error_msg = (
@@ -391,6 +470,13 @@ class LLMEngine(object):
             llm_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 
+        if self.guided_decoding_checker is not None:
+            request, err_msg = self.guided_decoding_checker.schema_format(
+                request)
+            if err_msg is not None:
+                llm_logger.error(err_msg)
+                raise EngineError(err_msg, error_code=400)
+
         request.preprocess_end_time = time.time()
         self.scheduler.put_requests([request])
         llm_logger.info(
@@ -404,10 +490,258 @@ class LLMEngine(object):
         # get eos_token_id
         pass
 
-    def insert_tasks(self, tasks):
+    def split_mode_get_tasks(self):
+        """
+        Split mode get tasks
+        """
+
+        def receiver_loop():
+            while self.running:
+                try:
+
+                    processed_indices = []
+                    for idx, task in enumerate(self.waiting_requests):
+                        if self.resource_manager.is_resource_sufficient(
+                                task.prompt_token_ids_len):
+                            self.insert_tasks([task])
+                            llm_logger.info(
+                                f"Resource available, processing task {task.request_id}"
+                            )
+                            processed_indices.append(idx)
+                        else:
+                            llm_logger.debug(
+                                f"Still waiting for resources {task.request_id}"
+                            )
+                            break
+
+                    for idx in sorted(processed_indices, reverse=True):
+                        self.waiting_requests.pop(idx)
+
+                    if not self.engine_worker_queue.disaggregate_queue_empty():
+                        items = self.engine_worker_queue.get_disaggregated_tasks(
+                        )
+                        for item in items:
+                            role = item[0]
+                            tasks = item[1]
+
+                            if role == "prefill":
+                                for task in tasks:
+                                    task.max_tokens = task.min_tokens = 2
+                                self.insert_tasks(tasks)
+
+                            elif role == "decode":
+                                if hasattr(tasks[0], 'finished'):
+                                    if not isinstance(tasks, list):
+                                        tasks = [tasks]
+                                    for task in tasks:
+                                        task.finished = False
+                                    self.insert_tasks(tasks, allocated=True)
+
+                                    if self.cfg.innode_prefill_ports is not None:
+                                        self.scheduler.put_results(tasks)
+
+                                else:
+                                    if len(self.waiting_requests):
+                                        llm_logger.info(
+                                            f"Waiting for resource for task {tasks[0].request_id}"
+                                        )
+                                        self.waiting_requests.extend(tasks)
+                                    else:
+                                        new_waiting = []
+                                        for task in tasks:
+                                            if self.resource_manager.is_resource_sufficient(
+                                                    task.prompt_token_ids_len):
+                                                self.insert_tasks([task])
+                                            else:
+                                                new_waiting.append(task)
+
+                                        if new_waiting:
+                                            self.waiting_requests.extend(
+                                                new_waiting)
+                                            llm_logger.info(
+                                                f"Added {len(new_waiting)} tasks to waiting queue"
+                                            )
+
+                    else:
+                        time.sleep(0.001)
+
+                except Exception as e:
+                    llm_logger.error(f"Error in main loop: {e}")
+                    time.sleep(0.1)
+
+        threading.Thread(target=receiver_loop, daemon=True).start()
+
+    def update_requests_chunk_size(self, requests):
+        """
+        update each request's chunk size info
+        """
+
+        def update_tokens(idx, chunk_size, update_chunk=False):
+            nonlocal remain_batched_tokens, chunk_request_num
+            if update_chunk:
+                requests_chunk[idx][-1] += chunk_size
+            else:
+                requests_chunk[idx].append(chunk_size)
+            remain_batched_tokens -= chunk_size
+            current_request_size[idx] -= chunk_size
+            if current_request_size[idx] <= 0:
+                chunk_request_num -= 1
+
+        if not self.cfg.cache_config.enable_chunked_prefill or len(
+                requests) == 0:
+            return
+
+        current_request_size = [
+            request.prompt_token_ids_len for request in requests
+        ]
+        requests_chunk = [[] for _ in range(len(requests))]
+        chunk_request_num = len(current_request_size)
+        while chunk_request_num >= 1:
+            remain_batched_tokens = self.cfg.max_num_batched_tokens
+            for idx in range(len(current_request_size)):
+                if current_request_size[idx] <= 0:
+                    continue
+                chunk_size = min(
+                    current_request_size[idx],
+                    self.partial_chunked_tokens[chunk_request_num])
+                update_tokens(idx, chunk_size)
+
+            while remain_batched_tokens >= self.cfg.cache_config.block_size:
+                # 当前 max_num_batched_tokens 还有剩余时，优先分配给较短的请求
+                waiting_requests = [
+                    input_lens for input_lens in current_request_size
+                    if input_lens > 0
+                ]
+                if len(waiting_requests) == 0:
+                    break
+
+                available_tokens = remain_batched_tokens // self.cfg.cache_config.block_size * \
+                    self.cfg.cache_config.block_size
+                append_idx = current_request_size.index(min(waiting_requests))
+                chunk_size = min(
+                    current_request_size[append_idx],
+                    self.partial_chunked_tokens[chunk_request_num],
+                    available_tokens)
+                update_tokens(append_idx, chunk_size, update_chunk=True)
+
+        for idx in range(len(requests)):
+            requests[idx].set("prefill_chunk_info", requests_chunk[idx])
+
+    def update_mm_requests_chunk_size(self, requests):
+        """
+        update each multimodal request's chunk size info
+        """
+        if not self.cfg.cache_config.enable_chunked_prefill or len(
+                requests) == 0:
+            return
+
+        for request in requests:
+            inputs = request.multimodal_inputs
+            # 兼容没有图片和视频的情况
+            if inputs["images"] is None:
+                inputs["image_type_ids"] = np.array([], dtype="int32")
+                inputs["grid_thw"] = np.array([], dtype="int64")
+                inputs["images"] = np.array([], dtype="uint8")
+            input_ids = paddle.to_tensor(inputs["input_ids"], dtype="int64")
+            image_type_ids = paddle.to_tensor(inputs["image_type_ids"],
+                                              dtype="int32")
+            image_mask = input_ids == self.data_processor.image_patch_id
+            image_token_sum = paddle.full(shape=[len(input_ids) + 1],
+                                          fill_value=0,
+                                          dtype="int32")
+            image_token_sum[1:] = paddle.cumsum(image_mask.cast("int32"))
+            grid_thw = []
+            for one in inputs["grid_thw"]:
+                if one[0] == 1:
+                    grid_thw.append(one)
+                else:
+                    grid_thw.extend([[2, one[1], one[2]]] * (one[0] // 2))
+            grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
+
+            from fastdeploy.model_executor.ops.gpu import get_mm_split_fuse
+            chunk_image_num, chunk_seq_len = get_mm_split_fuse(
+                input_ids, image_type_ids, image_token_sum, grid_thw,
+                self.data_processor.image_patch_id, len(grid_thw), 0,
+                len(input_ids), 0, self.partial_chunked_tokens[1], 2048)
+
+            grid_thw = grid_thw.numpy().reshape([-1, 3])
+            num_chunks = len(chunk_image_num)
+            chunks_info = []
+            input_ids_st, image_type_ids_st, grid_thw_st, patch_st = 0, 0, 0, 0
+            for idx in range(num_chunks):
+                chunk_input_ids = inputs["input_ids"][
+                    input_ids_st:input_ids_st + chunk_seq_len[idx]]
+                chunk_token_type_ids = inputs["token_type_ids"][
+                    input_ids_st:input_ids_st + chunk_seq_len[idx]]
+                actual_image_num = np.sum(grid_thw[grid_thw_st:grid_thw_st +
+                                                   chunk_image_num[idx], 0])
+                chunk_image_type_ids = inputs["image_type_ids"][
+                    image_type_ids_st:image_type_ids_st + actual_image_num]
+                chunk_grid_thw = grid_thw[grid_thw_st:grid_thw_st +
+                                          chunk_image_num[idx]]
+                chunk_patch_num = np.sum(np.prod(chunk_grid_thw, axis=1))
+                chunk_images = inputs["images"][patch_st:patch_st +
+                                                chunk_patch_num]
+
+                chunks_info.append({
+                    "input_ids":
+                    chunk_input_ids,
+                    "token_type_ids":
+                    chunk_token_type_ids,
+                    "image_type_ids":
+                    chunk_image_type_ids
+                    if chunk_image_type_ids.shape[0] else None,
+                    "grid_thw":
+                    chunk_grid_thw if chunk_grid_thw.shape[0] else None,
+                    "images":
+                    chunk_images if chunk_images.shape[0] else None,
+                    "position_ids":
+                    None
+                })
+
+                input_ids_st += chunk_seq_len[idx]
+                image_type_ids_st += actual_image_num
+                grid_thw_st += chunk_image_num[idx]
+                patch_st += chunk_patch_num
+            request.set("prefill_chunk_info", chunks_info)
+
+    def insert_tasks(self, tasks, current_id=-1, allocated=False):
         """
         Insert tasks to engine.
         """
+        # TODO 返回至 scheduler
+        if allocated:
+            current_tasks = []
+            for task in tasks:
+                cur_task_idx = self.resource_manager.req_dict[task.request_id]
+                del self.resource_manager.req_dict[task.request_id]
+                cur_task = self.resource_manager.tasks_list[cur_task_idx]
+                cur_task.prompt_token_ids[0] = task.outputs.token_ids[0]
+                if self.cfg.speculative_config.method in [
+                        "mtp"
+                ] and self.cfg.splitwise_role == "decode":
+                    cur_task.draft_token_ids = copy.deepcopy(
+                        task.outputs.draft_token_ids)
+                if task.error_code != 200:
+                    self.resource_manager.stop_flags[cur_task_idx] = True
+                    self.resource_manager.tasks_list[cur_task_idx] = None
+                    self.resource_manager._recycle_block_tables(cur_task)
+                    if task.request_id in self.token_processor.tokens_counter:
+                        del self.token_processor.tokens_counter[
+                            task.request_id]
+                    self.scheduler.put_results([task])
+                    llm_logger.warning(
+                        f"{task.request_id} prefill failed with msg:{task.error_msg}, recycle resource."
+                    )
+                    continue
+                self.token_processor.tokens_counter[task.request_id] = 1
+                current_tasks.append(cur_task)
+            self.engine_worker_queue.put_tasks(
+                (current_tasks, self.resource_manager.real_bsz))
+            return True
+
+        self.resource_manager.check_and_free_block_tables()
+
         if not isinstance(tasks, list):
             tasks = [tasks]
 
@@ -425,22 +759,40 @@ class LLMEngine(object):
         req_ids = [t.request_id for t in tasks]
 
         tasks = self.resource_manager.allocate_resources_for_new_tasks(tasks)
+
         if not tasks:
             error_msg = f"The request required resources is exceed the limit, request id={req_ids}."
             llm_logger.error(error_msg)
             raise EngineError(error_msg, error_code=500)
+            return False
 
         self.token_processor.number_of_tasks += len(tasks)
-        token_chunk_size =(self.cfg.max_num_batched_tokens // len(tasks)) // self.cfg.cache_config.block_size * self.cfg.cache_config.block_size
+
+        is_decode = False
+        is_prefill = False
         for i in range(len(tasks)):
+            if tasks[i].disaggregate_info is not None:
+                if tasks[i].disaggregate_info["role"] == "decode":
+                    is_decode = True
+                else:
+                    is_prefill = True
             self.token_processor.number_of_input_tokens += tasks[
                 i].prompt_token_ids_len
 
-            tasks[i].set("token_chunk_size", token_chunk_size)
-
-        llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
-        self.engine_worker_queue.put_tasks(
-            (tasks, self.resource_manager.real_bsz))
+        self.split_connector.send_cache_infos(tasks, current_id)
+        if not is_decode:
+            llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
+            for task in tasks:
+                task.inference_start_time = time.time()
+            if not is_prefill:
+                if not self.cfg.enable_mm:
+                    self.update_requests_chunk_size(tasks)
+                else:
+                    self.update_mm_requests_chunk_size(tasks)
+            self.engine_worker_queue.put_tasks(
+                (tasks, self.resource_manager.real_bsz))
+            if is_prefill and self.cfg.scheduler_config.name != "splitwise":
+                self.engine_worker_queue.available_prefill_instances.put(1)
         return True
 
     def task_is_finished(self, index):
@@ -485,7 +837,8 @@ class LLMEngine(object):
         judge if all worker processes are ready
 
         """
-        if np.sum(self.worker_ready_signal.value) == self.cfg.tp_num_per_node:
+        if np.sum(self.worker_ready_signal.value
+                  ) == self.cfg.worker_num_per_node:
             return True
         return False
 
@@ -493,18 +846,20 @@ class LLMEngine(object):
         """
         Initialize shared memory to indicate engine status
         """
-        # worker_ready_signal 用于engine感知各worker进程是否Ready
-
-        worker_ready_signal_data = np.zeros(
-            shape=[self.cfg.tensor_parallel_size], dtype=np.int32)
-        self.worker_ready_signal = IPCSignal(name="worker_ready_singnal",
+        # worker_ready_signatensor_parallel_size
+        array_size = min(
+            8, self.cfg.tensor_parallel_size *
+            self.cfg.parallel_config.data_parallel_size)
+        worker_ready_signal_data = np.zeros(shape=[array_size], dtype=np.int32)
+        self.worker_ready_signal = IPCSignal(name="worker_ready_signal",
                                              array=worker_ready_signal_data,
                                              dtype=np.int32,
                                              suffix=self.ipc_signal_suffix,
                                              create=True)
 
         # exist_task_signal 用于各worker进程感知是否有新Task需要处理
-        exist_task_signal_data = np.zeros([1], dtype=np.int32)
+        exist_task_signal_data = np.zeros(
+            [self.cfg.parallel_config.data_parallel_size], dtype=np.int32)
         self.exist_task_signal = IPCSignal(name="exist_task_signal",
                                            array=exist_task_signal_data,
                                            dtype=np.int32,
@@ -512,7 +867,8 @@ class LLMEngine(object):
                                            create=True)
 
         # exist_swapped_task_signal 用于engine感知worker中是否存在swapped task
-        exist_swapped_task_signal_data = np.zeros([1], dtype=np.int32)
+        exist_swapped_task_signal_data = np.zeros(
+            [self.cfg.parallel_config.data_parallel_size], dtype=np.int32)
         self.exist_swapped_task_signal = IPCSignal(
             name="exist_swapped_task_signal",
             array=exist_swapped_task_signal_data,
@@ -520,9 +876,18 @@ class LLMEngine(object):
             suffix=self.ipc_signal_suffix,
             create=True)
 
+        # exist_prefill_task_signal 用于各worker进程感知是否进行prefill
+        exist_prefill_task_signal_data = np.zeros([1], dtype=np.int32)
+        self.exist_prefill_task_signal = IPCSignal(
+            name="exist_prefill_task_signal",
+            array=exist_prefill_task_signal_data,
+            dtype=np.int32,
+            suffix=self.ipc_signal_suffix,
+            create=True)
+
         # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
-        worker_healthy_live_recorded_time_array = np.zeros(
-            shape=[self.cfg.tensor_parallel_size], dtype=np.int32)
+        worker_healthy_live_recorded_time_array = np.zeros(shape=[array_size],
+                                                           dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
             array=worker_healthy_live_recorded_time_array,
@@ -531,8 +896,7 @@ class LLMEngine(object):
             create=True)
 
         if self.do_profile:
-            get_profile_block_num = np.zeros([self.cfg.tensor_parallel_size],
-                                             dtype=np.int32)
+            get_profile_block_num = np.zeros([array_size], dtype=np.int32)
             self.get_profile_block_num_signal = IPCSignal(
                 name="get_profile_block_num",
                 array=get_profile_block_num,
@@ -552,20 +916,38 @@ class LLMEngine(object):
         """
         exit sub services
         """
+        self.running = False
+
+        if hasattr(self, "cache_manager_processes"):
+            self.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear(
+            )
+            self.resource_manager.cache_manager.cache_ready_signal.clear()
+            for p in self.cache_manager_processes:
+                llm_logger.info(f"Killing cache manager process {p.pid}")
+                try:
+                    os.killpg(p.pid, signal.SIGTERM)
+                except Exception as e:
+                    print(f"Error extracting file: {e}")
         self.worker_ready_signal.clear()
         self.exist_task_signal.clear()
         self.exist_swapped_task_signal.clear()
         self.worker_healthy_live_signal.clear()
+        self.exist_prefill_task_signal.clear()
         if hasattr(self, "get_profile_block_num_signal"):
             self.get_profile_block_num_signal.clear()
         self.model_weights_status_signal.clear()
         if hasattr(self, "worker_proc") and self.worker_proc is not None:
             try:
                 os.killpg(self.worker_proc.pid, signal.SIGTERM)
-            except:
-                pass
+            except Exception as e:
+                print(f"Error extracting sub services: {e}")
+
+        self.engine_worker_queue.cleanup()
         if hasattr(self, "zmq_server") and self.zmq_server is not None:
             self.zmq_server.close()
+        if hasattr(self, "dp_processed"):
+            for p in self.dp_processed:
+                p.join()
 
     def _setting_environ_variables(self):
         """
@@ -581,8 +963,35 @@ class LLMEngine(object):
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
-            "ELLM_DYNAMIC_MODE": 1,
+            "FLAGS_hardamard_moe_block_size": 128,
+            "FLAGS_max_partition_size": 32768,
         }
+        # environment variables needed by Dy2St
+        variables.update({
+            "SOT_LOG_LEVEL":
+            os.getenv("SOT_LOG_LEVEL", default="0"),
+            "SOT_UNSAFE_CACHE_FASTPATH":
+            os.getenv("SOT_UNSAFE_CACHE_FASTPATH", default="1"),
+            "SOT_ENABLE_0_SIZE_FALLBACK":
+            os.getenv("SOT_ENABLE_0_SIZE_FALLBACK", default="0"),
+            "FLAGS_specialize_device_in_dy2st":
+            os.getenv("FLAGS_specialize_device_in_dy2st", default="1"),
+            "FLAGS_enable_async_fast_gc":
+            os.getenv("FLAGS_enable_async_fast_gc", default="0"),
+            "FLAGS_pir_interpreter_record_stream_for_gc_cache":
+            os.getenv("FLAGS_pir_interpreter_record_stream_for_gc_cache",
+                      default="1"),
+        })
+
+        if self.cfg.splitwise_role != "mixed":
+            variables["FLAGS_use_pd_disaggregation"] = 1
+            # TODO dynamic load environment variable
+            if self.cfg.splitwise_role == "prefill":
+                variables["FLAGS_fmt_write_cache_completed_signal"] = 1
+
+        if self.cfg.enable_mm:
+            variables["FLAGS_max_partition_size"] = 1024
+
         command_prefix = ""
         for k, v in variables.items():
             command_prefix += f"{k}={v} "
@@ -593,14 +1002,21 @@ class LLMEngine(object):
         start gpu worker service
 
         """
+        log_dir = os.getenv("FD_LOG_DIR", default="log")
         command_prefix = self._setting_environ_variables()
         current_file_path = os.path.abspath(__file__)
         current_dir_path = os.path.split(current_file_path)[0]
         # TODO
         uncache_worker_stdout = "" if os.getenv("UNCACHE_WORKER_STDOUT",
                                                 "0") == 1 else "-u"
-        pd_cmd = f"{command_prefix} {sys.executable} {uncache_worker_stdout} -m paddle.distributed.launch "
-        py_script = os.path.join(current_dir_path, "../worker/worker.py")
+        pd_cmd = f"{command_prefix} {sys.executable} {uncache_worker_stdout} -m paddle.distributed.launch"
+        pd_cmd = pd_cmd + f" --log_dir {log_dir}"
+
+        worker_path = "../worker/worker_process.py"
+        if self.cfg.enable_mm:
+            worker_path = "../worker/vl_worker_process.py"
+        py_script = os.path.join(current_dir_path, worker_path)
+
         arguments = (
             f" --nnodes {str(self.cfg.nnode)}"
             f" --devices {self.cfg.device_ids} {py_script}"
@@ -608,6 +1024,7 @@ class LLMEngine(object):
             f" --gpu_memory_utilization {self.cfg.cache_config.gpu_memory_utilization}"
             f" --model_name_or_path {str(self.cfg.model_name_or_path)}"
             f" --device_ids {self.cfg.device_ids}"
+            f" --tensor_parallel_size {self.cfg.tensor_parallel_size}"
             f" --engine_worker_queue_port {str(self.cfg.engine_worker_queue_port)}"
             f" --total_block_num {self.cfg.cache_config.total_block_num}"
             f" --block_size {self.cfg.cache_config.block_size}"
@@ -615,21 +1032,38 @@ class LLMEngine(object):
             f" --eos_tokens_lens {self.data_processor.eos_token_id_len}"
             f" --pad_token_id {self.data_processor.pad_token_id}"
             f" --engine_pid {self.engine_pid}"
-            f" --do_profile {self.do_profile}"
-            f" --dynamic_load_weight {self.cfg.model_config.dynamic_load_weight}"
             f" --max_num_batched_tokens {self.cfg.max_num_batched_tokens}"
-            f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio} --dtype {self.cfg.cache_config.cache_dtype}"
-        )
+            f" --splitwise_role {self.cfg.splitwise_role}"
+            f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
+            f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
+            f" --quantization {self.cfg.model_config.quantization}"
+            f" --ori_vocab_size {len(self.data_processor.tokenizer)}"
+            f" --speculative_method {self.cfg.speculative_config.method}"
+            f" --speculative_max_draft_token_num {self.cfg.speculative_config.num_speculative_tokens}"
+            f" --speculative_model_name_or_path {self.cfg.speculative_config.model_name_or_path}"
+            f" --speculative_model_quantization {self.cfg.speculative_config.quantization}"
+            f" --max_capture_batch_size {self.cfg.max_capture_batch_size}"
+            f" --guided_decoding_backend {self.cfg.guided_decoding_backend}")
+
         worker_append_flag = {
-            "enable_chunked_prefill": self.cfg.enable_chunked_prefill,
+            "enable_expert_parallel":
+            self.cfg.parallel_config.enable_expert_parallel,
+            "enable_prefix_caching":
+            self.cfg.cache_config.enable_prefix_caching,
+            "enable_chunked_prefill":
+            self.cfg.cache_config.enable_chunked_prefill,
+            "do_profile": self.do_profile,
+            "dynamic_load_weight": self.cfg.model_config.dynamic_load_weight,
+            "enable_static_graph_inference":
+            self.cfg.enable_static_graph_inference,
+            "use_cudagraph": self.cfg.use_cudagraph,
+            "disable_any_whitespace": self.cfg.disable_any_whitespace,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:
                 arguments = arguments + f" --{worker_flag}"
-
         if self.cfg.nnode > 1:
             pd_cmd = pd_cmd + f" --ips {self.cfg.ips}"
-        log_dir = os.getenv("FD_LOG_DIR", default="log")
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
         llm_logger.info("Launch worker service command: {}".format(pd_cmd))
         p = subprocess.Popen(
@@ -705,6 +1139,8 @@ class LLMEngine(object):
                     output["outputs"]["reasoning_content"] = ""
                     yield output
 
+                self.resource_manager.check_and_free_block_tables()
+
     def _stop_profile(self):
         """
         Stop profiling of the model server and reset variables.
@@ -720,9 +1156,14 @@ class LLMEngine(object):
                 num_gpu_blocks = min(
                     num_gpu_blocks, self.get_profile_block_num_signal.value[i])
 
-        console_logger.info(f"Stop profile, num_gpu_blocks:  {num_gpu_blocks}")
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.resource_manager.reset_cache_config(self.cfg.cache_config)
+        if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
+            device_ids = self.cfg.device_ids.split(",")
+            self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
+                self.cfg.cache_config, self.cfg.tensor_parallel_size,
+                device_ids, self.cfg.engine_worker_queue_port,
+                self.ipc_signal_suffix)
 
     def check_health(self, time_interval_threashold=30):
         """
@@ -763,8 +1204,7 @@ class LLMEngine(object):
                         self.worker_init_status["finished"] = True
 
         self.checking_worker_status_thread = threading.Thread(
-            target=detect_thread, args=())
-        self.checking_worker_status_thread.daemon = True
+            target=detect_thread, daemon=True)
         self.checking_worker_status_thread.start()
 
         # display weight loadding progress
@@ -803,4 +1243,3 @@ class LLMEngine(object):
         except Exception:
             pass
         return True
-

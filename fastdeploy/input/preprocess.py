@@ -13,8 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+from typing import Any, Dict, Optional
 
 from fastdeploy.engine.config import ModelConfig
+from fastdeploy.reasoning import ReasoningParserManager
+
 
 class InputPreprocessor:
     """
@@ -24,6 +27,9 @@ class InputPreprocessor:
             key in the Hugging Face Transformers' model registry (https://huggingface.co/models).
             The model will be downloaded from the Hugging Face model hub if necessary.
             If a path is provided, the model will be loaded from that path.
+        reasoning_parser (str, optional):
+            Reasoning parser type. Defaults to None.
+            Flag specifies the reasoning parser to use for extracting reasoning content from the model output
         enable_mm (bool, optional):
             Whether to use the multi-modal model processor. Defaults to False.
 
@@ -32,15 +38,21 @@ class InputPreprocessor:
                 If the model name is not found in the Hugging Face Transformers' model registry and the path does not
                 exist.
     """
+
     def __init__(
         self,
         model_name_or_path: str,
+        reasoning_parser: str = None,
+        limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
+        mm_processor_kwargs: Optional[Dict[str, Any]] = None,
         enable_mm: bool = False,
     ) -> None:
 
         self.model_name_or_path = model_name_or_path
+        self.reasoning_parser = reasoning_parser
         self.enable_mm = enable_mm
-
+        self.limit_mm_per_prompt = limit_mm_per_prompt
+        self.mm_processor_kwargs = mm_processor_kwargs
 
     def create_processor(self):
         """
@@ -53,7 +65,33 @@ class InputPreprocessor:
         Returns:
             DataProcessor or MultiModalRegistry.Processor (Union[DataProcessor, MultiModalRegistry.Processor]): 数据处理器。
         """
+        reasoning_parser_obj = None
+        if self.reasoning_parser:
+            reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(
+                    self.reasoning_parser)
         architectures = ModelConfig(self.model_name_or_path).architectures
-        from fastdeploy.input.text_processor import DataProcessor
-        self.processor = DataProcessor(model_name_or_path=self.model_name_or_path)
+        if not self.enable_mm:
+            if "Ernie4_5_MoeForCausalLM" not in architectures \
+                and "Ernie4_5_ForCausalLM" not in architectures:
+                from fastdeploy.input.text_processor import DataProcessor
+                self.processor = DataProcessor(
+                    model_name_or_path=self.model_name_or_path, reasoning_parser_obj=reasoning_parser_obj)
+            else:
+                from fastdeploy.input.ernie_processor import ErnieProcessor
+                self.processor = ErnieProcessor(
+                    model_name_or_path=self.model_name_or_path, reasoning_parser_obj=reasoning_parser_obj)
+        else:
+            if not architectures.startswith(
+                    "Ernie4_5_VLMoeForConditionalGeneration"):
+                raise ValueError(
+                    f"Model {self.model_name_or_path} is not a valid Ernie4_5_VLMoe model."
+                )
+            else:
+                from fastdeploy.input.ernie_vl_processor import \
+                    ErnieMoEVLProcessor
+                self.processor = ErnieMoEVLProcessor(
+                    model_name_or_path=self.model_name_or_path,
+                    limit_mm_per_prompt=self.limit_mm_per_prompt,
+                    mm_processor_kwargs=self.mm_processor_kwargs,
+                    reasoning_parser_obj=reasoning_parser_obj)
         return self.processor

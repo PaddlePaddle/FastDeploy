@@ -28,7 +28,7 @@ class VocabParallelEmbedding(nn.Layer):
 
     def __init__(
         self,
-        llm_config,
+        fd_config,
         num_embeddings,
         embedding_dim=768,
         params_dtype="bfloat16",
@@ -38,7 +38,7 @@ class VocabParallelEmbedding(nn.Layer):
         Initialize the VocabParallelEmbedding layer for the model.
 
         Args:
-            llm_config (LLMConfig): Arguments related to inference, containing
+            fd_config (FDConfig): Arguments related to inference, containing
                 attributes such as weight_dtype, act_dtype, mp_size, hidden_size, head_dim,
                 num_attention_heads, and ffn_hidden_size.
             num_embeddings : vocabulary size.
@@ -48,21 +48,21 @@ class VocabParallelEmbedding(nn.Layer):
                 you can give it any name you like.
         """
         super().__init__()
+        self.fd_config = fd_config
         hcg = fleet.get_hybrid_communicate_group()
         self.mp_rank = hcg.get_model_parallel_rank()
-        self.column_cut = llm_config.parallel_config.column_cut
+        self.column_cut = fd_config.parallel_config.column_cut
         self.world_size = hcg.get_model_parallel_world_size()
         self.ring_id = hcg.get_model_parallel_group().id
-        self.use_rope = llm_config.model_config.use_rope
-        self.rope_head_dim = llm_config.model_config.rope_head_dim
-        self.use_ep = llm_config.parallel_config.use_ep
-        self.hidden_dropout_prob = llm_config.model_config.hidden_dropout_prob
-        self.initializer_range = llm_config.model_config.initializer_range
-        self.weight_sharing = llm_config.model_config.weight_sharing
-        self.sequence_parallel = llm_config.parallel_config.sequence_parallel
-        self.weight_sharing_add_bias = llm_config.model_config.weight_sharing_add_bias
-        self.max_position_embeddings = llm_config.model_config.max_position_embeddings
-        self.freeze_embedding = llm_config.model_config.freeze_embedding
+        self.use_rope = fd_config.model_config.use_rope
+        self.rope_head_dim = fd_config.model_config.rope_head_dim
+        self.use_ep = fd_config.parallel_config.use_ep
+        self.hidden_dropout_prob = fd_config.model_config.hidden_dropout_prob
+        self.initializer_range = fd_config.model_config.initializer_range
+        self.sequence_parallel = fd_config.parallel_config.sequence_parallel
+        self.max_position_embeddings = fd_config.model_config.max_position_embeddings
+        self.freeze_embedding = fd_config.model_config.freeze_embedding
+        self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
 
         if self.use_ep:
             self.word_embeddings = nn.Embedding(
@@ -78,8 +78,7 @@ class VocabParallelEmbedding(nn.Layer):
                     get_model_parallel_group(),
                     weight_attr=paddle.ParamAttr(
                         initializer=nn.initializer.Normal(
-                            mean=0.0, std=self.initializer_range),
-                    ),
+                            mean=0.0, std=self.initializer_range), ),
                 )
             else:
                 # column cut embedding
@@ -87,6 +86,7 @@ class VocabParallelEmbedding(nn.Layer):
                     num_embeddings,
                     embedding_dim // self.world_size,
                 )
+
                 self.word_embeddings.weight.is_distributed = True
                 self.word_embeddings.weight.split_axis = 1
 
@@ -94,33 +94,11 @@ class VocabParallelEmbedding(nn.Layer):
             self.position_embeddings = nn.Embedding(
                 self.max_position_embeddings,
                 embedding_dim,
-                weight_attr=paddle.ParamAttr(
-                    initializer=nn.initializer.Normal(
-                        mean=0.0, std=self.initializer_range),
-                ),
+                weight_attr=paddle.ParamAttr(initializer=nn.initializer.Normal(
+                    mean=0.0, std=self.initializer_range), ),
             )
 
         self.prefix = prefix
-
-        if self.weight_sharing and self.weight_sharing_add_bias:
-            assert num_embeddings % self.world_size == 0
-            if self.use_ep:
-                self.bias = self.create_parameter(
-                    shape=[num_embeddings],
-                    dtype=paddle.get_default_dtype(),
-                    attr=paddle.ParamAttr(
-                        initializer=paddle.nn.initializer.Constant(value=0.0),
-                    ),
-                    is_bias=True,
-                )
-            else:
-                self.bias = self.create_parameter(
-                    shape=[num_embeddings // self.world_size],
-                    dtype=paddle.get_default_dtype(),
-                    attr=mask_lm_out_bias_attr,
-                    is_bias=True,
-                )
-                self.bias.is_distributed = True
 
         if self.freeze_embedding:
             self.word_embeddings.weight.learning_rate = 0.0
@@ -138,9 +116,14 @@ class VocabParallelEmbedding(nn.Layer):
         Args:
             state_dict (dict): A dictionary containing the checkpoint weights and biases.
         """
-        self.word_embeddings.weight.set_value(
-            get_tensor(state_dict.pop(self.prefix + ".weight")).astype(
-                paddle.get_default_dtype()))
+        if self.tie_word_embeddings:
+            self.word_embeddings.weight.set_value(
+                get_tensor(state_dict[self.prefix + ".weight"]).astype(
+                    paddle.get_default_dtype()))
+        else:
+            self.word_embeddings.weight.set_value(
+                get_tensor(state_dict.pop(self.prefix + ".weight")).astype(
+                    paddle.get_default_dtype()))
 
     def forward(self, ids_remove_padding=None):
         """

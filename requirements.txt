@@ -1,4 +1,4 @@
-setuptools==75.1.0
+setuptools>=62.3.0,<80.0
 pre-commit
 yapf
 flake8
@@ -10,13 +10,13 @@ tqdm
 pynvml
 uvicorn
 fastapi
-paddlenlp @ https://paddle-qa.bj.bcebos.com/paddlenlp/wheel/c1322be06cdf366ad2d996e963499f5298d2a2bc/paddlenlp-3.0.0b4.post20250530-py3-none-any.whl
+paddleformers
 redis
 etcd3
 httpx
 tool_helpers
 cupy-cuda12x
-pybind11
+pybind11[global]
 tabulate
 gradio
 xlwt
@@ -25,3 +25,6 @@ setuptools-scm>=8
 prometheus-client
 decord
 moviepy
+triton==3.3
+use-triton-in-paddle
+crcmod

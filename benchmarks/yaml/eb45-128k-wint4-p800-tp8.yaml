@@ -1,0 +1,5 @@
+max_model_len: 131072
+max_num_seqs: 40
+gpu_memory_utilization: 0.9
+tensor_parallel_size: 8
+quantization: wint4

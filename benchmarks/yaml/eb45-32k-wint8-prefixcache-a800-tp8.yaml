@@ -1,0 +1,9 @@
+enable_prefix_caching: True
+max_model_len: 32768
+max_num_batched_tokens: 68304
+max_num_seqs: 128
+gpu_memory_utilization: 0.9
+kv_cache_ratio: 0.71
+tensor_parallel_size: 8
+swap_space: 100
+cache_queue_port: 55664

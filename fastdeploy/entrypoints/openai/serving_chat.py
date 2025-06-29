@@ -33,6 +33,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionResponseStreamChoice,
     ChatMessage,
     UsageInfo,
+    PromptTokenUsageInfo,
     ChatCompletionResponse,
     ErrorResponse,
 )
@@ -46,13 +47,7 @@ from fastdeploy.engine.request import RequestOutput
 
 class OpenAIServingChat:
     """
-    Implementation of OpenAI-compatible chat completion API endpoints.
-    
-    Handles both streaming and non-streaming chat completion requests.
-    
-    Attributes:
-        engine_client: Client for communicating with the LLM engine
-        pid: Process ID for ZMQ communication
+    OpenAI-style chat completions serving
     """
 
     def __init__(self, engine_client, pid):
@@ -64,16 +59,7 @@ class OpenAIServingChat:
         request: ChatCompletionRequest
     ):
         """
-        Create chat completion based on the given request.
-        
-        Args:
-            request (ChatCompletionRequest): Chat completion request parameters
-            
-        Returns:
-            Union[AsyncGenerator, ChatCompletionResponse, ErrorResponse]:
-                - Streaming generator if request.stream=True
-                - Full completion response if request.stream=False
-                - ErrorResponse if validation fails
+        Create a new chat completion using the specified parameters.
         """
         if request.user is not None:
             request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"
@@ -84,33 +70,27 @@ class OpenAIServingChat:
         try:
             current_req_dict = request.to_dict_for_infer(request_id)
             current_req_dict["arrival_time"] = time.time()
-            self.engine_client.format_and_add_data(current_req_dict)
-
-        except ValueError as e:
+            prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
+        except Exception as e:
             return ErrorResponse(code=400, message=str(e))
 
         del current_req_dict
 
         if request.stream:
             return self.chat_completion_stream_generator(
-                request, request_id, request.model)
+                request, request_id,
+                request.model,
+                prompt_token_ids)
         else:
             try:
                 return await self.chat_completion_full_generator(
-                    request, request_id, request.model)
-            except ValueError as e:
+                    request, request_id,
+                    request.model,
+                    prompt_token_ids)
+            except Exception as e:
                 return ErrorResponse(code=400, message=str(e))
 
     def _create_streaming_error_response(self, message: str) -> str:
-        """
-        Create an error response in streaming format.
-        
-        Args:
-            message (str): Error message to include
-            
-        Returns:
-            str: JSON-formatted error response
-        """
         error_response = ErrorResponse(
             code=400,
             message=message,
@@ -121,25 +101,11 @@ class OpenAIServingChat:
         self,
         request: ChatCompletionRequest,
         request_id: str,
-        model_name: str
+        model_name: str,
+        prompt_token_ids: list()
     ):
         """
-        Generator for streaming chat completion responses.
-        
-        Args:
-            request (ChatCompletionRequest): Original request parameters
-            request_id (str): Unique request identifier
-            model_name (str): Name of the model being used
-            
-        Yields:
-            str: Server-Sent Events (SSE) formatted chunks containing:
-                - Partial completion results
-                - Usage statistics (if enabled)
-                - Error messages (if any)
-                
-        Note:
-            Uses ZMQ for inter-process communication with the engine.
-            Maintains streaming protocol compatibility with OpenAI API.
+        Streaming chat completion generator.
         """
         created_time = int(time.time())
         chunk_object_type: str = "chat.completion.chunk"
@@ -148,6 +114,7 @@ class OpenAIServingChat:
         num_prompt_tokens = 0
         num_choices = 1
         max_streaming_response_tokens = 1
+        enable_thinking = None
         if request.metadata is not None and request.metadata.get("max_streaming_response_tokens", 1) > 1:
             max_streaming_response_tokens = request.metadata["max_streaming_response_tokens"]
 
@@ -172,23 +139,32 @@ class OpenAIServingChat:
             )
             dealer.write([b"", request_id.encode('utf-8')])
             choices = []
+            current_waiting_time = 0
             while num_choices > 0:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=300)
+                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
+                    current_waiting_time = 0
                 except asyncio.TimeoutError:
-                    status, msg = self.engine_client.check_health()
-                    if not status:
-                        if choices:
-                            chunk.choices = choices
-                            yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                        raise ValueError(f"Engine is not healthy: {msg}")
-                    else:
-                        continue
-
+                    current_waiting_time += 10
+                    if current_waiting_time == 300:
+                        status, msg = self.engine_client.check_health()
+                        if not status:
+                            if choices:
+                                chunk.choices = choices
+                                yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
+                            raise ValueError(f"Engine is not healthy: {msg}")
+                        else:
+                            current_waiting_time = 0
+                    await asyncio.sleep(0.1)
+                    continue
+    
                 res = json.loads(raw_data[-1].decode('utf-8'))
                 if res.get("error_code", 200) != 200:
                     raise ValueError("{}".format(res["error_msg"]))
-                self.engine_client.data_processor.process_response_dict(res, stream=True)
+                if request.metadata is not None:
+                    enable_thinking = request.metadata.get("enable_thinking")
+                self.engine_client.data_processor.process_response_dict(
+                    res, stream=True, enable_thinking=enable_thinking)
 
                 if res['metrics']['first_token_time'] is not None:
                     arrival_time = res['metrics']['first_token_time']
@@ -196,15 +172,15 @@ class OpenAIServingChat:
                 else:
                     arrival_time = res['metrics']['arrival_time'] - inference_start_time
                 if first_iteration:
-                    num_prompt_tokens = len(res["prompt_token_ids"])
+                    num_prompt_tokens = len(prompt_token_ids)
                     num_cached_tokens = res.get("num_cached_tokens", 0)
                     for i in range(num_choices):
                         choice = ChatCompletionResponseStreamChoice(
                             index=i,
-                            delta=DeltaMessage(role="assistant", content="", reasoning_content="")
+                            delta=DeltaMessage(role="assistant", content="", reasoning_content="", tool_calls=None)
                         )
                         if request.metadata is not None and request.metadata.get("training", False):
-                            choice.delta.token_ids = list(res["prompt_token_ids"])
+                            choice.delta.token_ids = prompt_token_ids
                         chunk = ChatCompletionStreamResponse(
                             id=request_id,
                             object=chunk_object_type,
@@ -216,7 +192,8 @@ class OpenAIServingChat:
                             chunk.usage = UsageInfo(
                                 prompt_tokens=num_prompt_tokens,
                                 completion_tokens=0,
-                                total_tokens=num_prompt_tokens
+                                total_tokens=num_prompt_tokens,
+                                prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cached_tokens)
                             )
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)} \n\n"
                     first_iteration = False
@@ -226,18 +203,21 @@ class OpenAIServingChat:
 
                 previous_num_tokens += len(output["token_ids"])
                 delta_message = DeltaMessage(content=delta_text, reasoning_content=output.get("reasoning_content"), \
-                    token_ids=output.get("token_ids"))
+                    token_ids=output.get("token_ids"), tool_calls=output.get("tool_call_content", []))
 
                 choice = ChatCompletionResponseStreamChoice(
-                    index=output["index"],
+                    index=0,
                     delta=delta_message,
                     arrival_time=arrival_time
                 )
                 if res["finished"]:
                     num_choices -= 1
                     work_process_metrics.e2e_request_latency.observe(time.time() - res["metrics"]["request_start_time"])
-                    if request.max_tokens is None or output["index"] + 1 != request.max_tokens:
+                    if request.max_tokens is None or previous_num_tokens != request.max_tokens:
                         choice.finish_reason = "stop"
+                        if self.engine_client.reasoning_parser == "ernie_x1" and \
+                                output.get("finish_reason", "") == "tool_calls":
+                            choice.finish_reason = "tool_calls"
                     else:
                         choice.finish_reason = "length"
 
@@ -285,27 +265,15 @@ class OpenAIServingChat:
         self,
         request: ChatCompletionRequest,
         request_id: str,
-        model_name: str
+        model_name: str,
+        prompt_token_ids: list()
     ):
         """
-        Generate complete chat response in one-shot mode.
-        
-        Args:
-            request (ChatCompletionRequest): Original request parameters
-            request_id (str): Unique request identifier
-            model_name (str): Name of the model being used
-            
-        Returns:
-            ChatCompletionResponse: Complete chat response with:
-                - Generated message
-                - Usage statistics
-                - Finish reason
-                
-        Raises:
-            ValueError: If engine communication fails or times out
+        Full chat completion generator.
         """
         created_time = int(time.time())
         final_res = None
+        enable_thinking = None
         try:
             dealer = await aiozmq.create_zmq_stream(
                 zmq.DEALER,
@@ -314,20 +282,29 @@ class OpenAIServingChat:
             dealer.write([b"", request_id.encode('utf-8')])
             final_res = None
             previous_num_tokens = 0
+            current_waiting_time = 0
             while True:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=300)
+                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
+                    current_waiting_time = 0
                 except asyncio.TimeoutError:
-                    status, msg = self.engine_client.check_health()
-                    if not status:
-                        raise ValueError(f"Engine is not healthy: {msg}")
-                    else:
-                        continue
+                    current_waiting_time += 10
+                    if current_waiting_time == 300:
+                        status, msg = self.engine_client.check_health()
+                        if not status:
+                            raise ValueError(f"Engine is not healthy: {msg}")
+                        else:
+                            current_waiting_time = 0
+                    await asyncio.sleep(0.1)
+                    continue
 
                 data = json.loads(raw_data[-1].decode('utf-8'))
                 if data.get("error_code", 200) != 200:
                     raise ValueError("{}".format(data["error_msg"]))
-                data = self.engine_client.data_processor.process_response_dict(data, stream=False)
+                if request.metadata is not None:
+                    enable_thinking = request.metadata.get("enable_thinking")
+                data = self.engine_client.data_processor.process_response_dict(
+                    data, stream=False, enable_thinking=enable_thinking)
                 # api_server_logger.debug(f"Client {request_id} received: {data}")
                 previous_num_tokens += len(data["outputs"]["token_ids"])
                 if data["finished"]:
@@ -342,27 +319,31 @@ class OpenAIServingChat:
             role="assistant",
             content=output["text"],
             reasoning_content=output.get("reasoning_content"),
+            tool_calls=output.get("tool_call_content"),
             token_ids=output.get("token_ids")
         )
 
         choice = ChatCompletionResponseChoice(
-            index=output["index"],
+            index=0,
             message=message,
             finish_reason=None
         )
-        if request.max_tokens is None or output["index"] + 1 != request.max_tokens:
-
+        if request.max_tokens is None or previous_num_tokens != request.max_tokens:
             choice.finish_reason = "stop"
+            if self.engine_client.reasoning_parser == "ernie_x1" and \
+                    output.get("finish_reason", "") == "tool_calls":
+                choice.finish_reason = "tool_calls"
         else:
             choice.finish_reason = "length"
         choices.append(choice)
 
-        num_prompt_tokens = len(final_res["prompt_token_ids"])
+        num_prompt_tokens = len(prompt_token_ids)
         num_generated_tokens = previous_num_tokens
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,
             completion_tokens=num_generated_tokens,
-            total_tokens=num_prompt_tokens + num_generated_tokens
+            total_tokens=num_prompt_tokens + num_generated_tokens,
+            prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=final_res.get("num_cached_tokens", 0))
         )
         work_process_metrics.e2e_request_latency.observe(time.time() - final_res["metrics"]["request_start_time"])
         return ChatCompletionResponse(

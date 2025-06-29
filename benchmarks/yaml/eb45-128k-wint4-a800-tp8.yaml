@@ -1,0 +1,8 @@
+enable_chunked_prefill: True
+max_model_len: 131072
+max_num_seqs: 16
+kv_cache_ratio: 0.75
+tensor_parallel_size: 8
+max_num_batched_tokens: 4096
+max_num_partial_prefills: 3
+max_long_partial_prefills: 3

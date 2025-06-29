@@ -24,8 +24,6 @@ __global__ void process_splitwise_prefill(
     int* seq_lens_encoder,
     int* seq_lens_decoder,
     int64_t* step_idx,
-    int* seq_lens_encoder_record,
-    int* seq_lens_decoder_record,
     bool* not_need_stop,
     bool* batch_drop,
     const int64_t* accept_tokens,
@@ -51,21 +49,18 @@ __global__ void process_splitwise_prefill(
     int base_model_step_idx_now = base_model_step_idx[tid];
     auto* input_ids_now = input_ids + tid * input_ids_len;
     auto* accept_tokens_now = accept_tokens + tid * accept_tokens_len;
-    // printf("bid: %d, base_model_step_idx_now: %d seq_lens_encoder_record: %d\n", tid, base_model_step_idx_now, seq_lens_encoder_record[tid]);
-    if (base_model_step_idx_now == 1 && seq_lens_encoder_record[tid] > 0) {
+    if (seq_lens_encoder[tid] > 0) {
       not_stop_flag = 1;
-      int seq_len_encoder_record = seq_lens_encoder_record[tid];
-      seq_lens_encoder[tid] = seq_len_encoder_record;
-      seq_lens_encoder_record[tid] = -1;
+      int seq_len_encoder = seq_lens_encoder[tid];
       stop_flags[tid] = false;
       int64_t base_model_first_token = accept_tokens_now[0];
-      int position = seq_len_encoder_record;
+      int position = seq_len_encoder;
       if (TRCUNCATE_FIRST_TOKEN) {
         input_ids_now[position - 1] = base_model_first_token;
-        seq_lens_this_time[tid] = seq_len_encoder_record;
+        seq_lens_this_time[tid] = seq_len_encoder;
       } else {
         input_ids_now[position] = base_model_first_token;
-        seq_lens_this_time[tid] = seq_len_encoder_record + 1;
+        seq_lens_this_time[tid] = seq_len_encoder + 1;
       }
     } else {
       stop_flags[tid] = true;
@@ -95,8 +90,6 @@ __global__ void draft_model_preprocess_kernel(
     int* seq_lens_encoder,
     int* seq_lens_decoder,
     int64_t* step_idx,
-    int* seq_lens_encoder_record,
-    int* seq_lens_decoder_record,
     bool* not_need_stop,
     bool* batch_drop,
     const int64_t* accept_tokens,
@@ -131,11 +124,7 @@ __global__ void draft_model_preprocess_kernel(
     for (int i = 1; i < base_model_draft_tokens_len; i++) {
       base_model_draft_tokens_now[i] = -1;
     }
-    // 处理 base_model recover 逻辑
-    // 1. 已处于 recover 状态
-    // if (batch_drop[tid]) {
 
-    // }
     if (base_model_stop_flags[tid] && base_model_is_block_step[tid]) {
       batch_drop[tid] = true;
       stop_flags[tid] = true;
@@ -147,22 +136,18 @@ __global__ void draft_model_preprocess_kernel(
       if (base_model_step_idx_now == 0) {
         seq_lens_this_time[tid] = 0;
         not_stop_flag = 0;
-      } else if (base_model_step_idx_now == 1 && seq_lens_encoder_record[tid] > 0) {
+      } else if (seq_lens_encoder[tid] > 0) {
         // Can be extended to first few tokens
-        int seq_len_encoder_record = seq_lens_encoder_record[tid];
-        seq_lens_encoder[tid] = seq_len_encoder_record;
-        seq_lens_encoder_record[tid] = -1;
-        seq_lens_decoder[tid] = seq_lens_decoder_record[tid];
-        seq_lens_decoder_record[tid] = 0;
+        int seq_len_encoder = seq_lens_encoder[tid];
         stop_flags[tid] = false;
         int64_t base_model_first_token = accept_tokens_now[0];
-        int position = seq_len_encoder_record;
+        int position = seq_len_encoder;
         if (TRCUNCATE_FIRST_TOKEN) {
           input_ids_now[position - 1] = base_model_first_token;
-          seq_lens_this_time[tid] = seq_len_encoder_record;
+          seq_lens_this_time[tid] = seq_len_encoder;
         } else {
           input_ids_now[position] = base_model_first_token;
-          seq_lens_this_time[tid] = seq_len_encoder_record + 1;
+          seq_lens_this_time[tid] = seq_len_encoder + 1;
         }
       } else if (accept_num_now <=
                  max_draft_token) /*Accept partial draft tokens*/ {
@@ -207,8 +192,6 @@ void DispatchRunner(
     int* seq_lens_encoder,
     int* seq_lens_decoder,
     int64_t* step_idx,
-    int* seq_lens_encoder_record,
-    int* seq_lens_decoder_record,
     bool* not_need_stop,
     bool* batch_drop,
     const int64_t* accept_tokens,
@@ -237,8 +220,6 @@ void DispatchRunner(
               seq_lens_encoder,
               seq_lens_decoder,
               step_idx,
-              seq_lens_encoder_record,
-              seq_lens_decoder_record,
               not_need_stop,
               batch_drop,
               accept_tokens,
@@ -265,8 +246,6 @@ void DispatchRunner(
               seq_lens_encoder,
               seq_lens_decoder,
               step_idx,
-              seq_lens_encoder_record,
-              seq_lens_decoder_record,
               not_need_stop,
               batch_drop,
               accept_tokens,
@@ -295,8 +274,6 @@ void DispatchTokenMode(
     int* seq_lens_encoder,
     int* seq_lens_decoder,
     int64_t* step_idx,
-    int* seq_lens_encoder_record,
-    int* seq_lens_decoder_record,
     bool* not_need_stop,
     bool* batch_drop,
     const int64_t* accept_tokens,
@@ -325,8 +302,6 @@ void DispatchTokenMode(
               seq_lens_encoder,
               seq_lens_decoder,
               step_idx,
-              seq_lens_encoder_record,
-              seq_lens_decoder_record,
               not_need_stop,
               batch_drop,
               accept_tokens,
@@ -355,8 +330,6 @@ void DispatchTokenMode(
               seq_lens_encoder,
               seq_lens_decoder,
               step_idx,
-              seq_lens_encoder_record,
-              seq_lens_decoder_record,
               not_need_stop,
               batch_drop,
               accept_tokens,
@@ -388,8 +361,6 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& seq_lens_encoder,
                           const paddle::Tensor& seq_lens_decoder,
                           const paddle::Tensor& step_idx,
-                          const paddle::Tensor& seq_lens_encoder_record,
-                          const paddle::Tensor& seq_lens_decoder_record,
                           const paddle::Tensor& not_need_stop,
                           const paddle::Tensor& batch_drop,
                           const paddle::Tensor& accept_tokens,
@@ -422,8 +393,6 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
               const_cast<int*>(seq_lens_encoder.data<int>()),
               const_cast<int*>(seq_lens_decoder.data<int>()),
               const_cast<int64_t*>(step_idx.data<int64_t>()),
-              const_cast<int*>(seq_lens_encoder_record.data<int>()),
-              const_cast<int*>(seq_lens_decoder_record.data<int>()),
               const_cast<bool*>(not_need_stop_gpu.data<bool>()),
               const_cast<bool*>(batch_drop.data<bool>()),
               accept_tokens.data<int64_t>(),
@@ -443,10 +412,6 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
               truncate_first_token,
               splitwise_prefill);
 
-
-
-
-
   auto not_need_stop_cpu =
       not_need_stop_gpu.copy_to(not_need_stop.place(), false);
   bool* not_need_stop_data = const_cast<bool*>(not_need_stop.data<bool>());
@@ -462,8 +427,6 @@ PD_BUILD_STATIC_OP(draft_model_preprocess)
              "seq_lens_encoder",
              "seq_lens_decoder",
              "step_idx",
-             "seq_lens_encoder_record",
-             "seq_lens_decoder_record",
              "not_need_stop",
              "batch_drop",
              "accept_tokens",
@@ -482,9 +445,7 @@ PD_BUILD_STATIC_OP(draft_model_preprocess)
               "seq_lens_decoder_out",
               "step_idx_out",
               "not_need_stop_out",
-              "batch_drop_out",
-              "seq_lens_encoder_record_out",
-              "seq_lens_decoder_record_out"})
+              "batch_drop_out"})
     .Attrs({"max_draft_token: int", "truncate_first_token: bool", "splitwise_prefill: bool"})
     .SetInplaceMap({{"draft_tokens", "draft_tokens_out"},
                     {"input_ids", "input_ids_out"},
@@ -494,7 +455,5 @@ PD_BUILD_STATIC_OP(draft_model_preprocess)
                     {"seq_lens_decoder", "seq_lens_decoder_out"},
                     {"step_idx", "step_idx_out"},
                     {"not_need_stop", "not_need_stop_out"},
-                    {"batch_drop", "batch_drop_out"},
-                    {"seq_lens_encoder_record", "seq_lens_encoder_record_out"},
-                    {"seq_lens_decoder_record", "seq_lens_decoder_record_out"}})
+                    {"batch_drop", "batch_drop_out"}})
     .SetKernelFn(PD_KERNEL(DraftModelPreprocess));

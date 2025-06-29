@@ -19,14 +19,14 @@ from typing import Callable, Optional, TypeVar
 
 import paddle.nn.layer
 
-from fastdeploy.config import LLMConfig
+from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.graph_optimization.graph_optimization_backend import \
     GraphOptBackend
 
 _T = TypeVar("_T", bound=type[paddle.nn.Layer])
 
 
-def support_graph_opt(cls: Optional[_T] = None) -> _T:
+def support_graph_optimization(cls: Optional[_T] = None) -> _T:
     """
     A decorator for wrapping models or layers with CUDA graph support.
     This enables efficient kernel launch sequencing for improved GPU performance.
@@ -34,7 +34,7 @@ def support_graph_opt(cls: Optional[_T] = None) -> _T:
     Example usage:
 
     '''
-    @support_graph_opt
+    @support_graph_optimization
     class ErnieBot(paddle.nn.Layer):
         def __init__(**kwargs):
             ...
@@ -49,15 +49,13 @@ def support_graph_opt(cls: Optional[_T] = None) -> _T:
         cls.__bases__ = cls.__bases__ + (GraphOptWrapper, )
     origin_init = cls.__init__
 
-    def __init__(self, llm_config: LLMConfig, **kwargs):
+    def __init__(self, fd_config: FDConfig, **kwargs):
         """ Decorator model.__init__() func """
-        origin_init(self, llm_config=llm_config, **kwargs)
-        self.use_graph_opt = (
-            not (llm_config.graph_opt_config.graph_opt_level == 0
-                 and not llm_config.graph_opt_config.use_cudagraph))
+        origin_init(self, fd_config=fd_config, **kwargs)
+        self.use_graph_opt = fd_config.graph_opt_config.graph_opt_level > 0 or fd_config.graph_opt_config.use_cudagraph
         if self.use_graph_opt:
             GraphOptWrapper.__init__(self,
-                                     llm_config=llm_config,
+                                     fd_config=fd_config,
                                      graph_opt_backend=None)
         else:
             # Not use graph optimization
@@ -81,10 +79,10 @@ class GraphOptWrapper:
     def __init__(
         self,
         graph_opt_backend: Optional[Callable] = None,
-        llm_config: LLMConfig = None,
+        fd_config: FDConfig = None,
     ):
         if graph_opt_backend is None:
-            graph_opt_backend = GraphOptBackend(self.forward, llm_config)
+            graph_opt_backend = GraphOptBackend(self.forward, fd_config)
         self.graph_opt_backend = graph_opt_backend
 
     @abstractmethod

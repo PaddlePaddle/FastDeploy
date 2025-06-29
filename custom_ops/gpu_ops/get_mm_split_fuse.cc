@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle/extension.h"
+#include <map>
 
 std::vector<paddle::Tensor> GetMmSplitFuse(const paddle::Tensor& task_input_ids,
                             const paddle::Tensor& task_image_type_ids,
@@ -60,6 +61,7 @@ std::vector<paddle::Tensor> GetMmSplitFuse(const paddle::Tensor& task_input_ids,
             st_idx += cur_st_len;
         }
     }
+    
     while (idx < seq_lens_origin) {
         idx = idx + split_fuse_text_size;
         if (idx >= seq_lens_origin) {

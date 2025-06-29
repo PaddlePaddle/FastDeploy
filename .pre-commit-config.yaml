@@ -16,7 +16,7 @@ repos:
   rev: v0.11.7
   hooks:
   - id: ruff
-    args: [--output-format, github, --fix]
+    args: [--output-format, github, --fix, --line-length=120]
 # # 拼写检查
 # - repo: https://github.com/codespell-project/codespell
 #   rev: v2.4.1
@@ -29,14 +29,15 @@ repos:
   rev: 6.0.1
   hooks:
   - id: isort
-# 格式化
-- repo: https://github.com/pre-commit/mirrors-clang-format
-  rev: v20.1.3
-  hooks:
-  - id: clang-format
-    # exclude: '.*'
-    types_or: [c++, cuda]
-    args: [--style=file, --verbose]
+# # 格式化
+# - repo: https://github.com/pre-commit/mirrors-clang-format
+#   rev: v20.1.3
+#   hooks:
+#   - id: clang-format
+#     # exclude: '.*'
+#     types_or: [c++, cuda]
+#     args: [--style=file, --verbose]
+
 # markdown
 - repo: https://github.com/jackdewinter/pymarkdown
   rev: v0.9.29

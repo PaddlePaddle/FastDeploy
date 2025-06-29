@@ -1,0 +1,129 @@
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_debug.h"
+#include "xpu/kernel/cluster_primitive.h"
+namespace xpu3 {
+namespace plugin {
+#define MAX_LM_SIZE 28672
+// One core has 32KB LM（gropu LM), MAX_LM_SIZE = (32 - 4)KB / 2 = 30720, 4KB is
+// the stack space
+#define MAX_BATCH 512
+#define ALIGNMENT 64
+static __device__ void get_cur_batch(int32_t* lods,
+                                     int batch_size,
+                                     int seq_idx,
+                                     int& cur_bs) {
+  int l = 0, r = batch_size;
+  while (l <= r) {
+    int mid = (l + r) / 2;
+    if (lods[mid] <= seq_idx) {
+      l = mid + 1;
+    } else {
+      r = mid - 1;
+    }
+  }
+  cur_bs = l - 1;
+}
+template <typename TX, typename TY>
+static __device__ void do_memcpy_1d(_global_ptr_ TX* src,
+                                    _global_ptr_ TY* dst,
+                                    int64_t copy_size) {
+#ifdef __XPU3__
+  constexpr int buf_size = 2048;
+#else
+  constexpr int buf_size = 512;
+#endif
+  __group_shared__ __simd__ float double_lmx[2][buf_size];
+  int64_t pingpong = 0;
+  for (int64_t i = 0; i < copy_size; i += buf_size) {
+    int real_size = min<int64_t>(buf_size, copy_size - i);
+    _group_shared_ptr_ float* lmx = double_lmx[pingpong];
+    GM2GSM(src + i, lmx, real_size * sizeof(TX));
+    if (!xpu_std::is_same<TX, TY>::value) {
+      primitive_cast_gsm<TX, float>(
+          (_group_shared_ptr_ TX*)lmx, lmx, real_size);
+      primitive_cast_gsm<float, TY>(
+          lmx, (_group_shared_ptr_ TY*)lmx, real_size);
+    }
+    GSM2GM_ASYNC((_group_shared_ptr_ TY*)lmx, dst + i, real_size * sizeof(TY));
+    pingpong = 1 - pingpong;
+  }
+  mfence();
+}
+template <typename TX, typename TY>
+__global__ void eb_adjust_batch(TX* src,
+                                TY* dst,
+                                int* encoder_seqs_lods,
+                                int* encoder_batch_map,
+                                int* decoder_batch_map,
+                                int en_batch,
+                                int de_batch,
+                                int64_t copy_size) {
+  int tid = core_id() * cluster_num() + cluster_id();
+  int nthreads = core_num() * cluster_num();
+  __group_shared__ int local_lods_en[MAX_BATCH + 1];
+  __group_shared__ int local_map_en[MAX_BATCH];
+  __group_shared__ int local_map_de[MAX_BATCH];
+  GM2GSM_ASYNC(encoder_seqs_lods, local_lods_en, (en_batch + 1) * sizeof(int));
+  if (en_batch > 0) {
+    GM2GSM_ASYNC(encoder_batch_map, local_map_en, en_batch * sizeof(int));
+  }
+  if (de_batch > 0) {
+    GM2GSM_ASYNC(decoder_batch_map, local_map_de, de_batch * sizeof(int));
+  }
+  mfence();
+  int max_encoder_len = local_lods_en[en_batch];
+  int seq_sum = max_encoder_len + de_batch;
+  int total_batch = en_batch + de_batch;
+  int start = 0;
+  int end = 0;
+
+  partition(tid, nthreads, seq_sum, 1, &start, &end);
+  int i = start;
+  while (i < end) {
+    if (i >= max_encoder_len) {
+      // dst decode part
+      int cur_de_bs = i - max_encoder_len;
+      int cur_en_bs = local_map_de[cur_de_bs] - cur_de_bs;
+      _global_ptr_ TY* cur_dst = dst + i * copy_size;
+      _global_ptr_ TX* cur_src =
+          src + (cur_de_bs + local_lods_en[cur_en_bs]) * copy_size;
+      do_memcpy_1d<TX, TY>(cur_src, cur_dst, copy_size);
+      i++;
+    } else {
+      // dst encode part
+      int cur_en_bs = 0;
+      int cur_de_bs = 0;
+      get_cur_batch(local_lods_en, en_batch, i, cur_en_bs);
+      cur_de_bs = local_map_en[cur_en_bs] - cur_en_bs;
+      int cur_len = min(end, local_lods_en[cur_en_bs + 1]) - i;
+      _global_ptr_ TY* cur_dst = dst + i * copy_size;
+      _global_ptr_ TX* cur_src = src + (cur_de_bs + i) * copy_size;
+      do_memcpy_1d<TX, TY>(cur_src, cur_dst, copy_size * cur_len);
+      i += cur_len;
+    }
+  }
+}
+
+#define _XPU_DEF__EB_ADJUST_BATCH_(TX, TY)                                 \
+  template __global__ void eb_adjust_batch<TX, TY>(TX * src,               \
+                                                   TY * dst,               \
+                                                   int* encoder_seqs_lods, \
+                                                   int* encoder_batch_map, \
+                                                   int* decoder_batch_map, \
+                                                   int en_batch,           \
+                                                   int de_batch,           \
+                                                   int64_t copy_size);
+
+_XPU_DEF__EB_ADJUST_BATCH_(float16, float16);
+_XPU_DEF__EB_ADJUST_BATCH_(bfloat16, bfloat16);
+_XPU_DEF__EB_ADJUST_BATCH_(float, float);
+_XPU_DEF__EB_ADJUST_BATCH_(float16, float);
+_XPU_DEF__EB_ADJUST_BATCH_(float, float16);
+_XPU_DEF__EB_ADJUST_BATCH_(bfloat16, float16);
+_XPU_DEF__EB_ADJUST_BATCH_(float16, bfloat16);
+_XPU_DEF__EB_ADJUST_BATCH_(bfloat16, float);
+_XPU_DEF__EB_ADJUST_BATCH_(float, bfloat16);
+_XPU_DEF__EB_ADJUST_BATCH_(int32_t, int32_t);
+_XPU_DEF__EB_ADJUST_BATCH_(int64_t, int64_t);
+}  // namespace plugin
+}  // namespace xpu3

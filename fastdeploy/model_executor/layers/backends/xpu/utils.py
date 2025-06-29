@@ -16,11 +16,13 @@
  !! This file will be deleted after the platform is fully functional
 """
 
+from typing import Tuple
+
 import numpy as np
 import paddle
 
 
-def xpu_clip_and_round(x):
+def xpu_clip_and_round(x: np.ndarray) -> np.ndarray:
     """
     Clip and round the input array to the range [-127, 127] and convert to int8.
 
@@ -33,7 +35,8 @@ def xpu_clip_and_round(x):
     return np.clip(np.around(x), -127, 127).astype("int8")
 
 
-def xpu_quant_qkv_weight(weight_np):
+def xpu_quant_qkv_weight(
+        weight_np: np.ndarray) -> Tuple[paddle.Tensor, paddle.Tensor]:
     """
     Quantize the query, key, and value weights for the Transformer model.
 
@@ -61,7 +64,8 @@ def xpu_quant_qkv_weight(weight_np):
     return quanted_weight, weight_scales
 
 
-def xpu_quant_weight(weight_np):
+def xpu_quant_weight(
+        weight_np: np.ndarray) -> Tuple[paddle.Tensor, paddle.Tensor]:
     """
     Quantize the weight tensor for XPU devices.
 

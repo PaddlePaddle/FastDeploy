@@ -14,7 +14,7 @@
 # limitations under the License.
 """
 
-from paddlenlp.utils.log import logger
+from paddleformers.utils.log import logger
 
 import paddle
 import paddle.nn.functional as F
