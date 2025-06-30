@@ -14,7 +14,7 @@ export FD_MODEL_CACHE=/ssd1/download_models
 
 | 模型名 | 上下文长度 | 量化方式 | 最小部署资源 | 说明 |
 | :----- | :--------------  | :----------- |:----------- |:----------- |
-| baidu/ERNIE-4.5-VL-424B-A47B-Paddle | 32K/128K | WINT2 | 1卡*96G显存/1T内存 | 128K需要开启Chunked Prefill |
+| baidu/ERNIE-4.5-VL-424B-A47B-Paddle | 32K/128K | WINT2 | 1卡*141G显存/1T内存 | 128K需要开启Chunked Prefill |
 | baidu/ERNIE-4.5-VL-424B-A47B-Paddle | 32K/128K | WINT4 | 4卡*80G显存/1T内存 | 128K需要开启Chunked Prefill |
 | baidu/ERNIE-4.5-VL-424B-A47B-Paddle | 32K/128K | WINT8 | 8卡*80G显存/1T内存 | 128K需要开启Chunked Prefill |
 | baidu/ERNIE-4.5-300B-A47B-Paddle | 32K/128K | WINT4 | 4卡*64G显存/600G内存 | 128K需要开启Chunked Prefill |
