@@ -3,8 +3,9 @@ The current version of the software merely serves as a demonstration demo for th
 
 ##  Machine Preparation
 First, you need to prepare a machine with the following configurations:
+
 | CPU | Memory | Card | Hard Disk|
-|-----|------|-----|-----|
+| :---: | :---: | :---: | :---: |
 | x86 | 1TB| 8xBI150| 1TB|
 
 Currently, the entire model needs to be loaded into the host memory, which requires more than 600GB of host memory. This issue will be optimized in subsequent versions.
