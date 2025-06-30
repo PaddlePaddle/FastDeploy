@@ -222,5 +222,5 @@ for chunk in response:
 print('\n')
 ```
 
-OpenAI 协议的更多说明可参考文档 [OpenAI Chat Compeltion API](https://platform.openai.com/docs/api-reference/chat/create)，以及与 OpenAI 协议的区别可以参考 [服务化部署](../../serving/README.md)。
+OpenAI 协议的更多说明可参考文档 [OpenAI Chat Compeltion API](https://platform.openai.com/docs/api-reference/chat/create)，以及与 OpenAI 协议的区别可以参考 [服务化部署](../../online_serving/README.md)。
 
