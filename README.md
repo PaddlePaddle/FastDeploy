@@ -46,9 +46,9 @@
 FastDeploy supports inference deployment on **NVIDIA GPUs**, **Kunlunxin XPUs**, **Iluvatar GPUs**, **Enflame GCUs**, and other hardware. For detailed installation instructions:
 
 - [NVIDIA GPU](./docs/installation/nvidia_cuda.md)
-- [Kunlunxin XPU](./docs/en/get_started/installation/kunlunxin_xpu.md)
-- [Iluvatar GPU](./docs/en/get_started/installation/iluvatar_gpu.md)
-- [Enflame GCU](./docs/en/get_started/installation/Enflame_gcu.md)
+- [Kunlunxin XPU](./docs/get_started/installation/kunlunxin_xpu.md)
+- [Iluvatar GPU](./docs/get_started/installation/iluvatar_gpu.md)
+- [Enflame GCU](./docs/get_started/installation/Enflame_gcu.md)
 
 **Note:** We are actively working on expanding hardware support. Additional hardware platforms including Ascend NPU, Hygon DCU, and MetaX GPU are currently under development and testing. Stay tuned for updates!
 
