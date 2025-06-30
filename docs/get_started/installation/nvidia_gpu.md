@@ -10,11 +10,7 @@ The following installation methods are available when your environment meets the
 
 ## 1. Pre-built Docker Installation (Recommended)
 ```shell
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy:${fastdeploy_latest_version}
-```
-Where ```${fastdeploy_latest_version}``` is the FastDeploy release version number. [Check latest release here](https://github.com/PaddlePaddle/FastDeploy/releases). For example:
-```shell
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy:2.0.0
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:2.0.0
 ```
 
 ## 2. Pre-built Pip Installation
