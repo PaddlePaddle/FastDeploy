@@ -10,7 +10,7 @@ Before deployment, ensure your environment meets the following requirements:
 
 This guide uses the lightweight ERNIE-4.5-0.3B-Paddle model for demonstration, which can be deployed on most hardware configurations. Docker deployment is recommended.
 
-For more information about how to install FastDeploy, refer to the [installation document](../installation/README.md).
+For more information about how to install FastDeploy, refer to the [installation document](installation/README.md).
 
 ## 1. Launch Service
 After installing FastDeploy, execute the following command in the terminal to start the service. For the configuration method of the startup command, refer to [Parameter Description](../parameters.md)
