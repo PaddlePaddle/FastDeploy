@@ -22,6 +22,7 @@ from .cpu import CPUPlatform
 from .xpu import XPUPlatform
 from .npu import NPUPlatform
 from .dcu import DCUPlatform
+from .maca import MACAPlatform
 from .base import _Backend
 
 _current_platform = None
@@ -34,6 +35,8 @@ def __getattr__(name: str):
         if _current_platform is None:
             if paddle.is_compiled_with_cuda():
                 _current_platform = CUDAPlatform()
+            elif  paddle.is_compiled_with_custom_device("metax_gpu"):
+                _current_platform = MACAPlatform()
             elif paddle.is_compiled_with_xpu():
                 _current_platform = XPUPlatform()
             elif paddle.is_compiled_with_custom_device("npu"):

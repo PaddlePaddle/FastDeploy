@@ -33,6 +33,12 @@ class Platform:
         whether platform is cuda
         """
         return paddle.is_compiled_with_cuda()
+    
+    def is_maca(self) -> bool:
+        """
+        whether platform is maca
+        """
+        return paddle.is_compiled_with_custom_device("metax_gpu")
 
     def is_npu(self) -> bool:
         """
