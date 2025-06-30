@@ -9,7 +9,7 @@
 - XPU 固件版本：≥ 1.31
 
 已验证的平台：
-- CPU：INTEL(R) XEON(R) PLATINUM 8563C
+- CPU：INTEL(R) XEON(R) PLATINUM 8563C / Hygon C86-4G 7490 64-core Processor
 - 内存：2T
 - 磁盘：4T
 - OS：CentOS release 7.6 (Final)

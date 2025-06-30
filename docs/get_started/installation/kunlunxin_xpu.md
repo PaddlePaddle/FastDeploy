@@ -9,7 +9,7 @@
 - XPU Firmware Version: ≥ 1.31
 
 Verified platform:
-- CPU: INTEL(R) XEON(R) PLATINUM 8563C
+- CPU: INTEL(R) XEON(R) PLATINUM 8563C / Hygon C86-4G 7490 64-core Processor
 - Memory: 2T
 - Disk: 4T
 - OS: CentOS release 7.6 (Final)
