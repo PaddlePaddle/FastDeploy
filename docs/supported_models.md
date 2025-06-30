@@ -13,7 +13,7 @@ export FD_MODEL_CACHE=/ssd1/download_models
 
 | Model Name | Context Length | Quantization | Minimum Deployment Resources | Notes |
 | :--------- | :------------- | :----------- | :-------------------------- | :---- |
-| baidu/ERNIE-4.5-VL-424B-A47B-Paddle | 32K/128K | WINT2 | 1*96G GPU VRAM/1T RAM | Chunked Prefill required for 128K |
+| baidu/ERNIE-4.5-VL-424B-A47B-Paddle | 32K/128K | WINT2 | 1*141G GPU VRAM/1T RAM | Chunked Prefill required for 128K |
 | baidu/ERNIE-4.5-VL-424B-A47B-Paddle | 32K/128K | WINT4 | 4*80G GPU VRAM/1T RAM | Chunked Prefill required for 128K |
 | baidu/ERNIE-4.5-VL-424B-A47B-Paddle | 32K/128K | WINT8 | 8*80G GPU VRAM/1T RAM | Chunked Prefill required for 128K |
 | baidu/ERNIE-4.5-300B-A47B-Paddle | 32K/128K | WINT4 | 4*64G GPU VRAM/600G RAM | Chunked Prefill required for 128K |
