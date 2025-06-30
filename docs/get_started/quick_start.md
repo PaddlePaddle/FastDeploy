@@ -1,4 +1,4 @@
-# Deploy ERNIE-4.5-0.3B-Base-Paddle in 10 Minutes
+# Deploy ERNIE-4.5-0.3B-Paddle in 10 Minutes
 
 Before deployment, ensure your environment meets the following requirements:
 
@@ -8,7 +8,7 @@ Before deployment, ensure your environment meets the following requirements:
 - Linux X86_64
 - Python ≥ 3.10
 
-This guide uses the lightweight ERNIE-4.5-0.3B-Base-Paddle model for demonstration, which can be deployed on most hardware configurations. Docker deployment is recommended.
+This guide uses the lightweight ERNIE-4.5-0.3B-Paddle model for demonstration, which can be deployed on most hardware configurations. Docker deployment is recommended.
 
 For more information about how to install FastDeploy, refer to the [installation document](../installation/README.md).
 
@@ -17,7 +17,7 @@ After installing FastDeploy, execute the following command in the terminal to st
 
 ```
 python -m fastdeploy.entrypoints.openai.api_server \
-       --model baidu/ERNIE-4.5-0.3B-Base-Paddle \
+       --model baidu/ERNIE-4.5-0.3B-Paddle \
        --port 8180 \
        --metrics-port 8181 \
        --engine-worker-queue-port 8182 \
