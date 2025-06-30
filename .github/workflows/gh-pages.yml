@@ -18,4 +18,4 @@ jobs:
         with:
           python-version: 3.x
       - run: pip install mkdocs-material mkdocs-get-deps mkdocs-material-extensions mkdocs-multilang
-      - run: mkdocs gh-deploy --force
+      - run: mkdocs gh-deploy --force --remote-name origin
