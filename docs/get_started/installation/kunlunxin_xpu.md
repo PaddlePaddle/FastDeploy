@@ -9,7 +9,7 @@
 - XPU Firmware Version: ≥ 1.31
 
 Verified platform:
-- CPU: INTEL(R) XEON(R) PLATINUM 8563C
+- CPU: INTEL(R) XEON(R) PLATINUM 8563C / Hygon C86-4G 7490 64-core Processor
 - Memory: 2T
 - Disk: 4T
 - OS: CentOS release 7.6 (Final)
@@ -43,7 +43,7 @@ python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/
 ### Install FastDeploy (**Do NOT install via PyPI source**)
 
 ```bash
-python -m pip install fastdeploy-xpu==2.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/ 
+python -m pip install fastdeploy-xpu==2.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 ```
 
 Alternatively, you can install the latest version of FastDeploy (Not recommended)
@@ -52,7 +52,7 @@ Alternatively, you can install the latest version of FastDeploy (Not recommended
 python -m pip install --pre fastdeploy-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
 ```
 
-### 3. Build wheel from source
+## 3. Build wheel from source
 
 ### Install PaddlePaddle
 
@@ -115,9 +115,9 @@ Currently, P800 has only validated deployment of the following models:
 - ERNIE-4.5-300B-A47B-Paddle 128K WINT4 (8-card)
 
 ### Offline inference
- 
+
 After installing FastDeploy, you can perform offline text generation with user-provided prompts using the following code,
- 
+
 ```python
 from fastdeploy import LLM, SamplingParams
 
@@ -141,11 +141,11 @@ for output in outputs:
 
 Refer to [Parameters](../../parameters.md) for more configuration options.
 
-## Online serving (OpenAI API-Compatible server)
+### Online serving (OpenAI API-Compatible server)
 
 Deploy an OpenAI API-compatible server using FastDeploy with the following commands:
 
-### Start service
+#### Start service
 
 **ERNIE-4.5-300B-A47B-Paddle 32K WINT4 (8-card) (Recommended)**
 
@@ -175,7 +175,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 Refer to [Parameters](../../parameters.md) for more options.
 
-### Send requests
+#### Send requests
 
 Send requests using either curl or Python
 
@@ -218,4 +218,4 @@ for chunk in response:
 print('\n')
 ```
 
-For detailed OpenAI protocol specifications, see [OpenAI Chat Compeltion API](https://platform.openai.com/docs/api-reference/chat/create). Differences from the standard OpenAI protocol are documented in [Deployment](../../online_serving/README.md).
+For detailed OpenAI protocol specifications, see [OpenAI Chat Compeltion API](https://platform.openai.com/docs/api-reference/chat/create). Differences from the standard OpenAI protocol are documented in [OpenAI Protocol-Compatible API Server](../../online_serving/README.md).

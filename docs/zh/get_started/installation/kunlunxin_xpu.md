@@ -9,7 +9,7 @@
 - XPU 固件版本：≥ 1.31
 
 已验证的平台：
-- CPU：INTEL(R) XEON(R) PLATINUM 8563C
+- CPU：INTEL(R) XEON(R) PLATINUM 8563C / Hygon C86-4G 7490 64-core Processor
 - 内存：2T
 - 磁盘：4T
 - OS：CentOS release 7.6 (Final)
@@ -43,7 +43,7 @@ python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/
 ### 安装 FastDeploy（**注意不要通过 pypi 源安装**）
 
 ```bash
-python -m pip install fastdeploy-xpu==2.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/ 
+python -m pip install fastdeploy-xpu==2.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 ```
 
 或者你也可以安装最新版 FastDeploy（不推荐）
@@ -95,6 +95,7 @@ git checkout <tag or branch>
 cd FastDeploy
 bash build.sh
 ```
+
 编译后的产物在 ```FastDeploy/dist``` 目录下。
 
 ## 验证是否安装成功
@@ -222,5 +223,4 @@ for chunk in response:
 print('\n')
 ```
 
-OpenAI 协议的更多说明可参考文档 [OpenAI Chat Compeltion API](https://platform.openai.com/docs/api-reference/chat/create)，以及与 OpenAI 协议的区别可以参考 [服务化部署](../../online_serving/README.md)。
-
+OpenAI 协议的更多说明可参考文档 [OpenAI Chat Compeltion API](https://platform.openai.com/docs/api-reference/chat/create)，以及与 OpenAI 协议的区别可以参考 [兼容 OpenAI 协议的服务化部署](../../online_serving/README.md)。
