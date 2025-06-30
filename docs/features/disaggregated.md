@@ -1,6 +1,6 @@
 # Disaggregated Deployment
 
-Large model inference consists of two phases: Prefill and Decode, which are compute-intensive (Prefill) and compute-intensive (Decode) respectively. Deploying Prefill and Decode separately in certain scenarios can improve hardware utilization, effectively increase throughput, and reduce overall sentence latency.
+Large model inference consists of two phases: Prefill and Decode, which are compute-intensive (Prefill) and Memory access-intensive(Decode) respectively. Deploying Prefill and Decode separately in certain scenarios can improve hardware utilization, effectively increase throughput, and reduce overall sentence latency.
 
 * Prefill phase: Processes all input Tokens (such as user prompts), completes the model's forward propagation, and generates the first token.
 * Decode phase: Starting from the first generated token, it generates one token at a time autoregressively until reaching the stop token. For N output tokens, the Decode phase requires (N-1) forward propagations that must be executed serially. During generation, the number of tokens to attend to increases, and computational requirements gradually grow.
