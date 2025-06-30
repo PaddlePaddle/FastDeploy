@@ -77,7 +77,7 @@ Learn how to use FastDeploy through our documentation:
 ## Advanced Usage
 
 - [Quantization](./docs/quantization/README.md)
-- [PD Disaggregation Deployment](./docs/features/pd_disaggregation.md)
+- [PD Disaggregation Deployment](./docs/features/disaggregated.md)
 - [Speculative Decoding](./docs/features/speculative_decoding.md)
 - [Prefix Caching](./docs/features/prefix_caching.md)
 - [Chunked Prefill](./docs/features/chunked_prefill.md)
