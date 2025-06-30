@@ -59,7 +59,7 @@ Learn how to use FastDeploy through our documentation:
 - [ERNIE-4.5 Large Language Model Deployment](./docs/get_started/ernie-4.5.md)
 - [ERNIE-4.5-VL Multimodal Model Deployment](./docs/get_started/ernie-4.5-vl.md)
 - [Offline Inference Development](./docs/offline_inference.md)
-- [Online Service Deployment](./docs/serving/README.md)
+- [Online Service Deployment](./docs/online_serving/README.md)
 - [Full Supported Models List](./docs/supported_models.md)
 
 ## Supported Models
