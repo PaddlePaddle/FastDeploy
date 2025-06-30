@@ -47,8 +47,12 @@ __global__ void moe_align_block_size_kernel(const scalar_t* __restrict__ topk_id
 
   __syncthreads();
 
-  for (int i = threadIdx.x; i < numel; i += blockDim.x) {
+  size_t block_size = numel / 1024;
+  for (int i = threadIdx.x; i < threadIdx.x + block_size; i += blockDim.x) {
     int expert_id = topk_ids[i];
+    if (expert_id < 0 || expert_id >= num_experts) {
+      continue; // Skip invalid expert IDs
+    }
     atomicAdd(&tokens_per_ep[expert_id], 1);
   }
 
