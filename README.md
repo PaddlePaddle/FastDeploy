@@ -13,7 +13,7 @@
 <p align="center">
     <a href="docs/get_started/installation/README.md"><b> Installation </b></a>
     |
-    <a href="docs/get_started.md"><b> Quick Start </b></a>
+    <a href="docs/get_started"><b> Quick Start </b></a>
     |
     <a href="docs/supported_models.md"><b> Supported Models </b></a>
 </p>
