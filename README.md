@@ -11,11 +11,11 @@
 </p>
 
 <p align="center">
-    <a href="docs/get_started/installation/README.md"><b> Installation </b></a>
+    <a href="https://paddlepaddle.github.io/FastDeploy/get_started/installation/nvidia_gpu/"><b> Installation </b></a>
     |
-    <a href="docs/get_started"><b> Quick Start </b></a>
+    <a href="https://paddlepaddle.github.io/FastDeploy/get_started/quick_start"><b> Quick Start </b></a>
     |
-    <a href="docs/supported_models.md"><b> Supported Models </b></a>
+    <a href="https://paddlepaddle.github.io/FastDeploy/supported_models/"><b> Supported Models </b></a>
 </p>
 
 --------------------------------------------------------------------------------
