@@ -18,7 +18,8 @@ import paddle
 from paddle import nn
 
 import fastdeploy
-
+from fastdeploy.distributed.communication_op import \
+    tensor_model_parallel_all_reduce
 from ..quantization.quant_base import QuantMethodBase
 from ..utils import create_and_set_parameter, get_tensor
 
@@ -232,5 +233,8 @@ class TritonWint2FusedMoeMethod(Wint2MoeMethod):
             norm_topk_prob=True,
             routed_scaling_factor=1.0,
         )
+
+        if layer.tp_size > 1:
+            tensor_model_parallel_all_reduce(fused_moe_out)
 
         return fused_moe_out
