@@ -20,6 +20,7 @@ from paddle import nn
 import fastdeploy
 from fastdeploy.distributed.communication_op import \
     tensor_model_parallel_all_reduce
+
 from ..quantization.quant_base import QuantMethodBase
 from ..utils import create_and_set_parameter, get_tensor
 
@@ -223,7 +224,6 @@ class TritonWint2FusedMoeMethod(Wint2MoeMethod):
         )
 
         from fastdeploy.model_executor.ops.gpu import moe_expert_reduce
-
         fused_moe_out = moe_expert_reduce(
             ffn_out,
             topk_weights,
