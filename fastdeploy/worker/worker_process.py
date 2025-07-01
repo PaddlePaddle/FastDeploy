@@ -689,9 +689,14 @@ def initialize_fd_config(args) -> FDConfig:
     elif args.quantization != "None":
         quantization_config = {}
         quant_config_name = args.quantization
-        if use_moe and quant_config_name == "wint4":
+        quantization_config["quantization"] = quant_config_name
+        # use some trick code for ernie model and will unify it in future.
+        is_ernie = "Ernie4_5_ForCausalLM" in config.get("architectures") or \
+                    "Ernie4_5_MoeForCausalLM" in config.get("architectures")
+        if use_moe and quant_config_name == "wint4" and is_ernie:
             quantization_config["dense_quant_type"] = "wint8"
             quantization_config["moe_quant_type"] = "wint4"
+            quantization_config["quantization"] = "mix_quant"
             quant_config_name = "mix_quant"
     else:
         quant_config_name = None
