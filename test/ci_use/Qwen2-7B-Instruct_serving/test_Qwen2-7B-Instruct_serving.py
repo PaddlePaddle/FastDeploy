@@ -1,8 +1,16 @@
-#!/bin/env python3
-# -*- coding: utf-8 -*-
-# @author DDDivano,yubaoku,xieyunshen
-# encoding=utf-8 vi:ts=4:sw=4:expandtab:ft=python
-
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import pytest
 import requests
@@ -303,7 +311,6 @@ def test_exceed_context_length(api_url, headers):
     # Check if the response indicates a token limit error or server error (500)
     try:
         response_json = resp.json()
-        # print("Response JSON content:", json.dumps(response_json, ensure_ascii=False)[:1000])
     except Exception:
         response_json = {}
 
@@ -365,7 +372,6 @@ def test_metrics_endpoint(metrics_url):
 
     # Parse Prometheus metrics data
     metrics_data = resp.text
-    # print(metrics_data)
     lines = metrics_data.split("\n")
 
     metric_lines = [line for line in lines if not line.startswith("#") and line.strip() != ""]
@@ -524,7 +530,6 @@ def test_streaming_chat(openai_client, capsys):
     for chunk in response:
         if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
             output.append(chunk.choices[0].delta.content)
-    # print(output)
     assert len(output) > 2
 
 # ==========================
@@ -560,5 +565,4 @@ def test_streaming(openai_client, capsys):
     output = []
     for chunk in response:
         output.append(chunk.choices[0].text)
-    # print(output)
     assert len(output) > 0

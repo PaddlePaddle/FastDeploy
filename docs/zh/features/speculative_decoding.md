@@ -108,7 +108,7 @@ python -m fastdeploy.entrypoints.openai.api_server  \
 ```
 
 ## 🧠 使用 Ngram 解码
-该算法通过 n-gram 窗口从 prompt 和已生成的 Token 中进行匹配生成草稿 Token，适合输入和输出有很大 overlap 的场景如代码编辑、文档查询等查看论文地址。
+该算法通过 n-gram 窗口从 prompt 和已生成的 Token 中进行匹配生成草稿 Token，适合输入和输出有很大 overlap 的场景，如代码续写、文档查询等。
 > 使用 4×H100；量化方式选择 WINT4  
 > 配置文件：benchmarks/yaml/eb45t-32k-wint4-mtp-h100-tp4.yaml
 ```
@@ -116,5 +116,5 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --model ${path_to_main_model} \
     --tensor-parallel-size 4 \
     --config ${path_to_FastDeploy}benchmarks/yaml/eb45t-32k-wint4-mtp-h100-tp4.yaml \
-    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${mtp_model_path}"}'
+    --speculative-config '{"method": "ngram", "num_speculative_tokens": 1, "model": "${mtp_model_path}"}'
 ```
