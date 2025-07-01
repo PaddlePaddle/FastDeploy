@@ -36,6 +36,8 @@ jobs:
               rm -rf ${REPO_NAME}
             fi
           '
+          git config --global user.name "FastDeployCI"
+          git config --global user.email "fastdeploy_ci@example.com"
           git clone ${REPO} ${REPO_NAME}
           cd FastDeploy
           if [ "${{ github.event_name }}" = "pull_request" ]; then
