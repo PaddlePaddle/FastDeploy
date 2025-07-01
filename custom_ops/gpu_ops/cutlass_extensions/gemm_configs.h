@@ -86,22 +86,21 @@ enum class CutlassTileConfigSM100
     // Signals that we should run heuristics do choose a config
     ChooseWithHeuristic,
 
-    // Example CTA configs for M=64 (replace with actual Blackwell configs)
-    CtaShape64x16x256B_SM100,    // Assuming K-tile might be 256B for Blackwell
-    CtaShape64x32x256B_SM100,
-    CtaShape64x64x256B_SM100,
-    CtaShape64x128x256B_SM100,
-    CtaShape64x256x256B_SM100,
-
-    // Example CTA configs for M=128 (replace with actual Blackwell configs)
-    CtaShape128x16x256B_SM100,
-    CtaShape128x32x256B_SM100,
-    CtaShape128x64x256B_SM100,
-    CtaShape128x128x256B_SM100,
-    CtaShape128x256x256B_SM100,
-
-    // Example CTA configs for M=256 (replace with actual Blackwell configs)
-    CtaShape256x128x256B_SM100,
+    // Actual SM100 tile configs based on user input (K-tile is 128B)
+    CtaShape64x64x128B,
+    CtaShape64x128x128B,
+    CtaShape64x256x128B,
+    CtaShape128x64x128B,
+    CtaShape128x128x128B,
+    CtaShape128x256x128B,
+    CtaShape256x64x128B,
+    CtaShape256x128x128B,
+    CtaShape256x256x128B
+    // Note: The user-provided list for get_candidate_tiles_sm100 also includes
+    // CtaShape128x64x128B and CtaShape256x64x128B for specific FP4 grouped gemm cases.
+    // These are already covered by the list above if general suffices.
+    // If they need distinct enum values, they should be added.
+    // For now, keeping the enum concise with unique shapes mentioned for general use.
 };
 
 
@@ -165,6 +164,7 @@ struct CutlassGemmConfig
         GROUPED_GEMM = 1u << 4,
         FP8_ONLY = 1u << 5,
         BLACKWELL = 1u << 6, // SM100
+        FP4_ONLY = 1u << 7, // For Blackwell FP4/MXFP4 paths
     };
 
     CutlassTileConfig tile_config = CutlassTileConfig::ChooseWithHeuristic;

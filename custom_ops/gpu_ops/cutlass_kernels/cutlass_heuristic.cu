@@ -245,71 +245,84 @@ bool supports_mcast_along_n(CutlassTileConfigSM90 const tile)
 #endif
 }
 
-// Placeholder for SM100 (Blackwell)
-// TODO: Populate with actual Blackwell optimized tile configurations after research
+// SM100 (Blackwell) candidate tile configurations
 std::vector<CutlassTileConfigSM100> get_candidate_tiles_sm100(
-    int const sm, CutlassGemmConfig::CandidateConfigTypeParam const config)
+    int /*sm*/, CutlassGemmConfig::CandidateConfigTypeParam const config)
 {
 #ifdef FAST_BUILD
-    // Fast build might disable all configs except a default one for SM100
-    return {CutlassTileConfigSM100::CtaShape128x128x256B_SM100}; // Example default
+    return {CutlassTileConfigSM100::CtaShape128x128x128B};
 #else
-    // These are placeholder values based on the enum definition.
-    // Actual values depend on performance testing and NVIDIA recommendations for Blackwell.
+    /*  Grouped-GEMM path first (Blackwell uses 1-SM and 2-SM “cluster” kernels) */
     if (config & CutlassGemmConfig::GROUPED_GEMM)
     {
-        return {CutlassTileConfigSM100::CtaShape128x16x256B_SM100, CutlassTileConfigSM100::CtaShape128x32x256B_SM100,
-            CutlassTileConfigSM100::CtaShape128x64x256B_SM100, CutlassTileConfigSM100::CtaShape128x128x256B_SM100,
-            CutlassTileConfigSM100::CtaShape128x256x256B_SM100, CutlassTileConfigSM100::CtaShape256x128x256B_SM100};
+        if (config & CutlassGemmConfig::FP4_ONLY)        // nvfp4 / mx_fp4
+        {
+            return {
+                /* 1 SM (M=128) */
+                CutlassTileConfigSM100::CtaShape128x128x128B,
+                CutlassTileConfigSM100::CtaShape128x256x128B,
+                /* 2 SM (M=256) */
+                CutlassTileConfigSM100::CtaShape256x128x128B,
+                CutlassTileConfigSM100::CtaShape256x256x128B,
+                /* slim tiles for very tall matrices */
+                CutlassTileConfigSM100::CtaShape128x64x128B,
+                CutlassTileConfigSM100::CtaShape256x64x128B};
+        }
+
+        /*  Fp8 / Fp16 grouped-GEMM      */
+        return {
+            CutlassTileConfigSM100::CtaShape128x128x128B,
+            CutlassTileConfigSM100::CtaShape128x256x128B,
+            CutlassTileConfigSM100::CtaShape256x128x128B,
+            CutlassTileConfigSM100::CtaShape256x256x128B};
     }
-    else
-    {
-        return {CutlassTileConfigSM100::CtaShape64x16x256B_SM100, CutlassTileConfigSM100::CtaShape64x32x256B_SM100,
-            CutlassTileConfigSM100::CtaShape64x64x256B_SM100, CutlassTileConfigSM100::CtaShape64x128x256B_SM100,
-            CutlassTileConfigSM100::CtaShape64x256x256B_SM100, CutlassTileConfigSM100::CtaShape128x16x256B_SM100,
-            CutlassTileConfigSM100::CtaShape128x32x256B_SM100, CutlassTileConfigSM100::CtaShape128x64x256B_SM100,
-            CutlassTileConfigSM100::CtaShape128x128x256B_SM100, CutlassTileConfigSM100::CtaShape128x256x256B_SM100};
-    }
+
+    /*  Non-grouped path (plain GEMM or weight-only)   */
+    return {
+        /* 1 SM tiles */
+        CutlassTileConfigSM100::CtaShape64x64x128B,
+        CutlassTileConfigSM100::CtaShape64x128x128B,
+        CutlassTileConfigSM100::CtaShape64x256x128B,
+        CutlassTileConfigSM100::CtaShape128x64x128B,
+        CutlassTileConfigSM100::CtaShape128x128x128B,
+        CutlassTileConfigSM100::CtaShape128x256x128B,
+        /* 2 SM tiles */
+        CutlassTileConfigSM100::CtaShape256x64x128B,
+        CutlassTileConfigSM100::CtaShape256x128x128B,
+        CutlassTileConfigSM100::CtaShape256x256x128B};
 #endif
 }
 
-// Placeholder: M-multicast support for SM100.
-// TODO: Update based on Blackwell architecture specifics.
-bool supports_mcast_along_m_sm100(CutlassTileConfigSM100 const tile)
+// M-multicast support for SM100.
+bool supports_mcast_along_m_sm100(CutlassTileConfigSM100 tile)
 {
 #ifdef FAST_BUILD
     return false;
 #else
-    // Example: Allow if M-dimension of tile is >= 128. This is a guess.
-    // Actual conditions will depend on Blackwell's capabilities and CUTLASS implementation for it.
-    std::set<CutlassTileConfigSM100> valid_tiles{
-        CutlassTileConfigSM100::CtaShape128x16x256B_SM100,
-        CutlassTileConfigSM100::CtaShape128x32x256B_SM100,
-        CutlassTileConfigSM100::CtaShape128x64x256B_SM100,
-        CutlassTileConfigSM100::CtaShape128x128x256B_SM100,
-        CutlassTileConfigSM100::CtaShape128x256x256B_SM100,
-        CutlassTileConfigSM100::CtaShape256x128x256B_SM100
-    };
-    return valid_tiles.count(tile) == 1;
+    std::set<CutlassTileConfigSM100> m_tiles{
+        CutlassTileConfigSM100::CtaShape128x64x128B,
+        CutlassTileConfigSM100::CtaShape128x128x128B,
+        CutlassTileConfigSM100::CtaShape128x256x128B,
+        CutlassTileConfigSM100::CtaShape256x64x128B,
+        CutlassTileConfigSM100::CtaShape256x128x128B,
+        CutlassTileConfigSM100::CtaShape256x256x128B};
+    return m_tiles.count(tile) == 1;
 #endif
 }
 
-// Placeholder: N-multicast support for SM100.
-// TODO: Update based on Blackwell architecture specifics.
-bool supports_mcast_along_n_sm100(CutlassTileConfigSM100 const tile)
+// N-multicast support for SM100.
+bool supports_mcast_along_n_sm100(CutlassTileConfigSM100 tile)
 {
 #ifdef FAST_BUILD
     return false;
 #else
-    // Example: Allow if N-dimension of tile is >= 128. This is a guess.
-    std::set<CutlassTileConfigSM100> valid_tiles{
-        CutlassTileConfigSM100::CtaShape64x128x256B_SM100,
-        CutlassTileConfigSM100::CtaShape64x256x256B_SM100,
-        CutlassTileConfigSM100::CtaShape128x128x256B_SM100,
-        CutlassTileConfigSM100::CtaShape128x256x256B_SM100,
-        CutlassTileConfigSM100::CtaShape256x128x256B_SM100
-    };
-    return valid_tiles.count(tile) == 1;
+    std::set<CutlassTileConfigSM100> n_tiles{
+        CutlassTileConfigSM100::CtaShape64x128x128B,
+        CutlassTileConfigSM100::CtaShape64x256x128B,
+        CutlassTileConfigSM100::CtaShape128x128x128B,
+        CutlassTileConfigSM100::CtaShape128x256x128B,
+        CutlassTileConfigSM100::CtaShape256x128x128B};
+    return n_tiles.count(tile) == 1;
 #endif
 }
 
@@ -358,37 +371,36 @@ std::vector<CutlassGemmConfig> get_candidate_configs(
         std::vector<CutlassTileConfigSM100> tiles = get_candidate_tiles_sm100(sm, config_type_param);
         std::vector<CutlassGemmConfig> candidate_configs;
 
-        for (auto const& tile_config : tiles)
+        for (auto const& tile_config_sm100 : tiles)
         {
-            // Assuming SM100 uses similar MainloopScheduleType, EpilogueScheduleType, ClusterShape as SM90 for now.
-            // These might need to be SM100-specific types/enums if Blackwell's TMA/scheduling differs.
+            // SM100 uses MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO similar to SM90.
+            // Cluster shapes are also handled similarly.
             CutlassGemmConfig config(
-                tile_config, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO, ClusterShape::ClusterShape_1x1x1);
+                tile_config_sm100, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO, ClusterShape::ClusterShape_1x1x1);
             candidate_configs.push_back(config);
 
-            // Placeholder mcast support checks for SM100
-            bool const has_m_mcast = supports_mcast_along_m_sm100(tile_config);
-            bool const has_n_mcast = supports_mcast_along_n_sm100(tile_config);
+            bool const has_m_mcast = supports_mcast_along_m_sm100(tile_config_sm100);
+            bool const has_n_mcast = supports_mcast_along_n_sm100(tile_config_sm100);
 
             if (has_m_mcast)
             {
-                CutlassGemmConfig config(tile_config, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
+                CutlassGemmConfig mcast_m_config(tile_config_sm100, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
                     ClusterShape::ClusterShape_2x1x1);
-                candidate_configs.push_back(config);
+                candidate_configs.push_back(mcast_m_config);
             }
 
             if (has_n_mcast)
             {
-                CutlassGemmConfig config(tile_config, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
+                CutlassGemmConfig mcast_n_config(tile_config_sm100, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
                     ClusterShape::ClusterShape_1x2x1);
-                candidate_configs.push_back(config);
+                candidate_configs.push_back(mcast_n_config);
             }
 
             if (has_m_mcast && has_n_mcast)
             {
-                CutlassGemmConfig config(tile_config, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
+                CutlassGemmConfig mcast_mn_config(tile_config_sm100, MainloopScheduleType::AUTO, EpilogueScheduleType::AUTO,
                     ClusterShape::ClusterShape_2x2x1);
-                candidate_configs.push_back(config);
+                candidate_configs.push_back(mcast_mn_config);
             }
         }
         return candidate_configs;
@@ -396,7 +408,8 @@ std::vector<CutlassGemmConfig> get_candidate_configs(
 
     // Fallback to older architecture configurations
     std::vector<CutlassTileConfig> tiles = get_candidate_tiles(sm, config_type_param);
-    std::vector<CutlassGemmConfig> candidate_configs;
+    std::vector<CutlassGemmConfig> candidate_configs; //Already declared above for SM90 path, ensure scope is correct or redeclare if necessary.
+                                                      // It's fine here as it's within an else if / else block.
     bool const int8_configs_only = config_type_param & CutlassGemmConfig::INT8_ONLY;
     int const min_stages = int8_configs_only ? 3 : 2;
     int const max_stages = int8_configs_only ? 6 : (sm >= 80 ? 4 : 2);
