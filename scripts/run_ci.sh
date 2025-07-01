@@ -9,21 +9,54 @@ python -m pip install jsonschema aistudio_sdk==0.2.6
 bash build.sh || exit 1
 
 failed_files=()
-run_path="$DIR/../test/ci_use"
-pushd "$run_path" || exit 1  # 目录不存在时退出
+run_path="$DIR/../test/ci_use/"
 
-for file in test_*; do
-    if [ -f "$file" ]; then
-        abs_path=$(realpath "$file")
-        echo "Running pytest on $abs_path"
-        if ! python -m pytest -sv "$abs_path"; then
-            echo "Test failed: $file"
-            failed_files+=("$file")
-        fi
+# load all test files
+for subdir in "$run_path"*/; do
+    if [ -d "$subdir" ]; then
+        pushd "$subdir" > /dev/null || continue  # into test dir or continue
+
+        # search for test_*.py files
+        for file in test_*.py; do
+            if [ -f "$file" ]; then
+                echo "============================================================"
+                echo "Running pytest on $(realpath "$file")"
+                echo "------------------------------------------------------------"
+
+                set +e
+                timeout 360 python -m pytest --disable-warnings -sv "$file"
+                exit_code=$?
+                set -e
+
+                if [ $exit_code -ne 0 ]; then
+                    if [ -f "${subdir%/}/log/workerlog.0" ]; then
+                        echo "---------------- log/workerlog.0 -------------------"
+                        cat "${subdir%/}/log/workerlog.0"
+                        echo "----------------------------------------------------"
+                    fi
+
+                    if [ -f "${subdir%/}/server.log" ]; then
+                        echo "---------------- server.log ----------------"
+                        cat "${subdir%/}/server.log"
+                        echo "--------------------------------------------"
+                    fi
+
+                    if [ "$exit_code" -eq 1 ] || [ "$exit_code" -eq 124 ]; then
+                        echo "[ERROR] $file 起服务或执行异常，exit_code=$exit_code"
+                        if [ "$exit_code" -eq 124 ]; then
+                            echo "[TIMEOUT] $file 脚本执行超过 6 分钟, 任务超时退出！"
+                        fi
+                    fi
+
+                    failed_files+=("$subdir$file")
+                    exit 1
+                fi
+                echo "------------------------------------------------------------"
+            fi
+        done
+        popd > /dev/null  # back to test dir
     fi
 done
-popd
-
 
 if [ ${#failed_files[@]} -gt 0 ]; then
     echo "The following tests failed:"
