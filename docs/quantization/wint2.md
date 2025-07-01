@@ -46,7 +46,7 @@ Example of quantization configuration in the model's config.json file:
 ```
 
 - For more deployment tutorials, please refer to [get_started](../get_started/ernie-4.5.md);
-- For more model descriptions, please refer to [Supported Model List](https://console.cloud.baidu-int.com/devops/icode/repos/baidu/paddle_internal/FastDeploy/blob/feature%2Finference-refactor-20250528/docs/supported_models.md).
+- For more model descriptions, please refer to [Supported Model List](../supported_models.md).
 
 ## WINT2 Performance
 
