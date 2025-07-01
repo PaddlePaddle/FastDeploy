@@ -127,7 +127,7 @@ Deploy an OpenAI API-compatible server using FastDeploy with the following comma
 
 #### Start service
 
-**The ERNIE-4.5-300B-A47B-Paddle model is to be deployed with a configuration of 32K WINT4 utilizing 8 XPU cards (Recommended)**
+**Deploy the ERNIE-4.5-300B-A47B-Paddle model with WINT4 precision and 32K context length on 8 XPUs(Recommended)**
 
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -140,7 +140,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.9
 ```
 
-**The ERNIE-4.5-300B-A47B-Paddle model is to be deployed with a configuration of 128K WINT4 utilizing 8 XPU cards**
+**Deploy the ERNIE-4.5-300B-A47B-Paddle model with WINT4 precision and 128K context length on 8 XPUs**
 
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -153,7 +153,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.9
 ```
 
-**The ERNIE-4.5-300B-A47B-Paddle model is to be deployed with a configuration of 32K WINT4 utilizing 4 XPU cards**
+**Deploy the ERNIE-4.5-300B-A47B-Paddle model with WINT4 precision and 32K context length on 4 XPUs**
 
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3"
