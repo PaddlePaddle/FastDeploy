@@ -46,7 +46,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 
 - 更多部署教程请参考[get_started](../get_started/ernie-4.5.md)；
-- 更多模型说明请参考[支持模型列表](https://console.cloud.baidu-int.com/devops/icode/repos/baidu/paddle_internal/FastDeploy/blob/feature%2Finference-refactor-20250528/docs/supported_models.md)。
+- 更多模型说明请参考[支持模型列表](../supported_models.md)。
 
 
 ## WINT2效果
