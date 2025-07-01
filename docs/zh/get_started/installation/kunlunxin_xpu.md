@@ -23,7 +23,13 @@
 ## 1. 使用 Docker 安装（推荐）
 
 ```bash
+mkdir Work
+cd Work
 docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.0.0
+docker run --name fastdeploy-xpu --net=host -itd --privileged -v $PWD:/Work -w /Work \
+    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.0.0 \
+    /bin/bash
+docker exec -it fastdeploy-xpu /bin/bash
 ```
 
 ## 2. 使用 Pip 安装
@@ -43,13 +49,13 @@ python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/
 ### 安装 FastDeploy（**注意不要通过 pypi 源安装**）
 
 ```bash
-python -m pip install fastdeploy-xpu==2.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+python -m pip install fastdeploy-xpu==2.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
 或者你也可以安装最新版 FastDeploy（不推荐）
 
 ```bash
-python -m pip install --pre fastdeploy-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+python -m pip install --pre fastdeploy-xpu -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
 ## 3. 从源码编译安装
@@ -101,50 +107,20 @@ bash build.sh
 ## 验证是否安装成功
 
 ```python
-import paddle
-from paddle.jit.marker import unified
-paddle.utils.run_check()
-from fastdeploy.model_executor.ops.xpu import block_attn
+python -c "import paddle; paddle.version.show()"
+python -c "import paddle; paddle.utils.run_check()"
+python -c "from paddle.jit.marker import unified"
+python -c "from fastdeploy.model_executor.ops.xpu import block_attn"
 ```
 
 如果上述步骤均执行成功，代表 FastDeploy 已安装成功。
 
 ## 快速开始
 
-目前 P800 暂时仅验证了以下模型的部署：
-- ERNIE-4.5-300B-A47B-Paddle 32K WINT4（8卡）
-- ERNIE-4.5-300B-A47B-Paddle 128K WINT4（8卡）
-
-### 离线推理
-
-安装 FastDeploy 后，您可以通过如下代码，基于用户给定的输入完成离线推理生成文本。
-
-```python
-from fastdeploy import LLM, SamplingParams
-
-prompts = [
-    "Where is the capital of China?",
-]
-
-# 采样参数
-sampling_params = SamplingParams(top_p=0.95)
-
-# 加载模型
-llm = LLM(model="baidu/ERNIE-4.5-300B-A47B-Paddle", tensor_parallel_size=8, max_model_len=8192, quantization='wint4')
-
-# 批量进行推理（llm内部基于资源情况进行请求排队、动态插入处理）
-outputs = llm.generate(prompts, sampling_params)
-
-# 输出结果
-for output in outputs:
-    prompt = output.prompt
-    generated_text = output.outputs.text
-
-    print(f"Prompt: {prompt}")
-    print(f"Generated text: {generated_text}")
-```
-
-更多参数可以参考文档 [参数说明](../../parameters.md)。
+P800 支持 ```ERNIE-4.5-300B-A47B-Paddle``` 模型采用以下配置部署（注意：不同配置在效果、性能上可能存在差异）。
+- 32K WINT4 8 卡（推荐）
+- 128K WINT4 8 卡
+- 32K WINT4 4 卡
 
 ### OpenAI 兼容服务器
 
@@ -152,7 +128,7 @@ for output in outputs:
 
 #### 启动服务
 
-**ERNIE-4.5-300B-A47B-Paddle 32K WINT4（8卡）（推荐）**
+**ERNIE-4.5-300B-A47B-Paddle 模型采用 32K WINT4 8 卡配置部署（推荐）**
 
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -165,7 +141,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.9
 ```
 
-**ERNIE-4.5-300B-A47B-Paddle 128K WINT4（8卡）**
+**ERNIE-4.5-300B-A47B-Paddle 模型采用 128K WINT4 8 卡配置部署**
 
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -173,6 +149,20 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --port 8188 \
     --tensor-parallel-size 8 \
     --max-model-len 131072 \
+    --max-num-seqs 64 \
+    --quantization "wint4" \
+    --gpu-memory-utilization 0.9
+```
+
+**ERNIE-4.5-300B-A47B-Paddle 模型采用 32K WINT4 4 卡配置部署**
+
+```bash
+export XPU_VISIBLE_DEVICES="0,1,2,3"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model baidu/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 4 \
+    --max-model-len 32768 \
     --max-num-seqs 64 \
     --quantization "wint4" \
     --gpu-memory-utilization 0.9
@@ -212,7 +202,6 @@ print('\n')
 response = client.chat.completions.create(
     model="null",
     messages=[
-        {"role": "system", "content": "I'm a helpful AI assistant."},
         {"role": "user", "content": "Where is the capital of China?"},
     ],
     stream=True,
