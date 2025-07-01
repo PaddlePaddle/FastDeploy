@@ -56,6 +56,9 @@ struct TileDequanter {
   UnzipAndDequantFunctor unzip_functor;
 
   CUTLASS_DEVICE
+  TileDequanter() {}
+
+  CUTLASS_DEVICE
   TileDequanter(MmaElementT *out_smem_ptr, char *pointer, int64_t ldm,
                 const cutlass::MatrixCoord &extent,
                 const cutlass::MatrixCoord &tb_offset,

@@ -384,7 +384,7 @@ struct DefaultMma<cutlass::bfloat16_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, 
             : cutlass::arch::CacheOperation::Always;
 
     static cutlass::arch::CacheOperation::Kind const CacheOpB =
-        ((sizeof_bits<bfloat16_t>::value * kAlignmentB) == 128) ? cutlass::arch::CacheOperation::Global
+        ((sizeof_bits<uint2b_t>::value * kAlignmentB) == 128) ? cutlass::arch::CacheOperation::Global
             : cutlass::arch::CacheOperation::Always;
 
     // Define the MmaCore components
@@ -402,9 +402,9 @@ struct DefaultMma<cutlass::bfloat16_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, 
 
     // Define iterators over tiles from the B operand
     using ThreadMapB = typename MmaCore::IteratorThreadMapB;
-    using AccessTypeB = cutlass::Array<bfloat16_t, kAlignmentB>;
+    using AccessTypeB = cutlass::Array<uint2b_t, kAlignmentB>;
     using IteratorB = cutlass::transform::threadblock::PredicatedTileAccessIterator<
-        cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>, bfloat16_t, LayoutB, 0, ThreadMapB,
+        cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>, uint2b_t, LayoutB, 0, ThreadMapB,
         AccessTypeB>;
 
     // Define the threadblock-scoped multistage matrix multiply
@@ -447,7 +447,7 @@ struct DefaultMma<bfloat16_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmen
             : cutlass::arch::CacheOperation::Always;
 
     static cutlass::arch::CacheOperation::Kind const CacheOpB =
-        ((sizeof_bits<bfloat16_t>::value * kAlignmentB) == 128) ? cutlass::arch::CacheOperation::Global
+        ((sizeof_bits<uint2b_t>::value * kAlignmentB) == 128) ? cutlass::arch::CacheOperation::Global
             : cutlass::arch::CacheOperation::Always;
 
     // Define the MmaCore components
@@ -465,9 +465,9 @@ struct DefaultMma<bfloat16_t, LayoutA, kAlignmentA, uint2b_t, LayoutB, kAlignmen
 
     // Define iterators over tiles from the B operand
     using ThreadMapB = typename MmaCore::IteratorThreadMapB;
-    using AccessTypeB = cutlass::Array<bfloat16_t, kAlignmentB>;
+    using AccessTypeB = cutlass::Array<uint2b_t, kAlignmentB>;
     using IteratorB = cutlass::transform::threadblock::PredicatedTileAccessIterator<
-        cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>, bfloat16_t, LayoutB, 0, ThreadMapB,
+        cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>, uint2b_t, LayoutB, 0, ThreadMapB,
         AccessTypeB>;
 
     // Define the threadblock-scoped multistage matrix multiply

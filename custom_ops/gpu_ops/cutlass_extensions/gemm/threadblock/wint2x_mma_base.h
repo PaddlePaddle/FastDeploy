@@ -104,8 +104,6 @@ public:
   using TensorRefB =
       TensorRef<typename Operator::ElementB, typename Operator::LayoutB>;
 
-  // using TensorRefZippedB = TensorRef<uint8_t, typename Operator::LayoutB>;
-
   static_assert(kWarpGemmIterations > 1,
                 "The pipelined structure requires at least two warp-level "
                 "GEMM operations.");
@@ -130,12 +128,11 @@ public:
                     Shape::kK * kStages + Policy::SmemPaddingA::kColumn>;
 
     /// Shape of the B matrix operand in shared memory
-    using ShapeB = MatrixShape<Shape::kK + Policy::SmemPaddingB::kRow,
+    using ShapeB = MatrixShape<Shape::kK * kStages + Policy::SmemPaddingB::kRow,
                                Shape::kN + Policy::SmemPaddingB::kColumn>;
 
     // w uint8; local_scale uint8;
-    constexpr static int kZippedRowsPerStages =
-	Shape::kK / 4 + (Shape::kK + 127) / 128;
+    constexpr static int kZippedRowsPerStages = Shape::kK / 4 + (Shape::kK + 127) / 128;
 
     // code_scale float; code_zp float; super_scale ElementB
     constexpr static int kColumnWiseParamsRows = 2 * sizeof(float) +

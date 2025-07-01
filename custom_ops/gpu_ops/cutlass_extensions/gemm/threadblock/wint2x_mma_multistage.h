@@ -90,7 +90,7 @@ template <
     SharedMemoryClearOption SharedMemoryClear = SharedMemoryClearOption::kNone,
     /// Used for partial specialization
     typename Enable = bool>
-class Wint2xMmaMultistage : 
+class Wint2xMmaMultistage :
   public Wint2xMmaBase<Shape_, Policy_, Stages> {
 public:
   ///< Base class
@@ -282,12 +282,12 @@ public:
   {
     // Advance global iterators
     iterator_A.add_tile_offset({0, 1});
-    //iterator_B.add_tile_offset({1, 0});
-    tile_dequanter_B.AddTileOffset({1, 0});
+    iterator_B.add_tile_offset({1, 0});
+    //tile_dequanter_B.AddTileOffset({1, 0});
 
     // Advance shared iterators
     smem_iterator_A_.add_tile_offset({0, 1});
-    //smem_iterator_B_.add_tile_offset({1, 0});
+    smem_iterator_B_.add_tile_offset({1, 0});
 
     // Increment shared memory write stage index
     ++smem_write_stage_idx_;
@@ -295,7 +295,7 @@ public:
     if (smem_write_stage_idx_ == Base::kStages) {
       // Wrap back around to the 'start' of the circular buffer in shared memory
       smem_iterator_A_.add_tile_offset({0, -Base::kStages});
-      //smem_iterator_B_.add_tile_offset({-Base::kStages, 0});
+      smem_iterator_B_.add_tile_offset({-Base::kStages, 0});
       smem_write_stage_idx_ = 0;
     }
   }
@@ -476,8 +476,11 @@ public:
       copy_tiles_and_advance_per_stage_A(iterator_A);
 
       // Async copy zipped B to shared memory.
-      tile_dequanter_B.Load(smem_zipped_ptr_B_ + (stage % Base::kStages) * smem_zipped_bytes_per_stage_B_,
-                            column_wise_smem_ptr_B_, stage);
+      copy_tiles_and_advance_per_stage_B<false, true>(iterator_B);
+
+      // TODO: Async copy other quantized params to shared memory, local_scale, code_scale, code_zp, super_scale.
+      //tile_dequanter_B.Load(smem_zipped_ptr_B_ + (stage % Base::kStages) * smem_zipped_bytes_per_stage_B_,
+      //                      column_wise_smem_ptr_B_, stage);
 
       // Move to the next write stage
       advance_smem_write_stage(iterator_A, iterator_B, tile_dequanter_B);
@@ -566,11 +569,11 @@ public:
       if (warp_mma_k + 1 == Base::kWarpGemmIterations) {
         // Unpack and dequant the first stage of B.
         int unpack_stage = stage - Base::kStages + 2;
-        tile_dequanter_B.UnpackAndDequant(smem_zipped_ptr_B_ + (unpack_stage % Base::kStages) * smem_zipped_bytes_per_stage_B_,
-                                          column_wise_smem_ptr_B_, unpack_stage);
+        //tile_dequanter_B.UnpackAndDequant(smem_zipped_ptr_B_ + (unpack_stage % Base::kStages) * smem_zipped_bytes_per_stage_B_,
+        //                                  column_wise_smem_ptr_B_, unpack_stage);
 
         // Copy dequatized data to shared memory used by mma core.
-        copy_tiles_and_advance_per_stage_B<false, false>(iterator_B);
+        //copy_tiles_and_advance_per_stage_B<false, false>(iterator_B);
       }
 
       // Load the next warp-tile's B fragment from shared memory
@@ -672,10 +675,11 @@ public:
       IteratorB &iterator_B,
       TileDequanterB &tile_dequanter_B)        ///< [in|out] iterator over B operand in global memory
   {
+#if 0
     PipeState pipe_state;
 
     // Unpack and dequant the first stage of B.
-    tile_dequanter_B.UnpackAndDequant(smem_zipped_ptr_B_, column_wise_smem_ptr_B_, 0);
+    //tile_dequanter_B.UnpackAndDequant(smem_zipped_ptr_B_, column_wise_smem_ptr_B_, 0);
 
     // Disable global fetching if done with global fetch iterations
     iterator_A.clear_mask(gemm_k_iterations == 0);
@@ -687,7 +691,7 @@ public:
     ++this->warp_tile_iterator_A_;
 
     // Copy dequatized data to shared memory used by mma core.
-    copy_tiles_and_advance_per_stage_B<false, true>(iterator_B);
+    //copy_tiles_and_advance_per_stage_B<false, true>(iterator_B);
 
     // Load first warp-tile's B fragment from shared memory
     this->warp_tile_iterator_B_.set_kgroup_index(0);
@@ -730,6 +734,7 @@ public:
     cutlass::arch::cp_async_fence();
     cutlass::arch::cp_async_wait<0>();
     __syncthreads();
+  #endif
   }
 
   /// Prepares the class for another prologue.
@@ -794,7 +799,7 @@ public:
     accum = src_accum;
 
     // Perform the MAC-iterations
-    gemm_iters(gemm_k_iterations, accum, iterator_A, iterator_B, tile_dequanter_B);
+    //gemm_iters(gemm_k_iterations, accum, iterator_A, iterator_B, tile_dequanter_B);
   }
 };
 

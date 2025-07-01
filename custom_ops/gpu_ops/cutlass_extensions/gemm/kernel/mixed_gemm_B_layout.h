@@ -134,8 +134,8 @@ template <typename TypeA, typename Arch>
 struct LayoutDetailsB<TypeA, uint2b_t, Arch, typename platform::enable_if<Arch::kMinComputeCapability >= 75>::type>
 {
     static constexpr int ThreadblockK = 128 * 8 / cutlass::sizeof_bits<TypeA>::value;
-    using Layout = layout::RowMajor;
-    static constexpr int ElementsPerAccess = 128 / cutlass::sizeof_bits<TypeA>::value;
+    using Layout = layout::ColumnMajor;
+    static constexpr int ElementsPerAccess = 8; // at least 4-bytes
     using Operator = cutlass::arch::OpMultiplyAdd;
 };
 

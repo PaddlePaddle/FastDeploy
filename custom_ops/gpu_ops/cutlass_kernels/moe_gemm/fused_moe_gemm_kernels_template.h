@@ -148,6 +148,8 @@ void generic_moe_gemm_kernelLauncher(const T* A,
                                        ElementAccumulator,
                                        EpilogueTag>::Op;
 
+  CUTLASS_TRACE_HOST("Stages: " << Stages);
+
   // Finally, set up the kernel.
   using BaseGemmKernel = typename cutlass::gemm::kernel::DefaultGemmGrouped<
       ElementType,
@@ -187,6 +189,7 @@ void generic_moe_gemm_kernelLauncher(const T* A,
         "GroupedGEMM kernel");
   }
   const int threadblock_count = multi_processor_count * occupancy;
+  CUTLASS_TRACE_HOST("kernel_occupancy: " << kernel_occupancy << ", occupancy: " << occupancy << ", threadblock_count: " << threadblock_count << ", multi_processor_count: " << multi_processor_count);
 
   typename EpilogueOp::Params epilogue_op(ElementAccumulator(1.f),
                                           ElementAccumulator(0.f));
@@ -205,7 +208,7 @@ void generic_moe_gemm_kernelLauncher(const T* A,
       threadblock_count,
       epilogue_op,
       reinterpret_cast<const ElementType*>(A),
-      reinterpret_cast<const CutlassMmaWeightType*>(B),
+      reinterpret_cast<const CutlassMmaKernelType*>(B),
       reinterpret_cast<const ElementType*>(weight_scales),
       reinterpret_cast<const ElementType*>(biases),
       reinterpret_cast<ElementType*>(C),
@@ -443,6 +446,7 @@ void dispatch_gemm_config(const T* A,
 #define dispatch_gemm_config_macro(AA, BB, CC, DD, EE, FF)      \
   case CutlassTileConfig::                                      \
       CtaShape##AA##x##BB##x##CC##_WarpShape##DD##x##EE##x##FF: \
+    CUTLASS_TRACE_HOST("ThreadblockShape<" << AA << "," << BB << "," << CC << ">, WarpShape<" << DD << "," << EE << "," << FF << ">"); \
     dispatch_gemm_config<T,                                     \
                          WeightQuantTraits,                     \
                          arch,                                  \
@@ -493,8 +497,8 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
                                   int* occupancy = nullptr) {
   switch (gemm_config.tile_config) {
     dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
-    dispatch_gemm_config_macro(64, 128, 64, 32, 64, 64);
-    dispatch_gemm_config_macro(128, 128, 64, 64, 32, 64);
+    //dispatch_gemm_config_macro(64, 128, 64, 32, 64, 64);
+    //dispatch_gemm_config_macro(128, 128, 64, 64, 32, 64);
     case CutlassTileConfig::Undefined:
       throw std::runtime_error("[dispatch_moe_gemm_to_cutlass] gemm config undefined.");
       break;
@@ -540,8 +544,8 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
   if constexpr (std::is_same<arch, cutlass::arch::Sm70>::value) {
     if constexpr (WeightQuantTraits::kQuantMethod != cutlass::WintQuantMethod::kWeightOnlyInt2) {
       switch (gemm_config.tile_config) {
-        dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
-        dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
+        //dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
+        //dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
         case CutlassTileConfig::Undefined:
           throw std::runtime_error("[dispatch_moe_gemm_to_cutlass] gemm config undefined.");
           break;
@@ -563,16 +567,16 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
   } else {
     switch (gemm_config.tile_config) {
       dispatch_gemm_config_macro(16, 128, 64, 16, 32, 64);
-      dispatch_gemm_config_macro(16, 256, 64, 16, 64, 64);
-      dispatch_gemm_config_macro(64, 64, 64, 32, 32, 64);
-      dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
-      dispatch_gemm_config_macro(128, 64, 64, 64, 32, 64);
-      dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
-      dispatch_gemm_config_macro(128, 128, 64, 64, 64, 64);
-      dispatch_gemm_config_macro(128, 128, 64, 128, 32, 64);
-      dispatch_gemm_config_macro(128, 256, 64, 64, 64, 64);
-      dispatch_gemm_config_macro(64, 128, 64, 64, 32, 64);
-      dispatch_gemm_config_macro(256, 128, 64, 64, 64, 64);
+      //dispatch_gemm_config_macro(16, 256, 64, 16, 64, 64);
+      //dispatch_gemm_config_macro(64, 64, 64, 32, 32, 64);
+      //dispatch_gemm_config_macro(32, 128, 64, 32, 32, 64);
+      //dispatch_gemm_config_macro(128, 64, 64, 64, 32, 64);
+      //dispatch_gemm_config_macro(64, 128, 64, 64, 64, 64);
+      //dispatch_gemm_config_macro(128, 128, 64, 64, 64, 64);
+      //dispatch_gemm_config_macro(128, 128, 64, 128, 32, 64);
+      //dispatch_gemm_config_macro(128, 256, 64, 64, 64, 64);
+      //dispatch_gemm_config_macro(64, 128, 64, 64, 32, 64);
+      //dispatch_gemm_config_macro(256, 128, 64, 64, 64, 64);
       case CutlassTileConfig::Undefined:
         throw std::runtime_error("[dispatch_moe_gemm_to_cutlass] gemm config undefined.");
         break;
@@ -614,7 +618,7 @@ void dispatch_moe_gemm_to_cutlass(const T* A,
                                   cudaStream_t stream,
                                   int* occupancy = nullptr) {
   switch (gemm_config.tile_config) {
-    dispatch_gemm_config_macro(128, 128, 8, 64, 64, 8);
+    //dispatch_gemm_config_macro(128, 128, 8, 64, 64, 8);
     case CutlassTileConfig::Undefined:
       throw std::runtime_error(
           "[dispatch_moe_gemm_to_cutlass][SIMT] gemm config "

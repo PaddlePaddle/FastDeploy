@@ -52,6 +52,15 @@ namespace cutlass {
 namespace gemm {
 namespace kernel {
 
+template <typename Layout> std::string GetCutlassLayoutString() {
+  if (std::is_same<Layout, cutlass::layout::RowMajor>::value) {
+    return "cutlass::layout::RowMajor";
+  } else if (std::is_same<Layout, cutlass::layout::ColumnMajor>::value) {
+    return "cutlass::layout::ColumnMajor";
+  }
+  return "unknown";
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // This section exists to that we can use the same kernel code for regular gemm
 // and dequantizing gemms. It will dispatch to the dequantizing gemm if the Mma
@@ -282,6 +291,27 @@ struct MoeFCGemm {
           platform::is_same<uint4b_t, ElementB>::value) {
         assert(weight_scales);
       }
+
+      CUTLASS_TRACE_HOST("[Arguments] problem_count: " << problem_count << ", threadblock_count: " << threadblock_count << ", gemm_n: " << gemm_n << ", gemm_k: " << gemm_k);
+      CUTLASS_TRACE_HOST("[Arguments] ptr_A: " << static_cast<void const*>(ptr_A));
+      CUTLASS_TRACE_HOST("[Arguments] ptr_B: " << static_cast<void const*>(ptr_B));
+      CUTLASS_TRACE_HOST("[Arguments] ptr_C: " << static_cast<void const*>(ptr_C));
+      CUTLASS_TRACE_HOST("[Arguments] ptr_D: " << static_cast<void*>(ptr_D));
+      CUTLASS_TRACE_HOST("[Arguments] weight_scales: " << static_cast<void const*>(weight_scales));
+      CUTLASS_TRACE_HOST("[Arguments] total_rows_before_expert: " << static_cast<void*>(total_rows_before_expert));
+      CUTLASS_TRACE_HOST("[Arguments] local_scale: " << static_cast<void const*>(local_scale));
+      CUTLASS_TRACE_HOST("[Arguments] code_scale: " << static_cast<void const*>(code_scale));
+      CUTLASS_TRACE_HOST("[Arguments] code_zp: " << static_cast<void const*>(code_zp));
+      CUTLASS_TRACE_HOST("[Arguments] quant_method: " << static_cast<int>(quant_method));
+      CUTLASS_TRACE_HOST("[Arguments] LayoutA: " << GetCutlassLayoutString<LayoutA>());
+      CUTLASS_TRACE_HOST("[Arguments] LayoutB: " << GetCutlassLayoutString<LayoutB>());
+      CUTLASS_TRACE_HOST("[Arguments] LayoutC: " << GetCutlassLayoutString<LayoutC>());
+      CUTLASS_TRACE_HOST("[Arguments] Mma::IteratorA::AccessType::kElements:" << Mma::IteratorA::AccessType::kElements);
+      CUTLASS_TRACE_HOST("[Arguments] Mma::IteratorB::AccessType::kElements:" << Mma::IteratorB::AccessType::kElements);
+      CUTLASS_TRACE_HOST("[Arguments] SharedStorage Information:");
+      CUTLASS_TRACE_HOST(" - ProblemVisitor::SharedStorage: " << sizeof(typename ProblemVisitor::SharedStorage) << " bytes");
+      CUTLASS_TRACE_HOST(" - Mma::SharedStorage: " << sizeof(typename Mma::SharedStorage) << " bytes");
+      CUTLASS_TRACE_HOST(" - Epilogue::SharedStorage: " << sizeof(typename Epilogue::SharedStorage) << " bytes");
     }
   };
 
@@ -835,6 +865,13 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
         int32_t problem_idx = problem_visitor.problem_index();
         int32_t cta_idx = int32_t(problem_visitor.threadblock_idx());
 
+        CUTLASS_TRACE_DEVICE(" problem_idx: %d, cta_idx: %d, problem_size: {%d, %d, %d}",
+            problem_idx, cta_idx, static_cast<int>(problem_size.m()), static_cast<int>(problem_size.n()), static_cast<int>(problem_size.k()));
+
+        if (problem_idx > 2) {
+          break;
+        }
+
         GemmCoord grid_shape = problem_visitor.grid_shape(problem_size);
 
         // threadblock_offset of C
@@ -879,16 +916,16 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
             platform::is_same<layout::RowMajor, LayoutB>::value
                 ? gemm_n
                 : gemm_k * kInterleave;
-        typename LayoutB::LongIndex ldm_B_shared = TileDequanterB::kColumns;
+        //typename LayoutB::LongIndex ldm_B_shared = TileDequanterB::kColumns;
 
         // the begin threadblock_offset of B, which holds the same column id with C
         cutlass::MatrixCoord tb_offset_B{0,
                                          threadblock_offset.n() / kInterleave};
 
         cutlass::MatrixCoord extent_B{problem_size.k() * kInterleave, problem_size.n() / kInterleave};
-        cutlass::MatrixCoord extent_B_shared{TileDequanterB::kRows, TileDequanterB::kColumns};
+        //cutlass::MatrixCoord extent_B_shared{TileDequanterB::kRows, TileDequanterB::kColumns};
 
-        MmaElementB* smem_unzip_B_ptr = nullptr;
+        /*MmaElementB* smem_unzip_B_ptr = nullptr;
         if constexpr (QuantMethod == WintQuantMethod::kWeightOnlyInt2) {
           smem_unzip_B_ptr = shared_storage.main_loop.operand_unzip_B_ptr();
         }
@@ -901,7 +938,9 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
                                         weight_scale_ptr,
                                         tb_offset_scale,
                                         quant_args);
-        MmaElementB* ptr_B = tile_dequanter_B.GetOutPtr();
+        MmaElementB* ptr_B = tile_dequanter_B.GetOutPtr();*/
+        TileDequanterB tile_dequanter_B;
+        ElementB* ptr_B = reinterpret_cast<ElementB*>(byte_ptr_B);
 
         // Compute position within threadblock
         int thread_idx = threadIdx.x;
@@ -914,11 +953,11 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
                                            tb_offset_A);
 
         typename Mma::IteratorB iterator_B(
-            LayoutB(TileDequanterB::kUseSharedMemory ? ldm_B_shared : ldm_B),
+            LayoutB(ldm_B),
             ptr_B,
-            TileDequanterB::kUseSharedMemory ? extent_B_shared : extent_B,
+            extent_B,
             thread_idx,
-            TileDequanterB::kUseSharedMemory ? cutlass::make_Coord(0, 0) : tb_offset_B);
+            tb_offset_B);
 
         typename Mma::FragmentC accumulators;
 
