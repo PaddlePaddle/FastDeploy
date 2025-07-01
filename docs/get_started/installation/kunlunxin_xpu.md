@@ -23,7 +23,13 @@ Verified platform:
 ## 1. Set up using Docker (Recommended)
 
 ```bash
+mkdir Work
+cd Work
 docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.0.0
+docker run --name fastdeploy-xpu --net=host -itd --privileged -v $PWD:/Work -w /Work \
+    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.0.0 \
+    /bin/bash
+docker exec -it fastdeploy-xpu /bin/bash
 ```
 
 ## 2. Set up using pre-built wheels
@@ -43,13 +49,13 @@ python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/
 ### Install FastDeploy (**Do NOT install via PyPI source**)
 
 ```bash
-python -m pip install fastdeploy-xpu==2.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+python -m pip install fastdeploy-xpu==2.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
 Alternatively, you can install the latest version of FastDeploy (Not recommended)
 
 ```bash
-python -m pip install --pre fastdeploy-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+python -m pip install --pre fastdeploy-xpu -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
 ## 3. Build wheel from source
@@ -99,47 +105,21 @@ The compiled outputs will be located in the ```FastDeploy/dist``` directory.
 
 ## Installation verification
 
-```python
-import paddle
-from paddle.jit.marker import unified
-paddle.utils.run_check()
-from fastdeploy.model_executor.ops.xpu import block_attn
+```bash
+python -c "import paddle; paddle.version.show()"
+python -c "import paddle; paddle.utils.run_check()"
+python -c "from paddle.jit.marker import unified"
+python -c "from fastdeploy.model_executor.ops.xpu import block_attn"
 ```
 
 If all the above steps execute successfully, FastDeploy is installed correctly.
 
 ## Quick start
 
-Currently, P800 has only validated deployment of the following models:
-- ERNIE-4.5-300B-A47B-Paddle 32K WINT4 (8-card)
-- ERNIE-4.5-300B-A47B-Paddle 128K WINT4 (8-card)
-
-### Offline inference
-
-After installing FastDeploy, you can perform offline text generation with user-provided prompts using the following code,
-
-```python
-from fastdeploy import LLM, SamplingParams
-
-prompts = [
-    "Where is the capital of China?",
-]
-
-sampling_params = SamplingParams(top_p=0.95)
-
-llm = LLM(model="baidu/ERNIE-4.5-300B-A47B-Paddle", tensor_parallel_size=8, max_model_len=8192, quantization='wint4')
-
-outputs = llm.generate(prompts, sampling_params)
-
-for output in outputs:
-    prompt = output.prompt
-    generated_text = output.outputs.text
-
-    print(f"Prompt: {prompt}")
-    print(f"Generated text: {generated_text}")
-```
-
-Refer to [Parameters](../../parameters.md) for more configuration options.
+The P800 supports the deployment of the ```ERNIE-4.5-300B-A47B-Paddle``` model using the following configurations (Note: Different configurations may result in variations in performance).
+- 32K WINT4 with 8 XPUs (Recommended)
+- 128K WINT4 with 8 XPUs
+- 32K WINT4 with 4 XPUs
 
 ### Online serving (OpenAI API-Compatible server)
 
@@ -147,7 +127,7 @@ Deploy an OpenAI API-compatible server using FastDeploy with the following comma
 
 #### Start service
 
-**ERNIE-4.5-300B-A47B-Paddle 32K WINT4 (8-card) (Recommended)**
+**The ERNIE-4.5-300B-A47B-Paddle model is to be deployed with a configuration of 32K WINT4 utilizing 8 XPU cards (Recommended)**
 
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -160,7 +140,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.9
 ```
 
-**ERNIE-4.5-300B-A47B-Paddle 128K WINT4 (8-card)**
+**The ERNIE-4.5-300B-A47B-Paddle model is to be deployed with a configuration of 128K WINT4 utilizing 8 XPU cards**
 
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -168,6 +148,20 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --port 8188 \
     --tensor-parallel-size 8 \
     --max-model-len 131072 \
+    --max-num-seqs 64 \
+    --quantization "wint4" \
+    --gpu-memory-utilization 0.9
+```
+
+**The ERNIE-4.5-300B-A47B-Paddle model is to be deployed with a configuration of 32K WINT4 utilizing 4 XPU cards**
+
+```bash
+export XPU_VISIBLE_DEVICES="0,1,2,3"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model baidu/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 4 \
+    --max-model-len 32768 \
     --max-num-seqs 64 \
     --quantization "wint4" \
     --gpu-memory-utilization 0.9
@@ -207,7 +201,6 @@ print('\n')
 response = client.chat.completions.create(
     model="null",
     messages=[
-        {"role": "system", "content": "I'm a helpful AI assistant."},
         {"role": "user", "content": "Where is the capital of China?"},
     ],
     stream=True,
