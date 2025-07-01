@@ -251,13 +251,15 @@ class LLM:
                 )
             req_ids.append(request_id)
             if isinstance(sampling_params, list):
-                sampling_params = sampling_params[i]
+                current_sampling_params = sampling_params[i]
+            else:
+                current_sampling_params = sampling_params
             enable_thinking = None
             if chat_template_kwargs is not None:
                 enable_thinking = chat_template_kwargs.get(
                     "enable_thinking", None)
             self.llm_engine.add_requests(tasks,
-                                         sampling_params,
+                                         current_sampling_params,
                                          enable_thinking=enable_thinking)
         return req_ids
 
