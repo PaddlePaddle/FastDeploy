@@ -9,6 +9,9 @@ The following installation methods are available when your environment meets the
 - Linux X86_64
 
 ## 1. Pre-built Docker Installation (Recommended)
+
+**Notice**: The pre-built image only supports SM80/90 GPU(e.g. H800/A800)，if you are deploying on SM86/89G(L40/4090/L20), please reinstall ```fastdpeloy-gpu``` after you create the container.
+
 ```shell
 docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:2.0.0
 ```
