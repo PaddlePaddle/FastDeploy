@@ -21,9 +21,9 @@ from paddle.distributed import fleet
 from .utils import get_tensor
 
 
-class ParallelEmbeddingHiddenStatesPorjection(nn.Layer):
+class ParallelEmbeddingHiddenStatesProjection(nn.Layer):
     """
-    "Parallelized Embedding Hidden States Porjection.
+    "Parallelized Embedding Hidden States Projection.
     """
 
     def __init__(
@@ -45,7 +45,7 @@ class ParallelEmbeddingHiddenStatesPorjection(nn.Layer):
             embedding_dim (int): size of hidden state.
             prefix (str): full name of the layer in the state dict
         """
-        super(ParallelEmbeddingHiddenStatesPorjection, self).__init__()
+        super(ParallelEmbeddingHiddenStatesProjection, self).__init__()
         self.linear_weight_key = prefix + ".weight"
         if with_bias:
             self.linear_bias_key = prefix + ".bias"
