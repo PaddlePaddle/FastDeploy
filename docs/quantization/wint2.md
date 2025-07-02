@@ -57,3 +57,6 @@ On the ERNIE-4.5-300B-A47B model, comparison of WINT2 vs WINT4 performance:
 | IFEval |500|88.17 | 85.40 |
 |BBH|6511|94.43|92.02|
 |DROP|9536|91.17|89.97|
+|GSM8K|1319|96.21|95.98|
+|CMath|600|96.50|96.00|
+|CMMLU|11477|89.92|86.22|
