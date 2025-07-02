@@ -139,25 +139,19 @@ class OpenAIServingChat:
             )
             dealer.write([b"", request_id.encode('utf-8')])
             choices = []
-            current_waiting_time = 0
             while num_choices > 0:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
-                    current_waiting_time = 0
+                    raw_data = await asyncio.wait_for(dealer.read(), timeout=300)
                 except asyncio.TimeoutError:
-                    current_waiting_time += 10
-                    if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health()
-                        if not status:
-                            if choices:
-                                chunk.choices = choices
-                                yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                            raise ValueError(f"Engine is not healthy: {msg}")
-                        else:
-                            current_waiting_time = 0
-                    await asyncio.sleep(0.1)
-                    continue
-    
+                    status, msg = self.engine_client.check_health()
+                    if not status:
+                        if choices:
+                            chunk.choices = choices
+                            yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
+                        raise ValueError(f"Engine is not healthy: {msg}")
+                    else:
+                        continue
+
                 res = json.loads(raw_data[-1].decode('utf-8'))
                 if res.get("error_code", 200) != 200:
                     raise ValueError("{}".format(res["error_msg"]))
@@ -219,6 +213,9 @@ class OpenAIServingChat:
                                 output.get("finish_reason", "") == "tool_calls":
                             choice.finish_reason = "tool_calls"
                     else:
+                        choice.finish_reason = "length"
+                    
+                    if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
                         choice.finish_reason = "length"
 
                 if request.metadata is not None and request.metadata.get("training", False) and delta_text != "":
@@ -282,21 +279,15 @@ class OpenAIServingChat:
             dealer.write([b"", request_id.encode('utf-8')])
             final_res = None
             previous_num_tokens = 0
-            current_waiting_time = 0
             while True:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
-                    current_waiting_time = 0
+                    raw_data = await asyncio.wait_for(dealer.read(), timeout=300)
                 except asyncio.TimeoutError:
-                    current_waiting_time += 10
-                    if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health()
-                        if not status:
-                            raise ValueError(f"Engine is not healthy: {msg}")
-                        else:
-                            current_waiting_time = 0
-                    await asyncio.sleep(0.1)
-                    continue
+                    status, msg = self.engine_client.check_health()
+                    if not status:
+                        raise ValueError(f"Engine is not healthy: {msg}")
+                    else:
+                        continue
 
                 data = json.loads(raw_data[-1].decode('utf-8'))
                 if data.get("error_code", 200) != 200:
@@ -334,6 +325,9 @@ class OpenAIServingChat:
                     output.get("finish_reason", "") == "tool_calls":
                 choice.finish_reason = "tool_calls"
         else:
+            choice.finish_reason = "length"
+            
+        if final_res.get("error_msg") is not None and "Recover" in final_res["error_msg"]:
             choice.finish_reason = "length"
         choices.append(choice)
 

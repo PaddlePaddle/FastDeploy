@@ -82,13 +82,21 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_MOE_BACKEND":
     lambda: os.getenv("FD_MOE_BACKEND", "cutlass"),
 
+    # Set whether to disable recompute the request when the KV cache is full.
+    "FD_DISABLED_RECOVER":
+    lambda: os.getenv("FD_DISABLED_RECOVER", "0"),
+
     # Set triton kernel JIT compilation directory.
     "FD_TRITON_KERNEL_CACHE_DIR":
     lambda: os.getenv("FD_TRITON_KERNEL_CACHE_DIR", None),
 
     # Whether transition from standalone PD decoupling to centralized inference
     "FD_PD_CHANGEABLE":
-    lambda: os.getenv("FD_PD_CHANGEABLE", "1"),
+    lambda: os.getenv("FD_PD_CHANGEABLE", "0"),
+
+    # Whether to use fastsafetensor load weight (0 or 1)
+    "FD_USE_FASTSAFETENSOR":
+    lambda: os.getenv("FD_USE_FASTSAFETENSOR", "0"),
 }
 
 

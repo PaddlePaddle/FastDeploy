@@ -23,6 +23,7 @@ import paddle
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
 
+from fastdeploy import envs
 from fastdeploy.config import (DecodingConfig, DeviceConfig, FDConfig,
                                GraphOptimizationConfig, LoadConfig,
                                ModelConfig, MoEConfig, MoEPhase,
@@ -61,7 +62,14 @@ class PaddleDisWorkerProc():
     def __init__(
         self,
         fd_config: FDConfig,
-    ):
+    ) -> None:
+        """
+        Initialize a distributed worker and task queue for single-node multi-GPU setup.
+        Args:
+            fd_config (FDConfig): Arguments related to inference, containing
+                attributes such as weight_dtype, act_dtype, mp_size, hidden_size, head_dim,
+                num_attention_heads, and ffn_hidden_size.
+        """
         self.fd_config = fd_config
         self.parallel_config = fd_config.parallel_config
 
@@ -80,8 +88,6 @@ class PaddleDisWorkerProc():
                 self.fd_config.moe_config.num_experts // self.parallel_config.expert_parallel_degree
             self.fd_config.moe_config.num_experts_start_offset = \
                 self.fd_config.parallel_config.expert_parallel_rank * self.fd_config.moe_config.num_experts_per_rank
-
-        self.fd_config.parallel_config.column_cut = False
 
         # For auto TP split
         self.fd_config.model_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_degree
@@ -109,7 +115,7 @@ class PaddleDisWorkerProc():
             local_data_parallel_id=self.fd_config.parallel_config.
             expert_parallel_rank)
 
-    def init_health_status(self):
+    def init_health_status(self) -> None:
         """
         Initialize the health status of the worker.
         Worker Status:
@@ -192,7 +198,7 @@ class PaddleDisWorkerProc():
             suffix=self.parallel_config.engine_pid,
             create=False)
 
-    def event_loop_ep(self):
+    def event_loop_ep(self) -> None:
         """
         Tmp loop function for ep utill DP is supported
         """
@@ -217,7 +223,7 @@ class PaddleDisWorkerProc():
             # These generated tokens can be obtained through get_output op.
             self.worker.execute_model()
 
-    def event_loop_normal(self):
+    def event_loop_normal(self) -> None:
         """ Main event loop for Paddle Distrubuted Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
@@ -288,7 +294,7 @@ class PaddleDisWorkerProc():
             self.exist_prefill_task_signal.value[
                 0] = self.worker.prefill_finished()
 
-    def init_distributed_enviroment(self, seed=20) -> List[int]:
+    def init_distributed_enviroment(self, seed: int = 20) -> List[int]:
         """ Initialize Paddle Fleet and get rank of worker """
         # Global rank
         self.rank = dist.get_world_size()
@@ -310,8 +316,17 @@ class PaddleDisWorkerProc():
 
         return self.rank, self.local_rank
 
-    def determine_num_available_blocks(self):
-        """
+    def determine_num_available_blocks(self) -> None:
+        """Profiles the peak memory usage of the model to determine how many
+        KV blocks may be allocated without OOMs.
+
+        The engine will first conduct a profiling of the existing memory usage.
+        Then, it calculate the maximum possible number of GPU and CPU blocks
+        that can be allocated with the remaining free memory.
+
+        .. tip::
+            You may limit the usage of GPU memory
+            by adjusting the `gpu_memory_utilization` parameter.
         """
         if self.fd_config.parallel_config.do_profile:
             # 1. Get available memory(bytes)
@@ -366,12 +381,12 @@ class PaddleDisWorkerProc():
         # 4. Updata share inputs
         self.worker.reinitialize_kv_cache(num_gpu_blocks=num_blocks_global)
 
-    def init_device(self):
-        """ """
+    def init_device(self) -> None:
+        """ Initialize device and Construct model runner """
         self.worker.init_device()
 
-    def load_model(self):
-        """ """
+    def load_model(self) -> None:
+        """ Load weights and create model """
         self.worker.load_model()
 
 
@@ -467,14 +482,6 @@ def parse_args():
         default="WINT8",
         type=str,
     )
-    parser.add_argument(
-        "--attention_backend",
-        default="APPEND_ATTN",
-        type=str,
-        choices=[
-            "APPEND_ATTN",
-        ],
-    )
     parser.add_argument("--max_num_batched_tokens",
                         type=int,
                         default=2048,
@@ -531,7 +538,7 @@ def parse_args():
     return args
 
 
-def initialize_fd_config(args) -> FDConfig:
+def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
     """Initialize FDConfig
     TODO(gongshaotian): Unified all configs to FDConfig
     """
@@ -592,7 +599,6 @@ def initialize_fd_config(args) -> FDConfig:
     parallel_config.pad_token_id = args.pad_token_id
     parallel_config.eos_tokens_lens = args.eos_tokens_lens
     parallel_config.enable_chunked_prefill = args.enable_chunked_prefill
-    parallel_config.attention_backend = args.attention_backend
     parallel_config.max_num_batched_tokens = args.max_num_batched_tokens
     parallel_config.enable_prefix_caching = args.enable_prefix_caching
 
@@ -600,6 +606,7 @@ def initialize_fd_config(args) -> FDConfig:
     parallel_config.tensor_parallel_degree = args.tensor_parallel_size
     parallel_config.expert_parallel_degree = args.expert_parallel_size
     parallel_config.splitwise_role = args.splitwise_role
+    load_config.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
 
     parallel_config.guided_decoding_backend = args.guided_decoding_backend
     parallel_config.disable_any_whitespace = args.disable_any_whitespace
@@ -664,14 +671,14 @@ def initialize_fd_config(args) -> FDConfig:
     if "Ernie4_5_ForCausalLM" in config.get("architectures"):
         model_config.ori_vocab_size = args.ori_vocab_size
 
-    quantization_config = config.get("quantization_config", None)
+    if "DeepseekV3ForCausalLM" in config.get("architectures"):
+        from paddleformers.transformers import AutoConfig
+        model_config.deepseekv3 = AutoConfig.from_pretrained(
+            args.model_name_or_path)
 
-    # Note(@wufeisheng): The `is_quantized` flag should be explicitly set to `true`
-    # when the weights are actually quantized offline. For backward compatibility
-    # with preview logic:
-    # - If `quantization_config` is provided but `is_quantized` is not explicitly set,
-    #   the value of `is_quantized` will be determined by whether `kv_cache_quant_type`
-    #   has been configured.
+    #TODO(@yuanrisheng): kv_cache quant config can only be
+    # stored in model config file, which should be unified
+    quantization_config = config.get("quantization_config", None)
     if not model_config.is_quantized:
         if quantization_config is not None:
             if "kv_cache_quant_type" not in quantization_config:
@@ -689,9 +696,14 @@ def initialize_fd_config(args) -> FDConfig:
     elif args.quantization != "None":
         quantization_config = {}
         quant_config_name = args.quantization
-        if use_moe and quant_config_name == "wint4":
+        quantization_config["quantization"] = quant_config_name
+        # use some trick code for ernie model and will unify it in future.
+        is_ernie = "Ernie4_5_ForCausalLM" in config.get("architectures") or \
+                    "Ernie4_5_MoeForCausalLM" in config.get("architectures")
+        if use_moe and quant_config_name == "wint4" and is_ernie:
             quantization_config["dense_quant_type"] = "wint8"
             quantization_config["moe_quant_type"] = "wint4"
+            quantization_config["quantization"] = "mix_quant"
             quant_config_name = "mix_quant"
     else:
         quant_config_name = None
@@ -733,7 +745,7 @@ def initialize_fd_config(args) -> FDConfig:
     return fd_config
 
 
-def run_worker_proc():
+def run_worker_proc() -> None:
     """
     start worker process
     """

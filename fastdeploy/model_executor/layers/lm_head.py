@@ -14,9 +14,14 @@
 # limitations under the License.
 """
 
+from typing import Dict, Optional
+
+import numpy as np
 import paddle
 from paddle import nn
 from paddle.distributed import fleet
+
+from fastdeploy.config import FDConfig
 
 from .utils import get_tensor
 
@@ -28,12 +33,12 @@ class ParallelLMHead(nn.Layer):
 
     def __init__(
         self,
-        fd_config,
-        num_embeddings,
-        embedding_dim,
-        prefix="",
-        with_bias=False,
-    ):
+        fd_config: FDConfig,
+        num_embeddings: int,
+        embedding_dim: int,
+        prefix: str = "",
+        with_bias: bool = False,
+    ) -> None:
         """
         Parallelized LMhead.
 
@@ -43,21 +48,22 @@ class ParallelLMHead(nn.Layer):
                 num_attention_heads, and ffn_hidden_size.
             num_embeddings (int): vocabulary size.
             embedding_dim (int): size of hidden state.
-            prefix (str): full name of the layer in the state dict
+            prefix (str): The name of current layer. Defaults to "".
+            with_bias (bool): whether to have bias. Default: False.
         """
         super(ParallelLMHead, self).__init__()
-        self.linear_weight_key = prefix + ".weight"
+        self.linear_weight_key: str = prefix + ".weight"
         if with_bias:
-            self.linear_bias_key = prefix + ".bias"
+            self.linear_bias_key: Optional[str] = prefix + ".bias"
         else:
-            self.linear_bias_key = None
-        self.use_ep = fd_config.parallel_config.use_ep
+            self.linear_bias_key: Optional[str] = None
+        self.use_ep: bool = fd_config.parallel_config.use_ep
         self.column_cut = True
 
         ColumnParallelLinear = fleet.meta_parallel.ColumnParallelLinear
         RowParallelLinear = fleet.meta_parallel.RowParallelLinear
 
-        self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
+        self.tie_word_embeddings: bool = fd_config.model_config.tie_word_embeddings
 
         if self.use_ep:
             self.weight = self.create_parameter(
@@ -92,7 +98,8 @@ class ParallelLMHead(nn.Layer):
                     fuse_matmul_bias=False,  # False diff更小
                 )
 
-    def load_state_dict(self, state_dict):
+    def load_state_dict(self, state_dict: Dict[str,
+                                               paddle.Tensor | np.ndarray]):
         """
         Load the checkpoint state dictionary into the layer.
 
@@ -122,7 +129,7 @@ class ParallelLMHead(nn.Layer):
                     paddle.get_default_dtype())
                 self.out_linear.bias.set_value(bias)
 
-    def forward(self, input):
+    def forward(self, input: paddle.Tensor) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
 

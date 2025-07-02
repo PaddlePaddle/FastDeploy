@@ -16,6 +16,7 @@
 
 from functools import cache
 
+from fastdeploy import envs
 from fastdeploy.platforms import _Backend, current_platform
 from fastdeploy.utils import resolve_obj_from_strname
 
@@ -40,6 +41,7 @@ def _get_attn_backend(selected_backend: str) -> object:
     return resolve_obj_from_strname(attention_cls)
 
 
-def get_attention_backend(selected_backend):
-    """Selects which attention backend ."""
-    return _get_attn_backend(selected_backend)
+def get_attention_backend() -> object:
+    """Selects which attention backend."""
+    attention_backend = envs.FD_ATTENTION_BACKEND
+    return _get_attn_backend(attention_backend)

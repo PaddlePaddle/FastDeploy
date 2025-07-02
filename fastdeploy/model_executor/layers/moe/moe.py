@@ -30,10 +30,15 @@ class FusedMoE(nn.Layer):
     def __init__(
         self,
         fd_config,
+        reduce_results: bool = True,
         moe_intermediate_size: int = -1,
         num_experts: int = -1,
         expert_id_offset: int = 0,
         top_k: int = -1,
+        topk_method: str = "",
+        topk_group: int = -1,
+        n_group: int = -1,
+        routed_scaling_factor: float = 1.0,
         layer_idx: int = -1,
         moe_tag: str = "",
         weight_key_map: dict = {},
@@ -49,6 +54,7 @@ class FusedMoE(nn.Layer):
 
         self.fd_config = fd_config
         self.layer_idx = layer_idx
+        self.reduce_results = reduce_results
 
         self.tp_size = fd_config.parallel_config.tensor_parallel_degree
         self.ep_size = fd_config.parallel_config.expert_parallel_degree
@@ -60,25 +66,27 @@ class FusedMoE(nn.Layer):
 
         self.hidden_size = fd_config.model_config.hidden_size
         self.moe_config = fd_config.moe_config
-
         self.num_experts = num_experts
         self.num_local_experts = self.num_experts // self.ep_size
 
         self.moe_intermediate_size = moe_intermediate_size // self.tp_size
 
         self.top_k = top_k
-        self.hidden_size = self.hidden_size
-        self.moe_intermediate_size = moe_intermediate_size // self.tp_size
         self.weight_key_map = weight_key_map
 
         self.use_method = envs.FD_MOE_BACKEND.lower()
         self.gate_correction_bias = None
         self.moe_tag = moe_tag
-
         if self.ep_size > 1:
             expert_id_offset = expert_id_offset + self.ep_rank * self.num_local_experts
 
         self.expert_id_offset = expert_id_offset
+
+        # used for deepseek_v3
+        self.topk_method = topk_method
+        self.topk_group = topk_group
+        self.n_group = n_group
+        self.routed_scaling_factor = routed_scaling_factor
 
         if fd_config.quant_config:
             self.quant_method = fd_config.quant_config.get_quant_method(self)

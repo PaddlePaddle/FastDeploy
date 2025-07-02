@@ -15,11 +15,15 @@
 platform interface file
 """
 
-import paddle
 import enum
+
+import paddle
+
+
 class _Backend(enum.Enum):
     NATIVE_ATTN = enum.auto()
     APPEND_ATTN = enum.auto()
+    MLA_ATTN = enum.auto()
 
 
 class Platform:
@@ -71,8 +75,7 @@ class Platform:
         if self.supported_quantization and quant not in self.supported_quantization:
             raise ValueError(
                 f"{quant} quantization is currently not supported in "
-                f"{self.device_name}."
-            )
+                f"{self.device_name}.")
 
     @classmethod
     def available(self):

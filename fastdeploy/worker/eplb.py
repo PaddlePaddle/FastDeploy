@@ -84,9 +84,10 @@ def replicate_experts(
     return phy2log, rank, logcnt
 
 
-def rebalance_experts_hierarchical(weight: np.ndarray,
-                                   num_physical_experts: int, num_groups: int,
-                                   num_nodes: int, num_gpus: int):
+def rebalance_experts_hierarchical(
+        weight: np.ndarray, num_physical_experts: int, num_groups: int,
+        num_nodes: int,
+        num_gpus: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Parameters:
         weight: [num_moe_layers, num_logical_experts]

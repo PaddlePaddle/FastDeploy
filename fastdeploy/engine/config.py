@@ -584,12 +584,10 @@ class Config:
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
 
-
         if self.innode_prefill_ports is not None:
             if not isinstance(self.innode_prefill_ports, list):
                 ports = str(self.innode_prefill_ports).split(',')
                 self.innode_prefill_ports = [int(port) for port in ports]
-                
 
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
 
@@ -728,7 +726,7 @@ class Config:
                 ), "XPU currently do not support guided_decoding"
 
                 try:
-                    pass
+                    import xgrammar
                 except Exception as e:
                     raise Exception(
                         f"import XGrammar failed, please install XGrammar use `pip install xgrammar==0.1.19`. \n\t {e}"

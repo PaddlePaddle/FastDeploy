@@ -691,15 +691,14 @@ class GPUModelRunner(ModelRunnerBase):
         head_dim = self.model_config.head_dim
 
         # Get the attention backend
-        attn_cls = get_attention_backend(
-            self.parallel_config.attention_backend)
+        attn_cls = get_attention_backend()
         attn_backend = attn_cls(self.fd_config,
                                 kv_num_heads=self.model_config.kv_num_heads,
                                 num_heads=num_heads,
                                 head_dim=head_dim)
         if attn_backend is None:
             raise NotImplementedError(
-                f"{ self.parallel_config.attention_backend} attention backend is not support by GPUModelRunner"
+                "Attention backend which you chose is not support by GPUModelRunner"
             )
         self.attn_backends.append(attn_backend)
 
@@ -735,6 +734,7 @@ class GPUModelRunner(ModelRunnerBase):
             is_decode_batch = not ((self.share_inputs["seq_lens_this_time"]
                                     > 1).sum() > 0)
             self.forward_meta.step_use_cudagraph = is_decode_batch and in_capturing
+            self.forward_meta.is_decode_batch = is_decode_batch
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta)
@@ -967,6 +967,7 @@ class GPUModelRunner(ModelRunnerBase):
         is_decode_batch = not ((self.share_inputs["seq_lens_this_time"]
                                 > 1).sum() > 0)
         self.forward_meta.step_use_cudagraph = self.use_cudagraph and is_decode_batch
+        self.forward_meta.is_decode_batch = is_decode_batch
         model_output = self.model(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             forward_meta=self.forward_meta)

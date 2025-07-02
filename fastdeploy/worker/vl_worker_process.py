@@ -35,7 +35,14 @@ class PrefillTracker:
     Record the prefill time of the request
     """
 
-    def __init__(self, engine_pid):
+    def __init__(
+        self,
+        engine_pid: int,
+    ) -> None:
+        """
+        Initialize the PrefillTracker.
+        """
+        super().__init__()
         self.start_times = defaultdict(float)
         prefill_time_data = np.zeros([100], dtype=np.float32)
         self.prefill_time_signal = IPCSignal(name="prefill_time_signal",
@@ -46,7 +53,7 @@ class PrefillTracker:
         self.current_index = 0
         self.executor = ThreadPoolExecutor(max_workers=1)
 
-    def start_prefill(self, task_idx):
+    def start_prefill(self, task_idx: int):
         """
         Record the start time of the prefill process for a given task index.
 
@@ -55,7 +62,7 @@ class PrefillTracker:
         """
         self.start_times[task_idx] = time.time()
 
-    def end_prefill(self, task_idx):
+    def end_prefill(self, task_idx: int):
         """
         Record the end time of the prefill process for a given task index and
         asynchronously submit the duration for metric recording.
@@ -69,7 +76,7 @@ class PrefillTracker:
             self.executor.submit(self._record_metrics, duration)
             del self.start_times[task_idx]
 
-    def _record_metrics(self, duration):
+    def _record_metrics(self, duration: float):
         """
         Internal method to record the prefill duration into the signal buffer.
         Logs the duration and updates a circular buffer of timing metrics.
@@ -89,19 +96,19 @@ class PrefillTracker:
 
 
 class Worker:
+    """
+        Engine -> (WIP)Executor -> Worker -> ModelRunner -> Model
+        Worker interface that allows inference framwork to cleanly separate implementations for different harware.
+    """
 
-    def __init__(self, args):
+    def __init__(
+        self,
+        args,
+    ) -> None:
         """
-            Args:
-            args (ArgumentParser): 命令行参数，包含模型名称、端口号等信息。
-
-        Returns:
-            None, 无返回值，初始化完成后会将相关参数和对象保存到类属性中。
-
-        Raises:
-            None, 没有异常抛出。
+        Initialize the Worker.
         """
-
+        super().__init__()
         self.args = args
         self.MAX_INFER_SEED = 9223372036854775806
         paddle.set_default_dtype(args.dtype)
@@ -123,7 +130,7 @@ class Worker:
                                              rank=self.rank)
         self.prefill_tracker = PrefillTracker(args.engine_pid)
 
-        # TODO 多机
+        # Only applicable for standalone (single-machine) inference
         address = ('0.0.0.0', self.args.engine_worker_queue_port)
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
@@ -154,7 +161,10 @@ class Worker:
         self.rank = fleet.worker_index()
 
     def init_health(self):
-        # worker_ready_signal 用于engine感知各worker进程是否Ready
+        """
+        init health signals
+        """
+        # To perceive whether each worker process is ready
         worker_ready_signal_data = np.zeros(shape=[self.nranks],
                                             dtype=np.int32)
         self.worker_ready_signal = IPCSignal(name="worker_ready_signal",
@@ -164,7 +174,7 @@ class Worker:
                                              create=False)
         self.worker_ready_signal.value[self.rank] = 1
 
-        # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
+        # To monitor the liveness of worker processes and record each step's timestamp
         worker_healthy_live_recorded_time_array = np.zeros(shape=[self.nranks],
                                                            dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
@@ -175,7 +185,7 @@ class Worker:
             create=False)
         self.worker_healthy_live_signal.value[self.rank] = int(time.time())
 
-        # exist_task_signal 用于各worker进程感知是否有新Task需要处理
+        # To perceive whether there is a new task to be processed
         exist_task_signal_data = np.zeros([1], dtype=np.int32)
         self.exist_task_signal = IPCSignal(name="exist_task_signal",
                                            array=exist_task_signal_data,
@@ -183,7 +193,7 @@ class Worker:
                                            suffix=self.args.engine_pid,
                                            create=False)
 
-        # exist_swapped_task_signal 用于engine感知worker中是否存在swapped task
+        # To detect whether there are swapped tasks in the worker
         exist_swapped_task_signal_data = np.zeros([1], dtype=np.int32)
         self.exist_swapped_task_signal = IPCSignal(
             name="exist_swapped_task_signal",
@@ -192,7 +202,6 @@ class Worker:
             suffix=self.args.engine_pid,
             create=False)
 
-        # model_weights_status 用于engine感知各worker中模型权重状态
         model_weights_status = np.zeros([1], dtype=np.int32)
         self.model_weights_status_signal = IPCSignal(
             name="model_weights_status",
@@ -309,17 +318,7 @@ class Worker:
 
     def run(self):
         """
-        运行函数，不断地从队列中获取任务并进行推理。
-            当队列为空或者所有节点都处于等待状态时，将会休眠一段时间再次尝试获取任务。
-
-            Args:
-                None.
-
-            Returns:
-                None.
-
-            Raises:
-                None.
+        run function, continuously get tasks and do inference.
         """
         infer_seed_increment = paddle.full(shape=[self.args.max_num_seqs, 1],
                                            fill_value=4,
@@ -614,14 +613,6 @@ def parse_args():
         default="",
         type=str,
     )
-    parser.add_argument(
-        "--attention_backend",
-        default="APPEND_ATTN",
-        type=str,
-        choices=[
-            "APPEND_ATTN",
-        ],
-    )
     parser.add_argument("--max_num_batched_tokens",
                         type=int,
                         default=2048,
@@ -668,7 +659,6 @@ def parse_args():
     parser.add_argument("--disable_any_whitespace",
                         action='store_false',
                         help="Disable any whitespace for guided decoding.")
-
     args = parser.parse_args()
     return args
 

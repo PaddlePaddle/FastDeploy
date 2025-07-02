@@ -383,6 +383,7 @@ class EngineArgs:
                                  "default is None. The priority of this configuration "\
                                  "is lower than that of the config file. " \
                                  "More complex quantization methods need to be configured via the config file.")
+
         model_group.add_argument(
             "--enable-static-graph-inference",
             action='store_true',
@@ -748,6 +749,9 @@ class EngineArgs:
         scheduler_cfg = self.create_scheduler_config()
 
         speculative_cfg = self.create_speculative_config()
+
+        assert not (self.use_cudagraph and self.enable_prefix_caching), \
+            "Prefix caching cannot be used with CUDA graph"
 
         return Config(
             model_name_or_path=self.model,

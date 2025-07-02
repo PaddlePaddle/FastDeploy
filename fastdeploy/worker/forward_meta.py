@@ -330,6 +330,8 @@ class ForwardMeta():
     decoder_batch_ids: Optional[paddle.Tensor] = None
     # for attention backend
     decoder_tile_ids_per_batch: Optional[paddle.Tensor] = None
+    # is_decode_batch or not
+    is_decode_batch: bool = False
 
     @classmethod
     def init_forward_meta(cls, share_inputs: Dict,

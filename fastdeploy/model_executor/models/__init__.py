@@ -27,6 +27,7 @@ inference_runner_supported_models = [
     "Qwen3MoeForCausalLM",
     "Ernie4_5_ForCausalLM",
     "Qwen3ForCausalLM",
+    "DeepseekV3ForCausalLM",
 ]
 
 

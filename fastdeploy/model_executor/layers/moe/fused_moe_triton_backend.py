@@ -17,6 +17,7 @@
 import paddle
 from paddle import nn
 
+import fastdeploy
 from fastdeploy.distributed.communication_op import \
     tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.utils import (create_hadamard_matrix_map,
@@ -25,17 +26,24 @@ from fastdeploy.utils import ceil_div
 
 from ..quantization.quant_base import QuantMethodBase
 
+try:
+    from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess_func
+
+    from .triton_moe_kernels import fused_moe_kernel_paddle
+except:
+    pass
+
 
 class TritonWeightOnlyMoEMethod(QuantMethodBase):
     """
     Use Triton Group Gemm to compute Fused MoE.
     """
 
-    def __init__(self, quant_method=None):
+    def __init__(self, quant_config=None):
         """
         Triton Group Gemm to compute Fused MoE.
         """
-        self.quant_method = quant_method
+        self.quant_config = quant_config
         self.added_weight_attrs = ["moe_ffn1_weight", "moe_ffn2_weight"]
         self.added_scale_attrs = [
             "moe_ffn1_weight_scale", "moe_ffn2_weight_scale"
@@ -52,7 +60,11 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         ffn1_weights, ffn2_weights = layer.extract_moe_ffn_weights(state_dict)
         assert len(ffn1_weights) == layer.num_local_experts
         assert len(ffn2_weights) == layer.num_local_experts
-        assert layer.quant_method.quant_config.name() == "wint8"
+
+        algo = layer.quant_method.quant_config.name()
+
+        assert algo == "wint8"
+
         assert ffn1_weights[0].shape == [
             layer.hidden_size, layer.moe_intermediate_size * 2
         ]
@@ -63,9 +75,9 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         ffn1_tensor = paddle.stack(ffn1_weights, axis=0)
         ffn2_tensor = paddle.stack(ffn2_weights, axis=0)
 
-        if self.quant_config.name() == "wint8":
+        if algo == "wint8":
             max_bound = 127
-        elif self.quant_config.name() == "wint4":
+        elif algo == "wint4":
             max_bound = 7
 
         for idx, weight_tensor in enumerate([ffn1_tensor, ffn2_tensor]):
@@ -111,15 +123,13 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         moe_intermediate_size = layer.moe_intermediate_size
         hidden_size = layer.hidden_size
 
-        gate_out = paddle.matmul(x.cast("float32"), layer.gate_weight)
-        scores = paddle.nn.functional.softmax(gate_out, axis=-1)
-
-        topk_weights, topk_ids = paddle.topk(scores,
-                                             k=top_k,
-                                             axis=-1,
-                                             sorted=False)
-        topk_weights = topk_weights / topk_weights.sum(axis=-1, keepdim=True)
-
+        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+            gate_out,
+            layer.gate_correction_bias,
+            top_k,
+            True,  # apply_norm_weight,
+            False,
+        )
         intermediate_cache1 = paddle.empty(
             [token_num * top_k, moe_intermediate_size * 2],
             dtype=x.dtype,
@@ -139,14 +149,12 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             "BLOCK_SIZE_K": 128,
             "GROUP_SIZE_M": 1,
         }
-        from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
-
-        from .triton_moe_kernels import fused_moe_kernel_paddle
-        sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess(
+        sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
             topk_ids, num_local_experts, config["BLOCK_SIZE_M"])
-        max_num_tokens_padded = sorted_token_ids.shape[0]
-        grid = (ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) *
-                ceil_div(moe_intermediate_size * 2, config["BLOCK_SIZE_N"]), )
+        max_possible_num_post_padded = sorted_token_ids.shape[0]
+        grid = (
+            ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"]) *
+            ceil_div(moe_intermediate_size * 2, config["BLOCK_SIZE_N"]), )
 
         fused_moe_kernel_paddle[grid](
             x,
@@ -158,10 +166,10 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             sorted_token_ids,
             expert_ids,
             num_tokens_post_padded,
-            moe_intermediate_size * 2,
-            hidden_size,
-            max_num_tokens_padded,
+            max_possible_num_post_padded,
             token_num * top_k,
+            N=moe_intermediate_size * 2,
+            K=hidden_size,
             stride_am=x.strides[0],
             stride_ak=x.strides[1],
             stride_be=layer.moe_ffn1_weight.strides[0],
@@ -193,8 +201,9 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         intermediate_cache2 = paddle.incubate.nn.functional.swiglu(
             intermediate_cache1)
 
-        grid = (ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) *
-                ceil_div(hidden_size, config["BLOCK_SIZE_N"]), )
+        grid = (
+            ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"]) *
+            ceil_div(hidden_size, config["BLOCK_SIZE_N"]), )
         fused_moe_kernel_paddle[grid](
             intermediate_cache2,
             layer.moe_ffn2_weight,
@@ -205,10 +214,10 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             sorted_token_ids,
             expert_ids,
             num_tokens_post_padded,
-            hidden_size,
-            moe_intermediate_size,
-            max_num_tokens_padded,
+            max_possible_num_post_padded,
             token_num * top_k,
+            N=hidden_size,
+            K=moe_intermediate_size,
             stride_am=intermediate_cache2.strides[0],
             stride_ak=intermediate_cache2.strides[1],
             stride_be=layer.moe_ffn2_weight.strides[0],
@@ -324,7 +333,6 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         moe_intermediate_size = layer.moe_intermediate_size
         hidden_size = layer.hidden_size
 
-        gate_out = paddle.matmul(x.cast("float32"), layer.gate_weight)
         scores = paddle.nn.functional.softmax(gate_out, axis=-1)
 
         topk_weights, topk_ids = paddle.topk(scores,
@@ -352,13 +360,13 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             "BLOCK_SIZE_K": 128,
             "GROUP_SIZE_M": 1,
         }
-        from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
 
-        sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess(
+        sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
             topk_ids, num_local_experts, config["BLOCK_SIZE_M"])
-        max_num_tokens_padded = sorted_token_ids.shape[0]
-        grid = (ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) *
-                ceil_div(moe_intermediate_size * 2, config["BLOCK_SIZE_N"]), )
+        max_possible_num_post_padded = sorted_token_ids.shape[0]
+        grid = (
+            ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"]) *
+            ceil_div(moe_intermediate_size * 2, config["BLOCK_SIZE_N"]), )
 
         adamard_matrix = create_hadamard_matrix_map[hidden_size]
         x = paddle.matmul(x.cast("float32"), adamard_matrix)
@@ -371,8 +379,6 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         permute_x = permute_x / quant_activation_scale
         permute_x = permute_x.astype("float8_e4m3fn")
 
-        from .triton_moe_kernels import fused_moe_kernel_paddle
-
         fused_moe_kernel_paddle[grid](
             permute_x,
             layer.moe_ffn1_weight.view(paddle.float8_e4m3fn),
@@ -383,10 +389,10 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             sorted_token_ids,
             expert_ids,
             num_tokens_post_padded,
-            moe_intermediate_size * 2,
-            hidden_size,
-            max_num_tokens_padded,
+            max_possible_num_post_padded,
             token_num * top_k,
+            N=moe_intermediate_size * 2,
+            K=hidden_size,
             stride_am=x.strides[0],
             stride_ak=x.strides[1],
             stride_be=layer.moe_ffn1_weight.strides[0],
@@ -426,8 +432,9 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         intermediate_cache2 = intermediate_cache2 / quant_activation_scale
         intermediate_cache2 = intermediate_cache2.astype("float8_e4m3fn")
 
-        grid = (ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) *
-                ceil_div(hidden_size, config["BLOCK_SIZE_N"]), )
+        grid = (
+            ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"]) *
+            ceil_div(hidden_size, config["BLOCK_SIZE_N"]), )
 
         fused_moe_kernel_paddle[grid](
             intermediate_cache2,
@@ -439,10 +446,10 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             sorted_token_ids,
             expert_ids,
             num_tokens_post_padded,
-            hidden_size,
-            moe_intermediate_size,
-            max_num_tokens_padded,
+            max_possible_num_post_padded,
             token_num * top_k,
+            N=hidden_size,
+            K=moe_intermediate_size,
             stride_am=intermediate_cache2.strides[0],
             stride_ak=intermediate_cache2.strides[1],
             stride_be=layer.moe_ffn2_weight.strides[0],

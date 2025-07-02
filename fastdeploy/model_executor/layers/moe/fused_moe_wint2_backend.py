@@ -224,6 +224,7 @@ class TritonWint2FusedMoeMethod(Wint2MoeMethod):
         )
 
         from fastdeploy.model_executor.ops.gpu import moe_expert_reduce
+
         fused_moe_out = moe_expert_reduce(
             ffn_out,
             topk_weights,

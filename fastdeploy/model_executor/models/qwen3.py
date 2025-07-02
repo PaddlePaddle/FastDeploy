@@ -68,7 +68,7 @@ class Qwen3Attention(nn.Layer):
             fd_config=fd_config,
             prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.head_dim *
-            fd_config.model_config.num_attention_heads // nranks,
+            fd_config.model_config.num_attention_heads,
             output_size=fd_config.model_config.hidden_size,
         )
 

@@ -15,10 +15,12 @@
 """
 
 from abc import ABC, abstractmethod
+import argparse
 
 import paddle
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
+from fastdeploy.config import ModelConfig
 
 from fastdeploy.utils import get_logger
 
@@ -27,20 +29,20 @@ logger = get_logger("worker", "worker.log")
 
 class VLModelRunnerBase(ABC):
     """
-        Initializes the model and sets up necessary parameters.
-
-    Args:
-        config (Config): The configuration object for the model.
-        args (Namespace): The arguments passed to the script.
-
-    Returns:
-        None.
-
-    Raises:
-        None.
+        Engine -> (WIP)Executor -> Worker -> VLModelRunnerBase -> Model
+        VLModelRunnerBase interface abstracts the model execution logic that
+        contain input preparation, token generation, and tokenprocessing.
     """
 
-    def __init__(self, config, args):
+    def __init__(
+        self,
+        config: ModelConfig,
+        args: argparse.Namespace,
+    ) -> None:
+        """
+        VLModelRunnerBase init
+        """
+
         self.share_inputs = {}
         self.model_cfg = config
         self.args = args
@@ -66,7 +68,7 @@ class VLModelRunnerBase(ABC):
                        f"current_allocated: {curr_alloc:.2f}GB\n"
                        f"current_reserved: {curr_reserved:.2f}GB")
 
-    def init_dist_env(self, seed=20):
+    def init_dist_env(self, seed=20) -> None:
         """
         init distributed env
         """
@@ -85,7 +87,7 @@ class VLModelRunnerBase(ABC):
         fleet.init(is_collective=True, strategy=strategy)
         self.rank = fleet.worker_index()
 
-    def _load_model_init_val(self):
+    def _load_model_init_val(self) -> None:
         """
         initialize model config from config file
         """
@@ -105,18 +107,10 @@ class VLModelRunnerBase(ABC):
         self.min_length = _get_attr("min_length", 1)
         self.max_length = self.args.max_model_len
 
-    def _init_share_inputs(self, max_num_seqs):
+    def _init_share_inputs(self, max_num_seqs: int) -> None:
         """
-        初始化共享的输入，包括预测和训练。
-            将所有需要的张量都初始化为零或者特定值。
-
-            Args:
-                max_num_seqs (int): 最大批次大小，用于初始化张量。
-
-            Returns:
-                None.
+        initialize shared inputs
         """
-        # 统一使用paddle.full创建张量
         self._load_model_init_val()
 
         int64_config = {"dtype": "int64"}
@@ -124,7 +118,6 @@ class VLModelRunnerBase(ABC):
         float32_config = {"dtype": "float32"}
         bool_config = {"dtype": "bool"}
 
-        # 批量初始化张量
         self.share_inputs.update({
             "pre_ids":
             paddle.full([max_num_seqs, self.max_length], -1, **int64_config),
@@ -146,7 +139,6 @@ class VLModelRunnerBase(ABC):
             "presence_score":
             paddle.full([max_num_seqs, 1], self.presence_score,
                         **float32_config),
-            # TODO 名称统一
             "min_dec_len":
             paddle.full([max_num_seqs, 1], self.min_length, **int64_config),
             "max_dec_len":
@@ -207,14 +199,12 @@ class VLModelRunnerBase(ABC):
             paddle.full([max_num_seqs, 1], -1, **int32_config),
         })
 
-        # 计算block tables相关参数
         pre_max_block_num = (
             self.args.max_model_len + self.args.block_size -
             1) // self.args.block_size + self.args.enc_dec_block_num
         self.share_inputs["block_tables"] = paddle.full(
             [max_num_seqs, pre_max_block_num], -1, **int32_config)
 
-        # 初始化free list
         free_list = list(
             range(
                 self.args.total_block_num - 1,
@@ -228,7 +218,6 @@ class VLModelRunnerBase(ABC):
             paddle.full([1], self.free_list_len, **int32_config),
         })
 
-        # 初始化stop seqs
         self.share_inputs.update({
             "stop_seqs_len":
             paddle.full([self.model_cfg.max_stop_seqs_num], 0, **int32_config),
@@ -239,9 +228,9 @@ class VLModelRunnerBase(ABC):
             ], -1, **int64_config),
         })
 
-    def update_chunked_prefill(self, tasks):
+    def update_chunked_prefill(self, tasks: list[any]) -> None:
         """
-        更新chunked prefill相关参数
+        update chunked prefill
         """
         if not self.args.enable_chunked_prefill:
             return
@@ -251,58 +240,38 @@ class VLModelRunnerBase(ABC):
 
     def prefill_finished(self):
         """
-        判断是否已经完成了prefill操作
+        Verify prefill operation completion
         """
         return True
 
     @abstractmethod
-    def init_rotary_position_embedding(self, max_model_len):
+    def init_rotary_position_embedding(self, max_model_len: int) -> None:
         """
-            初始化旋转位置编码，需要重写该方法。
-            参数max_model_len（int）：序列的最大长度。
-            返回值（None）：无返回值，需要在方法内完成初始化操作。
+        Init rotary position embedding
         """
         raise NotImplementedError
 
     @abstractmethod
-    def _load_model(self, model_dir, dynamic_load_weight):
+    def _load_model(
+        self,
+        model_name: str,
+        dynamic_load_weight: int = 0,
+    ) -> None:
         """
-            加载模型，包括模型参数和优化器等。
-        需要子类实现该方法。
-
-        Args:
-            model_dir (str): 模型保存的目录路径。
-
-        Raises:
-            NotImplementedError: 当前方法未被实现。
-
-        Returns:
-            None.
+        Load the model from the given model name.
         """
         raise NotImplementedError
 
     @abstractmethod
     def _init_kvcache(self):
         """
-            初始化kv缓存，用于快速查找数据块。
-        该方法需要被子类实现。
-
-        Args:
-            max_block_num (int): 最大的数据块数量。
-
-        Raises:
-            NotImplementedError: 当该方法未被子类实现时会引发此异常。
+        Init kv cache
         """
         raise NotImplementedError
 
     @abstractmethod
-    def dy_input_preprocess(self):
+    def dy_input_preprocess(self, tasks: list[any]) -> None:
         """
-            预处理输入数据，用于计算dy。
-            该函数需要在每次forward之前调用，并且只能调用一次。
-            默认实现抛出NotImplementedError。子类可以根据具体的模型实现此功能。
-
-            Raises:
-                NotImplementedError: 如果没有实现该方法。
+        dynamic insertion
         """
         raise NotImplementedError

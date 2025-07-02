@@ -149,6 +149,8 @@ class XPUAttentionBackend(AttentionBackend):
         k: paddle.Tensor,
         v: paddle.Tensor,
         qkv: paddle.Tensor,
+        compressed_kv: paddle.Tensor,
+        k_pe: paddle.Tensor,
         layer: Attention,
         forward_meta: ForwardMeta,
     ) -> paddle.Tensor:

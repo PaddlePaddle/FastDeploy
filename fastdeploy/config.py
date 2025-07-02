@@ -51,7 +51,6 @@ class ModelConfig(PretrainedConfig):
     top_p = 0.0
     temperature = 1.0
     rope_theta = 10000.0
-    rope_scaling = None
     penalty_score = 1.0
     frequency_score = 0.0
     presence_score = 0.0
@@ -163,7 +162,6 @@ class ParallelConfig:
     # The embedding weight distributed on your gpu cards is divided by row or column.
     # Defaults to False means divide by row. When vocab_size can not be divided by world_size
     # but hidden_size can, we can consider split embedding weight by column.
-    column_cut = False  # (bool, optional)
     """
     From old wersion worker args
     TODO(gongshaotian): Reclassify
@@ -202,10 +200,7 @@ class ParallelConfig:
     eos_tokens_lens: int = 2
     # Enable chunked prefill
     enable_chunked_prefill: str = "store_true"
-    """
-    - APPEND_ATTN:
-    """
-    attention_backend: str = "APPEND_ATTN"
+    #
     max_num_batched_tokens: int = 2048
     # enable prefix cache
     enable_prefix_caching = None
@@ -356,7 +351,7 @@ class LoadConfig:
     """
     Configuration for loading parameter
     """
-    pass
+    use_fastsafetensor: bool = False
 
 
 @dataclass

@@ -14,9 +14,14 @@
 # limitations under the License.
 """
 
+from typing import Dict
+
+import numpy as np
 import paddle
 from paddle import nn
 from paddle.distributed import fleet
+
+from fastdeploy.config import FDConfig
 
 from .utils import get_tensor
 
@@ -28,12 +33,12 @@ class VocabParallelEmbedding(nn.Layer):
 
     def __init__(
         self,
-        fd_config,
-        num_embeddings,
-        embedding_dim=768,
-        params_dtype="bfloat16",
+        fd_config: FDConfig,
+        num_embeddings: int,
+        embedding_dim: int = 768,
+        params_dtype: str = "bfloat16",
         prefix="",
-    ):
+    ) -> None:
         """
         Initialize the VocabParallelEmbedding layer for the model.
 
@@ -41,28 +46,28 @@ class VocabParallelEmbedding(nn.Layer):
             fd_config (FDConfig): Arguments related to inference, containing
                 attributes such as weight_dtype, act_dtype, mp_size, hidden_size, head_dim,
                 num_attention_heads, and ffn_hidden_size.
-            num_embeddings : vocabulary size.
-            embedding_dim : size of hidden state.
-            params_dtype : data type of parameters.
-            prefix (str): Unique name of the layer, used for naming internal attributes,
-                you can give it any name you like.
+            num_embeddings (int)  : vocabulary size.
+            embedding_dim (int) : size of hidden state.
+            params_dtype  (str) : data type of parameters.
+            prefix (str): The name of current layer. Defaults to "".
         """
         super().__init__()
         self.fd_config = fd_config
         hcg = fleet.get_hybrid_communicate_group()
-        self.mp_rank = hcg.get_model_parallel_rank()
-        self.column_cut = fd_config.parallel_config.column_cut
-        self.world_size = hcg.get_model_parallel_world_size()
-        self.ring_id = hcg.get_model_parallel_group().id
-        self.use_rope = fd_config.model_config.use_rope
-        self.rope_head_dim = fd_config.model_config.rope_head_dim
-        self.use_ep = fd_config.parallel_config.use_ep
-        self.hidden_dropout_prob = fd_config.model_config.hidden_dropout_prob
-        self.initializer_range = fd_config.model_config.initializer_range
-        self.sequence_parallel = fd_config.parallel_config.sequence_parallel
-        self.max_position_embeddings = fd_config.model_config.max_position_embeddings
-        self.freeze_embedding = fd_config.model_config.freeze_embedding
-        self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
+        self.mp_rank: int = hcg.get_model_parallel_rank()
+        self.column_cut = False
+        self.world_size: int = hcg.get_model_parallel_world_size()
+        self.ring_id: int = hcg.get_model_parallel_group().id
+        self.use_rope: bool = fd_config.model_config.use_rope
+        self.rope_head_dim: int = fd_config.model_config.rope_head_dim
+        self.use_ep: bool = fd_config.parallel_config.use_ep
+        self.hidden_dropout_prob: float = fd_config.model_config.hidden_dropout_prob
+        self.initializer_range: float = fd_config.model_config.initializer_range
+        self.sequence_parallel: bool = fd_config.parallel_config.sequence_parallel
+        self.max_position_embeddings: int = fd_config.model_config.max_position_embeddings
+        self.freeze_embedding: bool = fd_config.model_config.freeze_embedding
+        self.tie_word_embeddings: bool = fd_config.model_config.tie_word_embeddings
+        self.params_dtype: str = params_dtype
 
         if self.use_ep:
             self.word_embeddings = nn.Embedding(
@@ -109,7 +114,8 @@ class VocabParallelEmbedding(nn.Layer):
         self.rope_head_dim_shape_tensor = paddle.ones((self.rope_head_dim),
                                                       dtype="int8")
 
-    def load_state_dict(self, state_dict):
+    def load_state_dict(self, state_dict: Dict[str,
+                                               paddle.Tensor | np.ndarray]):
         """
         Load the checkpoint state dictionary into the layer.
 
@@ -125,7 +131,7 @@ class VocabParallelEmbedding(nn.Layer):
                 get_tensor(state_dict.pop(self.prefix + ".weight")).astype(
                     paddle.get_default_dtype()))
 
-    def forward(self, ids_remove_padding=None):
+    def forward(self, ids_remove_padding=None) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
 
