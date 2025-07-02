@@ -1,4 +1,4 @@
-# Run ERNIE-4.5-300B-A47B model on iluvatar machine
+# Run ERNIE-4.5-300B-A47B & ERNIE-4.5-21B-A3B model on iluvatar machine
 The current version of the software merely serves as a demonstration demo for the Iluvatar CoreX combined with the Fastdeploy inference framework for large models. There may be issues when running the latest ERNIE4.5 model, and we will conduct repairs and performance optimization in the future. Subsequent versions will provide customers with a more stable version.
 
 ##  Machine Preparation
@@ -62,7 +62,7 @@ prompts = [
 sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=256)
 
 # load the model
-llm = LLM(model="/home/paddle/ernie-4_5-300b-a47b-bf16-paddle", tensor_parallel_size=16, max_model_len=8192)
+llm = LLM(model="/home/paddle/ernie-4_5-300b-a47b-bf16-paddle", tensor_parallel_size=16, max_model_len=8192, static_decode_blocks=0, quantization='wint8')
 
 # Perform batch inference
 outputs = llm.generate(prompts, sampling_params)

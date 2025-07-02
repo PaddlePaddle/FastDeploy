@@ -1,4 +1,4 @@
-# 如何在天数机器上运行 ERNIE-4.5-300B-A47B-BF16
+# 如何在天数机器上运行 ERNIE-4.5-300B-A47B-BF16 & ERNIE-4.5-21B-A3B
 当前版本软件只是作为天数芯片 + Fastdeploy 推理大模型的一个演示 demo，跑最新ERNIE4.5模型可能存在问题，后续进行修复和性能优化，给客户提供一个更稳定的版本。
 
 ## 准备机器
@@ -62,7 +62,7 @@ prompts = [
 sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=256)
 
 # 加载模型
-llm = LLM(model="/home/paddle/ernie-4_5-300b-a47b-bf16-paddle", tensor_parallel_size=16, max_model_len=8192)
+llm = LLM(model="/home/paddle/ernie-4_5-300b-a47b-bf16-paddle", tensor_parallel_size=16, max_model_len=8192, static_decode_blocks=0, quantization='wint8')
 
 # 批量进行推理（llm内部基于资源情况进行请求排队、动态插入处理）
 outputs = llm.generate(prompts, sampling_params)
