@@ -25,7 +25,7 @@ python -m pip install paddlepaddle-gpu==3.1.0 -i https://www.paddlepaddle.org.cn
 
 Then install fastdeploy. **Do not install from PyPI**. Use the following methods instead:
 
-For SM80/90 architecture GPUs(e.g A100/H100):
+For SM80/90 architecture GPUs(e.g A100/H100/A10):
 ```
 # Install stable release
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -34,7 +34,7 @@ python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
-For SM86/89 architecture GPUs(e.g 4090/L20/L40):
+For SM86/89 architecture GPUs(e.g 4090/L20/L40/A30):
 ```
 # Install stable release
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
