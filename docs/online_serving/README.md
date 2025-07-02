@@ -52,6 +52,7 @@ For a description of the OpenAI protocol, refer to the document [OpenAI Chat Com
 ## Parameter Differences
 ### Request Parameter Differences
 The differences in request parameters between FastDeploy and the OpenAI protocol are as follows. Other request parameters will be ignored:
+
 - `prompt` (supported only in the `v1/completions` interface)
 - `messages` (supported only in the `v1/chat/completions` interface)
 - `frequency_penalty`: Optional[float] = 0.0
@@ -77,6 +78,7 @@ The additional return fields added by FastDeploy are as follows:
 - `reasoning_content`: The returned result of the reasoning chain
 
 Overview of return parameters:
+
 ```python
 ChatCompletionStreamResponse:
     id: str
