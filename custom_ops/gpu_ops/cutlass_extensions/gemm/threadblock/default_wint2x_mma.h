@@ -106,6 +106,9 @@ struct DefaultWint2xMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlig
     static_assert(platform::is_same<ElementB, uint2b_t>::value,
         "Element B must be uint2b_t");
 
+    static_assert(platform::is_same<Operator, arch::OpMultiplyAddDequantizeInterleavedBToA>::value,
+        "Mma multistage must dequantize after ldsm");
+
     static cutlass::arch::CacheOperation::Kind const CacheOpA = ((sizeof_bits<ElementA>::value * kAlignmentA) == 128)
         ? cutlass::arch::CacheOperation::Global
         : cutlass::arch::CacheOperation::Always;
@@ -117,8 +120,8 @@ struct DefaultWint2xMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlig
     // Define the MmaCore components
     // Mma core does not depend on stages, so pass in at least 3 here to mma multistage pieces are created
     using MmaCore = typename cutlass::gemm::threadblock::DefaultMmaCore<ThreadblockShape, WarpShape, InstructionShape,
-        ElementA, LayoutA, ElementA, LayoutB, ElementAccumulator, layout::RowMajor, OperatorClass, std::max(kStages, 3),
-        Operator, false, CacheOpA, CacheOpB>;
+        ElementA, LayoutA, ElementB, layout::ColumnMajor, ElementAccumulator, layout::RowMajor, OperatorClass,
+        std::max(kStages, 3), Operator, false, CacheOpA, CacheOpB>;
 
     // Define iterators over tiles from the A operand
     using ThreadMapA = typename MmaCore::IteratorThreadMapA;
@@ -127,17 +130,39 @@ struct DefaultWint2xMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlig
         cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK>, ElementA, LayoutA, 1, ThreadMapA,
         AccessTypeA>;
 
-    // Define iterators over tiles from the B operand
+private:
+    static constexpr int kColumnsInterleaved = LayoutB::kColumnsInterleaved;
+    static constexpr int kRowsPerTile = LayoutB::kRowsPerTile;
+    static_assert(!(MmaCore::Shape::kN % kColumnsInterleaved), "ThreadblockShape must be disivle by kColumnsInterleaved");
+    static_assert(kRowsPerTile == MmaCore::Shape::kK, "");
+
     using ThreadMapB = typename MmaCore::IteratorThreadMapB;
+    using WarpArrangement = typename ThreadMapB::Detail::WarpThreadArrangement;
+    static_assert(!(WarpArrangement::kStrided % kColumnsInterleaved), "");
+
+    using IteratorShapeB = MatrixShape<
+        MmaCore::Shape::kK * kColumnsInterleaved, MmaCore::Shape::kN / kColumnsInterleaved>;
+    using InterleavedThreadMapB = transform::PitchLinearWarpRakedThreadMap<
+        layout::PitchLinearShape<IteratorShapeB::kRow, IteratorShapeB::kColumn>,
+        ThreadMapB::kThreads,
+        layout::PitchLinearShape<WarpArrangement::kContiguous * kColumnsInterleaved,
+            WarpArrangement::kStrided / kColumnsInterleaved>,
+        MmaCore::kAccessSizeInBits / sizeof_bits<ElementB>::value>;
+
+public:
+    // Define iterators over tiles from the B operand
     using AccessTypeB = cutlass::Array<ElementB, kAlignmentB>;
     using IteratorB = cutlass::transform::threadblock::PredicatedTileAccessIterator<
-        cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>, ElementB, LayoutB, 0, ThreadMapB,
+        IteratorShapeB, ElementB, layout::ColumnMajor, 0, InterleavedThreadMapB,
         AccessTypeB>;
 
     // Define the threadblock-scoped multistage matrix multiply
-    using ThreadblockMma = cutlass::gemm::threadblock::Wint2xMmaMultistage<typename MmaCore::Shape, IteratorA,
-        typename MmaCore::SmemIteratorA, MmaCore::kCacheOpA, IteratorB, typename MmaCore::SmemIteratorB,
-        MmaCore::kCacheOpB, ElementAccumulator, layout::RowMajor, typename MmaCore::MmaPolicy, kStages, SharedMemoryClear>;
+    using ThreadblockMma = cutlass::gemm::threadblock::Wint2xMmaMultistage<
+        typename MmaCore::Shape,
+        IteratorA, typename MmaCore::SmemIteratorA, MmaCore::kCacheOpA,
+        IteratorB, typename MmaCore::SmemIteratorB, MmaCore::kCacheOpB,
+        ElementAccumulator, layout::RowMajor,
+        typename MmaCore::MmaPolicy, kStages, SharedMemoryClear>;
 };
 
 } // namespace threadblock

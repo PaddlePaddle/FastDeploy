@@ -295,6 +295,11 @@ public:
         assert(0);
 #endif
     }
+
+  /// Transform the mma operands to the required types
+  CUTLASS_DEVICE
+  void transform(TransformedFragmentA &dst_A, TransformedFragmentB &dst_B,
+                 FragmentA const &A, FragmentB const &B) const {}
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

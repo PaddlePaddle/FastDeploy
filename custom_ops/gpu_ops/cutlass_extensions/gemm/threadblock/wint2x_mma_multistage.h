@@ -266,10 +266,9 @@ public:
     if (smem_read_stage_idx_ == Base::kStages) {
       // Wrap back around to the 'start' of the circular buffer in shared memory
       this->warp_tile_iterator_A_.add_tile_offset({0, -Base::kStages * Policy::kPartitionsK * Base::kWarpGemmIterations});
-      // this->warp_tile_iterator_B_.add_tile_offset({-Base::kStages * Policy::kPartitionsK * Base::kWarpGemmIterations, 0});
+      this->warp_tile_iterator_B_.add_tile_offset({-Base::kStages * Policy::kPartitionsK * Base::kWarpGemmIterations, 0});
       smem_read_stage_idx_ = 0;
     }
-    this->warp_tile_iterator_B_.add_tile_offset({-Policy::kPartitionsK * Base::kWarpGemmIterations, 0});
   }
 
   /// Advance global memory read-iterators and shared memory write-iterators to the stage
@@ -566,16 +565,6 @@ public:
       this->warp_tile_iterator_A_.load(pipe_state.warp_loaded_frag_A_[(warp_mma_k + 1) % 2]);
       ++this->warp_tile_iterator_A_;
 
-      if (warp_mma_k + 1 == Base::kWarpGemmIterations) {
-        // Unpack and dequant the first stage of B.
-        int unpack_stage = stage - Base::kStages + 2;
-        //tile_dequanter_B.UnpackAndDequant(smem_zipped_ptr_B_ + (unpack_stage % Base::kStages) * smem_zipped_bytes_per_stage_B_,
-        //                                  column_wise_smem_ptr_B_, unpack_stage);
-
-        // Copy dequatized data to shared memory used by mma core.
-        //copy_tiles_and_advance_per_stage_B<false, false>(iterator_B);
-      }
-
       // Load the next warp-tile's B fragment from shared memory
       this->warp_tile_iterator_B_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
       this->warp_tile_iterator_B_.load(pipe_state.warp_loaded_frag_B_[(warp_mma_k + 1) % 2]);
@@ -617,13 +606,10 @@ public:
       // global->shared fragment copies
       if (warp_mma_k < Base::kWarpGemmIterations - 1) {
         int group_start_iteration_A = warp_mma_k * Detail::kAccessesPerGroupA;
+        int group_start_iteration_B = warp_mma_k * Detail::kAccessesPerGroupB;
 
         copy_tiles_and_advance_A(iterator_A, group_start_iteration_A);
-
-        if (warp_mma_k == 0) {
-          tile_dequanter_B.Load(smem_zipped_ptr_B_ + (stage % Base::kStages) * smem_zipped_bytes_per_stage_B_,
-                                column_wise_smem_ptr_B_, stage);
-        }
+        copy_tiles_and_advance_B<false>(iterator_B, group_start_iteration_B);
       }
 
       // The second-to-last warp-tile also:
@@ -632,8 +618,10 @@ public:
       if (warp_mma_k + 2 == Base::kWarpGemmIterations) {
         // Performs the last warp-tile's share of global->shared fragment copies
         int group_start_iteration_A = (warp_mma_k + 1) * Detail::kAccessesPerGroupA;
+        int group_start_iteration_B = (warp_mma_k + 1) * Detail::kAccessesPerGroupB;
 
         copy_tiles_and_advance_A(iterator_A, group_start_iteration_A);
+        copy_tiles_and_advance_B<false>(iterator_B, group_start_iteration_B);
 
         // Inserts a memory fence between stages of cp.async instructions.
         cutlass::arch::cp_async_fence();
@@ -648,7 +636,7 @@ public:
         // Disable global fetching when done with global fetch iterations
         --gemm_k_iterations;
         iterator_A.clear_mask(gemm_k_iterations == 0);
-        iterator_B.clear_mask(gemm_k_iterations == (-Base::kStages + 1));
+        iterator_B.clear_mask(gemm_k_iterations == 0);
       }
 
       // The last warp-tile also converts the shared memory fragments used by
@@ -675,11 +663,7 @@ public:
       IteratorB &iterator_B,
       TileDequanterB &tile_dequanter_B)        ///< [in|out] iterator over B operand in global memory
   {
-#if 0
     PipeState pipe_state;
-
-    // Unpack and dequant the first stage of B.
-    //tile_dequanter_B.UnpackAndDequant(smem_zipped_ptr_B_, column_wise_smem_ptr_B_, 0);
 
     // Disable global fetching if done with global fetch iterations
     iterator_A.clear_mask(gemm_k_iterations == 0);
@@ -689,9 +673,6 @@ public:
     this->warp_tile_iterator_A_.set_kgroup_index(0);
     this->warp_tile_iterator_A_.load(pipe_state.warp_loaded_frag_A_[0]);
     ++this->warp_tile_iterator_A_;
-
-    // Copy dequatized data to shared memory used by mma core.
-    //copy_tiles_and_advance_per_stage_B<false, true>(iterator_B);
 
     // Load first warp-tile's B fragment from shared memory
     this->warp_tile_iterator_B_.set_kgroup_index(0);
@@ -709,6 +690,7 @@ public:
       pipe_state.tmp_accum_.clear();
     }
 
+#if 0
     int stage = Base::kStages - 1;
 
     // Mainloop
@@ -723,6 +705,7 @@ public:
         gemm_k_iterations,
         stage);
       stage += 1;
+      break;
     }
 
     if (Detail::kStagedAccumulation) {
@@ -766,8 +749,7 @@ public:
     else
     {
       this->warp_tile_iterator_A_.add_tile_offset({0, ((Base::kStages - 2) * kStageIters)});
-      //this->warp_tile_iterator_B_.add_tile_offset({((Base::kStages - 2) * kStageIters), 0});
-      this->warp_tile_iterator_B_.add_tile_offset({(-2 * kStageIters), 0});
+      this->warp_tile_iterator_B_.add_tile_offset({((Base::kStages - 2) * kStageIters), 0});
     }
     smem_read_stage_idx_ = smem_write_stage_idx_;
   }

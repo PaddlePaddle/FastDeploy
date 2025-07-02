@@ -715,8 +715,8 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
   std::vector<CutlassGemmConfig> candidate_configs =
       get_candidate_configs(sm_, -1, is_weight_only, only_simt_configs, true);
 
-  static constexpr int warm_time = 5;
-  static constexpr int test_time = 10;
+  static constexpr int warm_time = 0;
+  static constexpr int test_time = 1;
   auto& gemmConfigManager = GemmConfigManager::Instance();
   constexpr GemmDataType dtype = getGemmDataType<T>();
   constexpr GemmDataType wdtype = getGemmDataType<WeightType>();
@@ -735,8 +735,10 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
         std::min(gemmConfigManager.nextPowerOfTwo(actual_total_rows),
                  gemmConfigManager.getMaxProfileM());
     bool find_one = false;
-    size_t num_candidate_configs_size = candidate_configs.size();
-    for (size_t ii = 0; ii < num_candidate_configs_size; ++ii) {
+    size_t num_candidate_configs_size = 2;//candidate_configs.size();
+    // for (size_t ii = 0; ii < num_candidate_configs_size; ++ii)
+    {
+      size_t ii = 1;
       try {
         for (int i = 0; i < warm_time; i++) {
           dispatch_to_arch<EpilogueTag>(A,
@@ -780,7 +782,7 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
         check_cuda_error(cudaEventElapsedTime(&elapsed, start, stop));
         check_cuda_error(cudaEventDestroy(start));
         check_cuda_error(cudaEventDestroy(stop));
-        //std::cout << "[TUNING] config: " << ii << ", time: " << elapsed << " ms" << std::endl;
+        std::cout << "[TUNING] config: " << ii << ", time: " << elapsed << " ms" << std::endl;
         if (elapsed < best_time) {
           best_id = ii;
           best_time = elapsed;
@@ -801,6 +803,7 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
     }
   }
 
+#if 0
   dispatch_to_arch<EpilogueTag>(A,
                                 B,
                                 weight_scales,
@@ -814,6 +817,7 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
                                 quant_args_B,
                                 chosen_config,
                                 stream);
+#endif
 }
 
 template <typename T, typename WeightQuantTraits>
