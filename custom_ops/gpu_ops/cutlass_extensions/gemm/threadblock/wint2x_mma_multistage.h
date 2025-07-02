@@ -475,7 +475,7 @@ public:
       copy_tiles_and_advance_per_stage_A(iterator_A);
 
       // Async copy zipped B to shared memory.
-      copy_tiles_and_advance_per_stage_B<false, true>(iterator_B);
+      copy_tiles_and_advance_per_stage_B<true, true>(iterator_B);
 
       // TODO: Async copy other quantized params to shared memory, local_scale, code_scale, code_zp, super_scale.
       //tile_dequanter_B.Load(smem_zipped_ptr_B_ + (stage % Base::kStages) * smem_zipped_bytes_per_stage_B_,
@@ -609,7 +609,7 @@ public:
         int group_start_iteration_B = warp_mma_k * Detail::kAccessesPerGroupB;
 
         copy_tiles_and_advance_A(iterator_A, group_start_iteration_A);
-        copy_tiles_and_advance_B<false>(iterator_B, group_start_iteration_B);
+        copy_tiles_and_advance_B<true>(iterator_B, group_start_iteration_B);
       }
 
       // The second-to-last warp-tile also:
@@ -621,7 +621,7 @@ public:
         int group_start_iteration_B = (warp_mma_k + 1) * Detail::kAccessesPerGroupB;
 
         copy_tiles_and_advance_A(iterator_A, group_start_iteration_A);
-        copy_tiles_and_advance_B<false>(iterator_B, group_start_iteration_B);
+        copy_tiles_and_advance_B<true>(iterator_B, group_start_iteration_B);
 
         // Inserts a memory fence between stages of cp.async instructions.
         cutlass::arch::cp_async_fence();
