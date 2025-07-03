@@ -90,7 +90,8 @@ class MTPProposer(Proposer):
 
         self.model = get_model_from_loader(self.cfg)
 
-    def dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
+    def dummy_prefill_inputs(self, num_tokens: int, batch_size: int,
+                             expected_decode_len: int):
         """Set dummy prefill inputs to model_inputs"""
         max_dec_len = expected_decode_len + 1
         self.num_gpu_blocks = self.parallel_config.max_block_num
@@ -130,10 +131,10 @@ class MTPProposer(Proposer):
         self.cache_kvs = {}
 
         cache_type = self.parallel_config.dtype
-        
-        if (self.quant_config and 
-            hasattr(self.quant_config, "kv_cache_quant_type") and 
-            self.quant_config.kv_cache_quant_type is not None):
+
+        if (self.quant_config
+                and hasattr(self.quant_config, "kv_cache_quant_type")
+                and self.quant_config.kv_cache_quant_type is not None):
             cache_type = 'uint8'
 
         # Get kv cache shape
@@ -190,8 +191,7 @@ class MTPProposer(Proposer):
         head_dim = self.model_config.head_dim
 
         # Get the attention backend
-        attn_cls = get_attention_backend(
-            self.parallel_config.attention_backend)
+        attn_cls = get_attention_backend()
         attn_backend = attn_cls(
             self.cfg,
             kv_num_heads=self.model_config.kv_num_heads,
@@ -200,8 +200,8 @@ class MTPProposer(Proposer):
         )
         if attn_backend is None:
             raise NotImplementedError(
-                f"{ self.parallel_config.attention_backend} attention backend"
-                " is not support by GPUModelRunner")
+                "Attention backend which you chose is not support by GPUModelRunner"
+            )
         self.attn_backends.append(attn_backend)
 
     def clear_dummy_input(self):
@@ -405,17 +405,21 @@ class MTPProposer(Proposer):
                                                                  1:length]
                 self.model_inputs["pre_ids"][idx:idx + 1] = -1
                 self.model_inputs["step_idx"][idx:idx + 1] = 0
-                # TODO(liuzichang) finish chunked_prefill
                 if self.parallel_config.enable_chunked_prefill:
-                    raise NotImplementedError(
-                        "MTP don't support chunked_prefill now")
+                    token_chunk_size = request.prefill_chunk_info[0]
+                    self.model_inputs["seq_lens_encoder"][idx:idx +
+                                                          1] = token_chunk_size
+                    self.model_inputs["seq_lens_this_time"][
+                        idx:idx + 1] = token_chunk_size
                 else:
                     self.model_inputs["seq_lens_encoder"][idx:idx + 1] = length
-                    self.model_inputs["seq_lens_decoder"][idx:idx + 1] = (
-                        request.get("seq_lens_decoder", 0))
                     self.model_inputs["seq_lens_this_time"][idx:idx +
                                                             1] = length
 
+                self.model_inputs["seq_lens_decoder"][idx:idx +
+                                                      1] = (request.get(
+                                                          "seq_lens_decoder",
+                                                          0))
                 self.model_inputs["stop_flags"][idx:idx + 1] = False
                 self.model_inputs["batch_drop"][idx:idx + 1] = False
 
@@ -595,6 +599,43 @@ class MTPProposer(Proposer):
 
                 self._post_process(sampled_token_ids)
 
+    def update_task_chunk_prefill(self, task):
+        """
+        Update single task's chunk_prefill info
+        """
+        idx = task.idx
+        start_idx = sum(task.prefill_chunk_info[:task.chunk_idx])
+
+        if task.chunk_idx == len(task.prefill_chunk_info):
+            self.model_inputs['seq_lens_encoder'][idx:idx + 1] = 0
+            self.model_inputs["step_idx"][idx:idx + 1] = 1
+            self.model_inputs["seq_lens_decoder"][idx:idx +
+                                                  1] = start_idx + task.get(
+                                                      "seq_lens_decoder", 0)
+        else:
+            token_chunk_size = task.prefill_chunk_info[task.chunk_idx]
+
+            if task.chunk_idx < len(task.prefill_chunk_info) - 1:
+                self.model_inputs['input_ids'][
+                    idx, :token_chunk_size] = np.array(
+                        task.prompt_token_ids[start_idx + 1:start_idx +
+                                              token_chunk_size + 1])
+            # Last prefill
+            else:
+                self.model_inputs['input_ids'][
+                    idx, :token_chunk_size - 1] = np.array(
+                        task.prompt_token_ids[start_idx + 1:start_idx +
+                                              token_chunk_size])
+
+            self.model_inputs["seq_lens_this_time"][idx:idx +
+                                                    1] = token_chunk_size
+            self.model_inputs['seq_lens_encoder'][idx:idx +
+                                                  1] = token_chunk_size
+            self.model_inputs["step_idx"][idx:idx + 1] = 0
+            self.model_inputs["seq_lens_decoder"][idx:idx +
+                                                  1] = start_idx + task.get(
+                                                      "seq_lens_decoder", 0)
+
     def _update_status(self):
         """
         Update main-model's forward info in next step.
@@ -624,6 +665,11 @@ class MTPProposer(Proposer):
         )
 
     def _run_impl(self, full_hidden_states):
+        """"""
         target_hidden_states = self._prepare_inputs(full_hidden_states)
         self._propose(target_hidden_states=target_hidden_states)
         self._update_status()
+
+    def is_chunk_prefill_enabled(self):
+        """"""
+        return True
