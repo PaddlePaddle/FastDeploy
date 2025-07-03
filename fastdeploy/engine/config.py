@@ -512,7 +512,7 @@ class Config:
         pod_ips: Optional[List[str]] = None,
         speculative_config: Optional[Dict[str, Any]] = None,
         use_warmup: bool = False,
-        engine_worker_queue_port: int = 8003,
+        engine_worker_queue_port: int = 8002,
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
         enable_mm: bool = False,
@@ -547,7 +547,7 @@ class Config:
             mm_processor_kwargs (Optional[Dict[str, Any]]): Additional arguments for multi-modal processor. Default is None.
             speculative_config (Optional[Dict[str, Any]]): Speculative execution configuration. Default is None.
             use_warmup (bool): Flag to use warmup. Default is False.
-    engine_worker_queue_port (int): Engine worker queue port. Default is 8003.
+            engine_worker_queue_port (int): Engine worker queue port. Default is 8002.
             enable_mm (bool): Flag to enable multi-modal processing. Default is False.
             splitwise_role (str): Splitwise role. Default is "mixed".
             innode_prefill_ports (Optional[List[int]]): Innode prefill ports. Default is None.
@@ -728,7 +728,7 @@ class Config:
                 ), "XPU currently do not support guided_decoding"
 
                 try:
-                    pass
+                    import xgrammar  # noqa
                 except Exception as e:
                     raise Exception(
                         f"import XGrammar failed, please install XGrammar use `pip install xgrammar==0.1.19`. \n\t {e}"

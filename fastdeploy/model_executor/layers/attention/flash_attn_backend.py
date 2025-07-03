@@ -157,7 +157,7 @@ class FlashAttentionBackend(AttentionBackend):
             self.block_size,
             self.speculate_max_draft_token_num + 1,
         )
-        # if metadata.set_max_lengths[1] > 0:
+
         (
             metadata.cu_seqlens_k,
             metadata.pre_cache_batch_ids,
