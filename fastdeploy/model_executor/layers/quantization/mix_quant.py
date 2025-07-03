@@ -15,8 +15,9 @@
 """
 from typing import Optional
 
-from ..attention import Attention
-from ..moe import FusedMoE
+from fastdeploy.model_executor.layers.attention.attention import Attention
+from fastdeploy.model_executor.layers.moe.moe import FusedMoE
+
 from . import get_quantization_config
 from .quant_base import QuantConfigBase, QuantMethodBase
 

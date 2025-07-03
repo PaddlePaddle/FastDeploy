@@ -86,7 +86,7 @@ class DefaultModelLoader(BaseModelLoader):
                     if isinstance(v, paddle.Tensor):
                         v.value().get_tensor()._clear()
             paddle.device.cuda.empty_cache()
-            paddle.device.cuda.synchronize()
+            paddle.device.synchronize()
 
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
         context = paddle.LazyGuard()

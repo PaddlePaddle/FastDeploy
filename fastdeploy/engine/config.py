@@ -728,7 +728,7 @@ class Config:
                 ), "XPU currently do not support guided_decoding"
 
                 try:
-                    import xgrammar
+                    import xgrammar  # noqa
                 except Exception as e:
                     raise Exception(
                         f"import XGrammar failed, please install XGrammar use `pip install xgrammar==0.1.19`. \n\t {e}"
