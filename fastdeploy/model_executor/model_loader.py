@@ -41,7 +41,7 @@ MODEL_CLASSES = {
     "Qwen3ForCausalLM": Qwen3PretrainedModel,
     "Qwen3MoeForCausalLM": Qwen3MoePretrainedModel,
     "Ernie4_5_ForCausalLM": Ernie4_5_PretrainedModel,
-    "DeepseekV3ForCausalLM": DeepSeekV3PretrainedModel
+    "DeepseekV3ForCausalLM": DeepSeekV3PretrainedModel,
 }
 
 
@@ -92,7 +92,6 @@ class DefaultModelLoader(BaseModelLoader):
         context = paddle.LazyGuard()
         architectures = fd_config.model_config.architectures[0]
         # TODO(gongshaotian): Now, only support safetensor
-
         model_class = MODEL_CLASSES[architectures]
 
         with context:
@@ -100,6 +99,11 @@ class DefaultModelLoader(BaseModelLoader):
             model = model_cls(fd_config)
 
         model.eval()
+
+        # RL model not need set_state_dict
+        if fd_config.load_config.dynamic_load_weight:
+            return model
+
         state_dict = load_composite_checkpoint(
             fd_config.parallel_config.model_name_or_path,
             model_class,

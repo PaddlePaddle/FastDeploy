@@ -358,6 +358,11 @@ class ForwardMeta():
                 "decoder_tile_ids_per_batch", None),
         )
         return ret
+    
+    def clear_caches(self):
+        """safe clear caches"""
+        if self.caches:
+            del self.caches
 
 
 @dataclass

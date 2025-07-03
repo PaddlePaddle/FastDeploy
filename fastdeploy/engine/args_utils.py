@@ -87,9 +87,13 @@ class EngineArgs:
     """
     Configuration for speculative execution.
     """
-    dynamic_load_weight: int = 0
+    dynamic_load_weight: bool = False
     """
     dynamic load weight
+    """
+    load_strategy: str = "meta"
+    """
+    dynamic load weight strategy
     """
     quantization: str = None
     guided_decoding_backend: str = "off"
@@ -364,13 +368,16 @@ class EngineArgs:
             type=json.loads,
             default=EngineArgs.speculative_config,
             help="Configuration for speculative execution.")
-
         model_group.add_argument(
             "--dynamic-load-weight",
-            type=int,
+            action='store_true',
             default=EngineArgs.dynamic_load_weight,
             help="Flag to indicate whether to load weight dynamically.")
-
+        model_group.add_argument(
+            "--load-strategy",
+            type=str,
+            default=EngineArgs.load_strategy,
+            help="Flag to dynamic load strategy.")
         model_group.add_argument("--engine-worker-queue-port",
                                  type=int,
                                  default=EngineArgs.engine_worker_queue_port,
@@ -669,8 +676,9 @@ class EngineArgs:
         """
         return ModelConfig(model_name_or_path=self.model,
                            config_json_file=self.model_config_name,
+                           quantization=self.quantization,
                            dynamic_load_weight=self.dynamic_load_weight,
-                           quantization=self.quantization)
+                           load_strategy=self.load_strategy)
 
     def create_cache_config(self, model_cfg) -> CacheConfig:
         """

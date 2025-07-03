@@ -357,12 +357,12 @@ class Ernie4_5_Model(nn.Layer):
             params_dtype=paddle.get_default_dtype(),
             prefix=(f"{fd_config.model_config.prefix_name}.embed_tokens"))
 
-        self.hidden_layers = [
+        self.hidden_layers = nn.LayerList([
             Ernie4_5_DecoderLayer(
                 fd_config=fd_config,
                 prefix=f"{fd_config.model_config.prefix_name}.layers.{i}")
             for i in range(self.num_layers)
-        ]
+        ])
 
         self.norm = RMSNorm(
             fd_config,

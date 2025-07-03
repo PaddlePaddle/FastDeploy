@@ -20,6 +20,7 @@ from typing import List, Optional
 import numpy as np
 import paddle
 import paddle.nn as nn
+from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
@@ -41,12 +42,9 @@ from fastdeploy.model_executor.pre_and_post_process import (post_process,
                                                             rebuild_padding,
                                                             step_cuda)
 from fastdeploy.spec_decode import MTPProposer, NgramProposer
-from fastdeploy.utils import get_logger
 from fastdeploy.worker.forward_meta import ForwardMeta
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
-
-logger = get_logger("gpu_model_runner", "gpu_model_runner.log")
 
 
 class GPUModelRunner(ModelRunnerBase):
@@ -593,6 +591,10 @@ class GPUModelRunner(ModelRunnerBase):
         time_before_load = time.perf_counter()
         # 1. Load original model
         self.model = get_model_from_loader(fd_config=self.fd_config)
+        # 1.1 Load RL dynamic model
+        if self.fd_config.load_config.dynamic_load_weight:
+            from fastdeploy.rl.dynamic_weight_manager import DynamicWeightManager
+            self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model)
 
         # 2. Load lora model
 
@@ -620,6 +622,25 @@ class GPUModelRunner(ModelRunnerBase):
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
+    
+    def clear_cache(self):
+        """Clear cached data from shared inputs and forward metadata."""
+        self.share_inputs.pop("caches", None)
+        if self.forward_meta is not None:
+            self.forward_meta.clear_caches()
+
+    def clear_parameters(self, pid):
+        """"dynamic model loader use to clear parameters use for RL"""
+        self.dynamic_weight_manager.clear_parameters(pid)
+        self.clear_cache()
+        paddle.device.cuda.empty_cache()
+        self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
+
+    def update_parameters(self, pid):
+        """"dynamic model loader use to update parameters use for RL"""
+        self.dynamic_weight_manager.update_parameters(pid)
+        self.initialize_kv_cache()
+        self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
     def initialize_kv_cache(self) -> None:
         """
@@ -1125,9 +1146,7 @@ class GPUModelRunner(ModelRunnerBase):
                         batch_size=min(self.parallel_config.max_num_seqs, 3))
 
         # 3. gc
-        del self.share_inputs["caches"]
-        if self.forward_meta is not None:
-            del self.forward_meta.caches
+        self.clear_cache()
 
         if self.speculative_method in ["mtp"]:
             self.proposer.clear_dummy_input()
