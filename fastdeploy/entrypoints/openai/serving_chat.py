@@ -220,6 +220,9 @@ class OpenAIServingChat:
                             choice.finish_reason = "tool_calls"
                     else:
                         choice.finish_reason = "length"
+                    
+                    if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
+                        choice.finish_reason = "length"
 
                 if request.metadata is not None and request.metadata.get("training", False) and delta_text != "":
                     choice.delta.token_ids = output["token_ids"]
@@ -334,6 +337,9 @@ class OpenAIServingChat:
                     output.get("finish_reason", "") == "tool_calls":
                 choice.finish_reason = "tool_calls"
         else:
+            choice.finish_reason = "length"
+            
+        if final_res.get("error_msg") is not None and "Recover" in final_res["error_msg"]:
             choice.finish_reason = "length"
         choices.append(choice)
 

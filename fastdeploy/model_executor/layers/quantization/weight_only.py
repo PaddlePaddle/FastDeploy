@@ -132,18 +132,14 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         self.quant_config = quant_config
 
     def create_weights(self, layer):
+
+        # The scale shape should be equal to the output dim of weight using Per-Channel Quantization.
+        linear_weight_scale_shape = [layer.linear_weight_shape[1]]
+
         layer.linear_weight_shape.reverse()
         if self.quant_config.name() == "wint4":
             layer.linear_weight_shape[0] //= 2
         layer.weight_dtype = "int8"
-        linear_weight_scale_shape = [layer.embed_dim]
-        if hasattr(layer, "linear_weight_shape"):
-            if isinstance(layer.linear_weight_shape, list):
-                layer_weight_shape = layer.linear_weight_shape
-                linear_weight_scale_shape = layer_weight_shape[:1]
-            if self.quant_config.name() == "wint4":
-                linear_weight_scale_shape[0] *= 2
-
         layer.linear_weight_scale = layer.create_parameter(
             shape=linear_weight_scale_shape,
             dtype=layer._dtype,
@@ -195,6 +191,7 @@ class GPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             weight_scale.astype(paddle.get_default_dtype()))
 
     def process_loaded_weights(self, layer, weight) -> None:
+
         quanted_weight_tensor, weight_scale_tensor = weight_quantize(
             weight,
             algo=self.quant_config.algo,

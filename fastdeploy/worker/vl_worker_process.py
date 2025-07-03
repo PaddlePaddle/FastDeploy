@@ -26,6 +26,7 @@ import paddle.distributed.fleet as fleet
 from fastdeploy.engine.config import ModelConfig
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
 from fastdeploy.utils import get_logger, none_or_str
+from fastdeploy.worker.worker_process import initialize_fd_config, parse_args
 
 logger = get_logger("worker", "worker.log")
 
@@ -35,7 +36,14 @@ class PrefillTracker:
     Record the prefill time of the request
     """
 
-    def __init__(self, engine_pid):
+    def __init__(
+        self,
+        engine_pid: int,
+    ) -> None:
+        """
+        Initialize the PrefillTracker.
+        """
+        super().__init__()
         self.start_times = defaultdict(float)
         prefill_time_data = np.zeros([100], dtype=np.float32)
         self.prefill_time_signal = IPCSignal(name="prefill_time_signal",
@@ -46,7 +54,7 @@ class PrefillTracker:
         self.current_index = 0
         self.executor = ThreadPoolExecutor(max_workers=1)
 
-    def start_prefill(self, task_idx):
+    def start_prefill(self, task_idx: int):
         """
         Record the start time of the prefill process for a given task index.
 
@@ -55,7 +63,7 @@ class PrefillTracker:
         """
         self.start_times[task_idx] = time.time()
 
-    def end_prefill(self, task_idx):
+    def end_prefill(self, task_idx: int):
         """
         Record the end time of the prefill process for a given task index and
         asynchronously submit the duration for metric recording.
@@ -69,7 +77,7 @@ class PrefillTracker:
             self.executor.submit(self._record_metrics, duration)
             del self.start_times[task_idx]
 
-    def _record_metrics(self, duration):
+    def _record_metrics(self, duration: float):
         """
         Internal method to record the prefill duration into the signal buffer.
         Logs the duration and updates a circular buffer of timing metrics.
@@ -89,19 +97,19 @@ class PrefillTracker:
 
 
 class Worker:
+    """
+        Engine -> (WIP)Executor -> Worker -> ModelRunner -> Model
+        Worker interface that allows inference framwork to cleanly separate implementations for different harware.
+    """
 
-    def __init__(self, args):
+    def __init__(
+        self,
+        args,
+    ) -> None:
         """
-            Args:
-            args (ArgumentParser): 命令行参数，包含模型名称、端口号等信息。
-
-        Returns:
-            None, 无返回值，初始化完成后会将相关参数和对象保存到类属性中。
-
-        Raises:
-            None, 没有异常抛出。
+        Initialize the Worker.
         """
-
+        super().__init__()
         self.args = args
         self.MAX_INFER_SEED = 9223372036854775806
         paddle.set_default_dtype(args.dtype)
@@ -123,7 +131,7 @@ class Worker:
                                              rank=self.rank)
         self.prefill_tracker = PrefillTracker(args.engine_pid)
 
-        # TODO 多机
+        # Only applicable for standalone (single-machine) inference
         address = ('0.0.0.0', self.args.engine_worker_queue_port)
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
@@ -154,7 +162,10 @@ class Worker:
         self.rank = fleet.worker_index()
 
     def init_health(self):
-        # worker_ready_signal 用于engine感知各worker进程是否Ready
+        """
+        init health signals
+        """
+        # To perceive whether each worker process is ready
         worker_ready_signal_data = np.zeros(shape=[self.nranks],
                                             dtype=np.int32)
         self.worker_ready_signal = IPCSignal(name="worker_ready_signal",
@@ -164,7 +175,7 @@ class Worker:
                                              create=False)
         self.worker_ready_signal.value[self.rank] = 1
 
-        # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
+        # To monitor the liveness of worker processes and record each step's timestamp
         worker_healthy_live_recorded_time_array = np.zeros(shape=[self.nranks],
                                                            dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
@@ -175,7 +186,7 @@ class Worker:
             create=False)
         self.worker_healthy_live_signal.value[self.rank] = int(time.time())
 
-        # exist_task_signal 用于各worker进程感知是否有新Task需要处理
+        # To perceive whether there is a new task to be processed
         exist_task_signal_data = np.zeros([1], dtype=np.int32)
         self.exist_task_signal = IPCSignal(name="exist_task_signal",
                                            array=exist_task_signal_data,
@@ -183,7 +194,7 @@ class Worker:
                                            suffix=self.args.engine_pid,
                                            create=False)
 
-        # exist_swapped_task_signal 用于engine感知worker中是否存在swapped task
+        # To detect whether there are swapped tasks in the worker
         exist_swapped_task_signal_data = np.zeros([1], dtype=np.int32)
         self.exist_swapped_task_signal = IPCSignal(
             name="exist_swapped_task_signal",
@@ -192,7 +203,6 @@ class Worker:
             suffix=self.args.engine_pid,
             create=False)
 
-        # model_weights_status 用于engine感知各worker中模型权重状态
         model_weights_status = np.zeros([1], dtype=np.int32)
         self.model_weights_status_signal = IPCSignal(
             name="model_weights_status",
@@ -309,17 +319,7 @@ class Worker:
 
     def run(self):
         """
-        运行函数，不断地从队列中获取任务并进行推理。
-            当队列为空或者所有节点都处于等待状态时，将会休眠一段时间再次尝试获取任务。
-
-            Args:
-                None.
-
-            Returns:
-                None.
-
-            Raises:
-                None.
+        run function, continuously get tasks and do inference.
         """
         infer_seed_increment = paddle.full(shape=[self.args.max_num_seqs, 1],
                                            fill_value=4,
@@ -524,153 +524,6 @@ class Worker:
             if int((self.infer_engine.share_inputs['seq_lens_this_time']
                     > 0).sum()) == 0:
                 break
-
-
-def parse_args():
-    """
-    parse args from command line
-    """
-    parser = argparse.ArgumentParser("FastDeploy LLM Inference")
-    parser.add_argument("-m",
-                        "--model_name_or_path",
-                        type=str,
-                        default="./output",
-                        help="model dir")
-    parser.add_argument("-mbs",
-                        "--max_num_seqs",
-                        type=int,
-                        default=34,
-                        help="max batch size")
-    parser.add_argument("--total_block_num", type=int, default=2000)
-    parser.add_argument("--block_size", type=int, default=64)
-    parser.add_argument("--engine_worker_queue_port", type=int, default=9923)
-    parser.add_argument("--max_model_len",
-                        type=int,
-                        default=3072,
-                        help="max model len")
-    parser.add_argument("--device_ids",
-                        type=str,
-                        default="0",
-                        help="cuda visible devices")
-    parser.add_argument("--dtype",
-                        type=str,
-                        default="bfloat16",
-                        help="input dtype")
-    parser.add_argument("--enc_dec_block_num",
-                        type=int,
-                        default=1,
-                        help="encoder's decoder num")
-    parser.add_argument("--kv_cache_ratio",
-                        type=float,
-                        default=0.7,
-                        help="kv cache ratio for input")
-    parser.add_argument("--first_token_id",
-                        type=int,
-                        default=1,
-                        help="first token id")
-    parser.add_argument("--gpu_memory_utilization",
-                        type=float,
-                        default=0.9,
-                        help="gpu memory utilization")
-    parser.add_argument("--engine_pid",
-                        type=int,
-                        default=None,
-                        help="Process ID of engine")
-    parser.add_argument("--do_profile",
-                        action='store_true',
-                        help="do profile or not")
-    parser.add_argument("--dynamic_load_weight",
-                        action='store_true',
-                        help="dynamic load weight or not")
-    parser.add_argument("--pad_token_id",
-                        type=int,
-                        default=-1,
-                        help="pad token id")
-    parser.add_argument("--eos_tokens_lens",
-                        type=int,
-                        default=2,
-                        help="eos token lens")
-    parser.add_argument("--enable_chunked_prefill",
-                        action='store_true',
-                        help="enable chunked prefill")
-    parser.add_argument(
-        "--speculative_method",
-        default=None,
-        type=none_or_str,
-        choices=[None, "ngram", "mtp"],
-    )
-    parser.add_argument(
-        "--speculative_max_draft_token_num",
-        default=1,
-        type=int,
-    )
-    parser.add_argument(
-        "--speculative_model_name_or_path",
-        default="",
-        type=str,
-    )
-    parser.add_argument(
-        "--speculative_model_quantization",
-        default="",
-        type=str,
-    )
-    parser.add_argument(
-        "--attention_backend",
-        default="APPEND_ATTN",
-        type=str,
-        choices=[
-            "APPEND_ATTN",
-        ],
-    )
-    parser.add_argument("--max_num_batched_tokens",
-                        type=int,
-                        default=2048,
-                        help="max num batched tokens")
-    parser.add_argument("--enable_prefix_caching",
-                        action='store_true',
-                        help="enable prefix cache")
-    parser.add_argument("--splitwise_role",
-                        type=str,
-                        default="mixed",
-                        help="splitwise role")
-    parser.add_argument("--ori_vocab_size", type=int, default=None)
-    parser.add_argument("--tensor_parallel_size",
-                        type=int,
-                        default=1,
-                        help="tensor parallel size")
-    parser.add_argument("--expert_parallel_size",
-                        type=int,
-                        default=1,
-                        help="expert parallel size")
-    parser.add_argument("--quantization",
-                        type=str,
-                        default="",
-                        help="Quantization name for the model, currentlly support " \
-                        "'wint4', 'wint8'," \
-                        "default is None. The priority of this configuration "\
-                        "is lower than that of the config file. " \
-                        "More complex quantization methods need to be configured via the config file.")
-    parser.add_argument("--enable_static_graph_inference",
-                        action='store_true',
-                        help="Whether to use static mode; if enabled, " \
-                             "'paddle.to_static' will be used to convert dynamic to static.")
-    parser.add_argument("--use_cudagraph",
-                        action='store_true',
-                        help="Flags to enable cuda graph.")
-    parser.add_argument("--max_capture_batch_size",
-                        type=int,
-                        default=64,
-                        help="Maximum of Batch Size for Warm Up.")
-    parser.add_argument("--guided_decoding_backend",
-                        type=str,
-                        default="off",
-                        help="guided decoding backend")
-    parser.add_argument("--disable_any_whitespace",
-                        action='store_false',
-                        help="Disable any whitespace for guided decoding.")
-
-    args = parser.parse_args()
-    return args
 
 
 def main():

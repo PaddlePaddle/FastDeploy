@@ -20,6 +20,10 @@ import paddle
 from paddle import nn
 
 from fastdeploy.config import FDConfig, LoadConfig, ModelConfig
+from fastdeploy.model_executor.load_weight_utils import \
+    load_composite_checkpoint
+from fastdeploy.model_executor.models.deepseek_v3 import \
+    DeepSeekV3PretrainedModel
 from fastdeploy.model_executor.models.ernie4_5_moe import \
     Ernie4_5_PretrainedModel
 from fastdeploy.model_executor.models.ernie4_5_mtp import \
@@ -28,7 +32,7 @@ from fastdeploy.model_executor.models.model_base import ModelRegistry
 from fastdeploy.model_executor.models.qwen2 import Qwen2PretrainedModel
 from fastdeploy.model_executor.models.qwen3 import Qwen3PretrainedModel
 from fastdeploy.model_executor.models.qwen3moe import Qwen3MoePretrainedModel
-from fastdeploy.model_executor.models.utils import load_checkpoint
+from fastdeploy.platforms import current_platform
 
 MODEL_CLASSES = {
     "Ernie4_5_MoeForCausalLM": Ernie4_5_PretrainedModel,
@@ -36,7 +40,8 @@ MODEL_CLASSES = {
     "Qwen2ForCausalLM": Qwen2PretrainedModel,
     "Qwen3ForCausalLM": Qwen3PretrainedModel,
     "Qwen3MoeForCausalLM": Qwen3MoePretrainedModel,
-    "Ernie4_5_ForCausalLM": Ernie4_5_PretrainedModel
+    "Ernie4_5_ForCausalLM": Ernie4_5_PretrainedModel,
+    "DeepseekV3ForCausalLM": DeepSeekV3PretrainedModel,
 }
 
 
@@ -73,23 +78,38 @@ class DefaultModelLoader(BaseModelLoader):
     def download_model(self, model_config: ModelConfig) -> None:
         pass
 
+    def clean_memory_fragments(self, state_dict: dict) -> None:
+        """clean_memory_fragments"""
+        if current_platform.is_cuda():
+            if state_dict:
+                for k, v in state_dict.items():
+                    if isinstance(v, paddle.Tensor):
+                        v.value().get_tensor()._clear()
+            paddle.device.cuda.empty_cache()
+            paddle.device.cuda.synchronize()
+
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
         context = paddle.LazyGuard()
         architectures = fd_config.model_config.architectures[0]
-
         # TODO(gongshaotian): Now, only support safetensor
-
         model_class = MODEL_CLASSES[architectures]
-        state_dict = load_checkpoint(
-            fd_config.parallel_config.model_name_or_path,
-            model_class,
-            fd_config.model_config,
-            return_numpy=True)
+
         with context:
             model_cls = ModelRegistry.get_class(architectures)
             model = model_cls(fd_config)
 
         model.eval()
-        model.set_state_dict(state_dict)
 
+        # RL model not need set_state_dict
+        if fd_config.load_config.dynamic_load_weight:
+            return model
+
+        state_dict = load_composite_checkpoint(
+            fd_config.parallel_config.model_name_or_path,
+            model_class,
+            fd_config,
+            return_numpy=True,
+        )
+        model.set_state_dict(state_dict)
+        self.clean_memory_fragments(state_dict)
         return model

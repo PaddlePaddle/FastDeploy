@@ -63,7 +63,7 @@ class Qwen3MLP(nn.Layer):
         self.down_proj = RowParallelLinear(
             fd_config,
             prefix=f"{prefix}.down_proj",
-            input_size=(fd_config.model_config.ffn_hidden_size // self.nranks),
+            input_size=fd_config.model_config.ffn_hidden_size,
             output_size=fd_config.model_config.hidden_size,
             with_bias=False,
         )
@@ -111,7 +111,7 @@ class Qwen3Attention(nn.Layer):
             fd_config,
             prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.head_dim *
-            fd_config.model_config.num_attention_heads // nranks,
+            fd_config.model_config.num_attention_heads,
             output_size=fd_config.model_config.hidden_size,
         )
 

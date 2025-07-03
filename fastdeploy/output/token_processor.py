@@ -341,7 +341,6 @@ class TokenProcessor(object):
                     result.prompt = task.prompt
                     result.prompt_token_ids = task.prompt_token_ids
                     if recovery_stop:
-                        result.outputs.token_ids.append(task.eos_token_ids[0])
                         result.error_msg = "Recover is not supported, the result is incomplete!"
                     llm_logger.info(
                         f"Request: {task_id} finished, number of "

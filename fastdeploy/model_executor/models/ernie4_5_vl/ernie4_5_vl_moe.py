@@ -25,6 +25,8 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
+from fastdeploy.distributed.communication_op import \
+    tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
@@ -66,6 +68,7 @@ class Ernie4_5_VLMoE(nn.Layer):
                  prefix: str) -> None:
         super().__init__()
 
+        self.tp_size = fd_config.parallel_config.tensor_parallel_degree
         moe_layer_start_index = fd_config.moe_config.moe_layer_start_index
         if isinstance(moe_layer_start_index, int):
             text_moe_layer_start_index = moe_layer_start_index
@@ -99,6 +102,7 @@ class Ernie4_5_VLMoE(nn.Layer):
             }
             self.mlp_text = FusedMoE(
                 fd_config=fd_config,
+                reduce_results=False,
                 moe_intermediate_size=fd_config.moe_config.
                 moe_intermediate_size[0],
                 num_experts=fd_config.moe_config.num_experts[0],
@@ -130,6 +134,7 @@ class Ernie4_5_VLMoE(nn.Layer):
             }
             self.mlp_image = FusedMoE(
                 fd_config=fd_config,
+                reduce_results=False,
                 moe_intermediate_size=fd_config.moe_config.
                 moe_intermediate_size[1],
                 num_experts=fd_config.moe_config.num_experts[1],
@@ -154,6 +159,7 @@ class Ernie4_5_VLMoE(nn.Layer):
                 intermediate_size=self.num_shared_experts *
                 fd_config.moe_config.moe_intermediate_size[0],
                 prefix=f"{prefix}.shared_experts",
+                reduce_results=False,
             )
 
     def extract_gate_correction_bias_text(self, gate_correction_bias_key,
@@ -210,6 +216,8 @@ class Ernie4_5_VLMoE(nn.Layer):
             hidden_states = self.mlp_text(hidden_states)
         if self.num_shared_experts > 0:
             hidden_states += share_experts_out
+        if self.tp_size > 1:
+            tensor_model_parallel_all_reduce(hidden_states)
         return hidden_states
 
 
@@ -337,12 +345,12 @@ class Ernie4_5_VLModel(nn.Layer):
             prefix=(f"{fd_config.model_config.prefix_name}.embed_tokens"),
         )
 
-        self.hidden_layers = [
+        self.hidden_layers = nn.LayerList([
             Ernie4_5_VLDecoderLayer(
                 fd_config=fd_config,
                 prefix=f"{fd_config.model_config.prefix_name}.layers.{i}")
             for i in range(self.num_layers)
-        ]
+        ])
 
         self.norm = RMSNorm(
             fd_config,
