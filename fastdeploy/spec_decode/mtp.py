@@ -582,7 +582,6 @@ class MTPProposer(Proposer):
                     self.model_inputs["output_padding_offset"],
                     self.parallel_config.max_model_len,
                 )
-                paddle.device.synchronize()
 
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hiddden_states)
