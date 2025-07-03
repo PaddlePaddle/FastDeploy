@@ -69,7 +69,6 @@ class ModelConfig(PretrainedConfig):
         max_seq_len: int = 512,
         initializer_range: float = 0.02,
         use_rope=True,
-        use_fast_ffn: bool = False,
         rope_theta: int = 10000,
         rope_3d: bool = False,
         ori_vocab_size: int | None = None,
@@ -104,7 +103,6 @@ class ModelConfig(PretrainedConfig):
         self.max_position_embeddings = max_position_embeddings
         self.initializer_range = initializer_range
         self.use_rope = use_rope
-        self.use_fast_ffn = use_fast_ffn
         self.rope_theta = rope_theta
         self.ori_vocab_size = ori_vocab_size or vocab_size
         self.max_seq_len = max_seq_len

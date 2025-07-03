@@ -57,7 +57,6 @@ class Qwen3MLP(nn.Layer):
             output_size=fd_config.model_config.ffn_hidden_size * 2,
             with_bias=False,
             activation=fd_config.model_config.hidden_act,
-            use_fast_ffn=True,
         )
 
         self.down_proj = RowParallelLinear(

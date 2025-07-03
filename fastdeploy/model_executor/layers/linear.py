@@ -329,7 +329,6 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         with_bias: bool = False,
         add_bias: bool = False,
         activation: str = "gelu",
-        use_fast_ffn: bool = False,
         skip_quant: bool = False,
     ):
         """
@@ -344,11 +343,8 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             with_bias (bool): Whether to include bias or not. Defaults to False.
             add_bias (bool): Whether to add bias in the current layer or in the pre/post layer. Defaults to False.
             activation (str): Activation function to use. Defaults to "gelu".
-            use_fast_ffn (bool): Whether to use a faster FFN implementation.
-                Defaults to False.
             skip_quant (bool): Whether to skip quantization. Defaults to False.
         """
-        self.use_fast_ffn = use_fast_ffn
         self.activation = activation
         self.hidden_size = fd_config.model_config.hidden_size
         self.nranks = fd_config.parallel_config.tensor_parallel_degree
@@ -385,23 +381,10 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                                                       "gate_proj")
                 bias_tensor = get_tensor(state_dict.pop(gate_bias_key)).astype(
                     paddle.get_default_dtype())
-                converted_bias_tensor = paddle.zeros(shape=list(
-                    bias_tensor.shape),
-                                                     dtype=bias_tensor.dtype)
-                if not self.use_fast_ffn:
-                    converted_bias_tensor = paddle.concat(
-                        [bias_tensor[::2], bias_tensor[1::2]], axis=0)
-                else:
-                    converted_bias_tensor = bias_tensor
-                state_dict[self.bias_key] = converted_bias_tensor
 
-        if not self.use_fast_ffn:
-            converted_weight_tensor = paddle.concat(
-                [weight_tensor[:, ::2], weight_tensor[:, 1::2]], axis=1)
-        else:
-            converted_weight_tensor = weight_tensor
+                state_dict[self.bias_key] = bias_tensor
 
-        state_dict[self.weight_key] = converted_weight_tensor
+        state_dict[self.weight_key] = weight_tensor
 
         super().load_state_dict(state_dict)
 
