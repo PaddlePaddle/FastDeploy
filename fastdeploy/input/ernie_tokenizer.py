@@ -82,6 +82,8 @@ class ErnieBotTokenizer(PretrainedTokenizer):
         self.vocab_file = vocab_file
         self.sp_model = spm.SentencePieceProcessor()
         self.sp_model.Load(vocab_file)
+        # pre-process map-type all spec token for decode accelerate.
+        self.all_spec_tok = set(self.all_special_tokens)
 
     @property
     def space_token(self):
@@ -143,7 +145,7 @@ class ErnieBotTokenizer(PretrainedTokenizer):
         # prev_is_special = False
         for token in tokens:
             # make sure that special tokens are not decoded using sentencepiece model
-            if token in self.all_special_tokens:
+            if token in self.all_spec_tok:
                 # if not prev_is_special:
                 #     out_string += " "
                 out_string += self.sp_model.decode(current_sub_tokens) + token
@@ -216,7 +218,7 @@ class ErnieBotTokenizer(PretrainedTokenizer):
         if hasattr(self, "do_lower_case") and self.do_lower_case:
             # convert non-special tokens to lowercase
             escaped_special_toks = [
-                re.escape(s_tok) for s_tok in (self.unique_no_split_tokens + self.all_special_tokens)
+                re.escape(s_tok) for s_tok in (self.unique_no_split_tokens + self.all_spec_tok)
             ]
             pattern = r"(" + r"|".join(escaped_special_toks) + r")|" + r"(.+?)"
             text = re.sub(pattern, lambda m: m.groups()[0] or m.groups()[1].lower(), text)
