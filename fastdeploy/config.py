@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Optional, Literal
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 
@@ -51,7 +51,6 @@ class ModelConfig(PretrainedConfig):
     top_p = 0.0
     temperature = 1.0
     rope_theta = 10000.0
-    rope_scaling = None
     penalty_score = 1.0
     frequency_score = 0.0
     presence_score = 0.0
@@ -142,6 +141,7 @@ class MoEConfig:
     moe_num_shared_experts = (0, )
     moe_layer_start_index = 0
     moe_layer_end_index = None
+    moe_use_aux_free: bool = False
     num_max_dispatch_tokens_per_rank = 256
     im_patch_id = (
         100295  # multimodality, TODO(liuyuanle): read from config.json
@@ -163,7 +163,6 @@ class ParallelConfig:
     # The embedding weight distributed on your gpu cards is divided by row or column.
     # Defaults to False means divide by row. When vocab_size can not be divided by world_size
     # but hidden_size can, we can consider split embedding weight by column.
-    column_cut = False  # (bool, optional)
     """
     From old wersion worker args
     TODO(gongshaotian): Reclassify
@@ -194,18 +193,13 @@ class ParallelConfig:
     engine_pid: Optional[int] = None
     # Do profile or not
     do_profile: bool = False
-    # Dynamic load weight or not
-    dynamic_load_weight: bool = False
     #
     pad_token_id: int = -1
     #
     eos_tokens_lens: int = 2
     # Enable chunked prefill
     enable_chunked_prefill: str = "store_true"
-    """
-    - APPEND_ATTN:
-    """
-    attention_backend: str = "APPEND_ATTN"
+    #
     max_num_batched_tokens: int = 2048
     # enable prefix cache
     enable_prefix_caching = None
@@ -354,9 +348,27 @@ class GraphOptimizationConfig:
 @dataclass
 class LoadConfig:
     """
-    Configuration for loading parameter
+    Configuration for dynamic weight loading strategies
+    
+    Attributes:
+        dynamic_load_weight: Whether to enable dynamic weight loading
+        load_strategy: Specifies the weight loading method when enabled:
+            - 'ipc': Real-time IPC streaming with automatic resharding
+            - 'ipc_no_reshard': Real-time IPC streaming without weight process
+            - 'ipc_snapshot': Load from disk snapshot of IPC weights
+            - 'meta': provide RL traing worker, no_weights_load
+            - None: No dynamic loading
     """
-    pass
+    use_fastsafetensor: bool = False
+    dynamic_load_weight: bool = False
+    load_strategy: Optional[Literal['ipc', 'ipc_no_reshard', 'ipc_snapshot', 'meta']] = None
+
+    def __post_init__(self):
+        if self.load_strategy is not None and not self.dynamic_load_weight:
+            raise ValueError("Load strategy requires dynamic_load_weight=True")
+            
+        if self.dynamic_load_weight and self.load_strategy is None:
+            raise ValueError("Must specify load_strategy when dynamic_load_weight is True")
 
 
 @dataclass
@@ -392,7 +404,7 @@ class FDConfig:
                                                   init=True)  # type: ignore
     device_config: DeviceConfig = field(default=None,
                                         init=True)  # type: ignore
-    load_config: LoadConfig = field(default=None, init=True)  # type: ignore
+    load_config: LoadConfig = field(default=None, init=True)
     quant_config: Optional[QuantConfigBase] = None
     graph_opt_config: Optional[GraphOptimizationConfig] = None
     moe_config: MoEConfig = field(default=None, init=True)  # type: ignore

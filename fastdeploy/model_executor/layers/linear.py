@@ -216,6 +216,14 @@ class ReplicatedLinear(LinearBase):
                          with_bias=with_bias,
                          add_bias=add_bias,
                          skip_quant=skip_quant)
+
+        self.hidden_size = fd_config.model_config.hidden_size
+        self.linear_weight_shape = [
+            self.input_size,
+            self.output_size,
+        ]
+        if fd_config.quant_config:
+            self.quant_method.create_weights(self)
         self.init_weight()
 
 
@@ -259,7 +267,10 @@ class ColumnParallelLinear(LinearBase):
                          skip_quant=skip_quant)
         self.nranks = fd_config.parallel_config.tensor_parallel_degree
         self.input_size = input_size
-        self.output_size = divide(output_size, self.nranks)
+        self.output_size = divide(
+            output_size,
+            self.nranks)  # Split the output_size using TP inference.
+        self.hidden_size = fd_config.model_config.hidden_size
         self.linear_weight_shape = [
             self.input_size,
             self.output_size,
@@ -339,7 +350,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         """
         self.use_fast_ffn = use_fast_ffn
         self.activation = activation
-        self.embed_dim = fd_config.model_config.hidden_size
+        self.hidden_size = fd_config.model_config.hidden_size
         self.nranks = fd_config.parallel_config.tensor_parallel_degree
 
         super().__init__(fd_config=fd_config,
@@ -413,12 +424,12 @@ class QKVParallelLinear(ColumnParallelLinear):
         """
         self.num_heads = fd_config.model_config.num_attention_heads
         self.kv_num_heads = fd_config.model_config.num_key_value_heads
-        self.embed_dim = fd_config.model_config.hidden_size
+        self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
         self.nranks = fd_config.parallel_config.tensor_parallel_degree
         self.num_heads_per_rank = divide(self.num_heads, self.nranks)
         self.kv_num_heads_per_rank = divide(self.kv_num_heads, self.nranks)
-        input_size = self.embed_dim
+        input_size = self.hidden_size
         output_size = (self.num_heads + 2 * self.kv_num_heads) * self.head_dim
         super().__init__(fd_config=fd_config,
                          prefix=prefix,
@@ -448,7 +459,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             weight_tensor = weight_tensor.reshape([
                 (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank) *
                 (self.head_dim),
-                self.embed_dim,
+                self.hidden_size,
             ])
             weight_tensor = paddle.transpose(weight_tensor, perm=[1, 0])
 
@@ -513,6 +524,7 @@ class RowParallelLinear(LinearBase):
         output_size: int = None,
         with_bias: bool = False,
         add_bias: bool = False,
+        reduce_results: bool = True,
         skip_quant: bool = False,
     ):
         """
@@ -538,9 +550,13 @@ class RowParallelLinear(LinearBase):
         self.fd_config = fd_config
         self.skip_quant = False
         self.nranks = fd_config.parallel_config.tensor_parallel_degree
-        self.embed_dim = fd_config.model_config.hidden_size
+        self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
         self.num_heads = fd_config.model_config.num_attention_heads // self.nranks
+
+        # Split input_size when using TP inference.
+        self.input_size = divide(input_size, self.nranks)
+        self.output_size = output_size
 
         self.linear_weight_shape = [
             self.input_size,
@@ -551,6 +567,8 @@ class RowParallelLinear(LinearBase):
         if fd_config.quant_config:
             self.quant_method = fd_config.quant_config.get_quant_method(self)
             self.quant_method.create_weights(self)
+
+        self.reduce_results = reduce_results
         self.init_weight()
 
     def init_weight(self):
@@ -570,7 +588,7 @@ class RowParallelLinear(LinearBase):
         self.linear_bias = None
         if self.with_bias:
             self.linear_bias = self.create_parameter(
-                shape=[self.embed_dim],
+                shape=[self.hidden_size],
                 dtype=self._dtype,
                 is_bias=True,
             )
@@ -589,7 +607,7 @@ class RowParallelLinear(LinearBase):
         else:
             out = paddle.matmul(x, self.linear_weight)
 
-        if self.nranks > 1:
+        if self.reduce_results and self.nranks > 1:
             tensor_model_parallel_all_reduce(out)
 
         return out

@@ -265,12 +265,12 @@ class Ernie4_5_MTPModel(nn.Layer):
         self.num_layers = fd_config.model_config.num_layers
         self.embeddings = fd_config.speculative_config.sharing_model.model.embeddings
 
-        self.hidden_layers = [
+        self.hidden_layers = nn.LayerList([
             Ernie4_5_DecoderLayer(
                 fd_config=fd_config,
                 prefix=f"{fd_config.model_config.prefix_name}.{i}")
             for i in range(self.num_layers)
-        ]
+        ])
 
         self.enorm = RMSNorm(
             fd_config,

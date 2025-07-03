@@ -1,4 +1,4 @@
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,8 +18,24 @@ from fastdeploy import LLM, SamplingParams
 import os
 import subprocess
 import signal
+import time
+import socket
+
 
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
+MAX_WAIT_SECONDS = 60
+
+def is_port_open(host: str, port: int, timeout=1.0):
+    """
+    Check if a TCP port is open on the given host.
+    Returns True if connection succeeds, False otherwise.
+    """
+    try:
+        with socket.create_connection((host, port), timeout):
+            return True
+    except Exception:
+        return False
+
 
 def format_chat_prompt(messages):
     """
@@ -49,27 +65,39 @@ def model_path():
     else:
         return "./Qwen2-7B-Instruct"
 
+
 @pytest.fixture(scope="module")
 def llm(model_path):
     """
     Fixture to initialize the LLM model with a given model path
     """
     try:
-        output = subprocess.check_output(f"lsof -i:{FD_ENGINE_QUEUE_PORT} -t", shell=True).decode().strip()
+        output = subprocess.check_output("lsof -i:{} -t".format(FD_ENGINE_QUEUE_PORT), shell=True).decode().strip()
         for pid in output.splitlines():
             os.kill(int(pid), signal.SIGKILL)
-            print(f"Killed process on port {FD_ENGINE_QUEUE_PORT}, pid={pid}")
+            print("Killed process on port {}, pid={}".format(FD_ENGINE_QUEUE_PORT, pid))
     except subprocess.CalledProcessError:
         pass
 
     try:
+        start = time.time()
         llm = LLM(
             model=model_path,
             tensor_parallel_size=1,
             engine_worker_queue_port=FD_ENGINE_QUEUE_PORT,
-            max_model_len=4096
+            max_model_len=32768,
+            quantization="wint8"
         )
-        print("Model loaded successfully from {}.".format(model_path))
+
+        # Wait for the port to be open
+        wait_start = time.time()
+        while not is_port_open("127.0.0.1", FD_ENGINE_QUEUE_PORT):
+            if time.time() - wait_start > MAX_WAIT_SECONDS:
+                pytest.fail("Model engine did not start within {} seconds on port {}".format(
+                    MAX_WAIT_SECONDS, FD_ENGINE_QUEUE_PORT))
+            time.sleep(1)
+
+        print("Model loaded successfully from {} in {:.2f}s.".format(model_path, time.time() - start))
         yield llm
     except Exception:
         print("Failed to load model from {}.".format(model_path))
@@ -84,8 +112,8 @@ def test_generate_prompts(llm):
     # Only one prompt enabled for testing currently
     prompts = [
         "请介绍一下中国的四大发明。",
-        # "太阳和地球之间的距离是多少？",
-        # "写一首关于春天的古风诗。",
+        "太阳和地球之间的距离是多少？",
+        "写一首关于春天的古风诗。",
     ]
 
     sampling_params = SamplingParams(

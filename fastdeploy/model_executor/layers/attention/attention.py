@@ -111,6 +111,8 @@ class Attention(nn.Layer):
         k: paddle.Tensor = None,
         v: paddle.Tensor = None,
         qkv: paddle.Tensor = None,
+        compressed_kv: paddle.Tensor = None,
+        k_pe: paddle.Tensor = None,
         forward_meta: ForwardMeta = None,
     ) -> paddle.Tensor:
         """
@@ -120,12 +122,16 @@ class Attention(nn.Layer):
             k: the key tensor
             v: the value tensor
             forward_meta: the forward meta data
+            compressed_kv: optional compressed key-value cache (for MLA)
+            k_pe: optional key positional encoding (for MLA)
         """
         return forward_meta.attn_backend.forward(
             q,
             k,
             v,
             qkv,
+            compressed_kv,
+            k_pe,
             self,
             forward_meta,
         )

@@ -87,9 +87,13 @@ class EngineArgs:
     """
     Configuration for speculative execution.
     """
-    dynamic_load_weight: int = 0
+    dynamic_load_weight: bool = False
     """
     dynamic load weight
+    """
+    load_strategy: str = "meta"
+    """
+    dynamic load weight strategy
     """
     quantization: str = None
     guided_decoding_backend: str = "off"
@@ -364,13 +368,16 @@ class EngineArgs:
             type=json.loads,
             default=EngineArgs.speculative_config,
             help="Configuration for speculative execution.")
-
         model_group.add_argument(
             "--dynamic-load-weight",
-            type=int,
+            action='store_true',
             default=EngineArgs.dynamic_load_weight,
             help="Flag to indicate whether to load weight dynamically.")
-
+        model_group.add_argument(
+            "--load-strategy",
+            type=str,
+            default=EngineArgs.load_strategy,
+            help="Flag to dynamic load strategy.")
         model_group.add_argument("--engine-worker-queue-port",
                                  type=int,
                                  default=EngineArgs.engine_worker_queue_port,
@@ -383,6 +390,7 @@ class EngineArgs:
                                  "default is None. The priority of this configuration "\
                                  "is lower than that of the config file. " \
                                  "More complex quantization methods need to be configured via the config file.")
+
         model_group.add_argument(
             "--enable-static-graph-inference",
             action='store_true',
@@ -668,8 +676,9 @@ class EngineArgs:
         """
         return ModelConfig(model_name_or_path=self.model,
                            config_json_file=self.model_config_name,
+                           quantization=self.quantization,
                            dynamic_load_weight=self.dynamic_load_weight,
-                           quantization=self.quantization)
+                           load_strategy=self.load_strategy)
 
     def create_cache_config(self, model_cfg) -> CacheConfig:
         """
@@ -748,6 +757,9 @@ class EngineArgs:
         scheduler_cfg = self.create_scheduler_config()
 
         speculative_cfg = self.create_speculative_config()
+
+        assert not (self.use_cudagraph and self.enable_prefix_caching), \
+            "Prefix caching cannot be used with CUDA graph"
 
         return Config(
             model_name_or_path=self.model,

@@ -41,7 +41,8 @@ class ModelConfig:
     def __init__(self,
                  model_name_or_path: str,
                  config_json_file: str = "config.json",
-                 dynamic_load_weight: int = 0,
+                 dynamic_load_weight: bool = False,
+                 load_strategy: str="meta",
                  quantization: str = None,
                  download_dir: Optional[str] = None):
         """
@@ -55,6 +56,7 @@ class ModelConfig:
         self.model_dir = model_name_or_path
         self.is_unified_ckpt = check_unified_ckpt(self.model_dir)
         self.dynamic_load_weight = dynamic_load_weight
+        self.load_strategy = load_strategy
         self.quantization = quantization
 
         config_file = os.path.join(model_name_or_path, config_json_file)
@@ -584,12 +586,10 @@ class Config:
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
 
-
         if self.innode_prefill_ports is not None:
             if not isinstance(self.innode_prefill_ports, list):
                 ports = str(self.innode_prefill_ports).split(',')
                 self.innode_prefill_ports = [int(port) for port in ports]
-                
 
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
 
@@ -728,7 +728,7 @@ class Config:
                 ), "XPU currently do not support guided_decoding"
 
                 try:
-                    pass
+                    import xgrammar
                 except Exception as e:
                     raise Exception(
                         f"import XGrammar failed, please install XGrammar use `pip install xgrammar==0.1.19`. \n\t {e}"
