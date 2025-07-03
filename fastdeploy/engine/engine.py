@@ -286,6 +286,8 @@ class LLMEngine(object):
         while self.running:
             try:
                 results = self.scheduler.get_results()
+                if len(results) == 0:
+                    time.sleep(0.001)
                 for request_id, contents in results.items():
                     for result in contents:
                         self.zmq_server.send_multipart(request_id, result)
