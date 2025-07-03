@@ -10,7 +10,7 @@ tqdm
 pynvml
 uvicorn
 fastapi
-paddleformers
+paddlenlp @ https://paddle-qa.bj.bcebos.com/paddlenlp/wheel/9f9c1d3e83a1738d8e092b229c6f03e39a04afd4/paddlenlp-3.0.0b4.post20250613-py3-none-any.whl
 redis
 etcd3
 httpx
@@ -25,6 +25,6 @@ setuptools-scm>=8
 prometheus-client
 decord
 moviepy
-triton==3.3
-use-triton-in-paddle
+orjson
+fastsafetensors @ https://paddlenlp.bj.bcebos.com/whl/fastsafetensors-0.1.13-cp310-cp310-linux_x86_64.whl
 crcmod
