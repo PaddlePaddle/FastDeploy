@@ -23,8 +23,9 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 import paddle
 
 from fastdeploy.model_executor.layers.attention.ops import (
-    append_attention, get_block_shape_and_split_kv_block,
-    init_signal_layerwise, open_shm_and_get_meta_signal)
+    append_attention, append_attention_with_output, 
+    get_block_shape_and_split_kv_block, init_signal_layerwise, 
+    open_shm_and_get_meta_signal)
 
 if TYPE_CHECKING:
     from paddle._typing.dtype_like import _DTypeLiteral
@@ -74,7 +75,7 @@ class AppendAttentionBackend(AttentionBackend):
     """
 
     def __init__(self, fd_config: FDConfig, kv_num_heads: int, num_heads: int,
-                 head_dim: int) -> None:
+                 head_dim: int, use_output: bool = True) -> None:
         """
         AppendAttentionBackend __init__
         """
@@ -106,6 +107,7 @@ class AppendAttentionBackend(AttentionBackend):
         self.start_layer_index: int = fd_config.model_config.start_layer_index
         self.device_id: int = os.getenv("CUDA_VISIBLE_DEVICES", None)
 
+        self.use_output = use_output
         if fd_config.parallel_config.expert_parallel_rank is None:
             fd_config.parallel_config.expert_parallel_rank = 0
         device_id = self.rank + fd_config.parallel_config.tensor_parallel_degree * \
@@ -202,55 +204,146 @@ class AppendAttentionBackend(AttentionBackend):
                 layer.layer_id] = init_signal_layerwise(
                     metadata.kv_signal_metadata,
                     layer.layer_id + self.start_layer_index)
-
-        res = append_attention(
-            qkv,
-            forward_meta.caches[2 * layer.layer_id],
-            forward_meta.caches[2 * layer.layer_id + 1],
-            forward_meta.seq_lens_encoder,
-            forward_meta.seq_lens_decoder,
-            forward_meta.seq_lens_this_time,
-            forward_meta.padding_offset,
-            forward_meta.cum_offsets,
-            metadata.block_tables,
-            metadata.encoder_batch_ids,
-            metadata.encoder_tile_ids_per_batch,
-            metadata.encoder_num_blocks,
-            metadata.kv_batch_ids,
-            metadata.kv_tile_ids_per_batch,
-            metadata.kv_num_blocks,
-            forward_meta.decoder_batch_ids,  # from buffer
-            forward_meta.decoder_tile_ids_per_batch,  # from buffer
-            metadata.decoder_num_blocks,
-            metadata.set_max_lengths,
-            metadata.max_len_kv,
-            metadata.rotary_embs,
-            metadata.attn_mask,
-            layer.qkv_bias,
-            layer.qkv_scale,
-            getattr(layer, "cache_k_scale", None),
-            getattr(layer, "cache_v_scale", None),
-            getattr(layer, "cache_k_out_scale", None),
-            getattr(layer, "cache_v_out_scale", None),
-            getattr(layer, "cache_k_zp", None),
-            getattr(layer, "cache_v_zp", None),
-            layer.linear_shift,
-            layer.linear_smooth,
-            metadata.kv_signal_data_list[layer.layer_id],
-            metadata._fuse_kernel_compute_dtype,
-            getattr(layer, "cache_quant_type_str", "none"),
-            layer.use_neox_rotary_style,
-            self.rope_3d,
-            self.max_seq_len,
-            getattr(layer, "quant_max_bound", 0.0),
-            getattr(layer, "quant_min_bound", 0.0),
-            getattr(layer, "out_scale", -1.0),
-            metadata.encoder_block_shape_q,
-            metadata.decoder_block_shape_q,
-            metadata.max_partition_size,
-            metadata.encoder_max_partition_size,
-            self.speculate_max_draft_token_num + 1,
-            self.causal,
-            self.speculative_method is not None,
-        )[0]
-        return res
+        quant_max_bound = getattr(layer, "quant_max_bound", 0.0)
+        quant_min_bound = getattr(layer, "quant_min_bound", 0.0)
+        cache_quant_type = getattr(layer, "cache_quant_type_str", "none")
+        if self.use_output:
+            compute_type = metadata._fuse_kernel_compute_dtype
+            ## 1. get output datatype
+            qkv_dtype = qkv.dtype
+            if qkv_dtype == paddle.float16:
+                D_type = paddle.float16
+            elif qkv_dtype == paddle.bfloat16:
+                D_type = paddle.bfloat16
+            elif qkv_dtype == paddle.int32:
+                if compute_type == "bf16":
+                    D_type = paddle.bfloat16
+                elif compute_type == "fp16":
+                    D_type = paddle.float16
+                else:
+                    raise NotImplementedError(
+                        "Only supported attr of qkv_type in ['float16', 'bfloat16'].")
+            else:
+                raise NotImplementedError(
+                    "Only supported attr of qkv_type in ['float16', 'bfloat16', 'int32'].")
+            ## 2.Extract related parameters
+            out_linear_in_scale = getattr(layer, "out_linear_in_scale", -1.0)
+            token_nums = qkv.shape[0]
+            head_dims = self.head_dim if cache_quant_type != "cache_int4_zp" else self.head_dim * 2
+            q_num_heads = self.num_heads
+            # 3. generate output tensor of different dtypes
+            if out_linear_in_scale > 0.0:
+                if abs(quant_max_bound - 127) < 0.000001:
+                    output = paddle.empty([token_nums, q_num_heads * head_dims], 
+                                          dtype='int8').to(qkv.place)
+                elif abs(quant_max_bound - 448) < 0.000001:
+                    output = paddle.empty([token_nums, q_num_heads * head_dims], 
+                                          dtype='float8_e4m3fn').to(qkv.place) 
+                else:
+                    raise NotImplementedError(
+                        "Only supported attr of quant_max_bound in ['127', '448'].")
+            else:
+                output = paddle.empty([token_nums, q_num_heads * head_dims], dtype=D_type).to(qkv.place)
+            
+            append_attention_with_output(
+                qkv,
+                forward_meta.caches[2 * layer.layer_id],
+                forward_meta.caches[2 * layer.layer_id + 1],
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.seq_lens_this_time,
+                forward_meta.padding_offset,
+                forward_meta.cum_offsets,
+                metadata.block_tables,
+                metadata.encoder_batch_ids,
+                metadata.encoder_tile_ids_per_batch,
+                metadata.encoder_num_blocks,
+                metadata.kv_batch_ids,
+                metadata.kv_tile_ids_per_batch,
+                metadata.kv_num_blocks,
+                forward_meta.decoder_batch_ids,  # from buffer
+                forward_meta.decoder_tile_ids_per_batch,  # from buffer
+                metadata.decoder_num_blocks,
+                metadata.set_max_lengths,
+                metadata.max_len_kv,
+                metadata.rotary_embs,
+                metadata.attn_mask,
+                layer.qkv_bias,
+                layer.qkv_scale,
+                getattr(layer, "cache_k_scale", None),
+                getattr(layer, "cache_v_scale", None),
+                getattr(layer, "cache_k_out_scale", None),
+                getattr(layer, "cache_v_out_scale", None),
+                getattr(layer, "cache_k_zp", None),
+                getattr(layer, "cache_v_zp", None),
+                layer.linear_shift,
+                layer.linear_smooth,
+                metadata.kv_signal_data_list[layer.layer_id],
+                output,
+                metadata._fuse_kernel_compute_dtype,
+                cache_quant_type,
+                layer.use_neox_rotary_style,
+                self.rope_3d,
+                self.max_seq_len,
+                quant_max_bound,
+                quant_min_bound,
+                layer.out_scale,
+                metadata.encoder_block_shape_q,
+                metadata.decoder_block_shape_q,
+                metadata.max_partition_size,
+                metadata.encoder_max_partition_size,
+                self.speculate_max_draft_token_num + 1,
+                self.causal,
+                self.speculative_method is not None)
+        else:
+            output = append_attention(
+                qkv,
+                forward_meta.caches[2 * layer.layer_id],
+                forward_meta.caches[2 * layer.layer_id + 1],
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.seq_lens_this_time,
+                forward_meta.padding_offset,
+                forward_meta.cum_offsets,
+                metadata.block_tables,
+                metadata.encoder_batch_ids,
+                metadata.encoder_tile_ids_per_batch,
+                metadata.encoder_num_blocks,
+                metadata.kv_batch_ids,
+                metadata.kv_tile_ids_per_batch,
+                metadata.kv_num_blocks,
+                forward_meta.decoder_batch_ids,  # from buffer
+                forward_meta.decoder_tile_ids_per_batch,  # from buffer
+                metadata.decoder_num_blocks,
+                metadata.set_max_lengths,
+                metadata.max_len_kv,
+                metadata.rotary_embs,
+                metadata.attn_mask,
+                layer.qkv_bias,
+                layer.qkv_scale,
+                getattr(layer, "cache_k_scale", None),
+                getattr(layer, "cache_v_scale", None),
+                getattr(layer, "cache_k_out_scale", None),
+                getattr(layer, "cache_v_out_scale", None),
+                getattr(layer, "cache_k_zp", None),
+                getattr(layer, "cache_v_zp", None),
+                layer.linear_shift,
+                layer.linear_smooth,
+                metadata.kv_signal_data_list[layer.layer_id],
+                metadata._fuse_kernel_compute_dtype,
+                cache_quant_type,
+                layer.use_neox_rotary_style,
+                self.rope_3d,
+                self.max_seq_len,
+                quant_max_bound,
+                quant_min_bound,
+                layer.out_scale,
+                metadata.encoder_block_shape_q,
+                metadata.decoder_block_shape_q,
+                metadata.max_partition_size,
+                metadata.encoder_max_partition_size,
+                self.speculate_max_draft_token_num + 1,
+                self.causal,
+                self.speculative_method is not None,
+            )[0]
+        return output
