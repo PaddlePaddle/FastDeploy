@@ -1,8 +1,7 @@
 name: Deploy GitHub Pages
 
 on:
-  push:
-    branches: [ develop ]
+  workflow_dispatch
 
 permissions:
   contents: write
@@ -12,10 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
-      - run: pip install mkdocs-material mkdocs-get-deps mkdocs-material-extensions mkdocs-multilang
+
+      - name: Install dependencies
+        run: pip install mkdocs-material mkdocs-get-deps mkdocs-material-extensions mkdocs-multilang
+
       - name: Deploy to GitHub Pages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
