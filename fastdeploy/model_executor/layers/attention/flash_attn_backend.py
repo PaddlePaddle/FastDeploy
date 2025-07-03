@@ -24,7 +24,7 @@ import paddle
 from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.layers.attention import Attention
+from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
 from fastdeploy.model_executor.layers.attention.ops import (
