@@ -29,7 +29,7 @@ from fastdeploy.model_executor.layers.attention.ops import (
     open_shm_and_get_meta_signal)
 from fastdeploy.platforms import current_platform
 
-if current_platform.is_cuda():
+if current_platform.is_cuda() and not current_platform.is_dcu():
     from fastdeploy.model_executor.ops.gpu import (decode_mla_write_cache,
                                                    multi_head_latent_attention,
                                                    prefill_mla_write_cache)
