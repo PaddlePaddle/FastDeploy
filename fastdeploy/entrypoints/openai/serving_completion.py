@@ -151,15 +151,21 @@ class OpenAIServingCompletion:
 
             valid_results = [dict()] * num_choices
             output_tokens = [0] * num_choices
+            current_waiting_time = 0
             while num_choices > 0:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=300)
+                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
+                    current_waiting_time = 0
                 except asyncio.TimeoutError:
-                    status, msg = self.engine_client.check_health()
-                    if not status:
-                        raise ValueError(f"Engine is not healthy: {msg}")
-                    else:
-                        continue
+                    current_waiting_time += 10
+                    if current_waiting_time == 300:
+                        status, msg = self.engine_client.check_health()
+                        if not status:
+                            raise ValueError(f"Engine is not healthy: {msg}")
+                        else:
+                            current_waiting_time = 0
+                    await asyncio.sleep(0.1)
+                    continue
                 data = json.loads(raw_data[-1].decode("utf-8"))
                 rid = int(data["request_id"].split("-")[-1])
                 if data.get("error_code", 200) != 200:
@@ -220,16 +226,21 @@ class OpenAIServingCompletion:
                 max_streaming_response_tokens = request.suffix["max_streaming_response_tokens"]
             choices = []
 
-
+            current_waiting_time = 0
             while num_choices > 0:
                 try:
-                    raw_data = await asyncio.wait_for(dealer.read(), timeout=300)
+                    raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
+                    current_waiting_time = 0
                 except asyncio.TimeoutError:
-                    status, msg = self.engine_client.check_health()
-                    if not status:
-                        raise ValueError(f"Engine is not healthy: {msg}")
-                    else:
-                        continue
+                    current_waiting_time += 10
+                    if current_waiting_time == 300:
+                        status, msg = self.engine_client.check_health()
+                        if not status:
+                            raise ValueError(f"Engine is not healthy: {msg}")
+                        else:
+                            current_waiting_time = 0
+                    await asyncio.sleep(0.1)
+                    continue
 
 
                 res = json.loads(raw_data[-1].decode('utf-8'))
