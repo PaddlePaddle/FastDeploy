@@ -3,8 +3,6 @@ name: Deploy GitHub Pages
 on:
   push:
     branches: [ develop ]
-  pull_request:
-    branches: [ develop ]
 
 permissions:
   contents: write
