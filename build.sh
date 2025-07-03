@@ -176,6 +176,21 @@ function build_and_install() {
   cd ..
 }
 
+function version_info() {
+  output_file="fastdeploy/version.txt"
+  fastdeploy_git_commit_id=$(git rev-parse HEAD)
+  paddle_version=$(${python} -c "import paddle; print(paddle.__version__)")
+  paddle_git_commit_id=$(${python} -c "import paddle; print(paddle.version.show())" | grep -Po "(?<=commit: )[\da-f]+")
+  cuda_version=$(nvcc -V | grep -Po "(?<=release )[\d.]+(?=, V)")
+  cxx_version=$(g++ --version | head -n 1 | grep -Po "(?<=\) )[\d.]+")
+
+  echo "fastdeploy GIT COMMIT ID: $fastdeploy_git_commit_id" > $output_file
+  echo "Paddle version: $paddle_version" >> $output_file
+  echo "Paddle GIT COMMIT ID: $paddle_git_commit_id" >> $output_file
+  echo "CUDA version: $cuda_version" >> $output_file
+  echo "CXX compiler version: $cxx_version" >> $output_file
+}
+
 function cleanup() {
   rm -rf $BUILD_DIR $EGG_DIR
   if [ `${python} -m pip list | grep fastdeploy | wc -l` -gt 0  ]; then
@@ -207,6 +222,7 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
   set -e
 
   init
+  version_info
   build_and_install_ops
   build_and_install
   cleanup
@@ -237,6 +253,7 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
 else
   init
   build_and_install_ops
+  version_info
   rm -rf $BUILD_DIR $EGG_DIR $DIST_DIR
   rm -rf $OPS_SRC_DIR/$BUILD_DIR $OPS_SRC_DIR/$EGG_DIR
 fi
