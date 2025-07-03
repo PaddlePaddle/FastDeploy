@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.event.pull_request.number }}
+  group: ${{ github.event.pull_request.number }}-xpu-ci
   cancel-in-progress: true
 
 jobs:
