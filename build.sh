@@ -166,7 +166,7 @@ function build_and_install() {
 
   echo -e "${BLUE}[install]${NONE} installing fastdeploy..."
   cd $DIST_DIR
-  ${python} -m pip install ./dist/fastdeploy*.whl --force-reinstall --no-cache-dir
+  find . -name "fastdeploy*.whl" | xargs ${python} -m pip install --force-reinstall --no-cache-dir
   if [ $? -ne 0 ]; then
     cd ..
     echo -e "${RED}[FAIL]${NONE} install fastdeploy wheel failed"
