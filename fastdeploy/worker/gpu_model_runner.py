@@ -593,7 +593,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.model = get_model_from_loader(fd_config=self.fd_config)
         # 1.1 Load RL dynamic model
         if self.fd_config.load_config.dynamic_load_weight:
-            from fastdeploy.rl.dynamic_weight_manager import DynamicWeightManager
+            from fastdeploy.rl.dynamic_weight_manager import \
+                DynamicWeightManager
             self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model)
 
         # 2. Load lora model
@@ -622,7 +623,7 @@ class GPUModelRunner(ModelRunnerBase):
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
-    
+
     def clear_cache(self):
         """Clear cached data from shared inputs and forward metadata."""
         self.share_inputs.pop("caches", None)
@@ -719,7 +720,7 @@ class GPUModelRunner(ModelRunnerBase):
                                 head_dim=head_dim)
         if attn_backend is None:
             raise NotImplementedError(
-                "Attention backend which you chose is not support by GPUModelRunner"
+                "Attention backend which you specified is not supported, please set FD_ATTENTION_BACKEND correctly."
             )
         self.attn_backends.append(attn_backend)
 
@@ -1150,7 +1151,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         if self.speculative_method in ["mtp"]:
             self.proposer.clear_dummy_input()
-        # paddle.device.cuda.synchronize()
 
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:
         """
