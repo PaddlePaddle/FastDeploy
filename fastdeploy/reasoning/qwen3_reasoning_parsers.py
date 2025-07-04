@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from typing import Optional, Union
 
 from fastdeploy.entrypoints.openai.protocol import (ChatCompletionRequest,
-                                              DeltaMessage)
+                                                    DeltaMessage)
 from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
 
 
@@ -115,31 +115,41 @@ class Qwen3ReasoningParser(ReasoningParser):
         """
         Extract reasoning content from the model output.
 
-        For text abc</think>xyz:
-        - 'abc' goes to reasoning_content
-        - 'xyz' goes to content
+        支持两种格式:
+        1. <think>abc</think>xyz - 标准格式
+        2. abc</think>xyz - 缺少起始标签的格式
 
         Returns:
             tuple[Optional[str], Optional[str]]: reasoning content and content
         """
 
-        # Check if the model output contains the <think> and </think> tokens.
-        if (self.think_start_token not in model_output
-                or self.think_end_token not in model_output):
-            return None, model_output
-        # Check if the <think> is present in the model output, remove it
-        # if it is present.
-        model_output_parts = model_output.partition(self.think_start_token)
-        model_output = model_output_parts[2] if model_output_parts[
-            1] else model_output_parts[0]
-        # Check if the model output contains the </think> tokens.
-        # If the end token is not found, return the model output as is.
+        # 检查是否包含结束标签
         if self.think_end_token not in model_output:
             return None, model_output
 
-        # Extract reasoning content from the model output.
-        reasoning_content, _, content = model_output.partition(
-            self.think_end_token)
+        # 检查是否有起始标签
+        if self.think_start_token in model_output:
+            # 标准格式：<think>content</think>answer
+            start_idx = model_output.find(self.think_start_token)
+            end_idx = model_output.find(self.think_end_token)
 
-        final_content = content or None
-        return reasoning_content, final_content
+            if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+                reasoning_content = model_output[start_idx +
+                                                 len(self.think_start_token
+                                                     ):end_idx].strip()
+                final_content = model_output[end_idx +
+                                             len(self.think_end_token):].strip(
+                                             )
+                final_content = final_content if final_content else None
+
+                return reasoning_content, final_content
+        else:
+            # 缺少起始标签的格式：content</think>answer
+            parts = model_output.split(self.think_end_token, 1)
+
+            if len(parts) == 2:
+                reasoning_content = parts[0].strip()
+                final_content = parts[1].strip() if parts[1].strip() else None
+                return reasoning_content, final_content
+
+        return None, model_output
