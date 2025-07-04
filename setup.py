@@ -189,7 +189,8 @@ setup(
             "model_executor/ops/xpu/libs/*",
             "model_executor/ops/npu/*", "model_executor/ops/base/*",
             "model_executor/models/*", "model_executor/layers/*",
-            "input/mm_processor/utils/*"
+            "input/mm_processor/utils/*",
+            "version.txt"
         ]
     },
     install_requires=load_requirements(),

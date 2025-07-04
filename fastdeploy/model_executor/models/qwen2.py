@@ -27,7 +27,7 @@ from fastdeploy.config import FDConfig, ModelConfig
 from fastdeploy.model_executor.graph_optimization.decorator import \
     support_graph_optimization
 from fastdeploy.model_executor.layers.activation import SiluAndMul
-from fastdeploy.model_executor.layers.attention import Attention
+from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear, QKVParallelLinear, RowParallelLinear)
@@ -55,13 +55,12 @@ class Qwen2MLP(nn.Layer):
             output_size=fd_config.model_config.ffn_hidden_size * 2,
             with_bias=False,
             activation=fd_config.model_config.hidden_act,
-            use_fast_ffn=True,
         )
 
         self.down_proj = RowParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.down_proj",
-            input_size=(fd_config.model_config.ffn_hidden_size // self.nranks),
+            input_size=fd_config.model_config.ffn_hidden_size,
             output_size=fd_config.model_config.hidden_size,
             with_bias=False,
         )
@@ -97,8 +96,6 @@ class Qwen2Attention(nn.Layer):
                  prefix: str = "") -> None:
         super().__init__()
 
-        nranks = fd_config.parallel_config.tensor_parallel_degree
-
         self.qkv_proj = QKVParallelLinear(fd_config=fd_config,
                                           prefix=f"{prefix}.qkv_proj",
                                           with_bias=True)
@@ -106,7 +103,7 @@ class Qwen2Attention(nn.Layer):
         self.o_proj = RowParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.o_proj",
-            input_size=(fd_config.model_config.hidden_size // nranks),
+            input_size=fd_config.model_config.hidden_size,
             output_size=fd_config.model_config.hidden_size,
         )
 

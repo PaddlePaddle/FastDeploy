@@ -280,8 +280,7 @@ class TokenProcessor(object):
                 recovery_stop = token_id == RECOVERY_STOP_SIGNAL
                 if recovery_stop:
                     llm_logger.info(
-                        f"recovery stop signal found at task {task_id}",
-                        f"token_ids: {token_ids}")
+                        f"recovery stop signal found at task {task_id}")
                 if not recovery_stop and token_id < 0:
                     continue
 
@@ -341,7 +340,6 @@ class TokenProcessor(object):
                     result.prompt = task.prompt
                     result.prompt_token_ids = task.prompt_token_ids
                     if recovery_stop:
-                        result.outputs.token_ids.append(task.eos_token_ids[0])
                         result.error_msg = "Recover is not supported, the result is incomplete!"
                     llm_logger.info(
                         f"Request: {task_id} finished, number of "

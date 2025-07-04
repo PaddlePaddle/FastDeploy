@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import enum
 import hashlib
 import json
 import os
@@ -23,27 +24,45 @@ import random
 import re
 import struct
 from functools import partial
+from typing import NamedTuple, Optional
 
 import numpy as np
 import paddle
 import paddle.distributed as dist
 from paddle.common_ops_import import convert_dtype
 from paddle.distributed import fleet
-from paddleformers.transformers.model_utils import (_add_variant,
-                                                    load_tp_checkpoint)
+from paddleformers.transformers.model_utils import _add_variant
 from paddleformers.transformers.utils import paddleformers_load
 from paddleformers.utils.env import (PADDLE_WEIGHTS_INDEX_NAME,
                                      SAFE_MASTER_WEIGHTS_INDEX_NAME,
                                      SAFE_PEFT_WEIGHTS_INDEX_NAME,
                                      SAFE_WEIGHTS_INDEX_NAME)
 from paddleformers.utils.log import logger
-from safetensors import safe_open
 from tqdm import tqdm
-
-from fastdeploy.config import ModelConfig
 
 MAX_BSZ = 512
 MAX_DRAFT_TOKENS = 6
+
+
+class LayerIdPlaceholder(str, enum.Enum):
+    """LayerIdPlaceholder"""
+    LAYER_ID = "layer_id"
+    FFN_LAYER_ID = "ffn_layer_id"
+    MOE_LAYER_ID = "moe_layer_id"
+    EXPERT_ID = "export_id"
+
+
+class WeightMeta(NamedTuple):
+    """
+    #tensor split parameters
+
+    # weight_name: weight name
+    # is_column: whether to split by columns
+    # extra: optional flags like "is_naive_2fuse", "is_gqa", "is_naive_3fuse"
+    """
+    weight_name: str
+    is_column: bool
+    extra: Optional[str] = None
 
 
 class UniqueIDGenerator:
@@ -431,223 +450,6 @@ def calculate_effective_tokens(training_args, train_dataset, max_seq_len):
     total_tokens = total_batch * max_seq_len
 
     return total_effective_tokens, total_tokens
-
-
-def load_ep_checkpoint(model_path: str,
-                       config: ModelConfig,
-                       return_numpy: bool = False,
-                       return_key_name: bool = True):
-    """
-    load ep checkpoint
-    """
-    # return_numpy=True cpu
-    # return_numpy=False gpu
-    with open(os.path.join(model_path, "model.safetensors.index.json"),
-              "r") as f:
-        weight_list = json.load(f)["weight_map"]
-    filtered_map = {k: v for k, v in weight_list.items() if "experts" not in k}
-    num_local_ffn_keys = []
-
-    for i in range(config.moe_layer_start_index, config.num_layers):
-        for j in range(
-                config.num_experts_start_offset,
-                config.num_experts_start_offset + config.num_experts_per_rank,
-        ):
-            ffn1_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight"
-            ffn2_key = (
-                f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight")
-            
-            ffn1_quant_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.quant_weight"
-            ffn2_quant_key = (
-                f"ernie.layers.{i}.mlp.experts.{j}.down_proj.quant_weight")
-
-            ffn1_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight_scale"
-            ffn2_scale_key = (
-                f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight_scale")
-            num_local_ffn_keys.append(ffn1_key)
-            num_local_ffn_keys.append(ffn2_key)
-            num_local_ffn_keys.append(ffn1_quant_key)
-            num_local_ffn_keys.append(ffn2_quant_key)
-            num_local_ffn_keys.append(ffn1_scale_key)
-            num_local_ffn_keys.append(ffn2_scale_key)
-
-    for k in num_local_ffn_keys:
-        if k in weight_list:
-            filtered_map[k] = weight_list[k]
-
-    state_dict = {}
-    # Get all safetensor file paths that need to be opened
-    safetensor_paths = set(filtered_map.values())
-
-    # Open each safetensor file sequentially with progress bar
-    for safetensor_path in tqdm(safetensor_paths,
-                                desc="Loading safetensor files",
-                                unit="file"):
-        with safe_open(os.path.join(model_path, safetensor_path),
-                       framework="np",
-                       device="cpu") as f:
-            # Check if this file contains keys from filtered_map
-            for k in filtered_map:
-                if filtered_map[k] == safetensor_path and k in f.keys():
-                    weight = f.get_tensor(k)
-                    if not return_numpy:
-                        weight = paddle.Tensor(weight, zero_copy=True)
-                        weight = weight._copy_to(
-                            paddle.framework._current_expected_place(), False)
-                    state_dict[k] = weight
-    return state_dict
-
-
-def get_safetensor_file(model_path):
-    """
-    get_safetensor_file
-    """
-    with open(os.path.join(model_path, "model.safetensors.index.json"),
-              "r") as f:
-        weight_map = json.load(f)["weight_map"]
-    weight_files_in_index = set()
-    for weight_name in weight_map:
-        weight_files_in_index.add(
-            os.path.join(model_path, weight_map[weight_name]))
-    key_name_list = list(set(weight_map.keys()))
-    safetensor_list = list(weight_files_in_index)
-    safetensor_list.sort()
-    return key_name_list, safetensor_list
-
-
-def safetensors_weights_iterator(safe_tensor_list: list[str], ):
-    """
-    safetensors_weights_iterator
-    """
-    for st_file in tqdm(
-            safe_tensor_list,
-            desc="Loading safetensors checkpoint shards",
-    ):
-        with safe_open(st_file, framework="np") as f:
-            for name in f.keys():  # noqa: SIM118
-                param = f.get_tensor(name)
-                yield name, param
-
-
-def fastsafetensors_weights_iterator(safetensor_list: list[str]):
-    """
-    fastsafetensors_weights_iterator
-    """
-    from fastsafetensors import SafeTensorsFileLoader, SingleGroup
-    world_size = dist.get_world_size()
-    if world_size > 1:
-        dist.init_parallel_env()
-        pg = dist.get_group()
-        device = f"gpu:{pg.rank}" if paddle.is_compiled_with_cuda() else "cpu"
-    else:
-        pg = SingleGroup()
-        device = f"gpu:{pg.rank()}" if paddle.is_compiled_with_cuda(
-        ) else "cpu"
-
-    safetensor_files_sub_lists = [
-        safetensor_list[i:i + world_size]
-        for i in range(0, len(safetensor_list), world_size)
-    ]
-    for st_file in tqdm(
-            safetensor_files_sub_lists,
-            desc="Loading fastsafetensors checkpoint shards",
-    ):
-        loader = SafeTensorsFileLoader(pg,
-                                       device,
-                                       nogds=True,
-                                       debug_log=False,
-                                       framework="paddle")
-        rank_file_map = {i: [f] for i, f in enumerate(st_file)}
-        loader.add_filenames(rank_file_map)
-        try:
-            fb = loader.copy_files_to_device()
-            try:
-                keys = list(fb.key_to_rank_lidx.keys())
-                for k in keys:
-                    t = fb.get_tensor(k)
-                    yield k, t
-            finally:
-                fb.close()
-        finally:
-            loader.close()
-
-
-def get_state_dict(model_path, config, use_fastsafetensor=False):
-    """
-    get_state_dict
-    """
-    state_dict = {}
-    _, safetensor_list = get_safetensor_file(
-        os.path.join(model_path, f"rank{config.tensor_parallel_rank}"))
-    if use_fastsafetensor:
-        weights_iterator = fastsafetensors_weights_iterator(safetensor_list)
-    else:
-        weights_iterator = safetensors_weights_iterator(safetensor_list)
-
-    for name, weight in weights_iterator:
-        state_dict[name] = weight
-    return state_dict
-
-
-def apply_quant(name_action_quant_mappings, key, tensor, state_dict):
-    """
-    apply_quant
-    """
-    if key in name_action_quant_mappings:
-        action = name_action_quant_mappings.pop(key)
-        quant_weight_tensor, weight_scale_tensor = action(tensor)
-        if quant_weight_tensor is not None and weight_scale_tensor is not None:
-            state_dict[key + ".quant_weight"] = quant_weight_tensor
-            state_dict[key + ".weight_scale"] = weight_scale_tensor
-        else:
-            state_dict[key] = quant_weight_tensor
-    else:
-        state_dict[key] = tensor
-
-
-def load_checkpoint(model_path, cls, config, return_numpy=True, load_gpu=True):
-    """
-    load checkpoint
-    """
-    if getattr(config, "parallel_config", None) is not None:
-        use_ep = getattr(config.parallel_config, "use_ep", False)
-        tensor_parallel_degree = config.parallel_config.tensor_parallel_degree
-    else:
-        use_ep = getattr(config, "use_ep", False)
-        tensor_parallel_degree = config.tensor_parallel_degree
-
-    if getattr(config, "model_config", None) is not None:
-        model_config = config.model_config
-    else:
-        model_config = config
-
-    if use_ep:
-        state_dict = load_ep_checkpoint(model_path,
-                                        config,
-                                        return_numpy=True,
-                                        return_key_name=True)
-    else:
-        rank_dirs = [
-            f for f in os.listdir(model_path) if f.startswith("rank")
-            and os.path.isdir(os.path.join(model_path, f))
-        ]
-        if len(rank_dirs) > 1:
-            if tensor_parallel_degree != len(rank_dirs):
-                raise ValueError(
-                    f"Your model only supports loading with tp{len(rank_dirs)}"
-                )
-            state_dict = get_state_dict(model_path, model_config)
-        else:
-            state_dict = load_tp_checkpoint(model_path,
-                                            cls,
-                                            model_config,
-                                            return_numpy=return_numpy)
-            import re
-            for k, v in state_dict.items():
-                match = re.search(r'layers\.(\d+)', k)
-                if match and int(match.group(1)) > 0:
-                    continue
-    return state_dict
 
 
 def parser_quant_type(quant_type):

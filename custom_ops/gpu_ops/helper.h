@@ -39,10 +39,12 @@ namespace cub = hipcub;
 #include <fstream>
 #include <iostream>
 
+#include "env.h"
 #include "paddle/extension.h"
 #include "paddle/phi/core/allocator.h"
 #include "paddle/phi/core/cuda_stream.h"
 #include "paddle/phi/core/dense_tensor.h"
+#include "paddle/phi/backends/gpu/gpu_info.h"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
@@ -512,4 +514,11 @@ inline int get_cuda_max_shared_memory_per_block_opt_in(int const device) {
   cudaDeviceGetAttribute(&max_shared_mem_per_block_opt_in,
                          cudaDevAttrMaxSharedMemoryPerBlockOptin, device);
   return max_shared_mem_per_block_opt_in;
+}
+
+inline int GetSMVersion() {
+  static int sm_version = phi::backends::gpu::GetGPUComputeCapability(
+      phi::backends::gpu::GetCurrentDeviceId());
+  return sm_version;
+
 }

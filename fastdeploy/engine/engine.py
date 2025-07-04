@@ -286,6 +286,8 @@ class LLMEngine(object):
         while self.running:
             try:
                 results = self.scheduler.get_results()
+                if len(results) == 0:
+                    time.sleep(0.001)
                 for request_id, contents in results.items():
                     for result in contents:
                         self.zmq_server.send_multipart(request_id, result)
@@ -444,8 +446,8 @@ class LLMEngine(object):
         enable_thinking = None
         if kwargs is not None:
             enable_thinking = kwargs.get("enable_thinking", None)
-        request = self.data_processor.process_request(request,
-                                                      self.cfg.max_model_len, enable_thinking=enable_thinking)
+        request = self.data_processor.process_request(
+            request, self.cfg.max_model_len, enable_thinking=enable_thinking)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
         input_ids_len = request.prompt_token_ids_len
         request.set(
@@ -453,7 +455,8 @@ class LLMEngine(object):
             min(self.cfg.max_model_len - input_ids_len,
                 request.get("max_tokens")))
         if request.get("reasoning_max_tokens") is None:
-            default_reasoning_max_tokens = max(int(request.get("max_tokens") * 0.8), 1)
+            default_reasoning_max_tokens = max(
+                int(request.get("max_tokens") * 0.8), 1)
             request.set("reasoning_max_tokens", default_reasoning_max_tokens)
         min_tokens = request.get("min_tokens")
         if input_ids_len + min_tokens >= self.cfg.max_model_len:
@@ -963,8 +966,8 @@ class LLMEngine(object):
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
-            "FLAGS_hardamard_moe_block_size": 128,
             "FLAGS_max_partition_size": 32768,
+            "FLAGS_hardamard_moe_block_size": 128,
         }
         # environment variables needed by Dy2St
         variables.update({
@@ -1017,6 +1020,12 @@ class LLMEngine(object):
             worker_path = "../worker/vl_worker_process.py"
         py_script = os.path.join(current_dir_path, worker_path)
 
+        ori_vocab_size = (
+            len(self.data_processor.tokenizer.sp_model) 
+            if hasattr(self.data_processor.tokenizer, 'sp_model') 
+            else len(self.data_processor.tokenizer.vocab)
+        )
+
         arguments = (
             f" --nnodes {str(self.cfg.nnode)}"
             f" --devices {self.cfg.device_ids} {py_script}"
@@ -1037,13 +1046,14 @@ class LLMEngine(object):
             f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
             f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
             f" --quantization {self.cfg.model_config.quantization}"
-            f" --ori_vocab_size {len(self.data_processor.tokenizer)}"
+            f" --ori_vocab_size {ori_vocab_size}"
             f" --speculative_method {self.cfg.speculative_config.method}"
             f" --speculative_max_draft_token_num {self.cfg.speculative_config.num_speculative_tokens}"
             f" --speculative_model_name_or_path {self.cfg.speculative_config.model_name_or_path}"
             f" --speculative_model_quantization {self.cfg.speculative_config.quantization}"
             f" --max_capture_batch_size {self.cfg.max_capture_batch_size}"
-            f" --guided_decoding_backend {self.cfg.guided_decoding_backend}")
+            f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
+            f" --load_strategy {self.cfg.model_config.load_strategy}")
 
         worker_append_flag = {
             "enable_expert_parallel":
@@ -1188,8 +1198,9 @@ class LLMEngine(object):
                 line = line.decode('utf-8', errors='ignore')
                 if self.worker_init_status.get("finished", False):
                     break
-                if match := re.search(r'Loading checkpoint shards:\s*(\d+)',
-                                      line):
+                if match := re.search(
+                        r'Loading (?:fastsafetensors |safetensors )?checkpoint shards:\s*(\d+)',
+                        line):
                     self.worker_init_status["weight_loadding"] = eval(
                         match.group(1)) * 1.0 / 100
                 elif (match := re.search(r'Start load layer (\d+)',

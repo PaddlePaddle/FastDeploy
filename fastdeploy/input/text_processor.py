@@ -25,6 +25,7 @@ from fastdeploy.utils import data_processor_logger
 
 _SAMPLING_EPS = 1e-5
 
+
 class BaseDataProcessor(ABC):
     """base class for data processor"""
 

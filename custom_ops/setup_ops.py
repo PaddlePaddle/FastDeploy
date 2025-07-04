@@ -267,6 +267,9 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/text_image_index_out.cu",
         "gpu_ops/text_image_gather_scatter.cu",
         "gpu_ops/sample_kernels/rejection_top_p_sampling.cu",
+        "gpu_ops/get_position_ids_and_mask_encoder_batch.cu",
+        "gpu_ops/fused_rotary_position_encoding.cu",
+        "gpu_ops/noaux_tc.cu",
     ]
 
     # pd_disaggregation
@@ -376,6 +379,8 @@ elif paddle.is_compiled_with_cuda():
         # append_attention
         sources += ["gpu_ops/append_attention.cu"]
         sources += find_end_files("gpu_ops/append_attn", ".cu")
+        # mla
+        sources += ["gpu_ops/multi_head_latent_attention.cu"]
         # gemm_dequant
         sources += ["gpu_ops/int8_gemm_with_cutlass/gemm_dequant.cu"]
         # speculate_decoding
@@ -440,6 +445,10 @@ elif paddle.is_compiled_with_cuda():
         ]
 
         sources += find_end_files(fp8_auto_gen_directory, ".cu")
+
+    if cc >= 90 and nvcc_version >= 12.0:
+        # Hopper optmized mla
+        sources += find_end_files("gpu_ops/mla_attn", ".cu")
 
     setup(
         name="fastdeploy_ops",

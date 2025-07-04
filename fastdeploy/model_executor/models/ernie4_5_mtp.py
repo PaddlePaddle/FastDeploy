@@ -26,7 +26,7 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig, ModelConfig
-from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
+from fastdeploy.model_executor.layers.mtp_linear import ParallelEHProjection
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_DecoderLayer
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
@@ -265,12 +265,12 @@ class Ernie4_5_MTPModel(nn.Layer):
         self.num_layers = fd_config.model_config.num_layers
         self.embeddings = fd_config.speculative_config.sharing_model.model.embeddings
 
-        self.hidden_layers = [
+        self.hidden_layers = nn.LayerList([
             Ernie4_5_DecoderLayer(
                 fd_config=fd_config,
                 prefix=f"{fd_config.model_config.prefix_name}.{i}")
             for i in range(self.num_layers)
-        ]
+        ])
 
         self.enorm = RMSNorm(
             fd_config,
@@ -286,7 +286,7 @@ class Ernie4_5_MTPModel(nn.Layer):
             prefix="ernie.mtp_hidden_norm.0",
         )
 
-        self.eh_proj = ParallelLMHead(
+        self.eh_proj = ParallelEHProjection(
             fd_config=fd_config,
             num_embeddings=fd_config.model_config.hidden_size,
             embedding_dim=fd_config.model_config.hidden_size * 2,

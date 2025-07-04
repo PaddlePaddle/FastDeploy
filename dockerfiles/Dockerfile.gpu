@@ -9,11 +9,6 @@ COPY . /workspace/FastDeploy
 RUN echo "ulimit -u unlimited" >> /root/.bashrc
 RUN echo "ulimit -n 65536" >> /root/.bashrc
 
-# setting proxy
-ARG http_proxy=agent.baidu.com:8891
-ARG https_proxy=agent.baidu.com:8891
-ARG no_proxy=localhost,bj.bcebos.com,su.bcebos.com,pypi.tuna.tsinghua.edu.cn,paddle-ci.gz.bcebos.com
-
 # uninstall existing package
 RUN python -m pip uninstall paddlepaddle-gpu fastdeploy-gpu -y
 

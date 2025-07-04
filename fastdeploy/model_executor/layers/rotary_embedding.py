@@ -14,12 +14,17 @@
 # limitations under the License.
 """
 
-from typing import Optional
+import math
+from typing import Optional, Tuple
 
 import paddle
+import paddle.nn as nn
 
 from fastdeploy.config import ModelConfig
 from fastdeploy.platforms import current_platform
+
+if current_platform.is_cuda():
+    from fastdeploy.model_executor.ops.gpu import fused_rotary_position_encoding
 
 from .utils import CpuGuard
 
@@ -99,20 +104,164 @@ class QwenRotaryEmbedding:
         return rot_emb
 
 
+def yarn_get_mscale(scale=1, mscale=1):
+    """
+    """
+    if scale <= 1:
+        return 1.0
+    return 0.1 * mscale * math.log(scale) + 1.0
+
+
+def yarn_find_correction_dim(num_rotations,
+                             dim,
+                             base=10000,
+                             max_position_embeddings=2048):
+    """
+    """
+    return (dim * math.log(max_position_embeddings /
+                           (num_rotations * 2 * math.pi))) / (2 *
+                                                              math.log(base))
+
+
+def yarn_find_correction_range(low_rot,
+                               high_rot,
+                               dim,
+                               base=10000,
+                               max_position_embeddings=2048):
+    """
+    """
+    low = math.floor(
+        yarn_find_correction_dim(low_rot, dim, base, max_position_embeddings))
+    high = math.ceil(
+        yarn_find_correction_dim(high_rot, dim, base, max_position_embeddings))
+    return max(low, 0), min(high, dim - 1)  # Clamp values just in case
+
+
+def yarn_linear_ramp_mask(min, max, dim):
+    """
+    """
+    if min == max:
+        max += 0.001  # Prevent singularity
+
+    linear_func = (paddle.arange(dim, dtype=paddle.float32) - min) / (max -
+                                                                      min)
+    ramp_func = paddle.clip(linear_func, 0, 1)
+    return ramp_func
+
+
+class DeepseekScalingRotaryEmbedding(nn.Layer):
+    """RotaryEmbedding extended with YaRN method.
+
+    Credits to Peng et al. github.com/jquesnelle/yarn
+
+    Args:
+    rotary_dim(int): Dimension of rotary embeddings (head dimension)
+    max_position_embeddings(int): Original training context length
+    base(float): Base value used to compute the inverse frequencies.
+    scaling_factor(float): Context extension scaling ratio (target_len / original_len)
+    extrapolation_factor(float): Weight for extrapolated frequencies (default=1)
+    attn_factor(float): Attention magnitude scaling factor (default=1)
+    beta_fast(int): High-frequency correction cutoff (default=32)
+    beta_slow(int): Low-frequency correction cutoff (default=1)
+    mscale(float): Primary magnitude scaling factor (default=1)
+    mscale_all_dim(float): Alternate magnitude scaling factor (default=0)
+
+    """
+
+    def __init__(
+        self,
+        rotary_dim: int,
+        max_position_embeddings: int,
+        base: int,
+        scaling_factor: float,
+        *,
+        extrapolation_factor: float = 1,
+        attn_factor: float = 1,
+        beta_fast: int = 32,
+        beta_slow: int = 1,
+        mscale: float = 1,
+        mscale_all_dim: float = 0,
+    ) -> None:
+        super().__init__()
+        self._dtype = paddle.get_default_dtype()
+
+        self.rotary_dim = rotary_dim
+        self.max_position_embeddings = max_position_embeddings
+        self.base = base
+
+        self.scaling_factor = scaling_factor
+        self.extrapolation_factor = extrapolation_factor
+        self.attn_factor = attn_factor
+        self.beta_fast = beta_fast
+        self.beta_slow = beta_slow
+        # Get n-d magnitude scaling corrected for interpolation.
+        self.mscale = float(
+            yarn_get_mscale(self.scaling_factor, float(mscale)) /
+            yarn_get_mscale(self.scaling_factor, float(mscale_all_dim)) *
+            attn_factor)
+
+        cache = self._compute_cos_sin_cache()
+
+        self.cos_sin_cache: paddle.Tensor
+        self.register_buffer("cos_sin_cache", cache, persistable=True)
+
+    def _compute_inv_freq(self, scaling_factor: float) -> paddle.Tensor:
+        pos_freqs = self.base**(
+            paddle.arange(0, self.rotary_dim, 2, dtype=paddle.float32) /
+            self.rotary_dim)
+
+        inv_freq_extrapolation = 1.0 / pos_freqs
+        inv_freq_interpolation = 1.0 / (scaling_factor * pos_freqs)
+
+        low, high = yarn_find_correction_range(self.beta_fast, self.beta_slow,
+                                               self.rotary_dim, self.base,
+                                               self.max_position_embeddings)
+        # Get n-d rotational scaling corrected for extrapolation
+        inv_freq_mask = (1 - yarn_linear_ramp_mask(
+            low, high, self.rotary_dim // 2)) * self.extrapolation_factor
+        inv_freq = inv_freq_interpolation * (
+            1 - inv_freq_mask) + inv_freq_extrapolation * inv_freq_mask
+        return inv_freq
+
+    def _compute_cos_sin_cache(self) -> paddle.Tensor:
+        inv_freq = self._compute_inv_freq(self.scaling_factor)
+        t = paddle.arange(self.max_position_embeddings * self.scaling_factor,
+                          dtype=paddle.float32)
+        freqs = paddle.einsum("i,j->ij", t, inv_freq)
+        cos = freqs.cos() * self.mscale
+        sin = freqs.sin() * self.mscale
+        cache = paddle.concat((cos, sin), axis=-1)
+        return cache.cast(self._dtype)
+
+    def forward(
+        self,
+        position_ids: paddle.Tensor,
+        query: paddle.Tensor,
+        key: paddle.Tensor,
+    ) -> Tuple[paddle.Tensor, paddle.Tensor]:
+        """
+        """
+        # In-place operations that update the query and key tensors.
+        fused_rotary_position_encoding(query, key, position_ids,
+                                       self.cos_sin_cache, self.rotary_dim,
+                                       False)
+
+        return query, key
+
+
 def get_rope_impl(
     rotary_dim: int,
     base: 10000.0,
-    position_ids,
+    position_ids: paddle.Tensor,
     model_config: Optional[ModelConfig] = None,
     partial_rotary_factor=1,
-):
+) -> paddle.Tensor:
     """
     The real implementation of get_rope
     """
 
     architecture = model_config.architectures[0]
-    if model_config is not None and model_config is None or architecture.startswith(
-            "Qwen"):
+    if model_config is None or architecture.startswith("Qwen"):
         rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base,
                                                partial_rotary_factor)
         rotary_emb = rotary_emb_layer(position_ids)
@@ -126,10 +275,10 @@ def get_rope_impl(
 def get_rope_xpu(
     rotary_dim: int,
     base: 10000.0,
-    position_ids,
-    model_config: ModelConfig,
+    position_ids: paddle.Tensor,
+    model_config: Optional[ModelConfig] = None,
     partial_rotary_factor=1,
-):
+) -> paddle.Tensor:
     """
     In XPU, cos and sin compute must be done on cpu
     """
@@ -143,12 +292,27 @@ def get_rope_xpu(
 def get_rope(
     rotary_dim: int,
     base: 10000.0,
-    position_ids,
-    model_config: ModelConfig,
-    partial_rotary_factor=1,
-):
+    position_ids: paddle.Tensor,
+    model_config: Optional[ModelConfig] = None,
+    partial_rotary_factor: int = 1,
+) -> paddle.Tensor:
     """
-    The warpper of get_rope
+    Pre-calculate rotary position embedding for position_ids.
+
+    Args:
+        rotary_dim (int):
+            Dimension of rotary embeddings (head dimension)
+        base (float, optional):
+            Base value used to compute the inverse frequencies.
+            Default: 10000.0.
+        position_ids (paddle.Tensor):
+            Tensor containing position indices of input tokens.
+        model_config (Optional[ModelConfig]):
+            Model configuration object containing architecture information.
+            If provided, determines RoPE implementation based on model architecture.
+        partial_rotary_factor (int, optional):
+            Factor controlling partial rotary application.
+            Default: 1 (apply to all dimensions).
     """
     if current_platform.is_xpu():
         return get_rope_xpu(rotary_dim, base, position_ids, model_config,
@@ -255,7 +419,24 @@ def get_rope_3d(
     paritial_rotary_factor: 1,
     max_position: 131072,
     freq_allocation: 2,
-):
+) -> paddle.Tensor:
+    """
+    Pre-calculate rotary position embedding for position_ids.
+
+    Args:
+        rotary_dim (int):
+            Dimension of rotary embeddings (head dimension)
+        base (float, optional):
+            Base value used to compute the inverse frequencies.
+            Default: 10000.0.
+        position_ids (paddle.Tensor):
+            Tensor containing position indices of input tokens.
+        partial_rotary_factor (int, optional):
+            Factor controlling partial rotary application.
+            Default: 1 (apply to all dimensions).
+        max_position: Maximum position index to precompute.
+        freq_allocation: Number of rotary dimensions allocated to temporal axis
+    """
     rotary_emb3d_layer = ErnieVlRotaryEmbedding3D(rotary_dim, base,
                                                   paritial_rotary_factor,
                                                   max_position,

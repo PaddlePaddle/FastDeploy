@@ -22,14 +22,35 @@ from paddleformers.utils.log import logger
 import fastdeploy
 from fastdeploy.distributed.communication_op import \
     tensor_model_parallel_all_reduce
-from ..utils import get_tensor, create_and_set_parameter
+from fastdeploy.platforms import current_platform
+
+from ..utils import create_and_set_parameter, get_tensor
 from .fused_moe_backend_base import MoEMethodBase
 
-from fastdeploy.platforms import current_platform
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch
-    from fastdeploy.model_executor.ops.gpu import moe_expert_reduce
-    
+    from fastdeploy.model_executor.ops.gpu import (moe_expert_dispatch,
+                                                   moe_expert_reduce, noaux_tc)
+
+
+# used for deepseek_v3
+def get_moe_scores(gating_output: paddle.Tensor, n_group, topk_group, top_k,
+                   routed_scaling_factor,
+                   e_score_correction_bias) -> paddle.Tensor:
+    """
+    compute moe scores using e_score_correction_bias.
+    """
+    scores = paddle.nn.functional.sigmoid(gating_output)
+    scores_with_bias = scores + e_score_correction_bias.unsqueeze(0)
+    scores = noaux_tc(
+        scores,
+        scores_with_bias,
+        n_group,
+        topk_group,
+        top_k,
+        routed_scaling_factor,
+    )
+    return scores
+
 
 class CutlassMoEMethod(MoEMethodBase):
     """
@@ -199,23 +220,47 @@ class CutlassMoEMethod(MoEMethodBase):
         """
         Paddle Cutlass compute Fused MoE.
         """
-        (
-            permute_input,
-            token_nums_per_expert,
-            permute_indices_per_token,
-            topk_weights,
-            topk_idx,
-            expert_idx_per_token,
-        ) = moe_expert_dispatch(
-            x,
-            gate_out,
-            layer.gate_correction_bias,
-            (layer.moe_ffn1_in_scale if hasattr(layer, "moe_ffn1_in_scale")
-             else None),  # if set, permute_input will be int8_t
-            layer.top_k,
-            False,
-            topk_only_mode=False,
-        )
+        if layer.topk_method == "noaux_tc":
+            gate_out = get_moe_scores(gate_out, layer.n_group,
+                                      layer.topk_group, layer.top_k,
+                                      layer.routed_scaling_factor,
+                                      layer.gate_correction_bias)
+
+            (
+                permute_input,
+                token_nums_per_expert,
+                permute_indices_per_token,
+                topk_weights,
+                topk_idx,
+                expert_idx_per_token,
+            ) = moe_expert_dispatch(
+                x,
+                gate_out,
+                None,  # Use layer.gate_correction_bias in get_moe_scores.
+                (layer.moe_ffn1_in_scale if hasattr(layer, "moe_ffn1_in_scale")
+                 else None),  # if set, permute_input will be int8_t
+                layer.top_k,
+                False,
+                topk_only_mode=True,
+            )
+        else:
+            (
+                permute_input,
+                token_nums_per_expert,
+                permute_indices_per_token,
+                topk_weights,
+                topk_idx,
+                expert_idx_per_token,
+            ) = moe_expert_dispatch(
+                x,
+                gate_out,
+                layer.gate_correction_bias,
+                (layer.moe_ffn1_in_scale if hasattr(layer, "moe_ffn1_in_scale")
+                 else None),  # if set, permute_input will be int8_t
+                layer.top_k,
+                False,
+                topk_only_mode=False,
+            )
 
         if self.moe_quant_type != "w4a8":
             # only w4a8 need expert_idx_per_token
@@ -234,11 +279,11 @@ class CutlassMoEMethod(MoEMethodBase):
             permute_indices_per_token,
             topk_idx,
             None,
-            norm_topk_prob=True,
+            norm_topk_prob=False if layer.topk_method == "noaux_tc" else True,
             routed_scaling_factor=1.0,
         )
 
-        if layer.tp_size > 1:
+        if layer.reduce_results and layer.tp_size > 1:
             tensor_model_parallel_all_reduce(fused_moe_out)
 
         return fused_moe_out

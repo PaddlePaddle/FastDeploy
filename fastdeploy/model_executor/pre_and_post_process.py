@@ -17,6 +17,7 @@ from typing import Dict, Optional
 
 import paddle
 
+from fastdeploy import envs
 from fastdeploy.engine.config import SpeculativeConfig
 from fastdeploy.model_executor.ops.gpu import (
     get_padding_offset, save_output, set_stop_value_multi_ends,
@@ -24,10 +25,11 @@ from fastdeploy.model_executor.ops.gpu import (
     speculate_get_padding_offset, speculate_get_seq_lens_output,
     speculate_save_output, speculate_set_value_by_flags_and_idx,
     speculate_step_paddle, speculate_step_system_cache, speculate_update_v3,
-    step_paddle, step_system_cache, update_inputs)
+    step_paddle, step_system_cache, update_inputs, step_reschedule)
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.output import ModelOutputData
 
+DISABLE_RECOVER = (envs.FD_DISABLED_RECOVER == "1")
 
 def pre_process(
     max_len: int,
@@ -214,6 +216,8 @@ def step_cuda(
     """
     TODO(gongshaotian): normalization name
     """
+
+    
     if speculative_config.method is not None:
         if enable_prefix_caching:
             speculate_step_system_cache(
@@ -291,6 +295,33 @@ def step_cuda(
                 share_inputs["input_ids"], share_inputs["pre_ids"],
                 share_inputs["step_idx"], share_inputs["next_tokens"],
                 share_inputs["first_token_ids"], block_size, enc_dec_block_num)
+        elif DISABLE_RECOVER:
+            step_reschedule(
+                share_inputs["stop_flags"],
+                share_inputs["seq_lens_this_time"],
+                share_inputs["step_seq_lens_encoder"],
+                share_inputs["seq_lens_encoder"],
+                share_inputs["seq_lens_decoder"],
+                share_inputs["block_tables"],
+                share_inputs["encoder_block_lens"],
+                share_inputs["is_block_step"],
+                share_inputs["step_block_list"],
+                share_inputs["step_lens"],
+                share_inputs["recover_block_list"],
+                share_inputs["recover_lens"],
+                share_inputs["need_block_list"],
+                share_inputs["need_block_len"],
+                share_inputs["used_list_len"],
+                share_inputs["free_list"],
+                share_inputs["free_list_len"],
+                share_inputs["input_ids"],
+                share_inputs["pre_ids"],
+                share_inputs["step_idx"],
+                share_inputs["next_tokens"],
+                share_inputs["first_token_ids"],
+                block_size,
+                enc_dec_block_num,
+            )
         else:
             step_paddle(
                 share_inputs["stop_flags"],
