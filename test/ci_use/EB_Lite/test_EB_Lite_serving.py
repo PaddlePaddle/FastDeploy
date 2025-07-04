@@ -90,21 +90,14 @@ def setup_and_run_server():
         "--max-model-len", "32768",
         "--max-num-seqs", "128",
         "--quantization", "wint4",
+        "--use-cudagraph",
+        "--max-capture-batch-size", "1"
     ]
-
-    # Set environment variables
-    env = os.environ.copy()
-    env["ENABLE_FASTDEPLOY_LOAD_MODEL_CONCURRENCY"] = "0"
-    env["FLAGS_use_append_attn"] = "1"
-    env["ELLM_DYNAMIC_MODE"] = "1"
-    env["NCCL_ALGO"] = "Ring"
-    env["USE_WORKER_V1"] = "1"
 
     # Start subprocess in new process group
     with open(log_path, "w") as logfile:
         process = subprocess.Popen(
             cmd,
-            env=env,
             stdout=logfile,
             stderr=subprocess.STDOUT,
             start_new_session=True  # Enables killing full group via os.killpg
