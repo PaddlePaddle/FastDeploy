@@ -898,6 +898,9 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"][idx:idx + 1] = 0
                 self.share_inputs["seq_lens_decoder"][
                     idx:idx + 1] = start_idx + task.get("seq_lens_decoder", 0)
+            if self.speculative_decoding and self.proposer.is_chunk_prefill_enabled(
+            ):
+                self.proposer.update_task_chunk_prefill(task)
             task.chunk_idx += 1
 
     def _dummy_sampler_run(self) -> paddle.Tensor:
