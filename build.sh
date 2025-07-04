@@ -180,7 +180,7 @@ function version_info() {
   output_file="fastdeploy/version.txt"
   fastdeploy_git_commit_id=$(git rev-parse HEAD)
   paddle_version=$(${python} -c "import paddle; print(paddle.__version__)")
-  paddle_git_commit_id=$(${python} -c "import paddle; print(paddle.version.show())" | grep -Po "(?<=commit: )[\da-f]+")
+  paddle_git_commit_id=$(${python} -c "import paddle; print(paddle.__git_commit__)")
   cuda_version=$(nvcc -V | grep -Po "(?<=release )[\d.]+(?=, V)")
   cxx_version=$(g++ --version | head -n 1 | grep -Po "(?<=\) )[\d.]+")
 
