@@ -20,10 +20,9 @@ import numpy as np
 from paddleformers.generation import GenerationConfig
 
 from fastdeploy import envs
-from fastdeploy.utils import data_processor_logger
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
-
 from fastdeploy.input.text_processor import BaseDataProcessor
+from fastdeploy.utils import data_processor_logger
 
 _SAMPLING_EPS = 1e-5
 
@@ -93,11 +92,19 @@ class ErnieProcessor(BaseDataProcessor):
         if request.get("eos_token_ids") is None or len(
                 request.eos_token_ids) == 0:
             request.eos_token_ids = self.eos_token_ids
+
+        # 暂时 stop 和 stop_token_ids 只有一个生效，前者优先级更高
         stop_sequences = request.get("stop", [])
         if stop_sequences is not None and len(stop_sequences) != 0:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
             request.set("stop_token_ids", stop_seqs)
             request.set("stop_seqs_len", stop_seqs_len)
+        else:
+            stop_token_ids_list = request.get("stop_token_ids", [])
+            if len(stop_token_ids_list) != 0:
+                request.set("stop_token_ids", [stop_token_ids_list])
+                request.set("stop_seqs_len", [len(stop_token_ids_list)])
+
 
         if request.prompt_token_ids is None or len(
                 request.prompt_token_ids) == 0:
@@ -149,6 +156,11 @@ class ErnieProcessor(BaseDataProcessor):
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
             request['stop_token_ids'] = stop_seqs
             request['stop_seqs_len'] = stop_seqs_len
+        else:
+            stop_token_ids_list = request.get("stop_token_ids", [])
+            if len(stop_token_ids_list) != 0:
+                request["stop_token_ids"] = [stop_token_ids_list]
+                request["stop_seqs_len"] = [len(stop_token_ids_list)]
 
         system = request.get("system")
         # 处理prompt_token_ids

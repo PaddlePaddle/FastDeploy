@@ -235,6 +235,11 @@ class DataProcessor(BaseDataProcessor):
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
             request.set("stop_token_ids", stop_seqs)
             request.set("stop_seqs_len", stop_seqs_len)
+        else:
+            stop_token_ids_list = request.get("stop_token_ids", [])
+            if len(stop_token_ids_list) != 0:
+                request.set("stop_token_ids", [stop_token_ids_list])
+                request.set("stop_seqs_len", [len(stop_token_ids_list)])
 
         if request.prompt_token_ids is None or len(
                 request.prompt_token_ids) == 0:
@@ -282,6 +287,11 @@ class DataProcessor(BaseDataProcessor):
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
             request['stop_token_ids'] = stop_seqs
             request['stop_seqs_len'] = stop_seqs_len
+        else:
+            stop_token_ids_list = request.get("stop_token_ids", [])
+            if len(stop_token_ids_list) != 0:
+                request["stop_token_ids"] = [stop_token_ids_list]
+                request["stop_seqs_len"] =  [len(stop_token_ids_list)]
 
         data_processor_logger.info(f"Processing request {request}")
         # 处理prompt_token_ids
@@ -630,6 +640,6 @@ class DataProcessor(BaseDataProcessor):
                                                        pad_id=-1,
                                                        return_seq_len=True,
                                                        return_array=False)
-        data_processor_logger.debug(
+        data_processor_logger.info(
             f"processed stop_seqs: {stop_seqs}, {stop_seqs_len}")
         return stop_seqs, stop_seqs_len
