@@ -52,6 +52,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_STOP_SEQS_MAX_LEN":
     lambda: os.getenv("FD_STOP_SEQS_MAX_LEN", "8"),
 
+    # Whether to use stop sequences (0 or 1)
+    "FD_USE_STOP_SEQ":
+    lambda: os.getenv("FD_USE_STOP_SEQ", "0"),
+
     # GPU devices that will be used. This is a string that
     # splited by comma, such as 0,1,2.
     "CUDA_VISIBLE_DEVICES":

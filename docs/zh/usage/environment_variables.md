@@ -1,5 +1,6 @@
 # FastDeploy 环境变量说明
 FastDeploy 的环境变量保存在了代码库根目录下 fastdeploy/envs.py 文件中，以下是其对应的中文版说明：
+
 ```python
 environment_variables: dict[str, Callable[[], Any]] = {
     # 构建 FastDeploy 时使用的 CUDA 架构版本，这是一个字符串列表，例如[80,90]
@@ -29,6 +30,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # 停止序列的最大长度
     "FD_STOP_SEQS_MAX_LEN":
     lambda: os.getenv("FD_STOP_SEQS_MAX_LEN", "8"),
+
+    # 是否使用停止序列
+    "FD_USE_STOP_SEQ":
+    lambda: os.getenv("FD_USE_STOP_SEQ", 0),
 
     # 将要使用的GPU设备，这是一个用逗号分隔的字符串，例如 0,1,2
     "CUDA_VISIBLE_DEVICES":
@@ -65,6 +70,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # 是否从单机 PD 分离转换为集中式推理
     "FD_PD_CHANGEABLE":
     lambda: os.getenv("FD_PD_CHANGEABLE", "1"),
-  
+
 }
 ```

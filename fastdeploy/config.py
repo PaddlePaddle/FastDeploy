@@ -22,6 +22,7 @@ from typing import Literal, Optional
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 
+from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.quant_base import \
     QuantConfigBase
 from fastdeploy.utils import get_logger
@@ -124,6 +125,9 @@ class ModelConfig(PretrainedConfig):
         self.tie_word_embeddings = tie_word_embeddings
         self.is_quantized = is_quantized
 
+        self.max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
+        self.stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+        self.use_stop_seq = int(envs.FD_USE_STOP_SEQ)
 
 @dataclass
 class MoEConfig:

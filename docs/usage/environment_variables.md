@@ -32,6 +32,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_STOP_SEQS_MAX_LEN":
     lambda: os.getenv("FD_STOP_SEQS_MAX_LEN", "8"),
 
+    # Whether to use stop sequences (0 or 1)
+    "FD_USE_STOP_SEQ":
+    lambda: os.getenv("FD_USE_STOP_SEQ", 0),
+
     # GPU devices to use (comma-separated string, e.g. 0,1,2)
     "CUDA_VISIBLE_DEVICES":
     lambda: os.getenv("CUDA_VISIBLE_DEVICES", None),
@@ -67,6 +71,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Switch from standalone PD to centralized inference (0 or 1)
     "FD_PD_CHANGEABLE":
     lambda: os.getenv("FD_PD_CHANGEABLE", "1"),
-  
+
 }
 ```

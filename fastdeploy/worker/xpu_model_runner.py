@@ -320,9 +320,9 @@ class XPUModelRunner(ModelRunnerBase):
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num,
                                self.model_config.max_stop_seqs_num):
-                    request.stop_seqs_len.append(0)
+                    request.sampling_params.stop_seqs_len.append(0)
                 self.share_inputs["stop_seqs_len"][:] = np.array(
-                    request.stop_seqs_len, dtype="int32")
+                    request.sampling_params.stop_seqs_len, dtype="int32")
                 self.share_inputs["stop_seqs"][:stop_seqs_num, :len(
                     request.get("stop_token_ids")[0])] = np.array(
                         request.get("stop_token_ids"), dtype="int64")
@@ -719,6 +719,8 @@ class XPUModelRunner(ModelRunnerBase):
             actual_draft_token_num=None,
             accept_tokens=None,
             accept_num=None,
+            stop_token_ids=None,
+            stop_seqs_len=None,
         )
         xpu_post_process(sampled_token_ids=sampled_token_ids,
                          model_output=model_output_data)

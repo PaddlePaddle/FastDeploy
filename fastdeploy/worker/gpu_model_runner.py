@@ -280,9 +280,9 @@ class GPUModelRunner(ModelRunnerBase):
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num,
                                self.model_config.max_stop_seqs_num):
-                    request.stop_seqs_len.append(0)
+                    request.sampling_params.stop_seqs_len.append(0)
                 self.share_inputs["stop_seqs_len"][:] = np.array(
-                    request.stop_seqs_len, dtype="int32")
+                    request.sampling_params.stop_seqs_len, dtype="int32")
                 self.share_inputs["stop_seqs"][:stop_seqs_num, :len(
                     request.get("stop_token_ids")[0])] = np.array(
                         request.get("stop_token_ids"), dtype="int64")
@@ -505,7 +505,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.model_config.stop_seqs_max_len
         ],
                                                      -1,
-                                                     dtype="int32")
+                                                     dtype="int64")
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
             self.share_inputs["input_ids_cpu"] = paddle.full(
@@ -832,7 +832,11 @@ class GPUModelRunner(ModelRunnerBase):
                 accept_tokens=self.share_inputs["accept_tokens"]
                 if self.speculative_decoding else None,
                 accept_num=self.share_inputs["accept_num"]
-                if self.speculative_decoding else None)
+                if self.speculative_decoding else None,
+                stop_token_ids=self.share_inputs["stop_seqs"]
+                if self.model_config.use_stop_seq else None,
+                stop_seqs_len=self.share_inputs["stop_seqs_len"]
+                if self.model_config.use_stop_seq else None)
 
             post_process(sampled_token_ids=sampled_token_ids,
                          model_output=model_output_data,
@@ -1065,7 +1069,12 @@ class GPUModelRunner(ModelRunnerBase):
             accept_tokens=self.share_inputs["accept_tokens"]
             if self.speculative_decoding else None,
             accept_num=self.share_inputs["accept_num"]
-            if self.speculative_decoding else None)
+            if self.speculative_decoding else None,
+            stop_token_ids=self.share_inputs["stop_seqs"]
+            if self.model_config.use_stop_seq else None,
+            stop_seqs_len=self.share_inputs["stop_seqs_len"]
+            if self.model_config.use_stop_seq else None,
+        )
 
         if self.speculative_config.method in ["mtp"] and \
             self.parallel_config.splitwise_role == "prefill":
@@ -1076,7 +1085,8 @@ class GPUModelRunner(ModelRunnerBase):
                      model_output=model_output_data,
                      save_each_rank=self.parallel_config.use_ep,
                      speculative_decoding=self.speculative_decoding,
-                     skip_save_output=skip_save_output)
+                     skip_save_output=skip_save_output,
+                     use_stop_seq=self.model_config.use_stop_seq)
 
         # 6. Speculative decode
         if self.speculative_decoding:

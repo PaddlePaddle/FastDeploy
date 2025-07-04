@@ -21,11 +21,12 @@ from fastdeploy import envs
 from fastdeploy.engine.config import SpeculativeConfig
 from fastdeploy.model_executor.ops.gpu import (
     get_padding_offset, save_output, set_stop_value_multi_ends,
-    speculate_clear_accept_nums, speculate_get_output_padding_offset,
-    speculate_get_padding_offset, speculate_get_seq_lens_output,
-    speculate_save_output, speculate_set_value_by_flags_and_idx,
-    speculate_step_paddle, speculate_step_system_cache, speculate_update_v3,
-    step_paddle, step_system_cache, update_inputs, step_reschedule)
+    set_stop_value_multi_seqs, speculate_clear_accept_nums,
+    speculate_get_output_padding_offset, speculate_get_padding_offset,
+    speculate_get_seq_lens_output, speculate_save_output,
+    speculate_set_value_by_flags_and_idx, speculate_step_paddle,
+    speculate_step_system_cache, speculate_update_v3, step_paddle,
+    step_reschedule, step_system_cache, update_inputs)
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.output import ModelOutputData
 
@@ -105,7 +106,8 @@ def pre_process(
 def post_process_normal(sampled_token_ids: paddle.Tensor,
                         model_output: ModelOutputData,
                         save_each_rank: bool = False,
-                        skip_save_output: bool = False) -> None:
+                        skip_save_output: bool = False,
+                        use_stop_seqs: bool = False) -> None:
     """ Post-processing steps after completing a single token generation. """
     # 1. Set stop value
     paddle.assign(
@@ -122,12 +124,23 @@ def post_process_normal(sampled_token_ids: paddle.Tensor,
         paddle.logical_or(model_output.stop_flags, length_cond),
         model_output.stop_flags,
     )
-    # TODO(gongshaotian): Add use_stop_seqs
-    set_stop_value_multi_ends(sampled_token_ids, model_output.stop_flags,
-                              model_output.seq_lens_this_time,
-                              model_output.eos_token_id,
-                              model_output.next_tokens, False)  # multi ends
 
+    if not use_stop_seqs:
+        set_stop_value_multi_ends(sampled_token_ids, model_output.stop_flags,
+                                model_output.seq_lens_this_time,
+                                model_output.eos_token_id,
+                                model_output.next_tokens, False)  # multi ends
+    else:
+        set_stop_value_multi_seqs(
+            sampled_token_ids,
+            model_output.pre_ids,
+            model_output.step_idx,
+            model_output.stop_flags,
+            model_output.seq_lens_this_time,
+            model_output.stop_token_ids,
+            model_output.stop_seqs_len,
+            model_output.eos_token_id,
+        )
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
         update_inputs(
@@ -197,13 +210,14 @@ def post_process(sampled_token_ids: paddle.Tensor,
                  model_output: ModelOutputData,
                  save_each_rank: bool = False,
                  speculative_decoding: bool = False,
-                 skip_save_output: bool = False) -> None:
+                 skip_save_output: bool = False,
+                 use_stop_seq: bool = False) -> None:
     """ Post-processing steps after completing a single token generation. """
     if speculative_decoding:
         post_process_specualate(model_output, skip_save_output)
     else:
         post_process_normal(sampled_token_ids, model_output, save_each_rank,
-                            skip_save_output)
+                            skip_save_output, use_stop_seq)
 
 
 def step_cuda(
@@ -217,7 +231,7 @@ def step_cuda(
     TODO(gongshaotian): normalization name
     """
 
-    
+
     if speculative_config.method is not None:
         if enable_prefix_caching:
             speculate_step_system_cache(

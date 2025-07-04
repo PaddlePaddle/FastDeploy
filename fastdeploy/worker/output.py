@@ -132,6 +132,15 @@ class ModelOutputData:
     """
     accept_num: paddle.Tensor
 
+    """
+        the token ids of stop sequence
+    """
+    stop_token_ids: paddle.Tensor
+
+    """
+        the length of stop sequence
+    """
+    stop_seqs_len: paddle.Tensor
 
 @dataclass
 class ModelRunnerOutput:
