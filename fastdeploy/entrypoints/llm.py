@@ -85,7 +85,7 @@ class LLM:
 
         self.mutex = threading.Lock()
         self.req_output = dict()
-        self.master_node_ip = self.llm_engine.config.pod_ips[0]
+        self.master_node_ip = self.llm_engine.cfg.pod_ips[0]
         self._receive_output_thread = threading.Thread(
             target=self._receive_output, daemon=True)
         self._receive_output_thread.start()
@@ -94,7 +94,7 @@ class LLM:
         """
         Check if the current node is the master node.
         """
-        return self.llm_engine.config._check_master()
+        return self.llm_engine.cfg._check_master()
 
     def _receive_output(self):
         """
