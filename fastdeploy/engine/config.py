@@ -582,7 +582,7 @@ class Config:
         self.max_capture_batch_size = max_capture_batch_size
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
-
+        self.is_master = True
         self._str_to_list("innode_prefill_ports", int)
         self._str_to_list("pod_ips", str)
 
@@ -641,6 +641,8 @@ class Config:
 
         if self.pod_ips is None:
             self.pod_ips = ["0.0.0.0"]
+        elif self.host_ip != self.pod_ips[0]:
+            self.is_master = False
 
         import paddle
         self.paddle_commit_id = paddle.version.commit
@@ -812,6 +814,9 @@ class Config:
                     "return_full_hidden_states")
         reset_value(self.cache_config, "cache_dtype", "infer_model_dtype")
 
+    def _check_master(self):
+        return self.is_master
+    
     def _str_to_list(self, attr_name, default_type):
         if hasattr(self, attr_name):
             val = getattr(self, attr_name)
