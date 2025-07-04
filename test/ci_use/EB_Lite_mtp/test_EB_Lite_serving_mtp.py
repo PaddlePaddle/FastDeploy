@@ -15,12 +15,13 @@
 import pytest
 import requests
 import time
+import json
 import subprocess
 import socket
 import os
 import signal
 import sys
-
+import openai
 
 # Read ports from environment variables; use default values if not set
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
@@ -75,9 +76,16 @@ def setup_and_run_server():
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        model_path=os.path.join(base_path, "Qwen3-30B-A3B")
+        model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
     else:
-        model_path="./Qwen3-30B-A3B"
+        model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
+
+    mtp_model_path = os.path.join(model_path, "mtp")
+    mtp_mode_str = json.dumps({
+        "method": "mtp",
+        "num_speculative_tokens": 1,
+        "model": mtp_model_path
+    })
 
     log_path = "server.log"
     cmd = [
@@ -88,8 +96,9 @@ def setup_and_run_server():
         "--engine-worker-queue-port", str(FD_ENGINE_QUEUE_PORT),
         "--metrics-port", str(FD_METRICS_PORT),
         "--max-model-len", "32768",
-        "--max-num-seqs", "50",
-        "--quantization", "wint4"
+        "--max-num-seqs", "128",
+        "--quantization", "wint4",
+        "--speculative-config", mtp_mode_str
     ]
 
     # Start subprocess in new process group
@@ -108,7 +117,7 @@ def setup_and_run_server():
             break
         time.sleep(1)
     else:
-        print("API server failed to start in time. Cleaning up...")
+        print("[TIMEOUT] API server failed to start in 5 minutes. Cleaning up...")
         try:
             os.killpg(process.pid, signal.SIGTERM)
         except Exception as e:
@@ -148,6 +157,7 @@ def headers():
     """
     return {"Content-Type": "application/json"}
 
+
 @pytest.fixture
 def consistent_payload():
     """
@@ -155,8 +165,8 @@ def consistent_payload():
     including a fixed random seed and temperature.
     """
     return {
-        "messages": [{"role": "user", "content": "用一句话介绍 PaddlePaddle, 30字以内 /no_think"}],
-        "temperature": 0.8,
+        "messages": [{"role": "user", "content": "用一句话介绍 PaddlePaddle"}],
+        "temperature": 0.9,
         "top_p": 0,  # fix top_p to reduce randomness
         "seed": 13  # fixed random seed
     }
@@ -215,62 +225,99 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     assert diff_rate < 0.05, "Output difference too large ({:.4%})".format(diff_rate)
 
 # ==========================
-# think Prompt Test
+# OpenAI Client chat.completions Test
 # ==========================
 
-def test_thinking_prompt(api_url, headers):
+@pytest.fixture
+def openai_client():
+    ip = "0.0.0.0"
+    service_http_port = str(FD_API_PORT)
+    client = openai.Client(
+        base_url="http://{}:{}/v1".format(ip, service_http_port),
+        api_key="EMPTY_API_KEY"
+    )
+    return client
+
+# Non-streaming test
+def test_non_streaming_chat(openai_client):
     """
-    Test case to verify normal 'thinking' behavior (no '/no_think' appended).
+    Test non-streaming chat functionality with the local service
     """
-    messages = [
-        {"role": "user", "content": "北京天安门在哪里"}
-    ]
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": "List 3 countries and their capitals."},
+        ],
+        temperature=1,
+        max_tokens=1024,
+        stream=False,
+    )
 
-    payload = {
-        "messages": messages,
-        "max_tokens": 100,
-        "temperature": 0.8,
-        "top_p": 0.01
-    }
+    assert hasattr(response, 'choices')
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], 'message')
+    assert hasattr(response.choices[0].message, 'content')
 
-    resp = requests.post(api_url, headers=headers, json=payload)
-    assert resp.status_code == 200, "Unexpected status code: {}".format(resp.status_code)
+# Streaming test
+def test_streaming_chat(openai_client, capsys):
+    """
+    Test streaming chat functionality with the local service
+    """
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": "List 3 countries and their capitals."},
+            {"role": "assistant", "content": "China(Beijing), France(Paris), Australia(Canberra)."},
+            {"role": "user", "content": "OK, tell more."},
+        ],
+        temperature=1,
+        max_tokens=1024,
+        stream=True,
+    )
 
-    try:
-        response_json = resp.json()
-    except Exception as e:
-        assert False, "Response is not valid JSON: {}".format(e)
-    
-    content = response_json.get("choices", [{}])[0].get("message", {}).get("content", "").lower()
-    assert "天安门" in content or "北京" in content, "Expected a location-related response with reasoning"
+    output = []
+    for chunk in response:
+        if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
+            output.append(chunk.choices[0].delta.content)
+    assert len(output) > 2
 
 # ==========================
-# no_think Prompt Test
+# OpenAI Client completions Test
 # ==========================
 
-def test_non_thinking_prompt(api_url, headers):
+def test_non_streaming(openai_client):
     """
-    Test case to verify non-thinking behavior (with '/no_think').
+    Test non-streaming chat functionality with the local service
     """
-    messages = [
-        {"role": "user", "content": "北京天安门在哪里 /no_think"}
-    ]
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=1024,
+        stream=False,
+    )
 
-    payload = {
-        "messages": messages,
-        "max_tokens": 100,
-        "temperature": 0.8,
-        "top_p": 0.01
-    }
+    # Assertions to check the response structure
+    assert hasattr(response, 'choices')
+    assert len(response.choices) > 0
 
-    resp = requests.post(api_url, headers=headers, json=payload)
-    assert resp.status_code == 200, "Unexpected status code: {}".format(resp.status_code)
 
-    try:
-        response_json = resp.json()
-    except Exception as e:
-        assert False, "Response is not valid JSON: {}".format(e)
+def test_streaming(openai_client, capsys):
+    """
+    Test streaming functionality with the local service
+    """
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=1024,
+        stream=True,
+    )
 
-    content = response_json.get("choices", [{}])[0].get("message", {}).get("content", "").lower()
-    assert not any(x in content for x in ["根据", "我认为", "推测", "可能"]), \
-        "Expected no reasoning in non-thinking response"
+    # Collect streaming output
+    output = []
+    for chunk in response:
+        output.append(chunk.choices[0].text)
+    assert len(output) > 0
