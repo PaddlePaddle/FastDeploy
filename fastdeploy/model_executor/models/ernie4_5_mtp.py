@@ -26,7 +26,7 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig, ModelConfig
-from fastdeploy.model_executor.layers.mtp_linear import ParallelEmbeddingHiddenStatesProjection
+from fastdeploy.model_executor.layers.mtp_linear import ParallelEHProjection
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_DecoderLayer
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
@@ -286,7 +286,7 @@ class Ernie4_5_MTPModel(nn.Layer):
             prefix="ernie.mtp_hidden_norm.0",
         )
 
-        self.eh_proj = ParallelEmbeddingHiddenStatesProjection(
+        self.eh_proj = ParallelEHProjection(
             fd_config=fd_config,
             num_embeddings=fd_config.model_config.hidden_size,
             embedding_dim=fd_config.model_config.hidden_size * 2,
