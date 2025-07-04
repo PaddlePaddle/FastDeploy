@@ -1005,6 +1005,7 @@ class LLMEngine(object):
 
         arguments = (
             f" --nnodes {str(self.cfg.nnode)}"
+            f" --ips {str(",".join(self.cfg.pod_ips)}"
             f" --devices {self.cfg.device_ids} {py_script}"
             f" --max_num_seqs {self.cfg.max_num_seqs} --max_model_len {self.cfg.max_model_len}"
             f" --gpu_memory_utilization {self.cfg.cache_config.gpu_memory_utilization}"
