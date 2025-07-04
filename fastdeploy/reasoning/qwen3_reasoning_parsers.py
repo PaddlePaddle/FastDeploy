@@ -67,48 +67,27 @@ class Qwen3ReasoningParser(ReasoningParser):
         - 'abc' goes to reasoning_content
         - 'xyz' goes to content
         """
-        # Skip single special tokens
         if len(delta_token_ids) == 1 and (delta_token_ids[0] in [
                 self.think_start_token_id, self.think_end_token_id
         ]):
             return "", ""
 
+        # </think> in delta
+        if self.think_end_token_id in delta_token_ids:
+            end_index = delta_text.find(self.think_end_token)
+            reasoning_content = delta_text[:end_index]
+            content = delta_text[end_index + len(self.think_end_token):]
+            content = content if content else None
+            return reasoning_content, content
+        # </think> in previous reasoning content continues
+        elif self.think_end_token_id in previous_token_ids:
+            return "", delta_text
 
-        if self.think_start_token_id in previous_token_ids:
-            if self.think_end_token_id in delta_token_ids:
-                # <think> in previous, </think> in delta,
-                # extract reasoning content
-                end_index = delta_text.find(self.think_end_token)
-                reasoning_content = delta_text[:end_index]
-                content = delta_text[end_index + len(self.think_end_token):]
-                content = content if content else None
-                return reasoning_content, content
-            elif self.think_end_token_id in previous_token_ids:
-                # <think> in previous, </think> in previous,
-                # reasoning content continues
-                return "", delta_text
-            else:
-                # <think> in previous, no </think> in previous or delta,
-                # reasoning content continues
-                return delta_text, ""
-        elif self.think_start_token_id in delta_token_ids:
-            if self.think_end_token_id in delta_token_ids:
-                # <think> in delta, </think> in delta, extract reasoning content
-                start_index = delta_text.find(self.think_start_token)
-                end_index = delta_text.find(self.think_end_token)
-                reasoning_content = delta_text[start_index +
-                                               len(self.think_start_token
-                                                   ):end_index]
-                content = delta_text[end_index + len(self.think_end_token):]
-                content = content if content else None
-                return reasoning_content, content
-            else:
-                # <think> in delta, no </think> in delta,
-                # reasoning content continues
-                return delta_text, ""
-        elif self.think_start_token_id in previous_token_ids or self.think_start_token in delta_token_ids:
+        elif self.think_start_token_id in previous_token_ids or self.think_start_token_id in delta_token_ids:
             if self.think_start_token_id in delta_token_ids:
                 if self.think_end_token_id in delta_token_ids:
+                    # <think> in previous, </think> in delta,
+                    # extract reasoning content
                     start_index = delta_text.find(self.think_start_token)
                     end_index = delta_text.find(self.think_end_token)
                     reasoning_content = delta_text[start_index + len(self.think_start_token):end_index]
@@ -120,11 +99,8 @@ class Qwen3ReasoningParser(ReasoningParser):
             else:
                 return delta_text, ""
         else:
-            if self.think_start_token_id not in previous_token_ids:
-                return delta_text,""
-            else:
-                # thinking is disabled, just content
-                return "", delta_text
+
+            return delta_text, ""
 
     def extract_reasoning_content(
             self, model_output: str, request: ChatCompletionRequest
