@@ -35,7 +35,7 @@ class ParallelEmbeddingHiddenStatesProjection(nn.Layer):
         with_bias=False,
     ):
         """
-        Parallelized LMhead.
+        Parallelized Embedding Hidden States Projection.
 
         Args:
             fd_config (FDConfig): Arguments related to inference, containing
