@@ -11,8 +11,8 @@ export model_path=${MODEL_PATH}/data/eb45t_4_layer
 export CLANG_PATH=${MODEL_PATH}/data/xtdk
 export XVLLM_PATH=${MODEL_PATH}/data/xvllm
 
-python -m pip install fastdeploy-xpu==2.0.0 -i  https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/
 python -m pip install -r requirements.txt
+python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 # build whl
 bash build.sh || exit 1
 # pip others
