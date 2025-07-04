@@ -83,7 +83,6 @@ class ErnieBotTokenizer(PretrainedTokenizer):
         self.sp_model = spm.SentencePieceProcessor()
         self.sp_model.Load(vocab_file)
         # pre-process map-type all spec token for decode accelerate.
-        self.all_spec_tok = set(self.all_special_tokens)
 
     @property
     def space_token(self):
@@ -138,8 +137,13 @@ class ErnieBotTokenizer(PretrainedTokenizer):
         """doc"""
         return self.sp_model.id_to_piece(id)
 
+    def spec_init(self):
+        if not hasattr(self, "all_spec_tok"):
+            self.all_spec_tok = set(self.all_special_tokens)
+
     def convert_tokens_to_string(self, tokens):
         """Converts a sequence of tokens (string) in a single string."""
+        spec_init()
         current_sub_tokens = []
         out_string = ""
         # prev_is_special = False
@@ -212,6 +216,7 @@ class ErnieBotTokenizer(PretrainedTokenizer):
         #     if isinstance(t, AddedToken)
         # )
 
+        spec_init()
         text, kwargs = self.prepare_for_tokenization(text, **kwargs)
 
         # TODO: should this be in the base class?
