@@ -70,8 +70,8 @@ jobs:
           docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
           -v "/ssd3:/ssd3" \
           -e "MODEL_PATH=/ssd3/model" \
-          -e "http_proxy=$(git config --global --get http.proxy)" \
-          -e "https_proxy=$(git config --global --get https.proxy)" \
+          -v "/ssd3/GithubActions/CacheDir:/root/.cache" \
+          -v "/ssd3/GithubActions/gitconfig:/root/.gitconfig" \
           -e "FD_API_PORT=${FD_API_PORT}" \
           -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
