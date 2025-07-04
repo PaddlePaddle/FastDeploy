@@ -11,11 +11,15 @@ export model_path=${MODEL_PATH}/data/eb45t_4_layer
 export CLANG_PATH=${MODEL_PATH}/data/xtdk
 export XVLLM_PATH=${MODEL_PATH}/data/xvllm
 
+echo "pip requirements"
 python -m pip install -r requirements.txt
+echo "uninstall org"
+python -m pip uninstall paddlepaddle-xpu -y
+python -m pip uninstall fastdeploy-xpu -y
 python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
-# build whl
+echo "build whl"
 bash build.sh || exit 1
-# pip others
+echo "pip others"
 python -m pip install openai -U
 python -m pip uninstall -y triton
 python -m pip install triton==3.3.0
