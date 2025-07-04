@@ -26,7 +26,7 @@
 | ```kv_cache_ratio```               | `float`     | KVCache块按kv_cache_ratio比例分给Prefill阶段和Decode阶段, 默认0.75 |
 | ```enable_prefix_caching```        | `bool`      | 是否开启Prefix Caching，默认False |
 | ```swap_space```                   | `float`     | 开启Prefix Caching时，用于swap KVCache的CPU内存大小，单位GB，默认None |
-| ```enable_chunk_prefill```         | `bool`      | 开启Chunked Prefill，默认False |
+| ```enable_chunked_prefill```         | `bool`      | 开启Chunked Prefill，默认False |
 | ```max_num_partial_prefills```     | `int`       | 开启Chunked Prefill时，Prefill阶段的最大并发数，默认1 |
 | ```max_long_partial_prefills```    | `int`       | 开启Chunked Prefill时，Prefill阶段并发中包启的最多长请求数，默认1 |
 | ```long_prefill_token_threshold``` | `int`       | 开启Chunked Prefill时，请求Token数超过此值的请求被视为长请求，默认为max_model_len*0.04 |
@@ -113,5 +113,5 @@ FastDeploy 的初始化顺序为先使用 `gpu_memory_utilization` 参数计算 
       ...
   ```
 - 当开启 ```use_cudagraph``` 时，暂时只支持单卡推理，即 ```tensor_parallel_size``` 设为1。
-- 当开启 ```use_cudagraph``` 时，暂不支持开启 ```enable_prefix_caching``` 或 ```enable_chunk_prefill``` 。
+- 当开启 ```use_cudagraph``` 时，暂不支持开启 ```enable_prefix_caching``` 或 ```enable_chunked_prefill``` 。
 - 当开启 ```use_cudagraph``` 后，size小于等于 ```max_capture_batch_size``` 的batch会由CudaGraph来执行前向计算，大于 ```max_capture_batch_size``` 的batch会由原本的动态图/静态图执行前向计算。如果希望所有batch size均由CudaGraph来执行，```max_capture_batch_size``` 的值建议与 ```max_num_seqs``` 一致。```max_capture_batch_size``` 大于 ```max_num_seqs``` 会导致浪费，会多捕获一些推理时不会遇到的batch，占用更多时间与显存。

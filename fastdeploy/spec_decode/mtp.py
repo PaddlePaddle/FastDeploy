@@ -200,7 +200,7 @@ class MTPProposer(Proposer):
         )
         if attn_backend is None:
             raise NotImplementedError(
-                "Attention backend which you chose is not support by GPUModelRunner"
+                "Attention backend which you specified is not supported, please set FD_ATTENTION_BACKEND correctly."
             )
         self.attn_backends.append(attn_backend)
 
