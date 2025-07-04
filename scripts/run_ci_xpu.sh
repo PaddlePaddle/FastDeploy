@@ -7,14 +7,9 @@ ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -
 ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 lsof -t -i :8188 | xargs kill -9 || true
 
-export model_path=${MODEL_PATH}/baidu/paddle_internal/eb45t_4_layer
+export model_path=${MODEL_PATH}/data/eb45t_4_layer
 export CLANG_PATH=${MODEL_PATH}/data/xtdk
 export XVLLM_PATH=${MODEL_PATH}/data/xvllm
-
-#打开代理
-export http_proxy=http://agent.baidu.com:8891
-export https_proxy=http://agent.baidu.com:8891
-export no_proxy=localhost,bj.bcebos.com,su.bcebos.com,pypi.tuna.tsinghua.edu.cn,paddle-ci.gz.bcebos.com
 
 python -m pip install fastdeploy-xpu==2.0.0 -i  https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/
 python -m pip install -r requirements.txt
