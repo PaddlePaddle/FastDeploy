@@ -143,7 +143,7 @@ class ErnieBotTokenizer(PretrainedTokenizer):
 
     def convert_tokens_to_string(self, tokens):
         """Converts a sequence of tokens (string) in a single string."""
-        self.spec_init()
+        spec_init()
         current_sub_tokens = []
         out_string = ""
         # prev_is_special = False
@@ -216,7 +216,7 @@ class ErnieBotTokenizer(PretrainedTokenizer):
         #     if isinstance(t, AddedToken)
         # )
 
-        self.spec_init()
+        spec_init()
         text, kwargs = self.prepare_for_tokenization(text, **kwargs)
 
         # TODO: should this be in the base class?
