@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  CI_XPU:
     runs-on: [self-hosted, XPU-P800-8Card]
     steps:
       - name: Print current runner name
