@@ -234,7 +234,7 @@ class OpenAIServingChat:
                         choice.finish_reason = "length"
                     
                     if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
-                        choice.finish_reason = "length"
+                        choice.finish_reason = "recover_stop"
 
                 if request.metadata is not None and request.metadata.get("training", False) and delta_text != "":
                     choice.delta.token_ids = output["token_ids"]
@@ -352,7 +352,7 @@ class OpenAIServingChat:
             choice.finish_reason = "length"
             
         if final_res.get("error_msg") is not None and "Recover" in final_res["error_msg"]:
-            choice.finish_reason = "length"
+            choice.finish_reason = "recover_stop"
         choices.append(choice)
 
         num_prompt_tokens = len(prompt_token_ids)
