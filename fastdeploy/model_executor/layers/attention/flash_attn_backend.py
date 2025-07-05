@@ -24,7 +24,7 @@ import paddle
 
 try:
     from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
-except ImportError:
+except:
     flash_attention_v3_varlen = None
 
 from fastdeploy.config import FDConfig
