@@ -27,5 +27,5 @@ try:
             dist.all_reduce(input_, group=mp_group)
         else:
             dist.all_reduce(input_)
-except ImportError:
+except:
     tensor_model_parallel_all_reduce=None
