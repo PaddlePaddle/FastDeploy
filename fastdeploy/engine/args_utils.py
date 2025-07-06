@@ -122,10 +122,7 @@ class EngineArgs:
     """
     Ratio of tokens to process in a block.
     """
-    nnode: int = 1
-    """
-    Number of nodes in the cluster.
-    """
+
     pod_ips: Optional[List[str]] = None
     """
     List of IP addresses for nodes in the cluster.
@@ -485,10 +482,7 @@ class EngineArgs:
             default=EngineArgs.pod_ips,
             help=
             "List of IP addresses for nodes in the cluster (comma-separated).")
-        system_group.add_argument("--nnode",
-                                  type=int,
-                                  default=EngineArgs.nnode,
-                                  help="Number of nodes in the cluster.")
+
 
         # Performance tuning parameters group
         perf_group = parser.add_argument_group("Performance Tuning")
@@ -773,7 +767,6 @@ class EngineArgs:
             max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
             max_num_batched_tokens=self.max_num_batched_tokens,
-            nnode=self.nnode,
             pod_ips=self.pod_ips,
             use_warmup=self.use_warmup,
             engine_worker_queue_port=self.engine_worker_queue_port,

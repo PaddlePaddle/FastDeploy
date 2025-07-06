@@ -85,10 +85,16 @@ class LLM:
 
         self.mutex = threading.Lock()
         self.req_output = dict()
-
+        self.master_node_ip = self.llm_engine.cfg.pod_ips[0]
         self._receive_output_thread = threading.Thread(
             target=self._receive_output, daemon=True)
         self._receive_output_thread.start()
+    
+    def _check_master(self):
+        """
+        Check if the current node is the master node.
+        """
+        return self.llm_engine.cfg._check_master()
 
     def _receive_output(self):
         """
@@ -129,6 +135,10 @@ class LLM:
         Returns:
             Union[str, list[str]]: The generated response.
         """
+
+        if not self._check_master():
+            err_msg = f"Only master node can accept completion request, please send request to master node: {self.master_node_ip}"
+            raise ValueError(err_msg)
 
         if sampling_params is None:
             sampling_params = self.default_sampling_params
@@ -182,6 +192,11 @@ class LLM:
         Returns:
             Union[str, list[str]]: The generated response.
         """
+
+        if not self._check_master():
+            err_msg = f"Only master node can accept completion request, please send request to master node: {self.master_node_ip}"
+            raise ValueError(err_msg)
+        
         if sampling_params is None:
             sampling_params = self.default_sampling_params
 
