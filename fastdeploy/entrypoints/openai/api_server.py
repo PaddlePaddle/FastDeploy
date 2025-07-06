@@ -273,10 +273,13 @@ def clear_load_weight(request: Request) -> Response:
                         status_code=404)
 
 
-def launch_api_server(args) -> None:
+def launch_api_server() -> None:
     """
     启动http服务
     """
+    if not is_port_available(args.host, args.port):
+        raise Exception(f"The parameter `port`:{args.port} is already in use.")
+    
     api_server_logger.info(
         f"launch Fastdeploy api server... port: {args.port}")
     api_server_logger.info(f"args: {args.__dict__}")
@@ -319,6 +322,11 @@ def run_metrics_server():
 
 def launch_metrics_server():
     """Metrics server running the sub thread"""
+    if not is_port_available(args.host, args.metrics_port):
+        raise Exception(
+            f"The parameter `metrics_port`:{args.metrics_port} is already in use."
+        )
+    
     prom_dir = cleanup_prometheus_files(True)
     os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
     metrics_server_thread = threading.Thread(target=run_metrics_server,
@@ -357,6 +365,11 @@ def launch_controller_server():
     """Controller server running the sub thread"""
     if args.controller_port < 0:
         return
+    
+    if not is_port_available(args.host, args.controller_port):
+        raise Exception(
+            f"The parameter `controller_port`:{args.controller_port} is already in use."
+        )
 
     controller_server_thread = threading.Thread(target=run_controller_server,
                                                 daemon=True)
@@ -366,19 +379,13 @@ def launch_controller_server():
 
 def main():
     """main函数"""
-    if not is_port_available(args.host, args.port):
-        raise Exception(f"The parameter `port`:{args.port} is already in use.")
-    if not is_port_available(args.host, args.metrics_port):
-        raise Exception(
-            f"The parameter `metrics_port`:{args.metrics_port} is already in use."
-        )
 
     if load_engine() is None:
         return
 
     launch_controller_server()
     launch_metrics_server()
-    launch_api_server(args)
+    launch_api_server()
 
 
 if __name__ == "__main__":
