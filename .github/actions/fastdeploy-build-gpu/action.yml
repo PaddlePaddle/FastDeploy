@@ -61,8 +61,8 @@ runs:
             export FASTDEPLOY_VERSION="2.0.0"
           fi
 
-          git config --global --add safe.directory /workspace/FastDeploy
-          cd FastDeploy
+          # git config --global --add safe.directory /workspace/FastDeploy
+          # cd FastDeploy
           GIT_COMMIT_TIME=$(git --no-pager show -s --format=%ci HEAD)
           DATE_ONLY=$(echo $GIT_COMMIT_TIME | sed "s/ .*//;s/-//g")
           echo "Git Commit Time: $GIT_COMMIT_TIME"
