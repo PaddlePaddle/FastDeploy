@@ -1,0 +1,120 @@
+name: FastDeploy CE Build Task
+description: "FastDeploy nightly package build and upload"
+
+inputs:
+  DOCKER_IMAGE:
+    description: "Build Images"
+    required: true
+    default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310"
+  COMPILE_ARCH:
+    description: "Build GPU Archs"
+    required: true
+    default: "80,90"
+  WITH_NIGHTLY_BUILD:
+    description: "Enable nightly build mode (e.g. add date suffix to version)"
+    required: false
+    default: "ON"
+  FD_VERSION:
+    description: "FastDeploy Package Version"
+    required: false
+    default: ""
+  
+
+runs:
+  using: "composite"
+  steps:
+    - name: Code Clone
+      shell: bash
+      env:
+        docker_image: ${{ inputs.DOCKER_IMAGE }}
+      run: |
+          REPO="https://github.com/${{ github.repository }}.git"
+          FULL_REPO="${{ github.repository }}"
+          REPO_NAME="${FULL_REPO##*/}"
+          # Clean the repository directory before starting
+          docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+          -e "REPO_NAME=${REPO_NAME}" \
+          ${docker_image} /bin/bash -c '
+            if [ -d ${REPO_NAME} ]; then
+              echo "Directory ${REPO_NAME} exists, removing it..."
+              rm -rf ${REPO_NAME}
+            fi
+          '
+          git config --global user.name "FastDeployCI"
+          git config --global user.email "fastdeploy_ci@example.com"
+          git clone ${REPO} ${REPO_NAME}
+          cd FastDeploy
+          git checkout ${{ github.sha }}
+          git log -n 3 --oneline
+    - name: FastDeploy Build
+      shell: bash
+      env:
+        docker_image: ${{ inputs.DOCKER_IMAGE }}
+        compile_arch: ${{ COMPILE_ARCH }}
+        fd_version: ${{ FD_VERSION }}
+      run: |
+          runner_name="${{ runner.name }}"
+          last_char="${runner_name: -1}"
+
+          if [[ "$last_char" =~ [0-3] ]]; then
+            gpu_id="$last_char"
+          else
+            gpu_id="0"  
+          fi
+          FD_API_PORT=$((9180 + gpu_id * 100))
+          FD_ENGINE_QUEUE_PORT=$((9150 + gpu_id * 100))
+          FD_METRICS_PORT=$((9170 + gpu_id * 100))
+
+          PARENT_DIR=$(dirname "$WORKSPACE")
+          echo "PARENT_DIR:$PARENT_DIR"
+          docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+          -v "/ssd4/GithubActions/gitconfig:/etc/gitconfig:ro" \
+          -v "/ssd4/GithubActions/ModelData:/ModelData:ro" \
+          -v "/ssd4/GithubActions/CacheDir:/root/.cache" \
+          -v "/ssd4/GithubActions/ConfigDir:/root/.config" \
+          -e TZ="Asia/Shanghai" \
+          -e "COMPILE_ARCH=${compile_arch}" \
+          -e "FD_VERSION=${fd_version}" \
+          -e "WITH_NIGHTLY_BUILD=${WITH_NIGHTLY_BUILD}" \
+          --gpus device=${gpu_id} ${docker_image} /bin/bash -c '
+          if [[ -n "${FD_VERSION}" ]]; then
+            export FASTDEPLOY_VERSION=${FD_VERSION}
+            echo "Custom FastDeploy version: ${FASTDEPLOY_VERSION}"
+          else
+            export FASTDEPLOY_VERSION="2.0.0"
+          fi
+
+          git config --global --add safe.directory /workspace/FastDeploy
+          cd FastDeploy
+          GIT_COMMIT_TIME=$(git --no-pager show -s --format=%ci HEAD)
+          DATE_ONLY=$(echo $GIT_COMMIT_TIME | sed "s/ .*//;s/-//g")
+          echo "Git Commit Time: $GIT_COMMIT_TIME"
+          echo "Date Only: $DATE_ONLY"
+          if [[ "${WITH_NIGHTLY_BUILD}" == "ON" ]];then
+              export FASTDEPLOY_VERSION="${FASTDEPLOY_VERSION}.dev${DATE_ONLY}"
+          fi
+          pip config set global.index-url http://pip.baidu.com/root/baidu/+simple/
+          pip config set install.trusted-host  pip.baidu.com
+          pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install wheel
+          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          # 编译RDMA
+          export ENABLE_FD_RDMA=1
+          bash build.sh 1 python false [${COMPILE_ARCH}]
+          ls ./dist/*.whl
+          '
+    - name: Export .whl path and version
+      id: export_output
+      shell: bash
+      run: |
+        WHEEL_PATH=$(ls ./FastDeploy/dist/*.whl | head -n 1)
+        echo "Built wheel: $WHEEL_PATH"
+        echo "wheel_path=$WHEEL_PATH" >> $GITHUB_OUTPUT
+
+outputs:
+  wheel_path:
+    description: "Path to the built FastDeploy wheel file"
+    value: ${{ steps.export_output.outputs.wheel_path }}

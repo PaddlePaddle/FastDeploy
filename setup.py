@@ -184,6 +184,8 @@ cmdclass_dict["build_ext"] = CMakeBuild
 FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", "2.0.0-dev")
 cmdclass_dict["build_optl"] = PostInstallCommand
 
+FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", "2.0.0")
+
 setup(
     name=get_name(),
     version=FASTDEPLOY_VERSION,

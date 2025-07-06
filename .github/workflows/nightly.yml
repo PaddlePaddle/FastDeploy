@@ -1,0 +1,24 @@
+name: Nightly FastDeploy Build
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Trigger at 03:00 AM China Standard Time (CST)
+    - cron: '0 19 * * *'
+
+jobs:
+  build:
+    runs-on: [self-hosted, GPU-L20-4Card]
+    steps:
+      - name: Run FastDeploy Build Plugin
+        uses: ./.github/actions/fastdeploy-build-gpu
+        with:
+          DOCKER_IMAGE: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310"
+          COMPILE_ARCH: "80,90"
+          FD_VERSION: "2.0.0"
+          WITH_NIGHTLY_BUILD: "ON"
+      - name: Show build result
+        run: |
+          echo "Built wheel path: ${{ steps.build_step.outputs.wheel_path }}"
+          ls -ll ${{ steps.build_step.outputs.wheel_path }}
+
