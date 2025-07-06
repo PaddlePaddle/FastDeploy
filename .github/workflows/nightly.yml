@@ -30,8 +30,7 @@ jobs:
             '
             git config --global user.name "FastDeployCI"
             git config --global user.email "fastdeploy_ci@example.com"
-            git clone ${REPO} ${REPO_NAME}
-            cd FastDeploy
+            git clone ${REPO} .
             git checkout ${{ github.sha }}
             git log -n 3 --oneline
 
