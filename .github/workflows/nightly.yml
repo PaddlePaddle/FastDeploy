@@ -10,29 +10,29 @@ jobs:
   build:
     runs-on: [self-hosted, GPU-L20-4Card]
     steps:
-    - name: Code Clone
-      shell: bash
-      env:
-        docker_image: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310"
-      run: |
-          REPO="https://github.com/${{ github.repository }}.git"
-          FULL_REPO="${{ github.repository }}"
-          REPO_NAME="${FULL_REPO##*/}"
-          # Clean the repository directory before starting
-          docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
-          -e "REPO_NAME=${REPO_NAME}" \
-          ${docker_image} /bin/bash -c '
-            if [ -d ${REPO_NAME} ]; then
-              echo "Directory ${REPO_NAME} exists, removing it..."
-              rm -rf ${REPO_NAME}
-            fi
-          '
-          git config --global user.name "FastDeployCI"
-          git config --global user.email "fastdeploy_ci@example.com"
-          git clone ${REPO} ${REPO_NAME}
-          cd FastDeploy
-          git checkout ${{ github.sha }}
-          git log -n 3 --oneline
+      - name: Code Clone
+        shell: bash
+        env:
+          docker_image: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310"
+        run: |
+            REPO="https://github.com/${{ github.repository }}.git"
+            FULL_REPO="${{ github.repository }}"
+            REPO_NAME="${FULL_REPO##*/}"
+            # Clean the repository directory before starting
+            docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+            -e "REPO_NAME=${REPO_NAME}" \
+            ${docker_image} /bin/bash -c '
+              if [ -d ${REPO_NAME} ]; then
+                echo "Directory ${REPO_NAME} exists, removing it..."
+                rm -rf ${REPO_NAME}
+              fi
+            '
+            git config --global user.name "FastDeployCI"
+            git config --global user.email "fastdeploy_ci@example.com"
+            git clone ${REPO} ${REPO_NAME}
+            cd FastDeploy
+            git checkout ${{ github.sha }}
+            git log -n 3 --oneline
 
       - name: Run FastDeploy Build Plugin
         id: build_step
