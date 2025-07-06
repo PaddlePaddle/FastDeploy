@@ -101,16 +101,10 @@ def setup_and_run_server():
         "--quantization", "wint4"
     ]
 
-    # Set environment variables
-    env = os.environ.copy()
-    env["ENABLE_FASTDEPLOY_LOAD_MODEL_CONCURRENCY"] = "0"
-    env["NCCL_ALGO"] = "Ring"
-
     # Start subprocess in new process group
     with open(log_path, "w") as logfile:
         process = subprocess.Popen(
             cmd,
-            env=env,
             stdout=logfile,
             stderr=subprocess.STDOUT,
             start_new_session=True  # Enables killing full group via os.killpg

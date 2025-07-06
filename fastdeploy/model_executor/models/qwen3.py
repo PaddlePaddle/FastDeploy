@@ -26,7 +26,7 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig, ModelConfig
 from fastdeploy.model_executor.graph_optimization.decorator import \
     support_graph_optimization
-from fastdeploy.model_executor.layers.attention import Attention
+from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (QKVParallelLinear,
                                                      RowParallelLinear)
@@ -68,7 +68,7 @@ class Qwen3Attention(nn.Layer):
             fd_config=fd_config,
             prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.head_dim *
-            fd_config.model_config.num_attention_heads // nranks,
+            fd_config.model_config.num_attention_heads,
             output_size=fd_config.model_config.hidden_size,
         )
 

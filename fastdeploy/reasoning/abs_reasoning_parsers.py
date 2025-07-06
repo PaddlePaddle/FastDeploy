@@ -13,15 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-import os
 from abc import abstractmethod
 from collections.abc import Sequence
 from functools import cached_property
 from typing import Callable, Optional, Union
 
 from fastdeploy.entrypoints.openai.protocol import (ChatCompletionRequest,
-                                              DeltaMessage)
-from fastdeploy.utils import data_processor_logger
+                                                    DeltaMessage)
 from fastdeploy.utils import is_list_of
 
 
@@ -120,7 +118,8 @@ class ReasoningParserManager:
     reasoning_parsers: dict[str, type] = {}
 
     @classmethod
-    def get_reasoning_parser(cls, name: str | None) -> type[ReasoningParser]:
+    def get_reasoning_parser(cls,
+                             name: Optional[str]) -> type[ReasoningParser]:
         """
         Get reasoning parser by name which is registered by `register_module`.
 

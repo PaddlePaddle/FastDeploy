@@ -5,8 +5,8 @@
 ##目前支持思考链的模型
 | 模型名称          | 解析器名称       | 默认开启思考链 |
 |---------------|-------------|---------|
-| ernie-45-vl   | ernie-45-vl | ✓       |
-| ernie-lite-vl | ernie-45-vl |    ✓    |
+| baidu/ERNIE-4.5-VL-424B-A47B-Paddle  | ernie-45-vl | ✓       |
+| baidu/ERNIE-4.5-VL-28B-A3B-Paddle | ernie-45-vl |    ✓    |
 
 思考模型需要指定解析器,以便于对思考内容进行解析. 通过`enable_thinking=False` 参数可以关闭模型思考模式.   
 

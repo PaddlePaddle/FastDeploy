@@ -16,48 +16,54 @@
 
 import time
 import os
-import subprocess
-import signal
+import multiprocessing
 
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.engine.sampling_params import SamplingParams
 
 
-model_name_or_path = "./models/eb45t02/"
+
+model_name_or_path = "baidu/ERNIE-4.5-21B-A3B-Paddle"
 
 
 
-prefill_cmd = (f"FD_LOG_DIR=log_prefill CUDA_VISIBLE_DEVICES=0,1,2,3 python fastdeploy.entrypoints.openai.api_server.py"
-    + f" --model {model_name_or_path} --port 9811"
-    + f" --splitwise-role prefill --tensor-parallel-size 4"
-    + f" --engine-worker-queue-port 6676 --cache-queue-port 55663")
+def start_decode(model_name_or_path):
+     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["FD_LOG_DIR"] = "log_decode"
+    llm_decode = LLM(
+        model=model_name_or_path,  
+        tensor_parallel_size=1, 
+        splitwise_role="decode",
+        engine_worker_queue_port=6678,
+        innode_prefill_ports=[6676],
+        cache_queue_port=55668
+        )
+    return llm_decode
 
-prefill_instance = subprocess.Popen(
-        prefill_cmd,
-        stdout=subprocess.PIPE,
-        shell=True,
-        preexec_fn=os.setsid,
-    )
-
-
-
-
-# # 超参设置
-os.environ["CUDA_VISIBLE_DEVICES"] = "4,5,6,7"
-os.environ["FD_LOG_DIR"] = "log_decode"
-sampling_params = SamplingParams(temperature=0.1, max_tokens=30)
-llm_decode = LLM(
-    model=model_name_or_path, 
-    tensor_parallel_size=4, 
-    splitwise_role="decode",
-    engine_worker_queue_port=6678, 
-    innode_prefill_ports=[6676],
-    cache_queue_port=55668
-    )
+def start_prefill(model_name_or_path):
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["FD_LOG_DIR"] = "log_prefill"
+    llm_prefill = LLM(
+        model=model_name_or_path, 
+        tensor_parallel_size=1, 
+        splitwise_role="prefill",
+        engine_worker_queue_port=6677, 
+        cache_queue_port=55667,
+        )
 
 
-output = llm_decode.generate(prompts=["who are you？", "what can you do？"], use_tqdm=True)
-print(output)
+def main():
+    prefill = multiprocessing.Process(
+        target=start_prefill,
+        args=(model_name_or_path,)).start()
+    time.sleep(10)
+    llm_decode = start_decode(model_name_or_path)
+
+    output = llm_decode.generate(prompts=["who are you？", "what can you do？"], use_tqdm=True)
+    print(output)
+
+    decode.join()
 
 
-os.killpg(prefill_instance.pid, signal.SIGTERM)
+if __name__ == "__main__":
+    main()

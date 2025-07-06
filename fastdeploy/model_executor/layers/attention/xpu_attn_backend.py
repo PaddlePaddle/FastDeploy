@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from paddle._typing.dtype_like import _DTypeLiteral
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.layers.attention import Attention
+from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
 from fastdeploy.worker.forward_meta import ForwardMeta
@@ -149,6 +149,8 @@ class XPUAttentionBackend(AttentionBackend):
         k: paddle.Tensor,
         v: paddle.Tensor,
         qkv: paddle.Tensor,
+        compressed_kv: paddle.Tensor,
+        k_pe: paddle.Tensor,
         layer: Attention,
         forward_meta: ForwardMeta,
     ) -> paddle.Tensor:

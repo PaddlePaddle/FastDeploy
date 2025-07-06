@@ -98,30 +98,7 @@ class LLMEngine(object):
                                                  cfg.mm_processor_kwargs,
                                                  cfg.enable_mm)
 
-        address = ('0.0.0.0', self.cfg.engine_worker_queue_port)
-        self.engine_worker_queue_server = EngineWorkerQueue(
-            address=address,
-            is_server=True,
-            num_client=self.cfg.tensor_parallel_size,
-            local_data_parallel_size=self.cfg.parallel_config.
-            data_parallel_size)
-
-        self.engine_worker_queue = EngineWorkerQueue(
-            address=address,
-            is_server=False,
-            num_client=self.cfg.tensor_parallel_size,
-            client_id=0,
-            local_data_parallel_id=0)
-
-        if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != 'mixed':
-            self.cache_task_queue = EngineCacheQueue(
-                address=('127.0.0.1', self.cfg.cache_config.cache_queue_port),
-                authkey=b'cache_queue_service',
-                is_server=True,
-                num_client=self.cfg.tensor_parallel_size,
-                client_id=-1,
-                local_data_parallel_size=self.cfg.parallel_config.
-                data_parallel_size)
+        self.start_queue_service()
 
         self.resource_manager = ResourceManager(cfg.max_num_seqs, cfg,
                                                 cfg.tensor_parallel_size,
@@ -198,9 +175,12 @@ class LLMEngine(object):
                 or self.cfg.splitwise_role != "mixed"):
             device_ids = self.cfg.device_ids.split(",")
             self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
-                self.cfg.cache_config, self.cfg.tensor_parallel_size,
-                device_ids, self.cfg.engine_worker_queue_port,
-                self.ipc_signal_suffix)
+                cache_config=self.cfg.cache_config,
+                tensor_parallel_size=self.cfg.tensor_parallel_size,
+                device_ids=device_ids,
+                pod_ip=self.cfg.pod_ips[0],
+                engine_worker_queue_port=self.cfg.engine_worker_queue_port,
+                pid_suffix=self.ipc_signal_suffix)
 
         self.worker_proc = self._start_worker_service()
         console_logger.info("Waitting worker processes ready...")
@@ -286,6 +266,8 @@ class LLMEngine(object):
         while self.running:
             try:
                 results = self.scheduler.get_results()
+                if len(results) == 0:
+                    time.sleep(0.001)
                 for request_id, contents in results.items():
                     for result in contents:
                         self.zmq_server.send_multipart(request_id, result)
@@ -444,8 +426,8 @@ class LLMEngine(object):
         enable_thinking = None
         if kwargs is not None:
             enable_thinking = kwargs.get("enable_thinking", None)
-        request = self.data_processor.process_request(request,
-                                                      self.cfg.max_model_len, enable_thinking=enable_thinking)
+        request = self.data_processor.process_request(
+            request, self.cfg.max_model_len, enable_thinking=enable_thinking)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
         input_ids_len = request.prompt_token_ids_len
         request.set(
@@ -453,7 +435,8 @@ class LLMEngine(object):
             min(self.cfg.max_model_len - input_ids_len,
                 request.get("max_tokens")))
         if request.get("reasoning_max_tokens") is None:
-            default_reasoning_max_tokens = max(int(request.get("max_tokens") * 0.8), 1)
+            default_reasoning_max_tokens = max(
+                int(request.get("max_tokens") * 0.8), 1)
             request.set("reasoning_max_tokens", default_reasoning_max_tokens)
         min_tokens = request.get("min_tokens")
         if input_ids_len + min_tokens >= self.cfg.max_model_len:
@@ -847,10 +830,7 @@ class LLMEngine(object):
         Initialize shared memory to indicate engine status
         """
         # worker_ready_signatensor_parallel_size
-        array_size = min(
-            8, self.cfg.tensor_parallel_size *
-            self.cfg.parallel_config.data_parallel_size)
-        worker_ready_signal_data = np.zeros(shape=[array_size], dtype=np.int32)
+        worker_ready_signal_data = np.zeros(shape=[self.cfg.worker_num_per_node], dtype=np.int32)
         self.worker_ready_signal = IPCSignal(name="worker_ready_signal",
                                              array=worker_ready_signal_data,
                                              dtype=np.int32,
@@ -886,7 +866,7 @@ class LLMEngine(object):
             create=True)
 
         # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
-        worker_healthy_live_recorded_time_array = np.zeros(shape=[array_size],
+        worker_healthy_live_recorded_time_array = np.zeros(shape=[self.cfg.worker_num_per_node],
                                                            dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
@@ -896,7 +876,7 @@ class LLMEngine(object):
             create=True)
 
         if self.do_profile:
-            get_profile_block_num = np.zeros([array_size], dtype=np.int32)
+            get_profile_block_num = np.zeros([self.cfg.worker_num_per_node], dtype=np.int32)
             self.get_profile_block_num_signal = IPCSignal(
                 name="get_profile_block_num",
                 array=get_profile_block_num,
@@ -963,8 +943,8 @@ class LLMEngine(object):
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
-            "FLAGS_hardamard_moe_block_size": 128,
             "FLAGS_max_partition_size": 32768,
+            "FLAGS_hardamard_moe_block_size": 128,
         }
         # environment variables needed by Dy2St
         variables.update({
@@ -1017,8 +997,15 @@ class LLMEngine(object):
             worker_path = "../worker/vl_worker_process.py"
         py_script = os.path.join(current_dir_path, worker_path)
 
+        ori_vocab_size = (
+            len(self.data_processor.tokenizer.sp_model) 
+            if hasattr(self.data_processor.tokenizer, 'sp_model') 
+            else len(self.data_processor.tokenizer.vocab)
+        )
+
         arguments = (
             f" --nnodes {str(self.cfg.nnode)}"
+            f" --ips {','.join(self.cfg.pod_ips)}"
             f" --devices {self.cfg.device_ids} {py_script}"
             f" --max_num_seqs {self.cfg.max_num_seqs} --max_model_len {self.cfg.max_model_len}"
             f" --gpu_memory_utilization {self.cfg.cache_config.gpu_memory_utilization}"
@@ -1026,6 +1013,7 @@ class LLMEngine(object):
             f" --device_ids {self.cfg.device_ids}"
             f" --tensor_parallel_size {self.cfg.tensor_parallel_size}"
             f" --engine_worker_queue_port {str(self.cfg.engine_worker_queue_port)}"
+            f" --pod_ip {self.cfg.pod_ips[0]}"
             f" --total_block_num {self.cfg.cache_config.total_block_num}"
             f" --block_size {self.cfg.cache_config.block_size}"
             f" --enc_dec_block_num {self.cfg.cache_config.enc_dec_block_num}"
@@ -1037,13 +1025,14 @@ class LLMEngine(object):
             f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
             f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
             f" --quantization {self.cfg.model_config.quantization}"
-            f" --ori_vocab_size {len(self.data_processor.tokenizer)}"
+            f" --ori_vocab_size {ori_vocab_size}"
             f" --speculative_method {self.cfg.speculative_config.method}"
             f" --speculative_max_draft_token_num {self.cfg.speculative_config.num_speculative_tokens}"
             f" --speculative_model_name_or_path {self.cfg.speculative_config.model_name_or_path}"
             f" --speculative_model_quantization {self.cfg.speculative_config.quantization}"
             f" --max_capture_batch_size {self.cfg.max_capture_batch_size}"
-            f" --guided_decoding_backend {self.cfg.guided_decoding_backend}")
+            f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
+            f" --load_strategy {self.cfg.model_config.load_strategy}")
 
         worker_append_flag = {
             "enable_expert_parallel":
@@ -1161,10 +1150,12 @@ class LLMEngine(object):
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
             device_ids = self.cfg.device_ids.split(",")
             self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
-                self.cfg.cache_config, self.cfg.tensor_parallel_size,
-                device_ids, self.cfg.engine_worker_queue_port,
-                self.ipc_signal_suffix)
-
+                cache_config=self.cfg.cache_config,
+                tensor_parallel_size=self.cfg.tensor_parallel_size,
+                device_ids=device_ids,
+                pod_ip=self.cfg.pod_ips[0],
+                engine_worker_queue_port=self.cfg.engine_worker_queue_port,
+                pid_suffix=self.ipc_signal_suffix)
     def check_health(self, time_interval_threashold=30):
         """
         Check the health of the model server by checking whether all workers are alive.
@@ -1188,8 +1179,9 @@ class LLMEngine(object):
                 line = line.decode('utf-8', errors='ignore')
                 if self.worker_init_status.get("finished", False):
                     break
-                if match := re.search(r'Loading checkpoint shards:\s*(\d+)',
-                                      line):
+                if match := re.search(
+                        r'Loading (?:fastsafetensors |safetensors )?checkpoint shards:\s*(\d+)',
+                        line):
                     self.worker_init_status["weight_loadding"] = eval(
                         match.group(1)) * 1.0 / 100
                 elif (match := re.search(r'Start load layer (\d+)',
@@ -1243,3 +1235,34 @@ class LLMEngine(object):
         except Exception:
             pass
         return True
+
+    def start_queue_service(self):
+        """
+        start queue service for engine worker communication
+        """
+        address = (self.cfg.pod_ips[0], self.cfg.engine_worker_queue_port)
+        if self.cfg.host_ip == self.cfg.pod_ips[0] or self.cfg.pod_ips[0] == "0.0.0.0":
+            self.engine_worker_queue_server = EngineWorkerQueue(
+                address=address,
+                is_server=True,
+                num_client=self.cfg.tensor_parallel_size,
+                local_data_parallel_size=self.cfg.parallel_config.
+                data_parallel_size)
+
+            if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != 'mixed':
+                self.cache_task_queue = EngineCacheQueue(
+                    address=(self.cfg.pod_ips[0], self.cfg.cache_config.cache_queue_port),
+                    authkey=b'cache_queue_service',
+                    is_server=True,
+                    num_client=self.cfg.tensor_parallel_size,
+                    client_id=-1,
+                    local_data_parallel_size=self.cfg.parallel_config.
+                    data_parallel_size)
+
+
+        self.engine_worker_queue = EngineWorkerQueue(
+            address=address,
+            is_server=False,
+            num_client=self.cfg.tensor_parallel_size,
+            client_id=0,
+            local_data_parallel_id=0)
