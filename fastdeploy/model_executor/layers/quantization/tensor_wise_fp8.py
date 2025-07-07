@@ -112,9 +112,9 @@ class TensorWiseFP8LinearMethod(QuantMethodBase):
         compute!
         """
         from fastdeploy.model_executor.ops.gpu import (
-            cutlass_fp8_fp8_half_gemm_fused, tensorwise_quant_fp8)
+            cutlass_fp8_fp8_half_gemm_fused, fused_hadamard_quant_fp8)
 
-        fp8_x = tensorwise_quant_fp8(x, scale=self.act_scale)
+        fp8_x = fused_hadamard_quant_fp8(x, scale=self.act_scale)
 
         linear_out = cutlass_fp8_fp8_half_gemm_fused(
             fp8_x,
