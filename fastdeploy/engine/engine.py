@@ -998,8 +998,8 @@ class LLMEngine(object):
         py_script = os.path.join(current_dir_path, worker_path)
 
         ori_vocab_size = (
-            len(self.data_processor.tokenizer.sp_model) 
-            if hasattr(self.data_processor.tokenizer, 'sp_model') 
+            len(self.data_processor.tokenizer.sp_model)
+            if hasattr(self.data_processor.tokenizer, 'sp_model')
             else len(self.data_processor.tokenizer.vocab)
         )
 
@@ -1032,7 +1032,8 @@ class LLMEngine(object):
             f" --speculative_model_quantization {self.cfg.speculative_config.quantization}"
             f" --max_capture_batch_size {self.cfg.max_capture_batch_size}"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
-            f" --load_strategy {self.cfg.model_config.load_strategy}")
+            f" --load_strategy {self.cfg.model_config.load_strategy}"
+            f" --load_format {self.cfg.load_format}")
 
         worker_append_flag = {
             "enable_expert_parallel":

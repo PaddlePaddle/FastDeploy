@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Literal, Optional
+from typing import Any, Dict, Literal, Optional, Union
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 
@@ -55,6 +55,7 @@ class ModelConfig(PretrainedConfig):
     frequency_score = 0.0
     presence_score = 0.0
     min_length = 1
+    weight_infos_dict: Dict[str, Any] = {}
 
     def __init__(
         self,
@@ -343,6 +344,12 @@ class GraphOptimizationConfig:
             self.graph_opt_level = 1
 
 
+class LoadFormat(str, Enum):
+    """LoadFormat"""
+    DEFAULT = "default"
+    LoadTimeQuant = "load_time_quantization"
+
+
 @dataclass
 class LoadConfig:
     """
@@ -357,6 +364,7 @@ class LoadConfig:
             - 'meta': provide RL traing worker, no_weights_load
             - None: No dynamic loading
     """
+    load_format: Union[str, LoadFormat] = LoadFormat.DEFAULT.value
     use_fastsafetensor: bool = False
     dynamic_load_weight: bool = False
     load_strategy: Optional[Literal['ipc', 'ipc_no_reshard', 'ipc_snapshot', 'meta']] = None

@@ -33,9 +33,6 @@ class W4AFP8Config(QuantConfigBase):
         super().__init__()
         self.weight_scale_dict = weight_scale_dict
         self.act_scale_dict = act_scale_dict
-        self.quant_max_bound = 448
-        self.quant_min_bound = -448
-        self.quant_round_type = 1
 
     def name(self) -> str:
         return "w4afp8"
@@ -61,6 +58,9 @@ class W4AFP8LinearMethod(QuantMethodBase):
     ) -> None:
         super().__init__()
         self.quant_config = quant_config
+        self.quant_max_bound = 448
+        self.quant_min_bound = -448
+        self.quant_round_type = 1
 
     def create_weights(self, layer):
         layer.linear_weight_shape.reverse()
@@ -68,14 +68,26 @@ class W4AFP8LinearMethod(QuantMethodBase):
         layer.weight_dtype = "int8"
         pass
 
-    def process_loaded_weights(self, layer, weights) -> None:
+    def process_quantized_weights(self, layer, state_dict) -> None:
+        """process_quantized_weights"""
+        layer.linear_weight.set_value(state_dict.pop(layer.weight_key))
+        layer.linear_weight_scale.set_value(state_dict.pop(layer.weight_scale))
+
+    def apply_weight_quantization(self, weight):
+        """apply_weight_quantization"""
         quanted_weight_tensor, weight_scale_tensor = (
             fastdeploy.model_executor.ops.gpu.
             scaled_gemm_f8_i4_f16_weight_quantize(
-                paddle.cast(weights, "float32").cpu(),
+                paddle.cast(weight, "float32").cpu(),
                 groupsize=-1,
                 scale_dtype="float16",
             ))
+        return quanted_weight_tensor, weight_scale_tensor
+
+    def process_unquantized_weights(self, layer, weights) -> None:
+        """process_unquantized_weights"""
+        quanted_weight_tensor, weight_scale_tensor = self.apply_weight_quantization(
+            weights)
         weight_scale_tensor = paddle.view(weight_scale_tensor, layer._dtype)
         layer.linear_weight.set_value(quanted_weight_tensor)
         layer.linear_weight_scale.set_value(weight_scale_tensor)

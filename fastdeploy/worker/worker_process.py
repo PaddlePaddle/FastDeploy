@@ -552,6 +552,12 @@ def parse_args():
         "'meta': provide RL traing worker, no_weights_load"
         "'normal':normal load weight")
 
+    parser.add_argument(
+        "--load_format",
+        type=str,
+        default="default",
+        help="The format of the model weights to load. default/load_time_quant."
+    )
     args = parser.parse_args()
     return args
 
@@ -626,6 +632,7 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
     parallel_config.expert_parallel_degree = args.expert_parallel_size
     parallel_config.splitwise_role = args.splitwise_role
     load_config.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
+    load_config.load_format = args.load_format
 
     parallel_config.guided_decoding_backend = args.guided_decoding_backend
     parallel_config.disable_any_whitespace = args.disable_any_whitespace

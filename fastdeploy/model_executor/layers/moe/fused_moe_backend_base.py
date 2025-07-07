@@ -57,9 +57,9 @@ class MoEMethodBase(QuantMethodBase):
                     layer.top_k, layer.hidden_size, layer.num_experts,
                     layer.ep_size, layer.ep_rank)
 
-    def process_loaded_weights(self, layer, weights) -> None:
+    def process_unquantized_weights(self, layer, weights) -> None:
         """
-        process_loaded_weights
+        process_unquantized_weights
         """
         pass
 

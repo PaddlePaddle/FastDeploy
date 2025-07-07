@@ -26,9 +26,28 @@ from paddleformers.transformers.conversion_utils import split_or_merge_func
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.models.utils import LayerIdPlaceholder
+from fastdeploy.model_executor.models.utils import (LayerIdPlaceholder,
+                                                    switch_level_context)
 
 
+class TensorSplitMode(Enum):
+    """TensorSplitMode"""
+
+    GQA = "is_gqa"
+    TRANSPOSE = "transpose"
+    QKV = "is_old_qkv"
+    PairFused = "is_naive_2fuse"
+    TripletFused = "is_naive_3fuse"
+
+
+class SafeDict(dict):
+    """SafeDict"""
+
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
+@switch_level_context("WARNING")
 def check_tensor_parallel_prerequisites(
     fd_config: FDConfig,
     cls: PretrainedModel,
@@ -66,26 +85,9 @@ def has_prefix(prefix_name: str, weight_name: str):
     return prefix_name == extract_prefix(weight_name)
 
 
-class TensorSplitMode(Enum):
-    """TensorSplitMode"""
-
-    GQA = "is_gqa"
-    TRANSPOSE = "transpose"
-    QKV = "is_old_qkv"
-    PairFused = "is_naive_2fuse"
-    TripletFused = "is_naive_3fuse"
-
-
 def extract_placeholders(template: str):
     """extract_placeholders"""
     return set(re.findall(r"{(\w+)}", template))
-
-
-class SafeDict(dict):
-    """SafeDict"""
-
-    def __missing__(self, key):
-        return "{" + key + "}"
 
 
 def has_placeholders(placeholders):

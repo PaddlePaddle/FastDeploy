@@ -30,6 +30,21 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --max-num-seqs 32
 ```
 
+To speed up model loading, set the environment variable **export FD_USE_FASTSAFETENSOR=1** and use the **--load_format "load_time_quantization"** option.
+
+```shell
+export FD_USE_FASTSAFETENSOR=1
+python -m fastdeploy.entrypoints.openai.api_server \
+       --model baidu/ERNIE-4.5-300B-A47B-Paddle \
+       --port 8180 --engine-worker-queue-port 8181 \
+       --cache-queue-port 8182 --metrics-port 8182 \
+       --tensor-parallel-size 8 \
+       --quantization wint4 \
+       --max-model-len 32768 \
+       --max-num-seqs 32 \
+       --load_format "load_time_quantization"
+```
+
 ## Request the Service
 After starting the service, the following output indicates successful initialization:
 

@@ -37,9 +37,6 @@ class W8A8Config(QuantConfigBase):
         self.act_scale_dict = act_scale_dict
         self.use_gemm_dequant = use_gemm_dequant
         self.use_smooth_quant = use_smooth_quant
-        self.quant_max_bound = 127
-        self.quant_min_bound = -127
-        self.quant_round_type = 0
 
     def name(self) -> str:
         return "w8a8"
@@ -67,6 +64,10 @@ class W8A8LinearMethod(QuantMethodBase):
         super().__init__()
         self.quant_config = quant_config
         self.smooth_quant_method = SmoothQuantLinearMethod(quant_config)
+        self.quant_max_bound = 127
+        self.quant_min_bound = -127
+        self.quant_round_type = 0
+        self.weight_dtype = "int8"
 
     def create_weights(self, layer):
         layer.linear_weight_shape.reverse()
@@ -95,16 +96,33 @@ class W8A8LinearMethod(QuantMethodBase):
         layer.linear_out_scale.set_value(
             convert_to_npu_dequant_scale(linear_out_scale))
 
-    def process_loaded_weights(self, layer, weights) -> None:
+    def process_quantized_weights(self, layer, state_dict) -> None:
+        """process_quantized_weights"""
         if self.quant_config.use_smooth_quant:
-            self.smooth_quant_method.process_loaded_weights(layer, weights)
+            self.smooth_quant_method.process_unquantized_weights(
+                layer, state_dict[self.weight_key])
+        layer.linear_weight.set_value(state_dict.pop(layer.weight_key))
+        layer.linear_weight_scale.set_value(
+            state_dict.pop(layer.weight_scale_key))
+
+    def apply_weight_quantization(self, weights):
+        """apply_weight_quantization"""
+        weight_tensor = weights.transpose([1, 0])
+        weight_tensor = paddle.cast(weight_tensor,
+                                    self.quant_config.weight_dtype)
+        return weight_tensor, None
+
+    def process_unquantized_weights(self, layer, weights) -> None:
+        """process_unquantized_weights"""
+        if self.quant_config.use_smooth_quant:
+            self.smooth_quant_method.process_unquantized_weights(
+                layer, weights)
         if self.skip_quant:
             logger.debug(f"{layer.prefix} skip quant")
             weight_tensor = weights.cast(layer._dtype)
             layer.linear_weight.set_value(weight_tensor)
         else:
-            weight_tensor = weights.transpose([1, 0])
-            weight_tensor = paddle.cast(weight_tensor, "int8")
+            weight_tensor, _ = self.apply_weight_quantization(weight_tensor)
             layer.linear_weight.set_value(weight_tensor)
 
     def apply(self, layer, x):
@@ -147,7 +165,8 @@ class SmoothQuantLinearMethod(QuantMethodBase):
             is_bias=False,
         )
 
-    def process_loaded_weights(self, layer, weights) -> None:
+    def process_unquantized_weights(self, layer, weights) -> None:
+        """process_unquantized_weights"""
         if layer.shift_key in layer.state_dict:
             shift_tensor = get_tensor(layer.state_dict.pop(
                 layer.shift_key)).astype(paddle.get_default_dtype())

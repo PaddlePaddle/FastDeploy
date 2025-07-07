@@ -53,13 +53,24 @@ class XPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             is_bias=False,
         )
 
-    def process_loaded_weights(self, layer: nn.Layer,
-                               weight: paddle.Tensor) -> None:
+    def process_quantized_weights(self, layer, state_dict) -> None:
+        """process_quantized_weights"""
+        # (tangbinhan:todo)  quant_utils support xpu
+        layer.linear_weight.set_value(state_dict.pop(layer.weight_key))
+        layer.linear_weight_scale.set_value(state_dict.pop(layer.weight_scale))
+
+    def apply_weight_quantization(self, weight):
+        """apply_weight_quantization"""
+        quanted_weight_tensor, weight_scale_tensor = weight_quantize_xpu(
+            weight, self.quant_config.algo, -1, -1)
+        return quanted_weight_tensor, weight_scale_tensor
+
+    def process_unquantized_weights(self, layer, weight) -> None:
         """
         loaded_weights using xpu special quantization
         """
-        quanted_weight_tensor, weight_scale_tensor = weight_quantize_xpu(
-            weight, self.quant_config.algo, -1, -1)
+        quanted_weight_tensor, weight_scale_tensor = self.apply_weight_quantization(
+            weight)
         layer.linear_weight.set_value(
             paddle.transpose(quanted_weight_tensor, [1, 0]))
         layer.linear_weight_scale.set_value(weight_scale_tensor)

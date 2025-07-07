@@ -293,6 +293,14 @@ class EngineArgs:
         max_capture_batch_size=64, FastDeploy will capture graphs for batches [1,64].
     """
 
+    load_format: str = "default"
+    """The format of the model weights to load.
+        Options include:
+        - "default": default loader.
+        -"load_time_quantization": Quantization applied during model loading, \
+            such as INT8, INT4, or FP8 formats.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -413,6 +421,13 @@ class EngineArgs:
             help=
             "Disabled any whitespaces when using guided decoding backend XGrammar."
         )
+        # Load group
+        load_group = parser.add_argument_group("Load Configuration")
+        load_group.add_argument("--load_format",
+                                type=str,
+                                default=EngineArgs.load_format,
+                                help="The format of the model weights to load.\
+                 default/load_time_quantization.")
 
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
@@ -784,4 +799,5 @@ class EngineArgs:
             max_capture_batch_size=self.max_capture_batch_size,
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
+            load_format=self.load_format,
         )

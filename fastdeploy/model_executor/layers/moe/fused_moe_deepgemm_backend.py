@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
@@ -23,8 +22,8 @@ import fastdeploy
 import fastdeploy.model_executor.ops.gpu.deep_gemm as deep_gemm
 from fastdeploy.distributed.communication_op import \
     tensor_model_parallel_all_reduce
-from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func
 from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func
 
 from ..utils import create_and_set_parameter
 from .fused_moe_backend_base import MoEMethodBase
@@ -34,6 +33,14 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
     """
     DeepGemmFusedMoeMethod is a class that implements the MoEMethodBase interface for DeepGemm backend.
     """
+
+    def apply_weight_quantization(self, weight):
+        """apply_weight_quantization"""
+        from fastdeploy.model_executor.layers.utils import \
+            per_block_cast_to_fp8
+        quant_weight, scale = per_block_cast_to_fp8(
+            weight, self.quant_config.weight_block_size)
+        return quant_weight, scale
 
     def create_weights(self, layer: nn.Layer, state_dict):
         """
@@ -51,10 +58,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             weight_list = []
             weight_scale_list = []
             for i in range(layer.num_local_experts):
-                from fastdeploy.model_executor.layers.utils import \
-                    per_block_cast_to_fp8
-                quant_weight, scale = per_block_cast_to_fp8(
-                    weight_tensor[i], self.quant_config.weight_block_size)
+                quant_weight, scale = self.apply_weight_quantization(
+                    weight_tensor[i])
 
                 weight_list.append(quant_weight)
                 weight_scale_list.append(scale)
@@ -67,9 +72,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 [0, 2, 1]).contiguous()
             create_and_set_parameter(layer, scale_name, quanted_weight_scale)
 
-    def process_prequanted_weights(self, layer: nn.Layer, state_dict):
+    def process_quantized_weights(self, layer: nn.Layer, state_dict):
         """
-        Paddle cutlass process prequanted weights.
+        Paddle cutlass process quantized weights.
         """
         ffn1_expert_weight_key = layer.weight_key_map.get(
             "ffn1_expert_weight_key", None)

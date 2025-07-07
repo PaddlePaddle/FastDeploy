@@ -49,8 +49,8 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             "moe_ffn1_weight_scale", "moe_ffn2_weight_scale"
         ]
 
-    def process_prequanted_weights(self, layer: nn.Layer, state_dict) -> None:
-        """process_prequanted_weights"""
+    def process_quantized_weights(self, layer: nn.Layer, state_dict) -> None:
+        """process_quantized_weights"""
         pass
 
     def create_weights(self, layer: nn.Layer, state_dict):
@@ -261,8 +261,25 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         """
         self.quant_method = quant_method
 
-    def process_prequanted_weights(self, layer: nn.Layer, state_dict) -> None:
-        """process_prequanted_weights"""
+    def create_tp_dict(self, model_config, layer):
+        """create_tp_dict"""
+        from fastdeploy.model_executor.models.tp_utils import \
+            TensorSplitMode as tsm
+        from fastdeploy.model_executor.models.utils import WeightMeta
+        ffn1_expert_weight_key = layer.weight_key_map.get(
+            "ffn1_expert_weight_key", None)
+        ffn2_expert_weight_key = layer.weight_key_map.get(
+            "ffn2_expert_weight_key", None)
+        for i in range(layer.num_experts):
+            ff1_key = ffn1_expert_weight_key.format(i)
+            ff1_weight_meta = WeightMeta(ff1_key, True, tsm.PairFused)
+            ff2_key = ffn2_expert_weight_key.format(i)
+            ff2_weight_meta = WeightMeta(ff2_key, False)
+            model_config.weight_infos_dict[ff1_key] = ff1_weight_meta
+            model_config.weight_infos_dict[ff2_key] = ff2_weight_meta
+
+    def process_quantized_weights(self, layer: nn.Layer, state_dict) -> None:
+        """process_quantized_weights"""
 
         ffn1_tensor, ffn2_tensor = layer.extract_moe_ffn_weights(state_dict)
         assert ffn1_tensor[0].shape == [

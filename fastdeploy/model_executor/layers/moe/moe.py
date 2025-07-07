@@ -92,6 +92,9 @@ class FusedMoE(nn.Layer):
         if moe_quant_config:
             self.quant_method = moe_quant_config.get_quant_method(self)
             self.moe_quant_type = moe_quant_config.name()
+            if hasattr(self.quant_method, 'create_tp_dict') and callable(
+                    getattr(self.quant_method, 'create_tp_dict')):
+                self.quant_method.create_tp_dict(fd_config.model_config, self)
         else:
             # now, no quant method(w_fp16 a_fp16) can't get from quant_config, we will optimize it in future
             from .fused_moe_cutlass_backend import CutlassMoEMethod
@@ -289,7 +292,7 @@ class FusedMoE(nn.Layer):
         self.gate_weight.set_value(gate_weight_tensor.astype("float32"))
 
         if self.fd_config.model_config.is_quantized:
-            self.quant_method.process_prequanted_weights(self, state_dict)
+            self.quant_method.process_quantized_weights(self, state_dict)
         else:
             self.quant_method.create_weights(self, state_dict)
 

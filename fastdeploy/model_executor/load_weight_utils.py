@@ -16,7 +16,9 @@
 
 import json
 import os
+from typing import Dict, Generator, Union
 
+import numpy as np
 import paddle
 import paddle.distributed as dist
 from fastsafetensors import SafeTensorsFileLoader, SingleGroup
@@ -49,15 +51,15 @@ def load_ep_checkpoint(model_path: str,
                 config.num_experts_start_offset + config.num_experts_per_rank,
         ):
             ffn1_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight"
-            ffn2_key = (f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight")
+            ffn2_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight"
 
-            ffn1_quant_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.quant_weight"
-            ffn2_quant_key = (
-                f"ernie.layers.{i}.mlp.experts.{j}.down_proj.quant_weight")
+            ffn1_quant_key = (
+                f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.quant_weight")
+            ffn2_quant_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.quant_weight"
 
-            ffn1_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight_scale"
-            ffn2_scale_key = (
-                f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight_scale")
+            ffn1_scale_key = (
+                f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight_scale")
+            ffn2_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight_scale"
             num_local_ffn_keys.append(ffn1_key)
             num_local_ffn_keys.append(ffn2_key)
             num_local_ffn_keys.append(ffn1_quant_key)
@@ -75,7 +77,7 @@ def load_ep_checkpoint(model_path: str,
 
     # Open each safetensor file sequentially with progress bar
     for safetensor_path in tqdm(safetensor_paths,
-                                desc="Loading safetensor files",
+                                desc="Loading safetensors checkpoint shards",
                                 unit="file"):
         with safe_open(os.path.join(model_path, safetensor_path),
                        framework="np",
@@ -92,7 +94,9 @@ def load_ep_checkpoint(model_path: str,
     return state_dict
 
 
-def safetensors_weights_iterator(safe_tensor_list: list[str], ):
+def safetensors_weights_iterator(
+    safe_tensor_list: list[str]
+) -> Generator[tuple[str, np.ndarray], None, None]:
     """
     safetensors_weights_iterator
     """
@@ -106,7 +110,9 @@ def safetensors_weights_iterator(safe_tensor_list: list[str], ):
                 yield name, param
 
 
-def fastsafetensors_weights_iterator(safetensor_list: list[str], ):
+def fastsafetensors_weights_iterator(
+    safetensor_list: list[str]
+) -> Generator[tuple[str, paddle.Tensor], None, None]:
     """
     Return an iterator over tensors on GPU from a given safetensor_list.
     """
@@ -187,18 +193,16 @@ def get_all_safetensors(model_path: str):
     return key_name_list, safetensor_list
 
 
-def load_tp_checkpoint_v1(
-    model_path: str,
+def tp_weights_iterator(
     cls: PretrainedModel,
     fd_config: FDConfig,
+    safetensor_keys: list[str],
+    safetensor_files: list[str],
     use_fastsafetensor: bool = True,
-):
+) -> Generator[tuple[str, Union[paddle.Tensor, np.ndarray]], None, None]:
     """
-    load_tp_checkpoint_v1
+    Iterate over tensor-parallel-sliced weights.
     """
-
-    safetensor_keys, safetensor_files = get_all_safetensors(model_path)
-
     if use_fastsafetensor:
         weights_iterator = fastsafetensors_weights_iterator(safetensor_files)
     else:
@@ -212,17 +216,20 @@ def load_tp_checkpoint_v1(
         safetensor_keys,
     )
     need_tp = True if tensor_parallel_filtered_map else False
-    state_dict = {}
     for key, weight in weights_iterator:
-        paddle.device.synchronize()
+        if isinstance(weight, paddle.Tensor):
+            paddle.device.cuda.synchronize()
         if need_tp and key in tensor_parallel_filtered_map:
             action = tensor_parallel_filtered_map.pop(key)
-            tensor = action(weight).clone()
+            tensor = action(weight.detach().clone()) if isinstance(
+                weight, paddle.Tensor) else action(weight.copy())
         else:
-            tensor = weight.clone()
-        state_dict[key] = tensor
-        weight.value().get_tensor()._clear()
-    return state_dict
+            tensor = weight.detach().clone() if isinstance(
+                weight, paddle.Tensor) else weight.copy()
+        if isinstance(weight, paddle.Tensor):
+            weight.value().get_tensor()._clear()
+        del weight
+        yield key, tensor
 
 
 def deal_state_dict(state_dict):
@@ -236,6 +243,30 @@ def deal_state_dict(state_dict):
             src_tensor = src.value().get_tensor()
             src_tensor._clear()
             src_tensor._share_data_with(dst_tensor)
+
+
+def load_tp_checkpoint_v1(
+    model_path: str,
+    cls: PretrainedModel,
+    fd_config: FDConfig,
+    use_fastsafetensor: bool = True,
+) -> Dict[str, Union[paddle.Tensor, np.ndarray]]:
+    """load_tp_checkpoint"""
+    safetensor_keys, safetensor_files = get_all_safetensors(model_path)
+    weights_iterator = tp_weights_iterator(
+        cls,
+        fd_config,
+        safetensor_keys,
+        safetensor_files,
+        use_fastsafetensor=use_fastsafetensor,
+    )
+    state_dict = {}
+    for key, weight in weights_iterator:
+        state_dict[key] = weight
+    deal_state_dict(state_dict)
+    paddle.device.cuda.empty_cache()
+    paddle.device.cuda.synchronize()
+    return state_dict
 
 
 def load_composite_checkpoint(
@@ -274,11 +305,13 @@ def load_composite_checkpoint(
             if fd_config.load_config.use_fastsafetensor and (
                     current_platform.available()
                     and current_platform.is_cuda()):
-                state_dict = load_tp_checkpoint_v1(model_path,
-                                                   cls,
-                                                   fd_config,
-                                                   use_fastsafetensor=True)
-                deal_state_dict(state_dict)
+                state_dict = load_tp_checkpoint_v1(
+                    model_path,
+                    cls,
+                    fd_config,
+                    use_fastsafetensor=fd_config.load_config.
+                    use_fastsafetensor,
+                )
             else:
                 state_dict = load_tp_checkpoint(model_path,
                                                 cls,

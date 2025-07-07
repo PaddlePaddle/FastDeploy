@@ -94,30 +94,7 @@ class Ernie4_5_MoE(nn.Layer):
     def __init__(self, fd_config: FDConfig, layer_id: int,
                  prefix: str) -> None:
         super().__init__()
-        moe_quant_type = ""
-        if hasattr(fd_config.quant_config, 'moe_quant_type'):
-            moe_quant_type = fd_config.quant_config.moe_quant_type
-
-        if moe_quant_type == "w4a8":
-            weight_key_map = {
-                "gate_weight_key":
-                f"{prefix}.gate.weight",
-                "gate_correction_bias_key":
-                f"{prefix}.moe_statics.e_score_correction_bias",
-                "ffn1_expert_weight_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                "ffn2_expert_weight_key":
-                f"{prefix}.experts.{{}}.down_proj.quant_weight",
-                "ffn1_expert_weight_scale_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                "ffn2_expert_weight_scale_key":
-                f"{prefix}.experts.{{}}.down_proj.weight_scale",
-                "ffn1_expert_in_scale_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
-                "ffn2_expert_in_scale_key":
-                f"{prefix}.experts.{{}}.down_proj.activation_scale",
-            }
-        elif moe_quant_type == "w4w2":
+        if fd_config.model_config.is_quantized:
             weight_key_map = {
                 "gate_weight_key":
                 f"{prefix}.gate.weight",
@@ -143,23 +120,6 @@ class Ernie4_5_MoE(nn.Layer):
                 f"{prefix}.experts.{{}}.up_gate_proj.code_zp",
                 "ffn2_expert_code_zp_key":
                 f"{prefix}.experts.{{}}.down_proj.code_zp",
-            }
-        elif moe_quant_type == "tensor_wise_fp8" or (
-                moe_quant_type == "block_wise_fp8"
-                and fd_config.model_config.is_quantized):
-            weight_key_map = {
-                "gate_weight_key":
-                f"{prefix}.gate.weight",
-                "gate_correction_bias_key":
-                f"{prefix}.moe_statics.e_score_correction_bias",
-                "ffn1_expert_weight_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                "ffn2_expert_weight_key":
-                f"{prefix}.experts.{{}}.down_proj.quant_weight",
-                "ffn1_expert_weight_scale_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                "ffn2_expert_weight_scale_key":
-                f"{prefix}.experts.{{}}.down_proj.weight_scale",
                 "ffn1_expert_in_scale_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
                 "ffn2_expert_in_scale_key":
@@ -509,54 +469,76 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
 
     weight_infos = [
         WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.qkv_proj.weight",
-                   True, tsm.GQA),
+                   True, tsm.GQA, "qkv_proj"),
         WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.o_proj.weight",
-                   False),
+                   False, None, "o_proj"),
         WeightMeta(
             f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.up_gate_proj.weight",
-            True, tsm.PairFused),
+            True, tsm.PairFused, "gate_up_proj"),
         WeightMeta(f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.down_proj.weight",
-                   False),
+                   False, None, "down_proj"),
         WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.up_gate_proj.weight",
-            True, tsm.PairFused),
+            True, tsm.PairFused, "fused_moe"),
         WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.down_proj.weight",
-            False),
+            False, None, "fused_moe"),
         WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.up_gate_proj.weight",
-            True, tsm.PairFused),
+            True, tsm.PairFused, "gate_up_proj"),
         WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.down_proj.weight",
-            False),
+            False, None, "down_proj"),
         WeightMeta(".embed_tokens.weight", False),
         WeightMeta("lm_head.weight", True),
-        # quant tensorwise
-        WeightMeta(
-            f".layers.{{{layerid.LAYER_ID}}}.self_attn.qkv_proj.quant_weight",
-            True, tsm.GQA),
-        WeightMeta(
-            f".layers.{{{layerid.LAYER_ID}}}.self_attn.o_proj.quant_weight",
-            False),
-        WeightMeta(
-            f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.up_gate_proj.quant_weight",
-            True, tsm.PairFused),
-        WeightMeta(
-            f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.down_proj.quant_weight",
-            False),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.up_gate_proj.quant_weight",
-            True, tsm.PairFused),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.down_proj.quant_weight",
-            False),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.up_gate_proj.quant_weight",
-            True, tsm.PairFused),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.down_proj.quant_weight",
-            False),
     ]
+
+    # quant_need_find_layer_list: names of model layers whose weights need quantization
+    # e.g., if the model defines `self.qkv_proj = QKVParallelLinear(...)` and qkv needs quantization,
+    #       add "qkv_proj" to this list
+    quant_need_find_layer_list = {
+        "qkv_proj", "o_proj", "gate_up_proj", "down_proj", "fused_moe"
+    }
+
+    @classmethod
+    def _get_quantization_mappings(cls, fd_config: FDConfig):
+        """
+        _get_quantization_mappings
+        """
+        logger.info("erine bot inference model _get_quantization_mappings")
+        from fastdeploy.model_executor.models.quant_utils import \
+            quantization_func
+        from fastdeploy.model_executor.models.tp_utils import \
+            build_expanded_keys
+
+        fn = quantization_func(fd_config)
+
+        def get_tensor_quantization_mappings(fd_config: FDConfig):
+            base_actions = {}
+            for (weight_name, _, _, quant_layer_key) in cls.weight_infos:
+                if not quant_layer_key:
+                    continue
+                params = {
+                    "quant_layer_key": quant_layer_key,
+                }
+                key = f"{fd_config.model_config.prefix_name}{weight_name}"
+                base_actions[key] = partial(fn, **params)
+            final_actions = {}
+            start_layer = (fd_config.moe_config.moe_layer_start_index
+                           if fd_config.moe_config.moe_layer_start_index > 0
+                           else fd_config.model_config.num_layers)
+            final_actions = build_expanded_keys(
+                fd_config.model_config.num_layers,
+                fd_config.moe_config.num_experts,
+                start_layer,
+                base_actions,
+            )
+
+            return final_actions
+
+        mappings = get_tensor_quantization_mappings(fd_config)
+
+        return mappings
 
     @classmethod
     def _get_tensor_parallel_mappings(cls, config: ModelConfig, is_split=True):
@@ -579,8 +561,9 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
                                                moe_layer_start_index,
                                                prefix_name):
             base_actions = {}
-            weight_infos = cls.weight_infos
-            for (weight_name, is_column, extra) in weight_infos:
+            weight_infos = list(
+                config.weight_infos_dict.values()) + cls.weight_infos
+            for (weight_name, is_column, extra, _) in weight_infos:
                 params = {
                     "is_column": is_column,
                     **({

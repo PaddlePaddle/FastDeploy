@@ -34,9 +34,9 @@ class Wint2MoeMethod(QuantMethodBase):
         super().__init__()
         self.moe_quant_type = quant_config.moe_quant_type
 
-    def process_loaded_weights(self, layer, weights) -> None:
+    def process_unquantized_weights(self, layer, weights) -> None:
         """
-        process_loaded_weights
+        process_unquantized_weights
         """
         pass
 
@@ -67,13 +67,13 @@ class TritonWint2FusedMoeMethod(Wint2MoeMethod):
         super().__init__(quant_config)
         self.moe_quant_type = quant_config.moe_quant_type
 
-    def process_loaded_weights(self, layer, weights) -> None:
+    def process_unquantized_weights(self, layer, weights) -> None:
         """
-        process_loaded_weights
+        process_unquantized_weights
         """
         pass
 
-    def process_prequanted_weights(self, layer: nn.Layer, state_dict):
+    def process_quantized_weights(self, layer: nn.Layer, state_dict):
         """
         Paddle cutlass process prequanted weights.
         """

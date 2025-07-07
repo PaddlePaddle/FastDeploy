@@ -494,6 +494,7 @@ class Config:
         splitwise_role (str): Splitwise role.
         innode_prefill_ports (Optional[List[int]]): Innode prefill ports.
             Temporary configuration, will be removed in the future.
+        load_format(str):The format of the model weights to load. .Default is default
     """
 
     def __init__(
@@ -526,6 +527,7 @@ class Config:
         max_capture_batch_size: int = 64,
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
+        load_format: str = "default",
     ):
         """
         Initialize the Config class.
@@ -554,6 +556,7 @@ class Config:
             guided_decoding_backend(str): Guided decoding backend. Default is None.
             disable_any_whitespace(bool): Disable any whitespace when using guided decoding.
                 Default is False.
+            load_format(str):The format of the model weights to load. .Default is default
         """
         self.model_config = model_config
         self.cache_config = cache_config
@@ -585,7 +588,8 @@ class Config:
         self.is_master = True
         self._str_to_list("innode_prefill_ports", int)
         self._str_to_list("pod_ips", str)
-
+        self.load_format = load_format
+        
         if self.pod_ips is None:
             self.nnode = 1
         else:

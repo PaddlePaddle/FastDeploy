@@ -23,6 +23,7 @@ import os
 import random
 import re
 import struct
+from contextlib import contextmanager
 from functools import partial
 from typing import NamedTuple, Optional
 
@@ -44,6 +45,29 @@ MAX_BSZ = 512
 MAX_DRAFT_TOKENS = 6
 
 
+@contextmanager
+def switch_config_context(config_obj, config_attr_name, value):
+    """switch_config_context"""
+    origin_value = getattr(config_obj, config_attr_name)
+    setattr(config_obj, config_attr_name, value)
+    try:
+        yield
+    finally:
+        setattr(config_obj, config_attr_name, origin_value)
+
+
+@contextmanager
+def switch_level_context(level="ERROR"):
+    """switch_level_context"""
+    original_level = logger.logLevel
+    logger.set_level(level)
+
+    try:
+        yield
+    finally:
+        logger.set_level(original_level)
+
+
 class LayerIdPlaceholder(str, enum.Enum):
     """LayerIdPlaceholder"""
     LAYER_ID = "layer_id"
@@ -59,10 +83,14 @@ class WeightMeta(NamedTuple):
     # weight_name: weight name
     # is_column: whether to split by columns
     # extra: optional flags like "is_naive_2fuse", "is_gqa", "is_naive_3fuse"
+
+    # quantization parameters
+    # layer_key: layer name this weight belongs to in the model
     """
     weight_name: str
     is_column: bool
     extra: Optional[str] = None
+    layer_key: Optional[str] = None
 
 
 class UniqueIDGenerator:

@@ -73,9 +73,18 @@ class RMSNorm(nn.Layer):
         self.quant_scale: Optional[float] = quant_scale
         self._dtype: str = self._helper.get_default_dtype()
         self._norm_weight_dtype: str = self._dtype
-        self.quant_round_type: int = self.fd_config.quant_config.quant_round_type if fd_config.quant_config else 0
-        self.quant_max_bound: int = self.fd_config.quant_config.quant_max_bound if fd_config.quant_config else 0
-        self.quant_min_bound: int = self.fd_config.quant_config.quant_min_bound if fd_config.quant_config else 0
+        if fd_config.quant_config:
+            self.quant_round_type: int = fd_config.quant_config.get_quant_method(
+                self).quant_round_type
+            self.quant_max_bound: int = fd_config.quant_config.get_quant_method(
+                self).quant_max_bound
+            self.quant_min_bound: int = fd_config.quant_config.get_quant_method(
+                self).quant_min_bound
+        else:
+            self.quant_round_type: int = 0
+            self.quant_max_bound: int = 0
+            self.quant_min_bound: int = 0
+
         self.begin_norm_axis: int = begin_norm_axis
 
         self.init_weight()
@@ -197,9 +206,17 @@ class LayerNorm(nn.Layer):
         self._dtype: str = self._helper.get_default_dtype()
         self._norm_weight_dtype: str = "float32"
 
-        self.quant_round_type: int = self.fd_config.quant_config.quant_round_type if fd_config.quant_config else 0
-        self.quant_max_bound: int = self.fd_config.quant_config.quant_max_bound if fd_config.quant_config else 0
-        self.quant_min_bound: int = self.fd_config.quant_config.quant_min_bound if fd_config.quant_config else 0
+        if fd_config.quant_config:
+            self.quant_round_type: int = fd_config.quant_config.get_quant_method(
+                self).quant_round_type
+            self.quant_max_bound: int = fd_config.quant_config.get_quant_method(
+                self).quant_max_bound
+            self.quant_min_bound: int = fd_config.quant_config.get_quant_method(
+                self).quant_min_bound
+        else:
+            self.quant_round_type: int = 0
+            self.quant_max_bound: int = 0
+            self.quant_min_bound: int = 0
 
         self.init_weight()
 

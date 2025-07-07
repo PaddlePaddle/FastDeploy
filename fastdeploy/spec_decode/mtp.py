@@ -73,7 +73,6 @@ class MTPProposer(Proposer):
         self.model_config.num_layers = 1
         self.parallel_config.model_name_or_path = (
             self.speculative_config.model_name_or_path)
-        self.model_config.prefix_name = "ernie.mtp_block"
         if self.speculative_config.quantization != "":
             self.model_config.quantization = (
                 self.speculative_config.quantization)
@@ -84,10 +83,14 @@ class MTPProposer(Proposer):
         """
         Load MTP Layer
         """
-        from fastdeploy.model_executor.model_loader import \
-            get_model_from_loader
-
-        self.model = get_model_from_loader(self.cfg)
+        from fastdeploy.config import LoadFormat
+        from fastdeploy.model_executor.model_loader import get_model_loader
+        from fastdeploy.model_executor.models.utils import \
+            switch_config_context
+        with switch_config_context(self.cfg.load_config, "load_format",
+                                   LoadFormat.DEFAULT.value):
+            model_loader = get_model_loader(load_config=self.cfg.load_config)
+            self.model = model_loader.load_model(fd_config=self.cfg)
 
     def dummy_prefill_inputs(self, num_tokens: int, batch_size: int,
                              expected_decode_len: int):

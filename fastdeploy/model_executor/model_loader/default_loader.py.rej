@@ -1,0 +1,14 @@
+diff a/fastdeploy/model_executor/model_loader/default_loader.py b/fastdeploy/model_executor/model_loader/default_loader.py	(rejected hunks)
+@@ -89,10 +49,11 @@ class DefaultModelLoader(BaseModelLoader):
+             paddle.device.cuda.synchronize()
+ 
+     def load_model(self, fd_config: FDConfig) -> nn.Layer:
++        """load_model"""
+         context = paddle.LazyGuard()
+         architectures = fd_config.model_config.architectures[0]
+         # TODO(gongshaotian): Now, only support safetensor
+-        model_class = MODEL_CLASSES[architectures]
++        model_class = get_pretrain_cls(architectures)
+ 
+         with context:
+             model_cls = ModelRegistry.get_class(architectures)

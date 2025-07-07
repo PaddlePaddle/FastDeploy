@@ -24,7 +24,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 - By specifying `--model baidu/ERNIE-4.5-300B-A47B-Paddle`, the model can be automatically downloaded from AIStudio. FastDeploy depends on Paddle format models. For more information, please refer to [Supported Model List](../supported_models.md).
 - By setting `--quantization` to `wint8` or `wint4`, online INT8/INT4 quantization can be selected.
-- Deploying ERNIE-4.5-300B-A47B-Paddle WINT8 requires at least 80G * 8 cards, while WINT4 requires 80GB * 4 cards.
+- Deploying ERNIE-4.5-300B-A47B-Paddle WINT8 requires at least 80G *8 cards, while WINT4 requires 80GB* 4 cards.
 - For more deployment tutorials, please refer to [get_started](../get_started/ernie-4.5.md).
 
 ## 2. Block-wise FP8
@@ -51,4 +51,23 @@ python -m fastdeploy.entrypoints.openai.api_server \
 - By specifying `--model baidu/ERNIE-4.5-300B-A47B-Paddle`, the model can be automatically downloaded from AIStudio. FastDeploy depends on Paddle format models. For more information, please refer to [Supported Model List](../supported_models.md).
 - By setting `--quantization` to `block_wise_fp8`, online Block-wise FP8 quantization can be selected.
 - Deploying ERNIE-4.5-300B-A47B-Paddle Block-wise FP8 requires at least 80G * 8 cards.
-- For more deployment tutorials, please refer to [get_started](../get_started/ernie-4.5.md) 
+- For more deployment tutorials, please refer to [get_started](../get_started/ernie-4.5.md)
+
+# LoadTimeQuantization
+To speed up loading with FastSafeTensor and load large bfloat16 models onto the GPU, we shifted quantization to the weight loading stage and performed it dynamically. This supports quantization formats such as INT4, INT8, and FP8.
+
+## 1. Run loadtimequant modelloader
+To speed up model loading, set the environment variable **export FD_USE_FASTSAFETENSOR=1** and use the **--load_format "load_time_quantization"** option.
+
+```
+export FD_USE_FASTSAFETENSOR=1
+python -m fastdeploy.entrypoints.openai.api_server \
+       --model baidu/ERNIE-4.5-300B-A47B-Paddle \
+       --port 8180 --engine-worker-queue-port 8181 \
+       --cache-queue-port 8182 --metrics-port 8182 \
+       --tensor-parallel-size 8 \
+       --quantization wint8 \
+       --max-model-len 32768 \
+       --max-num-seqs 32\
+       --load_format "load_time_quantization"
+```

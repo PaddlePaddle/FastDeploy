@@ -114,16 +114,16 @@ class LinearBase(nn.Layer):
         self.linear_shift = None
         self.linear_smooth = None
 
-    def load_prequant_weight(self, state_dict: dict):
+    def load_quantized_weight(self, state_dict):
         """
         Load the prequantized weight from the state dictionary.
 
         Args:
             state_dict (dict): A dictionary containing the prequantized weights and scales.
         """
-        self.quant_method.process_prequanted_weights(self, state_dict)
+        self.quant_method.process_quantized_weights(self, state_dict)
 
-    def load_weight(self, state_dict: dict):
+    def load_unquantized_weight(self, state_dict):
         """
         Load the weight from the state dictionary.
 
@@ -133,7 +133,7 @@ class LinearBase(nn.Layer):
         weight_tensor = get_tensor(state_dict.pop(self.weight_key))
 
         if self.fd_config.quant_config:
-            self.quant_method.process_loaded_weights(self, weight_tensor)
+            self.quant_method.process_unquantized_weights(self, weight_tensor)
         else:
             self.linear_weight.set_value(weight_tensor)
 
@@ -148,10 +148,9 @@ class LinearBase(nn.Layer):
         self.state_dict = state_dict
         assert self.weight_key is not None, 'weight_key should not be None.'
         if self.fd_config.model_config.is_quantized:
-            self.load_prequant_weight(state_dict)
+            self.load_quantized_weight(state_dict)
         else:
-            self.load_weight(state_dict)
-
+            self.load_unquantized_weight(state_dict)
         # bias
         if self.with_bias:
             bias_tensor = paddle.to_tensor(
@@ -366,25 +365,31 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         """
         # weight
         assert self.weight_key is not None, 'weight_key should not be None.'
-        if self.weight_key in state_dict.keys():
-            weight_tensor = get_tensor(state_dict.pop(self.weight_key))
+        if self.fd_config.model_config.is_quantized:
+            state_dict[self.weight_key] = get_tensor(
+                state_dict.pop(self.weight_key))
+            state_dict[self.weight_scale_key] = get_tensor(
+                state_dict.pop(self.weight_scale_key))
         else:
-            gate_weight_key = self.weight_key.replace("up_gate_proj",
-                                                      "gate_proj")
-            up_weight_key = self.weight_key.replace("up_gate_proj", "up_proj")
-            gate_tensor = get_tensor(state_dict.pop(gate_weight_key))
-            up_tensor = get_tensor(state_dict.pop(up_weight_key))
-            weight_tensor = paddle.concat([gate_tensor, up_tensor], axis=-1)
+            if self.weight_key in state_dict.keys():
+                weight_tensor = get_tensor(state_dict.pop(self.weight_key))
+            else:
+                gate_weight_key = self.weight_key.replace("up_gate_proj",
+                                                        "gate_proj")
+                up_weight_key = self.weight_key.replace("up_gate_proj", "up_proj")
+                gate_tensor = get_tensor(state_dict.pop(gate_weight_key))
+                up_tensor = get_tensor(state_dict.pop(up_weight_key))
+                weight_tensor = paddle.concat([gate_tensor, up_tensor], axis=-1)
 
-            if self.with_bias:
-                gate_bias_key = self.bias_key.replace("up_gate_proj",
-                                                      "gate_proj")
-                bias_tensor = get_tensor(state_dict.pop(gate_bias_key)).astype(
-                    paddle.get_default_dtype())
+                if self.with_bias:
+                    gate_bias_key = self.bias_key.replace("up_gate_proj",
+                                                        "gate_proj")
+                    bias_tensor = get_tensor(state_dict.pop(gate_bias_key)).astype(
+                        paddle.get_default_dtype())
 
-                state_dict[self.bias_key] = bias_tensor
+                    state_dict[self.bias_key] = bias_tensor
 
-        state_dict[self.weight_key] = weight_tensor
+            state_dict[self.weight_key] = weight_tensor
 
         super().load_state_dict(state_dict)
 
@@ -421,7 +426,16 @@ class QKVParallelLinear(ColumnParallelLinear):
                          with_bias=with_bias,
                          add_bias=add_bias)
 
-    def load_weight(self, state_dict: dict):
+    def load_quantized_weight(self, state_dict):
+        """
+        Load the prequantized weight from the state dictionary.
+
+        Args:
+            state_dict (dict): A dictionary containing the prequantized weights and scales.
+        """
+        self.quant_method.process_quantized_weights(self, state_dict)
+
+    def load_unquantized_weight(self, state_dict):
         """
         Load the weight from the state dictionary.
 
@@ -447,7 +461,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             weight_tensor = paddle.transpose(weight_tensor, perm=[1, 0])
 
         if self.fd_config.quant_config:
-            self.quant_method.process_loaded_weights(self, weight_tensor)
+            self.quant_method.process_unquantized_weights(self, weight_tensor)
         else:
             self.linear_weight.set_value(weight_tensor)
 
@@ -460,12 +474,10 @@ class QKVParallelLinear(ColumnParallelLinear):
         """
         # weight
         assert self.weight_key is not None, 'weight_key should not be None.'
-        # qkv fused in disk
-
         if self.fd_config.model_config.is_quantized:
-            self.load_prequant_weight(state_dict)
+            self.load_quantized_weight(state_dict)
         else:
-            self.load_weight(state_dict)
+            self.load_unquantized_weight(state_dict)
 
         # bias
         if self.with_bias:

@@ -16,6 +16,7 @@
 from typing import Optional
 
 import paddle
+from paddleformers.utils.log import logger
 
 from fastdeploy.model_executor.layers.moe import FusedMoE
 
@@ -78,13 +79,36 @@ class TensorWiseFP8LinearMethod(QuantMethodBase):
         self.quant_round_type = 1
         self.weight_dtype = "float8_e4m3fn"
 
+    def create_tp_dict(self, model_config, layer):
+        """create_tp_dict"""
+        from fastdeploy.model_executor.models.tp_utils import \
+            TensorSplitMode as tsm
+        from fastdeploy.model_executor.models.utils import WeightMeta
+
+        weight_key = layer.weight_key
+        if weight_key not in model_config.weight_infos_dict:
+            if ("up_gate_proj" in weight_key
+                    or "shared_experts.up_gate_proj" in weight_key):
+                weight_meta = WeightMeta(weight_key, True, tsm.PairFused)
+            elif "qkv_proj" in weight_key:
+                weight_meta = WeightMeta(weight_key, True, tsm.GQA)
+            elif ("down_proj" in weight_key or "o_proj" in weight_key
+                  or "shared_experts.down_proj" in weight_key):
+                weight_meta = WeightMeta(weight_key, False)
+            else:
+                logger.error(f"{weight_key} was not split.")
+            model_config.weight_infos_dict[weight_key] = weight_meta
+
     def create_weights(self, layer):
         """
-        Nothing to do!
+        create_weights
         """
-        pass
+        if (not layer.fd_config.parallel_config.use_ep
+                and layer.fd_config.model_config.is_quantized and
+                layer.fd_config.parallel_config.tensor_parallel_degree > 1):
+            self.create_tp_dict(layer.fd_config.model_config, layer)
 
-    def process_prequanted_weights(self, layer, state_dict) -> None:
+    def process_quantized_weights(self, layer, state_dict) -> None:
         """
         Process pre-quantized weights before applying them to the model
         Args:
@@ -131,5 +155,6 @@ class TensorWiseFP8LinearMethod(QuantMethodBase):
             bias=None,
             scale=self.total_scale,
             output_dtype="bfloat16",
-            activation_type="identity")
+            activation_type="identity",
+        )
         return linear_out

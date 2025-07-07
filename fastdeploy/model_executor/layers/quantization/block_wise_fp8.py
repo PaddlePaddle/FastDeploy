@@ -20,7 +20,7 @@ import paddle
 import fastdeploy
 from fastdeploy.model_executor.layers.moe import FusedMoE
 
-from ..utils import per_block_cast_to_fp8, get_tensor
+from ..utils import get_tensor, per_block_cast_to_fp8
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 
@@ -34,9 +34,6 @@ class BlockWiseFP8Config(QuantConfigBase):
     def __init__(self, weight_block_size: list = [-1, -1]) -> None:
         super().__init__()
         self.weight_block_size = weight_block_size
-        self.quant_max_bound = 448
-        self.quant_min_bound = -448
-        self.quant_round_type = 1
 
     def name(self) -> str:
         return "block_wise_fp8"
@@ -47,9 +44,9 @@ class BlockWiseFP8Config(QuantConfigBase):
         return cls(weight_block_size)
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
-        '''
+        """
         Get quantization method.
-        '''
+        """
         if isinstance(layer, FusedMoE):
             from fastdeploy.model_executor.layers.moe.fused_moe_deepgemm_backend import \
                 DeepGemmFusedMoeMethod
@@ -69,6 +66,9 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
     ) -> None:
         super().__init__()
         self.quant_config = quant_config
+        self.quant_max_bound = 448
+        self.quant_min_bound = -448
+        self.quant_round_type = 1
 
     def create_weights(self, layer):
         layer.linear_weight_shape.reverse()
@@ -84,16 +84,23 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         )
         layer.weight_dtype = "float8_e4m3fn"
 
-    def process_loaded_weights(self, layer, weights) -> None:
+    def apply_weight_quantization(self, weight_tensor):
+        """apply_weight_quantization"""
+        quanted_weight_tensor, weight_block_scale_tensor = per_block_cast_to_fp8(
+            weight_tensor)
+        return quanted_weight_tensor, weight_block_scale_tensor
+
+    def process_unquantized_weights(self, layer, weights) -> None:
+        """process_unquantized_weights"""
         weight_tensor = weights.transpose([1, 0])
         quanted_weight_tensor, weight_block_scale_tensor = (
-            per_block_cast_to_fp8(weight_tensor))
+            self.apply_weight_quantization(weight_tensor))
         layer.linear_weight.copy_(quanted_weight_tensor, False)
         layer.linear_weight_scale.set_value(weight_block_scale_tensor)
 
-    def process_prequanted_weights(self, layer, state_dict):
+    def process_quantized_weights(self, layer, state_dict):
         """
-        process_prequanted_weights
+        process_quantized_weights
         """
         quant_weight = get_tensor(state_dict.pop(layer.weight_key))
         weight_scale = get_tensor(state_dict.pop(layer.weight_scale_key))

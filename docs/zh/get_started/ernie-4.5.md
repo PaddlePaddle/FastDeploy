@@ -31,6 +31,21 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --max-num-seqs 32
 ```
 
+可以通过设置环境变量 **export FD_USE_FASTSAFETENSOR=1** 并添加参数 **--load_format "load_time_quantization"**,提升权重load速度,
+
+```shell
+export FD_USE_FASTSAFETENSOR=1
+python -m fastdeploy.entrypoints.openai.api_server \
+       --model baidu/ERNIE-4.5-300B-A47B-Paddle \
+       --port 8180 --engine-worker-queue-port 8181 \
+       --cache-queue-port 8182 --metrics-port 8182 \
+       --tensor-parallel-size 8 \
+       --quantization wint4 \
+       --max-model-len 32768 \
+       --max-num-seqs 32 \
+       --load_format "load_time_quantization"
+```
+
 ## 用户发起服务请求
 执行启动服务指令后，当终端打印如下信息，说明服务已经启动成功。
 
