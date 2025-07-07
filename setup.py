@@ -169,10 +169,11 @@ def get_name():
 
 cmdclass_dict = {'bdist_wheel': CustomBdistWheel}
 cmdclass_dict['build_ext'] = CMakeBuild
+FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", "2.0.0")
 
 setup(
     name=get_name(),
-    version="2.0.0",
+    version=FASTDEPLOY_VERSION,
     author="PaddlePaddle",
     author_email="dltp@baidu.com",
     description="FastDeploy: Large Language Model Serving.",
