@@ -393,7 +393,7 @@ class Ernie4_5_VLModel(nn.Layer):
         token_type_ids = image_mask.cast("int32")
         token_num = hidden_states.shape[0]
         image_token_num = paddle.count_nonzero(token_type_ids).cast("int32")
-        text_token_num = paddle.clip(token_num - image_token_num, min=1)
+        text_token_num = paddle.maximum(token_num - image_token_num, paddle.ones([],dtype="int64"))
         if image_mask.any():
             hidden_states[image_mask] = image_features.cast(self._dtype)
             text_input = paddle.full(
