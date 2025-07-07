@@ -211,17 +211,20 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     """
     Test that two runs with the same fixed input produce similar outputs.
     """
-    # First request
+    # request
     resp1 = requests.post(api_url, headers=headers, json=consistent_payload)
     assert resp1.status_code == 200
     result1 = resp1.json()
     content1 = result1["choices"][0]["message"]["content"]
-
-    # Second request
-    resp2 = requests.post(api_url, headers=headers, json=consistent_payload)
-    assert resp2.status_code == 200
-    result2 = resp2.json()
-    content2 = result2["choices"][0]["message"]["content"]
+    
+    # base result
+    base_path = os.getenv("MODEL_PATH")
+    if base_path:
+        base_file = os.path.join(base_path, "ernie-4_5-vl-base")
+    else:
+        base_file = "ernie-4_5-vl-base"
+    with open(base_file, "r") as f:
+        content2 = f.read()
 
     # Calculate difference rate
     diff_rate = calculate_diff_rate(content1, content2)
