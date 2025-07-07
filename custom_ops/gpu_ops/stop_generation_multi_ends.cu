@@ -74,11 +74,16 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
         }
     }
 
+#ifdef PADDLE_WITH_CUSTOM_DEVICE
+    auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(topk_ids.place()));
+    auto cu_stream = dev_ctx->stream();
+#else
     auto cu_stream = topk_ids.stream();
+#endif
     std::vector<int64_t> shape = topk_ids.shape();
     int64_t bs_now = shape[0];
     int64_t end_length = end_ids.shape()[0];
-    int block_size = (bs_now + 32 - 1) / 32 * 32;
+    int block_size = (bs_now + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
     set_value_by_flags<<<1, block_size, 0, cu_stream>>>(
         const_cast<bool *>(stop_flags.data<bool>()),
         const_cast<int64_t *>(topk_ids.data<int64_t>()),

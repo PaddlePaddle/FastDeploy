@@ -33,6 +33,8 @@ if current_platform.is_cuda() and current_platform.available():
             "Verify environment consistency between compilation and FastDeploy installation. "
             "And ensure the Paddle version supports FastDeploy's custom operators"
         )
+if current_platform.is_iluvatar():
+    from fastdeploy.model_executor.ops.iluvatar import get_padding_offset
 import re
 
 from fastdeploy import envs

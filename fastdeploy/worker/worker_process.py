@@ -48,6 +48,11 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
     if current_platform.is_xpu():
         from fastdeploy.worker.xpu_worker import XpuWorker
         return XpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
+    if current_platform.is_iluvatar():
+        from fastdeploy.worker.iluvatar_worker import IluvatarWorker
+        return IluvatarWorker(fd_config=fd_config,
+                              local_rank=local_rank,
+                              rank=rank)
 
 
 class PaddleDisWorkerProc():
@@ -125,9 +130,9 @@ class PaddleDisWorkerProc():
             model_weights_status:
         """
         # init worker_ready_signal
-
+        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         array_size = min(
-            8, self.parallel_config.tensor_parallel_degree *
+            max_chips_per_node, self.parallel_config.tensor_parallel_degree *
             self.parallel_config.expert_parallel_degree)
         workers_ready = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_ready_signal = IPCSignal(
@@ -136,7 +141,8 @@ class PaddleDisWorkerProc():
             dtype=np.int32,
             suffix=self.parallel_config.engine_pid,
             create=False)
-        self.worker_ready_signal.value[self.local_rank % 8] = 1
+        self.worker_ready_signal.value[self.local_rank %
+                                       max_chips_per_node] = 1
 
         # init worker_healthy_live_signal
         workers_alive = np.zeros(shape=[self.ranks], dtype=np.int32)
