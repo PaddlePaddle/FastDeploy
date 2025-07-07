@@ -122,9 +122,13 @@ class TokenProcessor(object):
 
         if current_platform.is_xpu():
             from fastdeploy.model_executor.ops.xpu import get_output
+        elif current_platform.is_iluvatar():
+            from fastdeploy.model_executor.ops.iluvatar import get_output
         else:
-            from fastdeploy.model_executor.ops.gpu import (
-                get_output, get_output_ep, speculate_get_output)
+            from fastdeploy.model_executor.ops.gpu import (get_output,
+                                                           get_output_ep,
+                                                           speculate_get_output
+                                                           )
         rank_id = self.cfg.parallel_config.local_data_parallel_id
 
         while True:
@@ -413,9 +417,12 @@ class WarmUpTokenProcessor(TokenProcessor):
 
         if current_platform.is_xpu():
             from fastdeploy.model_executor.ops.xpu import get_output
+        elif current_platform.is_iluvatar():
+            from fastdeploy.model_executor.ops.iluvatar import get_output
         else:
-            from fastdeploy.model_executor.ops.gpu import (
-                get_output, speculate_get_output)
+            from fastdeploy.model_executor.ops.gpu import (get_output,
+                                                           speculate_get_output
+                                                           )
 
         while self._is_running:
             try:

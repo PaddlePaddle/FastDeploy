@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """
 platform module
 """
@@ -22,7 +21,8 @@ from .cpu import CPUPlatform
 from .xpu import XPUPlatform
 from .npu import NPUPlatform
 from .dcu import DCUPlatform
-from .base import _Backend
+from .iluvatar import IluvatarPlatform
+from .base import _Backend  # noqa: F401
 
 _current_platform = None
 
@@ -40,10 +40,13 @@ def __getattr__(name: str):
                 _current_platform = NPUPlatform()
             elif paddle.is_compiled_with_rocm():
                 _current_platform = DCUPlatform()
+            elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
+                _current_platform = IluvatarPlatform()
             else:
                 _current_platform = CPUPlatform()
         return _current_platform
     elif name in globals():
         return globals()[name]
     else:
-        raise AttributeError(f"No attribute named '{name}' exists in {__name__}.")
+        raise AttributeError(
+            f"No attribute named '{name}' exists in {__name__}.")

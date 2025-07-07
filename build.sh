@@ -104,6 +104,15 @@ function copy_ops(){
       return
     fi
 
+    if_corex=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device(\"iluvatar_gpu\"))"`
+    if [ "$if_corex" = "True" ]; then
+      DEVICE_TYPE="iluvatar-gpu"
+      cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
+      cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/iluvatar
+      echo -e "BASE and Iluvatar ops have been copy to fastdeploy"
+      return
+    fi
+
     DEVICE_TYPE="cpu"
     cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
     cd ../../../../
