@@ -370,7 +370,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             ceil_div(max_possible_num_post_padded, config_ffn1["BLOCK_SIZE_M"]) *
             ceil_div(moe_intermediate_size * 2, config_ffn1["BLOCK_SIZE_N"]), )
 
-        permute_x = fastdeploy.model_executor.ops.gpu.expert_tensorwise_quant_fp8(
+        permute_x = fastdeploy.model_executor.ops.gpu.moe_fused_hadamard_quant_fp8(
             x,
             scale=layer.moe_ffn1_in_scale,
             topk_ids=topk_ids,
@@ -423,7 +423,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         intermediate_cache2 = paddle.incubate.nn.functional.swiglu(
             intermediate_cache1)
 
-        intermediate_cache2 = fastdeploy.model_executor.ops.gpu.expert_tensorwise_quant_fp8(
+        intermediate_cache2 = fastdeploy.model_executor.ops.gpu.moe_fused_hadamard_quant_fp8(
             intermediate_cache2,
             scale=layer.moe_ffn2_in_scale,
             topk_ids=topk_ids,
