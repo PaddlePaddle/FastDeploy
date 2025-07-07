@@ -245,7 +245,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             embedding_dim=fd_config.model_config.hidden_size,
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
-            )
+        )
 
     @classmethod
     def name(self):
