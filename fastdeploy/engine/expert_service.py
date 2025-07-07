@@ -65,7 +65,7 @@ class ExpertService(object):
 
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
 
-        address = ('0.0.0.0', cfg.engine_worker_queue_port)
+        address = (cfg.pod_ips[0], cfg.engine_worker_queue_port)
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,

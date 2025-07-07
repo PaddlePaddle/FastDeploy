@@ -83,9 +83,6 @@ class RolloutModel(nn.Layer):
         all_params = {}
         for model in self.rollout_models:
             for name, param in model.state_dict().items():
-                # logger.debug(
-                #     f"Model param: {name}, shape={param.shape}, dtype={param.dtype}"
-                # )
                 all_params[name] = param
         return all_params
 

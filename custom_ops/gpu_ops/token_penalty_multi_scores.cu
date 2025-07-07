@@ -132,7 +132,12 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
     typedef PDTraits<D> traits_;
     typedef typename traits_::DataType DataType_;
     typedef typename traits_::data_t data_t;
+#ifdef PADDLE_WITH_CUSTOM_DEVICE
+    auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(logits.place()));
+    auto cu_stream = dev_ctx->stream();
+#else
     auto cu_stream = logits.stream();
+#endif
     std::vector<int64_t> shape = logits.shape();
     auto repeat_times =
         paddle::full(shape, 0, paddle::DataType::INT32, pre_ids.place());
@@ -143,7 +148,7 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
 
     int64_t end_length = eos_token_id.shape()[0];
 
-    int block_size = (bs + 32 - 1) / 32 * 32;
+    int block_size = (bs + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
     min_length_logits_process<<<1, block_size, 0, cu_stream>>>(
         reinterpret_cast<DataType_ *>(
             const_cast<data_t *>(logits.data<data_t>())),
@@ -154,8 +159,12 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
         length,
         end_length);
 
-    block_size = (length_id + 32 - 1) / 32 * 32;
+    block_size = (length_id + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
+#ifdef PADDLE_WITH_COREX
+    block_size = std::min(block_size, 512);
+#else
     block_size = min(block_size, 512);
+#endif
     update_repeat_times<<<bs, block_size, 0, cu_stream>>>(
         pre_ids.data<int64_t>(),
         cur_len.data<int64_t>(),
@@ -164,8 +173,12 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
         length,
         length_id);
 
-    block_size = (length + 32 - 1) / 32 * 32;
+    block_size = (length + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
+#ifdef PADDLE_WITH_COREX
+    block_size = std::min(block_size, 512);
+#else
     block_size = min(block_size, 512);
+#endif
     update_value_by_repeat_times<DataType_><<<bs, block_size, 0, cu_stream>>>(
         repeat_times.data<int>(),
         reinterpret_cast<DataType_ *>(
@@ -180,8 +193,12 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
         bs,
         length);
 
-    block_size = (length_bad_words + 32 - 1) / 32 * 32;
+    block_size = (length_bad_words + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
+#ifdef PADDLE_WITH_COREX
+    block_size = std::min(block_size, 512);
+#else
     block_size = min(block_size, 512);
+#endif
     ban_bad_words<DataType_><<<bs, block_size, 0, cu_stream>>>(
         reinterpret_cast<DataType_ *>(
             const_cast<data_t *>(logits.data<data_t>())),
