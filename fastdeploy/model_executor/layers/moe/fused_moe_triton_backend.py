@@ -1,5 +1,5 @@
 """
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,8 +20,7 @@ from paddle import nn
 import fastdeploy
 from fastdeploy.distributed.communication_op import \
     tensor_model_parallel_all_reduce
-from fastdeploy.model_executor.layers.utils import (create_hadamard_matrix_map,
-                                                    get_tensor)
+from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.utils import ceil_div
 
 from ..quantization.quant_base import QuantMethodBase
@@ -272,8 +271,8 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             layer.moe_intermediate_size, layer.hidden_size
         ]
 
-        ffn1_tensor = paddle.stack(ffn1_tensor, axis=0)
-        ffn2_tensor = paddle.stack(ffn2_tensor, axis=0)
+        ffn1_tensor = paddle.stack(ffn1_tensor, axis=0).view(paddle.float8_e4m3fn)
+        ffn2_tensor = paddle.stack(ffn2_tensor, axis=0).view(paddle.float8_e4m3fn)
 
         added_wfp8afp8_attrs = [
             "moe_ffn1_weight", "moe_ffn2_weight", "moe_ffn1_weight_scale",
@@ -309,7 +308,10 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
                     dtype=weight_tensor.dtype,
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ))
-            getattr(layer, name).set_value(weight_tensor)
+            if weight_tensor.dtype == paddle.float8_e4m3fn:
+                getattr(layer, name).copy_(weight_tensor, False)
+            else:
+                getattr(layer, name).set_value(weight_tensor)
 
     def create_weights(self, layer: nn.Layer, state_dict):
         """
@@ -333,13 +335,13 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         moe_intermediate_size = layer.moe_intermediate_size
         hidden_size = layer.hidden_size
 
-        scores = paddle.nn.functional.softmax(gate_out, axis=-1)
-
-        topk_weights, topk_ids = paddle.topk(scores,
-                                             k=top_k,
-                                             axis=-1,
-                                             sorted=False)
-        topk_weights = topk_weights / topk_weights.sum(axis=-1, keepdim=True)
+        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+            gate_out,
+            layer.gate_correction_bias,
+            top_k,
+            True,  # apply_norm_weight,
+            False,
+        )
 
         intermediate_cache1 = paddle.empty(
             [token_num * top_k, moe_intermediate_size * 2],
@@ -354,34 +356,31 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             dtype=x.dtype,
         )
 
-        config = {
+        config_ffn1 = {
             "BLOCK_SIZE_M": 32,
             "BLOCK_SIZE_N": 128,
-            "BLOCK_SIZE_K": 128,
+            "BLOCK_SIZE_K": 256,
             "GROUP_SIZE_M": 1,
         }
 
         sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
-            topk_ids, num_local_experts, config["BLOCK_SIZE_M"])
+            topk_ids, num_local_experts, config_ffn1["BLOCK_SIZE_M"])
         max_possible_num_post_padded = sorted_token_ids.shape[0]
         grid = (
-            ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"]) *
-            ceil_div(moe_intermediate_size * 2, config["BLOCK_SIZE_N"]), )
+            ceil_div(max_possible_num_post_padded, config_ffn1["BLOCK_SIZE_M"]) *
+            ceil_div(moe_intermediate_size * 2, config_ffn1["BLOCK_SIZE_N"]), )
 
-        adamard_matrix = create_hadamard_matrix_map[hidden_size]
-        x = paddle.matmul(x.cast("float32"), adamard_matrix)
-
-        permute_x = x[:, None, :].tile([1, top_k, 1])
-        permute_x = permute_x.reshape([-1, hidden_size])
-
-        quant_activation_scale = layer.moe_ffn1_in_scale[topk_ids].reshape(
-            [-1, 1])
-        permute_x = permute_x / quant_activation_scale
-        permute_x = permute_x.astype("float8_e4m3fn")
+        permute_x = fastdeploy.model_executor.ops.gpu.moe_fused_hadamard_quant_fp8(
+            x,
+            scale=layer.moe_ffn1_in_scale,
+            topk_ids=topk_ids,
+            top_k=top_k,
+            intermediate_size=hidden_size,
+            tiled=False)
 
         fused_moe_kernel_paddle[grid](
             permute_x,
-            layer.moe_ffn1_weight.view(paddle.float8_e4m3fn),
+            layer.moe_ffn1_weight,
             intermediate_cache1,
             layer.moe_ffn1_in_scale,
             layer.moe_ffn1_weight_scale,
@@ -409,36 +408,43 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             group_n=-1,
             group_k=-1,
             # Meta-parameters
-            BLOCK_SIZE_M=config["BLOCK_SIZE_M"],
-            BLOCK_SIZE_N=config["BLOCK_SIZE_N"],
-            BLOCK_SIZE_K=config["BLOCK_SIZE_K"],
-            GROUP_SIZE_M=config["GROUP_SIZE_M"],
+            BLOCK_SIZE_M=config_ffn1["BLOCK_SIZE_M"],
+            BLOCK_SIZE_N=config_ffn1["BLOCK_SIZE_N"],
+            BLOCK_SIZE_K=config_ffn1["BLOCK_SIZE_K"],
+            GROUP_SIZE_M=config_ffn1["GROUP_SIZE_M"],
             MUL_ROUTED_WEIGHT=False,
             top_k=1,
             compute_type_enum=1,
             use_fp8_w8a8=True,
             use_int8_w8a16=False,
-            even_Ks=hidden_size % config["BLOCK_SIZE_K"] == 0,
+            even_Ks=hidden_size % config_ffn1["BLOCK_SIZE_K"] == 0,
         )
 
         intermediate_cache2 = paddle.incubate.nn.functional.swiglu(
             intermediate_cache1)
 
-        hadamard_matrix = create_hadamard_matrix_map[moe_intermediate_size]
-        intermediate_cache2 = paddle.matmul(
-            intermediate_cache2.cast("float32"), hadamard_matrix)
-        quant_activation_scale = layer.moe_ffn2_in_scale[topk_ids].reshape(
-            [-1, 1])
-        intermediate_cache2 = intermediate_cache2 / quant_activation_scale
-        intermediate_cache2 = intermediate_cache2.astype("float8_e4m3fn")
+        intermediate_cache2 = fastdeploy.model_executor.ops.gpu.moe_fused_hadamard_quant_fp8(
+            intermediate_cache2,
+            scale=layer.moe_ffn2_in_scale,
+            topk_ids=topk_ids,
+            top_k=top_k,
+            intermediate_size=moe_intermediate_size,
+            tiled=True)
+
+        config_ffn2 = {
+            "BLOCK_SIZE_M": 32,
+            "BLOCK_SIZE_N": 128,
+            "BLOCK_SIZE_K": 64,
+            "GROUP_SIZE_M": 1,
+        }
 
         grid = (
-            ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"]) *
-            ceil_div(hidden_size, config["BLOCK_SIZE_N"]), )
+            ceil_div(max_possible_num_post_padded, config_ffn2["BLOCK_SIZE_M"]) *
+            ceil_div(hidden_size, config_ffn2["BLOCK_SIZE_N"]), )
 
         fused_moe_kernel_paddle[grid](
             intermediate_cache2,
-            layer.moe_ffn2_weight.view(paddle.float8_e4m3fn),
+            layer.moe_ffn2_weight,
             intermediate_cache3,
             layer.moe_ffn2_in_scale,
             layer.moe_ffn2_weight_scale,
@@ -465,16 +471,16 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             group_n=-1,
             group_k=-1,
             # Meta-parameters
-            BLOCK_SIZE_M=config["BLOCK_SIZE_M"],
-            BLOCK_SIZE_N=config["BLOCK_SIZE_N"],
-            BLOCK_SIZE_K=config["BLOCK_SIZE_K"],
-            GROUP_SIZE_M=config["GROUP_SIZE_M"],
+            BLOCK_SIZE_M=config_ffn2["BLOCK_SIZE_M"],
+            BLOCK_SIZE_N=config_ffn2["BLOCK_SIZE_N"],
+            BLOCK_SIZE_K=config_ffn2["BLOCK_SIZE_K"],
+            GROUP_SIZE_M=config_ffn2["GROUP_SIZE_M"],
             MUL_ROUTED_WEIGHT=True,
             top_k=1,
             compute_type_enum=1,
             use_fp8_w8a8=True,
             use_int8_w8a16=False,
-            even_Ks=moe_intermediate_size % config["BLOCK_SIZE_K"] == 0,
+            even_Ks=moe_intermediate_size % config_ffn2["BLOCK_SIZE_K"] == 0,
         )
 
         intermediate_cache3.reshape_([token_num, top_k, hidden_size])
