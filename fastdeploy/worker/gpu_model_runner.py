@@ -207,7 +207,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx:idx +
                                                1, :length] = np.array(
                                                    request.prompt_token_ids)
-
                 # Use chunked prefill
                 if self.parallel_config.enable_chunked_prefill:
                     request.set("chunk_idx", 1)
@@ -714,6 +713,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Get the attention backend
         attn_cls = get_attention_backend()
+
         attn_backend = attn_cls(self.fd_config,
                                 kv_num_heads=self.model_config.kv_num_heads,
                                 num_heads=num_heads,
