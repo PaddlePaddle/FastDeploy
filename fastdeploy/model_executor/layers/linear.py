@@ -57,7 +57,8 @@ class LinearBase(nn.Layer):
             NotImplementedError: Raised if the current platform is not a CUDA platform.
         """
         super().__init__()
-        if current_platform.is_cuda() or current_platform.is_xpu():
+        if current_platform.is_cuda() or current_platform.is_xpu(
+        ) or current_platform.is_iluvatar():
             self.forward = self.forward_cuda
         else:
             raise NotImplementedError
@@ -411,9 +412,14 @@ class QKVParallelLinear(ColumnParallelLinear):
         self.head_dim = fd_config.model_config.head_dim
         self.nranks = fd_config.parallel_config.tensor_parallel_degree
         self.num_heads_per_rank = divide(self.num_heads, self.nranks)
-        self.kv_num_heads_per_rank = divide(self.kv_num_heads, self.nranks)
+        if self.kv_num_heads < self.nranks and self.nranks % self.kv_num_heads == 0:
+            self.kv_num_heads_per_rank = 1
+            output_size = (self.num_heads + 2 * self.nranks) * self.head_dim
+        else:
+            self.kv_num_heads_per_rank = divide(self.kv_num_heads, self.nranks)
+            output_size = (self.num_heads +
+                           2 * self.kv_num_heads) * self.head_dim
         input_size = self.hidden_size
-        output_size = (self.num_heads + 2 * self.kv_num_heads) * self.head_dim
         super().__init__(fd_config=fd_config,
                          prefix=prefix,
                          input_size=input_size,

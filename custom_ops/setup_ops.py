@@ -470,6 +470,36 @@ elif paddle.is_compiled_with_cuda():
     )
 elif paddle.is_compiled_with_xpu():
     assert False, "In XPU, we should use setup_ops.py in xpu_ops/src, not this."
+elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
+    setup(
+        name="fastdeploy_ops",
+        ext_modules=CUDAExtension(
+            extra_compile_args={
+                "nvcc": [
+                    "-DPADDLE_DEV",
+                    "-DPADDLE_WITH_CUSTOM_DEVICE",
+                ]
+            },
+            sources=[
+                "gpu_ops/get_padding_offset.cu",
+                "gpu_ops/set_value_by_flags.cu",
+                "gpu_ops/stop_generation_multi_stop_seqs.cu",
+                "gpu_ops/rebuild_padding.cu",
+                "gpu_ops/update_inputs.cu",
+                "gpu_ops/stop_generation_multi_ends.cu",
+                "gpu_ops/step.cu",
+                "gpu_ops/token_penalty_multi_scores.cu",
+                "iluvatar_ops/moe_dispatch.cu",
+                "iluvatar_ops/moe_reduce.cu",
+                "iluvatar_ops/paged_attn.cu",
+                "iluvatar_ops/runtime/iluvatar_context.cc",
+            ],
+            include_dirs=["iluvatar_ops/runtime", "gpu_ops"],
+            extra_link_args=[
+                "-lcuinfer",
+            ],
+        ),
+    )
 else:
     use_bf16 = envs.FD_CPU_USE_BF16 == "True"
 

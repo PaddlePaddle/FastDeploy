@@ -17,11 +17,11 @@
 #pragma once
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
+#include "helper.h"
 
 namespace cg = cooperative_groups;
 
 constexpr unsigned FULL_WARP_MASK = 0xffffffff;
-constexpr int32_t WARP_SIZE = 32;
 constexpr int32_t BLOCK_SIZE = 512;
 constexpr int32_t NUM_WARPS_PER_BLOCK = BLOCK_SIZE / WARP_SIZE;
 
