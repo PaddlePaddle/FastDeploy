@@ -254,7 +254,6 @@ class Qwen3ForCausalLM(ModelForCasualLM):
                 num_embeddings=fd_config.model_config.vocab_size,
                 prefix="lm_head",
             )
-        # self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
 
     @classmethod
     def name(self):
@@ -273,7 +272,6 @@ class Qwen3ForCausalLM(ModelForCasualLM):
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
         self.model.load_state_dict(state_dict)
-        # if self.tie_word_embeddings:
         self.lm_head.out_linear.weight.set_value(
             self.model.embeddings.word_embeddings.weight.transpose([1, 0]))
         self.lm_head.load_state_dict(state_dict)
