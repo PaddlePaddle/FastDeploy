@@ -270,7 +270,6 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/get_position_ids_and_mask_encoder_batch.cu",
         "gpu_ops/fused_rotary_position_encoding.cu",
         "gpu_ops/noaux_tc.cu",
-        "gpu_ops/fused_hadamard_quant_fp8.cu"
     ]
 
     # pd_disaggregation
@@ -443,6 +442,7 @@ elif paddle.is_compiled_with_cuda():
             "gpu_ops/scaled_gemm_f8_i4_f16_weight_quantize.cu",
             "gpu_ops/cutlass_kernels/cutlass_heuristic.cu",
             "gpu_ops/cutlass_kernels/cutlass_preprocessors.cu",
+            "gpu_ops/fused_hadamard_quant_fp8.cu"
         ]
 
         sources += find_end_files(fp8_auto_gen_directory, ".cu")
