@@ -114,7 +114,7 @@ class ParallelLMHead(nn.Layer):
         else:
             if self.tie_word_embeddings:
                 self.out_linear.weight.set_value(
-                    get_tensor(state_dict[self.linear_weight_key]).astype(
+                    get_tensor(state_dict.pop(self.linear_weight_key)).astype(
                         paddle.get_default_dtype()).transpose([1, 0]))
             else:
                 weight_tensor = get_tensor(
