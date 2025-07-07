@@ -19,17 +19,24 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.engine.config import SpeculativeConfig
-from fastdeploy.model_executor.ops.gpu import (
-    get_padding_offset, save_output, set_stop_value_multi_ends,
-    speculate_clear_accept_nums, speculate_get_output_padding_offset,
-    speculate_get_padding_offset, speculate_get_seq_lens_output,
-    speculate_save_output, speculate_set_value_by_flags_and_idx,
-    speculate_step_paddle, speculate_step_system_cache, speculate_update_v3,
-    step_paddle, step_system_cache, update_inputs, step_reschedule)
 from fastdeploy.platforms import current_platform
+if current_platform.is_iluvatar():
+    from fastdeploy.model_executor.ops.iluvatar import (
+        get_padding_offset, save_output, set_stop_value_multi_ends,
+        step_paddle, update_inputs)
+else:
+    from fastdeploy.model_executor.ops.gpu import (
+        get_padding_offset, save_output, set_stop_value_multi_ends,
+        speculate_clear_accept_nums, speculate_get_output_padding_offset,
+        speculate_get_padding_offset, speculate_get_seq_lens_output,
+        speculate_save_output, speculate_set_value_by_flags_and_idx,
+        speculate_step_paddle, speculate_step_system_cache,
+        speculate_update_v3, step_paddle, step_system_cache, update_inputs,
+        step_reschedule)
 from fastdeploy.worker.output import ModelOutputData
 
 DISABLE_RECOVER = (envs.FD_DISABLED_RECOVER == "1")
+
 
 def pre_process(
     max_len: int,
@@ -151,6 +158,7 @@ def post_process_normal(sampled_token_ids: paddle.Tensor,
             save_each_rank,  # save_each_rank
         )
 
+
 def post_process_specualate(model_output, skip_save_output: bool = False):
     """"""
     speculate_update_v3(
@@ -217,7 +225,6 @@ def step_cuda(
     TODO(gongshaotian): normalization name
     """
 
-    
     if speculative_config.method is not None:
         if enable_prefix_caching:
             speculate_step_system_cache(
@@ -364,6 +371,17 @@ def rebuild_padding(tmp_out: paddle.Tensor,
     """
     if current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import rebuild_padding
+        hidden_states = rebuild_padding(
+            tmp_out,
+            cum_offsets,
+            seq_len_this_time,
+            seq_lens_decoder,
+            seq_lens_encoder,
+            output_padding_offset,
+            max_input_length,
+        )
+    elif current_platform.is_iluvatar():
+        from fastdeploy.model_executor.ops.iluvatar import rebuild_padding
         hidden_states = rebuild_padding(
             tmp_out,
             cum_offsets,

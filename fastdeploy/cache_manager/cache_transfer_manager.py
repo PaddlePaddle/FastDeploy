@@ -71,6 +71,10 @@ def parse_args():
                         type=int,
                         default=9923,
                         help="cache queue port")
+    parser.add_argument("--pod_ip",
+                        type=str,
+                        default="0.0.0.0",
+                        help="pod ip")
     parser.add_argument("--engine_worker_queue_port",
                         type=int,
                         default=9923,
@@ -144,7 +148,7 @@ class CacheTransferManager:
         self.rank = rank
         self.device = device
 
-        address = ('0.0.0.0', args.cache_queue_port)
+        address = (args.pod_ip, args.cache_queue_port)
         self.cache_task_queue = EngineCacheQueue(
             address=address,
             is_server=False,
@@ -236,6 +240,7 @@ class CacheTransferManager:
             self.cache_messager = CacheMessager(
                 splitwise_role=args.splitwise_role,
                 transfer_protocol=args.protocol,
+                pod_ip=args.pod_ip,
                 engine_worker_queue_port=args.engine_worker_queue_port,
                 local_data_parallel_id=args.local_data_parallel_id,
                 gpu_cache_kvs=self.gpu_cache_kvs,

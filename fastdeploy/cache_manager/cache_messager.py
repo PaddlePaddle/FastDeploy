@@ -37,6 +37,7 @@ class CacheMessager(object):
     def __init__(self,
                  splitwise_role,
                  transfer_protocol,
+                 pod_ip,
                  engine_worker_queue_port,
                  local_data_parallel_id,
                  gpu_cache_kvs,
@@ -69,7 +70,7 @@ class CacheMessager(object):
         self.gpu_cache_kvs = gpu_cache_kvs
         self.rank = rank
         self.nranks = nranks
-        address = ('0.0.0.0', engine_worker_queue_port)
+        address = (pod_ip, engine_worker_queue_port)
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,

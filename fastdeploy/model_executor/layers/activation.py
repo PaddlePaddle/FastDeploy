@@ -63,7 +63,8 @@ class SiluAndMul(nn.Layer):
         """
         super().__init__()
 
-        if current_platform.is_cuda() or current_platform.is_xpu():
+        if current_platform.is_cuda() or current_platform.is_xpu(
+        ) or current_platform.is_iluvatar():
             self.forward = self.forward_cuda
         else:
             raise NotImplementedError

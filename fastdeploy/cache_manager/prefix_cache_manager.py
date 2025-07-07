@@ -109,7 +109,7 @@ class PrefixCacheManager:
 
 
     def launch_cache_manager(self, cache_config, tensor_parallel_size, \
-                    device_ids, engine_worker_queue_port, pid_suffix):
+                    device_ids, pod_ip, engine_worker_queue_port, pid_suffix):
         """
         launch_cache_manager function used to initialize the cache manager.
         """
@@ -123,7 +123,7 @@ class PrefixCacheManager:
             create=True)
 
         self.cache_task_queue = EngineCacheQueue(
-            address=('127.0.0.1', cache_config.cache_queue_port),
+            address=(pod_ip, cache_config.cache_queue_port),
             authkey=b'cache_queue_service',
             is_server=False,
             num_client=tensor_parallel_size,
@@ -166,6 +166,7 @@ class PrefixCacheManager:
                 f" --cache_dtype {cache_config.cache_dtype}" +
                 f" --cache_queue_port {cache_config.cache_queue_port}" +
                 f" --enable_splitwise {int(self.enable_splitwise)}" +
+                f" --pod_ip {pod_ip}" +
                 f" --engine_worker_queue_port {engine_worker_queue_port}" +
                 f" --num_gpu_blocks {cache_config.total_block_num}" +
                 f" --num_cpu_blocks {cache_config.num_cpu_blocks}" +

@@ -48,7 +48,8 @@ class ErnieRotaryEmbedding:
         freqs = paddle.einsum("ij,k->ijk",
                               partial_rotary_position_ids.cast("float32"),
                               inv_freq)
-        if paddle.is_compiled_with_xpu():
+        if paddle.is_compiled_with_xpu(
+        ) or paddle.is_compiled_with_custom_device("iluvatar_gpu"):
             # shape: [B, S, D]
             rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim),
                                    dtype="float32")

@@ -16,5 +16,6 @@ from . import gpu
 from . import cpu
 from . import xpu
 from . import npu
+from . import iluvatar
 
-__all__ = ["gpu", "cpu", "xpu", "npu"]
+__all__ = ["gpu", "cpu", "xpu", "npu", "iluvatar"]
