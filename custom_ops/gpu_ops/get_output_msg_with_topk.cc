@@ -24,7 +24,7 @@
 #endif
 
 #define MAX_BSZ 512
-#define K 10
+#define K 20
 
 struct msgdata {
     long mtype;
