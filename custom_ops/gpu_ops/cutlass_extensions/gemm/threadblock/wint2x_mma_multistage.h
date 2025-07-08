@@ -44,6 +44,7 @@
 #include "cutlass/numeric_types.h"
 
 #include "cutlass_extensions/arch/memory_copy_sm80.h"
+#include "cutlass_extensions/gemm/warp/mma_tensorop_wint2x_dequantizer.h"
 #include "cutlass_extensions/gemm/threadblock/wint2x_mma_base.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -128,6 +129,19 @@ public:
   /// Minimum architecture is Sm80 to support cp.async
   using ArchTag = arch::Sm80;
 
+  using LayoutScale = cutlass::layout::ColumnMajor;
+  using WarpTransformedFragmentB = typename Operator::TransformedFragmentB;
+  using ElementB = typename WarpTransformedFragmentB::Element;
+  using Dequantizer =
+      warp::MmaTensorOpWin2xDequantizer<Operator,
+                                        typename Base::WarpGemm,
+                                        Operand::kB,
+                                        ElementB,
+                                        cutlass::layout::ColumnMajor,
+                                        32,
+                                        WeightOnlyQuantOp::UNDEFINED>;
+  static_assert(sizeof(Dequantizer) > 0, "Dequantizer template instantiation failed");
+
   /// Complex transform on A operand
   static ComplexTransform const kTransformA = Operator::kTransformA;
 
@@ -194,6 +208,9 @@ public:
 
   /// Warp-level MMA operator
   Operator warp_mma_;
+
+  // Wint2 unzip operator
+  Dequantizer warp_dequantizer_;
 
   /// Iterator to write threadblock-scoped tile of A operand to shared memory
   SmemIteratorA smem_iterator_A_;
@@ -664,6 +681,26 @@ public:
     this->warp_tile_iterator_B_.set_kgroup_index(0);
     this->warp_tile_iterator_B_.load(pipe_state.warp_loaded_frag_B_[0]);
     ++this->warp_tile_iterator_B_;
+
+    typename Dequantizer::FragmentLocalScale warp_frag_local_scale;
+    typename Dequantizer::FragmentCodeScale warp_frag_code_scale;
+    typename Dequantizer::FragmentCodeZp warp_frag_code_zp;
+    typename Dequantizer::FragmentSuperScale warp_frag_super_scale;
+    typename Dequantizer::FragmentOutOperand warp_frag_out;
+
+    CUTLASS_TRACE_DEVICE(" warp_dequantizer_ - start load");
+    warp_dequantizer_.load(warp_frag_local_scale,
+                           warp_frag_code_scale,
+                           warp_frag_code_zp,
+                           warp_frag_super_scale);
+
+    CUTLASS_TRACE_DEVICE("warp_dequantizer_ - start dequant");
+    warp_dequantizer_.dequantize(warp_frag_out,
+                                 pipe_state.warp_loaded_frag_B_[0],
+                                 warp_frag_local_scale,
+                                 warp_frag_code_scale,
+                                 warp_frag_code_zp,
+                                 warp_frag_super_scale);
 
     // Transform, if necessary, the first warp-tile's shared memory fragments
     warp_mma_.transform(
