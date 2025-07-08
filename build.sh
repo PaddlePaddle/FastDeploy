@@ -104,6 +104,15 @@ function copy_ops(){
       return
     fi
 
+    if_corex=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device(\"iluvatar_gpu\"))"`
+    if [ "$if_corex" = "True" ]; then
+      DEVICE_TYPE="iluvatar-gpu"
+      cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
+      cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/iluvatar
+      echo -e "BASE and Iluvatar ops have been copy to fastdeploy"
+      return
+    fi
+
     DEVICE_TYPE="cpu"
     cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
     cd ../../../../
@@ -163,17 +172,6 @@ function build_and_install() {
     exit 1
   fi
   echo -e "${BLUE}[build]${NONE} ${GREEN}build fastdeploy wheel success${NONE}\n"
-
-  echo -e "${BLUE}[install]${NONE} installing fastdeploy..."
-  cd $DIST_DIR
-  find . -name "fastdeploy*.whl" | xargs ${python} -m pip install --force-reinstall --no-cache-dir
-  if [ $? -ne 0 ]; then
-    cd ..
-    echo -e "${RED}[FAIL]${NONE} install fastdeploy wheel failed"
-    exit 1
-  fi
-  echo -e "${BLUE}[install]${NONE} ${GREEN}fastdeploy install success${NONE}\n"
-  cd ..
 }
 
 function version_info() {
@@ -246,7 +244,7 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
   echo -e "${GREEN}wheel saved under${NONE} ${RED}${BOLD}./dist${NONE}"
 
   # install wheel
-  ${python} -m pip install ./dist/fastdeploy*.whl
+  ${python} -m pip install ./dist/fastdeploy*.whl --force-reinstall --no-cache-dir
   echo -e "${GREEN}wheel install success${NONE}\n"
 
   trap : 0

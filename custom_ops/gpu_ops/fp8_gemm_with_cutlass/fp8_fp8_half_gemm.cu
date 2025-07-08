@@ -19,7 +19,7 @@
 #include "fp8_fp8_half_cuda_core_gemm.h"
 
 
-std::vector<paddle::Tensor> cutlass_fp8_fp8_half_gemm(
+paddle::Tensor cutlass_fp8_fp8_half_gemm_func(
     const paddle::Tensor& x,
     const paddle::Tensor& y,
     const paddle::optional<paddle::Tensor>& bias,
@@ -142,7 +142,7 @@ std::vector<paddle::Tensor> cutlass_fp8_fp8_half_gemm(
         {
             if(output_dtype == "bfloat16") {
                 cuda_core_gemm_launcher<__nv_fp8_e4m3, __nv_bfloat16>(params);
-                
+
             } else {
                 cuda_core_gemm_launcher<__nv_fp8_e4m3, half>(params);
             }
@@ -174,7 +174,21 @@ std::vector<paddle::Tensor> cutlass_fp8_fp8_half_gemm(
                                         fuse_gemm_config};
         fp8_fp8_gemm_scale_bias_act(params);
     }
-    return {out};
+    return out;
+}
+
+std::vector<paddle::Tensor> cutlass_fp8_fp8_half_gemm(
+    const paddle::Tensor& x,
+    const paddle::Tensor& y,
+    const paddle::optional<paddle::Tensor>& bias,
+    bool trans_x,
+    bool trans_y,
+    float scale,  // only support per-tensor quantization
+    std::string output_dtype,
+    std::string activation_type) {
+    return {cutlass_fp8_fp8_half_gemm_func(
+            x, y, bias, trans_x, trans_y, scale,
+            output_dtype, activation_type)};
 }
 
 std::vector<std::vector<int64_t>> CutlassFp8Fp8HalfGemmFusedInferShape(

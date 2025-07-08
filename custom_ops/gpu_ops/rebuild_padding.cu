@@ -91,7 +91,12 @@ std::vector<paddle::Tensor> rebuild_padding(
     typedef typename traits_::DataType DataType_;
     typedef typename traits_::data_t data_t;
 
+#ifdef PADDLE_WITH_CUSTOM_DEVICE
+    auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(tmp_out.place()));
+    auto cu_stream = dev_ctx->stream();
+#else
     auto cu_stream = tmp_out.stream();
+#endif
     std::vector<int64_t> tmp_out_shape = tmp_out.shape();
     const int token_num = tmp_out_shape[0];
     const int dim_embed = tmp_out_shape[1];
@@ -125,7 +130,7 @@ std::vector<paddle::Tensor> rebuild_padding(
 
     if (output_padding_offset) {
         RebuildAppendPaddingKernel<DataType_, PackSize>
-            <<<grid_size, blocksize, 0, tmp_out.stream()>>>(
+            <<<grid_size, blocksize, 0, cu_stream>>>(
                 reinterpret_cast<DataType_ *>(out.data<data_t>()),
                 reinterpret_cast<const DataType_ *>(tmp_out.data<data_t>()),
                 cum_offsets.data<int>(),
@@ -138,7 +143,7 @@ std::vector<paddle::Tensor> rebuild_padding(
                 elem_nums);
     } else {
         RebuildPaddingKernel<DataType_, PackSize>
-            <<<grid_size, blocksize, 0, tmp_out.stream()>>>(
+            <<<grid_size, blocksize, 0, cu_stream>>>(
                 reinterpret_cast<DataType_ *>(out.data<data_t>()),
                 reinterpret_cast<DataType_ *>(
                     const_cast<data_t *>(tmp_out.data<data_t>())),
