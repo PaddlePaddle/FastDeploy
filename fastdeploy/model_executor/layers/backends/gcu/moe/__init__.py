@@ -1,4 +1,4 @@
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,21 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""fastdeploy gpu ops"""
-
-import sys
-
-from fastdeploy.import_ops import import_custom_ops
-
-PACKAGE = "fastdeploy.model_executor.ops.gpu"
-
-import_custom_ops(PACKAGE, "..base.fastdeploy_base_ops", globals())
-import_custom_ops(PACKAGE, ".fastdeploy_ops", globals())
-
-
-def tolerant_import_error():
-    class NoneModule:
-        def __getattr__(self, name):
-            return None
-
-    sys.modules[__name__] = NoneModule()
+""""
+gcu moe
+"""

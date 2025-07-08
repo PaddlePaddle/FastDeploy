@@ -115,9 +115,13 @@ class ExpertService(object):
         llm_logger.info(f"start expert service {local_data_parallel_id}")
 
         self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
-            self.cfg.cache_config, self.cfg.tensor_parallel_size,
-            self.cfg.local_device_ids, self.cfg.engine_worker_queue_port,
-            f"{local_data_parallel_id}_{ipc_signal_suffix}")
+            cache_config=self.cfg.cache_config,
+            tensor_parallel_size=self.cfg.tensor_parallel_size,
+            device_ids=self.cfg.local_device_ids,
+            pod_ip=self.cfg.pod_ips[0],
+            engine_worker_queue_port=self.cfg.engine_worker_queue_port,
+            pid_suffix=f"{local_data_parallel_id}_{ipc_signal_suffix}"
+        )
 
         self.insert_task_to_worker_thread = threading.Thread(
             target=self._insert_task_to_worker, args=())

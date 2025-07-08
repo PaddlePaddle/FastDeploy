@@ -91,8 +91,11 @@ class DefaultModelLoader(BaseModelLoader):
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
         context = paddle.LazyGuard()
         architectures = fd_config.model_config.architectures[0]
-        # TODO(gongshaotian): Now, only support safetensor
-        model_class = MODEL_CLASSES[architectures]
+
+        if fd_config.load_config.dynamic_load_weight:
+            # register rl model
+            import fastdeploy.rl
+            architectures = architectures + "RL"
 
         with context:
             model_cls = ModelRegistry.get_class(architectures)
@@ -104,6 +107,8 @@ class DefaultModelLoader(BaseModelLoader):
         if fd_config.load_config.dynamic_load_weight:
             return model
 
+        # TODO(gongshaotian): Now, only support safetensor
+        model_class = MODEL_CLASSES[architectures]
         state_dict = load_composite_checkpoint(
             fd_config.parallel_config.model_name_or_path,
             model_class,
