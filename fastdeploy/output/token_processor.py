@@ -122,9 +122,15 @@ class TokenProcessor(object):
 
         if current_platform.is_xpu():
             from fastdeploy.model_executor.ops.xpu import get_output
+        elif current_platform.is_iluvatar():
+            from fastdeploy.model_executor.ops.iluvatar import get_output
+        elif current_platform.is_gcu():
+            from fastdeploy.model_executor.ops.gcu import get_output
         else:
-            from fastdeploy.model_executor.ops.gpu import (
-                get_output, get_output_ep, speculate_get_output)
+            from fastdeploy.model_executor.ops.gpu import (get_output,
+                                                           get_output_ep,
+                                                           speculate_get_output
+                                                           )
         rank_id = self.cfg.parallel_config.local_data_parallel_id
 
         while True:
@@ -280,8 +286,7 @@ class TokenProcessor(object):
                 recovery_stop = token_id == RECOVERY_STOP_SIGNAL
                 if recovery_stop:
                     llm_logger.info(
-                        f"recovery stop signal found at task {task_id}",
-                        f"token_ids: {token_ids}")
+                        f"recovery stop signal found at task {task_id}")
                 if not recovery_stop and token_id < 0:
                     continue
 
@@ -414,9 +419,12 @@ class WarmUpTokenProcessor(TokenProcessor):
 
         if current_platform.is_xpu():
             from fastdeploy.model_executor.ops.xpu import get_output
+        elif current_platform.is_iluvatar():
+            from fastdeploy.model_executor.ops.iluvatar import get_output
         else:
-            from fastdeploy.model_executor.ops.gpu import (
-                get_output, speculate_get_output)
+            from fastdeploy.model_executor.ops.gpu import (get_output,
+                                                           speculate_get_output
+                                                           )
 
         while self._is_running:
             try:

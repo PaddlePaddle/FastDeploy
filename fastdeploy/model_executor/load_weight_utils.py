@@ -214,7 +214,7 @@ def load_tp_checkpoint_v1(
     need_tp = True if tensor_parallel_filtered_map else False
     state_dict = {}
     for key, weight in weights_iterator:
-        paddle.device.cuda.synchronize()
+        paddle.device.synchronize()
         if need_tp and key in tensor_parallel_filtered_map:
             action = tensor_parallel_filtered_map.pop(key)
             tensor = action(weight).clone()

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Literal
+from typing import Literal, Optional
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 
@@ -69,7 +69,6 @@ class ModelConfig(PretrainedConfig):
         max_seq_len: int = 512,
         initializer_range: float = 0.02,
         use_rope=True,
-        use_fast_ffn: bool = False,
         rope_theta: int = 10000,
         rope_3d: bool = False,
         ori_vocab_size: int | None = None,
@@ -104,7 +103,6 @@ class ModelConfig(PretrainedConfig):
         self.max_position_embeddings = max_position_embeddings
         self.initializer_range = initializer_range
         self.use_rope = use_rope
-        self.use_fast_ffn = use_fast_ffn
         self.rope_theta = rope_theta
         self.ori_vocab_size = ori_vocab_size or vocab_size
         self.max_seq_len = max_seq_len
@@ -199,7 +197,7 @@ class ParallelConfig:
     eos_tokens_lens: int = 2
     # Enable chunked prefill
     enable_chunked_prefill: str = "store_true"
-    #
+
     max_num_batched_tokens: int = 2048
     # enable prefix cache
     enable_prefix_caching = None
@@ -349,7 +347,7 @@ class GraphOptimizationConfig:
 class LoadConfig:
     """
     Configuration for dynamic weight loading strategies
-    
+
     Attributes:
         dynamic_load_weight: Whether to enable dynamic weight loading
         load_strategy: Specifies the weight loading method when enabled:
@@ -366,7 +364,7 @@ class LoadConfig:
     def __post_init__(self):
         if self.load_strategy is not None and not self.dynamic_load_weight:
             raise ValueError("Load strategy requires dynamic_load_weight=True")
-            
+
         if self.dynamic_load_weight and self.load_strategy is None:
             raise ValueError("Must specify load_strategy when dynamic_load_weight is True")
 

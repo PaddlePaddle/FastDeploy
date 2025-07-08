@@ -17,4 +17,4 @@ import os
 
 from fastdeploy.model_executor.models import auto_models_registry
 
-auto_models_registry(os.path.dirname(__file__), "fastdeploy.rl", suffix="RL")
+auto_models_registry(os.path.dirname(__file__), "fastdeploy.rl")

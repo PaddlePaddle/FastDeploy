@@ -442,6 +442,7 @@ elif paddle.is_compiled_with_cuda():
             "gpu_ops/scaled_gemm_f8_i4_f16_weight_quantize.cu",
             "gpu_ops/cutlass_kernels/cutlass_heuristic.cu",
             "gpu_ops/cutlass_kernels/cutlass_preprocessors.cu",
+            "gpu_ops/fused_hadamard_quant_fp8.cu"
         ]
 
         sources += find_end_files(fp8_auto_gen_directory, ".cu")
@@ -470,6 +471,47 @@ elif paddle.is_compiled_with_cuda():
     )
 elif paddle.is_compiled_with_xpu():
     assert False, "In XPU, we should use setup_ops.py in xpu_ops/src, not this."
+elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
+    setup(
+        name="fastdeploy_ops",
+        ext_modules=CUDAExtension(
+            extra_compile_args={
+                "nvcc": [
+                    "-DPADDLE_DEV",
+                    "-DPADDLE_WITH_CUSTOM_DEVICE",
+                ]
+            },
+            sources=[
+                "gpu_ops/get_padding_offset.cu",
+                "gpu_ops/set_value_by_flags.cu",
+                "gpu_ops/stop_generation_multi_stop_seqs.cu",
+                "gpu_ops/rebuild_padding.cu",
+                "gpu_ops/update_inputs.cu",
+                "gpu_ops/stop_generation_multi_ends.cu",
+                "gpu_ops/step.cu",
+                "gpu_ops/token_penalty_multi_scores.cu",
+                "iluvatar_ops/moe_dispatch.cu",
+                "iluvatar_ops/moe_reduce.cu",
+                "iluvatar_ops/paged_attn.cu",
+                "iluvatar_ops/runtime/iluvatar_context.cc",
+            ],
+            include_dirs=["iluvatar_ops/runtime", "gpu_ops"],
+            extra_link_args=[
+                "-lcuinfer",
+            ],
+        ),
+    )
+elif paddle.is_compiled_with_custom_device("gcu"):
+    setup(
+        name="fastdeploy_ops",
+        ext_modules=CppExtension(
+            sources=[
+                "gpu_ops/save_with_output_msg.cc",
+                "gpu_ops/get_output.cc",
+                "gpu_ops/get_output_msg_with_topk.cc",
+            ]
+        ),
+    )
 else:
     use_bf16 = envs.FD_CPU_USE_BF16 == "True"
 
