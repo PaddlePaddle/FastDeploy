@@ -190,8 +190,8 @@ class CompletionOutput:
     index: int
     send_idx: int
     token_ids: list[int]
-    logprob: Optional[float]
-    top_logprobs: Optional[LogprobsLists]
+    logprob: Optional[float] = None
+    top_logprobs: Optional[LogprobsLists] = None
     draft_token_ids: list[int] = None
     text: Optional[str] = None
     reasoning_content: Optional[str] = None

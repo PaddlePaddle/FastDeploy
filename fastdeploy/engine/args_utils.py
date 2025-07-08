@@ -292,8 +292,7 @@ class EngineArgs:
     Example:
         max_capture_batch_size=64, FastDeploy will capture graphs for batches [1,64].
     """
-    enable_logprob: bool = False,
-    max_logprobs: int = 10,
+    enable_logprob: bool = False
     """Maximum number of log probabilities to return when `logprobs` is
     specified in `SamplingParams`. The default value comes the default for the
     OpenAI Chat Completions API."""
@@ -795,5 +794,4 @@ class EngineArgs:
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             enable_logprob = self.enable_logprob,
-            max_logprobs = self.max_logprobs
         )

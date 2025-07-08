@@ -626,7 +626,7 @@ class Config:
         self.enable_logprob = enable_logprob
         # 外部没传 max_logprobs 时，默认使用 20（但前提是 enable_logprob 为 True）
         if enable_logprob:
-            self.max_logprobs = 20 if max_logprobs is None else max_logprobs
+            self.max_logprobs = 10 if max_logprobs is None else max_logprobs
         else:
             self.max_logprobs = 0
 
