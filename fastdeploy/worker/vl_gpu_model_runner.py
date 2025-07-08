@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+import argparse
 import json
 import os
 import random
-import argparse
 
 import numpy as np
 import paddle
@@ -24,6 +24,9 @@ import paddle.distributed.fleet as fleet
 from paddleformers.transformers.model_utils import load_tp_checkpoint
 from safetensors import safe_open
 
+from fastdeploy.config import (DeviceConfig, FDConfig, KVCacheConfig,
+                               LoadConfig, ModelConfig, MoEConfig, MoEPhase,
+                               ParallelConfig, SpeculativeConfig)
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.input.mm_processor import DataProcessor
 from fastdeploy.model_executor.layers.attention import get_attention_backend
@@ -44,9 +47,6 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.worker.forward_meta import ForwardMeta
 from fastdeploy.worker.utils import check_safetensors_model
 from fastdeploy.worker.vl_model_runner_base import VLModelRunnerBase
-from fastdeploy.config import (DeviceConfig, FDConfig, KVCacheConfig,
-                                LoadConfig, ModelConfig, MoEConfig,
-                                MoEPhase, ParallelConfig, SpeculativeConfig)
 
 if current_platform.is_cuda() and current_platform.available():
     from fastdeploy.model_executor.layers.utils import (
@@ -745,6 +745,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
                                               position_ids, **kwargs)
 
             self.share_inputs["top_p"][idx:idx + 1] = kwargs["top_p"]
+            self.share_inputs["top_k"][idx:idx + 1] = kwargs["top_k"]
             self.share_inputs["temperature"][idx:idx +
                                              1] = kwargs["temperature"]
             self.share_inputs["eos_token_id"][:] = np.array(
@@ -816,6 +817,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
 
         self.sampling_metadata = SamplingMetadata(
             temperature=self.share_inputs["temperature"],
+            top_k=self.share_inputs["top_k"],
             top_p=self.share_inputs["top_p"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
