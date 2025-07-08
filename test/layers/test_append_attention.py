@@ -80,6 +80,7 @@ class RopeEmbedding:
         # sin [θ0,θ1,θ2......θd/2-1] -> sin_pos [θ0,θ0,θ1,θ1,θ2,θ2......θd/2-1,θd/2-1]
         
         if self.use_neox_rotary_style:
+            print("use_neox_rotary_style也有?")
             sin_pos = sin
             cos_pos = cos
             # NeoX Stype：前后半部分分块旋转
@@ -92,7 +93,7 @@ class RopeEmbedding:
                 paddle.shape(k),
             )
         else:
-            # import pdb;pdb.set_trace()
+            print("跑的这里嘛")
             sin_pos = paddle.reshape(paddle.stack(
             [sin, sin], axis=-1), [1, 1, seq, head_dim])
             # cos [θ0,θ1,θ2......θd/2-1] -> cos_pos [θ0,θ0,θ1,θ1,θ2,θ2......θd/2-1,θd/2-1]

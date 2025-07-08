@@ -72,7 +72,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Set attention backend. "NATIVE_ATTN", "APPEND_ATTN"
     # and "MLA_ATTN" can be set currently.
     "FD_ATTENTION_BACKEND":
-    lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
+    lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN,NATIVE_ATTN").split(","),
 
     # Set sampling class. "base", "air" and "rejection" can be set currently.
     "FD_SAMPLING_CLASS":

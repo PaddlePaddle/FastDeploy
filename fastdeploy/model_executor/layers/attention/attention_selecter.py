@@ -34,7 +34,7 @@ def _get_attn_backend(selected_backend: str) -> object:
         selected_backend = backend_name_to_enum(selected_backend)
     attention_cls = current_platform.get_attention_backend_cls(
         selected_backend)
-
+    print("attention_cls",attention_cls)
     if not attention_cls:
         raise ValueError(
             f"Invalid attention backend for {current_platform.device_name}")
@@ -43,5 +43,8 @@ def _get_attn_backend(selected_backend: str) -> object:
 
 def get_attention_backend() -> object:
     """Selects which attention backend."""
-    attention_backend = envs.FD_ATTENTION_BACKEND
-    return _get_attn_backend(attention_backend)
+    attention_backend,native_attention_backend = envs.FD_ATTENTION_BACKEND
+    if current_platform.is_cuda():
+        return _get_attn_backend(attention_backend)
+    elif current_platform.is_cpu():
+        return _get_attn_backend(native_attention_backend)
