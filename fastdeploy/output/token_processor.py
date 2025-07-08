@@ -34,6 +34,7 @@ from fastdeploy.utils import llm_logger, spec_logger
 
 RECOVERY_STOP_SIGNAL = -3
 MAX_BSZ = 512
+K = 20
 MAX_DRAFT_TOKENS = 6
 SPECULATE_MAX_BSZ = 256
 
@@ -63,11 +64,11 @@ class TokenProcessor(object):
             ],
                 fill_value=2,
                 dtype="int64")
-        elif self.cfg.max_logprobs > 0:
+        elif self.cfg.enable_logprob:
             self.output_tokens = paddle.full(
-                shape=[MAX_BSZ * (self.cfg.max_logprobs + 1) + 2, 1], fill_value=2, dtype="int64")
+                shape=[MAX_BSZ * (K + 1) + 2, 1], fill_value=2, dtype="int64")
             self.output_scores = paddle.full(
-                shape=[MAX_BSZ * (self.cfg.max_logprobs + 1), 1], fill_value=0.0, dtype="float32")
+                shape=[MAX_BSZ * (K + 1), 1], fill_value=0.0, dtype="float32")
         else:
             self.output_tokens = paddle.full(shape=[MAX_BSZ + 2, 1],
                                              fill_value=2,
@@ -117,7 +118,7 @@ class TokenProcessor(object):
             raise Exception("Worker is already running!")
 
         use_logprobs = (
-                self.cfg.max_logprobs > 0
+                self.cfg.enable_logprob
                 and not self.speculative_decoding
                 and not self.cfg.parallel_config.enable_expert_parallel
         )
@@ -139,15 +140,15 @@ class TokenProcessor(object):
         """
 
         if current_platform.is_xpu():
-            from fastdeploy.model_executor.ops.xpu import get_output_msg_with_topk
+            from fastdeploy.model_executor.ops.xpu import get_output_topk
         else:
-            from fastdeploy.model_executor.ops.gpu import get_output_msg_with_topk
+            from fastdeploy.model_executor.ops.gpu import get_output_topk
         rank_id = self.cfg.parallel_config.local_data_parallel_id
 
         while True:
             try:
                 is_blocking = True
-                get_output_msg_with_topk(self.output_tokens, self.output_scores, rank_id, is_blocking)
+                get_output_topk(self.output_tokens, self.output_scores, K, rank_id, is_blocking)
 
                 if self.output_tokens[0, 0] == -2:
                     continue
@@ -301,11 +302,10 @@ class TokenProcessor(object):
         """
 
         batch = self.output_tokens[1, 0]
-        tokens = self.output_tokens[2:batch * (self.cfg.max_logprobs + 1) + 2].numpy().reshape(
-            [batch, self.cfg.max_logprobs + 1])[:, :(self.cfg.max_logprobs + 1)]
-        scores = self.output_scores[:batch * (self.cfg.max_logprobs + 1)].numpy().reshape(
-            [batch, self.cfg.max_logprobs + 1])[:, :(self.cfg.max_logprobs + 1)]
-
+        tokens = self.output_tokens[2:batch * (K + 1) + 2].numpy().reshape(
+            [batch, K + 1])[:, :(K + 1)]
+        scores = self.output_scores[:batch * (K + 1)].numpy().reshape(
+            [batch, K + 1])[:, :(K + 1)]
         batch_result = list()
         for i in range(batch):
             if self.resource_manager.stop_flags[i]:

@@ -582,7 +582,7 @@ class GPUModelRunner(ModelRunnerBase):
             min_dec_lens=self.share_inputs["min_dec_len"],
             bad_words_token_ids=self.share_inputs["bad_tokens"],
             eos_token_ids=self.share_inputs["eos_token_id"],
-            max_num_logprobs=None,
+            max_num_logprobs=20,
         )
 
     def load_model(self) -> None:
