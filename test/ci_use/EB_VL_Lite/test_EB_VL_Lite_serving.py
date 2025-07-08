@@ -216,12 +216,11 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     assert resp1.status_code == 200
     result1 = resp1.json()
     content1 = result1["choices"][0]["message"]["content"]
-    base_path = os.getenv("MODEL_PATH")
-    file_res = os.path.join(base_path, "ernie-4_5-vl-base")
+    file_res = "ernie-4_5-vl-base"
     f_o = open(file_res, 'a')
     f_o.writelines(content1)
     f_o.close()
-    
+    time.sleep(1800)
     # base result
     #base_path = os.getenv("MODEL_PATH")
     #if base_path:
