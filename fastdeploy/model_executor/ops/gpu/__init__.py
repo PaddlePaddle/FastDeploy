@@ -13,10 +13,19 @@
 # limitations under the License.
 """fastdeploy gpu ops"""
 
-import os
+import sys
+
 from fastdeploy.import_ops import import_custom_ops
 
 PACKAGE = "fastdeploy.model_executor.ops.gpu"
 
 import_custom_ops(PACKAGE, "..base.fastdeploy_base_ops", globals())
 import_custom_ops(PACKAGE, ".fastdeploy_ops", globals())
+
+
+def tolerant_import_error():
+    class NoneModule:
+        def __getattr__(self, name):
+            return None
+
+    sys.modules[__name__] = NoneModule()

@@ -518,7 +518,7 @@ def parse_args():
 
     parser.add_argument("--quantization",
                         type=str,
-                        default="",
+                        default="None",
                         help="Quantization name for the model, currentlly support " \
                             "'wint4', 'wint8'," \
                             "default is None. The priority of this configuration "\
@@ -562,149 +562,167 @@ def parse_args():
     return args
 
 
-def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
-    """Initialize FDConfig
-    TODO(gongshaotian): Unified all configs to FDConfig
+def initialize_fd_config(config_or_args) -> FDConfig:
+    """Initialize FDConfig from either RolloutModelConfig or argparse.Namespace
+
+    Args:
+        config: Configuration object containing all parameters (either RolloutModelConfig or argparse.Namespace)
+
+    Returns:
+        FDConfig: Initialized FastDeploy configuration object
     """
-    # NOTE(gongshaotian): From build stream line model
-    config, _ = ModelConfig.get_config_dict(args.model_name_or_path)
-    if 'num_experts' in config:
-        config['moe_num_experts'] = config.pop('num_experts')
+    # Get model config from model directory
+    model_config_dict, _ = ModelConfig.get_config_dict(config_or_args.model_name_or_path)
 
-    if 'num_experts_per_tok' in config:
-        config['moe_topk'] = config.pop('num_experts_per_tok')
-    config["head_dim"] = config.get(
-        "head_dim", config["hidden_size"] // config["num_attention_heads"])
-    config["rope_theta"] = config.get("rope_theta", 10000.0)
-    model_config = ModelConfig.from_dict(config)
-    # TODO Set `head_dim` again. Because `ModelConfig` class doesn't support feeding head_dim at all!
-    model_config.head_dim = config["head_dim"]
-    paddle.set_default_dtype(args.dtype)
+    # Handle MoE related configs
+    if 'num_experts' in model_config_dict:
+        model_config_dict['moe_num_experts'] = model_config_dict.pop('num_experts')
+    if 'num_experts_per_tok' in model_config_dict:
+        model_config_dict['moe_topk'] = model_config_dict.pop('num_experts_per_tok')
 
+    # Set default values for model config
+    model_config_dict["head_dim"] = model_config_dict.get(
+        "head_dim", model_config_dict["hidden_size"] // model_config_dict["num_attention_heads"])
+    model_config_dict["rope_theta"] = model_config_dict.get("rope_theta", 10000.0)
+
+    # Create model config object
+    model_config = ModelConfig.from_dict(model_config_dict)
+    model_config.head_dim = model_config_dict["head_dim"]
+    paddle.set_default_dtype(config_or_args.dtype)
+
+    # Initialize all config components
     device_config = DeviceConfig()
-    # model_config = ModelConfig()
-
     decoding_config = DecodingConfig()
-
     speculative_config = SpeculativeConfig()
     parallel_config = ParallelConfig()
     load_config = LoadConfig()
     moe_config = MoEConfig()
-    graph_opt_config = GraphOptimizationConfig(
-        args.enable_static_graph_inference, args.use_cudagraph,
-        args.max_capture_batch_size)
-    model_config.quantization = args.quantization
 
-    # Update speculate config
-    speculative_config.method = args.speculative_method
-    speculative_config.num_speculative_tokens = args.speculative_max_draft_token_num
-    speculative_config.model_name_or_path = args.speculative_model_name_or_path
-    speculative_config.quantization = args.speculative_model_quantization
+    # Handle graph optimization config (check for attribute existence for backward compatibility)
+    enable_static_graph_inference = getattr(config_or_args, 'enable_static_graph_inference', False)
+    use_cudagraph = getattr(config_or_args, 'use_cudagraph', False)
+    max_capture_batch_size = getattr(config_or_args, 'max_capture_batch_size', 0)
+
+    graph_opt_config = GraphOptimizationConfig(
+        enable_static_graph_inference,
+        use_cudagraph,
+        max_capture_batch_size
+    )
+
+    # Handle quantization (check for attribute existence)
+    model_config.quantization = getattr(config_or_args, 'quantization', None)
+
+    # Update speculative config_or_args
+    speculative_config.method = getattr(config_or_args, 'speculative_method', None)
+    speculative_config.num_speculative_tokens = getattr(config_or_args, 'speculative_max_draft_token_num', 0)
+    speculative_config.model_name_or_path = getattr(config_or_args, 'speculative_model_name_or_path', None)
+    speculative_config.quantization = getattr(config_or_args, 'speculative_model_quantization', None)
 
     # Update parallel config
-    parallel_config.engine_pid = args.engine_pid
-    parallel_config.model_name_or_path = args.model_name_or_path
-    parallel_config.max_num_seqs = args.max_num_seqs
-    parallel_config.max_block_num = args.total_block_num
-    parallel_config.block_size = args.block_size
-    parallel_config.pod_ip = args.pod_ip
-    parallel_config.engine_worker_queue_port = args.engine_worker_queue_port
-    parallel_config.max_model_len = args.max_model_len
-    model_config.max_seq_len = args.max_model_len
-    model_config.max_length = args.max_model_len
-    parallel_config.device_ids = args.device_ids
-    parallel_config.dtype = args.dtype
-    parallel_config.enc_dec_block_num = args.enc_dec_block_num
-    parallel_config.kv_cache_ratio = args.kv_cache_ratio
-    parallel_config.first_token_id = args.first_token_id
-    parallel_config.gpu_memory_utilization = args.gpu_memory_utilization
-    parallel_config.engine_pid = args.engine_pid
-    parallel_config.do_profile = args.do_profile
-    parallel_config.dynamic_load_weight = args.dynamic_load_weight
-    parallel_config.pad_token_id = args.pad_token_id
-    parallel_config.eos_tokens_lens = args.eos_tokens_lens
-    parallel_config.enable_chunked_prefill = args.enable_chunked_prefill
-    parallel_config.max_num_batched_tokens = args.max_num_batched_tokens
-    parallel_config.enable_prefix_caching = args.enable_prefix_caching
+    parallel_config.engine_pid = getattr(config_or_args, 'engine_pid', None)
+    parallel_config.model_name_or_path = config_or_args.model_name_or_path
+    parallel_config.max_num_seqs = getattr(config_or_args, 'max_num_seqs', 0)
+    parallel_config.max_block_num = getattr(config_or_args, 'total_block_num', 0)
+    parallel_config.block_size = getattr(config_or_args, 'block_size', 64)
+    parallel_config.pod_ip = getattr(config_or_args, 'pod_ip', None)
+    parallel_config.engine_worker_queue_port = getattr(config_or_args, 'engine_worker_queue_port', 0)
+    parallel_config.max_model_len = getattr(config_or_args, 'max_model_len', 0)
+    model_config.max_seq_len = getattr(config_or_args, 'max_model_len', 0)
+    model_config.max_length = getattr(config_or_args, 'max_model_len', 0)
+    parallel_config.device_ids = getattr(config_or_args, 'device_ids', [])
+    parallel_config.dtype = config_or_args.dtype
+    parallel_config.enc_dec_block_num = getattr(config_or_args, 'enc_dec_block_num', 0)
+    parallel_config.kv_cache_ratio = getattr(config_or_args, 'kv_cache_ratio', 1.0)
+    parallel_config.first_token_id = getattr(config_or_args, 'first_token_id', None)
+    parallel_config.gpu_memory_utilization = getattr(config_or_args, 'gpu_memory_utilization', 0.9)
+    parallel_config.engine_pid = getattr(config_or_args, 'engine_pid', None)
+    parallel_config.do_profile = getattr(config_or_args, 'do_profile', False)
+    parallel_config.dynamic_load_weight = getattr(config_or_args, 'dynamic_load_weight', False)
+    parallel_config.pad_token_id = getattr(config_or_args, 'pad_token_id', None)
+    parallel_config.eos_tokens_lens = getattr(config_or_args, 'eos_tokens_lens', 0)
+    parallel_config.enable_chunked_prefill = getattr(config_or_args, 'enable_chunked_prefill', False)
+    parallel_config.max_num_batched_tokens = getattr(config_or_args, 'max_num_batched_tokens', 0)
+    parallel_config.enable_prefix_caching = getattr(config_or_args, 'enable_prefix_caching', False)
+    parallel_config.use_ep = getattr(config_or_args, 'enable_expert_parallell', False)
+    parallel_config.tensor_parallel_degree = getattr(config_or_args, 'tensor_parallel_size', 1)
+    parallel_config.expert_parallel_degree = getattr(config_or_args, 'expert_parallel_size', 1)
+    parallel_config.splitwise_role = getattr(config_or_args, 'splitwise_role', None)
+    parallel_config.guided_decoding_backend = getattr(config_or_args, 'guided_decoding_backend', None)
+    parallel_config.disable_any_whitespace = getattr(config_or_args, 'disable_any_whitespace', False)
 
-    parallel_config.use_ep = args.enable_expert_parallell
-    parallel_config.tensor_parallel_degree = args.tensor_parallel_size
-    parallel_config.expert_parallel_degree = args.expert_parallel_size
-    parallel_config.splitwise_role = args.splitwise_role
-    load_config.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
-
-    parallel_config.guided_decoding_backend = args.guided_decoding_backend
-    parallel_config.disable_any_whitespace = args.disable_any_whitespace
-
+    # Log parallel config info
     logger.info(f"parallel_config.use_ep {parallel_config.use_ep}")
-    logger.info(
-        f"parallel_config.tensor_parallel_degree {parallel_config.tensor_parallel_degree}"
-    )
-    logger.info(f"args.splitwise_role {args.splitwise_role}")
+    logger.info(f"parallel_config.tensor_parallel_degree {parallel_config.tensor_parallel_degree}")
+    logger.info(f"splitwise_role {parallel_config.splitwise_role}")
 
-    if args.splitwise_role == "mixed":
+    # Set MoE phase based on splitwise role
+    if parallel_config.splitwise_role == "mixed":
         parallel_config.moe_phase = MoEPhase.PREFILL
-    elif args.splitwise_role == "prefill":
+    elif parallel_config.splitwise_role == "prefill":
         parallel_config.moe_phase = MoEPhase.PREFILL
-    elif args.splitwise_role == "decode":
+    elif parallel_config.splitwise_role == "decode":
         parallel_config.moe_phase = MoEPhase.DECODER
-    else:
+    elif parallel_config.splitwise_role is not None:
         raise NotImplementedError
 
-    num_key_value_heads = config.get("num_key_value_heads", -1)
+    # Handle model architecture specific configurations
+    num_key_value_heads = model_config_dict.get("num_key_value_heads", -1)
     if num_key_value_heads is None:
         num_key_value_heads = -1
 
-    if config.get("ffn_hidden_size", None) is not None:
-        ffn_hidden_size = config["ffn_hidden_size"]
-    elif config.get("intermediate_size", None) is not None:
-        ffn_hidden_size = config["intermediate_size"]
+    # Calculate FFN hidden size
+    if model_config_dict.get("ffn_hidden_size", None) is not None:
+        ffn_hidden_size = model_config_dict["ffn_hidden_size"]
+    elif model_config_dict.get("intermediate_size", None) is not None:
+        ffn_hidden_size = model_config_dict["intermediate_size"]
     else:
-        ffn_hidden_size = 4 * config["hidden_size"]
-        if config["hidden_act"].lower() == "swiglu":
+        ffn_hidden_size = 4 * model_config_dict["hidden_size"]
+        if model_config_dict["hidden_act"].lower() == "swiglu":
             if paddle.distributed.get_world_size() > 1:
-                multiple_of = 8 * config["num_attention_heads"]
+                multiple_of = 8 * model_config_dict["num_attention_heads"]
             else:
-                multiple_of = 4 * config["num_attention_heads"]
+                multiple_of = 4 * model_config_dict["num_attention_heads"]
             ffn_hidden_size = multiple_of * (
                 (int(2 * ffn_hidden_size / 3) + multiple_of - 1) //
                 multiple_of)
 
-    num_layers = config.get("num_layers", None) or config.get(
+    # Get number of layers
+    num_layers = model_config_dict.get("num_layers", None) or model_config_dict.get(
         "num_hidden_layers", None)
     if num_layers is None:
         raise ValueError(f"num_layers<{num_layers}> is invalid")
 
-    use_moe = config.get("moe_layer_start_index", num_layers) < num_layers
+    use_moe = model_config_dict.get("moe_layer_start_index", num_layers) < num_layers
 
+    # Update model config
     model_config.ffn_hidden_size = ffn_hidden_size
     model_config.num_layers = num_layers
-
     model_config.num_key_value_heads = num_key_value_heads
-    model_config.start_layer_index = config.get("start_layer_index", 0)
-    moe_config.num_experts = config.get("moe_num_experts", None)
-    moe_config.moe_intermediate_size = config.get("moe_intermediate_size",
-                                                  None)
-    moe_config.top_k = config.get("moe_k", config.get("moe_topk", 8))
-    moe_config.moe_num_shared_experts = config.get("moe_num_shared_experts", 0)
-    moe_config.moe_layer_start_index = config.get("moe_layer_start_index", 0)
+    model_config.start_layer_index = model_config_dict.get("start_layer_index", 0)
 
-    moe_config.num_max_dispatch_tokens_per_rank = config.get(
+    # Update MoE config
+    moe_config.num_experts = model_config_dict.get("moe_num_experts", None)
+    moe_config.moe_intermediate_size = model_config_dict.get("moe_intermediate_size", None)
+    moe_config.top_k = model_config_dict.get("moe_k", model_config_dict.get("moe_topk", 8))
+    moe_config.moe_num_shared_experts = model_config_dict.get("moe_num_shared_experts", 0)
+    moe_config.moe_layer_start_index = model_config_dict.get("moe_layer_start_index", 0)
+    moe_config.num_max_dispatch_tokens_per_rank = model_config_dict.get(
         "num_max_dispatch_tokens_per_rank", 256)
-    moe_config.moe_use_aux_free = config.get("moe_use_aux_free", False)
+    moe_config.moe_use_aux_free = model_config_dict.get("moe_use_aux_free", False)
 
-    model_config.ori_vocab_size = config.get("vocab_size", -1)
-    if "Ernie4_5_ForCausalLM" in config.get("architectures"):
-        model_config.ori_vocab_size = args.ori_vocab_size
+    # Handle vocabulary size
+    model_config.ori_vocab_size = model_config_dict.get("vocab_size", -1)
+    if "Ernie4_5_ForCausalLM" in model_config_dict.get("architectures", []):
+        model_config.ori_vocab_size = getattr(config_or_args, 'ori_vocab_size', model_config.ori_vocab_size)
 
-    if "DeepseekV3ForCausalLM" in config.get("architectures"):
+    # Handle DeepseekV3 specific config
+    if "DeepseekV3ForCausalLM" in model_config_dict.get("architectures", []):
         from paddleformers.transformers import AutoConfig
         model_config.deepseekv3 = AutoConfig.from_pretrained(
-            args.model_name_or_path)
+            config_or_args.model_name_or_path)
 
-    #TODO(@yuanrisheng): kv_cache quant config can only be
-    # stored in model config file, which should be unified
-    quantization_config = config.get("quantization_config", None)
+    # Handle quantization config
+    quantization_config = model_config_dict.get("quantization_config", None)
     if not model_config.is_quantized:
         if quantization_config is not None:
             if "kv_cache_quant_type" not in quantization_config:
@@ -719,13 +737,13 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
 
     if quantization_config is not None:
         quant_config_name = quantization_config["quantization"]
-    elif args.quantization != "None":
+    elif getattr(config_or_args, 'quantization', None) != "None":
         quantization_config = {}
-        quant_config_name = args.quantization
+        quant_config_name = getattr(config_or_args, 'quantization', None)
         quantization_config["quantization"] = quant_config_name
-        # use some trick code for ernie model and will unify it in future.
-        is_ernie = "Ernie4_5_ForCausalLM" in config.get("architectures") or \
-                    "Ernie4_5_MoeForCausalLM" in config.get("architectures")
+        # Special handling for Ernie models
+        is_ernie = "Ernie4_5_ForCausalLM" in model_config_dict.get("architectures", []) or \
+                   "Ernie4_5_MoeForCausalLM" in model_config_dict.get("architectures", [])
         if use_moe and quant_config_name == "wint4" and is_ernie:
             quantization_config["dense_quant_type"] = "wint8"
             quantization_config["moe_quant_type"] = "wint4"
@@ -740,6 +758,7 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
         quant_cls = get_quantization_config(quant_config_name)
         quant_config = quant_cls.from_config(quantization_config)
 
+    # Log quantization info
     logger.info("===========quantization_config==============")
     if quant_config is not None:
         if model_config.is_quantized:
@@ -750,29 +769,36 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
             logger.info(
                 "Model Status: Original (will apply online quantization)")
 
-        logger.info(f"Quantization Method: {args.quantization or 'None'}")
+        logger.info(f"Quantization Method: {getattr(config_or_args, 'quantization', 'None')}")
     else:
         logger.info(
             "No quantization config found and use original weight and act dtype."
         )
 
-    model_config.architectures = config.get("architectures")
+    model_config.architectures = model_config_dict.get("architectures")
 
+    # Update load config
     logger.info("===========load_config==============")
-    load_config.dynamic_load_weight = args.dynamic_load_weight
-    load_config.load_strategy = args.load_strategy
+    # Handle load config (check for environment variable)
+    load_config.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
+    load_config.dynamic_load_weight = getattr(config_or_args, 'dynamic_load_weight', False)
+    load_config.load_strategy = getattr(config_or_args, 'load_strategy', None)
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
+    logger.info(f"- Use fastsafetensor: {load_config.use_fastsafetensor}")
 
-    fd_config = FDConfig(model_config=model_config,
-                         parallel_config=parallel_config,
-                         speculative_config=speculative_config,
-                         device_config=device_config,
-                         load_config=load_config,
-                         moe_config=moe_config,
-                         decoding_config=decoding_config,
-                         quant_config=quant_config,
-                         graph_opt_config=graph_opt_config)
+    # Create and return FDConfig
+    fd_config = FDConfig(
+        model_config=model_config,
+        parallel_config=parallel_config,
+        speculative_config=speculative_config,
+        device_config=device_config,
+        load_config=load_config,
+        moe_config=moe_config,
+        decoding_config=decoding_config,
+        quant_config=quant_config,
+        graph_opt_config=graph_opt_config
+    )
 
     return fd_config
 
