@@ -93,6 +93,15 @@ public:
   static int const kWarpGemmIterations =
       (WarpGemm::kK / Operator::Policy::MmaShape::kK);
 
+  /// Number of warp-level GEMM oeprations per load for B
+  static constexpr int kWarpGemmIterationsPerLoadForB =
+      Operator::IteratorB::InstructionShape::kRow / Operator::InstructionShape::kK;
+  static_assert(!(kWarpGemmIterations % kWarpGemmIterationsPerLoadForB), "");
+
+  static constexpr int kWarpLoadIterationsForB =
+      kWarpGemmIterations / kWarpGemmIterationsPerLoadForB;
+
+
   /// Number of stages
   static int const kStages = Stages;
 
@@ -131,16 +140,16 @@ public:
     using ShapeB = MatrixShape<Shape::kK * kStages + Policy::SmemPaddingB::kRow,
                                Shape::kN + Policy::SmemPaddingB::kColumn>;
 
-    // w uint8; local_scale uint8;
-    constexpr static int kZippedRowsPerStages = Shape::kK / 4 + (Shape::kK + 127) / 128;
+    // local_scale uint4
+    constexpr static int kGroupWiseParamRows = Shape::kK / 64;
+
+    using GroupWiseParamShapeB = MatrixShape<kGroupWiseParamRows * kStages, Shape::kN>;
 
     // code_scale float; code_zp float; super_scale ElementB
-    constexpr static int kColumnWiseParamsRows = 2 * sizeof(float) +
+    constexpr static int kColumnWiseParamRows = 2 * sizeof(float) +
         sizeof_bits<typename Operator::ElementB>::value / 8;
 
-    using ZippedShapeB = MatrixShape<kColumnWiseParamsRows + kZippedRowsPerStages * kStages, Shape::kN>;
-
-    using NopaddingShapeB = MatrixShape<Shape::kK, Shape::kN>;
+    using ColumnWiseParamShapeB = MatrixShape<kColumnWiseParamRows, Shape::kN>;
 
   public:
     //
@@ -153,12 +162,11 @@ public:
     /// Buffer for B operand
     AlignedBuffer<typename Operator::ElementB, ShapeB::kCount> operand_B;
 
-    /// Buffer for quanted B operand
-    AlignedBuffer<uint8_t, ZippedShapeB::kCount> operand_zipped_B;
+    /// Buffer for local_scale of B operand
+    AlignedBuffer<uint4b_t, GroupWiseParamShapeB::kCount> operand_local_scale_B;
 
-    /// Buffer for unzip B operand
-    AlignedBuffer<typename Operator::ElementB, NopaddingShapeB::kCount>
-        operand_unzip_B;
+    /// Buffer for column-wise params of B operand
+    AlignedBuffer<uint8_t, ColumnWiseParamShapeB::kCount> operand_column_wise_B;
 
   public:
     //
@@ -187,14 +195,6 @@ public:
     CUTLASS_HOST_DEVICE
     TensorRefB operand_B_ref() {
       return TensorRefB{operand_B.data(), LayoutB()};
-    }
-
-    CUTLASS_HOST_DEVICE
-    uint8_t *operand_zipped_B_ptr() { return operand_zipped_B.data(); }
-
-    CUTLASS_HOST_DEVICE
-    typename Operator::ElementB *operand_unzip_B_ptr() {
-      return operand_unzip_B.data();
     }
   };
 

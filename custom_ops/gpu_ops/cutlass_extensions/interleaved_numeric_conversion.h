@@ -39,18 +39,16 @@
 #include "cutlass/array.h"
 #include "cutlass/half.h"
 #include "cutlass/numeric_types.h"
+#include "cutlass/trace.h"
 
-namespace cutlass
-{
+namespace cutlass {
 
 // This converter is meant to be used with data interleaved in a 32-bit register where the even elements are in the low
 // bits and the odd elemeents are in the high bits of the register. In addition, it assumes elements were originally
 // signed and had a bias of 2**(b-1) added (where b is the number of bits in the type) to make all numbers unsigned.
 // This converter will uninterleave the data and subtract the bias while converting to the result type.
 template <typename T, typename S, int N>
-struct FastInterleavedAndBiasedNumericArrayConverter
-{
-};
+struct FastInterleavedAndBiasedNumericArrayConverter;
 
 template <>
 struct FastInterleavedAndBiasedNumericArrayConverter<half_t, uint8_t, 4>
@@ -426,6 +424,106 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint4b_t, N>
 
         CUTLASS_PRAGMA_UNROLL
         for (int i = 0; i < N / VEC_WIDTH; ++i)
+        {
+            result_ptr[i] = convert_vector_(source_ptr[i]);
+        }
+
+        return result;
+    }
+
+    CUTLASS_DEVICE
+    result_type operator()(source_type const& s)
+    {
+        return convert(s);
+    }
+};
+
+template <typename T>
+struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, 16>
+{
+    static_assert(platform::is_same<T, half_t>::value || platform::is_same<T, bfloat16_t>::value,
+        "T must be fp16 or bf16");
+
+    using result_type = Array<T, 16>;
+    using source_type = Array<uint2b_t, 16>;
+
+    using ScaleComputeT = T;
+
+    static constexpr int32_t kWeightMask = 0x3F;
+    static constexpr int32_t kBZP = 32;
+
+    CUTLASS_DEVICE
+    static result_type convert(source_type const& source)
+    {
+        result_type result;
+        uint8_t const* in_ptr = reinterpret_cast<uint8_t const*>(&source);
+
+        ScaleComputeT code_scale = static_cast<ScaleComputeT>(1);
+        ScaleComputeT code_zp = static_cast<ScaleComputeT>(0);
+        ScaleComputeT floor_offset = static_cast<ScaleComputeT>(0.5);
+
+        CUTLASS_TRACE_DEVICE(" source: [%d, %d, %d, %d]",
+            static_cast<int>(in_ptr[0]), static_cast<int>(in_ptr[1]),
+            static_cast<int>(in_ptr[2]), static_cast<int>(in_ptr[3]));
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < 4; ++i) {
+            int32_t decode_value =
+                static_cast<int32_t>(floor(static_cast<ScaleComputeT>(in_ptr[i]) * code_scale + code_zp + floor_offset));
+
+            ScaleComputeT value_3 = static_cast<ScaleComputeT>((decode_value & kWeightMask) - kBZP);
+            decode_value >>= 3;
+            ScaleComputeT value_2 = static_cast<ScaleComputeT>((decode_value & kWeightMask) - kBZP);
+            decode_value >>= 3;
+            ScaleComputeT value_1 = static_cast<ScaleComputeT>((decode_value & kWeightMask) - kBZP);
+            decode_value >>= 3;
+            ScaleComputeT value_0 = static_cast<ScaleComputeT>((decode_value & kWeightMask) - kBZP);
+
+            result[0] = static_cast<T>(value_0);
+            result[1] = static_cast<T>(value_1);
+            result[2] = static_cast<T>(value_2);
+            result[3] = static_cast<T>(value_3);
+        }
+
+        return result;
+    }
+
+    CUTLASS_DEVICE
+    result_type operator()(source_type const& s)
+    {
+        return convert(s);
+    }
+};
+
+template <typename T, int N>
+struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, N>
+{
+    static_assert(platform::is_same<T, half_t>::value || platform::is_same<T, bfloat16_t>::value,
+        "T must be fp16 or bf16");
+
+    static constexpr int kVecWidth = 16;
+    static_assert(!(N % kVecWidth), "N must be multiple of 16.");
+
+    using result_type = Array<T, N>;
+    using source_type = Array<uint2b_t, N>;
+
+    CUTLASS_DEVICE
+    static result_type convert(source_type const& source)
+    {
+        using scalar_result_type = typename result_type::Element;
+        using scalar_source_type = typename source_type::Element;
+        FastInterleavedAndBiasedNumericArrayConverter<scalar_result_type, scalar_source_type, kVecWidth>
+            convert_vector_;
+
+        result_type result;
+        using vec_result = Array<scalar_result_type, kVecWidth>;
+        using vec_source = Array<scalar_source_type, kVecWidth>;
+
+        vec_result* result_ptr = reinterpret_cast<vec_result*>(&result);
+        vec_source const* source_ptr = reinterpret_cast<vec_source const*>(&source);
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < N / kVecWidth; ++i)
         {
             result_ptr[i] = convert_vector_(source_ptr[i]);
         }

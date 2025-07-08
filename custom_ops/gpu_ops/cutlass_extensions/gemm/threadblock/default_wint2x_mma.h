@@ -19,6 +19,7 @@
 
 #include "cutlass_extensions/arch/mma.h"
 #include "cutlass_extensions/interleaved_numeric_conversion.h"
+#include "cutlass_extensions/gemm/threadblock/default_dq_mma.h"
 #include "cutlass_extensions/gemm/threadblock/wint2x_mma_multistage.h"
 
 namespace cutlass {
@@ -156,13 +157,16 @@ public:
         IteratorShapeB, ElementB, layout::ColumnMajor, 0, InterleavedThreadMapB,
         AccessTypeB>;
 
+    using TransformBAfterLDS = FastInterleavedAndBiasedNumericArrayConverter<
+        ElementA, ElementB, MmaCore::MmaPolicy::Operator::FragmentB::kElements>;
+
     // Define the threadblock-scoped multistage matrix multiply
     using ThreadblockMma = cutlass::gemm::threadblock::Wint2xMmaMultistage<
         typename MmaCore::Shape,
         IteratorA, typename MmaCore::SmemIteratorA, MmaCore::kCacheOpA,
         IteratorB, typename MmaCore::SmemIteratorB, MmaCore::kCacheOpB,
         ElementAccumulator, layout::RowMajor,
-        typename MmaCore::MmaPolicy, kStages, SharedMemoryClear>;
+        typename MmaCore::MmaPolicy, kStages, TransformBAfterLDS, SharedMemoryClear>;
 };
 
 } // namespace threadblock
