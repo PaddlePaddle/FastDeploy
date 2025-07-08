@@ -113,6 +113,14 @@ function copy_ops(){
       return
     fi
 
+    is_gcu=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device('gcu'))"`
+    if [ "$is_gcu" = "True" ]; then
+      DEVICE_TYPE="gcu"
+      cp -r ${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/gcu
+      echo -e "gcu ops have been copy to fastdeploy"
+      return
+    fi
+
     DEVICE_TYPE="cpu"
     cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
     cd ../../../../

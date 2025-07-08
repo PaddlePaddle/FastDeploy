@@ -501,6 +501,17 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
             ],
         ),
     )
+elif paddle.is_compiled_with_custom_device("gcu"):
+    setup(
+        name="fastdeploy_ops",
+        ext_modules=CppExtension(
+            sources=[
+                "gpu_ops/save_with_output_msg.cc",
+                "gpu_ops/get_output.cc",
+                "gpu_ops/get_output_msg_with_topk.cc",
+            ]
+        ),
+    )
 else:
     use_bf16 = envs.FD_CPU_USE_BF16 == "True"
 
