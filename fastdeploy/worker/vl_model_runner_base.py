@@ -14,14 +14,14 @@
 # limitations under the License.
 """
 
-from abc import ABC, abstractmethod
 import argparse
+from abc import ABC, abstractmethod
 
 import paddle
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
-from fastdeploy.config import ModelConfig
 
+from fastdeploy.config import ModelConfig
 from fastdeploy.utils import get_logger
 
 logger = get_logger("worker", "worker.log")
@@ -98,6 +98,7 @@ class VLModelRunnerBase(ABC):
             return default
 
         self.top_p = _get_attr("top_p", 0.0)
+        self.top_k = _get_attr("top_k", 20)
         self.temperature = _get_attr("temperature", 1.0)
         self.rope_theta = _get_attr("rope_theta", 10000.0)
         self.rope_scaling = _get_attr("rope_scaling", None)
@@ -128,6 +129,8 @@ class VLModelRunnerBase(ABC):
             paddle.full([self.args.eos_tokens_lens, 1], 0, **int64_config),
             "top_p":
             paddle.full([max_num_seqs, 1], self.top_p, **float32_config),
+            "top_k":
+            paddle.full([max_num_seqs, 1], self.top_k, **int64_config),
             "temperature":
             paddle.full([max_num_seqs, 1], self.temperature, **float32_config),
             "penalty_score":

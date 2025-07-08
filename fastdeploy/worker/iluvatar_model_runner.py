@@ -29,9 +29,8 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import \
     AttentionBackend
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
-from fastdeploy.model_executor.layers.sample.sampler import (Sampler,
-                                                             SpeculativeSampler
-                                                             )
+from fastdeploy.model_executor.layers.sample.sampler import (
+    Sampler, SpeculativeSampler)
 from fastdeploy.model_executor.model_loader import get_model_from_loader
 from fastdeploy.model_executor.ops.iluvatar import set_value_by_flags_and_idx
 from fastdeploy.model_executor.pre_and_post_process import (post_process,
@@ -227,6 +226,8 @@ class IluvatarModelRunner(ModelRunnerBase):
                 request.eos_token_ids, dtype="int64").reshape(-1, 1)
 
             self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 0.7)
+            if request.get("top_k") is not None:
+                self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k")
             self.share_inputs["temperature"][idx:idx + 1] = request.get(
                 "temperature", 0.95)
             self.share_inputs["penalty_score"][idx:idx + 1] = request.get(
@@ -331,6 +332,9 @@ class IluvatarModelRunner(ModelRunnerBase):
         self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1],
                                                  self.model_config.top_p,
                                                  dtype='float32')
+        self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1],
+                                                 20,
+                                                 dtype='int64')
         self.share_inputs["temperature"] = paddle.full(
             [max_num_seqs, 1], self.model_config.temperature, dtype='float32')
         self.share_inputs["penalty_score"] = paddle.full(
@@ -558,6 +562,7 @@ class IluvatarModelRunner(ModelRunnerBase):
         self.sampling_metadata = SamplingMetadata(
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
+            top_k=self.share_inputs["top_k"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
             frequency_penalties=self.share_inputs["frequency_score"],
