@@ -511,9 +511,9 @@ class CommitConfig:
                     elif line.startswith("CXX compiler version:"):
                         self.compiler_version = line.split(":")[1].strip()
         except FileNotFoundError:
-            logger.info(f"Warning: Version file not found at {file_path}")
+            llm_logger.info(f"Warning: Version file not found at {file_path}")
         except Exception as e:
-            logger.info(f"Warning: Could not read version file - {str(e)}")
+            llm_logger.info(f"Warning: Could not read version file - {str(e)}")
 
     def print(self):
         """
