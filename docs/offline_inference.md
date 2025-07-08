@@ -17,7 +17,7 @@ prompts = [
 sampling_params = SamplingParams(top_p=0.95, max_tokens=6400)
 
 # Load model
-llm = LLM(model="ERNIE-4.5-0.3B", tensor_parallel_size=1, max_model_len=8192)
+llm = LLM(model="baidu/ERNIE-4.5-0.3B-Base-Paddle", tensor_parallel_size=1, max_model_len=8192)
 
 # Batch inference (internal request queuing and dynamic batching)
 outputs = llm.generate(prompts, sampling_params)
@@ -27,6 +27,8 @@ for output in outputs:
     prompt = output.prompt
     generated_text = output.outputs.text
 ```
+> Note: Text completion interface, suitable for scenarios where users have predefined the context input and expect the model to output only the continuation content. No additional `prompt` concatenation will be added during the inference process.
+> For the `chat` model, it is recommended to use the following Chat Interface (`LLM.chat`).
 
 ### Chat Interface (LLM.chat)
 ```python
@@ -58,10 +60,21 @@ for output in outputs:
 
 Documentation for `SamplingParams`, `LLM.generate`, `LLM.chat`, and output structure `RequestOutput` is provided below.
 
-> Note: For X1 model output
+> Note: For reasoning models, when loading the model, you need to specify the reasoning_parser parameter. Additionally, during the request, you can toggle the reasoning feature on or off by configuring the `enable_thinking` parameter within `chat_template_kwargs`.
 
 ```python
-# Output results
+from fastdeploy.entrypoints.llm import LLM
+# 加载模型
+llm = LLM(model="baidu/ERNIE-4.5-VL-28B-A3B-Paddle", tensor_parallel_size=1, max_model_len=32768, enable_mm=True, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
+
+outputs = llm.chat(
+    messages=[
+        {"role": "user", "content": [ {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"}},
+                                     {"type": "text", "text": "图中的文物属于哪个年代"}]}
+    ],
+    chat_template_kwargs={"enable_thinking": False})
+
+# 输出结果
 for output in outputs:
     prompt = output.prompt
     generated_text = output.outputs.text

@@ -17,7 +17,7 @@ prompts = [
 sampling_params = SamplingParams(top_p=0.95, max_tokens=6400)
 
 # 加载模型
-llm = LLM(model="ERNIE-4.5-0.3B", tensor_parallel_size=1, max_model_len=8192)
+llm = LLM(model="baidu/ERNIE-4.5-0.3B-Base-Paddle", tensor_parallel_size=1, max_model_len=8192)
 
 # 批量进行推理（llm内部基于资源情况进行请求排队、动态插入处理）
 outputs = llm.generate(prompts, sampling_params)
@@ -27,6 +27,8 @@ for output in outputs:
     prompt = output.prompt
     generated_text = output.outputs.text
 ```
+> 注： 续写接口, 适应于用户自定义好上下文输入, 并希望模型仅输出续写内容的场景; 推理过程不会增加其他 `prompt `拼接。   
+> 对于 `chat`模型, 建议使用下面 对话接口(LLM.chat)。
 
 ### 对话接口(LLM.chat)
 
@@ -47,7 +49,7 @@ messages = [msg1, msg2]
 sampling_params = SamplingParams(top_p=0.95, max_tokens=6400)
 
 # 加载模型
-llm = LLM(model="ERNIE-4.5-0.3B", tensor_parallel_size=1, max_model_len=8192)
+llm = LLM(model="baidu/ERNIE-4.5-0.3B-Paddle", tensor_parallel_size=1, max_model_len=8192)
 # 批量进行推理（llm内部基于资源情况进行请求排队、动态插入处理）
 outputs = llm.chat(messages, sampling_params)
 
@@ -59,15 +61,27 @@ for output in outputs:
 
 上述示例中```LLM```配置方式， `SamplingParams` ，`LLM.generate` ，`LLM.chat`以及输出output对应的结构体 `RequestOutput` 接口说明见如下文档说明。
 
-> 注： 若为X1 模型输出
+> 注： 若为思考模型, 加载模型时需要指定`resoning_parser` 参数，并在请求时, 可以通过配置`chat_template_kwargs` 中 `enable_thinking`参数, 进行开关思考。
 
 ```python
+from fastdeploy.entrypoints.llm import LLM
+# 加载模型
+llm = LLM(model="baidu/ERNIE-4.5-VL-28B-A3B-Paddle", tensor_parallel_size=1, max_model_len=32768, enable_mm=True, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
+
+outputs = llm.chat(
+    messages=[
+        {"role": "user", "content": [ {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"}},
+                                     {"type": "text", "text": "图中的文物属于哪个年代"}]}
+    ],
+    chat_template_kwargs={"enable_thinking": False})
+
 # 输出结果
 for output in outputs:
     prompt = output.prompt
     generated_text = output.outputs.text
     reasoning_text = output.outputs.resoning_content
 ```
+
 
 ## 2. 接口说明
 
