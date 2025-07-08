@@ -445,7 +445,7 @@ class Ernie4_5_VLModel(nn.Layer):
             forward_meta.seq_lens_this_time,
             forward_meta.cu_seqlens_q,
             score_text,
-        )[0].cast(self._dtype)
+        ).cast(self._dtype)
         # -----------------------
 
         out = self.norm(hidden_states)
