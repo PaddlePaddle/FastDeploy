@@ -43,7 +43,6 @@
 #include "cutlass/trace.h"
 
 #include "cutlass_extensions/gemm/kernel/gemm_moe_problem_visitor.h"
-#include "cutlass_extensions/gemm/threadblock/wint2x_tile_dequanter.h"
 #include "cutlass_extensions/tile_interleaved_layout.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -844,9 +843,6 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
                   kInterleave >= 1,
           "B must be row major/col major OR col major interleaved.");
 
-      // LayoutB should be RowMajor
-      using TileDequanterB = cutlass::gemm::threadblock::TileDequanter<ElementA, ElementScale, ThreadblockShape::kK, ThreadblockShape::kN, kStages, kThreadCount, QuantMethod>;
-
       //
       // Problem visitor.
       //
@@ -916,30 +912,13 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
             platform::is_same<layout::RowMajor, LayoutB>::value
                 ? gemm_n
                 : gemm_k * kInterleave;
-        //typename LayoutB::LongIndex ldm_B_shared = TileDequanterB::kColumns;
 
         // the begin threadblock_offset of B, which holds the same column id with C
         cutlass::MatrixCoord tb_offset_B{0,
                                          threadblock_offset.n() / kInterleave};
 
         cutlass::MatrixCoord extent_B{problem_size.k() * kInterleave, problem_size.n() / kInterleave};
-        //cutlass::MatrixCoord extent_B_shared{TileDequanterB::kRows, TileDequanterB::kColumns};
 
-        /*MmaElementB* smem_unzip_B_ptr = nullptr;
-        if constexpr (QuantMethod == WintQuantMethod::kWeightOnlyInt2) {
-          smem_unzip_B_ptr = shared_storage.main_loop.operand_unzip_B_ptr();
-        }
-        QuantArguments quant_args = get_quant_args(params, problem_idx, gemm_k, gemm_n);
-        TileDequanterB tile_dequanter_B(smem_unzip_B_ptr,
-                                        byte_ptr_B,
-                                        ldm_B,
-                                        extent_B,
-                                        tb_offset_B,
-                                        weight_scale_ptr,
-                                        tb_offset_scale,
-                                        quant_args);
-        MmaElementB* ptr_B = tile_dequanter_B.GetOutPtr();*/
-        TileDequanterB tile_dequanter_B;
         ElementB* ptr_B = reinterpret_cast<ElementB*>(byte_ptr_B);
 
         // Compute position within threadblock
@@ -989,7 +968,6 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
             accumulators,
             iterator_A,
             iterator_B,
-            tile_dequanter_B,
             accumulators);
 
         //

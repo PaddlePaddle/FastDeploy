@@ -45,7 +45,6 @@
 
 #include "cutlass_extensions/arch/memory_copy_sm80.h"
 #include "cutlass_extensions/gemm/threadblock/wint2x_mma_base.h"
-#include "cutlass_extensions/gemm/threadblock/wint2x_tile_dequanter.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -272,17 +271,12 @@ public:
   }
 
   /// Advance global memory read-iterators and shared memory write-iterators to the stage
-  template <typename TileDequanterB>
   CUTLASS_DEVICE
-  void advance_smem_write_stage(
-    IteratorA &iterator_A,
-    IteratorB &iterator_B,
-    TileDequanterB &tile_dequanter_B)
+  void advance_smem_write_stage(IteratorA &iterator_A, IteratorB &iterator_B)
   {
     // Advance global iterators
     iterator_A.add_tile_offset({0, 1});
     iterator_B.add_tile_offset({1, 0});
-    //tile_dequanter_B.AddTileOffset({1, 0});
 
     // Advance shared iterators
     smem_iterator_A_.add_tile_offset({0, 1});
@@ -455,12 +449,10 @@ public:
 
   /// GEMM prologue.  Bootstrap the global->shared memory pipeline by fetching
   /// the global fragments needed by the first kStages-1 threadblock mainloop iterations
-  template <typename TileDequanterB>
   CUTLASS_DEVICE
   void prologue(
     IteratorA &iterator_A,      ///< [in|out] iterator over A operand in global memory
     IteratorB &iterator_B,      ///< [in|out] iterator over B operand in global memory
-    TileDequanterB &tile_dequanter_B,
     int &gemm_k_iterations)     ///< [in|out] number of threadblock mainloop iterations remaining
   {
     // Issue several complete stages
@@ -478,11 +470,9 @@ public:
       copy_tiles_and_advance_per_stage_B<true, true>(iterator_B);
 
       // TODO: Async copy other quantized params to shared memory, local_scale, code_scale, code_zp, super_scale.
-      //tile_dequanter_B.Load(smem_zipped_ptr_B_ + (stage % Base::kStages) * smem_zipped_bytes_per_stage_B_,
-      //                      column_wise_smem_ptr_B_, stage);
 
       // Move to the next write stage
-      advance_smem_write_stage(iterator_A, iterator_B, tile_dequanter_B);
+      advance_smem_write_stage(iterator_A, iterator_B);
 
       // Defines the boundary of a stage of cp.async.
       cutlass::arch::cp_async_fence();
@@ -544,14 +534,12 @@ public:
   }
 
   /// Perform a threadblock mainloop iteration of matrix multiply-accumulate
-  template <typename TileDequanterB>
   CUTLASS_DEVICE
   void mac_loop_iter(
     PipeState &pipe_state,          ///< [in|out] loop-carried pipeline state
     FragmentC &accum,               ///< [in|out] destination accumulator tile
     IteratorA &iterator_A,          ///< [in|out] iterator over A operand in global memory
     IteratorB &iterator_B,          ///< [in|out] iterator over B operand in global memory
-    TileDequanterB &tile_dequanter_B, ///< [in|out] tile dequantizer for B operand
     int &gemm_k_iterations, ///< [in|out] number of threadblock mainloop iterations remaining
     int stage)
   {
@@ -630,7 +618,7 @@ public:
         gmem_wait();
 
         // Move to the next global fetch stage
-        advance_smem_write_stage(iterator_A, iterator_B, tile_dequanter_B);
+        advance_smem_write_stage(iterator_A, iterator_B);
         advance_smem_read_stage();
 
         // Disable global fetching when done with global fetch iterations
@@ -654,14 +642,12 @@ public:
 
   /// Perform the specified number of threadblock mainloop iterations of matrix
   /// multiply-accumulate.  Assumes prologue has been initiated.
-  template <typename TileDequanterB>
   CUTLASS_DEVICE
   void gemm_iters(
       int gemm_k_iterations,        ///< number of threadblock mainloop iterations
       FragmentC &accum,             ///< [in|out] accumulator tile
       IteratorA &iterator_A,        ///< [in|out] iterator over A operand in global memory
-      IteratorB &iterator_B,
-      TileDequanterB &tile_dequanter_B)        ///< [in|out] iterator over B operand in global memory
+      IteratorB &iterator_B)
   {
     PipeState pipe_state;
 
@@ -701,7 +687,6 @@ public:
         accum,
         iterator_A,
         iterator_B,
-        tile_dequanter_B,
         gemm_k_iterations,
         stage);
       stage += 1;
@@ -755,7 +740,6 @@ public:
   }
 
   /// Perform a threadblock-scoped matrix multiply-accumulate, pre-load B to shared memory.
-  template <typename TileDequanterB>
   CUTLASS_DEVICE
   void operator()(
       ///< problem size of GEMM
@@ -766,13 +750,11 @@ public:
       IteratorA iterator_A,
       ///< iterator over B operand in global memory
       IteratorB iterator_B,
-      ///< pre-load and dequantize B to shared memory
-      TileDequanterB tile_dequanter_B,
       ///< initial value of accumulator
       FragmentC const &src_accum) {
 
     // Prologue (start fetching iterations of global fragments into shared memory)
-    prologue(iterator_A, iterator_B, tile_dequanter_B, gemm_k_iterations);
+    prologue(iterator_A, iterator_B, gemm_k_iterations);
 
     // Wait until we have at least one completed global fetch stage
     gmem_wait();
@@ -781,7 +763,7 @@ public:
     accum = src_accum;
 
     // Perform the MAC-iterations
-    //gemm_iters(gemm_k_iterations, accum, iterator_A, iterator_B, tile_dequanter_B);
+    //gemm_iters(gemm_k_iterations, accum, iterator_A, iterator_B);
   }
 };
 
