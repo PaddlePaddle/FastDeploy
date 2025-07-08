@@ -136,7 +136,7 @@ class MLAAttentionBackend(AttentionBackend):
         self.start_layer_index: int = fd_config.model_config.start_layer_index
         self.device_id: int = os.getenv("CUDA_VISIBLE_DEVICES", None)
         
-         if self.device_id is None:
+        if self.device_id is None:
             self.device_id = self.rank
         else:
             device_ids = self.device_id.split(",")
