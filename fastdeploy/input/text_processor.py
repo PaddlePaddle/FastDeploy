@@ -309,6 +309,10 @@ class DataProcessor(BaseDataProcessor):
         data_processor_logger.info(f"Processed request {request}")
         return request
 
+    def process_logprob_response(self, token_ids, **kwargs):
+        full_text = self.tokenizer.decode(token_ids, **kwargs)
+        return full_text
+
     def process_response(self, response_dict, **kwargs):
         """
         Preprocess the response

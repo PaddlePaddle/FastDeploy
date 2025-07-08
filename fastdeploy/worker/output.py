@@ -15,10 +15,26 @@
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional,NamedTuple
 
 import paddle
 
+
+class LogprobsLists(NamedTuple):
+
+    # [num_reqs, max_num_logprobs + 1]
+    logprob_token_ids: list[list[int]]
+    # [num_reqs, max_num_logprobs + 1]
+    logprobs: list[list[float]]
+    # [num_reqs]
+    sampled_token_ranks: list[int]
+
+    def slice(self, start: int, end: int):
+        return LogprobsLists(
+            self.logprob_token_ids[start:end],
+            self.logprobs[start:end],
+            self.sampled_token_ranks[start:end],
+        )
 
 @dataclass
 class ModelOutputData:
@@ -158,3 +174,8 @@ class ModelRunnerOutput:
         [num_reqs, num_spec_tokens]
     """
     spec_token_ids: Optional[list[list[int]]]
+
+    # [num_reqs, max_num_logprobs + 1]
+    # [num_reqs, max_num_logprobs + 1]
+    # [num_reqs]
+    logprobs: Optional[LogprobsLists]

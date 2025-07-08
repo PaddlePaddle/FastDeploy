@@ -35,12 +35,12 @@ from fastdeploy.entrypoints.openai.protocol import (
     UsageInfo,
     PromptTokenUsageInfo,
     ChatCompletionResponse,
-    ErrorResponse,
+    ErrorResponse, LogProbEntry, LogProbs,
 )
 from fastdeploy.metrics.work_metrics import work_process_metrics
 from fastdeploy.utils import api_server_logger, get_host_ip
 from fastdeploy.engine.request import RequestOutput
-
+from fastdeploy.worker.output import LogprobsLists
 
 
 class OpenAIServingChat:
@@ -212,15 +212,23 @@ class OpenAIServingChat:
 
                 output = res["outputs"]
                 delta_text = output["text"]
-
+                top_logprobs: LogprobsLists = output["top_logprobs"]
+                topk = request.top_logprobs
+                ## 处理 logprobs
+                logprobs_res = self.build_logprobs_response(
+                    logprobs=top_logprobs,
+                    request_top_logprobs=topk,
+                )
                 previous_num_tokens += len(output["token_ids"])
                 delta_message = DeltaMessage(content=delta_text, reasoning_content=output.get("reasoning_content"), \
-                    token_ids=output.get("token_ids"), tool_calls=output.get("tool_call_content", []))
+                                             token_ids=output.get("token_ids"),
+                                             tool_calls=output.get("tool_call_content", []))
 
                 choice = ChatCompletionResponseStreamChoice(
                     index=0,
                     delta=delta_message,
-                    arrival_time=arrival_time
+                    logprobs=logprobs_res,
+                    arrival_time=arrival_time,
                 )
                 if res["finished"]:
                     num_choices -= 1
@@ -371,3 +379,41 @@ class OpenAIServingChat:
             choices=choices,
             usage=usage
         )
+
+
+    def build_logprobs_response(
+            self,
+            logprobs: Optional[LogprobsLists],
+            request_top_logprobs: int,
+    ) -> Optional[LogProbs]:
+        """
+        构造符合 OpenAI 风格的 logprobs 响应对象
+        """
+        if (
+                logprobs is None
+                or request_top_logprobs is None
+                or request_top_logprobs <= 0
+                or len(logprobs.logprob_token_ids) == 0
+        ):
+            return None
+
+        topk_token_ids = logprobs.logprob_token_ids[0][:request_top_logprobs]
+        topk_logprobs = logprobs.logprobs[0][:request_top_logprobs]
+        sampled_rank = logprobs.sampled_token_ranks[0]
+
+        top_logprob_entries = []
+        for tid, lp in zip(topk_token_ids, topk_logprobs):
+            token_str = self.engine_client.data_processor.process_logprob_response([tid], clean_up_tokenization_spaces=False)
+            entry = LogProbEntry(
+                token=token_str,
+                logprob=lp,
+            )
+            top_logprob_entries.append(entry)
+
+        if sampled_rank >= len(top_logprob_entries):
+            return None  # 防御性编程，避免索引越界
+
+        sampled_entry = top_logprob_entries[sampled_rank]
+        sampled_entry.top_logprobs = top_logprob_entries
+
+        return LogProbs(content=[sampled_entry])
