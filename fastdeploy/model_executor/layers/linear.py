@@ -294,7 +294,7 @@ class ColumnParallelLinear(LinearBase):
         )
         if self.nranks > 0:
             # col parallel
-            _set_var_distributed(self.linear_weight, split_axis=-1)
+            _set_var_distributed(self.linear_weight, split_axis=1)
 
         self.linear_bias = None
         if self.with_bias:
@@ -305,7 +305,7 @@ class ColumnParallelLinear(LinearBase):
             )
             if self.nranks > 0:
                 # col parallel
-                _set_var_distributed(self.linear_bias, split_axis=-1)
+                _set_var_distributed(self.linear_bias, split_axis=1)
 
         # smooth quant
         self.linear_shift = None

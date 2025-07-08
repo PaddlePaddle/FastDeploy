@@ -21,7 +21,11 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 import paddle
-from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
+
+try:
+    from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
+except:
+    flash_attention_v3_varlen = None
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
