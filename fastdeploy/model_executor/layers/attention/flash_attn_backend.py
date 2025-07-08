@@ -21,7 +21,11 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 import paddle
-from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
+
+try:
+    from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
+except:
+    flash_attention_v3_varlen = None
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
@@ -96,7 +100,7 @@ class FlashAttentionBackend(AttentionBackend):
         self.use_speculate = self.speculative_method is not None
         self.speculate_max_draft_token_num = fd_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
-        self.rank: int = fd_config.parallel_config.tensor_parallel_rank
+        self.rank: int = fd_config.parallel_config.expert_parallel_rank * fd_config.parallel_config.tensor_parallel_degree + fd_config.parallel_config.tensor_parallel_rank
 
         # pd_disaggregation
         self.use_pd_disaggregation: int = int(
@@ -106,12 +110,13 @@ class FlashAttentionBackend(AttentionBackend):
 
         if fd_config.parallel_config.expert_parallel_rank is None:
             fd_config.parallel_config.expert_parallel_rank = 0
-        device_id = self.rank + fd_config.parallel_config.tensor_parallel_degree * \
-            fd_config.parallel_config.expert_parallel_rank
+            
         if self.device_id is None:
-            self.device_id = device_id
+            self.device_id = self.rank
         else:
-            self.device_id = self.device_id.split(",")[device_id]
+            device_ids = self.device_id.split(",")
+            rank_index = self.rank % len(device_ids)
+            self.device_id = self.device_id[rank_index]
 
     def get_attntion_meta(self):
         """get_attntion_meta"""

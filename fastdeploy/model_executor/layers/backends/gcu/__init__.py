@@ -1,4 +1,3 @@
-"""
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,20 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+"""
+gcu backend methods
 """
 
-import paddle
-import paddle.distributed as dist
+from .attention.flash_attn_backend import GCUFlashAttnBackend
+from .attention.mem_efficient_attn_backend import GCUMemEfficientAttnBackend
+from .moe.fused_moe_method_gcu_backend import (GCUFusedMoeMethod,
+                                               GCUWeightOnlyMoEMethod)
+from .quantization.weight_only import GCUWeightOnlyLinearMethod
 
-try:
-    @paddle.jit.marker.unified
-    def tensor_model_parallel_all_reduce(input_: paddle.Tensor) -> paddle.Tensor:
-        """All-reduce the input tensor across model parallel group."""
-        if paddle.in_dynamic_mode():
-            hcg = dist.fleet.get_hybrid_communicate_group()
-            mp_group = hcg.get_model_parallel_group()
-            dist.all_reduce(input_, group=mp_group)
-        else:
-            dist.all_reduce(input_)
-except:
-    tensor_model_parallel_all_reduce=None
+__all__ = [
+    'GCUFlashAttnBackend',
+    'GCUMemEfficientAttnBackend',
+    'GCUFusedMoeMethod',
+    'GCUWeightOnlyMoEMethod',
+    'GCUWeightOnlyLinearMethod',
+]
