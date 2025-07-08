@@ -60,6 +60,9 @@ class GpuWorker(WorkerBase):
 
             gc.collect()
             paddle.device.cuda.empty_cache()
+            if self.parallel_config.enable_custom_all_reduce:
+                from fastdeploy.distributed.communication_op import use_custom_allreduce
+                use_custom_allreduce()
         else:
             raise RuntimeError(
                 f"Not support device type: {self.device_config.device}")
