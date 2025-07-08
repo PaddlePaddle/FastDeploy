@@ -23,7 +23,7 @@ from fastdeploy import envs
 
 def top_p_sampling(
     x: paddle.Tensor,
-    ps: paddle.Tensor,
+    top_p: paddle.Tensor,
     top_k: Optional[paddle.Tensor] = None,
     threshold: Optional[paddle.Tensor] = None,
     topp_seed: Optional[paddle.Tensor] = None,
@@ -34,7 +34,7 @@ def top_p_sampling(
 ) -> tuple[paddle.Tensor, paddle.Tensor]:
     """
     x(Tensor): An input 2-D Tensor with type float32, float16 and bfloat16.
-    ps(Tensor): A 1-D Tensor with type float32, float16 and bfloat16,
+    top_p(Tensor): A 1-D Tensor with type float32, float16 and bfloat16,
         used to specify the top_p corresponding to each query.
     top_k(Tensor|None, optional): A 1-D Tensor with type int64,
         used to specify the top_k corresponding to each query.
@@ -58,18 +58,18 @@ def top_p_sampling(
     top_p_class = envs.FD_SAMPLING_CLASS.lower()
     if top_p_class == "air":
         _, ids = air_top_p_sampling(x,
-                                    ps,
+                                    top_p,
                                     threshold,
                                     topp_seed,
                                     seed=seed,
                                     k=k,
                                     mode=mode)
     elif top_p_class == "rejection":
-        ids = rejection_top_p_sampling(x, ps, top_k, seed, order)
+        ids = rejection_top_p_sampling(x, top_p, top_k, seed, order)
         _ = None
     else:
         _, ids = paddle.tensor.top_p_sampling(x,
-                                              ps,
+                                              top_p,
                                               threshold=threshold,
                                               topp_seed=topp_seed,
                                               seed=seed,
@@ -80,7 +80,7 @@ def top_p_sampling(
 
 def air_top_p_sampling(
     x: paddle.Tensor,
-    ps: paddle.Tensor,
+    top_p: paddle.Tensor,
     threshold: Optional[paddle.Tensor] = None,
     topp_seed: Optional[paddle.Tensor] = None,
     seed: int = -1,
@@ -92,7 +92,7 @@ def air_top_p_sampling(
     """
     try:
         from fastdeploy.model_executor.ops.gpu import air_top_p_sampling
-        out, ids = air_top_p_sampling(x, ps, threshold, topp_seed, seed, k,
+        out, ids = air_top_p_sampling(x, top_p, threshold, topp_seed, seed, k,
                                       mode)
     except ImportError:
         raise RuntimeError("Cannot import air_top_p_sampling op.")
@@ -101,7 +101,7 @@ def air_top_p_sampling(
 
 def rejection_top_p_sampling(
     x: paddle.Tensor,
-    ps: paddle.Tensor,
+    top_p: paddle.Tensor,
     top_k: Optional[paddle.Tensor] = None,
     seed: int = -1,
     order: Literal['top_k_first', 'joint'] = "top_k_first",
@@ -117,14 +117,14 @@ def rejection_top_p_sampling(
             renorm_probs = top_k_renorm_probs(x, top_k)
             ids = rejection_top_p_sampling(
                 renorm_probs,
-                ps,
+                top_p,
                 None,
                 seed,
             )
         else:
             ids = rejection_top_p_sampling(
                 x,
-                ps,
+                top_p,
                 top_k,
                 seed,
             )

@@ -24,7 +24,7 @@ std::vector<paddle::Tensor> TopKRenorm(const paddle::Tensor &probs,
   auto cu_stream = probs.stream();
 
   auto renorm_probs =
-      paddle::empty(probs_shape, paddle::DataType::FLOAT32, probs.place());
+      GetEmptyTensor(probs.dims(), paddle::DataType::FLOAT32, probs.place());
 
   cudaError_t status;
 
