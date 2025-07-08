@@ -11,11 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""fastdeploy module"""
-from . import gpu
-from . import cpu
-from . import xpu
-from . import npu
-from . import iluvatar
+"""fastdeploy gpu ops"""
 
-__all__ = ["gpu", "cpu", "xpu", "npu", "iluvatar"]
+from fastdeploy.import_ops import import_custom_ops
+
+PACKAGE = "fastdeploy.model_executor.ops.iluvatar"
+
+import_custom_ops(PACKAGE, "..base.fastdeploy_base_ops", globals())
+import_custom_ops(PACKAGE, ".fastdeploy_ops", globals())
+
+from .moe_ops import iluvatar_moe_expert_ffn as moe_expert_ffn  # noqa: E402,  F401
+from .paged_attention import paged_attention  # noqa: E402,  F401

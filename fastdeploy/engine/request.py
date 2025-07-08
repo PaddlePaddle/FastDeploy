@@ -19,6 +19,7 @@ from __future__ import annotations
 import time
 from dataclasses import asdict, dataclass, fields
 from typing import Any, Dict, Optional, Union
+from fastdeploy.worker.output import LogprobsLists
 
 import numpy
 
@@ -189,6 +190,8 @@ class CompletionOutput:
     index: int
     send_idx: int
     token_ids: list[int]
+    logprob: Optional[float] = None
+    top_logprobs: Optional[LogprobsLists] = None
     draft_token_ids: list[int] = None
     text: Optional[str] = None
     reasoning_content: Optional[str] = None
@@ -201,6 +204,8 @@ class CompletionOutput:
             "index": self.index,
             "send_idx": self.send_idx,
             "token_ids": self.token_ids,
+            "logprob": self.logprob,
+            "top_logprobs": self.top_logprobs,
             "draft_token_ids": self.draft_token_ids,
             "text": self.text,
             "reasoning_content": self.reasoning_content

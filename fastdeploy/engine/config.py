@@ -42,7 +42,7 @@ class ModelConfig:
                  model_name_or_path: str,
                  config_json_file: str = "config.json",
                  dynamic_load_weight: bool = False,
-                 load_strategy: str="meta",
+                 load_strategy: str = "meta",
                  quantization: str = None,
                  download_dir: Optional[str] = None):
         """
@@ -526,6 +526,8 @@ class Config:
         max_capture_batch_size: int = 64,
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
+        enable_logprob: bool = False,
+        max_logprobs: int = None,
     ):
         """
         Initialize the Config class.
@@ -590,7 +592,7 @@ class Config:
             self.nnode = 1
         else:
             self.nnode = len(self.pod_ips)
-        
+
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
 
         # TODO
@@ -608,8 +610,9 @@ class Config:
                           == 1), "TP and EP cannot be enabled at the same time"
 
         num_ranks = self.tensor_parallel_size * self.parallel_config.expert_parallel_size
-        if num_ranks > 8:
-            self.worker_num_per_node = 8
+        self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        if num_ranks > self.max_chips_per_node:
+            self.worker_num_per_node = self.max_chips_per_node
             nnode = ceil_div(num_ranks, self.worker_num_per_node)
             assert nnode == self.nnode, \
                 f"nnode: {nnode}, but got {self.nnode}"
@@ -619,6 +622,13 @@ class Config:
         self.engine_worker_queue_port = engine_worker_queue_port
         self.device_ids = ",".join([str(i) for i in range(self.worker_num_per_node)])
         self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.device_ids)
+
+        self.enable_logprob = enable_logprob
+        # 现有架构下只能通过指定 max_logprobs 来申请通信缓冲区，默认使用 10（但前提是 enable_logprob 为 True）
+        if enable_logprob:
+            self.max_logprobs = 10 if max_logprobs is None else max_logprobs
+        else:
+            self.max_logprobs = 0
 
         self.read_from_config()
         self.postprocess()
@@ -679,8 +689,8 @@ class Config:
             is_port_available('0.0.0.0', self.engine_worker_queue_port)
         ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
         assert (
-            8 >= self.tensor_parallel_size > 0
-        ), f"tensor_parallel_size: {self.tensor_parallel_size} should be between 1 and 8"
+            self.max_chips_per_node >= self.tensor_parallel_size > 0
+        ), f"tensor_parallel_size: {self.tensor_parallel_size} should be between 1 and {self.max_chips_per_node}"
         assert (self.nnode >= 1), f"nnode: {self.nnode} should no less than 1"
         assert (
             self.max_model_len >= 16
@@ -816,7 +826,7 @@ class Config:
 
     def _check_master(self):
         return self.is_master
-    
+
     def _str_to_list(self, attr_name, default_type):
         if hasattr(self, attr_name):
             val = getattr(self, attr_name)

@@ -227,3 +227,8 @@ class ModelRunnerOutput:
         [num_reqs, num_spec_tokens]
     """
     spec_token_ids: Optional[list[list[int]]]
+
+    # [num_reqs, max_num_logprobs + 1]
+    # [num_reqs, max_num_logprobs + 1]
+    # [num_reqs]
+    logprobs: Optional[LogprobsLists]

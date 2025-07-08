@@ -20,6 +20,7 @@ import numpy as np
 import paddle
 from paddle import nn
 from paddle.incubate.nn.functional import fused_layer_norm, fused_rms_norm
+from fastdeploy.platforms import current_platform
 
 from fastdeploy.config import FDConfig
 
@@ -265,6 +266,18 @@ class LayerNorm(nn.Layer):
                   The `residual_output` is the result of applying the normalization and possibly other
                   operations (like linear transformation) on the `residual_input`.
         """
+        if current_platform.is_iluvatar():
+            if self.ln_weight is None and self.ln_bias is None:
+                out = x
+                if self.linear_bias is not None:
+                    out += self.linear_bias
+                if residual_input is not None:
+                    out += residual_input
+                    return out, out
+                else:
+                    return out
+            else:
+                raise NotImplementedError("Iluvatar does not support yet!")
 
         norm_out = self.norm_func(
             x,
