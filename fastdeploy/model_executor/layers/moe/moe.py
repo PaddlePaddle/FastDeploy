@@ -89,6 +89,7 @@ class FusedMoE(nn.Layer):
         self.routed_scaling_factor = routed_scaling_factor
 
         moe_quant_config = fd_config.quant_config
+        self.moe_quant_type = None
         if moe_quant_config:
             self.quant_method = moe_quant_config.get_quant_method(self)
             self.moe_quant_type = moe_quant_config.name()
@@ -142,7 +143,7 @@ class FusedMoE(nn.Layer):
         if self.moe_quant_type == "fp8":
             #(TODO:gaoziyuan)
             pass
-        else:
+        elif self.moe_quant_type == "wint8":
             self.weight_dtype = "int8"
             self.init_weight_only_scale()
 
