@@ -220,9 +220,14 @@ class Sampler(nn.Layer):
           Sampled token rank tensor, (num tokens)
         """
         assert token_ids.dtype == paddle.int64
-        # Find the topK values.
+        # Get with the logprob of the prompt or sampled token.
         token_logprobs = paddle.take_along_axis(logprobs, token_ids, axis=-1)
+
+        # Compute the ranks of the actual token.
+        token_ranks = (logprobs >= token_logprobs).sum(-1)
+
         if num_logprobs >= 1:
+            # Find the topK values.
             topk_logprobs, topk_indices = paddle.topk(logprobs,
                                                     num_logprobs,
                                                     axis=-1)
@@ -231,9 +236,6 @@ class Sampler(nn.Layer):
         else:
             indices = token_ids
             top_logprobs = token_logprobs
-
-        # Compute the ranks of the actual token.
-        token_ranks = (logprobs >= token_logprobs).sum(-1)
 
         return LogprobsTensors(indices, top_logprobs, token_ranks)
 

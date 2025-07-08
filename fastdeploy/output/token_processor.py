@@ -26,14 +26,15 @@ import numpy as np
 
 from fastdeploy.engine.request import (CompletionOutput, RequestMetrics,
                                        RequestOutput)
-from fastdeploy.worker.output import LogprobsLists
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger, spec_logger
+from fastdeploy.worker.output import LogprobsLists
 
 RECOVERY_STOP_SIGNAL = -3
 MAX_BSZ = 512
+K = 20
 MAX_DRAFT_TOKENS = 6
 SPECULATE_MAX_BSZ = 256
 
@@ -63,11 +64,13 @@ class TokenProcessor(object):
             ],
                 fill_value=2,
                 dtype="int64")
-        elif self.cfg.max_logprobs > 0:
+        elif self.cfg.enable_logprob:
             self.output_tokens = paddle.full(
-                shape=[MAX_BSZ * (self.cfg.max_logprobs + 1) + 2, 1], fill_value=2, dtype="int64")
+                shape=[MAX_BSZ * (K + 1) + 2, 1], fill_value=2, dtype="int64")
             self.output_scores = paddle.full(
-                shape=[MAX_BSZ * (self.cfg.max_logprobs + 1), 1], fill_value=0.0, dtype="float32")
+                shape=[MAX_BSZ * (K + 1), 1], fill_value=0.0, dtype="float32")
+            self.output_ranks = paddle.full(
+                shape=[MAX_BSZ], fill_value=0, dtype="int64")
         else:
             self.output_tokens = paddle.full(shape=[MAX_BSZ + 2, 1],
                                              fill_value=2,
@@ -117,7 +120,7 @@ class TokenProcessor(object):
             raise Exception("Worker is already running!")
 
         use_logprobs = (
-                self.cfg.max_logprobs > 0
+                self.cfg.enable_logprob
                 and not self.speculative_decoding
                 and not self.cfg.parallel_config.enable_expert_parallel
         )
@@ -139,15 +142,15 @@ class TokenProcessor(object):
         """
 
         if current_platform.is_xpu():
-            from fastdeploy.model_executor.ops.xpu import get_output_msg_with_topk
+            from fastdeploy.model_executor.ops.xpu import get_output_topk
         else:
-            from fastdeploy.model_executor.ops.gpu import get_output_msg_with_topk
+            from fastdeploy.model_executor.ops.gpu import get_output_topk
         rank_id = self.cfg.parallel_config.local_data_parallel_id
 
         while True:
             try:
                 is_blocking = True
-                get_output_msg_with_topk(self.output_tokens, self.output_scores, rank_id, is_blocking)
+                get_output_topk(self.output_tokens, self.output_scores, self.output_ranks, K, rank_id, is_blocking)
 
                 if self.output_tokens[0, 0] == -2:
                     continue
@@ -171,10 +174,8 @@ class TokenProcessor(object):
         elif current_platform.is_iluvatar():
             from fastdeploy.model_executor.ops.iluvatar import get_output
         else:
-            from fastdeploy.model_executor.ops.gpu import (get_output,
-                                                           get_output_ep,
-                                                           speculate_get_output
-                                                           )
+            from fastdeploy.model_executor.ops.gpu import (
+                get_output, get_output_ep, speculate_get_output)
         rank_id = self.cfg.parallel_config.local_data_parallel_id
 
         while True:
@@ -301,11 +302,11 @@ class TokenProcessor(object):
         """
 
         batch = self.output_tokens[1, 0]
-        tokens = self.output_tokens[2:batch * (self.cfg.max_logprobs + 1) + 2].numpy().reshape(
-            [batch, self.cfg.max_logprobs + 1])[:, :(self.cfg.max_logprobs + 1)]
-        scores = self.output_scores[:batch * (self.cfg.max_logprobs + 1)].numpy().reshape(
-            [batch, self.cfg.max_logprobs + 1])[:, :(self.cfg.max_logprobs + 1)]
-
+        tokens = self.output_tokens[2:batch * (K + 1) + 2].numpy().reshape(
+            [batch, K + 1])[:, :(K + 1)]
+        scores = self.output_scores[:batch * (K + 1)].numpy().reshape(
+            [batch, K + 1])[:, :(K + 1)]
+        ranks = self.output_ranks[:batch].numpy()
         batch_result = list()
         for i in range(batch):
             if self.resource_manager.stop_flags[i]:
@@ -379,7 +380,7 @@ class TokenProcessor(object):
                     # 构造 top_logprobs
                     topk_token_ids = tokens[i, :].tolist()
                     topk_logprobs = scores[i, :].tolist()
-                    sampled_rank = topk_token_ids.index(token_id)
+                    sampled_rank = ranks[i].item()
 
                     result.outputs.top_logprobs = LogprobsLists(
                         logprob_token_ids=[topk_token_ids],
@@ -582,9 +583,8 @@ class WarmUpTokenProcessor(TokenProcessor):
         elif current_platform.is_iluvatar():
             from fastdeploy.model_executor.ops.iluvatar import get_output
         else:
-            from fastdeploy.model_executor.ops.gpu import (get_output,
-                                                           speculate_get_output
-                                                           )
+            from fastdeploy.model_executor.ops.gpu import (
+                get_output, speculate_get_output)
 
         while self._is_running:
             try:

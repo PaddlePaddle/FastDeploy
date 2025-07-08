@@ -20,6 +20,7 @@ import paddle
 from fastdeploy import envs
 from fastdeploy.engine.config import SpeculativeConfig
 from fastdeploy.platforms import current_platform
+
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
         get_padding_offset, save_output, set_stop_value_multi_ends,
@@ -33,6 +34,7 @@ else:
         speculate_step_paddle, speculate_step_system_cache,
         speculate_update_v3, step_paddle, step_system_cache, update_inputs,
         step_reschedule, save_output_topk)
+
 from fastdeploy.worker.output import (ModelOutputData, ModelRunnerOutput,
                                       SamplerOutput)
 
@@ -164,6 +166,7 @@ def post_process_normal(sampler_output: SamplerOutput,
             save_output_topk(
                 sampler_output.logprobs_tensors.logprob_token_ids,
                 sampler_output.logprobs_tensors.logprobs,
+                sampler_output.logprobs_tensors.selected_token_ranks,
                 model_output.not_need_stop,
                 model_output.mp_rank,
             )
