@@ -69,6 +69,12 @@ class Platform:
         """
         return paddle.is_compiled_with_custom_device("iluvatar_gpu")
 
+    def is_gcu(self) -> bool:
+        """
+        whether platform is gcu
+        """
+        return paddle.is_compiled_with_custom_device("gcu")
+
     @classmethod
     def get_attention_backend_cls(self, selected_backend):
         """Get the attention backend"""

@@ -22,6 +22,7 @@ from .xpu import XPUPlatform
 from .npu import NPUPlatform
 from .dcu import DCUPlatform
 from .iluvatar import IluvatarPlatform
+from .gcu import GCUPlatform
 from .base import _Backend  # noqa: F401
 
 _current_platform = None
@@ -42,6 +43,8 @@ def __getattr__(name: str):
                 _current_platform = DCUPlatform()
             elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 _current_platform = IluvatarPlatform()
+            elif paddle.is_compiled_with_custom_device("gcu"):
+                _current_platform = GCUPlatform()
             else:
                 _current_platform = CPUPlatform()
         return _current_platform
