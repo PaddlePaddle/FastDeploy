@@ -579,7 +579,8 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
     model_config = ModelConfig.from_dict(config)
     # TODO Set `head_dim` again. Because `ModelConfig` class doesn't support feeding head_dim at all!
     model_config.head_dim = config["head_dim"]
-    model_config.tie_word_embeddings = config["tie_word_embeddings"]
+    if 'tie_word_embeddings' in config:
+        model_config.tie_word_embeddings = config["tie_word_embeddings"]
     paddle.set_default_dtype(args.dtype)
 
     device_config = DeviceConfig()
