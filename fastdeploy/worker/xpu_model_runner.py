@@ -70,7 +70,23 @@ def xpu_pre_process(
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
     share_inputs["cu_seqlens_k"] = cu_seqlens_k
 
-    xpu_forward_meta = XPUForwardMeta.init_forward_meta(share_inputs, None)
+    xpu_forward_meta = XPUForwardMeta(
+        input_ids=share_inputs["input_ids"],
+        ids_remove_padding=share_inputs["ids_remove_padding"],
+        rotary_embs=share_inputs["rope_emb"],
+        attn_backend=None,
+        decoder_batch_ids=share_inputs["decoder_batch_ids"],
+        decoder_tile_ids_per_batch=share_inputs["decoder_tile_ids_per_batch"],
+        seq_lens_encoder=share_inputs["seq_lens_encoder"],
+        seq_lens_decoder=share_inputs["seq_lens_decoder"],
+        seq_lens_this_time=share_inputs["seq_lens_this_time"],
+        cum_offsets=share_inputs["cum_offsets"],
+        padding_offset=share_inputs["padding_offset"],
+        cu_seqlens_q=share_inputs["cu_seqlens_q"],
+        cu_seqlens_k=share_inputs["cu_seqlens_k"],
+        block_tables=share_inputs["block_tables"],
+        caches=share_inputs["caches"]
+    )
 
     # Get xpu extra param
     (
