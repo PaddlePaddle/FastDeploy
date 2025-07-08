@@ -120,7 +120,8 @@ class ExpertService(object):
             device_ids=self.cfg.local_device_ids,
             pod_ip=self.cfg.pod_ips[0],
             engine_worker_queue_port=self.cfg.engine_worker_queue_port,
-            pid_suffix=f"{local_data_parallel_id}_{ipc_signal_suffix}")
+            pid_suffix=f"{local_data_parallel_id}_{ipc_signal_suffix}"
+        )
 
         self.insert_task_to_worker_thread = threading.Thread(
             target=self._insert_task_to_worker, args=())
