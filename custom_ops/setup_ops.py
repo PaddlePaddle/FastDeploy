@@ -442,6 +442,7 @@ elif paddle.is_compiled_with_cuda():
             "gpu_ops/scaled_gemm_f8_i4_f16_weight_quantize.cu",
             "gpu_ops/cutlass_kernels/cutlass_heuristic.cu",
             "gpu_ops/cutlass_kernels/cutlass_preprocessors.cu",
+            "gpu_ops/fused_hadamard_quant_fp8.cu"
         ]
 
         sources += find_end_files(fp8_auto_gen_directory, ".cu")
