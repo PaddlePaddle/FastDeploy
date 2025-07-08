@@ -42,7 +42,8 @@ from fastdeploy.metrics.metrics import (EXCLUDE_LABELS,
                                         main_process_metrics)
 from fastdeploy.utils import (FlexibleArgumentParser, api_server_logger,
                               console_logger, is_port_available,
-                              retrive_model_from_server)
+                              retrive_model_from_server,
+                              dump_git_info)
 
 parser = FlexibleArgumentParser()
 parser.add_argument("--port",
@@ -379,7 +380,7 @@ def launch_controller_server():
 
 def main():
     """main函数"""
-
+    dump_git_info()
     if load_engine() is None:
         return
 

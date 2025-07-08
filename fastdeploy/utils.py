@@ -23,6 +23,7 @@ import re
 import socket
 import tarfile
 import time
+import subprocess
 from datetime import datetime
 from logging.handlers import BaseRotatingHandler
 from pathlib import Path
@@ -575,6 +576,53 @@ def version():
             print(content)
     except FileNotFoundError:
         llm_logger.error("[version.txt] Not Found!")
+
+def get_git_diff_details():
+    '''
+    get changes
+    '''
+    try:
+        unstaged = subprocess.check_output(['git', 'diff', '--name-status']).decode('utf-8').strip()
+        staged = subprocess.check_output(['git', 'diff', '--cached', '--name-status']).decode('utf-8').strip()
+        return unstaged, staged
+    except Exception as e:
+        return f"Cannot get local changes through git, error details: {e!s}", ""
+
+def dump_git_info():
+    '''
+    dump git info
+    '''
+    print("gaoziyuan testhaha")
+    try:
+        branch = subprocess.check_output(['git', 'branch', '--show-current']).decode('utf-8').strip()
+        commit = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf-8').strip()
+        status = subprocess.check_output(['git', 'status', '--porcelain']).decode('utf-8')
+        has_changes = "local changes" if status else "no local changes"
+
+        llm_logger.info(f"Current branch: {branch}")
+        llm_logger.info(f"Current commit: {commit}")
+        llm_logger.info(f"Local status: {has_changes}")
+
+        if status:
+            llm_logger.info("\n:")
+            llm_logger.info(status)
+            unstaged, staged = get_git_diff_details()
+
+            if unstaged:
+                llm_logger.info("\nUnstaged changes detected:")
+                llm_logger.info(unstaged)
+                llm_logger.info("\nDetailed changes:")
+                llm_logger.info(subprocess.check_output(['git', 'diff']).decode('utf-8'))
+
+            if staged:
+                llm_logger.info("\nStaged changes detected:")
+                llm_logger.info(staged)
+                llm_logger.info("\nDetailed changes:")
+                llm_logger.info(subprocess.check_output(['git', 'diff', '--cached']).decode('utf-8'))
+
+    except Exception as e:
+        llm_logger.info(f"Cannot get code info through git, error details: {e!s}")
+
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")
 data_processor_logger = get_logger("data_processor", "data_processor.log")

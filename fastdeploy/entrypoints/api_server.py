@@ -19,7 +19,7 @@ import json
 from fastapi import FastAPI
 from fastapi.responses import Response, StreamingResponse
 
-from fastdeploy.utils import FlexibleArgumentParser, api_server_logger, is_port_available
+from fastdeploy.utils import FlexibleArgumentParser, api_server_logger, is_port_available, dump_git_info
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
 
@@ -109,6 +109,7 @@ def launch_api_server(args) -> None:
 def main():
     """main函数"""
     parser = FlexibleArgumentParser()
+    dump_git_info()
     parser.add_argument("--port", default=9904, type=int, help="port to the http server")
     parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
     parser.add_argument("--workers", default=1, type=int, help="number of workers")
