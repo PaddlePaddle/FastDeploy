@@ -28,12 +28,12 @@ class ModelRegistry:
     _registry = {}
 
     @classmethod
-    def register(cls, model_class, suffix=""):
+    def register(cls, model_class):
         """register model class"""
         if issubclass(
                 model_class,
                 ModelForCasualLM) and model_class is not ModelForCasualLM:
-            cls._registry[f"{model_class.name()}{suffix}"] = model_class
+            cls._registry[model_class.name()] = model_class
         return model_class
 
     @classmethod
