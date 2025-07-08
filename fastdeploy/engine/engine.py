@@ -931,8 +931,8 @@ class LLMEngine(object):
 
     def _setting_environ_variables(self):
         """
-       配置环境变量
-       """
+        配置环境变量
+        """
         variables = {
             "PADDLE_TRAINER_ID": 0,
             "PADDLE_TRAINERS_NUM": 1,
@@ -998,8 +998,8 @@ class LLMEngine(object):
         py_script = os.path.join(current_dir_path, worker_path)
 
         ori_vocab_size = (
-            len(self.data_processor.tokenizer.sp_model) 
-            if hasattr(self.data_processor.tokenizer, 'sp_model') 
+            len(self.data_processor.tokenizer.sp_model)
+            if hasattr(self.data_processor.tokenizer, 'sp_model')
             else len(self.data_processor.tokenizer.vocab)
         )
 

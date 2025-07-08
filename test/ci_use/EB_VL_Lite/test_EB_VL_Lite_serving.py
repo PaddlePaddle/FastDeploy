@@ -176,58 +176,31 @@ def consistent_payload():
         "seed": 13  # fixed random seed
     }
 
-# ==========================
-# Helper function to calculate difference rate between two texts
-# ==========================
-def calculate_diff_rate(text1, text2):
-    """
-    Calculate the difference rate between two strings
-    based on the normalized Levenshtein edit distance.
-    Returns a float in [0,1], where 0 means identical.
-    """
-    if text1 == text2:
-        return 0.0
-
-    len1, len2 = len(text1), len(text2)
-    dp = [[0] * (len2 + 1) for _ in range(len1 + 1)]
-
-    for i in range(len1 + 1):
-        for j in range(len2 + 1):
-            if i == 0 or j == 0:
-                dp[i][j] = i + j
-            elif text1[i - 1] == text2[j - 1]:
-                dp[i][j] = dp[i - 1][j - 1]
-            else:
-                dp[i][j] = 1 + min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
-
-    edit_distance = dp[len1][len2]
-    max_len = max(len1, len2)
-    return edit_distance / max_len if max_len > 0 else 0.0
 
 # ==========================
 # Consistency test for repeated runs with fixed payload
 # ==========================
 def test_consistency_between_runs(api_url, headers, consistent_payload):
     """
-    Test that two runs with the same fixed input produce similar outputs.
+    Test that result is same as the base result.
     """
-    # First request
+    # request
     resp1 = requests.post(api_url, headers=headers, json=consistent_payload)
     assert resp1.status_code == 200
     result1 = resp1.json()
     content1 = result1["choices"][0]["message"]["content"]
 
-    # Second request
-    resp2 = requests.post(api_url, headers=headers, json=consistent_payload)
-    assert resp2.status_code == 200
-    result2 = resp2.json()
-    content2 = result2["choices"][0]["message"]["content"]
+    # base result
+    base_path = os.getenv("MODEL_PATH")
+    if base_path:
+        base_file = os.path.join(base_path, "ernie-4_5-vl-base")
+    else:
+        base_file = "ernie-4_5-vl-base"
+    with open(base_file, "r") as f:
+        content2 = f.read()
 
-    # Calculate difference rate
-    diff_rate = calculate_diff_rate(content1, content2)
-
-    # Verify that the difference rate is below the threshold
-    assert diff_rate < 0.05, "Output difference too large ({:.4%})".format(diff_rate)
+    # Verify that result is same as the base result
+    assert content1 == content2
 
 # ==========================
 # OpenAI Client Chat Completion Test
