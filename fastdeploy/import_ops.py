@@ -79,7 +79,8 @@ def wrap_unified_op(original_cpp_ext_op, original_custom_op):
             res = original_cpp_ext_op(*args, **kwargs)
             if res is None:
                 return None
-            if len(res) == 1:
+            # TODO(DrRyanHuang): Remove this if when we align the implementation of custom op and C++ extension
+            if isinstance(res, list) and len(res) == 1:
                 return res[0]
             return res
         return original_custom_op(*args, **kwargs)
