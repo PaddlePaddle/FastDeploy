@@ -240,20 +240,12 @@ class Qwen3ForCausalLM(ModelForCasualLM):
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
         self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
-        # if self.tie_word_embeddings:
-        #     self.lm_head = ParallelLMHead(
-        #         fd_config=fd_config,
-        #         embedding_dim=fd_config.model_config.hidden_size,
-        #         num_embeddings=fd_config.model_config.vocab_size,
-        #         prefix=(f"{fd_config.model_config.prefix_name}.embed_tokens"),
-        #     )
-        # else:
         self.lm_head = ParallelLMHead(
             fd_config=fd_config,
             embedding_dim=fd_config.model_config.hidden_size,
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
-            )
+        )
 
     @classmethod
     def name(self):

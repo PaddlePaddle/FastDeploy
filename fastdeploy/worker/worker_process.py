@@ -53,6 +53,9 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
         return IluvatarWorker(fd_config=fd_config,
                               local_rank=local_rank,
                               rank=rank)
+    if current_platform.is_gcu():
+        from fastdeploy.worker.gcu_worker import GcuWorker
+        return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
 class PaddleDisWorkerProc():
