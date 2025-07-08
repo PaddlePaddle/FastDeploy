@@ -20,6 +20,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.platforms import current_platform
 
 
 class FusedMoE(nn.Layer):
@@ -95,8 +96,13 @@ class FusedMoE(nn.Layer):
             self.moe_quant_type = moe_quant_config.name()
         else:
             # now, no quant method(w_fp16 a_fp16) can't get from quant_config, we will optimize it in future
-            from .fused_moe_cutlass_backend import CutlassMoEMethod
-            self.quant_method = CutlassMoEMethod(None)
+            if current_platform.is_cuda():
+                from .fused_moe_cutlass_backend import CutlassMoEMethod
+                self.quant_method = CutlassMoEMethod(None)
+            elif current_platform.is_gcu():
+                from fastdeploy.model_executor.layers.backends import \
+                    GCUFusedMoeMethod
+                self.quant_method = GCUFusedMoeMethod(None)
 
         if self.ep_size > 1:
             self.quant_method.init_ep(self)
