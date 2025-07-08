@@ -468,6 +468,7 @@ std::vector<paddle::Tensor> NoauxTc(
       int topk,
       float routed_scaling_factor);
 
+#ifdef ENABLE_FP8
 paddle::Tensor cutlass_fp8_fp8_half_gemm_func(
     const paddle::Tensor& x,
     const paddle::Tensor& y,
@@ -489,6 +490,7 @@ paddle::Tensor MoeFusedHadamardQuantFp8Func(
 paddle::Tensor FusedHadamardQuantFp8Func(
                 const paddle::Tensor &input,
                 const float scale);
+#endif
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
 
@@ -769,6 +771,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("noaux_tc",&NoauxTc, "noaux_tc for Deepseekv3 MoE compute");
 
+#ifdef ENABLE_FP8
   m.def("cutlass_fp8_fp8_half_gemm_fused", &cutlass_fp8_fp8_half_gemm_func,
         py::arg("x"), py::arg("y"), py::arg("bias"), py::arg("transpose_x"),
         py::arg("transpose_y"), py::arg("scale"), py::arg("output_dtype"),
@@ -780,4 +783,5 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("fused_hadamard_quant_fp8", &FusedHadamardQuantFp8Func,
       py::arg("input"), py::arg("scale"), "fused_hadamard_quant_fp8 function");
+#endif
 }
