@@ -55,7 +55,7 @@ class FakeTokenizer:
         return []
 
 
-def send_one_batch(base_url, batch_size, input_requests, disable_tqdm):
+def send_one_batch(base_url, max_concurrency, input_requests, disable_tqdm):
     selected_percentile_metrics = ["s_itl"]
     selected_percentiles = []
     # Run benchmark
@@ -77,7 +77,7 @@ def send_one_batch(base_url, batch_size, input_requests, disable_tqdm):
             selected_percentiles=selected_percentiles,
             ignore_eos=False,
             goodput_config_dict=None,
-            max_concurrency=batch_size,
+            max_concurrency=max_concurrency,
             lora_modules=None,
             extra_body=None,
         )
@@ -104,21 +104,22 @@ def calculate_speedup(acceptance_rate, draft_token_step, t_ori, t_mtp):
 def main(args):
     base_url = f"http://{args.host}:{args.port}"
 
-    if args.dataset_path is None:
-        input_requests = prepare_dummy_input_requests(args.num_prompts)
-    else:
-        input_requests = prepare_input_requests(
-            args.num_prompts, args.dataset_name, args.dataset_path
-        )
+    input_requests = prepare_input_requests(
+        args.num_prompts, args.dataset_name, args.dataset_path
+    )
 
-    for batch_size in args.batch_size:
+    if len(args.max_concurrency) != len(args.s_itl_base_model):
+        raise ValueError(f"--max_concurrency should be same length as --s_itl_base_model")
+
+    for max_concurrency, s_itl in zip(args.max_concurrency, args.s_itl_base_model):
         # Wramup
+        print("Starting warmup...")
         with open(os.devnull, "w") as f:
             with contextlib.redirect_stdout(f):
-                send_one_batch(base_url, batch_size, input_requests[0:batch_size], True)
+                send_one_batch(base_url, max_concurrency, input_requests[0:max_concurrency], True)
 
         # Benchmark
-        record = send_one_batch(base_url, batch_size, input_requests, False)
+        record = send_one_batch(base_url, max_concurrency, input_requests, False)
 
         metric_header = f"Speed up"
         print("{s:{c}^{n}}".format(s=metric_header, n=50, c="-"))
@@ -126,7 +127,7 @@ def main(args):
             speedup = calculate_speedup(
                 args.acceptance_rate,
                 draft_token_step,
-                args.s_itl_base_model,
+                s_itl,
                 record["mean_s_itl_ms"],
             )
             print(
@@ -150,38 +151,39 @@ if __name__ == "__main__":
         default="8000",
     )
     parser.add_argument(
-        "--batch_size",
+        "--max-concurrency",
         type=int,
         nargs="+",
         default=(1, 2, 4, 8, 16, 32),
     )
     parser.add_argument(
-        "--num_prompts",
+        "--num-prompts",
         type=int,
         default=128,
     )
     parser.add_argument(
-        "--acceptance_rate",
+        "--acceptance-rate",
         type=float,
         default=0.8,
     )
     parser.add_argument(
-        "--draft_token_steps",
+        "--draft-token-steps",
         type=int,
         nargs="+",
         default=(1, 2),
     )
     parser.add_argument(
-        "--s_itl_base_model",
+        "--s_itl-base-model",
         type=float,
+        nargs="+",
     )
     parser.add_argument(
-        "--dataset_name",
+        "--dataset-name",
         type=str,
         default="EBChat",
     )
     parser.add_argument(
-        "--dataset_path",
+        "--dataset-path",
         type=str,
     )
     args = parser.parse_args()

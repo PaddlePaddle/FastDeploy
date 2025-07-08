@@ -109,25 +109,26 @@ python benchmark_serving.py \
 
 #### 使用方式：
 
-```
+```bash
 python benchmarks/benchmark_mtp.py \
   --host 127.0.0.1 --port 8000 \
-  --batch_size 1 2 4 8 16 32 --num_prompts 256 \
-  --acceptance_rate 0.8  --draft_token_steps 1 2 3 \
-  --s_itl_base_model 600 --dataset_name EBChat \
-  --dataset_path ./filtered_sharedgpt_2000_input_1136_output_200_fd.json
+  --max-concurrency 16 32 64 96 --num-prompts 256 \
+  --acceptance-rate 0.8 --draft-token-steps 1 2 3 \
+  --s_itl-base-model 15.88 22.84 16.47 16.93 \
+  --dataset-name EBChat \
+  --dataset-path ./filtered_sharedgpt_2000_input_1136_output_200_fd.json
 ```
 
 #### 参数说明
 
-```
+```bash
 --host：服务ip地址，用于组url
 --port：服务HTTP端口，用于组url
---batch_size：待测试的batch size
---num_prompts：总计发送多少条请求
---acceptance_rate：投机解码的模拟接受率
---draft_token_steps：投机解码的步数
---s_itl_base_model：主模型的推理延迟，可由上述的性能压测工具获得
---dataset_name：指定数据集类，指定为"EBChat"可读取转存的FD格式数据集
---dataset_path：测试数据集路径
+--max-concurrency：测试并发数
+--num-prompts：总计发送多少条请求
+--acceptance-rate：投机解码的模拟接受率
+--draft-token-steps：投机解码的步数
+--s_itl-base-model：主模型的解码延迟，可由上述的性能压测工具获得，与batch-size一一对应
+--dataset-name：指定数据集类，指定为"EBChat"可读取转存的FD格式数据集
+--dataset-path：测试数据集路径
 ```
