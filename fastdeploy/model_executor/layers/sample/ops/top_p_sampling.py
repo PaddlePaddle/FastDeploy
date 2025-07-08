@@ -24,14 +24,36 @@ from fastdeploy import envs
 def top_p_sampling(
     x: paddle.Tensor,
     ps: paddle.Tensor,
+    top_k: Optional[paddle.Tensor] = None,
     threshold: Optional[paddle.Tensor] = None,
     topp_seed: Optional[paddle.Tensor] = None,
     seed: int = -1,
     k: int = 0,
     mode: Literal['truncated', 'non-truncated'] = "truncated",
+    order: Literal['top_k_first', 'joint'] = "top_k_first",
 ) -> tuple[paddle.Tensor, paddle.Tensor]:
     """
-    top_p_sampling
+    x(Tensor): An input 2-D Tensor with type float32, float16 and bfloat16.
+    ps(Tensor): A 1-D Tensor with type float32, float16 and bfloat16,
+        used to specify the top_p corresponding to each query.
+    top_k(Tensor|None, optional): A 1-D Tensor with type int64,
+        used to specify the top_k corresponding to each query.
+        Only used when FD_SAMPLING_CLASS is `rejection`.
+    threshold(Tensor|None, optional): A 1-D Tensor with type float32, float16 and bfloat16,
+        used to avoid sampling low score tokens.
+    topp_seed(Tensor|None, optional): A 1-D Tensor with type int64,
+        used to specify the random seed for each query.
+    seed(int, optional): the random seed. Default is -1,
+    k(int): the number of top_k scores/ids to be returned. Default is 0.
+        Only used when FD_SAMPLING_CLASS is `air`.
+    mode(str): The mode to choose sampling strategy. If the mode is `truncated`, sampling will truncate the probability at top_p_value.
+        If the mode is `non-truncated`, it will not be truncated. Default is `truncated`.
+        Only used when FD_SAMPLING_CLASS is `air`.
+    order(str): The order of applying top-k and top-p sampling, should be either `top_k_first` or `joint`.
+        If `top_k_first`, we first apply top-k filter, then apply top-p sampling on the top-k results.
+        If `joint`, we apply top-k and top-p filter simultaneously in each round. Default is `top_k_first`.
+        Only used when FD_SAMPLING_CLASS is `rejection`.
+
     """
     top_p_class = envs.FD_SAMPLING_CLASS.lower()
     if top_p_class == "air":
@@ -43,7 +65,7 @@ def top_p_sampling(
                                     k=k,
                                     mode=mode)
     elif top_p_class == "rejection":
-        ids = rejection_top_p_sampling(x, ps, seed)
+        ids = rejection_top_p_sampling(x, ps, top_k, seed, order)
         _ = None
     else:
         _, ids = paddle.tensor.top_p_sampling(x,
@@ -80,18 +102,32 @@ def air_top_p_sampling(
 def rejection_top_p_sampling(
     x: paddle.Tensor,
     ps: paddle.Tensor,
+    top_k: Optional[paddle.Tensor] = None,
     seed: int = -1,
+    order: Literal['top_k_first', 'joint'] = "top_k_first",
 ) -> paddle.Tensor:
     """
     rejection_top_p_sampling
     """
     try:
-        from fastdeploy.model_executor.ops.gpu import rejection_top_p_sampling
-        ids = rejection_top_p_sampling(
-            x,
-            ps,
-            seed,
-        )
+        from fastdeploy.model_executor.ops.gpu import (
+            rejection_top_p_sampling, top_k_renorm_probs)
+        if order == "top_k_first":
+            assert top_k is not None, "top_k must be provided when order is 'top_k_first'"
+            renorm_probs = top_k_renorm_probs(x, top_k)
+            ids = rejection_top_p_sampling(
+                renorm_probs,
+                ps,
+                None,
+                seed,
+            )
+        else:
+            ids = rejection_top_p_sampling(
+                x,
+                ps,
+                top_k,
+                seed,
+            )
     except ImportError:
         raise RuntimeError("Cannot import rejection_top_p_sampling op.")
     return ids
