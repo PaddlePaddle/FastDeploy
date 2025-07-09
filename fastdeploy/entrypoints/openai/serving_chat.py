@@ -214,15 +214,17 @@ class OpenAIServingChat:
                 output = res["outputs"]
                 delta_text = output["text"]
                 raw_top_logprobs = output["top_logprobs"]
-                top_logprobs = LogprobsLists(
-                    logprob_token_ids=raw_top_logprobs[0],
-                    logprobs=raw_top_logprobs[1],
-                    sampled_token_ranks=raw_top_logprobs[2],
-                )
-                logprobs_res = self.build_logprobs_response(
-                    logprobs=top_logprobs,
-                    request_top_logprobs=request.top_logprobs,
-                )
+                logprobs_res = None
+                if raw_top_logprobs is not None:
+                    top_logprobs = LogprobsLists(
+                        logprob_token_ids=raw_top_logprobs[0],
+                        logprobs=raw_top_logprobs[1],
+                        sampled_token_ranks=raw_top_logprobs[2],
+                    )
+                    logprobs_res = self.build_logprobs_response(
+                        logprobs=top_logprobs,
+                        request_top_logprobs=request.top_logprobs,
+                    )
                 previous_num_tokens += len(output["token_ids"])
                 delta_message = DeltaMessage(content=delta_text, reasoning_content=output.get("reasoning_content"), \
                                              token_ids=output.get("token_ids"),
@@ -312,6 +314,7 @@ class OpenAIServingChat:
             final_res = None
             previous_num_tokens = 0
             current_waiting_time = 0
+            logprob_contents = []
             while True:
                 try:
                     raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
@@ -336,6 +339,20 @@ class OpenAIServingChat:
                     data, stream=False, enable_thinking=enable_thinking)
                 # api_server_logger.debug(f"Client {request_id} received: {data}")
                 previous_num_tokens += len(data["outputs"]["token_ids"])
+                # 处理响应的logprob
+                output = data["outputs"]
+                raw_top_logprobs = output["top_logprobs"]
+                top_logprobs = LogprobsLists(
+                    logprob_token_ids=raw_top_logprobs[0],
+                    logprobs=raw_top_logprobs[1],
+                    sampled_token_ranks=raw_top_logprobs[2],
+                )
+                logprobs_res = self.build_logprobs_response(
+                    logprobs=top_logprobs,
+                    request_top_logprobs=request.top_logprobs,
+                )
+                if logprobs_res and logprobs_res.content is not None:
+                    logprob_contents.extend(logprobs_res.content)
                 if data["finished"]:
                     final_res = data
                     break
@@ -351,10 +368,15 @@ class OpenAIServingChat:
             tool_calls=output.get("tool_call_content"),
             token_ids=output.get("token_ids")
         )
-
+        logprobs_full_res = None
+        if logprob_contents:
+            logprobs_full_res = LogProbs(
+                content=logprob_contents
+            )
         choice = ChatCompletionResponseChoice(
             index=0,
             message=message,
+            logprobs=logprobs_full_res,
             finish_reason=None
         )
         if request.max_tokens is None or previous_num_tokens != request.max_tokens:
@@ -388,9 +410,9 @@ class OpenAIServingChat:
 
 
     def build_logprobs_response(
-        self,
-        logprobs: Optional[LogprobsLists],
-        request_top_logprobs: int,
+            self,
+            logprobs: Optional[LogprobsLists],
+            request_top_logprobs: int,
     ) -> Optional[LogProbs]:
         """
         构造符合 OpenAI 风格的 logprobs 响应对象。
@@ -399,23 +421,23 @@ class OpenAIServingChat:
 
         # 参数验证
         if (
-            logprobs is None
-            or request_top_logprobs is None
-            or request_top_logprobs <= 0
-            or len(logprobs.logprob_token_ids) == 0
+                logprobs is None
+                or request_top_logprobs is None
+                or request_top_logprobs <= 0
+                or len(logprobs.logprob_token_ids) == 0
         ):
             return None
 
         try:
             # 当前 token 的 top-k 候选
-            topk_token_ids = logprobs.logprob_token_ids[0][:request_top_logprobs]
-            topk_logprobs = logprobs.logprobs[0][:request_top_logprobs]
-            sampled_rank = logprobs.sampled_token_ranks[0]
+            topk_token_ids = logprobs.logprob_token_ids[0][:request_top_logprobs + 1]
+            topk_logprobs = logprobs.logprobs[0][:request_top_logprobs + 1]
 
             # 构造 topk 的候选 token 结构（LogProbEntry）
             top_logprob_entries: List[LogProbEntry] = []
             for tid, lp in zip(topk_token_ids, topk_logprobs):
-                token_str = self.engine_client.data_processor.process_logprob_response([tid], clean_up_tokenization_spaces=False)
+                token_str = self.engine_client.data_processor.process_logprob_response([tid],
+                                                                                       clean_up_tokenization_spaces=False)
                 # token_bytes = token_str.encode("utf-8", errors="replace")
                 entry = LogProbEntry(
                     token=token_str,
@@ -423,23 +445,17 @@ class OpenAIServingChat:
                     # bytes=list(token_bytes)
                 )
                 top_logprob_entries.append(entry)
-
-            # 防止索引越界
-            if not (0 <= sampled_rank < len(top_logprob_entries)):
-                return None
-
             # 构造 sampled token 对象（避免与 top_logprob_entries 共享引用）
             sampled_entry = LogProbEntry(
-                token=top_logprob_entries[sampled_rank].token,
-                logprob=top_logprob_entries[sampled_rank].logprob,
-                bytes=top_logprob_entries[sampled_rank].bytes,
-                top_logprobs=top_logprob_entries  # 这里是完整 topk 候选
+                token=top_logprob_entries[0].token,
+                logprob=top_logprob_entries[0].logprob,
+                bytes=top_logprob_entries[0].bytes,
+                top_logprobs=top_logprob_entries[1:]  # 这里是完整 topk 候选
             )
 
             return LogProbs(content=[sampled_entry])
 
         except Exception as e:
-            import logging, traceback
-            logging.getLogger(__name__).error("Error in build_logprobs_response: %s", e)
-            logging.getLogger(__name__).error(traceback.format_exc())
+            api_server_logger.error("Error in build_logprobs_response: %s", e)
+            api_server_logger.error(traceback.format_exc())
             return None
