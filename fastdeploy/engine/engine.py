@@ -961,6 +961,9 @@ class LLMEngine(object):
             "FLAGS_pir_interpreter_record_stream_for_gc_cache":
             os.getenv("FLAGS_pir_interpreter_record_stream_for_gc_cache",
                       default="1"),
+            "FLAGS_parameters_persistent_mode_in_dy2st":
+            os.getenv("FLAGS_parameters_persistent_mode_in_dy2st",
+                      default="1"),
         })
 
         if self.cfg.splitwise_role != "mixed":
