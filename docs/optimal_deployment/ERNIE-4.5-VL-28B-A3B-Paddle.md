@@ -67,7 +67,7 @@ Only use bfloat16 if your use case demands the highest possible accuracy, as it 
 > **gpu-memory-utilization**
 - **Parameter**: `--gpu-memory-utilization`
 - **Usage**: Controls the available GPU memory allocated for FastDeploy service initialization, with a default value of 0.9 (reserving 10% of GPU memory as buffer).
-- **Recommendation**: It is recommended to set it to 0.9 on Nvidia Ampere GPUs, and to 0.8–0.9 on Hopper GPUs. If you encounter an out-of-memory error during service stress testing, you can try lowering this value.
+- **Recommendation**: It is recommended to set it to 0.9 (default). If you encounter an out-of-memory error during service stress testing, you can try lowering this value.
 
 > **kv-cache-ratio**
 - **Parameter**: `--kv-cache-ratio`
@@ -93,7 +93,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --quantization wint4 \
        --enable-mm \
 ```
-###  **Example**: Dual-GPU Wint8 with 128K Context Length Configuration 
+###  **Example**: Dual-GPU wint8 with 128K context length 
 ```shell
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle \
