@@ -444,3 +444,7 @@ class ErnieProcessor(BaseDataProcessor):
         data_processor_logger.debug(
             f"processed stop_seqs: {stop_seqs}, {stop_seqs_len}")
         return stop_seqs, stop_seqs_len
+
+    def process_logprob_response(self, token_ids, **kwargs):
+        full_text = self.tokenizer.decode(token_ids, **kwargs)
+        return full_text
