@@ -15,9 +15,10 @@
 from .fused_moe_cutlass_backend import (CutlassW4A8MoEMethod,
                                         CutlassWeightOnlyMoEMethod)
 from .fused_moe_triton_backend import TritonWeightOnlyMoEMethod
+from .fused_moe_xpu_backend import XPUMoEMethod
 from .moe import FusedMoE
 
 __all__ = [
     CutlassWeightOnlyMoEMethod, CutlassW4A8MoEMethod, FusedMoE,
-    TritonWeightOnlyMoEMethod
+    TritonWeightOnlyMoEMethod, XPUMoEMethod
 ]

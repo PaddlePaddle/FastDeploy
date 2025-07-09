@@ -22,6 +22,19 @@ from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
 
 
+def get_moe_method():
+    """
+    return moe method based on device platform
+    """
+    from fastdeploy.platforms import current_platform
+    if current_platform.is_cuda():
+        from .fused_moe_cutlass_backend import CutlassMoEMethod
+        return CutlassMoEMethod(None)
+    elif current_platform.is_xpu():
+        from .fused_moe_xpu_backend import XPUMoEMethod
+        return XPUMoEMethod(None)
+    raise NotImplementedError()
+
 class FusedMoE(nn.Layer):
     """
     FusedMoE is a layer that performs MoE (Mixture of Experts) computation.
@@ -84,8 +97,7 @@ class FusedMoE(nn.Layer):
             self.quant_method = fd_config.quant_config.get_quant_method(self)
         else:
             # now, no quant method(w_fp16 a_fp16) can't get from quant_config, we will optimize it in future
-            from .fused_moe_cutlass_backend import CutlassMoEMethod
-            self.quant_method = CutlassMoEMethod(None)
+            self.quant_method = get_moe_method()
 
         if self.ep_size > 1:
             self.quant_method.init_ep(self)
