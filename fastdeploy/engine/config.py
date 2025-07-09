@@ -337,6 +337,7 @@ class SpeculativeConfig:
         model_name_or_path (Optional[str]): Path of the model.
         quantization (str): Quantization method for draft model, default is WINT8.
         max_model_len: Optional[int]: Maximum model length for draft model.
+        benchmark_mode (bool): Whether to use benchmark mode.
     """
 
     def __init__(self,
@@ -345,12 +346,14 @@ class SpeculativeConfig:
                  model: Optional[str] = None,
                  quantization: Optional[str] = "WINT8",
                  max_model_len: Optional[int] = None,
+                 benchmark_mode: bool = False,
                  **kwargs):
         self.model_name_or_path = model
         self.method = method
         self.num_speculative_tokens = num_speculative_tokens
         self.quantization = quantization
         self.max_model_len = max_model_len
+        self.benchmark_mode = benchmark_mode
         # Fixed now
         self.num_gpu_block_expand_ratio = 1
         self.num_extra_cache_layer = 0
