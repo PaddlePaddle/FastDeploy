@@ -607,7 +607,7 @@ def initialize_fd_config(config_or_args) -> FDConfig:
     model_config.head_dim = model_config_dict["head_dim"]
     paddle.set_default_dtype(config_or_args.dtype)
     if 'tie_word_embeddings' in model_config_dict:
-        model_config_dict['tie_word_embeddings'] = model_config_dict.pop('tie_word_embeddings')
+        model_config.tie_word_embeddings = model_config_dict['tie_word_embeddings']
 
     # Initialize all config components
     device_config = DeviceConfig()
