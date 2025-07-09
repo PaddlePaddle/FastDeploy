@@ -562,6 +562,19 @@ def is_list_of(
 
     assert_never(check)
 
+def version():
+    """
+    Prints the contents of the version.txt file located in the parent directory of this script.
+    """
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    version_file_path = os.path.join(current_dir, 'version.txt')
+
+    try:
+        with open(version_file_path, 'r') as f:
+            content = f.read()
+            print(content)
+    except FileNotFoundError:
+        llm_logger.error("[version.txt] Not Found!")
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")
 data_processor_logger = get_logger("data_processor", "data_processor.log")

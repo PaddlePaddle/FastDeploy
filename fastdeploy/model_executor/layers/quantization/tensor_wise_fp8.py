@@ -15,8 +15,6 @@
 """
 from typing import Optional
 
-import paddle
-
 from fastdeploy.model_executor.layers.moe import FusedMoE
 
 from ..utils import get_tensor
@@ -113,15 +111,10 @@ class TensorWiseFP8LinearMethod(QuantMethodBase):
         """
         compute!
         """
-        from fastdeploy.model_executor.ops.gpu import \
-            cutlass_fp8_fp8_half_gemm_fused
+        from fastdeploy.model_executor.ops.gpu import (
+            cutlass_fp8_fp8_half_gemm_fused, fused_hadamard_quant_fp8)
 
-        from ..utils import create_hadamard_matrix_map
-
-        hadamard_matrix = create_hadamard_matrix_map[x.shape[-1]]
-        new_x = paddle.matmul(x.cast("float32"), hadamard_matrix)
-        fp8_x = new_x / self.act_scale
-        fp8_x = fp8_x.astype("float8_e4m3fn")
+        fp8_x = fused_hadamard_quant_fp8(x, scale=self.act_scale)
 
         linear_out = cutlass_fp8_fp8_half_gemm_fused(
             fp8_x,

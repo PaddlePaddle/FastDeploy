@@ -13,9 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-"""
-cuda platform file
-"""
 
 import paddle
 
@@ -64,6 +61,11 @@ class CUDAPlatform(Platform):
             logger.info("Using MLA ATTN backend.")
             return (
                 "fastdeploy.model_executor.layers.attention.MLAAttentionBackend"
+            )
+        elif selected_backend == _Backend.FLASH_ATTN:
+            logger.info("Using FLASH ATTN backend.")
+            return (
+                "fastdeploy.model_executor.layers.attention.FlashAttentionBackend"
             )
         else:
             raise ValueError(

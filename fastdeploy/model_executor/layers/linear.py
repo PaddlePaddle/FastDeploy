@@ -57,7 +57,8 @@ class LinearBase(nn.Layer):
             NotImplementedError: Raised if the current platform is not a CUDA platform.
         """
         super().__init__()
-        if current_platform.is_cuda() or current_platform.is_xpu():
+        if current_platform.is_cuda() or current_platform.is_xpu(
+        ) or current_platform.is_iluvatar() or current_platform.is_gcu():
             self.forward = self.forward_cuda
         else:
             raise NotImplementedError
@@ -293,7 +294,7 @@ class ColumnParallelLinear(LinearBase):
         )
         if self.nranks > 0:
             # col parallel
-            _set_var_distributed(self.linear_weight, split_axis=-1)
+            _set_var_distributed(self.linear_weight, split_axis=1)
 
         self.linear_bias = None
         if self.with_bias:
@@ -304,7 +305,7 @@ class ColumnParallelLinear(LinearBase):
             )
             if self.nranks > 0:
                 # col parallel
-                _set_var_distributed(self.linear_bias, split_axis=-1)
+                _set_var_distributed(self.linear_bias, split_axis=1)
 
         # smooth quant
         self.linear_shift = None
@@ -329,7 +330,6 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         with_bias: bool = False,
         add_bias: bool = False,
         activation: str = "gelu",
-        use_fast_ffn: bool = False,
         skip_quant: bool = False,
     ):
         """
@@ -344,11 +344,8 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             with_bias (bool): Whether to include bias or not. Defaults to False.
             add_bias (bool): Whether to add bias in the current layer or in the pre/post layer. Defaults to False.
             activation (str): Activation function to use. Defaults to "gelu".
-            use_fast_ffn (bool): Whether to use a faster FFN implementation.
-                Defaults to False.
             skip_quant (bool): Whether to skip quantization. Defaults to False.
         """
-        self.use_fast_ffn = use_fast_ffn
         self.activation = activation
         self.hidden_size = fd_config.model_config.hidden_size
         self.nranks = fd_config.parallel_config.tensor_parallel_degree
@@ -385,23 +382,10 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                                                       "gate_proj")
                 bias_tensor = get_tensor(state_dict.pop(gate_bias_key)).astype(
                     paddle.get_default_dtype())
-                converted_bias_tensor = paddle.zeros(shape=list(
-                    bias_tensor.shape),
-                                                     dtype=bias_tensor.dtype)
-                if not self.use_fast_ffn:
-                    converted_bias_tensor = paddle.concat(
-                        [bias_tensor[::2], bias_tensor[1::2]], axis=0)
-                else:
-                    converted_bias_tensor = bias_tensor
-                state_dict[self.bias_key] = converted_bias_tensor
 
-        if not self.use_fast_ffn:
-            converted_weight_tensor = paddle.concat(
-                [weight_tensor[:, ::2], weight_tensor[:, 1::2]], axis=1)
-        else:
-            converted_weight_tensor = weight_tensor
+                state_dict[self.bias_key] = bias_tensor
 
-        state_dict[self.weight_key] = converted_weight_tensor
+        state_dict[self.weight_key] = weight_tensor
 
         super().load_state_dict(state_dict)
 
@@ -428,9 +412,14 @@ class QKVParallelLinear(ColumnParallelLinear):
         self.head_dim = fd_config.model_config.head_dim
         self.nranks = fd_config.parallel_config.tensor_parallel_degree
         self.num_heads_per_rank = divide(self.num_heads, self.nranks)
-        self.kv_num_heads_per_rank = divide(self.kv_num_heads, self.nranks)
+        if self.kv_num_heads < self.nranks and self.nranks % self.kv_num_heads == 0:
+            self.kv_num_heads_per_rank = 1
+            output_size = (self.num_heads + 2 * self.nranks) * self.head_dim
+        else:
+            self.kv_num_heads_per_rank = divide(self.kv_num_heads, self.nranks)
+            output_size = (self.num_heads +
+                           2 * self.kv_num_heads) * self.head_dim
         input_size = self.hidden_size
-        output_size = (self.num_heads + 2 * self.kv_num_heads) * self.head_dim
         super().__init__(fd_config=fd_config,
                          prefix=prefix,
                          input_size=input_size,

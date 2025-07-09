@@ -61,3 +61,13 @@ class Proposer(ABC):
         Implemention for different method
         """
         raise NotImplementedError
+
+    def is_chunk_prefill_enabled(self) -> bool:
+        """
+        Check whether chunk-based prefill is enabled.
+        Default is False.
+
+        Returns:
+            bool: True if chunk prefill is enabled; False otherwise.
+        """
+        return False

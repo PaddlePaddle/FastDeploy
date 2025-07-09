@@ -48,12 +48,17 @@ class ErnieRotaryEmbedding:
         freqs = paddle.einsum("ij,k->ijk",
                               partial_rotary_position_ids.cast("float32"),
                               inv_freq)
-        if paddle.is_compiled_with_xpu():
+        if paddle.is_compiled_with_xpu(
+        ) or paddle.is_compiled_with_custom_device("iluvatar_gpu"):
             # shape: [B, S, D]
             rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim),
                                    dtype="float32")
             emb = paddle.stack([freqs, freqs], axis=-1).reshape(
                 (bsz, max_seq_len, self.rotary_dim))
+        elif current_platform.is_gcu():
+            # shape: [B, S, D]
+            rot_emb = paddle.concat([freqs.cos(), freqs.sin()], axis=-1)
+            return rot_emb
         else:
             # shape: [B, S, D/2]
             rot_emb = paddle.zeros(
@@ -94,6 +99,10 @@ class QwenRotaryEmbedding:
         # shape: [B, S, D/2]
         freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"),
                               inv_freq)
+        if current_platform.is_gcu():
+            # shape: [B, S, D]
+            rot_emb = paddle.concat([freqs.cos(), freqs.sin()], axis=-1)
+            return rot_emb
         # shape: [B, S, 1, D]
         emb = paddle.concat([freqs, freqs], axis=-1).reshape(
             (bsz, max_seq_len, 1, self.rotary_dim))

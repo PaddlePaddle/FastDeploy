@@ -13,10 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+import argparse
 import json
 import os
 import random
-import argparse
+from typing import Optional
 
 import numpy as np
 import paddle
@@ -24,6 +25,10 @@ import paddle.distributed.fleet as fleet
 from paddleformers.transformers.model_utils import load_tp_checkpoint
 from safetensors import safe_open
 
+from fastdeploy.config import (DeviceConfig, FDConfig, GraphOptimizationConfig,
+                               KVCacheConfig, LoadConfig, ModelConfig,
+                               MoEConfig, MoEPhase, ParallelConfig,
+                               SpeculativeConfig)
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.input.mm_processor import DataProcessor
 from fastdeploy.model_executor.layers.attention import get_attention_backend
@@ -44,9 +49,6 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.worker.forward_meta import ForwardMeta
 from fastdeploy.worker.utils import check_safetensors_model
 from fastdeploy.worker.vl_model_runner_base import VLModelRunnerBase
-from fastdeploy.config import (DeviceConfig, FDConfig, KVCacheConfig,
-                                LoadConfig, ModelConfig, MoEConfig,
-                                MoEPhase, ParallelConfig, SpeculativeConfig)
 
 if current_platform.is_cuda() and current_platform.available():
     from fastdeploy.model_executor.layers.utils import (
@@ -268,6 +270,10 @@ class GPUVLModelRunner(VLModelRunnerBase):
                                         -1)
         self.image_preprocess = image_preprocess
 
+        graph_opt_config = GraphOptimizationConfig(
+            self.args.enable_static_graph_inference, self.args.use_cudagraph,
+            self.args.max_capture_batch_size)
+
         fd_config, self.model = build_stream_line_model(
             self.args.model_name_or_path,
             self.args.dtype,
@@ -275,6 +281,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
             max_model_len=self.args.max_model_len,
             tokenizer=tokenizer,
             quantization=self.args.quantization,
+            graph_opt_config=graph_opt_config,
         )
         self.model.eval()
         self.set_state_dict(self.args)
@@ -1050,6 +1057,7 @@ def build_stream_line_model(
     max_model_len: int,
     tokenizer: ErnieBotTokenizer,
     quantization: str = "None",
+    graph_opt_config: Optional[GraphOptimizationConfig] = None
 ) -> tuple[FDConfig, paddle.nn.layer]:
     """
     build model
@@ -1221,6 +1229,7 @@ def build_stream_line_model(
         moe_config=moe_config,
         quant_config=quant_config,
         kv_cache_config=kv_cache_config,
+        graph_opt_config=graph_opt_config,
     )
     fd_config.parallel_config.max_model_len = max_model_len
     fd_config.model_config.rope_theta = rope_theta
