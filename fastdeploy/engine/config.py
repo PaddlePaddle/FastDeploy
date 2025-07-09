@@ -45,9 +45,7 @@ class ModelConfig:
                  dynamic_load_weight: bool = False,
                  load_strategy: str="meta",
                  quantization: str = None,
-                 download_dir: Optional[str] = None,
-                 no_top_p: bool = False,
-                 no_top_k: bool = False):
+                 download_dir: Optional[str] = None):
         """
         Initialize the ModelConfig class.
 
@@ -61,8 +59,6 @@ class ModelConfig:
         self.dynamic_load_weight = dynamic_load_weight
         self.load_strategy = load_strategy
         self.quantization = quantization
-        self.no_top_p = no_top_p
-        self.no_top_k = no_top_k
 
         config_file = os.path.join(model_name_or_path, config_json_file)
         if os.path.isfile(model_name_or_path):

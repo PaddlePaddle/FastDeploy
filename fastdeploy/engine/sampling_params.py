@@ -82,8 +82,8 @@ class SamplingParams:
     frequency_penalty: float = None
     repetition_penalty: float = None
     temperature: float = None
-    top_p: float = None
-    top_k: int = None
+    top_p: float = 1.0
+    top_k: int = 0
     seed: Optional[int] = None
     stop: Optional[Union[str, List[str]]] = None
     stop_token_ids: Optional[Union[List[List[int]], List[int]]] = None
@@ -132,8 +132,8 @@ class SamplingParams:
                    repetition_penalty=repetition_penalty
                    if repetition_penalty is not None else 1.0,
                    temperature=temperature if temperature is not None else 1.0,
-                   top_p=top_p if top_p is not None else 0.7,
-                   top_k=top_k if top_k is not None else 20,
+                   top_p=top_p if top_p is not None else 1.0,
+                   top_k=top_k if top_k is not None else 0,
                    seed=seed,
                    stop=stop,
                    stop_token_ids=stop_token_ids,
@@ -173,8 +173,6 @@ class SamplingParams:
                 f"temperature must be non-negative, got {self.temperature}.")
         if self.top_p is not None and not 0.0 <= self.top_p <= 1.0:
             raise ValueError(f"top_p must be in [0, 1], got {self.top_p}.")
-        if self.top_k is not None and self.top_k < 1:
-            raise ValueError(f"top_k must be at least 1, got {self.top_k}.")
 
         if self.max_tokens is not None and self.max_tokens < 1:
             raise ValueError(

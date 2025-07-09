@@ -56,6 +56,9 @@ def top_p_sampling(
 
     """
     top_p_class = envs.FD_SAMPLING_CLASS.lower()
+    print(f"*****top_p_class: {top_p_class}****")
+    print(top_p)
+    print(top_k)
     if top_p_class == "air":
         _, ids = air_top_p_sampling(x,
                                     top_p,
@@ -112,21 +115,33 @@ def rejection_top_p_sampling(
     try:
         from fastdeploy.model_executor.ops.gpu import (
             rejection_top_p_sampling, top_k_renorm_probs)
-        if order == "top_k_first":
-            assert top_k is not None, "top_k must be provided when order is 'top_k_first'"
-            renorm_probs = top_k_renorm_probs(x, top_k)
+
+        if top_k is None:
             ids = rejection_top_p_sampling(
-                renorm_probs,
+                x,
                 top_p,
                 None,
                 seed,
             )
+        elif top_k is not None and top_p is not None:
+            if order == "top_k_first":
+                renorm_probs = top_k_renorm_probs(x, top_k)
+                ids = rejection_top_p_sampling(
+                    renorm_probs,
+                    top_p,
+                    None,
+                    seed,
+                )
+            else:
+                ids = rejection_top_p_sampling(
+                    x,
+                    top_p,
+                    top_k,
+                    seed,
+                )
         else:
-            ids = rejection_top_p_sampling(
-                x,
-                top_p,
-                top_k,
-                seed,
+            raise ValueError(
+                "Top_p cannot be none."
             )
     except ImportError:
         raise RuntimeError("Cannot import rejection_top_p_sampling op.")

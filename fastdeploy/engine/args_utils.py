@@ -295,14 +295,6 @@ class EngineArgs:
     Example:
         max_capture_batch_size=64, FastDeploy will capture graphs for batches [1,64].
     """
-    no_top_p: bool = False
-    """
-    Whether to use top-p sampling.
-    """
-    no_top_k: bool = False
-    """
-    Whether to use top-k sampling.
-    """
 
     def __post_init__(self):
         """
@@ -424,14 +416,6 @@ class EngineArgs:
             help=
             "Disabled any whitespaces when using guided decoding backend XGrammar."
         )
-        model_group.add_argument("--no-top-p",
-                                action='store_true',
-                                default=EngineArgs.no_top_p,
-                                help="Flag to set no_top_p.")
-        model_group.add_argument("--no-top-k",
-                                action='store_true',
-                                default=EngineArgs.no_top_k,
-                                help="Flag to set no_top_k.")
 
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
@@ -694,9 +678,7 @@ class EngineArgs:
                            config_json_file=self.model_config_name,
                            quantization=self.quantization,
                            dynamic_load_weight=self.dynamic_load_weight,
-                           load_strategy=self.load_strategy,
-                           no_top_p=self.no_top_p,
-                           no_top_k=self.no_top_k)
+                           load_strategy=self.load_strategy)
 
     def create_cache_config(self, model_cfg) -> CacheConfig:
         """
