@@ -550,6 +550,20 @@ def parse_args():
         "'ipc_snapshot': load from disk snapshot of IPC weights, "
         "'meta': provide RL traing worker, no_weights_load"
         "'normal':normal load weight")
+    parser.add_argument("--no_top_p",
+                        action='store_true',
+                        help="Set top_p as None")
+    parser.add_argument("--no_top_k",
+                        action='store_true',
+                        help="Set top_k as None")
+    # parser.add_argument("--no_top_p",
+    #                     type=bool,
+    #                     default=False,
+    #                     help="Set top_p as None")
+    # parser.add_argument("--no_top_k",
+    #                     type=bool,
+    #                     default=False,
+    #                     help="Set top_k as None")
 
     args = parser.parse_args()
     return args

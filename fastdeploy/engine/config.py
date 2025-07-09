@@ -16,8 +16,8 @@
 
 import json
 import os
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from fastdeploy import envs
@@ -585,6 +585,8 @@ class Config:
         max_capture_batch_size: int = 64,
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
+        no_top_p: bool = False,
+        no_top_k: bool = False,
     ):
         """
         Initialize the Config class.
@@ -644,6 +646,12 @@ class Config:
         self.max_capture_batch_size = max_capture_batch_size
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
+
+        self.is_master = True
+        self._str_to_list("innode_prefill_ports", int)
+        self._str_to_list("pod_ips", str)
+        self.no_top_p = no_top_p
+        self.no_top_k = no_top_k
 
         if self.innode_prefill_ports is not None:
             if not isinstance(self.innode_prefill_ports, list):

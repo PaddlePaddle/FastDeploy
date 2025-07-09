@@ -56,6 +56,11 @@ def top_p_sampling(
 
     """
     top_p_class = envs.FD_SAMPLING_CLASS.lower()
+    print(f"*****top_p_class: {top_p_class}****")
+    print("top_p:")
+    print(top_p)
+    print("top_k:")
+    print(top_k)
     if top_p_class == "air":
         _, ids = air_top_p_sampling(x,
                                     top_p,
