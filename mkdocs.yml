@@ -7,7 +7,7 @@ nav:
           - 'KunlunXin XPU': get_started/installation/kunlunxin_xpu.md 
           - 'Enflame S60': get_started/installation/Enflame_gcu.md
           - 'Iluvatar CoreX': get_started/installation/iluvatar_gpu.md
-      - 'Quick Deployment For ERNIE-4.5-21B-A3B': get_started/quick_start.md 
+      - 'Quick Deployment For ERNIE-4.5-0.3B-Paddle': get_started/quick_start.md 
       - 'Quick Deployment for ERNIE-4.5-VL-28B-A3B': get_started/quick_start_vl.md
       - 'ERNIE-4.5-300B-A47B': get_started/ernie-4.5.md
       - 'ERNIE-4.5-VL-424B-A47B': get_started/ernie-4.5-vl.md

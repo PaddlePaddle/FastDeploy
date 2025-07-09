@@ -7,11 +7,6 @@ deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy main restricted universe 
 deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy-updates main restricted universe multiverse \n\
 deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy-backports main restricted universe multiverse" > /etc/apt/sources.list
 
-# setting proxy
-ENV http_proxy=http://agent.baidu.com:8891
-ENV https_proxy=http://agent.baidu.com:8891
-ENV no_proxy=localhost,bj.bcebos.com,su.bcebos.com,pypi.tuna.tsinghua.edu.cn,paddle-ci.gz.bcebos.com
-
 RUN apt-get update && apt-get install -y libibverbs-dev librdmacm-dev cmake pybind11-dev
 
 # uninstall existing package

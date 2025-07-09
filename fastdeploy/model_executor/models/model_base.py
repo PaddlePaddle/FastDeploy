@@ -29,6 +29,7 @@ class ModelRegistry:
 
     @classmethod
     def register(cls, model_class):
+        """register model class"""
         if issubclass(
                 model_class,
                 ModelForCasualLM) and model_class is not ModelForCasualLM:
@@ -37,6 +38,7 @@ class ModelRegistry:
 
     @classmethod
     def get_class(cls, name):
+        """get model class"""
         if name not in cls._registry:
             raise ValueError(f"Model '{name}' is not registered!")
         return cls._registry[name]

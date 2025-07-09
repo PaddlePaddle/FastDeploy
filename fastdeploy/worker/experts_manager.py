@@ -1,7 +1,7 @@
 """
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
+# Licensed under the Apache License, Version 2.0 (the "License"
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
@@ -13,9 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-"""
-redundant expert manger
-"""
+"""redundant expert manger."""
+from typing import Optional, Tuple
 
 import numpy as np
 import paddle
@@ -29,9 +28,9 @@ class RedundantExpertManger:
     RedundantExpertManger
     """
 
-    def __init__(self, n_routed_experts, num_hidden_layers,
-                 redundant_experts_num, ep_size):
-
+    def __init__(self, n_routed_experts: int, num_hidden_layers: int,
+                 redundant_experts_num: int, ep_size: int) -> None:
+        """Initialize a redundant expert manager"""
         self.num_expert = n_routed_experts
         self.redundant_experts_num = redundant_experts_num
         self.num_hidden_layers = num_hidden_layers
@@ -94,7 +93,9 @@ class RedundantExpertManger:
             num_replicas {self.num_replicas} export_per_rank {self.export_per_rank}"
         )
 
-    def get_ep_rank_to_expert_id_list_by_layer(self, layer_id):
+    def get_ep_rank_to_expert_id_list_by_layer(
+        self, layer_id: int
+    ) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor]:
         """
         get_ep_rank_to_expert_id_list_by_layer
         """
@@ -103,7 +104,9 @@ class RedundantExpertManger:
                self.model_expert_in_rank_num_list[layer_id], \
                self.model_tokens_per_expert_stats_list[layer_id]
 
-    def get_ep_rank_to_expert_id_list(self, layer_id):
+    def get_ep_rank_to_expert_id_list(
+        self, layer_id: int
+    ) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor]:
         """
         get_ep_rank_to_expert_id_list
         """
@@ -112,9 +115,12 @@ class RedundantExpertManger:
                self.model_expert_in_rank_num_list[layer_id], \
                self.model_tokens_per_expert_stats_list[layer_id]
 
-    def get_expert_tokens_stats(self,
-                                verbose: bool = False,
-                                clear_stat: bool = False):
+    def get_expert_tokens_stats(
+        self,
+        verbose: bool = False,
+        clear_stat: bool = False
+    ) -> Tuple[np.ndarray, Optional[np.ndarray], Optional[np.ndarray],
+               Optional[np.ndarray]]:
         """
         get_per_expert_tokens_stats
         """
@@ -130,7 +136,7 @@ class RedundantExpertManger:
             if clear_stat:
                 self.model_tokens_per_expert_stats_list.zero_()
 
-    def get_expert_id_to_ep_rank_array(self):
+    def get_expert_id_to_ep_rank_array(self) -> np.ndarray:
         """
         get_expert_id_to_ep_rank_array
         """
@@ -140,7 +146,7 @@ class RedundantExpertManger:
                                  rank_expert_list: np.ndarray,
                                  logical_to_physical_map: np.ndarray,
                                  expert_count: np.ndarray,
-                                 clear_stat: bool = True):
+                                 clear_stat: bool = True) -> None:
         """
         update_expert_rank_table
         """

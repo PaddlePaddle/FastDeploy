@@ -27,7 +27,7 @@ from fastdeploy.config import FDConfig, ModelConfig
 from fastdeploy.model_executor.graph_optimization.decorator import \
     support_graph_optimization
 from fastdeploy.model_executor.layers.activation import SiluAndMul
-from fastdeploy.model_executor.layers.attention import Attention
+from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear, QKVParallelLinear, RowParallelLinear)
@@ -57,13 +57,12 @@ class Qwen3MLP(nn.Layer):
             output_size=fd_config.model_config.ffn_hidden_size * 2,
             with_bias=False,
             activation=fd_config.model_config.hidden_act,
-            use_fast_ffn=True,
         )
 
         self.down_proj = RowParallelLinear(
             fd_config,
             prefix=f"{prefix}.down_proj",
-            input_size=(fd_config.model_config.ffn_hidden_size // self.nranks),
+            input_size=fd_config.model_config.ffn_hidden_size,
             output_size=fd_config.model_config.hidden_size,
             with_bias=False,
         )
@@ -111,7 +110,7 @@ class Qwen3Attention(nn.Layer):
             fd_config,
             prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.head_dim *
-            fd_config.model_config.num_attention_heads // nranks,
+            fd_config.model_config.num_attention_heads,
             output_size=fd_config.model_config.hidden_size,
         )
 

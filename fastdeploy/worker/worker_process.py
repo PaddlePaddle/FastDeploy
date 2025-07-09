@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 import argparse
-import json
 import time
 from typing import List
 
@@ -23,6 +22,7 @@ import paddle
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
 
+from fastdeploy import envs
 from fastdeploy.config import (DecodingConfig, DeviceConfig, FDConfig,
                                GraphOptimizationConfig, LoadConfig,
                                ModelConfig, MoEConfig, MoEPhase,
@@ -48,6 +48,14 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
     if current_platform.is_xpu():
         from fastdeploy.worker.xpu_worker import XpuWorker
         return XpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
+    if current_platform.is_iluvatar():
+        from fastdeploy.worker.iluvatar_worker import IluvatarWorker
+        return IluvatarWorker(fd_config=fd_config,
+                              local_rank=local_rank,
+                              rank=rank)
+    if current_platform.is_gcu():
+        from fastdeploy.worker.gcu_worker import GcuWorker
+        return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
 class PaddleDisWorkerProc():
@@ -61,14 +69,21 @@ class PaddleDisWorkerProc():
     def __init__(
         self,
         fd_config: FDConfig,
-    ):
+    ) -> None:
+        """
+        Initialize a distributed worker and task queue for single-node multi-GPU setup.
+        Args:
+            fd_config (FDConfig): Arguments related to inference, containing
+                attributes such as weight_dtype, act_dtype, mp_size, hidden_size, head_dim,
+                num_attention_heads, and ffn_hidden_size.
+        """
         self.fd_config = fd_config
         self.parallel_config = fd_config.parallel_config
 
         # Initialize distributed enviroment
-        (self.rank, self.local_rank) = self.init_distributed_enviroment()
+        (self.ranks, self.local_rank) = self.init_distributed_enviroment()
 
-        assert self.parallel_config.tensor_parallel_degree * self.parallel_config.expert_parallel_degree == self.rank
+        assert self.parallel_config.tensor_parallel_degree * self.parallel_config.expert_parallel_degree == self.ranks
 
         self.fd_config.parallel_config.tensor_parallel_rank = \
             self.local_rank % self.parallel_config.tensor_parallel_degree
@@ -80,8 +95,6 @@ class PaddleDisWorkerProc():
                 self.fd_config.moe_config.num_experts // self.parallel_config.expert_parallel_degree
             self.fd_config.moe_config.num_experts_start_offset = \
                 self.fd_config.parallel_config.expert_parallel_rank * self.fd_config.moe_config.num_experts_per_rank
-
-        self.fd_config.parallel_config.column_cut = False
 
         # For auto TP split
         self.fd_config.model_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_degree
@@ -95,10 +108,10 @@ class PaddleDisWorkerProc():
         # TODO(gongshaotian): Use worker factory to get worker
         self.worker = get_worker(fd_config=fd_config,
                                  local_rank=self.local_rank,
-                                 rank=self.rank)
+                                 rank=self.ranks)
 
         # Initialize task queue
-        task_address = ('0.0.0.0',
+        task_address = (self.parallel_config.pod_ip,
                         self.parallel_config.engine_worker_queue_port)
 
         self.task_queue = TaskQueue(
@@ -109,7 +122,7 @@ class PaddleDisWorkerProc():
             local_data_parallel_id=self.fd_config.parallel_config.
             expert_parallel_rank)
 
-    def init_health_status(self):
+    def init_health_status(self) -> None:
         """
         Initialize the health status of the worker.
         Worker Status:
@@ -120,9 +133,9 @@ class PaddleDisWorkerProc():
             model_weights_status:
         """
         # init worker_ready_signal
-
+        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         array_size = min(
-            8, self.parallel_config.tensor_parallel_degree *
+            max_chips_per_node, self.parallel_config.tensor_parallel_degree *
             self.parallel_config.expert_parallel_degree)
         workers_ready = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_ready_signal = IPCSignal(
@@ -131,10 +144,11 @@ class PaddleDisWorkerProc():
             dtype=np.int32,
             suffix=self.parallel_config.engine_pid,
             create=False)
-        self.worker_ready_signal.value[self.local_rank % 8] = 1
+        self.worker_ready_signal.value[self.local_rank %
+                                       max_chips_per_node] = 1
 
         # init worker_healthy_live_signal
-        workers_alive = np.zeros(shape=[self.rank], dtype=np.int32)
+        workers_alive = np.zeros(shape=[self.ranks], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
             array=workers_alive,
@@ -183,16 +197,7 @@ class PaddleDisWorkerProc():
             suffix=self.parallel_config.engine_pid,
             create=False)
 
-        # init model_weights_status
-        workers_model_weights = np.zeros(shape=[1], dtype=np.int32)
-        self.model_weights_status = IPCSignal(
-            name="model_weights_status",
-            array=workers_model_weights,
-            dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
-            create=False)
-
-    def event_loop_ep(self):
+    def event_loop_ep(self) -> None:
         """
         Tmp loop function for ep utill DP is supported
         """
@@ -217,14 +222,21 @@ class PaddleDisWorkerProc():
             # These generated tokens can be obtained through get_output op.
             self.worker.execute_model()
 
-    def event_loop_normal(self):
+    def event_loop_normal(self) -> None:
         """ Main event loop for Paddle Distrubuted Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
         # Currently, only support single node
-        self.nnode = 1
+        self.nnode = int((self.parallel_config.tensor_parallel_degree + 7) // 8)
+        mp_num_per_node = self.parallel_config.tensor_parallel_degree // self.nnode
         req_ids = []
         while True:
+            if self.local_rank == 0:
+                if self.model_weights_status.value[0] != 0:
+                    self.exist_task_signal.value[0] = 2
+                else:
+                    self.exist_task_signal.value[0] = 0
+
             if self.parallel_config.tensor_parallel_degree > 1:
                 # Synchronize before updating weights
                 paddle.distributed.barrier()
@@ -234,8 +246,7 @@ class PaddleDisWorkerProc():
                 time.time())
 
             # The first worker detects whether there are tasks in the task queue
-            mp_num_per_node = self.rank / self.nnode
-            if self.local_rank % mp_num_per_node == 0:
+            if self.local_rank %  mp_num_per_node == 0:
                 if self.task_queue.num_tasks() > 0:
                     if self.nnode > 1:
                         self.task_queue.read_finish_flag.set(1)
@@ -248,6 +259,14 @@ class PaddleDisWorkerProc():
                 # Synchronize the signal for other workers
                 # TODO(@wufeisheng): Split TP group and EP group
                 paddle.distributed.barrier()
+
+            if self.fd_config.load_config.dynamic_load_weight:
+                if self.exist_task_signal.value[0] == 2:
+                    from fastdeploy.rl.dynamic_weight_manager import \
+                        DynamicWeightManager
+                    DynamicWeightManager.check_model_weights_status(
+                        self.model_weights_status, self.worker.model_runner,
+                        self.parallel_config.engine_pid)
 
             if self.exist_task_signal.value[
                     self.fd_config.parallel_config.expert_parallel_rank] == 1 or \
@@ -275,7 +294,7 @@ class PaddleDisWorkerProc():
                 self.worker.preprocess_new_task(req_dicts)
 
             if not self.worker.model_runner.not_need_stop():
-                if self.rank > 1:
+                if self.ranks > 1:
                     paddle.distributed.barrier()
 
                 time.sleep(0.001)
@@ -288,15 +307,15 @@ class PaddleDisWorkerProc():
             self.exist_prefill_task_signal.value[
                 0] = self.worker.prefill_finished()
 
-    def init_distributed_enviroment(self, seed=20) -> List[int]:
+    def init_distributed_enviroment(self, seed: int = 20) -> List[int]:
         """ Initialize Paddle Fleet and get rank of worker """
         # Global rank
-        self.rank = dist.get_world_size()
+        self.ranks = dist.get_world_size()
         dist_strategy = fleet.DistributedStrategy()
 
         dist_strategy.hybrid_configs = {
             "dp_degree": 1,
-            "mp_degree": self.rank,
+            "mp_degree": self.ranks,
             "pp_degree": 1,
             "sharding_degree": 1,
         }
@@ -308,10 +327,19 @@ class PaddleDisWorkerProc():
         # Local rank
         self.local_rank = fleet.worker_index()
 
-        return self.rank, self.local_rank
+        return self.ranks, self.local_rank
 
-    def determine_num_available_blocks(self):
-        """
+    def determine_num_available_blocks(self) -> None:
+        """Profiles the peak memory usage of the model to determine how many
+        KV blocks may be allocated without OOMs.
+
+        The engine will first conduct a profiling of the existing memory usage.
+        Then, it calculate the maximum possible number of GPU and CPU blocks
+        that can be allocated with the remaining free memory.
+
+        .. tip::
+            You may limit the usage of GPU memory
+            by adjusting the `gpu_memory_utilization` parameter.
         """
         if self.fd_config.parallel_config.do_profile:
             # 1. Get available memory(bytes)
@@ -343,7 +371,8 @@ class PaddleDisWorkerProc():
             )
 
             # 3. Send IPCSignal
-            get_profile_block_num = np.zeros(shape=[self.rank], dtype=np.int32)
+            get_profile_block_num = np.zeros(shape=[self.ranks],
+                                             dtype=np.int32)
             self.get_profile_block_num_signal = IPCSignal(
                 name="get_profile_block_num",
                 array=get_profile_block_num,
@@ -366,12 +395,12 @@ class PaddleDisWorkerProc():
         # 4. Updata share inputs
         self.worker.reinitialize_kv_cache(num_gpu_blocks=num_blocks_global)
 
-    def init_device(self):
-        """ """
+    def init_device(self) -> None:
+        """ Initialize device and Construct model runner """
         self.worker.init_device()
 
-    def load_model(self):
-        """ """
+    def load_model(self) -> None:
+        """ Load weights and create model """
         self.worker.load_model()
 
 
@@ -392,6 +421,7 @@ def parse_args():
                         help="max batch size")
     parser.add_argument("--total_block_num", type=int, default=2000)
     parser.add_argument("--block_size", type=int, default=64)
+    parser.add_argument("--pod_ip", type=str, default="127.0.0.1")
     parser.add_argument("--engine_worker_queue_port", type=int, default=9923)
     parser.add_argument("--max_model_len",
                         type=int,
@@ -428,9 +458,6 @@ def parse_args():
     parser.add_argument("--do_profile",
                         action='store_true',
                         help="do profile or not")
-    parser.add_argument("--dynamic_load_weight",
-                        action='store_true',
-                        help="dynamic load weight or not")
     parser.add_argument("--pad_token_id",
                         type=int,
                         default=-1,
@@ -468,12 +495,9 @@ def parse_args():
         type=str,
     )
     parser.add_argument(
-        "--attention_backend",
-        default="APPEND_ATTN",
+        "--speculative_benchmark_mode",
+        default="false",
         type=str,
-        choices=[
-            "APPEND_ATTN",
-        ],
     )
     parser.add_argument("--max_num_batched_tokens",
                         type=int,
@@ -502,7 +526,7 @@ def parse_args():
 
     parser.add_argument("--quantization",
                         type=str,
-                        default="",
+                        default="None",
                         help="Quantization name for the model, currentlly support " \
                             "'wint4', 'wint8'," \
                             "default is None. The priority of this configuration "\
@@ -527,151 +551,194 @@ def parse_args():
     parser.add_argument("--disable_any_whitespace",
                         action='store_false',
                         help="Disable any whitespace for guided decoding.")
+    parser.add_argument("--dynamic_load_weight",
+                        action='store_true',
+                        help="Enable dynamic weight loading strategy")
+    parser.add_argument(
+        "--load_strategy",
+        type=str,
+        choices=['ipc', 'ipc_no_reshard', 'ipc_snapshot', 'meta', 'normal'],
+        default='meta',
+        help="Weight loading method when dynamic loading is enabled: "
+        "'ipc': real-time IPC streaming with automatic resharding, "
+        "'ipc_no_reshard': IPC streaming without weight processing, "
+        "'ipc_snapshot': load from disk snapshot of IPC weights, "
+        "'meta': provide RL traing worker, no_weights_load"
+        "'normal':normal load weight")
+
     args = parser.parse_args()
     return args
 
 
-def initialize_fd_config(args) -> FDConfig:
-    """Initialize FDConfig
-    TODO(gongshaotian): Unified all configs to FDConfig
+def initialize_fd_config(config_or_args) -> FDConfig:
+    """Initialize FDConfig from either RolloutModelConfig or argparse.Namespace
+
+    Args:
+        config: Configuration object containing all parameters (either RolloutModelConfig or argparse.Namespace)
+
+    Returns:
+        FDConfig: Initialized FastDeploy configuration object
     """
-    # NOTE(gongshaotian): From build stream line model
-    config, _ = ModelConfig.get_config_dict(args.model_name_or_path)
-    if 'num_experts' in config:
-        config['moe_num_experts'] = config.pop('num_experts')
+    # Get model config from model directory
+    model_config_dict, _ = ModelConfig.get_config_dict(config_or_args.model_name_or_path)
 
-    if 'num_experts_per_tok' in config:
-        config['moe_topk'] = config.pop('num_experts_per_tok')
-    config["head_dim"] = config.get(
-        "head_dim", config["hidden_size"] // config["num_attention_heads"])
-    config["rope_theta"] = config.get("rope_theta", 10000.0)
-    model_config = ModelConfig.from_dict(config)
-    # TODO Set `head_dim` again. Because `ModelConfig` class doesn't support feeding head_dim at all!
-    model_config.head_dim = config["head_dim"]
-    paddle.set_default_dtype(args.dtype)
 
+
+    # Handle MoE related configs
+    if 'num_experts' in model_config_dict:
+        model_config_dict['moe_num_experts'] = model_config_dict.pop('num_experts')
+    if 'num_experts_per_tok' in model_config_dict:
+        model_config_dict['moe_topk'] = model_config_dict.pop('num_experts_per_tok')
+
+
+    # Set default values for model config
+    model_config_dict["head_dim"] = model_config_dict.get(
+        "head_dim", model_config_dict["hidden_size"] // model_config_dict["num_attention_heads"])
+    model_config_dict["rope_theta"] = model_config_dict.get("rope_theta", 10000.0)
+
+    # Create model config object
+    model_config = ModelConfig.from_dict(model_config_dict)
+    model_config.head_dim = model_config_dict["head_dim"]
+    paddle.set_default_dtype(config_or_args.dtype)
+    if 'tie_word_embeddings' in model_config_dict:
+        model_config_dict['tie_word_embeddings'] = model_config_dict.pop('tie_word_embeddings')
+
+    # Initialize all config components
     device_config = DeviceConfig()
-    # model_config = ModelConfig()
-
     decoding_config = DecodingConfig()
-    decoding_config = MoEConfig()
     speculative_config = SpeculativeConfig()
     parallel_config = ParallelConfig()
     load_config = LoadConfig()
     moe_config = MoEConfig()
-    graph_opt_config = GraphOptimizationConfig(
-        args.enable_static_graph_inference, args.use_cudagraph,
-        args.max_capture_batch_size)
-    model_config.quantization = args.quantization
 
-    # Update speculate config
-    speculative_config.method = args.speculative_method
-    speculative_config.num_speculative_tokens = args.speculative_max_draft_token_num
-    speculative_config.model_name_or_path = args.speculative_model_name_or_path
-    speculative_config.quantization = args.speculative_model_quantization
+    # Handle graph optimization config (check for attribute existence for backward compatibility)
+    enable_static_graph_inference = getattr(config_or_args, 'enable_static_graph_inference', False)
+    use_cudagraph = getattr(config_or_args, 'use_cudagraph', False)
+    max_capture_batch_size = getattr(config_or_args, 'max_capture_batch_size', 0)
+
+    graph_opt_config = GraphOptimizationConfig(
+        enable_static_graph_inference,
+        use_cudagraph,
+        max_capture_batch_size
+    )
+
+    # Handle quantization (check for attribute existence)
+    model_config.quantization = getattr(config_or_args, 'quantization', None)
+
+    # Update speculative config_or_args
+    speculative_config.method = getattr(config_or_args, 'speculative_method', None)
+    speculative_config.num_speculative_tokens = getattr(config_or_args, 'speculative_max_draft_token_num', 0)
+    speculative_config.model_name_or_path = getattr(config_or_args, 'speculative_model_name_or_path', None)
+    speculative_config.quantization = getattr(config_or_args, 'speculative_model_quantization', None)
+    speculative_config.benchmark_mode = (
+        getattr(config_or_args, "speculative_benchmark_mode", "false").lower() == "true"
+    )
 
     # Update parallel config
-    parallel_config.engine_pid = args.engine_pid
-    parallel_config.model_name_or_path = args.model_name_or_path
-    parallel_config.max_num_seqs = args.max_num_seqs
-    parallel_config.max_block_num = args.total_block_num
-    parallel_config.block_size = args.block_size
-    parallel_config.engine_worker_queue_port = args.engine_worker_queue_port
-    parallel_config.max_model_len = args.max_model_len
-    model_config.max_seq_len = args.max_model_len
-    model_config.max_length = args.max_model_len
-    parallel_config.device_ids = args.device_ids
-    parallel_config.dtype = args.dtype
-    parallel_config.enc_dec_block_num = args.enc_dec_block_num
-    parallel_config.kv_cache_ratio = args.kv_cache_ratio
-    parallel_config.first_token_id = args.first_token_id
-    parallel_config.gpu_memory_utilization = args.gpu_memory_utilization
-    parallel_config.engine_pid = args.engine_pid
-    parallel_config.do_profile = args.do_profile
-    parallel_config.dynamic_load_weight = args.dynamic_load_weight
-    parallel_config.pad_token_id = args.pad_token_id
-    parallel_config.eos_tokens_lens = args.eos_tokens_lens
-    parallel_config.enable_chunked_prefill = args.enable_chunked_prefill
-    parallel_config.attention_backend = args.attention_backend
-    parallel_config.max_num_batched_tokens = args.max_num_batched_tokens
-    parallel_config.enable_prefix_caching = args.enable_prefix_caching
+    parallel_config.engine_pid = getattr(config_or_args, 'engine_pid', None)
+    parallel_config.model_name_or_path = config_or_args.model_name_or_path
+    parallel_config.max_num_seqs = getattr(config_or_args, 'max_num_seqs', 0)
+    parallel_config.max_block_num = getattr(config_or_args, 'total_block_num', 0)
+    parallel_config.block_size = getattr(config_or_args, 'block_size', 64)
+    parallel_config.pod_ip = getattr(config_or_args, 'pod_ip', None)
+    parallel_config.engine_worker_queue_port = getattr(config_or_args, 'engine_worker_queue_port', 0)
+    parallel_config.max_model_len = getattr(config_or_args, 'max_model_len', 0)
+    model_config.max_seq_len = getattr(config_or_args, 'max_model_len', 0)
+    model_config.max_length = getattr(config_or_args, 'max_model_len', 0)
+    parallel_config.device_ids = getattr(config_or_args, 'device_ids', [])
+    parallel_config.dtype = config_or_args.dtype
+    parallel_config.enc_dec_block_num = getattr(config_or_args, 'enc_dec_block_num', 0)
+    parallel_config.kv_cache_ratio = getattr(config_or_args, 'kv_cache_ratio', 1.0)
+    parallel_config.first_token_id = getattr(config_or_args, 'first_token_id', None)
+    parallel_config.gpu_memory_utilization = getattr(config_or_args, 'gpu_memory_utilization', 0.9)
+    parallel_config.engine_pid = getattr(config_or_args, 'engine_pid', None)
+    parallel_config.do_profile = getattr(config_or_args, 'do_profile', False)
+    parallel_config.dynamic_load_weight = getattr(config_or_args, 'dynamic_load_weight', False)
+    parallel_config.pad_token_id = getattr(config_or_args, 'pad_token_id', None)
+    parallel_config.eos_tokens_lens = getattr(config_or_args, 'eos_tokens_lens', 0)
+    parallel_config.enable_chunked_prefill = getattr(config_or_args, 'enable_chunked_prefill', False)
+    parallel_config.max_num_batched_tokens = getattr(config_or_args, 'max_num_batched_tokens', 0)
+    parallel_config.enable_prefix_caching = getattr(config_or_args, 'enable_prefix_caching', False)
+    parallel_config.use_ep = getattr(config_or_args, 'enable_expert_parallell', False)
+    parallel_config.tensor_parallel_degree = getattr(config_or_args, 'tensor_parallel_size', 1)
+    parallel_config.expert_parallel_degree = getattr(config_or_args, 'expert_parallel_size', 1)
+    parallel_config.splitwise_role = getattr(config_or_args, 'splitwise_role', None)
+    parallel_config.guided_decoding_backend = getattr(config_or_args, 'guided_decoding_backend', None)
+    parallel_config.disable_any_whitespace = getattr(config_or_args, 'disable_any_whitespace', False)
 
-    parallel_config.use_ep = args.enable_expert_parallell
-    parallel_config.tensor_parallel_degree = args.tensor_parallel_size
-    parallel_config.expert_parallel_degree = args.expert_parallel_size
-    parallel_config.splitwise_role = args.splitwise_role
-
-    parallel_config.guided_decoding_backend = args.guided_decoding_backend
-    parallel_config.disable_any_whitespace = args.disable_any_whitespace
-
+    # Log parallel config info
     logger.info(f"parallel_config.use_ep {parallel_config.use_ep}")
-    logger.info(
-        f"parallel_config.tensor_parallel_degree {parallel_config.tensor_parallel_degree}"
-    )
-    logger.info(f"args.splitwise_role {args.splitwise_role}")
+    logger.info(f"parallel_config.tensor_parallel_degree {parallel_config.tensor_parallel_degree}")
+    logger.info(f"splitwise_role {parallel_config.splitwise_role}")
 
-    if args.splitwise_role == "mixed":
+    # Set MoE phase based on splitwise role
+    if parallel_config.splitwise_role == "mixed":
         parallel_config.moe_phase = MoEPhase.PREFILL
-    elif args.splitwise_role == "prefill":
+    elif parallel_config.splitwise_role == "prefill":
         parallel_config.moe_phase = MoEPhase.PREFILL
-    elif args.splitwise_role == "decode":
+    elif parallel_config.splitwise_role == "decode":
         parallel_config.moe_phase = MoEPhase.DECODER
-    else:
+    elif parallel_config.splitwise_role is not None:
         raise NotImplementedError
 
-    num_key_value_heads = config.get("num_key_value_heads", -1)
+    # Handle model architecture specific configurations
+    num_key_value_heads = model_config_dict.get("num_key_value_heads", -1)
     if num_key_value_heads is None:
         num_key_value_heads = -1
 
-    if config.get("ffn_hidden_size", None) is not None:
-        ffn_hidden_size = config["ffn_hidden_size"]
-    elif config.get("intermediate_size", None) is not None:
-        ffn_hidden_size = config["intermediate_size"]
+    # Calculate FFN hidden size
+    if model_config_dict.get("ffn_hidden_size", None) is not None:
+        ffn_hidden_size = model_config_dict["ffn_hidden_size"]
+    elif model_config_dict.get("intermediate_size", None) is not None:
+        ffn_hidden_size = model_config_dict["intermediate_size"]
     else:
-        ffn_hidden_size = 4 * config["hidden_size"]
-        if config["hidden_act"].lower() == "swiglu":
+        ffn_hidden_size = 4 * model_config_dict["hidden_size"]
+        if model_config_dict["hidden_act"].lower() == "swiglu":
             if paddle.distributed.get_world_size() > 1:
-                multiple_of = 8 * config["num_attention_heads"]
+                multiple_of = 8 * model_config_dict["num_attention_heads"]
             else:
-                multiple_of = 4 * config["num_attention_heads"]
+                multiple_of = 4 * model_config_dict["num_attention_heads"]
             ffn_hidden_size = multiple_of * (
                 (int(2 * ffn_hidden_size / 3) + multiple_of - 1) //
                 multiple_of)
 
-    num_layers = config.get("num_layers", None) or config.get(
+    # Get number of layers
+    num_layers = model_config_dict.get("num_layers", None) or model_config_dict.get(
         "num_hidden_layers", None)
     if num_layers is None:
         raise ValueError(f"num_layers<{num_layers}> is invalid")
 
-    use_moe = config.get("moe_layer_start_index", num_layers) < num_layers
+    use_moe = model_config_dict.get("moe_layer_start_index", num_layers) < num_layers
 
+    # Update model config
     model_config.ffn_hidden_size = ffn_hidden_size
     model_config.num_layers = num_layers
-
     model_config.num_key_value_heads = num_key_value_heads
-    model_config.start_layer_index = config.get("start_layer_index", 0)
-    moe_config.num_experts = config.get("moe_num_experts", None)
-    moe_config.moe_intermediate_size = config.get("moe_intermediate_size",
-                                                  None)
-    moe_config.top_k = config.get("moe_k", config.get("moe_topk", 8))
-    moe_config.moe_num_shared_experts = config.get("moe_num_shared_experts", 0)
-    moe_config.moe_layer_start_index = config.get("moe_layer_start_index", 0)
+    model_config.start_layer_index = model_config_dict.get("start_layer_index", 0)
 
-    moe_config.num_max_dispatch_tokens_per_rank = config.get(
+    # Update MoE config
+    moe_config.num_experts = model_config_dict.get("moe_num_experts", None)
+    moe_config.moe_intermediate_size = model_config_dict.get("moe_intermediate_size", None)
+    moe_config.top_k = model_config_dict.get("moe_k", model_config_dict.get("moe_topk", 8))
+    moe_config.moe_num_shared_experts = model_config_dict.get("moe_num_shared_experts", 0)
+    moe_config.moe_layer_start_index = model_config_dict.get("moe_layer_start_index", 0)
+    moe_config.num_max_dispatch_tokens_per_rank = model_config_dict.get(
         "num_max_dispatch_tokens_per_rank", 256)
+    moe_config.moe_use_aux_free = model_config_dict.get("moe_use_aux_free", False)
 
-    model_config.ori_vocab_size = config.get("vocab_size", -1)
-    if "Ernie4_5_ForCausalLM" in config.get("architectures"):
-        model_config.ori_vocab_size = args.ori_vocab_size
+    # Handle vocabulary size
+    model_config.ori_vocab_size = model_config_dict.get("vocab_size", -1)
+    if "Ernie4_5_ForCausalLM" in model_config_dict.get("architectures", []):
+        model_config.ori_vocab_size = getattr(config_or_args, 'ori_vocab_size', model_config.ori_vocab_size)
 
-    quantization_config = config.get("quantization_config", None)
+    # Handle DeepseekV3 specific config
+    if "DeepseekV3ForCausalLM" in model_config_dict.get("architectures", []):
+        from paddleformers.transformers import AutoConfig
+        model_config.deepseekv3 = AutoConfig.from_pretrained(
+            config_or_args.model_name_or_path)
 
-    # Note(@wufeisheng): The `is_quantized` flag should be explicitly set to `true`
-    # when the weights are actually quantized offline. For backward compatibility
-    # with preview logic:
-    # - If `quantization_config` is provided but `is_quantized` is not explicitly set,
-    #   the value of `is_quantized` will be determined by whether `kv_cache_quant_type`
-    #   has been configured.
+    # Handle quantization config
+    quantization_config = model_config_dict.get("quantization_config", None)
     if not model_config.is_quantized:
         if quantization_config is not None:
             if "kv_cache_quant_type" not in quantization_config:
@@ -686,12 +753,17 @@ def initialize_fd_config(args) -> FDConfig:
 
     if quantization_config is not None:
         quant_config_name = quantization_config["quantization"]
-    elif args.quantization != "None":
+    elif getattr(config_or_args, 'quantization', None) != "None":
         quantization_config = {}
-        quant_config_name = args.quantization
-        if use_moe and quant_config_name == "wint4":
+        quant_config_name = getattr(config_or_args, 'quantization', None)
+        quantization_config["quantization"] = quant_config_name
+        # Special handling for Ernie models
+        is_ernie = "Ernie4_5_ForCausalLM" in model_config_dict.get("architectures", []) or \
+                   "Ernie4_5_MoeForCausalLM" in model_config_dict.get("architectures", [])
+        if use_moe and quant_config_name == "wint4" and is_ernie:
             quantization_config["dense_quant_type"] = "wint8"
             quantization_config["moe_quant_type"] = "wint4"
+            quantization_config["quantization"] = "mix_quant"
             quant_config_name = "mix_quant"
     else:
         quant_config_name = None
@@ -702,38 +774,52 @@ def initialize_fd_config(args) -> FDConfig:
         quant_cls = get_quantization_config(quant_config_name)
         quant_config = quant_cls.from_config(quantization_config)
 
+    # Log quantization info
     logger.info("===========quantization_config==============")
     if quant_config is not None:
         if model_config.is_quantized:
             logger.info(
-                "=====The currently loaded model is an offline quantized model====="
+                "Model Status: Offline Quantized (pre-quantized weights loaded)"
             )
         else:
-            logger.info("=====The currently loaded model is the original model\
-                    The model will be quantized online=====")
-        logger.info(f"{json.dumps(quantization_config, indent=2)}")
+            logger.info(
+                "Model Status: Original (will apply online quantization)")
+
+        logger.info(f"Quantization Method: {getattr(config_or_args, 'quantization', 'None')}")
     else:
         logger.info(
             "No quantization config found and use original weight and act dtype."
         )
-    logger.info("============================================")
 
-    model_config.architectures = config.get("architectures")
+    model_config.architectures = model_config_dict.get("architectures")
 
-    fd_config = FDConfig(model_config=model_config,
-                         parallel_config=parallel_config,
-                         speculative_config=speculative_config,
-                         device_config=device_config,
-                         load_config=load_config,
-                         moe_config=moe_config,
-                         decoding_config=decoding_config,
-                         quant_config=quant_config,
-                         graph_opt_config=graph_opt_config)
+    # Update load config
+    logger.info("===========load_config==============")
+    # Handle load config (check for environment variable)
+    load_config.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
+    load_config.dynamic_load_weight = getattr(config_or_args, 'dynamic_load_weight', False)
+    load_config.load_strategy = getattr(config_or_args, 'load_strategy', None)
+    logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
+    logger.info(f"- Load strategy: {load_config.load_strategy}")
+    logger.info(f"- Use fastsafetensor: {load_config.use_fastsafetensor}")
+
+    # Create and return FDConfig
+    fd_config = FDConfig(
+        model_config=model_config,
+        parallel_config=parallel_config,
+        speculative_config=speculative_config,
+        device_config=device_config,
+        load_config=load_config,
+        moe_config=moe_config,
+        decoding_config=decoding_config,
+        quant_config=quant_config,
+        graph_opt_config=graph_opt_config
+    )
 
     return fd_config
 
 
-def run_worker_proc():
+def run_worker_proc() -> None:
     """
     start worker process
     """

@@ -21,6 +21,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "paddle/extension.h"
+#include "helper.h"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
@@ -88,7 +89,12 @@ void GetStopFlagsMultiSeqs(const paddle::Tensor &topk_ids,
     PD_CHECK(topk_ids.dtype() == paddle::DataType::INT64);
     PD_CHECK(stop_flags.dtype() == paddle::DataType::BOOL);
 
+#ifdef PADDLE_WITH_CUSTOM_DEVICE
+    auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(topk_ids.place()));
+    auto cu_stream = dev_ctx->stream();
+#else
     auto cu_stream = topk_ids.stream();
+#endif
     std::vector<int64_t> shape = topk_ids.shape();
     std::vector<int64_t> stop_seqs_shape = stop_seqs.shape();
     int bs_now = shape[0];
@@ -96,7 +102,7 @@ void GetStopFlagsMultiSeqs(const paddle::Tensor &topk_ids,
     int stop_seqs_max_len = stop_seqs_shape[1];
     int pre_ids_len = pre_ids.shape()[1];
 
-    int block_size = (stop_seqs_bs + 31) / 32 * 32;
+    int block_size = (stop_seqs_bs + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
     set_value_by_stop_seqs<<<bs_now, block_size, 0, cu_stream>>>(
         const_cast<bool *>(stop_flags.data<bool>()),
         const_cast<int64_t *>(topk_ids.data<int64_t>()),

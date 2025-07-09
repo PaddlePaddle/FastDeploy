@@ -15,11 +15,14 @@
 """
 
 import os
+import subprocess
+import sys
 
 # suppress warning log from paddlepaddle
 os.environ["GLOG_minloglevel"] = "2"
 # suppress log from aistudio
 os.environ["AISTUDIO_LOG"] = "critical"
+from fastdeploy.utils import version
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 
@@ -30,3 +33,48 @@ try:
     use_triton_in_paddle.make_triton_compatible_with_paddle()
 except ImportError:
     pass
+# TODO(tangbinhan): remove this code
+
+
+def _patch_fastsafetensors():
+    try:
+        file_path = subprocess.check_output([
+            sys.executable, "-c", "import fastsafetensors, os; \
+             print(os.path.join(os.path.dirname(fastsafetensors.__file__), \
+             'frameworks', '_paddle.py'))"
+        ]).decode().strip()
+
+        with open(file_path, 'r') as f:
+            content = f.read()
+        if "DType.U16: DType.BF16," in content and "DType.U8: paddle.uint8," in content:
+            return
+
+        modified = False
+        if "DType.U16: DType.BF16," not in content:
+            lines = content.splitlines()
+            new_lines = []
+            inside_block = False
+            for line in lines:
+                new_lines.append(line)
+                if 'need_workaround_dtypes: Dict[DType, DType] = {' in line:
+                    inside_block = True
+                elif inside_block and '}' in line:
+                    new_lines.insert(-1, '    DType.U16: DType.BF16,')
+                    inside_block = False
+                    modified = True
+            content = "\n".join(new_lines)
+
+        if "DType.I8: paddle.uint8," in content:
+            content = content.replace("DType.I8: paddle.uint8,",
+                                      "DType.U8: paddle.uint8,")
+            modified = True
+
+        if modified:
+            with open(file_path, 'w') as f:
+                f.write(content + "\n")
+
+    except Exception as e:
+        print(f"Failed to patch fastsafetensors: {e}")
+
+
+_patch_fastsafetensors()
