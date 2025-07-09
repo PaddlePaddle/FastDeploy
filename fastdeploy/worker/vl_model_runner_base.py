@@ -43,9 +43,6 @@ class VLModelRunnerBase(ABC):
         VLModelRunnerBase init
         """
 
-        self.no_top_p = config.no_top_p
-        self.no_top_k = config.no_top_k
-
         self.share_inputs = {}
         self.model_cfg = config
         self.args = args
@@ -130,9 +127,9 @@ class VLModelRunnerBase(ABC):
             "eos_token_id":
             paddle.full([self.args.eos_tokens_lens, 1], 0, **int64_config),
             "top_p":
-            None if self.no_top_p else paddle.full([max_num_seqs, 1], self.top_p, **float32_config),
+            paddle.full([max_num_seqs, 1], self.top_p, **float32_config),
             "top_k":
-            None if self.no_top_k else paddle.full([max_num_seqs, 1], 20, **int64_config),
+            paddle.full([max_num_seqs, 1], 20, **int64_config),
             "temperature":
             paddle.full([max_num_seqs, 1], self.temperature, **float32_config),
             "penalty_score":

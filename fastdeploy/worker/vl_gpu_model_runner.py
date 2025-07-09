@@ -751,10 +751,8 @@ class GPUVLModelRunner(VLModelRunnerBase):
                                           1, :] = self.prepare_rope3d(
                                               position_ids, **kwargs)
 
-            if not self.no_top_p:
-                self.share_inputs["top_p"][idx:idx + 1] = kwargs["top_p"]
-            if not self.no_top_k:
-                self.share_inputs["top_k"][idx:idx + 1] = 20 if kwargs["top_k"]is None else kwargs["top_k"]
+            self.share_inputs["top_p"][idx:idx + 1] = kwargs["top_p"]
+            self.share_inputs["top_k"][idx:idx + 1] = kwargs["top_k"]
             self.share_inputs["temperature"][idx:idx +
                                              1] = kwargs["temperature"]
             self.share_inputs["eos_token_id"][:] = np.array(

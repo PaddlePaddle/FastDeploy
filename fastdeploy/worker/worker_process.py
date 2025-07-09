@@ -568,12 +568,6 @@ def parse_args():
         "'ipc_snapshot': load from disk snapshot of IPC weights, "
         "'meta': provide RL traing worker, no_weights_load"
         "'normal':normal load weight")
-    parser.add_argument("--no_top_p",
-                        action='store_true',
-                        help="Set top_p as None")
-    parser.add_argument("--no_top_k",
-                        action='store_true',
-                        help="Set top_k as None")
 
     args = parser.parse_args()
     return args
@@ -633,10 +627,6 @@ def initialize_fd_config(config_or_args) -> FDConfig:
 
     # Handle quantization (check for attribute existence)
     model_config.quantization = getattr(config_or_args, 'quantization', None)
-
-    # Haddle sampling config
-    model_config.no_top_p = getattr(config_or_args, 'no_top_p', False)
-    model_config.no_top_k = getattr(config_or_args, 'no_top_k', False)
 
     # Update speculative config_or_args
     speculative_config.method = getattr(config_or_args, 'speculative_method', None)
