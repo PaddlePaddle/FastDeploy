@@ -43,6 +43,9 @@ class VLModelRunnerBase(ABC):
         VLModelRunnerBase init
         """
 
+        self.no_top_p = config.no_top_p
+        self.no_top_k = config.no_top_k
+
         self.share_inputs = {}
         self.model_cfg = config
         self.args = args
@@ -98,7 +101,6 @@ class VLModelRunnerBase(ABC):
             return default
 
         self.top_p = _get_attr("top_p", 0.0)
-        self.top_k = _get_attr("top_k", 20)
         self.temperature = _get_attr("temperature", 1.0)
         self.rope_theta = _get_attr("rope_theta", 10000.0)
         self.rope_scaling = _get_attr("rope_scaling", None)
@@ -128,9 +130,9 @@ class VLModelRunnerBase(ABC):
             "eos_token_id":
             paddle.full([self.args.eos_tokens_lens, 1], 0, **int64_config),
             "top_p":
-            paddle.full([max_num_seqs, 1], self.top_p, **float32_config),
+            None if self.no_top_p else paddle.full([max_num_seqs, 1], self.top_p, **float32_config),
             "top_k":
-            paddle.full([max_num_seqs, 1], self.top_k, **int64_config),
+            None if self.no_top_k else paddle.full([max_num_seqs, 1], 20, **int64_config),
             "temperature":
             paddle.full([max_num_seqs, 1], self.temperature, **float32_config),
             "penalty_score":

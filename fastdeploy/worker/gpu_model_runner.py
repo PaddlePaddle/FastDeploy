@@ -69,8 +69,8 @@ class GPUModelRunner(ModelRunnerBase):
             self.guided_backend = get_guided_backend(fd_config=self.fd_config)
 
         #  Sampler
-        self.no_top_p = self.fd_config.decoding_config.no_top_p
-        self.no_top_k = self.fd_config.decoding_config.no_top_k
+        self.no_top_p = self.fd_config.model_config.no_top_p
+        self.no_top_k = self.fd_config.model_config.no_top_k
         if not self.speculative_decoding:
             self.sampler = Sampler()
         else:

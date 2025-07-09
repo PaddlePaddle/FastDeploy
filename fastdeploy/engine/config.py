@@ -45,7 +45,9 @@ class ModelConfig:
                  dynamic_load_weight: bool = False,
                  load_strategy: str="meta",
                  quantization: str = None,
-                 download_dir: Optional[str] = None):
+                 download_dir: Optional[str] = None,
+                 no_top_p: bool = False,
+                 no_top_k: bool = False):
         """
         Initialize the ModelConfig class.
 
@@ -59,6 +61,8 @@ class ModelConfig:
         self.dynamic_load_weight = dynamic_load_weight
         self.load_strategy = load_strategy
         self.quantization = quantization
+        self.no_top_p = no_top_p
+        self.no_top_k = no_top_k
 
         config_file = os.path.join(model_name_or_path, config_json_file)
         if os.path.isfile(model_name_or_path):
@@ -585,8 +589,6 @@ class Config:
         max_capture_batch_size: int = 64,
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
-        no_top_p: bool = False,
-        no_top_k: bool = False,
     ):
         """
         Initialize the Config class.
@@ -650,8 +652,6 @@ class Config:
         self.is_master = True
         self._str_to_list("innode_prefill_ports", int)
         self._str_to_list("pod_ips", str)
-        self.no_top_p = no_top_p
-        self.no_top_k = no_top_k
 
         if self.innode_prefill_ports is not None:
             if not isinstance(self.innode_prefill_ports, list):

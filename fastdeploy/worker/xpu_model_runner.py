@@ -237,8 +237,8 @@ class XPUModelRunner(ModelRunnerBase):
         self.local_rank = local_rank
 
         #  Sampler
-        self.no_top_p = self.fd_config.decoding_config.no_top_p
-        self.no_top_k = self.fd_config.decoding_config.no_top_k
+        self.no_top_p = self.fd_config.model_config.no_top_p
+        self.no_top_k = self.fd_config.model_config.no_top_k
         self.sampler = Sampler()
 
         # Lazy initialize kv cache after model loading
