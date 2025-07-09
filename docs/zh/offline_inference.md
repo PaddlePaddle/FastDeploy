@@ -52,7 +52,7 @@ outputs = llm.chat(
 for output in outputs:
     prompt = output.prompt
     generated_text = output.outputs.text
-    reasoning_text = output.outputs.resoning_content
+    reasoning_text = output.outputs.reasoning_content
 ```
 
 ### 续写接口(LLM.generate)
