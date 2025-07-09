@@ -22,6 +22,7 @@ setup(
             "gpu_ops/save_with_output_msg.cc",
             "gpu_ops/get_output.cc",
             "gpu_ops/get_output_msg_with_topk.cc",
+            "gpu_ops/save_output_msg_with_topk.cc",
             "gpu_ops/transfer_output.cc",
             "cpu_ops/rebuild_padding.cc",
         ],

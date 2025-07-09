@@ -52,6 +52,8 @@ class SamplingParams:
             the model more random. Zero means greedy sampling.
         top_p: Float that controls the cumulative probability of the top tokens
             to consider. Must be in [0, 1]. Set to 1 to consider all tokens.
+        top_k: Integer that controls the number of top tokens to consider. Set
+            to 0 (or -1) to consider all tokens.
         seed: Random seed to use for the generation.
         stop: list of strings that stop the generation when they are generated.
             The returned output will not contain the stop strings.
@@ -82,6 +84,7 @@ class SamplingParams:
     repetition_penalty: float = None
     temperature: float = None
     top_p: float = None
+    top_k: int = 0
     seed: Optional[int] = None
     stop: Optional[Union[str, List[str]]] = None
     stop_token_ids: Optional[Union[List[List[int]], List[int]]] = None
@@ -111,6 +114,7 @@ class SamplingParams:
                       repetition_penalty,
                       temperature,
                       top_p,
+                      top_k,
                       seed=None,
                       stop=None,
                       stop_token_ids=None,
@@ -130,6 +134,7 @@ class SamplingParams:
                    if repetition_penalty is not None else 1.0,
                    temperature=temperature if temperature is not None else 1.0,
                    top_p=top_p if top_p is not None else 0.7,
+                   top_k=top_k,
                    seed=seed,
                    stop=stop,
                    stop_token_ids=stop_token_ids,
@@ -169,6 +174,13 @@ class SamplingParams:
                 f"temperature must be non-negative, got {self.temperature}.")
         if self.top_p is not None and not 0.0 <= self.top_p <= 1.0:
             raise ValueError(f"top_p must be in [0, 1], got {self.top_p}.")
+        # quietly accept -1 as disabled, but prefer 0
+        if self.top_k < -1:
+            raise ValueError(f"top_k must be 0 (disable), or at least 1, "
+                             f"got {self.top_k}.")
+        if not isinstance(self.top_k, int):
+            raise TypeError(
+                f"top_k must be an integer, got {type(self.top_k).__name__}")
 
         if self.max_tokens is not None and self.max_tokens < 1:
             raise ValueError(
@@ -188,6 +200,9 @@ class SamplingParams:
         if self.logprobs is not None and self.logprobs < 0:
             raise ValueError(
                 f"logprobs must be non-negative, got {self.logprobs}.")
+        if self.logprobs is not None and self.logprobs > 20:
+            raise ValueError(
+                "Invalid value for 'top_logprobs': must be less than or equal to 20.")
 
         if not 0 <= self.seed <= 922337203685477580:
             raise ValueError("seed must be in [0, 922337203685477580], got "

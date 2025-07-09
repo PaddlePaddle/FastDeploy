@@ -299,6 +299,12 @@ class EngineArgs:
         max_capture_batch_size=64, FastDeploy will capture graphs for batches [1,64].
     """
 
+    enable_logprob: bool = False
+    """
+    Flag to enable logprob output. Default is False (disabled).
+    Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -419,6 +425,11 @@ class EngineArgs:
             help=
             "Disabled any whitespaces when using guided decoding backend XGrammar."
         )
+        model_group.add_argument("--enable-logprob",
+                                 action="store_true",
+                                 default=EngineArgs.enable_logprob,
+                                 help="Enable output of token-level log probabilities."
+                                 )
 
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
@@ -799,4 +810,5 @@ class EngineArgs:
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             enable_custom_all_reduce=self.enable_custom_all_reduce,
+            enable_logprob = self.enable_logprob,
         )
