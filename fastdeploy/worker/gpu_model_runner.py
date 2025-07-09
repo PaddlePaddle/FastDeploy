@@ -748,7 +748,7 @@ class GPUModelRunner(ModelRunnerBase):
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta)
-
+            paddle.device.synchronize()
             hiddden_states = rebuild_padding(
                 model_output,
                 self.share_inputs["cum_offsets"],
@@ -916,6 +916,14 @@ class GPUModelRunner(ModelRunnerBase):
         logger.info(
             f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds"
         )
+        # cudagraph debug: dummy run with batch size 1, tirgger padding batch
+        logger.info("trigger padding batch")
+        padding_batch_size = [1, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15] # capture list: [2, 4, 8, 16]
+        for batch_size in sorted(padding_batch_size, reverse=True):
+            self._dummy_run(num_tokens=self.parallel_config.max_model_len,
+                                batch_size=batch_size,
+                                in_capturing=True,
+                                expected_decode_len=expected_decode_len)
 
     def _get_skip_idx(self,
                       model_forward_batch: Optional[List[Request]] = None):
@@ -980,7 +988,7 @@ class GPUModelRunner(ModelRunnerBase):
         model_output = self.model(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             forward_meta=self.forward_meta)
-
+        paddle.device.synchronize()
         hiddden_states = rebuild_padding(
             model_output,
             self.share_inputs["cum_offsets"],

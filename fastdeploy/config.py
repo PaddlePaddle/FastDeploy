@@ -342,7 +342,7 @@ class GraphOptimizationConfig:
                  max_capture_batch_size: int = 64):
         """ """
         # capture_size = [i for i in range(1, max_capture_batch_size + 1)]
-        capture_size = [2]
+        capture_size = [2, 4, 8, 16]
         self.init_with_cudagrpah_size(cudagraph_capture_sizes=capture_size)
         self.use_cudagraph = use_cudagraph
         #TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
