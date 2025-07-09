@@ -1030,6 +1030,7 @@ class LLMEngine(object):
             f" --speculative_max_draft_token_num {self.cfg.speculative_config.num_speculative_tokens}"
             f" --speculative_model_name_or_path {self.cfg.speculative_config.model_name_or_path}"
             f" --speculative_model_quantization {self.cfg.speculative_config.quantization}"
+            f" --speculative_benchmark_mode {self.cfg.speculative_config.benchmark_mode}"
             f" --max_capture_batch_size {self.cfg.max_capture_batch_size}"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
             f" --load_strategy {self.cfg.model_config.load_strategy}")
