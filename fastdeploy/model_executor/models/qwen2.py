@@ -302,6 +302,7 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         """
         super(Qwen2ForCausalLM, self).__init__(fd_config)
 
+        self.fd_config =fd_config
         self.model = Qwen2Model(fd_config=fd_config)
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size

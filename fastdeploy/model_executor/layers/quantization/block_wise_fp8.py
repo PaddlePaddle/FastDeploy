@@ -18,9 +18,10 @@ from typing import Optional
 import paddle
 
 import fastdeploy
+from fastdeploy import envs
 from fastdeploy.model_executor.layers.moe import FusedMoE
 
-from ..utils import per_block_cast_to_fp8, get_tensor
+from ..utils import get_tensor, per_block_cast_to_fp8
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 
@@ -37,6 +38,7 @@ class BlockWiseFP8Config(QuantConfigBase):
         self.quant_max_bound = 448
         self.quant_min_bound = -448
         self.quant_round_type = 1
+        self.use_deep_gemm = bool(envs.FD_USE_DEEP_GEMM)
 
     def name(self) -> str:
         return "block_wise_fp8"
@@ -51,9 +53,14 @@ class BlockWiseFP8Config(QuantConfigBase):
         Get quantization method.
         '''
         if isinstance(layer, FusedMoE):
-            from fastdeploy.model_executor.layers.moe.fused_moe_deepgemm_backend import \
-                DeepGemmFusedMoeMethod
-            return DeepGemmFusedMoeMethod(self)
+            if self.use_deep_gemm:
+                from fastdeploy.model_executor.layers.moe.fused_moe_deepgemm_backend import \
+                    DeepGemmFusedMoeMethod
+                return DeepGemmFusedMoeMethod(self)
+            else:
+                from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import \
+                    BlockWiseFP8MoEMethod
+            return BlockWiseFP8MoEMethod(self)
         else:
             return BlockWiseFP8LinearMethod(self)
 

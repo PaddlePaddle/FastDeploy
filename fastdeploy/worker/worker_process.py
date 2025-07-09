@@ -40,12 +40,23 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
     """
     get worker of different device
     """
+    if current_platform.is_dcu():
+        from fastdeploy.worker.dcu_worker import DcuWorker
+        return DcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_cuda():
         from fastdeploy.worker.gpu_worker import GpuWorker
         return GpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_xpu():
         from fastdeploy.worker.xpu_worker import XpuWorker
         return XpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
+    if current_platform.is_iluvatar():
+        from fastdeploy.worker.iluvatar_worker import IluvatarWorker
+        return IluvatarWorker(fd_config=fd_config,
+                              local_rank=local_rank,
+                              rank=rank)
+    if current_platform.is_gcu():
+        from fastdeploy.worker.gcu_worker import GcuWorker
+        return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
 class PaddleDisWorkerProc():
@@ -119,9 +130,9 @@ class PaddleDisWorkerProc():
             model_weights_status:
         """
         # init worker_ready_signal
-
+        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         array_size = min(
-            8, self.parallel_config.tensor_parallel_size *
+            max_chips_per_node, self.parallel_config.tensor_parallel_size *
             self.parallel_config.expert_parallel_size)
         workers_ready = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_ready_signal = IPCSignal(
@@ -130,7 +141,8 @@ class PaddleDisWorkerProc():
             dtype=np.int32,
             suffix=self.parallel_config.engine_pid,
             create=False)
-        self.worker_ready_signal.value[self.local_rank % 8] = 1
+        self.worker_ready_signal.value[self.local_rank %
+                                       max_chips_per_node] = 1
 
         # init worker_healthy_live_signal
         workers_alive = np.zeros(shape=[self.ranks], dtype=np.int32)
@@ -479,6 +491,11 @@ def parse_args():
         default="WINT8",
         type=str,
     )
+    parser.add_argument(
+        "--speculative_benchmark_mode",
+        default="false",
+        type=str,
+    )
     parser.add_argument("--max_num_batched_tokens",
                         type=int,
                         default=2048,
@@ -487,6 +504,9 @@ def parse_args():
     parser.add_argument("--enable_prefix_caching",
                         action='store_true',
                         help="enable prefix cache")
+    parser.add_argument("--enable-custom-all-reduce",
+                        action='store_true',
+                        help="enable custom all-reduce")
     parser.add_argument("--splitwise_role",
                         type=str,
                         default="mixed",
@@ -506,7 +526,7 @@ def parse_args():
 
     parser.add_argument("--quantization",
                         type=str,
-                        default="",
+                        default="None",
                         help="Quantization name for the model, currentlly support " \
                             "'wint4', 'wint8'," \
                             "default is None. The priority of this configuration "\
@@ -551,6 +571,14 @@ def parse_args():
 
 
 def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
+    """Initialize FDConfig from either RolloutModelConfig or argparse.Namespace
+
+    Args:
+        config: Configuration object containing all parameters (either RolloutModelConfig or argparse.Namespace)
+
+    Returns:
+        FDConfig: Initialized FastDeploy configuration object
+    """
     paddle.set_default_dtype(args.dtype)
     model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
@@ -568,7 +596,6 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
     logger.info(
         f"parallel_config.tensor_parallel_size {parallel_config.tensor_parallel_size}"
     )
-    logger.info(f"args.splitwise_role {args.splitwise_role}")
 
     if getattr(model_config, 'num_hidden_layers', None) is None:
         raise ValueError("num_hidden_layers is None")
@@ -588,11 +615,11 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
 
     if quantization_config is not None:
         quant_config_name = quantization_config["quantization"]
-    elif args.quantization != "None":
+    elif getattr(config_or_args, 'quantization', None) != "None":
         quantization_config = {}
-        quant_config_name = args.quantization
+        quant_config_name = getattr(config_or_args, 'quantization', None)
         quantization_config["quantization"] = quant_config_name
-        # use some trick code for ernie model and will unify it in future.
+        # Special handling for Ernie models
         is_ernie = "Ernie4_5_ForCausalLM" in model_config.architectures or \
                     "Ernie4_5_MoeForCausalLM" in model_config.architectures
         if quant_config_name == "wint4" and is_ernie:
@@ -609,6 +636,7 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
         quant_cls = get_quantization_config(quant_config_name)
         quant_config = quant_cls.from_config(quantization_config)
 
+    # Log quantization info
     logger.info("===========quantization_config==============")
     if quant_config is not None:
         if model_config.is_quantized:
@@ -619,7 +647,7 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
             logger.info(
                 "Model Status: Original (will apply online quantization)")
 
-        logger.info(f"Quantization Method: {args.quantization or 'None'}")
+        logger.info(f"Quantization Method: {getattr(config_or_args, 'quantization', 'None')}")
     else:
         logger.info(
             "No quantization config found and use original weight and act dtype."

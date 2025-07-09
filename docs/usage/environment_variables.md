@@ -67,6 +67,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Switch from standalone PD to centralized inference (0 or 1)
     "FD_PD_CHANGEABLE":
     lambda: os.getenv("FD_PD_CHANGEABLE", "1"),
-  
+
+    # Whether to use DeepGemm for FP8 blockwise MoE.
+    "FD_USE_DEEP_GEMM":
+    lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "1"))),
+
 }
 ```

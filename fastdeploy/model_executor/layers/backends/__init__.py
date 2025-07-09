@@ -16,14 +16,30 @@
 all backends methods
 """
 
-from .xpu import *
-from .npu import *
+from fastdeploy.platforms import current_platform
 
 __all__ = []
-from . import npu
-if hasattr(npu, '__all__'):
-    __all__.extend(npu.__all__)
-    
-from . import xpu
-if hasattr(xpu, '__all__'):
-    __all__.extend(xpu.__all__)
+
+if current_platform.is_xpu():
+    from . import xpu
+    from .xpu import *
+    if hasattr(xpu, '__all__'):
+        __all__.extend(xpu.__all__)
+
+if current_platform.is_npu():
+    from . import npu
+    from .npu import *
+    if hasattr(npu, '__all__'):
+        __all__.extend(npu.__all__)
+
+if current_platform.is_gcu():
+    from . import gcu
+    from .gcu import *
+    if hasattr(gcu, '__all__'):
+        __all__.extend(gcu.__all__)
+
+if current_platform.is_dcu():
+    from .dcu import *
+    from . import dcu
+    if hasattr(dcu, '__all__'):
+        __all__.extend(dcu.__all__)

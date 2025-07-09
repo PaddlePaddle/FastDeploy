@@ -436,8 +436,24 @@ class MTPProposer(Proposer):
         Initialize forward meta and attention meta data
         """
         # Initialize forward meta
-        self.forward_meta = ForwardMeta.init_forward_meta(
-            self.model_inputs, self.attn_backends[0])
+        self.forward_meta = ForwardMeta(
+            input_ids=self.model_inputs["input_ids"],
+            ids_remove_padding=self.model_inputs["ids_remove_padding"],
+            rotary_embs=self.model_inputs["rope_emb"],
+            attn_backend=self.attn_backends[0],
+            decoder_batch_ids=self.model_inputs["decoder_batch_ids"],
+            decoder_tile_ids_per_batch=self.model_inputs["decoder_tile_ids_per_batch"],
+            seq_lens_encoder=self.model_inputs["seq_lens_encoder"],
+            seq_lens_decoder=self.model_inputs["seq_lens_decoder"],
+            seq_lens_this_time=self.model_inputs["seq_lens_this_time"],
+            cum_offsets=self.model_inputs["cum_offsets"],
+            padding_offset=self.model_inputs["padding_offset"],
+            cu_seqlens_q=self.model_inputs["cu_seqlens_q"],
+            cu_seqlens_k=self.model_inputs["cu_seqlens_k"],
+            block_tables=self.model_inputs["block_tables"],
+            caches=self.model_inputs["caches"]
+        )
+
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
