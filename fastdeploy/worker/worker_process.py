@@ -627,8 +627,8 @@ def initialize_fd_config(config_or_args) -> FDConfig:
     model_config.quantization = getattr(config_or_args, 'quantization', None)
 
     # Haddle sampling config
-    decoding_config.no_top_p = getattr(config_or_args, 'no_top_p', False)
-    decoding_config.no_top_k = getattr(config_or_args, 'no_top_k', False)
+    model_config.no_top_p = getattr(config_or_args, 'no_top_p', False)
+    model_config.no_top_k = getattr(config_or_args, 'no_top_k', False)
 
     # Update speculative config_or_args
     speculative_config.method = getattr(config_or_args, 'speculative_method', None)

@@ -688,7 +688,9 @@ class EngineArgs:
                            config_json_file=self.model_config_name,
                            quantization=self.quantization,
                            dynamic_load_weight=self.dynamic_load_weight,
-                           load_strategy=self.load_strategy)
+                           load_strategy=self.load_strategy,
+                           no_top_p=self.no_top_p,
+                           no_top_k=self.no_top_k)
 
     def create_cache_config(self, model_cfg) -> CacheConfig:
         """
@@ -800,6 +802,4 @@ class EngineArgs:
             max_capture_batch_size=self.max_capture_batch_size,
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
-            no_top_p=self.no_top_p,
-            no_top_k=self.no_top_k,
         )

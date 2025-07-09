@@ -63,8 +63,8 @@ class IluvatarModelRunner(ModelRunnerBase):
         self.guided_backend = None
 
         #  Sampler
-        self.no_top_p = self.fd_config.decoding_config.no_top_p
-        self.no_top_k = self.fd_config.decoding_config.no_top_k
+        self.no_top_p = self.fd_config.model_config.no_top_p
+        self.no_top_k = self.fd_config.model_config.no_top_k
         if not self.speculative_decoding:
             self.sampler = Sampler()
         else:
