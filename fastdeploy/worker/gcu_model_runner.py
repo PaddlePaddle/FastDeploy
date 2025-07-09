@@ -606,8 +606,23 @@ class GCUModelRunner(ModelRunnerBase):
         Initialize forward meta and attention meta data
         """
         # Initialize forward meta
-        self.forward_meta = ForwardMeta.init_forward_meta(
-            self.share_inputs, self.attn_backends[0])
+        self.forward_meta = ForwardMeta(
+            input_ids=self.share_inputs["input_ids"],
+            ids_remove_padding=self.share_inputs["ids_remove_padding"],
+            rotary_embs=self.share_inputs["rope_emb"],
+            attn_backend=self.attn_backends[0],
+            decoder_batch_ids=self.share_inputs["decoder_batch_ids"],
+            decoder_tile_ids_per_batch=self.share_inputs["decoder_tile_ids_per_batch"],
+            seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
+            seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+            seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
+            cum_offsets=self.share_inputs["cum_offsets"],
+            padding_offset=self.share_inputs["padding_offset"],
+            cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
+            cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
+            block_tables=self.share_inputs["block_tables"],
+            caches=self.share_inputs["caches"]
+        )
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:

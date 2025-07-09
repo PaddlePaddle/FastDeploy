@@ -12,10 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-xpu backend methods
-"""
+from .custom_all_reduce import CustomAllreduce
 
-from .quantization.weight_only import XPUWeightOnlyLinearMethod
-
-__all__ = ['XPUWeightOnlyLinearMethod']
+__all__ = ["CustomAllreduce"]

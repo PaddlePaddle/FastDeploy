@@ -15,7 +15,6 @@
 import functools
 import importlib
 import inspect
-import os
 
 import paddle
 
@@ -77,7 +76,13 @@ def wrap_unified_op(original_cpp_ext_op, original_custom_op):
     @functools.wraps(original_custom_op)
     def unified_op(*args, **kwargs):
         if paddle.in_dynamic_mode():
-            return original_cpp_ext_op(*args, **kwargs)
+            res = original_cpp_ext_op(*args, **kwargs)
+            if res is None:
+                return None
+            # TODO(DrRyanHuang): Remove this if when we align the implementation of custom op and C++ extension
+            if isinstance(res, list) and len(res) == 1:
+                return res[0]
+            return res
         return original_custom_op(*args, **kwargs)
 
     return unified_op
@@ -93,17 +98,13 @@ def preprocess_static_op(global_ns):
     """
     static_op_prefix = "static_op_"
     static_op_names = [k for k in global_ns if k.startswith(static_op_prefix)]
-    enforce_eager = int(os.getenv("FD_ENFORCE_EAGER", "0")) == 1
 
-    for static_op in static_op_names:
-        op_name = static_op[len(static_op_prefix):]
-        has_dynamic_op = op_name in global_ns
+    for static_op_name in static_op_names:
+        op_name = static_op_name.removeprefix(static_op_prefix)
+        if op_name not in global_ns:
+            global_ns[op_name] = global_ns[static_op_name]
+            continue
 
-        if has_dynamic_op:
-            if not enforce_eager:
-                original_cpp_ext_op = global_ns[op_name]
-                original_custom_op = global_ns[static_op]
-                global_ns[op_name] = wrap_unified_op(original_cpp_ext_op,
-                                                     original_custom_op)
-        else:
-            global_ns[op_name] = global_ns[static_op]
+        original_cpp_ext_op = global_ns[op_name]
+        original_custom_op = global_ns[static_op_name]
+        global_ns[op_name] = wrap_unified_op(original_cpp_ext_op, original_custom_op)
