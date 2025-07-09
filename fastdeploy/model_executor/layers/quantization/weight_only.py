@@ -75,6 +75,15 @@ class WeightOnlyConfig(QuantConfigBase):
                 return GCUWeightOnlyMoEMethod(self)
             else:
                 return GCUWeightOnlyLinearMethod(self)
+        elif current_platform.is_dcu():
+            if isinstance(layer, FusedMoE):
+                from fastdeploy.model_executor.layers.backends import (
+                    DCUTritonWeightOnlyMoEMethod)
+                return DCUTritonWeightOnlyMoEMethod(self)
+            else:
+                from fastdeploy.model_executor.layers.backends import (
+                    DCUWeightOnlyLinearMethod)
+                return DCUWeightOnlyLinearMethod(self)
         else:
             if isinstance(layer, FusedMoE):
                 if layer.use_method == "cutlass":

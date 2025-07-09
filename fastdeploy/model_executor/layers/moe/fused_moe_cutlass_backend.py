@@ -27,7 +27,7 @@ from fastdeploy.platforms import current_platform
 from ..utils import create_and_set_parameter, get_tensor
 from .fused_moe_backend_base import MoEMethodBase
 
-if current_platform.is_cuda():
+if current_platform.is_cuda() and not current_platform.is_dcu():
     from fastdeploy.model_executor.ops.gpu import (moe_expert_dispatch,
                                                    moe_expert_reduce, noaux_tc)
 elif current_platform.is_iluvatar():
