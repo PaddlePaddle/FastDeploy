@@ -38,9 +38,7 @@ class BlockWiseFP8Config(QuantConfigBase):
         self.quant_max_bound = 448
         self.quant_min_bound = -448
         self.quant_round_type = 1
-        self.use_deep_gemm = False
-        if envs.FD_USE_DEEP_GEMM:
-            self.use_deep_gemm = True
+        self.use_deep_gemm = bool(envs.FD_USE_DEEP_GEMM)
 
     def name(self) -> str:
         return "block_wise_fp8"
