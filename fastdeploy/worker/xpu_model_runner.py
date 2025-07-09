@@ -142,7 +142,8 @@ def xpu_process_output(
 
 
 def xpu_post_process(sampled_token_ids: paddle.Tensor,
-                     model_output: ModelOutputData) -> None:
+                     model_output: ModelOutputData,
+                     skip_save_output: bool) -> None:
     """
 
     """
@@ -185,12 +186,13 @@ def xpu_post_process(sampled_token_ids: paddle.Tensor,
         )
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
-    save_output(
-        sampled_token_ids,
-        model_output.not_need_stop,
-        model_output.mp_rank,
-        False,  # use_ep
-    )
+    if not skip_save_output:
+        save_output(
+            sampled_token_ids,
+            model_output.not_need_stop,
+            model_output.mp_rank,
+            False,  # use_ep
+        )
 
 
 def step_paddle(share_inputs: Dict[str, paddle.Tensor], block_size: int,
@@ -658,7 +660,7 @@ class XPUModelRunner(ModelRunnerBase):
         self._dummy_prefill_inputs(num_tokens, batch_size)
 
         while True:
-            self.execute_model(None)
+            self.execute_model(None, True)
 
             if int((self.share_inputs['seq_lens_this_time'] > 0).sum()) == 0:
                 break
@@ -666,6 +668,7 @@ class XPUModelRunner(ModelRunnerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
+        is_dummy_run: bool = False,
     ) -> Optional[ModelRunnerOutput]:
         """
         The Entrance of model execute.
@@ -721,7 +724,8 @@ class XPUModelRunner(ModelRunnerBase):
             accept_num=None,
         )
         xpu_post_process(sampled_token_ids=sampled_token_ids,
-                         model_output=model_output_data)
+                         model_output=model_output_data,
+                         skip_save_output=is_dummy_run)
 
         # 7. Updata 'infer_seed' and step_paddle()
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
