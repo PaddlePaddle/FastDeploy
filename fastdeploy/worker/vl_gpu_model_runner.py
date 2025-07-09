@@ -816,9 +816,23 @@ class GPUVLModelRunner(VLModelRunnerBase):
         self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full(
             [self.fd_config.parallel_config.max_num_seqs, 1], 0, dtype='int32')
         # initialize_forward_meta
-        self.forward_meta = ForwardMeta.init_forward_meta(
-            self.share_inputs, self.attn_backend)
-
+        self.forward_meta = ForwardMeta(
+            input_ids=self.share_inputs["input_ids"],
+            ids_remove_padding=self.share_inputs["ids_remove_padding"],
+            rotary_embs=self.share_inputs["rope_emb"],
+            attn_backend=self.attn_backend,
+            decoder_batch_ids=self.share_inputs["decoder_batch_ids"],
+            decoder_tile_ids_per_batch=self.share_inputs["decoder_tile_ids_per_batch"],
+            seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
+            seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+            seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
+            cum_offsets=self.share_inputs["cum_offsets"],
+            padding_offset=self.share_inputs["padding_offset"],
+            cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
+            cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
+            block_tables=self.share_inputs["block_tables"],
+            caches=self.share_inputs["caches"]
+        )
         self.attn_backend.init_attention_metadata(self.forward_meta)
 
         self.sampling_metadata = SamplingMetadata(

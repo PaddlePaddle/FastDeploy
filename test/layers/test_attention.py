@@ -21,8 +21,7 @@ import paddle
 
 from fastdeploy.model_executor.layers.attention import (
     Attention, PaddleNativeAttnBackend)
-from fastdeploy.worker.forward_meta import (ForwardMeta, ForwardMode,
-                                            MHATokenToKVPool)
+from fastdeploy.worker.forward_meta import ForwardMeta, ForwardMode
 
 
 class MockModelRunner:
@@ -63,15 +62,6 @@ class MockModelRunner:
             },
         )
         self.page_size = page_size
-        max_total_num_tokens = max_batch_size * max_context_len
-        self.token_to_kv_pool = MHATokenToKVPool(
-            size=max_total_num_tokens,
-            page_size=page_size,
-            dtype=self.dtype,
-            head_num=num_heads,
-            head_dim=head_dim,
-            layer_num=1,  # only consider layer=1 for unit test
-            device=self.device)
 
 
 class TestNativePaddleAttentionBackend(unittest.TestCase):

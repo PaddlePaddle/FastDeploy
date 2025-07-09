@@ -32,7 +32,6 @@ logger = get_logger("gpu_worker", "gpu_worker.log")
 
 
 class GpuWorker(WorkerBase):
-    """ """
 
     def __init__(
         self,
@@ -48,7 +47,8 @@ class GpuWorker(WorkerBase):
         pass
 
     def init_device(self):
-        """ Initialize device and Construct model runner
+        """
+        Initialize device and construct model runner
         """
         if self.device_config.device_type == "cuda" and paddle.device.is_compiled_with_cuda(
         ):
@@ -74,10 +74,10 @@ class GpuWorker(WorkerBase):
             device_id=self.device_ids[self.local_rank],
             rank=self.rank,
             local_rank=self.local_rank)
-    
+
     def prefill_finished(self):
         """
-        check whether prefill stage finished
+        Check whether prefill stage finished
         """
         return self.model_runner.prefill_finished()
 
@@ -115,7 +115,8 @@ class GpuWorker(WorkerBase):
             f"\nDevice used memory: {before_run_meminfo.used / Gb}",
             f"\nDevice free memory: {before_run_meminfo.free / Gb}",
             f"\nPaddle reserved memory: {paddle_reserved_mem_before_run / Gb}",
-            f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}"))
+            f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}"
+        ))
 
         # 2. Profile run
         self.model_runner.profile_run()
@@ -126,15 +127,6 @@ class GpuWorker(WorkerBase):
         paddle_allocated_mem_after_run = paddle.device.cuda.max_memory_allocated(
             self.local_rank)
 
-        
-
-        # NOTE(gongshaotian): v1 worker
-        # not_paddle_use_mem = after_run_meminfo.used - paddle_reserved_mem_after_run
-        # peak_memory = paddle_allocated_mem_after_run + not_paddle_use_mem
-        # available_kv_cache_memory = after_run_meminfo.total * \
-        #    self.parallel_config.gpu_memory_utilization - peak_memory
-
-        # v0 worker
         model_block_memory_used = self.cal_theortical_kvcache()
         paddle_peak_increase = paddle_reserved_mem_after_run - paddle_allocated_mem_before_run
 
@@ -146,32 +138,31 @@ class GpuWorker(WorkerBase):
         available_kv_cache_memory = after_run_meminfo.total * \
             self.parallel_config.gpu_memory_utilization - after_run_meminfo.used - paddle_peak_increase
         available_kv_cache_memory += model_block_memory_used * self.parallel_config.max_block_num
-        
 
         end_time = time.perf_counter()
-        logger.info(
-            ("After running the profile, the memory usage info is as follows:",
-             f"\nDevice Total memory: {after_run_meminfo.total / Gb}",
-             f"\nDevice used memory: {after_run_meminfo.used / Gb}",
-             f"\nDevice free memory: {after_run_meminfo.free / Gb}",
-             f"\nPaddle reserved memory: {paddle_reserved_mem_after_run / Gb}",
-             f"\nPaddle allocated memory: {paddle_allocated_mem_after_run / Gb}",
-             f"\nAvailable KV Cache meomory: {available_kv_cache_memory / Gb}",
-             f"Profile time: {end_time - start_time}"))
+        logger.info((
+            "After running the profile, the memory usage info is as follows:",
+            f"\nDevice Total memory: {after_run_meminfo.total / Gb}",
+            f"\nDevice used memory: {after_run_meminfo.used / Gb}",
+            f"\nDevice free memory: {after_run_meminfo.free / Gb}",
+            f"\nPaddle reserved memory: {paddle_reserved_mem_after_run / Gb}",
+            f"\nPaddle allocated memory: {paddle_allocated_mem_after_run / Gb}",
+            f"\nAvailable KV Cache meomory: {available_kv_cache_memory / Gb}",
+            f"Profile time: {end_time - start_time}"))
 
         return available_kv_cache_memory  # return to caculate the block num in this device
 
     def load_model(self) -> None:
-        """ """
+        """ Load model """
         self.model_runner.load_model()
 
     def get_model(self) -> nn.Layer:
-        """ """
+        """ Get current model """
         return self.model_runner.get_model()
 
     def initialize_cache(self, num_gpu_blocks: int,
                          num_cpu_blocks: int) -> None:
-        """ """
+        """ Initizlize the KV Cache """
         pass
 
     def execute_model(
@@ -193,10 +184,7 @@ class GpuWorker(WorkerBase):
         """
         Perform the warm-up and the graph optimization
         """
-        # 1. Warm up model
-        # NOTE(gongshaotian): may be not need warm_up at this place
-
-        # 2. Triger cuda grpah capture
+        # Triger cuda grpah capture
         self.model_runner.capture_model()
 
     def check_health(self) -> bool:
@@ -204,10 +192,10 @@ class GpuWorker(WorkerBase):
         return True
 
     def cal_theortical_kvcache(self) -> int:
-        """ """
+        """ Calculate the block memory required """
         return self.model_runner.cal_theortical_kvcache()
 
     def reinitialize_kv_cache(self, num_gpu_blocks: int) -> None:
-        """ """
+        """ Reinitialize the kv cache using the parameters from the profile """
         self.model_runner.update_share_input_block_num(
             num_gpu_blocks=num_gpu_blocks)
