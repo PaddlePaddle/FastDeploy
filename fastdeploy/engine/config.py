@@ -526,6 +526,8 @@ class Config:
         max_capture_batch_size: int = 64,
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
+        no_top_p: bool = False,
+        no_top_k: bool = False,
     ):
         """
         Initialize the Config class.
@@ -585,6 +587,8 @@ class Config:
         self.is_master = True
         self._str_to_list("innode_prefill_ports", int)
         self._str_to_list("pod_ips", str)
+        self.no_top_p = no_top_p
+        self.no_top_k = no_top_k
 
         if self.pod_ips is None:
             self.nnode = 1
