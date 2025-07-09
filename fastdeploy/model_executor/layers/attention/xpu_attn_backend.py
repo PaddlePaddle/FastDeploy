@@ -91,7 +91,7 @@ class XPUAttentionBackend(AttentionBackend):
         # self.use_speculate = self.speculate_method is not None
         # self.speculate_max_draft_token_num = fd_config.parallel_config.speculate_max_draft_tokens
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
-        self.rank: int = fd_config.parallel_config.expert_parallel_rank * fd_config.parallel_config.tensor_parallel_degree + fd_config.parallel_config.tensor_parallel_rank
+        self.rank: int = fd_config.parallel_config.tensor_parallel_rank
 
         self.kv_num_heads: int = kv_num_heads
         self.num_heads: int = num_heads
