@@ -813,7 +813,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
             input_ids=self.share_inputs["input_ids"],
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
-            attn_backend=self.attn_backends[0],
+            attn_backend=self.attn_backend,
             decoder_batch_ids=self.share_inputs["decoder_batch_ids"],
             decoder_tile_ids_per_batch=self.share_inputs["decoder_tile_ids_per_batch"],
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
