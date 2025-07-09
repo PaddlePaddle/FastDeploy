@@ -18,6 +18,9 @@ BUILD_WHEEL=${1:-1}
 PYTHON_VERSION=${2:-"python"}
 export python=$PYTHON_VERSION
 FD_CPU_USE_BF16=${3:-"false"}
+# FD_BUILDING_ARCS: Specify target CUDA architectures for custom ops, e.g., "[80, 90, 100]".
+# For SM90 (Hopper), use 90. For SM100 (Blackwell), use 100.
+# These will be translated to 90a / 100a in setup_ops.py for specific features.
 FD_BUILDING_ARCS=${4:-""}
 
 
@@ -187,7 +190,10 @@ function version_info() {
   fastdeploy_git_commit_id=$(git rev-parse HEAD)
   paddle_version=$(${python} -c "import paddle; print(paddle.__version__)")
   paddle_git_commit_id=$(${python} -c "import paddle; print(paddle.__git_commit__)")
-  cuda_version=$(nvcc -V | grep -Po "(?<=release )[\d.]+(?=, V)")
+  cuda_version="nvcc-not-installed"
+  if command -v nvcc &> /dev/null; then
+    cuda_version=$(nvcc -V | grep -Po "(?<=release )[\d.]+(?=, V)")
+  fi
   cxx_version=$(g++ --version | head -n 1 | grep -Po "(?<=\) )[\d.]+")
 
   echo "fastdeploy GIT COMMIT ID: $fastdeploy_git_commit_id" > $output_file

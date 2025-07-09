@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import random
+from typing import Optional
 
 import numpy as np
 import paddle
@@ -24,9 +25,10 @@ import paddle.distributed.fleet as fleet
 from paddleformers.transformers.model_utils import load_tp_checkpoint
 from safetensors import safe_open
 
-from fastdeploy.config import (DeviceConfig, FDConfig, KVCacheConfig,
-                               LoadConfig, ModelConfig, MoEConfig, MoEPhase,
-                               ParallelConfig, SpeculativeConfig)
+from fastdeploy.config import (DeviceConfig, FDConfig, GraphOptimizationConfig,
+                               KVCacheConfig, LoadConfig, ModelConfig,
+                               MoEConfig, MoEPhase, ParallelConfig,
+                               SpeculativeConfig)
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.input.mm_processor import DataProcessor
 from fastdeploy.model_executor.layers.attention import get_attention_backend
@@ -268,6 +270,10 @@ class GPUVLModelRunner(VLModelRunnerBase):
                                         -1)
         self.image_preprocess = image_preprocess
 
+        graph_opt_config = GraphOptimizationConfig(
+            self.args.enable_static_graph_inference, self.args.use_cudagraph,
+            self.args.max_capture_batch_size)
+
         fd_config, self.model = build_stream_line_model(
             self.args.model_name_or_path,
             self.args.dtype,
@@ -275,6 +281,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
             max_model_len=self.args.max_model_len,
             tokenizer=tokenizer,
             quantization=self.args.quantization,
+            graph_opt_config=graph_opt_config,
         )
         self.model.eval()
         self.set_state_dict(self.args)
@@ -812,9 +819,23 @@ class GPUVLModelRunner(VLModelRunnerBase):
         self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full(
             [self.fd_config.parallel_config.max_num_seqs, 1], 0, dtype='int32')
         # initialize_forward_meta
-        self.forward_meta = ForwardMeta.init_forward_meta(
-            self.share_inputs, self.attn_backend)
-
+        self.forward_meta = ForwardMeta(
+            input_ids=self.share_inputs["input_ids"],
+            ids_remove_padding=self.share_inputs["ids_remove_padding"],
+            rotary_embs=self.share_inputs["rope_emb"],
+            attn_backend=self.attn_backend,
+            decoder_batch_ids=self.share_inputs["decoder_batch_ids"],
+            decoder_tile_ids_per_batch=self.share_inputs["decoder_tile_ids_per_batch"],
+            seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
+            seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+            seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
+            cum_offsets=self.share_inputs["cum_offsets"],
+            padding_offset=self.share_inputs["padding_offset"],
+            cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
+            cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
+            block_tables=self.share_inputs["block_tables"],
+            caches=self.share_inputs["caches"]
+        )
         self.attn_backend.init_attention_metadata(self.forward_meta)
 
         self.sampling_metadata = SamplingMetadata(
@@ -1054,6 +1075,7 @@ def build_stream_line_model(
     max_model_len: int,
     tokenizer: ErnieBotTokenizer,
     quantization: str = "None",
+    graph_opt_config: Optional[GraphOptimizationConfig] = None
 ) -> tuple[FDConfig, paddle.nn.layer]:
     """
     build model
@@ -1225,6 +1247,7 @@ def build_stream_line_model(
         moe_config=moe_config,
         quant_config=quant_config,
         kv_cache_config=kv_cache_config,
+        graph_opt_config=graph_opt_config,
     )
     fd_config.parallel_config.max_model_len = max_model_len
     fd_config.model_config.rope_theta = rope_theta

@@ -931,8 +931,8 @@ class LLMEngine(object):
 
     def _setting_environ_variables(self):
         """
-       配置环境变量
-       """
+        配置环境变量
+        """
         variables = {
             "PADDLE_TRAINER_ID": 0,
             "PADDLE_TRAINERS_NUM": 1,
@@ -1030,6 +1030,7 @@ class LLMEngine(object):
             f" --speculative_max_draft_token_num {self.cfg.speculative_config.num_speculative_tokens}"
             f" --speculative_model_name_or_path {self.cfg.speculative_config.model_name_or_path}"
             f" --speculative_model_quantization {self.cfg.speculative_config.quantization}"
+            f" --speculative_benchmark_mode {self.cfg.speculative_config.benchmark_mode}"
             f" --max_capture_batch_size {self.cfg.max_capture_batch_size}"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
             f" --load_strategy {self.cfg.model_config.load_strategy}")
@@ -1049,6 +1050,7 @@ class LLMEngine(object):
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "no_top_p": self.cfg.model_config.no_top_p,
             "no_top_k": self.cfg.model_config.no_top_k,
+            "enable-custom-all-reduce": self.cfg.parallel_config.enable_custom_all_reduce,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:

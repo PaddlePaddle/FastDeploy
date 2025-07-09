@@ -86,7 +86,6 @@ class XpuWorker(WorkerBase):
             You may limit the usage of GPU memory
             by adjusting the `gpu_memory_utilization` parameter.
         """
-        # logger.warn("XPU current could not determine available memory")
         from fastdeploy.model_executor.ops.xpu import \
             xpu_get_free_global_memory, xpu_get_total_global_memory, xpu_get_used_global_memory
         
