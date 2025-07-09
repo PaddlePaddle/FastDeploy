@@ -77,8 +77,10 @@ function copy_ops(){
     is_rocm=`$python -c "import paddle; print(paddle.is_compiled_with_rocm())"`
     if [ "$is_rocm" = "True" ]; then
       DEVICE_TYPE="rocm"
+      mkdir -p ../fastdeploy/model_executor/ops/base
+      cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
       cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/gpu
-      echo -e "ROCM ops have been copy to fastdeploy"
+      echo -e "BASE and ROCM ops have been copy to fastdeploy"
       return
     fi
     mkdir -p ../fastdeploy/model_executor/ops/base

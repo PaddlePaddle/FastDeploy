@@ -91,7 +91,12 @@ void set_data_ipc(const paddle::Tensor& tmp_input,
   memset((void *)shm, 0, sizeof(*shm));
 
   void *data_ptr_now = reinterpret_cast<void*>(const_cast<data_t*>(tmp_input.data<data_t>()));
+#ifdef PADDLE_WITH_HIP
+  checkCudaErrors(hipIpcGetMemHandle((hipIpcMemHandle_t *)&shm->memHandle, data_ptr_now));
+#else
   checkCudaErrors(cudaIpcGetMemHandle((cudaIpcMemHandle_t *)&shm->memHandle, data_ptr_now));
+#endif
+
 
 }
 

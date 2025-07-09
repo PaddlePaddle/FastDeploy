@@ -14,7 +14,9 @@
 """
 dcu platform file
 """
-from .base import Platform
+import paddle
+from .base import Platform, _Backend
+from paddleformers.utils.log import logger
 
 
 class DCUPlatform(Platform):
@@ -22,3 +24,38 @@ class DCUPlatform(Platform):
     dcu platform class
     """
     device_name = "dcu"
+
+    @classmethod
+    def available(self):
+        """
+        Check whether CUDA is available.
+        """
+        try:
+            assert len(paddle.static.cuda_places()) > 0
+            return True
+        except Exception as e:
+            logger.warning(
+                "You are using GPU version PaddlePaddle, but there is no GPU "
+                "detected on your machine. Maybe CUDA devices is not set properly."
+                f"\n Original Error is {e}"
+            )
+            return False
+
+    @classmethod
+    def get_attention_backend_cls(
+        cls,
+        selected_backend
+    ):
+        """
+        get_attention_backend_cls
+        """
+        if selected_backend == _Backend.NATIVE_ATTN:
+            logger.info("Using NATIVE ATTN backend.")
+            return ("fastdeploy.model_executor.layers.attention.PaddleNativeAttnBackend")
+        elif selected_backend == _Backend.BLOCK_ATTN:
+            logger.info("Using BLOCK ATTN backend.")
+            return ("fastdeploy.model_executor.layers.attention.BlockAttentionBackend")
+        else:
+            logger.warning(
+                "Other backends are not supported for now."
+            )

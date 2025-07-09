@@ -1,5 +1,6 @@
 # FastDeploy 环境变量说明
 FastDeploy 的环境变量保存在了代码库根目录下 fastdeploy/envs.py 文件中，以下是其对应的中文版说明：
+
 ```python
 environment_variables: dict[str, Callable[[], Any]] = {
     # 构建 FastDeploy 时使用的 CUDA 架构版本，这是一个字符串列表，例如[80,90]
@@ -65,6 +66,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # 是否从单机 PD 分离转换为集中式推理
     "FD_PD_CHANGEABLE":
     lambda: os.getenv("FD_PD_CHANGEABLE", "1"),
-  
+
+    # 是否使用DeepGemm后端的FP8 blockwise MoE.
+    "FD_USE_DEEP_GEMM":
+    lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "1"))),
+
 }
 ```

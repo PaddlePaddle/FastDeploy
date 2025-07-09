@@ -20,9 +20,11 @@ from .mla_attention_backend import MLAAttentionBackend
 from .native_paddle_backend import PaddleNativeAttnBackend
 from .xpu_attn_backend import XPUAttentionBackend
 from .iluvatar_attn_backend import IluvatarAttnBackend
+from .block_multihead_attn_backend import BlockAttentionBackend
 
 __all__ = [
     "AttentionBackend", "PaddleNativeAttnBackend",
     "get_attention_backend", "AppendAttentionBackend", "XPUAttentionBackend",
-    "MLAAttentionBackend", "FlashAttentionBackend", "IluvatarAttnBackend"
+    "MLAAttentionBackend", "FlashAttentionBackend", "IluvatarAttnBackend",
+    "BlockAttentionBackend"
 ]
