@@ -189,7 +189,7 @@ __global__ void free_and_dispatch_block(bool *stop_flags,
                             ? tmp_used_len + 1
                             : max_decoder_block_num_this_seq;
 #ifdef DEBUG_STEP
-            printf("#### ori_step_len:%d, ori_free_list_len:%d, used_len:%d  \n", 
+            printf("#### ori_step_len:%d, ori_free_list_len:%d, used_len:%d  \n",
                     ori_step_len, ori_free_list_len, used_len);
 #endif
             while (ori_step_len > 0 && ori_free_list_len >= used_len) {
@@ -323,7 +323,12 @@ void StepPaddle(const paddle::Tensor &stop_flags,
                 const paddle::Tensor &first_token_ids,
                 const int block_size,
                 const int encoder_decoder_block_num) {
+#ifdef PADDLE_WITH_CUSTOM_DEVICE
+    auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(seq_lens_this_time.place()));
+    auto cu_stream = dev_ctx->stream();
+#else
     auto cu_stream = seq_lens_this_time.stream();
+#endif
     const int bsz = seq_lens_this_time.shape()[0];
     const int block_num_per_seq = block_tables.shape()[1];
     const int length = input_ids.shape()[1];

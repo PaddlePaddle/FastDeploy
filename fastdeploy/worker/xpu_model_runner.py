@@ -70,7 +70,21 @@ def xpu_pre_process(
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
     share_inputs["cu_seqlens_k"] = cu_seqlens_k
 
-    xpu_forward_meta = XPUForwardMeta.init_forward_meta(share_inputs, None)
+    xpu_forward_meta = XPUForwardMeta(
+        input_ids=share_inputs["input_ids"],
+        ids_remove_padding=share_inputs["ids_remove_padding"],
+        rotary_embs=share_inputs["rope_emb"],
+        attn_backend=None,
+        seq_lens_encoder=share_inputs["seq_lens_encoder"],
+        seq_lens_decoder=share_inputs["seq_lens_decoder"],
+        seq_lens_this_time=share_inputs["seq_lens_this_time"],
+        cum_offsets=share_inputs["cum_offsets"],
+        padding_offset=share_inputs["padding_offset"],
+        cu_seqlens_q=share_inputs["cu_seqlens_q"],
+        cu_seqlens_k=share_inputs["cu_seqlens_k"],
+        block_tables=share_inputs["block_tables"],
+        caches=share_inputs["caches"]
+    )
 
     # Get xpu extra param
     (
@@ -142,7 +156,8 @@ def xpu_process_output(
 
 
 def xpu_post_process(sampled_token_ids: paddle.Tensor,
-                     model_output: ModelOutputData) -> None:
+                     model_output: ModelOutputData,
+                     skip_save_output: bool) -> None:
     """
 
     """
@@ -185,12 +200,13 @@ def xpu_post_process(sampled_token_ids: paddle.Tensor,
         )
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
-    save_output(
-        sampled_token_ids,
-        model_output.not_need_stop,
-        model_output.mp_rank,
-        False,  # use_ep
-    )
+    if not skip_save_output:
+        save_output(
+            sampled_token_ids,
+            model_output.not_need_stop,
+            model_output.mp_rank,
+            False,  # use_ep
+        )
 
 
 def step_paddle(share_inputs: Dict[str, paddle.Tensor], block_size: int,
@@ -590,7 +606,7 @@ class XPUModelRunner(ModelRunnerBase):
                                 head_dim=head_dim)
         if attn_backend is None:
             raise NotImplementedError(
-                "Attention backend which you chose is not support by GPUModelRunner"
+                "Attention backend which you specified is not supported, please set FD_ATTENTION_BACKEND correctly."
             )
         self.attn_backends.append(attn_backend)
 
@@ -658,7 +674,7 @@ class XPUModelRunner(ModelRunnerBase):
         self._dummy_prefill_inputs(num_tokens, batch_size)
 
         while True:
-            self.execute_model(None)
+            self.execute_model(None, True)
 
             if int((self.share_inputs['seq_lens_this_time'] > 0).sum()) == 0:
                 break
@@ -666,6 +682,7 @@ class XPUModelRunner(ModelRunnerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
+        is_dummy_run: bool = False,
     ) -> Optional[ModelRunnerOutput]:
         """
         The Entrance of model execute.
@@ -721,7 +738,8 @@ class XPUModelRunner(ModelRunnerBase):
             accept_num=None,
         )
         xpu_post_process(sampled_token_ids=sampled_token_ids,
-                         model_output=model_output_data)
+                         model_output=model_output_data,
+                         skip_save_output=is_dummy_run)
 
         # 7. Updata 'infer_seed' and step_paddle()
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)

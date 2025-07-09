@@ -28,7 +28,7 @@ _T = TypeVar("_T", bound=type[paddle.nn.Layer])
 
 def support_graph_optimization(cls: Optional[_T] = None) -> _T:
     """
-    A decorator for wrapping models or layers with CUDA graph support.
+    A decorator for wrapping models or layers with static graph and CUDAGraph support.
     This enables efficient kernel launch sequencing for improved GPU performance.
 
     Example usage:
@@ -74,7 +74,7 @@ def support_graph_optimization(cls: Optional[_T] = None) -> _T:
 
 
 class GraphOptWrapper:
-    """ """
+    """ The wrapper for GraphOptBackend """
 
     def __init__(
         self,
@@ -87,7 +87,7 @@ class GraphOptWrapper:
 
     @abstractmethod
     def forward(self, **kwargs):
-        """ """
+        """ Abstract methods for implementing model.forward() """
         pass
 
     def __call__(self, **kwargs):

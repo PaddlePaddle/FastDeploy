@@ -170,7 +170,8 @@ class Sampler(nn.Layer):
         """
         """
         super().__init__()
-        if current_platform.is_cuda() or current_platform.is_xpu():
+        if current_platform.is_cuda() or current_platform.is_xpu(
+        ) or current_platform.is_iluvatar() or current_platform.is_gcu():
             self.forward = self.forward_cuda
         else:
             raise NotImplementedError()
@@ -234,6 +235,7 @@ class SpeculativeSampler(nn.Layer):
             raise NotImplementedError()
         self.speculative_verify_window = fd_config.speculative_config.verify_window
         self.speculative_max_candidate_len = fd_config.speculative_config.max_candidate_len
+        self.speculative_benchmark_mode = fd_config.speculative_config.benchmark_mode
 
     def pre_process(self, skip_idx_list: List[int] = []):
         """ pre process before running """
@@ -308,6 +310,7 @@ class SpeculativeSampler(nn.Layer):
             max_model_len,
             self.speculative_verify_window,
             True,  # enable_topp
+            self.speculative_benchmark_mode,
         )
 
         return None

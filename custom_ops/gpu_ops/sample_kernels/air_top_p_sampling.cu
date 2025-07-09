@@ -376,7 +376,6 @@ __global__ void air_topp_sampling(Counter<T> *counters, T *histograms,
     }
 
     // scan/find
-    constexpr int WARP_SIZE = 32;
     constexpr int WARP_COUNT = NumBuckets / WARP_SIZE;
     namespace cg = cooperative_groups;
     cg::thread_block block = cg::this_thread_block();

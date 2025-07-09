@@ -27,7 +27,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```kv_cache_ratio``` | `float` | KVCache blocks are divided between Prefill phase and Decode phase according to kv_cache_ratio ratio, default: 0.75 |
 | ```enable_prefix_caching``` | `bool` | Whether to enable Prefix Caching, default: False |
 | ```swap_space``` | `float` | When Prefix Caching is enabled, CPU memory size for KVCache swapping, unit: GB, default: None |
-| ```enable_chunk_prefill``` | `bool` | Enable Chunked Prefill, default: False |
+| ```enable_chunked_prefill``` | `bool` | Enable Chunked Prefill, default: False |
 | ```max_num_partial_prefills``` | `int` | When Chunked Prefill is enabled, maximum concurrent number of partial prefill batches, default: 1 |
 | ```max_long_partial_prefills``` | `int` | When Chunked Prefill is enabled, maximum number of long requests in concurrent partial prefill batches, default: 1 |
 | ```long_prefill_token_threshold``` | `int` | When Chunked Prefill is enabled, requests with token count exceeding this value are considered long requests, default: max_model_len*0.04 |
@@ -36,6 +36,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```enable_static_graph_inference``` | `bool` | Whether to use static graph inference mode, default: False |
 | ```use_cudagraph``` | `bool` | Whether to use cuda graph, default: False |
 | ```max_capture_batch_size``` | `int` | When cuda graph is enabled, maximum batch size of captured cuda graph, default: 64 |
+| ```enable_custom_all_reduce``` | `bool` | Enable Custom all-reduce, default: False |
 | ```splitwise_role``` | `str` | Whether to enable splitwise inference, default value: mixed, supported parameters: ["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports``` | `str` | Internal engine startup ports for prefill instances (only required for single-machine PD separation), default: None |
 | ```guided_decoding_backend``` | `str` | Specify the guided decoding backend to use, supports `auto`, `xgrammar`, `off`, default: `off` |
@@ -115,5 +116,5 @@ FastDeploy initialization sequence first uses `gpu_memory_utilization` parameter
       ...
   ```
 - When ```use_cudagraph``` is enabled, currently only supports single-GPU inference, i.e. ```tensor_parallel_size``` set to 1.
-- When ```use_cudagraph``` is enabled, cannot enable ```enable_prefix_caching``` or ```enable_chunk_prefill```.
+- When ```use_cudagraph``` is enabled, cannot enable ```enable_prefix_caching``` or ```enable_chunked_prefill```.
 - When ```use_cudagraph``` is enabled, batches with size ≤ ```max_capture_batch_size``` will be executed by CudaGraph, batches > ```max_capture_batch_size``` will be executed by original dynamic/static graph. To have all batch sizes executed by CudaGraph, ```max_capture_batch_size``` value should match ```max_num_seqs```. ```max_capture_batch_size``` > ```max_num_seqs``` will cause waste by capturing batches that won't be encountered during inference, occupying more time and memory.

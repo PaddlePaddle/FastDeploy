@@ -60,12 +60,21 @@ class WeightOnlyConfig(QuantConfigBase):
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if current_platform.is_xpu():
-            from fastdeploy.model_executor.layers.backends import (
-                XPUWeightOnlyLinearMethod, XPUWeightOnlyMoEMethod)
+            from fastdeploy.model_executor.layers.backends import \
+                XPUWeightOnlyLinearMethod
+            from fastdeploy.model_executor.layers.moe.fused_moe_xpu_backend import \
+                XPUWeightOnlyMoEMethod
             if isinstance(layer, FusedMoE):
                 return XPUWeightOnlyMoEMethod(self)
             else:
                 return XPUWeightOnlyLinearMethod(self)
+        elif current_platform.is_gcu():
+            from fastdeploy.model_executor.layers.backends import (
+                GCUWeightOnlyLinearMethod, GCUWeightOnlyMoEMethod)
+            if isinstance(layer, FusedMoE):
+                return GCUWeightOnlyMoEMethod(self)
+            else:
+                return GCUWeightOnlyLinearMethod(self)
         else:
             if isinstance(layer, FusedMoE):
                 if layer.use_method == "cutlass":
