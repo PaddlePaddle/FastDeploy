@@ -158,7 +158,8 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
     const paddle::Tensor &input, const paddle::Tensor &scale,
     const paddle::Tensor &topk_ids, const paddle::Tensor &topk_weights,
     const paddle::Tensor &token_nums_per_expert,
-    const paddle::Tensor &token_nums_per_expert_padded);
+    const paddle::Tensor &token_nums_per_expert_padded,
+    const bool use_in_ep, const int token_nums_this_rank_padded);
 
 std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor &input,
                                           const int block_size);
