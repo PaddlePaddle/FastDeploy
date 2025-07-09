@@ -83,7 +83,7 @@ class SamplingParams:
     repetition_penalty: float = None
     temperature: float = None
     top_p: float = None
-    top_k: Optional[int] = None
+    top_k: int = None
     seed: Optional[int] = None
     stop: Optional[Union[str, List[str]]] = None
     stop_token_ids: Optional[Union[List[List[int]], List[int]]] = None
@@ -113,7 +113,7 @@ class SamplingParams:
                       repetition_penalty,
                       temperature,
                       top_p,
-                      top_k=None,
+                      top_k,
                       seed=None,
                       stop=None,
                       stop_token_ids=None,
@@ -133,7 +133,7 @@ class SamplingParams:
                    if repetition_penalty is not None else 1.0,
                    temperature=temperature if temperature is not None else 1.0,
                    top_p=top_p if top_p is not None else 0.7,
-                   top_k=top_k,
+                   top_k=top_k if top_k is not None else 20,
                    seed=seed,
                    stop=stop,
                    stop_token_ids=stop_token_ids,

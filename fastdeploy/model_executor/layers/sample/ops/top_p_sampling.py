@@ -52,7 +52,7 @@ def top_p_sampling(
         Only used when FD_SAMPLING_CLASS is `air`.
     mode(str): The mode to choose sampling strategy. If the mode is `truncated`, sampling will truncate the probability at top_p_value.
         If the mode is `non-truncated`, it will not be truncated. Default is `truncated`.
-        Only used when FD_SAMPLING_CLASS is `air`.
+        Only used when FD_SAMPLING_CLASS is `air` or `base`.
     order(str): The order of applying top-k and top-p sampling, should be either `top_k_first` or `joint`.
         If `top_k_first`, we first apply top-k filter, then apply top-p sampling on the top-k results.
         If `joint`, we apply top-k and top-p filter simultaneously in each round. Default is `top_k_first`.
@@ -60,11 +60,6 @@ def top_p_sampling(
 
     """
     top_p_class = envs.FD_SAMPLING_CLASS.lower()
-    print(f"*****top_p_class: {top_p_class}****")
-    print("top_p:")
-    print(top_p)
-    print("top_k:")
-    print(top_k)
     if top_p_class == "air":
         _, ids = air_top_p_sampling(x,
                                     top_p,

@@ -66,6 +66,8 @@ class GCUModelRunner(ModelRunnerBase):
             self.guided_backend = get_guided_backend(fd_config=self.fd_config)
 
         #  Sampler
+        self.no_top_p = self.fd_config.decoding_config.no_top_p
+        self.no_top_k = self.fd_config.decoding_config.no_top_k
         if not self.speculative_decoding:
             self.sampler = Sampler()
         else:
@@ -234,8 +236,10 @@ class GCUModelRunner(ModelRunnerBase):
                 request.eos_token_ids.append(request.eos_token_ids[0])
             self.share_inputs["eos_token_id"][:] = np.array(
                 request.eos_token_ids, dtype="int64").reshape(-1, 1)
-
-            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 0.7)
+            if not self.no_top_p:
+                self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 0.7)
+            if not self.no_top_k:
+                self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k", 20)
             if request.get("top_k") is not None:
                 self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k")
             self.share_inputs["temperature"][idx:idx + 1] = request.get(
@@ -341,9 +345,18 @@ class GCUModelRunner(ModelRunnerBase):
             dtype='int64')
         self.share_inputs["eos_token_id"] = paddle.full(
             [self.parallel_config.eos_tokens_lens, 1], 0, dtype='int64')
-        self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1],
-                                                 self.model_config.top_p,
-                                                 dtype='float32')
+        if not self.no_top_p:
+            self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1],
+                                                    self.model_config.top_p,
+                                                    dtype='float32')
+        else:
+            self.share_inputs["top_p"] = None
+        if not self.no_top_k:
+            self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1],
+                                                    20,
+                                                    dtype='int64')
+        else:
+            self.share_inputs["top_k"] = None
         self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1],
                                                  20,
                                                  dtype='int64')
