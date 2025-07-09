@@ -3,31 +3,6 @@
 ## 1. Usage
 FastDeploy supports offline inference by loading models locally and processing user data. Usage examples:
 
-### Text Completion Interface (LLM.generate)
-
-```python
-from fastdeploy import LLM, SamplingParams
-
-prompts = [
-    "把李白的静夜思改写为现代诗",
-    "Write me a poem about large language model.",
-]
-
-# Sampling parameters
-sampling_params = SamplingParams(top_p=0.95, max_tokens=6400)
-
-# Load model
-llm = LLM(model="ERNIE-4.5-0.3B", tensor_parallel_size=1, max_model_len=8192)
-
-# Batch inference (internal request queuing and dynamic batching)
-outputs = llm.generate(prompts, sampling_params)
-
-# Output results
-for output in outputs:
-    prompt = output.prompt
-    generated_text = output.outputs.text
-```
-
 ### Chat Interface (LLM.chat)
 ```python
 from fastdeploy import LLM, SamplingParams
@@ -58,15 +33,115 @@ for output in outputs:
 
 Documentation for `SamplingParams`, `LLM.generate`, `LLM.chat`, and output structure `RequestOutput` is provided below.
 
-> Note: For X1 model output
+> Note: For reasoning models, when loading the model, you need to specify the reasoning_parser parameter. Additionally, during the request, you can toggle the reasoning feature on or off by configuring the `enable_thinking` parameter within `chat_template_kwargs`.
 
 ```python
-# Output results
+from fastdeploy.entrypoints.llm import LLM
+# 加载模型
+llm = LLM(model="baidu/ERNIE-4.5-VL-28B-A3B-Paddle", tensor_parallel_size=1, max_model_len=32768, enable_mm=True, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
+
+outputs = llm.chat(
+    messages=[
+        {"role": "user", "content": [ {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"}},
+                                     {"type": "text", "text": "图中的文物属于哪个年代"}]}
+    ],
+    chat_template_kwargs={"enable_thinking": False})
+
+# 输出结果
 for output in outputs:
     prompt = output.prompt
     generated_text = output.outputs.text
     reasoning_text = output.outputs.resoning_content
 ```
+
+### Text Completion Interface (LLM.generate)
+
+```python
+from fastdeploy import LLM, SamplingParams
+
+prompts = [
+    "User: 帮我写一篇关于深圳文心公园的500字游记和赏析。\nAssistant: 好的。"
+]
+
+# 采样参数
+sampling_params = SamplingParams(top_p=0.95, max_tokens=6400)
+
+# 加载模型
+llm = LLM(model="baidu/ERNIE-4.5-21B-A3B-Base-Paddle", tensor_parallel_size=1, max_model_len=8192)
+
+# 批量进行推理（llm内部基于资源情况进行请求排队、动态插入处理）
+outputs = llm.generate(prompts, sampling_params)
+
+# 输出结果
+for output in outputs:
+    prompt = output.prompt
+    generated_text = output.outputs.text
+```
+> Note: Text completion interface, suitable for scenarios where users have predefined the context input and expect the model to output only the continuation content. No additional `prompt` concatenation will be added during the inference process.
+> For the `chat` model, it is recommended to use the Chat Interface (`LLM.chat`).
+
+For multimodal models, such as `baidu/ERNIE-4.5-VL-28B-A3B-Paddle`, when calling the `generate interface`, you need to provide a prompt that includes images. The usage is as follows:
+```python
+import io
+import os
+import requests
+from PIL import Image
+
+from fastdeploy.entrypoints.llm import LLM
+from fastdeploy.engine.sampling_params import SamplingParams
+from fastdeploy.input.ernie_tokenizer_v2 import ErnieBotTokenizer
+
+PATH = "baidu/ERNIE-4.5-VL-28B-A3B-Paddle"
+tokenizer = ErnieBotTokenizer.from_pretrained(os.path.dirname(PATH))
+
+messages = [
+    {
+        "role": "user", 
+        "content": [
+            {"type":"image_url", "image_url": {"url":"https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0"}},
+            {"type":"text", "text":"这张图片的内容是什么"}
+        ]
+     }
+]
+
+prompt = tokenizer.apply_chat_template(messages, tokenize=False)
+images, videos = [], []
+for message in messages:
+    content = message["content"]
+    if not isinstance(content, list):
+        continue
+    for part in content:
+        if part["type"] == "image_url":
+            url = part["image_url"]["url"]
+            image_bytes = requests.get(url).content
+            img = Image.open(io.BytesIO(image_bytes))
+            images.append(img)
+        elif part["type"] == "video_url":
+            url = part["video_url"]["url"]
+            video_bytes = requests.get(url).content
+            videos.append({
+                "video": video_bytes,
+                "max_frames": 30
+            })
+
+sampling_params = SamplingParams(temperature=0.1, max_tokens=6400)
+llm = LLM(model=PATH, tensor_parallel_size=8, max_model_len=32768, enable_mm=True, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
+outputs = llm.generate(prompts={
+    "prompt": prompt,
+    "multimodal_data": {
+        "image": images,
+        "video": videos
+    }
+}, sampling_params=sampling_params)
+
+# 输出结果
+for output in outputs:
+    prompt = output.prompt
+    generated_text = output.outputs.text
+    reasoning_text = output.outputs.resoning_content
+
+```
+>Note: The `generate interface` does not currently support passing parameters to control the thinking function (on/off). It always uses the model's default parameters.
 
 ## 2. API Documentation
 
@@ -79,18 +154,20 @@ For ```LLM``` configuration, refer to [Parameter Documentation](parameters.md).
 > 2. After startup, the service logs KV Cache block count (e.g. `total_block_num:640`). Multiply this by block_size (default 64) to get total cacheable tokens.
 > 3. Calculate `max_num_seqs` based on cacheable tokens. Example: avg input=800 tokens, output=500 tokens, blocks=640 → `kv_cache_ratio = 800/(800+500)=0.6`, `max_seq_len = 640*64/(800+500)=31`.
 
-### 2.2 fastdeploy.LLM.generate
-
-* prompts(str,list[str],list[int]): Input prompts (batch supported), accepts decoded token ids
-* sampling_params: See 2.4 for parameter details
-* use_tqdm: Enable progress visualization
-
-### 2.3 fastdeploy.LLM.chat
+### 2.2 fastdeploy.LLM.chat
 
 * messages(list[dict],list[list[dict]]): Input messages (batch supported)
 * sampling_params: See 2.4 for parameter details
 * use_tqdm: Enable progress visualization
-* chat_template_kwargs(dict): Extra template parameters (currently supports enable_thinking(bool))
+* chat_template_kwargs(dict): Extra template parameters (currently supports enable_thinking(bool))  
+   *usage example: `chat_template_kwargs={"enable_thinking": False}`*
+
+### 2.3 fastdeploy.LLM.generate
+
+* prompts(str, list[str], list[int], list[list[int]], dict[str, Any], list[dict[str, Any]]): : Input prompts (batch supported), accepts decoded token ids  
+  *example of using a dict-type parameter: `prompts={"prompt": prompt, "multimodal_data": {"image": images}}`*
+* sampling_params: See 2.4 for parameter details
+* use_tqdm: Enable progress visualization
 
 ### 2.4 fastdeploy.SamplingParams
 
