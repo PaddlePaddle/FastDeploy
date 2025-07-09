@@ -30,12 +30,10 @@
 - **参数：**：`--enable-chunked-prefill`
 - **用处：**
               
-   开启 `chunked prefill` 可**降低峰值内存占用**并**提升推理速度**。
+   开启 `chunked prefill` 可**降低显存峰值**并**提升服务吞吐**。
 
 - **其他配置**:
-   - `--max-num-batched-tokens`：
-   - `--max-num-partial-prefills`：
-   - `--max-long-partial-prefills`： 
+   - `--max-num-batched-tokens`：限制每个chunk的最大token数量，推荐设置为1024。
 
 > **上下文缓存**
 
@@ -56,7 +54,7 @@
 
 - **验证过的设备和部分测试数据：**
 
-    | 设备 | 可运行的量化精度 | TPS(t/s) |  Latency(ms) |
+    | 设备 | 可运行的量化精度 | TPS(tok/s) |  Latency(ms) |
     |:----------:|:----------:|:------:|:------:|
     | A30 | wint4 | 432.99 | 17396.92 |
     | L20 | wint4<br>wint8 | 3311.34<br>2423.36  | 46566.81<br>60790.91 |
@@ -64,20 +62,20 @@
     | A100| wint4<br>wint8<br>bfloat16 | 4970.15<br>4842.86<br>3946.32 | 68316.08<br>78518.78<br>87448.57 |
     | H800| wint4<br>wint8<br>bfloat16 | 7450.01<br>7455.76<br>6351.90 | 49076.18<br>49253.59<br>54309.99 |
 
-> 没有验证过的设备和精度组合，只要内存和显存满足要求也是可以运行的。
+> ⚠️ 注：没有验证过的设备和精度组合，只要内存和显存满足要求也是可以运行的。
 
 ### **其他配置**
 > **gpu-memory-utilization**
-- **参数：**`--gpu-memory-utilization`
-- **用处：**
-              
-   开启 `chunked prefill` 可**降低峰值内存占用**并**提升推理速度**。
+- **参数：** `--gpu-memory-utilization`
+- **用处：** 用于控制 FastDeploy 初始化服务的可用显存，默认0.9，即预留10%的显存备用。
+- **推荐：** A卡上推荐0.9，H卡上推荐0.8～0.9。如果服务压测时提示显存不足，可以尝试调低该值。
+
 
 > **kv-cache-ratio**
 - **参数：**`--kv-cache-ratio`
-- **用处：**
-              
-   开启 `chunked prefill` 可**降低峰值内存占用**并**提升推理速度**。
+- **用处：** 用于控制 kv cache 显存的分配比例，默认0.75，即75%的 kv cache 显存给输入。
+- **推荐：** 理论最佳值应设置为应用场景的$\frac{平均输入长度}{平均输入长度+平均输出长度}$，如果您无法确定，保持默认值即可。
+                          
 
 
 ### **示例：** 单卡、wint4、32K上下文部署命令
@@ -93,11 +91,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --limit-mm-per-prompt '{"image": 100, "video": 100}' \
        --reasoning-parser ernie-45-vl \
        --gpu-memory-utilization 0.9 \
-       --kv-cache-ratio 0.8 \
+       --kv-cache-ratio 0.75 \
        --enable-chunked-prefill \
        --max-num-batched-tokens 1024 \
-       --max-num-partial-prefills 3 \
-       --max-long-partial-prefills 3 \
        --quantization wint4 \
        --enable-mm \
 ```
@@ -114,11 +110,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --limit-mm-per-prompt '{"image": 100, "video": 100}' \
        --reasoning-parser ernie-45-vl \
        --gpu-memory-utilization 0.9 \
-       --kv-cache-ratio 0.8 \
+       --kv-cache-ratio 0.75 \
        --enable-chunked-prefill \
        --max-num-batched-tokens 1024 \
-       --max-num-partial-prefills 3 \
-       --max-long-partial-prefills 3 \
        --quantization wint8 \
        --enable-mm \
 ```
