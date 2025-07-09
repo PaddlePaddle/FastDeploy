@@ -238,6 +238,10 @@ class SpeculativeConfig:
     # A trick method is currently used to enable this sharing.
     # This will be replaced with a more standardized solution in the future.
     sharing_model = None
+    # During benchmarking, we need to enforce that the number of accepted tokens is 1.
+    # This means no tokens from MTP are accepted.
+    # This ensures that the specified simulation acceptance rate is not affected.
+    benchmark_mode: bool = False
 
 
 @dataclass

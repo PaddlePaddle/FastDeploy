@@ -17,6 +17,7 @@
 import json
 import os
 from datetime import datetime
+from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional
 
 from fastdeploy import envs
@@ -336,6 +337,7 @@ class SpeculativeConfig:
         model_name_or_path (Optional[str]): Path of the model.
         quantization (str): Quantization method for draft model, default is WINT8.
         max_model_len: Optional[int]: Maximum model length for draft model.
+        benchmark_mode (bool): Whether to use benchmark mode.
     """
 
     def __init__(self,
@@ -344,12 +346,14 @@ class SpeculativeConfig:
                  model: Optional[str] = None,
                  quantization: Optional[str] = "WINT8",
                  max_model_len: Optional[int] = None,
+                 benchmark_mode: bool = False,
                  **kwargs):
         self.model_name_or_path = model
         self.method = method
         self.num_speculative_tokens = num_speculative_tokens
         self.quantization = quantization
         self.max_model_len = max_model_len
+        self.benchmark_mode = benchmark_mode
         # Fixed now
         self.num_gpu_block_expand_ratio = 1
         self.num_extra_cache_layer = 0
@@ -467,7 +471,63 @@ class ParallelConfig:
         llm_logger.info("Parallel Configuration Information :")
         for k, v in self.__dict__.items():
             llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info("==================")
+        llm_logger.info(
+            "=============================================================")
+
+
+@dataclass
+class CommitConfig:
+    """
+    Configuration for tracking version information from version.txt
+
+    Attributes:
+        fastdeploy_commit: Full FastDeploy git commit hash
+        paddle_version: PaddlePaddle version string
+        paddle_commit: PaddlePaddle git commit hash
+        cuda_version: CUDA version string
+        compiler_version: CXX compiler version string
+    """
+    fastdeploy_commit: str = ""
+    paddle_version: str = ""
+    paddle_commit: str = ""
+    cuda_version: str = ""
+    compiler_version: str = ""
+
+    def __post_init__(self):
+        """Automatically load version info when initialized"""
+        self._load_from_version_file()
+
+    def _load_from_version_file(self, file_path: str = "fastdeploy/version.txt"):
+        """Internal method to load version info from file"""
+        try:
+            with open(file_path, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("fastdeploy GIT COMMIT ID:"):
+                        self.fastdeploy_commit = line.split(":")[1].strip()
+                    elif line.startswith("Paddle version:"):
+                        self.paddle_version = line.split(":")[1].strip()
+                    elif line.startswith("Paddle GIT COMMIT ID:"):
+                        self.paddle_commit = line.split(":")[1].strip()
+                    elif line.startswith("CUDA version:"):
+                        self.cuda_version = line.split(":")[1].strip()
+                    elif line.startswith("CXX compiler version:"):
+                        self.compiler_version = line.split(":")[1].strip()
+        except FileNotFoundError:
+            llm_logger.info(f"Warning: Version file not found at {file_path}")
+        except Exception as e:
+            llm_logger.info(f"Warning: Could not read version file - {str(e)}")
+
+    def print(self):
+        """
+        print all config
+
+        """
+        llm_logger.info("Fasedeploy Commit Information :")
+        for k, v in self.__dict__.items():
+            llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
+        llm_logger.info(
+            "=============================================================")
 
 
 class Config:
@@ -502,6 +562,7 @@ class Config:
         cache_config: CacheConfig,
         scheduler_config: SchedulerConfig,
         parallel_config: ParallelConfig,
+        commit_config: CommitConfig = CommitConfig(),
         model_name_or_path: str = None,
         tokenizer: str = None,
         tensor_parallel_size: int = 8,
@@ -559,6 +620,7 @@ class Config:
         self.cache_config = cache_config
         self.scheduler_config = scheduler_config
         self.parallel_config = parallel_config
+        self.commit_config = commit_config
         self.model_name_or_path = model_name_or_path
         self.tokenizer = tokenizer
         self.max_num_batched_tokens = max_num_batched_tokens
@@ -756,7 +818,11 @@ class Config:
             if k == "generation_config" and v is not None:
                 for gck, gcv in v.to_dict().items():
                     llm_logger.info("{:<20}:{:<6}{}".format(gck, "", gcv))
-            elif k == "cache_config" or k == "model_config" or k == "scheduler_config" or k == "parallel_config":
+            elif (k == "cache_config" or
+                  k == "model_config" or
+                  k == "scheduler_config" or
+                  k == "parallel_config" or
+                  k == "commit_config"):
                 v.print()
             else:
                 llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))

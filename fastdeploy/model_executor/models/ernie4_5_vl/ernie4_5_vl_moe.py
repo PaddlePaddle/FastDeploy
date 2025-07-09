@@ -27,6 +27,8 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication_op import \
     tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.graph_optimization.decorator import \
+    support_graph_optimization
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
@@ -318,6 +320,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
         return hidden_states, residual
 
 
+@support_graph_optimization
 class Ernie4_5_VLModel(nn.Layer):
 
     def __init__(
@@ -512,7 +515,8 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         image_features: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        hidden_states = self.model(ids_remove_padding, image_features,
-                                   forward_meta)
+        hidden_states = self.model(ids_remove_padding=ids_remove_padding,
+                                   image_features=image_features,
+                                   forward_meta=forward_meta)
 
         return hidden_states
