@@ -22,11 +22,9 @@ import paddle
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
 
-from fastdeploy import envs
 from fastdeploy.config import (DecodingConfig, DeviceConfig, FDConfig,
                                GraphOptimizationConfig, LoadConfig,
-                               ModelConfig, MoEConfig, MoEPhase,
-                               ParallelConfig, SpeculativeConfig)
+                               ModelConfig, ParallelConfig, SpeculativeConfig)
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import \
@@ -75,27 +73,23 @@ class PaddleDisWorkerProc():
         # Initialize distributed enviroment
         (self.ranks, self.local_rank) = self.init_distributed_enviroment()
 
-        assert self.parallel_config.tensor_parallel_degree * self.parallel_config.expert_parallel_degree == self.ranks
+        assert self.parallel_config.tensor_parallel_size * self.parallel_config.expert_parallel_size == self.ranks
 
         self.fd_config.parallel_config.tensor_parallel_rank = \
-            self.local_rank % self.parallel_config.tensor_parallel_degree
+            self.local_rank % self.parallel_config.tensor_parallel_size
         self.fd_config.parallel_config.expert_parallel_rank = \
-            int(self.local_rank / self.parallel_config.tensor_parallel_degree)
+            int(self.local_rank / self.parallel_config.tensor_parallel_size)
 
         if self.fd_config.parallel_config.use_ep:
-            self.fd_config.moe_config.num_experts_per_rank = \
-                self.fd_config.moe_config.num_experts // self.parallel_config.expert_parallel_degree
-            self.fd_config.moe_config.num_experts_start_offset = \
-                self.fd_config.parallel_config.expert_parallel_rank * self.fd_config.moe_config.num_experts_per_rank
+            self.fd_config.model_config.num_experts_per_rank = \
+                self.fd_config.model_config.moe_num_experts // self.parallel_config.expert_parallel_size
+            self.fd_config.model_config.num_experts_start_offset = \
+                self.fd_config.parallel_config.expert_parallel_rank * self.fd_config.model_config.num_experts_per_rank
 
         # For auto TP split
-        self.fd_config.model_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_degree
+        self.fd_config.model_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_size
         self.fd_config.model_config.tensor_parallel_rank = self.parallel_config.tensor_parallel_rank
         self.fd_config.model_config.use_ep = self.parallel_config.use_ep
-
-        if self.fd_config.parallel_config.use_ep:
-            self.fd_config.model_config.num_experts_per_rank = self.fd_config.moe_config.num_experts_per_rank
-            self.fd_config.model_config.num_experts_start_offset = self.fd_config.moe_config.num_experts_start_offset
 
         # TODO(gongshaotian): Use worker factory to get worker
         self.worker = get_worker(fd_config=fd_config,
@@ -109,7 +103,7 @@ class PaddleDisWorkerProc():
         self.task_queue = TaskQueue(
             address=task_address,
             is_server=False,
-            num_client=self.parallel_config.tensor_parallel_degree,
+            num_client=self.parallel_config.tensor_parallel_size,
             client_id=self.parallel_config.tensor_parallel_rank,
             local_data_parallel_id=self.fd_config.parallel_config.
             expert_parallel_rank)
@@ -127,8 +121,8 @@ class PaddleDisWorkerProc():
         # init worker_ready_signal
 
         array_size = min(
-            8, self.parallel_config.tensor_parallel_degree *
-            self.parallel_config.expert_parallel_degree)
+            8, self.parallel_config.tensor_parallel_size *
+            self.parallel_config.expert_parallel_size)
         workers_ready = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_ready_signal = IPCSignal(
             name="worker_ready_signal",
@@ -160,7 +154,7 @@ class PaddleDisWorkerProc():
 
         # init exist_task_signal
         workers_exist_task = np.zeros(
-            [self.parallel_config.expert_parallel_degree], dtype=np.int32)
+            [self.parallel_config.expert_parallel_size], dtype=np.int32)
         self.exist_task_signal = IPCSignal(
             name="exist_task_signal",
             array=workers_exist_task,
@@ -170,7 +164,7 @@ class PaddleDisWorkerProc():
 
         # init exist_swapped_task_signal
         workers_swapped_task = np.zeros(
-            shape=[self.parallel_config.expert_parallel_degree],
+            shape=[self.parallel_config.expert_parallel_size],
             dtype=np.int32)
         self.exist_swapped_task_signal = IPCSignal(
             name="exist_swapped_task_signal",
@@ -218,8 +212,8 @@ class PaddleDisWorkerProc():
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
         # Currently, only support single node
-        self.nnode = int((self.parallel_config.tensor_parallel_degree + 7) // 8)
-        mp_num_per_node = self.parallel_config.tensor_parallel_degree // self.nnode
+        self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
+        mp_num_per_node = self.parallel_config.tensor_parallel_size// self.nnode
         req_ids = []
         while True:
             if self.local_rank == 0:
@@ -228,7 +222,7 @@ class PaddleDisWorkerProc():
                 else:
                     self.exist_task_signal.value[0] = 0
 
-            if self.parallel_config.tensor_parallel_degree > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize before updating weights
                 paddle.distributed.barrier()
 
@@ -246,7 +240,7 @@ class PaddleDisWorkerProc():
                             self.fd_config.parallel_config.
                             expert_parallel_rank] = 1
 
-            if self.parallel_config.tensor_parallel_degree > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize the signal for other workers
                 # TODO(@wufeisheng): Split TP group and EP group
                 paddle.distributed.barrier()
@@ -508,7 +502,7 @@ def parse_args():
     parser.add_argument("--enable_expert_parallell",
                         action='store_true',
                         help="enable expert parallell")
-    parser.add_argument("--ori_vocab_size", type=int, default=None)
+    parser.add_argument("--vocab_size", type=int, default=None)
 
     parser.add_argument("--quantization",
                         type=str,
@@ -557,148 +551,29 @@ def parse_args():
 
 
 def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
-    """Initialize FDConfig
-    TODO(gongshaotian): Unified all configs to FDConfig
-    """
-    # NOTE(gongshaotian): From build stream line model
-    config, _ = ModelConfig.get_config_dict(args.model_name_or_path)
-    if 'num_experts' in config:
-        config['moe_num_experts'] = config.pop('num_experts')
-
-    if 'num_experts_per_tok' in config:
-        config['moe_topk'] = config.pop('num_experts_per_tok')
-    config["head_dim"] = config.get(
-        "head_dim", config["hidden_size"] // config["num_attention_heads"])
-    config["rope_theta"] = config.get("rope_theta", 10000.0)
-    model_config = ModelConfig.from_dict(config)
-    # TODO Set `head_dim` again. Because `ModelConfig` class doesn't support feeding head_dim at all!
-    model_config.head_dim = config["head_dim"]
     paddle.set_default_dtype(args.dtype)
+    model_config = ModelConfig(vars(args))
+    device_config = DeviceConfig(vars(args))
+    decoding_config = DecodingConfig(vars(args))
+    speculative_config = SpeculativeConfig(vars(args))
+    parallel_config = ParallelConfig(vars(args))
+    load_config = LoadConfig(vars(args))
 
-    device_config = DeviceConfig()
-    # model_config = ModelConfig()
-
-    decoding_config = DecodingConfig()
-
-    speculative_config = SpeculativeConfig()
-    parallel_config = ParallelConfig()
-    load_config = LoadConfig()
-    moe_config = MoEConfig()
     graph_opt_config = GraphOptimizationConfig(
-        args.enable_static_graph_inference, args.use_cudagraph,
-        args.max_capture_batch_size)
-    model_config.quantization = args.quantization
-
-    # Update speculate config
-    speculative_config.method = args.speculative_method
-    speculative_config.num_speculative_tokens = args.speculative_max_draft_token_num
-    speculative_config.model_name_or_path = args.speculative_model_name_or_path
-    speculative_config.quantization = args.speculative_model_quantization
-
-    # Update parallel config
-    parallel_config.engine_pid = args.engine_pid
-    parallel_config.model_name_or_path = args.model_name_or_path
-    parallel_config.max_num_seqs = args.max_num_seqs
-    parallel_config.max_block_num = args.total_block_num
-    parallel_config.block_size = args.block_size
-    parallel_config.pod_ip = args.pod_ip
-    parallel_config.engine_worker_queue_port = args.engine_worker_queue_port
-    parallel_config.max_model_len = args.max_model_len
-    model_config.max_seq_len = args.max_model_len
-    model_config.max_length = args.max_model_len
-    parallel_config.device_ids = args.device_ids
-    parallel_config.dtype = args.dtype
-    parallel_config.enc_dec_block_num = args.enc_dec_block_num
-    parallel_config.kv_cache_ratio = args.kv_cache_ratio
-    parallel_config.first_token_id = args.first_token_id
-    parallel_config.gpu_memory_utilization = args.gpu_memory_utilization
-    parallel_config.engine_pid = args.engine_pid
-    parallel_config.do_profile = args.do_profile
-    parallel_config.dynamic_load_weight = args.dynamic_load_weight
-    parallel_config.pad_token_id = args.pad_token_id
-    parallel_config.eos_tokens_lens = args.eos_tokens_lens
-    parallel_config.enable_chunked_prefill = args.enable_chunked_prefill
-    parallel_config.max_num_batched_tokens = args.max_num_batched_tokens
-    parallel_config.enable_prefix_caching = args.enable_prefix_caching
-
-    parallel_config.use_ep = args.enable_expert_parallell
-    parallel_config.tensor_parallel_degree = args.tensor_parallel_size
-    parallel_config.expert_parallel_degree = args.expert_parallel_size
-    parallel_config.splitwise_role = args.splitwise_role
-    load_config.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
-
-    parallel_config.guided_decoding_backend = args.guided_decoding_backend
-    parallel_config.disable_any_whitespace = args.disable_any_whitespace
+                        args.enable_static_graph_inference,
+                        args.max_capture_batch_size,
+                        vars(args))
 
     logger.info(f"parallel_config.use_ep {parallel_config.use_ep}")
     logger.info(
-        f"parallel_config.tensor_parallel_degree {parallel_config.tensor_parallel_degree}"
+        f"parallel_config.tensor_parallel_size {parallel_config.tensor_parallel_size}"
     )
     logger.info(f"args.splitwise_role {args.splitwise_role}")
 
-    if args.splitwise_role == "mixed":
-        parallel_config.moe_phase = MoEPhase.PREFILL
-    elif args.splitwise_role == "prefill":
-        parallel_config.moe_phase = MoEPhase.PREFILL
-    elif args.splitwise_role == "decode":
-        parallel_config.moe_phase = MoEPhase.DECODER
-    else:
-        raise NotImplementedError
+    if getattr(model_config, 'num_hidden_layers', None) is None:
+        raise ValueError("num_hidden_layers is None")
 
-    num_key_value_heads = config.get("num_key_value_heads", -1)
-    if num_key_value_heads is None:
-        num_key_value_heads = -1
-
-    if config.get("ffn_hidden_size", None) is not None:
-        ffn_hidden_size = config["ffn_hidden_size"]
-    elif config.get("intermediate_size", None) is not None:
-        ffn_hidden_size = config["intermediate_size"]
-    else:
-        ffn_hidden_size = 4 * config["hidden_size"]
-        if config["hidden_act"].lower() == "swiglu":
-            if paddle.distributed.get_world_size() > 1:
-                multiple_of = 8 * config["num_attention_heads"]
-            else:
-                multiple_of = 4 * config["num_attention_heads"]
-            ffn_hidden_size = multiple_of * (
-                (int(2 * ffn_hidden_size / 3) + multiple_of - 1) //
-                multiple_of)
-
-    num_layers = config.get("num_layers", None) or config.get(
-        "num_hidden_layers", None)
-    if num_layers is None:
-        raise ValueError(f"num_layers<{num_layers}> is invalid")
-
-    use_moe = config.get("moe_layer_start_index", num_layers) < num_layers
-
-    model_config.ffn_hidden_size = ffn_hidden_size
-    model_config.num_layers = num_layers
-
-    model_config.num_key_value_heads = num_key_value_heads
-    model_config.start_layer_index = config.get("start_layer_index", 0)
-    moe_config.num_experts = config.get("moe_num_experts", None)
-    moe_config.moe_intermediate_size = config.get("moe_intermediate_size",
-                                                  None)
-    moe_config.top_k = config.get("moe_k", config.get("moe_topk", 8))
-    moe_config.moe_num_shared_experts = config.get("moe_num_shared_experts", 0)
-    moe_config.moe_layer_start_index = config.get("moe_layer_start_index", 0)
-
-    moe_config.num_max_dispatch_tokens_per_rank = config.get(
-        "num_max_dispatch_tokens_per_rank", 256)
-    moe_config.moe_use_aux_free = config.get("moe_use_aux_free", False)
-
-    model_config.ori_vocab_size = config.get("vocab_size", -1)
-    if "Ernie4_5_ForCausalLM" in config.get("architectures"):
-        model_config.ori_vocab_size = args.ori_vocab_size
-
-    if "DeepseekV3ForCausalLM" in config.get("architectures"):
-        from paddleformers.transformers import AutoConfig
-        model_config.deepseekv3 = AutoConfig.from_pretrained(
-            args.model_name_or_path)
-
-    #TODO(@yuanrisheng): kv_cache quant config can only be
-    # stored in model config file, which should be unified
-    quantization_config = config.get("quantization_config", None)
+    quantization_config = model_config.quantization_config
     if not model_config.is_quantized:
         if quantization_config is not None:
             if "kv_cache_quant_type" not in quantization_config:
@@ -718,9 +593,9 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
         quant_config_name = args.quantization
         quantization_config["quantization"] = quant_config_name
         # use some trick code for ernie model and will unify it in future.
-        is_ernie = "Ernie4_5_ForCausalLM" in config.get("architectures") or \
-                    "Ernie4_5_MoeForCausalLM" in config.get("architectures")
-        if use_moe and quant_config_name == "wint4" and is_ernie:
+        is_ernie = "Ernie4_5_ForCausalLM" in model_config.architectures or \
+                    "Ernie4_5_MoeForCausalLM" in model_config.architectures
+        if quant_config_name == "wint4" and is_ernie:
             quantization_config["dense_quant_type"] = "wint8"
             quantization_config["moe_quant_type"] = "wint4"
             quantization_config["quantization"] = "mix_quant"
@@ -750,11 +625,6 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
             "No quantization config found and use original weight and act dtype."
         )
 
-    model_config.architectures = config.get("architectures")
-
-    logger.info("===========load_config==============")
-    load_config.dynamic_load_weight = args.dynamic_load_weight
-    load_config.load_strategy = args.load_strategy
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
 
@@ -763,7 +633,6 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
                          speculative_config=speculative_config,
                          device_config=device_config,
                          load_config=load_config,
-                         moe_config=moe_config,
                          decoding_config=decoding_config,
                          quant_config=quant_config,
                          graph_opt_config=graph_opt_config)

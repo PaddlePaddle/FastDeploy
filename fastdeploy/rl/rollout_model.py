@@ -171,7 +171,7 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM):
                 infer_to_train[f"{infer_base_name}.{layer_idx}.mlp.fused_moe.gate_weight"] = \
                     f"ernie.layers.{layer_idx}.mlp.gate.weight"
 
-                if self.fd_config.moe_config.moe_use_aux_free:
+                if self.fd_config.model_config.moe_use_aux_free:
                     infer_to_train[f"{infer_base_name}.{layer_idx}.mlp.fused_moe.gate_correction_bias"] = \
                         f"ernie.layers.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
 
@@ -184,7 +184,7 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM):
                         f"ernie.layers.{layer_idx}.mlp.shared_experts.down_proj.weight"
 
                 # MoE experts mappings
-                for expert_idx in range(self.fd_config.moe_config.num_experts):
+                for expert_idx in range(self.fd_config.model_config.moe_num_experts):
                     for ph in place_holders:
                         # FFN1 (up_gate_proj)
                         ffn1_key = f"{infer_base_name}.{layer_idx}.mlp.fused_moe.moe_ffn1_weight"
@@ -204,12 +204,12 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM):
 
         # Process non-MoE layers
         for layer_idx in range(
-                self.fd_config.moe_config.moe_layer_start_index):
+                self.fd_config.model_config.moe_layer_start_index):
             _add_layer_mappings(layer_idx, is_moe_layer=False)
 
         # Process MoE layers
-        for layer_idx in range(self.fd_config.moe_config.moe_layer_start_index,
-                               self.fd_config.model_config.num_layers):
+        for layer_idx in range(self.fd_config.model_config.moe_layer_start_index,
+                               self.fd_config.model_config.num_hidden_layers):
             _add_layer_mappings(layer_idx, is_moe_layer=True)
 
         return infer_to_train

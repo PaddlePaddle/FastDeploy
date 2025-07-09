@@ -262,7 +262,7 @@ class Ernie4_5_MTPModel(nn.Layer):
         """
         super().__init__()
 
-        self.num_layers = fd_config.model_config.num_layers
+        self.num_layers = fd_config.model_config.num_hidden_layers
         self.embeddings = fd_config.speculative_config.sharing_model.model.embeddings
 
         self.hidden_layers = nn.LayerList([
@@ -351,7 +351,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
         self.fd_config = fd_config
         self.model = Ernie4_5_MTPModel(fd_config=fd_config)
 
-        self.ori_vocab_size = fd_config.model_config.ori_vocab_size
+        self.ori_vocab_size = fd_config.model_config.vocab_size
 
         self.lm_head = fd_config.speculative_config.sharing_model.lm_head
         self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
@@ -398,8 +398,8 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
             shape=[0, self.fd_config.model_config.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
-        for i in range(self.fd_config.moe_config.moe_layer_start_index,
-                       self.fd_config.model_config.num_layers):
+        for i in range(self.fd_config.model_config.moe_layer_start_index,
+                       self.fd_config.model_config.num_hidden_layers):
             self.model.hidden_layers[i].mlp.fused_moe(fake_hidden_states)
 
     def forward(

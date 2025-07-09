@@ -56,7 +56,7 @@ class Qwen3Attention(nn.Layer):
         self.fd_config = fd_config
 
         self.head_dim = fd_config.model_config.head_dim
-        nranks = fd_config.parallel_config.tensor_parallel_degree
+        nranks = fd_config.parallel_config.tensor_parallel_size
         self.q_size = fd_config.model_config.num_attention_heads * self.head_dim // nranks
         self.kv_size = fd_config.model_config.num_key_value_heads * self.head_dim // nranks
 
@@ -162,7 +162,7 @@ class Qwen3Model(nn.Layer):
         """
         super().__init__()
 
-        self.num_layers = fd_config.model_config.num_layers
+        self.num_layers = fd_config.model_config.num_hidden_layers
         fd_config.model_config.prefix_name = "model"
         fd_config.model_config.tie_word_embeddings = True
 
@@ -239,7 +239,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
 
         self.model = Qwen3Model(fd_config=fd_config)
 
-        self.ori_vocab_size = fd_config.model_config.ori_vocab_size
+        self.ori_vocab_size = fd_config.model_config.vocab_size
 
         self.lm_head = ParallelLMHead(
             fd_config=fd_config,

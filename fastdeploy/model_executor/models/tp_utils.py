@@ -36,7 +36,7 @@ def check_tensor_parallel_prerequisites(
     safetensor_keys: List[str],
 ) -> None:
     """check_tensor_parallel_prerequisites"""
-    if fd_config.parallel_config.tensor_parallel_degree > 1:
+    if fd_config.parallel_config.tensor_parallel_size > 1:
         tensor_parallel_map = cls._get_tensor_parallel_mappings(
             fd_config.model_config, is_split=True)
         if not tensor_parallel_map:

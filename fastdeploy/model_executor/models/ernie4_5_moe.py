@@ -54,7 +54,7 @@ class Ernie4_5_MLP(nn.Layer):
         reduce_results: bool = True,
     ) -> None:
         super().__init__()
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.gate_up_proj = MergedColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.up_gate_proj",
@@ -179,16 +179,16 @@ class Ernie4_5_MoE(nn.Layer):
 
         self.fused_moe = FusedMoE(
             fd_config=fd_config,
-            moe_intermediate_size=fd_config.moe_config.moe_intermediate_size,
-            num_experts=fd_config.moe_config.num_experts,
-            top_k=fd_config.moe_config.top_k,
+            moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
+            num_experts=fd_config.model_config.moe_num_experts,
+            top_k=fd_config.model_config.moe_k,
             layer_idx=layer_id,
             weight_key_map=weight_key_map,
         )
 
-        self.num_shared_experts = fd_config.moe_config.moe_num_shared_experts
+        self.num_shared_experts = fd_config.model_config.moe_num_shared_experts
         if self.num_shared_experts > 0:
-            shared_experts_hidden_dim = self.num_shared_experts * fd_config.moe_config.moe_intermediate_size
+            shared_experts_hidden_dim = self.num_shared_experts * fd_config.model_config.moe_intermediate_size
             self.shared_experts = Ernie4_5_MLP(
                 fd_config=fd_config,
                 intermediate_size=shared_experts_hidden_dim,
@@ -271,8 +271,8 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             prefix=f"{prefix}.self_attn",
         )
 
-        if (fd_config.moe_config.num_experts is not None
-                and layer_id >= fd_config.moe_config.moe_layer_start_index):
+        if (fd_config.model_config.moe_num_experts is not None
+                and layer_id >= fd_config.model_config.moe_layer_start_index):
             self.mlp = Ernie4_5_MoE(
                 fd_config=fd_config,
                 layer_id=layer_id,
@@ -281,7 +281,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         else:
             self.mlp = Ernie4_5_MLP(
                 fd_config=fd_config,
-                intermediate_size=fd_config.model_config.ffn_hidden_size,
+                intermediate_size=fd_config.model_config.intermediate_size,
                 prefix=f"{prefix}.mlp",
             )
 
@@ -346,7 +346,7 @@ class Ernie4_5_Model(nn.Layer):
         """
         super().__init__()
 
-        self.num_layers = fd_config.model_config.num_layers
+        self.num_layers = fd_config.model_config.num_hidden_layers
         fd_config.model_config.prefix_name = "ernie"
 
         self.embeddings = VocabParallelEmbedding(
@@ -419,7 +419,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         self.fd_config = fd_config
         self.model = Ernie4_5_Model(fd_config=fd_config)
 
-        self.ori_vocab_size = fd_config.model_config.ori_vocab_size
+        self.ori_vocab_size = fd_config.model_config.vocab_size
 
         self.lm_head = ParallelLMHead(
             fd_config=fd_config,
@@ -466,8 +466,8 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             shape=[0, self.fd_config.model_config.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
-        for i in range(self.fd_config.moe_config.moe_layer_start_index,
-                       self.fd_config.model_config.num_layers):
+        for i in range(self.fd_config.model_config.moe_layer_start_index,
+                       self.fd_config.model_config.num_hidden_layers):
             self.model.hidden_layers[i].mlp.fused_moe(fake_hidden_states)
 
     def forward(

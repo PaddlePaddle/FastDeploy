@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+import argparse
 import json
 import os
 import random
-import argparse
 
 import numpy as np
 import paddle
@@ -24,6 +24,9 @@ import paddle.distributed.fleet as fleet
 from paddleformers.transformers.model_utils import load_tp_checkpoint
 from safetensors import safe_open
 
+from fastdeploy.config import (DecodingConfig, DeviceConfig, FDConfig,
+                               LoadConfig, ModelConfig, MoEPhase,
+                               ParallelConfig, SpeculativeConfig)
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.input.mm_processor import DataProcessor
 from fastdeploy.model_executor.layers.attention import get_attention_backend
@@ -44,9 +47,6 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.worker.forward_meta import ForwardMeta
 from fastdeploy.worker.utils import check_safetensors_model
 from fastdeploy.worker.vl_model_runner_base import VLModelRunnerBase
-from fastdeploy.config import (DeviceConfig, FDConfig, KVCacheConfig,
-                                LoadConfig, ModelConfig, MoEConfig,
-                                MoEPhase, ParallelConfig, SpeculativeConfig)
 
 if current_platform.is_cuda() and current_platform.available():
     from fastdeploy.model_executor.layers.utils import (
@@ -283,10 +283,10 @@ class GPUVLModelRunner(VLModelRunnerBase):
         self.fd_config = fd_config
         attn_backend_cls = get_attention_backend()
         num_heads = self.fd_config.model_config.num_attention_heads // \
-            self.fd_config.parallel_config.tensor_parallel_degree
+            self.fd_config.parallel_config.tensor_parallel_size
         self.fd_config.model_config.kv_num_heads = int(
             self.fd_config.model_config.num_key_value_heads
-        ) // self.fd_config.parallel_config.tensor_parallel_degree
+        ) // self.fd_config.parallel_config.tensor_parallel_size
         head_dim = self.fd_config.model_config.head_dim
         self.attn_backend = attn_backend_cls(
             self.fd_config,
@@ -847,7 +847,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
         )
         # sampler & save_output
         next_tokens = self.sampler(logits, self.sampling_metadata)
-        if self.fd_config.parallel_config.tensor_parallel_degree > 1:
+        if self.fd_config.parallel_config.tensor_parallel_size > 1:
             paddle.distributed.broadcast(next_tokens, 0)
         self.post_process(next_tokens)
 
@@ -1056,7 +1056,6 @@ def build_stream_line_model(
     """
     import contextlib
 
-    from paddleformers.transformers.configuration_utils import PretrainedConfig
     from paddleformers.trl import llm_utils
     from paddleformers.utils.log import logger
 
@@ -1064,120 +1063,41 @@ def build_stream_line_model(
         get_quantization_config
     from fastdeploy.model_executor.models.model_base import ModelRegistry
 
-    config, _ = PretrainedConfig.get_config_dict(model_path)
-    config["head_dim"] = config.get(
-        "head_dim", config["hidden_size"] // config["num_attention_heads"])
-    config["rope_theta"] = config.get("rope_theta", 10000.0)
-    rope_theta = config["rope_theta"]
-    model_config = ModelConfig.from_dict(config)
-    model_config.head_dim = config["head_dim"]
+    # init args
+    args = {}
+    args["max_model_len"] = max_model_len
+    args["dtype"] = dtype
+    args["block_size"] = block_size
+    args["model_name_or_path"] = model_path
+    args["tensor_parallel_rank"], args["tensor_parallel_size"] = llm_utils.init_dist_env()
+    args["expert_parallel_size"] = 1
+    args["expert_parallel_rank"] = int(args["tensor_parallel_rank"] /
+                                               args["tensor_parallel_size"])
 
-    parallel_config = ParallelConfig()
-    speculative_config = SpeculativeConfig()
-    device_config = DeviceConfig()
-    load_config = LoadConfig()
-    moe_config = MoEConfig()
-    kv_cache_config = KVCacheConfig()
-    kv_cache_config.cache_quant_dtype = "none"
-
-    tensor_parallel_rank, tensor_parallel_degree = llm_utils.init_dist_env()
-    parallel_config.tensor_parallel_rank = tensor_parallel_rank
-    parallel_config.tensor_parallel_degree = tensor_parallel_degree
-    parallel_config.tensor_parallel_degree = tensor_parallel_degree
-    parallel_config.expert_parallel_degree = 1
-    parallel_config.expert_parallel_rank = int(tensor_parallel_rank /
-                                               tensor_parallel_degree)
-    parallel_config.column_cut = False
-
-    speculative_config.is_mtp = False
-    speculative_config.draft_type = "None"
-
-    # Note(tangbinhan): used for load_checkpoint
-    model_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
-    model_config.tensor_parallel_degree = parallel_config.tensor_parallel_degree
-    model_config.is_mtp = speculative_config.is_mtp
-    moe_config.num_experts = None
-
-    # use the length of tokenizer as the origin vocab size
-    ori_vocab_size = len(tokenizer)
-    moe_intermediate_size = (config.get("moe_intermediate_size", None), )
-    if isinstance(moe_intermediate_size, list) or isinstance(
-            moe_intermediate_size, tuple):
-        moe_intermediate_size = moe_intermediate_size[0]
-
-    num_key_value_heads = config.get("num_key_value_heads", -1)
-    if num_key_value_heads is None:
-        num_key_value_heads = -1
+    model_config = ModelConfig(args)
+    device_config = DeviceConfig(args)
+    decoding_config = DecodingConfig(args)
+    speculative_config = SpeculativeConfig(args)
+    parallel_config = ParallelConfig(args)
+    load_config = LoadConfig(args)
 
     # RL need, some model num_key_value_heads less tensor_parallel_degree, need copy
-    if num_key_value_heads < tensor_parallel_degree:
+    if model_config.num_key_value_heads < parallel_config.tensor_parallel_size:
         logger.warning(
-            f"key value heads num is {num_key_value_heads}, tensor parallel degree is {tensor_parallel_degree}"
+            f"key value heads num is {model_config.num_key_value_heads}, tensor parallel degree is {parallel_config.tensor_parallel_size}"
         )
-        num_key_value_heads = tensor_parallel_degree
+        num_key_value_heads = parallel_config.tensor_parallel_size
+        model_config.num_key_value_heads = num_key_value_heads
 
-    if config.get("ffn_hidden_size", None) is not None:
-        ffn_hidden_size = config["ffn_hidden_size"]
-    elif config.get("intermediate_size", None) is not None:
-        ffn_hidden_size = config["intermediate_size"]
-    else:
-        ffn_hidden_size = 4 * config["hidden_size"]
-        if config["hidden_act"].lower() == "swiglu":
-            if paddle.distributed.get_world_size() > 1:
-                multiple_of = 8 * config["num_attention_heads"]
-            else:
-                multiple_of = 4 * config["num_attention_heads"]
-            ffn_hidden_size = multiple_of * (
-                (int(2 * ffn_hidden_size / 3) + multiple_of - 1) //
-                multiple_of)
-
-    num_layers = config.get("num_layers", None) or config.get(
-        "num_hidden_layers", None)
-    if num_layers is None:
-        raise ValueError(f"num_layers<{num_layers}> is invalid")
-
-    remove_tail_layer = config.get("remove_tail_layer")
-    if remove_tail_layer is True:
-        num_layers -= 1
-    elif isinstance(remove_tail_layer, int):
-        num_layers -= remove_tail_layer
-
-    moe_num_experts = config.get("moe_num_experts", 0)
-    if isinstance(moe_num_experts, list):
-        moe_num_experts = max(moe_num_experts)
-    use_moe = moe_num_experts > 0
-
-    context = contextlib.nullcontext()
-
-    if config["hidden_act"].lower() == "swiglu":
-        model_config.hidden_act = "swiglu"
-    model_config.ffn_hidden_size = ffn_hidden_size
-    model_config.max_seq_len = max_model_len
-    model_config.num_layers = num_layers
-    model_config.dtype = dtype
-    parallel_config.block_size = block_size
-
-    parallel_config.msg_queue_id = None
-    model_config.num_key_value_heads = num_key_value_heads
-    model_config.return_all_hidden_states = False
-    speculative_config.draft_type = "None"
-    model_config.start_layer_index = 0
-    if use_moe:
-        moe_config.num_experts = config.get("moe_num_experts", None)
-        moe_config.moe_intermediate_size = config.get("moe_intermediate_size",
-                                                      None)
-        moe_config.top_k = config.get("moe_topk", 8)
-        moe_config.moe_num_shared_experts = config.get(
-            "moe_num_shared_experts", 0)
-        moe_config.moe_layer_start_index = config.get("moe_layer_start_index",
-                                                      None)
-        moe_config.moe_layer_end_index = config.get("moe_layer_end_index",
-                                                    None)
+    if getattr(model_config, 'num_hidden_layers', None) is None:
+        raise ValueError("num_hidden_layers is None")
 
     model_config.moe_phase = MoEPhase.PREFILL
-    model_config.ori_vocab_size = ori_vocab_size
+    # use the length of tokenizer as the origin vocab size
+    ori_vocab_size = len(tokenizer)
+    model_config.vocab_size = ori_vocab_size
 
-    quantization_config = config.get("quantization_config", None)
+    quantization_config = model_config.quantization_config
 
     quant_config_name = None
     if quantization_config is not None and quantization_config.get(
@@ -1192,7 +1112,7 @@ def build_stream_line_model(
         quant_config = quant_cls.from_config(quantization_config)
     elif quantization != "None":
         quantization_config = {}
-        if use_moe and quantization == "wint4":
+        if quantization == "wint4":
             quantization_config["dense_quant_type"] = "wint8"
             quantization_config["moe_quant_type"] = "wint4"
             quant_config_name = "mix_quant"
@@ -1218,13 +1138,11 @@ def build_stream_line_model(
         speculative_config=speculative_config,
         device_config=device_config,
         load_config=load_config,
-        moe_config=moe_config,
+        decoding_config=decoding_config,
         quant_config=quant_config,
-        kv_cache_config=kv_cache_config,
     )
-    fd_config.parallel_config.max_model_len = max_model_len
-    fd_config.model_config.rope_theta = rope_theta
 
+    context = contextlib.nullcontext()
     with context:
         model_cls = ModelRegistry.get_class(model_config.architectures[0])
         model = model_cls(fd_config)

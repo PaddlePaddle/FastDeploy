@@ -997,9 +997,9 @@ class LLMEngine(object):
             worker_path = "../worker/vl_worker_process.py"
         py_script = os.path.join(current_dir_path, worker_path)
 
-        ori_vocab_size = (
-            len(self.data_processor.tokenizer.sp_model) 
-            if hasattr(self.data_processor.tokenizer, 'sp_model') 
+        vocab_size = (
+            len(self.data_processor.tokenizer.sp_model)
+            if hasattr(self.data_processor.tokenizer, 'sp_model')
             else len(self.data_processor.tokenizer.vocab)
         )
 
@@ -1025,7 +1025,7 @@ class LLMEngine(object):
             f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
             f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
             f" --quantization {self.cfg.model_config.quantization}"
-            f" --ori_vocab_size {ori_vocab_size}"
+            f" --vocab_size {vocab_size}"
             f" --speculative_method {self.cfg.speculative_config.method}"
             f" --speculative_max_draft_token_num {self.cfg.speculative_config.num_speculative_tokens}"
             f" --speculative_model_name_or_path {self.cfg.speculative_config.model_name_or_path}"

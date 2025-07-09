@@ -260,7 +260,7 @@ def load_composite_checkpoint(
             and os.path.isdir(os.path.join(model_path, f))
         ]
         if len(rank_dirs) > 1:
-            if fd_config.parallel_config.tensor_parallel_degree != len(
+            if fd_config.parallel_config.tensor_parallel_size != len(
                     rank_dirs):
                 raise ValueError(
                     f"Your model only supports loading with tp{len(rank_dirs)}"

@@ -47,12 +47,12 @@ class Qwen2MLP(nn.Layer):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.gate_up_proj = MergedColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.up_gate_proj",
             input_size=fd_config.model_config.hidden_size,
-            output_size=fd_config.model_config.ffn_hidden_size * 2,
+            output_size=fd_config.model_config.intermediate_size * 2,
             with_bias=False,
             activation=fd_config.model_config.hidden_act,
         )
@@ -60,7 +60,7 @@ class Qwen2MLP(nn.Layer):
         self.down_proj = RowParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.down_proj",
-            input_size=fd_config.model_config.ffn_hidden_size,
+            input_size=fd_config.model_config.intermediate_size,
             output_size=fd_config.model_config.hidden_size,
             with_bias=False,
         )
@@ -227,7 +227,7 @@ class Qwen2Model(nn.Layer):
         """
         super().__init__()
 
-        self.num_layers = fd_config.model_config.num_layers
+        self.num_layers = fd_config.model_config.num_hidden_layers
         fd_config.model_config.prefix_name = "qwen2"
 
         self.embeddings = VocabParallelEmbedding(
@@ -304,7 +304,7 @@ class Qwen2ForCausalLM(ModelForCasualLM):
 
         self.model = Qwen2Model(fd_config=fd_config)
 
-        self.ori_vocab_size = fd_config.model_config.ori_vocab_size
+        self.ori_vocab_size = fd_config.model_config.vocab_size
 
         self.lm_head = ParallelLMHead(
             fd_config=fd_config,

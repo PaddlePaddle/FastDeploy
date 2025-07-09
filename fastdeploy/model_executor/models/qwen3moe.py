@@ -48,13 +48,13 @@ class Qwen3MLP(nn.Layer):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
 
         self.gate_up_proj = MergedColumnParallelLinear(
             fd_config,
             prefix=f"{prefix}.up_gate_proj",
             input_size=fd_config.model_config.hidden_size,
-            output_size=fd_config.model_config.ffn_hidden_size * 2,
+            output_size=fd_config.model_config.intermediate_size * 2,
             with_bias=False,
             activation=fd_config.model_config.hidden_act,
         )
@@ -62,7 +62,7 @@ class Qwen3MLP(nn.Layer):
         self.down_proj = RowParallelLinear(
             fd_config,
             prefix=f"{prefix}.down_proj",
-            input_size=fd_config.model_config.ffn_hidden_size,
+            input_size=fd_config.model_config.intermediate_size,
             output_size=fd_config.model_config.hidden_size,
             with_bias=False,
         )
@@ -104,7 +104,7 @@ class Qwen3Attention(nn.Layer):
         self.qkv_proj = QKVParallelLinear(fd_config,
                                           prefix=f"{prefix}.qkv_proj",
                                           with_bias=False)
-        nranks = fd_config.parallel_config.tensor_parallel_degree
+        nranks = fd_config.parallel_config.tensor_parallel_size
 
         self.o_proj = RowParallelLinear(
             fd_config,
@@ -199,14 +199,14 @@ class Qwen3DecoderLayer(nn.Layer):
             f"{prefix}.mlp.experts.{{}}.down_proj.weight",
         }
 
-        if (fd_config.moe_config.num_experts is not None
-                and layer_id >= fd_config.moe_config.moe_layer_start_index):
+        if (fd_config.model_config.moe_num_experts is not None
+                and layer_id >= fd_config.model_config.moe_layer_start_index):
 
             self.mlp = FusedMoE(fd_config,
-                                moe_intermediate_size=fd_config.moe_config.
+                                moe_intermediate_size=fd_config.model_config.
                                 moe_intermediate_size,
-                                num_experts=fd_config.moe_config.num_experts,
-                                top_k=fd_config.moe_config.top_k,
+                                num_experts=fd_config.model_config.moe_num_experts,
+                                top_k=fd_config.model_config.moe_topk,
                                 layer_idx=layer_id,
                                 weight_key_map=weight_key_map)
         else:
@@ -283,7 +283,7 @@ class Qwen3MoeModel(nn.Layer):
         """
         super().__init__()
 
-        self.num_layers = fd_config.model_config.num_layers
+        self.num_layers = fd_config.model_config.num_hidden_layers
         fd_config.model_config.prefix_name = "model"
 
         self.embeddings = VocabParallelEmbedding(
@@ -358,7 +358,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
 
         self.model = Qwen3MoeModel(fd_config)
 
-        self.ori_vocab_size = fd_config.model_config.ori_vocab_size
+        self.ori_vocab_size = fd_config.model_config.vocab_size
 
         self.lm_head = ParallelLMHead(
             fd_config,

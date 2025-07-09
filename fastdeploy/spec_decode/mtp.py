@@ -49,7 +49,7 @@ class MTPProposer(Proposer):
     def __init__(self, cfg, main_model, local_rank, device_id,
                  main_model_inputs):
         super().__init__(cfg)
-        self.num_main_model_layers = self.model_config.num_layers
+        self.num_main_model_layers = self.model_config.num_hidden_layers
         self.local_rank = local_rank
         self.device_id = device_id
         self._update_cfg(main_model)
@@ -70,7 +70,7 @@ class MTPProposer(Proposer):
         """
         self.model_config.architectures[0] = "Ernie4_5_MTPForCausalLM"
         self.speculative_config.sharing_model = main_model
-        self.model_config.num_layers = 1
+        self.model_config.num_hidden_layers = 1
         self.parallel_config.model_name_or_path = (
             self.speculative_config.model_name_or_path)
         self.model_config.prefix_name = "ernie.mtp_block"
@@ -145,7 +145,7 @@ class MTPProposer(Proposer):
             cache_kvs_list = []
             for i in range(
                     self.num_main_model_layers,
-                    self.num_main_model_layers + self.model_config.num_layers):
+                    self.num_main_model_layers + self.model_config.num_hidden_layers):
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache_name = f"key_caches_{i}_rank{self.local_rank}.device{self.device_id}"
                 val_cache_name = f"value_caches_{i}_rank{self.local_rank}.device{self.device_id}"
@@ -159,7 +159,7 @@ class MTPProposer(Proposer):
 
             self.model_inputs["caches"] = cache_kvs_list
         else:
-            for i in range(self.model_config.num_layers):
+            for i in range(self.model_config.num_hidden_layers):
                 self.cache_kvs["key_caches_{}".format(i)] = paddle.full(
                     shape=kv_cache_shape,
                     fill_value=0,
@@ -183,10 +183,10 @@ class MTPProposer(Proposer):
 
         # TODO(gongshaotian): Get rank from config
         num_heads = (self.model_config.num_attention_heads //
-                     self.parallel_config.tensor_parallel_degree)
+                     self.parallel_config.tensor_parallel_size)
         self.model_config.kv_num_heads = (
             int(self.model_config.num_key_value_heads) //
-            self.parallel_config.tensor_parallel_degree)
+            self.parallel_config.tensor_parallel_size)
         head_dim = self.model_config.head_dim
 
         # Get the attention backend
@@ -592,7 +592,7 @@ class MTPProposer(Proposer):
                     self.model_inputs,
                 )
 
-                if self.parallel_config.tensor_parallel_degree > 1:
+                if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(sampled_token_ids, 0)
 
                 self._post_process(sampled_token_ids)

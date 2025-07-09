@@ -16,7 +16,7 @@
 
 import copy
 
-from fastdeploy.config import ModelConfig
+from paddleformers.transformers.configuration_utils import PretrainedConfig
 
 from .dfnrope.modeling import DFNRopeVisionTransformerConfig
 
@@ -25,7 +25,7 @@ __all__ = [
 ]
 
 
-class Ernie4_5_VLMoeConfig(ModelConfig):
+class Ernie4_5_VLMoeConfig(PretrainedConfig):
     r"""
     This is the configuration class to store the configuration of a [`~ErnieModel`]. It is used to instantiate an Ernie
     model according to the specified arguments, defining the model architecture. Instantiating a configuration with the
