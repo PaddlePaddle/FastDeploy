@@ -28,3 +28,4 @@ moviepy
 triton==3.3
 use-triton-in-paddle
 crcmod
+fastsafetensors==0.1.14

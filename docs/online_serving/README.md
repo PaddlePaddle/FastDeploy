@@ -52,6 +52,7 @@ For a description of the OpenAI protocol, refer to the document [OpenAI Chat Com
 ## Parameter Differences
 ### Request Parameter Differences
 The differences in request parameters between FastDeploy and the OpenAI protocol are as follows. Other request parameters will be ignored:
+
 - `prompt` (supported only in the `v1/completions` interface)
 - `messages` (supported only in the `v1/chat/completions` interface)
 - `frequency_penalty`: Optional[float] = 0.0
@@ -61,7 +62,7 @@ The differences in request parameters between FastDeploy and the OpenAI protocol
 - `stream_options`: Optional[StreamOptions] = None
 - `temperature`: Optional[float] = None
 - `top_p`: Optional[float] = None
-- `metadata`: Optional[dict] = None (supported only in `v1/chat/completions` for configuring additional parameters, e.g., `meta_data={"enable_thinking": True}`)
+- `metadata`: Optional[dict] = None (supported only in `v1/chat/completions` for configuring additional parameters, e.g., `metadata={"enable_thinking": True}`)
     - `min_tokens`: Optional[int] = 1 (minimum number of tokens generated)
     - `reasoning_max_tokens`: Optional[int] = None (maximum number of tokens for reasoning content, defaults to the same as `max_tokens`)
     - `enable_thinking`: Optional[bool] = True (whether to enable reasoning for models that support deep thinking)
@@ -77,6 +78,7 @@ The additional return fields added by FastDeploy are as follows:
 - `reasoning_content`: The returned result of the reasoning chain
 
 Overview of return parameters:
+
 ```python
 ChatCompletionStreamResponse:
     id: str

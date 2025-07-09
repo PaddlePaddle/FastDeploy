@@ -585,15 +585,14 @@ class XPUModelRunner(ModelRunnerBase):
         head_dim = self.model_config.head_dim
 
         # Get the attention backend
-        attn_cls = get_attention_backend(
-            self.parallel_config.attention_backend)
+        attn_cls = get_attention_backend()
         attn_backend = attn_cls(self.fd_config,
                                 kv_num_heads=self.model_config.kv_num_heads,
                                 num_heads=num_heads,
                                 head_dim=head_dim)
         if attn_backend is None:
             raise NotImplementedError(
-                f"{ self.parallel_config.attention_backend} attention backend is not support by XPUModelRunner"
+                "Attention backend which you specified is not supported, please set FD_ATTENTION_BACKEND correctly."
             )
         self.attn_backends.append(attn_backend)
 

@@ -195,8 +195,6 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         hidden_size = layer.hidden_size
         num_experts = layer.num_experts
 
-        gate_out = paddle.matmul(x.cast("float32"), layer.gate_weight)
-
         topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
             gate_out,
             layer.gate_correction_bias,

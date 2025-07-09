@@ -19,7 +19,11 @@ from typing import Literal, Optional
 import paddle
 
 from fastdeploy import envs
+from fastdeploy.platforms import current_platform
 
+if current_platform.is_gcu():
+    from fastdeploy.model_executor.ops.gcu import \
+        top_p_sampling as gcu_top_p_sampling
 
 def top_p_sampling(
     x: paddle.Tensor,
@@ -46,13 +50,16 @@ def top_p_sampling(
         ids = rejection_top_p_sampling(x, ps, seed)
         _ = None
     else:
-        _, ids = paddle.tensor.top_p_sampling(x,
-                                              ps,
-                                              threshold=threshold,
-                                              topp_seed=topp_seed,
-                                              seed=seed,
-                                              k=k,
-                                              mode=mode)
+        if current_platform.is_gcu():
+            _, ids = gcu_top_p_sampling(x, ps)
+        else:
+            _, ids = paddle.tensor.top_p_sampling(x,
+                                                  ps,
+                                                  threshold=threshold,
+                                                  topp_seed=topp_seed,
+                                                  seed=seed,
+                                                  k=k,
+                                                  mode=mode)
     return _, ids
 
 

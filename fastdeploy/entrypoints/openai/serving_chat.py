@@ -38,9 +38,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     ErrorResponse,
 )
 from fastdeploy.metrics.work_metrics import work_process_metrics
-
-from fastdeploy.utils import api_server_logger
-
+from fastdeploy.utils import api_server_logger, get_host_ip
 from fastdeploy.engine.request import RequestOutput
 
 
@@ -50,9 +48,18 @@ class OpenAIServingChat:
     OpenAI-style chat completions serving
     """
 
-    def __init__(self, engine_client, pid):
+    def __init__(self, engine_client, pid, pod_ips):
         self.engine_client = engine_client
         self.pid = pid
+        self.pod_ips = pod_ips
+        self.host_ip = get_host_ip()
+
+    def _check_master(self):
+        if self.pod_ips is None:
+            return True
+        if self.host_ip == self.pod_ips[0]:
+            return True
+        return False
 
     async def create_chat_completion(
         self,
@@ -61,6 +68,11 @@ class OpenAIServingChat:
         """
         Create a new chat completion using the specified parameters.
         """
+
+        if not self._check_master():
+            err_msg = f"Only master node can accept completion request, please send request to master node: {self.pod_ips[0]}"
+            api_server_logger.error(err_msg)
+            return ErrorResponse(message=err_msg, code=400)
         if request.user is not None:
             request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"
         else:
@@ -220,6 +232,9 @@ class OpenAIServingChat:
                             choice.finish_reason = "tool_calls"
                     else:
                         choice.finish_reason = "length"
+                    
+                    if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
+                        choice.finish_reason = "recover_stop"
 
                 if request.metadata is not None and request.metadata.get("training", False) and delta_text != "":
                     choice.delta.token_ids = output["token_ids"]
@@ -335,6 +350,9 @@ class OpenAIServingChat:
                 choice.finish_reason = "tool_calls"
         else:
             choice.finish_reason = "length"
+            
+        if final_res.get("error_msg") is not None and "Recover" in final_res["error_msg"]:
+            choice.finish_reason = "recover_stop"
         choices.append(choice)
 
         num_prompt_tokens = len(prompt_token_ids)

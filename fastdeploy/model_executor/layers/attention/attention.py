@@ -67,7 +67,7 @@ class Attention(nn.Layer):
         self.num_heads: int = fd_config.model_config.num_attention_heads // fd_config.parallel_config.tensor_parallel_degree
         self.head_dim: int = fd_config.model_config.head_dim
         self.kv_num_heads: int = \
-            fd_config.model_config.num_key_value_heads // fd_config.parallel_config.tensor_parallel_degree
+            max(1, fd_config.model_config.num_key_value_heads // fd_config.parallel_config.tensor_parallel_degree)
         self.layer_id: int = layer_id
         self.v_head_dim: int = v_head_dim if v_head_dim > 0 else self.head_dim
         self.rope_type: str = rope_type
@@ -111,6 +111,8 @@ class Attention(nn.Layer):
         k: paddle.Tensor = None,
         v: paddle.Tensor = None,
         qkv: paddle.Tensor = None,
+        compressed_kv: paddle.Tensor = None,
+        k_pe: paddle.Tensor = None,
         forward_meta: ForwardMeta = None,
     ) -> paddle.Tensor:
         """
@@ -120,12 +122,16 @@ class Attention(nn.Layer):
             k: the key tensor
             v: the value tensor
             forward_meta: the forward meta data
+            compressed_kv: optional compressed key-value cache (for MLA)
+            k_pe: optional key positional encoding (for MLA)
         """
         return forward_meta.attn_backend.forward(
             q,
             k,
             v,
             qkv,
+            compressed_kv,
+            k_pe,
             self,
             forward_meta,
         )

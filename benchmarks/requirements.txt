@@ -3,3 +3,4 @@ tqdm
 numpy
 Pillow
 pyyaml
+requests

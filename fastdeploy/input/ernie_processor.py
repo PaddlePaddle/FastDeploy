@@ -27,6 +27,7 @@ from fastdeploy.input.text_processor import BaseDataProcessor
 
 _SAMPLING_EPS = 1e-5
 
+
 class ErnieProcessor(BaseDataProcessor):
     """
     初始化模型实例。
@@ -160,6 +161,7 @@ class ErnieProcessor(BaseDataProcessor):
             if request.get('prompt'):
                 prompt = request.get('prompt')
                 prompt = prompt[0] if isinstance(prompt, list) else prompt
+
                 tokens = self.tokenizer.tokenize(prompt)
                 token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
                 request['prompt_token_ids'] = token_ids

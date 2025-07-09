@@ -316,6 +316,96 @@ void TextImageGatherScatter(paddle::Tensor &input, paddle::Tensor &text_input,
 
 paddle::Tensor count_tokens_per_expert_func(const paddle::Tensor &topk_ids,
                                             int64_t num_experts);
+void GetPositionIdsAndMaskEncoderBatch(
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& position_ids,
+    const paddle::Tensor& mask_encoder_batch);
+
+std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
+    const paddle::Tensor& kv_nope,
+    const paddle::Tensor& kv_pe,
+    const paddle::Tensor& kv_cache,
+    const paddle::Tensor& seq_lens,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& padding_offsets,
+    const paddle::Tensor& cum_offsets,
+    const paddle::Tensor& block_tables,
+    const std::string& cache_quant_type_str,
+    const int max_seq_len,
+    const bool speculate_decoder);
+
+ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
+    const paddle::Tensor& kv_nope,
+    const paddle::Tensor& kv_pe,
+    const paddle::Tensor& kv_cache,
+    const paddle::Tensor& seq_lens,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& padding_offsets,
+    const paddle::Tensor& cum_offsets,
+    const paddle::Tensor& block_tables,
+    const std::string& cache_quant_type_str,
+    const int max_seq_len);
+
+
+void FusedRotaryPositionEncoding(
+    paddle::Tensor& query,  // [num_tokens, num_heads, head_size] or
+                            // [num_tokens, num_heads * head_size]
+    paddle::Tensor& key,
+    // [num_tokens, num_kv_heads, head_size] or [num_tokens, num_kv_heads *
+    // head_size]
+    const paddle::Tensor& position_ids,   // [num_tokens]
+    const paddle::Tensor& cos_sin_cache,  // [max_position, rot_dim]
+    int head_size,
+    bool is_neox);
+
+std::vector<paddle::Tensor> MultiHeadLatentAttention(
+    const paddle::Tensor& query,
+    const paddle::Tensor& key_cache,
+    const paddle::Tensor& value_cache,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& padding_offsets,
+    const paddle::Tensor& cum_offsets,
+    const paddle::Tensor& block_tables,
+    const paddle::Tensor& encoder_batch_ids,
+    const paddle::Tensor& encoder_tile_ids_per_batch,
+    const paddle::Tensor& encoder_num_blocks,
+    const paddle::Tensor& kv_batch_ids,
+    const paddle::Tensor& kv_tile_ids_per_batch,
+    const paddle::Tensor& kv_num_blocks,
+    const paddle::Tensor& decoder_batch_ids,
+    const paddle::Tensor& decoder_tile_ids_per_batch,
+    const paddle::Tensor& decoder_num_blocks,
+    const paddle::Tensor& decoder_num_blocks_cpu,
+    const paddle::Tensor& max_enc_len_this_time,
+    const paddle::Tensor& max_dec_len_this_time,
+    const paddle::Tensor& max_len_kv,
+    const paddle::optional<paddle::Tensor>& attn_mask,
+    const paddle::optional<paddle::Tensor>& query_bias,
+    const paddle::optional<paddle::Tensor>& query_out_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_zp,
+    const paddle::optional<paddle::Tensor>& cache_v_zp,
+    const paddle::optional<paddle::Tensor>& out_linear_shifts,
+    const paddle::optional<paddle::Tensor>& out_linear_smooths,
+    const std::string& compute_dtype,
+    const std::string& cache_quant_type_str,
+    const int nope_size,
+    const int max_input_length,
+    const float softmax_scale,
+    const float quant_max_bound,
+    const float quant_min_bound,
+    const float out_linear_in_scale,
+    const int speculate_max_draft_token_num,
+    const bool causal,
+    const bool speculate_decoder);
 
 
 std::vector<paddle::Tensor> tritonmoe_preprocess_kernel(const paddle::Tensor& topk_ids, int64_t num_experts, int64_t GEMM_BLOCK_SIZE_M);
@@ -369,6 +459,38 @@ void DynamicScaledFp8Quant(paddle::Tensor &out, paddle::Tensor const &input,
 void DynamicPerTokenScaledFp8Quant(paddle::Tensor &out,
                                    paddle::Tensor const &input,
                                    paddle::Tensor &scales, float scale_ub);
+
+std::vector<paddle::Tensor> NoauxTc(
+      paddle::Tensor& scores,
+      paddle::Tensor& scores_with_bias,
+      int n_group,
+      int topk_group,
+      int topk,
+      float routed_scaling_factor);
+
+#ifdef ENABLE_FP8
+paddle::Tensor cutlass_fp8_fp8_half_gemm_func(
+    const paddle::Tensor& x,
+    const paddle::Tensor& y,
+    const paddle::optional<paddle::Tensor>& bias,
+    bool trans_x,
+    bool trans_y,
+    float scale,  // only support per-tensor quantization
+    std::string output_dtype,
+    std::string activation_type);
+
+paddle::Tensor MoeFusedHadamardQuantFp8Func(
+                const paddle::Tensor &input,
+                const paddle::Tensor &scale,
+                const paddle::Tensor &topk_ids,
+                const int top_k,
+                const int intermediate_size,
+                const bool tiled);
+
+paddle::Tensor FusedHadamardQuantFp8Func(
+                const paddle::Tensor &input,
+                const float scale);
+#endif
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
 
@@ -599,35 +721,20 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "text_image_gather_scatter function");
 
   m.def("count_tokens_per_expert_func", &count_tokens_per_expert_func);
+
   m.def("tritonmoe_preprocess_func", &tritonmoe_preprocess_kernel);
 
   m.def("MoeWna16MarlinGemmApi", &MoeWna16MarlinGemmApi,
-  py::arg("a"),
-  py::arg("c_or_none"),
-  py::arg("b_q_weight"),
-  py::arg("b_scales"),
-  py::arg("global_scale_or_none"),
-  py::arg("b_zeros_or_none"),
-  py::arg("g_idx_or_none"),
-  py::arg("perm_or_none"),
-  py::arg("workspace"),
-  py::arg("sorted_token_ids"),
-  py::arg("expert_ids"),
-    py::arg("num_tokens_post_padded"),
-  py::arg("topk_weights"),
-  py::arg("moe_block_size"),
-    py::arg("top_k"),
-      py::arg("mul_topk_weights"),
-        py::arg("is_ep"),
-          py::arg("b_q_type_str"),
-            py::arg("size_m"),
-              py::arg("size_n"),
-              py::arg("size_k"),
-              py::arg("is_k_full"),
-              py::arg("use_atomic_add"),
-              py::arg("use_fp32_reduce"),
-              py::arg("is_zp_float"));
+      py::arg("a"), py::arg("c_or_none"), py::arg("b_q_weight"),
+      py::arg("b_scales"), py::arg("global_scale_or_none"), py::arg("b_zeros_or_none"),
+      py::arg("g_idx_or_none"), py::arg("perm_or_none"), py::arg("workspace"), py::arg("sorted_token_ids"),
+      py::arg("expert_ids"), py::arg("num_tokens_post_padded"), py::arg("topk_weights"), py::arg("moe_block_size"),
+      py::arg("top_k"), py::arg("mul_topk_weights"), py::arg("is_ep"),  py::arg("b_q_type_str"),
+      py::arg("size_m"), py::arg("size_n"), py::arg("size_k"), py::arg("is_k_full"), py::arg("use_atomic_add"),
+      py::arg("use_fp32_reduce"), py::arg("is_zp_float"));
 
+  m.def("get_position_ids_and_mask_encoder_batch", &GetPositionIdsAndMaskEncoderBatch,
+        "get_position_ids_and_mask_encoder_batch function");
 
   /**
    * cutlass_scaled_mm.cu
@@ -653,4 +760,28 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("dynamic_per_token_scaled_fp8_quant", &DynamicPerTokenScaledFp8Quant,
         "dynamic_per_token_scaled_fp8_quant function",
          py::arg("out"), py::arg("input"), py::arg("scales"), py::arg("scale_ub"));
+
+  m.def("decode_mla_write_cache", &DecodeMLAWriteCacheKernel, "decode_mla_write_cache function");
+
+  m.def("prefill_mla_write_cache", &PrefillMLAWriteCacheKernel, "prefill_mla_write_cache function");
+
+  m.def("fused_rotary_position_encoding", &FusedRotaryPositionEncoding, "fused_rotary_position_encoding function");
+
+  m.def("multi_head_latent_attention", &MultiHeadLatentAttention, "multi_head_latent_attention function");
+
+  m.def("noaux_tc",&NoauxTc, "noaux_tc for Deepseekv3 MoE compute");
+
+#ifdef ENABLE_FP8
+  m.def("cutlass_fp8_fp8_half_gemm_fused", &cutlass_fp8_fp8_half_gemm_func,
+        py::arg("x"), py::arg("y"), py::arg("bias"), py::arg("transpose_x"),
+        py::arg("transpose_y"), py::arg("scale"), py::arg("output_dtype"),
+        py::arg("activation_type"), "cutlass_fp8_fp8_half_gemm_fused function");
+
+  m.def("moe_fused_hadamard_quant_fp8", &MoeFusedHadamardQuantFp8Func,
+      py::arg("input"), py::arg("scale"), py::arg("topk_ids"),
+      py::arg("top_k"), py::arg("intermediate_size"), py::arg("tiled"), "moe_fused_hadamard_quant_fp8 function");
+
+  m.def("fused_hadamard_quant_fp8", &FusedHadamardQuantFp8Func,
+      py::arg("input"), py::arg("scale"), "fused_hadamard_quant_fp8 function");
+#endif
 }

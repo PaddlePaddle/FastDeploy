@@ -15,11 +15,16 @@
 platform interface file
 """
 
-import paddle
 import enum
+
+import paddle
+
+
 class _Backend(enum.Enum):
     NATIVE_ATTN = enum.auto()
     APPEND_ATTN = enum.auto()
+    MLA_ATTN = enum.auto()
+    FLASH_ATTN = enum.auto()
 
 
 class Platform:
@@ -58,6 +63,18 @@ class Platform:
         """
         return paddle.is_compiled_with_rocm()
 
+    def is_iluvatar(self) -> bool:
+        """
+        whether platform is iluvatar gpu
+        """
+        return paddle.is_compiled_with_custom_device("iluvatar_gpu")
+
+    def is_gcu(self) -> bool:
+        """
+        whether platform is gcu
+        """
+        return paddle.is_compiled_with_custom_device("gcu")
+
     @classmethod
     def get_attention_backend_cls(self, selected_backend):
         """Get the attention backend"""
@@ -71,8 +88,7 @@ class Platform:
         if self.supported_quantization and quant not in self.supported_quantization:
             raise ValueError(
                 f"{quant} quantization is currently not supported in "
-                f"{self.device_name}."
-            )
+                f"{self.device_name}.")
 
     @classmethod
     def available(self):

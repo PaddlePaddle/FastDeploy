@@ -46,6 +46,8 @@ class AttentionBackend(ABC):
         k: paddle.Tensor,
         v: paddle.Tensor,
         qkv: paddle.Tensor,
+        compressed_kv: paddle.Tensor,
+        k_pe: paddle.Tensor,
         layer: paddle.nn.Layer,
         forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
@@ -56,6 +58,8 @@ class AttentionBackend(ABC):
             k: The key tensor.
             v: The value tensor.
             layer: The layer that will be used for the forward.
+            compressed_kv: optional compressed key-value cache (for MLA)
+            k_pe: optional key positional encoding (for MLA)
             forward_meta: The forward metadata.
         """
         if forward_meta.forward_mode.is_mixed():
@@ -64,6 +68,8 @@ class AttentionBackend(ABC):
                 k,
                 v,
                 qkv,
+                compressed_kv,
+                k_pe,
                 layer,
                 forward_meta,
             )
@@ -73,6 +79,8 @@ class AttentionBackend(ABC):
                 k,
                 v,
                 qkv,
+                compressed_kv,
+                k_pe,
                 layer,
                 forward_meta,
             )
@@ -82,6 +90,8 @@ class AttentionBackend(ABC):
                 k,
                 v,
                 qkv,
+                compressed_kv,
+                k_pe,
                 layer,
                 forward_meta,
             )
@@ -92,6 +102,8 @@ class AttentionBackend(ABC):
         k: paddle.Tensor,
         v: paddle.Tensor,
         qkv: paddle.Tensor,
+        compressed_kv: paddle.Tensor,
+        k_pe: paddle.Tensor,
         layer: paddle.nn.Layer,
         forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
@@ -104,6 +116,8 @@ class AttentionBackend(ABC):
         k: paddle.Tensor,
         v: paddle.Tensor,
         qkv: paddle.Tensor,
+        compressed_kv: paddle.Tensor,
+        k_pe: paddle.Tensor,
         layer: paddle.nn.Layer,
         forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
@@ -116,6 +130,8 @@ class AttentionBackend(ABC):
         k: paddle.Tensor,
         v: paddle.Tensor,
         qkv: paddle.Tensor,
+        compressed_kv: paddle.Tensor,
+        k_pe: paddle.Tensor,
         layer: paddle.nn.Layer,
         forward_meta: ForwardMeta,
     ) -> paddle.Tensor:

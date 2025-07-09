@@ -17,10 +17,16 @@
 from .append_attention import append_attention
 from .get_block_shape_and_split_kv_block import \
     get_block_shape_and_split_kv_block
+from .gqa_rope_write_cache import gqa_rope_write_cache
 from .init_signal_layerwise import init_signal_layerwise
 from .open_shm_and_get_meta_signal import open_shm_and_get_meta_signal
+from .pre_cache_len_concat import pre_cache_len_concat
 
 __all__ = [
-    "get_block_shape_and_split_kv_block", "append_attention",
-    "open_shm_and_get_meta_signal", "init_signal_layerwise"
+    "get_block_shape_and_split_kv_block",
+    "append_attention",
+    "open_shm_and_get_meta_signal",
+    "init_signal_layerwise",
+    "gqa_rope_write_cache",
+    "pre_cache_len_concat",
 ]
