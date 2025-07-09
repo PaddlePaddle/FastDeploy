@@ -557,6 +557,9 @@ def parse_args():
         "'ipc_snapshot': load from disk snapshot of IPC weights, "
         "'meta': provide RL traing worker, no_weights_load"
         "'normal':normal load weight")
+    parser.add_argument("--enable_logprob",
+                        action='store_true',
+                        help="Enable output of token-level log probabilities.")
 
     args = parser.parse_args()
     return args
@@ -757,6 +760,7 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
         )
 
     model_config.architectures = config.get("architectures")
+    model_config.enable_logprob = args.enable_logprob
 
     logger.info("===========load_config==============")
     load_config.dynamic_load_weight = args.dynamic_load_weight

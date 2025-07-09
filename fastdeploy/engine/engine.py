@@ -998,8 +998,8 @@ class LLMEngine(object):
         py_script = os.path.join(current_dir_path, worker_path)
 
         ori_vocab_size = (
-            len(self.data_processor.tokenizer.sp_model) 
-            if hasattr(self.data_processor.tokenizer, 'sp_model') 
+            len(self.data_processor.tokenizer.sp_model)
+            if hasattr(self.data_processor.tokenizer, 'sp_model')
             else len(self.data_processor.tokenizer.vocab)
         )
 
@@ -1046,7 +1046,7 @@ class LLMEngine(object):
             "enable_static_graph_inference":
             self.cfg.enable_static_graph_inference,
             "use_cudagraph": self.cfg.use_cudagraph,
-            "disable_any_whitespace": self.cfg.disable_any_whitespace,
+            "enable_logprob": self.cfg.enable_logprob,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:

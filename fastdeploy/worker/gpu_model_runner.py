@@ -63,7 +63,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.device_id = device_id
         self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
-
+        self.enable_logprob = fd_config.model_config.enable_logprob
+        self.max_num_logprobs = 20 if fd_config.model_config.enable_logprob else None
         self.guided_backend = None
         if self.fd_config.parallel_config.guided_decoding_backend != "off":
             self.guided_backend = get_guided_backend(fd_config=self.fd_config)
@@ -582,7 +583,7 @@ class GPUModelRunner(ModelRunnerBase):
             min_dec_lens=self.share_inputs["min_dec_len"],
             bad_words_token_ids=self.share_inputs["bad_tokens"],
             eos_token_ids=self.share_inputs["eos_token_id"],
-            max_num_logprobs=20,
+            max_num_logprobs=self.max_num_logprobs,
         )
 
     def load_model(self) -> None:
