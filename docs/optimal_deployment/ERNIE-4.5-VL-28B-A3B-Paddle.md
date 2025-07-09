@@ -69,7 +69,6 @@ Only use bfloat16 if your use case demands the highest possible accuracy, as it 
 - **Usage**: Controls the available GPU memory allocated for FastDeploy service initialization, with a default value of 0.9 (reserving 10% of GPU memory as buffer).
 - **Recommendation**: It is recommended to set it to 0.9 on Nvidia Ampere GPUs, and to 0.8–0.9 on Hopper GPUs. If you encounter an out-of-memory error during service stress testing, you can try lowering this value.
 
-
 > **kv-cache-ratio**
 - **Parameter**: `--kv-cache-ratio`
 - **Usage**: It is used to control the allocation ratio of GPU memory for the kv cache. The default value is 0.75, meaning that 75% of the kv cache memory is allocated to the input.
