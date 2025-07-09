@@ -284,7 +284,7 @@ class XPUModelRunner(ModelRunnerBase):
             if not self.no_top_p:
                 self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 0.7)
             if not self.no_top_k:
-                self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k", 20)
+                self.share_inputs["top_k"][idx:idx + 1] = 20 if request.get("top_k", 20) is None else request.get("top_k")
             self.share_inputs["temperature"][idx:idx + 1] = request.get(
                 "temperature", 0.95)
             self.share_inputs["penalty_score"][idx:idx + 1] = request.get(
