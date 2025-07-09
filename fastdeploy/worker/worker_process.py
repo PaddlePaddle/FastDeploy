@@ -735,8 +735,7 @@ def initialize_fd_config(config_or_args) -> FDConfig:
 
     # Handle vocabulary size
     model_config.ori_vocab_size = model_config_dict.get("vocab_size", -1)
-    archs = model_config_dict.get("architectures", [])
-    if "Ernie4_5_ForCausalLM" in archs or "Ernie4_5_MoeForCausalLM" in archs:
+    if "Ernie4_5_ForCausalLM" in model_config_dict.get("architectures", []):
         model_config.ori_vocab_size = getattr(config_or_args, 'ori_vocab_size', model_config.ori_vocab_size)
 
     # Handle DeepseekV3 specific config
