@@ -493,6 +493,31 @@ paddle::Tensor FusedHadamardQuantFp8Func(
                 const float scale);
 #endif
 
+int64_t init_custom_all_reduce(const std::vector<int64_t>& fake_ipc_ptrs,
+                      paddle::Tensor& rank_data, int64_t rank, bool full_nvlink);
+
+void all_reduce(int64_t _fa, paddle::Tensor& inp, paddle::Tensor& out,
+                int64_t reg_buffer, int64_t reg_buffer_sz_bytes);
+
+void dispose(int64_t _fa);
+
+int64_t meta_size();
+
+void register_buffer(int64_t _fa, const std::vector<int64_t>& fake_ipc_ptrs);
+
+std::tuple<std::vector<int64_t>, std::vector<int64_t>> get_graph_buffer_ipc_meta(int64_t _fa);
+
+void register_graph_buffers(int64_t _fa,
+                            const std::vector<std::vector<int64_t>>& handles,
+                            const std::vector<std::vector<int64_t>>& offsets);
+
+std::tuple<int64_t, paddle::Tensor> allocate_shared_buffer_and_handle(
+    int64_t size);
+
+int64_t open_mem_handle(paddle::Tensor& mem_handle);
+
+void free_shared_buffer(int64_t buffer);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_expert_token_num", &GetExpertTokenNum, py::arg("topk_ids"),
@@ -785,4 +810,24 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("fused_hadamard_quant_fp8", &FusedHadamardQuantFp8Func,
       py::arg("input"), py::arg("scale"), "fused_hadamard_quant_fp8 function");
 #endif
+
+  m.def("init_custom_all_reduce", &init_custom_all_reduce, "init all reduce class function");
+ 
+  m.def("all_reduce", &all_reduce, "all reduce function");
+
+  m.def("dispose", &dispose, "del function for python");
+
+  m.def("meta_size", &meta_size, "meta_size function for Signal struct");
+
+  m.def("register_buffer", &register_buffer, "register ipc buffer");
+
+  m.def("register_graph_buffers", &register_graph_buffers, "register_graph_buffers");
+
+  m.def("allocate_shared_buffer_and_handle", &allocate_shared_buffer_and_handle, "allocate_shared_buffer_and_handle");
+
+  m.def("free_shared_buffer", &free_shared_buffer, "free_shared_buffer");
+
+  m.def("open_mem_handle", &open_mem_handle, "open_mem_handle");
+
+  m.def("get_graph_buffer_ipc_meta", &get_graph_buffer_ipc_meta, "get_graph_buffer_ipc_meta");
 }

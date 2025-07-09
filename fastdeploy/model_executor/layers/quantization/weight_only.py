@@ -60,8 +60,10 @@ class WeightOnlyConfig(QuantConfigBase):
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if current_platform.is_xpu():
-            from fastdeploy.model_executor.layers.backends import (
-                XPUWeightOnlyLinearMethod, XPUWeightOnlyMoEMethod)
+            from fastdeploy.model_executor.layers.backends import \
+                XPUWeightOnlyLinearMethod
+            from fastdeploy.model_executor.layers.moe.fused_moe_xpu_backend import \
+                XPUWeightOnlyMoEMethod
             if isinstance(layer, FusedMoE):
                 return XPUWeightOnlyMoEMethod(self)
             else:

@@ -1048,6 +1048,7 @@ class LLMEngine(object):
             self.cfg.enable_static_graph_inference,
             "use_cudagraph": self.cfg.use_cudagraph,
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
+            "enable-custom-all-reduce": self.cfg.parallel_config.enable_custom_all_reduce,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:
