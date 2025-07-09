@@ -25,6 +25,7 @@ class _Backend(enum.Enum):
     APPEND_ATTN = enum.auto()
     MLA_ATTN = enum.auto()
     FLASH_ATTN = enum.auto()
+    BLOCK_ATTN = enum.auto()
 
 
 class Platform:
@@ -68,6 +69,12 @@ class Platform:
         whether platform is iluvatar gpu
         """
         return paddle.is_compiled_with_custom_device("iluvatar_gpu")
+
+    def is_gcu(self) -> bool:
+        """
+        whether platform is gcu
+        """
+        return paddle.is_compiled_with_custom_device("gcu")
 
     @classmethod
     def get_attention_backend_cls(self, selected_backend):

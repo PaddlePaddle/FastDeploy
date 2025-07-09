@@ -42,6 +42,9 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
     """
     get worker of different device
     """
+    if current_platform.is_dcu():
+        from fastdeploy.worker.dcu_worker import DcuWorker
+        return DcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_cuda():
         from fastdeploy.worker.gpu_worker import GpuWorker
         return GpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
@@ -53,6 +56,9 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
         return IluvatarWorker(fd_config=fd_config,
                               local_rank=local_rank,
                               rank=rank)
+    if current_platform.is_gcu():
+        from fastdeploy.worker.gcu_worker import GcuWorker
+        return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
 class PaddleDisWorkerProc():
@@ -491,6 +497,11 @@ def parse_args():
         default="WINT8",
         type=str,
     )
+    parser.add_argument(
+        "--speculative_benchmark_mode",
+        default="false",
+        type=str,
+    )
     parser.add_argument("--max_num_batched_tokens",
                         type=int,
                         default=2048,
@@ -499,6 +510,9 @@ def parse_args():
     parser.add_argument("--enable_prefix_caching",
                         action='store_true',
                         help="enable prefix cache")
+    parser.add_argument("--enable-custom-all-reduce",
+                        action='store_true',
+                        help="enable custom all-reduce")
     parser.add_argument("--splitwise_role",
                         type=str,
                         default="mixed",
@@ -622,6 +636,9 @@ def initialize_fd_config(config_or_args) -> FDConfig:
     speculative_config.num_speculative_tokens = getattr(config_or_args, 'speculative_max_draft_token_num', 0)
     speculative_config.model_name_or_path = getattr(config_or_args, 'speculative_model_name_or_path', None)
     speculative_config.quantization = getattr(config_or_args, 'speculative_model_quantization', None)
+    speculative_config.benchmark_mode = (
+        getattr(config_or_args, "speculative_benchmark_mode", "false").lower() == "true"
+    )
 
     # Update parallel config
     parallel_config.engine_pid = getattr(config_or_args, 'engine_pid', None)
@@ -648,6 +665,7 @@ def initialize_fd_config(config_or_args) -> FDConfig:
     parallel_config.enable_chunked_prefill = getattr(config_or_args, 'enable_chunked_prefill', False)
     parallel_config.max_num_batched_tokens = getattr(config_or_args, 'max_num_batched_tokens', 0)
     parallel_config.enable_prefix_caching = getattr(config_or_args, 'enable_prefix_caching', False)
+    parallel_config.enable_custom_all_reduce = getattr(config_or_args, 'enable_custom_all_reduce', False)
     parallel_config.use_ep = getattr(config_or_args, 'enable_expert_parallell', False)
     parallel_config.tensor_parallel_degree = getattr(config_or_args, 'tensor_parallel_size', 1)
     parallel_config.expert_parallel_degree = getattr(config_or_args, 'expert_parallel_size', 1)

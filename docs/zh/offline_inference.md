@@ -3,31 +3,6 @@
 ## 1. 使用方式
 通过FastDeploy离线推理，可支持本地加载模型，并处理用户数据，使用方式如下，
 
-### 续写接口(LLM.generate)
-
-```python
-from fastdeploy import LLM, SamplingParams
-
-prompts = [
-    "把李白的静夜思改写为现代诗",
-    "Write me a poem about large language model.",
-]
-
-# 采样参数
-sampling_params = SamplingParams(top_p=0.95, max_tokens=6400)
-
-# 加载模型
-llm = LLM(model="ERNIE-4.5-0.3B", tensor_parallel_size=1, max_model_len=8192)
-
-# 批量进行推理（llm内部基于资源情况进行请求排队、动态插入处理）
-outputs = llm.generate(prompts, sampling_params)
-
-# 输出结果
-for output in outputs:
-    prompt = output.prompt
-    generated_text = output.outputs.text
-```
-
 ### 对话接口(LLM.chat)
 
 ```python
@@ -47,7 +22,7 @@ messages = [msg1, msg2]
 sampling_params = SamplingParams(top_p=0.95, max_tokens=6400)
 
 # 加载模型
-llm = LLM(model="ERNIE-4.5-0.3B", tensor_parallel_size=1, max_model_len=8192)
+llm = LLM(model="baidu/ERNIE-4.5-0.3B-Paddle", tensor_parallel_size=1, max_model_len=8192)
 # 批量进行推理（llm内部基于资源情况进行请求排队、动态插入处理）
 outputs = llm.chat(messages, sampling_params)
 
@@ -59,15 +34,115 @@ for output in outputs:
 
 上述示例中```LLM```配置方式， `SamplingParams` ，`LLM.generate` ，`LLM.chat`以及输出output对应的结构体 `RequestOutput` 接口说明见如下文档说明。
 
-> 注： 若为X1 模型输出
+> 注： 若为思考模型, 加载模型时需要指定`resoning_parser` 参数，并在请求时, 可以通过配置`chat_template_kwargs` 中 `enable_thinking`参数, 进行开关思考。
 
 ```python
+from fastdeploy.entrypoints.llm import LLM
+# 加载模型
+llm = LLM(model="baidu/ERNIE-4.5-VL-28B-A3B-Paddle", tensor_parallel_size=1, max_model_len=32768, enable_mm=True, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
+
+outputs = llm.chat(
+    messages=[
+        {"role": "user", "content": [ {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"}},
+                                     {"type": "text", "text": "图中的文物属于哪个年代"}]}
+    ],
+    chat_template_kwargs={"enable_thinking": False})
+
 # 输出结果
 for output in outputs:
     prompt = output.prompt
     generated_text = output.outputs.text
     reasoning_text = output.outputs.resoning_content
 ```
+
+### 续写接口(LLM.generate)
+
+```python
+from fastdeploy import LLM, SamplingParams
+
+prompts = [
+    "User: 帮我写一篇关于深圳文心公园的500字游记和赏析。\nAssistant: 好的。"
+]
+
+# 采样参数
+sampling_params = SamplingParams(top_p=0.95, max_tokens=6400)
+
+# 加载模型
+llm = LLM(model="baidu/ERNIE-4.5-21B-A3B-Base-Paddle", tensor_parallel_size=1, max_model_len=8192)
+
+# 批量进行推理（llm内部基于资源情况进行请求排队、动态插入处理）
+outputs = llm.generate(prompts, sampling_params)
+
+# 输出结果
+for output in outputs:
+    prompt = output.prompt
+    generated_text = output.outputs.text
+```
+> 注： 续写接口, 适应于用户自定义好上下文输入, 并希望模型仅输出续写内容的场景; 推理过程不会增加其他 `prompt `拼接。   
+> 对于 `chat`模型, 建议使用对话接口(LLM.chat)。
+
+对于多模模型, 例如`baidu/ERNIE-4.5-VL-28B-A3B-Paddle`, 在调用`generate接口`时, 需要提供包含图片的prompt, 使用方式如下:
+```python
+import io
+import os
+import requests
+from PIL import Image
+
+from fastdeploy.entrypoints.llm import LLM
+from fastdeploy.engine.sampling_params import SamplingParams
+from fastdeploy.input.ernie_tokenizer_v2 import ErnieBotTokenizer
+
+PATH = "baidu/ERNIE-4.5-VL-28B-A3B-Paddle"
+tokenizer = ErnieBotTokenizer.from_pretrained(os.path.dirname(PATH))
+
+messages = [
+    {
+        "role": "user", 
+        "content": [
+            {"type":"image_url", "image_url": {"url":"https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0"}},
+            {"type":"text", "text":"这张图片的内容是什么"}
+        ]
+     }
+]
+
+prompt = tokenizer.apply_chat_template(messages, tokenize=False)
+images, videos = [], []
+for message in messages:
+    content = message["content"]
+    if not isinstance(content, list):
+        continue
+    for part in content:
+        if part["type"] == "image_url":
+            url = part["image_url"]["url"]
+            image_bytes = requests.get(url).content
+            img = Image.open(io.BytesIO(image_bytes))
+            images.append(img)
+        elif part["type"] == "video_url":
+            url = part["video_url"]["url"]
+            video_bytes = requests.get(url).content
+            videos.append({
+                "video": video_bytes,
+                "max_frames": 30
+            })
+
+sampling_params = SamplingParams(temperature=0.1, max_tokens=6400)
+llm = LLM(model=PATH, tensor_parallel_size=8, max_model_len=32768, enable_mm=True, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
+outputs = llm.generate(prompts={
+    "prompt": prompt,
+    "multimodal_data": {
+        "image": images,
+        "video": videos
+    }
+}, sampling_params=sampling_params)
+
+# 输出结果
+for output in outputs:
+    prompt = output.prompt
+    generated_text = output.outputs.text
+    reasoning_text = output.outputs.resoning_content
+
+```
+> 注： `generate` 接口, 暂时不支持思考开关参数控制, 均使用模型默认思考能力。
 
 ## 2. 接口说明
 
@@ -80,18 +155,21 @@ for output in outputs:
 > 2. 模型服务启动后，会在日志文件log/fastdeploy.log中打印如 `Doing profile, the total_block_num:640` 的日志，其中640即表示自动计算得到的KV Cache block数量，将它乘以block_size(默认值64)，即可得到部署后总共可以在KV Cache中缓存的Token数。
 > 3. `max_num_seqs` 用于配置decode阶段最大并发处理请求数，该参数可以基于第1点中缓存的Token数来计算一个较优值，例如线上统计输入平均token数800, 输出平均token数500，本次计>算得到KV Cache block为640， block_size为64。那么我们可以配置 `kv_cache_ratio = 800 / (800 + 500) = 0.6` , 配置 `max_seq_len = 640 * 64 / (800 + 500) = 31`。
 
-### 2.2 fastdeploy.LLM.generate
 
-* prompts(str,list[str],list[int]): 输入的prompt, 支持batch prompt 输入，解码后的token ids 进行输入
-* sampling_params: 模型超参设置具体说明见2.4
-* use_tqdm: 是否打开推理进度可视化
-
-### 2.3 fastdeploy.LLM.chat
+### 2.2 fastdeploy.LLM.chat
 
 * messages(list[dict],list[list[dict]]): 输入的message, 支持batch message 输入
 * sampling_params: 模型超参设置具体说明见2.4
 * use_tqdm: 是否打开推理进度可视化
-* chat_template_kwargs(dict): 传递给对话模板的额外参数，当前支持enable_thinking(bool)
+* chat_template_kwargs(dict): 传递给对话模板的额外参数，当前支持enable_thinking(bool)  
+  *使用示例`chat_template_kwargs={"enable_thinking": False}`*
+
+### 2.3 fastdeploy.LLM.generate
+
+* prompts(str, list[str], list[int], list[list[int]], dict[str, Any], list[dict[str, Any]]): 输入的prompt, 支持batch prompt 输入，解码后的token ids 进行输入  
+  *dict 类型使用示例`prompts={"prompt": prompt, "multimodal_data": {"image": images}}`*
+* sampling_params: 模型超参设置具体说明见2.4
+* use_tqdm: 是否打开推理进度可视化
 
 ### 2.4 fastdeploy.SamplingParams
 

@@ -35,6 +35,7 @@
 | ```enable_static_graph_inference```| `bool`      | 是否使用静态图推理模式，默认False |
 | ```use_cudagraph```                | `bool`      | 是否使用cuda graph，默认False |
 | ```max_capture_batch_size```       | `int`       | 开启 cuda graph 时，捕获的 cuda graph的最大batch size，默认为64 |
+| ```enable_custom_all_reduce```     | `bool`      | 开启Custom all-reduce，默认False |
 | ```splitwise_role```               | `str`       | 是否开启splitwise推理，默认值mixed， 支持参数为["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports```         | `str`       | prefill 实例内部引擎启动端口 （仅单机PD分离需要），默认值None |
 | ```guided_decoding_backend```      | `str`       | 指定要使用的guided decoding后端，支持 `auto`、`xgrammar`、`off`, 默认为 `off` |

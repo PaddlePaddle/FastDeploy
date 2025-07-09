@@ -146,6 +146,8 @@ def load_requirements():
     requirements_file_name = 'requirements.txt'
     if paddle.is_compiled_with_custom_device('iluvatar_gpu'):
         requirements_file_name = 'requirements_iluvatar.txt'
+    elif paddle.is_compiled_with_rocm():
+        requirements_file_name = 'requirements_dcu.txt'
     requirements_path = os.path.join(os.path.dirname(__file__),
                                      requirements_file_name)
     with open(requirements_path, 'r') as f:
@@ -167,6 +169,8 @@ def get_device_type():
         return "npu"
     elif paddle.is_compiled_with_custom_device('iluvatar_gpu'):
         return "iluvatar-gpu"
+    elif paddle.is_compiled_with_custom_device('gcu'):
+        return "gcu"
     else:
         return "cpu"
 
@@ -199,7 +203,7 @@ setup(
             "model_executor/ops/xpu/libs/*", "model_executor/ops/npu/*",
             "model_executor/ops/base/*", "model_executor/ops/iluvatar/*",
             "model_executor/models/*", "model_executor/layers/*",
-            "input/mm_processor/utils/*",
+            "input/mm_processor/utils/*", "model_executor/ops/gcu/*",
             "version.txt"
         ]
     },

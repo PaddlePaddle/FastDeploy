@@ -97,6 +97,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use fastsafetensor load weight (0 or 1)
     "FD_USE_FASTSAFETENSOR":
     lambda: os.getenv("FD_USE_FASTSAFETENSOR", "0"),
+
+    # Whether to use DeepGemm for FP8 blockwise MoE.
+    "FD_USE_DEEP_GEMM":
+    lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "1"))),
 }
 
 
