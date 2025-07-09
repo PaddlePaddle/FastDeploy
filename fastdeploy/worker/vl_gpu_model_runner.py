@@ -35,8 +35,6 @@ from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler
 from fastdeploy.model_executor.models.ernie4_5_moe import \
     Ernie4_5_PretrainedModel
-from fastdeploy.model_executor.models.ernie4_5_vl.configuration import \
-    Ernie4_5_VLMoeConfig
 from fastdeploy.model_executor.models.ernie4_5_vl.dfnrope import \
     DFNRopeVisionTransformerConfig
 from fastdeploy.model_executor.models.ernie4_5_vl.dfnrope.modeling import \
@@ -194,13 +192,11 @@ class GPUVLModelRunner(VLModelRunnerBase):
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.unk_token
 
-        config = Ernie4_5_VLMoeConfig.from_pretrained(
-            self.args.llm_model_name_or_path,
-            tensor_parallel_degree=self.tensor_parallel_degree,
-            tensor_parallel_rank=self.tensor_parallel_rank,
-            moe_group="dummy",
-        )
-        self.model_cfg = config
+        self.model_cfg = ModelConfig(vars(self.args))
+        self.model_cfg.tensor_parallel_degree=self.tensor_parallel_degree
+        self.model_cfg.tensor_parallel_rank=self.tensor_parallel_rank
+        self.model_cfg.moe_group="dummy"
+        config = self.model_cfg
         if self.is_safetensors_model:
             meta_json = os.path.join(self.args.model_name_or_path,
                                      "model.safetensors.index.json")
@@ -279,7 +275,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
         self.model.eval()
         self.set_state_dict(self.args)
 
-        fd_config.parallel_config.max_model_len = fd_config.model_config.max_seq_len
+        fd_config.parallel_config.max_model_len = fd_config.model_config.max_model_len
         self.fd_config = fd_config
         attn_backend_cls = get_attention_backend()
         num_heads = self.fd_config.model_config.num_attention_heads // \
@@ -338,14 +334,10 @@ class GPUVLModelRunner(VLModelRunnerBase):
         """
         cache_kvs = {}
         total_block_num = self.num_gpu_blocks
-        num_layers = self.model_cfg.get("num_layers",
-                                        None) or self.model_cfg.get(
-                                            "num_hidden_layers", None)
+        num_layers = self.model_cfg.num_hidden_layers
 
-        kv_num_head = self.model_cfg.get(
-            "num_key_value_heads",
-            self.model_cfg.num_attention_heads,
-        )
+        kv_num_head = self.model_cfg.num_key_value_heads if self.model_cfg.num_key_value_heads != -1 else self.model_cfg.num_attention_heads
+
         kv_num_head = kv_num_head // self.tensor_parallel_degree
         self.model_cfg.kv_num_head = kv_num_head
 
@@ -459,7 +451,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
             raise ValueError(f"No such a file {rank_model_path}")
 
     @paddle.no_grad()
-    def inject_pp_vision_model(self, args: argparse.Namespace, cfg: Ernie4_5_VLMoeConfig):
+    def inject_pp_vision_model(self, args: argparse.Namespace, cfg: ModelConfig):
         """
         Inject pp vision model
         """
@@ -931,9 +923,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
         """
         Calculate the size of kvcache for computational theory
         """
-        num_layers = self.model_cfg.get("num_layers",
-                                        None) or self.model_cfg.get(
-                                            "num_hidden_layers", None)
+        num_layers = self.model_cfg.num_hidden_layers
         byte_of_cache = 2
         # support c8 c4
 
@@ -1095,7 +1085,7 @@ def build_stream_line_model(
     model_config.moe_phase = MoEPhase.PREFILL
     # use the length of tokenizer as the origin vocab size
     ori_vocab_size = len(tokenizer)
-    model_config.vocab_size = ori_vocab_size
+    model_config.ori_vocab_size = ori_vocab_size
 
     quantization_config = model_config.quantization_config
 

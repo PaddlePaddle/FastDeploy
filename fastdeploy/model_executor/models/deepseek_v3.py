@@ -620,7 +620,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         """
         super().__init__(fd_config)
         self.model = DeepSeekV3Model(fd_config)
-        self.ori_vocab_size = fd_config.model_config.vocab_size
+        self.ori_vocab_size = fd_config.model_config.ori_vocab_size
         self.lm_head = ParallelLMHead(
             fd_config,
             embedding_dim=fd_config.model_config.hidden_size,

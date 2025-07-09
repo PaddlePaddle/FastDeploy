@@ -239,7 +239,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
 
         self.model = Qwen3Model(fd_config=fd_config)
 
-        self.ori_vocab_size = fd_config.model_config.vocab_size
+        self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
         self.lm_head = ParallelLMHead(
             fd_config=fd_config,

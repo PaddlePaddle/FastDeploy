@@ -419,7 +419,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         self.fd_config = fd_config
         self.model = Ernie4_5_Model(fd_config=fd_config)
 
-        self.ori_vocab_size = fd_config.model_config.vocab_size
+        self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
         self.lm_head = ParallelLMHead(
             fd_config=fd_config,

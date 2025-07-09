@@ -358,7 +358,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
 
         self.model = Qwen3MoeModel(fd_config)
 
-        self.ori_vocab_size = fd_config.model_config.vocab_size
+        self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
         self.lm_head = ParallelLMHead(
             fd_config,

@@ -351,7 +351,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
         self.fd_config = fd_config
         self.model = Ernie4_5_MTPModel(fd_config=fd_config)
 
-        self.ori_vocab_size = fd_config.model_config.vocab_size
+        self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
         self.lm_head = fd_config.speculative_config.sharing_model.lm_head
         self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings

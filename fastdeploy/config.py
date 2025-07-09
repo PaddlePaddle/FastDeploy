@@ -79,6 +79,10 @@ class ModelConfig:
             "initializer_range":0.02,
             "max_position_embeddings":512,
             "quantization_config":None,
+            "use_recompute_resampler":False,
+            "use_temporal_conv":True,
+            "resampler_fuse_rms_norm":False,
+            "freq_allocation":20,
         }
 
         for key, value in args.items():
@@ -98,6 +102,10 @@ class ModelConfig:
         if not hasattr(self, "head_dim"):
             self.head_dim = self.hidden_size // self.num_attention_heads
 
+        if hasattr(self, "vision_config"):
+            self.vision_config = PretrainedConfig.from_dict(self.vision_config)
+
+        self.ori_vocab_size = self.vocab_size
         if "Ernie4_5_ForCausalLM" in self.architectures:
             self.vocab_size = args["vocab_size"]
 

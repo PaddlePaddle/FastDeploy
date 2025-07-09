@@ -502,7 +502,7 @@ def parse_args():
     parser.add_argument("--enable_expert_parallell",
                         action='store_true',
                         help="enable expert parallell")
-    parser.add_argument("--vocab_size", type=int, default=None)
+    parser.add_argument("--ori_vocab_size", type=int, default=None)
 
     parser.add_argument("--quantization",
                         type=str,
