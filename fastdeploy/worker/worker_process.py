@@ -550,6 +550,9 @@ def parse_args():
         "'ipc_snapshot': load from disk snapshot of IPC weights, "
         "'meta': provide RL traing worker, no_weights_load"
         "'normal':normal load weight")
+    parser.add_argument("--enable_logprob",
+                        action='store_true',
+                        help="Enable output of token-level log probabilities.")
 
     args = parser.parse_args()
     return args
@@ -769,6 +772,8 @@ def initialize_fd_config(config) -> FDConfig:
         logger.info(
             "No quantization config found and use original weight and act dtype."
         )
+
+    model_config.enable_logprob = config.enable_logprob
 
     model_config.architectures = model_config_dict.get("architectures")
 

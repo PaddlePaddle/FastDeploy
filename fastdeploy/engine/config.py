@@ -16,8 +16,8 @@
 
 import json
 import os
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from fastdeploy import envs
@@ -585,6 +585,7 @@ class Config:
         max_capture_batch_size: int = 64,
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
+        enable_logprob: bool = False,
     ):
         """
         Initialize the Config class.
@@ -677,6 +678,8 @@ class Config:
         self.device_ids = ",".join([str(i) for i in range(min((self.tensor_parallel_size * \
                                         self.parallel_config.expert_parallel_size), 8))])
         self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.device_ids)
+
+        self.enable_logprob = enable_logprob
 
         self.read_from_config()
         self.postprocess()
