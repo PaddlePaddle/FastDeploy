@@ -25,6 +25,7 @@ class _Backend(enum.Enum):
     APPEND_ATTN = enum.auto()
     MLA_ATTN = enum.auto()
     FLASH_ATTN = enum.auto()
+    BLOCK_ATTN = enum.auto()
 
 
 class Platform:

@@ -214,11 +214,19 @@ HOSTDEVICE inline void Store(const AlignedVector<T, Size> &vec, T *addr) {
   *addr_vec = vec;
 }
 
+#ifdef PADDLE_WITH_HIP
+template <int Size>
+HOSTDEVICE inline void Store(const AlignedVector<hip_bfloat16, Size> &vec,
+                             int8_t *addr) {
+    printf("Error: Store hip_bfloat16 to int8_t is not supported!");
+}
+#else
 template <int Size>
 HOSTDEVICE inline void Store(const AlignedVector<__nv_bfloat16, Size> &vec,
                              int8_t *addr) {
   printf("Error: Store __nv_bfloat16 to int8_t is not supported!");
 }
+#endif
 
 template <int Size>
 HOSTDEVICE inline void Store(const AlignedVector<half, Size> &vec,
@@ -478,7 +486,12 @@ template <typename T>
 static void PrintMatrix3(const T *mat_d, int num, std::string name) {
 
   std::vector<T> tmp(num);
+#ifdef PADDLE_WITH_HIP
+  hipMemcpy(tmp.data(), mat_d, sizeof(T) * num, hipMemcpyDeviceToHost);
+#else
   cudaMemcpy(tmp.data(), mat_d, sizeof(T) * num, cudaMemcpyDeviceToHost);
+#endif
+
 
   std::ofstream outfile;
   outfile.open(name + ".txt", std::ios::out);
@@ -495,6 +508,7 @@ static void PrintMatrix3(const T *mat_d, int num, std::string name) {
   outfile.close();
 }
 
+#ifndef PADDLE_WITH_HIP
 __forceinline__ __device__ uint32_t ld_flag_acquire(uint32_t *flag_addr,
                                                     int mode = 0) {
   uint32_t flag;
@@ -534,6 +548,7 @@ inline int get_cuda_max_shared_memory_per_block_opt_in(int const device) {
                          cudaDevAttrMaxSharedMemoryPerBlockOptin, device);
   return max_shared_mem_per_block_opt_in;
 }
+#endif
 
 inline int GetSMVersion() {
   static int sm_version = phi::backends::gpu::GetGPUComputeCapability(

@@ -39,7 +39,7 @@ from fastdeploy.model_executor.models.ernie4_5_moe import (Ernie4_5_Attention,
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 from fastdeploy.platforms import current_platform
 
-if current_platform.is_cuda():
+if current_platform.is_cuda() and not current_platform.is_dcu():
     from fastdeploy.model_executor.ops.gpu import (extract_text_token_output,
                                                    text_image_gather_scatter,
                                                    text_image_index_out)

@@ -37,3 +37,9 @@ if current_platform.is_gcu():
     from .gcu import *
     if hasattr(gcu, '__all__'):
         __all__.extend(gcu.__all__)
+
+if current_platform.is_dcu():
+    from .dcu import *
+    from . import dcu
+    if hasattr(dcu, '__all__'):
+        __all__.extend(dcu.__all__)
