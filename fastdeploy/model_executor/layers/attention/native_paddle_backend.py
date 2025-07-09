@@ -17,12 +17,16 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import paddle
 from paddle.nn.functional import scaled_dot_product_attention
 
 from fastdeploy.model_executor.layers.attention.base_attention_backend import \
     AttentionBackend
-from fastdeploy.worker.forward_meta import ForwardMeta
+
+if TYPE_CHECKING:
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class PaddleNativeAttnBackend(AttentionBackend):
@@ -34,7 +38,7 @@ class PaddleNativeAttnBackend(AttentionBackend):
     def __init__(self) -> None:
         super().__init__()
 
-    def init_attention_metadata(self, forward_meta: ForwardMeta):
+    def init_attention_metadata(self, forward_meta: "ForwardMeta"):
         """Init the metadata for a forward pass."""
         pass
 
@@ -212,7 +216,7 @@ class PaddleNativeAttnBackend(AttentionBackend):
         k: paddle.Tensor,
         v: paddle.Tensor,
         layer: paddle.nn.Layer,
-        forward_meta: ForwardMeta,
+        forward_meta: "ForwardMeta",
         save_kv_cache: bool = True,
     ) -> paddle.Tensor:
         """
@@ -253,7 +257,7 @@ class PaddleNativeAttnBackend(AttentionBackend):
         k: paddle.Tensor,
         v: paddle.Tensor,
         layer: paddle.nn.Layer,
-        forward_meta: ForwardMeta,
+        forward_meta: "ForwardMeta",
     ) -> paddle.Tensor:
         """
             Run the decoding attention forward by using paddle native sdpa op.

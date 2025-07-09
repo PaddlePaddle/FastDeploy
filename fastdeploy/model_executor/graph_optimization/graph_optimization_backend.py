@@ -14,13 +14,66 @@
 # limitations under the License.
 """
 
-from typing import Callable, Optional
+import functools
+import inspect
+import types
+from typing import Callable, Optional, get_type_hints
 
-from paddle.jit.dy2static.utils import Backend
-
+import paddle
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.graph_optimization.cudagraph_piecewise_backend import \
     CudaGraphPiecewiseBackend
+from fastdeploy.model_executor.graph_optimization.dynamic_dims_marker import \
+    resolve_dynamic_dims
+from paddle.jit import sot
+from paddle.jit.dy2static.utils import Backend
+
+
+def apply_to_static_optimization(fn):
+    forward_fn = fn
+    forward_sig = inspect.signature(forward_fn)
+    # forward_annotations = inspect.get_annotations(forward_fn)
+    forward_type_hints = get_type_hints(forward_fn)
+    static_forward_fn = sot.symbolic_translate(
+        forward_fn, training=False, backend=Backend.PHI
+    )
+    unsafe_static_forward_fn = None
+
+    @functools.wraps(forward_fn)
+    def static_forward(self, *args, **kwargs):
+        nonlocal unsafe_static_forward_fn
+        if unsafe_static_forward_fn is not None:
+            return unsafe_static_forward_fn(self, *args, **kwargs)
+        bound_args = forward_sig.bind(self, *args, **kwargs)
+        bound_args.apply_defaults()
+        for name, arg in bound_args.arguments.items():
+            if name not in forward_type_hints:
+                continue
+            annotation = forward_type_hints[name]
+            resolve_dynamic_dims(arg, name, annotation)
+
+            # print(f"Processing argument '{name}' with annotation: {annotation}")
+            # if isinstance(arg, paddle.Tensor):
+            #     print(
+            #         f"Argument '{name}' is a Tensor with dynamic dims: {extract_dynamic_dims(annotation)}"
+            #     )
+            #     paddle.jit.marker.dynamic_dims(
+            #         arg, extract_dynamic_dims(annotation)
+            #     )
+        result = static_forward_fn(self, *args, **kwargs)
+        original_code = forward_fn.__code__
+        (new_guarded_codes, _) = sot.opcode_translator.executor.executor_cache.OpcodeExecutorCache().cache[original_code]
+        new_code = new_guarded_codes[0][0][0]
+        unsafe_static_forward_fn = types.FunctionType(
+            new_code,
+            forward_fn.__globals__,
+            forward_fn.__name__,
+            forward_fn.__defaults__,
+            forward_fn.__closure__,
+        )
+        return result
+
+    return static_forward
 
 
 class GraphOptBackend:
@@ -43,9 +96,10 @@ class GraphOptBackend:
             backend = (Backend.CINN
                        if self.fd_config.graph_opt_config.graph_opt_level > 1
                        else Backend.PHI)
-            self.runnable = sot.symbolic_translate(self.runnable,
-                                                   training=False,
-                                                   backend=backend)
+            # self.runnable = sot.symbolic_translate(self.runnable,
+            #                                        training=False,
+            #                                        backend=backend)
+            self.runnable = apply_to_static_optimization(self.runnable.__func__).__get__(self.runnable.__self__)
 
     def __call__(self, **kwargs):
         if not self.fd_config.graph_opt_config.use_cudagraph:

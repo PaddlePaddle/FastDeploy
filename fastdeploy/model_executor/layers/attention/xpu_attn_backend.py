@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional, Tuple, Annotated
 
 import paddle
 
@@ -26,14 +26,14 @@ from fastdeploy.model_executor.layers.attention.ops import (
     init_signal_layerwise, open_shm_and_get_meta_signal)
 
 if TYPE_CHECKING:
-    from paddle._typing.dtype_like import _DTypeLiteral
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
-from fastdeploy.worker.forward_meta import ForwardMeta
-
+from fastdeploy.model_executor.graph_optimization.dynamic_dims_marker import \
+    DynamicDims
 
 @dataclass
 class XPUAttentionMetadata(AttentionMetadata):
@@ -42,17 +42,17 @@ class XPUAttentionMetadata(AttentionMetadata):
     """
     max_len_kv: paddle.Tensor = None
     set_max_lengths: int = -1
-    encoder_batch_ids: paddle.Tensor = None
-    encoder_tile_ids_per_batch: paddle.Tensor = None
-    encoder_num_blocks: paddle.Tensor = None
-    kv_batch_ids: paddle.Tensor = None
-    kv_tile_ids_per_batch: paddle.Tensor = None
-    kv_num_blocks: paddle.Tensor = None
-    decoder_batch_ids: paddle.Tensor = None
-    decoder_tile_ids_per_batch: paddle.Tensor = None
-    decoder_num_blocks: paddle.Tensor = None
+    encoder_batch_ids: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    encoder_tile_ids_per_batch: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    encoder_num_blocks: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    kv_batch_ids: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    kv_tile_ids_per_batch: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    kv_num_blocks: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    decoder_batch_ids: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    decoder_tile_ids_per_batch: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    decoder_num_blocks: Annotated[paddle.Tensor, DynamicDims(0)] = None
 
-    _dtype: _DTypeLiteral = paddle.bfloat16
+    _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768
     max_partition_size: int = 32768
     block_tables: Optional[paddle.Tensor] = None
@@ -71,6 +71,9 @@ class XPUAttentionBackend(AttentionBackend):
     """
     XPUAttentionBackend backend implementation.
     """
+
+    __infer_dynamic_dims_fields__ = ["attention_metadata"]
+    attention_metadata: XPUAttentionMetadata
 
     def __init__(self, fd_config: FDConfig, kv_num_heads: int, num_heads: int,
                  head_dim: int):
@@ -103,7 +106,7 @@ class XPUAttentionBackend(AttentionBackend):
             os.getenv("FLAGS_use_pd_disaggregation", 0))
         self.start_layer_index: int = fd_config.model_config.start_layer_index
 
-    def init_attention_metadata(self, forward_meta: ForwardMeta):
+    def init_attention_metadata(self, forward_meta: "ForwardMeta"):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
         metadata = XPUAttentionMetadata()
         metadata.encoder_block_shape_q = 64
@@ -152,7 +155,7 @@ class XPUAttentionBackend(AttentionBackend):
         compressed_kv: paddle.Tensor,
         k_pe: paddle.Tensor,
         layer: Attention,
-        forward_meta: ForwardMeta,
+        forward_meta: "ForwardMeta",
     ) -> paddle.Tensor:
         """
         forward_mixed

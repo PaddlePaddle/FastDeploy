@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Annotated, TYPE_CHECKING
 
 import paddle
 from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
@@ -27,10 +27,14 @@ from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
+from fastdeploy.model_executor.graph_optimization.dynamic_dims_marker import \
+    DynamicDims
 from fastdeploy.model_executor.layers.attention.ops import (
     get_block_shape_and_split_kv_block, gqa_rope_write_cache,
     init_signal_layerwise, open_shm_and_get_meta_signal, pre_cache_len_concat)
-from fastdeploy.worker.forward_meta import ForwardMeta
+
+if TYPE_CHECKING:
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 @dataclass
@@ -42,15 +46,15 @@ class FlashAttentionMetadata(AttentionMetadata):
     set_max_lengths: int = -1
     rotary_embs: Optional[paddle.Tensor] = None
     block_tables: Optional[paddle.Tensor] = None
-    encoder_batch_ids: paddle.Tensor = None
-    encoder_tile_ids_per_batch: paddle.Tensor = None
-    encoder_num_blocks: paddle.Tensor = None
-    kv_batch_ids: paddle.Tensor = None
-    kv_tile_ids_per_batch: paddle.Tensor = None
-    kv_num_blocks: paddle.Tensor = None
-    decoder_batch_ids: paddle.Tensor = None
-    decoder_tile_ids_per_batch: paddle.Tensor = None
-    decoder_num_blocks: paddle.Tensor = None
+    encoder_batch_ids: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    encoder_tile_ids_per_batch: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    encoder_num_blocks: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    kv_batch_ids: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    kv_tile_ids_per_batch: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    kv_num_blocks: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    decoder_batch_ids: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    decoder_tile_ids_per_batch: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    decoder_num_blocks: Annotated[paddle.Tensor, DynamicDims(0)] = None
 
     encoder_block_shape_q: Optional[paddle.Tensor] = None
     decoder_block_shape_q: Optional[paddle.Tensor] = None
@@ -74,6 +78,9 @@ class FlashAttentionBackend(AttentionBackend):
     """
     FlashAttentionBackend backend implementation
     """
+
+    __infer_dynamic_dims_fields__ = ["attention_metadata"]
+    attention_metadata: FlashAttentionMetadata
 
     def __init__(self, fd_config: FDConfig, kv_num_heads: int, num_heads: int,
                  head_dim: int):
@@ -127,7 +134,7 @@ class FlashAttentionBackend(AttentionBackend):
         return (max_num_blocks, self.kv_num_heads, self.block_size,
                 self.head_dim)
 
-    def init_attention_metadata(self, forward_meta: ForwardMeta):
+    def init_attention_metadata(self, forward_meta: "ForwardMeta"):
         metadata = FlashAttentionMetadata()
         metadata.encoder_block_shape_q = 64
         metadata.decoder_block_shape_q = 16
@@ -190,7 +197,7 @@ class FlashAttentionBackend(AttentionBackend):
         compressed_kv: paddle.Tensor,
         k_pe: paddle.Tensor,
         layer: Attention,
-        forward_meta: ForwardMeta,
+        forward_meta: "ForwardMeta",
     ):
         metadata = self.attention_metadata
 

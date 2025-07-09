@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Dict, Union
+from typing import Dict, Union, Annotated
 
 import numpy as np
 import paddle
@@ -41,8 +41,10 @@ from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
 from fastdeploy.model_executor.models.utils import \
     LayerIdPlaceholder as layerid
 from fastdeploy.model_executor.models.utils import WeightMeta
-from fastdeploy.worker.forward_meta import ForwardMeta
-
+from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.graph_optimization.dynamic_dims_marker import (
+    DynamicDims
+)
 
 class Ernie4_5_MLP(nn.Layer):
 
@@ -387,7 +389,7 @@ class Ernie4_5_Model(nn.Layer):
 
     def forward(
         self,
-        ids_remove_padding: paddle.Tensor,
+        ids_remove_padding: Annotated[paddle.Tensor, DynamicDims(0)],
         forward_meta: ForwardMeta,
     ):
         hidden_states = self.embeddings(ids_remove_padding=ids_remove_padding)

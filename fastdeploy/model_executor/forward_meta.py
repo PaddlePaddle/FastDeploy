@@ -18,14 +18,16 @@ import abc
 import logging
 from dataclasses import dataclass
 from enum import IntEnum, auto
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union, Annotated
+from fastdeploy.model_executor.graph_optimization.dynamic_dims_marker import (
+    DynamicDims
+)
+from fastdeploy.model_executor.layers.attention import (Attention,
+                                                        AttentionBackend)
 
 import numpy as np
 import paddle
 
-if TYPE_CHECKING:
-    from fastdeploy.model_executor.layers.attention import (Attention,
-                                                            AttentionBackend)
 
 logger = logging.getLogger(__name__)
 
@@ -282,7 +284,7 @@ class ForwardMeta():
     forward_mode: ForwardMode = ForwardMode.MIXED
 
     #
-    ids_remove_padding: paddle.Tensor = None
+    ids_remove_padding: Annotated[paddle.Tensor, DynamicDims(0)] = None
 
     #
     seq_lens_encoder: Optional[paddle.Tensor] = None
@@ -300,13 +302,13 @@ class ForwardMeta():
     block_tables: Optional[paddle.Tensor] = None
 
     #
-    attn_backend: 'AttentionBackend' = None
+    attn_backend: AttentionBackend = None
 
     #
     rotary_embs: Optional[paddle.Tensor] = None
 
     #
-    padding_offset: Optional[paddle.Tensor] = None
+    padding_offset: Optional[Annotated[paddle.Tensor, DynamicDims(0)]] = None
 
     #
     cu_seqlens_q: Optional[paddle.Tensor] = None
@@ -315,7 +317,7 @@ class ForwardMeta():
     cu_seqlens_k: Optional[paddle.Tensor] = None
 
     #
-    caches: Optional[paddle.Tensor] = None
+    caches: Optional[list[Annotated[paddle.Tensor, DynamicDims(0)]]] = None
 
     #
     attn_mask: Optional[paddle.Tensor] = None
@@ -327,9 +329,9 @@ class ForwardMeta():
     step_use_cudagraph: bool = False
 
     # for attention backend
-    decoder_batch_ids: Optional[paddle.Tensor] = None
+    decoder_batch_ids: Optional[Annotated[paddle.Tensor, DynamicDims(0)]] = None
     # for attention backend
-    decoder_tile_ids_per_batch: Optional[paddle.Tensor] = None
+    decoder_tile_ids_per_batch: Optional[Annotated[paddle.Tensor, DynamicDims(0)]] = None
     # is_decode_batch or not
     is_decode_batch: bool = False
 

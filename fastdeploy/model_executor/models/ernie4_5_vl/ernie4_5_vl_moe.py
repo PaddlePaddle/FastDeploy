@@ -42,7 +42,7 @@ if current_platform.is_cuda():
                                                    text_image_gather_scatter,
                                                    text_image_index_out)
 
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Ernie4_5_VLMLP(Ernie4_5_MLP):

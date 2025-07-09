@@ -14,17 +14,18 @@
 # limitations under the License.
 """
 
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 
 import numpy as np
 import paddle
-from paddle import nn
-from paddleformers.utils.log import logger
-
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.quantization.quant_base import \
     QuantMethodBase
-from fastdeploy.worker.forward_meta import ForwardMeta
+from paddle import nn
+from paddleformers.utils.log import logger
+
+if TYPE_CHECKING:
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Attention(nn.Layer):
@@ -113,7 +114,7 @@ class Attention(nn.Layer):
         qkv: paddle.Tensor = None,
         compressed_kv: paddle.Tensor = None,
         k_pe: paddle.Tensor = None,
-        forward_meta: ForwardMeta = None,
+        forward_meta: "ForwardMeta" = None,
     ) -> paddle.Tensor:
         """
         The forward function of attention layer.
