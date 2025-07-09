@@ -447,6 +447,7 @@ class ParallelConfig:
         tensor_parallel_size: int = 1,
         data_parallel_size: int = 1,
         enable_expert_parallel: bool = False,
+        enable_custom_all_reduce: bool = False,
     ):
         """
         Initialize the ParallelConfig class.
@@ -462,6 +463,7 @@ class ParallelConfig:
         self.enable_expert_parallel = enable_expert_parallel
         self.expert_parallel_size = data_parallel_size
         self.local_data_parallel_id = 0
+        self.enable_custom_all_reduce = enable_custom_all_reduce
 
     def print(self):
         """
@@ -587,6 +589,7 @@ class Config:
         max_capture_batch_size: int = 64,
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
+        enable_custom_all_reduce: bool = False,
     ):
         """
         Initialize the Config class.

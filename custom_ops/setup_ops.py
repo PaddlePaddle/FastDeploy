@@ -276,6 +276,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/get_position_ids_and_mask_encoder_batch.cu",
         "gpu_ops/fused_rotary_position_encoding.cu",
         "gpu_ops/noaux_tc.cu",
+        "gpu_ops/custom_all_reduce/all_reduce.cu",
     ]
 
     # pd_disaggregation

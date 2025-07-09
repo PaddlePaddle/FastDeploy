@@ -507,6 +507,9 @@ def parse_args():
     parser.add_argument("--enable_prefix_caching",
                         action='store_true',
                         help="enable prefix cache")
+    parser.add_argument("--enable-custom-all-reduce",
+                        action='store_true',
+                        help="enable custom all-reduce")
     parser.add_argument("--splitwise_role",
                         type=str,
                         default="mixed",
@@ -659,6 +662,7 @@ def initialize_fd_config(config_or_args) -> FDConfig:
     parallel_config.enable_chunked_prefill = getattr(config_or_args, 'enable_chunked_prefill', False)
     parallel_config.max_num_batched_tokens = getattr(config_or_args, 'max_num_batched_tokens', 0)
     parallel_config.enable_prefix_caching = getattr(config_or_args, 'enable_prefix_caching', False)
+    parallel_config.enable_custom_all_reduce = getattr(config_or_args, 'enable_custom_all_reduce', False)
     parallel_config.use_ep = getattr(config_or_args, 'enable_expert_parallell', False)
     parallel_config.tensor_parallel_degree = getattr(config_or_args, 'tensor_parallel_size', 1)
     parallel_config.expert_parallel_degree = getattr(config_or_args, 'expert_parallel_size', 1)
