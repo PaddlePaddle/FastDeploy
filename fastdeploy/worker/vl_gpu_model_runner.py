@@ -752,7 +752,6 @@ class GPUVLModelRunner(VLModelRunnerBase):
                                               position_ids, **kwargs)
 
             self.share_inputs["top_p"][idx:idx + 1] = kwargs["top_p"]
-            self.share_inputs["top_k"][idx:idx + 1] = kwargs["top_k"]
             self.share_inputs["temperature"][idx:idx +
                                              1] = kwargs["temperature"]
             self.share_inputs["eos_token_id"][:] = np.array(
@@ -838,7 +837,6 @@ class GPUVLModelRunner(VLModelRunnerBase):
 
         self.sampling_metadata = SamplingMetadata(
             temperature=self.share_inputs["temperature"],
-            top_k=self.share_inputs["top_k"],
             top_p=self.share_inputs["top_p"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],

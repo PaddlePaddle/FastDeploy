@@ -128,8 +128,6 @@ class VLModelRunnerBase(ABC):
             paddle.full([self.args.eos_tokens_lens, 1], 0, **int64_config),
             "top_p":
             paddle.full([max_num_seqs, 1], self.top_p, **float32_config),
-            "top_k":
-            paddle.full([max_num_seqs, 1], 20, **int64_config),
             "temperature":
             paddle.full([max_num_seqs, 1], self.temperature, **float32_config),
             "penalty_score":
