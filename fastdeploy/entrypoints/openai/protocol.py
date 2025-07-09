@@ -140,7 +140,7 @@ class LogProbEntry(BaseModel):
     token: str
     logprob: float
     bytes: Optional[List[int]] = None
-    top_logprobs: Optional[List["LogProbEntry"]] = None  # forward reference
+    top_logprobs: Optional[List["LogProbEntry"]] = None
 
 class LogProbs(BaseModel):
     content: Optional[List[LogProbEntry]] = None

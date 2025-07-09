@@ -63,8 +63,8 @@ class OpenAIServingChat:
         return False
 
     async def create_chat_completion(
-        self,
-        request: ChatCompletionRequest
+            self,
+            request: ChatCompletionRequest
     ):
         """
         Create a new chat completion using the specified parameters.
@@ -111,11 +111,11 @@ class OpenAIServingChat:
         return error_response.model_dump_json()
 
     async def chat_completion_stream_generator(
-        self,
-        request: ChatCompletionRequest,
-        request_id: str,
-        model_name: str,
-        prompt_token_ids: list()
+            self,
+            request: ChatCompletionRequest,
+            request_id: str,
+            model_name: str,
+            prompt_token_ids: list()
     ):
         """
         Streaming chat completion generator.
@@ -170,7 +170,7 @@ class OpenAIServingChat:
                             current_waiting_time = 0
                     await asyncio.sleep(0.1)
                     continue
-    
+
                 res = json.loads(raw_data[-1].decode('utf-8'))
                 if res.get("error_code", 200) != 200:
                     raise ValueError("{}".format(res["error_msg"]))
@@ -246,7 +246,7 @@ class OpenAIServingChat:
                             choice.finish_reason = "tool_calls"
                     else:
                         choice.finish_reason = "length"
-                    
+
                     if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
                         choice.finish_reason = "recover_stop"
 
@@ -264,7 +264,6 @@ class OpenAIServingChat:
                     chunk.choices = choices
                     yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                     choices = []
-
 
             if include_usage:
                 completion_tokens = previous_num_tokens
@@ -293,11 +292,11 @@ class OpenAIServingChat:
             yield "data: [DONE]\n\n"
 
     async def chat_completion_full_generator(
-        self,
-        request: ChatCompletionRequest,
-        request_id: str,
-        model_name: str,
-        prompt_token_ids: list()
+            self,
+            request: ChatCompletionRequest,
+            request_id: str,
+            model_name: str,
+            prompt_token_ids: list()
     ):
         """
         Full chat completion generator.
@@ -342,17 +341,18 @@ class OpenAIServingChat:
                 # 处理响应的logprob
                 output = data["outputs"]
                 raw_top_logprobs = output["top_logprobs"]
-                top_logprobs = LogprobsLists(
-                    logprob_token_ids=raw_top_logprobs[0],
-                    logprobs=raw_top_logprobs[1],
-                    sampled_token_ranks=raw_top_logprobs[2],
-                )
-                logprobs_res = self.build_logprobs_response(
-                    logprobs=top_logprobs,
-                    request_top_logprobs=request.top_logprobs,
-                )
-                if logprobs_res and logprobs_res.content is not None:
-                    logprob_contents.extend(logprobs_res.content)
+                if raw_top_logprobs is not None:
+                    top_logprobs = LogprobsLists(
+                        logprob_token_ids=raw_top_logprobs[0],
+                        logprobs=raw_top_logprobs[1],
+                        sampled_token_ranks=raw_top_logprobs[2],
+                    )
+                    logprobs_res = self.build_logprobs_response(
+                        logprobs=top_logprobs,
+                        request_top_logprobs=request.top_logprobs,
+                    )
+                    if logprobs_res and logprobs_res.content is not None:
+                        logprob_contents.extend(logprobs_res.content)
                 if data["finished"]:
                     final_res = data
                     break
@@ -386,7 +386,7 @@ class OpenAIServingChat:
                 choice.finish_reason = "tool_calls"
         else:
             choice.finish_reason = "length"
-            
+
         if final_res.get("error_msg") is not None and "Recover" in final_res["error_msg"]:
             choice.finish_reason = "recover_stop"
         choices.append(choice)
@@ -407,7 +407,6 @@ class OpenAIServingChat:
             choices=choices,
             usage=usage
         )
-
 
     def build_logprobs_response(
             self,
