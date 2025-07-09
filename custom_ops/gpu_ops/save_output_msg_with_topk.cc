@@ -31,10 +31,12 @@ struct msgdata {
     long mtype;
     int mtext[MAX_BSZ * (K + 1) + 2];  // stop_flag, bsz, tokens
     float mtext_f[MAX_BSZ * (K + 1)];  // score
+    int mtext_ranks[MAX_BSZ];  // ranks
 };
 
 void SaveOutMmsgTopK(const paddle::Tensor& x,
                      const paddle::Tensor& scores,
+                     const paddle::Tensor& ranks,
                      const paddle::Tensor& not_need_stop,
                      int64_t rank_id) {
     if (rank_id > 0) {
@@ -42,8 +44,10 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
     }
     auto x_cpu = x.copy_to(paddle::CPUPlace(), false);
     auto scores_cpu = scores.copy_to(paddle::CPUPlace(), false);
+    auto ranks_cpu = ranks.copy_to(paddle::CPUPlace(), false);
     int64_t* x_data = x_cpu.data<int64_t>();
     float* scores_data = scores_cpu.data<float>();
+    int64_t* ranks_data = ranks_cpu.data<int64_t>();
     static struct msgdata msg_sed;
     int msg_queue_id = 1;
     if (const char* inference_msg_queue_id_env_p =
@@ -108,6 +112,7 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
             msg_sed.mtext[offset + 2] = (int)x_data[i * token_num + j];
             msg_sed.mtext_f[offset] = scores_data[i * token_num + j];
         }
+        msg_sed.mtext_ranks[i] = (int)ranks_data[i];
     }
 #ifdef SAVE_WITH_OUTPUT_DEBUG
     std::cout << "msg data: ";
@@ -118,7 +123,7 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
 #endif
     if ((msgsnd(msgid,
                 &msg_sed,
-                (MAX_BSZ * (K + 1) + 2) * 4 + (MAX_BSZ * (K + 1)) * 4,
+                (MAX_BSZ * (K + 1) + 2) * 4 + (MAX_BSZ * (K + 1)) * 4 + MAX_BSZ * 4,
                 0)) == -1) {
         printf("full msg buffer\n");
     }
@@ -126,7 +131,7 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
 }
 
 PD_BUILD_STATIC_OP(save_output_topk)
-    .Inputs({"x", "scores", "not_need_stop"})
+    .Inputs({"x", "scores", "ranks", "not_need_stop"})
     .Attrs({"rank_id: int64_t"})
     .Outputs({"x_out"})
     .SetInplaceMap({{"x", "x_out"}})
