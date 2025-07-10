@@ -25,7 +25,7 @@ if current_platform.is_gcu():
     from fastdeploy.model_executor.ops.gcu import \
         top_p_sampling as gcu_top_p_sampling
 
-def top_p_sampling(
+def top_k_top_p_sampling(
     x: paddle.Tensor,
     top_p: paddle.Tensor,
     top_k: Optional[paddle.Tensor] = None,
