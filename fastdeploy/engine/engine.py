@@ -1021,8 +1021,8 @@ class LLMEngine(object):
         py_script = os.path.join(current_dir_path, worker_path)
 
         ori_vocab_size = (
-            len(self.data_processor.tokenizer.sp_model) 
-            if hasattr(self.data_processor.tokenizer, 'sp_model') 
+            len(self.data_processor.tokenizer.sp_model)
+            if hasattr(self.data_processor.tokenizer, 'sp_model')
             else len(self.data_processor.tokenizer.vocab)
         )
 
