@@ -317,10 +317,7 @@ class DeepseekV3MLAAttention(nn.Layer):
         ],
                                 dtype=layernorm_out.dtype)
 
-        decode_stage = forward_meta.is_decode_batch
-        prefill_stage = not (forward_meta.is_decode_batch)
-
-        if prefill_stage:
+        if forward_meta.max_enc_len_this_time:
             query = self.q_a_proj(layernorm_out)
             query = self.q_a_layernorm(query)
             query = self.q_b_proj(query)
@@ -370,8 +367,7 @@ class DeepseekV3MLAAttention(nn.Layer):
                 fmha_out_prefill.dtype)
 
             fmha_out = fmha_out + fmha_out_prefill
-
-        if decode_stage:
+        if forward_meta.max_dec_len_this_time:
             query = self.q_a_proj(layernorm_out)
             query = self.q_a_layernorm(query)
             ln_out_or_q_c = query
@@ -554,28 +550,6 @@ class DeepSeekV3Model(nn.Layer):
             prefix="deepseek_v3.norm",
         )
 
-    def pre_process(self, forward_meta):
-        """
-        """
-        seq_lens_encoder = forward_meta.seq_lens_encoder
-        seq_lens_decoder = forward_meta.seq_lens_decoder
-        seq_lens_this_time = forward_meta.seq_lens_this_time
-        position_ids_shape = paddle.sum(seq_lens_this_time)
-
-        position_ids = paddle.empty(shape=position_ids_shape,
-                                    dtype=seq_lens_encoder.dtype)
-        mask_encoder_batch = paddle.empty(
-            shape=position_ids_shape,
-            dtype=seq_lens_encoder.dtype).unsqueeze(1)
-
-        get_position_ids_and_mask_encoder_batch(seq_lens_encoder,
-                                                seq_lens_decoder,
-                                                seq_lens_this_time,
-                                                position_ids,
-                                                mask_encoder_batch)
-
-        return position_ids, mask_encoder_batch
-
     def load_state_dict(self, state_dict):
         """
         Load model parameters from a given state dictionary.
@@ -590,12 +564,12 @@ class DeepSeekV3Model(nn.Layer):
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
+        position_ids: paddle.Tensor,
+        mask_encoder_batch: paddle.Tensor,
     ):
         """
         """
         hidden_states = self.embeddings(ids_remove_padding=ids_remove_padding)
-
-        position_ids, mask_encoder_batch = self.pre_process(forward_meta)
 
         residual = None
         for i in range(self.num_layers):
@@ -650,6 +624,27 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         logits[:, self.ori_vocab_size:] = -float("inf")
         return logits
 
+    def pre_process(self, forward_meta):
+        """
+        """
+        seq_lens_encoder = forward_meta.seq_lens_encoder
+        seq_lens_decoder = forward_meta.seq_lens_decoder
+        seq_lens_this_time = forward_meta.seq_lens_this_time
+        position_ids_shape = paddle.sum(seq_lens_this_time)
+        position_ids = paddle.empty(shape=position_ids_shape,
+                                    dtype=seq_lens_encoder.dtype)
+        mask_encoder_batch = paddle.empty(
+            shape=position_ids_shape,
+            dtype=seq_lens_encoder.dtype).unsqueeze(1)
+
+        get_position_ids_and_mask_encoder_batch(seq_lens_encoder,
+                                                seq_lens_decoder,
+                                                seq_lens_this_time,
+                                                position_ids,
+                                                mask_encoder_batch)
+
+        return position_ids, mask_encoder_batch
+
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
@@ -657,7 +652,9 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
     ):
         """
         """
-        hidden_states = self.model(ids_remove_padding, forward_meta)
+        position_ids, mask_encoder_batch = self.pre_process(forward_meta)
+        hidden_states = self.model(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta,
+            position_ids=position_ids, mask_encoder_batch=mask_encoder_batch)
         return hidden_states
 
 

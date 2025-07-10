@@ -60,6 +60,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.device_id = device_id
         self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
+        self.enable_logprob = fd_config.model_config.enable_logprob
 
         self.guided_backend = None
         if self.fd_config.parallel_config.guided_decoding_backend != "off":
@@ -154,11 +155,28 @@ class GCUModelRunner(ModelRunnerBase):
                 -1].disaggregate_info["role"] == "prefill":
             os.environ['PREFILL_NODE_ONE_STEP_STOP'] = "1"
 
+        top_k_reqs = []
+        top_p_reqs = []
+        max_num_seqs = self.parallel_config.max_num_seqs
+        top_p_buffer = paddle.full([max_num_seqs, 1],
+                                    self.model_config.top_p,
+                                    dtype='float32')
+        top_k_buffer = paddle.full([max_num_seqs, 1],
+                                                0,
+                                                dtype='int64')
+
         req_len = len(req_dicts)
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
             length = len(request.prompt_token_ids)
+
+            if sampling_params := request.sampling_params:
+                if sampling_params.top_p < 1:
+                    top_p_reqs.append(idx)
+                top_k = sampling_params.top_k
+                if top_k > 0:
+                    top_k_reqs.append(idx)
 
             prefill_tokens = []
             if (request.guided_json is not None
@@ -234,8 +252,8 @@ class GCUModelRunner(ModelRunnerBase):
                 request.eos_token_ids.append(request.eos_token_ids[0])
             self.share_inputs["eos_token_id"][:] = np.array(
                 request.eos_token_ids, dtype="int64").reshape(-1, 1)
-
-            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 0.7)
+            top_p_buffer[idx:idx + 1] = request.get("top_p", 1.0)
+            top_k_buffer[idx:idx + 1] = request.get("top_k", 0)
             self.share_inputs["temperature"][idx:idx + 1] = request.get(
                 "temperature", 0.95)
             self.share_inputs["penalty_score"][idx:idx + 1] = request.get(
@@ -285,6 +303,16 @@ class GCUModelRunner(ModelRunnerBase):
 
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_prefill_inputs(req_dicts)
+
+        if len(top_k_reqs) == 0:
+            self.share_inputs["top_k"] = None
+        else:
+            self.share_inputs["top_k"] = top_k_buffer
+
+        if len(top_p_reqs) == 0:
+            self.share_inputs["top_p"] = None
+        else:
+            self.share_inputs["top_p"] = top_p_buffer
 
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int,
                               expected_decode_len: int):
@@ -340,8 +368,11 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs["eos_token_id"] = paddle.full(
             [self.parallel_config.eos_tokens_lens, 1], 0, dtype='int64')
         self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1],
-                                                 self.model_config.top_p,
-                                                 dtype='float32')
+                                                self.model_config.top_p,
+                                                dtype='float32')
+        self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1],
+                                                0,
+                                                dtype='int64')
         self.share_inputs["temperature"] = paddle.full(
             [max_num_seqs, 1], self.model_config.temperature, dtype='float32')
         self.share_inputs["penalty_score"] = paddle.full(
@@ -563,6 +594,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.sampling_metadata = SamplingMetadata(
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
+            top_k=self.share_inputs["top_k"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
             frequency_penalties=self.share_inputs["frequency_score"],
@@ -571,6 +603,7 @@ class GCUModelRunner(ModelRunnerBase):
             min_dec_lens=self.share_inputs["min_dec_len"],
             bad_words_token_ids=self.share_inputs["bad_tokens"],
             eos_token_ids=self.share_inputs["eos_token_id"],
+            max_num_logprobs=20 if self.enable_logprob else None,
         )
 
     def load_model(self) -> None:
@@ -775,15 +808,15 @@ class GCUModelRunner(ModelRunnerBase):
                     self.share_inputs["step_idx"],
                     self.share_inputs["stop_flags"],
                 )
-                sampled_token_ids = self.sampler(logits,
+                sampler_output = self.sampler(logits,
                                                  self.sampling_metadata)
                 if self.parallel_config.tensor_parallel_degree > 1:
-                    paddle.distributed.broadcast(sampled_token_ids, 0)
+                    paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
             else:
                 self.sampler(logits, self.sampling_metadata,
                              self.parallel_config.max_model_len,
                              self.share_inputs)
-                sampled_token_ids = None
+                sampler_output = None
                 if self.parallel_config.tensor_parallel_degree > 1:
                     paddle.distributed.broadcast(
                         self.share_inputs["accept_tokens"], 0)
@@ -823,7 +856,7 @@ class GCUModelRunner(ModelRunnerBase):
                 accept_num=self.share_inputs["accept_num"]
                 if self.speculative_decoding else None)
 
-            post_process(sampled_token_ids=sampled_token_ids,
+            post_process(sampler_output=sampler_output,
                          model_output=model_output_data,
                          speculative_decoding=self.speculative_decoding,
                          skip_save_output=True)
@@ -1005,18 +1038,18 @@ class GCUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"],
                 self.share_inputs["stop_flags"],
             )
-            sampled_token_ids = self.sampler(
+            sampler_output = self.sampler(
                 logits,
                 self.sampling_metadata,
                 skip_idx_list,
             )
             if self.parallel_config.tensor_parallel_degree > 1:
-                paddle.distributed.broadcast(sampled_token_ids, 0)
+                paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
 
         else:
             self.sampler(logits, self.sampling_metadata,
                          self.parallel_config.max_model_len, self.share_inputs)
-            sampled_token_ids = None
+            sampler_output = None
             if self.parallel_config.tensor_parallel_degree > 1:
                 paddle.distributed.broadcast(
                     self.share_inputs["accept_tokens"], 0)
@@ -1059,7 +1092,7 @@ class GCUModelRunner(ModelRunnerBase):
             skip_save_output = True
         else:
             skip_save_output = False
-        post_process(sampled_token_ids=sampled_token_ids,
+        post_process(sampler_output=sampler_output,
                      model_output=model_output_data,
                      save_each_rank=self.parallel_config.use_ep,
                      speculative_decoding=self.speculative_decoding,

@@ -64,6 +64,7 @@ class ModelConfig:
         self.is_quantized = False
         self.max_model_len = 0
         self.dtype = ""
+        self.enable_logprob = False
 
         PRETRAINED_INIT_CONFIGURATION = {
             "rope_theta": 10000.0,

@@ -1052,6 +1052,7 @@ class LLMEngine(object):
             "use_cudagraph": self.cfg.use_cudagraph,
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "enable-custom-all-reduce": self.cfg.parallel_config.enable_custom_all_reduce,
+            "enable_logprob": self.cfg.enable_logprob,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:

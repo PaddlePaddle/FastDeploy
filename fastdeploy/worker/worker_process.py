@@ -40,6 +40,8 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
     """
     get worker of different device
     """
+    if fd_config.model_config.enable_logprob and not current_platform.is_cuda():
+        raise NotImplementedError("Only CUDA platform supports logprob.")
     if current_platform.is_dcu():
         from fastdeploy.worker.dcu_worker import DcuWorker
         return DcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
@@ -565,6 +567,9 @@ def parse_args():
         "'ipc_snapshot': load from disk snapshot of IPC weights, "
         "'meta': provide RL traing worker, no_weights_load"
         "'normal':normal load weight")
+    parser.add_argument("--enable_logprob",
+                        action='store_true',
+                        help="Enable output of token-level log probabilities.")
 
     args = parser.parse_args()
     return args
