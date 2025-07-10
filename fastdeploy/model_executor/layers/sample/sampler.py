@@ -214,7 +214,7 @@ class Sampler(nn.Layer):
 
         probs = F.softmax(logits)
 
-        _, next_tokens = top_p_sampling(probs, sampling_metadata.top_p)
+        _, next_tokens = top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
 
         self.processor.update_output_tokens(next_tokens, skip_idx_list)
         return next_tokens
@@ -367,5 +367,5 @@ class MTPSampler(nn.Layer):
         )
         probs = F.softmax(logits)
 
-        _, next_tokens = top_p_sampling(probs, sampling_metadata.top_p)
+        _, next_tokens = top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
         return next_tokens

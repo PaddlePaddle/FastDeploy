@@ -282,11 +282,26 @@ class XPUModelRunner(ModelRunnerBase):
 
     def process_prefill_inputs(self, req_dicts: List[Request]):
         """ Process inputs for prefill tasks and update share_inputs buffer """
+        top_k_reqs = []
+        top_p_reqs = []
+        max_num_seqs = self.parallel_config.max_num_seqs
+        top_p_buffer = paddle.full([max_num_seqs, 1],
+                                    self.model_config.top_p,
+                                    dtype='float32')
+        top_k_buffer = paddle.full([max_num_seqs, 1],
+                                                0,
+                                                dtype='int64')
         req_len = len(req_dicts)
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
             length = request.prompt_token_ids_len
+            if sampling_params := request.sampling_params:
+                if sampling_params.top_p < 1:
+                    top_p_reqs.append(idx)
+                top_k = sampling_params.top_k
+                if top_k > 0:
+                    top_k_reqs.append(idx)
             self.share_inputs["input_ids"][idx:idx + 1, :length] = np.array(
                 request.prompt_token_ids)
             if len(request.eos_token_ids
@@ -295,7 +310,8 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["eos_token_id"][:] = np.array(
                 request.eos_token_ids, dtype="int64").reshape(-1, 1)
             self.share_inputs["pre_ids"][idx:idx + 1] = -1
-            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 0.7)
+            top_p_buffer[idx:idx + 1] = request.get("top_p", 1.0)
+            top_k_buffer[idx:idx + 1] = request.get("top_k", 0)
             self.share_inputs["temperature"][idx:idx + 1] = request.get(
                 "temperature", 0.95)
             self.share_inputs["penalty_score"][idx:idx + 1] = request.get(
@@ -344,6 +360,15 @@ class XPUModelRunner(ModelRunnerBase):
                         request.get("stop_token_ids"), dtype="int64")
 
         self.share_inputs["not_need_stop"][0] = True
+        if len(top_k_reqs) == 0:
+            self.share_inputs["top_k"] = None
+        else:
+            self.share_inputs["top_k"] = top_k_buffer
+
+        if len(top_p_reqs) == 0:
+            self.share_inputs["top_p"] = None
+        else:
+            self.share_inputs["top_p"] = top_p_buffer
 
     def _init_share_inputs(self, max_num_seqs: int):
         """Initialize all share buffers for model inputs.
@@ -363,8 +388,11 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["eos_token_id"] = paddle.full(
             [self.parallel_config.eos_tokens_lens, 1], 0, dtype='int64')
         self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1],
-                                                 self.model_config.top_p,
-                                                 dtype='float32')
+                                                self.model_config.top_p,
+                                                dtype='float32')
+        self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1],
+                                                0,
+                                                dtype='int64')
         self.share_inputs["temperature"] = paddle.full(
             [max_num_seqs, 1], self.model_config.temperature, dtype='float32')
         self.share_inputs["penalty_score"] = paddle.full(
@@ -514,6 +542,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.sampling_metadata = SamplingMetadata(
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
+            top_k=self.share_inputs["top_k"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
             frequency_penalties=self.share_inputs["frequency_score"],
