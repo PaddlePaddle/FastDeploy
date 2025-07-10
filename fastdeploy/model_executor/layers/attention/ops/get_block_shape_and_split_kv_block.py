@@ -21,7 +21,7 @@ from fastdeploy.platforms import current_platform
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import \
         get_block_shape_and_split_kv_block as \
-        _get_block_shape_and_split_kv_block
+        get_block_shape_and_split_kv_block_cuda
 
 
 def get_block_shape_and_split_kv_block(
@@ -51,7 +51,7 @@ def get_block_shape_and_split_kv_block(
             decoder_num_blocks,
             max_len_kv,
             set_max_lengths,
-        ) = _get_block_shape_and_split_kv_block(
+        ) = get_block_shape_and_split_kv_block_cuda(
             seq_lens_encoder,
             seq_lens_decoder,
             seq_lens_this_time,
