@@ -157,7 +157,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
 **基于 WINT4 精度和 32K 上下文部署 ERNIE-4.5-300B-A47B-Paddle 模型到 4 卡 P800 服务器**
 
 ```bash
-export XPU_VISIBLE_DEVICES="0,1,2,3"
+export CUDA_VISIBLE_DEVICES="0,1,2,3"
+# 如果你想使用 4,5,6,7 卡，可以按如下设置环境变量
+# export CUDA_VISIBLE_DEVICES="4,5,6,7"
 python -m fastdeploy.entrypoints.openai.api_server \
     --model baidu/ERNIE-4.5-300B-A47B-Paddle \
     --port 8188 \
