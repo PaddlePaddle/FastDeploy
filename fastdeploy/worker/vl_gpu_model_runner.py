@@ -932,18 +932,17 @@ class GPUVLModelRunner(VLModelRunnerBase):
             False,
         )  # multi ends
         # update inputs
-        with paddle.framework._no_check_dy2st_diff():
-            update_inputs(
-                self.share_inputs["stop_flags"],
-                self.share_inputs["not_need_stop"],
-                self.share_inputs["seq_lens_this_time"],
-                self.share_inputs["seq_lens_encoder"],
-                self.share_inputs["seq_lens_decoder"],
-                self.share_inputs["input_ids"],
-                self.share_inputs["stop_nums"],
-                sampler_output.sampled_token_ids,
-                self.share_inputs["is_block_step"],
-            )
+        update_inputs(
+            self.share_inputs["stop_flags"],
+            self.share_inputs["not_need_stop"],
+            self.share_inputs["seq_lens_this_time"],
+            self.share_inputs["seq_lens_encoder"],
+            self.share_inputs["seq_lens_decoder"],
+            self.share_inputs["input_ids"],
+            self.share_inputs["stop_nums"],
+            sampler_output.sampled_token_ids,
+            self.share_inputs["is_block_step"],
+        )
         if sampler_output.logprobs_tensors is None:
             save_output(
                 sampler_output.sampled_token_ids,

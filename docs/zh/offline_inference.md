@@ -52,7 +52,7 @@ outputs = llm.chat(
 for output in outputs:
     prompt = output.prompt
     generated_text = output.outputs.text
-    reasoning_text = output.outputs.resoning_content
+    reasoning_text = output.outputs.reasoning_content
 ```
 
 ### 续写接口(LLM.generate)
@@ -90,7 +90,7 @@ from PIL import Image
 
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.engine.sampling_params import SamplingParams
-from fastdeploy.input.ernie_tokenizer_v2 import ErnieBotTokenizer
+from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 
 PATH = "baidu/ERNIE-4.5-VL-28B-A3B-Paddle"
 tokenizer = ErnieBotTokenizer.from_pretrained(os.path.dirname(PATH))
@@ -126,7 +126,7 @@ for message in messages:
             })
 
 sampling_params = SamplingParams(temperature=0.1, max_tokens=6400)
-llm = LLM(model=PATH, tensor_parallel_size=8, max_model_len=32768, enable_mm=True, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
+llm = LLM(model=PATH, tensor_parallel_size=1, max_model_len=32768, enable_mm=True, limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
 outputs = llm.generate(prompts={
     "prompt": prompt,
     "multimodal_data": {
@@ -139,7 +139,7 @@ outputs = llm.generate(prompts={
 for output in outputs:
     prompt = output.prompt
     generated_text = output.outputs.text
-    reasoning_text = output.outputs.resoning_content
+    reasoning_text = output.outputs.reasoning_content
 
 ```
 > 注： `generate` 接口, 暂时不支持思考开关参数控制, 均使用模型默认思考能力。
