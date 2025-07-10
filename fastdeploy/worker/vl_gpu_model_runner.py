@@ -1092,6 +1092,7 @@ def build_stream_line_model(
     rope_theta = config["rope_theta"]
     model_config = ModelConfig.from_dict(config)
     model_config.head_dim = config["head_dim"]
+    model_config.rms_norm_eps = config["rms_norm_eps"]
 
     parallel_config = ParallelConfig()
     speculative_config = SpeculativeConfig()
