@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-from email import contentmanager
 import os
 import threading
 import time
@@ -349,19 +348,22 @@ def reset_scheduler():
 
     if llm_engine is None:
         return Response("Engine not loaded", status_code=500)
-    llm_engine.reset_scheduler()
+    llm_engine.scheduler.reset_scheduler()
     return Response("Scheduler Reset Successfully", status_code=200)
 
 
 @controller_app.post("/controller/scheduler")
 def control_scheduler(request: ControlSchedulerRequest):
     """
-    control scheduler
+     Control the scheduler behavior with the given parameters.
     """
+    content = ErrorResponse(object="", message="Scheduler updated successfully", code=0)
+    
     global llm_engine
     if llm_engine is None:
-        content = ErrorResponse(message="Engine is not loaded", code=500)
-        return JSONResponse(content=content, status_code=500)
+        content.message = "Engine is not loaded"
+        content.code = 500
+        return JSONResponse(content=content.model_dump(), status_code=500)
 
     if request.reset:
         llm_engine.scheduler.reset_scheduler()
@@ -372,11 +374,11 @@ def control_scheduler(request: ControlSchedulerRequest):
                 load_shards_num=request.load_shards_num,
                 reallocate=request.reallocate_shard)
         else:
-            content = ErrorResponse(
-                message="This scheduler doesn't support the `update_config()` method.", code=400)
-            return JSONResponse(content=content, status_code=400)
+            content.message="This scheduler doesn't support the `update_config()` method."
+            content.code=400
+            return JSONResponse(content=content.model_dump(), status_code=400)
 
-    return Response("Scheduler updated successfully", status_code=200)
+    return JSONResponse(content=content.model_dump(), status_code=200)
 
 
 def run_controller_server():
