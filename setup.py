@@ -146,6 +146,8 @@ def load_requirements():
     requirements_file_name = 'requirements.txt'
     if paddle.is_compiled_with_custom_device('iluvatar_gpu'):
         requirements_file_name = 'requirements_iluvatar.txt'
+    elif paddle.is_compiled_with_rocm():
+        requirements_file_name = 'requirements_dcu.txt'
     requirements_path = os.path.join(os.path.dirname(__file__),
                                      requirements_file_name)
     with open(requirements_path, 'r') as f:

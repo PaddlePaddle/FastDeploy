@@ -37,10 +37,18 @@ std::vector<paddle::Tensor> ShareExternalData(paddle::Tensor& input,
   }
   shm = (volatile shmStruct *)info.addr;
   void *ptr = nullptr;
+#ifdef PADDLE_WITH_HIP
+  checkCudaErrors(
+      hipIpcOpenMemHandle(&ptr,
+                           *(hipIpcMemHandle_t *)&shm->memHandle,  // NOLINT
+                           hipIpcMemLazyEnablePeerAccess));
+#else
   checkCudaErrors(
       cudaIpcOpenMemHandle(&ptr,
                            *(cudaIpcMemHandle_t *)&shm->memHandle,  // NOLINT
                            cudaIpcMemLazyEnablePeerAccess));
+#endif
+
   paddle::Tensor tmp_tensor = paddle::from_blob(
     ptr,
     shape,

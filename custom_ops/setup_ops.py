@@ -187,39 +187,45 @@ def find_end_files(directory, end_str):
 if paddle.is_compiled_with_rocm():
     # NOTE(@duanyanhui): paddle.is_compiled_with_cuda() returns True when paddle compiled with rocm.
     # so we need to check if paddle compiled with rocm at first.
+    json_dir = "third_party/nlohmann_json"
+    if not os.path.exists(json_dir) or not os.listdir(json_dir):
+        if not os.path.exists(json_dir):
+            os.makedirs(json_dir)
+        clone_git_repo("v3.11.3", "https://bgithub.xyz/nlohmann/json.git", json_dir)
+        if not os.listdir(json_dir):
+            raise ValueError("Git clone nlohmann_json failed!")
+    sources=[
+        "gpu_ops/set_value_by_flags.cu",
+        "gpu_ops/token_penalty_multi_scores.cu",
+        "gpu_ops/stop_generation.cu",
+        "gpu_ops/stop_generation_multi_ends.cu",
+        "gpu_ops/get_padding_offset.cu",
+        "gpu_ops/update_inputs.cu",
+        "gpu_ops/rebuild_padding.cu",
+        "gpu_ops/step.cu",
+        "gpu_ops/set_data_ipc.cu",
+        "gpu_ops/moe/tritonmoe_preprocess.cu",
+        "gpu_ops/step_system_cache.cu",
+        "gpu_ops/get_output_ep.cc",
+        "gpu_ops/speculate_decoding/speculate_get_padding_offset.cu",
+        "gpu_ops/speculate_decoding/speculate_get_output.cc",
+        "gpu_ops/share_external_data.cu",
+        "gpu_ops/speculate_decoding/speculate_clear_accept_nums.cu",
+        "gpu_ops/speculate_decoding/speculate_get_output_padding_offset.cu",
+        "gpu_ops/speculate_decoding/speculate_get_seq_lens_output.cu",
+        "gpu_ops/speculate_decoding/speculate_save_output.cc",
+        "gpu_ops/speculate_decoding/speculate_set_value_by_flags.cu",
+        "gpu_ops/speculate_decoding/speculate_step.cu",
+        "gpu_ops/speculate_decoding/speculate_step_system_cache.cu",
+        "gpu_ops/speculate_decoding/speculate_update_v3.cu",
+        "gpu_ops/get_position_ids_and_mask_encoder_batch.cu",
+        "gpu_ops/fused_rotary_position_encoding.cu",
+        "gpu_ops/step_reschedule.cu",
+    ]
     setup(
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(
-            sources=[
-                "gpu_ops/save_with_output.cc",
-                "gpu_ops/set_mask_value.cu",
-                "gpu_ops/set_value_by_flags.cu",
-                "gpu_ops/ngram_mask.cu",
-                "gpu_ops/gather_idx.cu",
-                "gpu_ops/token_penalty_multi_scores.cu",
-                "gpu_ops/token_penalty_only_once.cu",
-                "gpu_ops/stop_generation.cu",
-                "gpu_ops/stop_generation_multi_ends.cu",
-                "gpu_ops/stop_generation_multi_stop_seqs.cu",
-                "gpu_ops/set_flags.cu",
-                "gpu_ops/fused_get_rope.cu",
-                "gpu_ops/transfer_output.cc",
-                "gpu_ops/get_padding_offset.cu",
-                "gpu_ops/update_inputs.cu",
-                "gpu_ops/update_inputs_beam.cu",
-                "gpu_ops/beam_search_softmax.cu",
-                "gpu_ops/rebuild_padding.cu",
-                "gpu_ops/save_with_output_msg.cc",
-                "gpu_ops/get_output.cc",
-                "gpu_ops/get_output_msg_with_topk.cc",
-                "gpu_ops/step.cu",
-                "gpu_ops/step_reschedule.cu",
-                "gpu_ops/set_data_ipc.cu",
-                "gpu_ops/read_data_ipc.cu",
-                "gpu_ops/dequant_int8.cu",
-                "gpu_ops/enforce_generation.cu",
-                "gpu_ops/tune_cublaslt_gemm.cu",
-            ],
+            sources=sources,
             extra_compile_args={
                 "cxx": ["-O3"],
                 "hipcc": [
@@ -231,6 +237,9 @@ if paddle.is_compiled_with_rocm():
                     "-U__HIP_NO_BFLOAT16_CONVERSIONS__",
                     "-U__HIP_NO_BFLOAT162_OPERATORS__",
                     "-U__HIP_NO_BFLOAT162_CONVERSIONS__",
+                    "-DPADDLE_DEV",
+                    "-Ithird_party/nlohmann_json/include",
+                    "-Igpu_ops",
                 ],
             },
         ),
