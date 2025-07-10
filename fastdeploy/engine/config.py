@@ -590,6 +590,7 @@ class Config:
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
         enable_custom_all_reduce: bool = False,
+        enable_logprob: bool = False,
     ):
         """
         Initialize the Config class.
@@ -685,6 +686,8 @@ class Config:
         self.engine_worker_queue_port = engine_worker_queue_port
         self.device_ids = ",".join([str(i) for i in range(self.worker_num_per_node)])
         self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.device_ids)
+
+        self.enable_logprob = enable_logprob
 
         self.read_from_config()
         self.postprocess()
