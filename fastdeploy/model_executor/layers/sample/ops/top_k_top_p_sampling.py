@@ -21,7 +21,7 @@ import paddle
 from fastdeploy import envs
 
 
-def top_p_sampling(
+def top_k_top_p_sampling(
     x: paddle.Tensor,
     top_p: paddle.Tensor,
     top_k: Optional[paddle.Tensor] = None,

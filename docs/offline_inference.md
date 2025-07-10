@@ -29,6 +29,7 @@ for output in outputs:
 ```
 
 ### Chat Interface (LLM.chat)
+
 ```python
 from fastdeploy import LLM, SamplingParams
 
@@ -99,6 +100,7 @@ For ```LLM``` configuration, refer to [Parameter Documentation](parameters.md).
 * repetition_penalty(float): Direct penalty for repeated tokens (>1 penalizes, <1 encourages)
 * temperature(float): Controls randomness (higher = more random)
 * top_p(float): Probability threshold for token selection
+* top_k(int): Number of tokens considered for sampling
 * max_tokens(int): Maximum generated tokens (input + output)
 * min_tokens(int): Minimum forced generation length
 
