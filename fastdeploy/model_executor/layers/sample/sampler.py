@@ -27,7 +27,7 @@ from fastdeploy.model_executor.guided_decoding.base_guided_decoding import \
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.ops import (
     apply_penalty_multi_scores, apply_speculative_penalty_multi_scores,
-    top_p_sampling)
+    top_k_top_p_sampling)
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
 
@@ -265,7 +265,7 @@ class Sampler(nn.Layer):
 
         probs = F.softmax(logits)
 
-        _, next_tokens = top_p_sampling(probs, sampling_metadata.top_p)
+        _, next_tokens = top_k_top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
 
         logprobs_tensors = None if num_logprobs is None else \
             self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=next_tokens)
@@ -427,5 +427,5 @@ class MTPSampler(nn.Layer):
         )
         probs = F.softmax(logits)
 
-        _, next_tokens = top_p_sampling(probs, sampling_metadata.top_p)
+        _, next_tokens = top_k_top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
         return next_tokens
