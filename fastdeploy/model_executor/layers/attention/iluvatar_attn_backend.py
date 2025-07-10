@@ -20,7 +20,7 @@ import os
 import paddle
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from math import sqrt
 
 from paddle.nn.functional.flash_attention import flash_attn_unpadded
@@ -30,7 +30,8 @@ from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
-from fastdeploy.worker.forward_meta import ForwardMeta
+if TYPE_CHECKING:
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 @dataclass

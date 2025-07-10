@@ -30,7 +30,7 @@ from fastdeploy.model_executor.layers.mtp_linear import ParallelEHProjection
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_DecoderLayer
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Ernie4_5_MTPPretrainedModel(PretrainedModel):
