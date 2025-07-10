@@ -607,7 +607,7 @@ def initialize_fd_config(config_or_args) -> FDConfig:
     model_config.head_dim = model_config_dict["head_dim"]
     paddle.set_default_dtype(config_or_args.dtype)
     if 'tie_word_embeddings' in model_config_dict:
-        model_config_dict['tie_word_embeddings'] = model_config_dict.pop('tie_word_embeddings')
+        model_config.tie_word_embeddings = model_config_dict['tie_word_embeddings']
 
     # Initialize all config components
     device_config = DeviceConfig()
@@ -735,7 +735,8 @@ def initialize_fd_config(config_or_args) -> FDConfig:
 
     # Handle vocabulary size
     model_config.ori_vocab_size = model_config_dict.get("vocab_size", -1)
-    if "Ernie4_5_ForCausalLM" in model_config_dict.get("architectures", []):
+    archs = model_config_dict.get("architectures", [])
+    if "Ernie4_5_ForCausalLM" in archs or "Ernie4_5_MoeForCausalLM" in archs:
         model_config.ori_vocab_size = getattr(config_or_args, 'ori_vocab_size', model_config.ori_vocab_size)
 
     # Handle DeepseekV3 specific config
