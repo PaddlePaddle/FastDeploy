@@ -18,6 +18,7 @@
 
 std::vector<paddle::Tensor> TopPSamplingReject(const paddle::Tensor &probs,
                                                const paddle::Tensor &top_p,
+                                               const paddle::optional<paddle::Tensor> &top_k,
                                                int seed) {
   std::vector<int64_t> probs_shape = probs.shape();
   unsigned int batch_size = probs_shape[0];
@@ -40,10 +41,18 @@ std::vector<paddle::Tensor> TopPSamplingReject(const paddle::Tensor &probs,
 
   cudaError_t status;
 
-  status = sampling::TopKTopPSamplingFromProb<float, int64_t>(
-      const_cast<float *>(probs.data<float>()), samples.data<int64_t>(), 
-      batch_size, top_p.data<float>(), vocab_size,
-      true, philox_seed, philox_offset, cu_stream);
+  if (top_k) {
+    status = sampling::TopKTopPSamplingFromProb<float, int64_t>(
+        const_cast<float *>(probs.data<float>()), samples.data<int64_t>(),
+        batch_size, top_p.data<float>(), top_k.get().data<int64_t>(), vocab_size,
+        true, philox_seed, philox_offset, cu_stream);
+  }
+  else {
+    status = sampling::TopPSamplingFromProb<float, int64_t>(
+        const_cast<float *>(probs.data<float>()), samples.data<int64_t>(),
+        batch_size, top_p.data<float>(), vocab_size,
+        true, philox_seed, philox_offset, cu_stream);
+  }
 
   PD_CHECK(status == cudaSuccess, "SamplingFromProbs failed with error code " +
                                       std::string(cudaGetErrorString(status)));
@@ -53,19 +62,21 @@ std::vector<paddle::Tensor> TopPSamplingReject(const paddle::Tensor &probs,
 
 std::vector<std::vector<int64_t>>
 TopPSamplingRejectInferShape(const std::vector<int64_t> &probs_shape,
-                             const std::vector<int64_t> &top_p_shape) {
+                             const std::vector<int64_t> &top_p_shape,
+                             const paddle::optional<std::vector<int64_t>> &top_k_shape) {
   int64_t bs = probs_shape[0];
   return {{bs, 1}};
 }
 
 std::vector<paddle::DataType>
 TopPSamplingRejectInferDtype(const paddle::DataType &probs_dtype,
-                             const paddle::DataType &top_p_shape) {
+                             const paddle::DataType &top_p_dtype,
+                             const paddle::optional<paddle::DataType> &top_k_dtype) {
   return {paddle::DataType::INT64};
 }
 
 PD_BUILD_STATIC_OP(rejection_top_p_sampling)
-    .Inputs({"probs", "top_p"})
+    .Inputs({"probs", "top_p", paddle::Optional("top_k")})
     .Outputs({"samples"})
     .Attrs({"seed: int"})
     .SetKernelFn(PD_KERNEL(TopPSamplingReject))

@@ -4,6 +4,7 @@
 FastDeploy supports offline inference by loading models locally and processing user data. Usage examples:
 
 ### Chat Interface (LLM.chat)
+
 ```python
 from fastdeploy import LLM, SamplingParams
 
@@ -77,10 +78,12 @@ for output in outputs:
     prompt = output.prompt
     generated_text = output.outputs.text
 ```
+
 > Note: Text completion interface, suitable for scenarios where users have predefined the context input and expect the model to output only the continuation content. No additional `prompt` concatenation will be added during the inference process.
 > For the `chat` model, it is recommended to use the Chat Interface (`LLM.chat`).
 
 For multimodal models, such as `baidu/ERNIE-4.5-VL-28B-A3B-Paddle`, when calling the `generate interface`, you need to provide a prompt that includes images. The usage is as follows:
+
 ```python
 import io
 import os
@@ -96,7 +99,7 @@ tokenizer = ErnieBotTokenizer.from_pretrained(os.path.dirname(PATH))
 
 messages = [
     {
-        "role": "user", 
+        "role": "user",
         "content": [
             {"type":"image_url", "image_url": {"url":"https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0"}},
             {"type":"text", "text":"这张图片的内容是什么"}
@@ -141,6 +144,7 @@ for output in outputs:
     reasoning_text = output.outputs.reasoning_content
 
 ```
+
 >Note: The `generate interface` does not currently support passing parameters to control the thinking function (on/off). It always uses the model's default parameters.
 
 ## 2. API Documentation
@@ -159,12 +163,12 @@ For ```LLM``` configuration, refer to [Parameter Documentation](parameters.md).
 * messages(list[dict],list[list[dict]]): Input messages (batch supported)
 * sampling_params: See 2.4 for parameter details
 * use_tqdm: Enable progress visualization
-* chat_template_kwargs(dict): Extra template parameters (currently supports enable_thinking(bool))  
+* chat_template_kwargs(dict): Extra template parameters (currently supports enable_thinking(bool))
    *usage example: `chat_template_kwargs={"enable_thinking": False}`*
 
 ### 2.3 fastdeploy.LLM.generate
 
-* prompts(str, list[str], list[int], list[list[int]], dict[str, Any], list[dict[str, Any]]): : Input prompts (batch supported), accepts decoded token ids  
+* prompts(str, list[str], list[int], list[list[int]], dict[str, Any], list[dict[str, Any]]): : Input prompts (batch supported), accepts decoded token ids
   *example of using a dict-type parameter: `prompts={"prompt": prompt, "multimodal_data": {"image": images}}`*
 * sampling_params: See 2.4 for parameter details
 * use_tqdm: Enable progress visualization
@@ -176,6 +180,7 @@ For ```LLM``` configuration, refer to [Parameter Documentation](parameters.md).
 * repetition_penalty(float): Direct penalty for repeated tokens (>1 penalizes, <1 encourages)
 * temperature(float): Controls randomness (higher = more random)
 * top_p(float): Probability threshold for token selection
+* top_k(int): Number of tokens considered for sampling
 * max_tokens(int): Maximum generated tokens (input + output)
 * min_tokens(int): Minimum forced generation length
 
