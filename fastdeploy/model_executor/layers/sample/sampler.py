@@ -266,7 +266,7 @@ class Sampler(nn.Layer):
 
         probs = F.softmax(logits)
 
-        _, next_tokens = top_p_sampling(probs, sampling_metadata.top_p)
+        _, next_tokens = top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
 
         logprobs_tensors = None if num_logprobs is None else \
             self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=next_tokens)
@@ -430,5 +430,5 @@ class MTPSampler(nn.Layer):
         )
         probs = F.softmax(logits)
 
-        _, next_tokens = top_p_sampling(probs, sampling_metadata.top_p)
+        _, next_tokens = top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
         return next_tokens
