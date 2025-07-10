@@ -601,6 +601,7 @@ def initialize_fd_config(config_or_args) -> FDConfig:
     model_config_dict["head_dim"] = model_config_dict.get(
         "head_dim", model_config_dict["hidden_size"] // model_config_dict["num_attention_heads"])
     model_config_dict["rope_theta"] = model_config_dict.get("rope_theta", 10000.0)
+    print("model_config_dict['rope_theta']",model_config_dict['rope_theta'])
 
     # Create model config object
     model_config = ModelConfig.from_dict(model_config_dict)
@@ -608,6 +609,8 @@ def initialize_fd_config(config_or_args) -> FDConfig:
     paddle.set_default_dtype(config_or_args.dtype)
     if 'tie_word_embeddings' in model_config_dict:
         model_config.tie_word_embeddings = model_config_dict['tie_word_embeddings']
+    if 'rms_norm_eps' in model_config_dict:
+        model_config.rms_norm_eps = model_config_dict['rms_norm_eps']
 
     # Initialize all config components
     device_config = DeviceConfig()
