@@ -166,6 +166,7 @@ class GPUModelRunner(ModelRunnerBase):
             request = req_dicts[i]
             idx = request.idx
             length = len(request.prompt_token_ids)
+            assert length > 0, "The prompt requested must not be empty."
 
             prefill_tokens = []
             if (request.guided_json is not None
