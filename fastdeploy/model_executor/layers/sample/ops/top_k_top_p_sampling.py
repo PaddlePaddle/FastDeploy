@@ -71,6 +71,14 @@ def top_k_top_p_sampling(
     elif top_p_class == "rejection":
         ids = rejection_top_p_sampling(x, top_p, top_k, seed, order)
         _ = None
+    elif top_p_class == "base_non_truncated":
+        _, ids = paddle.tensor.top_p_sampling(x,
+                                                top_p,
+                                                threshold=threshold,
+                                                topp_seed=topp_seed,
+                                                seed=seed,
+                                                k=k,
+                                                mode="non-truncated")
     else:
         if current_platform.is_gcu():
             _, ids = gcu_top_p_sampling(x, top_p)
@@ -81,7 +89,7 @@ def top_k_top_p_sampling(
                                                   topp_seed=topp_seed,
                                                   seed=seed,
                                                   k=k,
-                                                  mode=mode)
+                                                  mode="truncated")
     return _, ids
 
 
