@@ -737,7 +737,7 @@ class XPUModelRunner(ModelRunnerBase):
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hiddden_states)
 
-        sampled_token_ids = self.sampler(logits, self.sampling_metadata)
+        sampler_output = self.sampler(logits, self.sampling_metadata)
 
         # 5. Speculative decode
 
@@ -766,7 +766,7 @@ class XPUModelRunner(ModelRunnerBase):
             accept_tokens=None,
             accept_num=None,
         )
-        xpu_post_process(sampled_token_ids=sampled_token_ids,
+        xpu_post_process(sampled_token_ids=sampler_output.sampled_token_ids,
                          model_output=model_output_data,
                          skip_save_output=is_dummy_run)
 
