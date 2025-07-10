@@ -18,7 +18,7 @@ import paddle
 from fastdeploy.config import FDConfig, GraphOptimizationConfig
 from fastdeploy.model_executor.graph_optimization.decorator import \
     support_graph_optimization
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 @support_graph_optimization

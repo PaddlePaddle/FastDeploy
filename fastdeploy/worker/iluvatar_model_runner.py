@@ -37,7 +37,7 @@ from fastdeploy.model_executor.pre_and_post_process import (post_process,
                                                             pre_process,
                                                             rebuild_padding,
                                                             step_cuda)
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
 
