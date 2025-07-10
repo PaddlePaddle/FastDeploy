@@ -143,7 +143,7 @@ class TokenProcessor(object):
         if current_platform.is_cuda():
             from fastdeploy.model_executor.ops.gpu import get_output_topk
         else:
-            raise NotImplementedError("Only CUDA platform support logprob.")
+            raise NotImplementedError("Only CUDA platform supports logprob.")
         rank_id = self.cfg.parallel_config.local_data_parallel_id
 
         while True:
