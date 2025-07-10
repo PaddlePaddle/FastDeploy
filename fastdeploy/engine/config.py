@@ -685,6 +685,7 @@ class Config:
         self.engine_worker_queue_port = engine_worker_queue_port
         self.device_ids = ",".join([str(i) for i in range(self.worker_num_per_node)])
         self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.device_ids)
+        self.device_ids = os.getenv("XPU_VISIBLE_DEVICES", self.device_ids)
 
         self.read_from_config()
         self.postprocess()
