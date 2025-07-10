@@ -589,7 +589,6 @@ def initialize_fd_config(config_or_args) -> FDConfig:
     model_config_dict, _ = ModelConfig.get_config_dict(config_or_args.model_name_or_path)
 
 
-
     # Handle MoE related configs
     if 'num_experts' in model_config_dict:
         model_config_dict['moe_num_experts'] = model_config_dict.pop('num_experts')
@@ -608,8 +607,7 @@ def initialize_fd_config(config_or_args) -> FDConfig:
     paddle.set_default_dtype(config_or_args.dtype)
     if 'tie_word_embeddings' in model_config_dict:
         model_config.tie_word_embeddings = model_config_dict['tie_word_embeddings']
-    if 'rms_norm_eps' in model_config_dict:
-        model_config.rms_norm_eps = model_config_dict['rms_norm_eps']
+
     # Initialize all config components
     device_config = DeviceConfig()
     decoding_config = DecodingConfig()
