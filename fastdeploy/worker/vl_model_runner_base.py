@@ -14,14 +14,14 @@
 # limitations under the License.
 """
 
-from abc import ABC, abstractmethod
 import argparse
+from abc import ABC, abstractmethod
 
 import paddle
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
-from fastdeploy.config import ModelConfig
 
+from fastdeploy.config import ModelConfig
 from fastdeploy.utils import get_logger
 
 logger = get_logger("worker", "worker.log")

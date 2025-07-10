@@ -34,7 +34,7 @@ from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 from fastdeploy.model_executor.models.qwen2 import Qwen2DecoderLayer, Qwen2MLP
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Qwen3MLP(Qwen2MLP):
@@ -79,12 +79,12 @@ class Qwen3Attention(nn.Layer):
 
         self.q_norm = RMSNorm(fd_config=fd_config,
                               hidden_size=fd_config.model_config.head_dim,
-                              eps=1e-6,
+                              eps=fd_config.model_config.rms_norm_eps,
                               prefix=f"{prefix}.q_norm",
                               begin_norm_axis=2)
         self.k_norm = RMSNorm(fd_config=fd_config,
                               hidden_size=fd_config.model_config.head_dim,
-                              eps=1e-6,
+                              eps=fd_config.model_config.rms_norm_eps,
                               prefix=f"{prefix}.k_norm",
                               begin_norm_axis=2)
 
@@ -183,7 +183,7 @@ class Qwen3Model(nn.Layer):
         self.norm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-6,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{fd_config.model_config.prefix_name}.norm",
         )
 

@@ -24,6 +24,7 @@ import numpy
 
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.utils import data_processor_logger
+from fastdeploy.worker.output import LogprobsLists
 
 
 @dataclass
@@ -189,6 +190,8 @@ class CompletionOutput:
     index: int
     send_idx: int
     token_ids: list[int]
+    logprob: Optional[float] = None
+    top_logprobs: Optional[LogprobsLists] = None
     draft_token_ids: list[int] = None
     text: Optional[str] = None
     reasoning_content: Optional[str] = None
@@ -201,6 +204,8 @@ class CompletionOutput:
             "index": self.index,
             "send_idx": self.send_idx,
             "token_ids": self.token_ids,
+            "logprob": self.logprob,
+            "top_logprobs": self.top_logprobs,
             "draft_token_ids": self.draft_token_ids,
             "text": self.text,
             "reasoning_content": self.reasoning_content

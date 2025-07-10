@@ -961,6 +961,9 @@ class LLMEngine(object):
             "FLAGS_pir_interpreter_record_stream_for_gc_cache":
             os.getenv("FLAGS_pir_interpreter_record_stream_for_gc_cache",
                       default="1"),
+            "FLAGS_parameters_persistent_mode_in_dy2st":
+            os.getenv("FLAGS_parameters_persistent_mode_in_dy2st",
+                      default="1"),
         })
 
         if self.cfg.splitwise_role != "mixed":
@@ -1049,6 +1052,7 @@ class LLMEngine(object):
             "use_cudagraph": self.cfg.use_cudagraph,
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "enable-custom-all-reduce": self.cfg.parallel_config.enable_custom_all_reduce,
+            "enable_logprob": self.cfg.enable_logprob,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:

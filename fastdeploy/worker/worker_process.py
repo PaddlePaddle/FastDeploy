@@ -42,6 +42,8 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
     """
     get worker of different device
     """
+    if fd_config.model_config.enable_logprob and not current_platform.is_cuda():
+        raise NotImplementedError("Only CUDA platform supports logprob.")
     if current_platform.is_dcu():
         from fastdeploy.worker.dcu_worker import DcuWorker
         return DcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
@@ -571,6 +573,9 @@ def parse_args():
         "'ipc_snapshot': load from disk snapshot of IPC weights, "
         "'meta': provide RL traing worker, no_weights_load"
         "'normal':normal load weight")
+    parser.add_argument("--enable_logprob",
+                        action='store_true',
+                        help="Enable output of token-level log probabilities.")
 
     args = parser.parse_args()
     return args
@@ -587,7 +592,6 @@ def initialize_fd_config(config_or_args) -> FDConfig:
     """
     # Get model config from model directory
     model_config_dict, _ = ModelConfig.get_config_dict(config_or_args.model_name_or_path)
-
 
 
     # Handle MoE related configs
@@ -735,7 +739,8 @@ def initialize_fd_config(config_or_args) -> FDConfig:
 
     # Handle vocabulary size
     model_config.ori_vocab_size = model_config_dict.get("vocab_size", -1)
-    if "Ernie4_5_ForCausalLM" in model_config_dict.get("architectures", []):
+    archs = model_config_dict.get("architectures", [])
+    if "Ernie4_5_ForCausalLM" in archs or "Ernie4_5_MoeForCausalLM" in archs:
         model_config.ori_vocab_size = getattr(config_or_args, 'ori_vocab_size', model_config.ori_vocab_size)
 
     # Handle DeepseekV3 specific config
@@ -797,6 +802,8 @@ def initialize_fd_config(config_or_args) -> FDConfig:
         logger.info(
             "No quantization config found and use original weight and act dtype."
         )
+
+    model_config.enable_logprob = config_or_args.enable_logprob
 
     model_config.architectures = model_config_dict.get("architectures")
 

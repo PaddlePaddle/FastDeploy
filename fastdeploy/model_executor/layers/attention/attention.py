@@ -14,7 +14,9 @@
 # limitations under the License.
 """
 
-from typing import Dict, Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Dict, Optional
 
 import numpy as np
 import paddle
@@ -24,7 +26,8 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.quantization.quant_base import \
     QuantMethodBase
-from fastdeploy.worker.forward_meta import ForwardMeta
+if TYPE_CHECKING:
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Attention(nn.Layer):

@@ -35,14 +35,13 @@ if current_platform.is_cuda() and not current_platform.is_dcu():
                                                    prefill_mla_write_cache)
 
 if TYPE_CHECKING:
-    from paddle._typing.dtype_like import _DTypeLiteral
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
-from fastdeploy.worker.forward_meta import ForwardMeta
 
 
 def yarn_get_mscale(scale=1, mscale=1):
@@ -70,7 +69,7 @@ class MLAAttentionMetadata(AttentionMetadata):
     decoder_tile_ids_per_batch: paddle.Tensor = None
     decoder_num_blocks: paddle.Tensor = None
 
-    _dtype: _DTypeLiteral = paddle.bfloat16
+    _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768
     max_partition_size: int = 32768
     block_tables: Optional[paddle.Tensor] = None
@@ -185,6 +184,8 @@ class MLAAttentionBackend(AttentionBackend):
         # MLA
         metadata.max_enc_len_this_time = metadata.set_max_lengths[1]
         metadata.max_dec_len_this_time = metadata.set_max_lengths[2]
+        forward_meta.max_enc_len_this_time = metadata.set_max_lengths[1]
+        forward_meta.max_dec_len_this_time = metadata.set_max_lengths[2]
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
@@ -375,9 +376,6 @@ class MLAAttentionBackend(AttentionBackend):
         speculate_decoder = self.speculative_method is not None
         speculate_max_tokens = self.speculate_max_draft_token_num
 
-        decode_stage = forward_meta.is_decode_batch
-        prefill_stage = not (forward_meta.is_decode_batch)
-
         if self.use_pd_disaggregation:
             metadata.kv_signal_data_list[
                 layer.layer_id] = init_signal_layerwise(
@@ -387,8 +385,7 @@ class MLAAttentionBackend(AttentionBackend):
         latent_cache = forward_meta.caches[layer.layer_id] if hasattr(
             forward_meta, 'caches') else None
 
-        if prefill_stage:
-            # 写入缓存
+        if k is not None:
             prefill_mla_write_cache(
                 compressed_kv,
                 k_pe,
@@ -419,8 +416,7 @@ class MLAAttentionBackend(AttentionBackend):
             return fmha_out
 
         # Decode
-        if decode_stage:
-            # mla写入缓存
+        if k is None:
             decode_mla_write_cache(
                 compressed_kv,
                 k_pe,
