@@ -288,7 +288,7 @@ __global__ void TopKTopPSamplingFromProbKernel(DType* probs, IdType* output,
   curandStatePhilox4_32_10_t state;
   curand_init(philox_seed, bx, philox_offset, &state);
   const uint32_t row_idx = bx;
-  const uint32_t k = top_k_arr[row_idx] == 0 ? 1 : top_k_arr[row_idx];
+  const uint32_t k = top_k_arr[row_idx] == 0 ? d : top_k_arr[row_idx];
   const float p = top_p_arr[row_idx] == 0 ? 1e-6 : top_p_arr[row_idx];
 
   extern __shared__ __align__(
@@ -558,7 +558,7 @@ template <uint32_t BLOCK_THREADS, BlockReduceAlgorithm REDUCE_ALGORITHM, uint32_
 __global__ void TopKRenormProbKernel(DType* probs, DType* renormed_prob, IdType* top_k_arr, uint32_t d) {
   const uint32_t bx = blockIdx.x, tx = threadIdx.x;
   const uint32_t row_idx = bx;
-  const uint32_t k = top_k_arr[row_idx] == 0 ? 1 : top_k_arr[row_idx];
+  const uint32_t k = top_k_arr[row_idx] == 0 ? d : top_k_arr[row_idx];
   double pivot = -cuda::std::numeric_limits<float>::infinity(), normalizer = 1;
   vec_t<float, VEC_SIZE> probs_vec;
   if (k < d) {

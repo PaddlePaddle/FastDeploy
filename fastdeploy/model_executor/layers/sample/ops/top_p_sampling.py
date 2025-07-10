@@ -56,6 +56,9 @@ def top_p_sampling(
 
     """
     top_p_class = envs.FD_SAMPLING_CLASS.lower()
+    print(f"*****top_p_class: {top_p_class}****")
+    print(top_p)
+    print(top_k)
     if top_p_class == "air":
         _, ids = air_top_p_sampling(x,
                                     top_p,
@@ -109,6 +112,7 @@ def rejection_top_p_sampling(
     """
     rejection_top_p_sampling
     """
+    assert top_p is not None, "Top_p should not be none when FD_SAMPLING_CLASS is rejection"
     try:
         from fastdeploy.model_executor.ops.gpu import (
             rejection_top_p_sampling, top_k_renorm_probs)
