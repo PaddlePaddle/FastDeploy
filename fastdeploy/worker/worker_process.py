@@ -615,9 +615,9 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
 
     if quantization_config is not None:
         quant_config_name = quantization_config["quantization"]
-    elif getattr(config_or_args, 'quantization', None) != "None":
+    elif args.quantization != "None":
         quantization_config = {}
-        quant_config_name = getattr(config_or_args, 'quantization', None)
+        quant_config_name = args.quantization
         quantization_config["quantization"] = quant_config_name
         # Special handling for Ernie models
         is_ernie = "Ernie4_5_ForCausalLM" in model_config.architectures or \
@@ -647,7 +647,7 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
             logger.info(
                 "Model Status: Original (will apply online quantization)")
 
-        logger.info(f"Quantization Method: {getattr(config_or_args, 'quantization', 'None')}")
+        logger.info(f"{quantization_config}")
     else:
         logger.info(
             "No quantization config found and use original weight and act dtype."

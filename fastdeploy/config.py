@@ -187,7 +187,7 @@ class ParallelConfig:
         else:
             raise NotImplementedError
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
-        enable_custom_all_reduce: str = "store_true"
+        self.enable_custom_all_reduce: bool = False
 
 @dataclass
 class SpeculativeConfig:
@@ -225,7 +225,7 @@ class SpeculativeConfig:
         # During benchmarking, we need to enforce that the number of accepted tokens is 1.
         # This means no tokens from MTP are accepted.
         # This ensures that the specified simulation acceptance rate is not affected.
-        benchmark_mode: bool = False
+        self.benchmark_mode: bool = False
 
         for key, value in args.items():
             if hasattr(self, key):

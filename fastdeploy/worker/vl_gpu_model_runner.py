@@ -25,9 +25,10 @@ import paddle.distributed.fleet as fleet
 from paddleformers.transformers.model_utils import load_tp_checkpoint
 from safetensors import safe_open
 
-from fastdeploy.config import (DecodingConfig, DeviceConfig, FDConfig, GraphOptimizationConfig,
-                               LoadConfig, ModelConfig, MoEPhase,
-                               ParallelConfig, SpeculativeConfig)
+from fastdeploy.config import (DecodingConfig, DeviceConfig, FDConfig,
+                               GraphOptimizationConfig, LoadConfig,
+                               ModelConfig, MoEPhase, ParallelConfig,
+                               SpeculativeConfig)
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.input.mm_processor import DataProcessor
 from fastdeploy.model_executor.layers.attention import get_attention_backend
@@ -266,8 +267,9 @@ class GPUVLModelRunner(VLModelRunnerBase):
         self.image_preprocess = image_preprocess
 
         graph_opt_config = GraphOptimizationConfig(
-            self.args.enable_static_graph_inference, self.args.use_cudagraph,
-            self.args.max_capture_batch_size)
+            self.args.enable_static_graph_inference,
+            self.args.max_capture_batch_size,
+            vars(self.args))
 
         fd_config, self.model = build_stream_line_model(
             self.args.model_name_or_path,
