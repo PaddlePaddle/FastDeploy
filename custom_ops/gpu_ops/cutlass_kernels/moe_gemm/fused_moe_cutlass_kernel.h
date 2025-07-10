@@ -804,17 +804,54 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
   template <WintQuantMethod QuantMethod, typename dummy>
   struct KernelRunner<QuantMethod, true, dummy> {
     using WeightQuantTraits = WintQuantTraits<ElementA, QuantMethod>;
-    using QuantArguments = typename WeightQuantTraits::Arguments;
+    using MmaQuantArguments = typename Mma::QuantParamsAccessor::Arguments;
 
     CUTLASS_DEVICE
-    static QuantArguments get_quant_args(Params const& params, int32_t problem_idx, const int64_t gemm_k, const int64_t gemm_n) {
-      QuantArguments quant_args;
-      if constexpr (QuantMethod == WintQuantMethod::kWeightOnlyInt2) {
-        quant_args.local_scale_ptr = params.local_scale + problem_idx * gemm_k * gemm_n / 128;
-        quant_args.code_scale_ptr = params.code_scale + problem_idx * gemm_n;
-        quant_args.code_zp_ptr = params.code_zp + problem_idx * gemm_n;
-      }
-      return quant_args;
+    static MmaQuantArguments prepare_quant_args(
+        Params const& params, cutlass::gemm::GemmCoord const& threadblock_offset,
+        int32_t problem_idx, const int32_t gemm_k, const int32_t gemm_n, const int thread_idx) {
+      // the begin threadblock_offset of scale, which holds the same column id with C, but with no row id
+      cutlass::MatrixCoord tb_offset_scale{0, threadblock_offset.n()};
+      cutlass::MatrixCoord tb_offset_local_scale{0, threadblock_offset.n() * 2};
+
+      ElementScale* weight_scale_ptr = params.weight_scales + problem_idx * gemm_n;
+      typename Mma::QuantParamsAccessor::IteratorSuperScale iterator_super_scale(
+          Mma::QuantParamsAccessor::LayoutSuperScale(gemm_n),
+          weight_scale_ptr,
+          {1, gemm_n},
+          thread_idx,
+          tb_offset_scale);
+
+      int local_scale_pointer_offset = ((ThreadblockShape::kK + 127) / 128) * (gemm_n * 2);
+      uint4b_t *local_scale_ptr = reinterpret_cast<uint4b_t *>(params.local_scale + problem_idx * gemm_k * gemm_n / 128);
+      CUTLASS_TRACE_DEVICE(" local_scale_ptr=%p, extent={%d, %d}, tb_offset={%d, %d}, local_scale_pointer_offset=%d",
+          local_scale_ptr, gemm_k / 128, gemm_n * 2, tb_offset_local_scale.row(), tb_offset_local_scale.column(), local_scale_pointer_offset);
+      typename Mma::QuantParamsAccessor::IteratorLocalScale iterator_local_scale(
+          Mma::QuantParamsAccessor::LayoutLocalScale(gemm_n * 2),
+          local_scale_ptr,
+          {(gemm_k + 127) / 128, gemm_n * 2},
+          thread_idx,
+          tb_offset_local_scale);
+
+      float* code_scale_ptr = params.code_scale + problem_idx * gemm_n;
+      typename Mma::QuantParamsAccessor::IteratorCodeScaleZp iterator_code_scale(
+          Mma::QuantParamsAccessor::LayoutCodeScaleZp(gemm_n),
+          code_scale_ptr,
+          {1, gemm_n},
+          thread_idx,
+          tb_offset_scale);
+
+      float* code_zp_ptr = params.code_zp + problem_idx * gemm_n;
+      typename Mma::QuantParamsAccessor::IteratorCodeScaleZp iterator_code_zp(
+          Mma::QuantParamsAccessor::LayoutCodeScaleZp(gemm_n),
+          code_zp_ptr,
+          {1, gemm_n},
+          thread_idx,
+          tb_offset_scale);
+
+      MmaQuantArguments mma_quant_args(
+          iterator_super_scale, iterator_local_scale, iterator_code_scale, iterator_code_zp, local_scale_pointer_offset);
+      return mma_quant_args;
     }
 
     CUTLASS_DEVICE
@@ -861,7 +898,7 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
         int32_t problem_idx = problem_visitor.problem_index();
         int32_t cta_idx = int32_t(problem_visitor.threadblock_idx());
 
-        if (problem_idx > 2) {
+        if (problem_idx > 20) {
           break;
         }
 
@@ -875,12 +912,6 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
             int(cta_idx / grid_shape.n()) * Mma::Shape::kM,  // NOLINT
             int(cta_idx % grid_shape.n()) * Mma::Shape::kN,  // NOLINT
             0);
-
-        // begin address offset for weight_scale.
-        ElementScale* weight_scale_ptr =
-            params.weight_scales ? params.weight_scales + problem_idx * problem_size.n() : nullptr;
-        // the begin threadblock_offset of scale, which holds the same column id with C, but with no row id
-        cutlass::MatrixCoord tb_offset_scale{0, threadblock_offset.n()};
 
         // Load element pointers. Exchange pointers and strides if working on
         // the transpose
@@ -899,30 +930,22 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
 
         // Compute initial location in logical coordinates
         // the begin threadblock_offset of A, which holds the same row id with C
-        cutlass::MatrixCoord tb_offset_A{
-            threadblock_offset.m(),
-            0,
-        };
+        cutlass::MatrixCoord tb_offset_A{threadblock_offset.m(), 0};
 
         // begin address offset for B for current problem_idx, totally num_experts problems
         char* byte_ptr_B = ((char*)params.ptr_B) +                 // NOLINT
                            problem_idx * bytes_per_expert_matrix;  // NOLINT
-
+        ElementB* ptr_B = reinterpret_cast<ElementB*>(byte_ptr_B);
         typename LayoutB::LongIndex ldm_B =
             platform::is_same<layout::RowMajor, LayoutB>::value
                 ? gemm_n
                 : gemm_k * kInterleave;
 
         // the begin threadblock_offset of B, which holds the same column id with C
-        cutlass::MatrixCoord tb_offset_B{0,
-                                         threadblock_offset.n() / kInterleave};
-
+        cutlass::MatrixCoord tb_offset_B{0, threadblock_offset.n() / kInterleave};
         cutlass::MatrixCoord extent_B{problem_size.k() * kInterleave, problem_size.n() / kInterleave};
-
         CUTLASS_TRACE_DEVICE(" ldm_B: %d, tb_offset_B: {%d, %d}, extent_B: {%d, %d}",
             static_cast<int>(ldm_B), tb_offset_B.row(), tb_offset_B.column(), extent_B.row(), extent_B.column());
-
-        ElementB* ptr_B = reinterpret_cast<ElementB*>(byte_ptr_B);
 
         // Compute position within threadblock
         int thread_idx = threadIdx.x;
@@ -941,14 +964,15 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
             thread_idx,
             tb_offset_B);
 
-        typename Mma::FragmentC accumulators;
+        MmaQuantArguments mma_quant_args = prepare_quant_args(
+            params, threadblock_offset, problem_idx, gemm_k, gemm_n, thread_idx);
 
+        typename Mma::FragmentC accumulators;
         accumulators.clear();
 
         // Broadcast the warp_id computed by lane 0 to ensure dependent code
         // is compiled as warp-uniform.
         int warp_idx = __shfl_sync(0xffffffff, threadIdx.x / 32, 0);
-
         int lane_idx = threadIdx.x % 32;
 
         //
@@ -971,6 +995,7 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
             accumulators,
             iterator_A,
             iterator_B,
+            mma_quant_args,
             accumulators);
 
         //

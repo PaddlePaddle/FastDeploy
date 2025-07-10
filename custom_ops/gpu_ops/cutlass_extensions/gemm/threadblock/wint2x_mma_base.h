@@ -63,8 +63,8 @@ template <
     typename Policy_,
     /// Number of stages,
     int Stages,
-    /// Used for partial specialization
-    typename Enable = bool>
+    /// Size of extra quantized params
+    typename QuantParamsShape>
 class Wint2xMmaBase {
 public:
   ///< Size of the Gemm problem - concept: gemm::GemmShape<>
@@ -100,7 +100,6 @@ public:
 
   static constexpr int kWarpLoadIterationsForB =
       kWarpGemmIterations / kWarpGemmIterationsPerLoadForB;
-
 
   /// Number of stages
   static int const kStages = Stages;
@@ -140,16 +139,8 @@ public:
     using ShapeB = MatrixShape<Shape::kK * kStages + Policy::SmemPaddingB::kRow,
                                Shape::kN + Policy::SmemPaddingB::kColumn>;
 
-    // local_scale uint4
-    constexpr static int kGroupWiseParamRows = Shape::kK / 64;
-
-    using GroupWiseParamShapeB = MatrixShape<kGroupWiseParamRows * kStages, Shape::kN>;
-
-    // code_scale float; code_zp float; super_scale ElementB
-    constexpr static int kColumnWiseParamRows = 2 * sizeof(float) +
-        sizeof_bits<typename Operator::ElementB>::value / 8;
-
-    using ColumnWiseParamShapeB = MatrixShape<kColumnWiseParamRows, Shape::kN>;
+    /// Shape of all quant params in shared memory
+    using QuantParamsShapeB = QuantParamsShape;
 
   public:
     //
@@ -162,11 +153,8 @@ public:
     /// Buffer for B operand
     AlignedBuffer<typename Operator::ElementB, ShapeB::kCount> operand_B;
 
-    /// Buffer for local_scale of B operand
-    AlignedBuffer<uint4b_t, GroupWiseParamShapeB::kCount> operand_local_scale_B;
-
-    /// Buffer for column-wise params of B operand
-    AlignedBuffer<uint8_t, ColumnWiseParamShapeB::kCount> operand_column_wise_B;
+    /// Buffer for extra quant params of B operand
+    AlignedBuffer<uint8_t, QuantParamsShapeB::kCount> operand_quant_params_B;
 
   public:
     //

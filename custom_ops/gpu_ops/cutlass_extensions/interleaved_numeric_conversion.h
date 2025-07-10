@@ -462,9 +462,11 @@ struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, 16>
         ScaleComputeT code_zp = static_cast<ScaleComputeT>(0);
         ScaleComputeT floor_offset = static_cast<ScaleComputeT>(0.5);
 
+#if 0
         CUTLASS_TRACE_DEVICE(" source: [%d, %d, %d, %d]",
             static_cast<int>(in_ptr[0]), static_cast<int>(in_ptr[1]),
             static_cast<int>(in_ptr[2]), static_cast<int>(in_ptr[3]));
+#endif
 
         CUTLASS_PRAGMA_UNROLL
         for (int i = 0; i < 4; ++i) {

@@ -51,12 +51,13 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
     typename WeightOnlyTraits::Arguments ffn1_quant_args;
     typename WeightOnlyTraits::Arguments ffn2_quant_args;
     if constexpr (QuantMethod == cutlass::WintQuantMethod::kWeightOnlyInt2) {
-        ffn1_quant_args.local_scale_ptr = ffn1_local_scale->data<uint8_t>();
-        ffn1_quant_args.code_scale_ptr = ffn1_code_scale->data<float>();
-        ffn1_quant_args.code_zp_ptr = ffn1_code_zp->data<float>();
-        ffn2_quant_args.local_scale_ptr = ffn2_local_scale->data<uint8_t>();
-        ffn2_quant_args.code_scale_ptr = ffn2_code_scale->data<float>();
-        ffn2_quant_args.code_zp_ptr = ffn2_code_zp->data<float>();
+        ffn1_quant_args.local_scale_ptr = const_cast<uint8_t*>(ffn1_local_scale->data<uint8_t>());
+        ffn1_quant_args.code_scale_ptr = const_cast<float*>(ffn1_code_scale->data<float>());
+        ffn1_quant_args.code_zp_ptr = const_cast<float*>(ffn1_code_zp->data<float>());
+
+        ffn2_quant_args.local_scale_ptr = const_cast<uint8_t*>(ffn2_local_scale->data<uint8_t>());
+        ffn2_quant_args.code_scale_ptr = const_cast<float*>(ffn2_code_scale->data<float>());
+        ffn2_quant_args.code_zp_ptr = const_cast<float*>(ffn2_code_zp->data<float>());
     }
 
     auto moe_gemm_runner = MoeGemmRunner<NvType, WeightOnlyTraits>();

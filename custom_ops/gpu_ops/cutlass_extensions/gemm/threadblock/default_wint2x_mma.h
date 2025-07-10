@@ -18,15 +18,64 @@
 #pragma once
 
 #include "cutlass_extensions/arch/mma.h"
-#include "cutlass_extensions/interleaved_numeric_conversion.h"
 #include "cutlass_extensions/gemm/threadblock/default_dq_mma.h"
 #include "cutlass_extensions/gemm/threadblock/wint2x_mma_multistage.h"
+#include "cutlass_extensions/gemm/threadblock/wint2x_params_accessor.h"
 
 namespace cutlass {
 namespace gemm {
 namespace threadblock {
 
 ////////////////////////////////////////////////////////////////////////////////
+
+template <typename ThreadblockShape, typename ElementT, int GroupSize>
+struct DefaultQuantParamsIterators {
+private:
+    static constexpr int kAlignment = 128 / sizeof_bits<ElementT>::value;
+    static_assert((ThreadblockShape::kN % kAlignment) == 0, "");
+
+    static constexpr int kRows =
+        (GroupSize == -1) ? 1 : (ThreadblockShape::kK + GroupSize - 1) / GroupSize;
+    static constexpr int kColumns = ThreadblockShape::kN;
+
+    using IteratorThreadMap = transform::PitchLinearStripminedThreadMap<
+        layout::PitchLinearShape<kColumns, kRows>,
+        kColumns / kAlignment, kAlignment>;
+
+public:
+    using Iterator = cutlass::transform::threadblock::PredicatedTileIterator<
+        MatrixShape<kRows, kColumns>, ElementT, layout::RowMajor, 0,
+        IteratorThreadMap, kAlignment>;
+    using SmemIterator = Iterator;
+
+    //using AccessType = cutlass::Array<ElementT, kAlignment>;
+    //using Iterator = cutlass::transform::threadblock::PredicatedTileAccessIterator<
+    //    MatrixShape<kRows, kColumns>, ElementT, layout::RowMajor,
+    //    0, IteratorThreadMap, AccessType>;
+};
+
+template <typename ThreadblockShape, int GroupSize>
+struct DefaultQuantParamsIterators<ThreadblockShape, uint4b_t, GroupSize> {
+private:
+    static constexpr int kAlignment = 128 / sizeof_bits<uint4b_t>::value;
+    static_assert((ThreadblockShape::kN % kAlignment) == 0, "");
+
+    static constexpr int kRows =
+        (GroupSize == -1) ? 1 : (ThreadblockShape::kK + 2 * GroupSize - 1) / (2 * GroupSize);
+    static constexpr int kColumns =
+        (GroupSize == -1) ? ThreadblockShape::kN : ThreadblockShape::kN * 2;
+
+    using IteratorThreadMap = transform::PitchLinearStripminedThreadMap<
+        layout::PitchLinearShape<kColumns, kRows>,
+        kColumns / kAlignment, kAlignment>;
+
+public:
+    using Iterator =
+        cutlass::transform::threadblock::PredicatedTileIterator<
+            cutlass::MatrixShape<kRows, kColumns>, uint4b_t,
+            layout::RowMajor, 0, IteratorThreadMap, kAlignment>;
+    using SmemIterator = Iterator;
+};
 
 template <
     /// Element type for A matrix operand
@@ -100,7 +149,7 @@ struct DefaultWint2xMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlig
     layout::RowMajor, OperatorClass, ArchTag, ThreadblockShape, WarpShape, InstructionShape,
     kStages, Operator, SharedMemoryClear>
 {
-
+public:
     static_assert(platform::is_same<ElementA, half_t>::value || platform::is_same<ElementA, bfloat16_t>::value,
         "Element A must be fp16 or bf16");
 
@@ -109,6 +158,12 @@ struct DefaultWint2xMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlig
 
     static_assert(platform::is_same<Operator, arch::OpMultiplyAddDequantizeInterleavedBToA>::value,
         "Mma multistage must dequantize after ldsm");
+
+    using ElementSuperScale = ElementA;
+    using ElementLocalScale = uint4b_t;
+    using ElementCodeScaleZp = float;
+
+    static constexpr int kGroupSize = 64;
 
     static cutlass::arch::CacheOperation::Kind const CacheOpA = ((sizeof_bits<ElementA>::value * kAlignmentA) == 128)
         ? cutlass::arch::CacheOperation::Global
@@ -157,16 +212,36 @@ public:
         IteratorShapeB, ElementB, layout::ColumnMajor, 0, InterleavedThreadMapB,
         AccessTypeB>;
 
-    using TransformBAfterLDS = FastInterleavedAndBiasedNumericArrayConverter<
-        ElementA, ElementB, MmaCore::MmaPolicy::Operator::FragmentB::kElements>;
+private:
+    // Define iterators over tiles from extra quant params for B operand
+    using IteratorSuperScale = typename DefaultQuantParamsIterators<
+        ThreadblockShape, ElementSuperScale, -1>::Iterator;
+    using SmemIteratorSuperScale = typename DefaultQuantParamsIterators<
+        ThreadblockShape, ElementSuperScale, -1>::SmemIterator;
+
+    using IteratorLocalScale = typename DefaultQuantParamsIterators<
+        ThreadblockShape, ElementLocalScale, kGroupSize>::Iterator;
+    using SmemIteratorLocalScale = typename DefaultQuantParamsIterators<
+        ThreadblockShape, ElementLocalScale, kGroupSize>::SmemIterator;
+
+    using IteratorCodeScaleZp = typename DefaultQuantParamsIterators<
+        ThreadblockShape, ElementCodeScaleZp, -1>::Iterator;
+    using SmemIteratorCodeScaleZp = typename DefaultQuantParamsIterators<
+        ThreadblockShape, ElementCodeScaleZp, -1>::Iterator;
+
+public:
+    using QuantParamsAccessor = Wint2ParamsAccessor<
+        ElementA, ThreadblockShape, IteratorSuperScale, SmemIteratorSuperScale,
+        IteratorLocalScale, SmemIteratorLocalScale,
+        IteratorCodeScaleZp, SmemIteratorCodeScaleZp, kStages, kGroupSize>;
 
     // Define the threadblock-scoped multistage matrix multiply
     using ThreadblockMma = cutlass::gemm::threadblock::Wint2xMmaMultistage<
         typename MmaCore::Shape,
         IteratorA, typename MmaCore::SmemIteratorA, MmaCore::kCacheOpA,
         IteratorB, typename MmaCore::SmemIteratorB, MmaCore::kCacheOpB,
-        ElementAccumulator, layout::RowMajor,
-        typename MmaCore::MmaPolicy, kStages, TransformBAfterLDS, SharedMemoryClear>;
+        ElementAccumulator, layout::RowMajor, typename MmaCore::MmaPolicy,
+        kStages, QuantParamsAccessor, SharedMemoryClear>;
 };
 
 } // namespace threadblock
