@@ -601,7 +601,6 @@ def initialize_fd_config(config_or_args) -> FDConfig:
     model_config_dict["head_dim"] = model_config_dict.get(
         "head_dim", model_config_dict["hidden_size"] // model_config_dict["num_attention_heads"])
     model_config_dict["rope_theta"] = model_config_dict.get("rope_theta", 10000.0)
-    print("model_config_dict['rope_theta']",model_config_dict['rope_theta'])
 
     # Create model config object
     model_config = ModelConfig.from_dict(model_config_dict)
