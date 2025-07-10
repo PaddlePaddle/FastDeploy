@@ -121,14 +121,15 @@ def rejection_top_p_sampling(
         from fastdeploy.model_executor.ops.gpu import (
             rejection_top_p_sampling, top_k_renorm_probs)
 
-        if top_k is None:
+        no_top_k = top_k is None or paddle.all(top_k == 0).item()
+        if no_top_k:
             ids = rejection_top_p_sampling(
                 x,
                 top_p,
                 None,
                 seed,
             )
-        elif top_k is not None and top_p is not None:
+        else:
             if order == "top_k_first":
                 renorm_probs = top_k_renorm_probs(x, top_k)
                 ids = rejection_top_p_sampling(
@@ -144,10 +145,6 @@ def rejection_top_p_sampling(
                     top_k,
                     seed,
                 )
-        else:
-            raise ValueError(
-                "Top_p cannot be none."
-            )
     except ImportError:
         raise RuntimeError("Cannot import rejection_top_p_sampling op.")
     return ids
