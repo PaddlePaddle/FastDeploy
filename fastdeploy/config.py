@@ -83,6 +83,7 @@ class ModelConfig:
             "use_temporal_conv":True,
             "resampler_fuse_rms_norm":False,
             "freq_allocation":20,
+            "tie_word_embeddings":False,
         }
 
         for key, value in args.items():
