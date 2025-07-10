@@ -115,7 +115,6 @@ class ParallelConfig:
         self,
         args,
     ):
-        self.block_size = 16  # The block size for processing.
         self.sequence_parallel = False  # Whether to enable sequence parallelism.
         self.use_ep = False  # Whether to enable Expert Parallelism
         self.moe_phase = MoEPhase.PREFILL  # Generation phase

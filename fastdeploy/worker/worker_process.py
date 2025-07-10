@@ -225,7 +225,7 @@ class PaddleDisWorkerProc():
         """
         # Currently, only support single node
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
-        mp_num_per_node = self.parallel_config.tensor_parallel_size// self.nnode
+        mp_num_per_node = self.parallel_config.tensor_parallel_size // self.nnode
         req_ids = []
         while True:
             if self.local_rank == 0:
