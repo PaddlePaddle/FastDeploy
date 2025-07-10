@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle/extension.h"
+#include "helper.h"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
@@ -51,13 +52,18 @@ void SetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
                            const paddle::Tensor &seq_lens_decoder,
                            const paddle::Tensor &step_idx,
                            const paddle::Tensor &stop_flags) {
+#ifdef PADDLE_WITH_CUSTOM_DEVICE
+    auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(stop_flags.place()));
+    auto cu_stream = dev_ctx->stream();
+#else
     auto cu_stream = stop_flags.stream();
+#endif
     std::vector<int64_t> pre_ids_all_shape = pre_ids_all.shape();
 
     int bs = seq_lens_this_time.shape()[0];
     int length = pre_ids_all_shape[1];
     int length_input_ids = input_ids.shape()[1];
-    int block_size = (bs + 32 - 1) / 32 * 32;
+    int block_size = (bs + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
     set_value_by_flag_and_id<<<1, block_size, 0, cu_stream>>>(
         stop_flags.data<bool>(),
         const_cast<int64_t *>(pre_ids_all.data<int64_t>()),

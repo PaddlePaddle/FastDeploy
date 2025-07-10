@@ -13,10 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+import argparse
 import json
 import os
 import random
-import argparse
+from typing import Optional
 
 import numpy as np
 import paddle
@@ -24,6 +25,10 @@ import paddle.distributed.fleet as fleet
 from paddleformers.transformers.model_utils import load_tp_checkpoint
 from safetensors import safe_open
 
+from fastdeploy.config import (DeviceConfig, FDConfig, GraphOptimizationConfig,
+                               KVCacheConfig, LoadConfig, ModelConfig,
+                               MoEConfig, MoEPhase, ParallelConfig,
+                               SpeculativeConfig)
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.input.mm_processor import DataProcessor
 from fastdeploy.model_executor.layers.attention import get_attention_backend
@@ -41,18 +46,16 @@ from fastdeploy.model_executor.models.ernie4_5_vl.dfnrope.modeling import \
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import (
     ScatterOp, VariableResolutionResamplerModel)
 from fastdeploy.platforms import current_platform
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.worker.output import SamplerOutput
 from fastdeploy.worker.utils import check_safetensors_model
 from fastdeploy.worker.vl_model_runner_base import VLModelRunnerBase
-from fastdeploy.config import (DeviceConfig, FDConfig, KVCacheConfig,
-                                LoadConfig, ModelConfig, MoEConfig,
-                                MoEPhase, ParallelConfig, SpeculativeConfig)
 
 if current_platform.is_cuda() and current_platform.available():
     from fastdeploy.model_executor.layers.utils import (
         remove_padding, speculate_remove_padding)
 
-from fastdeploy.model_executor.ops.gpu import (save_output,
+from fastdeploy.model_executor.ops.gpu import (save_output, save_output_topk,
                                                set_stop_value_multi_ends,
                                                set_value_by_flags_and_idx,
                                                update_inputs)
@@ -84,6 +87,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
         self.mp_group = hcg.get_model_parallel_group()
         self.is_safetensors_model = check_safetensors_model(
             args.model_name_or_path)
+        self.enable_logprob = args.enable_logprob
 
         model_path = os.path.dirname(args.model_name_or_path)
         args.llm_model_name_or_path = args.model_name_or_path
@@ -268,6 +272,10 @@ class GPUVLModelRunner(VLModelRunnerBase):
                                         -1)
         self.image_preprocess = image_preprocess
 
+        graph_opt_config = GraphOptimizationConfig(
+            self.args.enable_static_graph_inference, self.args.use_cudagraph,
+            self.args.max_capture_batch_size)
+
         fd_config, self.model = build_stream_line_model(
             self.args.model_name_or_path,
             self.args.dtype,
@@ -275,6 +283,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
             max_model_len=self.args.max_model_len,
             tokenizer=tokenizer,
             quantization=self.args.quantization,
+            graph_opt_config=graph_opt_config,
         )
         self.model.eval()
         self.set_state_dict(self.args)
@@ -809,9 +818,23 @@ class GPUVLModelRunner(VLModelRunnerBase):
         self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full(
             [self.fd_config.parallel_config.max_num_seqs, 1], 0, dtype='int32')
         # initialize_forward_meta
-        self.forward_meta = ForwardMeta.init_forward_meta(
-            self.share_inputs, self.attn_backend)
-
+        self.forward_meta = ForwardMeta(
+            input_ids=self.share_inputs["input_ids"],
+            ids_remove_padding=self.share_inputs["ids_remove_padding"],
+            rotary_embs=self.share_inputs["rope_emb"],
+            attn_backend=self.attn_backend,
+            decoder_batch_ids=self.share_inputs["decoder_batch_ids"],
+            decoder_tile_ids_per_batch=self.share_inputs["decoder_tile_ids_per_batch"],
+            seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
+            seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+            seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
+            cum_offsets=self.share_inputs["cum_offsets"],
+            padding_offset=self.share_inputs["padding_offset"],
+            cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
+            cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
+            block_tables=self.share_inputs["block_tables"],
+            caches=self.share_inputs["caches"]
+        )
         self.attn_backend.init_attention_metadata(self.forward_meta)
 
         self.sampling_metadata = SamplingMetadata(
@@ -825,6 +848,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
             min_dec_lens=self.share_inputs["min_dec_len"],
             bad_words_token_ids=self.share_inputs["bad_tokens"],
             eos_token_ids=self.share_inputs["eos_token_id"],
+            max_num_logprobs=20 if self.enable_logprob else None,
         )
 
     def generate(self) -> None:
@@ -846,17 +870,17 @@ class GPUVLModelRunner(VLModelRunnerBase):
             self.share_inputs["stop_flags"],
         )
         # sampler & save_output
-        next_tokens = self.sampler(logits, self.sampling_metadata)
+        sampler_output = self.sampler(logits, self.sampling_metadata)
         if self.fd_config.parallel_config.tensor_parallel_degree > 1:
-            paddle.distributed.broadcast(next_tokens, 0)
-        self.post_process(next_tokens)
+            paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
+        self.post_process(sampler_output)
 
-    def post_process(self, next_tokens: paddle.Tensor) -> None:
+    def post_process(self, sampler_output: SamplerOutput) -> None:
         """
         post_process
         """
         if self.share_inputs["enable_thinking"]:
-            exists_think_end = next_tokens == self.model_cfg.think_end_id
+            exists_think_end = sampler_output.sampled_token_ids == self.model_cfg.think_end_id
             paddle.assign(
                 paddle.where(
                     exists_think_end,
@@ -872,12 +896,12 @@ class GPUVLModelRunner(VLModelRunnerBase):
                 ), self.share_inputs["reasoning_index"])
 
             stop_wo_think = (
-                (next_tokens == self.share_inputs["eos_token_id"]) |
+                (sampler_output.sampled_token_ids == self.share_inputs["eos_token_id"]) |
                 (self.share_inputs["reasoning_index"] == 0)) & (
                     self.share_inputs["need_think_end"] > 0)
-            next_tokens = paddle.where(stop_wo_think,
+            sampler_output.sampled_token_ids = paddle.where(stop_wo_think,
                                        self.model_cfg.think_end_id,
-                                       next_tokens)
+                                       sampler_output.sampled_token_ids)
             paddle.assign(
                 paddle.where(
                     stop_wo_think,
@@ -900,7 +924,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
         )
 
         set_stop_value_multi_ends(
-            next_tokens,
+            sampler_output.sampled_token_ids,
             self.share_inputs["stop_flags"],
             self.share_inputs["seq_lens_this_time"],
             self.share_inputs["eos_token_id"],
@@ -908,24 +932,33 @@ class GPUVLModelRunner(VLModelRunnerBase):
             False,
         )  # multi ends
         # update inputs
-        with paddle.framework._no_check_dy2st_diff():
-            update_inputs(
-                self.share_inputs["stop_flags"],
-                self.share_inputs["not_need_stop"],
-                self.share_inputs["seq_lens_this_time"],
-                self.share_inputs["seq_lens_encoder"],
-                self.share_inputs["seq_lens_decoder"],
-                self.share_inputs["input_ids"],
-                self.share_inputs["stop_nums"],
-                next_tokens,
-                self.share_inputs["is_block_step"],
-            )
-        save_output(
-            next_tokens,
+        update_inputs(
+            self.share_inputs["stop_flags"],
             self.share_inputs["not_need_stop"],
-            self.rank,
-            False,  # use_ep
+            self.share_inputs["seq_lens_this_time"],
+            self.share_inputs["seq_lens_encoder"],
+            self.share_inputs["seq_lens_decoder"],
+            self.share_inputs["input_ids"],
+            self.share_inputs["stop_nums"],
+            sampler_output.sampled_token_ids,
+            self.share_inputs["is_block_step"],
         )
+        if sampler_output.logprobs_tensors is None:
+            save_output(
+                sampler_output.sampled_token_ids,
+                self.share_inputs["not_need_stop"],
+                self.rank,
+                False,  # use_ep
+            )
+        else:
+            save_output_topk(
+                sampler_output.sampled_token_ids,
+                sampler_output.logprobs_tensors.logprob_token_ids,
+                sampler_output.logprobs_tensors.logprobs,
+                sampler_output.logprobs_tensors.selected_token_ranks,
+                self.share_inputs["not_need_stop"],
+                self.rank,
+            )
 
     def _cal_theortical_kvcache(self):
         """
@@ -1050,6 +1083,7 @@ def build_stream_line_model(
     max_model_len: int,
     tokenizer: ErnieBotTokenizer,
     quantization: str = "None",
+    graph_opt_config: Optional[GraphOptimizationConfig] = None
 ) -> tuple[FDConfig, paddle.nn.layer]:
     """
     build model
@@ -1221,6 +1255,7 @@ def build_stream_line_model(
         moe_config=moe_config,
         quant_config=quant_config,
         kv_cache_config=kv_cache_config,
+        graph_opt_config=graph_opt_config,
     )
     fd_config.parallel_config.max_model_len = max_model_len
     fd_config.model_config.rope_theta = rope_theta

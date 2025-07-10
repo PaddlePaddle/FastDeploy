@@ -36,8 +36,7 @@ def _find_py_files(root_dir):
 
 
 def auto_models_registry(dir_path,
-                         register_path="fastdeploy.model_executor.models",
-                         suffix=""):
+                         register_path="fastdeploy.model_executor.models"):
     """
     auto registry all models in this folder
     """
@@ -49,7 +48,7 @@ def auto_models_registry(dir_path,
                 if inspect.isclass(attr) and issubclass(
                         attr,
                         ModelForCasualLM) and attr is not ModelForCasualLM:
-                    ModelRegistry.register(attr, suffix=suffix)
+                    ModelRegistry.register(attr)
         except ImportError:
             raise ImportError(f"{module_file=} import error")
 

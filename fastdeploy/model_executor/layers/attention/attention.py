@@ -14,7 +14,9 @@
 # limitations under the License.
 """
 
-from typing import Dict, Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Dict, Optional
 
 import numpy as np
 import paddle
@@ -24,7 +26,8 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.quantization.quant_base import \
     QuantMethodBase
-from fastdeploy.worker.forward_meta import ForwardMeta
+if TYPE_CHECKING:
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Attention(nn.Layer):
@@ -67,7 +70,7 @@ class Attention(nn.Layer):
         self.num_heads: int = fd_config.model_config.num_attention_heads // fd_config.parallel_config.tensor_parallel_degree
         self.head_dim: int = fd_config.model_config.head_dim
         self.kv_num_heads: int = \
-            fd_config.model_config.num_key_value_heads // fd_config.parallel_config.tensor_parallel_degree
+            max(1, fd_config.model_config.num_key_value_heads // fd_config.parallel_config.tensor_parallel_degree)
         self.layer_id: int = layer_id
         self.v_head_dim: int = v_head_dim if v_head_dim > 0 else self.head_dim
         self.rope_type: str = rope_type

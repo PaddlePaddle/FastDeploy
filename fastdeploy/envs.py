@@ -74,7 +74,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ATTENTION_BACKEND":
     lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
 
-    # Set sampling class. "base", "air" and "rejection" can be set currently.
+    # Set sampling class. "base", "base_non_truncated", "air" and "rejection" can be set currently.
     "FD_SAMPLING_CLASS":
     lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
 
@@ -97,6 +97,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use fastsafetensor load weight (0 or 1)
     "FD_USE_FASTSAFETENSOR":
     lambda: os.getenv("FD_USE_FASTSAFETENSOR", "0"),
+
+    # Whether to use DeepGemm for FP8 blockwise MoE.
+    "FD_USE_DEEP_GEMM":
+    lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "1"))),
 }
 
 

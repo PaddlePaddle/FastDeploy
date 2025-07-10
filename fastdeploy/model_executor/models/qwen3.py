@@ -34,7 +34,7 @@ from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 from fastdeploy.model_executor.models.qwen2 import Qwen2DecoderLayer, Qwen2MLP
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Qwen3MLP(Qwen2MLP):
@@ -79,12 +79,12 @@ class Qwen3Attention(nn.Layer):
 
         self.q_norm = RMSNorm(fd_config=fd_config,
                               hidden_size=fd_config.model_config.head_dim,
-                              eps=1e-6,
+                              eps=fd_config.model_config.rms_norm_eps,
                               prefix=f"{prefix}.q_norm",
                               begin_norm_axis=2)
         self.k_norm = RMSNorm(fd_config=fd_config,
                               hidden_size=fd_config.model_config.head_dim,
-                              eps=1e-6,
+                              eps=fd_config.model_config.rms_norm_eps,
                               prefix=f"{prefix}.k_norm",
                               begin_norm_axis=2)
 
@@ -164,7 +164,6 @@ class Qwen3Model(nn.Layer):
 
         self.num_layers = fd_config.model_config.num_layers
         fd_config.model_config.prefix_name = "model"
-        fd_config.model_config.tie_word_embeddings = True
 
         self.embeddings = VocabParallelEmbedding(
             fd_config=fd_config,
@@ -184,7 +183,7 @@ class Qwen3Model(nn.Layer):
         self.norm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-6,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{fd_config.model_config.prefix_name}.norm",
         )
 
@@ -240,14 +239,13 @@ class Qwen3ForCausalLM(ModelForCasualLM):
         self.model = Qwen3Model(fd_config=fd_config)
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
-
+        self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
         self.lm_head = ParallelLMHead(
             fd_config=fd_config,
             embedding_dim=fd_config.model_config.hidden_size,
             num_embeddings=fd_config.model_config.vocab_size,
-            prefix=(f"{fd_config.model_config.prefix_name}.embed_tokens"),
+            prefix="lm_head",
         )
-        self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
 
     @classmethod
     def name(self):
@@ -269,7 +267,8 @@ class Qwen3ForCausalLM(ModelForCasualLM):
         if self.tie_word_embeddings:
             self.lm_head.out_linear.weight.set_value(
                 self.model.embeddings.word_embeddings.weight.transpose([1, 0]))
-        self.lm_head.load_state_dict(state_dict)
+        else:
+            self.lm_head.load_state_dict(state_dict)
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         """
@@ -324,6 +323,7 @@ class Qwen3PretrainedModel(PretrainedModel):
 
             base_actions = {
                 # Row Linear
+                "lm_head.weight": partial(fn, is_column=True),
                 "embed_tokens.weight": partial(fn, is_column=False),
                 "layers.0.self_attn.o_proj.weight": partial(fn,
                                                             is_column=False),

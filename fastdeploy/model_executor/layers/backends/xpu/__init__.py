@@ -16,6 +16,6 @@
 xpu backend methods
 """
 
-from .quantization.weight_only import XPUWeightOnlyLinearMethod, XPUWeightOnlyMoEMethod
+from .quantization.weight_only import XPUWeightOnlyLinearMethod
 
-__all__ = ['XPUWeightOnlyLinearMethod', 'XPUWeightOnlyMoEMethod']
+__all__ = ['XPUWeightOnlyLinearMethod']

@@ -156,7 +156,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 **Deploy the ERNIE-4.5-300B-A47B-Paddle model with WINT4 precision and 32K context length on 4 XPUs**
 
 ```bash
-export XPU_VISIBLE_DEVICES="0,1,2,3"
+export XPU_VISIBLE_DEVICES="0,1,2,3" # Specify which cards to be used
 python -m fastdeploy.entrypoints.openai.api_server \
     --model baidu/ERNIE-4.5-300B-A47B-Paddle \
     --port 8188 \
@@ -166,6 +166,11 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --quantization "wint4" \
     --gpu-memory-utilization 0.9
 ```
+
+**Note:** When deploying on 4 XPUs, only two configurations are supported which constrained by hardware limitations such as interconnect capabilities.
+`export XPU_VISIBLE_DEVICES="0,1,2,3"`
+or
+`export XPU_VISIBLE_DEVICES="4,5,6,7"`
 
 Refer to [Parameters](../../parameters.md) for more options.
 

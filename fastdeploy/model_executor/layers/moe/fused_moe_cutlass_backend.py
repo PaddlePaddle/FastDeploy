@@ -27,9 +27,11 @@ from fastdeploy.platforms import current_platform
 from ..utils import create_and_set_parameter, get_tensor
 from .fused_moe_backend_base import MoEMethodBase
 
-if current_platform.is_cuda():
+if current_platform.is_cuda() and not current_platform.is_dcu():
     from fastdeploy.model_executor.ops.gpu import (moe_expert_dispatch,
                                                    moe_expert_reduce, noaux_tc)
+elif current_platform.is_iluvatar():
+    from fastdeploy.model_executor.ops.iluvatar import moe_expert_dispatch, moe_expert_reduce
 
 
 # used for deepseek_v3
@@ -89,6 +91,23 @@ class CutlassMoEMethod(MoEMethodBase):
         """
         Paddle Cutlass compute Fused MoE.
         """
+        if current_platform.is_iluvatar():
+            return fastdeploy.model_executor.ops.iluvatar.moe_expert_ffn(
+                permute_input,
+                token_nums_per_expert,
+                layer.moe_ffn1_weight,
+                layer.moe_ffn2_weight,
+                None,
+                (layer.moe_ffn1_weight_scale if hasattr(
+                    layer, "moe_ffn1_weight_scale") else None),
+                (layer.moe_ffn2_weight_scale if hasattr(
+                    layer, "moe_ffn2_weight_scale") else None),
+                (layer.moe_ffn2_in_scale
+                 if hasattr(layer, "moe_ffn2_in_scale") else None),
+                expert_idx_per_token,
+                self.moe_quant_type,
+                used_in_ep_low_latency,
+            )
         return fastdeploy.model_executor.ops.gpu.moe_expert_ffn(
             permute_input,
             token_nums_per_expert,

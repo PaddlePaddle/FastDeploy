@@ -121,8 +121,8 @@ async def lifespan(app: FastAPI):
                                  args.mm_processor_kwargs, args.enable_mm,
                                  args.reasoning_parser)
     app.state.dynamic_load_weight = args.dynamic_load_weight
-    chat_handler = OpenAIServingChat(engine_client, pid)
-    completion_handler = OpenAIServingCompletion(engine_client, pid)
+    chat_handler = OpenAIServingChat(engine_client, pid, args.pod_ips)
+    completion_handler = OpenAIServingCompletion(engine_client, pid, args.pod_ips)
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
     app.state.engine_client = engine_client
@@ -395,6 +395,11 @@ def launch_controller_server():
     """Controller server running the sub thread"""
     if args.controller_port < 0:
         return
+    
+    if not is_port_available(args.host, args.controller_port):
+        raise Exception(
+            f"The parameter `controller_port`:{args.controller_port} is already in use."
+        )
 
     if not is_port_available(args.host, args.controller_port):
         raise Exception(

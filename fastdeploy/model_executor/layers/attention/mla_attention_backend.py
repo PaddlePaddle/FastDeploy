@@ -29,19 +29,19 @@ from fastdeploy.model_executor.layers.attention.ops import (
     open_shm_and_get_meta_signal)
 from fastdeploy.platforms import current_platform
 
-if current_platform.is_cuda():
+if current_platform.is_cuda() and not current_platform.is_dcu():
     from fastdeploy.model_executor.ops.gpu import (decode_mla_write_cache,
                                                    multi_head_latent_attention,
                                                    prefill_mla_write_cache)
 
 if TYPE_CHECKING:
-    from paddle._typing.dtype_like import _DTypeLiteral
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
 
 
 def yarn_get_mscale(scale=1, mscale=1):
@@ -69,7 +69,7 @@ class MLAAttentionMetadata(AttentionMetadata):
     decoder_tile_ids_per_batch: paddle.Tensor = None
     decoder_num_blocks: paddle.Tensor = None
 
-    _dtype: _DTypeLiteral = paddle.bfloat16
+    _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768
     max_partition_size: int = 32768
     block_tables: Optional[paddle.Tensor] = None
@@ -109,7 +109,6 @@ class MLAAttentionBackend(AttentionBackend):
         self.use_speculate: bool = self.speculative_method is not None
         self.speculate_max_draft_token_num: int = fd_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
-        self.rank: int = fd_config.parallel_config.tensor_parallel_rank
 
         self.kv_num_heads: int = kv_num_heads
         self.num_heads: int = num_heads
@@ -135,10 +134,8 @@ class MLAAttentionBackend(AttentionBackend):
             os.getenv("FLAGS_use_pd_disaggregation", 0))
         self.start_layer_index: int = fd_config.model_config.start_layer_index
         self.device_id: int = os.getenv("CUDA_VISIBLE_DEVICES", None)
-        if self.device_id is None:
-            self.device_id = self.rank
-        else:
-            self.device_id = self.device_id.split(",")[self.rank]
+        
+        self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attention metadata hence all layers in the forward pass can reuse it."""
@@ -187,6 +184,8 @@ class MLAAttentionBackend(AttentionBackend):
         # MLA
         metadata.max_enc_len_this_time = metadata.set_max_lengths[1]
         metadata.max_dec_len_this_time = metadata.set_max_lengths[2]
+        forward_meta.max_enc_len_this_time = metadata.set_max_lengths[1]
+        forward_meta.max_dec_len_this_time = metadata.set_max_lengths[2]
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
@@ -377,9 +376,6 @@ class MLAAttentionBackend(AttentionBackend):
         speculate_decoder = self.speculative_method is not None
         speculate_max_tokens = self.speculate_max_draft_token_num
 
-        decode_stage = forward_meta.is_decode_batch
-        prefill_stage = not (forward_meta.is_decode_batch)
-
         if self.use_pd_disaggregation:
             metadata.kv_signal_data_list[
                 layer.layer_id] = init_signal_layerwise(
@@ -389,8 +385,7 @@ class MLAAttentionBackend(AttentionBackend):
         latent_cache = forward_meta.caches[layer.layer_id] if hasattr(
             forward_meta, 'caches') else None
 
-        if prefill_stage:
-            # 写入缓存
+        if k is not None:
             prefill_mla_write_cache(
                 compressed_kv,
                 k_pe,
@@ -421,8 +416,7 @@ class MLAAttentionBackend(AttentionBackend):
             return fmha_out
 
         # Decode
-        if decode_stage:
-            # mla写入缓存
+        if k is None:
             decode_mla_write_cache(
                 compressed_kv,
                 k_pe,

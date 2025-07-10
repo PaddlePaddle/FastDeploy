@@ -18,10 +18,14 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 import paddle
-from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
+
+try:
+    from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
+except:
+    flash_attention_v3_varlen = None
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
@@ -30,7 +34,9 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 from fastdeploy.model_executor.layers.attention.ops import (
     get_block_shape_and_split_kv_block, gqa_rope_write_cache,
     init_signal_layerwise, open_shm_and_get_meta_signal, pre_cache_len_concat)
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+if TYPE_CHECKING:
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 @dataclass
@@ -96,22 +102,16 @@ class FlashAttentionBackend(AttentionBackend):
         self.use_speculate = self.speculative_method is not None
         self.speculate_max_draft_token_num = fd_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
-        self.rank: int = fd_config.parallel_config.tensor_parallel_rank
 
         # pd_disaggregation
         self.use_pd_disaggregation: int = int(
             os.getenv("FLAGS_use_pd_disaggregation", 0))
         self.start_layer_index: int = fd_config.model_config.start_layer_index
-        self.device_id: int = os.getenv("CUDA_VISIBLE_DEVICES", None)
 
         if fd_config.parallel_config.expert_parallel_rank is None:
             fd_config.parallel_config.expert_parallel_rank = 0
-        device_id = self.rank + fd_config.parallel_config.tensor_parallel_degree * \
-            fd_config.parallel_config.expert_parallel_rank
-        if self.device_id is None:
-            self.device_id = device_id
-        else:
-            self.device_id = self.device_id.split(",")[device_id]
+            
+        self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
     def get_attntion_meta(self):
         """get_attntion_meta"""

@@ -1,8 +1,8 @@
-# Running ERNIE-4.5-21B-A3B with FastDeploy
+# Running ERNIE 4.5 Series Models with FastDeploy
 
 The Enflame S60 ([Learn about Enflame](https://www.enflame-tech.com/)) is a next-generation AI inference accelerator card designed for large-scale deployment in data centers. It meets the demands of large language models (LLMs), search/advertising/recommendation systems, and traditional models. Characterized by broad model coverage, user-friendliness, and high portability, it is widely applicable to mainstream inference scenarios such as image and text generation applications, search and recommendation systems, and text/image/speech recognition.
 
-FastDeploy has deeply adapted and optimized the ernie-4_5-21b-a3b-bf16-paddle model for the Enflame S60, achieving a unified inference interface between GCU and GPU. This allows seamless migration of inference tasks without code modifications.
+FastDeploy has deeply adapted and optimized the ERNIE 4.5 Series Models for the Enflame S60, achieving a unified inference interface between GCU and GPU. This allows seamless migration of inference tasks without code modifications.
 
 ## 🚀 Quick Start 🚀
 
@@ -27,15 +27,15 @@ lspci | grep S60
 3b:00.0 Processing accelerators: Shanghai Enflame Technology Co. Ltd S60 [Enflame] (rev 01)
 3c:00.0 Processing accelerators: Shanghai Enflame Technology Co. Ltd S60 [Enflame] (rev 01)
 ```
-### 1. Environment Setup (Estimated time: 5–10 minutes)
+### 1. Environment Setup (Estimated time: 5-10 minutes)
 1. Pull the Docker image
 ```bash
 # Note: This image only contains the Paddle development environment, not precompiled PaddlePaddle packages
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-gcu:topsrider3.4.623-ubuntu20-x86_64-gcc84
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-gcu:topsrider3.5.102-ubuntu20-x86_64-gcc84
 ```
 2. Start the container
 ```bash
-docker run --name paddle-gcu-llm -v /home:/home -v /work:/work --network=host --ipc=host -it --privileged ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-gcu:topsrider3.4.623-ubuntu20-x86_64-gcc84 /bin/bash
+docker run --name paddle-gcu-llm -v /home:/home -v /work:/work --network=host --ipc=host -it --privileged ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-gcu:topsrider3.5.102-ubuntu20-x86_64-gcc84 /bin/bash
 ```
 3. Obtain and install drivers<br/>
 **Full software packages are preloaded in the Docker container. Copy them to an external directory, e.g., ```/home/workspace/deps/```**
@@ -67,25 +67,31 @@ python -m pip install paddle-custom-gcu==3.1.0 -i https://www.paddlepaddle.org.c
 7. Install FastDeploy and dependencies
 ```bash
 python -m pip install fastdeploy -i https://www.paddlepaddle.org.cn/packages/stable/gcu/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simplels
-apt install python3.10-distutils
+# For source compilation, refer to the following steps
+git clone https://github.com/PaddlePaddle/FastDeploy
+cd FastDeploy
+python -m pip install -r requirements.txt --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simplels
+bash build.sh 1
 ```
-### 2. Data Preparation (Estimated time: 2–5 minutes)
+### 2. Data Preparation (Estimated time: 2-5 minutes)
 Use a trained model for inference on GSM8K dataset:
 ```bash
 mkdir -p /home/workspace/benchmark/ && cd /home/workspace/benchmark/
 wget https://raw.githubusercontent.com/openai/grade-school-math/master/grade_school_math/data/test.jsonl
 ```
-Place model weights in a directory, e.g., ```/work/models/ernie-4_5-21b-a3b-bf16-paddle/```
-### 3. Inference (Estimated time: 2–5 minutes)
+Place model weights in a directory, e.g., ```/work/models/ERNIE-4.5-300B-A47B-Paddle/```
+### 3. Inference (Estimated time: 2-5 minutes)
 Start the inference service:
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
-    --model "/work/models/ernie-4_5-21b-a3b-bf16-paddle/" \
+    --model "/work/models/ERNIE-4.5-300B-A47B-Paddle/" \
     --port 8188 \
     --metrics-port 8200 \
-    --tensor-parallel-size 4 \
-    --max-model-len 8192 \
-    --num-gpu-blocks-override 1024
+    --tensor-parallel-size 8 \
+    --max-model-len 32768 \
+    --num-gpu-blocks-override 4096 \
+    --max-num-batched-tokens 32768 \
+    --quantization "wint4"
 ```
 Query the model service:
 ```bash
@@ -93,13 +99,13 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
-    {"role": "user", "content": "The largest ocean is"}
+    {"role": "user", "content": "Where is Beijing?"}
   ]
 }'
 ```
 Successful execution returns inference results, e.g.:
 ```json
-{"id":"chatcmpl-5cd96f3b-eff3-4dc0-8aa2-8b5d7b7b86f2","object":"chat.completion","created":1751167862,"model":"default","choices":[{"index":0,"message":{"role":"assistant","content":"3. **Pacific Ocean**: The Pacific Ocean is the largest and deepest of the world's oceans. It covers an area of approximately 181,344,000 square kilometers, which is more than 30% of the Earth's surface. It is located between the Americas to the west and east, and Asia and Australia to the north and south. The Pacific Ocean is known for its vastness, diverse marine life, and numerous islands.\n\nIn summary, the largest ocean in the world is the Pacific Ocean.","reasoning_content":null,"tool_calls":null},"finish_reason":"stop"}],"usage":{"prompt_tokens":11,"total_tokens":127,"completion_tokens":116,"prompt_tokens_details":{"cached_tokens":0}}}
+{"id":"chatcmpl-20f1210d-6943-4110-ad2d-c76ba11604ad","object":"chat.completion","created":1751621261,"model":"default","choices":[{"index":0,"message":{"role":"assistant","content":"Beijing is the capital city of the People's Republic of China, located in the northern part of the country. It is situated in the North China Plain, bordered by the mountains to the west, north, and northeast. Beijing serves as China's political, cultural, and international exchange center, playing a crucial role in the nation's development and global interactions.","reasoning_content":null,"tool_calls":null},"finish_reason":"stop"}],"usage":{"prompt_tokens":11,"total_tokens":88,"completion_tokens":77,"prompt_tokens_details":{"cached_tokens":0}}}
 ```
 ### 4. Accuracy Testing (Estimated time: 60–180 minutes)
 Place the accuracy script ```bench_gsm8k.py``` in ```/home/workspace/benchmark/``` and modify sampling parameters, e.g.:
@@ -120,10 +126,10 @@ data = {
 Run accuracy tests:
 ```bash
 cd /home/workspace/benchmark/
-python -u bench_gsm8k.py --port 8188 --num-questions 1319 --num-shots 5 --parallel 2
+python -u bench_gsm8k.py --port 8188 --num-questions 1319 --num-shots 5 --parallel 8
 ```
 Upon completion, accuracy results are saved in ```result.jsonl```, e.g.:
 ```json
-{"task": "gsm8k", "backend": "paddlepaddle", "num_gpus": 1, "latency": 365.548, "accuracy": 0.967, "num_requests": 30, "other": {"num_questions": 30, "parallel": 2}}
+{"task": "gsm8k", "backend": "paddlepaddle", "num_gpus": 1, "latency": 13446.01, "accuracy": 0.956, "num_requests": 1319, "other": {"num_questions": 1319, "parallel": 8}}
 ```
 

@@ -20,10 +20,9 @@ import numpy as np
 from paddleformers.generation import GenerationConfig
 
 from fastdeploy import envs
-from fastdeploy.utils import data_processor_logger
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
-
 from fastdeploy.input.text_processor import BaseDataProcessor
+from fastdeploy.utils import data_processor_logger
 
 _SAMPLING_EPS = 1e-5
 
@@ -216,8 +215,7 @@ class ErnieProcessor(BaseDataProcessor):
             response_dict.outputs.text = full_text
         data_processor_logger.info(f"req_id:{req_id}, token)ids: {token_ids}")
         if response_dict.outputs.text == "" and \
-                response_dict.outputs.reasoning_content == "" and \
-                response_dict.outputs.tool_call_content == []:
+                response_dict.outputs.reasoning_content == "":
             return None
         return response_dict
 
@@ -444,3 +442,7 @@ class ErnieProcessor(BaseDataProcessor):
         data_processor_logger.debug(
             f"processed stop_seqs: {stop_seqs}, {stop_seqs_len}")
         return stop_seqs, stop_seqs_len
+
+    def process_logprob_response(self, token_ids, **kwargs):
+        full_text = self.tokenizer.decode(token_ids, **kwargs)
+        return full_text

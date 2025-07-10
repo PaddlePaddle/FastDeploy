@@ -27,6 +27,8 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication_op import \
     tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.graph_optimization.decorator import \
+    support_graph_optimization
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
@@ -37,12 +39,12 @@ from fastdeploy.model_executor.models.ernie4_5_moe import (Ernie4_5_Attention,
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 from fastdeploy.platforms import current_platform
 
-if current_platform.is_cuda():
+if current_platform.is_cuda() and not current_platform.is_dcu():
     from fastdeploy.model_executor.ops.gpu import (extract_text_token_output,
                                                    text_image_gather_scatter,
                                                    text_image_index_out)
 
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Ernie4_5_VLMLP(Ernie4_5_MLP):
@@ -271,14 +273,14 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
         self.input_layernorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-5,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
         )
 
         self.post_attention_layernorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-5,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
         )
 
@@ -318,6 +320,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
         return hidden_states, residual
 
 
+@support_graph_optimization
 class Ernie4_5_VLModel(nn.Layer):
 
     def __init__(
@@ -355,7 +358,7 @@ class Ernie4_5_VLModel(nn.Layer):
         self.norm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-5,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{fd_config.model_config.prefix_name}.norm",
         )
 
@@ -392,9 +395,8 @@ class Ernie4_5_VLModel(nn.Layer):
         image_mask = ids_remove_padding == self.im_patch_id
         token_type_ids = image_mask.cast("int32")
         token_num = hidden_states.shape[0]
-        image_token_num = paddle.count_nonzero(token_type_ids).cast("int32")
-        text_token_num = ((token_num - image_token_num) if
-                          (token_num - image_token_num) > 0 else 1)
+        image_token_num = paddle.count_nonzero(token_type_ids)
+        text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
         if image_mask.any():
             hidden_states[image_mask] = image_features.cast(self._dtype)
             text_input = paddle.full(
@@ -442,11 +444,11 @@ class Ernie4_5_VLModel(nn.Layer):
         hidden_states = extract_text_token_output(
             max_seq_len,
             max_seq_len_index.cast("int32"),
-            image_token_num,
+            image_token_num.cast("int32"),
             forward_meta.seq_lens_this_time,
             forward_meta.cu_seqlens_q,
             score_text,
-        )[0].cast(self._dtype)
+        ).cast(self._dtype)
         # -----------------------
 
         out = self.norm(hidden_states)
@@ -513,7 +515,8 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         image_features: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        hidden_states = self.model(ids_remove_padding, image_features,
-                                   forward_meta)
+        hidden_states = self.model(ids_remove_padding=ids_remove_padding,
+                                   image_features=image_features,
+                                   forward_meta=forward_meta)
 
         return hidden_states
