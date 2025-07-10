@@ -288,14 +288,14 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         self.input_layernorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-5,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
         )
 
         self.post_attention_layernorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-5,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
         )
 
@@ -366,7 +366,7 @@ class Ernie4_5_Model(nn.Layer):
         self.norm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-5,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{fd_config.model_config.prefix_name}.norm",
         )
 
