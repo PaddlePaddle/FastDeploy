@@ -76,14 +76,15 @@ class Qwen3Attention(nn.Layer):
 
         self.q_norm = RMSNorm(fd_config,
                               hidden_size=self.head_dim,
-                              eps=1e-6,
+                              eps=fd_config.model_config.rms_norm_eps,
                               prefix=f"{prefix}.q_norm",
                               begin_norm_axis=2)
         self.k_norm = RMSNorm(fd_config,
                               hidden_size=self.head_dim,
-                              eps=1e-6,
+                              eps=fd_config.model_config.rms_norm_eps,
                               prefix=f"{prefix}.k_norm",
                               begin_norm_axis=2)
+
         nranks = fd_config.parallel_config.tensor_parallel_degree
         num_kv_heads_replicas = max(1, nranks // fd_config.model_config.num_key_value_heads)
         self.q_size = fd_config.model_config.num_attention_heads * self.head_dim // nranks
@@ -183,7 +184,7 @@ class Qwen3Model(nn.Layer):
         self.norm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-6,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{fd_config.model_config.prefix_name}.norm",
         )
 
