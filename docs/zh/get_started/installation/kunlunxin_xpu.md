@@ -159,6 +159,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```bash
 export CUDA_VISIBLE_DEVICES="0,1,2,3"
 # 如果你想使用 4,5,6,7 卡，可以按如下设置环境变量
+# 注意！对于 4 卡部署，昆仑 P800 只支持 "0,1,2,3" 或 "4,5,6,7"
 # export CUDA_VISIBLE_DEVICES="4,5,6,7"
 python -m fastdeploy.entrypoints.openai.api_server \
     --model baidu/ERNIE-4.5-300B-A47B-Paddle \

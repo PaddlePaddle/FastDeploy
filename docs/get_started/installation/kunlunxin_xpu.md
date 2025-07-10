@@ -157,7 +157,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 ```bash
 export CUDA_VISIBLE_DEVICES="0,1,2,3"
-# If you want to use cards 4,5,6,7, you can set the environment variables as follows
+# If you want to use cards 4,5,6,7, you can set the environment variables as follows .
+# Note! For 4-card deployment, Kunlun P800 only supports "0,1,2,3" or "4,5,6,7".
 # export CUDA_VISIBLE_DEVICES="4,5,6,7"
 python -m fastdeploy.entrypoints.openai.api_server \
     --model baidu/ERNIE-4.5-300B-A47B-Paddle \
