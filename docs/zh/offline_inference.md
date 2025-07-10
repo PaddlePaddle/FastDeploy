@@ -78,10 +78,12 @@ for output in outputs:
     prompt = output.prompt
     generated_text = output.outputs.text
 ```
-> 注： 续写接口, 适应于用户自定义好上下文输入, 并希望模型仅输出续写内容的场景; 推理过程不会增加其他 `prompt `拼接。   
+
+> 注： 续写接口, 适应于用户自定义好上下文输入, 并希望模型仅输出续写内容的场景; 推理过程不会增加其他 `prompt`拼接。
 > 对于 `chat`模型, 建议使用对话接口(LLM.chat)。
 
 对于多模模型, 例如`baidu/ERNIE-4.5-VL-28B-A3B-Paddle`, 在调用`generate接口`时, 需要提供包含图片的prompt, 使用方式如下:
+
 ```python
 import io
 import os
@@ -97,7 +99,7 @@ tokenizer = ErnieBotTokenizer.from_pretrained(os.path.dirname(PATH))
 
 messages = [
     {
-        "role": "user", 
+        "role": "user",
         "content": [
             {"type":"image_url", "image_url": {"url":"https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0"}},
             {"type":"text", "text":"这张图片的内容是什么"}
@@ -142,6 +144,7 @@ for output in outputs:
     reasoning_text = output.outputs.reasoning_content
 
 ```
+
 > 注： `generate` 接口, 暂时不支持思考开关参数控制, 均使用模型默认思考能力。
 
 ## 2. 接口说明
@@ -155,18 +158,17 @@ for output in outputs:
 > 2. 模型服务启动后，会在日志文件log/fastdeploy.log中打印如 `Doing profile, the total_block_num:640` 的日志，其中640即表示自动计算得到的KV Cache block数量，将它乘以block_size(默认值64)，即可得到部署后总共可以在KV Cache中缓存的Token数。
 > 3. `max_num_seqs` 用于配置decode阶段最大并发处理请求数，该参数可以基于第1点中缓存的Token数来计算一个较优值，例如线上统计输入平均token数800, 输出平均token数500，本次计>算得到KV Cache block为640， block_size为64。那么我们可以配置 `kv_cache_ratio = 800 / (800 + 500) = 0.6` , 配置 `max_seq_len = 640 * 64 / (800 + 500) = 31`。
 
-
 ### 2.2 fastdeploy.LLM.chat
 
 * messages(list[dict],list[list[dict]]): 输入的message, 支持batch message 输入
 * sampling_params: 模型超参设置具体说明见2.4
 * use_tqdm: 是否打开推理进度可视化
-* chat_template_kwargs(dict): 传递给对话模板的额外参数，当前支持enable_thinking(bool)  
+* chat_template_kwargs(dict): 传递给对话模板的额外参数，当前支持enable_thinking(bool)
   *使用示例`chat_template_kwargs={"enable_thinking": False}`*
 
 ### 2.3 fastdeploy.LLM.generate
 
-* prompts(str, list[str], list[int], list[list[int]], dict[str, Any], list[dict[str, Any]]): 输入的prompt, 支持batch prompt 输入，解码后的token ids 进行输入  
+* prompts(str, list[str], list[int], list[list[int]], dict[str, Any], list[dict[str, Any]]): 输入的prompt, 支持batch prompt 输入，解码后的token ids 进行输入
   *dict 类型使用示例`prompts={"prompt": prompt, "multimodal_data": {"image": images}}`*
 * sampling_params: 模型超参设置具体说明见2.4
 * use_tqdm: 是否打开推理进度可视化
@@ -178,7 +180,7 @@ for output in outputs:
 * repetition_penalty(float): 直接对重复生成的token进行惩罚的系数（>1时惩罚重复，<1时鼓励重复）
 * temperature(float): 控制生成随机性的参数，值越高结果越随机，值越低结果越确定
 * top_p(float): 概率累积分布截断阈值，仅考虑累计概率达到此阈值的最可能token集合
-* top_k(int): 采样概率最高的的token数量，考虑概率最高的k个token进行采样
+* top_k(int): 采样概率最高的token数量，考虑概率最高的k个token进行采样
 * max_tokens(int): 限制模型生成的最大token数量（包括输入和输出）
 * min_tokens(int): 强制模型生成的最少token数量，避免过早结束
 
