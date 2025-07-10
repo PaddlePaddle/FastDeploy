@@ -157,7 +157,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 **基于 WINT4 精度和 32K 上下文部署 ERNIE-4.5-300B-A47B-Paddle 模型到 4 卡 P800 服务器**
 
 ```bash
-export XPU_VISIBLE_DEVICES="0,1,2,3"
+export XPU_VISIBLE_DEVICES="0,1,2,3" # 设置使用的 XPU 卡
 python -m fastdeploy.entrypoints.openai.api_server \
     --model baidu/ERNIE-4.5-300B-A47B-Paddle \
     --port 8188 \
@@ -167,6 +167,11 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --quantization "wint4" \
     --gpu-memory-utilization 0.9
 ```
+
+**注意：** 使用 P800 在 4 块 XPU 上进行部署时，由于受到卡间互联拓扑等硬件限制，仅支持以下两种配置方式：
+`export XPU_VISIBLE_DEVICES="0,1,2,3"`
+or
+`export XPU_VISIBLE_DEVICES="4,5,6,7"`
 
 更多参数可以参考 [参数说明](../../parameters.md)。
 
