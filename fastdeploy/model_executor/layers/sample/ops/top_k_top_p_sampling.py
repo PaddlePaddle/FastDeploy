@@ -109,20 +109,18 @@ def air_top_p_sampling(
 def rejection_top_p_sampling(
     x: paddle.Tensor,
     top_p: paddle.Tensor,
-    top_k: Optional[paddle.Tensor] = None,
+    top_k: paddle.Tensor,
     seed: int = -1,
     order: Literal['top_k_first', 'joint'] = "top_k_first",
 ) -> paddle.Tensor:
     """
     rejection_top_p_sampling
     """
-    assert top_p is not None, "Top_p should not be none when FD_SAMPLING_CLASS is rejection"
     try:
         from fastdeploy.model_executor.ops.gpu import (
             rejection_top_p_sampling, top_k_renorm_probs)
 
-        no_top_k = top_k is None or paddle.all(top_k == 0).item()
-        if no_top_k:
+        if paddle.count_nonzero(top_k) == 0:
             ids = rejection_top_p_sampling(
                 x,
                 top_p,
