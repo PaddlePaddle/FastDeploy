@@ -395,8 +395,8 @@ class Ernie4_5_VLModel(nn.Layer):
         image_mask = ids_remove_padding == self.im_patch_id
         token_type_ids = image_mask.cast("int32")
         token_num = hidden_states.shape[0]
-        image_token_num = paddle.count_nonzero(token_type_ids).cast("int32")
-        text_token_num = paddle.maximum(token_num - image_token_num, paddle.ones([], dtype="int32"))
+        image_token_num = paddle.count_nonzero(token_type_ids)
+        text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
         if image_mask.any():
             hidden_states[image_mask] = image_features.cast(self._dtype)
             text_input = paddle.full(
@@ -444,7 +444,7 @@ class Ernie4_5_VLModel(nn.Layer):
         hidden_states = extract_text_token_output(
             max_seq_len,
             max_seq_len_index.cast("int32"),
-            image_token_num,
+            image_token_num.cast("int32"),
             forward_meta.seq_lens_this_time,
             forward_meta.cu_seqlens_q,
             score_text,
