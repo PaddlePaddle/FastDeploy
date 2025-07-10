@@ -57,6 +57,8 @@ def _create_default_sampling_metadata(
         top_p=paddle.full(shape=[batch_size, 1],
                           fill_value=0.7,
                           dtype="float32"),
+        input_ids=_create_tokens_tensor(batch_size, max_seq_len),
+        first_token_ids=_create_tokens_tensor(batch_size, max_seq_len)[:, :1],
         step_idx=paddle.full(shape=[batch_size, 1],
                              fill_value=0,
                              dtype="int64"),

@@ -252,6 +252,8 @@ class Sampler(nn.Layer):
         logits = self.processor.apply_token_mask(logits, skip_idx_list)
 
         logits = apply_penalty_multi_scores(
+            sampling_metadata.input_ids,
+            sampling_metadata.first_token_ids,
             sampling_metadata.pre_token_ids,
             logits,
             sampling_metadata.repetition_penalties,

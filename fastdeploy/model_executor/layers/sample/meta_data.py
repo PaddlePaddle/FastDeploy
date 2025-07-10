@@ -28,6 +28,8 @@ class SamplingMetadata:
 
     temperature: paddle.Tensor
 
+    input_ids: paddle.Tensor
+    first_token_ids: paddle.Tensor
     pre_token_ids: paddle.Tensor
     eos_token_ids: paddle.Tensor
     frequency_penalties: paddle.Tensor

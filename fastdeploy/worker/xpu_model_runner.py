@@ -544,6 +544,8 @@ class XPUModelRunner(ModelRunnerBase):
             top_p=self.share_inputs["top_p"],
             top_k=self.share_inputs["top_k"],
             step_idx=self.share_inputs["step_idx"],
+            input_ids=self.share_inputs["input_ids"],
+            first_token_ids=self.share_inputs["first_token_ids"],
             pre_token_ids=self.share_inputs["pre_ids"],
             frequency_penalties=self.share_inputs["frequency_score"],
             presence_penalties=self.share_inputs["presence_score"],

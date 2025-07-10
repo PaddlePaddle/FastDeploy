@@ -158,6 +158,9 @@ class GPUVLModelRunner(VLModelRunnerBase):
                 token_chunk_size = inputs["input_ids"].shape[1]
                 self.share_inputs["input_ids"][
                     idx:idx + 1, :token_chunk_size] = inputs["input_ids"]
+                self.share_inputs["first_token_ids"][idx:idx +
+                                        1] = inputs["input_ids"][
+                                            idx:idx + 1, :1]
                 self.share_inputs["seq_lens_this_time"][idx:idx +
                                                         1] = token_chunk_size
                 self.share_inputs['seq_lens_encoder'][idx:idx +
@@ -716,6 +719,9 @@ class GPUVLModelRunner(VLModelRunnerBase):
                 task.set("start_idx", token_chunk_size)
                 self.share_inputs["input_ids"][
                     idx:idx + 1, :token_chunk_size] = inputs["input_ids"]
+                self.share_inputs["first_token_ids"][idx:idx +
+                                                     1] = inputs["input_ids"][
+                                                         idx:idx + 1, :1]
                 self.share_inputs["seq_lens_this_time"][idx:idx +
                                                         1] = token_chunk_size
                 self.share_inputs["seq_lens_encoder"][idx:idx +
@@ -736,6 +742,9 @@ class GPUVLModelRunner(VLModelRunnerBase):
                 length = inputs["input_ids"].shape[1]
                 self.share_inputs["input_ids"][
                     idx:idx + 1, :length] = inputs["input_ids"]
+                self.share_inputs["first_token_ids"][idx:idx +
+                                        1] = inputs["input_ids"][
+                                            idx:idx + 1, :1]
                 self.share_inputs["seq_lens_this_time"][idx:idx + 1] = length
                 self.share_inputs["seq_lens_encoder"][idx:idx + 1] = length
                 self.share_inputs["step_seq_lens_encoder"][idx:idx +
@@ -841,6 +850,8 @@ class GPUVLModelRunner(VLModelRunnerBase):
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
             step_idx=self.share_inputs["step_idx"],
+            input_ids=self.share_inputs["input_ids"],
+            first_token_ids=self.share_inputs["first_token_ids"],
             pre_token_ids=self.share_inputs["pre_ids"],
             frequency_penalties=self.share_inputs["frequency_score"],
             presence_penalties=self.share_inputs["presence_score"],
