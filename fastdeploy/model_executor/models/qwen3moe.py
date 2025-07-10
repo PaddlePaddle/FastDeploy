@@ -502,7 +502,7 @@ class Qwen3MoePretrainedModel(PretrainedModel):
                 f"Not support type of moe_num_experts [{type(config.moe_num_experts)}]"
             )
 
-        mappings = get_tensor_parallel_split_mappings(config.num_layers,
+        mappings = get_tensor_parallel_split_mappings(config.num_hidden_layers,
                                                       moe_num_experts)
 
         return mappings

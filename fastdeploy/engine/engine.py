@@ -1194,10 +1194,10 @@ class LLMEngine(object):
                                              r'set state for layer (\d+)',
                                              line)):
                     progress = eval(match.group(
-                        1)) * 1.0 / self.cfg.model_config.num_layers
+                        1)) * 1.0 / self.cfg.model_config.num_hidden_layers
                     self.worker_init_status["layer_loadding"] = progress
                     if self.worker_init_status[
-                            "layer_loadding"] == self.cfg.model_config.num_layers - 1:
+                            "layer_loadding"] == self.cfg.model_config.num_hidden_layers - 1:
                         self.worker_init_status["finished"] = True
 
         self.checking_worker_status_thread = threading.Thread(

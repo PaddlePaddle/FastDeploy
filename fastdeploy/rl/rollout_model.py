@@ -278,7 +278,7 @@ class Qwen2ForCausalLMRL(Qwen2ForCausalLM):
                     f"{train_base_name}.{layer_idx}.mlp.down_proj.{ph}"
 
         for layer_idx in range(
-                self.fd_config.model_config.num_layers):
+                self.fd_config.model_config.num_hidden_layers):
             _add_layer_mappings(layer_idx)
 
         return infer_to_train

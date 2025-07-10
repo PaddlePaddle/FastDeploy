@@ -43,7 +43,7 @@ def load_ep_checkpoint(model_path: str,
     filtered_map = {k: v for k, v in weight_list.items() if "experts" not in k}
     num_local_ffn_keys = []
 
-    for i in range(config.moe_layer_start_index, config.num_layers):
+    for i in range(config.moe_layer_start_index, config.num_hidden_layers):
         for j in range(
                 config.num_experts_start_offset,
                 config.num_experts_start_offset + config.num_experts_per_rank,

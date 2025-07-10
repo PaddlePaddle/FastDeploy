@@ -618,7 +618,7 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
         elif isinstance(config.moe_layer_start_index, int):
             moe_layer_start_index = config.moe_layer_start_index
 
-        mappings = get_tensor_parallel_split_mappings(config.num_layers,
+        mappings = get_tensor_parallel_split_mappings(config.num_hidden_layers,
                                                       moe_num_experts,
                                                       moe_layer_start_index,
                                                       config.prefix_name)

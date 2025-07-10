@@ -673,7 +673,7 @@ class GCUModelRunner(ModelRunnerBase):
                 "prefix_caching is not support by GCUModelRunner."
             )
         else:
-            for i in range(self.model_config.num_layers):
+            for i in range(self.model_config.num_hidden_layers):
 
                 cache_kvs["key_caches_{}".format(i)] = paddle.full(
                     shape=kv_cache_shape,
@@ -1186,11 +1186,11 @@ class GCUModelRunner(ModelRunnerBase):
             byte_of_dtype = 2
 
         hidden_dim = self.model_config.head_dim * self.model_config.kv_num_heads
-        num_layers = self.model_config.num_layers + \
+        num_layers = self.model_config.num_hidden_layers + \
             self.speculative_config.num_gpu_block_expand_ratio if \
                 self.speculative_method in [
             "mtp"
-        ] else self.model_config.num_layers
+        ] else self.model_config.num_hidden_layers
         required_memory = (
             byte_of_dtype * 2 *  # k + v
             (self.parallel_config.block_size * hidden_dim) * num_layers)

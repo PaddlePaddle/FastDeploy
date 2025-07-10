@@ -237,7 +237,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
 
         moe_num_experts = 0
         mappings = get_tensor_parallel_split_mappings(
-            config.num_layers,
+            config.num_hidden_layers,
             moe_num_experts,
             config.moe_layer_start_index,
         )
