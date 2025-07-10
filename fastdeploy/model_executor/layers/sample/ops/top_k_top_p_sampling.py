@@ -64,9 +64,20 @@ def top_k_top_p_sampling(
                                     seed=seed,
                                     k=k,
                                     mode=mode)
+    # rejection
     elif top_p_class == "rejection":
         ids = rejection_top_p_sampling(x, top_p, top_k, seed, order)
         _ = None
+    # base non-truncated
+    elif top_p_class == "base_non_truncated":
+        _, ids = paddle.tensor.top_p_sampling(x,
+                                              top_p,
+                                              threshold=threshold,
+                                              topp_seed=topp_seed,
+                                              seed=seed,
+                                              k=k,
+                                              mode="non-truncated")
+    # base truncated
     else:
         _, ids = paddle.tensor.top_p_sampling(x,
                                               top_p,
@@ -74,7 +85,7 @@ def top_k_top_p_sampling(
                                               topp_seed=topp_seed,
                                               seed=seed,
                                               k=k,
-                                              mode=mode)
+                                              mode="truncated")
     return _, ids
 
 
@@ -102,26 +113,25 @@ def air_top_p_sampling(
 def rejection_top_p_sampling(
     x: paddle.Tensor,
     top_p: paddle.Tensor,
-    top_k: Optional[paddle.Tensor] = None,
+    top_k: paddle.Tensor,
     seed: int = -1,
     order: Literal['top_k_first', 'joint'] = "top_k_first",
 ) -> paddle.Tensor:
     """
     rejection_top_p_sampling
     """
-    assert top_p is not None, "Top_p should not be none when FD_SAMPLING_CLASS is rejection"
     try:
         from fastdeploy.model_executor.ops.gpu import (
             rejection_top_p_sampling, top_k_renorm_probs)
 
-        if top_k is None:
+        if paddle.count_nonzero(top_k) == 0:
             ids = rejection_top_p_sampling(
                 x,
                 top_p,
                 None,
                 seed,
             )
-        elif top_k is not None and top_p is not None:
+        else:
             if order == "top_k_first":
                 renorm_probs = top_k_renorm_probs(x, top_k)
                 ids = rejection_top_p_sampling(
@@ -137,10 +147,6 @@ def rejection_top_p_sampling(
                     top_k,
                     seed,
                 )
-        else:
-            raise ValueError(
-                "Top_p cannot be none."
-            )
     except ImportError:
         raise RuntimeError("Cannot import rejection_top_p_sampling op.")
     return ids

@@ -1,5 +1,6 @@
 # FastDeploy 环境变量说明
 FastDeploy 的环境变量保存在了代码库根目录下 fastdeploy/envs.py 文件中，以下是其对应的中文版说明：
+
 ```python
 environment_variables: dict[str, Callable[[], Any]] = {
     # 构建 FastDeploy 时使用的 CUDA 架构版本，这是一个字符串列表，例如[80,90]
@@ -50,7 +51,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ATTENTION_BACKEND":
     lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
 
-    # 设置采样类别，当前可设置为 "base"、"air" 或 "rejection"
+    # 设置采样类别，当前可设置为 "base"、"base_non_truncated"、"air" 或 "rejection"
     "FD_SAMPLING_CLASS":
     lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
 
@@ -65,6 +66,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # 是否从单机 PD 分离转换为集中式推理
     "FD_PD_CHANGEABLE":
     lambda: os.getenv("FD_PD_CHANGEABLE", "1"),
-  
+
 }
 ```
