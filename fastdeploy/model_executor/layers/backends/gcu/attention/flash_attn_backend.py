@@ -24,15 +24,12 @@ import paddle
 
 import numpy as np
 
-
-if TYPE_CHECKING:
-    from paddle._typing.dtype_like import _DTypeLiteral
-
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
-from fastdeploy.worker.forward_meta import ForwardMeta, ForwardMode
+if TYPE_CHECKING:
+    from fastdeploy.model_executor.forward_meta import ForwardMeta, ForwardMode
 
 from fastdeploy.model_executor.ops.gcu import (fused_rotary_embedding,
                                                mem_efficient_attention,
@@ -47,7 +44,7 @@ class GCUFlashAttnMetadata(AttentionMetadata):
     """
     forward_mode: ForwardMode = ForwardMode.MIXED
 
-    _dtype: _DTypeLiteral = paddle.bfloat16
+    _dtype: paddle.dtype = paddle.bfloat16
 
     seq_lens_encoder: Optional[paddle.Tensor] = None
     seq_lens_decoder: Optional[paddle.Tensor] = None

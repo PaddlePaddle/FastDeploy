@@ -36,7 +36,7 @@ from fastdeploy.model_executor.ops.gpu import (draft_model_postprocess,
                                                share_external_data)
 from fastdeploy.model_executor.pre_and_post_process import (pre_process,
                                                             rebuild_padding)
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 from .base import Proposer
 

@@ -30,7 +30,7 @@ from fastdeploy.model_executor.layers.mtp_linear import ParallelEHProjection
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_DecoderLayer
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Ernie4_5_MTPPretrainedModel(PretrainedModel):
@@ -275,14 +275,14 @@ class Ernie4_5_MTPModel(nn.Layer):
         self.enorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-5,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix="ernie.mtp_emb_norm.0",
         )
 
         self.hnorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-5,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix="ernie.mtp_hidden_norm.0",
         )
 

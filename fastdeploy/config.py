@@ -85,6 +85,7 @@ class ModelConfig:
             "resampler_fuse_rms_norm":False,
             "freq_allocation":20,
             "tie_word_embeddings":False,
+            "rms_norm_eps":1e-5,
         }
 
         for key, value in args.items():
@@ -103,6 +104,37 @@ class ModelConfig:
 
         if not hasattr(self, "head_dim"):
             self.head_dim = self.hidden_size // self.num_attention_heads
+<<<<<<< HEAD
+=======
+        else:
+            self.head_dim = head_dim
+        self.hidden_act = hidden_act
+        self.hidden_dropout_prob = hidden_dropout_prob
+        self.max_position_embeddings = max_position_embeddings
+        self.initializer_range = initializer_range
+        self.use_rope = use_rope
+        self.rope_theta = rope_theta
+        self.ori_vocab_size = ori_vocab_size or vocab_size
+        self.max_seq_len = max_seq_len
+        self.prefix_name = prefix_name
+        self.freeze_embedding = freeze_embedding
+        self.rope_head_dim = rope_head_dim
+        moe_num_experts = kwargs.get("moe_num_experts", 0)
+        if moe_layer_start_index is not None:
+            self.moe_layer_start_index = moe_layer_start_index
+        elif moe_num_experts == 0:
+            self.moe_layer_start_index = self.num_layers
+            self.moe_num_experts = 0
+        if moe_layer_end_index is not None:
+            self.moe_layer_end_index = moe_layer_end_index
+        self.ffn_hidden_size = ffn_hidden_size
+        self.rope_3d = rope_3d
+        self.start_layer_index = start_layer_index
+        self.dtype = dtype
+        self.tie_word_embeddings = tie_word_embeddings
+        self.is_quantized = is_quantized
+        self.rms_norm_eps = rms_norm_eps
+>>>>>>> 59071268b67c2596c58779899165f0286139968d
 
         if hasattr(self, "vision_config"):
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)

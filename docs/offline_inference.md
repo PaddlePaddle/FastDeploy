@@ -86,7 +86,6 @@ For multimodal models, such as `baidu/ERNIE-4.5-VL-28B-A3B-Paddle`, when calling
 
 ```python
 import io
-import os
 import requests
 from PIL import Image
 
@@ -95,14 +94,14 @@ from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 
 PATH = "baidu/ERNIE-4.5-VL-28B-A3B-Paddle"
-tokenizer = ErnieBotTokenizer.from_pretrained(os.path.dirname(PATH))
+tokenizer = ErnieBotTokenizer.from_pretrained(PATH)
 
 messages = [
     {
         "role": "user",
         "content": [
-            {"type":"image_url", "image_url": {"url":"https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0"}},
-            {"type":"text", "text":"这张图片的内容是什么"}
+            {"type":"image_url", "image_url": {"url":"https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"}},
+            {"type":"text", "text":"图中的文物属于哪个年代"}
         ]
      }
 ]
