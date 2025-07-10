@@ -31,7 +31,7 @@ from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler
 from fastdeploy.model_executor.model_loader import get_model_from_loader
 from fastdeploy.utils import get_logger
-from fastdeploy.worker.forward_meta import ForwardMeta, XPUForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta, XPUForwardMeta
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
 

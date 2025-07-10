@@ -215,8 +215,7 @@ class ErnieProcessor(BaseDataProcessor):
             response_dict.outputs.text = full_text
         data_processor_logger.info(f"req_id:{req_id}, token)ids: {token_ids}")
         if response_dict.outputs.text == "" and \
-                response_dict.outputs.reasoning_content == "" and \
-                response_dict.outputs.tool_call_content == []:
+                response_dict.outputs.reasoning_content == "":
             return None
         return response_dict
 

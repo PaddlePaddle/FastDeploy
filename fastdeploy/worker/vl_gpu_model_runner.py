@@ -46,7 +46,7 @@ from fastdeploy.model_executor.models.ernie4_5_vl.dfnrope.modeling import \
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import (
     ScatterOp, VariableResolutionResamplerModel)
 from fastdeploy.platforms import current_platform
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.worker.output import SamplerOutput
 from fastdeploy.worker.utils import check_safetensors_model
 from fastdeploy.worker.vl_model_runner_base import VLModelRunnerBase

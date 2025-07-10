@@ -23,13 +23,13 @@ from typing import TYPE_CHECKING, List, Optional
 import paddle
 
 if TYPE_CHECKING:
-    from paddle._typing.dtype_like import _DTypeLiteral
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
-from fastdeploy.worker.forward_meta import ForwardMeta
+
 
 @dataclass
 class BlockAttentionMetadata(AttentionMetadata):
@@ -48,7 +48,7 @@ class BlockAttentionMetadata(AttentionMetadata):
     decoder_tile_ids_per_batch: paddle.Tensor = None
     decoder_num_blocks: paddle.Tensor = None
 
-    _dtype: _DTypeLiteral = paddle.bfloat16
+    _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768
     max_partition_size: int = 32768
     block_tables: Optional[paddle.Tensor] = None

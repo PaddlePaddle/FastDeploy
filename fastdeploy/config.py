@@ -84,6 +84,7 @@ class ModelConfig(PretrainedConfig):
         head_dim: Optional[int] = None,
         tie_word_embeddings: bool = False,
         is_quantized: bool = False,
+        rms_norm_eps: float = 1e-5,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -123,6 +124,7 @@ class ModelConfig(PretrainedConfig):
         self.dtype = dtype
         self.tie_word_embeddings = tie_word_embeddings
         self.is_quantized = is_quantized
+        self.rms_norm_eps = rms_norm_eps
 
 
 @dataclass

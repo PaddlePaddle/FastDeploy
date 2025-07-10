@@ -594,7 +594,6 @@ def initialize_fd_config(config_or_args) -> FDConfig:
     model_config_dict, _ = ModelConfig.get_config_dict(config_or_args.model_name_or_path)
 
 
-
     # Handle MoE related configs
     if 'num_experts' in model_config_dict:
         model_config_dict['moe_num_experts'] = model_config_dict.pop('num_experts')
