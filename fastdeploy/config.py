@@ -106,8 +106,8 @@ class ModelConfig:
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
         self.ori_vocab_size = self.vocab_size
-        if "Ernie4_5_ForCausalLM" in self.architectures:
-            self.vocab_size = args["vocab_size"]
+        if "Ernie4_5_ForCausalLM" in self.architectures or "Ernie4_5_MoeForCausalLM" in self.architectures:
+            self.ori_vocab_size = args["ori_vocab_size"]
 
 class ParallelConfig:
     """Configuration for the distributed execution."""
