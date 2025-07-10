@@ -199,14 +199,14 @@ class Qwen3DecoderLayer(nn.Layer):
             f"{prefix}.mlp.experts.{{}}.down_proj.weight",
         }
 
-        if (fd_config.model_config.moe_num_experts is not None
+        if (fd_config.model_config.num_experts is not None
                 and layer_id >= fd_config.model_config.moe_layer_start_index):
 
             self.mlp = FusedMoE(fd_config,
                                 moe_intermediate_size=fd_config.model_config.
                                 moe_intermediate_size,
-                                num_experts=fd_config.model_config.moe_num_experts,
-                                top_k=fd_config.model_config.moe_topk,
+                                num_experts=fd_config.model_config.num_experts,
+                                top_k=fd_config.model_config.num_experts_per_tok,
                                 layer_idx=layer_id,
                                 weight_key_map=weight_key_map)
         else:
@@ -435,7 +435,7 @@ class Qwen3MoePretrainedModel(PretrainedModel):
             num_attention_heads=config.num_attention_heads,
         )
 
-        def get_tensor_parallel_split_mappings(num_layers, moe_num_experts):
+        def get_tensor_parallel_split_mappings(num_layers, num_experts):
             final_actions = {}
 
             base_actions = {
@@ -486,23 +486,23 @@ class Qwen3MoePretrainedModel(PretrainedModel):
             for key, action in base_actions.items():
                 for i in range(num_layers):
                     newkey = key.replace("layers.0.", f"layers.{i}.")
-                    for j in range(moe_num_experts):
+                    for j in range(num_experts):
                         newkey2 = newkey.replace("experts.0.", f"experts.{j}.")
                         final_actions[newkey2] = action
 
             return final_actions
 
-        moe_num_experts = 0
-        if isinstance(config.moe_num_experts, list):
-            moe_num_experts = sum(config.moe_num_experts)
-        elif isinstance(config.moe_num_experts, int):
-            moe_num_experts = config.moe_num_experts
+        num_experts = 0
+        if isinstance(config.num_experts, list):
+            num_experts = sum(config.num_experts)
+        elif isinstance(config.num_experts, int):
+            num_experts = config.num_experts
         else:
             raise ValueError(
-                f"Not support type of moe_num_experts [{type(config.moe_num_experts)}]"
+                f"Not support type of num_experts [{type(config.num_experts)}]"
             )
 
         mappings = get_tensor_parallel_split_mappings(config.num_hidden_layers,
-                                                      moe_num_experts)
+                                                      num_experts)
 
         return mappings
