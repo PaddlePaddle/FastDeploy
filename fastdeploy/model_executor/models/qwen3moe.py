@@ -121,12 +121,12 @@ class Qwen3Attention(nn.Layer):
 
         self.q_norm = RMSNorm(fd_config,
                               hidden_size=self.head_dim,
-                              eps=1e-6,
+                              eps=fd_config.model_config.rms_norm_eps,
                               prefix=f"{prefix}.q_norm",
                               begin_norm_axis=2)
         self.k_norm = RMSNorm(fd_config,
                               hidden_size=self.head_dim,
-                              eps=1e-6,
+                              eps=fd_config.model_config.rms_norm_eps,
                               prefix=f"{prefix}.k_norm",
                               begin_norm_axis=2)
 
