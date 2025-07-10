@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+from email import contentmanager
 import os
 import threading
 import time
@@ -32,7 +33,8 @@ from fastdeploy.entrypoints.openai.protocol import (ChatCompletionRequest,
                                                     ChatCompletionResponse,
                                                     CompletionRequest,
                                                     CompletionResponse,
-                                                    ErrorResponse)
+                                                    ErrorResponse,
+                                                    ControlSchedulerRequest)
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import \
     OpenAIServingCompletion
@@ -279,7 +281,7 @@ def launch_api_server() -> None:
     """
     if not is_port_available(args.host, args.port):
         raise Exception(f"The parameter `port`:{args.port} is already in use.")
-    
+
     api_server_logger.info(
         f"launch Fastdeploy api server... port: {args.port}")
     api_server_logger.info(f"args: {args.__dict__}")
@@ -326,7 +328,7 @@ def launch_metrics_server():
         raise Exception(
             f"The parameter `metrics_port`:{args.metrics_port} is already in use."
         )
-    
+
     prom_dir = cleanup_prometheus_files(True)
     os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
     metrics_server_thread = threading.Thread(target=run_metrics_server,
@@ -351,6 +353,32 @@ def reset_scheduler():
     return Response("Scheduler Reset Successfully", status_code=200)
 
 
+@controller_app.post("/controller/scheduler")
+def control_scheduler(request: ControlSchedulerRequest):
+    """
+    control scheduler
+    """
+    global llm_engine
+    if llm_engine is None:
+        content = ErrorResponse(message="Engine is not loaded", code=500)
+        return JSONResponse(content=content, status_code=500)
+
+    if request.reset:
+        llm_engine.scheduler.reset_scheduler()
+
+    if request.load_shards_num or request.reallocate_shard:
+        if hasattr(llm_engine.scheduler, "update_config") and callable(llm_engine.scheduler.update_config):
+            llm_engine.scheduler.update_config(
+                load_shards_num=request.load_shards_num,
+                reallocate=request.reallocate_shard)
+        else:
+            content = ErrorResponse(
+                message="This scheduler doesn't support the `update_config()` method.", code=400)
+            return JSONResponse(content=content, status_code=400)
+
+    return Response("Scheduler updated successfully", status_code=200)
+
+
 def run_controller_server():
     """
     run controller server
@@ -365,7 +393,7 @@ def launch_controller_server():
     """Controller server running the sub thread"""
     if args.controller_port < 0:
         return
-    
+
     if not is_port_available(args.host, args.controller_port):
         raise Exception(
             f"The parameter `controller_port`:{args.controller_port} is already in use."

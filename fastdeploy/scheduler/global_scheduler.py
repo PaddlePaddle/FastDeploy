@@ -813,7 +813,7 @@ class GlobalScheduler(object):
             self.stolen_requests = dict()
         scheduler_logger.info("Scheduler has been reset")
 
-    def update_config(self, load_shards_num: int, reallocate: bool):
+    def update_config(self, load_shards_num: Optional[int], reallocate: Optional[bool]):
         """
         Update the scheduler's configuration parameters dynamically.
 
@@ -839,11 +839,13 @@ class GlobalScheduler(object):
             old_load_shards_num = self.load_shards_num
             old_shard = self.shard
 
-            self.load_shards_num = load_shards_num
+            if load_shards_num:
+                self.load_shards_num = load_shards_num
+
             if reallocate:
                 self.shard = self._get_hash_slot(
                     self.name) % self.load_shards_num
 
         scheduler_logger.info("Scheduler has reload config, "
-                              f"load_shards_num({old_load_shards_num} => {load_shards_num}) "
+                              f"load_shards_num({old_load_shards_num} => {self.load_shards_num}) "
                               f"shard({old_shard} => {self.shard})")
