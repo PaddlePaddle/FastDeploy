@@ -100,7 +100,7 @@ def pre_process(
             seq_lens_this_time,
             seq_lens_encoder,
             seq_lens_decoder,
-        )
+        )[0]
         output_token_num = paddle.sum(seq_lens_output)
         output_cum_offsets_tmp = paddle.cumsum(max_len - seq_lens_output)
         output_padding_offset, output_cum_offsets = speculate_get_output_padding_offset(

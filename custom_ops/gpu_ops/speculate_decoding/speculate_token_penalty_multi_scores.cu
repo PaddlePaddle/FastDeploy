@@ -246,7 +246,7 @@ void token_penalty_multi_scores_kernel(
         max_seq_len);
 }
 
-void TokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
+void SpecTokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
                              const paddle::Tensor &logits,
                              const paddle::Tensor &penalty_scores,
                              const paddle::Tensor &frequency_scores,
@@ -338,4 +338,4 @@ PD_BUILD_STATIC_OP(speculate_get_token_penalty_multi_scores)
     .Outputs({"logits_out"})
     .Attrs({"max_seq_len: int"})
     .SetInplaceMap({{"logits", "logits_out"}})
-    .SetKernelFn(PD_KERNEL(TokenPenaltyMultiScores));
+    .SetKernelFn(PD_KERNEL(SpecTokenPenaltyMultiScores));

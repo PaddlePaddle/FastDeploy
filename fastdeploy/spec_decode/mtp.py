@@ -497,6 +497,8 @@ class MTPProposer(Proposer):
             self.main_model_inputs["seq_lens_encoder"],
             self.max_draft_token_num,
         )
+        if isinstance(target_hidden_states, list):
+            target_hidden_states = target_hidden_states[0]
 
         return target_hidden_states
 
