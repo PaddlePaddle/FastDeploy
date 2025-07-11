@@ -92,7 +92,8 @@ class ModelConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
         pretrained_config, _ = PretrainedConfig.get_config_dict(self.model_name_or_path)
-
+        self.pretrained_config = pretrained_config
+        
         # set attribute from pretrained_config
         for key, value in pretrained_config.items():
             setattr(self, key, value)
@@ -164,7 +165,7 @@ class ParallelConfig:
         #
         self.eos_tokens_lens: int = 2
         # Enable chunked prefill
-        self.enable_chunked_prefill: str = "store_true"
+        self.enable_chunked_prefill: bool = False
 
         self.max_num_batched_tokens: int = 2048
         # enable prefix cache
@@ -191,7 +192,6 @@ class ParallelConfig:
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
         self.enable_custom_all_reduce: bool = False
 
-@dataclass
 class SpeculativeConfig:
     """
     Configuration for speculative decoding.
@@ -229,9 +229,17 @@ class SpeculativeConfig:
         # This ensures that the specified simulation acceptance rate is not affected.
         self.benchmark_mode: bool = False
 
+        #TODO(YuanRisheng): The name of the server args is different from the name of the SpeculativeConfig.
+        #We temperately add the name map here and will delete it in future.
+        name_map = {"speculative_method": "method",
+                   "speculative_max_draft_token_num": "num_speculative_tokens",
+                   "speculative_model_name_or_path": "model_name_or_path",
+                   "speculative_model_quantization": "quantization",
+                   "speculative_benchmark_mode": "benchmark_mode"}
+
         for key, value in args.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
+            if key in name_map.keys() and hasattr(self, name_map[key]):
+                setattr(self, name_map[key], value)
 
 class DeviceConfig:
     """
@@ -365,19 +373,16 @@ class LoadConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
-@dataclass
 class LoRAConfig:
     """ LoRA Config """
     pass
 
 
-@dataclass
 class KVCacheConfig:
     """ KV Cache Config """
     cache_quant_dtype: str = "none"
 
 
-@dataclass
 class DecodingConfig:
     """
     Configuration for decoding

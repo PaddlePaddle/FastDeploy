@@ -282,7 +282,7 @@ def load_composite_checkpoint(
             else:
                 state_dict = load_tp_checkpoint(model_path,
                                                 cls,
-                                                fd_config.model_config,
+                                                fd_config.model_config.pretrained_config,
                                                 return_numpy=return_numpy)
     if not state_dict:
         raise ValueError("weight not found in state_dict !")

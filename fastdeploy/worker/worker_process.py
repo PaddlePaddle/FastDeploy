@@ -495,8 +495,8 @@ def parse_args():
     )
     parser.add_argument(
         "--speculative_benchmark_mode",
-        default="false",
-        type=str,
+        default=False,
+        type=bool,
     )
     parser.add_argument("--max_num_batched_tokens",
                         type=int,
@@ -596,6 +596,11 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
                         args.enable_static_graph_inference,
                         args.max_capture_batch_size,
                         vars(args))
+
+    # Note(tangbinhan): used for load_checkpoint
+    model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
+    model_config.pretrained_config.tensor_parallel_degree = parallel_config.tensor_parallel_size
+    model_config.pretrained_config.is_mtp = speculative_config.is_mtp
 
     logger.info(f"parallel_config.use_ep {parallel_config.use_ep}")
     logger.info(
