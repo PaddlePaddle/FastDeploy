@@ -24,6 +24,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import \
     AttentionBackend
@@ -37,7 +38,6 @@ from fastdeploy.model_executor.pre_and_post_process import (post_process,
                                                             pre_process,
                                                             rebuild_padding,
                                                             step_cuda)
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
 
@@ -672,11 +672,11 @@ class IluvatarModelRunner(ModelRunnerBase):
         assert len(self.attn_backends) == 0
 
         # TODO(gongshaotian): Get rank from config
-        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_degree
+        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
         self.model_config.kv_num_heads = max(
             1,
             int(self.model_config.num_key_value_heads) //
-            self.parallel_config.tensor_parallel_degree)
+            self.parallel_config.tensor_parallel_size)
         head_dim = self.model_config.head_dim
 
         # Get the attention backend
@@ -748,14 +748,14 @@ class IluvatarModelRunner(ModelRunnerBase):
                 )
                 sampled_token_ids = self.sampler(logits,
                                                  self.sampling_metadata)
-                if self.parallel_config.tensor_parallel_degree > 1:
+                if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(sampled_token_ids, 0)
             else:
                 self.sampler(logits, self.sampling_metadata,
                              self.parallel_config.max_model_len,
                              self.share_inputs)
                 sampled_token_ids = None
-                if self.parallel_config.tensor_parallel_degree > 1:
+                if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
                         self.share_inputs["accept_tokens"], 0)
                     paddle.distributed.broadcast(
@@ -977,14 +977,14 @@ class IluvatarModelRunner(ModelRunnerBase):
                 self.sampling_metadata,
                 skip_idx_list,
             )
-            if self.parallel_config.tensor_parallel_degree > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(sampled_token_ids, 0)
 
         else:
             self.sampler(logits, self.sampling_metadata,
                          self.parallel_config.max_model_len, self.share_inputs)
             sampled_token_ids = None
-            if self.parallel_config.tensor_parallel_degree > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(
                     self.share_inputs["accept_tokens"], 0)
                 paddle.distributed.broadcast(self.share_inputs["accept_num"],

@@ -25,7 +25,8 @@ from paddle import nn
 from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig, ModelConfig
+from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import \
     support_graph_optimization
 from fastdeploy.model_executor.layers.activation import SiluAndMul
@@ -41,7 +42,6 @@ from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
 from fastdeploy.model_executor.models.utils import \
     LayerIdPlaceholder as layerid
 from fastdeploy.model_executor.models.utils import WeightMeta
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Ernie4_5_MLP(nn.Layer):
@@ -347,19 +347,19 @@ class Ernie4_5_Model(nn.Layer):
         super().__init__()
 
         self.num_layers = fd_config.model_config.num_hidden_layers
-        fd_config.model_config.prefix_name = "ernie"
+        fd_config.model_config.pretrained_config.prefix_name = "ernie"
 
         self.embeddings = VocabParallelEmbedding(
             fd_config=fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
             params_dtype=paddle.get_default_dtype(),
-            prefix=(f"{fd_config.model_config.prefix_name}.embed_tokens"))
+            prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"))
 
         self.hidden_layers = nn.LayerList([
             Ernie4_5_DecoderLayer(
                 fd_config=fd_config,
-                prefix=f"{fd_config.model_config.prefix_name}.layers.{i}")
+                prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}")
             for i in range(self.num_layers)
         ])
 
@@ -367,7 +367,7 @@ class Ernie4_5_Model(nn.Layer):
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
-            prefix=f"{fd_config.model_config.prefix_name}.norm",
+            prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
     def load_state_dict(self, state_dict):
@@ -559,7 +559,7 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
     ]
 
     @classmethod
-    def _get_tensor_parallel_mappings(cls, config: ModelConfig, is_split=True):
+    def _get_tensor_parallel_mappings(cls, config, is_split=True):
         """
         get_tensor_parallel_mappings
         """

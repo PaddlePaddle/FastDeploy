@@ -24,6 +24,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.guided_decoding import get_guided_backend
 from fastdeploy.model_executor.guided_decoding.base_guided_decoding import \
     LogitsProcessorBase
@@ -39,7 +40,6 @@ from fastdeploy.model_executor.ops.gcu import set_value_by_flags_and_idx
 from fastdeploy.model_executor.pre_and_post_process import (post_process,
                                                             pre_process,
                                                             rebuild_padding)
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
 
@@ -670,7 +670,7 @@ class GCUModelRunner(ModelRunnerBase):
         # Get kv cache shape
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
             max_num_blocks=max_block_num)
-        # local_rank = self.local_rank % self.parallel_config.tensor_parallel_degree
+        # local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
         if not self.parallel_config.do_profile and (
                 self.parallel_config.enable_prefix_caching \
@@ -701,10 +701,10 @@ class GCUModelRunner(ModelRunnerBase):
         """
         assert len(self.attn_backends) == 0
 
-        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_degree
+        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
         self.model_config.kv_num_heads = int(
             self.model_config.num_key_value_heads
-        ) // self.parallel_config.tensor_parallel_degree
+        ) // self.parallel_config.tensor_parallel_size
         head_dim = self.model_config.head_dim
 
         # Get the attention backend
@@ -783,14 +783,14 @@ class GCUModelRunner(ModelRunnerBase):
                 )
                 sampler_output = self.sampler(logits,
                                                  self.sampling_metadata)
-                if self.parallel_config.tensor_parallel_degree > 1:
+                if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
             else:
                 self.sampler(logits, self.sampling_metadata,
                              self.parallel_config.max_model_len,
                              self.share_inputs)
                 sampler_output = None
-                if self.parallel_config.tensor_parallel_degree > 1:
+                if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
                         self.share_inputs["accept_tokens"], 0)
                     paddle.distributed.broadcast(
@@ -1016,14 +1016,14 @@ class GCUModelRunner(ModelRunnerBase):
                 self.sampling_metadata,
                 skip_idx_list,
             )
-            if self.parallel_config.tensor_parallel_degree > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
 
         else:
             self.sampler(logits, self.sampling_metadata,
                          self.parallel_config.max_model_len, self.share_inputs)
             sampler_output = None
-            if self.parallel_config.tensor_parallel_degree > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(
                     self.share_inputs["accept_tokens"], 0)
                 paddle.distributed.broadcast(self.share_inputs["accept_num"],

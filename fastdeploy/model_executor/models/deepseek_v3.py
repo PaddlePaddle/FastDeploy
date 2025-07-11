@@ -27,6 +27,7 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication_op import \
     tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.activation import SiluAndMul
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
@@ -40,7 +41,6 @@ from fastdeploy.model_executor.layers.rotary_embedding import \
     DeepseekScalingRotaryEmbedding
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 from fastdeploy.platforms import current_platform
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import \
@@ -526,7 +526,7 @@ class DeepSeekV3Model(nn.Layer):
         """
         super().__init__()
         self.num_layers = fd_config.model_config.num_hidden_layers
-        fd_config.model_config.prefix_name = "deepseek_v3"
+        fd_config.model_config.pretrained_config.prefix_name = "deepseek_v3"
 
         self.embeddings = VocabParallelEmbedding(
             fd_config,
@@ -539,7 +539,7 @@ class DeepSeekV3Model(nn.Layer):
         self.decoder_layers = nn.LayerList([
             DeepSeekV3DecoderLayer(
                 fd_config,
-                prefix=f"{fd_config.model_config.prefix_name}.layers.{i}")
+                prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}")
             for i in range(self.num_layers)
         ])
 

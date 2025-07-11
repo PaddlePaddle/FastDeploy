@@ -23,20 +23,19 @@ from paddle import nn
 from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig, ModelConfig
+from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import \
     support_graph_optimization
 from fastdeploy.model_executor.layers.activation import SiluAndMul
-from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (
-    MergedColumnParallelLinear, QKVParallelLinear, RowParallelLinear)
+    MergedColumnParallelLinear, RowParallelLinear)
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 from fastdeploy.model_executor.models.qwen3 import Qwen3Attention
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Qwen3MLP(nn.Layer):
@@ -200,20 +199,20 @@ class Qwen3MoeModel(nn.Layer):
         super().__init__()
 
         self.num_layers = fd_config.model_config.num_hidden_layers
-        fd_config.model_config.prefix_name = "model"
+        fd_config.model_config.pretrained_config.prefix_name = "model"
 
         self.embeddings = VocabParallelEmbedding(
             fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
             params_dtype=paddle.get_default_dtype,
-            prefix=(f"{fd_config.model_config.prefix_name}.embed_tokens"),
+            prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"),
         )
 
         self.layers = nn.LayerList([
             Qwen3DecoderLayer(
                 fd_config,
-                prefix=f"{fd_config.model_config.prefix_name}.layers.{i}")
+                prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}")
             for i in range(self.num_layers)
         ])
 
@@ -221,7 +220,7 @@ class Qwen3MoeModel(nn.Layer):
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=1e-6,
-            prefix=f"{fd_config.model_config.prefix_name}.norm",
+            prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
     def load_state_dict(self, state_dict):
@@ -338,7 +337,7 @@ class Qwen3MoePretrainedModel(PretrainedModel):
         return None
 
     @classmethod
-    def _get_tensor_parallel_mappings(cls, config: ModelConfig, is_split=True):
+    def _get_tensor_parallel_mappings(cls, config, is_split=True):
         # TODO not support TP split now, next PR will support TP.
 
         from paddleformers.transformers.conversion_utils import \

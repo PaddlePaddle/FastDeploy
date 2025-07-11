@@ -25,12 +25,12 @@ from paddle import nn
 from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig, ModelConfig
+from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.mtp_linear import ParallelEHProjection
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_DecoderLayer
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Ernie4_5_MTPPretrainedModel(PretrainedModel):
@@ -47,7 +47,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
         return None
 
     @classmethod
-    def _get_tensor_parallel_mappings(cls, config: ModelConfig, is_split=True):
+    def _get_tensor_parallel_mappings(cls, config, is_split=True):
         """
         get_tensor_parallel_mappings
         """
@@ -268,7 +268,7 @@ class Ernie4_5_MTPModel(nn.Layer):
         self.hidden_layers = nn.LayerList([
             Ernie4_5_DecoderLayer(
                 fd_config=fd_config,
-                prefix=f"{fd_config.model_config.prefix_name}.{i}")
+                prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.{i}")
             for i in range(self.num_layers)
         ])
 

@@ -338,20 +338,20 @@ class Ernie4_5_VLModel(nn.Layer):
         self.num_layers = fd_config.model_config.num_hidden_layers
         self.im_patch_id = fd_config.model_config.im_patch_id
         self._dtype = fd_config.model_config.dtype
-        fd_config.model_config.prefix_name = "ernie"
+        fd_config.model_config.pretrained_config.prefix_name = "ernie"
 
         self.embeddings = VocabParallelEmbedding(
             fd_config=fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
             params_dtype=paddle.get_default_dtype,
-            prefix=(f"{fd_config.model_config.prefix_name}.embed_tokens"),
+            prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"),
         )
 
         self.hidden_layers = nn.LayerList([
             Ernie4_5_VLDecoderLayer(
                 fd_config=fd_config,
-                prefix=f"{fd_config.model_config.prefix_name}.layers.{i}")
+                prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}")
             for i in range(self.num_layers)
         ])
 
@@ -359,7 +359,7 @@ class Ernie4_5_VLModel(nn.Layer):
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
-            prefix=f"{fd_config.model_config.prefix_name}.norm",
+            prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
     def load_state_dict(self, state_dict):

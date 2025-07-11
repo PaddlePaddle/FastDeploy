@@ -607,6 +607,9 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
     logger.info(
         f"parallel_config.tensor_parallel_size {parallel_config.tensor_parallel_size}"
     )
+    logger.info(
+        f"parallel_config.tensor_parallel_rank {parallel_config.tensor_parallel_rank}"
+    )
 
     if getattr(model_config, 'num_hidden_layers', None) is None:
         raise ValueError("num_hidden_layers is None")

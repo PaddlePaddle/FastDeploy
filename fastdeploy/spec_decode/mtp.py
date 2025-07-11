@@ -21,6 +21,7 @@ import numpy as np
 import paddle
 
 from fastdeploy.engine.request import Request
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import \
     AttentionBackend
@@ -36,7 +37,6 @@ from fastdeploy.model_executor.ops.gpu import (draft_model_postprocess,
                                                share_external_data)
 from fastdeploy.model_executor.pre_and_post_process import (pre_process,
                                                             rebuild_padding)
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 from .base import Proposer
 
@@ -73,7 +73,7 @@ class MTPProposer(Proposer):
         self.model_config.num_hidden_layers = 1
         self.parallel_config.model_name_or_path = (
             self.speculative_config.model_name_or_path)
-        self.model_config.prefix_name = "ernie.mtp_block"
+        self.model_config.pretrained_config.prefix_name = "ernie.mtp_block"
         if self.speculative_config.quantization != "":
             self.model_config.quantization = (
                 self.speculative_config.quantization)

@@ -21,6 +21,7 @@ from enum import Enum
 from typing import Literal, Optional
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
+from paddleformers.trl import llm_utils
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.quant_base import \
@@ -36,6 +37,29 @@ class MoEPhase(Enum):
 
     PREFILL = 1
     DECODER = 2
+
+PRETRAINED_INIT_CONFIGURATION = {
+    "rope_theta": 10000.0,
+    "num_key_value_heads":-1,
+    "start_layer_index": 0,
+    "moe_num_shared_experts":0,
+    "moe_layer_start_index": 0,
+    "num_max_dispatch_tokens_per_rank":256,
+    "moe_use_aux_free":False,
+    "vocab_size": -1,
+    "use_rope": True,
+    "hidden_dropout_prob":0.0,
+    "initializer_range":0.02,
+    "max_position_embeddings":512,
+    "quantization_config":None,
+    "use_recompute_resampler":False,
+    "use_temporal_conv":True,
+    "resampler_fuse_rms_norm":False,
+    "freq_allocation":20,
+    "tie_word_embeddings":False,
+    "rms_norm_eps":1e-5,
+}
+
 
 class ModelConfig:
     """
@@ -66,31 +90,10 @@ class ModelConfig:
         self.dtype = ""
         self.enable_logprob = False
 
-        PRETRAINED_INIT_CONFIGURATION = {
-            "rope_theta": 10000.0,
-            "num_key_value_heads":-1,
-            "start_layer_index": 0,
-            "moe_num_shared_experts":0,
-            "moe_layer_start_index": 0,
-            "num_max_dispatch_tokens_per_rank":256,
-            "moe_use_aux_free":False,
-            "vocab_size": -1,
-            "use_rope": True,
-            "hidden_dropout_prob":0.0,
-            "initializer_range":0.02,
-            "max_position_embeddings":512,
-            "quantization_config":None,
-            "use_recompute_resampler":False,
-            "use_temporal_conv":True,
-            "resampler_fuse_rms_norm":False,
-            "freq_allocation":20,
-            "tie_word_embeddings":False,
-            "rms_norm_eps":1e-5,
-        }
-
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+
         pretrained_config, _ = PretrainedConfig.get_config_dict(self.model_name_or_path)
         self.pretrained_config = PretrainedConfig.from_dict(pretrained_config)
 
@@ -123,10 +126,12 @@ class ParallelConfig:
         self.use_ep = False  # Whether to enable Expert Parallelism
         self.moe_phase = MoEPhase.PREFILL  # Generation phase
         self.msg_queue_id = 1  # mesage queue id
-        self.tensor_parallel_rank = None  # TP rank ID
-        self.tensor_parallel_size = None  # TP degree
-        self.expert_parallel_rank = None  # EP rank ID
-        self.expert_parallel_size= None  # EP degree
+
+        tensor_parallel_rank, tensor_parallel_size = llm_utils.init_dist_env()
+        self.tensor_parallel_rank = tensor_parallel_rank  # TP rank ID
+        self.tensor_parallel_size = tensor_parallel_size  # TP degree
+        self.expert_parallel_rank = int(tensor_parallel_rank / tensor_parallel_size)  # EP rank ID
+        self.expert_parallel_size = 1  # EP degree
         # The embedding weight distributed on your gpu cards is divided by row or column.
         # Defaults to False means divide by row. When vocab_size can not be divided by world_size
         # but hidden_size can, we can consider split embedding weight by column.
