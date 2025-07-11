@@ -68,7 +68,6 @@ class BaseDataProcessor(ABC):
                     req.set(key, value)
 
         set_value(request, "top_p", 0.7)
-        set_value(request, "top_k", 0)
         set_value(request, "temperature", 1.0)
         set_value(request, "repetition_penalty", 1.0)
         set_value(request, "frequency_penalty", 0.0)
