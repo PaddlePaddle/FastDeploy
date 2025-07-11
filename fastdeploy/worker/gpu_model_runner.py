@@ -245,7 +245,7 @@ class GPUModelRunner(ModelRunnerBase):
                 request.eos_token_ids.append(request.eos_token_ids[0])
             self.share_inputs["eos_token_id"][:] = np.array(
                 request.eos_token_ids, dtype="int64").reshape(-1, 1)
-            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 1.0)
+            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 0.7)
             self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k", 0)
             self.share_inputs["temperature"][idx:idx + 1] = request.get(
                 "temperature", 0.95)
@@ -711,9 +711,9 @@ class GPUModelRunner(ModelRunnerBase):
         assert len(self.attn_backends) == 0
 
         num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_degree
-        self.model_config.kv_num_heads = int(
+        self.model_config.kv_num_heads = max(1, int(
             self.model_config.num_key_value_heads
-        ) // self.parallel_config.tensor_parallel_degree
+        ) // self.parallel_config.tensor_parallel_degree)
         head_dim = self.model_config.head_dim
 
         # Get the attention backend

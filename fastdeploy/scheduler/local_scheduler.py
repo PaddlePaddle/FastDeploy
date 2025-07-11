@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Tuple
 
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.scheduler.data import ScheduledRequest, ScheduledResponse
-from fastdeploy.utils import llm_logger
+from fastdeploy.utils import scheduler_logger
 
 
 class LocalScheduler(object):
@@ -115,7 +115,7 @@ class LocalScheduler(object):
             self.ids = list()
             self.requests = dict()
             self.responses = dict()
-        llm_logger.info("Scheduler has been reset")
+        scheduler_logger.info("Scheduler has been reset")
 
     def _recycle(self, request_id: Optional[str] = None):
         """
@@ -189,10 +189,10 @@ class LocalScheduler(object):
 
             self.ids += valid_ids
             self.requests_not_empty.notify_all()
-        llm_logger.info(f"Scheduler has enqueued some requests: {valid_ids}")
+        scheduler_logger.info(f"Scheduler has enqueued some requests: {valid_ids}")
 
         if len(duplicated_ids) > 0:
-            llm_logger.warning(
+            scheduler_logger.warning(
                 f"Scheduler has received some duplicated requests: {duplicated_ids}"
             )
 
@@ -234,7 +234,7 @@ class LocalScheduler(object):
             List of Request objects ready for processing
         """
         if available_blocks <= reserved_output_blocks or batch < 1:
-            llm_logger.debug(
+            scheduler_logger.debug(
                 f"Scheduler's resource are insufficient: available_blocks={available_blocks} "
                 f"reserved_output_blocks={reserved_output_blocks} batch={batch} "
                 f"max_num_batched_tokens={max_num_batched_tokens}")
@@ -277,12 +277,12 @@ class LocalScheduler(object):
             self.ids_read_cursor += len(requests)
 
         if len(batch_ids) > 0 and len(requests) == 0:
-            llm_logger.debug(
+            scheduler_logger.debug(
                 f"Scheduler has put all just-pulled request into the queue: {len(batch_ids)}"
             )
 
         if len(requests) > 0:
-            llm_logger.info(
+            scheduler_logger.info(
                 f"Scheduler has pulled some request: {[request.request_id for request in requests]}"
             )
 
@@ -303,14 +303,14 @@ class LocalScheduler(object):
             response.request_id for response in responses if response.finished
         ]
         if len(finished_responses) > 0:
-            llm_logger.info(
+            scheduler_logger.info(
                 f"Scheduler has received some finished responses: {finished_responses}"
             )
 
         with self.mutex:
             for response in responses:
                 if response.request_id not in self.requests:
-                    llm_logger.warning(
+                    scheduler_logger.warning(
                         f"Scheduler has received a expired response: {[response.request_id]}"
                     )
                     continue
@@ -342,7 +342,7 @@ class LocalScheduler(object):
             - Thread-safe operation using condition variables
             - Has a short timeout (0.001s) to avoid blocking
             - Automatically recycles completed requests to free memory
-            - Logs finished requests via llm_logger
+            - Logs finished requests via scheduler_logger
         """
 
         def _get_results():
@@ -364,7 +364,7 @@ class LocalScheduler(object):
 
                 if finished:
                     self._recycle(request_id)
-                    llm_logger.info(
+                    scheduler_logger.info(
                         f"Scheduler has pulled a finished response: {[request_id]}"
                     )
             return results
