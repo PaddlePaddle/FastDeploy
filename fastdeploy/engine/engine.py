@@ -142,12 +142,6 @@ class LLMEngine(object):
                 disable_any_whitespace=self.cfg.disable_any_whitespace,
             )
 
-    def reset_scheduler(self):
-        """
-        Reset the scheduler to its initial state.
-        """
-        self.scheduler.reset()
-
     def start(self, api_server_pid=None):
         """
         Initializes the engine and starts its sub-services.
