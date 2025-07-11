@@ -52,7 +52,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ATTENTION_BACKEND":
     lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
 
-    # Sampling class ("base", "air", or "rejection")
+    # Sampling class ("base", "base_non_truncated", "air", or "rejection")
     "FD_SAMPLING_CLASS":
     lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
 
@@ -67,6 +67,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Switch from standalone PD to centralized inference (0 or 1)
     "FD_PD_CHANGEABLE":
     lambda: os.getenv("FD_PD_CHANGEABLE", "1"),
-  
+
+    # Whether to use DeepGemm for FP8 blockwise MoE.
+    "FD_USE_DEEP_GEMM":
+    lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "1"))),
+
 }
 ```

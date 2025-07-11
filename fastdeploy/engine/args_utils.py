@@ -122,10 +122,7 @@ class EngineArgs:
     """
     Ratio of tokens to process in a block.
     """
-    nnode: int = 1
-    """
-    Number of nodes in the cluster.
-    """
+
     pod_ips: Optional[List[str]] = None
     """
     List of IP addresses for nodes in the cluster.
@@ -150,6 +147,12 @@ class EngineArgs:
     """
     Flag to enable prefix caching.
     """
+
+    enable_custom_all_reduce: bool = False
+    """
+    Flag to enable the custom all-reduce kernel.
+    """
+
     engine_worker_queue_port: int = 8002
     """
     Port for worker queue communication.
@@ -296,6 +299,12 @@ class EngineArgs:
         max_capture_batch_size=64, FastDeploy will capture graphs for batches [1,64].
     """
 
+    enable_logprob: bool = False
+    """
+    Flag to enable logprob output. Default is False (disabled).
+    Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -416,6 +425,11 @@ class EngineArgs:
             help=
             "Disabled any whitespaces when using guided decoding backend XGrammar."
         )
+        model_group.add_argument("--enable-logprob",
+                                 action="store_true",
+                                 default=EngineArgs.enable_logprob,
+                                 help="Enable output of token-level log probabilities."
+                                 )
 
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
@@ -424,6 +438,10 @@ class EngineArgs:
                                     type=int,
                                     default=EngineArgs.tensor_parallel_size,
                                     help="Degree of tensor parallelism.")
+        parallel_group.add_argument("--enable-custom-all-reduce",
+                                action='store_true',
+                                default=EngineArgs.enable_custom_all_reduce,
+                                help="Flag to enable custom all-reduce.")
         parallel_group.add_argument(
             "--max-num-seqs",
             type=int,
@@ -485,10 +503,7 @@ class EngineArgs:
             default=EngineArgs.pod_ips,
             help=
             "List of IP addresses for nodes in the cluster (comma-separated).")
-        system_group.add_argument("--nnode",
-                                  type=int,
-                                  default=EngineArgs.nnode,
-                                  help="Number of nodes in the cluster.")
+
 
         # Performance tuning parameters group
         perf_group = parser.add_argument_group("Performance Tuning")
@@ -739,6 +754,7 @@ class EngineArgs:
             tensor_parallel_size=self.tensor_parallel_size,
             enable_expert_parallel=self.enable_expert_parallel,
             data_parallel_size=self.data_parallel_size,
+            enable_custom_all_reduce=self.enable_custom_all_reduce
         )
 
     def create_engine_config(self) -> Config:
@@ -761,6 +777,9 @@ class EngineArgs:
         assert not (self.use_cudagraph and self.enable_prefix_caching), \
             "Prefix caching cannot be used with CUDA graph"
 
+        assert not (self.tensor_parallel_size<=1 and self.enable_custom_all_reduce), \
+            "enable_custom_all_reduce must be used with tensor_parallel_size>1"
+
         return Config(
             model_name_or_path=self.model,
             model_config=model_cfg,
@@ -773,7 +792,6 @@ class EngineArgs:
             max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
             max_num_batched_tokens=self.max_num_batched_tokens,
-            nnode=self.nnode,
             pod_ips=self.pod_ips,
             use_warmup=self.use_warmup,
             engine_worker_queue_port=self.engine_worker_queue_port,
@@ -791,4 +809,6 @@ class EngineArgs:
             max_capture_batch_size=self.max_capture_batch_size,
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
+            enable_custom_all_reduce=self.enable_custom_all_reduce,
+            enable_logprob = self.enable_logprob,
         )

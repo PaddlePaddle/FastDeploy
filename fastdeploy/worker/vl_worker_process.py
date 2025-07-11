@@ -131,8 +131,7 @@ class Worker:
                                              rank=self.rank)
         self.prefill_tracker = PrefillTracker(args.engine_pid)
 
-        # Only applicable for standalone (single-machine) inference
-        address = ('0.0.0.0', self.args.engine_worker_queue_port)
+        address = (self.args.pod_ip, self.args.engine_worker_queue_port)
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
@@ -324,8 +323,9 @@ class Worker:
         infer_seed_increment = paddle.full(shape=[self.args.max_num_seqs, 1],
                                            fill_value=4,
                                            dtype="int64")
-        self.nnode = 1
 
+        self.nnode = int((self.nranks + 7) // 8)
+        mp_num_per_node = self.nranks // self.nnode
         while True:
             if self.rank == 0:
                 if self.model_weights_status_signal.value[0] != 0:
@@ -342,7 +342,6 @@ class Worker:
             self.insert_step = False
 
             self.worker_healthy_live_signal.value[self.rank] = int(time.time())
-            mp_num_per_node = self.nranks
 
             if self.rank % mp_num_per_node == 0:
                 if self.engine_worker_queue.num_tasks(

@@ -84,6 +84,7 @@ class ModelConfig(PretrainedConfig):
         head_dim: Optional[int] = None,
         tie_word_embeddings: bool = False,
         is_quantized: bool = False,
+        rms_norm_eps: float = 1e-5,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -123,6 +124,7 @@ class ModelConfig(PretrainedConfig):
         self.dtype = dtype
         self.tie_word_embeddings = tie_word_embeddings
         self.is_quantized = is_quantized
+        self.rms_norm_eps = rms_norm_eps
 
 
 @dataclass
@@ -207,6 +209,8 @@ class ParallelConfig:
     guided_decoding_backend: str = None
     # disable any whitespace for guided decoding
     disable_any_whitespace: bool = True
+    # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
+    enable_custom_all_reduce: str = "store_true"
 
 
 @dataclass
@@ -238,6 +242,10 @@ class SpeculativeConfig:
     # A trick method is currently used to enable this sharing.
     # This will be replaced with a more standardized solution in the future.
     sharing_model = None
+    # During benchmarking, we need to enforce that the number of accepted tokens is 1.
+    # This means no tokens from MTP are accepted.
+    # This ensures that the specified simulation acceptance rate is not affected.
+    benchmark_mode: bool = False
 
 
 @dataclass

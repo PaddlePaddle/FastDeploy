@@ -18,7 +18,6 @@
 #include <algorithm>
 #include <optional>
 
-#include "helper.h"
 #include "noauxtc_kernel.h"
 
 std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,

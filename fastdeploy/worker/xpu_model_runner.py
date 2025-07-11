@@ -70,7 +70,21 @@ def xpu_pre_process(
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
     share_inputs["cu_seqlens_k"] = cu_seqlens_k
 
-    xpu_forward_meta = XPUForwardMeta.init_forward_meta(share_inputs, None)
+    xpu_forward_meta = XPUForwardMeta(
+        input_ids=share_inputs["input_ids"],
+        ids_remove_padding=share_inputs["ids_remove_padding"],
+        rotary_embs=share_inputs["rope_emb"],
+        attn_backend=None,
+        seq_lens_encoder=share_inputs["seq_lens_encoder"],
+        seq_lens_decoder=share_inputs["seq_lens_decoder"],
+        seq_lens_this_time=share_inputs["seq_lens_this_time"],
+        cum_offsets=share_inputs["cum_offsets"],
+        padding_offset=share_inputs["padding_offset"],
+        cu_seqlens_q=share_inputs["cu_seqlens_q"],
+        cu_seqlens_k=share_inputs["cu_seqlens_k"],
+        block_tables=share_inputs["block_tables"],
+        caches=share_inputs["caches"]
+    )
 
     # Get xpu extra param
     (
@@ -142,7 +156,8 @@ def xpu_process_output(
 
 
 def xpu_post_process(sampled_token_ids: paddle.Tensor,
-                     model_output: ModelOutputData) -> None:
+                     model_output: ModelOutputData,
+                     skip_save_output: bool) -> None:
     """
 
     """
@@ -185,12 +200,13 @@ def xpu_post_process(sampled_token_ids: paddle.Tensor,
         )
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
-    save_output(
-        sampled_token_ids,
-        model_output.not_need_stop,
-        model_output.mp_rank,
-        False,  # use_ep
-    )
+    if not skip_save_output:
+        save_output(
+            sampled_token_ids,
+            model_output.not_need_stop,
+            model_output.mp_rank,
+            False,  # use_ep
+        )
 
 
 def step_paddle(share_inputs: Dict[str, paddle.Tensor], block_size: int,
@@ -279,7 +295,8 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["eos_token_id"][:] = np.array(
                 request.eos_token_ids, dtype="int64").reshape(-1, 1)
             self.share_inputs["pre_ids"][idx:idx + 1] = -1
-            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 0.7)
+            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 1.0)
+            self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k", 0)
             self.share_inputs["temperature"][idx:idx + 1] = request.get(
                 "temperature", 0.95)
             self.share_inputs["penalty_score"][idx:idx + 1] = request.get(
@@ -347,8 +364,11 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["eos_token_id"] = paddle.full(
             [self.parallel_config.eos_tokens_lens, 1], 0, dtype='int64')
         self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1],
-                                                 self.model_config.top_p,
-                                                 dtype='float32')
+                                                self.model_config.top_p,
+                                                dtype='float32')
+        self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1],
+                                                0,
+                                                dtype='int64')
         self.share_inputs["temperature"] = paddle.full(
             [max_num_seqs, 1], self.model_config.temperature, dtype='float32')
         self.share_inputs["penalty_score"] = paddle.full(
@@ -498,6 +518,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.sampling_metadata = SamplingMetadata(
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
+            top_k=self.share_inputs["top_k"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
             frequency_penalties=self.share_inputs["frequency_score"],
@@ -658,7 +679,7 @@ class XPUModelRunner(ModelRunnerBase):
         self._dummy_prefill_inputs(num_tokens, batch_size)
 
         while True:
-            self.execute_model(None)
+            self.execute_model(None, True)
 
             if int((self.share_inputs['seq_lens_this_time'] > 0).sum()) == 0:
                 break
@@ -666,6 +687,7 @@ class XPUModelRunner(ModelRunnerBase):
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
+        is_dummy_run: bool = False,
     ) -> Optional[ModelRunnerOutput]:
         """
         The Entrance of model execute.
@@ -691,7 +713,7 @@ class XPUModelRunner(ModelRunnerBase):
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hiddden_states)
 
-        sampled_token_ids = self.sampler(logits, self.sampling_metadata)
+        sampler_output = self.sampler(logits, self.sampling_metadata)
 
         # 5. Speculative decode
 
@@ -720,8 +742,9 @@ class XPUModelRunner(ModelRunnerBase):
             accept_tokens=None,
             accept_num=None,
         )
-        xpu_post_process(sampled_token_ids=sampled_token_ids,
-                         model_output=model_output_data)
+        xpu_post_process(sampled_token_ids=sampler_output.sampled_token_ids,
+                         model_output=model_output_data,
+                         skip_save_output=is_dummy_run)
 
         # 7. Updata 'infer_seed' and step_paddle()
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)

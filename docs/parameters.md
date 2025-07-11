@@ -36,6 +36,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```enable_static_graph_inference``` | `bool` | Whether to use static graph inference mode, default: False |
 | ```use_cudagraph``` | `bool` | Whether to use cuda graph, default: False |
 | ```max_capture_batch_size``` | `int` | When cuda graph is enabled, maximum batch size of captured cuda graph, default: 64 |
+| ```enable_custom_all_reduce``` | `bool` | Enable Custom all-reduce, default: False |
 | ```splitwise_role``` | `str` | Whether to enable splitwise inference, default value: mixed, supported parameters: ["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports``` | `str` | Internal engine startup ports for prefill instances (only required for single-machine PD separation), default: None |
 | ```guided_decoding_backend``` | `str` | Specify the guided decoding backend to use, supports `auto`, `xgrammar`, `off`, default: `off` |

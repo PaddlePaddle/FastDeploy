@@ -275,14 +275,14 @@ class Ernie4_5_MTPModel(nn.Layer):
         self.enorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-5,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix="ernie.mtp_emb_norm.0",
         )
 
         self.hnorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-5,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix="ernie.mtp_hidden_norm.0",
         )
 

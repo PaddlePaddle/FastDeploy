@@ -77,7 +77,10 @@ def apply_to_static_optimization(fn):
 
 
 class GraphOptBackend:
-    """ """
+    """
+    Integrated various graph optimization functions, including dynamic graph to static graph conversion,
+    CINN compilation optimization, CudaGraph, and so on.
+    """
 
     fd_config: FDConfig
     cudagraph_piecewise_backend: Optional[CudaGraphPiecewiseBackend] = None
