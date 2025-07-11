@@ -215,7 +215,9 @@ class OpenAIServingChat:
                 if res["finished"]:
                     num_choices -= 1
                     work_process_metrics.e2e_request_latency.observe(time.time() - res["metrics"]["request_start_time"])
-                    if request.max_tokens is None or previous_num_tokens != request.max_tokens:
+                    has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
+                    max_tokens = request.max_completion_tokens or request.max_tokens
+                    if has_no_token_limit or previous_num_tokens != max_tokens:
                         choice.finish_reason = "stop"
                         if self.engine_client.reasoning_parser == "ernie_x1" and \
                                 output.get("finish_reason", "") == "tool_calls":
@@ -355,7 +357,9 @@ class OpenAIServingChat:
             logprobs=logprobs_full_res,
             finish_reason=None
         )
-        if request.max_tokens is None or previous_num_tokens != request.max_tokens:
+        has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
+        max_tokens = request.max_completion_tokens or request.max_tokens
+        if has_no_token_limit or previous_num_tokens != max_tokens:
             choice.finish_reason = "stop"
             if self.engine_client.reasoning_parser == "ernie_x1" and \
                     output.get("finish_reason", "") == "tool_calls":
