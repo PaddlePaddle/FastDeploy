@@ -18,7 +18,7 @@ from typing import Callable, List, Any, Dict, Optional
 import functools
 import threading
 import traceback
-from fastdeploy.utils import llm_logger
+from fastdeploy.utils import scheduler_logger
 
 
 class Task:
@@ -163,7 +163,7 @@ class Workers:
             try:
                 results = self.work(tasks)
             except Exception as e:
-                llm_logger.error(
+                scheduler_logger.error(
                     f"Worker {self.name} execute error: {e}, traceback: {traceback.format_exc()}")
                 continue
 
