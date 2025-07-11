@@ -164,28 +164,12 @@ class GPUModelRunner(ModelRunnerBase):
                 -1].disaggregate_info["role"] == "prefill":
             os.environ['PREFILL_NODE_ONE_STEP_STOP'] = "1"
 
-        top_k_reqs = []
-        top_p_reqs = []
-        max_num_seqs = self.parallel_config.max_num_seqs
-        top_p_buffer = paddle.full([max_num_seqs, 1],
-                                    self.model_config.top_p,
-                                    dtype='float32')
-        top_k_buffer = paddle.full([max_num_seqs, 1],
-                                                0,
-                                                dtype='int64')
         req_len = len(req_dicts)
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
             length = len(request.prompt_token_ids)
             assert length > 0, "The prompt requested must not be empty."
-
-            if sampling_params := request.sampling_params:
-                if sampling_params.top_p < 1:
-                    top_p_reqs.append(idx)
-                top_k = sampling_params.top_k
-                if top_k > 0:
-                    top_k_reqs.append(idx)
 
             prefill_tokens = []
             if (request.guided_json is not None
@@ -261,8 +245,8 @@ class GPUModelRunner(ModelRunnerBase):
                 request.eos_token_ids.append(request.eos_token_ids[0])
             self.share_inputs["eos_token_id"][:] = np.array(
                 request.eos_token_ids, dtype="int64").reshape(-1, 1)
-            top_p_buffer[idx:idx + 1] = request.get("top_p", 1.0)
-            top_k_buffer[idx:idx + 1] = request.get("top_k", 0)
+            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 1.0)
+            self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k", 0)
             self.share_inputs["temperature"][idx:idx + 1] = request.get(
                 "temperature", 0.95)
             self.share_inputs["penalty_score"][idx:idx + 1] = request.get(
@@ -312,16 +296,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_prefill_inputs(req_dicts)
-
-        if len(top_k_reqs) == 0:
-            self.share_inputs["top_k"] = None
-        else:
-            self.share_inputs["top_k"] = top_k_buffer
-
-        if len(top_p_reqs) == 0:
-            self.share_inputs["top_p"] = None
-        else:
-            self.share_inputs["top_p"] = top_p_buffer
 
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int,
                               expected_decode_len: int):
