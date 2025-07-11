@@ -711,9 +711,9 @@ class GPUModelRunner(ModelRunnerBase):
         assert len(self.attn_backends) == 0
 
         num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_degree
-        self.model_config.kv_num_heads = int(
+        self.model_config.kv_num_heads = max(1, int(
             self.model_config.num_key_value_heads
-        ) // self.parallel_config.tensor_parallel_degree
+        ) // self.parallel_config.tensor_parallel_degree)
         head_dim = self.model_config.head_dim
 
         # Get the attention backend
