@@ -717,38 +717,6 @@ void SpeculateStepPaddle(
     const int encoder_decoder_block_num,
     const int max_draft_tokens);
 
-
-// void SpeculateStepPaddle(
-//     const paddle::Tensor &stop_flags,
-//     const paddle::Tensor &seq_lens_this_time,
-//     const paddle::Tensor &ori_seq_lens_encoder,
-//     const paddle::Tensor &ori_seq_lens_decoder,
-//     const paddle::Tensor &seq_lens_encoder,
-//     const paddle::Tensor &seq_lens_decoder,
-//     const paddle::Tensor &block_tables,  // [bsz, block_num_per_seq]
-//     const paddle::Tensor &encoder_block_lens,
-//     const paddle::Tensor &is_block_step,
-//     const paddle::Tensor &step_block_list,
-//     const paddle::Tensor &step_lens,
-//     const paddle::Tensor &recover_block_list,
-//     const paddle::Tensor &recover_lens,
-//     const paddle::Tensor &need_block_list,
-//     const paddle::Tensor &need_block_len,
-//     const paddle::Tensor &used_list_len,
-//     const paddle::Tensor &free_list,
-//     const paddle::Tensor &free_list_len,
-//     const paddle::Tensor &input_ids,
-//     const paddle::Tensor &pre_ids,
-//     const paddle::Tensor &step_idx,
-//     const paddle::Tensor &next_tokens,
-//     const paddle::Tensor &first_token_ids,
-//     const paddle::Tensor &accept_num,
-//     const int block_size,
-//     const int encoder_decoder_block_num,
-//     const int max_draft_tokens);
-
->>>>>>> b5d43ee7 (optimize infer speed)
-
 PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_expert_token_num", &GetExpertTokenNum, py::arg("topk_ids"),
@@ -1035,7 +1003,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 #endif
 
   m.def("init_custom_all_reduce", &init_custom_all_reduce, "init all reduce class function");
- 
+
   m.def("all_reduce", &all_reduce, "all reduce function");
 
   m.def("dispose", &dispose, "del function for python");
