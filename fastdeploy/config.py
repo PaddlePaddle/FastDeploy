@@ -92,8 +92,8 @@ class ModelConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
         pretrained_config, _ = PretrainedConfig.get_config_dict(self.model_name_or_path)
-        self.pretrained_config = pretrained_config
-        
+        self.pretrained_config = PretrainedConfig.from_dict(pretrained_config)
+
         # set attribute from pretrained_config
         for key, value in pretrained_config.items():
             setattr(self, key, value)

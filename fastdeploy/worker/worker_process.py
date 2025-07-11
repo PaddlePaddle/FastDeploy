@@ -600,7 +600,7 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
     model_config.pretrained_config.tensor_parallel_degree = parallel_config.tensor_parallel_size
-    model_config.pretrained_config.is_mtp = speculative_config.is_mtp
+    model_config.pretrained_config.is_mtp = False
 
     logger.info(f"parallel_config.use_ep {parallel_config.use_ep}")
     logger.info(
