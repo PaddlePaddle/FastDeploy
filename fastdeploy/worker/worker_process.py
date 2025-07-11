@@ -601,6 +601,7 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
     model_config.pretrained_config.tensor_parallel_degree = parallel_config.tensor_parallel_size
     model_config.pretrained_config.is_mtp = False
+    model_config.pretrained_config.head_dim = model_config.head_dim
 
     logger.info(f"parallel_config.use_ep {parallel_config.use_ep}")
     logger.info(
