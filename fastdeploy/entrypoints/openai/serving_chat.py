@@ -198,7 +198,8 @@ class OpenAIServingChat:
                         sampled_token_ranks=raw_top_logprobs[2],
                     )
                     logprobs_res = self.build_logprobs_response(
-                        logprobs=top_logprobs,
+                        request_logprobs= request.logprobs,
+                        response_logprobs=top_logprobs,
                         request_top_logprobs=request.top_logprobs,
                     )
 
@@ -325,7 +326,8 @@ class OpenAIServingChat:
                         sampled_token_ranks=raw_top_logprobs[2],
                     )
                     logprobs_res = self.build_logprobs_response(
-                        logprobs=top_logprobs,
+                        request_logprobs=request.logprobs,
+                         response_logprobs=top_logprobs,
                         request_top_logprobs=request.top_logprobs,
                     )
                     if logprobs_res and logprobs_res.content is not None:
@@ -390,7 +392,8 @@ class OpenAIServingChat:
 
     def build_logprobs_response(
             self,
-            logprobs: Optional[LogprobsLists],
+            request_logprobs: bool,
+            response_logprobs: Optional[LogprobsLists],
             request_top_logprobs: int,
     ) -> Optional[LogProbs]:
         """
@@ -400,17 +403,17 @@ class OpenAIServingChat:
 
         # Parameter validation
         if (
-                logprobs is None
+                response_logprobs is None
+                or not request_logprobs
                 or request_top_logprobs is None
-                or request_top_logprobs <= 0
-                or len(logprobs.logprob_token_ids) == 0
+                or request_top_logprobs < 0
         ):
             return None
 
         try:
             # The top-k candidates for the current token
-            topk_token_ids = logprobs.logprob_token_ids[0][:request_top_logprobs + 1]
-            topk_logprobs = logprobs.logprobs[0][:request_top_logprobs + 1]
+            topk_token_ids = response_logprobs.logprob_token_ids[0][:request_top_logprobs + 1]
+            topk_logprobs = response_logprobs.logprobs[0][:request_top_logprobs + 1]
 
             # Construct the candidate token structure (LogProbEntry) of topk
             top_logprob_entries: List[LogProbEntry] = []
