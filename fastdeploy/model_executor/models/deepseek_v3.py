@@ -40,7 +40,7 @@ from fastdeploy.model_executor.layers.rotary_embedding import \
     DeepseekScalingRotaryEmbedding
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 from fastdeploy.platforms import current_platform
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import \

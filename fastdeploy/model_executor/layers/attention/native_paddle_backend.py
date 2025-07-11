@@ -17,12 +17,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 import paddle
 from paddle.nn.functional import scaled_dot_product_attention
 
 from fastdeploy.model_executor.layers.attention.base_attention_backend import \
     AttentionBackend
-from fastdeploy.worker.forward_meta import ForwardMeta
+if TYPE_CHECKING:
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class PaddleNativeAttnBackend(AttentionBackend):
