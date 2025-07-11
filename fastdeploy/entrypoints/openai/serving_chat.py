@@ -212,7 +212,7 @@ class OpenAIServingChat:
                         sampled_token_ranks=raw_top_logprobs[2],
                     )
                     logprobs_res = self.build_logprobs_response(
-                        request_logprobs= request.logprobs,
+                        request_logprobs=request.logprobs,
                         response_logprobs=top_logprobs,
                         request_top_logprobs=request.top_logprobs,
                     )
@@ -426,8 +426,14 @@ class OpenAIServingChat:
 
         try:
             # The top-k candidates for the current token
-            topk_token_ids = response_logprobs.logprob_token_ids[0][:request_top_logprobs + 1]
-            topk_logprobs = response_logprobs.logprobs[0][:request_top_logprobs + 1]
+            topk_token_ids = []
+            topk_logprobs = []
+
+            if response_logprobs.logprob_token_ids and len(response_logprobs.logprob_token_ids) > 0:
+                topk_token_ids = response_logprobs.logprob_token_ids[0][:request_top_logprobs + 1]
+
+            if response_logprobs.logprobs and len(response_logprobs.logprobs) > 0:
+                topk_logprobs = response_logprobs.logprobs[0][:request_top_logprobs + 1]
 
             # Construct the candidate token structure (LogProbEntry) of topk
             top_logprob_entries: List[LogProbEntry] = []
