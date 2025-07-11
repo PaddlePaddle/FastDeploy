@@ -776,7 +776,7 @@ def initialize_fd_config(config) -> FDConfig:
             "No quantization config found and use original weight and act dtype."
         )
 
-    model_config.enable_logprob = config.get("enable_logprob", False)
+    model_config.enable_logprob = config.enable_logprob
 
     model_config.architectures = model_config_dict.get("architectures")
 
