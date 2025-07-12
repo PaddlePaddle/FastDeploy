@@ -360,11 +360,11 @@ class PaddleDisWorkerProc():
                                    model_block_memory_used)
             # NOTE(liuzichang): Too many block will lead to illegal memory access
             # We will develop dynamic limits in future.
-            if num_blocks_local > 20000:
+            if num_blocks_local > 40000:
                 logger.info(
-                    f"------- Reset num_blocks_local {num_blocks_local} to 20000"
+                    f"------- Reset num_blocks_local {num_blocks_local} to 40000"
                 )
-                num_blocks_local = min(20000, num_blocks_local)
+                num_blocks_local = min(40000, num_blocks_local)
             logger.info(
                 f"------- model_block_memory_used:{model_block_memory_used} --------"
             )
