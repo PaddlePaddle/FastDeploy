@@ -56,6 +56,7 @@ class ModelForCasualLM(nn.Layer, ABC):
                 ori_vocab_size, use_topp_sampling, etc.
         """
         super(ModelForCasualLM, self).__init__()
+        self.fd_config = configs
 
     @abstractmethod
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray,
