@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 
@@ -72,8 +72,10 @@ class ModelConfig(PretrainedConfig):
         rope_theta: int = 10000,
         rope_3d: bool = False,
         ori_vocab_size: int | None = None,
-        moe_layer_start_index: int | None = None,
-        moe_layer_end_index: int | None = None,
+        moe_layer_start_index: Union[int, list[int], None] = None,
+        moe_num_experts: Union[int, list[int], None] = None,
+        moe_layer_end_index: Union[int, list[int], None] = None,
+        moe_num_shared_experts: int | None = None,
         num_hidden_layers: int | None = None,
         prefix_name="",
         freeze_embedding=False,
@@ -110,14 +112,10 @@ class ModelConfig(PretrainedConfig):
         self.prefix_name = prefix_name
         self.freeze_embedding = freeze_embedding
         self.rope_head_dim = rope_head_dim
-        moe_num_experts = kwargs.get("moe_num_experts", 0)
-        if moe_layer_start_index is not None:
-            self.moe_layer_start_index = moe_layer_start_index
-        elif moe_num_experts == 0:
-            self.moe_layer_start_index = self.num_layers
-            self.moe_num_experts = 0
-        if moe_layer_end_index is not None:
-            self.moe_layer_end_index = moe_layer_end_index
+        self.moe_layer_start_index = moe_layer_start_index
+        self.moe_num_experts = moe_num_experts
+        self.moe_num_shared_experts = moe_num_shared_experts
+        self.moe_layer_end_index = moe_layer_end_index
         self.ffn_hidden_size = ffn_hidden_size
         self.rope_3d = rope_3d
         self.start_layer_index = start_layer_index
@@ -132,15 +130,15 @@ class MoEConfig:
     """
     Configuration for MoE.
     """
-    num_experts: int = -1
+    num_experts: Union[int, list[int], None] = None
     top_k: int = 8
     moe_intermediate_size: int = -1
     num_experts_per_rank: int = -1
     num_experts_start_offset: int = -1
 
     moe_num_shared_experts = (0, )
-    moe_layer_start_index = 0
-    moe_layer_end_index = None
+    moe_layer_start_index: Union[int, list[int], None] = None
+    moe_layer_end_index: Union[int, list[int], None] = None
     moe_use_aux_free: bool = False
     num_max_dispatch_tokens_per_rank = 256
     im_patch_id = (

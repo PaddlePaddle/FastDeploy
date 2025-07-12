@@ -28,6 +28,8 @@ from fastdeploy.model_executor.models.ernie4_5_moe import \
     Ernie4_5_PretrainedModel
 from fastdeploy.model_executor.models.ernie4_5_mtp import \
     Ernie4_5_MTPPretrainedModel
+from fastdeploy.model_executor.models.ernie4_5_vl.ernie4_5_vl_moe import \
+    Ernie4_5_VLPretrainedModel
 from fastdeploy.model_executor.models.model_base import ModelRegistry
 from fastdeploy.model_executor.models.qwen2 import Qwen2PretrainedModel
 from fastdeploy.model_executor.models.qwen3 import Qwen3PretrainedModel
@@ -42,6 +44,7 @@ MODEL_CLASSES = {
     "Qwen3MoeForCausalLM": Qwen3MoePretrainedModel,
     "Ernie4_5_ForCausalLM": Ernie4_5_PretrainedModel,
     "DeepseekV3ForCausalLM": DeepSeekV3PretrainedModel,
+    "Ernie4_5_VLMoeForConditionalGeneration": Ernie4_5_VLPretrainedModel,
 }
 
 
@@ -94,7 +97,7 @@ class DefaultModelLoader(BaseModelLoader):
 
         if fd_config.load_config.dynamic_load_weight:
             # register rl model
-            import fastdeploy.rl
+            import fastdeploy.rl  # noqa
             architectures = architectures + "RL"
 
         with context:

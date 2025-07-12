@@ -38,19 +38,23 @@ def check_tensor_parallel_prerequisites(
     """check_tensor_parallel_prerequisites"""
     if fd_config.parallel_config.tensor_parallel_degree > 1:
         tensor_parallel_map = cls._get_tensor_parallel_mappings(
-            fd_config.model_config, is_split=True)
+            fd_config.model_config, is_split=True
+        )
         if not tensor_parallel_map:
-            logger.error("filtered_quant_map should not be empty. \
+            logger.error(
+                "filtered_quant_map should not be empty. \
                 parallel splitting required, but _get_tensor_parallel_mappings is not implemented."
-                         )
-        filtered_tp_keys = cls._resolve_prefix_keys(tensor_parallel_map.keys(),
-                                                    safetensor_keys)
+            )
+        filtered_tp_keys = cls._resolve_prefix_keys(
+            tensor_parallel_map.keys(), safetensor_keys
+        )
         for k, v in filtered_tp_keys.items():
             tensor_parallel_filtered_map[v] = tensor_parallel_map.pop(k)
         if not tensor_parallel_filtered_map:
-            logger.error("tensor_parallel_filtered_map should not be empty. \
+            logger.error(
+                "tensor_parallel_filtered_map should not be empty. \
                 The weights required for tensor parallel splitting are inconsistent with the model's weights."
-                         )
+            )
 
 
 def extract_prefix(weight_name: str) -> str:
@@ -99,7 +103,14 @@ def update_final_actions(params, final_actions, key, action):
     final_actions[new_key] = action
 
 
-def build_expanded_keys(num_layers, num_experts, start_layer, base_actions):
+def build_expanded_keys(
+    base_actions,
+    num_layers,
+    start_layer: int = -1,
+    num_experts: int = 0,
+    text_num_experts: int = 0,
+    img_num_experts: int = 0,
+):
     """build_expanded_keys"""
     final_actions = {}
     for key, action in base_actions.items():
@@ -116,6 +127,8 @@ def build_expanded_keys(num_layers, num_experts, start_layer, base_actions):
                         action,
                     )
             elif LayerIdPlaceholder.FFN_LAYER_ID.value in placeholders:
+                if start_layer < 0:
+                    continue
                 for layer_id in range(start_layer):
                     update_final_actions(
                         {LayerIdPlaceholder.FFN_LAYER_ID.value: layer_id},
@@ -123,22 +136,65 @@ def build_expanded_keys(num_layers, num_experts, start_layer, base_actions):
                         key,
                         action,
                     )
-            elif (LayerIdPlaceholder.MOE_LAYER_ID.value in placeholders
-                  and LayerIdPlaceholder.EXPERT_ID.value in placeholders):
+            elif (
+                LayerIdPlaceholder.MOE_LAYER_ID.value in placeholders
+                and LayerIdPlaceholder.EXPERT_ID.value in placeholders
+            ):
+                if start_layer < 0:
+                    continue
                 for layer_id in range(start_layer, num_layers):
                     for export_id in range(num_experts):
                         update_final_actions(
                             {
-                                LayerIdPlaceholder.MOE_LAYER_ID.value:
-                                layer_id,
+                                LayerIdPlaceholder.MOE_LAYER_ID.value: layer_id,
                                 LayerIdPlaceholder.EXPERT_ID.value: export_id,
                             },
                             final_actions,
                             key,
                             action,
                         )
-            elif (LayerIdPlaceholder.MOE_LAYER_ID.value in placeholders
-                  and len(placeholders) == 1):
+            elif (
+                LayerIdPlaceholder.MOE_LAYER_ID.value in placeholders
+                and LayerIdPlaceholder.TEXT_EXPERT_ID.value in placeholders
+            ):
+                if start_layer < 0:
+                    continue
+                for layer_id in range(start_layer, num_layers):
+                    for export_id in range(text_num_experts):
+                        update_final_actions(
+                            {
+                                LayerIdPlaceholder.MOE_LAYER_ID.value: layer_id,
+                                LayerIdPlaceholder.TEXT_EXPERT_ID.value: export_id,
+                            },
+                            final_actions,
+                            key,
+                            action,
+                        )
+            elif (
+                LayerIdPlaceholder.MOE_LAYER_ID.value in placeholders
+                and LayerIdPlaceholder.IMG_EXPERT_ID.value in placeholders
+            ):
+                if start_layer < 0:
+                    continue
+                for layer_id in range(start_layer, num_layers):
+                    for export_id in range(
+                        text_num_experts, text_num_experts + img_num_experts
+                    ):
+                        update_final_actions(
+                            {
+                                LayerIdPlaceholder.MOE_LAYER_ID.value: layer_id,
+                                LayerIdPlaceholder.IMG_EXPERT_ID.value: export_id,
+                            },
+                            final_actions,
+                            key,
+                            action,
+                        )
+            elif (
+                LayerIdPlaceholder.MOE_LAYER_ID.value in placeholders
+                and len(placeholders) == 1
+            ):
+                if start_layer < 0:
+                    continue
                 for layer_id in range(start_layer, num_layers):
                     update_final_actions(
                         {LayerIdPlaceholder.MOE_LAYER_ID.value: layer_id},
@@ -147,7 +203,7 @@ def build_expanded_keys(num_layers, num_experts, start_layer, base_actions):
                         action,
                     )
             else:
-                logger.error(f"{key} does not match any case.")
+                raise ValueError(f"{key} does not match any case.")
     return final_actions
 
 

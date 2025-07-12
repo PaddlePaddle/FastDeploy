@@ -23,7 +23,8 @@ from paddle import nn
 from paddle.autograd import PyLayer
 from paddle.distributed.fleet.utils import recompute
 
-from fastdeploy.model_executor.layers.utils import _set_var_distributed
+from fastdeploy.model_executor.layers.utils import (_set_var_distributed,
+                                                    get_tensor)
 from fastdeploy.model_executor.models.ernie4_5_vl.dist_utils import (
     RowSequenceParallelLinear, all_gather_group, reduce_scatter_group,
     scatter_axis)
@@ -138,7 +139,7 @@ class VariableResolutionResamplerModel(nn.Layer):
     """
 
     def __init__(self, in_dim, out_dim, spatial_conv_size, temporal_conv_size,
-                 config):
+                 config, prefix_name: str = ""):
         super().__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -148,6 +149,7 @@ class VariableResolutionResamplerModel(nn.Layer):
         self.use_recompute_resampler = config.use_recompute_resampler
         self.use_temporal_conv = config.use_temporal_conv
         self.tensor_parallel_degree = config.tensor_parallel_degree
+        self.prefix_name = prefix_name
 
         # for 空间四合一
         self.spatial_dim = self.in_dim * self.spatial_conv_size * self.spatial_conv_size
@@ -368,6 +370,22 @@ class VariableResolutionResamplerModel(nn.Layer):
         if num_pad is not None and num_pad > 0:
             x = x[:-num_pad]
         return x
+
+    def load_state_dict(self, state_dict):
+        params_dict = dict(self.named_parameters())
+        for param_name, param in params_dict.items():
+            state_dict_key = f"{self.prefix_name}.{param_name}"
+            if state_dict_key not in state_dict:
+                raise ValueError(
+                    f"The key {state_dict_key} does not exist in state_dict. "
+                )
+            tensor = get_tensor(state_dict.pop(state_dict_key))
+            if param.shape != tensor.shape:
+                raise ValueError(
+                    f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}"
+                )
+            else:
+                param.copy_(tensor, False)
 
     @classmethod
     def _get_tensor_parallel_mappings(cls, config, is_split=True):
