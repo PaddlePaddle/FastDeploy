@@ -189,6 +189,10 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     assert resp1.status_code == 200
     result1 = resp1.json()
     content1 = result1["choices"][0]["message"]["content"]
+    file_res_temp = "ernie-4_5-vl"
+    f_o = open(file_res_temp, 'a')
+    f_o.writelines(content1)
+    f_o.close()
 
     # base result
     base_path = os.getenv("MODEL_PATH")
