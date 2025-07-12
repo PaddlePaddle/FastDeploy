@@ -347,6 +347,7 @@ elif paddle.is_compiled_with_cuda():
     nvcc_compile_args += ["-DPADDLE_DEV"]
     nvcc_compile_args += ["-DPADDLE_ON_INFERENCE"]
     nvcc_compile_args += ["-DPy_LIMITED_API=0x03090000"]
+    nvcc_compile_args += ["--use_fast_math"]
     nvcc_compile_args += [
         "-Igpu_ops/cutlass_kernels",
         "-Ithird_party/cutlass/include",
