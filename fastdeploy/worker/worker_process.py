@@ -551,6 +551,10 @@ def parse_args():
         "'ipc_snapshot': load from disk snapshot of IPC weights, "
         "'meta': provide RL traing worker, no_weights_load"
         "'normal':normal load weight")
+    parser.add_argument("--use_vl",
+                        type=bool,
+                        default=False,
+                        help="Whether to use vl")
     parser.add_argument("--enable_logprob",
                         action='store_true',
                         help="Enable output of token-level log probabilities.")
@@ -815,6 +819,9 @@ def initialize_fd_config(config_or_args, ranks: int = 1, local_rank: int = 0) ->
     model_config.enable_logprob = config_or_args.enable_logprob
 
     model_config.architectures = model_config_dict.get("architectures")
+
+    # Set VL tag
+    model_config.use_vl = getattr(config_or_args, 'use_vl', False)
 
     # Update load config
     logger.info("===========load_config==============")
