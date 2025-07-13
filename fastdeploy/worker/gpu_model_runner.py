@@ -994,7 +994,7 @@ class GPUModelRunner(ModelRunnerBase):
 
     def _update_chunked_prefill(self, tasks):
         """
-        更新chunked prefill相关参数
+        Update chunked prefill related parameters
         """
         if not self.parallel_config.enable_chunked_prefill:
             return
