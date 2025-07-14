@@ -21,6 +21,7 @@ import numpy as np
 import paddle
 
 from fastdeploy.engine.request import Request
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import \
     AttentionBackend
@@ -36,7 +37,6 @@ from fastdeploy.model_executor.ops.gpu import (draft_model_postprocess,
                                                share_external_data)
 from fastdeploy.model_executor.pre_and_post_process import (pre_process,
                                                             rebuild_padding)
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 from .base import Proposer
 
@@ -497,6 +497,8 @@ class MTPProposer(Proposer):
             self.main_model_inputs["seq_lens_encoder"],
             self.max_draft_token_num,
         )
+        if isinstance(target_hidden_states, list):
+            target_hidden_states = target_hidden_states[0]
 
         return target_hidden_states
 
