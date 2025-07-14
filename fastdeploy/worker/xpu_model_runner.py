@@ -23,6 +23,7 @@ import paddle.nn as nn
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
+from fastdeploy.model_executor.forward_meta import ForwardMeta, XPUForwardMeta
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import \
     AttentionBackend
@@ -31,7 +32,6 @@ from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler
 from fastdeploy.model_executor.model_loader import get_model_from_loader
 from fastdeploy.utils import get_logger
-from fastdeploy.model_executor.forward_meta import ForwardMeta, XPUForwardMeta
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
 
@@ -297,6 +297,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["pre_ids"][idx:idx + 1] = -1
             self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 1.0)
             self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k", 0)
+            self.share_inputs["min_p"][idx:idx+1] = request.get("min_p", 0.0)
             self.share_inputs["temperature"][idx:idx + 1] = request.get(
                 "temperature", 0.95)
             self.share_inputs["penalty_score"][idx:idx + 1] = request.get(
@@ -369,6 +370,9 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1],
                                                 0,
                                                 dtype='int64')
+        self.share_inputs["min_p"] = paddle.full([max_num_seqs, 1],
+                                                0.0,
+                                                dtype='float32')
         self.share_inputs["temperature"] = paddle.full(
             [max_num_seqs, 1], self.model_config.temperature, dtype='float32')
         self.share_inputs["penalty_score"] = paddle.full(
@@ -519,6 +523,7 @@ class XPUModelRunner(ModelRunnerBase):
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
             top_k=self.share_inputs["top_k"],
+            min_p=self.share_inputs["min_p"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
             frequency_penalties=self.share_inputs["frequency_score"],
