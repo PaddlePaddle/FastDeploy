@@ -60,6 +60,27 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
         from fastdeploy.worker.gcu_worker import GcuWorker
         return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
+def init_distributed_environment(seed: int = 20) -> List[int]:
+    """ Initialize Paddle Fleet and get rank of worker """
+    # Global rank
+    ranks = dist.get_world_size()
+    dist_strategy = fleet.DistributedStrategy()
+
+    dist_strategy.hybrid_configs = {
+        "dp_degree": 1,
+        "mp_degree": ranks,
+        "pp_degree": 1,
+        "sharding_degree": 1,
+    }
+
+    # Set control in tensor parallel
+    dist_strategy.tensor_parallel_configs = {"tensor_init_seed": seed}
+    fleet.init(is_collective=True, strategy=dist_strategy)
+
+    # Local rank
+    local_rank = fleet.worker_index()
+
+    return ranks, local_rank
 
 class PaddleDisWorkerProc():
     """
@@ -72,6 +93,8 @@ class PaddleDisWorkerProc():
     def __init__(
         self,
         fd_config: FDConfig,
+        ranks: int = 1,
+        local_rank: int = 0
     ) -> None:
         """
         Initialize a distributed worker and task queue for single-node multi-GPU setup.
@@ -80,29 +103,10 @@ class PaddleDisWorkerProc():
                 attributes such as weight_dtype, act_dtype, mp_size, hidden_size, head_dim,
                 num_attention_heads, and ffn_hidden_size.
         """
+        self.ranks = ranks
+        self.local_rank = local_rank
         self.fd_config = fd_config
         self.parallel_config = fd_config.parallel_config
-
-        # Initialize distributed enviroment
-        (self.ranks, self.local_rank) = self.init_distributed_enviroment()
-
-        assert self.parallel_config.tensor_parallel_size * self.parallel_config.expert_parallel_size == self.ranks
-
-        self.fd_config.parallel_config.tensor_parallel_rank = \
-            self.local_rank % self.parallel_config.tensor_parallel_size
-        self.fd_config.parallel_config.expert_parallel_rank = \
-            int(self.local_rank / self.parallel_config.tensor_parallel_size)
-
-        if self.fd_config.parallel_config.use_ep:
-            self.fd_config.model_config.num_experts_per_rank = \
-                self.fd_config.model_config.moe_num_experts // self.parallel_config.expert_parallel_size
-            self.fd_config.model_config.num_experts_start_offset = \
-                self.fd_config.parallel_config.expert_parallel_rank * self.fd_config.model_config.num_experts_per_rank
-
-        # For auto TP split
-        self.fd_config.model_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_size
-        self.fd_config.model_config.tensor_parallel_rank = self.parallel_config.tensor_parallel_rank
-        self.fd_config.model_config.use_ep = self.parallel_config.use_ep
 
         # TODO(gongshaotian): Use worker factory to get worker
         self.worker = get_worker(fd_config=fd_config,
@@ -118,8 +122,7 @@ class PaddleDisWorkerProc():
             is_server=False,
             num_client=self.parallel_config.tensor_parallel_size,
             client_id=self.parallel_config.tensor_parallel_rank,
-            local_data_parallel_id=self.fd_config.parallel_config.
-            expert_parallel_rank)
+            local_data_parallel_id=self.parallel_config.expert_parallel_rank)
 
     def init_health_status(self) -> None:
         """
@@ -306,27 +309,6 @@ class PaddleDisWorkerProc():
             self.exist_prefill_task_signal.value[
                 0] = self.worker.prefill_finished()
 
-    def init_distributed_enviroment(self, seed: int = 20) -> List[int]:
-        """ Initialize Paddle Fleet and get rank of worker """
-        # Global rank
-        self.ranks = dist.get_world_size()
-        dist_strategy = fleet.DistributedStrategy()
-
-        dist_strategy.hybrid_configs = {
-            "dp_degree": 1,
-            "mp_degree": self.ranks,
-            "pp_degree": 1,
-            "sharding_degree": 1,
-        }
-
-        # Set control in tensor parallel
-        dist_strategy.tensor_parallel_configs = {"tensor_init_seed": seed}
-        fleet.init(is_collective=True, strategy=dist_strategy)
-
-        # Local rank
-        self.local_rank = fleet.worker_index()
-
-        return self.ranks, self.local_rank
 
     def determine_num_available_blocks(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
@@ -354,11 +336,11 @@ class PaddleDisWorkerProc():
                                    model_block_memory_used)
             # NOTE(liuzichang): Too many block will lead to illegal memory access
             # We will develop dynamic limits in future.
-            if num_blocks_local > 20000:
+            if num_blocks_local > 40000:
                 logger.info(
-                    f"------- Reset num_blocks_local {num_blocks_local} to 20000"
+                    f"------- Reset num_blocks_local {num_blocks_local} to 40000"
                 )
-                num_blocks_local = min(20000, num_blocks_local)
+                num_blocks_local = min(40000, num_blocks_local)
             logger.info(
                 f"------- model_block_memory_used:{model_block_memory_used} --------"
             )
@@ -575,7 +557,7 @@ def parse_args():
     return args
 
 
-def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
+def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     """Initialize FDConfig from either RolloutModelConfig or argparse.Namespace
 
     Args:
@@ -635,7 +617,8 @@ def initialize_fd_config(args: argparse.Namespace) -> FDConfig:
         quantization_config["quantization"] = quant_config_name
         # Special handling for Ernie models
         is_ernie = "Ernie4_5_ForCausalLM" in model_config.architectures or \
-                    "Ernie4_5_MoeForCausalLM" in model_config.architectures
+                    "Ernie4_5_MoeForCausalLM" in model_config.architectures or \
+                    "Ernie4_5_VLMoeForConditionalGeneration" in model_config.architectures
         if quant_config_name == "wint4" and is_ernie:
             quantization_config["dense_quant_type"] = "wint8"
             quantization_config["moe_quant_type"] = "wint4"
@@ -689,11 +672,13 @@ def run_worker_proc() -> None:
     # Get args form Engine
     args = parse_args()
 
+    ranks, local_rank = init_distributed_environment()
+
     # Get fd_config
-    fd_config = initialize_fd_config(args)
+    fd_config = initialize_fd_config(args, ranks, local_rank)
 
     # Create worker process
-    worker_proc = PaddleDisWorkerProc(fd_config)
+    worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
 
     # Initialize device and create model runner
     worker_proc.init_device()

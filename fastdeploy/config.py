@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.trl import llm_utils

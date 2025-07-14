@@ -599,27 +599,13 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
             start_layer = (moe_layer_start_index
                            if moe_layer_start_index > 0 else num_layers)
             final_actions = build_expanded_keys(
-                num_layers,
-                moe_num_experts,
-                start_layer,
-                base_actions,
+                base_actions, num_layers, start_layer, moe_num_experts
             )
             return final_actions
-
-        moe_num_experts = 0
-        if isinstance(config.moe_num_experts, list):
-            moe_num_experts = sum(config.moe_num_experts)
-        elif isinstance(config.moe_num_experts, int):
-            moe_num_experts = config.moe_num_experts
-
-        moe_layer_start_index = -1
-        if isinstance(config.moe_layer_start_index, list):
-            moe_layer_start_index = min(config.moe_layer_start_index)
-        elif isinstance(config.moe_layer_start_index, int):
-            moe_layer_start_index = config.moe_layer_start_index
-
-        mappings = get_tensor_parallel_split_mappings(config.num_hidden_layers,
-                                                      moe_num_experts,
-                                                      moe_layer_start_index,
-                                                      config.prefix_name)
+        mappings = get_tensor_parallel_split_mappings(
+            config.num_hidden_layers,
+            config.moe_num_experts,
+            config.moe_layer_start_index,
+            config.prefix_name,
+        )
         return mappings

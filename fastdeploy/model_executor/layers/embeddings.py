@@ -112,10 +112,6 @@ class VocabParallelEmbedding(nn.Layer):
         Args:
             state_dict (dict): A dictionary containing the checkpoint weights and biases.
         """
-        from fastdeploy.utils import get_logger
-
-        logger = get_logger("other", "other.log")
-        logger.info(f"prefix: {self.prefix}")
         a = state_dict[self.prefix + ".weight"]
         logger.info(f"tensor : {a}")
         if self.tie_word_embeddings:

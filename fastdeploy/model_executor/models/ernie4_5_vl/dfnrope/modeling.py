@@ -29,6 +29,8 @@ from paddle.nn.functional.flash_attention import \
     flash_attn_unpadded as flash_attn_varlen_func
 from paddleformers.transformers.model_utils import PretrainedModel
 
+from fastdeploy.model_executor.layers.utils import get_tensor
+
 from .activation import ACT2FN
 from .configuration import DFNRopeVisionTransformerConfig
 
@@ -487,10 +489,10 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
 
     config_class = DFNRopeVisionTransformerConfig
 
-    def __init__(self, config) -> None:
+    def __init__(self, config, prefix_name: str = "") -> None:
         super().__init__(config)
         self.spatial_merge_size = config.spatial_merge_size
-
+        self.prefix_name = prefix_name
         self.patch_embed = PatchEmbed(
             patch_size=config.patch_size,
             in_channels=config.in_channels,
@@ -723,10 +725,18 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         mappings = get_tensor_parallel_split_mappings(vision_config.depth)
         return mappings
 
-    def set_state_dict(self, state_dict, *args, **kwargs):
-        """_summary_
-
-        Args:
-            state_dict (_type_): _description_
-        """
-        super().set_state_dict(state_dict, *args, **kwargs)
+    def load_state_dict(self, state_dict):
+        params_dict = dict(self.named_parameters())
+        for param_name, param in params_dict.items():
+            state_dict_key = f"{self.prefix_name}.{param_name}"
+            if state_dict_key not in state_dict:
+                raise ValueError(
+                    f"The key {state_dict_key} does not exist in state_dict. "
+                )
+            tensor = get_tensor(state_dict.pop(state_dict_key))
+            if param.shape != tensor.shape:
+                raise ValueError(
+                    f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}"
+                )
+            else:
+                param.copy_(tensor, False)
