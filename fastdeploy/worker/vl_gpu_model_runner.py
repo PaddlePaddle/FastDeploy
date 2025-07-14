@@ -235,8 +235,6 @@ class GPUVLModelRunner(VLModelRunnerBase):
         fd_config.model_config.think_end_id = tokenizer.get_vocab()["</think>"]
         fd_config.model_config.max_text_id = fd_config.model_config.im_patch_id
         fd_config.model_config.sequence_parallel = False
-        # TODO(YuanRisheng) The moe_k in develop is fixed to 8, need to be changed according to json config
-        fd_config.model_config.moe_k = 8
         self.fd_config = fd_config
         self.model_cfg = self.fd_config.model_config
         self.image_preprocess = self._init_image_preprocess(
