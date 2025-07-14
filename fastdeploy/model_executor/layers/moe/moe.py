@@ -72,8 +72,8 @@ class FusedMoE(nn.Layer):
         self.layer_idx = layer_idx
         self.reduce_results = reduce_results
 
-        self.tp_size = fd_config.parallel_config.tensor_parallel_degree
-        self.ep_size = fd_config.parallel_config.expert_parallel_degree
+        self.tp_size = fd_config.parallel_config.tensor_parallel_size
+        self.ep_size = fd_config.parallel_config.expert_parallel_size
         self.ep_rank = fd_config.parallel_config.expert_parallel_rank
 
         assert (self.tp_size >= 1 and self.ep_size == 1) or \
@@ -81,7 +81,6 @@ class FusedMoE(nn.Layer):
             'MoE only support parallelism on TP or EP dimension.'
 
         self.hidden_size = fd_config.model_config.hidden_size
-        self.moe_config = fd_config.moe_config
         self.num_experts = num_experts
         self.num_local_experts = self.num_experts // self.ep_size
 
@@ -141,7 +140,7 @@ class FusedMoE(nn.Layer):
             shape=gate_weight_shape,
             dtype="float32",
         )
-        if self.moe_config.moe_use_aux_free:
+        if self.model_config.moe_use_aux_free:
             self.gate_correction_bias = self.create_parameter(
                 shape=gate_correction_bias_shape,
                 dtype="float32",

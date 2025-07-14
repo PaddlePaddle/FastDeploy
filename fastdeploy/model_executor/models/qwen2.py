@@ -24,6 +24,7 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig, ModelConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import \
     support_graph_optimization
 from fastdeploy.model_executor.layers.activation import SiluAndMul
@@ -34,7 +35,6 @@ from fastdeploy.model_executor.layers.linear import (
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Qwen2MLP(nn.Layer):
@@ -47,12 +47,12 @@ class Qwen2MLP(nn.Layer):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.gate_up_proj = MergedColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.up_gate_proj",
             input_size=fd_config.model_config.hidden_size,
-            output_size=fd_config.model_config.ffn_hidden_size * 2,
+            output_size=fd_config.model_config.intermediate_size * 2,
             with_bias=False,
             activation=fd_config.model_config.hidden_act,
         )
@@ -60,7 +60,7 @@ class Qwen2MLP(nn.Layer):
         self.down_proj = RowParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.down_proj",
-            input_size=fd_config.model_config.ffn_hidden_size,
+            input_size=fd_config.model_config.intermediate_size,
             output_size=fd_config.model_config.hidden_size,
             with_bias=False,
         )
@@ -227,21 +227,21 @@ class Qwen2Model(nn.Layer):
         """
         super().__init__()
 
-        self.num_layers = fd_config.model_config.num_layers
-        fd_config.model_config.prefix_name = "qwen2"
+        self.num_layers = fd_config.model_config.num_hidden_layers
+        fd_config.model_config.pretrained_config.prefix_name = "qwen2"
 
         self.embeddings = VocabParallelEmbedding(
             fd_config=fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
             params_dtype=paddle.get_default_dtype,
-            prefix=(f"{fd_config.model_config.prefix_name}.embed_tokens"),
+            prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"),
         )
 
         self.layers = nn.LayerList([
             Qwen2DecoderLayer(
                 fd_config=fd_config,
-                prefix=f"{fd_config.model_config.prefix_name}.layers.{i}")
+                prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}")
             for i in range(self.num_layers)
         ])
 
@@ -249,7 +249,7 @@ class Qwen2Model(nn.Layer):
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
-            prefix=f"{fd_config.model_config.prefix_name}.norm",
+            prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
     def load_state_dict(self, state_dict):
@@ -427,6 +427,6 @@ class Qwen2PretrainedModel(PretrainedModel):
 
             return final_actions
 
-        mappings = get_tensor_parallel_split_mappings(config.num_layers)
+        mappings = get_tensor_parallel_split_mappings(config.num_hidden_layers)
 
         return mappings

@@ -29,8 +29,6 @@ from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope_3d
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler
-from fastdeploy.model_executor.models.ernie4_5_vl.configuration import \
-    Ernie4_5_VLMoeConfig
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import \
     ScatterOp
 from fastdeploy.platforms import current_platform
@@ -221,9 +219,9 @@ class GPUVLModelRunner(VLModelRunnerBase):
         fd_config = initialize_fd_config(
             self.args, self.tensor_parallel_degree, self.tensor_parallel_rank
         )
-        fd_config.model_config = Ernie4_5_VLMoeConfig(
-            **fd_config.model_config.__dict__
-        )
+        fd_config.model_config.tensor_parallel_degree=self.tensor_parallel_degree
+        fd_config.model_config.tensor_parallel_rank=self.tensor_parallel_rank
+        fd_config.model_config.moe_group="dummy"
         fd_config.parallel_config.column_cut = False
         vision_config = fd_config.model_config.vision_config
         vision_config.attn_sep = False
@@ -237,8 +235,8 @@ class GPUVLModelRunner(VLModelRunnerBase):
         fd_config.model_config.think_end_id = tokenizer.get_vocab()["</think>"]
         fd_config.model_config.max_text_id = fd_config.model_config.im_patch_id
         fd_config.model_config.sequence_parallel = False
-        # TODO (bukejiyu): Remove the assignment
-        fd_config.moe_config.top_k = 8
+        # TODO(YuanRisheng) The moe_k in develop is fixed to 8, need to be changed according to json config
+        fd_config.model_config.moe_k = 8
         self.fd_config = fd_config
         self.model_cfg = self.fd_config.model_config
         self.image_preprocess = self._init_image_preprocess(
@@ -250,10 +248,10 @@ class GPUVLModelRunner(VLModelRunnerBase):
         self.model = get_model_from_loader(self.fd_config)
         attn_backend_cls = get_attention_backend()
         num_heads = self.fd_config.model_config.num_attention_heads // \
-            self.fd_config.parallel_config.tensor_parallel_degree
+            self.fd_config.parallel_config.tensor_parallel_size
         self.fd_config.model_config.kv_num_heads = int(
             self.fd_config.model_config.num_key_value_heads
-        ) // self.fd_config.parallel_config.tensor_parallel_degree
+        ) // self.fd_config.parallel_config.tensor_parallel_size
         head_dim = self.fd_config.model_config.head_dim
         self.attn_backend = attn_backend_cls(
             self.fd_config,
@@ -305,14 +303,10 @@ class GPUVLModelRunner(VLModelRunnerBase):
         """
         cache_kvs = {}
         total_block_num = self.num_gpu_blocks
-        num_layers = self.model_cfg.get("num_layers",
-                                        None) or self.model_cfg.get(
-                                            "num_hidden_layers", None)
+        num_layers = self.model_cfg.num_hidden_layers
 
-        kv_num_head = self.model_cfg.get(
-            "num_key_value_heads",
-            self.model_cfg.num_attention_heads,
-        )
+        kv_num_head = self.model_cfg.num_key_value_heads if self.model_cfg.num_key_value_heads != -1 else self.model_cfg.num_attention_heads
+
         kv_num_head = kv_num_head // self.tensor_parallel_degree
         self.model_cfg.kv_num_head = kv_num_head
 
@@ -647,7 +641,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
         )
         # sampler & save_output
         sampler_output = self.sampler(logits, self.sampling_metadata)
-        if self.fd_config.parallel_config.tensor_parallel_degree > 1:
+        if self.fd_config.parallel_config.tensor_parallel_size > 1:
             paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
         self.post_process(sampler_output)
 
@@ -740,9 +734,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
         """
         Calculate the size of kvcache for computational theory
         """
-        num_layers = self.model_cfg.get("num_layers",
-                                        None) or self.model_cfg.get(
-                                            "num_hidden_layers", None)
+        num_layers = self.model_cfg.num_hidden_layers
         byte_of_cache = 2
         # support c8 c4
 

@@ -648,7 +648,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                 or self.parallel_config.splitwise_role != "mixed"):
             raise NotImplementedError("Iluvatar does not support yet")
         else:
-            for i in range(self.model_config.num_layers):
+            for i in range(self.model_config.num_hidden_layers):
 
                 cache_kvs["key_caches_{}".format(i)] = paddle.full(
                     shape=kv_cache_shape,
@@ -672,11 +672,11 @@ class IluvatarModelRunner(ModelRunnerBase):
         assert len(self.attn_backends) == 0
 
         # TODO(gongshaotian): Get rank from config
-        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_degree
+        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
         self.model_config.kv_num_heads = max(
             1,
             int(self.model_config.num_key_value_heads) //
-            self.parallel_config.tensor_parallel_degree)
+            self.parallel_config.tensor_parallel_size)
         head_dim = self.model_config.head_dim
 
         # Get the attention backend
@@ -748,14 +748,14 @@ class IluvatarModelRunner(ModelRunnerBase):
                 )
                 sampled_token_ids = self.sampler(logits,
                                                  self.sampling_metadata)
-                if self.parallel_config.tensor_parallel_degree > 1:
+                if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(sampled_token_ids, 0)
             else:
                 self.sampler(logits, self.sampling_metadata,
                              self.parallel_config.max_model_len,
                              self.share_inputs)
                 sampled_token_ids = None
-                if self.parallel_config.tensor_parallel_degree > 1:
+                if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
                         self.share_inputs["accept_tokens"], 0)
                     paddle.distributed.broadcast(
@@ -977,14 +977,14 @@ class IluvatarModelRunner(ModelRunnerBase):
                 self.sampling_metadata,
                 skip_idx_list,
             )
-            if self.parallel_config.tensor_parallel_degree > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(sampled_token_ids, 0)
 
         else:
             self.sampler(logits, self.sampling_metadata,
                          self.parallel_config.max_model_len, self.share_inputs)
             sampled_token_ids = None
-            if self.parallel_config.tensor_parallel_degree > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(
                     self.share_inputs["accept_tokens"], 0)
                 paddle.distributed.broadcast(self.share_inputs["accept_num"],
@@ -1145,11 +1145,11 @@ class IluvatarModelRunner(ModelRunnerBase):
 
         hidden_dim = self.model_config.head_dim * self.model_config.kv_num_heads
         # NOTE(liuzichang): Implement multi-layer MTP architecture in the future
-        num_layers = self.model_config.num_layers + \
+        num_layers = self.model_config.num_hidden_layers + \
             self.speculative_config.num_gpu_block_expand_ratio if \
                 self.speculative_method in [
             "mtp"
-        ] else self.model_config.num_layers
+        ] else self.model_config.num_hidden_layers
         required_memory = (
             byte_of_dtype * 2 *  # k + v
             (self.parallel_config.block_size * hidden_dim) * num_layers)
