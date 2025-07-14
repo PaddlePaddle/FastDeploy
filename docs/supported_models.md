@@ -14,11 +14,11 @@ export FD_MODEL_CACHE=/ssd1/download_models
 
 | Model Name                                  | Context Length | Quantization | Minimum Deployment Resources | Notes                                                                                      |
 | :------------------------------------------ | :------------- | :----------- | :--------------------------- | :----------------------------------------------------------------------------------------- |
-| baidu/ERNIE-4.5-VL-424B-A47B-Paddle         | 32K/128K       | WINT2        | 1*141G GPU VRAM/1T RAM       | Chunked Prefill required for 128K                                                          |
 | baidu/ERNIE-4.5-VL-424B-A47B-Paddle         | 32K/128K       | WINT4        | 4*80G GPU VRAM/1T RAM        | Chunked Prefill required for 128K                                                          |
 | baidu/ERNIE-4.5-VL-424B-A47B-Paddle         | 32K/128K       | WINT8        | 8*80G GPU VRAM/1T RAM        | Chunked Prefill required for 128K                                                          |
 | baidu/ERNIE-4.5-300B-A47B-Paddle            | 32K/128K       | WINT4        | 4*64G GPU VRAM/600G RAM      | Chunked Prefill required for 128K                                                          |
 | baidu/ERNIE-4.5-300B-A47B-Paddle            | 32K/128K       | WINT8        | 8*64G GPU VRAM/600G RAM      | Chunked Prefill required for 128K                                                          |
+| baidu/ERNIE-4.5-300B-A47B-2Bits-Paddle      | 32K/128K       | WINT2        | 1*141G GPU VRAM/600G RAM     | Chunked Prefill required for 128K                                                          |
 | baidu/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle | 32K/128K       | W4A8C8       | 4*64G GPU VRAM/160G RAM      | Fixed 4-GPU setup, Chunked Prefill recommended                                             |
 | baidu/ERNIE-4.5-300B-A47B-FP8-Paddle        | 32K/128K       | FP8          | 8*64G GPU VRAM/600G RAM      | Chunked Prefill recommended, only supports PD Disaggragated Deployment with EP parallelism |
 | baidu/ERNIE-4.5-300B-A47B-Base-Paddle       | 32K/128K       | WINT4        | 4*64G GPU VRAM/600G RAM      | Chunked Prefill recommended                                                                |
