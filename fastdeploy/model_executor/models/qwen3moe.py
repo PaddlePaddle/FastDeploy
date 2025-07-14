@@ -121,7 +121,7 @@ class Qwen3DecoderLayer(nn.Layer):
                                 moe_intermediate_size=fd_config.model_config.
                                 moe_intermediate_size,
                                 num_experts=fd_config.model_config.moe_num_experts,
-                                top_k=fd_config.model_config.num_experts_per_tok,
+                                top_k=fd_config.model_config.top_k,
                                 layer_idx=layer_id,
                                 weight_key_map=weight_key_map)
         else:
