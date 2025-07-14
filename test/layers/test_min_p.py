@@ -68,7 +68,7 @@ def fastdeploy_min_p_sampling():
     return data2, data3
 
 
-def vllm_min_p_sampling():
+def flashinfer_min_p_sampling():
     logits = torch.ones((1, vocab_size), dtype=torch.float32).cuda()
     logits[0][0] = 10
     logits[0][1] = 8
@@ -158,7 +158,7 @@ def main():
     print("Running FastDeploy sampling...")
     data2_fastdeploy, data3_fastdeploy = fastdeploy_min_p_sampling()
     print("Running vLLM (FlashInfer) sampling...")
-    data2_vllm, data3_vllm = vllm_min_p_sampling()
+    data2_vllm, data3_vllm = flashinfer_min_p_sampling()
 
     # Calculate errors
     error_fastdeploy = np.abs(data2_fastdeploy - data3_fastdeploy)
