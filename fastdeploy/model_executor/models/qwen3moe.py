@@ -114,13 +114,13 @@ class Qwen3DecoderLayer(nn.Layer):
             f"{prefix}.mlp.experts.{{}}.down_proj.weight",
         }
 
-        if (fd_config.model_config.num_experts is not None
+        if (fd_config.model_config.moe_num_experts is not None
                 and layer_id >= fd_config.model_config.moe_layer_start_index):
 
             self.mlp = FusedMoE(fd_config,
                                 moe_intermediate_size=fd_config.model_config.
                                 moe_intermediate_size,
-                                num_experts=fd_config.model_config.num_experts,
+                                num_experts=fd_config.model_config.moe_num_experts,
                                 top_k=fd_config.model_config.num_experts_per_tok,
                                 layer_idx=layer_id,
                                 weight_key_map=weight_key_map)
@@ -408,13 +408,13 @@ class Qwen3MoePretrainedModel(PretrainedModel):
             return final_actions
 
         num_experts = 0
-        if isinstance(config.num_experts, list):
-            num_experts = sum(config.num_experts)
-        elif isinstance(config.num_experts, int):
-            num_experts = config.num_experts
+        if isinstance(config.moe_num_experts, list):
+            num_experts = sum(config.moe_num_experts)
+        elif isinstance(config.moe_num_experts, int):
+            num_experts = config.moe_num_experts
         else:
             raise ValueError(
-                f"Not support type of num_experts [{type(config.num_experts)}]"
+                f"Not support type of num_experts [{type(config.moe_num_experts)}]"
             )
 
         mappings = get_tensor_parallel_split_mappings(config.num_hidden_layers,
