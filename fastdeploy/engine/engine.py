@@ -1029,7 +1029,7 @@ class LLMEngine(object):
             f" --max_capture_batch_size {self.cfg.max_capture_batch_size}"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
             f" --load_strategy {self.cfg.model_config.load_strategy}"
-            f" --use_vl {self.cfg.enable_mm}")
+            f" --enable_mm {self.cfg.enable_mm}")
 
 
         worker_append_flag = {

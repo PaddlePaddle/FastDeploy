@@ -123,7 +123,7 @@ class ModelConfig(PretrainedConfig):
         self.tie_word_embeddings = tie_word_embeddings
         self.is_quantized = is_quantized
         self.rms_norm_eps = rms_norm_eps
-        self.use_vl = False
+        self.enable_mm = False
 
 
 @dataclass

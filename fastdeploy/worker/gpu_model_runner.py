@@ -72,7 +72,7 @@ class GPUModelRunner(ModelRunnerBase):
             rank: int,
             local_rank: int):
         super().__init__(fd_config=fd_config, device=device)
-        self.use_vl = self.model_config.use_vl
+        self.enable_mm = self.model_config.enable_mm
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
@@ -85,7 +85,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.guided_backend = get_guided_backend(fd_config=self.fd_config)
 
         # VL model config:
-        if self.use_vl:
+        if self.enable_mm:
             hcg = fleet.get_hybrid_communicate_group()
             self.mp_src_rank = hcg.get_model_parallel_group_src_rank()
             self.mp_group = hcg.get_model_parallel_group()
@@ -262,7 +262,7 @@ class GPUModelRunner(ModelRunnerBase):
                     logger.info(
                         f"prefill_chunk_info: {request.prefill_chunk_info}")
                     token_chunk_size = request.prefill_chunk_info[0]
-                    if self.use_vl:
+                    if self.enable_mm:
                         inputs = self._preprocess_task(token_chunk_size)
                         if inputs.get("images") is not None:
                             self.share_inputs["image_features"] = self.extract_vision_features(
@@ -295,7 +295,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs['seq_lens_encoder'][idx:idx +
                                                         1] = token_chunk_size
                 else:
-                    if self.use_vl:
+                    if self.enable_mm:
                         inputs = self._preprocess_task(request.multimodal_inputs)
                         if inputs.get("images") is not None:
                             self.share_inputs[
@@ -319,7 +319,7 @@ class GPUModelRunner(ModelRunnerBase):
                                                                1] = length
                     self.share_inputs['seq_lens_encoder'][idx:idx + 1] = length
 
-                if self.use_vl:
+                if self.enable_mm:
                     enable_thinking = request.get("enable_thinking", True)
                     enable_thinking = enable_thinking if enable_thinking is not None else True
                     self.share_inputs["enable_thinking"][:] = enable_thinking
@@ -401,7 +401,7 @@ class GPUModelRunner(ModelRunnerBase):
                               expected_decode_len: int):
         """ Set dummy prefill inputs to share_inputs """
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
-        if self.use_vl:
+        if self.enable_mm:
             self.share_inputs["free_list"] = paddle.to_tensor([], dtype="int32")
             self.share_inputs["free_list_len"][0] = 0
         max_dec_len = expected_decode_len + 1
@@ -579,7 +579,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.parallel_config.max_model_len).reshape((1, -1))
 
         # TODO(gongshaotian): move to models
-        if not self.use_vl:
+        if not self.enable_mm:
             self.share_inputs["rope_emb"] = get_rope(
                 rotary_dim=self.model_config.head_dim,
                 position_ids=tmp_position_ids,
@@ -645,7 +645,7 @@ class GPUModelRunner(ModelRunnerBase):
                 fill_value=0,
                 dtype="int32")
 
-        if self.use_vl:
+        if self.enable_mm:
             head_dim = self.model_config.head_dim
             self.share_inputs["rope_emb"] = paddle.full(shape=[
                     max_num_seqs, 2, 1, self.parallel_config.max_model_len, 1, head_dim // 2
@@ -720,7 +720,7 @@ class GPUModelRunner(ModelRunnerBase):
             f"Starting to load model {self.model_config.architectures[0]}")
         time_before_load = time.perf_counter()
         # 1. Load original model
-        if self.use_vl:
+        if self.enable_mm:
             self.load_vl_config_and_image_preprocess()
         self.model = get_model_from_loader(fd_config=self.fd_config)
         # 1.1 Load RL dynamic model
@@ -880,7 +880,7 @@ class GPUModelRunner(ModelRunnerBase):
                                     > 1).sum() > 0)
             self.forward_meta.step_use_cudagraph = is_decode_batch and in_capturing
             self.forward_meta.is_decode_batch = is_decode_batch
-            if self.use_vl:
+            if self.enable_mm:
                 hidden_states = model_output = self.model(self.share_inputs["ids_remove_padding"],
                                                             self.share_inputs["image_features"],
                                                             self.forward_meta)
@@ -962,13 +962,13 @@ class GPUModelRunner(ModelRunnerBase):
                 accept_num=self.share_inputs["accept_num"]
                 if self.speculative_decoding else None,
                 enable_thinking= self.share_inputs["enable_thinking"]
-                if self.use_vl else None,
+                if self.enable_mm else None,
                 think_end_id=self.model_config.think_end_id
-                if self.use_vl else -1,
+                if self.enable_mm else -1,
                 need_think_end=self.share_inputs["need_think_end"]
-                if self.use_vl else None,
+                if self.enable_mm else None,
                 reasoning_index=self.share_inputs["reasoning_index"]
-                if self.use_vl else None)
+                if self.enable_mm else None)
 
             post_process(sampler_output=sampler_output,
                          model_output=model_output_data,
@@ -1011,13 +1011,13 @@ class GPUModelRunner(ModelRunnerBase):
             logger.debug(
                 f"{task.request_id} chunked prefill {task.chunk_idx}/{len(task.prefill_chunk_info)}"
             )
-            if not self.use_vl:
+            if not self.enable_mm:
                 start_idx = sum(task.prefill_chunk_info[:task.chunk_idx])
             if task.chunk_idx == len(task.prefill_chunk_info):
                 self.share_inputs["seq_lens_this_time"][idx:idx + 1] = 1
                 self.share_inputs['seq_lens_encoder'][idx:idx + 1] = 0
                 self.share_inputs["step_idx"][idx:idx + 1] = 1
-                if self.use_vl:
+                if self.enable_mm:
                     self.share_inputs["seq_lens_decoder"][idx:idx +
                                                       1] = task.start_idx
                 else:
@@ -1026,7 +1026,7 @@ class GPUModelRunner(ModelRunnerBase):
                 del self.restore_chunked_prefill_request[task.request_id]
             else:
                 token_chunk_size = task.prefill_chunk_info[task.chunk_idx]
-                if self.use_vl:
+                if self.enable_mm:
                     inputs = self._preprocess_task(task.prefill_chunk_info[task.chunk_idx])
                     if inputs.get("images") is not None:
                         self.share_inputs[
@@ -1142,7 +1142,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_meta.step_use_cudagraph = self.use_cudagraph and is_decode_batch
         self.forward_meta.is_decode_batch = is_decode_batch
 
-        if self.use_vl:
+        if self.enable_mm:
             hidden_states = model_output = self.model(self.share_inputs["ids_remove_padding"],
                                                         self.share_inputs["image_features"],
                                                         self.forward_meta)
@@ -1223,13 +1223,13 @@ class GPUModelRunner(ModelRunnerBase):
             accept_num=self.share_inputs["accept_num"]
             if self.speculative_decoding else None,
             enable_thinking= self.share_inputs["enable_thinking"]
-            if self.use_vl else None,
+            if self.enable_mm else None,
             think_end_id=self.model_config.think_end_id
-            if self.use_vl else -1,
+            if self.enable_mm else -1,
             need_think_end=self.share_inputs["need_think_end"]
-            if self.use_vl else None,
+            if self.enable_mm else None,
             reasoning_index=self.share_inputs["reasoning_index"]
-            if self.use_vl else None)
+            if self.enable_mm else None)
 
         if self.speculative_config.method in ["mtp"] and \
             self.parallel_config.splitwise_role == "prefill":
