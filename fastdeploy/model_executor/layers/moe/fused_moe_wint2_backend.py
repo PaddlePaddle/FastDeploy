@@ -319,10 +319,10 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
             expert_ids,
             num_tokens_post_padded,
             num_valid_tokens,
+            max_possible_num_post_padded,
             # Matrix dimensions
             N=layer.moe_ffn1_weight.shape[-1],
             K=x.shape[-1],
-            max_possible_num_post_padded=max_possible_num_post_padded,
             # The stride variables represent how much to increase the ptr by when
             # moving by 1 element in a particular dimension. E.g. `stride_am` is
             # how much to increase `a_ptr` by to get the element one row down
@@ -377,10 +377,10 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
             expert_ids,
             num_tokens_post_padded,
             num_valid_tokens,
+            max_possible_num_post_padded,
             # Matrix dimensions
             N=layer.moe_ffn2_weight.shape[-1],
             K=intermediate_cache2.shape[-1],
-            max_possible_num_post_padded=max_possible_num_post_padded,
             # The stride variables represent how much to increase the ptr by when
             # moving by 1 element in a particular dimension. E.g. `stride_am` is
             # how much to increase `a_ptr` by to get the element one row down

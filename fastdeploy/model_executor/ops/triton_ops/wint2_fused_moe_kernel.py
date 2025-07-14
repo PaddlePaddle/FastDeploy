@@ -36,9 +36,9 @@ def moe_wint2_ffn_kernel(
     num_tokens_post_padded_ptr,
     num_valid_tokens,
     # Matrix dimensions
+    max_possible_num_post_padded,
     N: tl.constexpr,
     K: tl.constexpr,
-    max_possible_num_post_padded: tl.constexpr,
     # The stride variables represent how much to increase the ptr by when
     # moving by 1 element in a particular dimension. E.g. `stride_am` is
     # how much to increase `a_ptr` by to get the element one row down
