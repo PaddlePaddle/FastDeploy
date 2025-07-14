@@ -33,7 +33,8 @@ from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
-from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+from fastdeploy.model_executor.layers.attention.utils import \
+    init_rank_and_device_id
 
 
 @dataclass
@@ -106,7 +107,7 @@ class AppendAttentionBackend(AttentionBackend):
 
         if fd_config.parallel_config.expert_parallel_rank is None:
             fd_config.parallel_config.expert_parallel_rank = 0
-        
+
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
@@ -134,8 +135,8 @@ class AppendAttentionBackend(AttentionBackend):
             metadata.kv_batch_ids,
             metadata.kv_tile_ids_per_batch,
             metadata.kv_num_blocks,
-            metadata.decoder_batch_ids,
-            metadata.decoder_tile_ids_per_batch,
+            metadata.decoder_batch_ids,  # will copy to buffer
+            metadata.decoder_tile_ids_per_batch, # will copy to buffer
             metadata.decoder_num_blocks,
             metadata.max_len_kv,
             metadata.set_max_lengths,

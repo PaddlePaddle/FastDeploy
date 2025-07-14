@@ -336,15 +336,35 @@ class GraphOptimizationConfig:
         self.batch_size_to_captured_size[
             self.max_capture_size] = self.max_capture_size
 
+    def _set_cudagraph_sizes(self, max_capture_batch_size:int = 8):
+        """
+        Calculate a series of candidate capture batch sizes,
+        and then extract a portion of them as the capture list for the CUDA graph based on user input.
+        """
+        # Batch Size [1, 2, 4, 8, 16, ... 120, 128]
+        draft_capture_sizes = [1, 2, 4] + [8 * i for i in range(1, 17)]
+        # Batch Size [128, 144, ... 240, 256]
+        draft_capture_sizes += [16 * i for i in range(9, 17)]
+        # Batch Size [256, 288, ... 992, 1024]
+        draft_capture_sizes += [32 * i for i in range(17, 33)]
+        draft_capture_sizes = sorted(draft_capture_sizes)
+
+        capture_sizes = [size for size in draft_capture_sizes if size < max_capture_batch_size]
+        capture_sizes.append(max_capture_batch_size)
+
+        return capture_sizes
+
     def __init__(self,
-                 enable_static_graph_inference: bool = False,
-                 use_cudagraph: bool = False,
-                 max_capture_batch_size: int = 64):
-        """ """
-        capture_size = [i for i in range(1, max_capture_batch_size + 1)]
-        self.init_with_cudagrpah_size(cudagraph_capture_sizes=capture_size)
+            enable_static_graph_inference: bool = False,
+            use_cudagraph: bool = False,
+            max_capture_batch_size: int = 8
+        ):
+
         self.use_cudagraph = use_cudagraph
-        #TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
+        capture_sizes = self._set_cudagraph_sizes(max_capture_batch_size=max_capture_batch_size)
+        self.init_with_cudagrpah_size(cudagraph_capture_sizes=capture_sizes)
+
+        #TODO(wangmingkai02): Change graph_opt_level=2 when using static mode with cinn
         if enable_static_graph_inference:
             self.graph_opt_level = 1
 

@@ -715,10 +715,6 @@ class IluvatarModelRunner(ModelRunnerBase):
             # 3. Prepare lora
 
             # 4. Run model
-            is_decode_batch = not ((self.share_inputs["seq_lens_this_time"]
-                                    > 1).sum() > 0)
-            self.forward_meta.step_use_cudagraph = is_decode_batch and in_capturing
-            self.forward_meta.is_decode_batch = is_decode_batch
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta)
@@ -939,11 +935,6 @@ class IluvatarModelRunner(ModelRunnerBase):
         # 2. Padding inputs for cuda grph
 
         # 3. Execute model
-        # TODO(gongshaotian): Use seq_lens_encoder to set is_decode_batch
-        is_decode_batch = not ((self.share_inputs["seq_lens_this_time"]
-                                > 1).sum() > 0)
-        self.forward_meta.step_use_cudagraph = self.use_cudagraph and is_decode_batch
-        self.forward_meta.is_decode_batch = is_decode_batch
         model_output = self.model(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             forward_meta=self.forward_meta)
