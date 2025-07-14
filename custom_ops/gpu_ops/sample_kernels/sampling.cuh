@@ -628,9 +628,6 @@ __global__ void MinPSamplingFromProbKernel(DType* probs, IdType* output,
   }
   sampled_id = temp_storage.sampled_id;
   if (sampled_id == d) {
-    // NOTE(Zihao): this would happen when u is very close to 1
-    // and the sum of probabilities is smaller than u
-    // In this case, we use the last valid index as the sampled id
     sampled_id = temp_storage.last_valid_id;
   }
   output[bx] = sampled_id;
