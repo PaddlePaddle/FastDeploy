@@ -266,18 +266,6 @@ void SpeculateVerify(
   seed++;
   offset++;
 
-  auto err = cudaDeviceSynchronize();
-  if (err != 0) {
-    printf("err %d\n", err);
-  }
-
-  err = cudaGetLastError();
-
-  if (err != 0) {
-    printf("err %d\n", err);
-  }
-
-  //   printf("inited curand\n");
   bool use_topk = false;
   char *env_var = getenv("SPECULATE_VERIFY_USE_TOPK");
   if (env_var) {
