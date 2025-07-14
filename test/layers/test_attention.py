@@ -21,7 +21,7 @@ import paddle
 
 from fastdeploy.model_executor.layers.attention import (
     Attention, PaddleNativeAttnBackend)
-from fastdeploy.worker.forward_meta import ForwardMeta, ForwardMode
+from fastdeploy.model_executor.forward_meta import ForwardMeta, ForwardMode
 
 
 class MockModelRunner:

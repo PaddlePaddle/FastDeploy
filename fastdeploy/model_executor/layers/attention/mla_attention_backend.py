@@ -35,15 +35,13 @@ if current_platform.is_cuda() and not current_platform.is_dcu():
                                                    prefill_mla_write_cache)
 
 if TYPE_CHECKING:
-    from paddle._typing.dtype_like import _DTypeLiteral
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
-from fastdeploy.model_executor.layers.attention.utils import \
-    init_rank_and_device_id
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
 
 
 def yarn_get_mscale(scale=1, mscale=1):
@@ -71,7 +69,7 @@ class MLAAttentionMetadata(AttentionMetadata):
     decoder_tile_ids_per_batch: paddle.Tensor = None
     decoder_num_blocks: paddle.Tensor = None
 
-    _dtype: _DTypeLiteral = paddle.bfloat16
+    _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768
     max_partition_size: int = 32768
     block_tables: Optional[paddle.Tensor] = None

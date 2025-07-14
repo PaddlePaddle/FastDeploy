@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 import paddle
 
@@ -35,7 +35,8 @@ from fastdeploy.model_executor.layers.attention.ops import (
     get_block_shape_and_split_kv_block, gqa_rope_write_cache,
     init_signal_layerwise, open_shm_and_get_meta_signal, pre_cache_len_concat)
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
-from fastdeploy.worker.forward_meta import ForwardMeta
+if TYPE_CHECKING:
+    from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 @dataclass

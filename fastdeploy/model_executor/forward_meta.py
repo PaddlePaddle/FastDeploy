@@ -18,11 +18,10 @@ import logging
 from dataclasses import dataclass
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Optional
+from fastdeploy.model_executor.layers.attention import AttentionBackend
 
 import paddle
-
-if TYPE_CHECKING:
-    from fastdeploy.model_executor.layers.attention import AttentionBackend
+    
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +68,7 @@ class ForwardMeta():
     is_decode_batch: bool = False
 
     # Attention backend object
-    attn_backend: 'AttentionBackend' = None
+    attn_backend: AttentionBackend = None
     # Forward mode used during attention
     forward_mode: ForwardMode = ForwardMode.MIXED
     # Attention mask
@@ -100,7 +99,7 @@ class ForwardMeta():
     # Block tables
     block_tables: Optional[paddle.Tensor] = None
     # KV caches
-    caches: Optional[paddle.Tensor] = None
+    caches: Optional[list[paddle.Tensor]] = None
 
     def clear_caches(self):
         """ Safely clean up the caches """

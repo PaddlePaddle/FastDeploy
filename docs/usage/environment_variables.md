@@ -52,7 +52,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ATTENTION_BACKEND":
     lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
 
-    # Sampling class ("base", "air", or "rejection")
+    # Sampling class ("base", "base_non_truncated", "air", or "rejection")
     "FD_SAMPLING_CLASS":
     lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
 

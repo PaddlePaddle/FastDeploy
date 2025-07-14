@@ -34,7 +34,7 @@ from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 from fastdeploy.model_executor.models.qwen2 import Qwen2DecoderLayer, Qwen2MLP
-from fastdeploy.worker.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Qwen3MLP(Qwen2MLP):
@@ -54,39 +54,41 @@ class Qwen3Attention(nn.Layer):
         super().__init__()
 
         self.fd_config = fd_config
-
         self.head_dim = fd_config.model_config.head_dim
-        nranks = fd_config.parallel_config.tensor_parallel_degree
-        self.q_size = fd_config.model_config.num_attention_heads * self.head_dim // nranks
-        self.kv_size = fd_config.model_config.num_key_value_heads * self.head_dim // nranks
 
-        self.qkv_proj = QKVParallelLinear(fd_config=fd_config,
+        self.qkv_proj = QKVParallelLinear(fd_config,
                                           prefix=f"{prefix}.qkv_proj",
                                           with_bias=False)
+        nranks = fd_config.parallel_config.tensor_parallel_degree
 
         self.o_proj = RowParallelLinear(
-            fd_config=fd_config,
+            fd_config,
             prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.head_dim *
             fd_config.model_config.num_attention_heads,
             output_size=fd_config.model_config.hidden_size,
         )
 
-        self.attn = Attention(fd_config=fd_config,
+        self.attn = Attention(fd_config,
                               layer_id=layer_id,
                               prefix=prefix,
                               use_neox_rotary_style=True)
 
-        self.q_norm = RMSNorm(fd_config=fd_config,
-                              hidden_size=fd_config.model_config.head_dim,
-                              eps=1e-6,
+        self.q_norm = RMSNorm(fd_config,
+                              hidden_size=self.head_dim,
+                              eps=fd_config.model_config.rms_norm_eps,
                               prefix=f"{prefix}.q_norm",
                               begin_norm_axis=2)
-        self.k_norm = RMSNorm(fd_config=fd_config,
-                              hidden_size=fd_config.model_config.head_dim,
-                              eps=1e-6,
+        self.k_norm = RMSNorm(fd_config,
+                              hidden_size=self.head_dim,
+                              eps=fd_config.model_config.rms_norm_eps,
                               prefix=f"{prefix}.k_norm",
                               begin_norm_axis=2)
+
+        nranks = fd_config.parallel_config.tensor_parallel_degree
+        num_kv_heads_replicas = max(1, nranks // fd_config.model_config.num_key_value_heads)
+        self.q_size = fd_config.model_config.num_attention_heads * self.head_dim // nranks
+        self.kv_size = fd_config.model_config.num_key_value_heads * self.head_dim * num_kv_heads_replicas // nranks
 
     def load_state_dict(self, state_dict):
         """
@@ -104,7 +106,6 @@ class Qwen3Attention(nn.Layer):
         """
         """
         qkv_out = self.qkv_proj(hidden_states)
-
         # origin_qkv_out = qkv_out
         q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size],
                                 axis=-1)
@@ -183,7 +184,7 @@ class Qwen3Model(nn.Layer):
         self.norm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-6,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{fd_config.model_config.prefix_name}.norm",
         )
 
