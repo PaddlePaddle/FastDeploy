@@ -31,6 +31,7 @@ from fastdeploy.config import (DeviceConfig, FDConfig, GraphOptimizationConfig,
                                SpeculativeConfig)
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.input.mm_processor import DataProcessor
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope_3d
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
@@ -46,7 +47,6 @@ from fastdeploy.model_executor.models.ernie4_5_vl.dfnrope.modeling import \
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import (
     ScatterOp, VariableResolutionResamplerModel)
 from fastdeploy.platforms import current_platform
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.worker.output import SamplerOutput
 from fastdeploy.worker.utils import check_safetensors_model
 from fastdeploy.worker.vl_model_runner_base import VLModelRunnerBase
@@ -679,6 +679,8 @@ class GPUVLModelRunner(VLModelRunnerBase):
                 get_numeric_value(task, "temperature", 0.2),
                 "top_k":
                 get_numeric_value(task, "top_k", 0),
+                "min_p":
+                get_numeric_value(task,"min_p",0.0),
                 "penalty_score":
                 get_numeric_value(task, "repetition_penalty", 1.0),
                 "frequency_score":

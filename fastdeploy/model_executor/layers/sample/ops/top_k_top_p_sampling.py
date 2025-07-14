@@ -154,3 +154,18 @@ def rejection_top_p_sampling(
     except ImportError:
         raise RuntimeError("Cannot import rejection_top_p_sampling op.")
     return ids
+
+def min_p_sampling(
+    x:paddle.tensor,
+    min_p:paddle.Tensor,
+    seed:int=-1
+)->paddle.Tensor:
+    """
+    min_p_sampling
+    """
+    try:
+        from fastdeploy.model_executor.ops.gpu import min_p_sampling
+        ids=min_p_sampling(x,min_p,seed)
+    except ImportError:
+        raise RuntimeError("Cannot import min_p_sampling op.")
+    return ids
