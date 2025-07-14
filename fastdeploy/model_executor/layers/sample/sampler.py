@@ -267,8 +267,10 @@ class Sampler(nn.Layer):
 
         probs = F.softmax(logits)
 
-        if hasattr(sampling_metadata,"min_p") and sampling_metadata.min_p > 0.0:
-            probs = min_p_sampling(probs, sampling_metadata.min_p)
+        if hasattr(sampling_metadata,"min_p") and sampling_metadata.min_p is not None:
+            min_p_value = sampling_metadata.min_p[0].item()
+            if min_p_value > 0.0:
+                probs = min_p_sampling(probs, sampling_metadata.min_p)
 
         _, next_tokens = top_k_top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
 
