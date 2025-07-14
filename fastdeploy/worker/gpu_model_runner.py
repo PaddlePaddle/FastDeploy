@@ -245,7 +245,7 @@ class GPUModelRunner(ModelRunnerBase):
                 request.eos_token_ids.append(request.eos_token_ids[0])
             self.share_inputs["eos_token_id"][:] = np.array(
                 request.eos_token_ids, dtype="int64").reshape(-1, 1)
-            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 1.0)
+            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 0.7)
             self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k", 0)
             self.share_inputs["min_p"][idx:idx + 1] = request.get("min_p",0.0)
             self.share_inputs["temperature"][idx:idx + 1] = request.get(
@@ -260,7 +260,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["min_dec_len"][idx:idx + 1] = request.get(
                 "min_tokens", 1)
             self.share_inputs["max_dec_len"][idx:idx + 1] = request.get(
-                "max_tokens", self.model_config.max_length)
+                "max_tokens", self.model_config.max_model_len)
             self.share_inputs["stop_flags"][idx:idx + 1] = False
 
             self.share_inputs["first_token_ids"][
@@ -379,11 +379,11 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["min_dec_len"] = paddle.full(
             [max_num_seqs, 1], self.model_config.min_length, dtype='int64')
         self.share_inputs["max_dec_len"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_length, dtype='int64')
+            [max_num_seqs, 1], self.model_config.max_model_len, dtype='int64')
         self.share_inputs["min_length"] = paddle.full(
             [max_num_seqs, 1], self.model_config.min_length, dtype='int64')
         self.share_inputs["max_length"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_length, dtype='int64')
+            [max_num_seqs, 1], self.model_config.max_model_len, dtype='int64')
         self.share_inputs["seq_lens_this_time"] = paddle.full(max_num_seqs,
                                                               0,
                                                               dtype='int32')
@@ -671,13 +671,13 @@ class GPUModelRunner(ModelRunnerBase):
         # Get kv cache shape
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
             max_num_blocks=max_block_num)
-        local_rank = self.local_rank % self.parallel_config.tensor_parallel_degree
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
         if not self.parallel_config.do_profile and (
                 self.parallel_config.enable_prefix_caching \
                 or self.parallel_config.splitwise_role != "mixed"):
             cache_kvs_list = []
-            for i in range(self.model_config.num_layers):
+            for i in range(self.model_config.num_hidden_layers):
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
@@ -692,7 +692,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["caches"] = cache_kvs_list
 
         else:
-            for i in range(self.model_config.num_layers):
+            for i in range(self.model_config.num_hidden_layers):
 
                 cache_kvs["key_caches_{}".format(i)] = paddle.full(
                     shape=kv_cache_shape,
@@ -715,10 +715,10 @@ class GPUModelRunner(ModelRunnerBase):
         """
         assert len(self.attn_backends) == 0
 
-        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_degree
-        self.model_config.kv_num_heads = int(
+        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
+        self.model_config.kv_num_heads = max(1, int(
             self.model_config.num_key_value_heads
-        ) // self.parallel_config.tensor_parallel_degree
+        ) // self.parallel_config.tensor_parallel_size)
         head_dim = self.model_config.head_dim
 
         # Get the attention backend
@@ -792,14 +792,14 @@ class GPUModelRunner(ModelRunnerBase):
                 )
                 sampler_output = self.sampler(logits,
                                                  self.sampling_metadata)
-                if self.parallel_config.tensor_parallel_degree > 1:
+                if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
             else:
                 self.sampler(logits, self.sampling_metadata,
                              self.parallel_config.max_model_len,
                              self.share_inputs)
                 sampler_output = None
-                if self.parallel_config.tensor_parallel_degree > 1:
+                if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
                         self.share_inputs["accept_tokens"], 0)
                     paddle.distributed.broadcast(
@@ -1026,14 +1026,14 @@ class GPUModelRunner(ModelRunnerBase):
                 self.sampling_metadata,
                 skip_idx_list,
             )
-            if self.parallel_config.tensor_parallel_degree > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
 
         else:
             self.sampler(logits, self.sampling_metadata,
                          self.parallel_config.max_model_len, self.share_inputs)
             sampler_output = None
-            if self.parallel_config.tensor_parallel_degree > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(
                     self.share_inputs["accept_tokens"], 0)
                 paddle.distributed.broadcast(self.share_inputs["accept_num"],
@@ -1211,11 +1211,11 @@ class GPUModelRunner(ModelRunnerBase):
 
         hidden_dim = self.model_config.head_dim * self.model_config.kv_num_heads
         # NOTE(liuzichang): Implement multi-layer MTP architecture in the future
-        num_layers = self.model_config.num_layers + \
+        num_layers = self.model_config.num_hidden_layers + \
             self.speculative_config.num_gpu_block_expand_ratio if \
                 self.speculative_method in [
             "mtp"
-        ] else self.model_config.num_layers
+        ] else self.model_config.num_hidden_layers
         required_memory = (
             byte_of_dtype * 2 *  # k + v
             (self.parallel_config.block_size * hidden_dim) * num_layers)

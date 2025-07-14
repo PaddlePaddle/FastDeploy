@@ -212,7 +212,8 @@ class OpenAIServingChat:
                         sampled_token_ranks=raw_top_logprobs[2],
                     )
                     logprobs_res = self.build_logprobs_response(
-                        logprobs=top_logprobs,
+                        request_logprobs=request.logprobs,
+                        response_logprobs=top_logprobs,
                         request_top_logprobs=request.top_logprobs,
                     )
 
@@ -229,7 +230,9 @@ class OpenAIServingChat:
                 if res["finished"]:
                     num_choices -= 1
                     work_process_metrics.e2e_request_latency.observe(time.time() - res["metrics"]["request_start_time"])
-                    if request.max_tokens is None or previous_num_tokens != request.max_tokens:
+                    has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
+                    max_tokens = request.max_completion_tokens or request.max_tokens
+                    if has_no_token_limit or previous_num_tokens != max_tokens:
                         choice.finish_reason = "stop"
                         if self.engine_client.reasoning_parser == "ernie_x1" and \
                                 output.get("finish_reason", "") == "tool_calls":
@@ -337,7 +340,8 @@ class OpenAIServingChat:
                         sampled_token_ranks=raw_top_logprobs[2],
                     )
                     logprobs_res = self.build_logprobs_response(
-                        logprobs=top_logprobs,
+                        request_logprobs=request.logprobs,
+                        response_logprobs=top_logprobs,
                         request_top_logprobs=request.top_logprobs,
                     )
                     if logprobs_res and logprobs_res.content is not None:
@@ -369,7 +373,9 @@ class OpenAIServingChat:
             logprobs=logprobs_full_res,
             finish_reason=None
         )
-        if request.max_tokens is None or previous_num_tokens != request.max_tokens:
+        has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
+        max_tokens = request.max_completion_tokens or request.max_tokens
+        if has_no_token_limit or previous_num_tokens != max_tokens:
             choice.finish_reason = "stop"
             if self.engine_client.reasoning_parser == "ernie_x1" and \
                     output.get("finish_reason", "") == "tool_calls":
@@ -400,7 +406,8 @@ class OpenAIServingChat:
 
     def build_logprobs_response(
             self,
-            logprobs: Optional[LogprobsLists],
+            request_logprobs: bool,
+            response_logprobs: Optional[LogprobsLists],
             request_top_logprobs: int,
     ) -> Optional[LogProbs]:
         """
@@ -410,17 +417,23 @@ class OpenAIServingChat:
 
         # Parameter validation
         if (
-                logprobs is None
+                response_logprobs is None
+                or not request_logprobs
                 or request_top_logprobs is None
-                or request_top_logprobs <= 0
-                or len(logprobs.logprob_token_ids) == 0
+                or request_top_logprobs < 0
         ):
             return None
 
         try:
             # The top-k candidates for the current token
-            topk_token_ids = logprobs.logprob_token_ids[0][:request_top_logprobs + 1]
-            topk_logprobs = logprobs.logprobs[0][:request_top_logprobs + 1]
+            topk_token_ids = []
+            topk_logprobs = []
+
+            if response_logprobs.logprob_token_ids and len(response_logprobs.logprob_token_ids) > 0:
+                topk_token_ids = response_logprobs.logprob_token_ids[0][:request_top_logprobs + 1]
+
+            if response_logprobs.logprobs and len(response_logprobs.logprobs) > 0:
+                topk_logprobs = response_logprobs.logprobs[0][:request_top_logprobs + 1]
 
             # Construct the candidate token structure (LogProbEntry) of topk
             top_logprob_entries: List[LogProbEntry] = []

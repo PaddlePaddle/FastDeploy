@@ -96,7 +96,7 @@ class FlashAttentionBackend(AttentionBackend):
         self.head_dim = fd_config.model_config.head_dim
         self.hidden_size = fd_config.model_config.hidden_size
         self.block_size = fd_config.parallel_config.block_size
-        self.num_layers: int = fd_config.model_config.num_layers
+        self.num_layers: int = fd_config.model_config.num_hidden_layers
 
         self.speculative_method = fd_config.speculative_config.method
         self.use_speculate = self.speculative_method is not None

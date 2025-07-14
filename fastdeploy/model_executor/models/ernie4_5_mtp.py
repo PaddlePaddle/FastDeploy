@@ -25,12 +25,12 @@ from paddle import nn
 from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig, ModelConfig
+from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.mtp_linear import ParallelEHProjection
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_DecoderLayer
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Ernie4_5_MTPPretrainedModel(PretrainedModel):
@@ -47,7 +47,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
         return None
 
     @classmethod
-    def _get_tensor_parallel_mappings(cls, config: ModelConfig, is_split=True):
+    def _get_tensor_parallel_mappings(cls, config, is_split=True):
         """
         get_tensor_parallel_mappings
         """
@@ -237,7 +237,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
 
         moe_num_experts = 0
         mappings = get_tensor_parallel_split_mappings(
-            config.num_layers,
+            config.num_hidden_layers,
             moe_num_experts,
             config.moe_layer_start_index,
         )
@@ -262,13 +262,13 @@ class Ernie4_5_MTPModel(nn.Layer):
         """
         super().__init__()
 
-        self.num_layers = fd_config.model_config.num_layers
+        self.num_layers = fd_config.model_config.num_hidden_layers
         self.embeddings = fd_config.speculative_config.sharing_model.model.embeddings
 
         self.hidden_layers = nn.LayerList([
             Ernie4_5_DecoderLayer(
                 fd_config=fd_config,
-                prefix=f"{fd_config.model_config.prefix_name}.{i}")
+                prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.{i}")
             for i in range(self.num_layers)
         ])
 
@@ -398,8 +398,8 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
             shape=[0, self.fd_config.model_config.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
-        for i in range(self.fd_config.moe_config.moe_layer_start_index,
-                       self.fd_config.model_config.num_layers):
+        for i in range(self.fd_config.model_config.moe_layer_start_index,
+                       self.fd_config.model_config.num_hidden_layers):
             self.model.hidden_layers[i].mlp.fused_moe(fake_hidden_states)
 
     def forward(

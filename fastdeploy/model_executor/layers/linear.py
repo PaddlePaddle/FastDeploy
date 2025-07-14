@@ -266,7 +266,7 @@ class ColumnParallelLinear(LinearBase):
                          with_bias=with_bias,
                          add_bias=add_bias,
                          skip_quant=skip_quant)
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.input_size = input_size
         self.output_size = divide(
             output_size,
@@ -348,7 +348,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         """
         self.activation = activation
         self.hidden_size = fd_config.model_config.hidden_size
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
 
         super().__init__(fd_config=fd_config,
                          prefix=prefix,
@@ -410,7 +410,7 @@ class QKVParallelLinear(ColumnParallelLinear):
         self.kv_num_heads = fd_config.model_config.num_key_value_heads
         self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.num_heads_per_rank = divide(self.num_heads, self.nranks)
         if self.kv_num_heads < self.nranks and self.nranks % self.kv_num_heads == 0:
             self.kv_num_heads_per_rank = 1
@@ -443,6 +443,13 @@ class QKVParallelLinear(ColumnParallelLinear):
             q_tensor = get_tensor(state_dict.pop(q_weight_key))
             k_tensor = get_tensor(state_dict.pop(k_weight_key))
             v_tensor = get_tensor(state_dict.pop(v_weight_key))
+            
+            if self.kv_num_heads < self.nranks:
+                sharedkv_index = (self.fd_config.parallel_config.tensor_parallel_rank * self.kv_num_heads) // self.nranks
+                sharedkv_start = sharedkv_index * self.head_dim
+                sharedkv_end = sharedkv_start + self.head_dim
+                k_tensor = k_tensor[ : , sharedkv_start : sharedkv_end]
+                v_tensor = v_tensor[ : , sharedkv_start : sharedkv_end]
             weight_tensor = paddle.concat([q_tensor, k_tensor, v_tensor],
                                           axis=-1).transpose([1, 0])
             weight_tensor = weight_tensor.reshape([
@@ -538,7 +545,7 @@ class RowParallelLinear(LinearBase):
                          skip_quant=skip_quant)
         self.fd_config = fd_config
         self.skip_quant = False
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
         self.num_heads = fd_config.model_config.num_attention_heads // self.nranks
@@ -631,7 +638,7 @@ class KVBatchLinear(LinearBase):
             with_bias (bool): Whether to include bias or not. Defaults to False.
             skip_quant (bool): Whether to skip quantization. Defaults to False.
         """
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.kv_lora_rank = kv_lora_rank
         self.num_attention_heads = num_attention_heads
         self.qk_nope_head_dim = qk_nope_head_dim

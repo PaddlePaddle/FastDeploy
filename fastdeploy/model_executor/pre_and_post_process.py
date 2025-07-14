@@ -101,6 +101,8 @@ def pre_process(
             seq_lens_encoder,
             seq_lens_decoder,
         )
+        if isinstance(seq_lens_output, list):
+            seq_lens_output = seq_lens_output[0]
         output_token_num = paddle.sum(seq_lens_output)
         output_cum_offsets_tmp = paddle.cumsum(max_len - seq_lens_output)
         output_padding_offset, output_cum_offsets = speculate_get_output_padding_offset(
@@ -182,7 +184,7 @@ def post_process_normal(sampler_output: SamplerOutput,
             )
 
 
-def post_process_specualate(model_output, skip_save_output: bool = False):
+def post_process_specualate(model_output, save_each_rank: bool = False, skip_save_output: bool = False):
     """"""
     speculate_update_v3(
         model_output.seq_lens_encoder,
@@ -204,7 +206,7 @@ def post_process_specualate(model_output, skip_save_output: bool = False):
             model_output.accept_num,
             model_output.not_need_stop,
             model_output.mp_rank,
-            False,
+            save_each_rank,
         )
 
     speculate_clear_accept_nums(model_output.accept_num,
@@ -231,7 +233,7 @@ def post_process(sampler_output: SamplerOutput,
                  skip_save_output: bool = False) -> None:
     """ Post-processing steps after completing a single token generation. """
     if speculative_decoding:
-        post_process_specualate(model_output, skip_save_output)
+        post_process_specualate(model_output, save_each_rank, skip_save_output)
     else:
         post_process_normal(sampler_output, model_output, save_each_rank,
                             skip_save_output)
