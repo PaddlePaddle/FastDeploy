@@ -31,6 +31,7 @@ from fastdeploy.config import (DecodingConfig, DeviceConfig, FDConfig,
                                SpeculativeConfig)
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.input.mm_processor import DataProcessor
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope_3d
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
@@ -44,7 +45,6 @@ from fastdeploy.model_executor.models.ernie4_5_vl.dfnrope.modeling import \
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import (
     ScatterOp, VariableResolutionResamplerModel)
 from fastdeploy.platforms import current_platform
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.worker.output import SamplerOutput
 from fastdeploy.worker.utils import check_safetensors_model
 from fastdeploy.worker.vl_model_runner_base import VLModelRunnerBase
@@ -1156,6 +1156,9 @@ def build_stream_line_model(
             "No quantization config found and use original weight and act dtype."
         )
     logger.info("============================================")
+
+    # TODO(YuanRisheng) The moe_k in develop is fixed to 8, need to be changed according to json config
+    model_config.moe_k = 8
 
     fd_config = FDConfig(
         model_config=model_config,
