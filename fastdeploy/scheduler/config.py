@@ -110,7 +110,7 @@ class GlobalSchedulerConfig:
                  ttl: int = 900,
                  min_load_score: float = 3,
                  max_model_len: int = 8192,
-                 load_shrads_num: int = 1,
+                 load_shards_num: int = 1,
                  enable_chunked_prefill: bool = False,
                  max_num_partial_prefills: int = 1,
                  max_long_partial_prefills: int = 1,
@@ -129,7 +129,7 @@ class GlobalSchedulerConfig:
             ttl: Time-to-live in seconds for Redis keys (default 900s)
             min_load_score: Minimum load score for task assignment (default 3)
             max_model_len: Maximum model context length in tokens
-            load_shrads_num: Number of load balancing shards
+            load_shards_num: Number of load balancing shards
             enable_chunked_prefill: Whether to enable chunked prefill processing
             max_num_partial_prefills: Max partial prefill operations allowed
             max_long_partial_prefills: Max long-running partial prefill ops
@@ -147,7 +147,7 @@ class GlobalSchedulerConfig:
         self.topic = topic
         self.ttl = ttl
         self.min_load_score = min_load_score
-        self.load_shrads_num = load_shrads_num
+        self.load_shards_num = load_shards_num
 
         self.max_model_len = max_model_len
         self.enable_chunked_prefill = enable_chunked_prefill
@@ -169,8 +169,8 @@ class GlobalSchedulerConfig:
             raise ValueError("ttl should be greater than 60")
         if self.min_load_score < 1:
             raise ValueError("min_load_score should be greater than 0")
-        if self.load_shrads_num < 1:
-            raise ValueError("load_shrads_num should be greater than 0")
+        if self.load_shards_num < 1:
+            raise ValueError("load_shards_num should be greater than 0")
 
         r = redis.Redis(self.host, self.port, self.db, self.password)
         try:
@@ -262,7 +262,7 @@ class SchedulerConfig:
                                    topic=self.config.topic,
                                    ttl=self.config.ttl,
                                    min_load_score=self.config.min_load_score,
-                                   load_shrads_num=self.config.load_shrads_num,
+                                   load_shards_num=self.config.load_shards_num,
                                    enable_chunked_prefill=self.config.enable_chunked_prefill,
                                    max_num_partial_prefills=self.config.max_num_partial_prefills,
                                    max_long_partial_prefills=self.config.max_long_partial_prefills,
