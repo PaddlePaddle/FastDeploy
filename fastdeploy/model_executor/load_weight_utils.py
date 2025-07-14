@@ -250,7 +250,8 @@ def load_composite_checkpoint(
     # 2. Tensor Parallel (TP)
     # 3. Pre-sharded (pre-split)
     """
-    if fd_config.parallel_config.use_ep:
+    if fd_config.parallel_config.use_ep and \
+        fd_config.speculative_config.model_type != "mtp":
         state_dict = load_ep_checkpoint(model_path,
                                         fd_config.model_config,
                                         return_numpy=True)
