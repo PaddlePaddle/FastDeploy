@@ -47,9 +47,6 @@ from fastdeploy.platforms import current_platform
 if not current_platform.is_dcu():
     from fastdeploy.spec_decode import MTPProposer, NgramProposer
 
-# VL use
-import paddle.distributed.fleet as fleet
-
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.input.mm_processor import DataProcessor
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -86,17 +83,14 @@ class GPUModelRunner(ModelRunnerBase):
 
         # VL model config:
         if self.enable_mm:
-            hcg = fleet.get_hybrid_communicate_group()
-            self.mp_src_rank = hcg.get_model_parallel_group_src_rank()
-            self.mp_group = hcg.get_model_parallel_group()
             model_path = os.path.dirname(self.parallel_config.model_name_or_path)
             self.is_safetensors_model = check_safetensors_model(
                 self.parallel_config.model_name_or_path)
             if not self.is_safetensors_model:
-                self.tokenizer = self.image_preprocessor = model_path
+                self.tokenizer_path = self.image_preprocessor_path = model_path
             else:
-                self.tokenizer = self.parallel_config.model_name_or_path
-                self.image_preprocessor = self.parallel_config.model_name_or_path
+                self.tokenizer_path = self.parallel_config.model_name_or_path
+                self.image_preprocessor_path = self.parallel_config.model_name_or_path
             self.vision_model_name_or_path = os.path.join(
                 model_path, "DFNRopeVisionTransformer")
 
@@ -263,7 +257,7 @@ class GPUModelRunner(ModelRunnerBase):
                         f"prefill_chunk_info: {request.prefill_chunk_info}")
                     token_chunk_size = request.prefill_chunk_info[0]
                     if self.enable_mm:
-                        inputs = self._preprocess_task(token_chunk_size)
+                        inputs = self._preprocess_mm_task(token_chunk_size)
                         if inputs.get("images") is not None:
                             self.share_inputs["image_features"] = self.extract_vision_features(
                                 inputs)
@@ -296,7 +290,7 @@ class GPUModelRunner(ModelRunnerBase):
                                                         1] = token_chunk_size
                 else:
                     if self.enable_mm:
-                        inputs = self._preprocess_task(request.multimodal_inputs)
+                        inputs = self._preprocess_mm_task(request.multimodal_inputs)
                         if inputs.get("images") is not None:
                             self.share_inputs[
                                 "image_features"] = self.extract_vision_features(
@@ -720,7 +714,7 @@ class GPUModelRunner(ModelRunnerBase):
         time_before_load = time.perf_counter()
         # 1. Load original model
         if self.enable_mm:
-            self.load_vl_config_and_image_preprocess()
+            self.load_mm_config_and_image_preprocess()
         self.model = get_model_from_loader(fd_config=self.fd_config)
         # 1.1 Load RL dynamic model
         if self.fd_config.load_config.dynamic_load_weight:
@@ -1026,7 +1020,7 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 token_chunk_size = task.prefill_chunk_info[task.chunk_idx]
                 if self.enable_mm:
-                    inputs = self._preprocess_task(task.prefill_chunk_info[task.chunk_idx])
+                    inputs = self._preprocess_mm_task(task.prefill_chunk_info[task.chunk_idx])
                     if inputs.get("images") is not None:
                         self.share_inputs[
                             "image_features"] = self.extract_vision_features(
@@ -1408,8 +1402,8 @@ class GPUModelRunner(ModelRunnerBase):
 
     def _init_image_preprocess(self) -> None:
         processor = DataProcessor(
-            tokenizer_name=self.tokenizer,
-            image_preprocessor_name=str(self.image_preprocessor),
+            tokenizer_name=self.tokenizer_path,
+            image_preprocessor_name=str(self.image_preprocessor_path),
         )
         processor.eval()
         image_preprocess = processor.image_preprocessor
@@ -1427,19 +1421,9 @@ class GPUModelRunner(ModelRunnerBase):
                                         -1)
         self.image_preprocess = image_preprocess
 
-    def load_vl_config_and_image_preprocess(self) -> None:
-
-        vocab_file_names = [
-            "tokenizer.model", "spm.model", "ernie_token_100k.model"
-        ]
-        for i in range(len(vocab_file_names)):
-            if os.path.exists(
-                    os.path.join(self.tokenizer, vocab_file_names[i])):
-                ErnieBotTokenizer.resource_files_names[
-                    "vocab_file"] = vocab_file_names[i]
-                break
+    def load_mm_config_and_image_preprocess(self) -> None:
         tokenizer = ErnieBotTokenizer.from_pretrained(
-            self.tokenizer,
+            self.tokenizer_path,
             model_max_length=self.parallel_config.max_model_len,
             padding_side="right",
             use_fast=False,
@@ -1467,7 +1451,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.model_config = self.fd_config.model_config
         self._init_image_preprocess()
 
-    def _preprocess_task(self, one: dict) -> None:
+    def _preprocess_mm_task(self, one: dict) -> None:
         """process batch"""
 
         input_ids = one["input_ids"][np.newaxis, :]
