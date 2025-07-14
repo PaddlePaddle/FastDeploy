@@ -280,10 +280,6 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
             [M, top_k, N],
             dtype=x.dtype,
         )
-        intermediate_cache2 = paddle.empty(
-            (M * top_k, N // 2),
-            dtype=x.dtype,
-        )
         intermediate_cache3 = paddle.empty(
             (M, top_k, K),
             dtype=x.dtype,
