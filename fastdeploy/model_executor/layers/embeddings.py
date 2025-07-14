@@ -113,7 +113,6 @@ class VocabParallelEmbedding(nn.Layer):
             state_dict (dict): A dictionary containing the checkpoint weights and biases.
         """
         a = state_dict[self.prefix + ".weight"]
-        logger.info(f"tensor : {a}")
         if self.tie_word_embeddings:
             self.word_embeddings.weight.set_value(
                 get_tensor(state_dict[self.prefix + ".weight"]).astype(
