@@ -23,7 +23,7 @@ import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig
+from fastdeploy.config import FDConfig, MoEPhase
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
     profile_run_guard,
@@ -1164,7 +1164,17 @@ class GPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
         """
         # NOTE(wufeisheng): For Expert Parallelism
+        is_decode_batch = paddle.to_tensor(not ((self.share_inputs["seq_lens_this_time"]
+                        > 1).sum() > 0))
+        paddle.distributed.broadcast(is_decode_batch, src=0)
+        self.fd_config.parallel_config.moe_phase.phase = "decode" if is_decode_batch else "prefill"
+        print(f'rank: {self.rank}, is decode batch: {is_decode_batch}, seq_lens_encoder: {self.share_inputs["seq_lens_encoder"]}')
+
+        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
+        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
+        # when there is data on other runner, the current runner is required to execute part of the model.
         if not self.not_need_stop():
+            print("got into empty_input")
             self._execute_empty_input()
             return None
 

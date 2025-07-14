@@ -30,13 +30,23 @@ from fastdeploy.utils import get_logger
 logger = get_logger("config", "config.log")
 
 
-class MoEPhase(Enum):
+class MoEPhase:
     """
     The generation phase of the moe.
     """
+    def __init__(self, phase="prefill"):
+        self._phase = phase
 
-    PREFILL = 1
-    DECODER = 2
+    @property
+    def phase(self):
+        return self._phase
+
+    @phase.setter
+    def phase(self, value):
+        if value not in ["prefill", "decode"]:
+            raise ValueError(f"The moe_phase is invalid, only support prefill and decode, but got {value}")
+        else:
+            self._phase = value
 
 
 class ErnieArchitectures:
@@ -210,11 +220,11 @@ class ParallelConfig:
                 setattr(self, key, value)
         self.use_ep = args["expert_parallel_size"] > 1
         if self.splitwise_role == "mixed":
-            self.moe_phase = MoEPhase.PREFILL
+            self.moe_phase = MoEPhase(phase="prefill")
         elif self.splitwise_role == "prefill":
-            self.moe_phase = MoEPhase.PREFILL
+            self.moe_phase = MoEPhase(phase="prefill")
         elif self.splitwise_role == "decode":
-            self.moe_phase = MoEPhase.DECODER
+            self.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError
 

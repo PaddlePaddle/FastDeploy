@@ -45,9 +45,11 @@ class MoEMethodBase(QuantMethodBase):
         Init EP related module
         """
         if layer.ep_size > 1:
-            if layer.fd_config.parallel_config.moe_phase == MoEPhase.DECODER:
-                from .ep import EPDecoderRunner
-
+            if layer.fd_config.parallel_config.splitwise_role == "mixed":
+                from .ep import EPPrefillRunner, EPDecoderRunner
+                self.ep_prefill_runner = EPPrefillRunner(
+                    layer.top_k, layer.hidden_size, layer.num_experts,
+                    layer.ep_size, layer.ep_rank)
                 self.ep_decoder_runner = EPDecoderRunner(
                     layer.top_k,
                     layer.hidden_size,
@@ -58,7 +60,17 @@ class MoEMethodBase(QuantMethodBase):
                     layer.fd_config.model_config.redundant_experts_num,
                 )
             else:
-                from .ep import EPPrefillRunner
+                if layer.fd_config.parallel_config.moe_phase == "prefill":
+                    from .ep import EPPrefillRunner
+                    self.ep_prefill_runner = EPPrefillRunner(
+                        layer.top_k, layer.hidden_size, layer.num_experts,
+                        layer.ep_size, layer.ep_rank)
+                else:
+                    from .ep import EPDecoderRunner
+                    self.ep_decoder_runner = EPDecoderRunner(
+                        layer.top_k, layer.hidden_size, layer.num_experts,
+                        layer.moe_config.num_max_dispatch_tokens_per_rank,
+                        layer.ep_size, layer.ep_rank)
 
                 self.ep_prefill_runner = EPPrefillRunner(
                     layer.top_k,
@@ -141,9 +153,14 @@ class MoEMethodBase(QuantMethodBase):
         Paddle Cutlass compute Fused MoE.
         """
         if layer.ep_size > 1:
-            if layer.fd_config.parallel_config.moe_phase == MoEPhase.PREFILL:
+            if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
+                print("Apply ep prefill")
                 return self.apply_ep_prefill(layer, x, gate_out)
-            else:
+            elif layer.fd_config.parallel_config.moe_phase.phase == "decode":
+                print("Apply ep decode")
                 return self.apply_ep_decode(layer, x, gate_out)
+            else:
+                logger.error(
+                    f"invalid value of moe_phase={layer.fd_config.parallel_config.moe_phase.phase}")
         else:
             return self.apply_tp(layer, x, gate_out)
