@@ -314,7 +314,7 @@ class XPUModelRunner(ModelRunnerBase):
                 "min_tokens", 1)
 
             self.share_inputs["max_dec_len"][idx:idx + 1] = request.get(
-                "max_tokens", self.model_config.max_length)
+                "max_tokens", self.model_config.max_model_len)
             self.share_inputs["stop_flags"][idx:idx + 1] = False
 
             self.share_inputs["first_token_ids"][
@@ -387,11 +387,11 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["min_dec_len"] = paddle.full(
             [max_num_seqs, 1], self.model_config.min_length, dtype='int64')
         self.share_inputs["max_dec_len"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_length, dtype='int64')
+            [max_num_seqs, 1], self.model_config.max_model_len, dtype='int64')
         self.share_inputs["min_length"] = paddle.full(
             [max_num_seqs, 1], self.model_config.min_length, dtype='int64')
         self.share_inputs["max_length"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_length, dtype='int64')
+            [max_num_seqs, 1], self.model_config.max_model_len, dtype='int64')
         self.share_inputs["seq_lens_this_time"] = paddle.full(max_num_seqs,
                                                               0,
                                                               dtype='int32')
@@ -574,7 +574,7 @@ class XPUModelRunner(ModelRunnerBase):
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
             max_num_blocks=max_block_num)
 
-        for i in range(self.model_config.num_layers):
+        for i in range(self.model_config.num_hidden_layers):
             cache_kvs["key_caches_{}".format(i)] = paddle.full(
                 shape=kv_cache_shape,
                 fill_value=0,
@@ -597,10 +597,10 @@ class XPUModelRunner(ModelRunnerBase):
         assert len(self.attn_backends) == 0
 
         # TODO(gongshaotian): Get rank from config
-        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_degree
+        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
         self.model_config.kv_num_heads = int(
             self.model_config.num_key_value_heads
-        ) // self.parallel_config.tensor_parallel_degree
+        ) // self.parallel_config.tensor_parallel_size
         head_dim = self.model_config.head_dim
 
         # Get the attention backend
@@ -803,7 +803,7 @@ class XPUModelRunner(ModelRunnerBase):
         required_memory = (
             byte_of_dtype * 2 *  # k + v
             (self.parallel_config.block_size * hidden_dim) *
-            self.model_config.num_layers)
+            self.model_config.num_hidden_layers)
         return required_memory
 
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:

@@ -95,7 +95,7 @@ class AppendAttentionBackend(AttentionBackend):
         self.kv_num_heads: int = kv_num_heads
         self.num_heads: int = num_heads
         self.head_dim: int = fd_config.model_config.head_dim
-        self.num_layers: int = fd_config.model_config.num_layers
+        self.num_layers: int = fd_config.model_config.num_hidden_layers
         self.max_partition_size: int = int(
             os.getenv("FLAGS_max_partition_size", 32768))
 
