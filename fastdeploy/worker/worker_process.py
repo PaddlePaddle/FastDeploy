@@ -124,7 +124,9 @@ class PaddleDisWorkerProc():
             is_server=False,
             num_client=self.parallel_config.tensor_parallel_degree,
             client_id=self.parallel_config.tensor_parallel_rank,
-            local_data_parallel_id=self.parallel_config.expert_parallel_rank)
+            local_data_parallel_size=self.parallel_config.expert_parallel_degree,
+            local_data_parallel_id=self.fd_config.parallel_config.
+            expert_parallel_rank)
 
     def init_health_status(self) -> None:
         """
@@ -137,7 +139,7 @@ class PaddleDisWorkerProc():
             model_weights_status:
         """
         # init worker_ready_signal
-        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         array_size = min(
             max_chips_per_node, self.parallel_config.tensor_parallel_degree *
             self.parallel_config.expert_parallel_degree)
@@ -152,7 +154,7 @@ class PaddleDisWorkerProc():
                                        max_chips_per_node] = 1
 
         # init worker_healthy_live_signal
-        workers_alive = np.zeros(shape=[self.ranks], dtype=np.int32)
+        workers_alive = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
             array=workers_alive,
@@ -206,7 +208,7 @@ class PaddleDisWorkerProc():
         Tmp loop function for ep utill DP is supported
         """
         while True:
-            self.worker_healthy_live_signal.value[self.local_rank] = int(
+            self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(
                 time.time())
 
             if self.fd_config.parallel_config.tensor_parallel_rank == 0 and self.task_queue.num_tasks(

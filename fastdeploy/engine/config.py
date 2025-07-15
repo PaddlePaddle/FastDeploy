@@ -571,7 +571,9 @@ class Config:
         max_model_len: int = 8192,
         max_num_seqs: int = 8,
         max_num_batched_tokens: Optional[int] = None,
-        pod_ips: Optional[List[str]] = None,
+        dist_init_addr: str = None,
+        nnodes: int = 1,
+        node_rank: int = 0,
         speculative_config: Optional[Dict[str, Any]] = None,
         use_warmup: bool = False,
         engine_worker_queue_port: int = 8002,
@@ -629,7 +631,15 @@ class Config:
         self.tokenizer = tokenizer
         self.max_num_batched_tokens = max_num_batched_tokens
         self.tensor_parallel_size = tensor_parallel_size
-        self.pod_ips = pod_ips
+        
+        self.dist_init_addr = dist_init_addr
+        self.nnode = nnodes
+        self.node_rank = node_rank
+        if self.dist_init_addr is None:
+            self.master_ip = "0.0.0.0"
+        else:
+            self.master_ip = self.dist_init_addr.split(":")[0]
+
         self.max_model_len = max_model_len
         self.max_num_seqs = max_num_seqs
         self.limit_mm_per_prompt = limit_mm_per_prompt
@@ -648,14 +658,8 @@ class Config:
         self.max_capture_batch_size = max_capture_batch_size
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
-        self.is_master = True
         self._str_to_list("innode_prefill_ports", int)
-        self._str_to_list("pod_ips", str)
 
-        if self.pod_ips is None:
-            self.nnode = 1
-        else:
-            self.nnode = len(self.pod_ips)
 
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
 
@@ -710,9 +714,9 @@ class Config:
 
         self.host_ip = get_host_ip()
 
-        if self.pod_ips is None:
-            self.pod_ips = ["0.0.0.0"]
-        elif self.host_ip != self.pod_ips[0]:
+        if self.dist_init_addr is None or self.host_ip == self.master_ip:
+            self.is_master = True
+        else:
             self.is_master = False
 
         import paddle

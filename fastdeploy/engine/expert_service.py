@@ -49,8 +49,8 @@ class ExpertService(object):
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
-        start_pos = local_data_parallel_id * self.cfg.tensor_parallel_size
-        end_pos = (local_data_parallel_id + 1) * self.cfg.tensor_parallel_size
+        start_pos = (local_data_parallel_id * self.cfg.tensor_parallel_size) % self.cfg.worker_num_per_node
+        end_pos = ((local_data_parallel_id + 1) * self.cfg.tensor_parallel_size) % self.cfg.worker_num_per_node
         self.cfg.cache_config.rdma_comm_ports = self.cfg.cache_config.rdma_comm_ports[
             start_pos:end_pos]
         self.cfg.local_device_ids = self.cfg.device_ids.split(

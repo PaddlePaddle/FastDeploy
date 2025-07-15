@@ -123,9 +123,19 @@ class EngineArgs:
     Ratio of tokens to process in a block.
     """
 
-    pod_ips: Optional[List[str]] = None
+    dist_init_addr: Optional[str] = None
     """
-    List of IP addresses for nodes in the cluster.
+    The master node address of multinode deployment
+    """
+
+    nnodes: int = 1
+    """
+    The number of nodes in multinode deployment
+    """
+
+    node_rank: int = 0
+    """
+    The rank of the current node in multinode deployment
     """
 
     swap_space: float = None
@@ -498,11 +508,23 @@ class EngineArgs:
         # Cluster system parameters group
         system_group = parser.add_argument_group("System Configuration")
         system_group.add_argument(
-            "--pod-ips",
-            type=lambda s: s.split(",") if s else None,
-            default=EngineArgs.pod_ips,
+            "--dist-init-addr",
+            default=EngineArgs.dist_init_addr,
             help=
-            "List of IP addresses for nodes in the cluster (comma-separated).")
+            "IP addresses of master node.")
+
+        system_group.add_argument(
+            "--nnodes",
+            default=EngineArgs.nnodes,
+            help=
+            "The number of all nodes.")
+
+        system_group.add_argument(
+            "--node-rank",
+            default=EngineArgs.node_rank,
+            help=
+            "node rank id (range [0, nnodes)).")
+
 
 
         # Performance tuning parameters group
@@ -792,7 +814,9 @@ class EngineArgs:
             max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
             max_num_batched_tokens=self.max_num_batched_tokens,
-            pod_ips=self.pod_ips,
+            dist_init_addr=self.dist_init_addr,
+            nnodes=self.nnodes,
+            node_rank=self.node_rank,
             use_warmup=self.use_warmup,
             engine_worker_queue_port=self.engine_worker_queue_port,
             limit_mm_per_prompt=self.limit_mm_per_prompt,
