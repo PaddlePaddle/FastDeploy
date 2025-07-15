@@ -105,7 +105,7 @@ class Ernie4_5_VLMoE(nn.Layer):
                 "down_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.down_proj.weight",
             }
-            self.mlp_text = FusedMoE(
+            self.text_fused_moe = FusedMoE(
                 fd_config=fd_config,
                 reduce_results=False,
                 moe_intermediate_size=fd_config.model_config.
@@ -117,9 +117,9 @@ class Ernie4_5_VLMoE(nn.Layer):
                 moe_tag="Text",
                 weight_key_map=weight_key_map,
             )
-            self.mlp_text.extract_gate_correction_bias = self.extract_gate_correction_bias_text
+            self.text_fused_moe.extract_gate_correction_bias = self.extract_gate_correction_bias_text
         else:
-            self.mlp_text = Ernie4_5_VLMLP(
+            self.text_fused_moe = Ernie4_5_VLMLP(
                 fd_config=fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
                 prefix=f"{prefix}",
@@ -137,7 +137,7 @@ class Ernie4_5_VLMoE(nn.Layer):
                 "down_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.down_proj.weight",
             }
-            self.mlp_image = FusedMoE(
+            self.image_fused_moe = FusedMoE(
                 fd_config=fd_config,
                 reduce_results=False,
                 moe_intermediate_size=fd_config.model_config.
@@ -149,9 +149,9 @@ class Ernie4_5_VLMoE(nn.Layer):
                 moe_tag="Image",
                 weight_key_map=weight_key_map,
             )
-            self.mlp_image.extract_gate_correction_bias = self.extract_gate_correction_bias_image
+            self.image_fused_moe.extract_gate_correction_bias = self.extract_gate_correction_bias_image
         else:
-            self.mlp_image = Ernie4_5_VLMLP(
+            self.image_fused_moe = Ernie4_5_VLMLP(
                 fd_config=fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
                 prefix=f"{prefix}",
@@ -186,10 +186,10 @@ class Ernie4_5_VLMoE(nn.Layer):
         return gate_correction_bias_tensor[1].unsqueeze(0)
 
     def load_state_dict(self, state_dict):
-        self.mlp_text.load_state_dict(state_dict)
-        self.mlp_image.load_state_dict(state_dict)
-        if self.mlp_text.moe_use_gate_correction_bias:
-            state_dict.pop(self.mlp_text.gate_correction_bias_key)
+        self.text_fused_moe.load_state_dict(state_dict)
+        self.image_fused_moe.load_state_dict(state_dict)
+        if self.text_fused_moe.moe_use_gate_correction_bias:
+            state_dict.pop(self.text_fused_moe.gate_correction_bias_key)
         if self.num_shared_experts > 0:
             self.share_experts.load_state_dict(state_dict)
 
@@ -206,8 +206,8 @@ class Ernie4_5_VLMoE(nn.Layer):
                 vl_moe_meta.image_index,
                 True,
             )
-            text_out = self.mlp_text(vl_moe_meta.text_input)
-            image_out = self.mlp_image(vl_moe_meta.image_input)
+            text_out = self.text_fused_moe(vl_moe_meta.text_input)
+            image_out = self.image_fused_moe(vl_moe_meta.image_input)
             text_image_gather_scatter(
                 hidden_states,
                 text_out,
@@ -218,7 +218,7 @@ class Ernie4_5_VLMoE(nn.Layer):
                 False,
             )
         else:
-            hidden_states = self.mlp_text(hidden_states)
+            hidden_states = self.text_fused_moe(hidden_states)
         if self.num_shared_experts > 0:
             hidden_states += share_experts_out
         if self.tp_size > 1:

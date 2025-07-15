@@ -182,21 +182,27 @@ class Ernie4_5_VLMoeForConditionalGenerationRL(Ernie4_5_VLMoeForConditionalGener
         base_name = base_name + ".layers"
 
         # Helper function to add layer mappings
-        def _add_layer_mappings(layer_idx: int):
+        def _add_layer_mappings(layer_idx: int, moe_tag: str):
             # MoE specific mappings
-            infer_to_train[f"{base_name}.{layer_idx}.mlp.fused_moe.gate_weight"] = \
-                f"{base_name}.{layer_idx}.mlp.gate.weight"
+            infer_to_train[f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.gate_weight"] = f"{base_name}.{layer_idx}.mlp.gate.weight" if moe_tag == "text" else f"{base_name}.{layer_idx}.mlp.gate.weight_1"
 
             if self.fd_config.model_config.moe_use_aux_free:
-                infer_to_train[f"{base_name}.{layer_idx}.mlp.fused_moe.gate_correction_bias"] = \
+                infer_to_train[f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.gate_correction_bias"] = \
                     f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
 
             # MoE experts mappings
             assert isinstance(self.fd_config.model_config.moe_num_experts, list)
-            for expert_idx in range(sum(self.fd_config.model_config.moe_num_experts)):
+            if moe_tag == "text":
+                expert_idx_start = 0
+                expert_idx_end = self.fd_config.model_config.moe_num_experts[0]
+            else:
+                expert_idx_start = self.fd_config.model_config.moe_num_experts[0]
+                expert_idx_end = self.fd_config.model_config.moe_num_experts[1]
+
+            for expert_idx in range(expert_idx_start, expert_idx_end):
                 for ph in place_holders:
                     # up_gate_proj (up_gate_proj)
-                    up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.fused_moe.up_gate_proj_weight"
+                    up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.up_gate_proj_weight"
                     if up_gate_proj_key not in infer_to_train:
                         infer_to_train[up_gate_proj_key] = []
                     infer_to_train[up_gate_proj_key].append(
@@ -204,17 +210,36 @@ class Ernie4_5_VLMoeForConditionalGenerationRL(Ernie4_5_VLMoeForConditionalGener
                     )
 
                     # down_proj (down_proj)
-                    down_proj_key = f"{base_name}.{layer_idx}.mlp.fused_moe.down_proj_weight"
+                    down_proj_key = f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.down_proj_weight"
                     if down_proj_key not in infer_to_train:
                         infer_to_train[down_proj_key] = []
                     infer_to_train[down_proj_key].append(
                         f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.down_proj.{ph}"
                     )
 
+        moe_layer_start_index = self.fd_config.model_config.moe_layer_start_index
+        if isinstance(moe_layer_start_index, int):
+            text_moe_layer_start_index = moe_layer_start_index
+            image_moe_layer_start_index = moe_layer_start_index
+        else:
+            text_moe_layer_start_index = moe_layer_start_index[0]
+            image_moe_layer_start_index = moe_layer_start_index[1]
+
+        moe_layer_end_index = self.fd_config.model_config.moe_layer_end_index
+        if moe_layer_end_index is None:
+            text_moe_layer_end_index = self.fd_config.model_config.num_hidden_layers
+            image_moe_layer_end_index = self.fd_config.model_config.num_hidden_layers
+        elif isinstance(moe_layer_end_index, int):
+            text_moe_layer_end_index = moe_layer_end_index
+            image_moe_layer_end_index = moe_layer_end_index
+        else:
+            text_moe_layer_end_index = moe_layer_end_index[0]
+            image_moe_layer_end_index = moe_layer_end_index[1]
         # Process MoE layers
-        for layer_idx in range(self.fd_config.model_config.moe_layer_start_index,
-                               self.fd_config.model_config.num_hidden_layers):
-            _add_layer_mappings(layer_idx)
+        for layer_idx in range(text_moe_layer_start_index, text_moe_layer_end_index):
+            _add_layer_mappings(layer_idx, "text")
+        for layer_idx in range(image_moe_layer_start_index, image_moe_layer_end_index):
+            _add_layer_mappings(layer_idx, "image")
 
         return infer_to_train
 
