@@ -898,7 +898,7 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
         int32_t problem_idx = problem_visitor.problem_index();
         int32_t cta_idx = int32_t(problem_visitor.threadblock_idx());
 
-        if (problem_idx > 20) {
+        if (problem_idx > 2) {
           break;
         }
 
@@ -944,6 +944,7 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
         // the begin threadblock_offset of B, which holds the same column id with C
         cutlass::MatrixCoord tb_offset_B{0, threadblock_offset.n() / kInterleave};
         cutlass::MatrixCoord extent_B{problem_size.k() * kInterleave, problem_size.n() / kInterleave};
+
         CUTLASS_TRACE_DEVICE(" ldm_B: %d, tb_offset_B: {%d, %d}, extent_B: {%d, %d}",
             static_cast<int>(ldm_B), tb_offset_B.row(), tb_offset_B.column(), extent_B.row(), extent_B.column());
 
