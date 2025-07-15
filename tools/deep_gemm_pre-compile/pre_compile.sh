@@ -1,4 +1,3 @@
-"""
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,11 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
 
-try:
-    from .wint2_fused_moe import fused_moe_wint2_triton
-    from .wint2_fused_moe_kernel import moe_wint2_ffn_kernel
-    __all__ = ["fused_moe_wint2_triton", "moe_wint2_ffn_kernel"]
-except:
-    pass
+export PRE_COMPILE_LOG_LEVEL="INFO"
+export DG_CACHE_DIR=$(pwd)/deep_gemm_cache
+
+echo DeepGEMM Cache Dir: $DG_CACHE_DIR
+
+MODEL_PATH=${1:-"/path/to/model"}
+EXPERT_PARALLEL=${2:-"8"}
+nproc=$(nproc)
+
+python generate_config.py \
+    --model $MODEL_PATH \
+    --output=./deep_gemm_pre_compile_config.jsonl
+
+python pre_compile.py \
+    --config_file=./deep_gemm_pre_compile_config.jsonl \
+    --expert_parallel=$EXPERT_PARALLEL \
+    --num_threads=$nproc

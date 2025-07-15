@@ -9,6 +9,17 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --max-model-len 32768
 ```
 
+如果要启用输出token的logprob，用户可以通过如下命令快速进行部署：
+
+```bash
+python -m fastdeploy.entrypoints.openai.api_server \
+       --model baidu/ERNIE-4.5-0.3B-Paddle \
+       --port 8188 --tensor-parallel-size 8 \
+       --max-model-len 32768 \
+       --enable-logprob
+```
+
+
 服务部署时的命令行更多使用方式参考[参数说明](../parameters.md)。
 
 ## 发送用户请求
@@ -26,6 +37,19 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
   ]
 }'
 ```
+
+使用 curl 命令示例，演示如何在用户请求中包含logprobs参数：
+
+```bash
+curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "Hello!"}, "logprobs": true, "top_logprobs": 5
+  ]
+}'
+```
+
 使用 Python 脚本发送用户请求示例如下：
 ```python
 import openai
@@ -54,6 +78,8 @@ print('\n')
 FastDeploy 与 OpenAI 协议的请求参数差异如下，其余请求参数会被忽略：
 - `prompt` (仅支持 `v1/completions` 接口)
 - `messages` (仅支持 `v1/chat/completions` 接口)
+- `logprobs`: Optional[bool] = False (仅支持 `v1/chat/completions` 接口)
+- `top_logprobs`: Optional[int] = None (仅支持 `v1/chat/completions` 接口。如果使用这个参数必须设置logprobs为True，取值大于等于0小于20)
 - `frequency_penalty`: Optional[float] = 0.0
 - `max_tokens`: Optional[int] = 16
 - `presence_penalty`: Optional[float] = 0.0
