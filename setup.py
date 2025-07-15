@@ -172,7 +172,7 @@ cmdclass_dict['build_ext'] = CMakeBuild
 
 setup(
     name=get_name(),
-    version="2.0.0",
+    version="2.0.2",
     author="PaddlePaddle",
     author_email="dltp@baidu.com",
     description="FastDeploy: Large Language Model Serving.",
