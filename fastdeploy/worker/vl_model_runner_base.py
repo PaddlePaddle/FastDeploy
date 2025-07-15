@@ -124,6 +124,11 @@ class VLModelRunnerBase(ABC):
             "input_ids":
             paddle.full([max_num_seqs, self.args.max_model_len],
                         self.args.pad_token_id, **int64_config),
+            "prompt_ids":
+            paddle.full([max_num_seqs, self.args.max_model_len],
+                        self.args.pad_token_id, **int64_config),
+            "prompt_lens":
+            paddle.full([max_num_seqs, 1], 0, **int64_config),
             "eos_token_id":
             paddle.full([self.args.eos_tokens_lens, 1], 0, **int64_config),
             "top_p":

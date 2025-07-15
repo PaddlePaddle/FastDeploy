@@ -563,6 +563,8 @@ class IluvatarModelRunner(ModelRunnerBase):
             top_k=self.share_inputs["top_k"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
+            prompt_ids=self.share_inputs["prompt_ids"],
+            prompt_lens=self.share_inputs["prompt_lens"],
             frequency_penalties=self.share_inputs["frequency_score"],
             presence_penalties=self.share_inputs["presence_score"],
             repetition_penalties=self.share_inputs["penalty_score"],

@@ -145,15 +145,18 @@ class GPUVLModelRunner(VLModelRunnerBase):
                 token_chunk_size = inputs["input_ids"].shape[1]
                 self.share_inputs["input_ids"][
                     idx:idx + 1, :token_chunk_size] = inputs["input_ids"]
-                self.share_inputs["first_token_ids"][idx:idx +
-                                        1] = inputs["input_ids"][
-                                            idx:idx + 1, :1]
+                self.share_inputs["prompt_ids"][
+                    idx:idx + 1,
+                    self.share_inputs["prompt_lens"][idx:idx + 1]: self.share_inputs["prompt_lens"][idx:idx + 1] + token_chunk_size
+                    ] = inputs["input_ids"]
                 self.share_inputs["seq_lens_this_time"][idx:idx +
                                                         1] = token_chunk_size
                 self.share_inputs['seq_lens_encoder'][idx:idx +
                                                       1] = token_chunk_size
                 self.share_inputs["seq_lens_decoder"][idx:idx +
                                                       1] = task.start_idx
+                self.share_inputs["prompt_lens"][idx:idx +
+                                                    1] += token_chunk_size
                 self.share_inputs["step_idx"][idx:idx + 1] = 0
 
                 task.start_idx += token_chunk_size
@@ -495,11 +498,12 @@ class GPUVLModelRunner(VLModelRunnerBase):
                 task.set("start_idx", token_chunk_size)
                 self.share_inputs["input_ids"][
                     idx:idx + 1, :token_chunk_size] = inputs["input_ids"]
-                self.share_inputs["first_token_ids"][idx:idx +
-                                                     1] = inputs["input_ids"][
-                                                         idx:idx + 1, :1]
+                self.share_inputs["prompt_ids"][
+                    idx:idx + 1, :token_chunk_size] = inputs["input_ids"]
                 self.share_inputs["seq_lens_this_time"][idx:idx +
                                                         1] = token_chunk_size
+                self.share_inputs["prompt_lens"][idx:idx +
+                                                1] = token_chunk_size
                 self.share_inputs["seq_lens_encoder"][idx:idx +
                                                       1] = token_chunk_size
                 self.share_inputs["step_seq_lens_encoder"][
@@ -518,13 +522,13 @@ class GPUVLModelRunner(VLModelRunnerBase):
                 length = inputs["input_ids"].shape[1]
                 self.share_inputs["input_ids"][
                     idx:idx + 1, :length] = inputs["input_ids"]
-                self.share_inputs["first_token_ids"][idx:idx +
-                                        1] = inputs["input_ids"][
-                                            idx:idx + 1, :1]
+                self.share_inputs["prompt_ids"][
+                    idx:idx + 1, :length] = inputs["input_ids"]
                 self.share_inputs["seq_lens_this_time"][idx:idx + 1] = length
                 self.share_inputs["seq_lens_encoder"][idx:idx + 1] = length
                 self.share_inputs["step_seq_lens_encoder"][idx:idx +
                                                            1] = length
+                self.share_inputs["prompt_lens"][idx:idx + 1] = length
 
             # force </think>
             self.share_inputs["enable_thinking"][:] = kwargs["enable_thinking"]
@@ -626,9 +630,9 @@ class GPUVLModelRunner(VLModelRunnerBase):
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
             step_idx=self.share_inputs["step_idx"],
-            input_ids=self.share_inputs["input_ids"],
-            first_token_ids=self.share_inputs["first_token_ids"],
             pre_token_ids=self.share_inputs["pre_ids"],
+            prompt_ids=self.share_inputs["prompt_ids"],
+            prompt_lens=self.share_inputs["prompt_lens"],
             frequency_penalties=self.share_inputs["frequency_score"],
             presence_penalties=self.share_inputs["presence_score"],
             repetition_penalties=self.share_inputs["penalty_score"],
@@ -811,6 +815,7 @@ class GPUVLModelRunner(VLModelRunnerBase):
                                                        1] = input_length
             self.share_inputs["seq_lens_encoder"][idx:idx + 1] = input_length
             self.share_inputs["seq_lens_decoder"][idx:idx + 1] = 0
+            self.share_inputs["prompt_lens"][idx:idx + 1] = 0
             self.share_inputs["step_idx"][idx:idx + 1] = 0
             self.share_inputs["max_dec_len"][idx:idx + 1] = 10
             self.share_inputs["stop_flags"][idx:idx + 1] = False

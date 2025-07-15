@@ -28,13 +28,14 @@ class SamplingMetadata:
 
     temperature: paddle.Tensor
 
-    input_ids: paddle.Tensor
-    first_token_ids: paddle.Tensor
     pre_token_ids: paddle.Tensor
     eos_token_ids: paddle.Tensor
     frequency_penalties: paddle.Tensor
     presence_penalties: paddle.Tensor
     repetition_penalties: paddle.Tensor
+
+    prompt_ids: Optional[paddle.Tensor] = None
+    prompt_lens: Optional[paddle.Tensor] = None
 
     min_dec_lens: paddle.Tensor
 

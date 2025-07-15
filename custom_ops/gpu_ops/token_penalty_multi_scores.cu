@@ -55,26 +55,27 @@ __global__ inline void min_length_logits_process<half>(
     }
 }
 
-__global__ void update_repeat_times(const int64_t *input_ids,
-                                    const int64_t *first_token_ids,
-                                    const int64_t *pre_ids,
+__global__ void update_repeat_times(const int64_t *pre_ids,
+                                    const int64_t *prompt_ids,
+                                    const int64_t *prompt_len,
                                     const int64_t *cur_len,
                                     int *repeat_times,
                                     int *is_repeated,
                                     const int64_t bs,
                                     const int64_t length_logits,
                                     const int64_t length_pre_ids,
-                                    const int64_t length_input_ids) {
+                                    const int64_t length_prompt_ids) {
     int64_t bi = blockIdx.x;
     if (cur_len[bi] < 0) {
         return;
     }
+    const int64_t prompt_len_now = prompt_len[bi];
     int64_t tid = threadIdx.x;
-    const int64_t *input_ids_now = input_ids + bi * length_input_ids;
+    const int64_t *prompt_now = prompt_ids + bi * length_prompt_ids;
     const int64_t *pre_ids_now = pre_ids + bi * length_pre_ids;
     int *repeat_times_now = repeat_times + bi * length_logits;
     int *is_repeated_now = is_repeated + bi * length_logits;
-    const int64_t loop_len = length_input_ids > length_pre_ids ? length_input_ids : length_pre_ids;
+    const int64_t loop_len = prompt_len_now > length_pre_ids ? prompt_len_now : length_pre_ids;
     for (int64_t i = tid; i < loop_len; i += blockDim.x) {
         if (i < length_pre_ids) {
             int64_t id = pre_ids_now[i];
@@ -83,15 +84,12 @@ __global__ void update_repeat_times(const int64_t *input_ids,
                 atomicAdd(&is_repeated_now[id], 1);
             }
         }
-        if (i > 0 && i < length_input_ids) {
-            int64_t id = input_ids_now[i];
+        if (i < prompt_len_now) {
+            int64_t id = prompt_ids[i];
             if (id >= 0) {
                 atomicAdd(&is_repeated_now[id], 1);
             }
         }
-    }
-    if (tid == 0) {
-        atomicAdd(&is_repeated_now[first_token_ids[bi]], 1);
     }
 }
 
@@ -142,9 +140,9 @@ __global__ void ban_bad_words(T *logits,
 }
 
 template <paddle::DataType D>
-void token_penalty_multi_scores_kernel(const paddle::Tensor &input_ids,
-                                       const paddle::Tensor &first_token_ids,
-                                       const paddle::Tensor &pre_ids,
+void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
+                                       const paddle::Tensor &prompt_ids,
+                                       const paddle::Tensor &prompt_len,
                                        const paddle::Tensor &logits,
                                        const paddle::Tensor &penalty_scores,
                                        const paddle::Tensor &frequency_score,
@@ -174,7 +172,7 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &input_ids,
     int64_t length_pre_ids = pre_ids.shape()[1];
     int64_t length_bad_words = bad_tokens.shape()[0];
     int64_t length_eos_token_id = eos_token_id.shape()[0];
-    int64_t length_input_ids = input_ids.shape()[1];
+    int64_t length_prompt_ids = prompt_ids.shape()[1];
 
     int block_size = (bs + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
     min_length_logits_process<<<1, block_size, 0, cu_stream>>>(
@@ -194,16 +192,16 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &input_ids,
     block_size = min(block_size, 512);
 #endif
     update_repeat_times<<<bs, block_size, 0, cu_stream>>>(
-        input_ids.data<int64_t>(),
-        first_token_ids.data<int64_t>(),
         pre_ids.data<int64_t>(),
+        prompt_ids.data<int64_t>(),
+        prompt_len.data<int64_t>(),
         cur_len.data<int64_t>(),
         repeat_times.data<int>(),
         is_repeated.data<int>(),
         bs,
         length_logits,
         length_pre_ids,
-        length_input_ids);
+        length_prompt_ids);
 
     block_size = (length_logits + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
 #ifdef PADDLE_WITH_COREX
@@ -241,9 +239,9 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &input_ids,
         length_bad_words);
 }
 
-void TokenPenaltyMultiScores(const paddle::Tensor& input_ids,
-                             const paddle::Tensor& first_token_ids,
-                             const paddle::Tensor &pre_ids,
+void TokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
+                             const paddle::Tensor &prompt_ids,
+                             const paddle::Tensor &prompt_len,
                              const paddle::Tensor &logits,
                              const paddle::Tensor &penalty_scores,
                              const paddle::Tensor &frequency_scores,
@@ -256,9 +254,9 @@ void TokenPenaltyMultiScores(const paddle::Tensor& input_ids,
     switch (logits.type()) {
         case paddle::DataType::BFLOAT16: {
             return token_penalty_multi_scores_kernel<
-                paddle::DataType::BFLOAT16>(input_ids,
-                                            first_token_ids,
-                                            pre_ids,
+                paddle::DataType::BFLOAT16>(pre_ids,
+                                            prompt_ids,
+                                            prompt_len,
                                             logits,
                                             penalty_scores,
                                             frequency_scores,
@@ -270,34 +268,34 @@ void TokenPenaltyMultiScores(const paddle::Tensor& input_ids,
                                             eos_token_id);
         }
         case paddle::DataType::FLOAT16: {
-            return token_penalty_multi_scores_kernel<paddle::DataType::FLOAT16>(
-                input_ids,
-                first_token_ids,
-                pre_ids,
-                logits,
-                penalty_scores,
-                frequency_scores,
-                presence_scores,
-                temperatures,
-                bad_tokens,
-                cur_len,
-                min_len,
-                eos_token_id);
+            return token_penalty_multi_scores_kernel<
+                paddle::DataType::FLOAT16>(pre_ids,
+                                           prompt_ids,
+                                           prompt_len,
+                                           logits,
+                                           penalty_scores,
+                                           frequency_scores,
+                                           presence_scores,
+                                           temperatures,
+                                           bad_tokens,
+                                           cur_len,
+                                           min_len,
+                                           eos_token_id);
         }
         case paddle::DataType::FLOAT32: {
-            return token_penalty_multi_scores_kernel<paddle::DataType::FLOAT32>(
-                input_ids,
-                first_token_ids,
-                pre_ids,
-                logits,
-                penalty_scores,
-                frequency_scores,
-                presence_scores,
-                temperatures,
-                bad_tokens,
-                cur_len,
-                min_len,
-                eos_token_id);
+            return token_penalty_multi_scores_kernel<
+                paddle::DataType::FLOAT32>(pre_ids,
+                                           prompt_ids,
+                                           prompt_len,
+                                           logits,
+                                           penalty_scores,
+                                           frequency_scores,
+                                           presence_scores,
+                                           temperatures,
+                                           bad_tokens,
+                                           cur_len,
+                                           min_len,
+                                           eos_token_id);
         }
         default: {
             PD_THROW(
@@ -308,10 +306,10 @@ void TokenPenaltyMultiScores(const paddle::Tensor& input_ids,
     }
 }
 
-PD_BUILD_STATIC_OP(get_token_penalty_multi_scores)
-    .Inputs({"input_ids",
-             "first_token_ids",
-             "pre_ids",
+PD_BUILD_OP(get_token_penalty_multi_scores)
+    .Inputs({"pre_ids",
+             "prompt_ids",
+             "prompt_len",
              "logits",
              "penalty_scores",
              "frequency_scores",
