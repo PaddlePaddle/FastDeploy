@@ -139,7 +139,7 @@ class PaddleDisWorkerProc():
         # init worker_ready_signal
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         array_size = min(
-            max_chips_per_node, self.parallel_config.tensor_parallel_degree *
+            self.max_chips_per_node, self.parallel_config.tensor_parallel_degree *
             self.parallel_config.expert_parallel_degree)
         workers_ready = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_ready_signal = IPCSignal(
@@ -149,7 +149,7 @@ class PaddleDisWorkerProc():
             suffix=self.parallel_config.engine_pid,
             create=False)
         self.worker_ready_signal.value[self.local_rank %
-                                       max_chips_per_node] = 1
+                                       self.max_chips_per_node] = 1
 
         # init worker_healthy_live_signal
         workers_alive = np.zeros(shape=[array_size], dtype=np.int32)
