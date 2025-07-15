@@ -53,7 +53,7 @@ class ModelForCasualLM(nn.Layer, ABC):
         """
         Args:
             configs (dict): Configurations including parameters such as max_dec_len, min_dec_len, decode_strategy,
-                ori_vocab_size, use_topp_sampling, etc.
+                vocab_size, use_topp_sampling, etc.
         """
         super(ModelForCasualLM, self).__init__()
         self.fd_config = configs

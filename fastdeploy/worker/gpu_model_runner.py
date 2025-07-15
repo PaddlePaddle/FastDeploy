@@ -50,8 +50,6 @@ if not current_platform.is_dcu():
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.input.mm_processor import DataProcessor
 from fastdeploy.model_executor.forward_meta import ForwardMeta
-from fastdeploy.model_executor.models.ernie4_5_vl.configuration import \
-    Ernie4_5_VLMoeConfig
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import \
     ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
@@ -352,7 +350,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["min_dec_len"][idx:idx + 1] = request.get(
                 "min_tokens", 1)
             self.share_inputs["max_dec_len"][idx:idx + 1] = request.get(
-                "max_tokens", self.model_config.max_length)
+                "max_tokens", self.model_config.max_model_len)
             self.share_inputs["stop_flags"][idx:idx + 1] = False
 
             self.share_inputs["first_token_ids"][
@@ -471,11 +469,11 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["min_dec_len"] = paddle.full(
             [max_num_seqs, 1], self.model_config.min_length, dtype='int64')
         self.share_inputs["max_dec_len"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_length, dtype='int64')
+            [max_num_seqs, 1], self.model_config.max_model_len, dtype='int64')
         self.share_inputs["min_length"] = paddle.full(
             [max_num_seqs, 1], self.model_config.min_length, dtype='int64')
         self.share_inputs["max_length"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_length, dtype='int64')
+            [max_num_seqs, 1], self.model_config.max_model_len, dtype='int64')
         self.share_inputs["seq_lens_this_time"] = paddle.full(max_num_seqs,
                                                               0,
                                                               dtype='int32')
@@ -783,13 +781,13 @@ class GPUModelRunner(ModelRunnerBase):
         # Get kv cache shape
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
             max_num_blocks=max_block_num)
-        local_rank = self.local_rank % self.parallel_config.tensor_parallel_degree
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
         if not self.parallel_config.do_profile and (
                 self.parallel_config.enable_prefix_caching \
                 or self.parallel_config.splitwise_role != "mixed"):
             cache_kvs_list = []
-            for i in range(self.model_config.num_layers):
+            for i in range(self.model_config.num_hidden_layers):
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
@@ -804,7 +802,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["caches"] = cache_kvs_list
 
         else:
-            for i in range(self.model_config.num_layers):
+            for i in range(self.model_config.num_hidden_layers):
 
                 cache_kvs["key_caches_{}".format(i)] = paddle.full(
                     shape=kv_cache_shape,
@@ -827,10 +825,10 @@ class GPUModelRunner(ModelRunnerBase):
         """
         assert len(self.attn_backends) == 0
 
-        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_degree
+        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
         self.model_config.kv_num_heads = max(1, int(
             self.model_config.num_key_value_heads
-        ) // self.parallel_config.tensor_parallel_degree)
+        ) // self.parallel_config.tensor_parallel_size)
         head_dim = self.model_config.head_dim
 
         # Get the attention backend
@@ -909,14 +907,14 @@ class GPUModelRunner(ModelRunnerBase):
                 )
                 sampler_output = self.sampler(logits,
                                                  self.sampling_metadata)
-                if self.parallel_config.tensor_parallel_degree > 1:
+                if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
             else:
                 self.sampler(logits, self.sampling_metadata,
                              self.parallel_config.max_model_len,
                              self.share_inputs)
                 sampler_output = None
-                if self.parallel_config.tensor_parallel_degree > 1:
+                if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
                         self.share_inputs["accept_tokens"], 0)
                     paddle.distributed.broadcast(
@@ -1031,6 +1029,7 @@ class GPUModelRunner(ModelRunnerBase):
                     token_chunk_size = inputs["input_ids"].shape[1]
                     self.share_inputs["input_ids"][idx:idx + 1, :token_chunk_size] = inputs["input_ids"]
                     self.share_inputs["seq_lens_decoder"][idx:idx +1] = task.start_idx
+                    task.start_idx += token_chunk_size
                 else:
                     self.share_inputs['input_ids'][idx, :token_chunk_size] = np.array(
                                                                                 task.prompt_token_ids[start_idx:start_idx +
@@ -1172,14 +1171,14 @@ class GPUModelRunner(ModelRunnerBase):
                 self.sampling_metadata,
                 skip_idx_list,
             )
-            if self.parallel_config.tensor_parallel_degree > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
 
         else:
             self.sampler(logits, self.sampling_metadata,
                          self.parallel_config.max_model_len, self.share_inputs)
             sampler_output = None
-            if self.parallel_config.tensor_parallel_degree > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(
                     self.share_inputs["accept_tokens"], 0)
                 paddle.distributed.broadcast(self.share_inputs["accept_num"],
@@ -1365,11 +1364,11 @@ class GPUModelRunner(ModelRunnerBase):
 
         hidden_dim = self.model_config.head_dim * self.model_config.kv_num_heads
         # NOTE(liuzichang): Implement multi-layer MTP architecture in the future
-        num_layers = self.model_config.num_layers + \
+        num_layers = self.model_config.num_hidden_layers + \
             self.speculative_config.num_gpu_block_expand_ratio if \
                 self.speculative_method in [
             "mtp"
-        ] else self.model_config.num_layers
+        ] else self.model_config.num_hidden_layers
         required_memory = (
             byte_of_dtype * 2 *  # k + v
             (self.parallel_config.block_size * hidden_dim) * num_layers)
@@ -1432,12 +1431,14 @@ class GPUModelRunner(ModelRunnerBase):
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.unk_token
 
-        self.fd_config.model_config = Ernie4_5_VLMoeConfig(**self.fd_config.model_config.__dict__)
+        self.fd_config.model_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_size
+        self.fd_config.model_config.tensor_parallel_rank = self.parallel_config.tensor_parallel_rank
+        self.fd_config.model_config.moe_group="dummy"
         self.fd_config.parallel_config.column_cut = False
         vision_config = self.fd_config.model_config.vision_config
         vision_config.attn_sep = False
         vision_config.dtype = "bfloat16"
-        vision_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_degree
+        vision_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_size
         vision_config.tensor_parallel_rank = self.parallel_config.tensor_parallel_rank
         self.fd_config.model_config.pixel_hidden_size = vision_config.hidden_size
         self.fd_config.model_config.im_patch_id = tokenizer.get_vocab()[
@@ -1446,8 +1447,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.fd_config.model_config.think_end_id = tokenizer.get_vocab()["</think>"]
         self.fd_config.model_config.max_text_id = self.fd_config.model_config.im_patch_id
         self.fd_config.model_config.sequence_parallel = False
-        # TODO (bukejiyu): Remove the assignment
-        self.fd_config.moe_config.top_k = 8
         self.model_config = self.fd_config.model_config
         self._init_image_preprocess()
 
@@ -1514,7 +1513,7 @@ class GPUModelRunner(ModelRunnerBase):
         ):
             image_features = self.model.vision_model.extract_feature(
                 images, grid_thw)
-            if self.parallel_config.tensor_parallel_degree > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 S, C = image_features.shape
                 image_features = image_features.reshape(
                     [-1, C * self.model_config.spatial_conv_size**2])
