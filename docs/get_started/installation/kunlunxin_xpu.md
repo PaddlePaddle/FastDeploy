@@ -72,32 +72,36 @@ Alternatively, you can install the latest version of PaddlePaddle (Not recommend
 python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
 ```
 
-### Download Kunlunxin Toolkit (XTDK) and XVLLM library, then set their paths.
+### Download FastDeploy source code, checkout the stable branch/TAG
 
 ```bash
-# XTDK
-wget https://klx-sdk-release-public.su.bcebos.com/xtdk_15fusion/dev/3.2.40.1/xtdk-llvm15-ubuntu2004_x86_64.tar.gz
-tar -xvf xtdk-llvm15-ubuntu2004_x86_64.tar.gz && mv xtdk-llvm15-ubuntu2004_x86_64 xtdk
-export CLANG_PATH=$(pwd)/xtdk
+git clone https://github.com/PaddlePaddle/FastDeploy
+git checkout <tag or branch>
+cd FastDeploy
+```
 
-# XVLLM
-wget https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/20250624/output.tar.gz
-tar -xvf output.tar.gz && mv output xvllm
-export XVLLM_PATH=$(pwd)/xvllm
+### Download Kunlunxin Compilation Dependency
+
+```bash
+bash custom_ops/xpu_ops/src/download_dependency.sh stable
 ```
 
 Alternatively, you can download the latest versions of XTDK and XVLLM (Not recommended)
 
 ```bash
-XTDK: https://klx-sdk-release-public.su.bcebos.com/xtdk_15fusion/dev/latest/xtdk-llvm15-ubuntu2004_x86_64.tar.gz
-XVLLM: https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/latest/output.tar.gz
+bash custom_ops/xpu_ops/src/download_dependency.sh develop
 ```
 
-### Download FastDeploy source code, checkout the stable branch/TAG, then compile and install.
+Set environment variables,
 
 ```bash
-git clone https://github.com/PaddlePaddle/FastDeploy
-cd FastDeploy
+export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xtdk
+export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xvllm
+```
+
+### Compile and Install.
+
+```bash
 bash build.sh
 ```
 
@@ -217,3 +221,32 @@ print('\n')
 ```
 
 For detailed OpenAI protocol specifications, see [OpenAI Chat Compeltion API](https://platform.openai.com/docs/api-reference/chat/create). Differences from the standard OpenAI protocol are documented in [OpenAI Protocol-Compatible API Server](../../online_serving/README.md).
+
+## Suppported Models
+|模型名Model Name|上下文长度Context Length|量化Quantization|所需卡数XPUs Required|部署命令Deployment Commands|
+|-|-|-|-|-|
+|ERNIE-4.5-300B-A47B|32K|BF16|x|x|
+|||WINT8|8|export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 8 \
+    --max-model-len 32768 \
+    --max-num-seqs 64 \
+    --quantization "wint8" \
+    --gpu-memory-utilization 0.9|
+|||WINT4|4（推荐）|export XPU_VISIBLE_DEVICES="0,1,2,3" 或 "4,5,6,7"python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \    --port 8188 \    --tensor-parallel-size 4 \    --max-model-len 32768 \    --max-num-seqs 64 \    --quantization "wint4" \    --gpu-memory-utilization 0.9|
+|||WINT4|8|export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \    --port 8188 \    --tensor-parallel-size 8 \    --max-model-len 32768 \    --max-num-seqs 64 \    --quantization "wint4" \    --gpu-memory-utilization 0.9|
+||128K|BF16|x|x|
+|||WINT8|x|x|
+|||WINT4|8（推荐）|export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \    --port 8188 \    --tensor-parallel-size 8 \    --max-model-len 131072 \    --max-num-seqs 64 \    --quantization "wint4" \    --gpu-memory-utilization 0.9|
+|ERNIE-4.5-21B-A3B|32K|BF16|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 32768 \    --max-num-seqs 128 \    --gpu-memory-utilization 0.9|
+|||WINT8|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 32768 \    --max-num-seqs 128 \    --quantization "wint8" \    --gpu-memory-utilization 0.9|
+|||WINT4|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 32768 \    --max-num-seqs 128 \    --quantization "wint4" \    --gpu-memory-utilization 0.9|
+||128K|BF16|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 131072 \    --max-num-seqs 128 \    --gpu-memory-utilization 0.9|
+|||WINT8|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 131072 \    --max-num-seqs 128 \    --quantization "wint8" \    --gpu-memory-utilization 0.9|
+|||WINT4|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 131072 \    --max-num-seqs 128 \    --quantization "wint4" \    --gpu-memory-utilization 0.9|
+|ERNIE-4.5-0.3B|32K|BF16|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 32768 \    --max-num-seqs 128 \    --gpu-memory-utilization 0.9|
+|||WINT8|1|export XPU_VISIBLE_DEVICES="x" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 32768 \    --max-num-seqs 128 \    --quantization "wint8" \    --gpu-memory-utilization 0.9|
+||128K|BF16|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 131072 \    --max-num-seqs 128 \    --gpu-memory-utilization 0.9|
+|||WINT8|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 131072 \    --max-num-seqs 128 \    --quantization "wint8" \    --gpu-memory-utilization 0.9|

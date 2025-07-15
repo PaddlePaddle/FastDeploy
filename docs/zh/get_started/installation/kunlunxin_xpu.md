@@ -72,33 +72,37 @@ python -m pip install paddlepaddle-xpu==3.1.0 -i https://www.paddlepaddle.org.cn
 python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
 ```
 
-### 下载昆仑编译套件 XTDK 和 XVLLM 预编译算子库并设置路径
-
-```bash
-# XTDK
-wget https://klx-sdk-release-public.su.bcebos.com/xtdk_15fusion/dev/3.2.40.1/xtdk-llvm15-ubuntu2004_x86_64.tar.gz
-tar -xvf xtdk-llvm15-ubuntu2004_x86_64.tar.gz && mv xtdk-llvm15-ubuntu2004_x86_64 xtdk
-export CLANG_PATH=$(pwd)/xtdk
-
-# XVLLM
-wget https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/20250624/output.tar.gz
-tar -xvf output.tar.gz && mv output xvllm
-export XVLLM_PATH=$(pwd)/xvllm
-```
-
-或者你也可以下载最新版 XTDK 和 XVLLM（不推荐）
-
-```bash
-XTDK: https://klx-sdk-release-public.su.bcebos.com/xtdk_15fusion/dev/latest/xtdk-llvm15-ubuntu2004_x86_64.tar.gz
-XVLLM: https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/latest/output.tar.gz
-```
-
-### 下载 FastDelpoy 源码，切换到稳定分支或 TAG，开始编译并安装：
+### 下载 FastDelpoy 源码，切换到稳定分支或 TAG
 
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy
 git checkout <tag or branch>
 cd FastDeploy
+```
+
+### 下载昆仑编译依赖
+
+```bash
+bash custom_ops/xpu_ops/src/download_dependency.sh stable
+```
+
+或者你也可以下载最新版编译依赖
+
+```bash
+bash custom_ops/xpu_ops/src/download_dependency.sh develop
+```
+
+设置环境变量
+
+```bash
+export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xtdk
+export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xvllm
+```
+
+### 开始编译并安装：
+
+```bash
+
 bash build.sh
 ```
 
