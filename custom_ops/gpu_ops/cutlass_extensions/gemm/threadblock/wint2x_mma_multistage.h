@@ -740,6 +740,16 @@ public:
           warp_k_compute_offset_B
         );
 #if 0
+        CUTLASS_TRACE_DEVICE(" pipe_state.warp_frag_B_=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
+            static_cast<float>(pipe_state.warp_frag_B_[0]), static_cast<float>(pipe_state.warp_frag_B_[1]),
+            static_cast<float>(pipe_state.warp_frag_B_[2]), static_cast<float>(pipe_state.warp_frag_B_[3]),
+            static_cast<float>(pipe_state.warp_frag_B_[4]), static_cast<float>(pipe_state.warp_frag_B_[5]),
+            static_cast<float>(pipe_state.warp_frag_B_[6]), static_cast<float>(pipe_state.warp_frag_B_[7]),
+            static_cast<float>(pipe_state.warp_frag_B_[8]), static_cast<float>(pipe_state.warp_frag_B_[9]),
+            static_cast<float>(pipe_state.warp_frag_B_[10]), static_cast<float>(pipe_state.warp_frag_B_[11]),
+            static_cast<float>(pipe_state.warp_frag_B_[12]), static_cast<float>(pipe_state.warp_frag_B_[13]),
+            static_cast<float>(pipe_state.warp_frag_B_[14]), static_cast<float>(pipe_state.warp_frag_B_[15]));
+
         if (FragmentC::kElements == 16) {
           CUTLASS_TRACE_DEVICE(" tile_C[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
                 static_cast<float>(accum[0]), static_cast<float>(accum[1]),
@@ -751,7 +761,6 @@ public:
                 static_cast<float>(accum[12]), static_cast<float>(accum[13]),
                 static_cast<float>(accum[14]), static_cast<float>(accum[15]));
         }
-#endif
 
         // CUTLASS_TRACE_DEVICE_TID(" now1 warp_loaded_frag_A_[0:7]=[%f, %f, %f, %f, %f, %f, %f, %f]",
         //     static_cast<float>(pipe_state.warp_loaded_frag_A_[warp_mma_k % 2][0]), static_cast<float>(pipe_state.warp_loaded_frag_A_[warp_mma_k % 2][1]),
@@ -779,6 +788,7 @@ public:
         //       static_cast<float>(accum[10]), static_cast<float>(accum[11]),
         //       static_cast<float>(accum[12]), static_cast<float>(accum[13]),
         //       static_cast<float>(accum[14]), static_cast<float>(accum[15]));
+#endif
       }
 
       // Except for the last warp-tile, all warp-tiles issue their share of
