@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Literal, Optional, Union
+from typing import Literal, Optional
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.trl import llm_utils
@@ -142,7 +142,7 @@ class ParallelConfig:
         self.model_name_or_path: str = "./output"
         self.max_num_seqs: int = 34
         # Set default block num for profile run
-        self.max_block_num: int = 2000
+        self.total_block_num: int = 2000
         # block size
         self.block_size: int = 64
         # Engine worker queue port
