@@ -49,7 +49,7 @@ class MoEMethodBase(QuantMethodBase):
                 from .ep import EPDecoderRunner
                 self.ep_decoder_runner = EPDecoderRunner(
                     layer.top_k, layer.hidden_size, layer.num_experts,
-                    layer.model_config.num_max_dispatch_tokens_per_rank,
+                    layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
                     layer.ep_size, layer.ep_rank)
             else:
                 from .ep import EPPrefillRunner

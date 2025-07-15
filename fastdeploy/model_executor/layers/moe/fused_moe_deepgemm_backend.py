@@ -241,7 +241,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             [
                 layer.num_local_experts,
                 layer.ep_size *
-                layer.model_config.num_max_dispatch_tokens_per_rank,
+                layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
                 layer.moe_intermediate_size * 2,
             ],
             dtype=paddle.bfloat16,
@@ -251,7 +251,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             [
                 layer.num_local_experts,
                 layer.ep_size *
-                layer.model_config.num_max_dispatch_tokens_per_rank,
+                layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
                 layer.hidden_size,
             ],
             dtype=paddle.bfloat16,
