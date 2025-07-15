@@ -55,7 +55,8 @@ class Request:
                  guided_grammar: Optional[Any] = None,
                  structural_tag: Optional[Any] = None,
                  guided_json_object: Optional[bool] = None,
-                 enable_thinking: Optional[bool] = True) -> None:
+                 enable_thinking: Optional[bool] = True,
+                 metadata: Optional[dict] = dict()) -> None:
         self.request_id = request_id
         self.prompt = prompt
         self.prompt_token_ids = prompt_token_ids
@@ -91,6 +92,7 @@ class Request:
         self.multimodal_data = multimodal_data
 
         self.enable_thinking = enable_thinking
+        self.metadata = {"tracing_carrier": {}}
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -120,7 +122,8 @@ class Request:
                    guided_grammar=d.get("guided_grammar", None),
                    structural_tag=d.get("structural_tag", None),
                    guided_json_object=d.get("guided_json_object", None),
-                   enable_thinking=d.get("enable_thinking", True))
+                   enable_thinking=d.get("enable_thinking", True),
+                   metadata=d.get("metadata", {}))
 
     def to_dict(self) -> dict:
         """convert Request into a serializable dict """

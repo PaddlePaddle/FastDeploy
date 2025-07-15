@@ -19,6 +19,9 @@ import re
 import sys
 import paddle
 import subprocess
+from setuptools import setup
+from setuptools.command.install import install
+from pathlib import Path
 from pathlib import Path
 from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
@@ -137,8 +140,17 @@ class CMakeBuild(build_ext):
                     cwd=build_temp,
                     check=True)
         subprocess.run(["cmake", "--build", ".", *build_args],
-                    cwd=build_temp,
-                    check=True)
+                       cwd=build_temp,
+                       check=True)
+
+class PostInstallCommand(install):
+    """在标准安装完成后执行自定义命令"""
+    def run(self):
+        # 先执行标准安装步骤
+        install.run(self)
+        # 执行自定义命令
+        subprocess.check_call(["opentelemetry-bootstrap", "-a", "install"])
+        subprocess.check_call(["pip", "install", "opentelemetry-instrumentation-fastapi"])
 
 def load_requirements():
     """Load dependencies from requirements.txt"""
@@ -169,6 +181,8 @@ def get_name():
 
 cmdclass_dict = {'bdist_wheel': CustomBdistWheel}
 cmdclass_dict['build_ext'] = CMakeBuild
+FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", "2.0.0-dev")
+cmdclass_dict['build_optl'] = PostInstallCommand
 
 setup(
     name=get_name(),
@@ -211,3 +225,4 @@ setup(
     python_requires=">=3.7",
     extras_require={"test": ["pytest>=6.0"]},
 )
+
