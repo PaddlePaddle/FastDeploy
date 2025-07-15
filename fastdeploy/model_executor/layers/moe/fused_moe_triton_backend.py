@@ -30,7 +30,7 @@ try:
     from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess_func
 
     from .triton_moe_kernels import fused_moe_kernel_paddle
-except:
+except ImportError:
     pass
 
 
@@ -44,7 +44,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         Triton Group Gemm to compute Fused MoE.
         """
         self.quant_config = quant_config
-        self.added_weight_attrs = ["moe_ffn1_weight", "moe_ffn2_weight"]
+        self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
         self.added_scale_attrs = [
             "moe_ffn1_weight_scale", "moe_ffn2_weight_scale"
         ]
@@ -150,7 +150,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
 
         fused_moe_kernel_paddle[grid](
             x,
-            layer.moe_ffn1_weight,
+            layer.up_gate_proj_weight,
             ffn1_out,
             None,
             layer.moe_ffn1_weight_scale,
@@ -164,9 +164,9 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             K=hidden_size,
             stride_am=x.strides[0],
             stride_ak=x.strides[1],
-            stride_be=layer.moe_ffn1_weight.strides[0],
-            stride_bk=layer.moe_ffn1_weight.strides[1],
-            stride_bn=layer.moe_ffn1_weight.strides[2],
+            stride_be=layer.up_gate_proj_weight.strides[0],
+            stride_bk=layer.up_gate_proj_weight.strides[1],
+            stride_bn=layer.up_gate_proj_weight.strides[2],
             stride_cm=ffn1_out.strides[0],
             stride_cn=ffn1_out.strides[1],
             #
@@ -203,7 +203,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             ceil_div(hidden_size, config["BLOCK_SIZE_N"]), )
         fused_moe_kernel_paddle[grid](
             ffn2_input,
-            layer.moe_ffn2_weight,
+            layer.down_proj_weight,
             ffn2_out,
             None,
             layer.moe_ffn2_weight_scale,
@@ -217,9 +217,9 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             K=moe_intermediate_size,
             stride_am=ffn2_input.strides[0],
             stride_ak=ffn2_input.strides[1],
-            stride_be=layer.moe_ffn2_weight.strides[0],
-            stride_bk=layer.moe_ffn2_weight.strides[1],
-            stride_bn=layer.moe_ffn2_weight.strides[2],
+            stride_be=layer.down_proj_weight.strides[0],
+            stride_bk=layer.down_proj_weight.strides[1],
+            stride_bn=layer.down_proj_weight.strides[2],
             stride_cm=ffn2_out.strides[0],
             stride_cn=ffn2_out.strides[1],
             stride_asm=-1,
@@ -273,7 +273,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         ffn2_tensor = paddle.stack(ffn2_tensor, axis=0).view(paddle.float8_e4m3fn)
 
         added_wfp8afp8_attrs = [
-            "moe_ffn1_weight", "moe_ffn2_weight", "moe_ffn1_weight_scale",
+            "up_gate_proj_weight", "down_proj_weight", "moe_ffn1_weight_scale",
             "moe_ffn2_weight_scale", "moe_ffn1_in_scale", "moe_ffn2_in_scale"
         ]
 
@@ -370,7 +370,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
 
         fused_moe_kernel_paddle[grid](
             permute_x,
-            layer.moe_ffn1_weight,
+            layer.up_gate_proj_weight,
             ffn1_out,
             layer.moe_ffn1_in_scale,
             layer.moe_ffn1_weight_scale,
@@ -384,9 +384,9 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             K=hidden_size,
             stride_am=x.strides[0],
             stride_ak=x.strides[1],
-            stride_be=layer.moe_ffn1_weight.strides[0],
-            stride_bk=layer.moe_ffn1_weight.strides[1],
-            stride_bn=layer.moe_ffn1_weight.strides[2],
+            stride_be=layer.up_gate_proj_weight.strides[0],
+            stride_bk=layer.up_gate_proj_weight.strides[1],
+            stride_bn=layer.up_gate_proj_weight.strides[2],
             stride_cm=ffn1_out.strides[0],
             stride_cn=ffn1_out.strides[1],
             #
@@ -439,7 +439,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
 
         fused_moe_kernel_paddle[grid](
             ffn2_input,
-            layer.moe_ffn2_weight,
+            layer.down_proj_weight,
             ffn2_out,
             layer.moe_ffn2_in_scale,
             layer.moe_ffn2_weight_scale,
@@ -453,9 +453,9 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             K=moe_intermediate_size,
             stride_am=ffn2_input.strides[0],
             stride_ak=ffn2_input.strides[1],
-            stride_be=layer.moe_ffn2_weight.strides[0],
-            stride_bk=layer.moe_ffn2_weight.strides[1],
-            stride_bn=layer.moe_ffn2_weight.strides[2],
+            stride_be=layer.down_proj_weight.strides[0],
+            stride_bk=layer.down_proj_weight.strides[1],
+            stride_bn=layer.down_proj_weight.strides[2],
             stride_cm=ffn2_out.strides[0],
             stride_cn=ffn2_out.strides[1],
             stride_asm=-1,
@@ -496,7 +496,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         Triton Group Gemm to compute Fused MoE.
         """
         self.quant_config = quant_config
-        self.added_weight_attrs = ["moe_ffn1_weight", "moe_ffn2_weight"]
+        self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
         self.added_scale_attrs = [
             "moe_ffn1_weight_scale", "moe_ffn2_weight_scale"
         ]
@@ -563,8 +563,8 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         num_local_experts = layer.num_local_experts
         moe_intermediate_size = layer.moe_intermediate_size
         hidden_size = layer.hidden_size
-        E, N1, _ = layer.moe_ffn1_weight.shape
-        N2 = layer.moe_ffn2_weight.shape[1]
+        E, N1, _ = layer.up_gate_proj_weight.shape
+        N2 = layer.down_proj_weight.shape[1]
 
         topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
             gate_out,
@@ -605,7 +605,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
 
         fused_moe_kernel_paddle[grid](
             x_q,
-            layer.moe_ffn1_weight.view(paddle.float8_e4m3fn),
+            layer.up_gate_proj_weight.view(paddle.float8_e4m3fn),
             intermediate_cache1,
             x_scale,
             layer.moe_ffn1_weight_scale,
@@ -619,9 +619,9 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             K=hidden_size,
             stride_am=x_q.strides[0],
             stride_ak=x_q.strides[1],
-            stride_be=layer.moe_ffn1_weight.strides[0],
-            stride_bk=layer.moe_ffn1_weight.strides[2],
-            stride_bn=layer.moe_ffn1_weight.strides[1],
+            stride_be=layer.up_gate_proj_weight.strides[0],
+            stride_bk=layer.up_gate_proj_weight.strides[2],
+            stride_bn=layer.up_gate_proj_weight.strides[1],
             stride_cm=intermediate_cache1.strides[0],
             stride_cn=intermediate_cache1.strides[1],
             #
@@ -656,7 +656,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
 
         fused_moe_kernel_paddle[grid](
             x_q,
-            layer.moe_ffn2_weight.view(paddle.float8_e4m3fn),
+            layer.down_proj_weight.view(paddle.float8_e4m3fn),
             intermediate_cache3,
             x_scale,
             layer.moe_ffn2_weight_scale,
@@ -670,9 +670,9 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             K=moe_intermediate_size,
             stride_am=x_q.strides[0],
             stride_ak=x_q.strides[1],
-            stride_be=layer.moe_ffn2_weight.strides[0],
-            stride_bk=layer.moe_ffn2_weight.strides[2],
-            stride_bn=layer.moe_ffn2_weight.strides[1],
+            stride_be=layer.down_proj_weight.strides[0],
+            stride_bk=layer.down_proj_weight.strides[2],
+            stride_bn=layer.down_proj_weight.strides[1],
             stride_cm=intermediate_cache3.strides[0],
             stride_cn=intermediate_cache3.strides[1],
             stride_asm=x_scale.strides[0],  # only used in blockwise fp8

@@ -162,13 +162,13 @@ class FusedMoE(nn.Layer):
             self.init_weight_only_scale()
 
         # FFN1 parameters
-        self.moe_ffn1_weight = self.create_parameter(
+        self.up_gate_proj_weight = self.create_parameter(
             shape=ffn1_weight_shape,
             dtype=self.weight_dtype,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
         # FFN2 parameters
-        self.moe_ffn2_weight = self.create_parameter(
+        self.down_proj_weight = self.create_parameter(
             shape=ffn2_weight_shape,
             dtype=self.weight_dtype,
             default_initializer=paddle.nn.initializer.Constant(0),

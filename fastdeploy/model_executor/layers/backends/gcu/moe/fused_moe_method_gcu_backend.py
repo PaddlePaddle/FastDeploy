@@ -122,7 +122,7 @@ class GCUFusedMoeMethod(MoEMethodBase):
 
         invoke_fused_moe_kernel(
             x,  # input
-            layer.moe_ffn1_weight,  # weight
+            layer.up_gate_proj_weight,  # weight
             intermediate_cache1,  # output
             None,  # A_scale
             ffn1_B_scale,  # B_scale
@@ -159,7 +159,7 @@ class GCUFusedMoeMethod(MoEMethodBase):
 
         invoke_fused_moe_kernel(
             intermediate_cache2,  # input
-            layer.moe_ffn2_weight,  # weight
+            layer.down_proj_weight,  # weight
             intermediate_cache3,  # output
             None,  # A_scale
             ffn2_B_scale,  # B_scale
@@ -296,8 +296,8 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
         ffn2_weight_scale = paddle.stack(ffn2_weight_scale, axis=0)
 
         name_tensor_map = {
-            "moe_ffn1_weight": ffn1_weight,
-            "moe_ffn2_weight": ffn2_weight,
+            "up_gate_proj_weight": ffn1_weight,
+            "down_proj_weight": ffn2_weight,
             "moe_ffn1_weight_scale": ffn1_weight_scale,
             "moe_ffn2_weight_scale": ffn2_weight_scale
         }

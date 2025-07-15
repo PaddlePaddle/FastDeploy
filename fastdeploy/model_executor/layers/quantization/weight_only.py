@@ -77,12 +77,12 @@ class WeightOnlyConfig(QuantConfigBase):
                 return GCUWeightOnlyLinearMethod(self)
         elif current_platform.is_dcu():
             if isinstance(layer, FusedMoE):
-                from fastdeploy.model_executor.layers.backends import (
-                    DCUTritonWeightOnlyMoEMethod)
+                from fastdeploy.model_executor.layers.backends import \
+                    DCUTritonWeightOnlyMoEMethod
                 return DCUTritonWeightOnlyMoEMethod(self)
             else:
-                from fastdeploy.model_executor.layers.backends import (
-                    DCUWeightOnlyLinearMethod)
+                from fastdeploy.model_executor.layers.backends import \
+                    DCUWeightOnlyLinearMethod
                 return DCUWeightOnlyLinearMethod(self)
         else:
             if isinstance(layer, FusedMoE):
@@ -171,7 +171,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
     def apply(self, layer, x):
         linear_out = weight_only_linear(
             x,
-            weight=layer.linear_weight,
+            weight=layer.weight,
             bias=layer.linear_bias if layer.add_bias else None,
             weight_scale=layer.linear_weight_scale,
             weight_dtype="int8"
@@ -204,7 +204,7 @@ class GPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         """
         quant_weight = get_tensor(state_dict.pop(layer.weight_key))
         weight_scale = get_tensor(state_dict.pop(layer.weight_scale_key))
-        layer.linear_weight.set_value(quant_weight)
+        layer.weight.set_value(quant_weight)
         layer.linear_weight_scale.set_value(
             weight_scale.astype(paddle.get_default_dtype()))
 
@@ -216,6 +216,6 @@ class GPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             arch=self.quant_config.weight_only_linear_arch,
         )
 
-        layer.linear_weight.set_value(quanted_weight_tensor)
+        layer.weight.set_value(quanted_weight_tensor)
         layer.linear_weight_scale.set_value(
             weight_scale_tensor.astype(paddle.get_default_dtype()))

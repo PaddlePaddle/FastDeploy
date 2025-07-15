@@ -19,11 +19,9 @@ from paddle import nn
 
 from fastdeploy.distributed.communication_op import \
     tensor_model_parallel_all_reduce
-from fastdeploy.model_executor.layers.utils import (create_hadamard_matrix_map,
-                                                    get_tensor)
+from fastdeploy.model_executor.layers.quantization.quant_base import \
+    QuantMethodBase
 from fastdeploy.utils import ceil_div
-
-from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 
 
 class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
@@ -36,7 +34,7 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         Triton Group Gemm to compute Fused MoE.
         """
         self.quant_method = quant_method
-        self.added_weight_attrs = ["moe_ffn1_weight", "moe_ffn2_weight"]
+        self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
         self.added_scale_attrs = [
             "moe_ffn1_weight_scale", "moe_ffn2_weight_scale"
         ]
@@ -150,7 +148,7 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
 
         fused_moe_kernel_paddle[grid](
             x,
-            layer.moe_ffn1_weight,
+            layer.up_gate_proj_weight,
             intermediate_cache1,
             None,
             layer.moe_ffn1_weight_scale,
@@ -164,9 +162,9 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
             token_num * top_k,
             stride_am=x.strides[0],
             stride_ak=x.strides[1],
-            stride_be=layer.moe_ffn1_weight.strides[0],
-            stride_bk=layer.moe_ffn1_weight.strides[1],
-            stride_bn=layer.moe_ffn1_weight.strides[2],
+            stride_be=layer.up_gate_proj_weight.strides[0],
+            stride_bk=layer.up_gate_proj_weight.strides[1],
+            stride_bn=layer.up_gate_proj_weight.strides[2],
             stride_cm=intermediate_cache1.strides[0],
             stride_cn=intermediate_cache1.strides[1],
             #
@@ -197,7 +195,7 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
                 ceil_div(hidden_size, config["BLOCK_SIZE_N"]), )
         fused_moe_kernel_paddle[grid](
             intermediate_cache2,
-            layer.moe_ffn2_weight,
+            layer.down_proj_weight,
             intermediate_cache3,
             None,
             layer.moe_ffn2_weight_scale,
@@ -211,9 +209,9 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
             token_num * top_k,
             stride_am=intermediate_cache2.strides[0],
             stride_ak=intermediate_cache2.strides[1],
-            stride_be=layer.moe_ffn2_weight.strides[0],
-            stride_bk=layer.moe_ffn2_weight.strides[1],
-            stride_bn=layer.moe_ffn2_weight.strides[2],
+            stride_be=layer.down_proj_weight.strides[0],
+            stride_bk=layer.down_proj_weight.strides[1],
+            stride_bn=layer.down_proj_weight.strides[2],
             stride_cm=intermediate_cache3.strides[0],
             stride_cn=intermediate_cache3.strides[1],
             stride_asm=-1,

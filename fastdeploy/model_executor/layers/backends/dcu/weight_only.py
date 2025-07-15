@@ -16,8 +16,8 @@
 import paddle
 from paddle.nn.quant import weight_dequantize
 
-from fastdeploy.model_executor.layers.quantization.weight_only import WeightOnlyConfig, GPUWeightOnlyLinearMethod
-
+from fastdeploy.model_executor.layers.quantization.weight_only import (
+    GPUWeightOnlyLinearMethod, WeightOnlyConfig)
 
 
 class DCUWeightOnlyLinearMethod(GPUWeightOnlyLinearMethod):
@@ -35,7 +35,7 @@ class DCUWeightOnlyLinearMethod(GPUWeightOnlyLinearMethod):
 
     def apply(self, layer, x):
         dequant_out = weight_dequantize(
-            x=layer.linear_weight,
+            x=layer.weight,
             scale=layer.linear_weight_scale,
             algo=self.quant_config.algo,
             out_dtype=paddle.get_default_dtype()

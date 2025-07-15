@@ -61,7 +61,7 @@ class GCUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         """
         quant_weight = get_tensor(state_dict.pop(layer.weight_key))
         weight_scale = get_tensor(state_dict.pop(layer.weight_scale_key))
-        layer.linear_weight.set_value(quant_weight)
+        layer.weight.set_value(quant_weight)
         layer.linear_weight_scale.set_value(
             weight_scale.astype(paddle.get_default_dtype()))
 
@@ -73,7 +73,7 @@ class GCUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             self.group_size,  # group_size
         )
 
-        layer.linear_weight.set_value(quanted_weight_tensor)
+        layer.weight.set_value(quanted_weight_tensor)
         layer.linear_weight_scale.set_value(
             weight_scale_tensor.astype(paddle.get_default_dtype()))
 
@@ -82,7 +82,7 @@ class GCUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
     def apply(self, layer, x):
         linear_out = linear_quant(
             lhs=x,
-            rhs=layer.linear_weight,
+            rhs=layer.weight,
             scale=layer.linear_weight_scale,
             bias=None,
             group_size=self.group_size,

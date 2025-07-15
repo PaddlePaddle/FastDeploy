@@ -55,6 +55,6 @@ class XPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         """
         quanted_weight_tensor, weight_scale_tensor = weight_quantize_xpu(
             weight, self.quant_config.algo, -1, -1)
-        layer.linear_weight.set_value(
+        layer.weight.set_value(
             paddle.transpose(quanted_weight_tensor, [1, 0]))
         layer.linear_weight_scale.set_value(weight_scale_tensor)

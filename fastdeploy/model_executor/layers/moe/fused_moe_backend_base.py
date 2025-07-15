@@ -34,7 +34,7 @@ class MoEMethodBase(QuantMethodBase):
             self.moe_quant_type = "w16a16"
         else:
             self.quant_config = quant_config
-        self.added_weight_attrs = ["moe_ffn1_weight", "moe_ffn2_weight"]
+        self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
         self.added_scale_attrs = [
             "moe_ffn1_weight_scale", "moe_ffn2_weight_scale"
         ]

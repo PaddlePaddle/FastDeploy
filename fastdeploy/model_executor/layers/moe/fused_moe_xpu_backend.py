@@ -71,8 +71,8 @@ class XPUMoEMethod(MoEMethodBase):
             x,
             layer.gate_weight.transpose([1, 0]),
             layer.gate_correction_bias,
-            layer.moe_ffn1_weight,
-            layer.moe_ffn2_weight,
+            layer.up_gate_proj_weight,
+            layer.down_proj_weight,
             None,  # ffn1 bias
             None,  # ffn2 bias
             None,  # ffn1 scale
@@ -139,7 +139,7 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
             layer.moe_intermediate_size, layer.hidden_size
         ]
 
-        added_weight_attrs = ["moe_ffn1_weight", "moe_ffn2_weight"]
+        added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
         added_scale_attrs = ["moe_ffn1_weight_scale", "moe_ffn2_weight_scale"]
 
         for idx, weight_tensor in enumerate([ffn1_weights, ffn2_weights]):
@@ -189,8 +189,8 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
             x,
             layer.gate_weight.transpose([1, 0]),
             layer.gate_correction_bias,
-            layer.moe_ffn1_weight,
-            layer.moe_ffn2_weight,
+            layer.up_gate_proj_weight,
+            layer.down_proj_weight,
             None,  # ffn1 bias
             None,  # ffn2 bias
             (layer.moe_ffn1_weight_scale

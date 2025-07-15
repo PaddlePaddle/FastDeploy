@@ -95,7 +95,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         weight_tensor = weights.transpose([1, 0])
         quanted_weight_tensor, weight_block_scale_tensor = (
             per_block_cast_to_fp8(weight_tensor))
-        layer.linear_weight.copy_(quanted_weight_tensor, False)
+        layer.weight.copy_(quanted_weight_tensor, False)
         layer.linear_weight_scale.set_value(weight_block_scale_tensor)
 
     def process_prequanted_weights(self, layer, state_dict):
@@ -106,7 +106,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         weight_scale = get_tensor(state_dict.pop(layer.weight_scale_key))
 
         quant_weight = quant_weight.transpose([1, 0]).contiguous()
-        layer.linear_weight.copy_(quant_weight.view("float8_e4m3fn"), False)
+        layer.weight.copy_(quant_weight.view("float8_e4m3fn"), False)
 
         weight_scale = weight_scale.transpose([1, 0])
         layer.linear_weight_scale.set_value(weight_scale)
@@ -119,7 +119,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         import fastdeploy.model_executor.ops.gpu.deep_gemm as deep_gemm
         deep_gemm.gemm_fp8_fp8_bf16_nt(
             (x, x_scale_tensor),
-            (layer.linear_weight, layer.linear_weight_scale),
+            (layer.weight, layer.linear_weight_scale),
             linear_out,
         )
         if layer.with_bias:

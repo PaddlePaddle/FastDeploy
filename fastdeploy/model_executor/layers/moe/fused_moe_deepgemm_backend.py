@@ -101,8 +101,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         ffn2_weight_scale = paddle.stack(ffn2_weight_scale, axis=0).transpose([0, 2, 1]).contiguous()
 
         name_tensor_map = {
-            "moe_ffn1_weight": ffn1_weight,
-            "moe_ffn2_weight": ffn2_weight,
+            "up_gate_proj_weight": ffn1_weight,
+            "down_proj_weight": ffn2_weight,
             "moe_ffn1_weight_scale": ffn1_weight_scale,
             "moe_ffn2_weight_scale": ffn2_weight_scale
         }
@@ -143,10 +143,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         if token_all_num > 0:
             logger.info(f"token_all_num {token_all_num}")
             (recv_x, recv_x_scale) = recv_x
-            
+
             token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
             token_nums_this_rank_padded = sum(token_nums_this_rank[1].numpy().tolist())
-            
+
             (
                 permute_input,
                 permute_scale,
@@ -173,12 +173,12 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
             # ffn1
             ffn_out = paddle.empty(
-                (permute_input.shape[0], layer.moe_ffn1_weight.shape[1]),
+                (permute_input.shape[0], layer.up_gate_proj_weight.shape[1]),
                 dtype=paddle.bfloat16,
             )
             deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous(
                 (permute_input, permute_scale),
-                (layer.moe_ffn1_weight, layer.moe_ffn1_weight_scale),
+                (layer.up_gate_proj_weight, layer.moe_ffn1_weight_scale),
                 ffn_out,
                 m_indices,
             )
@@ -193,11 +193,11 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0])
 
             ffn_out = paddle.empty(
-                (ffn_out.shape[0], layer.moe_ffn2_weight.shape[1]),
+                (ffn_out.shape[0], layer.down_proj_weight.shape[1]),
                 dtype=paddle.bfloat16)
             deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous(
                 (ffn_in_x, ffn_in_x_scale_tensor),
-                (layer.moe_ffn2_weight, layer.moe_ffn2_weight_scale),
+                (layer.down_proj_weight, layer.moe_ffn2_weight_scale),
                 ffn_out,
                 m_indices,
             )
@@ -261,7 +261,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_masked(
             permute_input,
             (
-                layer.moe_ffn1_weight,
+                layer.up_gate_proj_weight,
                 layer.moe_ffn1_weight_scale,
             ),
             ffn1_out,
@@ -279,7 +279,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_masked(
             (act_out_fp8, scale),
             (
-                layer.moe_ffn2_weight,
+                layer.down_proj_weight,
                 layer.moe_ffn2_weight_scale,
             ),
             ffn_out,
@@ -341,12 +341,12 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         # ffn1
         ffn_out = paddle.empty(
-            (permute_input.shape[0], layer.moe_ffn1_weight.shape[1]),
+            (permute_input.shape[0], layer.up_gate_proj_weight.shape[1]),
             dtype=paddle.bfloat16,
         )
         deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous(
             (permute_input, permute_scale),
-            (layer.moe_ffn1_weight, layer.moe_ffn1_weight_scale),
+            (layer.up_gate_proj_weight, layer.moe_ffn1_weight_scale),
             ffn_out,
             m_indices,
         )
@@ -362,11 +362,11 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0])
 
         ffn_out = paddle.empty(
-            (ffn_out.shape[0], layer.moe_ffn2_weight.shape[1]),
+            (ffn_out.shape[0], layer.down_proj_weight.shape[1]),
             dtype=paddle.bfloat16)
         deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous(
             (ffn_in_x, ffn_in_x_scale_tensor),
-            (layer.moe_ffn2_weight, layer.moe_ffn2_weight_scale),
+            (layer.down_proj_weight, layer.moe_ffn2_weight_scale),
             ffn_out,
             m_indices,
         )

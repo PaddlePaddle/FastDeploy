@@ -342,7 +342,7 @@ class Ernie4_5_VLModel(nn.Layer):
         self._dtype = fd_config.model_config.dtype
         fd_config.model_config.pretrained_config.prefix_name = "ernie"
 
-        self.embeddings = VocabParallelEmbedding(
+        self.embed_tokens = VocabParallelEmbedding(
             fd_config=fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
@@ -350,7 +350,7 @@ class Ernie4_5_VLModel(nn.Layer):
             prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"),
         )
 
-        self.hidden_layers = nn.LayerList([
+        self.layers = nn.LayerList([
             Ernie4_5_VLDecoderLayer(
                 fd_config=fd_config,
                 prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}")
@@ -373,11 +373,11 @@ class Ernie4_5_VLModel(nn.Layer):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.embeddings.load_state_dict(state_dict)
+        self.embed_tokens.load_state_dict(state_dict)
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
-            self.hidden_layers[i].load_state_dict(state_dict)
+            self.layers[i].load_state_dict(state_dict)
 
     def forward(
         self,
@@ -391,7 +391,7 @@ class Ernie4_5_VLModel(nn.Layer):
         image_index = None
         image_token_num = 0
 
-        hidden_states = self.embeddings(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
         # -----------------------
         image_mask = ids_remove_padding == self.im_patch_id
@@ -424,7 +424,7 @@ class Ernie4_5_VLModel(nn.Layer):
 
         residual = None
         for i in range(self.num_layers):
-            hidden_states, residual = self.hidden_layers[i](
+            hidden_states, residual = self.layers[i](
                 forward_meta,
                 hidden_states,
                 residual,
@@ -539,8 +539,8 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         self.vision_model.load_state_dict(state_dict)
         self.resampler_model.load_state_dict(state_dict)
         if self.tie_word_embeddings:
-            self.lm_head.out_linear.weight.set_value(
-                self.ernie.embeddings.word_embeddings.weight.transpose([1, 0]))
+            self.lm_head.linear.weight.set_value(
+                self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
         else:
             self.lm_head.load_state_dict(state_dict)
 

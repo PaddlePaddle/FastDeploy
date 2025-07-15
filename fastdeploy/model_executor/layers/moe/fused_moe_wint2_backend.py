@@ -157,8 +157,8 @@ class TritonWint2FusedMoeMethod(Wint2MoeMethod):
         ffn2_code_zp = paddle.stack(ffn2_code_zp, axis=0)
 
         name_tensor_map = {
-            "moe_ffn1_weight": ffn1_weight,
-            "moe_ffn2_weight": ffn2_weight,
+            "up_gate_proj_weight": ffn1_weight,
+            "down_proj_weight": ffn2_weight,
             "moe_ffn1_weight_scale": ffn1_weight_scale,
             "moe_ffn2_weight_scale": ffn2_weight_scale,
             "moe_ffn1_super_scales": ffn1_super_scales,
@@ -209,8 +209,8 @@ class TritonWint2FusedMoeMethod(Wint2MoeMethod):
         ffn_out = fastdeploy.model_executor.ops.gpu.moe_expert_ffn_wint2(
             permute_input,
             token_nums_per_expert,
-            layer.moe_ffn1_weight,
-            layer.moe_ffn2_weight,
+            layer.up_gate_proj_weight,
+            layer.down_proj_weight,
             None,
             layer.moe_ffn1_super_scales,
             layer.moe_ffn2_super_scales,

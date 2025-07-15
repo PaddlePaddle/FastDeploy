@@ -94,9 +94,9 @@ class RMSNorm(nn.Layer):
         Initialize the weights and biases.
         """
 
-        self.ln_weight = None
+        self.weight = None
         if self.with_weight:
-            self.ln_weight = self.create_parameter(
+            self.weight = self.create_parameter(
                 shape=[self.hidden_size],
                 default_initializer=nn.initializer.Constant(value=1.0),
                 dtype=self._norm_weight_dtype,
@@ -115,7 +115,7 @@ class RMSNorm(nn.Layer):
         weight_tensor = paddle.cast(
             get_tensor(state_dict.pop(self.weight_key)),
             self._norm_weight_dtype)
-        self.ln_weight.set_value(weight_tensor)
+        self.weight.set_value(weight_tensor)
 
     def forward(
             self,
@@ -139,14 +139,14 @@ class RMSNorm(nn.Layer):
         """
         if current_platform.is_gcu():
             if residual_input is None:
-                return rms_norm(x, self.ln_weight, self.eps)
+                return rms_norm(x, self.weight, self.eps)
             norm_out = self.norm_func(
-                x, residual_input, self.ln_weight, self.eps
+                x, residual_input, self.weight, self.eps
             )
         else:
             norm_out = self.norm_func(
                 x,
-                norm_weight=self.ln_weight,
+                norm_weight=self.weight,
                 norm_bias=None,
                 epsilon=self.eps,
                 begin_norm_axis=self.begin_norm_axis,
@@ -227,16 +227,16 @@ class LayerNorm(nn.Layer):
         Initialize the weights and biases.
         """
 
-        self.ln_weight = None
+        self.weight = None
         if self.with_weight:
-            self.ln_weight = self.create_parameter(
+            self.weight = self.create_parameter(
                 shape=[self.hidden_size],
                 default_initializer=nn.initializer.Constant(value=1.0),
                 dtype=self._norm_weight_dtype,
             )
-        self.ln_bias = None
+        self.bias = None
         if self.with_bias:
-            self.ln_bias = self.create_parameter(
+            self.bias = self.create_parameter(
                 shape=[self.hidden_size],
                 is_bias=True,
                 dtype=self._norm_weight_dtype,
@@ -255,14 +255,14 @@ class LayerNorm(nn.Layer):
         weight_tensor = paddle.cast(
             get_tensor(state_dict.pop(self.weight_key)),
             self._norm_weight_dtype)
-        self.ln_weight.set_value(weight_tensor)
+        self.weight.set_value(weight_tensor)
 
         # bias
         if self.with_bias:
             bias_tensor = paddle.cast(
                 get_tensor(state_dict.pop(self.bias_key)),
                 self._norm_weight_dtype)
-            self.ln_bias.set_value(bias_tensor)
+            self.bias.set_value(bias_tensor)
 
     def forward(
             self,
@@ -285,7 +285,7 @@ class LayerNorm(nn.Layer):
                   operations (like linear transformation) on the `residual_input`.
         """
         if current_platform.is_iluvatar():
-            if self.ln_weight is None and self.ln_bias is None:
+            if self.weight is None and self.bias is None:
                 out = x
                 if self.linear_bias is not None:
                     out += self.linear_bias
@@ -303,7 +303,7 @@ class LayerNorm(nn.Layer):
                 out = self.norm_func(
                     x=y,
                     normalized_shape=y.shape[1:],
-                    weight=self.ln_weight,
+                    weight=self.weight,
                     bias=self.linear_bias,
                     epsilon=self.eps,
                 )
@@ -312,7 +312,7 @@ class LayerNorm(nn.Layer):
                 out = self.norm_func(
                     x=x,
                     normalized_shape=x.shape[1:],
-                    weight=self.ln_weight,
+                    weight=self.weight,
                     bias=self.linear_bias,
                     epsilon=self.eps,
                 )
@@ -320,8 +320,8 @@ class LayerNorm(nn.Layer):
         else:
             norm_out = self.norm_func(
                 x,
-                norm_weight=self.ln_weight,
-                norm_bias=self.ln_bias,
+                norm_weight=self.weight,
+                norm_bias=self.bias,
                 epsilon=self.eps,
                 begin_norm_axis=1,
                 bias=self.linear_bias,

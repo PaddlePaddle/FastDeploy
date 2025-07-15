@@ -31,7 +31,8 @@ if current_platform.is_cuda() and not current_platform.is_dcu():
     from fastdeploy.model_executor.ops.gpu import (moe_expert_dispatch,
                                                    moe_expert_reduce, noaux_tc)
 elif current_platform.is_iluvatar():
-    from fastdeploy.model_executor.ops.iluvatar import moe_expert_dispatch, moe_expert_reduce
+    from fastdeploy.model_executor.ops.iluvatar import (moe_expert_dispatch,
+                                                        moe_expert_reduce)
 
 
 # used for deepseek_v3
@@ -95,8 +96,8 @@ class CutlassMoEMethod(MoEMethodBase):
             return fastdeploy.model_executor.ops.iluvatar.moe_expert_ffn(
                 permute_input,
                 token_nums_per_expert,
-                layer.moe_ffn1_weight,
-                layer.moe_ffn2_weight,
+                layer.up_gate_proj_weight,
+                layer.down_proj_weight,
                 None,
                 (layer.moe_ffn1_weight_scale if hasattr(
                     layer, "moe_ffn1_weight_scale") else None),
@@ -111,8 +112,8 @@ class CutlassMoEMethod(MoEMethodBase):
         return fastdeploy.model_executor.ops.gpu.moe_expert_ffn(
             permute_input,
             token_nums_per_expert,
-            layer.moe_ffn1_weight,
-            layer.moe_ffn2_weight,
+            layer.up_gate_proj_weight,
+            layer.down_proj_weight,
             None,
             (layer.moe_ffn1_weight_scale
              if hasattr(layer, "moe_ffn1_weight_scale") else None),
@@ -462,8 +463,8 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
         ffn2_weight_scale = paddle.stack(ffn2_weight_scale, axis=0)
 
         name_tensor_map = {
-            "moe_ffn1_weight": ffn1_weight,
-            "moe_ffn2_weight": ffn2_weight,
+            "up_gate_proj_weight": ffn1_weight,
+            "down_proj_weight": ffn2_weight,
             "moe_ffn1_weight_scale": ffn1_weight_scale,
             "moe_ffn2_weight_scale": ffn2_weight_scale
         }

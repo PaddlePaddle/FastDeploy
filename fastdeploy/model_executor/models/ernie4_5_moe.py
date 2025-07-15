@@ -55,7 +55,7 @@ class Ernie4_5_MLP(nn.Layer):
     ) -> None:
         super().__init__()
         self.nranks = fd_config.parallel_config.tensor_parallel_size
-        self.gate_up_proj = MergedColumnParallelLinear(
+        self.up_gate_proj = MergedColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.up_gate_proj",
             input_size=fd_config.model_config.hidden_size,
@@ -79,11 +79,11 @@ class Ernie4_5_MLP(nn.Layer):
         )
 
     def load_state_dict(self, state_dict):
-        self.gate_up_proj.load_state_dict(state_dict)
+        self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
     def forward(self, hidden_states: paddle.Tensor):
-        gate_up_out = self.gate_up_proj(hidden_states)
+        gate_up_out = self.up_gate_proj(hidden_states)
         act_out = self.act_fn(gate_up_out)
         down_out = self.down_proj(act_out)
         return down_out
@@ -349,14 +349,14 @@ class Ernie4_5_Model(nn.Layer):
         self.num_layers = fd_config.model_config.num_hidden_layers
         fd_config.model_config.pretrained_config.prefix_name = "ernie"
 
-        self.embeddings = VocabParallelEmbedding(
+        self.embed_tokens = VocabParallelEmbedding(
             fd_config=fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
             params_dtype=paddle.get_default_dtype(),
             prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"))
 
-        self.hidden_layers = nn.LayerList([
+        self.layers = nn.LayerList([
             Ernie4_5_DecoderLayer(
                 fd_config=fd_config,
                 prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}")
@@ -379,22 +379,22 @@ class Ernie4_5_Model(nn.Layer):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.embeddings.load_state_dict(state_dict)
+        self.embed_tokens.load_state_dict(state_dict)
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
-            self.hidden_layers[i].load_state_dict(state_dict)
+            self.layers[i].load_state_dict(state_dict)
 
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        hidden_states = self.embeddings(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
         residual = None
         for i in range(self.num_layers):
-            hidden_states, residual = self.hidden_layers[i](forward_meta,
+            hidden_states, residual = self.layers[i](forward_meta,
                                                             hidden_states,
                                                             residual)
 
@@ -417,7 +417,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         """
         super(Ernie4_5_MoeForCausalLM, self).__init__(fd_config)
         self.fd_config = fd_config
-        self.model = Ernie4_5_Model(fd_config=fd_config)
+        self.ernie = Ernie4_5_Model(fd_config=fd_config)
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
@@ -444,10 +444,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.model.load_state_dict(state_dict)
+        self.ernie.load_state_dict(state_dict)
         if self.tie_word_embeddings:
-            self.lm_head.out_linear.weight.set_value(
-                self.model.embeddings.word_embeddings.weight.transpose([1, 0]))
+            self.lm_head.linear.weight.set_value(
+                self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
         else:
             self.lm_head.load_state_dict(state_dict)
 
@@ -468,14 +468,14 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         )
         for i in range(self.fd_config.model_config.moe_layer_start_index,
                        self.fd_config.model_config.num_hidden_layers):
-            self.model.hidden_layers[i].mlp.fused_moe(fake_hidden_states)
+            self.ernie.layers[i].mlp.fused_moe(fake_hidden_states)
 
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        hidden_states = self.model(ids_remove_padding=ids_remove_padding,
+        hidden_states = self.ernie(ids_remove_padding=ids_remove_padding,
                                    forward_meta=forward_meta)
 
         return hidden_states

@@ -66,7 +66,7 @@ class ParallelEHProjection(nn.Layer):
         else:
             if self.column_cut:
                 need_gather = True
-                self.out_linear = ColumnParallelLinear(
+                self.linear = ColumnParallelLinear(
                     embedding_dim,
                     num_embeddings,
                     mp_group=fleet.get_hybrid_communicate_group().
@@ -78,7 +78,7 @@ class ParallelEHProjection(nn.Layer):
                     fuse_matmul_bias=False,  # False diff更小
                 )
             else:
-                self.out_linear = RowParallelLinear(
+                self.linear = RowParallelLinear(
                     embedding_dim,
                     num_embeddings,
                     mp_group=fleet.get_hybrid_communicate_group().
@@ -106,14 +106,14 @@ class ParallelEHProjection(nn.Layer):
             weight_tensor = get_tensor(
                 state_dict.pop(self.linear_weight_key)).astype(
                     paddle.get_default_dtype())
-            if self.out_linear.weight.shape != weight_tensor.shape:
+            if self.linear.weight.shape != weight_tensor.shape:
                 weight_tensor = weight_tensor.transpose([1, 0])
-            self.out_linear.weight.set_value(weight_tensor)
+            self.linear.weight.set_value(weight_tensor)
 
             if self.linear_bias_key is not None:
                 bias = get_tensor(state_dict.pop(self.linear_bias_key)).astype(
                     paddle.get_default_dtype())
-                self.out_linear.bias.set_value(bias)
+                self.linear.bias.set_value(bias)
 
     def forward(self, input):
         """
@@ -129,5 +129,5 @@ class ParallelEHProjection(nn.Layer):
         if self.use_ep:
             logits = paddle.matmul(logits, self.weight)
         else:
-            logits = self.out_linear(logits)
+            logits = self.linear(logits)
         return logits
