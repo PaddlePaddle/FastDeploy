@@ -61,7 +61,7 @@ class DeepSeekV3MLP(nn.Layer):
     ) -> None:
         super().__init__()
 
-        self.gate_up_proj = MergedColumnParallelLinear(
+        self.up_gate_proj = MergedColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.up_gate_proj",
             input_size=fd_config.model_config.hidden_size,
@@ -88,13 +88,13 @@ class DeepSeekV3MLP(nn.Layer):
     def load_state_dict(self, state_dict):
         """
         """
-        self.gate_up_proj.load_state_dict(state_dict)
+        self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
     def forward(self, x):
         """
         """
-        gate_up_out = self.gate_up_proj(x)
+        gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
         down_out = self.down_proj(act_out)
         return down_out
@@ -115,9 +115,9 @@ class DeepSeekV3MoE(nn.Layer):
             "gate_weight_key": f"{prefix}.gate.weight",
             "gate_correction_bias_key":
             f"{prefix}.gate.e_score_correction_bias",
-            "ffn1_expert_weight_key":
+            "up_gate_proj_expert_weight_key":
             f"{prefix}.experts.{{}}.up_gate_proj.weight",
-            "ffn2_expert_weight_key":
+            "down_proj_expert_weight_key":
             f"{prefix}.experts.{{}}.down_proj.weight",
         }
 
@@ -528,7 +528,7 @@ class DeepSeekV3Model(nn.Layer):
         self.num_layers = fd_config.model_config.num_hidden_layers
         fd_config.model_config.pretrained_config.prefix_name = "deepseek_v3"
 
-        self.embeddings = VocabParallelEmbedding(
+        self.embed_tokens = VocabParallelEmbedding(
             fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
@@ -554,7 +554,7 @@ class DeepSeekV3Model(nn.Layer):
         """
         Load model parameters from a given state dictionary.
         """
-        self.embeddings.load_state_dict(state_dict)
+        self.embed_tokens.load_state_dict(state_dict)
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
@@ -569,7 +569,7 @@ class DeepSeekV3Model(nn.Layer):
     ):
         """
         """
-        hidden_states = self.embeddings(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
         residual = None
         for i in range(self.num_layers):

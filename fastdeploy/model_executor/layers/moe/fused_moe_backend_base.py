@@ -34,9 +34,9 @@ class MoEMethodBase(QuantMethodBase):
             self.moe_quant_type = "w16a16"
         else:
             self.quant_config = quant_config
-        self.added_weight_attrs = ["moe_ffn1_weight", "moe_ffn2_weight"]
+        self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
         self.added_scale_attrs = [
-            "moe_ffn1_weight_scale", "moe_ffn2_weight_scale"
+            "up_gate_proj_weight_scale", "down_proj_weight_scale"
         ]
         self.pack_num = 1
 
@@ -63,14 +63,14 @@ class MoEMethodBase(QuantMethodBase):
         """
         pass
 
-    def check(self, layer: nn.Layer, ffn1_weights, ffn2_weights):
+    def check(self, layer: nn.Layer, up_gate_proj_weights, down_proj_weights):
         """
         check layer is valid for this method
         """
-        assert ffn1_weights[0].shape == [
+        assert up_gate_proj_weights[0].shape == [
             layer.hidden_size // self.pack_num, layer.moe_intermediate_size * 2
         ]
-        assert ffn2_weights[0].shape == [
+        assert down_proj_weights[0].shape == [
             layer.moe_intermediate_size // self.pack_num, layer.hidden_size
         ]
 

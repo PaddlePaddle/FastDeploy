@@ -24,9 +24,10 @@ import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.transformers import PretrainedModel
+from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig, ModelConfig
+from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication_op import \
     tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.graph_optimization.decorator import \
@@ -99,12 +100,12 @@ class Ernie4_5_VLMoE(nn.Layer):
                 f"{prefix}.gate.weight",
                 "gate_correction_bias_key":
                 f"{prefix}.moe_statics.e_score_correction_bias",
-                "ffn1_expert_weight_key":
+                "up_gate_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.weight",
-                "ffn2_expert_weight_key":
+                "down_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.down_proj.weight",
             }
-            self.mlp_text = FusedMoE(
+            self.text_fused_moe = FusedMoE(
                 fd_config=fd_config,
                 reduce_results=False,
                 moe_intermediate_size=fd_config.model_config.
@@ -116,9 +117,9 @@ class Ernie4_5_VLMoE(nn.Layer):
                 moe_tag="Text",
                 weight_key_map=weight_key_map,
             )
-            self.mlp_text.extract_gate_correction_bias = self.extract_gate_correction_bias_text
+            self.text_fused_moe.extract_gate_correction_bias = self.extract_gate_correction_bias_text
         else:
-            self.mlp_text = Ernie4_5_VLMLP(
+            self.text_fused_moe = Ernie4_5_VLMLP(
                 fd_config=fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
                 prefix=f"{prefix}",
@@ -131,12 +132,12 @@ class Ernie4_5_VLMoE(nn.Layer):
                 f"{prefix}.gate.weight_1",
                 "gate_correction_bias_key":
                 f"{prefix}.moe_statics.e_score_correction_bias",
-                "ffn1_expert_weight_key":
+                "up_gate_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.weight",
-                "ffn2_expert_weight_key":
+                "down_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.down_proj.weight",
             }
-            self.mlp_image = FusedMoE(
+            self.image_fused_moe = FusedMoE(
                 fd_config=fd_config,
                 reduce_results=False,
                 moe_intermediate_size=fd_config.model_config.
@@ -148,9 +149,9 @@ class Ernie4_5_VLMoE(nn.Layer):
                 moe_tag="Image",
                 weight_key_map=weight_key_map,
             )
-            self.mlp_image.extract_gate_correction_bias = self.extract_gate_correction_bias_image
+            self.image_fused_moe.extract_gate_correction_bias = self.extract_gate_correction_bias_image
         else:
-            self.mlp_image = Ernie4_5_VLMLP(
+            self.image_fused_moe = Ernie4_5_VLMLP(
                 fd_config=fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
                 prefix=f"{prefix}",
@@ -185,10 +186,10 @@ class Ernie4_5_VLMoE(nn.Layer):
         return gate_correction_bias_tensor[1].unsqueeze(0)
 
     def load_state_dict(self, state_dict):
-        self.mlp_text.load_state_dict(state_dict)
-        self.mlp_image.load_state_dict(state_dict)
-        if self.mlp_text.moe_use_gate_correction_bias:
-            state_dict.pop(self.mlp_text.gate_correction_bias_key)
+        self.text_fused_moe.load_state_dict(state_dict)
+        self.image_fused_moe.load_state_dict(state_dict)
+        if self.text_fused_moe.moe_use_gate_correction_bias:
+            state_dict.pop(self.text_fused_moe.gate_correction_bias_key)
         if self.num_shared_experts > 0:
             self.share_experts.load_state_dict(state_dict)
 
@@ -205,8 +206,8 @@ class Ernie4_5_VLMoE(nn.Layer):
                 vl_moe_meta.image_index,
                 True,
             )
-            text_out = self.mlp_text(vl_moe_meta.text_input)
-            image_out = self.mlp_image(vl_moe_meta.image_input)
+            text_out = self.text_fused_moe(vl_moe_meta.text_input)
+            image_out = self.image_fused_moe(vl_moe_meta.image_input)
             text_image_gather_scatter(
                 hidden_states,
                 text_out,
@@ -217,7 +218,7 @@ class Ernie4_5_VLMoE(nn.Layer):
                 False,
             )
         else:
-            hidden_states = self.mlp_text(hidden_states)
+            hidden_states = self.text_fused_moe(hidden_states)
         if self.num_shared_experts > 0:
             hidden_states += share_experts_out
         if self.tp_size > 1:
@@ -342,7 +343,7 @@ class Ernie4_5_VLModel(nn.Layer):
         self._dtype = fd_config.model_config.dtype
         fd_config.model_config.pretrained_config.prefix_name = "ernie"
 
-        self.embeddings = VocabParallelEmbedding(
+        self.embed_tokens = VocabParallelEmbedding(
             fd_config=fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
@@ -350,7 +351,7 @@ class Ernie4_5_VLModel(nn.Layer):
             prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"),
         )
 
-        self.hidden_layers = nn.LayerList([
+        self.layers = nn.LayerList([
             Ernie4_5_VLDecoderLayer(
                 fd_config=fd_config,
                 prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}")
@@ -373,11 +374,11 @@ class Ernie4_5_VLModel(nn.Layer):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.embeddings.load_state_dict(state_dict)
+        self.embed_tokens.load_state_dict(state_dict)
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
-            self.hidden_layers[i].load_state_dict(state_dict)
+            self.layers[i].load_state_dict(state_dict)
 
     def forward(
         self,
@@ -391,7 +392,7 @@ class Ernie4_5_VLModel(nn.Layer):
         image_index = None
         image_token_num = 0
 
-        hidden_states = self.embeddings(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
         # -----------------------
         image_mask = ids_remove_padding == self.im_patch_id
@@ -424,7 +425,7 @@ class Ernie4_5_VLModel(nn.Layer):
 
         residual = None
         for i in range(self.num_layers):
-            hidden_states, residual = self.hidden_layers[i](
+            hidden_states, residual = self.layers[i](
                 forward_meta,
                 hidden_states,
                 residual,
@@ -539,8 +540,8 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         self.vision_model.load_state_dict(state_dict)
         self.resampler_model.load_state_dict(state_dict)
         if self.tie_word_embeddings:
-            self.lm_head.out_linear.weight.set_value(
-                self.ernie.embeddings.word_embeddings.weight.transpose([1, 0]))
+            self.lm_head.linear.weight.set_value(
+                self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
         else:
             self.lm_head.load_state_dict(state_dict)
 
@@ -666,7 +667,7 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
     ]
 
     @classmethod
-    def _get_tensor_parallel_mappings(cls, config: ModelConfig, is_split=True):
+    def _get_tensor_parallel_mappings(cls, config: PretrainedConfig, is_split=True):
         """
         get_tensor_parallel_mappings
         """
@@ -686,10 +687,10 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
             is_split=is_split,
             tensor_parallel_degree=config.tensor_parallel_degree,
             tensor_parallel_rank=config.tensor_parallel_rank,
-            num_attention_heads=config.vision_config.num_heads,
-            num_key_value_heads=config.vision_config.num_heads,
-            head_dim=config.vision_config.hidden_size
-            // config.vision_config.num_heads,
+            num_attention_heads=config.vision_config.get("num_heads"),
+            num_key_value_heads=config.vision_config.get("num_heads"),
+            head_dim=config.vision_config.get("hidden_size")
+            // config.vision_config.get("num_heads"),
         )
 
         def get_tensor_parallel_split_mappings(
@@ -754,7 +755,7 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
             config.prefix_name,
         )
         vision_mappings = get_vison_parallel_split_mappings(
-            config.vision_config.depth
+            config.vision_config.get("depth")
         )
 
         return {**mappings, **vision_mappings}
