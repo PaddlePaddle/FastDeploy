@@ -58,6 +58,7 @@ PRETRAINED_INIT_CONFIGURATION = {
     "freq_allocation":20,
     "tie_word_embeddings":False,
     "rms_norm_eps":1e-5,
+    "moe_num_experts": None,
 }
 
 
