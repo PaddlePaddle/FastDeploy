@@ -124,9 +124,7 @@ class PaddleDisWorkerProc():
             is_server=False,
             num_client=self.parallel_config.tensor_parallel_degree,
             client_id=self.parallel_config.tensor_parallel_rank,
-            local_data_parallel_size=self.parallel_config.expert_parallel_degree,
-            local_data_parallel_id=self.fd_config.parallel_config.
-            expert_parallel_rank)
+            local_data_parallel_id=self.parallel_config.expert_parallel_rank)
 
     def init_health_status(self) -> None:
         """
