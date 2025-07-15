@@ -38,11 +38,11 @@ class GCUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
 
     def create_weights(self, layer):
         # The scale shape should be equal to the output dim of weight using Per-Channel Quantization.
-        weight_scale_shape = [layer.linear_weight_shape[1]]
+        weight_scale_shape = [layer.weight_shape[1]]
 
-        layer.linear_weight_shape.reverse()
+        layer.weight_shape.reverse()
         if self.quant_config.name() == "wint4":
-            layer.linear_weight_shape[0] //= 2
+            layer.weight_shape[0] //= 2
         layer.weight_dtype = "int8"
         layer.weight_scale = layer.create_parameter(
             shape=weight_scale_shape,

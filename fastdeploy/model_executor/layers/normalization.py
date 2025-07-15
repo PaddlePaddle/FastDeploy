@@ -43,7 +43,7 @@ class RMSNorm(nn.Layer):
         hidden_size: int,
         eps: float = 1e-5,
         prefix: str = "",
-        linear_bias: paddle.Tensor = None,
+        bias: paddle.Tensor = None,
         quant_scale: float = None,
         begin_norm_axis: int = 1,
     ) -> None:
@@ -57,7 +57,7 @@ class RMSNorm(nn.Layer):
             hidden_size (int) : size of hidden state.
             eps:(float, optional): Small value added to the variance to avoid division by zero. Defaults to 1e-5.
             prefix(str,optional):The name of current layer. Defaults to "".
-            linear_bias (paddle.Tensor,optional): Initial bias value for the linear layer (if used). Defaults to None.
+            bias (paddle.Tensor,optional): Initial bias value for the linear layer (if used). Defaults to None.
             quant_scale(float,optional):Quantization scale, used in quantization scenarios. Defaults to -1, indicating no quantization.
             begin_norm_axis (int, optional): The axis along which to perform normalization. Defaults to 1.
 
@@ -78,7 +78,7 @@ class RMSNorm(nn.Layer):
             self.norm_func: Callable = fused_add_rms_norm
         else:
             self.norm_func: Callable = fused_rms_norm
-        self.linear_bias: Optional[paddle.Tensor] = linear_bias
+        self.bias: Optional[paddle.Tensor] = bias
         self.quant_scale: Optional[float] = quant_scale
         self._dtype: str = self._helper.get_default_dtype()
         self._norm_weight_dtype: str = self._dtype
@@ -150,7 +150,7 @@ class RMSNorm(nn.Layer):
                 norm_bias=None,
                 epsilon=self.eps,
                 begin_norm_axis=self.begin_norm_axis,
-                bias=self.linear_bias,
+                bias=self.bias,
                 residual=residual_input,
                 quant_scale=-1 if self.quant_scale is None else self.quant_scale,
                 quant_round_type=self.quant_round_type,
@@ -174,7 +174,7 @@ class LayerNorm(nn.Layer):
         hidden_size: int,
         eps: float = 1e-5,
         prefix="",
-        linear_bias: paddle.Tensor = None,
+        bias: paddle.Tensor = None,
         quant_scale: float = None,
         with_bias: bool = False,
     ):
@@ -189,7 +189,7 @@ class LayerNorm(nn.Layer):
             eps:(float, optional): Small value added to the variance to avoid division by zero. Defaults to 1e-5.
             prefix (str): Unique name of the layer, used for naming internal attributes,
                 you can give it any name you like.
-            linear_bias (float, optional): Initial bias value for the linear layer (if used). Defaults to None.
+            bias (float, optional): Initial bias value for the linear layer (if used). Defaults to None.
             quant_scale(float,optional):Quantization scale, used in quantization scenarios. Defaults to -1, indicating no quantization.
             with_bias (bool):Whether to include bias or not. Defaults to False.
         Raises:
@@ -212,7 +212,7 @@ class LayerNorm(nn.Layer):
             self.norm_func: Callable = paddle.nn.functional.layer_norm
         else:
             self.norm_func: Callable = fused_layer_norm
-        self.linear_bias: Optional[paddle.Tensor] = linear_bias
+        self.bias: Optional[paddle.Tensor] = bias
         self._dtype: str = self._helper.get_default_dtype()
         self._norm_weight_dtype: str = "float32"
 
@@ -287,8 +287,8 @@ class LayerNorm(nn.Layer):
         if current_platform.is_iluvatar():
             if self.weight is None and self.bias is None:
                 out = x
-                if self.linear_bias is not None:
-                    out += self.linear_bias
+                if self.bias is not None:
+                    out += self.bias
                 if residual_input is not None:
                     out += residual_input
                     return out, out
@@ -304,7 +304,7 @@ class LayerNorm(nn.Layer):
                     x=y,
                     normalized_shape=y.shape[1:],
                     weight=self.weight,
-                    bias=self.linear_bias,
+                    bias=self.bias,
                     epsilon=self.eps,
                 )
                 return out, y
@@ -313,7 +313,7 @@ class LayerNorm(nn.Layer):
                     x=x,
                     normalized_shape=x.shape[1:],
                     weight=self.weight,
-                    bias=self.linear_bias,
+                    bias=self.bias,
                     epsilon=self.eps,
                 )
                 return out
@@ -324,7 +324,7 @@ class LayerNorm(nn.Layer):
                 norm_bias=self.bias,
                 epsilon=self.eps,
                 begin_norm_axis=1,
-                bias=self.linear_bias,
+                bias=self.bias,
                 residual=residual_input,
                 quant_scale=-1 if self.quant_scale is None else self.quant_scale,
                 quant_round_type=self.quant_round_type,

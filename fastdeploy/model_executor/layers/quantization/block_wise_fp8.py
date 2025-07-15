@@ -78,7 +78,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         self.quant_config = quant_config
 
     def create_weights(self, layer):
-        layer.linear_weight_shape.reverse()
+        layer.weight_shape.reverse()
         layer.weight_scale = layer.create_parameter(
             shape=[
                 (layer.output_size + self.quant_config.weight_block_size[0] -
@@ -123,5 +123,5 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
             linear_out,
         )
         if layer.with_bias:
-            linear_out = paddle.add(linear_out, layer.linear_bias)
+            linear_out = paddle.add(linear_out, layer.bias)
         return linear_out

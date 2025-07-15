@@ -152,11 +152,11 @@ class WeightOnlyLinearMethod(QuantMethodBase):
     def create_weights(self, layer):
 
         # The scale shape should be equal to the output dim of weight using Per-Channel Quantization.
-        weight_scale_shape = [layer.linear_weight_shape[1]]
+        weight_scale_shape = [layer.weight_shape[1]]
 
-        layer.linear_weight_shape.reverse()
+        layer.weight_shape.reverse()
         if self.quant_config.name() == "wint4":
-            layer.linear_weight_shape[0] //= 2
+            layer.weight_shape[0] //= 2
         layer.weight_dtype = "int8"
         layer.weight_scale = layer.create_parameter(
             shape=weight_scale_shape,
@@ -172,7 +172,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         linear_out = weight_only_linear(
             x,
             weight=layer.weight,
-            bias=layer.linear_bias if layer.add_bias else None,
+            bias=layer.bias if layer.add_bias else None,
             weight_scale=layer.weight_scale,
             weight_dtype="int8"
             if self.quant_config.name() == "wint8" else "int4",

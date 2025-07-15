@@ -69,7 +69,7 @@ class W8A8LinearMethod(QuantMethodBase):
         self.smooth_quant_method = SmoothQuantLinearMethod(quant_config)
 
     def create_weights(self, layer):
-        layer.linear_weight_shape.reverse()
+        layer.weight_shape.reverse()
         layer.weight_dtype = "int8"
         if self.quant_config.use_smooth_quant:
             self.smooth_quant_method.create_weights(layer)

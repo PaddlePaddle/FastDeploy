@@ -79,7 +79,7 @@ class LinearBase(nn.Layer):
 
         self._dtype = self._helper.get_default_dtype()
         self.weight_dtype = self._dtype
-        self.linear_weight_shape = [
+        self.weight_shape = [
             self.input_size,
             self.output_size,
         ]
@@ -97,15 +97,15 @@ class LinearBase(nn.Layer):
         if self.skip_quant:
             self.weight_dtype = self._dtype
         self.weight = self.create_parameter(
-            shape=self.linear_weight_shape,
+            shape=self.weight_shape,
             dtype=self.weight_dtype,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
 
-        self.linear_bias = None
+        self.bias = None
         if self.with_bias:
-            self.linear_bias = self.create_parameter(
+            self.bias = self.create_parameter(
                 shape=[self.output_size],
                 dtype=self._dtype,
                 is_bias=True,
@@ -157,7 +157,7 @@ class LinearBase(nn.Layer):
         if self.with_bias:
             bias_tensor = paddle.to_tensor(
                 get_tensor(state_dict.pop(self.bias_key)))
-            self.linear_bias.set_value(bias_tensor)
+            self.bias.set_value(bias_tensor)
 
     def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:
         """
@@ -177,7 +177,7 @@ class LinearBase(nn.Layer):
         else:
             linear_out = paddle.matmul(x, self.weight)
             if self.with_bias:
-                linear_out = paddle.add(linear_out, self.linear_bias)
+                linear_out = paddle.add(linear_out, self.bias)
 
         return linear_out
 
@@ -219,7 +219,7 @@ class ReplicatedLinear(LinearBase):
                          skip_quant=skip_quant)
 
         self.hidden_size = fd_config.model_config.hidden_size
-        self.linear_weight_shape = [
+        self.weight_shape = [
             self.input_size,
             self.output_size,
         ]
@@ -272,7 +272,7 @@ class ColumnParallelLinear(LinearBase):
             output_size,
             self.nranks)  # Split the output_size using TP inference.
         self.hidden_size = fd_config.model_config.hidden_size
-        self.linear_weight_shape = [
+        self.weight_shape = [
             self.input_size,
             self.output_size,
         ]
@@ -287,7 +287,7 @@ class ColumnParallelLinear(LinearBase):
         if self.skip_quant:
             self.weight_dtype = self._dtype
         self.weight = self.create_parameter(
-            shape=self.linear_weight_shape,
+            shape=self.weight_shape,
             dtype=self.weight_dtype,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
@@ -296,16 +296,16 @@ class ColumnParallelLinear(LinearBase):
             # col parallel
             _set_var_distributed(self.weight, split_axis=1)
 
-        self.linear_bias = None
+        self.bias = None
         if self.with_bias:
-            self.linear_bias = self.create_parameter(
+            self.bias = self.create_parameter(
                 shape=[self.output_size],
                 dtype=self._dtype,
                 is_bias=True,
             )
             if self.nranks > 0:
                 # col parallel
-                _set_var_distributed(self.linear_bias, split_axis=1)
+                _set_var_distributed(self.bias, split_axis=1)
 
         # smooth quant
         self.linear_shift = None
@@ -485,7 +485,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             if self.bias_key in state_dict.keys():
                 bias_tensor = paddle.to_tensor(
                     get_tensor(state_dict.pop(self.bias_key)))
-                self.linear_bias.set_value(bias_tensor)
+                self.bias.set_value(bias_tensor)
             else:
                 q_bias_key = self.bias_key.replace("qkv_proj", "q_proj")
                 k_bias_key = self.bias_key.replace("qkv_proj", "k_proj")
@@ -494,7 +494,7 @@ class QKVParallelLinear(ColumnParallelLinear):
                 k_bias = get_tensor(state_dict.pop(k_bias_key))
                 v_bias = get_tensor(state_dict.pop(v_bias_key))
                 qkv_bias = paddle.concat([q_bias, k_bias, v_bias], axis=-1)
-            self.linear_bias.set_value(qkv_bias)
+            self.bias.set_value(qkv_bias)
 
 
 class RowParallelLinear(LinearBase):
@@ -554,7 +554,7 @@ class RowParallelLinear(LinearBase):
         self.input_size = divide(input_size, self.nranks)
         self.output_size = output_size
 
-        self.linear_weight_shape = [
+        self.weight_shape = [
             self.input_size,
             self.output_size,
         ]
@@ -575,15 +575,15 @@ class RowParallelLinear(LinearBase):
             self.weight_dtype = self._dtype
 
         self.weight = self.create_parameter(
-            shape=self.linear_weight_shape,
+            shape=self.weight_shape,
             dtype=self.weight_dtype,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
 
-        self.linear_bias = None
+        self.bias = None
         if self.with_bias:
-            self.linear_bias = self.create_parameter(
+            self.bias = self.create_parameter(
                 shape=[self.hidden_size],
                 dtype=self._dtype,
                 is_bias=True,

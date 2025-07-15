@@ -69,7 +69,7 @@ class Qwen3MLP(nn.Layer):
 
         self.act_fn = SiluAndMul(
             fd_config,
-            bias=getattr(self.up_gate_proj, "linear_bias", None),
+            bias=getattr(self.up_gate_proj, "bias", None),
             act_method=fd_config.model_config.hidden_act,
         )
 

@@ -52,11 +52,11 @@ class ParallelLMHead(nn.Layer):
             with_bias (bool): whether to have bias. Default: False.
         """
         super(ParallelLMHead, self).__init__()
-        self.linear_weight_key: str = prefix + ".weight"
+        self.weight_key: str = prefix + ".weight"
         if with_bias:
-            self.linear_bias_key: Optional[str] = prefix + ".bias"
+            self.bias_key: Optional[str] = prefix + ".bias"
         else:
-            self.linear_bias_key: Optional[str] = None
+            self.bias_key: Optional[str] = None
         self.use_ep: bool = fd_config.parallel_config.use_ep
         self.column_cut = True
 
@@ -81,7 +81,7 @@ class ParallelLMHead(nn.Layer):
                     get_model_parallel_group(),
                     weight_attr=None,
                     has_bias=True
-                    if self.linear_bias_key is not None else False,
+                    if self.bias_key is not None else False,
                     gather_output=need_gather,
                     fuse_matmul_bias=False,  # False diff更小
                 )
@@ -93,7 +93,7 @@ class ParallelLMHead(nn.Layer):
                     get_model_parallel_group(),
                     weight_attr=None,
                     has_bias=True
-                    if self.linear_bias_key is not None else False,
+                    if self.bias_key is not None else False,
                     input_is_parallel=False,
                     fuse_matmul_bias=False,  # False diff更小
                 )
@@ -109,23 +109,23 @@ class ParallelLMHead(nn.Layer):
 
         if self.use_ep:
             self.weight.set_value(
-                get_tensor(state_dict.pop(self.linear_weight_key)).astype(
+                get_tensor(state_dict.pop(self.weight_key)).astype(
                     paddle.get_default_dtype()))
         else:
             if self.tie_word_embeddings:
                 self.linear.weight.set_value(
-                    get_tensor(state_dict.pop(self.linear_weight_key)).astype(
+                    get_tensor(state_dict.pop(self.weight_key)).astype(
                         paddle.get_default_dtype()).transpose([1, 0]))
             else:
                 weight_tensor = get_tensor(
-                    state_dict.pop(self.linear_weight_key)).astype(
+                    state_dict.pop(self.weight_key)).astype(
                         paddle.get_default_dtype())
                 if self.linear.weight.shape != weight_tensor.shape:
                     weight_tensor = weight_tensor.transpose([1, 0])
                 self.linear.weight.set_value(weight_tensor)
 
-            if self.linear_bias_key is not None:
-                bias = get_tensor(state_dict.pop(self.linear_bias_key)).astype(
+            if self.bias_key is not None:
+                bias = get_tensor(state_dict.pop(self.bias_key)).astype(
                     paddle.get_default_dtype())
                 self.linear.bias.set_value(bias)
 

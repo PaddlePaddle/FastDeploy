@@ -70,7 +70,7 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
     def create_weights(self, layer):
         """
         """
-        layer.linear_weight_shape.reverse()
+        layer.weight_shape.reverse()
         layer.weight_dtype = "float8_e4m3fn"
         # TODO(YuanRisheng): set weight logic should be moved to process_loaded_weights func
         self.skip_quant = False
@@ -110,7 +110,7 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
                 x, use_per_token_if_dynamic=self.use_per_token_if_dynamic)
             linear_out = cutlass_scaled_mm(a_q, layer.weight, a_scales,
                                            layer.weight_scale, out_type,
-                                           layer.linear_bias)
+                                           layer.bias)
         else:
             raise NotImplementedError
         return linear_out

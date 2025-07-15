@@ -41,6 +41,6 @@ class DCUWeightOnlyLinearMethod(GPUWeightOnlyLinearMethod):
             out_dtype=paddle.get_default_dtype()
         )
         linear_out = paddle.matmul(x, dequant_out)
-        if layer.linear_bias is not None:
-            linear_out = paddle.add(linear_out, layer.linear_bias)
+        if layer.bias is not None:
+            linear_out = paddle.add(linear_out, layer.bias)
         return linear_out
