@@ -77,8 +77,8 @@ The differences in request parameters between FastDeploy and the OpenAI protocol
 
 - `prompt` (supported only in the `v1/completions` interface)
 - `messages` (supported only in the `v1/chat/completions` interface)
-- `logprobs` (supported only in the `v1/chat/completions` interface)
-- `top_logprobs` (supported only in the `v1/chat/completions` interface)
+- `logprobs`: Optional[bool] = False (supported only in the `v1/chat/completions` interface)
+- `top_logprobs`Optional[int] = None (supported only in the `v1/chat/completions` interface. An integer between 0 and 20,logprobs must be set to true if this parameter is used)
 - `frequency_penalty`: Optional[float] = 0.0
 - `max_tokens`: Optional[int] = 16
 - `presence_penalty`: Optional[float] = 0.0

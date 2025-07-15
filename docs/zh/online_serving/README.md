@@ -78,8 +78,8 @@ print('\n')
 FastDeploy 与 OpenAI 协议的请求参数差异如下，其余请求参数会被忽略：
 - `prompt` (仅支持 `v1/completions` 接口)
 - `messages` (仅支持 `v1/chat/completions` 接口)
-- `logprobs` (仅支持 `v1/chat/completions` 接口)
-- `top_logprobs` (仅支持 `v1/chat/completions` 接口)
+- `logprobs`: Optional[bool] = False (仅支持 `v1/chat/completions` 接口)
+- `top_logprobs`Optional[int] = None (仅支持 `v1/chat/completions` 接口。如果使用这个参数必须设置logprobs为True，取值大于等于0小于20)
 - `frequency_penalty`: Optional[float] = 0.0
 - `max_tokens`: Optional[int] = 16
 - `presence_penalty`: Optional[float] = 0.0
