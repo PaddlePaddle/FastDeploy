@@ -357,10 +357,8 @@ class LLMEngine(object):
                 results: List[Tuple[str, Optional[str]]] = list()
                 if data:
                     request = Request.from_dict(data)
-                    
-                    start_span("DEQUEUE_ZMQ", data, trace.SpanKind.CONSUMER)
-
-                        
+                    start_span("DEQUEUE_ZMQ", data, trace.SpanKind.CONSUMER)          
+                             
 
                     llm_logger.debug(f"Receive request: {request}")
 

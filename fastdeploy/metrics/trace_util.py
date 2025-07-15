@@ -2,6 +2,7 @@ from opentelemetry.propagate import inject, extract
 from opentelemetry import trace
 
 import json
+import os
 
 # create global OpenTelemetry tracer
 tracer = trace.get_tracer(__name__)
@@ -28,6 +29,8 @@ def inject_to_metadata(request, metadata_attr='metadata'):
     """
     try:
         if request is None:
+            return
+        if is_opentelemetry_instrumented() == False:
             return
 
         metadata = request.get(metadata_attr) if isinstance(request, dict) else getattr(request, metadata_attr, None)
@@ -77,9 +80,26 @@ def start_span(span_name, request, kind=trace.SpanKind.CLIENT):
         just start a new span in request trace context
     """
     try:
+        if is_opentelemetry_instrumented() == False:
+            return
         # extract Trace context from request.metadata.trace_carrier
         ctx = extract_from_metadata(request)
         with tracer.start_as_current_span(span_name, context=ctx, kind=kind) as span:
             pass
     except:
         pass
+
+def is_opentelemetry_instrumented() -> bool:
+    """
+        check OpenTelemetry is start or not
+    """
+    try:
+        return (
+            os.getenv("OTEL_PYTHONE_DISABLED_INSTRUMENTATIONS") is not None
+            or os.getenv("OTEL_SERVICE_NAME") is not None
+            or os.getenv("OTEL_TRACES_EXPORTER") is not None
+        )
+    except Exception:
+        return False
+    
+    
