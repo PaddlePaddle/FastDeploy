@@ -306,7 +306,7 @@ void TokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
     }
 }
 
-PD_BUILD_OP(get_token_penalty_multi_scores)
+PD_BUILD_STATIC_OP(get_token_penalty_multi_scores)
     .Inputs({"pre_ids",
              "prompt_ids",
              "prompt_len",
