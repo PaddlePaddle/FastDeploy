@@ -221,32 +221,3 @@ print('\n')
 ```
 
 For detailed OpenAI protocol specifications, see [OpenAI Chat Compeltion API](https://platform.openai.com/docs/api-reference/chat/create). Differences from the standard OpenAI protocol are documented in [OpenAI Protocol-Compatible API Server](../../online_serving/README.md).
-
-## Suppported Models
-|模型名Model Name|上下文长度Context Length|量化Quantization|所需卡数XPUs Required|部署命令Deployment Commands|
-|-|-|-|-|-|
-|ERNIE-4.5-300B-A47B|32K|BF16|x|x|
-|||WINT8|8|export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
-python -m fastdeploy.entrypoints.openai.api_server \
-    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \
-    --port 8188 \
-    --tensor-parallel-size 8 \
-    --max-model-len 32768 \
-    --max-num-seqs 64 \
-    --quantization "wint8" \
-    --gpu-memory-utilization 0.9|
-|||WINT4|4（推荐）|export XPU_VISIBLE_DEVICES="0,1,2,3" 或 "4,5,6,7"python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \    --port 8188 \    --tensor-parallel-size 4 \    --max-model-len 32768 \    --max-num-seqs 64 \    --quantization "wint4" \    --gpu-memory-utilization 0.9|
-|||WINT4|8|export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \    --port 8188 \    --tensor-parallel-size 8 \    --max-model-len 32768 \    --max-num-seqs 64 \    --quantization "wint4" \    --gpu-memory-utilization 0.9|
-||128K|BF16|x|x|
-|||WINT8|x|x|
-|||WINT4|8（推荐）|export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \    --port 8188 \    --tensor-parallel-size 8 \    --max-model-len 131072 \    --max-num-seqs 64 \    --quantization "wint4" \    --gpu-memory-utilization 0.9|
-|ERNIE-4.5-21B-A3B|32K|BF16|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 32768 \    --max-num-seqs 128 \    --gpu-memory-utilization 0.9|
-|||WINT8|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 32768 \    --max-num-seqs 128 \    --quantization "wint8" \    --gpu-memory-utilization 0.9|
-|||WINT4|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 32768 \    --max-num-seqs 128 \    --quantization "wint4" \    --gpu-memory-utilization 0.9|
-||128K|BF16|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 131072 \    --max-num-seqs 128 \    --gpu-memory-utilization 0.9|
-|||WINT8|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 131072 \    --max-num-seqs 128 \    --quantization "wint8" \    --gpu-memory-utilization 0.9|
-|||WINT4|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 131072 \    --max-num-seqs 128 \    --quantization "wint4" \    --gpu-memory-utilization 0.9|
-|ERNIE-4.5-0.3B|32K|BF16|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 32768 \    --max-num-seqs 128 \    --gpu-memory-utilization 0.9|
-|||WINT8|1|export XPU_VISIBLE_DEVICES="x" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 32768 \    --max-num-seqs 128 \    --quantization "wint8" \    --gpu-memory-utilization 0.9|
-||128K|BF16|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 131072 \    --max-num-seqs 128 \    --gpu-memory-utilization 0.9|
-|||WINT8|1|export XPU_VISIBLE_DEVICES="0" # 任意指定一张卡python -m fastdeploy.entrypoints.openai.api_server \    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \    --port 8188 \    --tensor-parallel-size 1 \    --max-model-len 131072 \    --max-num-seqs 128 \    --quantization "wint8" \    --gpu-memory-utilization 0.9|
