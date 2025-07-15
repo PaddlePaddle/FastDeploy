@@ -44,6 +44,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```speculative_config``` | `dict[str]` | Speculative decoding configuration, only supports standard format JSON string, default: None |
 | ```dynamic_load_weight``` | `int` | Whether to enable dynamic weight loading, default: 0 |
 | ```enable_expert_parallel``` | `bool` | Whether to enable expert parallel |
+| ```enable_logprob``` | `bool` | Whether to enable return log probabilities of the output tokens or not. If true, returns the log probabilities of each output token returned in the content of message.If logrpob is not used, this parameter can be omitted when starting |
 
 
 ## 1. Relationship between KVCache allocation, ```num_gpu_blocks_override``` and ```block_size```?

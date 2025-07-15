@@ -38,7 +38,7 @@ class SampleRequest:
     """
     Represents a single inference request for benchmarking.
     """
-
+    no: int
     prompt: Union[str, Any]
     history_QA: Union[str, Any]
     json_data: Optional[dict]
@@ -229,6 +229,7 @@ class EBDataset(BenchmarkDataset):
         **kwargs,
     ) -> list:
         samples: list = []
+        cnt = 1
         for entry in self.data:
             if len(samples) >= num_requests:
                 break
@@ -246,15 +247,16 @@ class EBDataset(BenchmarkDataset):
                     prompt, None)
             samples.append(
                 SampleRequest(
+                    no=cnt,
                     prompt=prompt,
                     prompt_len=self.prompt_len,
                     history_QA=[],
                     expected_output_len=new_output_len,
                 ))
+            cnt += 1
 
         self.maybe_oversample_requests(samples, num_requests)
         return samples
-
 
 class EBChatDataset(BenchmarkDataset):
     """
@@ -284,6 +286,7 @@ class EBChatDataset(BenchmarkDataset):
         **kwargs,
     ) -> list:
         samples: list = []
+        cnt = 1
         for entry in self.data:
             if len(samples) >= num_requests:
                 break
@@ -297,12 +300,14 @@ class EBChatDataset(BenchmarkDataset):
                     prompt, None)
             samples.append(
                 SampleRequest(
+                    no=cnt,
                     json_data=json_data,
                     prompt=prompt,
                     prompt_len=0,
                     history_QA=history_QA,
                     expected_output_len=new_output_len,
                 ))
+            cnt += 1
 
         self.maybe_oversample_requests(samples, num_requests)
         return samples

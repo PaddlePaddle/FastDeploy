@@ -103,9 +103,9 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         Marlin Group Gemm to compute Fused MoE.
         """
         self.quant_method = quant_method
-        self.added_weight_attrs = ["moe_ffn1_weight", "moe_ffn2_weight"]
+        self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
         self.added_scale_attrs = [
-            "moe_ffn1_weight_scale", "moe_ffn2_weight_scale"
+            "up_gate_proj_weight_scale", "down_proj_weight_scale"
         ]
         self.added_zeros_attrs = ["zeros0", "zeros1"]
 
@@ -113,22 +113,22 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         """
         Marlin MoE create weight process.
         """
-        ffn1_weights, ffn2_weights = layer.extract_moe_ffn_weights(state_dict)
-        assert len(ffn1_weights) == layer.num_local_experts
-        assert len(ffn2_weights) == layer.num_local_experts
-        assert ffn1_weights[0].shape == [
+        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        assert len(up_gate_proj_weights) == layer.num_local_experts
+        assert len(down_proj_weights) == layer.num_local_experts
+        assert up_gate_proj_weights[0].shape == [
             layer.hidden_size, layer.moe_intermediate_size * 2
         ]
-        assert ffn2_weights[0].shape == [
+        assert down_proj_weights[0].shape == [
             layer.moe_intermediate_size, layer.hidden_size
         ]
 
-        ffn1_tensor = paddle.stack(ffn1_weights, axis=0)
-        ffn2_tensor = paddle.stack(ffn2_weights, axis=0)
+        up_gate_proj_tensor = paddle.stack(up_gate_proj_weights, axis=0)
+        down_proj_tensor = paddle.stack(down_proj_weights, axis=0)
 
         max_bound = 7
 
-        for idx, weight_tensor in enumerate([ffn1_tensor, ffn2_tensor]):
+        for idx, weight_tensor in enumerate([up_gate_proj_tensor, down_proj_tensor]):
             weight_name = self.added_weight_attrs[idx]
             scale_name = self.added_scale_attrs[idx]
 
@@ -221,8 +221,8 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         ffn_out = MoeWna16MarlinGemmApi(
             x,
             c_or_none=None,
-            b_q_weight=layer.moe_ffn1_weight,
-            b_scales=layer.moe_ffn1_weight_scale,
+            b_q_weight=layer.up_gate_proj_weight,
+            b_scales=layer.up_gate_proj_weight_scale,
             global_scale_or_none=None,
             b_zeros_or_none=None,
             g_idx_or_none=None,
@@ -250,8 +250,8 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         ffn_out = MoeWna16MarlinGemmApi(
             swiglu_out,
             c_or_none=None,
-            b_q_weight=layer.moe_ffn2_weight,
-            b_scales=layer.moe_ffn2_weight_scale,
+            b_q_weight=layer.down_proj_weight,
+            b_scales=layer.down_proj_weight_scale,
             global_scale_or_none=None,
             b_zeros_or_none=None,
             g_idx_or_none=None,

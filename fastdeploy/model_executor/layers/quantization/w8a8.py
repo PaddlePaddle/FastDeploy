@@ -69,7 +69,7 @@ class W8A8LinearMethod(QuantMethodBase):
         self.smooth_quant_method = SmoothQuantLinearMethod(quant_config)
 
     def create_weights(self, layer):
-        layer.linear_weight_shape.reverse()
+        layer.weight_shape.reverse()
         layer.weight_dtype = "int8"
         if self.quant_config.use_smooth_quant:
             self.smooth_quant_method.create_weights(layer)
@@ -101,21 +101,21 @@ class W8A8LinearMethod(QuantMethodBase):
         if self.skip_quant:
             logger.debug(f"{layer.prefix} skip quant")
             weight_tensor = weights.cast(layer._dtype)
-            layer.linear_weight.set_value(weight_tensor)
+            layer.weight.set_value(weight_tensor)
         else:
             weight_tensor = weights.transpose([1, 0])
             weight_tensor = paddle.cast(weight_tensor, "int8")
-            layer.linear_weight.set_value(weight_tensor)
+            layer.weight.set_value(weight_tensor)
 
     def apply(self, layer, x):
         if self.skip_quant:
-            linear_out = paddle.matmul(x, layer.linear_weight, False, True)
+            linear_out = paddle.matmul(x, layer.weight, False, True)
             return linear_out
         if self.quant_config.use_gemm_dequant:
             linear_out = fastdeploy.model_executor.ops.gpu.gemm_dequant(
-                x, layer.linear_weight, layer.linear_out_scale, layer._dtype)
+                x, layer.weight, layer.linear_out_scale, layer._dtype)
         else:
-            linear_out = paddle.matmul(x, layer.linear_weight, False, True)
+            linear_out = paddle.matmul(x, layer.weight, False, True)
             linear_out = fastdeploy.model_executor.ops.gpu.dequant_int8(
                 linear_out, layer.linear_out_scale, layer._dtype)
         return linear_out

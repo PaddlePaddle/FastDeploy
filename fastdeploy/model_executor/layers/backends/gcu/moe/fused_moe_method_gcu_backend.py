@@ -50,11 +50,11 @@ class GCUFusedMoeMethod(MoEMethodBase):
         Paddle gcu create weight process.
         """
         # bf16
-        ffn1_weights, ffn2_weights = layer.extract_moe_ffn_weights(state_dict)
-        stacked_ffn1_weights = paddle.stack(ffn1_weights, axis=0)
-        stacked_ffn2_weights = paddle.stack(ffn2_weights, axis=0)
+        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        stacked_up_gate_proj_weights = paddle.stack(up_gate_proj_weights, axis=0)
+        stacked_down_proj_weights = paddle.stack(down_proj_weights, axis=0)
         for idx, weight_tensor in enumerate(
-            [stacked_ffn1_weights, stacked_ffn2_weights]):
+            [stacked_up_gate_proj_weights, stacked_down_proj_weights]):
             # shape [E, K, N] -> [E, N, K]
             weight_tensor = paddle.transpose(weight_tensor, [0, 2, 1])
             weight_name = self.added_weight_attrs[idx]
@@ -117,16 +117,16 @@ class GCUFusedMoeMethod(MoEMethodBase):
             dtype=x.dtype,
         )
 
-        ffn1_B_scale = layer.moe_ffn1_weight_scale if enable_quant else None
-        ffn1_B_zeros = layer.moe_ffn1_weight_zeros if enable_quant else None
+        up_gate_proj_B_scale = layer.up_gate_proj_weight_scale if enable_quant else None
+        up_gate_proj_B_zeros = layer.up_gate_proj_weight_zeros if enable_quant else None
 
         invoke_fused_moe_kernel(
             x,  # input
-            layer.moe_ffn1_weight,  # weight
+            layer.up_gate_proj_weight,  # weight
             intermediate_cache1,  # output
             None,  # A_scale
-            ffn1_B_scale,  # B_scale
-            ffn1_B_zeros,  # B_zp
+            up_gate_proj_B_scale,  # B_scale
+            up_gate_proj_B_zeros,  # B_zp
             topk_weights,
             topk_indices,
             sorted_token_ids,
@@ -154,16 +154,16 @@ class GCUFusedMoeMethod(MoEMethodBase):
             dtype=x.dtype,
         )
 
-        ffn2_B_scale = layer.moe_ffn2_weight_scale if enable_quant else None
-        ffn2_B_zeros = layer.moe_ffn2_weight_zeros if enable_quant else None
+        down_proj_B_scale = layer.down_proj_weight_scale if enable_quant else None
+        down_proj_B_zeros = layer.down_proj_weight_zeros if enable_quant else None
 
         invoke_fused_moe_kernel(
             intermediate_cache2,  # input
-            layer.moe_ffn2_weight,  # weight
+            layer.down_proj_weight,  # weight
             intermediate_cache3,  # output
             None,  # A_scale
-            ffn2_B_scale,  # B_scale
-            ffn2_B_zeros,  # B_zp
+            down_proj_B_scale,  # B_scale
+            down_proj_B_zeros,  # B_zp
             topk_weights,
             topk_indices,
             sorted_token_ids,
@@ -251,7 +251,7 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
             "GCUWeightOnlyMoEMethod only support weight_only_int4, but got:{self.quant_config.algo}"
 
         self.added_qzeros_attrs = [
-            "moe_ffn1_weight_zeros", "moe_ffn2_weight_zeros"
+            "up_gate_proj_weight_zeros", "down_proj_weight_zeros"
         ]
         self.group_size = 64
 
@@ -265,41 +265,41 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
         """
         Paddle gcu process prequanted weights.
         """
-        ffn1_expert_weight_key = layer.weight_key_map.get(
-            "ffn1_expert_weight_key", None)
-        ffn2_expert_weight_key = layer.weight_key_map.get(
-            "ffn2_expert_weight_key", None)
-        ffn1_expert_weight_scale_key = layer.weight_key_map.get(
-            "ffn1_expert_weight_scale_key", None)
-        ffn2_expert_weight_scale_key = layer.weight_key_map.get(
-            "ffn2_expert_weight_scale_key", None)
+        up_gate_proj_expert_weight_key = layer.weight_key_map.get(
+            "up_gate_proj_expert_weight_key", None)
+        down_proj_expert_weight_key = layer.weight_key_map.get(
+            "down_proj_expert_weight_key", None)
+        up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get(
+            "up_gate_proj_expert_weight_scale_key", None)
+        down_proj_expert_weight_scale_key = layer.weight_key_map.get(
+            "down_proj_expert_weight_scale_key", None)
 
-        ffn1_weights, ffn2_weights = layer.load_experts_weight(
-            state_dict, ffn1_expert_weight_key, ffn2_expert_weight_key)
-        # self.check(layer, ffn1_weights, ffn2_weights)
-        ffn1_weight_scale = []
-        ffn2_weight_scale = []
+        up_gate_proj_weights, down_proj_weights = layer.load_experts_weight(
+            state_dict, up_gate_proj_expert_weight_key, down_proj_expert_weight_key)
+        # self.check(layer, up_gate_proj_weights, down_proj_weights)
+        up_gate_proj_weight_scale = []
+        down_proj_weight_scale = []
         for i in range(layer.num_experts):
             expert_idx = layer.expert_id_offset + i
-            ffn1_weight_scale.append(
+            up_gate_proj_weight_scale.append(
                 get_tensor(
                     state_dict.pop(
-                        ffn1_expert_weight_scale_key.format(expert_idx))))
-            ffn2_weight_scale.append(
+                        up_gate_proj_expert_weight_scale_key.format(expert_idx))))
+            down_proj_weight_scale.append(
                 get_tensor(
                     state_dict.pop(
-                        ffn2_expert_weight_scale_key.format(expert_idx))))
+                        down_proj_expert_weight_scale_key.format(expert_idx))))
 
-        ffn1_weight = paddle.stack(ffn1_weights, axis=0)
-        ffn2_weight = paddle.stack(ffn2_weights, axis=0)
-        ffn1_weight_scale = paddle.stack(ffn1_weight_scale, axis=0)
-        ffn2_weight_scale = paddle.stack(ffn2_weight_scale, axis=0)
+        up_gate_proj_weight = paddle.stack(up_gate_proj_weights, axis=0)
+        down_proj_weight = paddle.stack(down_proj_weights, axis=0)
+        up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0)
+        down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0)
 
         name_tensor_map = {
-            "moe_ffn1_weight": ffn1_weight,
-            "moe_ffn2_weight": ffn2_weight,
-            "moe_ffn1_weight_scale": ffn1_weight_scale,
-            "moe_ffn2_weight_scale": ffn2_weight_scale
+            "up_gate_proj_weight": up_gate_proj_weight,
+            "down_proj_weight": down_proj_weight,
+            "up_gate_proj_weight_scale": up_gate_proj_weight_scale,
+            "down_proj_weight_scale": down_proj_weight_scale
         }
         for name, tensor in name_tensor_map.items():
             create_and_set_parameter(layer, name, tensor)
@@ -310,8 +310,8 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
         """
         Paddle cutlass create weight process.
         """
-        ffn1_weights, ffn2_weights = layer.extract_moe_ffn_weights(state_dict)
-        self.check(layer, ffn1_weights, ffn2_weights)
+        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        self.check(layer, up_gate_proj_weights, down_proj_weights)
 
 
         def quant_worker(p_group_idx, shared_dict, weights, moe_quant_type, group_size):
@@ -329,7 +329,7 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
                     )
 
 
-        for idx, weight_tensor in enumerate([ffn1_weights, ffn2_weights]):
+        for idx, weight_tensor in enumerate([up_gate_proj_weights, down_proj_weights]):
             weight_name = self.added_weight_attrs[idx]
             scale_name = self.added_scale_attrs[idx]
             zeros_name = self.added_qzeros_attrs[idx]
@@ -365,8 +365,8 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
                     dict_ = dict(shared_dict)
 
                     for k, v in dict_.items():
-                        weight_list[k] = v[0].to(ffn1_weights[0].place)
-                        weight_scale_list[k] = v[1].to(ffn1_weights[0].place)
+                        weight_list[k] = v[0].to(up_gate_proj_weights[0].place)
+                        weight_scale_list[k] = v[1].to(up_gate_proj_weights[0].place)
             else:
                 remain_weights_start_idx = 0
 

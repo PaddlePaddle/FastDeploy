@@ -89,6 +89,7 @@ class ModelConfig:
         self.max_model_len = 0
         self.dtype = ""
         self.enable_logprob = False
+        self.enable_mm = False
 
         for key, value in args.items():
             if hasattr(self, key):
