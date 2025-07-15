@@ -23,6 +23,7 @@ import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.transformers import PretrainedModel
+from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
@@ -559,7 +560,7 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
     ]
 
     @classmethod
-    def _get_tensor_parallel_mappings(cls, config, is_split=True):
+    def _get_tensor_parallel_mappings(cls, config: PretrainedConfig, is_split=True):
         """
         get_tensor_parallel_mappings
         """

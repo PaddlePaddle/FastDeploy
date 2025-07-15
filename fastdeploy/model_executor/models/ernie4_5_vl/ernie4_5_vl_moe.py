@@ -24,9 +24,10 @@ import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.transformers import PretrainedModel
+from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig, ModelConfig
+from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication_op import \
     tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.graph_optimization.decorator import \
@@ -666,7 +667,7 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
     ]
 
     @classmethod
-    def _get_tensor_parallel_mappings(cls, config: ModelConfig, is_split=True):
+    def _get_tensor_parallel_mappings(cls, config: PretrainedConfig, is_split=True):
         """
         get_tensor_parallel_mappings
         """
@@ -686,10 +687,10 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
             is_split=is_split,
             tensor_parallel_degree=config.tensor_parallel_degree,
             tensor_parallel_rank=config.tensor_parallel_rank,
-            num_attention_heads=config.vision_config.num_heads,
-            num_key_value_heads=config.vision_config.num_heads,
-            head_dim=config.vision_config.hidden_size
-            // config.vision_config.num_heads,
+            num_attention_heads=config.vision_config.get("num_heads"),
+            num_key_value_heads=config.vision_config.get("num_heads"),
+            head_dim=config.vision_config.get("hidden_size")
+            // config.vision_config.get("num_heads"),
         )
 
         def get_tensor_parallel_split_mappings(
@@ -754,7 +755,7 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
             config.prefix_name,
         )
         vision_mappings = get_vison_parallel_split_mappings(
-            config.vision_config.depth
+            config.vision_config.get("depth")
         )
 
         return {**mappings, **vision_mappings}
