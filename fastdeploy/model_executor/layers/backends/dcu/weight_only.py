@@ -36,7 +36,7 @@ class DCUWeightOnlyLinearMethod(GPUWeightOnlyLinearMethod):
     def apply(self, layer, x):
         dequant_out = weight_dequantize(
             x=layer.weight,
-            scale=layer.linear_weight_scale,
+            scale=layer.weight_scale,
             algo=self.quant_config.algo,
             out_dtype=paddle.get_default_dtype()
         )

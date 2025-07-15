@@ -12,21 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ffn1_n=7168
-ffn1_k=8192
+up_gate_proj_n=7168
+up_gate_proj_k=8192
 
-ffn2_n=8192
-ffn2_k=3584
-rm -rf ffn1_7168_8192.log
-rm -rf ffn2_8192_3584.log
+down_proj_n=8192
+down_proj_k=3584
+rm -rf up_gate_proj_7168_8192.log
+rm -rf down_proj_8192_3584.log
 num_experts=8
 
 for tokens_per_expert in 12
 
 do
 wait
-CUDA_VISIBLE_DEVICES=2 ./w4a8_moe_gemm_test ${num_experts} ${ffn1_n} ${ffn1_k} ${tokens_per_expert} 1 0 >> ffn1_${ffn1_n}_${ffn1_k}.log 2>&1 &
-# CUDA_VISIBLE_DEVICES=3 ./w4a8_moe_gemm_test ${num_experts} ${ffn2_n} ${ffn2_k} ${tokens_per_expert} 1 0 >> ffn2_${ffn2_n}_${ffn2_k}.log 2>&1 &
+CUDA_VISIBLE_DEVICES=2 ./w4a8_moe_gemm_test ${num_experts} ${up_gate_proj_n} ${up_gate_proj_k} ${tokens_per_expert} 1 0 >> up_gate_proj_${up_gate_proj_n}_${up_gate_proj_k}.log 2>&1 &
+# CUDA_VISIBLE_DEVICES=3 ./w4a8_moe_gemm_test ${num_experts} ${down_proj_n} ${down_proj_k} ${tokens_per_expert} 1 0 >> down_proj_${down_proj_n}_${down_proj_k}.log 2>&1 &
 done
 wait
 echo "#### finish ####"

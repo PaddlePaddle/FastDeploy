@@ -36,7 +36,7 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         self.quant_method = quant_method
         self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
         self.added_scale_attrs = [
-            "moe_ffn1_weight_scale", "moe_ffn2_weight_scale"
+            "up_gate_proj_weight_scale", "down_proj_weight_scale"
         ]
 
     def process_prequanted_weights(self, layer: nn.Layer, state_dict) -> None:
@@ -47,26 +47,26 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         """
         Triton MoE create weight process.
         """
-        ffn1_weights, ffn2_weights = layer.extract_moe_ffn_weights(state_dict)
-        assert len(ffn1_weights) == layer.num_local_experts
-        assert len(ffn2_weights) == layer.num_local_experts
+        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        assert len(up_gate_proj_weights) == layer.num_local_experts
+        assert len(down_proj_weights) == layer.num_local_experts
         assert self.quant_method.name() == "wint8"
-        assert ffn1_weights[0].shape == [
+        assert up_gate_proj_weights[0].shape == [
             layer.hidden_size, layer.moe_intermediate_size * 2
         ]
-        assert ffn2_weights[0].shape == [
+        assert down_proj_weights[0].shape == [
             layer.moe_intermediate_size, layer.hidden_size
         ]
 
-        ffn1_tensor = paddle.stack(ffn1_weights, axis=0)
-        ffn2_tensor = paddle.stack(ffn2_weights, axis=0)
+        up_gate_proj_tensor = paddle.stack(up_gate_proj_weights, axis=0)
+        down_proj_tensor = paddle.stack(down_proj_weights, axis=0)
 
         if self.quant_method.name() == "wint8":
             max_bound = 127
         elif self.quant_method.name() == "wint4":
             max_bound = 7
 
-        for idx, weight_tensor in enumerate([ffn1_tensor, ffn2_tensor]):
+        for idx, weight_tensor in enumerate([up_gate_proj_tensor, down_proj_tensor]):
             weight_name = self.added_weight_attrs[idx]
             scale_name = self.added_scale_attrs[idx]
 
@@ -151,7 +151,7 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
             layer.up_gate_proj_weight,
             intermediate_cache1,
             None,
-            layer.moe_ffn1_weight_scale,
+            layer.up_gate_proj_weight_scale,
             None,
             sorted_token_ids,
             expert_ids,
@@ -170,9 +170,9 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
             #
             stride_asm=-1,
             stride_ask=-1,
-            stride_bse=layer.moe_ffn1_weight_scale.strides[0],
+            stride_bse=layer.up_gate_proj_weight_scale.strides[0],
             stride_bsk=-1,
-            stride_bsn=layer.moe_ffn1_weight_scale.strides[1],
+            stride_bsn=layer.up_gate_proj_weight_scale.strides[1],
             group_n=-1,
             group_k=-1,
             # Meta-parameters
@@ -198,7 +198,7 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
             layer.down_proj_weight,
             intermediate_cache3,
             None,
-            layer.moe_ffn2_weight_scale,
+            layer.down_proj_weight_scale,
             topk_weights,
             sorted_token_ids,
             expert_ids,
@@ -216,9 +216,9 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
             stride_cn=intermediate_cache3.strides[1],
             stride_asm=-1,
             stride_ask=-1,
-            stride_bse=layer.moe_ffn2_weight_scale.strides[0],
+            stride_bse=layer.down_proj_weight_scale.strides[0],
             stride_bsk=-1,
-            stride_bsn=layer.moe_ffn2_weight_scale.strides[1],
+            stride_bsn=layer.down_proj_weight_scale.strides[1],
             group_n=-1,
             group_k=-1,
             # Meta-parameters

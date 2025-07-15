@@ -333,7 +333,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         skip_quant: bool = False,
     ):
         """
-        Initialize the fused ffn1 Linear layer with given parameters.
+        Initialize the fused up_gate_proj Linear layer with given parameters.
 
         Args:
             fd_config (FDConfig): Inference-related parameters.

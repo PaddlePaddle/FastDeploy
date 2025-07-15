@@ -100,9 +100,9 @@ class Ernie4_5_VLMoE(nn.Layer):
                 f"{prefix}.gate.weight",
                 "gate_correction_bias_key":
                 f"{prefix}.moe_statics.e_score_correction_bias",
-                "ffn1_expert_weight_key":
+                "up_gate_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.weight",
-                "ffn2_expert_weight_key":
+                "down_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.down_proj.weight",
             }
             self.mlp_text = FusedMoE(
@@ -132,9 +132,9 @@ class Ernie4_5_VLMoE(nn.Layer):
                 f"{prefix}.gate.weight_1",
                 "gate_correction_bias_key":
                 f"{prefix}.moe_statics.e_score_correction_bias",
-                "ffn1_expert_weight_key":
+                "up_gate_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.weight",
-                "ffn2_expert_weight_key":
+                "down_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.down_proj.weight",
             }
             self.mlp_image = FusedMoE(

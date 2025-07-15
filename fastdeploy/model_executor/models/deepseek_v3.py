@@ -115,9 +115,9 @@ class DeepSeekV3MoE(nn.Layer):
             "gate_weight_key": f"{prefix}.gate.weight",
             "gate_correction_bias_key":
             f"{prefix}.gate.e_score_correction_bias",
-            "ffn1_expert_weight_key":
+            "up_gate_proj_expert_weight_key":
             f"{prefix}.experts.{{}}.up_gate_proj.weight",
-            "ffn2_expert_weight_key":
+            "down_proj_expert_weight_key":
             f"{prefix}.experts.{{}}.down_proj.weight",
         }
 

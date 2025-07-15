@@ -105,17 +105,17 @@ class Ernie4_5_MoE(nn.Layer):
                 f"{prefix}.gate.weight",
                 "gate_correction_bias_key":
                 f"{prefix}.moe_statics.e_score_correction_bias",
-                "ffn1_expert_weight_key":
+                "up_gate_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                "ffn2_expert_weight_key":
+                "down_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.down_proj.quant_weight",
-                "ffn1_expert_weight_scale_key":
+                "up_gate_proj_expert_weight_scale_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                "ffn2_expert_weight_scale_key":
+                "down_proj_expert_weight_scale_key":
                 f"{prefix}.experts.{{}}.down_proj.weight_scale",
-                "ffn1_expert_in_scale_key":
+                "up_gate_proj_expert_in_scale_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
-                "ffn2_expert_in_scale_key":
+                "down_proj_expert_in_scale_key":
                 f"{prefix}.experts.{{}}.down_proj.activation_scale",
             }
         elif moe_quant_type == "w4w2":
@@ -124,25 +124,25 @@ class Ernie4_5_MoE(nn.Layer):
                 f"{prefix}.gate.weight",
                 "gate_correction_bias_key":
                 f"{prefix}.moe_statics.e_score_correction_bias",
-                "ffn1_expert_weight_key":
+                "up_gate_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                "ffn2_expert_weight_key":
+                "down_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.down_proj.quant_weight",
-                "ffn1_expert_weight_scale_key":
+                "up_gate_proj_expert_weight_scale_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                "ffn2_expert_weight_scale_key":
+                "down_proj_expert_weight_scale_key":
                 f"{prefix}.experts.{{}}.down_proj.weight_scale",
-                "ffn1_expert_super_scales_key":
+                "up_gate_proj_expert_super_scales_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.super_scales",
-                "ffn2_expert_super_scales_key":
+                "down_proj_expert_super_scales_key":
                 f"{prefix}.experts.{{}}.down_proj.super_scales",
-                "ffn1_expert_code_scale_key":
+                "up_gate_proj_expert_code_scale_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.code_scale",
-                "ffn2_expert_code_scale_key":
+                "down_proj_expert_code_scale_key":
                 f"{prefix}.experts.{{}}.down_proj.code_scale",
-                "ffn1_expert_code_zp_key":
+                "up_gate_proj_expert_code_zp_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.code_zp",
-                "ffn2_expert_code_zp_key":
+                "down_proj_expert_code_zp_key":
                 f"{prefix}.experts.{{}}.down_proj.code_zp",
             }
         elif moe_quant_type == "tensor_wise_fp8" or (
@@ -153,17 +153,17 @@ class Ernie4_5_MoE(nn.Layer):
                 f"{prefix}.gate.weight",
                 "gate_correction_bias_key":
                 f"{prefix}.moe_statics.e_score_correction_bias",
-                "ffn1_expert_weight_key":
+                "up_gate_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                "ffn2_expert_weight_key":
+                "down_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.down_proj.quant_weight",
-                "ffn1_expert_weight_scale_key":
+                "up_gate_proj_expert_weight_scale_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                "ffn2_expert_weight_scale_key":
+                "down_proj_expert_weight_scale_key":
                 f"{prefix}.experts.{{}}.down_proj.weight_scale",
-                "ffn1_expert_in_scale_key":
+                "up_gate_proj_expert_in_scale_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
-                "ffn2_expert_in_scale_key":
+                "down_proj_expert_in_scale_key":
                 f"{prefix}.experts.{{}}.down_proj.activation_scale",
             }
         else:
@@ -172,9 +172,9 @@ class Ernie4_5_MoE(nn.Layer):
                 f"{prefix}.gate.weight",
                 "gate_correction_bias_key":
                 f"{prefix}.moe_statics.e_score_correction_bias",
-                "ffn1_expert_weight_key":
+                "up_gate_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.weight",
-                "ffn2_expert_weight_key":
+                "down_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.down_proj.weight",
             }
 

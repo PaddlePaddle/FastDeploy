@@ -115,19 +115,19 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM):
             # MoE experts mappings
             for expert_idx in range(self.fd_config.model_config.moe_num_experts):
                 for ph in place_holders:
-                    # FFN1 (up_gate_proj)
-                    ffn1_key = f"{base_name}.{layer_idx}.mlp.fused_moe.up_gate_proj_weight"
-                    if ffn1_key not in infer_to_train:
-                        infer_to_train[ffn1_key] = []
-                    infer_to_train[ffn1_key].append(
+                    # up_gate_proj (up_gate_proj)
+                    up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.fused_moe.up_gate_proj_weight"
+                    if up_gate_proj_key not in infer_to_train:
+                        infer_to_train[up_gate_proj_key] = []
+                    infer_to_train[up_gate_proj_key].append(
                         f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.up_gate_proj.{ph}"
                     )
 
-                    # FFN2 (down_proj)
-                    ffn2_key = f"{base_name}.{layer_idx}.mlp.fused_moe.down_proj_weight"
-                    if ffn2_key not in infer_to_train:
-                        infer_to_train[ffn2_key] = []
-                    infer_to_train[ffn2_key].append(
+                    # down_proj (down_proj)
+                    down_proj_key = f"{base_name}.{layer_idx}.mlp.fused_moe.down_proj_weight"
+                    if down_proj_key not in infer_to_train:
+                        infer_to_train[down_proj_key] = []
+                    infer_to_train[down_proj_key].append(
                         f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.down_proj.{ph}"
                     )
 
@@ -195,19 +195,19 @@ class Ernie4_5_VLMoeForConditionalGenerationRL(Ernie4_5_VLMoeForConditionalGener
             assert isinstance(self.fd_config.model_config.moe_num_experts, list)
             for expert_idx in range(sum(self.fd_config.model_config.moe_num_experts)):
                 for ph in place_holders:
-                    # FFN1 (up_gate_proj)
-                    ffn1_key = f"{base_name}.{layer_idx}.mlp.fused_moe.up_gate_proj_weight"
-                    if ffn1_key not in infer_to_train:
-                        infer_to_train[ffn1_key] = []
-                    infer_to_train[ffn1_key].append(
+                    # up_gate_proj (up_gate_proj)
+                    up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.fused_moe.up_gate_proj_weight"
+                    if up_gate_proj_key not in infer_to_train:
+                        infer_to_train[up_gate_proj_key] = []
+                    infer_to_train[up_gate_proj_key].append(
                         f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.up_gate_proj.{ph}"
                     )
 
-                    # FFN2 (down_proj)
-                    ffn2_key = f"{base_name}.{layer_idx}.mlp.fused_moe.down_proj_weight"
-                    if ffn2_key not in infer_to_train:
-                        infer_to_train[ffn2_key] = []
-                    infer_to_train[ffn2_key].append(
+                    # down_proj (down_proj)
+                    down_proj_key = f"{base_name}.{layer_idx}.mlp.fused_moe.down_proj_weight"
+                    if down_proj_key not in infer_to_train:
+                        infer_to_train[down_proj_key] = []
+                    infer_to_train[down_proj_key].append(
                         f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.down_proj.{ph}"
                     )
 
@@ -318,19 +318,19 @@ class Qwen3MoeForCausalLMRL(Qwen3MoeForCausalLM):
             # MoE experts mappings
             for expert_idx in range(self.fd_config.moe_config.num_experts):
                 for ph in place_holders:
-                    # FFN1 (up_gate_proj)
-                    ffn1_key = f"{base_name}.{layer_idx}.mlp.up_gate_proj_weight"
-                    if ffn1_key not in infer_to_train:
-                        infer_to_train[ffn1_key] = []
-                    infer_to_train[ffn1_key].append(
+                    # up_gate_proj (up_gate_proj)
+                    up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.up_gate_proj_weight"
+                    if up_gate_proj_key not in infer_to_train:
+                        infer_to_train[up_gate_proj_key] = []
+                    infer_to_train[up_gate_proj_key].append(
                         f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.up_gate_proj.{ph}"
                     )
 
-                    # FFN2 (down_proj)
-                    ffn2_key = f"{base_name}.{layer_idx}.mlp.down_proj_weight"
-                    if ffn2_key not in infer_to_train:
-                        infer_to_train[ffn2_key] = []
-                    infer_to_train[ffn2_key].append(
+                    # down_proj (down_proj)
+                    down_proj_key = f"{base_name}.{layer_idx}.mlp.down_proj_weight"
+                    if down_proj_key not in infer_to_train:
+                        infer_to_train[down_proj_key] = []
+                    infer_to_train[down_proj_key].append(
                         f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.down_proj.{ph}"
                     )
 

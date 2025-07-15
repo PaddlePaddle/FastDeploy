@@ -40,16 +40,16 @@ class Wint2MoeMethod(QuantMethodBase):
         """
         pass
 
-    def check(self, layer: nn.Layer, ffn1_weights, ffn2_weights):
+    def check(self, layer: nn.Layer, up_gate_proj_weights, down_proj_weights):
         """
         check layer is valid for this method
         """
         assert len(
-            ffn1_weights
-        ) == layer.num_local_experts, "ffn1_weights length should be equal to num_local_experts."
+            up_gate_proj_weights
+        ) == layer.num_local_experts, "up_gate_proj_weights length should be equal to num_local_experts."
         assert len(
-            ffn2_weights
-        ) == layer.num_local_experts, "ffn2_weights length should be equal to num_local_experts."
+            down_proj_weights
+        ) == layer.num_local_experts, "down_proj_weights length should be equal to num_local_experts."
 
     def create_weights(self, layer: nn.Layer, state_dict):
         """
@@ -77,96 +77,96 @@ class TritonWint2FusedMoeMethod(Wint2MoeMethod):
         """
         Paddle cutlass process prequanted weights.
         """
-        ffn1_expert_weight_key = layer.weight_key_map.get(
-            "ffn1_expert_weight_key", None)
-        ffn2_expert_weight_key = layer.weight_key_map.get(
-            "ffn2_expert_weight_key", None)
-        ffn1_expert_weight_scale_key = layer.weight_key_map.get(
-            "ffn1_expert_weight_scale_key", None)
-        ffn2_expert_weight_scale_key = layer.weight_key_map.get(
-            "ffn2_expert_weight_scale_key", None)
-        ffn1_expert_super_scales_key = layer.weight_key_map.get(
-            "ffn1_expert_super_scales_key", None)
-        ffn2_expert_super_scales_key = layer.weight_key_map.get(
-            "ffn2_expert_super_scales_key", None)
-        ffn1_expert_code_scale_key = layer.weight_key_map.get(
-            "ffn1_expert_code_scale_key", None)
-        ffn2_expert_code_scale_key = layer.weight_key_map.get(
-            "ffn2_expert_code_scale_key", None)
-        ffn1_expert_code_zp_key = layer.weight_key_map.get(
-            "ffn1_expert_code_zp_key", None)
-        ffn2_expert_code_zp_key = layer.weight_key_map.get(
-            "ffn2_expert_code_zp_key", None)
+        up_gate_proj_expert_weight_key = layer.weight_key_map.get(
+            "up_gate_proj_expert_weight_key", None)
+        down_proj_expert_weight_key = layer.weight_key_map.get(
+            "down_proj_expert_weight_key", None)
+        up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get(
+            "up_gate_proj_expert_weight_scale_key", None)
+        down_proj_expert_weight_scale_key = layer.weight_key_map.get(
+            "down_proj_expert_weight_scale_key", None)
+        up_gate_proj_expert_super_scales_key = layer.weight_key_map.get(
+            "up_gate_proj_expert_super_scales_key", None)
+        down_proj_expert_super_scales_key = layer.weight_key_map.get(
+            "down_proj_expert_super_scales_key", None)
+        up_gate_proj_expert_code_scale_key = layer.weight_key_map.get(
+            "up_gate_proj_expert_code_scale_key", None)
+        down_proj_expert_code_scale_key = layer.weight_key_map.get(
+            "down_proj_expert_code_scale_key", None)
+        up_gate_proj_expert_code_zp_key = layer.weight_key_map.get(
+            "up_gate_proj_expert_code_zp_key", None)
+        down_proj_expert_code_zp_key = layer.weight_key_map.get(
+            "down_proj_expert_code_zp_key", None)
 
-        ffn1_weights, ffn2_weights = layer.load_experts_weight(
-            state_dict, ffn1_expert_weight_key, ffn2_expert_weight_key)
-        # self.check(layer, ffn1_weights, ffn2_weights)
+        up_gate_proj_weights, down_proj_weights = layer.load_experts_weight(
+            state_dict, up_gate_proj_expert_weight_key, down_proj_expert_weight_key)
+        # self.check(layer, up_gate_proj_weights, down_proj_weights)
 
-        ffn1_weight_scale = []
-        ffn2_weight_scale = []
-        ffn1_super_scales = []
-        ffn2_super_scales = []
-        ffn1_code_scale = []
-        ffn2_code_scale = []
-        ffn1_code_zp = []
-        ffn2_code_zp = []
+        up_gate_proj_weight_scale = []
+        down_proj_weight_scale = []
+        up_gate_proj_super_scales = []
+        down_proj_super_scales = []
+        up_gate_proj_code_scale = []
+        down_proj_code_scale = []
+        up_gate_proj_code_zp = []
+        down_proj_code_zp = []
         for i in range(layer.num_experts):
             expert_idx = layer.expert_id_offset + i
-            ffn1_weight_scale.append(
+            up_gate_proj_weight_scale.append(
                 get_tensor(
                     state_dict.pop(
-                        ffn1_expert_weight_scale_key.format(expert_idx))))
-            ffn2_weight_scale.append(
+                        up_gate_proj_expert_weight_scale_key.format(expert_idx))))
+            down_proj_weight_scale.append(
                 get_tensor(
                     state_dict.pop(
-                        ffn2_expert_weight_scale_key.format(expert_idx))))
-            ffn1_super_scales.append(
+                        down_proj_expert_weight_scale_key.format(expert_idx))))
+            up_gate_proj_super_scales.append(
                 get_tensor(
                     state_dict.pop(
-                        ffn1_expert_super_scales_key.format(expert_idx))))
-            ffn2_super_scales.append(
+                        up_gate_proj_expert_super_scales_key.format(expert_idx))))
+            down_proj_super_scales.append(
                 get_tensor(
                     state_dict.pop(
-                        ffn2_expert_super_scales_key.format(expert_idx))))
-            ffn1_code_scale.append(
+                        down_proj_expert_super_scales_key.format(expert_idx))))
+            up_gate_proj_code_scale.append(
                 get_tensor(
                     state_dict.pop(
-                        ffn1_expert_code_scale_key.format(expert_idx))))
-            ffn2_code_scale.append(
+                        up_gate_proj_expert_code_scale_key.format(expert_idx))))
+            down_proj_code_scale.append(
                 get_tensor(
                     state_dict.pop(
-                        ffn2_expert_code_scale_key.format(expert_idx))))
-            ffn1_code_zp.append(
+                        down_proj_expert_code_scale_key.format(expert_idx))))
+            up_gate_proj_code_zp.append(
                 get_tensor(
                     state_dict.pop(
-                        ffn1_expert_code_zp_key.format(expert_idx))))
-            ffn2_code_zp.append(
+                        up_gate_proj_expert_code_zp_key.format(expert_idx))))
+            down_proj_code_zp.append(
                 get_tensor(
                     state_dict.pop(
-                        ffn2_expert_code_zp_key.format(expert_idx))))
+                        down_proj_expert_code_zp_key.format(expert_idx))))
 
-        ffn1_weight = paddle.stack(ffn1_weights, axis=0)
-        ffn2_weight = paddle.stack(ffn2_weights, axis=0)
-        ffn1_weight_scale = paddle.stack(ffn1_weight_scale, axis=0)
-        ffn2_weight_scale = paddle.stack(ffn2_weight_scale, axis=0)
-        ffn1_super_scales = paddle.stack(ffn1_super_scales, axis=0)
-        ffn2_super_scales = paddle.stack(ffn2_super_scales, axis=0)
-        ffn1_code_scale = paddle.stack(ffn1_code_scale, axis=0)
-        ffn2_code_scale = paddle.stack(ffn2_code_scale, axis=0)
-        ffn1_code_zp = paddle.stack(ffn1_code_zp, axis=0)
-        ffn2_code_zp = paddle.stack(ffn2_code_zp, axis=0)
+        up_gate_proj_weight = paddle.stack(up_gate_proj_weights, axis=0)
+        down_proj_weight = paddle.stack(down_proj_weights, axis=0)
+        up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0)
+        down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0)
+        up_gate_proj_super_scales = paddle.stack(up_gate_proj_super_scales, axis=0)
+        down_proj_super_scales = paddle.stack(down_proj_super_scales, axis=0)
+        up_gate_proj_code_scale = paddle.stack(up_gate_proj_code_scale, axis=0)
+        down_proj_code_scale = paddle.stack(down_proj_code_scale, axis=0)
+        up_gate_proj_code_zp = paddle.stack(up_gate_proj_code_zp, axis=0)
+        down_proj_code_zp = paddle.stack(down_proj_code_zp, axis=0)
 
         name_tensor_map = {
-            "up_gate_proj_weight": ffn1_weight,
-            "down_proj_weight": ffn2_weight,
-            "moe_ffn1_weight_scale": ffn1_weight_scale,
-            "moe_ffn2_weight_scale": ffn2_weight_scale,
-            "moe_ffn1_super_scales": ffn1_super_scales,
-            "moe_ffn2_super_scales": ffn2_super_scales,
-            "moe_ffn1_code_scale": ffn1_code_scale,
-            "moe_ffn2_code_scale": ffn2_code_scale,
-            "moe_ffn1_code_zp": ffn1_code_zp,
-            "moe_ffn2_code_zp": ffn2_code_zp
+            "up_gate_proj_weight": up_gate_proj_weight,
+            "down_proj_weight": down_proj_weight,
+            "up_gate_proj_weight_scale": up_gate_proj_weight_scale,
+            "down_proj_weight_scale": down_proj_weight_scale,
+            "up_gate_proj_super_scales": up_gate_proj_super_scales,
+            "down_proj_super_scales": down_proj_super_scales,
+            "up_gate_proj_code_scale": up_gate_proj_code_scale,
+            "down_proj_code_scale": down_proj_code_scale,
+            "up_gate_proj_code_zp": up_gate_proj_code_zp,
+            "down_proj_code_zp": down_proj_code_zp
         }
         for name, tensor in name_tensor_map.items():
             create_and_set_parameter(layer, name, tensor)
@@ -199,7 +199,7 @@ class TritonWint2FusedMoeMethod(Wint2MoeMethod):
             x,
             gate_out,
             layer.gate_correction_bias,
-            (layer.moe_ffn1_in_scale if hasattr(layer, "moe_ffn1_in_scale")
+            (layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale")
              else None),  # if set, permute_input will be int8_t
             layer.top_k,
             False,
@@ -212,14 +212,14 @@ class TritonWint2FusedMoeMethod(Wint2MoeMethod):
             layer.up_gate_proj_weight,
             layer.down_proj_weight,
             None,
-            layer.moe_ffn1_super_scales,
-            layer.moe_ffn2_super_scales,
-            layer.moe_ffn1_weight_scale,
-            layer.moe_ffn1_code_scale,
-            layer.moe_ffn1_code_zp,
-            layer.moe_ffn2_weight_scale,
-            layer.moe_ffn2_code_scale,
-            layer.moe_ffn2_code_zp,
+            layer.up_gate_proj_super_scales,
+            layer.down_proj_super_scales,
+            layer.up_gate_proj_weight_scale,
+            layer.up_gate_proj_code_scale,
+            layer.up_gate_proj_code_zp,
+            layer.down_proj_weight_scale,
+            layer.down_proj_code_scale,
+            layer.down_proj_code_zp,
             False,
         )
 

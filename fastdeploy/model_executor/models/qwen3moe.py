@@ -108,9 +108,9 @@ class Qwen3DecoderLayer(nn.Layer):
         weight_key_map = {
             "gate_weight_key":
             f"{prefix}.mlp.gate.weight",
-            "ffn1_expert_weight_key":
+            "up_gate_proj_expert_weight_key":
             f"{prefix}.mlp.experts.{{}}.up_gate_proj.weight",
-            "ffn2_expert_weight_key":
+            "down_proj_expert_weight_key":
             f"{prefix}.mlp.experts.{{}}.down_proj.weight",
         }
 
