@@ -271,7 +271,7 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
         )
 
         num_tokens, K = x.shape
-        E, _, N = layer.moe_ffn1_weight.shape
+        E, _, N = layer.up_gate_proj_weight.shape
         M = num_tokens
 
         top_k = topk_ids.shape[1]
@@ -308,12 +308,12 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
 
         moe_wint2_ffn_kernel[grid](
             x,
-            layer.moe_ffn1_weight,
+            layer.up_gate_proj_weight,
             intermediate_cache1,
-            layer.moe_ffn1_weight_scale,
-            layer.moe_ffn1_super_scales,
-            layer.moe_ffn1_code_scale,
-            layer.moe_ffn1_code_zp,
+            layer.up_gate_proj_weight_scale,
+            layer.up_gate_proj_super_scales,
+            layer.up_gate_proj_code_scale,
+            layer.up_gate_proj_code_zp,
             topk_weights,
             sorted_token_ids,
             expert_ids,
@@ -321,7 +321,7 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
             num_valid_tokens,
             max_possible_num_post_padded,
             # Matrix dimensions
-            N=layer.moe_ffn1_weight.shape[-1],
+            N=layer.up_gate_proj_weight.shape[-1],
             K=x.shape[-1],
             # The stride variables represent how much to increase the ptr by when
             # moving by 1 element in a particular dimension. E.g. `stride_am` is
@@ -329,15 +329,15 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
             # (A has M rows).
             stride_am=x.strides[0],
             stride_ak=x.strides[1],
-            stride_be=layer.moe_ffn1_weight.strides[0],
-            stride_bk=layer.moe_ffn1_weight.strides[1],
+            stride_be=layer.up_gate_proj_weight.strides[0],
+            stride_bk=layer.up_gate_proj_weight.strides[1],
             stride_bn=1,
             stride_cm=intermediate_cache1.strides[-2],
             stride_cn=1,
-            stride_bse=layer.moe_ffn1_weight_scale.strides[0],
-            stride_bsk=layer.moe_ffn1_weight_scale.strides[1],
+            stride_bse=layer.up_gate_proj_weight_scale.strides[0],
+            stride_bsk=layer.up_gate_proj_weight_scale.strides[1],
             stride_bsn=1,
-            stride_bce=layer.moe_ffn1_code_scale.strides[0],
+            stride_bce=layer.up_gate_proj_code_scale.strides[0],
             stride_bck=1,
             stride_bcn=1,
             BLOCK_SIZE_M=config["BLOCK_SIZE_M"],
@@ -361,17 +361,17 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
         }
 
         grid = (ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"]) *
-                ceil_div(layer.moe_ffn2_weight.shape[-1], config["BLOCK_SIZE_N"]), )
+                ceil_div(layer.down_proj_weight.shape[-1], config["BLOCK_SIZE_N"]), )
 
 
         moe_wint2_ffn_kernel[grid](
             intermediate_cache2,
-            layer.moe_ffn2_weight,
+            layer.down_proj_weight,
             intermediate_cache3,
-            layer.moe_ffn2_weight_scale,
-            layer.moe_ffn2_super_scales,
-            layer.moe_ffn2_code_scale,
-            layer.moe_ffn2_code_zp,
+            layer.down_proj_weight_scale,
+            layer.down_proj_super_scales,
+            layer.down_proj_code_scale,
+            layer.down_proj_code_zp,
             topk_weights,
             sorted_token_ids,
             expert_ids,
@@ -379,7 +379,7 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
             num_valid_tokens,
             max_possible_num_post_padded,
             # Matrix dimensions
-            N=layer.moe_ffn2_weight.shape[-1],
+            N=layer.down_proj_weight.shape[-1],
             K=intermediate_cache2.shape[-1],
             # The stride variables represent how much to increase the ptr by when
             # moving by 1 element in a particular dimension. E.g. `stride_am` is
@@ -387,15 +387,15 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
             # (A has M rows).
             stride_am=intermediate_cache2.strides[0],
             stride_ak=1,
-            stride_be=layer.moe_ffn2_weight.strides[0],
-            stride_bk=layer.moe_ffn2_weight.strides[1],
+            stride_be=layer.down_proj_weight.strides[0],
+            stride_bk=layer.down_proj_weight.strides[1],
             stride_bn=1,
             stride_cm=intermediate_cache3.strides[-2],
             stride_cn=1,
-            stride_bse=layer.moe_ffn2_weight_scale.strides[0],
-            stride_bsk=layer.moe_ffn2_weight_scale.strides[1],
+            stride_bse=layer.down_proj_weight_scale.strides[0],
+            stride_bsk=layer.down_proj_weight_scale.strides[1],
             stride_bsn=1,
-            stride_bce=layer.moe_ffn2_code_scale.strides[0],
+            stride_bce=layer.down_proj_code_scale.strides[0],
             stride_bck=1,
             stride_bcn=1,
             BLOCK_SIZE_M=config["BLOCK_SIZE_M"],
