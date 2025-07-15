@@ -263,7 +263,7 @@ class Ernie4_5_MTPModel(nn.Layer):
         super().__init__()
 
         self.num_layers = fd_config.model_config.num_hidden_layers
-        self.embed_tokens = fd_config.speculative_config.sharing_model.model.embed_tokens
+        self.embed_tokens = fd_config.speculative_config.sharing_model.ernie.embed_tokens
 
         self.layers = nn.LayerList([
             Ernie4_5_DecoderLayer(
@@ -349,7 +349,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
         """
         super(Ernie4_5_MTPForCausalLM, self).__init__(fd_config)
         self.fd_config = fd_config
-        self.model = Ernie4_5_MTPModel(fd_config=fd_config)
+        self.ernie = Ernie4_5_MTPModel(fd_config=fd_config)
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
@@ -373,10 +373,10 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.model.load_state_dict(state_dict)
+        self.ernie.load_state_dict(state_dict)
         # if self.tie_word_embeddings:
         #     self.lm_head.linear.weight.set_value(
-        #         self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
+        #         self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
         # else:
         #     self.lm_head.load_state_dict(state_dict)
 
@@ -400,7 +400,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
         )
         for i in range(self.fd_config.model_config.moe_layer_start_index,
                        self.fd_config.model_config.num_hidden_layers):
-            self.model.layers[i].mlp.fused_moe(fake_hidden_states)
+            self.ernie.layers[i].mlp.fused_moe(fake_hidden_states)
 
     def forward(
         self,
@@ -411,7 +411,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
         """
         forward
         """
-        hidden_states = self.model(ids_remove_padding, previous_hidden_states,
+        hidden_states = self.ernie(ids_remove_padding, previous_hidden_states,
                                    forward_meta)
 
         return hidden_states
