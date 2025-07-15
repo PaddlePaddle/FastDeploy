@@ -1266,4 +1266,5 @@ class LLMEngine(object):
             num_client=self.cfg.tensor_parallel_size,
             client_id=0,
             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
-            local_data_parallel_id= self.cfg.worker_num_per_node * self.cfg.node_rank)
+            local_data_parallel_id= min(self.cfg.worker_num_per_node * self.cfg.node_rank,
+                                       self.cfg.parallel_config.data_parallel_size - 1))
