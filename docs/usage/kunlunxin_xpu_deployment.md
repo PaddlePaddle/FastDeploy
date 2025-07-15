@@ -24,32 +24,6 @@ Deploy an OpenAI API-compatible server using FastDeploy with the following comma
 
 #### Start service
 
-**Deploy the ERNIE-4.5-300B-A47B-Paddle model with WINT4 precision and 32K context length on 8 XPUs(Recommended)**
-
-```bash
-python -m fastdeploy.entrypoints.openai.api_server \
-    --model baidu/ERNIE-4.5-300B-A47B-Paddle \
-    --port 8188 \
-    --tensor-parallel-size 8 \
-    --max-model-len 32768 \
-    --max-num-seqs 64 \
-    --quantization "wint4" \
-    --gpu-memory-utilization 0.9
-```
-
-**Deploy the ERNIE-4.5-300B-A47B-Paddle model with WINT4 precision and 128K context length on 8 XPUs**
-
-```bash
-python -m fastdeploy.entrypoints.openai.api_server \
-    --model baidu/ERNIE-4.5-300B-A47B-Paddle \
-    --port 8188 \
-    --tensor-parallel-size 8 \
-    --max-model-len 131072 \
-    --max-num-seqs 64 \
-    --quantization "wint4" \
-    --gpu-memory-utilization 0.9
-```
-
 **Deploy the ERNIE-4.5-300B-A47B-Paddle model with WINT4 precision and 32K context length on 4 XPUs**
 
 ```bash

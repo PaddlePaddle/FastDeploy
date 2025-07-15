@@ -83,13 +83,13 @@ cd FastDeploy
 ### Download Kunlunxin Compilation Dependency
 
 ```bash
-bash custom_ops/xpu_ops/src/download_dependency.sh stable
+bash custom_ops/xpu_ops/src/download_dependencies.sh stable
 ```
 
 Alternatively, you can download the latest versions of XTDK and XVLLM (Not recommended)
 
 ```bash
-bash custom_ops/xpu_ops/src/download_dependency.sh develop
+bash custom_ops/xpu_ops/src/download_dependencies.sh develop
 ```
 
 Set environment variables,

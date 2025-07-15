@@ -48,7 +48,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Installation completed in: $THIRDPARTY_DIR"
-echo "You can set environment variables to use XVLLM and XTDK in the following way:"
+echo "You can set environment variables as follows to use XVLLM and XTDK:"
 echo " export CLANG_PATH=$THIRDPARTY_DIR/xtdk"
 echo " export XVLLM_PATH=$THIRDPARTY_DIR/xvllm"
 echo ""

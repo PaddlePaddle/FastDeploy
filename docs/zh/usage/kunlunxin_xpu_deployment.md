@@ -24,32 +24,6 @@
 
 #### 启动服务
 
-**基于 WINT4 精度和 32K 上下文部署 ERNIE-4.5-300B-A47B-Paddle 模型到 8 卡 P800 服务器（推荐）**
-
-```bash
-python -m fastdeploy.entrypoints.openai.api_server \
-    --model baidu/ERNIE-4.5-300B-A47B-Paddle \
-    --port 8188 \
-    --tensor-parallel-size 8 \
-    --max-model-len 32768 \
-    --max-num-seqs 64 \
-    --quantization "wint4" \
-    --gpu-memory-utilization 0.9
-```
-
-**基于 WINT4 精度和 128K 上下文部署 ERNIE-4.5-300B-A47B-Paddle 模型到 8 卡 P800 服务器**
-
-```bash
-python -m fastdeploy.entrypoints.openai.api_server \
-    --model baidu/ERNIE-4.5-300B-A47B-Paddle \
-    --port 8188 \
-    --tensor-parallel-size 8 \
-    --max-model-len 131072 \
-    --max-num-seqs 64 \
-    --quantization "wint4" \
-    --gpu-memory-utilization 0.9
-```
-
 **基于 WINT4 精度和 32K 上下文部署 ERNIE-4.5-300B-A47B-Paddle 模型到 4 卡 P800 服务器**
 
 ```bash

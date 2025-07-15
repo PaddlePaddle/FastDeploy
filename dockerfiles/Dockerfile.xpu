@@ -23,7 +23,7 @@ COPY . /workspace/FastDeploy
 RUN mkdir -p /workspace/deps && cd /workspace/deps && \
     wget https://klx-sdk-release-public.su.bcebos.com/xre/kl3-release/5.0.21.21/xre-Linux-x86_64-5.0.21.21.tar.gz && \
     tar -zxf xre-Linux-x86_64-5.0.21.21.tar.gz && mv xre-Linux-x86_64-5.0.21.21 xre && \
-    cd /workspace/FastDeploy && bash custom_ops/xpu_ops/src/download_dependency.sh stable
+    cd /workspace/FastDeploy && bash custom_ops/xpu_ops/src/download_dependencies.sh stable
 
 ENV PATH=/workspace/deps/xre/bin:$PATH
 ENV CLANG_PATH=/workspace/FastDeploy/custom_ops/xpu_ops/src/third_party/xtdk

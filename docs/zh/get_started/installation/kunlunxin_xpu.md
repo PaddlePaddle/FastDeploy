@@ -83,13 +83,13 @@ cd FastDeploy
 ### 下载昆仑编译依赖
 
 ```bash
-bash custom_ops/xpu_ops/src/download_dependency.sh stable
+bash custom_ops/xpu_ops/src/download_dependencies.sh stable
 ```
 
 或者你也可以下载最新版编译依赖
 
 ```bash
-bash custom_ops/xpu_ops/src/download_dependency.sh develop
+bash custom_ops/xpu_ops/src/download_dependencies.sh develop
 ```
 
 设置环境变量
