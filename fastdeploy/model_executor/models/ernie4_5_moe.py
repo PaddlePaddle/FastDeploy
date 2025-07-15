@@ -272,7 +272,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             prefix=f"{prefix}.self_attn",
         )
 
-        if (fd_config.model_config.moe_num_experts is not None
+        if (getattr(fd_config.model_config, "moe_num_experts", None) is not None
                 and layer_id >= fd_config.model_config.moe_layer_start_index):
             self.mlp = Ernie4_5_MoE(
                 fd_config=fd_config,
