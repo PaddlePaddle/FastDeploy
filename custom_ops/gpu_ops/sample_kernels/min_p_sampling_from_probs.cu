@@ -17,7 +17,8 @@
 #include "sample_kernels/sampling.cuh"
 
 std::vector<paddle::Tensor> MinPSamplingFromProbs(const paddle::Tensor &probs,
-                                               const paddle::Tensor &min_p,
+                                               const paddle::optional<paddle::Tensor>& min_p_tensor,
+                                               float min_p_val,
                                                int seed) {
     std::vector<int64_t> probs_shape = probs.shape();
     unsigned int batch_size = probs_shape[0];
@@ -29,11 +30,21 @@ std::vector<paddle::Tensor> MinPSamplingFromProbs(const paddle::Tensor &probs,
     auto samples =
         paddle::empty({batch_size, 1}, paddle::DataType::INT64, probs.place());
 
+    float* min_p_ptr = min_p_tensor ? const_cast<float*>(min_p_tensor->data<float>()) : nullptr;
+
     cudaError_t status;
 
     status = sampling::MinPSamplingFromProb<float, int64_t>(
-    const_cast<float *>(probs.data<float>()),samples.data<int64_t>(),
-    batch_size,min_p.data<float>(),vocab_size,true,philox_seed,philox_offset,cu_stream);
+      const_cast<float *>(probs.data<float>()),
+      min_p_ptr,
+      samples.data<int64_t>(),
+      batch_size,
+      min_p_val,
+      vocab_size,
+      true,
+      philox_seed,
+      philox_offset,
+      cu_stream);
 
   PD_CHECK(status == cudaSuccess, "SamplingFromProbs failed with error code " +
                                       std::string(cudaGetErrorString(status)));
@@ -56,9 +67,9 @@ MinPSamplingFromProbsInferDtype(const paddle::DataType &probs_dtype,
 
 
 PD_BUILD_STATIC_OP(min_p_sampling)
-    .Inputs({"probs", "min_p"})
+    .Inputs({"probs",paddle::Optional("min_p_tensor")})
     .Outputs({"samples"})
-    .Attrs({"seed: int"})
+    .Attrs({"min_p_val: float", "seed: int"})
     .SetKernelFn(PD_KERNEL(MinPSamplingFromProbs))
     .SetInferShapeFn(PD_INFER_SHAPE(MinPSamplingFromProbsInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(MinPSamplingFromProbsInferDtype));

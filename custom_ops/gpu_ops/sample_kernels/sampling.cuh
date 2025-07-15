@@ -561,11 +561,11 @@ struct RenormTempStorage {
 template <uint32_t BLOCK_THREADS, BlockScanAlgorithm SCAN_ALGORITHM,
           BlockReduceAlgorithm REDUCE_ALGORITHM, uint32_t VEC_SIZE, bool DETERMINISTIC,
           typename DType, typename IdType>
-__global__ void MinPSamplingFromProbKernel(DType* probs, IdType* output,
-                                            float* min_p_arr, uint32_t d,
+__global__ void MinPSamplingFromProbKernel(DType* probs,float* min_p_arr, IdType* output,
+                                             float min_p_val, uint32_t d,
                                            uint64_t philox_seed, uint64_t philox_offset) {
   const uint32_t bx = blockIdx.x, tx = threadIdx.x;
-  float p = (min_p_arr == nullptr) ? 1e-6 : min_p_arr[bx];
+  float p = (min_p_arr == nullptr) ? min_p_val : min_p_arr[bx];
   curandStatePhilox4_32_10_t state;
   curand_init(philox_seed, bx, philox_offset, &state);
   const uint32_t row_idx = bx;
@@ -787,8 +787,8 @@ cudaError_t TopPSamplingFromProb(T *probs, IdType *output,
 }
 
 template <typename T, typename IdType>
-cudaError_t MinPSamplingFromProb(T *probs, IdType *output,
-                                 uint32_t batch_size, const T *min_p_val,
+cudaError_t MinPSamplingFromProb(T *probs, T* min_p_arr,IdType *output,
+                                 uint32_t batch_size,float min_p_val,
                                  uint32_t d, bool deterministic,
                                  uint64_t philox_seed, uint64_t philox_offset,
                                  cudaStream_t stream = 0){
@@ -798,7 +798,7 @@ cudaError_t MinPSamplingFromProb(T *probs, IdType *output,
   const uint32_t smem_size = sizeof(SamplingTempStorage<BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO>);
   dim3 nblks(batch_size);
   dim3 nthrs(BLOCK_THREADS);
-  void* args[] = {&probs, &output, &min_p_val,&d,&philox_seed,&philox_offset};
+  void* args[] = {&probs, &min_p_arr,&output, &min_p_val,&d,&philox_seed,&philox_offset};
   DISPATCH_ALIGNED_VEC_SIZE(
       vec_size, VEC_SIZE,
       {DISPATCH_DETERMINISTIC(deterministic, DETERMINISTIC, {

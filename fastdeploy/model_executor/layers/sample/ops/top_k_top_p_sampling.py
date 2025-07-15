@@ -157,7 +157,8 @@ def rejection_top_p_sampling(
 
 def min_p_sampling(
     x:paddle.tensor,
-    min_p:paddle.Tensor,
+    min_p_arr:Optional[paddle.Tensor],
+    min_p:float,
     seed:int=-1
 )->paddle.Tensor:
     """
@@ -165,7 +166,7 @@ def min_p_sampling(
     """
     try:
         from fastdeploy.model_executor.ops.gpu import min_p_sampling
-        ids=min_p_sampling(x,min_p,seed)
+        ids=min_p_sampling(x,min_p_arr,min_p,seed)
     except ImportError:
         raise RuntimeError("Cannot import min_p_sampling op.")
     return ids
