@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
@@ -23,8 +22,8 @@ import fastdeploy
 import fastdeploy.model_executor.ops.gpu.deep_gemm as deep_gemm
 from fastdeploy.distributed.communication_op import \
     tensor_model_parallel_all_reduce
-from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func
 from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func
 
 from ..utils import create_and_set_parameter
 from .fused_moe_backend_base import MoEMethodBase
@@ -242,7 +241,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             [
                 layer.num_local_experts,
                 layer.ep_size *
-                layer.moe_config.num_max_dispatch_tokens_per_rank,
+                layer.model_config.num_max_dispatch_tokens_per_rank,
                 layer.moe_intermediate_size * 2,
             ],
             dtype=paddle.bfloat16,
@@ -252,7 +251,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             [
                 layer.num_local_experts,
                 layer.ep_size *
-                layer.moe_config.num_max_dispatch_tokens_per_rank,
+                layer.model_config.num_max_dispatch_tokens_per_rank,
                 layer.hidden_size,
             ],
             dtype=paddle.bfloat16,

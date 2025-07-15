@@ -102,7 +102,7 @@ class IluvatarAttnBackend(AttentionBackend):
         self.head_dim = head_dim
         # note: scale need to change if using MLA
         self.attention_metadata.scale = 1.0 / sqrt(head_dim)
-        self.num_layers = llm_config.model_config.num_layers
+        self.num_layers = llm_config.model_config.num_hidden_layers
         self.record_block_table_metadata = {}
         self.only_use_flash_attn = int(
             os.getenv("FD_ILUVATAR_ONLY_USE_FLASH_ATTN", 0)) == 1

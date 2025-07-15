@@ -72,8 +72,8 @@ class Ernie4_5_VLMoE(nn.Layer):
                  prefix: str) -> None:
         super().__init__()
 
-        self.tp_size = fd_config.parallel_config.tensor_parallel_degree
-        moe_layer_start_index = fd_config.moe_config.moe_layer_start_index
+        self.tp_size = fd_config.parallel_config.tensor_parallel_size
+        moe_layer_start_index = fd_config.model_config.moe_layer_start_index
         if isinstance(moe_layer_start_index, int):
             text_moe_layer_start_index = moe_layer_start_index
             image_moe_layer_start_index = moe_layer_start_index
@@ -81,10 +81,10 @@ class Ernie4_5_VLMoE(nn.Layer):
             text_moe_layer_start_index = moe_layer_start_index[0]
             image_moe_layer_start_index = moe_layer_start_index[1]
 
-        moe_layer_end_index = fd_config.moe_config.moe_layer_end_index
+        moe_layer_end_index = fd_config.model_config.moe_layer_end_index
         if moe_layer_end_index is None:
-            text_moe_layer_end_index = fd_config.model_config.num_layers
-            image_moe_layer_end_index = fd_config.model_config.num_layers
+            text_moe_layer_end_index = fd_config.model_config.num_hidden_layers
+            image_moe_layer_end_index = fd_config.model_config.num_hidden_layers
         elif isinstance(moe_layer_end_index, int):
             text_moe_layer_end_index = moe_layer_end_index
             image_moe_layer_end_index = moe_layer_end_index
@@ -107,11 +107,11 @@ class Ernie4_5_VLMoE(nn.Layer):
             self.mlp_text = FusedMoE(
                 fd_config=fd_config,
                 reduce_results=False,
-                moe_intermediate_size=fd_config.moe_config.
+                moe_intermediate_size=fd_config.model_config.
                 moe_intermediate_size[0],
-                num_experts=fd_config.moe_config.num_experts[0],
+                num_experts=fd_config.model_config.moe_num_experts[0],
                 expert_id_offset=0,
-                top_k=fd_config.moe_config.top_k,
+                top_k=fd_config.model_config.moe_k,
                 layer_idx=layer_id,
                 moe_tag="Text",
                 weight_key_map=weight_key_map,
@@ -120,7 +120,7 @@ class Ernie4_5_VLMoE(nn.Layer):
         else:
             self.mlp_text = Ernie4_5_VLMLP(
                 fd_config=fd_config,
-                intermediate_size=fd_config.model_config.ffn_hidden_size,
+                intermediate_size=fd_config.model_config.intermediate_size,
                 prefix=f"{prefix}",
             )
 
@@ -139,11 +139,11 @@ class Ernie4_5_VLMoE(nn.Layer):
             self.mlp_image = FusedMoE(
                 fd_config=fd_config,
                 reduce_results=False,
-                moe_intermediate_size=fd_config.moe_config.
+                moe_intermediate_size=fd_config.model_config.
                 moe_intermediate_size[1],
-                num_experts=fd_config.moe_config.num_experts[1],
-                expert_id_offset=fd_config.moe_config.num_experts[0],
-                top_k=fd_config.moe_config.top_k,
+                num_experts=fd_config.model_config.moe_num_experts[1],
+                expert_id_offset=fd_config.model_config.moe_num_experts[0],
+                top_k=fd_config.model_config.moe_k,
                 layer_idx=layer_id,
                 moe_tag="Image",
                 weight_key_map=weight_key_map,
@@ -152,16 +152,16 @@ class Ernie4_5_VLMoE(nn.Layer):
         else:
             self.mlp_image = Ernie4_5_VLMLP(
                 fd_config=fd_config,
-                intermediate_size=fd_config.model_config.ffn_hidden_size,
+                intermediate_size=fd_config.model_config.intermediate_size,
                 prefix=f"{prefix}",
             )
 
-        self.num_shared_experts = fd_config.moe_config.moe_num_shared_experts
+        self.num_shared_experts = fd_config.model_config.moe_num_shared_experts
         if self.num_shared_experts > 0:
             self.share_experts = Ernie4_5_VLMLP(
                 fd_config=fd_config,
                 intermediate_size=self.num_shared_experts *
-                fd_config.moe_config.moe_intermediate_size[0],
+                fd_config.model_config.moe_intermediate_size[0],
                 prefix=f"{prefix}.shared_experts",
                 reduce_results=False,
             )
@@ -235,15 +235,15 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
         super().__init__()
         layer_id = int(prefix.split(sep='.')[-1])
 
-        moe_layer_start_index = fd_config.moe_config.moe_layer_start_index
+        moe_layer_start_index = fd_config.model_config.moe_layer_start_index
         if isinstance(moe_layer_start_index, list):
             min_moe_layer_start_index = min(moe_layer_start_index)
         else:
             min_moe_layer_start_index = moe_layer_start_index
 
-        max_moe_layer_end_index = fd_config.model_config.num_layers
-        if fd_config.moe_config.moe_layer_end_index is not None:
-            moe_layer_end_index = fd_config.moe_config.moe_layer_end_index
+        max_moe_layer_end_index = fd_config.model_config.num_hidden_layers
+        if fd_config.model_config.moe_layer_end_index is not None:
+            moe_layer_end_index = fd_config.model_config.moe_layer_end_index
             if isinstance(moe_layer_start_index, list):
                 max_moe_layer_end_index = max(moe_layer_end_index)
             else:
@@ -257,7 +257,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
 
         assert min_moe_layer_start_index <= max_moe_layer_end_index
 
-        if (fd_config.moe_config.num_experts is not None
+        if (fd_config.model_config.moe_num_experts is not None
                 and layer_id >= min_moe_layer_start_index
                 and layer_id <= max_moe_layer_end_index):
             self.mlp = Ernie4_5_VLMoE(
@@ -268,7 +268,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
         else:
             self.mlp = Ernie4_5_VLMLP(
                 fd_config=fd_config,
-                intermediate_size=fd_config.model_config.ffn_hidden_size,
+                intermediate_size=fd_config.model_config.intermediate_size,
                 prefix=f"{prefix}.mlp",
             )
 
@@ -337,23 +337,23 @@ class Ernie4_5_VLModel(nn.Layer):
         """
         super().__init__()
 
-        self.num_layers = fd_config.model_config.num_layers
-        self.im_patch_id = fd_config.moe_config.im_patch_id
+        self.num_layers = fd_config.model_config.num_hidden_layers
+        self.im_patch_id = fd_config.model_config.im_patch_id
         self._dtype = fd_config.model_config.dtype
-        fd_config.model_config.prefix_name = "ernie"
+        fd_config.model_config.pretrained_config.prefix_name = "ernie"
 
         self.embeddings = VocabParallelEmbedding(
             fd_config=fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
             params_dtype=paddle.get_default_dtype,
-            prefix=(f"{fd_config.model_config.prefix_name}.embed_tokens"),
+            prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"),
         )
 
         self.hidden_layers = nn.LayerList([
             Ernie4_5_VLDecoderLayer(
                 fd_config=fd_config,
-                prefix=f"{fd_config.model_config.prefix_name}.layers.{i}")
+                prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}")
             for i in range(self.num_layers)
         ])
 
@@ -361,7 +361,7 @@ class Ernie4_5_VLModel(nn.Layer):
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
-            prefix=f"{fd_config.model_config.prefix_name}.norm",
+            prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
     def load_state_dict(self, state_dict):
@@ -748,7 +748,7 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
             moe_layer_start_index = config.moe_layer_start_index
 
         mappings = get_tensor_parallel_split_mappings(
-            config.num_layers,
+            config.num_hidden_layers,
             config.moe_num_experts,
             moe_layer_start_index,
             config.prefix_name,

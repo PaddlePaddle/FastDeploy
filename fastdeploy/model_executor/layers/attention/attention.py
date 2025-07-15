@@ -67,10 +67,10 @@ class Attention(nn.Layer):
             ValueError: If the `v_head_dim` is less than 0.
         """
         super().__init__()
-        self.num_heads: int = fd_config.model_config.num_attention_heads // fd_config.parallel_config.tensor_parallel_degree
+        self.num_heads: int = fd_config.model_config.num_attention_heads // fd_config.parallel_config.tensor_parallel_size
         self.head_dim: int = fd_config.model_config.head_dim
         self.kv_num_heads: int = \
-            max(1, fd_config.model_config.num_key_value_heads // fd_config.parallel_config.tensor_parallel_degree)
+            max(1, fd_config.model_config.num_key_value_heads // fd_config.parallel_config.tensor_parallel_size)
         self.layer_id: int = layer_id
         self.v_head_dim: int = v_head_dim if v_head_dim > 0 else self.head_dim
         self.rope_type: str = rope_type
