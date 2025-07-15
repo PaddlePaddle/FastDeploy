@@ -123,7 +123,7 @@ def apply_speculative_penalty_multi_scores(
         from fastdeploy.model_executor.ops.gpu import \
             speculate_get_token_penalty_multi_scores
 
-        logits = speculate_get_token_penalty_multi_scores(
+        speculate_get_token_penalty_multi_scores(
             pre_token_ids,
             logits,
             repetition_penalties,
@@ -141,5 +141,5 @@ def apply_speculative_penalty_multi_scores(
         )
     else:
         raise NotImplementedError()
-
+    # inplace
     return logits
