@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Literal, Optional, Union
+from typing import Literal, Optional
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.trl import llm_utils
@@ -89,6 +89,7 @@ class ModelConfig:
         self.max_model_len = 0
         self.dtype = ""
         self.enable_logprob = False
+        self.enable_mm = False
 
         for key, value in args.items():
             if hasattr(self, key):

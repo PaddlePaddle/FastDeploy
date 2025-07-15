@@ -990,8 +990,6 @@ class LLMEngine(object):
         pd_cmd = pd_cmd + f" --log_dir {log_dir}"
 
         worker_path = "../worker/worker_process.py"
-        if self.cfg.enable_mm:
-            worker_path = "../worker/vl_worker_process.py"
         py_script = os.path.join(current_dir_path, worker_path)
 
         ori_vocab_size = (
@@ -1030,7 +1028,9 @@ class LLMEngine(object):
             f" --speculative_benchmark_mode {self.cfg.speculative_config.benchmark_mode}"
             f" --max_capture_batch_size {self.cfg.max_capture_batch_size}"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
-            f" --load_strategy {self.cfg.model_config.load_strategy}")
+            f" --load_strategy {self.cfg.model_config.load_strategy}"
+            f" --enable_mm {self.cfg.enable_mm}")
+
 
         worker_append_flag = {
             "enable_expert_parallel":
