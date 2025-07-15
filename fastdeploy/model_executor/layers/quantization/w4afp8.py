@@ -63,8 +63,8 @@ class W4AFP8LinearMethod(QuantMethodBase):
         self.quant_config = quant_config
 
     def create_weights(self, layer):
-        layer.linear_weight_shape.reverse()
-        layer.linear_weight_shape[0] //= 2
+        layer.weight_shape.reverse()
+        layer.weight_shape[0] //= 2
         layer.weight_dtype = "int8"
         pass
 
@@ -77,16 +77,16 @@ class W4AFP8LinearMethod(QuantMethodBase):
                 scale_dtype="float16",
             ))
         weight_scale_tensor = paddle.view(weight_scale_tensor, layer._dtype)
-        layer.linear_weight.set_value(quanted_weight_tensor)
-        layer.linear_weight_scale.set_value(weight_scale_tensor)
+        layer.weight.set_value(quanted_weight_tensor)
+        layer.weight_scale.set_value(weight_scale_tensor)
 
     def apply(self, layer, x):
         linear_out = fastdeploy.model_executor.ops.gpu.scaled_gemm_f8_i4_f16(
             x,
-            layer.linear_weight,
-            layer.linear_weight_scale,
+            layer.weight,
+            layer.weight_scale,
             zero_points=None,
-            bias=layer.linear_bias if layer.add_bias else None,
+            bias=layer.bias if layer.add_bias else None,
             out_scale=self.quant_config.weight_scale_dict.get(layer.prefix +
                                                               ".weight_scale")
             / (self.quant_config.act_scale_dict.get(layer.prefix +

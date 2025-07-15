@@ -116,11 +116,11 @@ PreCacheLenConcat(const paddle::Tensor &seq_lens_decoder,
 
 paddle::Tensor FusedExpertMoeFunc(
     const paddle::Tensor &input, const paddle::Tensor &gate_weight,
-    const paddle::Tensor &ffn1_weight, const paddle::Tensor &ffn2_weight,
-    const paddle::optional<paddle::Tensor> &ffn1_bias,
-    const paddle::optional<paddle::Tensor> &ffn1_scale,
-    const paddle::optional<paddle::Tensor> &ffn2_bias,
-    const paddle::optional<paddle::Tensor> &ffn2_scale,
+    const paddle::Tensor &up_gate_proj_weight, const paddle::Tensor &down_proj_weight,
+    const paddle::optional<paddle::Tensor> &up_gate_proj_bias,
+    const paddle::optional<paddle::Tensor> &up_gate_proj_scale,
+    const paddle::optional<paddle::Tensor> &down_proj_bias,
+    const paddle::optional<paddle::Tensor> &down_proj_scale,
     const std::string &quant_method, const int moe_topk,
     const bool norm_topk_prob, const bool group_moe);
 
@@ -149,7 +149,7 @@ MoERedundantTopKSelectKernel(const paddle::Tensor &gating_logits,
 std::vector<paddle::Tensor>
 EPMoeExpertDispatch(const paddle::Tensor &input, const paddle::Tensor &topk_ids,
                     const paddle::Tensor &topk_weights,
-                    const paddle::optional<paddle::Tensor> &ffn1_in_scale,
+                    const paddle::optional<paddle::Tensor> &up_gate_proj_in_scale,
                     const std::vector<int> &token_nums_per_expert,
                     const int token_nums_this_rank,
                     const std::string &moe_quant_type);
@@ -173,7 +173,7 @@ std::vector<paddle::Tensor> EPMoeExpertCombine(
     const paddle::Tensor &ffn_out, const paddle::Tensor &expert_scales_float,
     const paddle::Tensor &permute_indices_per_token,
     const paddle::Tensor &top_k_indices,
-    const paddle::optional<paddle::Tensor> &ffn2_bias,
+    const paddle::optional<paddle::Tensor> &down_proj_bias,
     const bool norm_topk_prob, const float routed_scaling_factor);
 
 std::vector<std::vector<int>> GetExpertTokenNum(const paddle::Tensor &topk_ids,
@@ -182,35 +182,35 @@ std::vector<std::vector<int>> GetExpertTokenNum(const paddle::Tensor &topk_ids,
 paddle::Tensor MoeExpertFFNFunc(
     const paddle::Tensor& permute_input,
     const paddle::Tensor& tokens_expert_prefix_sum,
-    const paddle::Tensor& ffn1_weight, const paddle::Tensor& ffn2_weight,
-    const paddle::optional<paddle::Tensor>& ffn1_bias,
-    const paddle::optional<paddle::Tensor>& ffn1_scale,
-    const paddle::optional<paddle::Tensor>& ffn2_scale,
-    const paddle::optional<paddle::Tensor>& ffn2_in_scale,
+    const paddle::Tensor& up_gate_proj_weight, const paddle::Tensor& down_proj_weight,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
+    const paddle::optional<paddle::Tensor>& down_proj_scale,
+    const paddle::optional<paddle::Tensor>& down_proj_in_scale,
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
     const std::string& quant_method, const bool used_in_ep_low_latency);
 
 paddle::Tensor MoeExpertFFNWint2Func(
     const paddle::Tensor& permute_input,
     const paddle::Tensor& tokens_expert_prefix_sum,
-    const paddle::Tensor& ffn1_weight,
-    const paddle::Tensor& ffn2_weight,
-    const paddle::optional<paddle::Tensor>& ffn1_bias,
-    const paddle::optional<paddle::Tensor>& ffn1_scale,
-    const paddle::optional<paddle::Tensor>& ffn2_scale,
-    const paddle::optional<paddle::Tensor>& ffn1_local_scale,
-    const paddle::optional<paddle::Tensor>& ffn1_code_scale,
-    const paddle::optional<paddle::Tensor>& ffn1_code_zp,
-    const paddle::optional<paddle::Tensor>& ffn2_local_scale,
-    const paddle::optional<paddle::Tensor>& ffn2_code_scale,
-    const paddle::optional<paddle::Tensor>& ffn2_code_zp,
+    const paddle::Tensor& up_gate_proj_weight,
+    const paddle::Tensor& down_proj_weight,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
+    const paddle::optional<paddle::Tensor>& down_proj_scale,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_local_scale,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_code_scale,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_code_zp,
+    const paddle::optional<paddle::Tensor>& down_proj_local_scale,
+    const paddle::optional<paddle::Tensor>& down_proj_code_scale,
+    const paddle::optional<paddle::Tensor>& down_proj_code_zp,
     const bool used_in_ep_low_latency);
 
 paddle::Tensor MoeExpertReduceFunc(
     const paddle::Tensor &ffn_out, const paddle::Tensor &top_k_weight,
     const paddle::Tensor &permute_indices_per_token,
     const paddle::Tensor &top_k_indices,
-    const paddle::optional<paddle::Tensor> &ffn2_bias,
+    const paddle::optional<paddle::Tensor> &down_proj_bias,
     const bool norm_topk_prob, const float routed_scaling_factor);
 
 void InitKVSignalPerQuery(const paddle::Tensor &seq_lens_encoder_tensor,
@@ -816,7 +816,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    * ep_moe_dispatch
    */
   m.def("ep_moe_expert_dispatch", &EPMoeExpertDispatch, py::arg("input"),
-        py::arg("topk_ids"), py::arg("topk_weights"), py::arg("ffn1_in_scale"),
+        py::arg("topk_ids"), py::arg("topk_weights"), py::arg("up_gate_proj_in_scale"),
         py::arg("token_nums_per_expert"), py::arg("token_nums_this_rank"),
         py::arg("moe_quant_type"), "ep moe export dispatch function");
 
@@ -824,7 +824,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("ep_moe_expert_combine", &EPMoeExpertCombine, py::arg("ffn_out"),
         py::arg("expert_scales_float"), py::arg("permute_indices_per_token"),
-        py::arg("top_k_indices"), py::arg("ffn2_bias"),
+        py::arg("top_k_indices"), py::arg("down_proj_bias"),
         py::arg("norm_topk_prob"), py::arg("routed_scaling_factor"),
         "ep moe export combine function");
 
@@ -866,7 +866,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    */
   m.def("moe_expert_reduce", &MoeExpertReduceFunc, py::arg("ffn_out"),
         py::arg("top_k_weight"), py::arg("permute_indices_per_token"),
-        py::arg("top_k_indices"), py::arg("ffn2_bias"),
+        py::arg("top_k_indices"), py::arg("down_proj_bias"),
         py::arg("norm_topk_prob"), py::arg("routed_scaling_factor"),
         "moe export reduce function");
 

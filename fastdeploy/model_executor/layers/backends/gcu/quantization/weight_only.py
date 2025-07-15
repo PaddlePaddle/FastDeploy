@@ -38,14 +38,14 @@ class GCUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
 
     def create_weights(self, layer):
         # The scale shape should be equal to the output dim of weight using Per-Channel Quantization.
-        linear_weight_scale_shape = [layer.linear_weight_shape[1]]
+        weight_scale_shape = [layer.weight_shape[1]]
 
-        layer.linear_weight_shape.reverse()
+        layer.weight_shape.reverse()
         if self.quant_config.name() == "wint4":
-            layer.linear_weight_shape[0] //= 2
+            layer.weight_shape[0] //= 2
         layer.weight_dtype = "int8"
-        layer.linear_weight_scale = layer.create_parameter(
-            shape=linear_weight_scale_shape,
+        layer.weight_scale = layer.create_parameter(
+            shape=weight_scale_shape,
             dtype=layer._dtype,
             is_bias=False,
         )
@@ -61,8 +61,8 @@ class GCUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         """
         quant_weight = get_tensor(state_dict.pop(layer.weight_key))
         weight_scale = get_tensor(state_dict.pop(layer.weight_scale_key))
-        layer.linear_weight.set_value(quant_weight)
-        layer.linear_weight_scale.set_value(
+        layer.weight.set_value(quant_weight)
+        layer.weight_scale.set_value(
             weight_scale.astype(paddle.get_default_dtype()))
 
 
@@ -73,8 +73,8 @@ class GCUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             self.group_size,  # group_size
         )
 
-        layer.linear_weight.set_value(quanted_weight_tensor)
-        layer.linear_weight_scale.set_value(
+        layer.weight.set_value(quanted_weight_tensor)
+        layer.weight_scale.set_value(
             weight_scale_tensor.astype(paddle.get_default_dtype()))
 
 
@@ -82,8 +82,8 @@ class GCUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
     def apply(self, layer, x):
         linear_out = linear_quant(
             lhs=x,
-            rhs=layer.linear_weight,
-            scale=layer.linear_weight_scale,
+            rhs=layer.weight,
+            scale=layer.weight_scale,
             bias=None,
             group_size=self.group_size,
         )
