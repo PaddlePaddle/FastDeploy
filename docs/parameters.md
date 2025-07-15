@@ -4,47 +4,47 @@
 
 When using FastDeploy to deploy models (including offline inference and service deployment), the following parameter configurations are involved. Please note that for offline inference, the parameter configurations are the parameter names as shown below; while when starting the service via command line, the separators in the corresponding parameters need to be changed from ```_``` to ```-```, for example ```max_model_len``` becomes ```--max-model-len``` in command line.
 
-| Parameter Name                               | Type        | Description                                                                                                                                                             |
-|:---------------------------------------------|:------------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| ```port```                                   | `int`       | Only required for service deployment, HTTP service port number, default: 8000                                                                                           |
-| ```metrics_port```                           | `int`       | Only required for service deployment, metrics monitoring port number, default: 8001                                                                                     |
-| ```engine_worker_queue_port```               | `int`       | FastDeploy internal engine communication port, default: 8002                                                                                                            |
-| ```cache_queue_port```                       | `int`       | FastDeploy internal KVCache process communication port, default: 8003                                                                                                   |
-| ```max_model_len```                          | `int`       | Default maximum supported context length for inference, default: 2048                                                                                                   |
-| ```tensor_parallel_size```                   | `int`       | Default tensor parallelism degree for model, default: 1                                                                                                                 |
-| ```data_parallel_size```                     | `int`       | Default data parallelism degree for model, default: 1                                                                                                                   |
-| ```block_size```                             | `int`       | KVCache management granularity (Token count), recommended default: 64                                                                                                   |
-| ```max_num_seqs```                           | `int`       | Maximum concurrent number in Decode phase, default: 8                                                                                                                   |
-| ```mm_processor_kwargs```                    | `dict[str]` | Multimodal processor parameter configuration, e.g.: {"image_min_pixels": 3136, "video_fps": 2}                                                                          |
-| ```tokenizer```                              | `str`       | Tokenizer name or path, defaults to model path                                                                                                                          |
-| ```use_warmup```                             | `int`       | Whether to perform warmup at startup, will automatically generate maximum length data for warmup, enabled by default when automatically calculating KV Cache            |
-| ```limit_mm_per_prompt```                    | `dict[str]` | Limit the amount of multimodal data per prompt, e.g.: {"image": 10, "video": 3}, default: 1 for all                                                                     |
-| ```enable_mm```                              | `bool`      | Whether to support multimodal data (for multimodal models only), default: False                                                                                         |
-| ```quantization```                           | `str`       | Model quantization strategy, when loading BF16 CKPT, specifying wint4 or wint8 supports lossless online 4bit/8bit quantization                                          |
-| ```gpu_memory_utilization```                 | `float`     | GPU memory utilization, default: 0.9                                                                                                                                    |
-| ```num_gpu_blocks_override```                | `int`       | Preallocated KVCache blocks, this parameter can be automatically calculated by FastDeploy based on memory situation, no need for user configuration, default: None      |
-| ```max_num_batched_tokens```                 | `int`       | Maximum batch token count in Prefill phase, default: None (same as max_model_len)                                                                                       |
-| ```kv_cache_ratio```                         | `float`     | KVCache blocks are divided between Prefill phase and Decode phase according to kv_cache_ratio ratio, default: 0.75                                                      |
-| ```enable_prefix_caching```                  | `bool`      | Whether to enable Prefix Caching, default: False                                                                                                                        |
-| ```swap_space```                             | `float`     | When Prefix Caching is enabled, CPU memory size for KVCache swapping, unit: GB, default: None                                                                           |
-| ```enable_chunked_prefill```                 | `bool`      | Enable Chunked Prefill, default: False                                                                                                                                  |
-| ```max_num_partial_prefills```               | `int`       | When Chunked Prefill is enabled, maximum concurrent number of partial prefill batches, default: 1                                                                       |
-| ```max_long_partial_prefills```              | `int`       | When Chunked Prefill is enabled, maximum number of long requests in concurrent partial prefill batches, default: 1                                                      |
-| ```long_prefill_token_threshold```           | `int`       | When Chunked Prefill is enabled, requests with token count exceeding this value are considered long requests, default: max_model_len*0.04                               |
-| ```static_decode_blocks```                   | `int`       | During inference, each request is forced to allocate corresponding number of blocks from Prefill's KVCache for Decode use, default: 2                                   |
-| ```reasoning_parser```                       | `str`       | Specify the reasoning parser to extract reasoning content from model output                                                                                             |
-| ```enable_static_graph_inference```          | `bool`      | Whether to use static graph inference mode, default: False                                                                                                              |
-| ```use_cudagraph```                          | `bool`      | Whether to use cuda graph, default: False                                                                                                                               |
-| ```max_capture_batch_size```                 | `int`       | When cuda graph is enabled, maximum batch size of captured cuda graph, default: 64                                                                                      |
-| ```enable_custom_all_reduce```               | `bool`      | Enable Custom all-reduce, default: False                                                                                                                                |
-| ```splitwise_role```                         | `str`       | Whether to enable splitwise inference, default value: mixed, supported parameters: ["mixed", "decode", "prefill"]                                                       |
-| ```innode_prefill_ports```                   | `str`       | Internal engine startup ports for prefill instances (only required for single-machine PD separation), default: None                                                     |
-| ```guided_decoding_backend```                | `str`       | Specify the guided decoding backend to use, supports `auto`, `xgrammar`, `off`, default: `off`                                                                          |
-| ```guided_decoding_disable_any_whitespace``` | `bool`      | Whether to disable whitespace generation during guided decoding, default: False                                                                                         |
-| ```speculative_config```                     | `dict[str]` | Speculative decoding configuration, only supports standard format JSON string, default: None                                                                            |
-| ```dynamic_load_weight```                    | `int`       | Whether to enable dynamic weight loading, default: 0                                                                                                                    |
-| ```enable_expert_parallel```                 | `bool`      | Whether to enable expert parallel                                                                                                                                       |
-| ```enable_logprob```                         | `bool`      | Whether to enable return log probabilities of the output tokens or not. If true, returns the log probabilities of each output token returned in the content of message.If logrpob is not used, this parameter can be omitted when starting |
+| Parameter Name | Type | Description |
+|:--------------|:----|:-----------|
+| ```port``` | `int` | Only required for service deployment, HTTP service port number, default: 8000 |
+| ```metrics_port``` | `int` | Only required for service deployment, metrics monitoring port number, default: 8001 |
+| ```engine_worker_queue_port``` | `int` | FastDeploy internal engine communication port, default: 8002 |
+| ```cache_queue_port``` | `int` | FastDeploy internal KVCache process communication port, default: 8003 |
+| ```max_model_len``` | `int` | Default maximum supported context length for inference, default: 2048 |
+| ```tensor_parallel_size``` | `int` | Default tensor parallelism degree for model, default: 1 |
+| ```data_parallel_size``` | `int` | Default data parallelism degree for model, default: 1 |
+| ```block_size``` | `int` | KVCache management granularity (Token count), recommended default: 64 |
+| ```max_num_seqs``` | `int` | Maximum concurrent number in Decode phase, default: 8 |
+| ```mm_processor_kwargs``` | `dict[str]` | Multimodal processor parameter configuration, e.g.: {"image_min_pixels": 3136, "video_fps": 2} |
+| ```tokenizer``` | `str` | Tokenizer name or path, defaults to model path |
+| ```use_warmup``` | `int` | Whether to perform warmup at startup, will automatically generate maximum length data for warmup, enabled by default when automatically calculating KV Cache |
+| ```limit_mm_per_prompt``` | `dict[str]` | Limit the amount of multimodal data per prompt, e.g.: {"image": 10, "video": 3}, default: 1 for all |
+| ```enable_mm``` | `bool` | Whether to support multimodal data (for multimodal models only), default: False |
+| ```quantization``` | `str` | Model quantization strategy, when loading BF16 CKPT, specifying wint4 or wint8 supports lossless online 4bit/8bit quantization |
+| ```gpu_memory_utilization``` | `float` | GPU memory utilization, default: 0.9 |
+| ```num_gpu_blocks_override``` | `int` | Preallocated KVCache blocks, this parameter can be automatically calculated by FastDeploy based on memory situation, no need for user configuration, default: None |
+| ```max_num_batched_tokens``` | `int` | Maximum batch token count in Prefill phase, default: None (same as max_model_len) |
+| ```kv_cache_ratio``` | `float` | KVCache blocks are divided between Prefill phase and Decode phase according to kv_cache_ratio ratio, default: 0.75 |
+| ```enable_prefix_caching``` | `bool` | Whether to enable Prefix Caching, default: False |
+| ```swap_space``` | `float` | When Prefix Caching is enabled, CPU memory size for KVCache swapping, unit: GB, default: None |
+| ```enable_chunked_prefill``` | `bool` | Enable Chunked Prefill, default: False |
+| ```max_num_partial_prefills``` | `int` | When Chunked Prefill is enabled, maximum concurrent number of partial prefill batches, default: 1 |
+| ```max_long_partial_prefills``` | `int` | When Chunked Prefill is enabled, maximum number of long requests in concurrent partial prefill batches, default: 1 |
+| ```long_prefill_token_threshold``` | `int` | When Chunked Prefill is enabled, requests with token count exceeding this value are considered long requests, default: max_model_len*0.04 |
+| ```static_decode_blocks``` | `int` | During inference, each request is forced to allocate corresponding number of blocks from Prefill's KVCache for Decode use, default: 2 |
+| ```reasoning_parser``` | `str` | Specify the reasoning parser to extract reasoning content from model output |
+| ```enable_static_graph_inference``` | `bool` | Whether to use static graph inference mode, default: False |
+| ```use_cudagraph``` | `bool` | Whether to use cuda graph, default: False |
+| ```max_capture_batch_size``` | `int` | When cuda graph is enabled, maximum batch size of captured cuda graph, default: 64 |
+| ```enable_custom_all_reduce``` | `bool` | Enable Custom all-reduce, default: False |
+| ```splitwise_role``` | `str` | Whether to enable splitwise inference, default value: mixed, supported parameters: ["mixed", "decode", "prefill"] |
+| ```innode_prefill_ports``` | `str` | Internal engine startup ports for prefill instances (only required for single-machine PD separation), default: None |
+| ```guided_decoding_backend``` | `str` | Specify the guided decoding backend to use, supports `auto`, `xgrammar`, `off`, default: `off` |
+| ```guided_decoding_disable_any_whitespace``` | `bool` | Whether to disable whitespace generation during guided decoding, default: False |
+| ```speculative_config``` | `dict[str]` | Speculative decoding configuration, only supports standard format JSON string, default: None |
+| ```dynamic_load_weight``` | `int` | Whether to enable dynamic weight loading, default: 0 |
+| ```enable_expert_parallel``` | `bool` | Whether to enable expert parallel |
+| ```enable_logprob``` | `bool` | Whether to enable return log probabilities of the output tokens or not. If true, returns the log probabilities of each output token returned in the content of message.If logrpob is not used, this parameter can be omitted when starting |
 
 
 ## 1. Relationship between KVCache allocation, ```num_gpu_blocks_override``` and ```block_size```?
