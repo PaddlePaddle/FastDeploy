@@ -9,6 +9,16 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --max-model-len 32768
 ```
 
+To enable log probability output, simply deploy with the following command:
+
+```bash
+python -m fastdeploy.entrypoints.openai.api_server \
+       --model baidu/ERNIE-4.5-0.3B-Paddle \
+       --port 8188 --tensor-parallel-size 8 \
+       --max-model-len 32768 \
+       --enable-logprob
+```
+
 For more usage methods of the command line during service deployment, refer to [Parameter Descriptions](../parameters.md).
 
 ## Sending User Requests
@@ -26,6 +36,18 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
   ]
 }'
 ```
+Here's an example curl command demonstrating how to include the logprobs parameter in a user request:
+
+```bash
+curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "Hello!"}, "logprobs": true, "top_logprobs": 5
+  ]
+}'
+```
+
 Here is an example of sending a user request using a Python script:
 ```python
 import openai
