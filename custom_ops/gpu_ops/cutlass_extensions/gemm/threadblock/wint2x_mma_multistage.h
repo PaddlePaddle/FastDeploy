@@ -44,9 +44,9 @@
 #include "cutlass/numeric_types.h"
 
 #include "cutlass_extensions/arch/memory_copy_sm80.h"
-#include "cutlass_extensions/gemm/warp/mma_tensorop_wint2x_dequantizer.h"
 #include "cutlass_extensions/gemm/threadblock/wint2x_mma_base.h"
 #include "cutlass_extensions/gemm/threadblock/wint2x_params_accessor.h"
+#include "cutlass_extensions/gemm/warp/mma_tensorop_wint2x_dequantizer.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -292,11 +292,11 @@ public:
     int warp_idx_m = warp_idx_mn % Base::WarpCount::kM;
     int warp_idx_n = warp_idx_mn / Base::WarpCount::kM;
 
-    CUTLASS_TRACE_DEVICE(" Shape: {%d, %d, %d}, IteratorB::Shape: {%d, %d}, kInterleave: %d",
-        Shape::kM, Shape::kN, Shape::kK, IteratorB::Shape::kRow, IteratorB::Shape::kColumn, kInterleave);
-    CUTLASS_TRACE_DEVICE(" kPartitionsK=%d, kWarpGemmIterations=%d, WarpCount={%d, %d}, warp_idx_m=%d, warp_idx_n=%d, warp_idx_k=%d",
-        Policy::kPartitionsK, Base::kWarpGemmIterations,
-        Base::WarpCount::kM, Base::WarpCount::kN, warp_idx_m, warp_idx_n, warp_idx_k);
+    //CUTLASS_TRACE_DEVICE(" Shape: {%d, %d, %d}, IteratorB::Shape: {%d, %d}, kInterleave: %d",
+    //    Shape::kM, Shape::kN, Shape::kK, IteratorB::Shape::kRow, IteratorB::Shape::kColumn, kInterleave);
+    //CUTLASS_TRACE_DEVICE(" kPartitionsK=%d, kWarpGemmIterations=%d, WarpCount={%d, %d}, warp_idx_m=%d, warp_idx_n=%d, warp_idx_k=%d",
+    //    Policy::kPartitionsK, Base::kWarpGemmIterations,
+    //    Base::WarpCount::kM, Base::WarpCount::kN, warp_idx_m, warp_idx_n, warp_idx_k);
 
     // Add per-warp offsets in units of warp-level tiles
     this->warp_tile_iterator_A_.add_tile_offset(
@@ -304,20 +304,20 @@ public:
     this->warp_tile_iterator_B_.add_tile_offset(
         {Base::kWarpGemmIterations * warp_idx_k, warp_idx_n});
 
-    CUTLASS_TRACE_DEVICE(" Policy::SmemPaddingA: {%d, %d}; Policy::SmemPaddingB: {%d, %d}",
-        Policy::SmemPaddingA::kRow, Policy::SmemPaddingA::kColumn, Policy::SmemPaddingB::kRow, Policy::SmemPaddingB::kColumn);
-    CUTLASS_TRACE_DEVICE(" operand_A_ptr=%p, kRow=%d, kColumn=%d, %d bytes;  kElementsPerAccess=%d, sizeof(AccessType)=%d, AsyncCopyIterationsPerStageA=%d, kAccessesPerVectorA=%d",
-        shared_storage.operand_A.data(),
-        static_cast<int>(Base::SharedStorage::ShapeA::kRow), static_cast<int>(Base::SharedStorage::ShapeA::kColumn),
-        static_cast<int>(sizeof(shared_storage.operand_A)),
-        static_cast<int>(IteratorA::ThreadMap::kElementsPerAccess), static_cast<int>(sizeof(typename IteratorA::AccessType)),
-        static_cast<int>(Detail::AsyncCopyIterationsPerStageA), static_cast<int>(IteratorA::kAccessesPerVector));
-    CUTLASS_TRACE_DEVICE(" operand_B_ptr=%p, kRow=%d, kColumn=%d, %d bytes; kElementsPerAccess=%d, sizeof(AccessType)=%d, AsyncCopyIterationsPerStageB=%d, kAccessesPerVectorA=%d",
-        shared_storage.operand_B.data(),
-        static_cast<int>(Base::SharedStorage::ShapeB::kRow), static_cast<int>(Base::SharedStorage::ShapeB::kColumn),
-        static_cast<int>(sizeof(shared_storage.operand_B)),
-        static_cast<int>(IteratorB::ThreadMap::kElementsPerAccess), static_cast<int>(sizeof(typename IteratorB::AccessType)),
-        static_cast<int>(Detail::AsyncCopyIterationsPerStageB), static_cast<int>(IteratorB::kAccessesPerVector));
+    //CUTLASS_TRACE_DEVICE(" Policy::SmemPaddingA: {%d, %d}; Policy::SmemPaddingB: {%d, %d}",
+    //    Policy::SmemPaddingA::kRow, Policy::SmemPaddingA::kColumn, Policy::SmemPaddingB::kRow, Policy::SmemPaddingB::kColumn);
+    //CUTLASS_TRACE_DEVICE(" operand_A_ptr=%p, kRow=%d, kColumn=%d, %d bytes;  kElementsPerAccess=%d, sizeof(AccessType)=%d, AsyncCopyIterationsPerStageA=%d, kAccessesPerVectorA=%d",
+    //    shared_storage.operand_A.data(),
+    //    static_cast<int>(Base::SharedStorage::ShapeA::kRow), static_cast<int>(Base::SharedStorage::ShapeA::kColumn),
+    //    static_cast<int>(sizeof(shared_storage.operand_A)),
+    //    static_cast<int>(IteratorA::ThreadMap::kElementsPerAccess), static_cast<int>(sizeof(typename IteratorA::AccessType)),
+    //    static_cast<int>(Detail::AsyncCopyIterationsPerStageA), static_cast<int>(IteratorA::kAccessesPerVector));
+    //CUTLASS_TRACE_DEVICE(" operand_B_ptr=%p, kRow=%d, kColumn=%d, %d bytes; kElementsPerAccess=%d, sizeof(AccessType)=%d, AsyncCopyIterationsPerStageB=%d, kAccessesPerVectorA=%d",
+    //    shared_storage.operand_B.data(),
+    //    static_cast<int>(Base::SharedStorage::ShapeB::kRow), static_cast<int>(Base::SharedStorage::ShapeB::kColumn),
+    //    static_cast<int>(sizeof(shared_storage.operand_B)),
+    //    static_cast<int>(IteratorB::ThreadMap::kElementsPerAccess), static_cast<int>(sizeof(typename IteratorB::AccessType)),
+    //    static_cast<int>(Detail::AsyncCopyIterationsPerStageB), static_cast<int>(IteratorB::kAccessesPerVector));
 
     smem_ptr_A_ = reinterpret_cast<ElementA*>(shared_storage.operand_A.data());
     smem_ptr_B_ = reinterpret_cast<uint8_t*>(shared_storage.operand_B.data());
@@ -678,9 +678,11 @@ public:
     int &gemm_k_iterations, ///< [in|out] number of threadblock mainloop iterations remaining
     int stage)
   {
+
     // Unroll the warp-level MMA tiles of a threadblock's mainloop iteration
     CUTLASS_PRAGMA_UNROLL
     for (int warp_mma_k = 0; warp_mma_k < Base::kWarpGemmIterations; ++warp_mma_k) {
+
       // Load the next warp-tile's A fragment from shared memory
       this->warp_tile_iterator_A_.set_kgroup_index((warp_mma_k + 1) % Base::kWarpGemmIterations);
       this->warp_tile_iterator_A_.load(pipe_state.warp_frag_A_[(warp_mma_k + 1) % 2]);
@@ -699,27 +701,41 @@ public:
       }
 
       // Execute the current warp-tile of MMA operations
+
+      // CUTLASS_TRACE_DEVICE("ElementA %d", PipeState::WarpTransformedFragmentA::kElements);
+      // CUTLASS_TRACE_DEVICE("ElementB %d", PipeState::WarpTransformedFragmentB::kElements);
+      // CUTLASS_TRACE_DEVICE("kStagedAccumulation %d", Detail::kStagedAccumulation);
+
+      // uint8_t* reg_uint8_ptr = reinterpret_cast<uint8_t*>(pipe_state.warp_loaded_frag_B_[warp_mma_k % 2].data());
+      // CUTLASS_TRACE_DEVICE(" reg_uint8_ptr=[%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d], %d bytes",
+      //     static_cast<int>(reg_uint8_ptr[0]), static_cast<int>(reg_uint8_ptr[1]),
+      //     static_cast<int>(reg_uint8_ptr[2]), static_cast<int>(reg_uint8_ptr[3]),
+      //     static_cast<int>(reg_uint8_ptr[4]), static_cast<int>(reg_uint8_ptr[5]),
+      //     static_cast<int>(reg_uint8_ptr[6]), static_cast<int>(reg_uint8_ptr[7]),
+      //     static_cast<int>(reg_uint8_ptr[8]), static_cast<int>(reg_uint8_ptr[9]),
+      //     static_cast<int>(reg_uint8_ptr[10]), static_cast<int>(reg_uint8_ptr[11]),
+      //     static_cast<int>(reg_uint8_ptr[12]), static_cast<int>(reg_uint8_ptr[13]),
+      //     static_cast<int>(reg_uint8_ptr[14]), static_cast<int>(reg_uint8_ptr[15]),
+      //     sizeof_bits<typename PipeState::WarpLoadedFragmentB>::value / 8);
+
       if (Detail::kStagedAccumulation) {
         //CUTLASS_TRACE_DEVICE(" [MMa-kStagedAccumulation][stage=%d] warp_mma_k=%d, warp_k_compute_offset_B=%d", stage, warp_mma_k, warp_k_compute_offset_B);
         warp_mma_(
           pipe_state.tmp_accum_,
           pipe_state.warp_frag_A_[warp_mma_k % 2],
           pipe_state.warp_frag_B_,
+          // unpacked_frag_B,
           pipe_state.tmp_accum_,
           warp_k_compute_offset_B
         );
 
-        if (warp_mma_k == 0) {
-          plus<FragmentC> plus_accum;
-          accum = plus_accum(accum, pipe_state.tmp_accum_);
-          pipe_state.tmp_accum_.clear();
-        }
       } else {
         //CUTLASS_TRACE_DEVICE(" [MMa][stage=%d] warp_mma_k=%d, warp_k_compute_offset_B=%d", stage, warp_mma_k, warp_k_compute_offset_B);
         warp_mma_(
           accum,
           pipe_state.warp_frag_A_[warp_mma_k % 2],
           pipe_state.warp_frag_B_,
+          // unpacked_frag_B,
           accum,
           warp_k_compute_offset_B
         );
@@ -736,6 +752,33 @@ public:
                 static_cast<float>(accum[14]), static_cast<float>(accum[15]));
         }
 #endif
+
+        // CUTLASS_TRACE_DEVICE_TID(" now1 warp_loaded_frag_A_[0:7]=[%f, %f, %f, %f, %f, %f, %f, %f]",
+        //     static_cast<float>(pipe_state.warp_loaded_frag_A_[warp_mma_k % 2][0]), static_cast<float>(pipe_state.warp_loaded_frag_A_[warp_mma_k % 2][1]),
+        //     static_cast<float>(pipe_state.warp_loaded_frag_A_[warp_mma_k % 2][2]), static_cast<float>(pipe_state.warp_loaded_frag_A_[warp_mma_k % 2][3]),
+        //     static_cast<float>(pipe_state.warp_loaded_frag_A_[warp_mma_k % 2][4]), static_cast<float>(pipe_state.warp_loaded_frag_A_[warp_mma_k % 2][5]),
+        //     static_cast<float>(pipe_state.warp_loaded_frag_A_[warp_mma_k % 2][6]), static_cast<float>(pipe_state.warp_loaded_frag_A_[warp_mma_k % 2][7]));
+
+        // CUTLASS_TRACE_DEVICE_TID(" now1 unpacked_frag_B[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
+        //       static_cast<float>(unpacked_frag_B[0]), static_cast<float>(unpacked_frag_B[1]),
+        //       static_cast<float>(unpacked_frag_B[2]), static_cast<float>(unpacked_frag_B[3]),
+        //       static_cast<float>(unpacked_frag_B[4]), static_cast<float>(unpacked_frag_B[5]),
+        //       static_cast<float>(unpacked_frag_B[6]), static_cast<float>(unpacked_frag_B[7]),
+        //       static_cast<float>(unpacked_frag_B[8]), static_cast<float>(unpacked_frag_B[9]),
+        //       static_cast<float>(unpacked_frag_B[10]), static_cast<float>(unpacked_frag_B[11]),
+        //       static_cast<float>(unpacked_frag_B[12]), static_cast<float>(unpacked_frag_B[13]),
+        //       static_cast<float>(unpacked_frag_B[14]), static_cast<float>(unpacked_frag_B[15]));
+
+        // CUTLASS_TRACE_DEVICE_TID(" warp_k_compute_offset_B = %d, now1 tmp_accum_[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
+        //       warp_k_compute_offset_B,
+        //       static_cast<float>(accum[0]), static_cast<float>(accum[1]),
+        //       static_cast<float>(accum[2]), static_cast<float>(accum[3]),
+        //       static_cast<float>(accum[4]), static_cast<float>(accum[5]),
+        //       static_cast<float>(accum[6]), static_cast<float>(accum[7]),
+        //       static_cast<float>(accum[8]), static_cast<float>(accum[9]),
+        //       static_cast<float>(accum[10]), static_cast<float>(accum[11]),
+        //       static_cast<float>(accum[12]), static_cast<float>(accum[13]),
+        //       static_cast<float>(accum[14]), static_cast<float>(accum[15]));
       }
 
       // Except for the last warp-tile, all warp-tiles issue their share of
@@ -832,6 +875,7 @@ public:
     this->warp_tile_iterator_B_.load(pipe_state.warp_loaded_frag_B_);
     ++this->warp_tile_iterator_B_;
 
+#if 0
     if (PipeState::WarpLoadedFragmentA::kElements == 8) {
       ElementA* warp_frag_A_ptr = reinterpret_cast<ElementA*>(pipe_state.warp_frag_A_[0].data());
       CUTLASS_TRACE_DEVICE(" warp_frag_A_=[%f, %f, %f, %f, %f, %f, %f, %f], %d bytes",
@@ -841,6 +885,7 @@ public:
           static_cast<float>(warp_frag_A_ptr[6]), static_cast<float>(warp_frag_A_ptr[7]),
           sizeof_bits<typename PipeState::WarpLoadedFragmentA>::value / 8);
     }
+#endif
 #if 0
     if (PipeState::WarpLoadedFragmentB::kElements == 64) {
       uint8_t* reg_uint8_ptr = reinterpret_cast<uint8_t*>(pipe_state.warp_loaded_frag_B_.data());
@@ -881,8 +926,69 @@ public:
                                  pipe_state.warp_frag_B_,
                                  0);
 
+#if 0
+    if (TransformBAfterLDS::result_type::kElements == 64) {
+      CUTLASS_TRACE_DEVICE(" TransformBAfterLDS::result_type::kElements: 64, %d bytes", sizeof_bits<typename TransformBAfterLDS::result_type>::value / 8);
+      CUTLASS_TRACE_DEVICE(" warp_loaded_frag_B_[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
+          static_cast<float>(unpacked_frag_B[0]), static_cast<float>(unpacked_frag_B[1]),
+          static_cast<float>(unpacked_frag_B[2]), static_cast<float>(unpacked_frag_B[3]),
+          static_cast<float>(unpacked_frag_B[4]), static_cast<float>(unpacked_frag_B[5]),
+          static_cast<float>(unpacked_frag_B[6]), static_cast<float>(unpacked_frag_B[7]),
+          static_cast<float>(unpacked_frag_B[8]), static_cast<float>(unpacked_frag_B[9]),
+          static_cast<float>(unpacked_frag_B[10]), static_cast<float>(unpacked_frag_B[11]),
+          static_cast<float>(unpacked_frag_B[12]), static_cast<float>(unpacked_frag_B[13]),
+          static_cast<float>(unpacked_frag_B[14]), static_cast<float>(unpacked_frag_B[15]));
+      CUTLASS_TRACE_DEVICE(" warp_loaded_frag_B_[16:31]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
+          static_cast<float>(unpacked_frag_B[16]), static_cast<float>(unpacked_frag_B[17]),
+          static_cast<float>(unpacked_frag_B[18]), static_cast<float>(unpacked_frag_B[19]),
+          static_cast<float>(unpacked_frag_B[20]), static_cast<float>(unpacked_frag_B[21]),
+          static_cast<float>(unpacked_frag_B[22]), static_cast<float>(unpacked_frag_B[23]),
+          static_cast<float>(unpacked_frag_B[24]), static_cast<float>(unpacked_frag_B[25]),
+          static_cast<float>(unpacked_frag_B[26]), static_cast<float>(unpacked_frag_B[27]),
+          static_cast<float>(unpacked_frag_B[28]), static_cast<float>(unpacked_frag_B[29]),
+          static_cast<float>(unpacked_frag_B[30]), static_cast<float>(unpacked_frag_B[31]));
+      CUTLASS_TRACE_DEVICE(" warp_loaded_frag_B_[32:47]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
+          static_cast<float>(unpacked_frag_B[32]), static_cast<float>(unpacked_frag_B[33]),
+          static_cast<float>(unpacked_frag_B[34]), static_cast<float>(unpacked_frag_B[35]),
+          static_cast<float>(unpacked_frag_B[36]), static_cast<float>(unpacked_frag_B[37]),
+          static_cast<float>(unpacked_frag_B[38]), static_cast<float>(unpacked_frag_B[39]),
+          static_cast<float>(unpacked_frag_B[40]), static_cast<float>(unpacked_frag_B[41]),
+          static_cast<float>(unpacked_frag_B[42]), static_cast<float>(unpacked_frag_B[43]),
+          static_cast<float>(unpacked_frag_B[44]), static_cast<float>(unpacked_frag_B[45]),
+          static_cast<float>(unpacked_frag_B[46]), static_cast<float>(unpacked_frag_B[47]));
+      CUTLASS_TRACE_DEVICE(" warp_loaded_frag_B_[48:63]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
+          static_cast<float>(unpacked_frag_B[48]), static_cast<float>(unpacked_frag_B[49]),
+          static_cast<float>(unpacked_frag_B[50]), static_cast<float>(unpacked_frag_B[51]),
+          static_cast<float>(unpacked_frag_B[52]), static_cast<float>(unpacked_frag_B[53]),
+          static_cast<float>(unpacked_frag_B[54]), static_cast<float>(unpacked_frag_B[55]),
+          static_cast<float>(unpacked_frag_B[56]), static_cast<float>(unpacked_frag_B[57]),
+          static_cast<float>(unpacked_frag_B[58]), static_cast<float>(unpacked_frag_B[59]),
+          static_cast<float>(unpacked_frag_B[60]), static_cast<float>(unpacked_frag_B[61]),
+          static_cast<float>(unpacked_frag_B[62]), static_cast<float>(unpacked_frag_B[63]));
+    }
+#endif
+
     if (Detail::kStagedAccumulation) {
       pipe_state.tmp_accum_.clear();
+      CUTLASS_TRACE_DEVICE(" before tmp_accum_[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
+          static_cast<float>(pipe_state.tmp_accum_[0]), static_cast<float>(pipe_state.tmp_accum_[1]),
+          static_cast<float>(pipe_state.tmp_accum_[2]), static_cast<float>(pipe_state.tmp_accum_[3]),
+          static_cast<float>(pipe_state.tmp_accum_[4]), static_cast<float>(pipe_state.tmp_accum_[5]),
+          static_cast<float>(pipe_state.tmp_accum_[6]), static_cast<float>(pipe_state.tmp_accum_[7]),
+          static_cast<float>(pipe_state.tmp_accum_[8]), static_cast<float>(pipe_state.tmp_accum_[9]),
+          static_cast<float>(pipe_state.tmp_accum_[10]), static_cast<float>(pipe_state.tmp_accum_[11]),
+          static_cast<float>(pipe_state.tmp_accum_[12]), static_cast<float>(pipe_state.tmp_accum_[13]),
+          static_cast<float>(pipe_state.tmp_accum_[14]), static_cast<float>(pipe_state.tmp_accum_[15]));
+    } else {
+      CUTLASS_TRACE_DEVICE(" before tmp_accum_[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
+          static_cast<float>(accum[0]), static_cast<float>(accum[1]),
+          static_cast<float>(accum[2]), static_cast<float>(accum[3]),
+          static_cast<float>(accum[4]), static_cast<float>(accum[5]),
+          static_cast<float>(accum[6]), static_cast<float>(accum[7]),
+          static_cast<float>(accum[8]), static_cast<float>(accum[9]),
+          static_cast<float>(accum[10]), static_cast<float>(accum[11]),
+          static_cast<float>(accum[12]), static_cast<float>(accum[13]),
+          static_cast<float>(accum[14]), static_cast<float>(accum[15]));
     }
 
     int stage = Base::kStages - 1;

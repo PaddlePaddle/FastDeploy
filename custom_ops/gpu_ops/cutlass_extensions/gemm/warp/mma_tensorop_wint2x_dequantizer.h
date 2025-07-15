@@ -287,7 +287,7 @@ public:
                 static_cast<ElementCompute>(shifted_local_scale) * static_cast<ElementCompute>(super_scale_frag[i]);
         }
 
-#if 1
+#if 0
         if (FragmentCompute::kElements == 4) {
         CUTLASS_TRACE_DEVICE(" [stage=%d] tb_offset_k=%d, local_scale_shift=%d, scale_frag[0:3]=[%f, %f, %f, %f], sizeof(FragmentCompute)=%d bytes",
                 stage, tb_offset_k, local_scale_shift,
@@ -312,7 +312,7 @@ public:
         }
 
         if (FragmentOutput::kElements == 64) {
-#if 1
+#if 0
             CUTLASS_TRACE_DEVICE(" [stage=%d] output_frag[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
                 stage,
                 static_cast<float>(output_frag[0]), static_cast<float>(output_frag[1]),
