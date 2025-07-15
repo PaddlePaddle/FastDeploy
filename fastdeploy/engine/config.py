@@ -608,7 +608,6 @@ class Config:
             max_model_len (int): Maximum model length. Default is 8192.
             max_num_seqs (int): Maximum number of sequences. Default is 8.
             max_num_batched_tokens (Optional[int]): Maximum number of batched tokens. Default is None.
-            pod_ips (Optional[List[str]]): List of POD IPs. Default is None.
             mm_processor_kwargs (Optional[Dict[str, Any]]): Additional arguments for multi-modal processor. Default is None.
             speculative_config (Optional[Dict[str, Any]]): Speculative execution configuration. Default is None.
             use_warmup (bool): Flag to use warmup. Default is False.
