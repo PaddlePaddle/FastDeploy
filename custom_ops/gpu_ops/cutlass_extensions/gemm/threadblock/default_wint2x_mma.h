@@ -47,11 +47,6 @@ public:
         MatrixShape<kRows, kColumns>, ElementT, layout::RowMajor, 0,
         IteratorThreadMap, kAlignment>;
     using SmemIterator = Iterator;
-
-    //using AccessType = cutlass::Array<ElementT, kAlignment>;
-    //using Iterator = cutlass::transform::threadblock::PredicatedTileAccessIterator<
-    //    MatrixShape<kRows, kColumns>, ElementT, layout::RowMajor,
-    //    0, IteratorThreadMap, AccessType>;
 };
 
 template <typename ThreadblockShape, int GroupSize>
@@ -70,10 +65,11 @@ private:
         kColumns / kAlignment, kAlignment>;
 
 public:
-    using Iterator =
-        cutlass::transform::threadblock::PredicatedTileIterator<
-            cutlass::MatrixShape<kRows, kColumns>, uint4b_t,
-            layout::RowMajor, 0, IteratorThreadMap, kAlignment>;
+    using AccessType = cutlass::Array<uint4b_t, kAlignment>;
+    using Iterator = cutlass::transform::threadblock::PredicatedTileAccessIterator<
+        MatrixShape<kRows, kColumns>, uint4b_t, layout::RowMajor,
+        0, IteratorThreadMap, AccessType>;
+
     using SmemIterator = Iterator;
 };
 

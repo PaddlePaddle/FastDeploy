@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include "cutlass/arch/memory_sm80.h"
 #include "cutlass/cutlass.h"
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/matrix_shape.h"
@@ -67,7 +68,7 @@ public:
   using ElementSuperScale = typename IteratorSuperScale::Element;
   using LayoutSuperScale = typename IteratorSuperScale::Layout;
 
-  // local_scale uint4 and group-wise
+  /// local_scale uint4 and group-wise
   using ElementLocalScale = typename IteratorLocalScale::Element;
   using LayoutLocalScale = typename IteratorLocalScale::Layout;
   static_assert(platform::is_same<ElementLocalScale, uint4b_t>::value,
@@ -76,7 +77,7 @@ public:
   using ElementCodeScaleZp = typename IteratorCodeScaleZp::Element;
   using LayoutCodeScaleZp = typename IteratorCodeScaleZp::Layout;
 
-  // 2 uint4b_t values are stored in a single uint8_t
+  /// 2 uint4b_t values are stored in a single uint8_t
   constexpr static int kStagesPerLocalScaleLoad = 2 * kGroupSize / Shape::kK;
   constexpr static int kLocalScaleRows = IteratorLocalScale::Shape::kRow;
 
@@ -249,29 +250,37 @@ public:
     if ((stage % kStagesPerLocalScaleLoad) == 0) {
       // Load group-wise local_scale to shared memory, which only needs to be done at each stage.
       // Since 2 uint4b_t values of local_scale are saved in a single uint8_t, local_scale needs to be loaded once every two stages.
-      typename IteratorLocalScale::Fragment tb_frag_local_scale;
-      tb_frag_local_scale.clear();
-      quant_args.iterator_local_scale.load(tb_frag_local_scale);
-      this->smem_iterator_local_scale_.store(tb_frag_local_scale);
+      using AccessType = typename IteratorLocalScale::AccessType;
+      cutlass::arch::CacheOperation::Kind const kCacheOp = (sizeof_bits<AccessType>::value == 128)
+          ? cutlass::arch::CacheOperation::Global : cutlass::arch::CacheOperation::Always;
+
+      quant_args.iterator_local_scale.set_iteration_index(0);
+      this->smem_iterator_local_scale_.set_iteration_index(0);
+
+      // Async Copy for local_scale
+      CUTLASS_PRAGMA_UNROLL
+      for (int j = 0; j < IteratorLocalScale::ThreadMap::Iterations::kCount; ++j) {
+        AccessType *dst_ptr =
+            reinterpret_cast<AccessType *>(this->smem_iterator_local_scale_.get());
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int v = 0; v < IteratorLocalScale::kAccessesPerVector; ++v) {
+          auto gmem_ptr = quant_args.iterator_local_scale.get();
+
+          int const kSrcBytes =
+              sizeof_bits<typename IteratorLocalScale::Element>::value *
+              IteratorLocalScale::ThreadMap::kElementsPerAccess /
+              IteratorLocalScale::kAccessesPerVector / 8;
+
+              cutlass::arch::cp_async<kSrcBytes, kCacheOp>(
+                  dst_ptr + v, gmem_ptr, quant_args.iterator_local_scale.valid());
+        }
+        ++quant_args.iterator_local_scale;
+      }
+      ++this->smem_iterator_local_scale_;
 
       //CUTLASS_TRACE_DEVICE(" [stage=%d][LocalScale] Shape: {%d, %d}",
       //    stage, IteratorLocalScale::Shape::kRow, IteratorLocalScale::Shape::kColumn);
-#if 0
-      __syncthreads();
-      if (IteratorLocalScale::Fragment::kElements == 32) {
-        uint8_t* local_scale_ptr = reinterpret_cast<uint8_t*>(tb_frag_local_scale.data());
-        CUTLASS_TRACE_DEVICE(" [stage=%d][LocalScale] tb_frag_local_scale[0:15]=[%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d]",
-            stage,
-            static_cast<int>(local_scale_ptr[0]), static_cast<int>(local_scale_ptr[1]),
-            static_cast<int>(local_scale_ptr[2]), static_cast<int>(local_scale_ptr[3]),
-            static_cast<int>(local_scale_ptr[4]), static_cast<int>(local_scale_ptr[5]),
-            static_cast<int>(local_scale_ptr[6]), static_cast<int>(local_scale_ptr[7]),
-            static_cast<int>(local_scale_ptr[8]), static_cast<int>(local_scale_ptr[9]),
-            static_cast<int>(local_scale_ptr[10]), static_cast<int>(local_scale_ptr[11]),
-            static_cast<int>(local_scale_ptr[12]), static_cast<int>(local_scale_ptr[13]),
-            static_cast<int>(local_scale_ptr[14]), static_cast<int>(local_scale_ptr[15]));
-      }
-#endif
     }
   }
 

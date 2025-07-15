@@ -572,7 +572,6 @@ public:
 
       ++this->smem_iterator_B_;
     }
-    __syncthreads();
   }
 
   /// GEMM prologue.  Bootstrap the global->shared memory pipeline by fetching
