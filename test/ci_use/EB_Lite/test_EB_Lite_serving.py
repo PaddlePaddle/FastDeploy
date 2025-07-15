@@ -90,8 +90,7 @@ def setup_and_run_server():
         "--max-model-len", "32768",
         "--max-num-seqs", "128",
         "--quantization", "wint4",
-        "--use-cudagraph",
-        "--max-capture-batch-size", "1"
+        "--use-cudagraph"
     ]
 
     # Start subprocess in new process group
