@@ -324,10 +324,7 @@ class GraphOptimizationConfig:
         pre-compute the mapping from batch size to padded graph size
         """
         # Regular capture sizes
-        if len(self.cudagraph_capture_sizes) == 0: return
         self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size < max_num_seqs]
-        self.cudagraph_capture_sizes.append(max_num_seqs)
-
         dedup_sizes = list(set(self.cudagraph_capture_sizes))
         if len(dedup_sizes) < len(self.cudagraph_capture_sizes):
             logger.info(("cudagraph sizes specified by model runner"
@@ -352,7 +349,10 @@ class GraphOptimizationConfig:
         self.batch_size_to_captured_size[
             self.max_capture_size] = self.max_capture_size
 
-    def _set_cudagraph_sizes(self):
+    def _set_cudagraph_sizes(
+        self, 
+        max_num_seqs:int = 0
+    ):
         """
         Calculate a series of candidate capture batch sizes,
         and then extract a portion of them as the capture list for the CUDA graph based on user input.
@@ -363,7 +363,10 @@ class GraphOptimizationConfig:
         draft_capture_sizes += [16 * i for i in range(9, 17)]
         # Batch Size [256, 288, ... 992, 1024]
         draft_capture_sizes += [32 * i for i in range(17, 33)]
+
+        draft_capture_sizes.append(max_num_seqs)
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
+
 
 class LoadConfig:
     """
@@ -436,7 +439,7 @@ class FDConfig:
     def __post_init__(self):
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
-            self.graph_opt_config._set_cudagraph_sizes()
+            self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
         self.graph_opt_config.init_with_cudagrpah_size(max_num_seqs=self.parallel_config.max_num_seqs)
 
         #TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
