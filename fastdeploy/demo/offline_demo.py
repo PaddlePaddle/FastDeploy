@@ -17,13 +17,14 @@
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 
-model_name_or_path = "./models/llama-7b"
+model_name_or_path = "/home/zexuli/Models/Qwen3-0.6B"
 
 # 超参设置
-sampling_params = SamplingParams(temperature=0.1, max_tokens=30)
-llm = LLM(model=model_name_or_path, tensor_parallel_size=1)
-output = llm.generate(prompts="who are you？",
-                      use_tqdm=True,
-                      sampling_params=sampling_params)
+sampling_params = SamplingParams(temperature=0.1,top_p=0.7,top_k=10,min_p=0.1)
+llm = LLM(model=model_name_or_path, tensor_parallel_size=1,reasoning_parser="qwen3")
+prompt = "北京天安门在哪里?"
+messages = [{"role": "user", "content": prompt}]
+output = llm.chat([messages],
+                   sampling_params)
 
 print(output)

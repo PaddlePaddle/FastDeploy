@@ -32,8 +32,8 @@ std::vector<paddle::Tensor> MinPSamplingFromProbs(const paddle::Tensor &probs,
     cudaError_t status;
 
     status = sampling::MinPSamplingFromProb<float, int64_t>(
-    const_cast<float *>(probs.data<float>()),samples.data<int64_t>(),
-    batch_size,min_p.data<float>(),vocab_size,true,philox_seed,philox_offset,cu_stream);
+    const_cast<float *>(probs.data<float>()),min_p.data<float>(),samples.data<int64_t>(),
+    batch_size,vocab_size,true,philox_seed,philox_offset,cu_stream);
 
   PD_CHECK(status == cudaSuccess, "SamplingFromProbs failed with error code " +
                                       std::string(cudaGetErrorString(status)));

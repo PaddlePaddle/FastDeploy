@@ -78,6 +78,7 @@ class GPUModelRunner(ModelRunnerBase):
         else:
             self.sampler = SpeculativeSampler(fd_config)
 
+
         # Lazy initialize kv cache after model loading
         # self.kv_caches: list[paddle.Tensor] = []
 
@@ -580,12 +581,16 @@ class GPUModelRunner(ModelRunnerBase):
         # Initialize forward meta data
         self.initialize_forward_meta()
 
+        num_reqs = int((self.share_inputs["seq_lens_this_time"] > 0).sum())
+        min_p_slice = self.share_inputs["min_p"][:num_reqs]
+        no_min_p = paddle.all(min_p_slice == 0.0).item()
+
         # Get sampling metadata
         self.sampling_metadata = SamplingMetadata(
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
             top_k=self.share_inputs["top_k"],
-            min_p=self.share_inputs["min_p"],
+            min_p=None if no_min_p else self.share_inputs["min_p"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
             frequency_penalties=self.share_inputs["frequency_score"],

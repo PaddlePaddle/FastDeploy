@@ -265,12 +265,16 @@ class Sampler(nn.Layer):
             sampling_metadata.eos_token_ids,
         )
 
+        # print("sampling_metadata.min_p",sampling_metadata.min_p)
         probs = F.softmax(logits)
-
-        if hasattr(sampling_metadata,"min_p") and sampling_metadata.min_p > 0.0:
-            probs = min_p_sampling(probs, sampling_metadata.min_p)
-
-        _, next_tokens = top_k_top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
+        if sampling_metadata.min_p is not None:
+            next_tokens,probs= min_p_sampling(probs,sampling_metadata.min_p)
+            if next_tokens is not None:
+                pass
+            else:
+                _, next_tokens = top_k_top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
+        else:
+            _, next_tokens = top_k_top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
 
         logprobs_tensors = None if num_logprobs is None else \
             self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=next_tokens)

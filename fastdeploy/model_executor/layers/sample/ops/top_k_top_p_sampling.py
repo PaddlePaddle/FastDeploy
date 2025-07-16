@@ -137,6 +137,8 @@ def rejection_top_p_sampling(
             )
         else:
             if order == "top_k_first":
+                print("走的这里吧?",x)
+                print("top_k",top_k)
                 renorm_probs = top_k_renorm_probs(x, top_k)
                 ids = rejection_top_p_sampling(
                     renorm_probs,
@@ -156,16 +158,28 @@ def rejection_top_p_sampling(
     return ids
 
 def min_p_sampling(
-    x:paddle.tensor,
-    min_p:paddle.Tensor,
+    logits:paddle.tensor,
+    min_p_arr:Optional[paddle.Tensor],
     seed:int=-1
-)->paddle.Tensor:
+)-> tuple[paddle.Tensor, paddle.Tensor]:
     """
     min_p_sampling
     """
-    try:
+    _ = None
+
+    if current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import min_p_sampling
-        ids=min_p_sampling(x,min_p,seed)
-    except ImportError:
-        raise RuntimeError("Cannot import min_p_sampling op.")
-    return ids
+        ids=min_p_sampling(logits,min_p_arr,seed)
+
+        return ids,_
+    else:
+        probability_values= paddle.nn.functional.softmax(logits,axis=-1)
+        max_probabilities = paddle.amax(probability_values,
+                                        axis=-1,
+                                        keepdim=True)
+        adjusted_min_p = max_probabilities * min_p_arr
+        invalid_token_mask = probability_values < adjusted_min_p
+        logits = paddle.where(invalid_token_mask,
+                            paddle.full_like(logits, -float('inf')),
+                            logits)
+    return _,logits
