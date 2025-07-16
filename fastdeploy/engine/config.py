@@ -43,7 +43,7 @@ class ModelConfig:
                  model_name_or_path: str,
                  config_json_file: str = "config.json",
                  dynamic_load_weight: bool = False,
-                 load_strategy: str = "meta",
+                 load_strategy: str = "ipc_snapshot",
                  quantization: str = None,
                  download_dir: Optional[str] = None):
         """
