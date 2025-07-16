@@ -107,7 +107,6 @@ class Ernie4_5_VLMoE(nn.Layer):
             }
             self.text_fused_moe = FusedMoE(
                 fd_config=fd_config,
-                reduce_results=False,
                 moe_intermediate_size=fd_config.model_config.
                 moe_intermediate_size[0],
                 num_experts=fd_config.model_config.moe_num_experts[0],
@@ -139,7 +138,6 @@ class Ernie4_5_VLMoE(nn.Layer):
             }
             self.image_fused_moe = FusedMoE(
                 fd_config=fd_config,
-                reduce_results=False,
                 moe_intermediate_size=fd_config.model_config.
                 moe_intermediate_size[1],
                 num_experts=fd_config.model_config.moe_num_experts[1],
@@ -164,7 +162,6 @@ class Ernie4_5_VLMoE(nn.Layer):
                 intermediate_size=self.num_shared_experts *
                 fd_config.model_config.moe_intermediate_size[0],
                 prefix=f"{prefix}.shared_experts",
-                reduce_results=False,
             )
 
     def extract_gate_correction_bias_text(self, gate_correction_bias_key,
@@ -221,8 +218,6 @@ class Ernie4_5_VLMoE(nn.Layer):
             hidden_states = self.text_fused_moe(hidden_states)
         if self.num_shared_experts > 0:
             hidden_states += share_experts_out
-        if self.tp_size > 1:
-            tensor_model_parallel_all_reduce(hidden_states)
         return hidden_states
 
 
