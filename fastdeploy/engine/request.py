@@ -56,7 +56,7 @@ class Request:
                  structural_tag: Optional[Any] = None,
                  guided_json_object: Optional[bool] = None,
                  enable_thinking: Optional[bool] = True,
-                 metadata: Optional[dict] = dict()) -> None:
+                 trace_carrier: dict = dict()) -> None:
         self.request_id = request_id
         self.prompt = prompt
         self.prompt_token_ids = prompt_token_ids
@@ -92,12 +92,14 @@ class Request:
         self.multimodal_data = multimodal_data
 
         self.enable_thinking = enable_thinking
-        self.metadata = {"tracing_carrier": {}}
+        self.trace_carrier = trace_carrier
 
     @classmethod
     def from_dict(cls, d: dict):
         data_processor_logger.debug(f"{d}")
+        print("before from_dict", d)
         sampling_params = SamplingParams.from_dict(d)
+        print("after from_dict", d)
         return cls(request_id=d["request_id"],
                    prompt=d.get("prompt"),
                    prompt_token_ids=d.get("prompt_token_ids"),
@@ -123,7 +125,7 @@ class Request:
                    structural_tag=d.get("structural_tag", None),
                    guided_json_object=d.get("guided_json_object", None),
                    enable_thinking=d.get("enable_thinking", True),
-                   metadata=d.get("metadata", {}))
+                   trace_carrier=d.get("trace_carrier", "11111111"))
 
     def to_dict(self) -> dict:
         """convert Request into a serializable dict """
@@ -145,7 +147,8 @@ class Request:
             "raw_request": self.raw_request,
             "disaggregate_info": self.disaggregate_info,
             "draft_token_ids": self.draft_token_ids,
-            "enable_thinking": self.enable_thinking
+            "enable_thinking": self.enable_thinking,
+            "trace_carrier": self.trace_carrier
         }
         add_params = [
             "guided_json", "guided_regex", "guided_choice", "guided_grammar",
