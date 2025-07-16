@@ -143,30 +143,6 @@ def apply_rotary_pos_emb_vision(tensor: paddle.Tensor,
     return output
 
 
-def qkv_reshard_head(tensor, group):
-    """
-    将qkv在seq维度拼接后一起做切分维度的转换
-    """
-    parallelism = group.nranks
-    qkv_seqlen, head_num, head_dim = tensor.shape
-    tensor = tensor.transpose(perm=[1, 0, 2]).contiguous()
-    out = _AllToAll.apply(tensor, group)
-    out = paddle.split(out, parallelism, axis=0)
-    output_q = []
-    output_k = []
-    output_v = []
-    for output_i in out:
-        outout = output_i.transpose(perm=[1, 0, 2]).contiguous()
-        output = paddle.split(outout, 3, axis=0)
-        output_q.append(output[0])
-        output_k.append(output[1])
-        output_v.append(output[2])
-    q = paddle.concat(output_q, axis=0)
-    k = paddle.concat(output_k, axis=0)
-    v = paddle.concat(output_v, axis=0)
-    return q, k, v
-
-
 class VisionFlashAttention2(nn.Layer):
     """_summary_
 
@@ -211,7 +187,6 @@ class VisionFlashAttention2(nn.Layer):
         hidden_states: paddle.Tensor,
         cu_seqlens: paddle.Tensor,
         rotary_pos_emb: paddle.Tensor = None,
-        attn_sep=False,
     ) -> paddle.Tensor:
         """_summary_
 
@@ -228,13 +203,6 @@ class VisionFlashAttention2(nn.Layer):
             [seq_length, 3, self.num_heads // self.tensor_parallel_degree,
              -1]).transpose(perm=[1, 0, 2, 3])
         q, k, v = qkv.unbind(axis=0)
-
-        if attn_sep:
-            hcg = get_hcg()
-            mp_group = hcg.get_model_parallel_group()
-            qkv = paddle.concat([q, k, v], axis=0)
-            q, k, v = qkv_reshard_head(qkv, mp_group)
-            seq_length = q.shape[0]
 
         q = apply_rotary_pos_emb_vision(q.unsqueeze(axis=0),
                                         rotary_pos_emb).squeeze(axis=0)
@@ -256,10 +224,7 @@ class VisionFlashAttention2(nn.Layer):
                 max_seqlen,
                 scale=softmax_scale,  # TODO: 需要手动加上
             )[0].squeeze(0).reshape([seq_length, -1]))
-        if attn_sep:
-            out = _AllToAll.apply(attn_output, mp_group)
-            out = paddle.split(out, mp_group.nranks, axis=0)
-            attn_output = paddle.concat(out, axis=1)
+
         attn_output = attn_output.astype(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
@@ -415,8 +380,7 @@ class DFNRopeVisionBlock(nn.Layer):
     def forward(self,
                 hidden_states,
                 cu_seqlens,
-                rotary_pos_emb,
-                attn_sep=False) -> paddle.Tensor:
+                rotary_pos_emb) -> paddle.Tensor:
         """_summary_
 
         Args:
@@ -431,7 +395,6 @@ class DFNRopeVisionBlock(nn.Layer):
             self.norm1(hidden_states),
             cu_seqlens=cu_seqlens,
             rotary_pos_emb=rotary_pos_emb,
-            attn_sep=attn_sep,
         )
         hidden_states = hidden_states + self.mlp(self.norm2(hidden_states))
         return hidden_states
@@ -593,7 +556,6 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         else:
             cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
 
-        attn_sep = getattr(self.config, "attn_sep", False)
         vit_num_recompute_layers = getattr(self.config,
                                            "vit_num_recompute_layers",
                                            self.config.depth)
@@ -601,13 +563,12 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         for idx, blk in enumerate(self.blocks):
             if self.config.recompute and self.training and idx < vit_num_recompute_layers:
                 hidden_states = recompute(blk, hidden_states, cu_seqlens,
-                                          rotary_pos_emb, attn_sep)
+                                          rotary_pos_emb)
             else:
                 hidden_states = blk(
                     hidden_states,
                     cu_seqlens=cu_seqlens,
                     rotary_pos_emb=rotary_pos_emb,
-                    attn_sep=attn_sep,
                 )
 
         # ret = self.merger(hidden_states)

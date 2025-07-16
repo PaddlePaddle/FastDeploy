@@ -46,7 +46,6 @@ class DFNRopeVisionTransformerConfig(PretrainedConfig):
         attn_implementation="eager",  # new added
         pp_data_balance=False,
         recompute=False,
-        attn_sep=False,
         vit_first_fwd_bsz=128,
         vit_num_recompute_layers=10000,
         **kwargs,
@@ -65,6 +64,5 @@ class DFNRopeVisionTransformerConfig(PretrainedConfig):
         self.attn_implementation = attn_implementation
         self.pp_data_balance = pp_data_balance
         self.recompute = recompute
-        self.attn_sep = attn_sep
         self.vit_first_fwd_bsz = vit_first_fwd_bsz
         self.vit_num_recompute_layers = vit_num_recompute_layers
