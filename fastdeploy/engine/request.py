@@ -97,9 +97,7 @@ class Request:
     @classmethod
     def from_dict(cls, d: dict):
         data_processor_logger.debug(f"{d}")
-        print("before from_dict", d)
         sampling_params = SamplingParams.from_dict(d)
-        print("after from_dict", d)
         return cls(request_id=d["request_id"],
                    prompt=d.get("prompt"),
                    prompt_token_ids=d.get("prompt_token_ids"),
@@ -125,7 +123,7 @@ class Request:
                    structural_tag=d.get("structural_tag", None),
                    guided_json_object=d.get("guided_json_object", None),
                    enable_thinking=d.get("enable_thinking", True),
-                   trace_carrier=d.get("trace_carrier", "11111111"))
+                   trace_carrier=d.get("trace_carrier", {}))
 
     def to_dict(self) -> dict:
         """convert Request into a serializable dict """
