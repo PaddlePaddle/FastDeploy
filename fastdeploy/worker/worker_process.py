@@ -372,7 +372,7 @@ class PaddleDisWorkerProc():
             self.get_profile_block_num_signal.value[
                 self.local_rank] = num_blocks_global
         else:
-            num_blocks_global = self.fd_config.parallel_config.max_block_num
+            num_blocks_global = self.fd_config.parallel_config.total_block_num
         # NOTE(liuzichang): Too big num_blocks_global will lead to error 700
         # 4. Updata share inputs
         self.worker.reinitialize_kv_cache(num_gpu_blocks=num_blocks_global)

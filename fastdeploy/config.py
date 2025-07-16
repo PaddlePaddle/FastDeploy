@@ -58,6 +58,7 @@ PRETRAINED_INIT_CONFIGURATION = {
     "freq_allocation":20,
     "tie_word_embeddings":False,
     "rms_norm_eps":1e-5,
+    "moe_num_experts": None,
 }
 
 
@@ -143,7 +144,7 @@ class ParallelConfig:
         self.model_name_or_path: str = "./output"
         self.max_num_seqs: int = 34
         # Set default block num for profile run
-        self.max_block_num: int = 2000
+        self.total_block_num: int = 2000
         # block size
         self.block_size: int = 64
         # Engine worker queue port
