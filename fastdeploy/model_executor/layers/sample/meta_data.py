@@ -34,9 +34,6 @@ class SamplingMetadata:
     presence_penalties: paddle.Tensor
     repetition_penalties: paddle.Tensor
 
-    prompt_ids: Optional[paddle.Tensor] = None
-    prompt_lens: Optional[paddle.Tensor] = None
-
     min_dec_lens: paddle.Tensor
 
     bad_words_token_ids: paddle.Tensor
@@ -46,3 +43,5 @@ class SamplingMetadata:
     top_p: paddle.Tensor
     top_k: Optional[paddle.Tensor] = None
     max_num_logprobs: Optional[int] = None
+    prompt_ids: Optional[paddle.Tensor] = None
+    prompt_lens: Optional[paddle.Tensor] = None
