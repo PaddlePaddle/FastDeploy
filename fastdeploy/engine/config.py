@@ -24,7 +24,7 @@ from fastdeploy import envs
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.utils import (ceil_div, check_unified_ckpt, get_host_ip,
-                              is_port_available, llm_logger)
+                              is_port_available, get_random_port, llm_logger)
 
 TaskOption = Literal["generate"]
 
@@ -571,7 +571,7 @@ class Config:
         max_model_len: int = 8192,
         max_num_seqs: int = 8,
         max_num_batched_tokens: Optional[int] = None,
-        dist_init_addr: str = None,
+        dist_init_ip: str = None,
         nnodes: int = 1,
         node_rank: int = 0,
         speculative_config: Optional[Dict[str, Any]] = None,
@@ -631,13 +631,13 @@ class Config:
         self.max_num_batched_tokens = max_num_batched_tokens
         self.tensor_parallel_size = tensor_parallel_size
         
-        self.dist_init_addr = dist_init_addr
         self.nnode = nnodes
         self.node_rank = node_rank
-        if self.dist_init_addr is None:
+        if self.dist_init_ip is None:
             self.master_ip = "0.0.0.0"
         else:
-            self.master_ip = self.dist_init_addr.split(":")[0]
+            self.master_ip = self.dist_init_ip
+            self.dist_init_addr = f"{self.dist_init_ip}:{get_random_port()}"
 
         self.max_model_len = max_model_len
         self.max_num_seqs = max_num_seqs
@@ -713,7 +713,7 @@ class Config:
 
         self.host_ip = get_host_ip()
 
-        if self.dist_init_addr is None or self.host_ip == self.master_ip:
+        if self.dist_init_ip is None or self.host_ip == self.master_ip:
             self.is_master = True
         else:
             self.is_master = False

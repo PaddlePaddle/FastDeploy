@@ -123,9 +123,9 @@ class EngineArgs:
     Ratio of tokens to process in a block.
     """
 
-    dist_init_addr: Optional[str] = None
+    dist_init_ip: Optional[str] = None
     """
-    The master node address of multinode deployment
+    The master node ip of multinode deployment
     """
 
     nnodes: int = 1
@@ -509,7 +509,7 @@ class EngineArgs:
         system_group = parser.add_argument_group("System Configuration")
         system_group.add_argument(
             "--dist-init-addr",
-            default=EngineArgs.dist_init_addr,
+            default=EngineArgs.dist_init_ip,
             help=
             "IP addresses of master node.")
 
@@ -816,7 +816,7 @@ class EngineArgs:
             max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
             max_num_batched_tokens=self.max_num_batched_tokens,
-            dist_init_addr=self.dist_init_addr,
+            dist_init_ip=self.dist_init_ip,
             nnodes=self.nnodes,
             node_rank=self.node_rank,
             use_warmup=self.use_warmup,
