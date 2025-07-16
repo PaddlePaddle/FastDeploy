@@ -269,7 +269,7 @@ class OpenAIServingChat:
                         chunk.choices = choices
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         choices = []
-                        
+
                 if choices:
                     chunk.choices = choices
                     yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
@@ -338,33 +338,38 @@ class OpenAIServingChat:
                     await asyncio.sleep(0.1)
                     continue
 
-                data = msgpack.unpackb(raw_data[-1])
-                if data.get("error_code", 200) != 200:
-                    raise ValueError("{}".format(data["error_msg"]))
-                if request.metadata is not None:
-                    enable_thinking = request.metadata.get("enable_thinking")
-                data = self.engine_client.data_processor.process_response_dict(
-                    data, stream=False, enable_thinking=enable_thinking)
-                # api_server_logger.debug(f"Client {request_id} received: {data}")
-                previous_num_tokens += len(data["outputs"]["token_ids"])
-                # The logprob for handling the response
-                output = data["outputs"]
-                raw_top_logprobs = output["top_logprobs"]
-                if raw_top_logprobs is not None:
-                    top_logprobs = LogprobsLists(
-                        logprob_token_ids=raw_top_logprobs[0],
-                        logprobs=raw_top_logprobs[1],
-                        sampled_token_ranks=raw_top_logprobs[2],
-                    )
-                    logprobs_res = self.build_logprobs_response(
-                        request_logprobs=request.logprobs,
-                        response_logprobs=top_logprobs,
-                        request_top_logprobs=request.top_logprobs,
-                    )
-                    if logprobs_res and logprobs_res.content is not None:
-                        logprob_contents.extend(logprobs_res.content)
-                if data["finished"]:
-                    final_res = data
+                response = msgpack.unpackb(raw_data[-1])
+                task_is_finished = False
+                for data in response:
+                    if data.get("error_code", 200) != 200:
+                        raise ValueError("{}".format(data["error_msg"]))
+                    if request.metadata is not None:
+                        enable_thinking = request.metadata.get("enable_thinking")
+                    data = self.engine_client.data_processor.process_response_dict(
+                        data, stream=False, enable_thinking=enable_thinking)
+                    # api_server_logger.debug(f"Client {request_id} received: {data}")
+                    previous_num_tokens += len(data["outputs"]["token_ids"])
+                    # The logprob for handling the response
+                    output = data["outputs"]
+                    raw_top_logprobs = output["top_logprobs"]
+                    if raw_top_logprobs is not None:
+                        top_logprobs = LogprobsLists(
+                            logprob_token_ids=raw_top_logprobs[0],
+                            logprobs=raw_top_logprobs[1],
+                            sampled_token_ranks=raw_top_logprobs[2],
+                        )
+                        logprobs_res = self.build_logprobs_response(
+                            request_logprobs=request.logprobs,
+                            response_logprobs=top_logprobs,
+                            request_top_logprobs=request.top_logprobs,
+                        )
+                        if logprobs_res and logprobs_res.content is not None:
+                            logprob_contents.extend(logprobs_res.content)
+                    if data["finished"]:
+                        final_res = data
+                        task_is_finished = True
+                        break
+                if task_is_finished:
                     break
         finally:
             dealer.close()

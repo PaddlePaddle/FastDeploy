@@ -180,18 +180,20 @@ class OpenAIServingCompletion:
                             current_waiting_time = 0
                     await asyncio.sleep(0.1)
                     continue
-                data = msgpack.unpackb(raw_data[-1])
-                rid = int(data["request_id"].split("-")[-1])
-                if data.get("error_code", 200) != 200:
-                    raise ValueError("{}".format(data["error_msg"]))
+                response = msgpack.unpackb(raw_data[-1])
+                for data in response:
+                    rid = int(data["request_id"].split("-")[-1])
+                    if data.get("error_code", 200) != 200:
+                        raise ValueError("{}".format(data["error_msg"]))
 
-                self.engine_client.data_processor.process_response_dict(
-                    data, stream=False)
-                output_tokens[rid] += len(data["outputs"]["token_ids"])
-                if data.get("finished", False):
-                    data["output_token_ids"] = output_tokens[rid]
-                    valid_results[rid] = data
-                    num_choices -= 1
+                    self.engine_client.data_processor.process_response_dict(
+                        data, stream=False)
+                    output_tokens[rid] += len(data["outputs"]["token_ids"])
+                    if data.get("finished", False):
+                        data["output_token_ids"] = output_tokens[rid]
+                        valid_results[rid] = data
+                        num_choices -= 1
+                        break
 
             return self.request_output_to_completion_response(
                 final_res_batch=valid_results,
