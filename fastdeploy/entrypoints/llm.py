@@ -169,6 +169,8 @@ class LLM:
 
         # get output
         outputs = self._run_engine(req_ids, use_tqdm=use_tqdm)
+        for i in range(len(outputs)):
+            outputs[i].prompt = prompts[i]
         return outputs
 
     def chat(
@@ -245,7 +247,10 @@ class LLM:
         prompts_len = len(prompts)
         req_ids = []
         for i in range(prompts_len):
+            # 生成唯一的请求 ID
             request_id = str(uuid.uuid4())
+        
+            # 根据 prompts[i] 的类型，生成对应的 tasks 字典
             if isinstance(prompts[i], str):
                 tasks = {
                     "prompt": prompts[i],
@@ -261,10 +266,15 @@ class LLM:
                 tasks = prompts[i]
                 tasks["request_id"] = request_id
             else:
+                # 如果 prompts[i] 的类型不符合要求，抛出 TypeError 异常
                 raise TypeError(
                     f"Invalid type for 'prompt': {type(prompts[i])}, expected one of ['str', 'list', 'dict']."
                 )
+        
+            # 将生成的请求 ID 添加到 req_ids 列表中
             req_ids.append(request_id)
+        
+            # 根据 sampling_params 的类型，获取当前的采样参数
             if isinstance(sampling_params, list):
                 current_sampling_params = sampling_params[i]
             else:
@@ -272,7 +282,14 @@ class LLM:
             enable_thinking = None
             if chat_template_kwargs is not None:
                 enable_thinking = chat_template_kwargs.get(
+        
+            # 根据 chat_template_kwargs 获取 enable_thinking 参数
+            enable_thinking = None
+            if chat_template_kwargs is not None:
+                enable_thinking = chat_template_kwargs.get(
                     "enable_thinking", None)
+        
+            # 将生成的 tasks 字典和采样参数添加到 LLM Engine 中
             self.llm_engine.add_requests(tasks,
                                          current_sampling_params,
                                          enable_thinking=enable_thinking)
