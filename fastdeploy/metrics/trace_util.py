@@ -12,20 +12,20 @@ TRACE_CARRIER = "trace_carrier"
 
 def inject_to_metadata(request, metadata_attr='metadata'):
     """
-       将 OpenTelemetry 的 trace context 注入到 request 的 metadata 字段中。
+        Inject OpenTelemetry trace context into the metadata field of the request.
 
-       参数:
-           request: 可为 dict 或对象，需有 metadata 属性或字段。
-           metadata_attr: metadata 的字段名，默认是 'metadata'。
+        Parameters:
+        request: can be a dict or object, with metadata attributes or fields.
+        metadata_attr: the field name of metadata, default is 'metadata'.
 
-       操作:
-           - 若 metadata 不存在，则新建并挂载到 request 上。
-           - 将当前 trace context 注入为 JSON 字符串形式存储到 metadata 中。
-           - 使用键 TRACE_CARRIER 存储注入内容。
+        Operation:
+        - If metadata does not exist, create a new one and mount it on the request.
+        - Inject the current trace context as a JSON string and store it in metadata.
+        - Use the key TRACE_CARRIER to store the injected content.
 
-       注意:
-           - 此函数为非阻塞操作，出错时静默忽略。
-           - 如果 request 中没有 metadata 属性，会给它创建一个空dict作为它的属性
+        Note:
+        - This function is a non-blocking operation, and errors are silently ignored.
+        - If there is no metadata attribute in the request, an empty dict will be created for it as its attribute
     """
     try:
         if request is None:
@@ -50,15 +50,15 @@ def inject_to_metadata(request, metadata_attr='metadata'):
 
 def extract_from_metadata(request, metadata_attr='metadata'):
     """
-        从 request 对象(dict 或类实例)的 metadata 中提取 trace context。
+        Extract trace context from metadata of request object (dict or class instance).
 
-        参数:
-            request: 可以是字典或任意对象，包含 metadata 属性或字段。
-            metadata_attr: metadata 字段名，默认是 'metadata'。
+        Parameters:
+        request: can be a dictionary or any object, containing metadata attributes or fields.
+        metadata_attr: metadata field name, default is 'metadata'.
 
-        返回:
-            - 提取成功：返回 OpenTelemetry 上下文对象（Context）
-            - 提取失败或异常：返回 None
+        Returns:
+        - Extraction success: returns OpenTelemetry context object (Context)
+        - Extraction failure or exception: returns None
     """
     try:
         metadata = request.get(metadata_attr) if isinstance(request, dict) else getattr(request, metadata_attr, None)
@@ -74,6 +74,32 @@ def extract_from_metadata(request, metadata_attr='metadata'):
         return ctx
     except:
         return None
+    
+
+def extract_from_request(request):
+    """
+        Extract trace context from trace_carrier of request object (dict or class instance).
+
+        Parameters:
+        request: can be a dictionary or any object, containing metadata attributes or fields.
+        metadata_attr: metadata field name, default is 'metadata'.
+
+        Returns:
+        - Extraction success: returns OpenTelemetry context object (Context)
+        - Extraction failure or exception: returns None
+    """
+    try:
+        print("extract_from_request", request)
+        trace_carrier_info = getattr(request, TRACE_CARRIER, None)
+
+        if trace_carrier_info is None:
+            return None
+
+        trace_carrier = json.loads(trace_carrier_info)
+        ctx = extract(trace_carrier)
+        return ctx
+    except:
+        return None
 
 def start_span(span_name, request, kind=trace.SpanKind.CLIENT):
     """
@@ -84,6 +110,20 @@ def start_span(span_name, request, kind=trace.SpanKind.CLIENT):
             return
         # extract Trace context from request.metadata.trace_carrier
         ctx = extract_from_metadata(request)
+        with tracer.start_as_current_span(span_name, context=ctx, kind=kind) as span:
+            pass
+    except:
+        pass
+
+def start_span_request(span_name, request, kind=trace.SpanKind.CLIENT):
+    """
+        just start a new span in request trace context
+    """
+    try:
+        if is_opentelemetry_instrumented() == False:
+            return
+        # extract Trace context from request.metadata.trace_carrier
+        ctx = extract_from_request(request)
         with tracer.start_as_current_span(span_name, context=ctx, kind=kind) as span:
             pass
     except:
