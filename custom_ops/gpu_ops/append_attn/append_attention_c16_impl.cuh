@@ -41,7 +41,7 @@ __global__ void multi_query_append_attention_kernel(
     const int *__restrict__ seq_lens_kv,
     const int *__restrict__ batch_ids,
     const int *__restrict__ tile_ids_per_batch,
-    const int *__restrict__ cum_offsets,
+    const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
     const int max_seq_len,
     const int max_dec_len,
@@ -114,8 +114,7 @@ __global__ void multi_query_append_attention_kernel(
   const uint32_t kv_n_stride = kv_num_heads * BLOCK_SIZE * HEAD_DIM;
   const uint32_t kv_h_stride = BLOCK_SIZE * HEAD_DIM;
   const uint32_t kv_b_stride = HEAD_DIM;
-  const uint32_t q_start_seq_id =
-      batch_id * max_seq_len - __ldg(&cum_offsets[batch_id]);
+  const uint32_t q_start_seq_id = cu_seqlens_q[batch_id];
   const uint32_t q_base_seq_id_this_block =
       (tile_id * NUM_WARPS + wid) * num_frags_x * 16;
   const uint32_t q_offset = q_start_seq_id * q_ori_n_stride +
@@ -405,7 +404,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     const int *__restrict__ seq_lens_kv,
     const int *__restrict__ batch_ids,
     const int *__restrict__ tile_ids_per_batch,
-    const int *__restrict__ cum_offsets,
+    const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
     const int max_seq_len,
     const int max_dec_len,
@@ -477,8 +476,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   const uint32_t kv_n_stride = kv_num_heads * BLOCK_SIZE * HEAD_DIM;
   const uint32_t kv_h_stride = BLOCK_SIZE * HEAD_DIM;
   const uint32_t kv_b_stride = HEAD_DIM;
-  const uint32_t q_start_seq_id =
-      batch_id * max_seq_len - __ldg(&cum_offsets[batch_id]);
+  const uint32_t q_start_seq_id = cu_seqlens_q[batch_id];
   const uint32_t q_base_seq_id_this_block = tile_id * num_frags_x * 16;
   const uint32_t q_offset = q_start_seq_id * q_ori_n_stride +
                             q_head_idx * HEAD_DIM +
@@ -776,7 +774,7 @@ void MultiQueryAppendAttention(
     const paddle::Tensor &seq_lens_kv,
     const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &padding_offsets,
-    const paddle::Tensor &cum_offsets,
+    const paddle::Tensor &cu_seqlens_q,
     const paddle::Tensor &block_table,
     const paddle::Tensor &batch_ids,
     const paddle::Tensor &tile_ids_per_batch,
@@ -882,7 +880,7 @@ void MultiQueryAppendAttention(
           seq_lens_kv.data<int>(),
           batch_ids.data<int>(),
           tile_ids_per_batch.data<int>(),
-          cum_offsets.data<int>(),
+          cu_seqlens_q.data<int>(),
           block_table.data<int>(),
           max_seq_len,
           max_dec_len,
@@ -939,7 +937,7 @@ void MultiQueryAppendAttention(
           seq_lens_kv.data<int>(),
           batch_ids.data<int>(),
           tile_ids_per_batch.data<int>(),
-          cum_offsets.data<int>(),
+          cu_seqlens_q.data<int>(),
           block_table.data<int>(),
           max_seq_len,
           max_dec_len,
@@ -974,7 +972,7 @@ void MultiQueryAppendAttention(
                 seq_lens_q.data<int>(),
                 seq_lens_kv.data<int>(),
                 seq_lens_encoder.data<int>(),
-                cum_offsets.data<int>(),
+                cu_seqlens_q.data<int>(),
                 shift_bias ? reinterpret_cast<NV_TYPE *>(
                                  const_cast<T *>(shift_bias.get().data<T>()))
                            : nullptr,
@@ -1103,7 +1101,7 @@ void MultiQueryAppendAttention(
           seq_lens_kv.data<int>(),
           batch_ids.data<int>(),
           tile_ids_per_batch.data<int>(),
-          cum_offsets.data<int>(),
+          cu_seqlens_q.data<int>(),
           block_table.data<int>(),
           max_seq_len,
           max_dec_len,
@@ -1171,7 +1169,7 @@ void MultiQueryAppendAttention(
           seq_lens_kv.data<int>(),
           batch_ids.data<int>(),
           tile_ids_per_batch.data<int>(),
-          cum_offsets.data<int>(),
+          cu_seqlens_q.data<int>(),
           block_table.data<int>(),
           max_seq_len,
           max_dec_len,
@@ -1207,7 +1205,7 @@ void MultiQueryAppendAttention(
                 seq_lens_q.data<int>(),
                 seq_lens_kv.data<int>(),
                 seq_lens_encoder.data<int>(),
-                cum_offsets.data<int>(),
+                cu_seqlens_q.data<int>(),
                 shift_bias ? reinterpret_cast<NV_TYPE *>(
                                  const_cast<T *>(shift_bias.get().data<T>()))
                            : nullptr,
@@ -1290,7 +1288,7 @@ void CascadeAppendAttentionC16Kernel(
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& padding_offsets,
-    const paddle::Tensor& cum_offsets,
+    const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_table,
     const paddle::Tensor& batch_ids,
     const paddle::Tensor& tile_ids_per_batch,
@@ -1353,7 +1351,7 @@ void CascadeAppendAttentionC16Kernel(
                                 seq_lens_kv,
                                 seq_lens_encoder,
                                 padding_offsets,
-                                cum_offsets,
+                                cu_seqlens_q,
                                 block_table,
                                 batch_ids,
                                 tile_ids_per_batch,

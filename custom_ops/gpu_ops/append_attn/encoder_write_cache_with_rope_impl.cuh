@@ -879,7 +879,7 @@ __global__ void append_write_cache_kv_c8_qkv(
     const int *__restrict__ seq_lens_this_time,
     const int *__restrict__ seq_lens_decoder,
     const int *__restrict__ padding_offsets,
-    const int *__restrict__ cum_offsets,
+    const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_tables,
     const int max_seq_len,
     const int max_blocks_per_seq,
@@ -911,8 +911,7 @@ __global__ void append_write_cache_kv_c8_qkv(
   const uint32_t tile_start = start_len_pad + tile_id * num_rows_per_block;
   uint32_t chunk_start = tile_start + wid * num_frags_z * 16 + tid / 8;
 
-  const uint32_t start_token_idx =
-      batch_id * max_seq_len - cum_offsets[batch_id];
+  const uint32_t start_token_idx = cu_seqlens_q[batch_id];
   const uint32_t kv_batch_stride = (num_heads + 2 * kv_num_heads) * HEAD_DIM;
   const uint32_t kv_h_stride = HEAD_DIM;
   __shared__ T k_smem_ori[num_rows_per_block * HEAD_DIM];
@@ -1119,7 +1118,7 @@ __global__ void append_write_cache_kv_c4_qkv(
     const int *__restrict__ seq_lens_this_time,
     const int *__restrict__ seq_lens_decoder,
     const int *__restrict__ padding_offsets,
-    const int *__restrict__ cum_offsets,
+    const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_tables,
     const int max_seq_len,
     const int max_blocks_per_seq,
@@ -1148,8 +1147,7 @@ __global__ void append_write_cache_kv_c4_qkv(
   const uint32_t tile_start = start_len_pad + tile_id * num_rows_per_block;
   uint32_t chunk_start = tile_start + wid * num_frags_z * 16 + tid / 8;
 
-  const uint32_t start_token_idx =
-      batch_id * max_seq_len - cum_offsets[batch_id];
+  const uint32_t start_token_idx = cu_seqlens_q[batch_id];
   const uint32_t kv_batch_stride = (num_heads + 2 * kv_num_heads) * HEAD_DIM;
   const uint32_t kv_h_stride = HEAD_DIM;
   __shared__ T k_smem_ori[num_rows_per_block * HEAD_DIM];
@@ -1750,7 +1748,7 @@ void CascadeAppendWriteCacheKVC8QKV(
     const paddle::Tensor &seq_lens_this_time,
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &padding_offsets,
-    const paddle::Tensor &cum_offsets,
+    const paddle::Tensor &cu_seqlens_q,
     const paddle::Tensor &block_table,
     const paddle::Tensor &batch_ids,
     const paddle::Tensor &tile_ids_per_batch,
@@ -1815,7 +1813,7 @@ void CascadeAppendWriteCacheKVC8QKV(
                                           seq_lens_this_time.data<int>(),
                                           seq_lens_decoder.data<int>(),
                                           padding_offsets.data<int>(),
-                                          cum_offsets.data<int>(),
+                                          cu_seqlens_q.data<int>(),
                                           block_table.data<int>(),
                                           max_seq_len,
                                           max_blocks_per_seq,
@@ -1838,7 +1836,7 @@ void CascadeAppendWriteCacheKVC4QKV(
     const paddle::Tensor &seq_lens_this_time,
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &padding_offsets,
-    const paddle::Tensor &cum_offsets,
+    const paddle::Tensor &cu_seqlens_q,
     const paddle::Tensor &block_table,
     const paddle::Tensor &batch_ids,
     const paddle::Tensor &tile_ids_per_batch,
@@ -1885,7 +1883,7 @@ void CascadeAppendWriteCacheKVC4QKV(
                                           seq_lens_this_time.data<int>(),
                                           seq_lens_decoder.data<int>(),
                                           padding_offsets.data<int>(),
-                                          cum_offsets.data<int>(),
+                                          cu_seqlens_q.data<int>(),
                                           block_table.data<int>(),
                                           max_seq_len,
                                           max_blocks_per_seq,
