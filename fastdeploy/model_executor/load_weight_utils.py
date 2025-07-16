@@ -46,6 +46,23 @@ def load_ep_checkpoint(model_path: str,
     from itertools import chain
     def get_expert_ranges(config):
         """
+        Generate expert index ranges based on configuration parameters
+    
+        This function is primarily used in Mixture-of-Experts (MoE) models to generate
+        expert index ranges according to configuration parameters. When moe_num_experts
+        is a list in the config, it returns a chained combination of two ranges, otherwise
+        returns a single range.
+        
+        Args:
+            config: Configuration objec
+        
+        Returns:
+            If moe_num_experts is a list:
+                Returns a chained combination (chain object) of two ranges:
+                    1. Base range: [num_experts_start_offset, num_experts_start_offset + num_experts_per_rank)
+                    2. Offset range: [base_range.start + moe_num_experts[0], base_range.stop + moe_num_experts[0])
+            Else:
+                Returns single range: [num_experts_start_offset, num_experts_start_offset + num_experts_per_rank)
         """
         base_range = range(
             config.num_experts_start_offset,
