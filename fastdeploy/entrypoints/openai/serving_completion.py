@@ -45,16 +45,16 @@ from fastdeploy.engine.request import RequestOutput
 
 
 class OpenAIServingCompletion:
-    def __init__(self, engine_client, pid, pod_ips):
+    def __init__(self, engine_client, pid, dist_init_ip):
         self.engine_client = engine_client
         self.pid = pid
-        self.pod_ips = pod_ips
+        self.master_ip = dist_init_ip
         self.host_ip = get_host_ip()
 
     def _check_master(self):
-        if self.pod_ips is None:
+        if self.master_ip is None:
             return True
-        if self.host_ip == self.pod_ips[0]:
+        if self.host_ip == self.master_ip:
             return True
         return False
 

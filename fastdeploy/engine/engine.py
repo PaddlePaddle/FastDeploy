@@ -174,7 +174,7 @@ class LLMEngine(object):
                 cache_config=self.cfg.cache_config,
                 tensor_parallel_size=self.cfg.tensor_parallel_size,
                 device_ids=device_ids,
-                pod_ip=self.cfg.pod_ips[0],
+                pod_ip=self.cfg.master_ip,
                 engine_worker_queue_port=self.cfg.engine_worker_queue_port,
                 pid_suffix=self.ipc_signal_suffix)
 
@@ -239,11 +239,12 @@ class LLMEngine(object):
 
             if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
                 self.dp_processed = []
-                for i in range(1, self.cfg.parallel_config.data_parallel_size):
+                for i in range(1, self.cfg.parallel_config.data_parallel_size // self.cfg.nnode):
                     time.sleep(1)
                     self.dp_processed.append(
                         multiprocessing.Process(target=start_expert_service,
-                                                args=(self.cfg, i,
+                                                args=(self.cfg,
+                                                      i + self.cfg.node_rank * self.cfg.worker_num_per_node,
                                                       self.ipc_signal_suffix)))
                     llm_logger.info(f"Engine is initialized successfully with {self.cfg.tensor_parallel_size}" \
                 + " data parallel id {}".format(i))
@@ -1007,8 +1008,6 @@ class LLMEngine(object):
         )
 
         arguments = (
-            f" --nnodes {str(self.cfg.nnode)}"
-            f" --ips {','.join(self.cfg.pod_ips)}"
             f" --devices {self.cfg.device_ids} {py_script}"
             f" --max_num_seqs {self.cfg.max_num_seqs} --max_model_len {self.cfg.max_model_len}"
             f" --gpu_memory_utilization {self.cfg.cache_config.gpu_memory_utilization}"
@@ -1016,7 +1015,7 @@ class LLMEngine(object):
             f" --device_ids {self.cfg.device_ids}"
             f" --tensor_parallel_size {self.cfg.tensor_parallel_size}"
             f" --engine_worker_queue_port {str(self.cfg.engine_worker_queue_port)}"
-            f" --pod_ip {self.cfg.pod_ips[0]}"
+            f" --pod_ip {self.cfg.master_ip}"
             f" --total_block_num {self.cfg.cache_config.total_block_num}"
             f" --block_size {self.cfg.cache_config.block_size}"
             f" --enc_dec_block_num {self.cfg.cache_config.enc_dec_block_num}"
@@ -1057,7 +1056,11 @@ class LLMEngine(object):
             if value:
                 arguments = arguments + f" --{worker_flag}"
         if self.cfg.nnode > 1:
-            pd_cmd = pd_cmd + f" --ips {self.cfg.ips}"
+            pd_cmd = pd_cmd + (
+                f" --master {self.cfg.dist_init_addr}"
+                f" --nnodes {str(self.cfg.nnode)}"
+                f" --rank {str(self.cfg.node_rank)}"
+            )
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
         llm_logger.info("Launch worker service command: {}".format(pd_cmd))
         p = subprocess.Popen(
@@ -1158,7 +1161,7 @@ class LLMEngine(object):
                 cache_config=self.cfg.cache_config,
                 tensor_parallel_size=self.cfg.tensor_parallel_size,
                 device_ids=device_ids,
-                pod_ip=self.cfg.pod_ips[0],
+                pod_ip=self.cfg.master_ip,
                 engine_worker_queue_port=self.cfg.engine_worker_queue_port,
                 pid_suffix=self.ipc_signal_suffix)
     def check_health(self, time_interval_threashold=30):
@@ -1245,8 +1248,9 @@ class LLMEngine(object):
         """
         start queue service for engine worker communication
         """
-        address = (self.cfg.pod_ips[0], self.cfg.engine_worker_queue_port)
-        if self.cfg.host_ip == self.cfg.pod_ips[0] or self.cfg.pod_ips[0] == "0.0.0.0":
+        address = (self.cfg.master_ip, self.cfg.engine_worker_queue_port)
+        if self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0":
+            llm_logger.info(f"Starting engine worker queue server service at {address}")
             self.engine_worker_queue_server = EngineWorkerQueue(
                 address=address,
                 is_server=True,
@@ -1256,7 +1260,7 @@ class LLMEngine(object):
 
             if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != 'mixed':
                 self.cache_task_queue = EngineCacheQueue(
-                    address=(self.cfg.pod_ips[0], self.cfg.cache_config.cache_queue_port),
+                    address=(self.cfg.master_ip, self.cfg.cache_config.cache_queue_port),
                     authkey=b'cache_queue_service',
                     is_server=True,
                     num_client=self.cfg.tensor_parallel_size,
@@ -1270,4 +1274,6 @@ class LLMEngine(object):
             is_server=False,
             num_client=self.cfg.tensor_parallel_size,
             client_id=0,
-            local_data_parallel_id=0)
+            local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
+            local_data_parallel_id= min(self.cfg.worker_num_per_node * self.cfg.node_rank,
+                                       self.cfg.parallel_config.data_parallel_size - 1))

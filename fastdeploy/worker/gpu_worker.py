@@ -23,6 +23,7 @@ import pynvml
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_logger
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
 from fastdeploy.worker.output import ModelRunnerOutput
@@ -50,11 +51,12 @@ class GpuWorker(WorkerBase):
         """
         Initialize device and construct model runner
         """
+        self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         if self.device_config.device_type == "cuda" and paddle.device.is_compiled_with_cuda(
         ):
             # Set evironment variable
             self.device_ids = self.parallel_config.device_ids.split(",")
-            self.device = f"gpu:{self.local_rank}"
+            self.device = f"gpu:{self.local_rank % self.max_chips_per_node}"
             paddle.device.set_device(self.device)
             paddle.set_default_dtype(self.parallel_config.dtype)
 
@@ -72,7 +74,7 @@ class GpuWorker(WorkerBase):
         self.model_runner: GPUModelRunner = GPUModelRunner(
             fd_config=self.fd_config,
             device=self.device,
-            device_id=self.device_ids[self.local_rank],
+            device_id=self.device_ids[self.local_rank % self.max_chips_per_node],
             rank=self.rank,
             local_rank=self.local_rank)
 
