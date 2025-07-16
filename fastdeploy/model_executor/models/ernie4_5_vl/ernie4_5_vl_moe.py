@@ -123,6 +123,7 @@ class Ernie4_5_VLMoE(nn.Layer):
                 fd_config=fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
                 prefix=f"{prefix}",
+                reduce_results=False,
             )
 
         assert image_moe_layer_start_index <= image_moe_layer_end_index
@@ -155,6 +156,7 @@ class Ernie4_5_VLMoE(nn.Layer):
                 fd_config=fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
                 prefix=f"{prefix}",
+                reduce_results=False,
             )
 
         self.num_shared_experts = fd_config.model_config.moe_num_shared_experts

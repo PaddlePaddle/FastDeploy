@@ -71,6 +71,7 @@ class Ernie4_5_MLP(nn.Layer):
             input_size=intermediate_size,
             output_size=fd_config.model_config.hidden_size,
             with_bias=False,
+            reduce_results=reduce_results,
         )
 
         self.act_fn = SiluAndMul(
