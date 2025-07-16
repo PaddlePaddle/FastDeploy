@@ -89,7 +89,6 @@ def extract_from_request(request):
         - Extraction failure or exception: returns None
     """
     try:
-        print("extract_from_request", request)
         trace_carrier_info = getattr(request, TRACE_CARRIER, None)
 
         if trace_carrier_info is None:
