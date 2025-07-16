@@ -20,7 +20,7 @@
 #include "moe/fast_hardamard_kernel.h"
 #include "moe/fused_moe_helper.h"
 
-#define _GROUP_GEMM_ONLY 1
+#define _GROUP_GEMM_ONLY 0
 
 template <typename DataT, typename NvType, typename WeightSavedT, cutlass::WintQuantMethod QuantMethod>
 void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,

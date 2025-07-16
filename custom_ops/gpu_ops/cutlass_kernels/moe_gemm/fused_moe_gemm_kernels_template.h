@@ -150,6 +150,10 @@ void generic_moe_gemm_kernelLauncher(const T* A,
 
   CUTLASS_TRACE_HOST("Stages: " << Stages);
 
+  //std::cout << "-- ThreadblockShape: {" << ThreadblockShape::kM << ", " << ThreadblockShape::kN << ", " << ThreadblockShape::kK
+  //          << "}, WarpShape: {" << WarpShape::kM << ", " << WarpShape::kN << ", " << WarpShape::kK
+  //          << "}, Stages: " << Stages << std::endl;
+
   // Finally, set up the kernel.
   using BaseGemmKernel = typename cutlass::gemm::kernel::DefaultGemmGrouped<
       ElementType,
@@ -715,8 +719,8 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
   std::vector<CutlassGemmConfig> candidate_configs =
       get_candidate_configs(sm_, -1, is_weight_only, only_simt_configs, true);
 
-  static constexpr int warm_time = 0;
-  static constexpr int test_time = 1;
+  static constexpr int warm_time = 5;
+  static constexpr int test_time = 10;
   auto& gemmConfigManager = GemmConfigManager::Instance();
   constexpr GemmDataType dtype = getGemmDataType<T>();
   constexpr GemmDataType wdtype = getGemmDataType<WeightType>();
@@ -735,10 +739,8 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
         std::min(gemmConfigManager.nextPowerOfTwo(actual_total_rows),
                  gemmConfigManager.getMaxProfileM());
     bool find_one = false;
-    size_t num_candidate_configs_size = 2;//candidate_configs.size();
-    // for (size_t ii = 0; ii < num_candidate_configs_size; ++ii)
-    {
-      size_t ii = 1;
+    size_t num_candidate_configs_size = 4; //candidate_configs.size();
+    for (size_t ii = 0; ii < num_candidate_configs_size; ++ii) {
       try {
         for (int i = 0; i < warm_time; i++) {
           dispatch_to_arch<EpilogueTag>(A,
@@ -795,7 +797,7 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
       }
     }
     if (find_one) {
-      //std::cout << "[TUNING] best_config: " << best_id << ", time: " << best_time << " ms" << std::endl;
+      std::cout << "[TUNING] best_config: " << best_id << ", time: " << best_time << " ms" << std::endl;
       gemmConfigManager.addBestConfig(gemmId, profile_total_rows, best_config);
       chosen_config = best_config;
     } else {
@@ -803,7 +805,6 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
     }
   }
 
-#if 0
   dispatch_to_arch<EpilogueTag>(A,
                                 B,
                                 weight_scales,
@@ -817,7 +818,6 @@ void MoeGemmRunner<T, WeightQuantTraits>::run_gemm<EpilogueTag>(
                                 quant_args_B,
                                 chosen_config,
                                 stream);
-#endif
 }
 
 template <typename T, typename WeightQuantTraits>

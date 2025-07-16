@@ -442,7 +442,6 @@ public:
         ++this->smem_iterator_B_;
       }
     }
-    __syncthreads();
   }
 
   CUTLASS_DEVICE
@@ -696,6 +695,7 @@ public:
         this->warp_tile_iterator_B_.load(pipe_state.warp_loaded_frag_B_);
         ++this->warp_tile_iterator_B_;
 
+#if 0
         if (PipeState::WarpLoadedFragmentB::kElements == 64) {
           uint8_t* reg_uint8_ptr = reinterpret_cast<uint8_t*>(pipe_state.warp_loaded_frag_B_.data());
           CUTLASS_TRACE_DEVICE(" [stage=%d] warp_loaded_frag_B_=[%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d], %d bytes",
@@ -710,13 +710,13 @@ public:
               static_cast<int>(reg_uint8_ptr[14]), static_cast<int>(reg_uint8_ptr[15]),
               sizeof_bits<typename PipeState::WarpLoadedFragmentB>::value / 8);
         }
+#endif
 
         warp_dequantizer_.load(pipe_state.warp_frag_local_scale_);
       }
 
       // Execute the current warp-tile of MMA operations
       if (Detail::kStagedAccumulation) {
-        //CUTLASS_TRACE_DEVICE(" [MMa-kStagedAccumulation][stage=%d] warp_mma_k=%d, warp_k_compute_offset_B=%d", stage, warp_mma_k, warp_k_compute_offset_B);
         warp_mma_(
           pipe_state.tmp_accum_,
           pipe_state.warp_frag_A_[warp_mma_k % 2],
@@ -731,7 +731,6 @@ public:
           pipe_state.tmp_accum_.clear();
         }
       } else {
-        //CUTLASS_TRACE_DEVICE(" [MMa][stage=%d] warp_mma_k=%d, warp_k_compute_offset_B=%d", stage, warp_mma_k, warp_k_compute_offset_B);
         warp_mma_(
           accum,
           pipe_state.warp_frag_A_[warp_mma_k % 2],
@@ -858,7 +857,7 @@ public:
           sizeof_bits<typename PipeState::WarpLoadedFragmentA>::value / 8);
     }
 #endif
-#if 1
+#if 0
     if (PipeState::WarpLoadedFragmentB::kElements == 64) {
       uint8_t* reg_uint8_ptr = reinterpret_cast<uint8_t*>(pipe_state.warp_loaded_frag_B_.data());
       CUTLASS_TRACE_DEVICE(" [stage=0] warp_loaded_frag_B_=[%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d], %d bytes",
