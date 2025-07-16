@@ -43,6 +43,7 @@
 | ```speculative_config```           | `dict[str]` | 投机解码配置，仅支持标准格式json字符串，默认为None |
 | ```dynamic_load_weight```          | `int`       | 是否动态加载权重，默认0 |
 | ```enable_expert_parallel```       | `bool`      | 是否启用专家并行 |
+| ```enable_logprob```       | `bool`      | 是否启用输出token返回logprob。如果未使用 logrpob，则在启动时可以省略此参数。 |
 
 
 ## 1. KVCache分配与```num_gpu_blocks_override```、```block_size```的关系？

@@ -31,7 +31,8 @@ if current_platform.is_cuda() and not current_platform.is_dcu():
     from fastdeploy.model_executor.ops.gpu import (moe_expert_dispatch,
                                                    moe_expert_reduce, noaux_tc)
 elif current_platform.is_iluvatar():
-    from fastdeploy.model_executor.ops.iluvatar import moe_expert_dispatch, moe_expert_reduce
+    from fastdeploy.model_executor.ops.iluvatar import (moe_expert_dispatch,
+                                                        moe_expert_reduce)
 
 
 # used for deepseek_v3
@@ -65,11 +66,11 @@ class CutlassMoEMethod(MoEMethodBase):
         Paddle cutlass create weight process.
         """
         # bf16
-        ffn1_weights, ffn2_weights = layer.extract_moe_ffn_weights(state_dict)
-        stacked_ffn1_weights = paddle.stack(ffn1_weights, axis=0)
-        stacked_ffn2_weights = paddle.stack(ffn2_weights, axis=0)
+        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        stacked_up_gate_proj_weights = paddle.stack(up_gate_proj_weights, axis=0)
+        stacked_down_proj_weights = paddle.stack(down_proj_weights, axis=0)
         for idx, weight_tensor in enumerate(
-            [stacked_ffn1_weights, stacked_ffn2_weights]):
+            [stacked_up_gate_proj_weights, stacked_down_proj_weights]):
             weight_name = self.added_weight_attrs[idx]
             setattr(
                 layer, weight_name,
@@ -95,15 +96,15 @@ class CutlassMoEMethod(MoEMethodBase):
             return fastdeploy.model_executor.ops.iluvatar.moe_expert_ffn(
                 permute_input,
                 token_nums_per_expert,
-                layer.moe_ffn1_weight,
-                layer.moe_ffn2_weight,
+                layer.up_gate_proj_weight,
+                layer.down_proj_weight,
                 None,
-                (layer.moe_ffn1_weight_scale if hasattr(
-                    layer, "moe_ffn1_weight_scale") else None),
-                (layer.moe_ffn2_weight_scale if hasattr(
-                    layer, "moe_ffn2_weight_scale") else None),
-                (layer.moe_ffn2_in_scale
-                 if hasattr(layer, "moe_ffn2_in_scale") else None),
+                (layer.up_gate_proj_weight_scale if hasattr(
+                    layer, "up_gate_proj_weight_scale") else None),
+                (layer.down_proj_weight_scale if hasattr(
+                    layer, "down_proj_weight_scale") else None),
+                (layer.down_proj_in_scale
+                 if hasattr(layer, "down_proj_in_scale") else None),
                 expert_idx_per_token,
                 self.moe_quant_type,
                 used_in_ep_low_latency,
@@ -111,15 +112,15 @@ class CutlassMoEMethod(MoEMethodBase):
         return fastdeploy.model_executor.ops.gpu.moe_expert_ffn(
             permute_input,
             token_nums_per_expert,
-            layer.moe_ffn1_weight,
-            layer.moe_ffn2_weight,
+            layer.up_gate_proj_weight,
+            layer.down_proj_weight,
             None,
-            (layer.moe_ffn1_weight_scale
-             if hasattr(layer, "moe_ffn1_weight_scale") else None),
-            (layer.moe_ffn2_weight_scale
-             if hasattr(layer, "moe_ffn2_weight_scale") else None),
-            (layer.moe_ffn2_in_scale
-             if hasattr(layer, "moe_ffn2_in_scale") else None),
+            (layer.up_gate_proj_weight_scale
+             if hasattr(layer, "up_gate_proj_weight_scale") else None),
+            (layer.down_proj_weight_scale
+             if hasattr(layer, "down_proj_weight_scale") else None),
+            (layer.down_proj_in_scale
+             if hasattr(layer, "down_proj_in_scale") else None),
             expert_idx_per_token,
             self.moe_quant_type,
             used_in_ep_low_latency,
@@ -163,8 +164,8 @@ class CutlassMoEMethod(MoEMethodBase):
                 recv_x,
                 recv_topk_idx,
                 recv_topk_weights,
-                (self.moe_ffn1_in_scale
-                 if hasattr(self, "moe_ffn1_in_scale") else None),
+                (self.up_gate_proj_in_scale
+                 if hasattr(self, "up_gate_proj_in_scale") else None),
                 recv_num_tokens_per_expert_list,
                 token_all_num,
                 self.moe_quant_type,
@@ -186,7 +187,7 @@ class CutlassMoEMethod(MoEMethodBase):
                 dst_weights,
                 permute_indices_per_token,
                 dst_indices,
-                None,  # moe_ffn2_bias,
+                None,  # down_proj_bias,
                 False,  # norm_topk_prob
                 1.0,
             )[0]
@@ -256,7 +257,7 @@ class CutlassMoEMethod(MoEMethodBase):
                 x,
                 gate_out,
                 None,  # Use layer.gate_correction_bias in get_moe_scores.
-                (layer.moe_ffn1_in_scale if hasattr(layer, "moe_ffn1_in_scale")
+                (layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale")
                  else None),  # if set, permute_input will be int8_t
                 layer.top_k,
                 False,
@@ -274,7 +275,7 @@ class CutlassMoEMethod(MoEMethodBase):
                 x,
                 gate_out,
                 layer.gate_correction_bias,
-                (layer.moe_ffn1_in_scale if hasattr(layer, "moe_ffn1_in_scale")
+                (layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale")
                  else None),  # if set, permute_input will be int8_t
                 layer.top_k,
                 False,
@@ -323,9 +324,9 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
         """
         Paddle cutlass create weight process.
         """
-        ffn1_weights, ffn2_weights = layer.extract_moe_ffn_weights(state_dict)
-        self.check(layer, ffn1_weights, ffn2_weights)
-        for idx, weight_tensor in enumerate([ffn1_weights, ffn2_weights]):
+        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        self.check(layer, up_gate_proj_weights, down_proj_weights)
+        for idx, weight_tensor in enumerate([up_gate_proj_weights, down_proj_weights]):
             weight_name = self.added_weight_attrs[idx]
             weight_list = []
             for i in range(layer.num_local_experts):
@@ -366,26 +367,26 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
             create_and_set_parameter(layer, name, processed_weight_scale)
 
         # 1. Init scale containers and maps
-        moe_ffn1_weight_scales = []
-        moe_ffn2_weight_scales = []
-        moe_ffn1_in_scales = []
-        moe_ffn2_in_scales = []
+        up_gate_proj_weight_scales = []
+        down_proj_weight_scales = []
+        up_gate_proj_in_scales = []
+        down_proj_in_scales = []
 
         scale_weight_map = {
-            "moe_ffn1_weight_scale": moe_ffn1_weight_scales,
-            "moe_ffn2_weight_scale": moe_ffn2_weight_scales,
-            "moe_ffn1_in_scale": moe_ffn1_in_scales,
-            "moe_ffn2_in_scale": moe_ffn2_in_scales,
+            "up_gate_proj_weight_scale": up_gate_proj_weight_scales,
+            "down_proj_weight_scale": down_proj_weight_scales,
+            "up_gate_proj_in_scale": up_gate_proj_in_scales,
+            "down_proj_in_scale": down_proj_in_scales,
         }
         scale_key_map = {
-            "moe_ffn1_weight_scale":
-            weight_key_map.get("ffn1_expert_weight_scale_key", None),
-            "moe_ffn2_weight_scale":
-            weight_key_map.get("ffn2_expert_weight_scale_key", None),
-            "moe_ffn1_in_scale":
-            weight_key_map.get("ffn1_expert_in_scale_key", None),
-            "moe_ffn2_in_scale":
-            weight_key_map.get("ffn2_expert_in_scale_key", None),
+            "up_gate_proj_weight_scale":
+            weight_key_map.get("up_gate_proj_expert_weight_scale_key", None),
+            "down_proj_weight_scale":
+            weight_key_map.get("down_proj_expert_weight_scale_key", None),
+            "up_gate_proj_in_scale":
+            weight_key_map.get("up_gate_proj_expert_in_scale_key", None),
+            "down_proj_in_scale":
+            weight_key_map.get("down_proj_expert_in_scale_key", None),
         }
         for name, value in scale_key_map.items():
             if value is None:
@@ -404,13 +405,13 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
 
         # 3. Process scale tensor and set to layer
         in_scales = []
-        for in_scale_name in ["moe_ffn1_in_scale", "moe_ffn2_in_scale"]:
+        for in_scale_name in ["up_gate_proj_in_scale", "down_proj_in_scale"]:
             in_scales.append(
                 _process_in_scale(in_scale_name,
                                   scale_weight_map[in_scale_name]))
 
         for i, weight_scale_name in enumerate(
-            ["moe_ffn1_weight_scale", "moe_ffn2_weight_scale"]):
+            ["up_gate_proj_weight_scale", "down_proj_weight_scale"]):
             _process_weight_scale(weight_scale_name,
                                   scale_weight_map[weight_scale_name],
                                   in_scales[i])
@@ -431,41 +432,41 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
         """
         Paddle cutlass process prequanted weights.
         """
-        ffn1_expert_weight_key = layer.weight_key_map.get(
-            "ffn1_expert_weight_key", None)
-        ffn2_expert_weight_key = layer.weight_key_map.get(
-            "ffn2_expert_weight_key", None)
-        ffn1_expert_weight_scale_key = layer.weight_key_map.get(
-            "ffn1_expert_weight_scale_key", None)
-        ffn2_expert_weight_scale_key = layer.weight_key_map.get(
-            "ffn2_expert_weight_scale_key", None)
+        up_gate_proj_expert_weight_key = layer.weight_key_map.get(
+            "up_gate_proj_expert_weight_key", None)
+        down_proj_expert_weight_key = layer.weight_key_map.get(
+            "down_proj_expert_weight_key", None)
+        up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get(
+            "up_gate_proj_expert_weight_scale_key", None)
+        down_proj_expert_weight_scale_key = layer.weight_key_map.get(
+            "down_proj_expert_weight_scale_key", None)
 
-        ffn1_weights, ffn2_weights = layer.load_experts_weight(
-            state_dict, ffn1_expert_weight_key, ffn2_expert_weight_key)
-        # self.check(layer, ffn1_weights, ffn2_weights)
-        ffn1_weight_scale = []
-        ffn2_weight_scale = []
+        up_gate_proj_weights, down_proj_weights = layer.load_experts_weight(
+            state_dict, up_gate_proj_expert_weight_key, down_proj_expert_weight_key)
+        # self.check(layer, up_gate_proj_weights, down_proj_weights)
+        up_gate_proj_weight_scale = []
+        down_proj_weight_scale = []
         for i in range(layer.num_local_experts):
             expert_idx = layer.expert_id_offset + i
-            ffn1_weight_scale.append(
+            up_gate_proj_weight_scale.append(
                 get_tensor(
                     state_dict.pop(
-                        ffn1_expert_weight_scale_key.format(expert_idx))))
-            ffn2_weight_scale.append(
+                        up_gate_proj_expert_weight_scale_key.format(expert_idx))))
+            down_proj_weight_scale.append(
                 get_tensor(
                     state_dict.pop(
-                        ffn2_expert_weight_scale_key.format(expert_idx))))
+                        down_proj_expert_weight_scale_key.format(expert_idx))))
 
-        ffn1_weight = paddle.stack(ffn1_weights, axis=0)
-        ffn2_weight = paddle.stack(ffn2_weights, axis=0)
-        ffn1_weight_scale = paddle.stack(ffn1_weight_scale, axis=0)
-        ffn2_weight_scale = paddle.stack(ffn2_weight_scale, axis=0)
+        up_gate_proj_weight = paddle.stack(up_gate_proj_weights, axis=0)
+        down_proj_weight = paddle.stack(down_proj_weights, axis=0)
+        up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0)
+        down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0)
 
         name_tensor_map = {
-            "moe_ffn1_weight": ffn1_weight,
-            "moe_ffn2_weight": ffn2_weight,
-            "moe_ffn1_weight_scale": ffn1_weight_scale,
-            "moe_ffn2_weight_scale": ffn2_weight_scale
+            "up_gate_proj_weight": up_gate_proj_weight,
+            "down_proj_weight": down_proj_weight,
+            "up_gate_proj_weight_scale": up_gate_proj_weight_scale,
+            "down_proj_weight_scale": down_proj_weight_scale
         }
         for name, tensor in name_tensor_map.items():
             create_and_set_parameter(layer, name, tensor)
@@ -474,10 +475,10 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
         """
         Paddle cutlass create weight process.
         """
-        ffn1_weights, ffn2_weights = layer.extract_moe_ffn_weights(state_dict)
-        self.check(layer, ffn1_weights, ffn2_weights)
+        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        self.check(layer, up_gate_proj_weights, down_proj_weights)
 
-        for idx, weight_tensor in enumerate([ffn1_weights, ffn2_weights]):
+        for idx, weight_tensor in enumerate([up_gate_proj_weights, down_proj_weights]):
             weight_name = self.added_weight_attrs[idx]
             scale_name = self.added_scale_attrs[idx]
 

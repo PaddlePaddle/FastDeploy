@@ -479,8 +479,8 @@ class XPUModelRunner(ModelRunnerBase):
         # Initialize free list
         free_list = list(
             range(
-                self.parallel_config.max_block_num - 1,
-                int(self.parallel_config.max_block_num *
+                self.parallel_config.total_block_num - 1,
+                int(self.parallel_config.total_block_num *
                     self.parallel_config.kv_cache_ratio) - 1, -1))
         self.free_list_len = len(free_list)
         self.share_inputs["free_list"] = paddle.to_tensor(free_list,
@@ -757,7 +757,7 @@ class XPUModelRunner(ModelRunnerBase):
     def prepare_profile(self) -> None:
         """Prepare the profile run by setting the block number and initializing the KV cache."""
         paddle.device.xpu.empty_cache()
-        self.num_gpu_blocks = self.parallel_config.max_block_num
+        self.num_gpu_blocks = self.parallel_config.total_block_num
         self.initialize_kv_cache()
 
     def profile_run(self) -> None:

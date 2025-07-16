@@ -386,19 +386,19 @@ def moe_wint2_ffn_kernel(
 
 def fused_moe_wint2_impl(
     hidden_states,
-    ffn1_quant_weight,
-    ffn2_quant_weight,
+    up_gate_proj_quant_weight,
+    down_proj_quant_weight,
     topk_weights,
     topk_ids,
     # inplace: bool = False,
-    ffn1_weight_scale=None,
-    ffn2_weight_scale=None,
-    ffn1_super_scales=None,
-    ffn2_super_scales=None,
-    ffn1_code_scale=None,
-    ffn2_code_scale=None,
-    ffn1_code_zp=None,
-    ffn2_code_zp=None,
+    up_gate_proj_weight_scale=None,
+    down_proj_weight_scale=None,
+    up_gate_proj_super_scales=None,
+    down_proj_super_scales=None,
+    up_gate_proj_code_scale=None,
+    down_proj_code_scale=None,
+    up_gate_proj_code_zp=None,
+    down_proj_code_zp=None,
     group_size=64,
     bit="wint2",
 ):
@@ -408,22 +408,22 @@ def fused_moe_wint2_impl(
     # Check constraints.
     # A: [M, K]
     # B: [E, K, N]
-    # assert hidden_states.shape[1] == ffn1_weight_scale.shape[1],
-    # f"Hidden size mismatch, {hidden_states.shape[1]} != {ffn1_quant_weight.shape[1]}"
+    # assert hidden_states.shape[1] == up_gate_proj_weight_scale.shape[1],
+    # f"Hidden size mismatch, {hidden_states.shape[1]} != {up_gate_proj_quant_weight.shape[1]}"
     assert topk_weights.shape == topk_ids.shape, "topk shape mismatch"
     assert hidden_states.is_contiguous(), "Hidden_states must be contiguous"
-    assert ffn1_quant_weight.is_contiguous(
+    assert up_gate_proj_quant_weight.is_contiguous(
     ), "Expert weights1 must be contiguous"
-    assert ffn2_quant_weight.is_contiguous(
+    assert down_proj_quant_weight.is_contiguous(
     ), "Expert weights2 must be contiguous"
     assert group_size > 0, "Group size must be greater than 0"
 
     num_tokens, K = hidden_states.shape
-    E, _, N = ffn1_quant_weight.shape
+    E, _, N = up_gate_proj_quant_weight.shape
     M = num_tokens
 
     if group_size < 0:
-        group_size = K // ffn1_weight_scale.shape[1]
+        group_size = K // up_gate_proj_weight_scale.shape[1]
 
     top_k = topk_ids.shape[1]
 
@@ -448,12 +448,12 @@ def fused_moe_wint2_impl(
 
     invoke_fused_moe_kernel(
         A=hidden_states,
-        B=ffn1_quant_weight,
+        B=up_gate_proj_quant_weight,
         C=intermediate_cache1,
-        B_scale=ffn1_weight_scale,
-        B_super_scale=ffn1_super_scales,
-        B_code_scale=ffn1_code_scale,
-        B_code_zp=ffn1_code_zp,
+        B_scale=up_gate_proj_weight_scale,
+        B_super_scale=up_gate_proj_super_scales,
+        B_code_scale=up_gate_proj_code_scale,
+        B_code_zp=up_gate_proj_code_zp,
         topk_weights=topk_weights,
         topk_ids=topk_ids,
         sorted_token_ids=sorted_token_ids,
@@ -469,12 +469,12 @@ def fused_moe_wint2_impl(
 
     invoke_fused_moe_kernel(
         A=intermediate_cache2,
-        B=ffn2_quant_weight,
+        B=down_proj_quant_weight,
         C=intermediate_cache3,
-        B_scale=ffn2_weight_scale,
-        B_super_scale=ffn2_super_scales,
-        B_code_scale=ffn2_code_scale,
-        B_code_zp=ffn2_code_zp,
+        B_scale=down_proj_weight_scale,
+        B_super_scale=down_proj_super_scales,
+        B_code_scale=down_proj_code_scale,
+        B_code_zp=down_proj_code_zp,
         topk_weights=topk_weights,
         topk_ids=topk_ids,
         sorted_token_ids=sorted_token_ids,
@@ -491,37 +491,37 @@ def fused_moe_wint2_impl(
 
 def fused_moe_wint2_triton(
     hidden_states,
-    ffn1_quant_weight,
-    ffn2_quant_weight,
+    up_gate_proj_quant_weight,
+    down_proj_quant_weight,
     scores,
     gate_correction_bias,
     topk,
-    ffn1_weight_scale,
-    ffn2_weight_scale,
-    ffn1_super_scales,
-    ffn2_super_scales,
-    ffn1_code_scale,
-    ffn2_code_scale,
-    ffn1_code_zp,
-    ffn2_code_zp,
+    up_gate_proj_weight_scale,
+    down_proj_weight_scale,
+    up_gate_proj_super_scales,
+    down_proj_super_scales,
+    up_gate_proj_code_scale,
+    down_proj_code_scale,
+    up_gate_proj_code_zp,
+    down_proj_code_zp,
 ):
     """
     Fuse MoE with WINT2 quantization scheme and Triton backend.
     Args:
         hidden_states: input tensor.
-        ffn1_quant_weight: ffn1 weight matrix for experts.
-        ffn2_quant_weight: ffn2 weight matrix for experts.
+        up_gate_proj_quant_weight: up_gate_proj weight matrix for experts.
+        down_proj_quant_weight: down_proj weight matrix for experts.
         scores: gate scores.
         gate_correction_bias: bias correction for gates.
         topk: number of experts to use.
-        ffn1_weight_scale: scaling factor for ffn1_quant_weight.
-        ffn2_weight_scale: scaling factor for ffn2_quant_weight.
-        ffn1_super_scales: super scaling factor for ffn1_scale.
-        ffn2_super_scales: super scaling factor for ffn2_weight_scale.
-        ffn1_code_scale: code scaling factor for ffn1_quant_weight.
-        ffn2_code_scale: code scaling factor for ffn2_quant_weight.
-        ffn1_code_zp: code zero point for ffn1_quant_weight.
-        ffn2_code_zp: code zero point for ffn2_quant_weight.
+        up_gate_proj_weight_scale: scaling factor for up_gate_proj_quant_weight.
+        down_proj_weight_scale: scaling factor for down_proj_quant_weight.
+        up_gate_proj_super_scales: super scaling factor for up_gate_proj_scale.
+        down_proj_super_scales: super scaling factor for down_proj_weight_scale.
+        up_gate_proj_code_scale: code scaling factor for up_gate_proj_quant_weight.
+        down_proj_code_scale: code scaling factor for down_proj_quant_weight.
+        up_gate_proj_code_zp: code zero point for up_gate_proj_quant_weight.
+        down_proj_code_zp: code zero point for down_proj_quant_weight.
     Returns:
         output tensor.
     """
@@ -533,17 +533,17 @@ def fused_moe_wint2_triton(
 
     return fused_moe_wint2_impl(
         hidden_states,
-        ffn1_quant_weight,
-        ffn2_quant_weight,
+        up_gate_proj_quant_weight,
+        down_proj_quant_weight,
         topk_weights,
         topk_ids,
-        ffn1_weight_scale,
-        ffn2_weight_scale,
-        ffn1_super_scales,
-        ffn2_super_scales,
-        ffn1_code_scale,
-        ffn2_code_scale,
-        ffn1_code_zp,
-        ffn2_code_zp,
+        up_gate_proj_weight_scale,
+        down_proj_weight_scale,
+        up_gate_proj_super_scales,
+        down_proj_super_scales,
+        up_gate_proj_code_scale,
+        down_proj_code_scale,
+        up_gate_proj_code_zp,
+        down_proj_code_zp,
         bit="wint2",
     )
