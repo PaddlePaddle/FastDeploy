@@ -59,6 +59,7 @@ PRETRAINED_INIT_CONFIGURATION = {
     "tie_word_embeddings":False,
     "rms_norm_eps":1e-5,
     "moe_num_experts": None,
+    "moe_layer_end_index":None,
 }
 
 
@@ -330,7 +331,7 @@ class GraphOptimizationConfig:
         if len(dedup_sizes) < len(self.cudagraph_capture_sizes):
             logger.info(("cudagraph sizes specified by model runner"
                             " %s is overridden by config %s"),
-                        cudagraph_capture_sizes, dedup_sizes)
+                        self.cudagraph_capture_sizes, dedup_sizes)
         self.cudagraph_capture_sizes = dedup_sizes
 
         # Sort to make sure cudagraph capture sizes are in descending order
@@ -351,7 +352,7 @@ class GraphOptimizationConfig:
             self.max_capture_size] = self.max_capture_size
 
     def _set_cudagraph_sizes(
-        self, 
+        self,
         max_num_seqs:int = 0
     ):
         """
