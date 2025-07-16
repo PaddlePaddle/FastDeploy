@@ -91,7 +91,7 @@ def setup_and_run_server():
         "--max-num-seqs", "128",
         "--quantization", "wint4",
         "--use-cudagraph",
-        "--max-capture-batch-size", "1"
+        "--graph-optimization-config", '{"cudagraph_capture_sizes": [1]}'
     ]
 
     # Start subprocess in new process group

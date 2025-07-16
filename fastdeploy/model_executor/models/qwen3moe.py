@@ -23,20 +23,19 @@ from paddle import nn
 from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig, ModelConfig
+from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import \
     support_graph_optimization
 from fastdeploy.model_executor.layers.activation import SiluAndMul
-from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (
-    MergedColumnParallelLinear, QKVParallelLinear, RowParallelLinear)
+    MergedColumnParallelLinear, RowParallelLinear)
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 from fastdeploy.model_executor.models.qwen3 import Qwen3Attention
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Qwen3MLP(nn.Layer):
@@ -49,13 +48,13 @@ class Qwen3MLP(nn.Layer):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
 
-        self.gate_up_proj = MergedColumnParallelLinear(
+        self.up_gate_proj = MergedColumnParallelLinear(
             fd_config,
             prefix=f"{prefix}.up_gate_proj",
             input_size=fd_config.model_config.hidden_size,
-            output_size=fd_config.model_config.ffn_hidden_size * 2,
+            output_size=fd_config.model_config.intermediate_size * 2,
             with_bias=False,
             activation=fd_config.model_config.hidden_act,
         )
@@ -63,27 +62,27 @@ class Qwen3MLP(nn.Layer):
         self.down_proj = RowParallelLinear(
             fd_config,
             prefix=f"{prefix}.down_proj",
-            input_size=fd_config.model_config.ffn_hidden_size,
+            input_size=fd_config.model_config.intermediate_size,
             output_size=fd_config.model_config.hidden_size,
             with_bias=False,
         )
 
         self.act_fn = SiluAndMul(
             fd_config,
-            bias=getattr(self.gate_up_proj, "linear_bias", None),
+            bias=getattr(self.up_gate_proj, "bias", None),
             act_method=fd_config.model_config.hidden_act,
         )
 
     def load_state_dict(self, state_dict):
         """
         """
-        self.gate_up_proj.load_state_dict(state_dict)
+        self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
     def forward(self, x):
         """
         """
-        gate_up_out = self.gate_up_proj(x)
+        gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
         down_out = self.down_proj(act_out)
         return down_out
@@ -109,20 +108,20 @@ class Qwen3DecoderLayer(nn.Layer):
         weight_key_map = {
             "gate_weight_key":
             f"{prefix}.mlp.gate.weight",
-            "ffn1_expert_weight_key":
+            "up_gate_proj_expert_weight_key":
             f"{prefix}.mlp.experts.{{}}.up_gate_proj.weight",
-            "ffn2_expert_weight_key":
+            "down_proj_expert_weight_key":
             f"{prefix}.mlp.experts.{{}}.down_proj.weight",
         }
 
-        if (fd_config.moe_config.num_experts is not None
-                and layer_id >= fd_config.moe_config.moe_layer_start_index):
+        if (fd_config.model_config.moe_num_experts is not None
+                and layer_id >= fd_config.model_config.moe_layer_start_index):
 
             self.mlp = FusedMoE(fd_config,
-                                moe_intermediate_size=fd_config.moe_config.
+                                moe_intermediate_size=fd_config.model_config.
                                 moe_intermediate_size,
-                                num_experts=fd_config.moe_config.num_experts,
-                                top_k=fd_config.moe_config.top_k,
+                                num_experts=fd_config.model_config.moe_num_experts,
+                                top_k=fd_config.model_config.moe_topk,
                                 layer_idx=layer_id,
                                 weight_key_map=weight_key_map)
         else:
@@ -199,21 +198,21 @@ class Qwen3MoeModel(nn.Layer):
         """
         super().__init__()
 
-        self.num_layers = fd_config.model_config.num_layers
-        fd_config.model_config.prefix_name = "model"
+        self.num_layers = fd_config.model_config.num_hidden_layers
+        fd_config.model_config.pretrained_config.prefix_name = "model"
 
-        self.embeddings = VocabParallelEmbedding(
+        self.embed_tokens = VocabParallelEmbedding(
             fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
             params_dtype=paddle.get_default_dtype,
-            prefix=(f"{fd_config.model_config.prefix_name}.embed_tokens"),
+            prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"),
         )
 
         self.layers = nn.LayerList([
             Qwen3DecoderLayer(
                 fd_config,
-                prefix=f"{fd_config.model_config.prefix_name}.layers.{i}")
+                prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}")
             for i in range(self.num_layers)
         ])
 
@@ -221,7 +220,7 @@ class Qwen3MoeModel(nn.Layer):
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=1e-6,
-            prefix=f"{fd_config.model_config.prefix_name}.norm",
+            prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
     def load_state_dict(self, state_dict):
@@ -233,7 +232,7 @@ class Qwen3MoeModel(nn.Layer):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.embeddings.load_state_dict(state_dict)
+        self.embed_tokens.load_state_dict(state_dict)
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
@@ -246,7 +245,7 @@ class Qwen3MoeModel(nn.Layer):
     ):
         """
         """
-        hidden_states = self.embeddings(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
         residual = None
 
@@ -338,7 +337,7 @@ class Qwen3MoePretrainedModel(PretrainedModel):
         return None
 
     @classmethod
-    def _get_tensor_parallel_mappings(cls, config: ModelConfig, is_split=True):
+    def _get_tensor_parallel_mappings(cls, config, is_split=True):
         # TODO not support TP split now, next PR will support TP.
 
         from paddleformers.transformers.conversion_utils import \
@@ -351,7 +350,7 @@ class Qwen3MoePretrainedModel(PretrainedModel):
             num_attention_heads=config.num_attention_heads,
         )
 
-        def get_tensor_parallel_split_mappings(num_layers, moe_num_experts):
+        def get_tensor_parallel_split_mappings(num_layers, num_experts):
             final_actions = {}
 
             base_actions = {
@@ -402,23 +401,23 @@ class Qwen3MoePretrainedModel(PretrainedModel):
             for key, action in base_actions.items():
                 for i in range(num_layers):
                     newkey = key.replace("layers.0.", f"layers.{i}.")
-                    for j in range(moe_num_experts):
+                    for j in range(num_experts):
                         newkey2 = newkey.replace("experts.0.", f"experts.{j}.")
                         final_actions[newkey2] = action
 
             return final_actions
 
-        moe_num_experts = 0
+        num_experts = 0
         if isinstance(config.moe_num_experts, list):
-            moe_num_experts = sum(config.moe_num_experts)
+            num_experts = sum(config.moe_num_experts)
         elif isinstance(config.moe_num_experts, int):
-            moe_num_experts = config.moe_num_experts
+            num_experts = config.moe_num_experts
         else:
             raise ValueError(
-                f"Not support type of moe_num_experts [{type(config.moe_num_experts)}]"
+                f"Not support type of num_experts [{type(config.moe_num_experts)}]"
             )
 
-        mappings = get_tensor_parallel_split_mappings(config.num_layers,
-                                                      moe_num_experts)
+        mappings = get_tensor_parallel_split_mappings(config.num_hidden_layers,
+                                                      num_experts)
 
         return mappings
