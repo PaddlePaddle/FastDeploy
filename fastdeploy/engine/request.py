@@ -333,7 +333,10 @@ class RequestOutput:
         self.error_code = error_code
         self.error_msg = error_msg
 
-        if isinstance(self.prompt_token_ids, np.ndarray):
+
+        if prompt_token_ids is None:
+            self.prompt_token_ids = []
+        elif isinstance(self.prompt_token_ids, np.ndarray):
             self.prompt_token_ids = self.prompt_token_ids.tolist()
 
     def add(self, next_output: "RequestOutput") -> None:

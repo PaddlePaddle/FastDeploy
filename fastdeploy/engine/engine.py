@@ -261,7 +261,7 @@ class LLMEngine(object):
             try:
                 results = self.scheduler.get_results()
                 if len(results) == 0:
-                    time.sleep(0.001)
+                    time.sleep(0.005)
                     continue
                 for request_id, contents in results.items():
                     self.zmq_server.send_multipart(request_id, contents)

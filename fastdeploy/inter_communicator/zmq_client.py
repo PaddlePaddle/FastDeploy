@@ -95,7 +95,7 @@ class ZmqClient:
         """
         return self.socket.recv_pyobj()
 
-    def aggregate_data(self, data):
+    def pack_aggregated_data(self, data):
         """
         Aggregate multiple responses into one and send them to the client.
         """
@@ -130,7 +130,7 @@ class ZmqClient:
         try:
             start_send = time.time()
             if self.aggregate_send:
-                result = self.aggregate_data(data)
+                result = self.pack_aggregated_data(data)
             else:
                 result = msgpack.packb([response.to_dict() for response in data])
             self.router.send_multipart([self.req_dict[req_id], b'', result])
