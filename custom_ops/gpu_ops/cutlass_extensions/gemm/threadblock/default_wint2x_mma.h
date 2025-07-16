@@ -52,7 +52,7 @@ public:
 template <typename ThreadblockShape, int GroupSize>
 struct DefaultQuantParamsIterators<ThreadblockShape, uint4b_t, GroupSize> {
 private:
-    static constexpr int kAlignment = 128 / sizeof_bits<uint4b_t>::value;
+    static constexpr int kAlignment = 32 / sizeof_bits<uint4b_t>::value;
     static_assert((ThreadblockShape::kN % kAlignment) == 0, "");
 
     static constexpr int kRows =
