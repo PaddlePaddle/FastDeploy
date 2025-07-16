@@ -57,6 +57,7 @@ def check_safetensors_model(model_dir: str):
     return is_safetensors
 
 def init_image_preprocess(tokenizer_path: str, image_preprocessor_path: str, patch_size: int) -> DataProcessor:
+    """create image preprocessor"""
     processor = DataProcessor(
         tokenizer_name=tokenizer_path,
         image_preprocessor_name=str(image_preprocessor_path),
@@ -77,8 +78,15 @@ def init_image_preprocess(tokenizer_path: str, image_preprocessor_path: str, pat
     return image_preprocess
 
 @paddle.no_grad()
-def extract_vision_features(image_preprocess: DataProcessor ,inputs: list[paddle.Tensor], im_patch_id: int, amp_black: List[str], amp_white: List[str], dtype: paddle.dtype, model: paddle.nn.Layer,spatial_conv_size: int,tensor_parallel_size:int) -> paddle.Tensor:
-    pass
+def extract_vision_features(image_preprocess: DataProcessor,
+                            inputs: list[paddle.Tensor],
+                            im_patch_id: int,
+                            amp_black: List[str],
+                            amp_white: List[str],
+                            dtype: paddle.dtype,
+                            model: paddle.nn.Layer,
+                            spatial_conv_size: int,
+                            tensor_parallel_size:int) -> paddle.Tensor:
     """extract_vision_features"""
     assert inputs["images"] is not None
     grid_thw = inputs["grid_thw"]

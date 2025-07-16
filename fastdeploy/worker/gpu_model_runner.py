@@ -332,8 +332,12 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["reasoning_index"][
                         idx:idx + 1, :] = request.get("reasoning_max_tokens", 2048)
                     self.share_inputs["rope_emb"][idx:idx +
-                                          1, :] = prepare_rope3d(
-                                              position_ids, request.get("max_tokens", 2048), head_dim = self.model_config.head_dim, rope_theta = self.model_config.rope_theta, freq_allocation = self.model_config.freq_allocation, max_model_len = self.parallel_config.max_model_len)
+                                          1, :] = prepare_rope3d(position_ids,
+                                                                 request.get("max_tokens", 2048),
+                                                                 head_dim = self.model_config.head_dim,
+                                                                 rope_theta = self.model_config.rope_theta,
+                                                                 freq_allocation = self.model_config.freq_allocation,
+                                                                 max_model_len = self.parallel_config.max_model_len)
                     self.share_inputs["seq_lens_decoder"][idx:idx + 1] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
@@ -1447,4 +1451,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.fd_config.model_config.max_text_id = self.fd_config.model_config.im_patch_id
         self.fd_config.model_config.sequence_parallel = False
         self.model_config = self.fd_config.model_config
-        self.image_preprocess = init_image_preprocess(self.tokenizer_path, self.image_preprocessor_path,self.model_config.vision_config.patch_size)
+        self.image_preprocess = init_image_preprocess(self.tokenizer_path,
+                                                      self.image_preprocessor_path,
+                                                      self.model_config.vision_config.patch_size)
