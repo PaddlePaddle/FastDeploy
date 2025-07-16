@@ -15,42 +15,42 @@
 #include "helper.h"
 
 template <typename T>
-__global__ inline void min_length_logits_process(T *logits,
+__global__ inline void min_vocab_size_process(T *logits,
                                                  const int64_t *cur_len,
                                                  const int64_t *min_len,
                                                  const int64_t *eos_token_id,
                                                  const int64_t bs,
-                                                 const int64_t length_logits,
-                                                 const int64_t length_eos_token_id) {
+                                                 const int64_t vocab_size,
+                                                 const int64_t eos_len) {
     int bi = threadIdx.x;
     if (bi >= bs) return;
     if (cur_len[bi] < 0) {
         return;
     }
     if (cur_len[bi] < min_len[bi]) {
-        for (int i = 0; i < length_eos_token_id; i++) {
-            logits[bi * length_logits + eos_token_id[i]] = -1e10;
+        for (int i = 0; i < eos_len; i++) {
+            logits[bi * vocab_size + eos_token_id[i]] = -1e10;
         }
     }
 }
 
 template <>
-__global__ inline void min_length_logits_process<half>(
+__global__ inline void min_vocab_size_process<half>(
     half *logits,
     const int64_t *cur_len,
     const int64_t *min_len,
     const int64_t *eos_token_id,
     const int64_t bs,
-    const int64_t length_logits,
-    const int64_t length_eos_token_id) {
+    const int64_t vocab_size,
+    const int64_t eos_len) {
     int bi = threadIdx.x;
     if (bi >= bs) return;
     if (cur_len[bi] < 0) {
         return;
     }
     if (cur_len[bi] < min_len[bi]) {
-        for (int i = 0; i < length_eos_token_id; i++) {
-            logits[bi * length_logits + eos_token_id[i]] = -1e4;
+        for (int i = 0; i < eos_len; i++) {
+            logits[bi * vocab_size + eos_token_id[i]] = -1e4;
         }
     }
 }
@@ -62,22 +62,22 @@ __global__ void update_repeat_times(const int64_t *pre_ids,
                                     int *repeat_times,
                                     int *is_repeated,
                                     const int64_t bs,
-                                    const int64_t length_logits,
-                                    const int64_t length_pre_ids,
-                                    const int64_t length_prompt_ids) {
+                                    const int64_t vocab_size,
+                                    const int64_t max_dec_len,
+                                    const int64_t max_model_len) {
     int64_t bi = blockIdx.x;
     if (cur_len[bi] < 0) {
         return;
     }
     const int64_t prompt_len_now = prompt_len[bi];
     int64_t tid = threadIdx.x;
-    const int64_t *prompt_now = prompt_ids + bi * length_prompt_ids;
-    const int64_t *pre_ids_now = pre_ids + bi * length_pre_ids;
-    int *repeat_times_now = repeat_times + bi * length_logits;
-    int *is_repeated_now = is_repeated + bi * length_logits;
-    const int64_t loop_len = prompt_len_now > length_pre_ids ? prompt_len_now : length_pre_ids;
+    const int64_t *prompt_now = prompt_ids + bi * max_model_len;
+    const int64_t *pre_ids_now = pre_ids + bi * max_dec_len;
+    int *repeat_times_now = repeat_times + bi * vocab_size;
+    int *is_repeated_now = is_repeated + bi * vocab_size;
+    const int64_t loop_len = prompt_len_now > max_dec_len ? prompt_len_now : max_dec_len;
     for (int64_t i = tid; i < loop_len; i += blockDim.x) {
-        if (i < length_pre_ids) {
+        if (i < max_dec_len) {
             int64_t id = pre_ids_now[i];
             if (id >= 0) {
                 atomicAdd(&repeat_times_now[id], 1);
@@ -85,7 +85,7 @@ __global__ void update_repeat_times(const int64_t *pre_ids,
             }
         }
         if (i < prompt_len_now) {
-            int64_t id = prompt_ids[i];
+            int64_t id = prompt_now[i];
             if (id >= 0) {
                 atomicAdd(&is_repeated_now[id], 1);
             }
@@ -102,18 +102,19 @@ __global__ void update_value_by_repeat_times(const int *repeat_times,
                                              const float *temperatures,
                                              T *logits,
                                              const int64_t bs,
-                                             const int64_t length_logits) {
+                                             const int64_t vocab_size) {
     int bi = blockIdx.x;
     int tid = threadIdx.x;
-    T *logits_now = logits + bi * length_logits;
-    const int *repeat_times_now = repeat_times + bi * length_logits;
+    T *logits_now = logits + bi * vocab_size;
+    const int *repeat_times_now = repeat_times + bi * vocab_size;
+    const int *is_repeated_now = is_repeated + bi * vocab_size;
     float alpha = static_cast<float>(penalty_scores[bi]);
     float beta = static_cast<float>(frequency_score[bi]);
     float gamma = static_cast<float>(presence_score[bi]);
-    for (int i = tid; i < length_logits; i += blockDim.x) {
+    for (int i = tid; i < vocab_size; i += blockDim.x) {
         int times = repeat_times_now[i];
         float logit_now = static_cast<float>(logits_now[i]);
-        if (is_repeated[i] != 0) {
+        if (is_repeated_now[i] != 0) {
             logit_now = logit_now < 0 ? logit_now * alpha : logit_now / alpha;
         }
         if (times != 0) {
@@ -127,14 +128,14 @@ template <typename T>
 __global__ void ban_bad_words(T *logits,
                               const int64_t *bad_words_list,
                               const int64_t bs,
-                              const int64_t length_logits,
-                              const int64_t length_bad_words) {
+                              const int64_t vocab_size,
+                              const int64_t bad_words_len) {
     const int bi = blockIdx.x;
     int tid = threadIdx.x;
-    T *logits_now = logits + bi * length_logits;
-    for (int i = tid; i < length_bad_words; i += blockDim.x) {
+    T *logits_now = logits + bi * vocab_size;
+    for (int i = tid; i < bad_words_len; i += blockDim.x) {
         const int64_t bad_words_token_id = bad_words_list[i];
-        if (bad_words_token_id >= length_logits || bad_words_token_id < 0) continue;
+        if (bad_words_token_id >= vocab_size || bad_words_token_id < 0) continue;
         logits_now[bad_words_token_id] = -1e10;
     }
 }
@@ -168,24 +169,24 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
         paddle::full(shape, 0, paddle::DataType::INT32, pre_ids.place());
     int64_t bs = shape[0];
 
-    int64_t length_logits = shape[1];
-    int64_t length_pre_ids = pre_ids.shape()[1];
-    int64_t length_bad_words = bad_tokens.shape()[0];
-    int64_t length_eos_token_id = eos_token_id.shape()[0];
-    int64_t length_prompt_ids = prompt_ids.shape()[1];
+    int64_t vocab_size = shape[1];
+    int64_t max_dec_len = pre_ids.shape()[1];
+    int64_t bad_words_len = bad_tokens.shape()[0];
+    int64_t eos_len = eos_token_id.shape()[0];
+    int64_t max_model_len = prompt_ids.shape()[1];
 
     int block_size = (bs + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
-    min_length_logits_process<<<1, block_size, 0, cu_stream>>>(
+    min_vocab_size_process<<<1, block_size, 0, cu_stream>>>(
         reinterpret_cast<DataType_ *>(
             const_cast<data_t *>(logits.data<data_t>())),
         cur_len.data<int64_t>(),
         min_len.data<int64_t>(),
         eos_token_id.data<int64_t>(),
         bs,
-        length_logits,
-        length_eos_token_id);
+        vocab_size,
+        eos_len);
 
-    block_size = (length_pre_ids + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
+    block_size = (max_dec_len + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
 #ifdef PADDLE_WITH_COREX
     block_size = std::min(block_size, 512);
 #else
@@ -199,11 +200,11 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
         repeat_times.data<int>(),
         is_repeated.data<int>(),
         bs,
-        length_logits,
-        length_pre_ids,
-        length_prompt_ids);
+        vocab_size,
+        max_dec_len,
+        max_model_len);
 
-    block_size = (length_logits + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
+    block_size = (vocab_size + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
 #ifdef PADDLE_WITH_COREX
     block_size = std::min(block_size, 512);
 #else
@@ -222,9 +223,9 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
         reinterpret_cast<DataType_ *>(
             const_cast<data_t *>(logits.data<data_t>())),
         bs,
-        length_logits);
+        vocab_size);
 
-    block_size = (length_bad_words + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
+    block_size = (bad_words_len + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
 #ifdef PADDLE_WITH_COREX
     block_size = std::min(block_size, 512);
 #else
@@ -235,8 +236,8 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
             const_cast<data_t *>(logits.data<data_t>())),
         bad_tokens.data<int64_t>(),
         bs,
-        length_logits,
-        length_bad_words);
+        vocab_size,
+        bad_words_len);
 }
 
 void TokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
