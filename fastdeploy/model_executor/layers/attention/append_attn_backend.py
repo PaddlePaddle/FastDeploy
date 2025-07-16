@@ -206,7 +206,7 @@ class AppendAttentionBackend(AttentionBackend):
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
             forward_meta.padding_offset,
-            forward_meta.cum_offsets,
+            forward_meta.cu_seqlens_q,
             metadata.block_tables,
             metadata.encoder_batch_ids,
             metadata.encoder_tile_ids_per_batch,

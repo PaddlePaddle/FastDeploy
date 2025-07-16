@@ -422,7 +422,6 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& padding_offsets,
-    const paddle::Tensor& cum_offsets,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& kv_batch_ids,
     const paddle::Tensor& kv_tile_ids,
@@ -450,7 +449,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
   const int token_num = qkv_dims[0];
   const int max_blocks_per_seq = block_tables.dims()[1];
   const int block_size = key_cache.dims()[2];
-  const int batch_size = cum_offsets.dims()[0];
+  const int batch_size = seq_lens_this_time.dims()[0];
   const int kv_num_heads = key_cache_dims[1];
   const int head_dim = key_cache_dims[3];
   const int num_heads = qkv_dims[qkv_dims.size() - 1] / head_dim - 2 * kv_num_heads;
@@ -463,7 +462,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
   meta_data.q_num_heads = num_heads;
   meta_data.max_blocks_per_seq = max_blocks_per_seq;
   meta_data.block_size = block_size;
-  meta_data.batch_size = cum_offsets.dims()[0];
+  meta_data.batch_size = seq_lens_this_time.dims()[0];
 
   phi::GPUContext* dev_ctx = static_cast<phi::GPUContext*>(phi::DeviceContextPool::Instance().Get(qkv.place()));
 
@@ -528,7 +527,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
         seq_lens_this_time,
         seq_lens_decoder,
         padding_offsets,
-        cum_offsets,
+        cu_seqlens_q,
         block_tables,
         kv_batch_ids,
         kv_tile_ids,
@@ -595,7 +594,6 @@ PD_BUILD_STATIC_OP(gqa_rope_write_cache)
              "seq_lens_encoder",
              "seq_lens_decoder",
              "padding_offsets",
-             "cum_offsets",
              "block_tables",
              "kv_batch_ids",
              "kv_tile_ids_per_batch",
