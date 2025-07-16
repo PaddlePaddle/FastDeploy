@@ -389,7 +389,7 @@ class DFNRopeVisionBlock(nn.Layer):
         nn (_type_): _description_
     """
 
-    def __init__(self, config, attn_implementation: str = "sdpa") -> None:
+    def __init__(self, config, tensor_parallel_degree: int, attn_implementation: str = "sdpa") -> None:
         """_summary_
 
         Args:
@@ -404,12 +404,12 @@ class DFNRopeVisionBlock(nn.Layer):
         self.attn = VisionFlashAttention2(
             config.embed_dim,
             num_heads=config.num_heads,
-            tensor_parallel_degree=config.tensor_parallel_degree)
+            tensor_parallel_degree=tensor_parallel_degree)
         self.mlp = VisionMlp(
             dim=config.embed_dim,
             hidden_dim=mlp_hidden_dim,
             hidden_act=config.hidden_act,
-            tensor_parallel_degree=config.tensor_parallel_degree)
+            tensor_parallel_degree=tensor_parallel_degree)
         self.config = config
 
     def forward(self,
@@ -490,26 +490,26 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
     config_class = DFNRopeVisionTransformerConfig
 
     def __init__(self, config, prefix_name: str = "") -> None:
-        super().__init__(config)
-        self.spatial_merge_size = config.spatial_merge_size
+        super().__init__(config.vision_config)
+        self.spatial_merge_size = config.vision_config.spatial_merge_size
         self.prefix_name = prefix_name
         self.patch_embed = PatchEmbed(
-            patch_size=config.patch_size,
-            in_channels=config.in_channels,
-            embed_dim=config.embed_dim,
+            patch_size=config.vision_config.patch_size,
+            in_channels=config.vision_config.in_channels,
+            embed_dim=config.vision_config.embed_dim,
         )
 
-        head_dim = config.embed_dim // config.num_heads
+        head_dim = config.vision_config.embed_dim // config.vision_config.num_heads
         self.rotary_pos_emb = VisionRotaryEmbedding(head_dim // 2)
 
         self.blocks = nn.LayerList(
-            [DFNRopeVisionBlock(config) for _ in range(config.depth)])
+            [DFNRopeVisionBlock(config.vision_config, config.pretrained_config.tensor_parallel_degree) for _ in range(config.vision_config.depth)])
 
         assert (
-            config.hidden_size == config.embed_dim
+            config.vision_config.hidden_size == config.vision_config.embed_dim
         ), "in DFNRope, vit's config.hidden must be equal to config.embed_dim"
         # self.merger = PatchMerger(dim=config.hidden_size, context_dim=config.embed_dim)
-        self.ln = nn.LayerNorm(config.hidden_size, epsilon=1e-6)
+        self.ln = nn.LayerNorm(config.vision_config.hidden_size, epsilon=1e-6)
 
     def get_dtype(self) -> paddle.dtype:
         """_summary_
