@@ -417,7 +417,10 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_decoder"][idx:idx + 1] = 0
             self.share_inputs["step_idx"][idx:idx + 1] = 0
             self.share_inputs["max_dec_len"][idx:idx + 1] = max_dec_len
+            self.share_inputs["min_dec_len"][idx:idx + 1] = max_dec_len
             self.share_inputs["stop_flags"][idx:idx + 1] = False
+            self.share_inputs["top_p"][idx:idx + 1] = 0.0
+            self.share_inputs["temperature"][idx:idx + 1] = 1
 
             self.share_inputs["first_token_ids"][
                 idx:idx + 1] = self.share_inputs["input_ids"][idx:idx + 1, :1]
@@ -759,6 +762,11 @@ class GPUModelRunner(ModelRunnerBase):
             caches=self.share_inputs["caches"]
         )
 
+        # Update Batch type for cuda graph
+        # TODO(gongshaotian): Use seq_lens_encoder to set is_decode_batch
+        is_decode_batch = not ((self.share_inputs["seq_lens_this_time"] > 1).sum() > 0)
+        self.forward_meta.step_use_cudagraph = self.use_cudagraph and is_decode_batch
+
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
@@ -850,6 +858,7 @@ class GPUModelRunner(ModelRunnerBase):
         Args:
             num_tokens:
             expected_decode_len: Expected number of tokens generated
+            in_capturing: Is cuda graph in capturing state
         """
         self._dummy_prefill_inputs(num_tokens=num_tokens,
                                    batch_size=batch_size,
@@ -864,17 +873,16 @@ class GPUModelRunner(ModelRunnerBase):
             # 1. Initialize forward meta and attention meta data
             self._prepare_inputs()
 
-            # 2. Prepare lora
+            # 2. Padding inputs for cuda graph
+            self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
+            self.padding_cudagraph_inputs()
 
             # 3. Run model
-            is_decode_batch = not ((self.share_inputs["seq_lens_this_time"]
-                                    > 1).sum() > 0)
-            self.forward_meta.step_use_cudagraph = is_decode_batch and in_capturing
-            self.forward_meta.is_decode_batch = is_decode_batch
             if self.enable_mm:
-                hidden_states = model_output = self.model(self.share_inputs["ids_remove_padding"],
+                model_output = self.model(self.share_inputs["ids_remove_padding"],
                                                             self.share_inputs["image_features"],
                                                             self.forward_meta)
+                hidden_states = model_output
             else:
                 model_output = self.model(
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
@@ -1113,9 +1121,7 @@ class GPUModelRunner(ModelRunnerBase):
             We plan to replace it with 'ModelForwardBatch'.
             intermediate_tensors:
         """
-        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
-        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
-        # when there is data on other runner, the current runner is required to execute part of the model.
+        # NOTE(wufeisheng): For Expert Parallelism
         if not self.not_need_stop():
             self._execute_empty_input()
             return None
@@ -1126,18 +1132,14 @@ class GPUModelRunner(ModelRunnerBase):
         self.sampler.pre_process(skip_idx_list)
 
         # 2. Padding inputs for cuda graph
+        self.padding_cudagraph_inputs()
 
         # 3. Execute model
-        # TODO(gongshaotian): Use seq_lens_encoder to set is_decode_batch
-        is_decode_batch = not ((self.share_inputs["seq_lens_this_time"]
-                                > 1).sum() > 0)
-        self.forward_meta.step_use_cudagraph = self.use_cudagraph and is_decode_batch
-        self.forward_meta.is_decode_batch = is_decode_batch
-
         if self.enable_mm:
-            hidden_states = model_output = self.model(self.share_inputs["ids_remove_padding"],
+            model_output = self.model(self.share_inputs["ids_remove_padding"],
                                                         self.share_inputs["image_features"],
                                                         self.forward_meta)
+            hidden_states = model_output
         else:
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
@@ -1398,6 +1400,18 @@ class GPUModelRunner(ModelRunnerBase):
         self.initialize_kv_cache()
         self.dynamic_weight_manager._log_memory(
             "dynamic weight manager update all memory")
+
+    def padding_cudagraph_inputs(self) -> None:
+        """
+        Clean buffers used for the CUDA graph when replaying the CUDA graph with the padded batch.
+        In FastDeploy, almost all input tensors have a buffer. So, just keep the buffer clean when replaying the CUDA graph with the padded batch.
+        """
+        # TODO(gongshaotian): Use more efficient implementation
+        if self.forward_meta.step_use_cudagraph:
+            num_empty_batch = (self.forward_meta.seq_lens_this_time == 0).sum()
+            for i in range(1, num_empty_batch + 1):
+                self.forward_meta.decoder_batch_ids[-i] = 0
+                self.forward_meta.decoder_tile_ids_per_batch[-i] = 0
 
     def _init_image_preprocess(self) -> None:
         processor = DataProcessor(

@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 import argparse
+import json
 import time
 from typing import List
 
@@ -516,18 +517,11 @@ def parse_args():
                             "default is None. The priority of this configuration "\
                             "is lower than that of the config file. " \
                             "More complex quantization methods need to be configured via the config file.")
-    parser.add_argument("--enable_static_graph_inference",
-                        action='store_true',
-                        help="Whether to use static mode; if enabled, " \
-                             "'paddle.to_static' will be used to convert dynamic to static.")
-    parser.add_argument("--use_cudagraph",
-                        action='store_true',
-                        help="Flags to enable cuda graph.")
-    parser.add_argument("--max_capture_batch_size",
-                        type=int,
-                        default=64,
-                        help="Maximum Batch Size for Cuda Graph Capture. " \
-                        "If max_capture_batch_size set 64, FastDeploy will capture batch size in [1, 64]")
+    parser.add_argument("--graph_optimiaztion_config",
+                        type=json.loads,
+                        default=None,
+                        help=" Configation of Graph optimization backend. "
+    )
     parser.add_argument("--guided_decoding_backend",
                         type=str,
                         default="off",
@@ -579,9 +573,10 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     load_config = LoadConfig(vars(args))
 
     graph_opt_config = GraphOptimizationConfig(
-                        args.enable_static_graph_inference,
-                        args.max_capture_batch_size,
-                        vars(args))
+        use_cudagraph=args.graph_optimiaztion_config["use_cudagraph"],
+        graph_opt_level=args.graph_optimiaztion_config["graph_opt_level"],
+        cudagraph_capture_sizes=args.graph_optimiaztion_config["cudagraph_capture_sizes"]
+    )
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank

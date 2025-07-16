@@ -18,7 +18,8 @@ from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
 
-from fastdeploy.engine.config import (CacheConfig, Config, ModelConfig,
+from fastdeploy.engine.config import (CacheConfig, Config,
+                                      GraphOptimizationConfig, ModelConfig,
                                       ParallelConfig, SpeculativeConfig,
                                       TaskOption)
 from fastdeploy.scheduler.config import SchedulerConfig
@@ -283,20 +284,13 @@ class EngineArgs:
     """
     SplitWise Use, Results Writer Batch Size
     """
-    enable_static_graph_inference: bool = False
-    """
-    Whether to use static mode
-    """
     use_cudagraph: bool = False
     """
     Flags to enable Cuda Graph
     """
-    max_capture_batch_size: int = 64
+    graph_optimization_config: Optional[Dict[str, Any]] = None
     """
-    Maximum Batch Size for Cuda Graph Capture
-    NOTE: Now only support to capture continuous batch size,
-    Example:
-        max_capture_batch_size=64, FastDeploy will capture graphs for batches [1,64].
+    Configuration for graph optimization backend execution.
     """
 
     enable_logprob: bool = False
@@ -399,21 +393,14 @@ class EngineArgs:
                                  "default is None. The priority of this configuration "\
                                  "is lower than that of the config file. " \
                                  "More complex quantization methods need to be configured via the config file.")
-
-        model_group.add_argument(
-            "--enable-static-graph-inference",
-            action='store_true',
-            default=EngineArgs.enable_static_graph_inference,
-            help="Whether to use static mode; if enabled, " \
-                 "'paddle.to_static' will be used to convert dynamic to static.")
         model_group.add_argument("--use-cudagraph",
                                  action='store_true',
                                  default=EngineArgs.use_cudagraph,
                                  help="Flags to enable cuda graph.")
-        model_group.add_argument("--max-capture-batch-size",
-                                 type=int,
-                                 default=EngineArgs.max_capture_batch_size,
-                                 help="Maximum of Batch Size for Warm Up.")
+        model_group.add_argument("--graph-optimization-config",
+                                 type=json.loads,
+                                 default=EngineArgs.graph_optimization_config,
+                                 help="")
         model_group.add_argument("--guided-decoding-backend",
                                  type=str,
                                  default=EngineArgs.guided_decoding_backend,
@@ -757,6 +744,15 @@ class EngineArgs:
             enable_custom_all_reduce=self.enable_custom_all_reduce
         )
 
+    def create_graph_optimization_config(self) -> GraphOptimizationConfig:
+        """
+        Create and retuan a GraphOptimizationConfig object based on the current settings.
+        """
+        if self.graph_optimization_config is not None:
+            return GraphOptimizationConfig(**self.graph_optimization_config)
+        else:
+            return GraphOptimizationConfig()
+
     def create_engine_config(self) -> Config:
         """
         Create and return a Config object based on the current settings.
@@ -771,8 +767,9 @@ class EngineArgs:
             else:
                 self.max_num_batched_tokens = self.max_model_len
         scheduler_cfg = self.create_scheduler_config()
-
         speculative_cfg = self.create_speculative_config()
+        graph_opt_cfg = self.create_graph_optimization_config()
+        graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
 
         assert not (self.use_cudagraph and self.enable_prefix_caching), \
             "Prefix caching cannot be used with CUDA graph"
@@ -804,9 +801,7 @@ class EngineArgs:
             max_num_partial_prefills=self.max_num_partial_prefills,
             max_long_partial_prefills=self.max_long_partial_prefills,
             long_prefill_token_threshold=self.long_prefill_token_threshold,
-            enable_static_graph_inference=self.enable_static_graph_inference,
-            use_cudagraph=self.use_cudagraph,
-            max_capture_batch_size=self.max_capture_batch_size,
+            graph_optimization_config=graph_opt_cfg,
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             enable_custom_all_reduce=self.enable_custom_all_reduce,
