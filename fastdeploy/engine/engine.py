@@ -937,7 +937,7 @@ class LLMEngine(object):
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
-            "FLAGS_max_partition_size": 32768,
+            "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 32768)),
             "FLAGS_hardamard_moe_block_size": 128,
         }
         # environment variables needed by Dy2St
