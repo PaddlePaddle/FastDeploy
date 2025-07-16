@@ -78,8 +78,8 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         self.quant_config = quant_config
 
     def create_weights(self, layer):
-        layer.linear_weight_shape.reverse()
-        layer.linear_weight_scale = layer.create_parameter(
+        layer.weight_shape.reverse()
+        layer.weight_scale = layer.create_parameter(
             shape=[
                 (layer.output_size + self.quant_config.weight_block_size[0] -
                  1) // self.quant_config.weight_block_size[0],
@@ -95,8 +95,8 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         weight_tensor = weights.transpose([1, 0])
         quanted_weight_tensor, weight_block_scale_tensor = (
             per_block_cast_to_fp8(weight_tensor))
-        layer.linear_weight.copy_(quanted_weight_tensor, False)
-        layer.linear_weight_scale.set_value(weight_block_scale_tensor)
+        layer.weight.copy_(quanted_weight_tensor, False)
+        layer.weight_scale.set_value(weight_block_scale_tensor)
 
     def process_prequanted_weights(self, layer, state_dict):
         """
@@ -106,10 +106,10 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         weight_scale = get_tensor(state_dict.pop(layer.weight_scale_key))
 
         quant_weight = quant_weight.transpose([1, 0]).contiguous()
-        layer.linear_weight.copy_(quant_weight.view("float8_e4m3fn"), False)
+        layer.weight.copy_(quant_weight.view("float8_e4m3fn"), False)
 
         weight_scale = weight_scale.transpose([1, 0])
-        layer.linear_weight_scale.set_value(weight_scale)
+        layer.weight_scale.set_value(weight_scale)
 
     def apply(self, layer, x):
         x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
@@ -119,9 +119,9 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         import fastdeploy.model_executor.ops.gpu.deep_gemm as deep_gemm
         deep_gemm.gemm_fp8_fp8_bf16_nt(
             (x, x_scale_tensor),
-            (layer.linear_weight, layer.linear_weight_scale),
+            (layer.weight, layer.weight_scale),
             linear_out,
         )
         if layer.with_bias:
-            linear_out = paddle.add(linear_out, layer.linear_bias)
+            linear_out = paddle.add(linear_out, layer.bias)
         return linear_out

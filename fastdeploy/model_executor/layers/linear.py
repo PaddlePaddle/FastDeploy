@@ -79,7 +79,7 @@ class LinearBase(nn.Layer):
 
         self._dtype = self._helper.get_default_dtype()
         self.weight_dtype = self._dtype
-        self.linear_weight_shape = [
+        self.weight_shape = [
             self.input_size,
             self.output_size,
         ]
@@ -96,16 +96,16 @@ class LinearBase(nn.Layer):
         """
         if self.skip_quant:
             self.weight_dtype = self._dtype
-        self.linear_weight = self.create_parameter(
-            shape=self.linear_weight_shape,
+        self.weight = self.create_parameter(
+            shape=self.weight_shape,
             dtype=self.weight_dtype,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
 
-        self.linear_bias = None
+        self.bias = None
         if self.with_bias:
-            self.linear_bias = self.create_parameter(
+            self.bias = self.create_parameter(
                 shape=[self.output_size],
                 dtype=self._dtype,
                 is_bias=True,
@@ -136,7 +136,7 @@ class LinearBase(nn.Layer):
         if self.fd_config.quant_config:
             self.quant_method.process_loaded_weights(self, weight_tensor)
         else:
-            self.linear_weight.set_value(weight_tensor)
+            self.weight.set_value(weight_tensor)
 
     def load_state_dict(self, state_dict: dict):
         """
@@ -157,7 +157,7 @@ class LinearBase(nn.Layer):
         if self.with_bias:
             bias_tensor = paddle.to_tensor(
                 get_tensor(state_dict.pop(self.bias_key)))
-            self.linear_bias.set_value(bias_tensor)
+            self.bias.set_value(bias_tensor)
 
     def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:
         """
@@ -175,9 +175,9 @@ class LinearBase(nn.Layer):
         if self.fd_config.quant_config:
             linear_out = self.quant_method.apply(self, x)
         else:
-            linear_out = paddle.matmul(x, self.linear_weight)
+            linear_out = paddle.matmul(x, self.weight)
             if self.with_bias:
-                linear_out = paddle.add(linear_out, self.linear_bias)
+                linear_out = paddle.add(linear_out, self.bias)
 
         return linear_out
 
@@ -219,7 +219,7 @@ class ReplicatedLinear(LinearBase):
                          skip_quant=skip_quant)
 
         self.hidden_size = fd_config.model_config.hidden_size
-        self.linear_weight_shape = [
+        self.weight_shape = [
             self.input_size,
             self.output_size,
         ]
@@ -266,13 +266,13 @@ class ColumnParallelLinear(LinearBase):
                          with_bias=with_bias,
                          add_bias=add_bias,
                          skip_quant=skip_quant)
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.input_size = input_size
         self.output_size = divide(
             output_size,
             self.nranks)  # Split the output_size using TP inference.
         self.hidden_size = fd_config.model_config.hidden_size
-        self.linear_weight_shape = [
+        self.weight_shape = [
             self.input_size,
             self.output_size,
         ]
@@ -286,26 +286,26 @@ class ColumnParallelLinear(LinearBase):
         """
         if self.skip_quant:
             self.weight_dtype = self._dtype
-        self.linear_weight = self.create_parameter(
-            shape=self.linear_weight_shape,
+        self.weight = self.create_parameter(
+            shape=self.weight_shape,
             dtype=self.weight_dtype,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
         if self.nranks > 0:
             # col parallel
-            _set_var_distributed(self.linear_weight, split_axis=1)
+            _set_var_distributed(self.weight, split_axis=1)
 
-        self.linear_bias = None
+        self.bias = None
         if self.with_bias:
-            self.linear_bias = self.create_parameter(
+            self.bias = self.create_parameter(
                 shape=[self.output_size],
                 dtype=self._dtype,
                 is_bias=True,
             )
             if self.nranks > 0:
                 # col parallel
-                _set_var_distributed(self.linear_bias, split_axis=1)
+                _set_var_distributed(self.bias, split_axis=1)
 
         # smooth quant
         self.linear_shift = None
@@ -333,7 +333,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         skip_quant: bool = False,
     ):
         """
-        Initialize the fused ffn1 Linear layer with given parameters.
+        Initialize the fused up_gate_proj Linear layer with given parameters.
 
         Args:
             fd_config (FDConfig): Inference-related parameters.
@@ -348,7 +348,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         """
         self.activation = activation
         self.hidden_size = fd_config.model_config.hidden_size
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
 
         super().__init__(fd_config=fd_config,
                          prefix=prefix,
@@ -410,7 +410,7 @@ class QKVParallelLinear(ColumnParallelLinear):
         self.kv_num_heads = fd_config.model_config.num_key_value_heads
         self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.num_heads_per_rank = divide(self.num_heads, self.nranks)
         if self.kv_num_heads < self.nranks and self.nranks % self.kv_num_heads == 0:
             self.kv_num_heads_per_rank = 1
@@ -443,6 +443,13 @@ class QKVParallelLinear(ColumnParallelLinear):
             q_tensor = get_tensor(state_dict.pop(q_weight_key))
             k_tensor = get_tensor(state_dict.pop(k_weight_key))
             v_tensor = get_tensor(state_dict.pop(v_weight_key))
+
+            if self.kv_num_heads < self.nranks:
+                sharedkv_index = (self.fd_config.parallel_config.tensor_parallel_rank * self.kv_num_heads) // self.nranks
+                sharedkv_start = sharedkv_index * self.head_dim
+                sharedkv_end = sharedkv_start + self.head_dim
+                k_tensor = k_tensor[ : , sharedkv_start : sharedkv_end]
+                v_tensor = v_tensor[ : , sharedkv_start : sharedkv_end]
             weight_tensor = paddle.concat([q_tensor, k_tensor, v_tensor],
                                           axis=-1).transpose([1, 0])
             weight_tensor = weight_tensor.reshape([
@@ -455,7 +462,7 @@ class QKVParallelLinear(ColumnParallelLinear):
         if self.fd_config.quant_config:
             self.quant_method.process_loaded_weights(self, weight_tensor)
         else:
-            self.linear_weight.set_value(weight_tensor)
+            self.weight.set_value(weight_tensor)
 
     def load_state_dict(self, state_dict: dict):
         """
@@ -478,7 +485,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             if self.bias_key in state_dict.keys():
                 bias_tensor = paddle.to_tensor(
                     get_tensor(state_dict.pop(self.bias_key)))
-                self.linear_bias.set_value(bias_tensor)
+                self.bias.set_value(bias_tensor)
             else:
                 q_bias_key = self.bias_key.replace("qkv_proj", "q_proj")
                 k_bias_key = self.bias_key.replace("qkv_proj", "k_proj")
@@ -487,7 +494,7 @@ class QKVParallelLinear(ColumnParallelLinear):
                 k_bias = get_tensor(state_dict.pop(k_bias_key))
                 v_bias = get_tensor(state_dict.pop(v_bias_key))
                 qkv_bias = paddle.concat([q_bias, k_bias, v_bias], axis=-1)
-            self.linear_bias.set_value(qkv_bias)
+            self.bias.set_value(qkv_bias)
 
 
 class RowParallelLinear(LinearBase):
@@ -538,7 +545,7 @@ class RowParallelLinear(LinearBase):
                          skip_quant=skip_quant)
         self.fd_config = fd_config
         self.skip_quant = False
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
         self.num_heads = fd_config.model_config.num_attention_heads // self.nranks
@@ -547,7 +554,7 @@ class RowParallelLinear(LinearBase):
         self.input_size = divide(input_size, self.nranks)
         self.output_size = output_size
 
-        self.linear_weight_shape = [
+        self.weight_shape = [
             self.input_size,
             self.output_size,
         ]
@@ -567,16 +574,16 @@ class RowParallelLinear(LinearBase):
         if self.skip_quant:
             self.weight_dtype = self._dtype
 
-        self.linear_weight = self.create_parameter(
-            shape=self.linear_weight_shape,
+        self.weight = self.create_parameter(
+            shape=self.weight_shape,
             dtype=self.weight_dtype,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
 
-        self.linear_bias = None
+        self.bias = None
         if self.with_bias:
-            self.linear_bias = self.create_parameter(
+            self.bias = self.create_parameter(
                 shape=[self.hidden_size],
                 dtype=self._dtype,
                 is_bias=True,
@@ -584,7 +591,7 @@ class RowParallelLinear(LinearBase):
 
         if self.nranks > 0:
             # row parallel
-            _set_var_distributed(self.linear_weight, split_axis=0)
+            _set_var_distributed(self.weight, split_axis=0)
 
         # smooth quant
         self.linear_shift = None
@@ -594,7 +601,7 @@ class RowParallelLinear(LinearBase):
         if self.fd_config.quant_config:
             out = self.quant_method.apply(self, x)
         else:
-            out = paddle.matmul(x, self.linear_weight)
+            out = paddle.matmul(x, self.weight)
 
         if self.reduce_results and self.nranks > 1:
             tensor_model_parallel_all_reduce(out)
@@ -631,7 +638,7 @@ class KVBatchLinear(LinearBase):
             with_bias (bool): Whether to include bias or not. Defaults to False.
             skip_quant (bool): Whether to skip quantization. Defaults to False.
         """
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.kv_lora_rank = kv_lora_rank
         self.num_attention_heads = num_attention_heads
         self.qk_nope_head_dim = qk_nope_head_dim

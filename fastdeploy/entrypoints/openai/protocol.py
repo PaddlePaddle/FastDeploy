@@ -542,3 +542,12 @@ class ChatCompletionRequest(BaseModel):
                 )
 
         return data
+      
+      
+class ControlSchedulerRequest(BaseModel):
+    """
+    Control scheduler request to the engine.
+    """
+    reset: Optional[bool] = False
+    load_shards_num: Optional[int] = None
+    reallocate_shard: Optional[bool] = False

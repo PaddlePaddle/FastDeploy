@@ -88,7 +88,7 @@ class GCUFlashAttnBackend(AttentionBackend):
         self.num_heads = num_heads
         self.head_dim = head_dim
         self.scaling = 1.0 / (self.head_dim**0.5)
-        self.num_layers = fd_config.model_config.num_layers
+        self.num_layers = fd_config.model_config.num_hidden_layers
         self.position_ids_base = paddle.arange(self.max_seq_len)
 
         # TODO(zhengjun): Need to adapt the allocation logic and

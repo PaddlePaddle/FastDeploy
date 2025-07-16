@@ -59,24 +59,22 @@ class VocabParallelEmbedding(nn.Layer):
         self.world_size: int = hcg.get_model_parallel_world_size()
         self.ring_id: int = hcg.get_model_parallel_group().id
         self.use_rope: bool = fd_config.model_config.use_rope
-        self.rope_head_dim: int = fd_config.model_config.rope_head_dim
         self.use_ep: bool = fd_config.parallel_config.use_ep
         self.hidden_dropout_prob: float = fd_config.model_config.hidden_dropout_prob
         self.initializer_range: float = fd_config.model_config.initializer_range
         self.sequence_parallel: bool = fd_config.parallel_config.sequence_parallel
         self.max_position_embeddings: int = fd_config.model_config.max_position_embeddings
-        self.freeze_embedding: bool = fd_config.model_config.freeze_embedding
         self.tie_word_embeddings: bool = fd_config.model_config.tie_word_embeddings
         self.params_dtype: str = params_dtype
 
         if self.use_ep:
-            self.word_embeddings = nn.Embedding(
+            self.embeddings = nn.Embedding(
                 num_embeddings,
                 embedding_dim,
             )
         else:
             if not self.column_cut:
-                self.word_embeddings = fleet.meta_parallel.VocabParallelEmbedding(
+                self.embeddings = fleet.meta_parallel.VocabParallelEmbedding(
                     num_embeddings,
                     embedding_dim,
                     mp_group=fleet.get_hybrid_communicate_group().
@@ -87,13 +85,13 @@ class VocabParallelEmbedding(nn.Layer):
                 )
             else:
                 # column cut embedding
-                self.word_embeddings = nn.Embedding(
+                self.embeddings = nn.Embedding(
                     num_embeddings,
                     embedding_dim // self.world_size,
                 )
 
-                self.word_embeddings.weight.is_distributed = True
-                self.word_embeddings.weight.split_axis = 1
+                self.embeddings.weight.is_distributed = True
+                self.embeddings.weight.split_axis = 1
 
         if not self.use_rope:
             self.position_embeddings = nn.Embedding(
@@ -104,15 +102,7 @@ class VocabParallelEmbedding(nn.Layer):
             )
 
         self.prefix = prefix
-
-        if self.freeze_embedding:
-            self.word_embeddings.weight.learning_rate = 0.0
-            if not self.use_rope:
-                self.position_embeddings.weight.learning_rate = 0.0
-
         self.dropout = nn.Dropout(self.hidden_dropout_prob)
-        self.rope_head_dim_shape_tensor = paddle.ones((self.rope_head_dim),
-                                                      dtype="int8")
 
     def load_state_dict(self, state_dict: Dict[str,
                                                paddle.Tensor | np.ndarray]):
@@ -123,11 +113,11 @@ class VocabParallelEmbedding(nn.Layer):
             state_dict (dict): A dictionary containing the checkpoint weights and biases.
         """
         if self.tie_word_embeddings:
-            self.word_embeddings.weight.set_value(
+            self.embeddings.weight.set_value(
                 get_tensor(state_dict[self.prefix + ".weight"]).astype(
                     paddle.get_default_dtype()))
         else:
-            self.word_embeddings.weight.set_value(
+            self.embeddings.weight.set_value(
                 get_tensor(state_dict.pop(self.prefix + ".weight")).astype(
                     paddle.get_default_dtype()))
 
@@ -143,10 +133,10 @@ class VocabParallelEmbedding(nn.Layer):
             Tensor: Embedded tensor representation of the input IDs.
         """
         if self.use_ep:
-            input_embedings = self.word_embeddings(ids_remove_padding)
+            input_embedings = self.embeddings(ids_remove_padding)
         else:
             if self.column_cut:
-                input_embedings = self.word_embeddings(ids_remove_padding)
+                input_embedings = self.embeddings(ids_remove_padding)
                 inputs_embeds_temp = []
                 paddle.distributed.all_gather(
                     inputs_embeds_temp,
@@ -157,6 +147,6 @@ class VocabParallelEmbedding(nn.Layer):
                 )
                 input_embedings = paddle.concat(inputs_embeds_temp, -1)
             else:
-                input_embedings = self.word_embeddings(ids_remove_padding)
+                input_embedings = self.embeddings(ids_remove_padding)
 
         return input_embedings

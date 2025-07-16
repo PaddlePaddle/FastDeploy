@@ -260,7 +260,7 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
   echo -e "${GREEN}wheel saved under${NONE} ${RED}${BOLD}./dist${NONE}"
 
   # install wheel
-  ${python} -m pip install ./dist/fastdeploy*.whl --force-reinstall --no-cache-dir
+  ${python} -m pip install ./dist/fastdeploy*.whl
   echo -e "${GREEN}wheel install success${NONE}\n"
 
   trap : 0

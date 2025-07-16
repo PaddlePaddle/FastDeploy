@@ -43,27 +43,27 @@ def load_ep_checkpoint(model_path: str,
     filtered_map = {k: v for k, v in weight_list.items() if "experts" not in k}
     num_local_ffn_keys = []
 
-    for i in range(config.moe_layer_start_index, config.num_layers):
+    for i in range(config.moe_layer_start_index, config.num_hidden_layers):
         for j in range(
                 config.num_experts_start_offset,
                 config.num_experts_start_offset + config.num_experts_per_rank,
         ):
-            ffn1_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight"
-            ffn2_key = (f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight")
+            up_gate_proj_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight"
+            down_proj_key = (f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight")
 
-            ffn1_quant_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.quant_weight"
-            ffn2_quant_key = (
+            up_gate_proj_quant_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.quant_weight"
+            down_proj_quant_key = (
                 f"ernie.layers.{i}.mlp.experts.{j}.down_proj.quant_weight")
 
-            ffn1_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight_scale"
-            ffn2_scale_key = (
+            up_gate_proj_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight_scale"
+            down_proj_scale_key = (
                 f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight_scale")
-            num_local_ffn_keys.append(ffn1_key)
-            num_local_ffn_keys.append(ffn2_key)
-            num_local_ffn_keys.append(ffn1_quant_key)
-            num_local_ffn_keys.append(ffn2_quant_key)
-            num_local_ffn_keys.append(ffn1_scale_key)
-            num_local_ffn_keys.append(ffn2_scale_key)
+            num_local_ffn_keys.append(up_gate_proj_key)
+            num_local_ffn_keys.append(down_proj_key)
+            num_local_ffn_keys.append(up_gate_proj_quant_key)
+            num_local_ffn_keys.append(down_proj_quant_key)
+            num_local_ffn_keys.append(up_gate_proj_scale_key)
+            num_local_ffn_keys.append(down_proj_scale_key)
 
     for k in num_local_ffn_keys:
         if k in weight_list:
@@ -250,7 +250,8 @@ def load_composite_checkpoint(
     # 2. Tensor Parallel (TP)
     # 3. Pre-sharded (pre-split)
     """
-    if fd_config.parallel_config.use_ep:
+    if fd_config.parallel_config.use_ep and \
+        fd_config.speculative_config.model_type != "mtp":
         state_dict = load_ep_checkpoint(model_path,
                                         fd_config.model_config,
                                         return_numpy=True)
@@ -260,7 +261,7 @@ def load_composite_checkpoint(
             and os.path.isdir(os.path.join(model_path, f))
         ]
         if len(rank_dirs) > 1:
-            if fd_config.parallel_config.tensor_parallel_degree != len(
+            if fd_config.parallel_config.tensor_parallel_size != len(
                     rank_dirs):
                 raise ValueError(
                     f"Your model only supports loading with tp{len(rank_dirs)}"
@@ -282,7 +283,7 @@ def load_composite_checkpoint(
             else:
                 state_dict = load_tp_checkpoint(model_path,
                                                 cls,
-                                                fd_config.model_config,
+                                                fd_config.model_config.pretrained_config,
                                                 return_numpy=return_numpy)
     if not state_dict:
         raise ValueError("weight not found in state_dict !")

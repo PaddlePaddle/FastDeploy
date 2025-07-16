@@ -38,14 +38,14 @@ class XPUMoEMethod(MoEMethodBase):
         Paddle cutlass create weight process.
         """
         # bf16
-        ffn1_weights, ffn2_weights = layer.extract_moe_ffn_weights(state_dict)
-        for weights in [ffn1_weights, ffn2_weights]:
+        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        for weights in [up_gate_proj_weights, down_proj_weights]:
             for idx, weight in enumerate(weights):
                 weights[idx] = weight.transpose([1, 0])
-        stacked_ffn1_weights = paddle.stack(ffn1_weights, axis=0)
-        stacked_ffn2_weights = paddle.stack(ffn2_weights, axis=0)
+        stacked_up_gate_proj_weights = paddle.stack(up_gate_proj_weights, axis=0)
+        stacked_down_proj_weights = paddle.stack(down_proj_weights, axis=0)
         for idx, weight_tensor in enumerate(
-            [stacked_ffn1_weights, stacked_ffn2_weights]):
+            [stacked_up_gate_proj_weights, stacked_down_proj_weights]):
             weight_name = self.added_weight_attrs[idx]
             setattr(
                 layer, weight_name,
@@ -71,13 +71,13 @@ class XPUMoEMethod(MoEMethodBase):
             x,
             layer.gate_weight.transpose([1, 0]),
             layer.gate_correction_bias,
-            layer.moe_ffn1_weight,
-            layer.moe_ffn2_weight,
-            None,  # ffn1 bias
-            None,  # ffn2 bias
-            None,  # ffn1 scale
-            None,  # ffn2 scale
-            None, # ffn1_in_scale
+            layer.up_gate_proj_weight,
+            layer.down_proj_weight,
+            None,  # up_gate_proj bias
+            None,  # down_proj bias
+            None,  # up_gate_proj scale
+            None,  # down_proj scale
+            None, # up_gate_proj_in_scale
             "", # moe_quant_type
             layer.top_k,
             False,  # moe group, used in deepseek
@@ -129,20 +129,20 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
         """
         Paddle cutlass create weight process.
         """
-        ffn1_weights, ffn2_weights = layer.extract_moe_ffn_weights(state_dict)
-        assert len(ffn1_weights) == layer.num_local_experts
-        assert len(ffn2_weights) == layer.num_local_experts
-        assert ffn1_weights[0].shape == [
+        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        assert len(up_gate_proj_weights) == layer.num_local_experts
+        assert len(down_proj_weights) == layer.num_local_experts
+        assert up_gate_proj_weights[0].shape == [
             layer.hidden_size, layer.moe_intermediate_size * 2
         ]
-        assert ffn2_weights[0].shape == [
+        assert down_proj_weights[0].shape == [
             layer.moe_intermediate_size, layer.hidden_size
         ]
 
-        added_weight_attrs = ["moe_ffn1_weight", "moe_ffn2_weight"]
-        added_scale_attrs = ["moe_ffn1_weight_scale", "moe_ffn2_weight_scale"]
+        added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
+        added_scale_attrs = ["up_gate_proj_weight_scale", "down_proj_weight_scale"]
 
-        for idx, weight_tensor in enumerate([ffn1_weights, ffn2_weights]):
+        for idx, weight_tensor in enumerate([up_gate_proj_weights, down_proj_weights]):
             weight_name = added_weight_attrs[idx]
             scale_name = added_scale_attrs[idx]
 
@@ -189,16 +189,16 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
             x,
             layer.gate_weight.transpose([1, 0]),
             layer.gate_correction_bias,
-            layer.moe_ffn1_weight,
-            layer.moe_ffn2_weight,
-            None,  # ffn1 bias
-            None,  # ffn2 bias
-            (layer.moe_ffn1_weight_scale
-             if hasattr(layer, "moe_ffn1_weight_scale") else None),
-            (layer.moe_ffn2_weight_scale
-             if hasattr(layer, "moe_ffn2_weight_scale") else None),
-            (layer.moe_ffn2_in_scale
-             if hasattr(layer, "moe_ffn2_in_scale") else None),
+            layer.up_gate_proj_weight,
+            layer.down_proj_weight,
+            None,  # up_gate_proj bias
+            None,  # down_proj bias
+            (layer.up_gate_proj_weight_scale
+             if hasattr(layer, "up_gate_proj_weight_scale") else None),
+            (layer.down_proj_weight_scale
+             if hasattr(layer, "down_proj_weight_scale") else None),
+            (layer.down_proj_in_scale
+             if hasattr(layer, "down_proj_in_scale") else None),
             self.moe_quant_type,
             layer.top_k,
             False,  # moe group, used in deepseek
