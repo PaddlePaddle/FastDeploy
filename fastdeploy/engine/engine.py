@@ -1051,7 +1051,11 @@ class LLMEngine(object):
             if value:
                 arguments = arguments + f" --{worker_flag}"
         if self.cfg.nnode > 1:
-            pd_cmd = pd_cmd + f" --master {self.cfg.dist_init_addr}" + f" --nnodes {str(self.cfg.nnode)}"
+            pd_cmd = pd_cmd + (
+                f" --master {self.cfg.dist_init_addr}"
+                f" --nnodes {str(self.cfg.nnode)}"
+                f" --rank {str(self.cfg.node_rank)}"
+            )
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
         llm_logger.info("Launch worker service command: {}".format(pd_cmd))
         p = subprocess.Popen(
