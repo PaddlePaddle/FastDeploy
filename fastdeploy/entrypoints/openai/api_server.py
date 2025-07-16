@@ -24,6 +24,7 @@ import zmq
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST
+from fastdeploy.metrics.trace_util import inject_to_metadata
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
@@ -210,6 +211,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
             return JSONResponse(
                 content={"error": "Worker Service Not Healthy"},
                 status_code=304)
+    inject_to_metadata(request)
     generator = await app.state.chat_handler.create_chat_completion(request)
 
     if isinstance(generator, ErrorResponse):
