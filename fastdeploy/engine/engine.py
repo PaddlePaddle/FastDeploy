@@ -948,6 +948,8 @@ class LLMEngine(object):
             os.getenv("SOT_UNSAFE_CACHE_FASTPATH", default="1"),
             "SOT_ENABLE_0_SIZE_FALLBACK":
             os.getenv("SOT_ENABLE_0_SIZE_FALLBACK", default="0"),
+            "SOT_SPECIALIZED_DIM_NUMBERS":
+            os.getenv("SOT_SPECIALIZED_DIM_NUMBERS", default="no"),
             "FLAGS_specialize_device_in_dy2st":
             os.getenv("FLAGS_specialize_device_in_dy2st", default="1"),
             "FLAGS_enable_async_fast_gc":

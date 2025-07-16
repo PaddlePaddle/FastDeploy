@@ -17,6 +17,7 @@
 import logging
 from dataclasses import dataclass
 from enum import IntEnum, auto
+from typing import Annotated, Optional
 
 import paddle
 
