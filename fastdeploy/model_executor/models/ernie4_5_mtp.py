@@ -263,9 +263,9 @@ class Ernie4_5_MTPModel(nn.Layer):
         super().__init__()
 
         self.num_layers = fd_config.model_config.num_hidden_layers
-        self.embeddings = fd_config.speculative_config.sharing_model.model.embeddings
+        self.embed_tokens = fd_config.speculative_config.sharing_model.ernie.embed_tokens
 
-        self.hidden_layers = nn.LayerList([
+        self.layers = nn.LayerList([
             Ernie4_5_DecoderLayer(
                 fd_config=fd_config,
                 prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.{i}")
@@ -302,13 +302,13 @@ class Ernie4_5_MTPModel(nn.Layer):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        # self.embeddings.load_state_dict(state_dict)
+        # self.embed_tokens.load_state_dict(state_dict)
         self.enorm.load_state_dict(state_dict)
         self.hnorm.load_state_dict(state_dict)
         self.eh_proj.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
-            self.hidden_layers[i].load_state_dict(state_dict)
+            self.layers[i].load_state_dict(state_dict)
 
     def forward(
         self,
@@ -319,7 +319,7 @@ class Ernie4_5_MTPModel(nn.Layer):
         """
         forward
         """
-        inputs_embedding = self.embeddings(
+        inputs_embedding = self.embed_tokens(
             ids_remove_padding=ids_remove_padding)
         inputs_embedding = paddle.concat(
             [self.enorm(inputs_embedding),
@@ -328,7 +328,7 @@ class Ernie4_5_MTPModel(nn.Layer):
         hidden_states = self.eh_proj(inputs_embedding)
         residual = None
         for i in range(self.num_layers):
-            hidden_states, residual = self.hidden_layers[i](forward_meta,
+            hidden_states, residual = self.layers[i](forward_meta,
                                                             hidden_states,
                                                             residual)
 
@@ -349,7 +349,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
         """
         super(Ernie4_5_MTPForCausalLM, self).__init__(fd_config)
         self.fd_config = fd_config
-        self.model = Ernie4_5_MTPModel(fd_config=fd_config)
+        self.ernie = Ernie4_5_MTPModel(fd_config=fd_config)
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
@@ -373,10 +373,10 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.model.load_state_dict(state_dict)
+        self.ernie.load_state_dict(state_dict)
         # if self.tie_word_embeddings:
-        #     self.lm_head.out_linear.weight.set_value(
-        #         self.model.embeddings.word_embeddings.weight.transpose([1, 0]))
+        #     self.lm_head.linear.weight.set_value(
+        #         self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
         # else:
         #     self.lm_head.load_state_dict(state_dict)
 
@@ -400,7 +400,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
         )
         for i in range(self.fd_config.model_config.moe_layer_start_index,
                        self.fd_config.model_config.num_hidden_layers):
-            self.model.hidden_layers[i].mlp.fused_moe(fake_hidden_states)
+            self.ernie.layers[i].mlp.fused_moe(fake_hidden_states)
 
     def forward(
         self,
@@ -411,7 +411,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
         """
         forward
         """
-        hidden_states = self.model(ids_remove_padding, previous_hidden_states,
+        hidden_states = self.ernie(ids_remove_padding, previous_hidden_states,
                                    forward_meta)
 
         return hidden_states

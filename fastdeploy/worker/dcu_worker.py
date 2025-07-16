@@ -13,18 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-import gc
 import time
-from typing import List, Optional
 
 import paddle
-import paddle.nn as nn
 
 from fastdeploy.config import FDConfig
-from fastdeploy.engine.request import Request
 from fastdeploy.utils import get_logger
-from fastdeploy.worker.gpu_model_runner import GPUModelRunner
-from fastdeploy.worker.output import ModelRunnerOutput
 from fastdeploy.worker.gpu_worker import GpuWorker
 
 logger = get_logger("dcu_worker", "dcu_worker.log")
@@ -97,7 +91,7 @@ class DcuWorker(GpuWorker):
         paddle_peak_increase = paddle_reserved_mem_after_run - paddle_allocated_mem_before_run
         available_kv_cache_memory = total_gpu_memory * \
             self.parallel_config.gpu_memory_utilization - after_used_gpu_memory - paddle_peak_increase
-        available_kv_cache_memory += model_block_memory_used * self.parallel_config.max_block_num
+        available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
 
         end_time = time.perf_counter()
         logger.info(
