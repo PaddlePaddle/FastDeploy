@@ -15,7 +15,7 @@
 #include "helper.h"
 
 template <typename T>
-__global__ inline void min_vocab_size_process(T *logits,
+__global__ inline void min_length_logits_process(T *logits,
                                                  const int64_t *cur_len,
                                                  const int64_t *min_len,
                                                  const int64_t *eos_token_id,
@@ -35,7 +35,7 @@ __global__ inline void min_vocab_size_process(T *logits,
 }
 
 template <>
-__global__ inline void min_vocab_size_process<half>(
+__global__ inline void min_length_logits_process<half>(
     half *logits,
     const int64_t *cur_len,
     const int64_t *min_len,
@@ -176,7 +176,7 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
     int64_t max_model_len = prompt_ids.shape()[1];
 
     int block_size = (bs + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
-    min_vocab_size_process<<<1, block_size, 0, cu_stream>>>(
+    min_length_logits_process<<<1, block_size, 0, cu_stream>>>(
         reinterpret_cast<DataType_ *>(
             const_cast<data_t *>(logits.data<data_t>())),
         cur_len.data<int64_t>(),
