@@ -117,18 +117,18 @@ public:
 
   void
   ComputeFFN(const paddle::Tensor *input, const paddle::Tensor *gate_weight,
-             const paddle::Tensor *ffn1_weight,
-             const paddle::Tensor *ffn1_scale, const paddle::Tensor *ffn1_bias,
-             const paddle::Tensor *ffn2_weight,
-             const paddle::Tensor *ffn2_scale, const paddle::Tensor *ffn2_bias,
+             const paddle::Tensor *up_gate_proj_weight,
+             const paddle::Tensor *up_gate_proj_scale, const paddle::Tensor *up_gate_proj_bias,
+             const paddle::Tensor *down_proj_weight,
+             const paddle::Tensor *down_proj_scale, const paddle::Tensor *down_proj_bias,
              const paddle::Tensor *moe_token_type_ids, const int moe_topk,
              const bool group_moe, const bool norm_topk_prob,
              const float routed_scaling_factor, const std::string moe_type,
              paddle::Tensor *output) {
     auto *input_activations = input->data<T>();
     auto *gating_weights = gate_weight->data<float>();
-    const T *fc1_expert_biases = ffn1_bias ? ffn1_bias->data<T>() : nullptr;
-    const T *fc2_expert_biases = ffn2_bias ? ffn2_bias->data<T>() : nullptr;
+    const T *fc1_expert_biases = up_gate_proj_bias ? up_gate_proj_bias->data<T>() : nullptr;
+    const T *fc2_expert_biases = down_proj_bias ? down_proj_bias->data<T>() : nullptr;
 
     auto *output_ = output->data<T>();
     auto stream = input->stream();
@@ -136,7 +136,7 @@ public:
     auto input_type = input->dtype();
 
     auto input_dims = input->dims();
-    auto ffn1_dims = ffn1_weight->dims();
+    auto up_gate_proj_dims = up_gate_proj_weight->dims();
     int64_t token_num = 0;
     if (input_dims.size() == 3) {
       token_num = input_dims[0] * input_dims[1];
@@ -145,12 +145,12 @@ public:
     }
     const int64_t num_rows = token_num;
 
-    const int64_t hidden_size = ffn1_dims[1];
+    const int64_t hidden_size = up_gate_proj_dims[1];
     int64_t inter_dim = 0;
     if (moe_type == "qkv") {
-      inter_dim = ffn1_dims[2] * ffn1_dims[3] * ffn1_dims[4];
+      inter_dim = up_gate_proj_dims[2] * up_gate_proj_dims[3] * up_gate_proj_dims[4];
     } else {
-      inter_dim = ffn1_dims[2];
+      inter_dim = up_gate_proj_dims[2];
     }
 
     if (gemm_method_ == "weight_only_int4") {
@@ -158,7 +158,7 @@ public:
     }
 
     const int64_t inter_size = inter_dim;
-    const int64_t num_experts = ffn1_dims[0];
+    const int64_t num_experts = up_gate_proj_dims[0];
     const int64_t k = moe_topk;
 
     int64_t bytes =
@@ -260,38 +260,38 @@ public:
                                      total_rows_before_expert_, stream);
 
     if (gemm_method_ == "weight_only_int8") {
-      typename Int8Traits::Arguments ffn1_quant_args;
+      typename Int8Traits::Arguments up_gate_proj_quant_args;
       int8_moe_gemm_runner_->moe_gemm_bias_act(
           reinterpret_cast<NvType *>(permuted_data_),
-          reinterpret_cast<const uint8_t *>(ffn1_weight->data<int8_t>()),
-          reinterpret_cast<const NvType *>(ffn1_scale->data<T>()),
+          reinterpret_cast<const uint8_t *>(up_gate_proj_weight->data<int8_t>()),
+          reinterpret_cast<const NvType *>(up_gate_proj_scale->data<T>()),
           reinterpret_cast<const NvType *>(fc1_expert_biases),
           reinterpret_cast<NvType *>(fc1_out), total_rows_before_expert_,
           -1, // useless
           expanded_active_expert_rows, inter_size, hidden_size, num_experts,
-          ffn1_quant_args, "none", stream);
+          up_gate_proj_quant_args, "none", stream);
     } else if (gemm_method_ == "weight_only_int4") {
-      typename Int4Traits::Arguments ffn1_quant_args;
+      typename Int4Traits::Arguments up_gate_proj_quant_args;
       int4_moe_gemm_runner_->moe_gemm_bias_act(
           reinterpret_cast<NvType *>(permuted_data_),
           reinterpret_cast<const cutlass::uint4b_t *>(
-              ffn1_weight->data<int8_t>()),
-          reinterpret_cast<const NvType *>(ffn1_scale->data<T>()),
+              up_gate_proj_weight->data<int8_t>()),
+          reinterpret_cast<const NvType *>(up_gate_proj_scale->data<T>()),
           reinterpret_cast<const NvType *>(fc1_expert_biases),
           reinterpret_cast<NvType *>(fc1_out), total_rows_before_expert_,
           -1, // useless
           expanded_active_expert_rows, inter_size, hidden_size, num_experts,
-          ffn1_quant_args, "none", stream);
+          up_gate_proj_quant_args, "none", stream);
     } else {
-      typename Fp16Traits::Arguments ffn1_quant_args;
+      typename Fp16Traits::Arguments up_gate_proj_quant_args;
       fp16_moe_gemm_runner_->moe_gemm_bias_act(
           reinterpret_cast<NvType *>(permuted_data_),
-          reinterpret_cast<const NvType *>(ffn1_weight->data<T>()), nullptr,
+          reinterpret_cast<const NvType *>(up_gate_proj_weight->data<T>()), nullptr,
           reinterpret_cast<const NvType *>(fc1_expert_biases),
           reinterpret_cast<NvType *>(fc1_out), total_rows_before_expert_,
           -1, // useless
           expanded_active_expert_rows, inter_size, hidden_size, num_experts,
-          ffn1_quant_args, "none", stream);
+          up_gate_proj_quant_args, "none", stream);
     }
 
     if (moe_type == "ffn") {
@@ -304,35 +304,35 @@ public:
       T *fc2_result = fc2_output_tensor.data<T>();
 
       if (gemm_method_ == "weight_only_int8") {
-        typename Int8Traits::Arguments ffn2_quant_args;
+        typename Int8Traits::Arguments down_proj_quant_args;
         int8_moe_gemm_runner_->moe_gemm(
             reinterpret_cast<NvType *>(act_out),
-            reinterpret_cast<const uint8_t *>(ffn2_weight->data<int8_t>()),
-            reinterpret_cast<const NvType *>(ffn2_scale->data<T>()),
+            reinterpret_cast<const uint8_t *>(down_proj_weight->data<int8_t>()),
+            reinterpret_cast<const NvType *>(down_proj_scale->data<T>()),
             reinterpret_cast<NvType *>(fc2_result), total_rows_before_expert_,
             -1, // useless
             expanded_active_expert_rows, hidden_size, inter_size / 2,
-            num_experts, ffn2_quant_args, stream);
+            num_experts, down_proj_quant_args, stream);
       } else if (gemm_method_ == "weight_only_int4") {
-        typename Int4Traits::Arguments ffn2_quant_args;
+        typename Int4Traits::Arguments down_proj_quant_args;
         int4_moe_gemm_runner_->moe_gemm(
             reinterpret_cast<NvType *>(act_out),
             reinterpret_cast<const cutlass::uint4b_t *>(
-                ffn2_weight->data<int8_t>()),
-            reinterpret_cast<const NvType *>(ffn2_scale->data<T>()),
+                down_proj_weight->data<int8_t>()),
+            reinterpret_cast<const NvType *>(down_proj_scale->data<T>()),
             reinterpret_cast<NvType *>(fc2_result), total_rows_before_expert_,
             -1, // useless
             expanded_active_expert_rows, hidden_size, inter_size / 2,
-            num_experts, ffn2_quant_args, stream);
+            num_experts, down_proj_quant_args, stream);
       } else {
-        typename Fp16Traits::Arguments ffn2_quant_args;
+        typename Fp16Traits::Arguments down_proj_quant_args;
         fp16_moe_gemm_runner_->moe_gemm(
             reinterpret_cast<NvType *>(act_out),
-            reinterpret_cast<const NvType *>(ffn2_weight->data<T>()), nullptr,
+            reinterpret_cast<const NvType *>(down_proj_weight->data<T>()), nullptr,
             reinterpret_cast<NvType *>(fc2_result), total_rows_before_expert_,
             -1, // useless
             expanded_active_expert_rows, hidden_size, inter_size / 2,
-            num_experts, ffn2_quant_args, stream);
+            num_experts, down_proj_quant_args, stream);
       }
 
       finalize_moe_routing_kernelLauncher<T>::run(

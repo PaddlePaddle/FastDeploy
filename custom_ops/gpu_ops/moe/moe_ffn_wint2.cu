@@ -23,17 +23,17 @@
 template <typename DataT, typename NvType, typename WeightSavedT, cutlass::WintQuantMethod QuantMethod>
 void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
                   const paddle::Tensor& tokens_expert_prefix_sum,
-                  const paddle::Tensor& ffn1_weight,
-                  const paddle::Tensor& ffn2_weight,
-                  const paddle::Tensor* ffn1_bias,
-                  const paddle::Tensor* ffn1_super_scale,
-                  const paddle::Tensor* ffn2_super_scale,
-                  const paddle::Tensor* ffn1_local_scale,
-                  const paddle::Tensor* ffn1_code_scale,
-                  const paddle::Tensor* ffn1_code_zp,
-                  const paddle::Tensor* ffn2_local_scale,
-                  const paddle::Tensor* ffn2_code_scale,
-                  const paddle::Tensor* ffn2_code_zp,
+                  const paddle::Tensor& up_gate_proj_weight,
+                  const paddle::Tensor& down_proj_weight,
+                  const paddle::Tensor* up_gate_proj_bias,
+                  const paddle::Tensor* up_gate_proj_super_scale,
+                  const paddle::Tensor* down_proj_super_scale,
+                  const paddle::Tensor* up_gate_proj_local_scale,
+                  const paddle::Tensor* up_gate_proj_code_scale,
+                  const paddle::Tensor* up_gate_proj_code_zp,
+                  const paddle::Tensor* down_proj_local_scale,
+                  const paddle::Tensor* down_proj_code_scale,
+                  const paddle::Tensor* down_proj_code_zp,
                   paddle::Tensor fc1_out,
                   paddle::Tensor ffn_out,
                   const int64_t total_rows_in_ll_else_minus1,
@@ -46,15 +46,15 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
     using WeightOnlyTraits = cutlass::WintQuantTraits<NvType, QuantMethod>;
     using WeightType = typename WeightOnlyTraits::WeightType;
 
-    typename WeightOnlyTraits::Arguments ffn1_quant_args;
-    typename WeightOnlyTraits::Arguments ffn2_quant_args;
+    typename WeightOnlyTraits::Arguments up_gate_proj_quant_args;
+    typename WeightOnlyTraits::Arguments down_proj_quant_args;
     if constexpr (QuantMethod == cutlass::WintQuantMethod::kWeightOnlyInt2) {
-        ffn1_quant_args.local_scale_ptr = ffn1_local_scale->data<uint8_t>();
-        ffn1_quant_args.code_scale_ptr = ffn1_code_scale->data<float>();
-        ffn1_quant_args.code_zp_ptr = ffn1_code_zp->data<float>();
-        ffn2_quant_args.local_scale_ptr = ffn2_local_scale->data<uint8_t>();
-        ffn2_quant_args.code_scale_ptr = ffn2_code_scale->data<float>();
-        ffn2_quant_args.code_zp_ptr = ffn2_code_zp->data<float>();
+        up_gate_proj_quant_args.local_scale_ptr = up_gate_proj_local_scale->data<uint8_t>();
+        up_gate_proj_quant_args.code_scale_ptr = up_gate_proj_code_scale->data<float>();
+        up_gate_proj_quant_args.code_zp_ptr = up_gate_proj_code_zp->data<float>();
+        down_proj_quant_args.local_scale_ptr = down_proj_local_scale->data<uint8_t>();
+        down_proj_quant_args.code_scale_ptr = down_proj_code_scale->data<float>();
+        down_proj_quant_args.code_zp_ptr = down_proj_code_zp->data<float>();
     }
 
     auto moe_gemm_runner = MoeGemmRunner<NvType, WeightOnlyTraits>();
@@ -62,9 +62,9 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
 
     moe_gemm_runner.moe_gemm_bias_act(
         reinterpret_cast<const NvType*>(permute_input.data<DataT>()),
-        reinterpret_cast<const WeightType*>(ffn1_weight.data<WeightSavedT>()),
-        reinterpret_cast<const NvType*>(ffn1_super_scale ? ffn1_super_scale->data<DataT>() : nullptr),
-        reinterpret_cast<const NvType*>(ffn1_bias ? ffn1_bias->data<DataT>() : nullptr),
+        reinterpret_cast<const WeightType*>(up_gate_proj_weight.data<WeightSavedT>()),
+        reinterpret_cast<const NvType*>(up_gate_proj_super_scale ? up_gate_proj_super_scale->data<DataT>() : nullptr),
+        reinterpret_cast<const NvType*>(up_gate_proj_bias ? up_gate_proj_bias->data<DataT>() : nullptr),
         reinterpret_cast<NvType*>(fc1_out.data<DataT>()),
         const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
         total_rows_in_ll_else_minus1,
@@ -72,7 +72,7 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
         inter_size,
         hidden_size,
         num_experts,
-        ffn1_quant_args,
+        up_gate_proj_quant_args,
         "none",
         stream);
 
@@ -85,8 +85,8 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
 
     moe_gemm_runner.moe_gemm(
         reinterpret_cast<const NvType*>(act_out.data<DataT>()),
-        reinterpret_cast<const WeightType*>(ffn2_weight.data<WeightSavedT>()),
-        reinterpret_cast<const NvType*>(ffn2_super_scale ? ffn2_super_scale->data<DataT>() : nullptr),
+        reinterpret_cast<const WeightType*>(down_proj_weight.data<WeightSavedT>()),
+        reinterpret_cast<const NvType*>(down_proj_super_scale ? down_proj_super_scale->data<DataT>() : nullptr),
         reinterpret_cast<NvType*>(ffn_out.data<DataT>()),
         const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
         total_rows_in_ll_else_minus1,
@@ -94,24 +94,24 @@ void WeightOnlyMoeFFNKernel(const paddle::Tensor& permute_input,
         hidden_size,
         inter_size / 2,
         num_experts,
-        ffn2_quant_args,
+        down_proj_quant_args,
         stream);
 }
 
 template <paddle::DataType T>
 void MoeFFNWint2Kernel(const paddle::Tensor& permute_input,
                        const paddle::Tensor& tokens_expert_prefix_sum,
-                       const paddle::Tensor& ffn1_weight,
-                       const paddle::Tensor& ffn2_weight,
-                       const paddle::optional<paddle::Tensor>& ffn1_bias,
-                       const paddle::optional<paddle::Tensor>& ffn1_scale,
-                       const paddle::optional<paddle::Tensor>& ffn2_scale,
-                       const paddle::optional<paddle::Tensor>& ffn1_local_scale,
-                       const paddle::optional<paddle::Tensor>& ffn1_code_scale,
-                       const paddle::optional<paddle::Tensor>& ffn1_code_zp,
-                       const paddle::optional<paddle::Tensor>& ffn2_local_scale,
-                       const paddle::optional<paddle::Tensor>& ffn2_code_scale,
-                       const paddle::optional<paddle::Tensor>& ffn2_code_zp,
+                       const paddle::Tensor& up_gate_proj_weight,
+                       const paddle::Tensor& down_proj_weight,
+                       const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
+                       const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
+                       const paddle::optional<paddle::Tensor>& down_proj_scale,
+                       const paddle::optional<paddle::Tensor>& up_gate_proj_local_scale,
+                       const paddle::optional<paddle::Tensor>& up_gate_proj_code_scale,
+                       const paddle::optional<paddle::Tensor>& up_gate_proj_code_zp,
+                       const paddle::optional<paddle::Tensor>& down_proj_local_scale,
+                       const paddle::optional<paddle::Tensor>& down_proj_code_scale,
+                       const paddle::optional<paddle::Tensor>& down_proj_code_zp,
                        paddle::Tensor ffn_out,
                        bool used_in_ep_low_latency) {
     using namespace phi;
@@ -121,12 +121,12 @@ void MoeFFNWint2Kernel(const paddle::Tensor& permute_input,
     auto place = permute_input.place();
 
     assert(permute_input.dims().size() == 3 || permute_input.dims().size() == 2);
-    assert(ffn1_weight.dims().size() == 3);
+    assert(up_gate_proj_weight.dims().size() == 3);
 
-    const int num_experts = ffn1_weight.dims()[0];
+    const int num_experts = up_gate_proj_weight.dims()[0];
     const int hidden_size = permute_input.dims()[permute_input.dims().size() - 1];
 
-    int inter_dim = ffn1_weight.dims()[1] * ffn1_weight.dims()[2] / hidden_size;
+    int inter_dim = up_gate_proj_weight.dims()[1] * up_gate_proj_weight.dims()[2] / hidden_size;
 
     const int64_t inter_size = inter_dim * 4;
 
@@ -160,17 +160,17 @@ void MoeFFNWint2Kernel(const paddle::Tensor& permute_input,
     WeightOnlyMoeFFNKernel<data_t, NvType, uint8_t, cutlass::WintQuantMethod::kWeightOnlyInt2>(
         permute_input,
         tokens_expert_prefix_sum,
-        ffn1_weight,
-        ffn2_weight,
-        const_cast<paddle::Tensor*>(ffn1_bias.get_ptr()),
-        const_cast<paddle::Tensor*>(ffn1_scale.get_ptr()),
-        const_cast<paddle::Tensor*>(ffn2_scale.get_ptr()),
-        const_cast<paddle::Tensor*>(ffn1_local_scale.get_ptr()),
-        const_cast<paddle::Tensor*>(ffn1_code_scale.get_ptr()),
-        const_cast<paddle::Tensor*>(ffn1_code_zp.get_ptr()),
-        const_cast<paddle::Tensor*>(ffn2_local_scale.get_ptr()),
-        const_cast<paddle::Tensor*>(ffn2_code_scale.get_ptr()),
-        const_cast<paddle::Tensor*>(ffn2_code_zp.get_ptr()),
+        up_gate_proj_weight,
+        down_proj_weight,
+        const_cast<paddle::Tensor*>(up_gate_proj_bias.get_ptr()),
+        const_cast<paddle::Tensor*>(up_gate_proj_scale.get_ptr()),
+        const_cast<paddle::Tensor*>(down_proj_scale.get_ptr()),
+        const_cast<paddle::Tensor*>(up_gate_proj_local_scale.get_ptr()),
+        const_cast<paddle::Tensor*>(up_gate_proj_code_scale.get_ptr()),
+        const_cast<paddle::Tensor*>(up_gate_proj_code_zp.get_ptr()),
+        const_cast<paddle::Tensor*>(down_proj_local_scale.get_ptr()),
+        const_cast<paddle::Tensor*>(down_proj_code_scale.get_ptr()),
+        const_cast<paddle::Tensor*>(down_proj_code_zp.get_ptr()),
         fc1_out_tensor,
         ffn_out,
         total_rows_in_ll_else_minus1,
@@ -184,17 +184,17 @@ void MoeFFNWint2Kernel(const paddle::Tensor& permute_input,
 paddle::Tensor MoeExpertFFNWint2Func(
     const paddle::Tensor& permute_input,
     const paddle::Tensor& tokens_expert_prefix_sum,
-    const paddle::Tensor& ffn1_weight,
-    const paddle::Tensor& ffn2_weight,
-    const paddle::optional<paddle::Tensor>& ffn1_bias,
-    const paddle::optional<paddle::Tensor>& ffn1_scale,
-    const paddle::optional<paddle::Tensor>& ffn2_scale,
-    const paddle::optional<paddle::Tensor>& ffn1_local_scale,
-    const paddle::optional<paddle::Tensor>& ffn1_code_scale,
-    const paddle::optional<paddle::Tensor>& ffn1_code_zp,
-    const paddle::optional<paddle::Tensor>& ffn2_local_scale,
-    const paddle::optional<paddle::Tensor>& ffn2_code_scale,
-    const paddle::optional<paddle::Tensor>& ffn2_code_zp,
+    const paddle::Tensor& up_gate_proj_weight,
+    const paddle::Tensor& down_proj_weight,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
+    const paddle::optional<paddle::Tensor>& down_proj_scale,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_local_scale,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_code_scale,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_code_zp,
+    const paddle::optional<paddle::Tensor>& down_proj_local_scale,
+    const paddle::optional<paddle::Tensor>& down_proj_code_scale,
+    const paddle::optional<paddle::Tensor>& down_proj_code_zp,
     const bool used_in_ep_low_latency) {
 
     const auto dtype = permute_input.dtype();
@@ -204,34 +204,34 @@ paddle::Tensor MoeExpertFFNWint2Func(
         case paddle::DataType::BFLOAT16:
             MoeFFNWint2Kernel<paddle::DataType::BFLOAT16>(permute_input,
                                                           tokens_expert_prefix_sum,
-                                                          ffn1_weight,
-                                                          ffn2_weight,
-                                                          ffn1_bias,
-                                                          ffn1_scale,
-                                                          ffn2_scale,
-                                                          ffn1_local_scale,
-                                                          ffn1_code_scale,
-                                                          ffn1_code_zp,
-                                                          ffn2_local_scale,
-                                                          ffn2_code_scale,
-                                                          ffn2_code_zp,
+                                                          up_gate_proj_weight,
+                                                          down_proj_weight,
+                                                          up_gate_proj_bias,
+                                                          up_gate_proj_scale,
+                                                          down_proj_scale,
+                                                          up_gate_proj_local_scale,
+                                                          up_gate_proj_code_scale,
+                                                          up_gate_proj_code_zp,
+                                                          down_proj_local_scale,
+                                                          down_proj_code_scale,
+                                                          down_proj_code_zp,
                                                           ffn_out,
                                                           used_in_ep_low_latency);
             break;
         case paddle::DataType::FLOAT16:
             MoeFFNWint2Kernel<paddle::DataType::FLOAT16>(permute_input,
                                                          tokens_expert_prefix_sum,
-                                                         ffn1_weight,
-                                                         ffn2_weight,
-                                                         ffn1_bias,
-                                                         ffn1_scale,
-                                                         ffn2_scale,
-                                                         ffn1_local_scale,
-                                                         ffn1_code_scale,
-                                                         ffn1_code_zp,
-                                                         ffn2_local_scale,
-                                                         ffn2_code_scale,
-                                                         ffn2_code_zp,
+                                                         up_gate_proj_weight,
+                                                         down_proj_weight,
+                                                         up_gate_proj_bias,
+                                                         up_gate_proj_scale,
+                                                         down_proj_scale,
+                                                         up_gate_proj_local_scale,
+                                                         up_gate_proj_code_scale,
+                                                         up_gate_proj_code_zp,
+                                                         down_proj_local_scale,
+                                                         down_proj_code_scale,
+                                                         down_proj_code_zp,
                                                          ffn_out,
                                                          used_in_ep_low_latency);
             break;
@@ -244,49 +244,49 @@ paddle::Tensor MoeExpertFFNWint2Func(
 std::vector<paddle::Tensor> MoeExpertFFNWint2(
     const paddle::Tensor& permute_input,
     const paddle::Tensor& tokens_expert_prefix_sum,
-    const paddle::Tensor& ffn1_weight,
-    const paddle::Tensor& ffn2_weight,
-    const paddle::optional<paddle::Tensor>& ffn1_bias,
-    const paddle::optional<paddle::Tensor>& ffn1_scale,
-    const paddle::optional<paddle::Tensor>& ffn2_scale,
-    const paddle::optional<paddle::Tensor>& ffn1_local_scale,
-    const paddle::optional<paddle::Tensor>& ffn1_code_scale,
-    const paddle::optional<paddle::Tensor>& ffn1_code_zp,
-    const paddle::optional<paddle::Tensor>& ffn2_local_scale,
-    const paddle::optional<paddle::Tensor>& ffn2_code_scale,
-    const paddle::optional<paddle::Tensor>& ffn2_code_zp,
+    const paddle::Tensor& up_gate_proj_weight,
+    const paddle::Tensor& down_proj_weight,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
+    const paddle::optional<paddle::Tensor>& down_proj_scale,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_local_scale,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_code_scale,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_code_zp,
+    const paddle::optional<paddle::Tensor>& down_proj_local_scale,
+    const paddle::optional<paddle::Tensor>& down_proj_code_scale,
+    const paddle::optional<paddle::Tensor>& down_proj_code_zp,
     const bool used_in_ep_low_latency) {
 
     return {MoeExpertFFNWint2Func(permute_input,
                                   tokens_expert_prefix_sum,
-                                  ffn1_weight,
-                                  ffn2_weight,
-                                  ffn1_bias,
-                                  ffn1_scale,
-                                  ffn2_scale,
-                                  ffn1_local_scale,
-                                  ffn1_code_scale,
-                                  ffn1_code_zp,
-                                  ffn2_local_scale,
-                                  ffn2_code_scale,
-                                  ffn2_code_zp,
+                                  up_gate_proj_weight,
+                                  down_proj_weight,
+                                  up_gate_proj_bias,
+                                  up_gate_proj_scale,
+                                  down_proj_scale,
+                                  up_gate_proj_local_scale,
+                                  up_gate_proj_code_scale,
+                                  up_gate_proj_code_zp,
+                                  down_proj_local_scale,
+                                  down_proj_code_scale,
+                                  down_proj_code_zp,
                                   used_in_ep_low_latency)};
 }
 
 std::vector<std::vector<int64_t>> MoeExpertFFNWint2InferShape(
     const std::vector<int64_t>& permute_input_shape,
     const std::vector<int64_t>& tokens_expert_prefix_sum_shape,
-    const std::vector<int64_t>& ffn1_weight_shape,
-    const std::vector<int64_t>& ffn2_weight_shape,
-    const paddle::optional<std::vector<int64_t>>& ffn1_bias_shape,
-    const paddle::optional<std::vector<int64_t>>& ffn1_scale_shape,
-    const paddle::optional<std::vector<int64_t>>& ffn2_scale_shape,
-    const paddle::optional<std::vector<int64_t>>& ffn1_local_scale_shape,
-    const paddle::optional<std::vector<int64_t>>& ffn1_code_scale_shape,
-    const paddle::optional<std::vector<int64_t>>& ffn1_code_zp_shape,
-    const paddle::optional<std::vector<int64_t>>& ffn2_local_scale_shape,
-    const paddle::optional<std::vector<int64_t>>& ffn2_code_scale_shape,
-    const paddle::optional<std::vector<int64_t>>& ffn2_code_zp_shape,
+    const std::vector<int64_t>& up_gate_proj_weight_shape,
+    const std::vector<int64_t>& down_proj_weight_shape,
+    const paddle::optional<std::vector<int64_t>>& up_gate_proj_bias_shape,
+    const paddle::optional<std::vector<int64_t>>& up_gate_proj_scale_shape,
+    const paddle::optional<std::vector<int64_t>>& down_proj_scale_shape,
+    const paddle::optional<std::vector<int64_t>>& up_gate_proj_local_scale_shape,
+    const paddle::optional<std::vector<int64_t>>& up_gate_proj_code_scale_shape,
+    const paddle::optional<std::vector<int64_t>>& up_gate_proj_code_zp_shape,
+    const paddle::optional<std::vector<int64_t>>& down_proj_local_scale_shape,
+    const paddle::optional<std::vector<int64_t>>& down_proj_code_scale_shape,
+    const paddle::optional<std::vector<int64_t>>& down_proj_code_zp_shape,
     const bool used_in_ep_low_latency) {
 
     return {permute_input_shape};
@@ -295,17 +295,17 @@ std::vector<std::vector<int64_t>> MoeExpertFFNWint2InferShape(
 std::vector<paddle::DataType> MoeExpertFFNWint2InferDtype(
     const paddle::DataType &permute_input_dtype,
     const paddle::DataType &tokens_expert_prefix_sum_dtype,
-    const paddle::DataType &ffn1_weight_dtype,
-    const paddle::DataType &ffn2_weight_dtype,
-    const paddle::optional<paddle::DataType> &ffn1_bias_dtype,
-    const paddle::optional<paddle::DataType> &ffn1_scale_dtype,
-    const paddle::optional<paddle::DataType> &ffn2_scale_dtype,
-    const paddle::optional<paddle::DataType> &ffn1_local_scale_dtype,
-    const paddle::optional<paddle::DataType> &ffn1_code_scale_dtype,
-    const paddle::optional<paddle::DataType> &ffn1_code_zp_dtype,
-    const paddle::optional<paddle::DataType> &ffn2_local_scale_dtype,
-    const paddle::optional<paddle::DataType> &ffn2_code_scale_dtype,
-    const paddle::optional<paddle::DataType> &ffn2_code_zp_dtype,
+    const paddle::DataType &up_gate_proj_weight_dtype,
+    const paddle::DataType &down_proj_weight_dtype,
+    const paddle::optional<paddle::DataType> &up_gate_proj_bias_dtype,
+    const paddle::optional<paddle::DataType> &up_gate_proj_scale_dtype,
+    const paddle::optional<paddle::DataType> &down_proj_scale_dtype,
+    const paddle::optional<paddle::DataType> &up_gate_proj_local_scale_dtype,
+    const paddle::optional<paddle::DataType> &up_gate_proj_code_scale_dtype,
+    const paddle::optional<paddle::DataType> &up_gate_proj_code_zp_dtype,
+    const paddle::optional<paddle::DataType> &down_proj_local_scale_dtype,
+    const paddle::optional<paddle::DataType> &down_proj_code_scale_dtype,
+    const paddle::optional<paddle::DataType> &down_proj_code_zp_dtype,
     const bool used_in_ep_low_latency) {
 
     return {permute_input_dtype};
@@ -315,9 +315,9 @@ std::vector<paddle::DataType> MoeExpertFFNWint2InferDtype(
  * @brief Weight-Only Quantized Mixture of Experts (MoE) Feed-Forward Network Operator
  *
  * This operator performs the expert computation in MoE architecture, including:
- * 1. First linear transformation (FFN1) with optional quantization
+ * 1. First linear transformation (up_gate_proj) with optional quantization
  * 2. SwiGLU activation function
- * 3. Second linear transformation (FFN2) with optional quantization
+ * 3. Second linear transformation (down_proj) with optional quantization
  *
  * Supports multiple quantization methods including weight-only int4/int8 and w4a8 quantization.
  *
@@ -328,26 +328,26 @@ std::vector<paddle::DataType> MoeExpertFFNWint2InferDtype(
  *   - tokens_expert_prefix_sum: Prefix sum array of token counts per expert for group_gemm
  *                              Shape: [num_experts]
  *                              dtype: int64
- *   - ffn1_weight: First FFN layer weights
+ *   - up_gate_proj_weight: First FFN layer weights
  *                 Shape: [num_experts, inter_size * 2, hidden_size]
  *                 dtype: Same as input (unquantized) or int8 (quantized)
- *   - ffn2_weight: Second FFN layer weights
+ *   - down_proj_weight: Second FFN layer weights
  *                 Shape: [num_experts, hidden_size, inter_size]
  *                 dtype: Same as input (unquantized) or int8 (quantized)
- *   - ffn1_bias: Optional bias for first FFN layer
+ *   - up_gate_proj_bias: Optional bias for first FFN layer
  *               Shape: [num_experts, inter_size * 2]
  *               dtype: Same as input
- *   - ffn1_scale: Quantization scales for first FFN layer
+ *   - up_gate_proj_scale: Quantization scales for first FFN layer
  *                Shape: [num_experts, inter_size * 2]
  *                dtype: Same as input
- *   - ffn2_scale: Quantization scales for second FFN layer
+ *   - down_proj_scale: Quantization scales for second FFN layer
  *                Shape: [num_experts, hidden_size]
  *                dtype: Same as input
  *
  * Outputs:
  *   - output_tensor: Output tensor after MoE FFN computation
  *                   Shape: Same as permute_input
- *                   dtype: Same as input (or ffn1_scale dtype for w4a8)
+ *                   dtype: Same as input (or up_gate_proj_scale dtype for w4a8)
  *
  * Attributes:
  *   - used_in_ep_low_latency: Whether running in low latency mode
@@ -359,17 +359,17 @@ std::vector<paddle::DataType> MoeExpertFFNWint2InferDtype(
 PD_BUILD_STATIC_OP(moe_expert_ffn_wint2)
     .Inputs({"permute_input",
              "tokens_expert_prefix_sum",
-             "ffn1_weight",
-             "ffn2_weight",
-             paddle::Optional("ffn1_bias"),
-             paddle::Optional("ffn1_scale"),
-             paddle::Optional("ffn2_scale"),
-             paddle::Optional("ffn1_local_scale"),
-             paddle::Optional("ffn1_code_scale"),
-             paddle::Optional("ffn1_code_zp"),
-             paddle::Optional("ffn2_local_scale"),
-             paddle::Optional("ffn2_code_scale"),
-             paddle::Optional("ffn2_code_zp")})
+             "up_gate_proj_weight",
+             "down_proj_weight",
+             paddle::Optional("up_gate_proj_bias"),
+             paddle::Optional("up_gate_proj_scale"),
+             paddle::Optional("down_proj_scale"),
+             paddle::Optional("up_gate_proj_local_scale"),
+             paddle::Optional("up_gate_proj_code_scale"),
+             paddle::Optional("up_gate_proj_code_zp"),
+             paddle::Optional("down_proj_local_scale"),
+             paddle::Optional("down_proj_code_scale"),
+             paddle::Optional("down_proj_code_zp")})
     .Outputs({"output_tensor"})
     .Attrs({"used_in_ep_low_latency:bool"})
     .SetKernelFn(PD_KERNEL(MoeExpertFFNWint2))

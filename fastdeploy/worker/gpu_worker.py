@@ -138,7 +138,7 @@ class GpuWorker(WorkerBase):
 
         available_kv_cache_memory = after_run_meminfo.total * \
             self.parallel_config.gpu_memory_utilization - after_run_meminfo.used - paddle_peak_increase
-        available_kv_cache_memory += model_block_memory_used * self.parallel_config.max_block_num
+        available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
 
         end_time = time.perf_counter()
         logger.info((

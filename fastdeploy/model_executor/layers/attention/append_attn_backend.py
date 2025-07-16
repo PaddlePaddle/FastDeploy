@@ -135,8 +135,8 @@ class AppendAttentionBackend(AttentionBackend):
             metadata.kv_batch_ids,
             metadata.kv_tile_ids_per_batch,
             metadata.kv_num_blocks,
-            metadata.decoder_batch_ids,
-            metadata.decoder_tile_ids_per_batch,
+            metadata.decoder_batch_ids,  # will copy to buffer
+            metadata.decoder_tile_ids_per_batch, # will copy to buffer
             metadata.decoder_num_blocks,
             metadata.max_len_kv,
             metadata.set_max_lengths,
