@@ -515,12 +515,14 @@ class EngineArgs:
 
         system_group.add_argument(
             "--nnodes",
+            type=int,
             default=EngineArgs.nnodes,
             help=
             "The number of all nodes.")
 
         system_group.add_argument(
             "--node-rank",
+            type=int,
             default=EngineArgs.node_rank,
             help=
             "node rank id (range [0, nnodes)).")
