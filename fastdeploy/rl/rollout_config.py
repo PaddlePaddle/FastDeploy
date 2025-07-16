@@ -102,4 +102,4 @@ class RolloutModelConfig:
 
     def initialize(self):
         """Initialize the final fd config"""
-        return initialize_fd_config(self, self.tensor_parallel_size, 0)
+        return initialize_fd_config(self, ranks=self.tensor_parallel_size, local_rank=0)

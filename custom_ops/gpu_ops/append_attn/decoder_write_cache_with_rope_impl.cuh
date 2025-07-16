@@ -29,7 +29,7 @@ __global__ void append_decode_cache_T_rope_kernel(
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
     const int* __restrict__ padding_offsets,  // [num_tokens]
-    const int* __restrict__ cum_offsets,
+    const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
@@ -65,7 +65,7 @@ __global__ void append_decode_cache_T_rope_kernel(
     const int bias = linear_index % hidden_size;
     const int hi = bias / head_size;  // q + k + v
     const int h_bias = bias % head_size;
-    const int start_token_idx = ori_bi * max_seq_len - cum_offsets[ori_bi];
+    const int start_token_idx = cu_seqlens_q[ori_bi];
     if (seq_lens_encoder[ori_bi] > 0) return;
     const int write_seq_id = seq_lens[ori_bi];
     if (write_seq_id == 0) continue;
@@ -135,7 +135,7 @@ __global__ void append_decode_cache_T_rope_kernel(
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
     const int* __restrict__ padding_offsets,  // [num_tokens]
-    const int* __restrict__ cum_offsets,
+    const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
@@ -177,7 +177,7 @@ __global__ void append_decode_cache_T_rope_kernel(
     const int bias = linear_index % hidden_size;
     const int hi = bias / head_size;  // q + k + v
     const int h_bias = bias % head_size;
-    const int start_token_idx = ori_bi * max_seq_len - cum_offsets[ori_bi];
+    const int start_token_idx = cu_seqlens_q[ori_bi];
     if (seq_lens_encoder[ori_bi] > 0) return;
     const int write_seq_id = seq_lens[ori_bi];
     if (write_seq_id == 0) continue;
@@ -255,7 +255,7 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
     const int* __restrict__ padding_offsets,  // [num_tokens]
-    const int* __restrict__ cum_offsets,
+    const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
@@ -293,7 +293,7 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
     const int bias = linear_index % half_hidden_size;
     const int hi = bias / half_head_size;  // q + k + v
     const int h_bias = bias % half_head_size;
-    const int start_token_idx = ori_bi * max_seq_len - cum_offsets[ori_bi];
+    const int start_token_idx = cu_seqlens_q[ori_bi];
     if (seq_lens_encoder[ori_bi] > 0) return;
     const int write_seq_id = seq_lens[ori_bi];
     if (write_seq_id == 0) continue;
@@ -367,7 +367,7 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
     const int* __restrict__ padding_offsets,  // [num_tokens]
-    const int* __restrict__ cum_offsets,
+    const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
@@ -409,7 +409,7 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
     const int bias = linear_index % half_hidden_size;
     const int hi = bias / half_head_size;  // q + k + v
     const int h_bias = bias % half_head_size;
-    const int start_token_idx = ori_bi * max_seq_len - cum_offsets[ori_bi];
+    const int start_token_idx = cu_seqlens_q[ori_bi];
     if (seq_lens_encoder[ori_bi] > 0) return;
     const int write_seq_id = seq_lens[ori_bi];
     if (write_seq_id == 0) continue;
@@ -499,7 +499,7 @@ __global__ void append_decode_cache_int8_rope_kernel(
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
     const int* __restrict__ padding_offsets,  // [num_tokens]
-    const int* __restrict__ cum_offsets,
+    const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
@@ -523,7 +523,7 @@ __global__ void append_decode_cache_int8_rope_kernel(
   int q_head_idx, k_head_idx, v_idx;
   const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * HeadDim;
   constexpr int half_head_size = HeadDim / 2;
-  const int start_token_idx = bid * max_seq_len - __ldg(&cum_offsets[bid]);
+  const int start_token_idx = cu_seqlens_q[bid];
   if (seq_lens_encoder[bid] > 0) return;
   const int write_seq_id = seq_lens[bid];
   if (write_seq_id == 0) return;
@@ -746,7 +746,7 @@ __global__ void append_decode_cache_int8_rope_kernel(
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
     const int* __restrict__ padding_offsets,  // [num_tokens]
-    const int* __restrict__ cum_offsets,
+    const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
@@ -775,7 +775,7 @@ __global__ void append_decode_cache_int8_rope_kernel(
   int q_head_idx, k_head_idx, v_idx;
   const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * HeadDim;
   constexpr int half_head_size = HeadDim / 2;
-  const int start_token_idx = bid * max_seq_len - __ldg(&cum_offsets[bid]);
+  const int start_token_idx = cu_seqlens_q[bid];
   if (seq_lens_encoder[bid] > 0) return;
   const int write_seq_id = seq_lens[bid];
   if (write_seq_id == 0) return;
@@ -1048,7 +1048,7 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
     const int* __restrict__ padding_offsets,  // [num_tokens]
-    const int* __restrict__ cum_offsets,
+    const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
@@ -1073,7 +1073,7 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
   int q_head_idx, k_head_idx, v_idx;
   const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * HeadDim;
   constexpr int half_head_size = HeadDim / 2;
-  const int start_token_idx = bid * max_seq_len - __ldg(&cum_offsets[bid]);
+  const int start_token_idx = cu_seqlens_q[bid];
   if (seq_lens_encoder[bid] > 0) return;
   const int write_seq_id = seq_lens[bid];
   if (write_seq_id == 0) return;
@@ -1347,7 +1347,7 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
     const int* __restrict__ padding_offsets,  // [num_tokens]
-    const int* __restrict__ cum_offsets,
+    const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
@@ -1377,7 +1377,7 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
 
   const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * HeadDim;
   constexpr int half_head_size = HeadDim / 2;
-  const int start_token_idx = bid * max_seq_len - __ldg(&cum_offsets[bid]);
+  const int start_token_idx = cu_seqlens_q[bid];
   if (seq_lens_encoder[bid] > 0) return;
   const int write_seq_id = seq_lens[bid];
   if (write_seq_id == 0) return;
@@ -1740,7 +1740,7 @@ __global__ void append_decode_cache_int4_rope_kernel(
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
     const int* __restrict__ padding_offsets,  // [num_tokens]
-    const int* __restrict__ cum_offsets,
+    const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
@@ -1766,7 +1766,7 @@ __global__ void append_decode_cache_int4_rope_kernel(
   const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * HeadDim;
   constexpr int half_head_size = HeadDim / 2;
   const int half_block_size = block_size / 2;
-  const int start_token_idx = bid * max_seq_len - __ldg(&cum_offsets[bid]);
+  const int start_token_idx = cu_seqlens_q[bid];
   if (seq_lens_encoder[bid] > 0) return;
   const int write_seq_id = seq_lens[bid];
   if (write_seq_id == 0) return;
@@ -2035,7 +2035,7 @@ __global__ void append_decode_cache_int4_rope_kernel(
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
     const int* __restrict__ padding_offsets,  // [num_tokens]
-    const int* __restrict__ cum_offsets,
+    const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
@@ -2066,7 +2066,7 @@ __global__ void append_decode_cache_int4_rope_kernel(
   const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * HeadDim;
   constexpr int half_head_size = HeadDim / 2;
   const int half_block_size = block_size / 2;
-  const int start_token_idx = bid * max_seq_len - __ldg(&cum_offsets[bid]);
+  const int start_token_idx = cu_seqlens_q[bid];
   if (seq_lens_encoder[bid] > 0) return;
   const int write_seq_id = seq_lens[bid];
   if (write_seq_id == 0) return;
@@ -2363,7 +2363,7 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
     const int* __restrict__ padding_offsets,  // [num_tokens]
-    const int* __restrict__ cum_offsets,
+    const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
@@ -2389,7 +2389,7 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
   const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * HeadDim;
   constexpr int half_head_size = HeadDim / 2;
   const int half_block_size = block_size / 2;
-  const int start_token_idx = bid * max_seq_len - __ldg(&cum_offsets[bid]);
+  const int start_token_idx = cu_seqlens_q[bid];
   if (seq_lens_encoder[bid] > 0) return;
   const int write_seq_id = seq_lens[bid];
   if (write_seq_id == 0) return;
@@ -2733,7 +2733,7 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
     const int* __restrict__ padding_offsets,  // [num_tokens]
-    const int* __restrict__ cum_offsets,
+    const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
@@ -2764,7 +2764,7 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
   const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * HeadDim;
   constexpr int half_head_size = HeadDim / 2;
   const int half_block_size = block_size / 2;
-  const int start_token_idx = bid * max_seq_len - __ldg(&cum_offsets[bid]);
+  const int start_token_idx = cu_seqlens_q[bid];
   if (seq_lens_encoder[bid] > 0) return;
   const int write_seq_id = seq_lens[bid];
   if (write_seq_id == 0) return;
