@@ -479,8 +479,8 @@ class XPUModelRunner(ModelRunnerBase):
         # Initialize free list
         free_list = list(
             range(
-                self.parallel_config.max_block_num - 1,
-                int(self.parallel_config.max_block_num *
+                self.parallel_config.total_block_num - 1,
+                int(self.parallel_config.total_block_num *
                     self.parallel_config.kv_cache_ratio) - 1, -1))
         self.free_list_len = len(free_list)
         self.share_inputs["free_list"] = paddle.to_tensor(free_list,
@@ -757,7 +757,7 @@ class XPUModelRunner(ModelRunnerBase):
     def prepare_profile(self) -> None:
         """Prepare the profile run by setting the block number and initializing the KV cache."""
         paddle.device.xpu.empty_cache()
-        self.num_gpu_blocks = self.parallel_config.max_block_num
+        self.num_gpu_blocks = self.parallel_config.total_block_num
         self.initialize_kv_cache()
 
     def profile_run(self) -> None:
@@ -774,7 +774,6 @@ class XPUModelRunner(ModelRunnerBase):
         del self.share_inputs["caches"]
         if self.forward_meta is not None:
             del self.forward_meta.caches
-        del self.share_inputs["block_tables"]
         paddle.device.xpu.empty_cache()
 
     def cal_theortical_kvcache(self):
@@ -816,11 +815,6 @@ class XPUModelRunner(ModelRunnerBase):
 
         # Reset block table and kv cache with global block num
         self.initialize_kv_cache()
-
-        self.share_inputs["block_tables"] = paddle.full(
-            [self.parallel_config.max_num_seqs, self.num_gpu_blocks],
-            -1,
-            dtype="int32")
 
         # Reset free list
         free_list = list(

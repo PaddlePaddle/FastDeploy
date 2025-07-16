@@ -93,7 +93,7 @@ class MTPProposer(Proposer):
                              expected_decode_len: int):
         """Set dummy prefill inputs to model_inputs"""
         max_dec_len = expected_decode_len + 1
-        self.num_gpu_blocks = self.parallel_config.max_block_num
+        self.num_gpu_blocks = self.parallel_config.total_block_num
         self.initialize_kv_cache()
         full_length = min(num_tokens // batch_size,
                           self.parallel_config.max_model_len - max_dec_len)
@@ -327,8 +327,8 @@ class MTPProposer(Proposer):
 
         self.free_list = list(
             range(
-                self.parallel_config.max_block_num - 1,
-                int(self.parallel_config.max_block_num *
+                self.parallel_config.total_block_num - 1,
+                int(self.parallel_config.total_block_num *
                     self.parallel_config.kv_cache_ratio) - 1,
                 -1,
             ))
