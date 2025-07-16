@@ -96,7 +96,7 @@ class TensorWiseFP8LinearMethod(QuantMethodBase):
         act_scale = get_tensor(state_dict.pop(layer.act_scale_key))
 
         quant_weight = quant_weight.transpose([1, 0]).contiguous()
-        layer.linear_weight.copy_(quant_weight.view("float8_e4m3fn"), False)
+        layer.weight.copy_(quant_weight.view("float8_e4m3fn"), False)
 
         self.act_scale = act_scale.item()
         self.total_scale = (act_scale * weight_scale).item()
@@ -118,7 +118,7 @@ class TensorWiseFP8LinearMethod(QuantMethodBase):
 
         linear_out = cutlass_fp8_fp8_half_gemm_fused(
             fp8_x,
-            layer.linear_weight,
+            layer.weight,
             transpose_x=False,
             transpose_y=True,
             bias=None,

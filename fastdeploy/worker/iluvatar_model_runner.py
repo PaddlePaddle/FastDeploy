@@ -24,6 +24,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import \
     AttentionBackend
@@ -37,7 +38,6 @@ from fastdeploy.model_executor.pre_and_post_process import (post_process,
                                                             pre_process,
                                                             rebuild_padding,
                                                             step_cuda)
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
 
@@ -224,7 +224,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                 request.eos_token_ids.append(request.eos_token_ids[0])
             self.share_inputs["eos_token_id"][:] = np.array(
                 request.eos_token_ids, dtype="int64").reshape(-1, 1)
-            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 1.0)
+            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 0.7)
             self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k", 0)
             self.share_inputs["temperature"][idx:idx + 1] = request.get(
                 "temperature", 0.95)
@@ -468,8 +468,8 @@ class IluvatarModelRunner(ModelRunnerBase):
         # Initialize free list
         free_list = list(
             range(
-                self.parallel_config.max_block_num - 1,
-                int(self.parallel_config.max_block_num *
+                self.parallel_config.total_block_num - 1,
+                int(self.parallel_config.total_block_num *
                     self.parallel_config.kv_cache_ratio) - 1, -1))
         self.free_list_len = len(free_list)
         self.share_inputs["free_list"] = paddle.to_tensor(free_list,
@@ -648,7 +648,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                 or self.parallel_config.splitwise_role != "mixed"):
             raise NotImplementedError("Iluvatar does not support yet")
         else:
-            for i in range(self.model_config.num_layers):
+            for i in range(self.model_config.num_hidden_layers):
 
                 cache_kvs["key_caches_{}".format(i)] = paddle.full(
                     shape=kv_cache_shape,
@@ -672,11 +672,11 @@ class IluvatarModelRunner(ModelRunnerBase):
         assert len(self.attn_backends) == 0
 
         # TODO(gongshaotian): Get rank from config
-        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_degree
+        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
         self.model_config.kv_num_heads = max(
             1,
             int(self.model_config.num_key_value_heads) //
-            self.parallel_config.tensor_parallel_degree)
+            self.parallel_config.tensor_parallel_size)
         head_dim = self.model_config.head_dim
 
         # Get the attention backend
@@ -715,10 +715,6 @@ class IluvatarModelRunner(ModelRunnerBase):
             # 3. Prepare lora
 
             # 4. Run model
-            is_decode_batch = not ((self.share_inputs["seq_lens_this_time"]
-                                    > 1).sum() > 0)
-            self.forward_meta.step_use_cudagraph = is_decode_batch and in_capturing
-            self.forward_meta.is_decode_batch = is_decode_batch
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta)
@@ -748,14 +744,14 @@ class IluvatarModelRunner(ModelRunnerBase):
                 )
                 sampled_token_ids = self.sampler(logits,
                                                  self.sampling_metadata)
-                if self.parallel_config.tensor_parallel_degree > 1:
+                if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(sampled_token_ids, 0)
             else:
                 self.sampler(logits, self.sampling_metadata,
                              self.parallel_config.max_model_len,
                              self.share_inputs)
                 sampled_token_ids = None
-                if self.parallel_config.tensor_parallel_degree > 1:
+                if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
                         self.share_inputs["accept_tokens"], 0)
                     paddle.distributed.broadcast(
@@ -939,11 +935,6 @@ class IluvatarModelRunner(ModelRunnerBase):
         # 2. Padding inputs for cuda grph
 
         # 3. Execute model
-        # TODO(gongshaotian): Use seq_lens_encoder to set is_decode_batch
-        is_decode_batch = not ((self.share_inputs["seq_lens_this_time"]
-                                > 1).sum() > 0)
-        self.forward_meta.step_use_cudagraph = self.use_cudagraph and is_decode_batch
-        self.forward_meta.is_decode_batch = is_decode_batch
         model_output = self.model(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             forward_meta=self.forward_meta)
@@ -977,14 +968,14 @@ class IluvatarModelRunner(ModelRunnerBase):
                 self.sampling_metadata,
                 skip_idx_list,
             )
-            if self.parallel_config.tensor_parallel_degree > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(sampled_token_ids, 0)
 
         else:
             self.sampler(logits, self.sampling_metadata,
                          self.parallel_config.max_model_len, self.share_inputs)
             sampled_token_ids = None
-            if self.parallel_config.tensor_parallel_degree > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(
                     self.share_inputs["accept_tokens"], 0)
                 paddle.distributed.broadcast(self.share_inputs["accept_num"],
@@ -1078,7 +1069,7 @@ class IluvatarModelRunner(ModelRunnerBase):
 
         # Initialize kv cache for profile run. After profile run kv cache will be reset.
         # TODO(gongshaotian): Optimize the management logic of kvcache
-        self.num_gpu_blocks = self.parallel_config.max_block_num
+        self.num_gpu_blocks = self.parallel_config.total_block_num
         self.initialize_kv_cache()
 
         # 1. Profile with multimodal encoder & encoder cache
@@ -1145,11 +1136,11 @@ class IluvatarModelRunner(ModelRunnerBase):
 
         hidden_dim = self.model_config.head_dim * self.model_config.kv_num_heads
         # NOTE(liuzichang): Implement multi-layer MTP architecture in the future
-        num_layers = self.model_config.num_layers + \
+        num_layers = self.model_config.num_hidden_layers + \
             self.speculative_config.num_gpu_block_expand_ratio if \
                 self.speculative_method in [
             "mtp"
-        ] else self.model_config.num_layers
+        ] else self.model_config.num_hidden_layers
         required_memory = (
             byte_of_dtype * 2 *  # k + v
             (self.parallel_config.block_size * hidden_dim) * num_layers)

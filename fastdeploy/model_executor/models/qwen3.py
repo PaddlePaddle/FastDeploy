@@ -23,7 +23,8 @@ from paddle import nn
 from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig, ModelConfig
+from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import \
     support_graph_optimization
 from fastdeploy.model_executor.layers.attention.attention import Attention
@@ -34,7 +35,6 @@ from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 from fastdeploy.model_executor.models.qwen2 import Qwen2DecoderLayer, Qwen2MLP
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Qwen3MLP(Qwen2MLP):
@@ -54,39 +54,41 @@ class Qwen3Attention(nn.Layer):
         super().__init__()
 
         self.fd_config = fd_config
-
         self.head_dim = fd_config.model_config.head_dim
-        nranks = fd_config.parallel_config.tensor_parallel_degree
-        self.q_size = fd_config.model_config.num_attention_heads * self.head_dim // nranks
-        self.kv_size = fd_config.model_config.num_key_value_heads * self.head_dim // nranks
 
-        self.qkv_proj = QKVParallelLinear(fd_config=fd_config,
+        self.qkv_proj = QKVParallelLinear(fd_config,
                                           prefix=f"{prefix}.qkv_proj",
                                           with_bias=False)
+        nranks = fd_config.parallel_config.tensor_parallel_size
 
         self.o_proj = RowParallelLinear(
-            fd_config=fd_config,
+            fd_config,
             prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.head_dim *
             fd_config.model_config.num_attention_heads,
             output_size=fd_config.model_config.hidden_size,
         )
 
-        self.attn = Attention(fd_config=fd_config,
+        self.attn = Attention(fd_config,
                               layer_id=layer_id,
                               prefix=prefix,
                               use_neox_rotary_style=True)
 
-        self.q_norm = RMSNorm(fd_config=fd_config,
-                              hidden_size=fd_config.model_config.head_dim,
+        self.q_norm = RMSNorm(fd_config,
+                              hidden_size=self.head_dim,
                               eps=fd_config.model_config.rms_norm_eps,
                               prefix=f"{prefix}.q_norm",
                               begin_norm_axis=2)
-        self.k_norm = RMSNorm(fd_config=fd_config,
-                              hidden_size=fd_config.model_config.head_dim,
+        self.k_norm = RMSNorm(fd_config,
+                              hidden_size=self.head_dim,
                               eps=fd_config.model_config.rms_norm_eps,
                               prefix=f"{prefix}.k_norm",
                               begin_norm_axis=2)
+
+        nranks = fd_config.parallel_config.tensor_parallel_size
+        num_kv_heads_replicas = max(1, nranks // fd_config.model_config.num_key_value_heads)
+        self.q_size = fd_config.model_config.num_attention_heads * self.head_dim // nranks
+        self.kv_size = fd_config.model_config.num_key_value_heads * self.head_dim * num_kv_heads_replicas // nranks
 
     def load_state_dict(self, state_dict):
         """
@@ -104,7 +106,6 @@ class Qwen3Attention(nn.Layer):
         """
         """
         qkv_out = self.qkv_proj(hidden_states)
-
         # origin_qkv_out = qkv_out
         q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size],
                                 axis=-1)
@@ -162,21 +163,21 @@ class Qwen3Model(nn.Layer):
         """
         super().__init__()
 
-        self.num_layers = fd_config.model_config.num_layers
-        fd_config.model_config.prefix_name = "model"
+        self.num_layers = fd_config.model_config.num_hidden_layers
+        fd_config.model_config.pretrained_config.prefix_name = "model"
 
-        self.embeddings = VocabParallelEmbedding(
+        self.embed_tokens = VocabParallelEmbedding(
             fd_config=fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
             params_dtype=paddle.get_default_dtype,
-            prefix=(f"{fd_config.model_config.prefix_name}.embed_tokens"),
+            prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"),
         )
 
         self.layers = nn.LayerList([
             Qwen3DecoderLayer(
                 fd_config=fd_config,
-                prefix=f"{fd_config.model_config.prefix_name}.layers.{i}")
+                prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}")
             for i in range(self.num_layers)
         ])
 
@@ -184,7 +185,7 @@ class Qwen3Model(nn.Layer):
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
-            prefix=f"{fd_config.model_config.prefix_name}.norm",
+            prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
     def load_state_dict(self, state_dict):
@@ -196,7 +197,7 @@ class Qwen3Model(nn.Layer):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.embeddings.load_state_dict(state_dict)
+        self.embed_tokens.load_state_dict(state_dict)
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
@@ -209,7 +210,7 @@ class Qwen3Model(nn.Layer):
     ):
         """
         """
-        hidden_states = self.embeddings(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
         residual = None
 
@@ -265,8 +266,8 @@ class Qwen3ForCausalLM(ModelForCasualLM):
         """
         self.model.load_state_dict(state_dict)
         if self.tie_word_embeddings:
-            self.lm_head.out_linear.weight.set_value(
-                self.model.embeddings.word_embeddings.weight.transpose([1, 0]))
+            self.lm_head.linear.weight.set_value(
+                self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
         else:
             self.lm_head.load_state_dict(state_dict)
 
@@ -306,7 +307,7 @@ class Qwen3PretrainedModel(PretrainedModel):
         return None
 
     @classmethod
-    def _get_tensor_parallel_mappings(cls, config: ModelConfig, is_split=True):
+    def _get_tensor_parallel_mappings(cls, config, is_split=True):
 
         from paddleformers.transformers.conversion_utils import \
             split_or_merge_func
@@ -357,5 +358,5 @@ class Qwen3PretrainedModel(PretrainedModel):
 
             return final_actions
 
-        mappings = get_tensor_parallel_split_mappings(config.num_layers)
+        mappings = get_tensor_parallel_split_mappings(config.num_hidden_layers)
         return mappings

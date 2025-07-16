@@ -77,12 +77,12 @@ class WeightOnlyConfig(QuantConfigBase):
                 return GCUWeightOnlyLinearMethod(self)
         elif current_platform.is_dcu():
             if isinstance(layer, FusedMoE):
-                from fastdeploy.model_executor.layers.backends import (
-                    DCUTritonWeightOnlyMoEMethod)
+                from fastdeploy.model_executor.layers.backends import \
+                    DCUTritonWeightOnlyMoEMethod
                 return DCUTritonWeightOnlyMoEMethod(self)
             else:
-                from fastdeploy.model_executor.layers.backends import (
-                    DCUWeightOnlyLinearMethod)
+                from fastdeploy.model_executor.layers.backends import \
+                    DCUWeightOnlyLinearMethod
                 return DCUWeightOnlyLinearMethod(self)
         else:
             if isinstance(layer, FusedMoE):
@@ -152,14 +152,14 @@ class WeightOnlyLinearMethod(QuantMethodBase):
     def create_weights(self, layer):
 
         # The scale shape should be equal to the output dim of weight using Per-Channel Quantization.
-        linear_weight_scale_shape = [layer.linear_weight_shape[1]]
+        weight_scale_shape = [layer.weight_shape[1]]
 
-        layer.linear_weight_shape.reverse()
+        layer.weight_shape.reverse()
         if self.quant_config.name() == "wint4":
-            layer.linear_weight_shape[0] //= 2
+            layer.weight_shape[0] //= 2
         layer.weight_dtype = "int8"
-        layer.linear_weight_scale = layer.create_parameter(
-            shape=linear_weight_scale_shape,
+        layer.weight_scale = layer.create_parameter(
+            shape=weight_scale_shape,
             dtype=layer._dtype,
             is_bias=False,
         )
@@ -171,9 +171,9 @@ class WeightOnlyLinearMethod(QuantMethodBase):
     def apply(self, layer, x):
         linear_out = weight_only_linear(
             x,
-            weight=layer.linear_weight,
-            bias=layer.linear_bias if layer.add_bias else None,
-            weight_scale=layer.linear_weight_scale,
+            weight=layer.weight,
+            bias=layer.bias if layer.add_bias else None,
+            weight_scale=layer.weight_scale,
             weight_dtype="int8"
             if self.quant_config.name() == "wint8" else "int4",
             arch=self.quant_config.weight_only_linear_arch,
@@ -204,8 +204,8 @@ class GPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         """
         quant_weight = get_tensor(state_dict.pop(layer.weight_key))
         weight_scale = get_tensor(state_dict.pop(layer.weight_scale_key))
-        layer.linear_weight.set_value(quant_weight)
-        layer.linear_weight_scale.set_value(
+        layer.weight.set_value(quant_weight)
+        layer.weight_scale.set_value(
             weight_scale.astype(paddle.get_default_dtype()))
 
     def process_loaded_weights(self, layer, weight) -> None:
@@ -216,6 +216,6 @@ class GPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             arch=self.quant_config.weight_only_linear_arch,
         )
 
-        layer.linear_weight.set_value(quanted_weight_tensor)
-        layer.linear_weight_scale.set_value(
+        layer.weight.set_value(quanted_weight_tensor)
+        layer.weight_scale.set_value(
             weight_scale_tensor.astype(paddle.get_default_dtype()))

@@ -22,7 +22,7 @@ template void EncoderWriteCacheWithRopeKernel<paddle::bfloat16, int>(
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& padding_offsets,
-    const paddle::Tensor& cum_offsets,
+    const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& batch_ids,
     const paddle::Tensor& tile_ids,

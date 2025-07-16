@@ -46,12 +46,12 @@ template <typename TX, typename TW>
 std::vector<paddle::Tensor> MoeLayerKernel(
     const paddle::Tensor &x, const paddle::Tensor &gate_weight,
     const paddle::optional<paddle::Tensor> &gate_correction_bias,
-    const paddle::Tensor &ffn1_weight, const paddle::Tensor &ffn2_weight,
-    const paddle::optional<paddle::Tensor> &ffn1_bias,
-    const paddle::optional<paddle::Tensor> &ffn2_bias,
-    const paddle::optional<paddle::Tensor> &ffn1_weight_scale,
-    const paddle::optional<paddle::Tensor> &ffn2_weight_scale,
-    const paddle::optional<paddle::Tensor> &ffn2_in_scale, // not support
+    const paddle::Tensor &up_gate_proj_weight, const paddle::Tensor &down_proj_weight,
+    const paddle::optional<paddle::Tensor> &up_gate_proj_bias,
+    const paddle::optional<paddle::Tensor> &down_proj_bias,
+    const paddle::optional<paddle::Tensor> &up_gate_proj_weight_scale,
+    const paddle::optional<paddle::Tensor> &down_proj_weight_scale,
+    const paddle::optional<paddle::Tensor> &down_proj_in_scale, // not support
     const std::string &quant_method, const int moe_top_k,
     const bool moe_group) {
     // std::cout << "[Op Debug] enter moe layer" << std::endl;
@@ -66,24 +66,24 @@ std::vector<paddle::Tensor> MoeLayerKernel(
 
     const auto xtype = x.dtype();
     auto x_dims = x.shape();
-    auto ffn1_dims = ffn1_weight.shape();
+    auto up_gate_proj_dims = up_gate_proj_weight.shape();
     PD_CHECK(x_dims.size() == 2, "x_dims.size() shoud be 2.");
-    PD_CHECK(ffn1_dims.size() == 3, "ffn1_dims.size() should be 3.");
-    PD_CHECK(ffn2_in_scale.get_ptr() == nullptr, "ffn2_in_scale not support.");
+    PD_CHECK(up_gate_proj_dims.size() == 3, "up_gate_proj_dims.size() should be 3.");
+    PD_CHECK(down_proj_in_scale.get_ptr() == nullptr, "down_proj_in_scale not support.");
     if (quant_method == "weight_only_int4") {
-        PD_CHECK(x_dims[1] == ffn1_dims[2] * 2,
-                 "x_dims[1] should equal to ffn1_dims[2], (weight must be "
+        PD_CHECK(x_dims[1] == up_gate_proj_dims[2] * 2,
+                 "x_dims[1] should equal to up_gate_proj_dims[2], (weight must be "
                  "[e,n,k]).");
     } else {
-        PD_CHECK(x_dims[1] == ffn1_dims[2],
-                 "x_dims[1] should equal to ffn1_dims[2], (weight must be "
+        PD_CHECK(x_dims[1] == up_gate_proj_dims[2],
+                 "x_dims[1] should equal to up_gate_proj_dims[2], (weight must be "
                  "[e,n,k]).");
     }
 
     int token_num = x_dims[0];
     int hidden_dim = x_dims[1];
-    int expert_num = ffn1_dims[0];
-    int inter_dim = ffn1_dims[1];
+    int expert_num = up_gate_proj_dims[0];
+    int inter_dim = up_gate_proj_dims[1];
     int outer_dim = inter_dim / 2;
 
     paddle::Tensor fused_moe_out = paddle::empty_like(x);
@@ -104,7 +104,7 @@ std::vector<paddle::Tensor> MoeLayerKernel(
         // input + output
         xftblock::Tensor xin(const_cast<TX *>(x.data<TX>() + x_offset), xftblock_tx,
                             x_mpart_shape);
-        
+
         xftblock::Tensor xout(fused_moe_out.mutable_data<TX>() + x_offset, xftblock_tx,
                             x_mpart_shape);
         // gate
@@ -118,63 +118,63 @@ std::vector<paddle::Tensor> MoeLayerKernel(
                 gate_correction_bias.get_ptr()->shape());
         }
 
-        // ffn1 + ffn2
-        std::shared_ptr<xftblock::Tensor> xffn1_w, xffn2_w;
+        // up_gate_proj + down_proj
+        std::shared_ptr<xftblock::Tensor> xup_gate_proj_w, xdown_proj_w;
 
         if (std::is_same<TW, int4_t>::value) {
-            xffn1_w = std::make_shared<xftblock::Tensor>(
-                const_cast<int8_t *>(ffn1_weight.data<int8_t>()), nullptr,
-                const_cast<float *>(ffn1_weight_scale.get_ptr()
-                                        ? ffn1_weight_scale.get_ptr()->data<float>()
+            xup_gate_proj_w = std::make_shared<xftblock::Tensor>(
+                const_cast<int8_t *>(up_gate_proj_weight.data<int8_t>()), nullptr,
+                const_cast<float *>(up_gate_proj_weight_scale.get_ptr()
+                                        ? up_gate_proj_weight_scale.get_ptr()->data<float>()
                                         : nullptr),
                 xftblock_tw,
                 std::vector<int64_t>{expert_num, inter_dim, hidden_dim});
 
-            xffn2_w = std::make_shared<xftblock::Tensor>(
-                const_cast<int8_t *>(ffn2_weight.data<int8_t>()), nullptr,
-                const_cast<float *>(ffn2_weight_scale.get_ptr()
-                                        ? ffn2_weight_scale.get_ptr()->data<float>()
+            xdown_proj_w = std::make_shared<xftblock::Tensor>(
+                const_cast<int8_t *>(down_proj_weight.data<int8_t>()), nullptr,
+                const_cast<float *>(down_proj_weight_scale.get_ptr()
+                                        ? down_proj_weight_scale.get_ptr()->data<float>()
                                         : nullptr),
                 xftblock_tw,
                 std::vector<int64_t>{expert_num, hidden_dim, outer_dim});
 
         } else {
-            xffn1_w = std::make_shared<xftblock::Tensor>(
-                const_cast<TW *>(ffn1_weight.data<TW>()), nullptr,
-                const_cast<float *>(ffn1_weight_scale.get_ptr()
-                                        ? ffn1_weight_scale.get_ptr()->data<float>()
+            xup_gate_proj_w = std::make_shared<xftblock::Tensor>(
+                const_cast<TW *>(up_gate_proj_weight.data<TW>()), nullptr,
+                const_cast<float *>(up_gate_proj_weight_scale.get_ptr()
+                                        ? up_gate_proj_weight_scale.get_ptr()->data<float>()
                                         : nullptr),
                 xftblock_tw,
                 std::vector<int64_t>{expert_num, inter_dim, hidden_dim});
 
-            xffn2_w = std::make_shared<xftblock::Tensor>(
-                const_cast<TW *>(ffn2_weight.data<TW>()), nullptr,
-                const_cast<float *>(ffn2_weight_scale.get_ptr()
-                                        ? ffn2_weight_scale.get_ptr()->data<float>()
+            xdown_proj_w = std::make_shared<xftblock::Tensor>(
+                const_cast<TW *>(down_proj_weight.data<TW>()), nullptr,
+                const_cast<float *>(down_proj_weight_scale.get_ptr()
+                                        ? down_proj_weight_scale.get_ptr()->data<float>()
                                         : nullptr),
                 xftblock_tw,
                 std::vector<int64_t>{expert_num, hidden_dim, outer_dim});
         }
-        std::shared_ptr<xftblock::Tensor> xffn1_bias;
-        std::shared_ptr<xftblock::Tensor> xffn2_bias;
-        if (ffn1_bias.get_ptr()) {
-            xffn1_bias = std::make_shared<xftblock::Tensor>(
-                const_cast<float *>(ffn1_bias.get_ptr()->data<float>()),
-                xftblock::DataType::DT_FLOAT, ffn1_bias.get_ptr()->shape());
+        std::shared_ptr<xftblock::Tensor> xup_gate_proj_bias;
+        std::shared_ptr<xftblock::Tensor> xdown_proj_bias;
+        if (up_gate_proj_bias.get_ptr()) {
+            xup_gate_proj_bias = std::make_shared<xftblock::Tensor>(
+                const_cast<float *>(up_gate_proj_bias.get_ptr()->data<float>()),
+                xftblock::DataType::DT_FLOAT, up_gate_proj_bias.get_ptr()->shape());
         }
-        if (ffn2_bias.get_ptr()) {
-            xffn2_bias = std::make_shared<xftblock::Tensor>(
-                const_cast<float *>(ffn2_bias.get_ptr()->data<float>()),
-                xftblock::DataType::DT_FLOAT, ffn2_bias.get_ptr()->shape());
+        if (down_proj_bias.get_ptr()) {
+            xdown_proj_bias = std::make_shared<xftblock::Tensor>(
+                const_cast<float *>(down_proj_bias.get_ptr()->data<float>()),
+                xftblock::DataType::DT_FLOAT, down_proj_bias.get_ptr()->shape());
         }
         // std::cout << "[Op Debug] start init moe_ffn weight and bias" <<
         // std::endl; MoeFFNWeight
         xftblock::MoeFFNWeight moe_ffn_w_struct;
         moe_ffn_w_struct.gate_weight = &xgate_w;
-        moe_ffn_w_struct.ffn_inter_weights = xffn1_w.get();
-        moe_ffn_w_struct.ffn_inter_bias = xffn1_bias.get();
-        moe_ffn_w_struct.ffn_outer_weights = xffn2_w.get();
-        moe_ffn_w_struct.ffn_outer_bias = xffn2_bias.get();
+        moe_ffn_w_struct.ffn_inter_weights = xup_gate_proj_w.get();
+        moe_ffn_w_struct.ffn_inter_bias = xup_gate_proj_bias.get();
+        moe_ffn_w_struct.ffn_outer_weights = xdown_proj_w.get();
+        moe_ffn_w_struct.ffn_outer_bias = xdown_proj_bias.get();
         moe_ffn_w_struct.score_bias = xgate_correct_bias.get();
         // MoeFFNParam
         xftblock::MoeFFNParam moe_ffn_param;
@@ -191,29 +191,29 @@ std::vector<paddle::Tensor> MoeLayerKernel(
         PD_CHECK(ret == 0,
                 "xftblock::moe_ffn_block_sorted_castte_per_token failed");
     }
-    
+
     return {fused_moe_out};
 }
 
 std::vector<paddle::Tensor>
 MoeLayer(const paddle::Tensor &x, const paddle::Tensor &gate_weight,
          const paddle::optional<paddle::Tensor> &gate_correction_bias,
-         const paddle::Tensor &ffn1_weight, const paddle::Tensor &ffn2_weight,
-         const paddle::optional<paddle::Tensor> &ffn1_bias,
-         const paddle::optional<paddle::Tensor> &ffn2_bias,
-         const paddle::optional<paddle::Tensor> &ffn1_weight_scale,
-         const paddle::optional<paddle::Tensor> &ffn2_weight_scale,
-         const paddle::optional<paddle::Tensor> &ffn2_in_scale,
+         const paddle::Tensor &up_gate_proj_weight, const paddle::Tensor &down_proj_weight,
+         const paddle::optional<paddle::Tensor> &up_gate_proj_bias,
+         const paddle::optional<paddle::Tensor> &down_proj_bias,
+         const paddle::optional<paddle::Tensor> &up_gate_proj_weight_scale,
+         const paddle::optional<paddle::Tensor> &down_proj_weight_scale,
+         const paddle::optional<paddle::Tensor> &down_proj_in_scale,
          const std::string &quant_method, const int moe_top_k,
          const bool moe_group) {
     const auto x_type = x.dtype();
-    const auto w_type = ffn1_weight.dtype();
+    const auto w_type = up_gate_proj_weight.dtype();
 
 #define APPLY_MOE_LAYER_KERNEL(TX, TW)                                         \
     return MoeLayerKernel<TX, TW>(                                             \
-        x, gate_weight, gate_correction_bias, ffn1_weight, ffn2_weight,        \
-        ffn1_bias, ffn2_bias, ffn1_weight_scale, ffn2_weight_scale,            \
-        ffn2_in_scale, quant_method, moe_top_k, moe_group);
+        x, gate_weight, gate_correction_bias, up_gate_proj_weight, down_proj_weight,        \
+        up_gate_proj_bias, down_proj_bias, up_gate_proj_weight_scale, down_proj_weight_scale,            \
+        down_proj_in_scale, quant_method, moe_top_k, moe_group);
 
     // TODO(mayang02): how to use quant_method?
     if (x_type == paddle::DataType::BFLOAT16 &&
@@ -237,36 +237,36 @@ std::vector<std::vector<int64_t>> MoeLayerInferShape(
     const std::vector<int64_t> &x_shape,
     const std::vector<int64_t> &gate_weight_shape,
     const paddle::optional<std::vector<int64_t>> &gate_correction_bias_shape,
-    const std::vector<int64_t> &ffn1_weight_shape,
-    const std::vector<int64_t> &ffn2_weight_shape,
-    const paddle::optional<std::vector<int64_t>> &ffn1_bias_shape,
-    const paddle::optional<std::vector<int64_t>> &ffn2_bias_shape,
-    const paddle::optional<std::vector<int64_t>> &ffn1_weight_scale_shape,
-    const paddle::optional<std::vector<int64_t>> &ffn2_weight_scale_shape,
-    const paddle::optional<std::vector<int64_t>> &ffn2_in_scale_shape) {
+    const std::vector<int64_t> &up_gate_proj_weight_shape,
+    const std::vector<int64_t> &down_proj_weight_shape,
+    const paddle::optional<std::vector<int64_t>> &up_gate_proj_bias_shape,
+    const paddle::optional<std::vector<int64_t>> &down_proj_bias_shape,
+    const paddle::optional<std::vector<int64_t>> &up_gate_proj_weight_scale_shape,
+    const paddle::optional<std::vector<int64_t>> &down_proj_weight_scale_shape,
+    const paddle::optional<std::vector<int64_t>> &down_proj_in_scale_shape) {
     return {x_shape};
 }
 
 std::vector<paddle::DataType> MoeLayerInferDtype(
     const paddle::DataType &x_dtype, const paddle::DataType &gate_weight_dtype,
     const paddle::optional<paddle::DataType> &gate_correction_bias_dtype,
-    const paddle::DataType &ffn1_weight_dtype,
-    const paddle::DataType &ffn2_weight_dtype,
-    const paddle::optional<paddle::DataType> &ffn1_bias_dtype,
-    const paddle::optional<paddle::DataType> &ffn2_bias_dtype,
-    const paddle::optional<paddle::DataType> &ffn1_weight_scale_dtype,
-    const paddle::optional<paddle::DataType> &ffn2_weight_scale_dtype,
-    const paddle::optional<paddle::DataType> &ffn2_in_scale_dtype) {
+    const paddle::DataType &up_gate_proj_weight_dtype,
+    const paddle::DataType &down_proj_weight_dtype,
+    const paddle::optional<paddle::DataType> &up_gate_proj_bias_dtype,
+    const paddle::optional<paddle::DataType> &down_proj_bias_dtype,
+    const paddle::optional<paddle::DataType> &up_gate_proj_weight_scale_dtype,
+    const paddle::optional<paddle::DataType> &down_proj_weight_scale_dtype,
+    const paddle::optional<paddle::DataType> &down_proj_in_scale_dtype) {
     return {x_dtype};
 }
 
 PD_BUILD_OP(xpu_moe_layer) // fused_moe
     .Inputs({"x", "gate_weight", paddle::Optional("gate_correction_bias"),
-             "ffn1_weight", "ffn2_weight", paddle::Optional("ffn1_bias"),
-             paddle::Optional("ffn2_bias"),
-             paddle::Optional("ffn1_weight_scale"),
-             paddle::Optional("ffn2_weight_scale"),
-             paddle::Optional("ffn2_in_scale")})
+             "up_gate_proj_weight", "down_proj_weight", paddle::Optional("up_gate_proj_bias"),
+             paddle::Optional("down_proj_bias"),
+             paddle::Optional("up_gate_proj_weight_scale"),
+             paddle::Optional("down_proj_weight_scale"),
+             paddle::Optional("down_proj_in_scale")})
     .Outputs({"fused_moe_out"})
     .Attrs({"quant_method:std::string", "moe_top_k:int", "moe_group:bool"})
     .SetKernelFn(PD_KERNEL(MoeLayer))

@@ -113,18 +113,18 @@ class MLAAttentionBackend(AttentionBackend):
         self.kv_num_heads: int = kv_num_heads
         self.num_heads: int = num_heads
         self.head_dim: int = fd_config.model_config.head_dim
-        self.num_layers: int = fd_config.model_config.num_layers
+        self.num_layers: int = fd_config.model_config.num_hidden_layers
 
         # For Multi Head Latent Attention
-        self.kv_lora_rank: int = fd_config.model_config.deepseekv3.kv_lora_rank
-        self.qk_rope_head_dim: int = fd_config.model_config.deepseekv3.qk_rope_head_dim
-        self.qk_head_dim: int = fd_config.model_config.deepseekv3.qk_nope_head_dim \
-            + fd_config.model_config.deepseekv3.qk_rope_head_dim
+        self.kv_lora_rank: int = fd_config.model_config.kv_lora_rank
+        self.qk_rope_head_dim: int = fd_config.model_config.qk_rope_head_dim
+        self.qk_head_dim: int = fd_config.model_config.qk_nope_head_dim \
+            + fd_config.model_config.qk_rope_head_dim
         self.attn_softmax_scale: float = self.qk_head_dim**-0.5
-        if fd_config.model_config.deepseekv3.rope_scaling:
-            mscale_all_dim = fd_config.model_config.deepseekv3.rope_scaling.get(
+        if fd_config.model_config.rope_scaling:
+            mscale_all_dim = fd_config.model_config.rope_scaling.get(
                 "mscale_all_dim", False)  # 1.0
-            scaling_factor = fd_config.model_config.deepseekv3.rope_scaling[
+            scaling_factor = fd_config.model_config.rope_scaling[
                 "factor"]  # 40
             mscale = yarn_get_mscale(scaling_factor, float(mscale_all_dim))
             self.attn_softmax_scale = self.attn_softmax_scale * mscale * mscale

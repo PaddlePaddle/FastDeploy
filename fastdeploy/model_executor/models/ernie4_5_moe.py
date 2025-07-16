@@ -23,9 +23,11 @@ import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.transformers import PretrainedModel
+from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig, ModelConfig
+from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import \
     support_graph_optimization
 from fastdeploy.model_executor.layers.activation import SiluAndMul
@@ -41,7 +43,6 @@ from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
 from fastdeploy.model_executor.models.utils import \
     LayerIdPlaceholder as layerid
 from fastdeploy.model_executor.models.utils import WeightMeta
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Ernie4_5_MLP(nn.Layer):
@@ -54,8 +55,8 @@ class Ernie4_5_MLP(nn.Layer):
         reduce_results: bool = True,
     ) -> None:
         super().__init__()
-        self.nranks = fd_config.parallel_config.tensor_parallel_degree
-        self.gate_up_proj = MergedColumnParallelLinear(
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
+        self.up_gate_proj = MergedColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.up_gate_proj",
             input_size=fd_config.model_config.hidden_size,
@@ -70,6 +71,7 @@ class Ernie4_5_MLP(nn.Layer):
             input_size=intermediate_size,
             output_size=fd_config.model_config.hidden_size,
             with_bias=False,
+            reduce_results=reduce_results,
         )
 
         self.act_fn = SiluAndMul(
@@ -79,11 +81,11 @@ class Ernie4_5_MLP(nn.Layer):
         )
 
     def load_state_dict(self, state_dict):
-        self.gate_up_proj.load_state_dict(state_dict)
+        self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
     def forward(self, hidden_states: paddle.Tensor):
-        gate_up_out = self.gate_up_proj(hidden_states)
+        gate_up_out = self.up_gate_proj(hidden_states)
         act_out = self.act_fn(gate_up_out)
         down_out = self.down_proj(act_out)
         return down_out
@@ -104,17 +106,17 @@ class Ernie4_5_MoE(nn.Layer):
                 f"{prefix}.gate.weight",
                 "gate_correction_bias_key":
                 f"{prefix}.moe_statics.e_score_correction_bias",
-                "ffn1_expert_weight_key":
+                "up_gate_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                "ffn2_expert_weight_key":
+                "down_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.down_proj.quant_weight",
-                "ffn1_expert_weight_scale_key":
+                "up_gate_proj_expert_weight_scale_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                "ffn2_expert_weight_scale_key":
+                "down_proj_expert_weight_scale_key":
                 f"{prefix}.experts.{{}}.down_proj.weight_scale",
-                "ffn1_expert_in_scale_key":
+                "up_gate_proj_expert_in_scale_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
-                "ffn2_expert_in_scale_key":
+                "down_proj_expert_in_scale_key":
                 f"{prefix}.experts.{{}}.down_proj.activation_scale",
             }
         elif moe_quant_type == "w4w2":
@@ -123,25 +125,25 @@ class Ernie4_5_MoE(nn.Layer):
                 f"{prefix}.gate.weight",
                 "gate_correction_bias_key":
                 f"{prefix}.moe_statics.e_score_correction_bias",
-                "ffn1_expert_weight_key":
+                "up_gate_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                "ffn2_expert_weight_key":
+                "down_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.down_proj.quant_weight",
-                "ffn1_expert_weight_scale_key":
+                "up_gate_proj_expert_weight_scale_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                "ffn2_expert_weight_scale_key":
+                "down_proj_expert_weight_scale_key":
                 f"{prefix}.experts.{{}}.down_proj.weight_scale",
-                "ffn1_expert_super_scales_key":
+                "up_gate_proj_expert_super_scales_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.super_scales",
-                "ffn2_expert_super_scales_key":
+                "down_proj_expert_super_scales_key":
                 f"{prefix}.experts.{{}}.down_proj.super_scales",
-                "ffn1_expert_code_scale_key":
+                "up_gate_proj_expert_code_scale_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.code_scale",
-                "ffn2_expert_code_scale_key":
+                "down_proj_expert_code_scale_key":
                 f"{prefix}.experts.{{}}.down_proj.code_scale",
-                "ffn1_expert_code_zp_key":
+                "up_gate_proj_expert_code_zp_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.code_zp",
-                "ffn2_expert_code_zp_key":
+                "down_proj_expert_code_zp_key":
                 f"{prefix}.experts.{{}}.down_proj.code_zp",
             }
         elif moe_quant_type == "tensor_wise_fp8" or (
@@ -152,17 +154,17 @@ class Ernie4_5_MoE(nn.Layer):
                 f"{prefix}.gate.weight",
                 "gate_correction_bias_key":
                 f"{prefix}.moe_statics.e_score_correction_bias",
-                "ffn1_expert_weight_key":
+                "up_gate_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                "ffn2_expert_weight_key":
+                "down_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.down_proj.quant_weight",
-                "ffn1_expert_weight_scale_key":
+                "up_gate_proj_expert_weight_scale_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                "ffn2_expert_weight_scale_key":
+                "down_proj_expert_weight_scale_key":
                 f"{prefix}.experts.{{}}.down_proj.weight_scale",
-                "ffn1_expert_in_scale_key":
+                "up_gate_proj_expert_in_scale_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
-                "ffn2_expert_in_scale_key":
+                "down_proj_expert_in_scale_key":
                 f"{prefix}.experts.{{}}.down_proj.activation_scale",
             }
         else:
@@ -171,24 +173,24 @@ class Ernie4_5_MoE(nn.Layer):
                 f"{prefix}.gate.weight",
                 "gate_correction_bias_key":
                 f"{prefix}.moe_statics.e_score_correction_bias",
-                "ffn1_expert_weight_key":
+                "up_gate_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.up_gate_proj.weight",
-                "ffn2_expert_weight_key":
+                "down_proj_expert_weight_key":
                 f"{prefix}.experts.{{}}.down_proj.weight",
             }
 
         self.fused_moe = FusedMoE(
             fd_config=fd_config,
-            moe_intermediate_size=fd_config.moe_config.moe_intermediate_size,
-            num_experts=fd_config.moe_config.num_experts,
-            top_k=fd_config.moe_config.top_k,
+            moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
+            num_experts=fd_config.model_config.moe_num_experts,
+            top_k=fd_config.model_config.moe_k,
             layer_idx=layer_id,
             weight_key_map=weight_key_map,
         )
 
-        self.num_shared_experts = fd_config.moe_config.moe_num_shared_experts
+        self.num_shared_experts = fd_config.model_config.moe_num_shared_experts
         if self.num_shared_experts > 0:
-            shared_experts_hidden_dim = self.num_shared_experts * fd_config.moe_config.moe_intermediate_size
+            shared_experts_hidden_dim = self.num_shared_experts * fd_config.model_config.moe_intermediate_size
             self.shared_experts = Ernie4_5_MLP(
                 fd_config=fd_config,
                 intermediate_size=shared_experts_hidden_dim,
@@ -271,8 +273,8 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             prefix=f"{prefix}.self_attn",
         )
 
-        if (fd_config.moe_config.num_experts is not None
-                and layer_id >= fd_config.moe_config.moe_layer_start_index):
+        if (getattr(fd_config.model_config, "moe_num_experts", None) is not None
+                and layer_id >= fd_config.model_config.moe_layer_start_index):
             self.mlp = Ernie4_5_MoE(
                 fd_config=fd_config,
                 layer_id=layer_id,
@@ -281,7 +283,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         else:
             self.mlp = Ernie4_5_MLP(
                 fd_config=fd_config,
-                intermediate_size=fd_config.model_config.ffn_hidden_size,
+                intermediate_size=fd_config.model_config.intermediate_size,
                 prefix=f"{prefix}.mlp",
             )
 
@@ -346,20 +348,20 @@ class Ernie4_5_Model(nn.Layer):
         """
         super().__init__()
 
-        self.num_layers = fd_config.model_config.num_layers
-        fd_config.model_config.prefix_name = "ernie"
+        self.num_layers = fd_config.model_config.num_hidden_layers
+        fd_config.model_config.pretrained_config.prefix_name = "ernie"
 
-        self.embeddings = VocabParallelEmbedding(
+        self.embed_tokens = VocabParallelEmbedding(
             fd_config=fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
             params_dtype=paddle.get_default_dtype(),
-            prefix=(f"{fd_config.model_config.prefix_name}.embed_tokens"))
+            prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"))
 
-        self.hidden_layers = nn.LayerList([
+        self.layers = nn.LayerList([
             Ernie4_5_DecoderLayer(
                 fd_config=fd_config,
-                prefix=f"{fd_config.model_config.prefix_name}.layers.{i}")
+                prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}")
             for i in range(self.num_layers)
         ])
 
@@ -367,7 +369,7 @@ class Ernie4_5_Model(nn.Layer):
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
-            prefix=f"{fd_config.model_config.prefix_name}.norm",
+            prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
     def load_state_dict(self, state_dict):
@@ -379,22 +381,22 @@ class Ernie4_5_Model(nn.Layer):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.embeddings.load_state_dict(state_dict)
+        self.embed_tokens.load_state_dict(state_dict)
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
-            self.hidden_layers[i].load_state_dict(state_dict)
+            self.layers[i].load_state_dict(state_dict)
 
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        hidden_states = self.embeddings(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
         residual = None
         for i in range(self.num_layers):
-            hidden_states, residual = self.hidden_layers[i](forward_meta,
+            hidden_states, residual = self.layers[i](forward_meta,
                                                             hidden_states,
                                                             residual)
 
@@ -417,7 +419,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         """
         super(Ernie4_5_MoeForCausalLM, self).__init__(fd_config)
         self.fd_config = fd_config
-        self.model = Ernie4_5_Model(fd_config=fd_config)
+        self.ernie = Ernie4_5_Model(fd_config=fd_config)
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
@@ -444,10 +446,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.model.load_state_dict(state_dict)
+        self.ernie.load_state_dict(state_dict)
         if self.tie_word_embeddings:
-            self.lm_head.out_linear.weight.set_value(
-                self.model.embeddings.word_embeddings.weight.transpose([1, 0]))
+            self.lm_head.linear.weight.set_value(
+                self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
         else:
             self.lm_head.load_state_dict(state_dict)
 
@@ -466,16 +468,16 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             shape=[0, self.fd_config.model_config.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
-        for i in range(self.fd_config.moe_config.moe_layer_start_index,
-                       self.fd_config.model_config.num_layers):
-            self.model.hidden_layers[i].mlp.fused_moe(fake_hidden_states)
+        for i in range(self.fd_config.model_config.moe_layer_start_index,
+                       self.fd_config.model_config.num_hidden_layers):
+            self.ernie.layers[i].mlp.fused_moe(fake_hidden_states)
 
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        hidden_states = self.model(ids_remove_padding=ids_remove_padding,
+        hidden_states = self.ernie(ids_remove_padding=ids_remove_padding,
                                    forward_meta=forward_meta)
 
         return hidden_states
@@ -559,7 +561,7 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
     ]
 
     @classmethod
-    def _get_tensor_parallel_mappings(cls, config: ModelConfig, is_split=True):
+    def _get_tensor_parallel_mappings(cls, config: PretrainedConfig, is_split=True):
         """
         get_tensor_parallel_mappings
         """
@@ -599,27 +601,13 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
             start_layer = (moe_layer_start_index
                            if moe_layer_start_index > 0 else num_layers)
             final_actions = build_expanded_keys(
-                num_layers,
-                moe_num_experts,
-                start_layer,
-                base_actions,
+                base_actions, num_layers, start_layer, moe_num_experts
             )
             return final_actions
-
-        moe_num_experts = 0
-        if isinstance(config.moe_num_experts, list):
-            moe_num_experts = sum(config.moe_num_experts)
-        elif isinstance(config.moe_num_experts, int):
-            moe_num_experts = config.moe_num_experts
-
-        moe_layer_start_index = -1
-        if isinstance(config.moe_layer_start_index, list):
-            moe_layer_start_index = min(config.moe_layer_start_index)
-        elif isinstance(config.moe_layer_start_index, int):
-            moe_layer_start_index = config.moe_layer_start_index
-
-        mappings = get_tensor_parallel_split_mappings(config.num_layers,
-                                                      moe_num_experts,
-                                                      moe_layer_start_index,
-                                                      config.prefix_name)
+        mappings = get_tensor_parallel_split_mappings(
+            config.num_hidden_layers,
+            config.moe_num_experts,
+            config.moe_layer_start_index,
+            config.prefix_name,
+        )
         return mappings

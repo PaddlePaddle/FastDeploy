@@ -295,7 +295,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["eos_token_id"][:] = np.array(
                 request.eos_token_ids, dtype="int64").reshape(-1, 1)
             self.share_inputs["pre_ids"][idx:idx + 1] = -1
-            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 1.0)
+            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 0.7)
             self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k", 0)
             self.share_inputs["min_p"][idx:idx+1] = request.get("min_p", 0.0)
             self.share_inputs["temperature"][idx:idx + 1] = request.get(
@@ -315,7 +315,7 @@ class XPUModelRunner(ModelRunnerBase):
                 "min_tokens", 1)
 
             self.share_inputs["max_dec_len"][idx:idx + 1] = request.get(
-                "max_tokens", self.model_config.max_length)
+                "max_tokens", self.model_config.max_model_len)
             self.share_inputs["stop_flags"][idx:idx + 1] = False
 
             self.share_inputs["first_token_ids"][
@@ -391,11 +391,11 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["min_dec_len"] = paddle.full(
             [max_num_seqs, 1], self.model_config.min_length, dtype='int64')
         self.share_inputs["max_dec_len"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_length, dtype='int64')
+            [max_num_seqs, 1], self.model_config.max_model_len, dtype='int64')
         self.share_inputs["min_length"] = paddle.full(
             [max_num_seqs, 1], self.model_config.min_length, dtype='int64')
         self.share_inputs["max_length"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_length, dtype='int64')
+            [max_num_seqs, 1], self.model_config.max_model_len, dtype='int64')
         self.share_inputs["seq_lens_this_time"] = paddle.full(max_num_seqs,
                                                               0,
                                                               dtype='int32')
@@ -483,8 +483,8 @@ class XPUModelRunner(ModelRunnerBase):
         # Initialize free list
         free_list = list(
             range(
-                self.parallel_config.max_block_num - 1,
-                int(self.parallel_config.max_block_num *
+                self.parallel_config.total_block_num - 1,
+                int(self.parallel_config.total_block_num *
                     self.parallel_config.kv_cache_ratio) - 1, -1))
         self.free_list_len = len(free_list)
         self.share_inputs["free_list"] = paddle.to_tensor(free_list,
@@ -579,7 +579,7 @@ class XPUModelRunner(ModelRunnerBase):
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
             max_num_blocks=max_block_num)
 
-        for i in range(self.model_config.num_layers):
+        for i in range(self.model_config.num_hidden_layers):
             cache_kvs["key_caches_{}".format(i)] = paddle.full(
                 shape=kv_cache_shape,
                 fill_value=0,
@@ -602,10 +602,10 @@ class XPUModelRunner(ModelRunnerBase):
         assert len(self.attn_backends) == 0
 
         # TODO(gongshaotian): Get rank from config
-        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_degree
+        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
         self.model_config.kv_num_heads = int(
             self.model_config.num_key_value_heads
-        ) // self.parallel_config.tensor_parallel_degree
+        ) // self.parallel_config.tensor_parallel_size
         head_dim = self.model_config.head_dim
 
         # Get the attention backend
@@ -762,7 +762,7 @@ class XPUModelRunner(ModelRunnerBase):
     def prepare_profile(self) -> None:
         """Prepare the profile run by setting the block number and initializing the KV cache."""
         paddle.device.xpu.empty_cache()
-        self.num_gpu_blocks = self.parallel_config.max_block_num
+        self.num_gpu_blocks = self.parallel_config.total_block_num
         self.initialize_kv_cache()
 
     def profile_run(self) -> None:
@@ -779,7 +779,6 @@ class XPUModelRunner(ModelRunnerBase):
         del self.share_inputs["caches"]
         if self.forward_meta is not None:
             del self.forward_meta.caches
-        del self.share_inputs["block_tables"]
         paddle.device.xpu.empty_cache()
 
     def cal_theortical_kvcache(self):
@@ -808,7 +807,7 @@ class XPUModelRunner(ModelRunnerBase):
         required_memory = (
             byte_of_dtype * 2 *  # k + v
             (self.parallel_config.block_size * hidden_dim) *
-            self.model_config.num_layers)
+            self.model_config.num_hidden_layers)
         return required_memory
 
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:
@@ -821,11 +820,6 @@ class XPUModelRunner(ModelRunnerBase):
 
         # Reset block table and kv cache with global block num
         self.initialize_kv_cache()
-
-        self.share_inputs["block_tables"] = paddle.full(
-            [self.parallel_config.max_num_seqs, self.num_gpu_blocks],
-            -1,
-            dtype="int32")
 
         # Reset free list
         free_list = list(

@@ -101,6 +101,8 @@ def pre_process(
             seq_lens_encoder,
             seq_lens_decoder,
         )
+        if isinstance(seq_lens_output, list):
+            seq_lens_output = seq_lens_output[0]
         output_token_num = paddle.sum(seq_lens_output)
         output_cum_offsets_tmp = paddle.cumsum(max_len - seq_lens_output)
         output_padding_offset, output_cum_offsets = speculate_get_output_padding_offset(
@@ -127,6 +129,36 @@ def post_process_normal(sampler_output: SamplerOutput,
                         save_each_rank: bool = False,
                         skip_save_output: bool = False) -> ModelRunnerOutput:
     """ Post-processing steps after completing a single token generation. """
+    # handle vl:
+    if model_output.enable_thinking:
+        exists_think_end = sampler_output.sampled_token_ids == model_output.think_end_id
+        paddle.assign(
+                paddle.where(
+                    exists_think_end,
+                    model_output.need_think_end - 1,
+                    model_output.need_think_end,
+                ), model_output.need_think_end)
+
+        paddle.assign(
+            paddle.where(
+                model_output.need_think_end.cast("bool"),
+                model_output.reasoning_index - 1,
+                model_output.reasoning_index,
+            ), model_output.reasoning_index)
+
+        stop_wo_think = (
+            (sampler_output.sampled_token_ids == model_output.eos_token_id) |
+            (model_output.reasoning_index == 0)) & (
+                model_output.need_think_end > 0)
+        sampler_output.sampled_token_ids = paddle.where(stop_wo_think,
+                                    model_output.think_end_id,
+                                    sampler_output.sampled_token_ids)
+        paddle.assign(
+            paddle.where(
+                stop_wo_think,
+                model_output.need_think_end - 1,
+                model_output.need_think_end,
+            ), model_output.need_think_end)
     # 1. Set stop value
     paddle.assign(
         paddle.where(
@@ -182,7 +214,7 @@ def post_process_normal(sampler_output: SamplerOutput,
             )
 
 
-def post_process_specualate(model_output, skip_save_output: bool = False):
+def post_process_specualate(model_output, save_each_rank: bool = False, skip_save_output: bool = False):
     """"""
     speculate_update_v3(
         model_output.seq_lens_encoder,
@@ -204,7 +236,7 @@ def post_process_specualate(model_output, skip_save_output: bool = False):
             model_output.accept_num,
             model_output.not_need_stop,
             model_output.mp_rank,
-            False,
+            save_each_rank,
         )
 
     speculate_clear_accept_nums(model_output.accept_num,
@@ -231,7 +263,7 @@ def post_process(sampler_output: SamplerOutput,
                  skip_save_output: bool = False) -> None:
     """ Post-processing steps after completing a single token generation. """
     if speculative_decoding:
-        post_process_specualate(model_output, skip_save_output)
+        post_process_specualate(model_output, save_each_rank, skip_save_output)
     else:
         post_process_normal(sampler_output, model_output, save_each_rank,
                             skip_save_output)

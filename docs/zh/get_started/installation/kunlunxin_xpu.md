@@ -72,33 +72,37 @@ python -m pip install paddlepaddle-xpu==3.1.0 -i https://www.paddlepaddle.org.cn
 python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
 ```
 
-### 下载昆仑编译套件 XTDK 和 XVLLM 预编译算子库并设置路径
-
-```bash
-# XTDK
-wget https://klx-sdk-release-public.su.bcebos.com/xtdk_15fusion/dev/3.2.40.1/xtdk-llvm15-ubuntu2004_x86_64.tar.gz
-tar -xvf xtdk-llvm15-ubuntu2004_x86_64.tar.gz && mv xtdk-llvm15-ubuntu2004_x86_64 xtdk
-export CLANG_PATH=$(pwd)/xtdk
-
-# XVLLM
-wget https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/20250624/output.tar.gz
-tar -xvf output.tar.gz && mv output xvllm
-export XVLLM_PATH=$(pwd)/xvllm
-```
-
-或者你也可以下载最新版 XTDK 和 XVLLM（不推荐）
-
-```bash
-XTDK: https://klx-sdk-release-public.su.bcebos.com/xtdk_15fusion/dev/latest/xtdk-llvm15-ubuntu2004_x86_64.tar.gz
-XVLLM: https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/latest/output.tar.gz
-```
-
-### 下载 FastDelpoy 源码，切换到稳定分支或 TAG，开始编译并安装：
+### 下载 FastDelpoy 源码，切换到稳定分支或 TAG
 
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy
 git checkout <tag or branch>
 cd FastDeploy
+```
+
+### 下载昆仑编译依赖
+
+```bash
+bash custom_ops/xpu_ops/src/download_dependencies.sh stable
+```
+
+或者你也可以下载最新版编译依赖
+
+```bash
+bash custom_ops/xpu_ops/src/download_dependencies.sh develop
+```
+
+设置环境变量
+
+```bash
+export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xtdk
+export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xvllm
+```
+
+### 开始编译并安装：
+
+```bash
+
 bash build.sh
 ```
 
@@ -115,106 +119,5 @@ python -c "from fastdeploy.model_executor.ops.xpu import block_attn"
 
 如果上述步骤均执行成功，代表 FastDeploy 已安装成功。
 
-## 快速开始
-
-P800 支持 ```ERNIE-4.5-300B-A47B-Paddle``` 模型采用以下配置部署（注意：不同配置在效果、性能上可能存在差异）。
-- 32K WINT4 8 卡（推荐）
-- 128K WINT4 8 卡
-- 32K WINT4 4 卡
-
-### OpenAI 兼容服务器
-
-您还可以通过如下命令，基于 FastDeploy 实现 OpenAI API 协议兼容的服务器部署。
-
-#### 启动服务
-
-**基于 WINT4 精度和 32K 上下文部署 ERNIE-4.5-300B-A47B-Paddle 模型到 8 卡 P800 服务器（推荐）**
-
-```bash
-python -m fastdeploy.entrypoints.openai.api_server \
-    --model baidu/ERNIE-4.5-300B-A47B-Paddle \
-    --port 8188 \
-    --tensor-parallel-size 8 \
-    --max-model-len 32768 \
-    --max-num-seqs 64 \
-    --quantization "wint4" \
-    --gpu-memory-utilization 0.9
-```
-
-**基于 WINT4 精度和 128K 上下文部署 ERNIE-4.5-300B-A47B-Paddle 模型到 8 卡 P800 服务器**
-
-```bash
-python -m fastdeploy.entrypoints.openai.api_server \
-    --model baidu/ERNIE-4.5-300B-A47B-Paddle \
-    --port 8188 \
-    --tensor-parallel-size 8 \
-    --max-model-len 131072 \
-    --max-num-seqs 64 \
-    --quantization "wint4" \
-    --gpu-memory-utilization 0.9
-```
-
-**基于 WINT4 精度和 32K 上下文部署 ERNIE-4.5-300B-A47B-Paddle 模型到 4 卡 P800 服务器**
-
-```bash
-export XPU_VISIBLE_DEVICES="0,1,2,3" # 设置使用的 XPU 卡
-python -m fastdeploy.entrypoints.openai.api_server \
-    --model baidu/ERNIE-4.5-300B-A47B-Paddle \
-    --port 8188 \
-    --tensor-parallel-size 4 \
-    --max-model-len 32768 \
-    --max-num-seqs 64 \
-    --quantization "wint4" \
-    --gpu-memory-utilization 0.9
-```
-
-**注意：** 使用 P800 在 4 块 XPU 上进行部署时，由于受到卡间互联拓扑等硬件限制，仅支持以下两种配置方式：
-`export XPU_VISIBLE_DEVICES="0,1,2,3"`
-or
-`export XPU_VISIBLE_DEVICES="4,5,6,7"`
-
-更多参数可以参考 [参数说明](../../parameters.md)。
-
-#### 请求服务
-
-您可以基于 OpenAI 协议，通过 curl 和 python 两种方式请求服务。
-
-```bash
-curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
--H "Content-Type: application/json" \
--d '{
-  "messages": [
-    {"role": "user", "content": "Where is the capital of China?"}
-  ]
-}'
-```
-
-```python
-import openai
-host = "0.0.0.0"
-port = "8188"
-client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
-
-response = client.completions.create(
-    model="null",
-    prompt="Where is the capital of China?",
-    stream=True,
-)
-for chunk in response:
-    print(chunk.choices[0].text, end='')
-print('\n')
-
-response = client.chat.completions.create(
-    model="null",
-    messages=[
-        {"role": "user", "content": "Where is the capital of China?"},
-    ],
-    stream=True,
-)
-for chunk in response:
-    if chunk.choices[0].delta:
-        print(chunk.choices[0].delta.content, end='')
-print('\n')
-```
-
-OpenAI 协议的更多说明可参考文档 [OpenAI Chat Compeltion API](https://platform.openai.com/docs/api-reference/chat/create)，以及与 OpenAI 协议的区别可以参考 [兼容 OpenAI 协议的服务化部署](../../online_serving/README.md)。
+## 如何在昆仑新XPU上部署服务
+请参考 [**支持的模型与服务部署**](../../usage/kunlunxin_xpu_deployment.md) 以了解昆仑芯 XPU 支持的模型与服务部署方法。

@@ -126,7 +126,7 @@ class WINT2Config(QuantConfigBase):
             layer (Layer): The layer for which the quantization method should be retrieved.
 
         Returns:
-            QuantMethodBase: The quantization method associated with the given layer. 
+            QuantMethodBase: The quantization method associated with the given layer.
         """
         if isinstance(layer, FusedMoE):
             if layer.layer_idx <= self.moe_w4_quant_end_layer:
@@ -135,8 +135,8 @@ class WINT2Config(QuantConfigBase):
                         {}).get_quant_method(layer)
             else:
                 from fastdeploy.model_executor.layers.moe.fused_moe_wint2_backend import \
-                    TritonWint2FusedMoeMethod
-                return TritonWint2FusedMoeMethod(self)
+                    CutlassWint2FusedMoeMethod
+                return CutlassWint2FusedMoeMethod(self)
         else:
             return get_quantization_config(self.dense_quant_type).from_config(
                 {}).get_quant_method(layer)

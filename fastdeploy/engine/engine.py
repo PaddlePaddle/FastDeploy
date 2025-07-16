@@ -47,7 +47,8 @@ from fastdeploy.output.token_processor import (TokenProcessor,
                                                WarmUpTokenProcessor)
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, console_logger, llm_logger
-
+from fastdeploy.metrics.trace_util import extract_from_metadata, start_span, start_span_request
+from opentelemetry import trace
 
 class LLMEngine(object):
     """
@@ -55,6 +56,7 @@ class LLMEngine(object):
 
     Attributes:
         cfg (Config): Configuration object containing all the parameters.
+        cached_generated_tokens (queue.Queue): Queue to store generated tokens.
         cached_generated_tokens (queue.Queue): Queue to store generated tokens.
         scheduler (LocalScheduler or GlobalScheduler): Scheduling tasks.
         input_processor (InputPreprocessor): Preprocessor for input data.
@@ -141,12 +143,6 @@ class LLMEngine(object):
                 self.cfg.guided_decoding_backend,
                 disable_any_whitespace=self.cfg.disable_any_whitespace,
             )
-
-    def reset_scheduler(self):
-        """
-        Reset the scheduler to its initial state.
-        """
-        self.scheduler.reset()
 
     def start(self, api_server_pid=None):
         """
@@ -361,7 +357,10 @@ class LLMEngine(object):
                 request, insert_task = None, []
                 results: List[Tuple[str, Optional[str]]] = list()
                 if data:
-                    request = Request.from_dict(data)
+                    request = Request.from_dict(data) 
+                    start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)     
+                             
+
                     llm_logger.debug(f"Receive request: {request}")
 
                     err_msg = None
@@ -692,6 +691,8 @@ class LLMEngine(object):
         """
         Insert tasks to engine.
         """
+        for task in tasks:
+            start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER) 
         # TODO 返回至 scheduler
         if allocated:
             current_tasks = []
@@ -943,7 +944,7 @@ class LLMEngine(object):
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
-            "FLAGS_max_partition_size": 32768,
+            "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 32768)),
             "FLAGS_hardamard_moe_block_size": 128,
         }
         # environment variables needed by Dy2St
@@ -996,8 +997,6 @@ class LLMEngine(object):
         pd_cmd = pd_cmd + f" --log_dir {log_dir}"
 
         worker_path = "../worker/worker_process.py"
-        if self.cfg.enable_mm:
-            worker_path = "../worker/vl_worker_process.py"
         py_script = os.path.join(current_dir_path, worker_path)
 
         ori_vocab_size = (
@@ -1034,9 +1033,11 @@ class LLMEngine(object):
             f" --speculative_model_name_or_path {self.cfg.speculative_config.model_name_or_path}"
             f" --speculative_model_quantization {self.cfg.speculative_config.quantization}"
             f" --speculative_benchmark_mode {self.cfg.speculative_config.benchmark_mode}"
-            f" --max_capture_batch_size {self.cfg.max_capture_batch_size}"
+            f" --graph_optimiaztion_config '{self.cfg.graph_optimization_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
-            f" --load_strategy {self.cfg.model_config.load_strategy}")
+            f" --load_strategy {self.cfg.model_config.load_strategy}"
+            f" --enable_mm {self.cfg.enable_mm}")
+
 
         worker_append_flag = {
             "enable_expert_parallel":
@@ -1047,9 +1048,6 @@ class LLMEngine(object):
             self.cfg.cache_config.enable_chunked_prefill,
             "do_profile": self.do_profile,
             "dynamic_load_weight": self.cfg.model_config.dynamic_load_weight,
-            "enable_static_graph_inference":
-            self.cfg.enable_static_graph_inference,
-            "use_cudagraph": self.cfg.use_cudagraph,
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "enable-custom-all-reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.enable_logprob,

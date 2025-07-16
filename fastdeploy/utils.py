@@ -335,65 +335,43 @@ def download_model(url, output_dir, temp_tar):
 
 class FlexibleArgumentParser(argparse.ArgumentParser):
     """
-    扩展 argparse.ArgumentParser，支持从 YAML 文件加载参数。
+    Extend argparse.ArgumentParser to support loading parameters from YAML files.
     """
 
     def __init__(self, *args, config_arg='--config', sep='_', **kwargs):
         super().__init__(*args, **kwargs)
-        self.sep = sep  # 用于展平嵌套字典的分隔符
-        # 创建临时解析器，仅用于解析 --config 参数
+        self.sep = sep
+
+        # Create parser to prase yaml file
         self.tmp_parser = argparse.ArgumentParser(add_help=False)
         self.tmp_parser.add_argument(config_arg,
                                      type=str,
                                      help='Path to YAML config file')
 
     def parse_args(self, args=None, namespace=None):
-        # 使用临时解析器解析出 --config 参数
         tmp_ns, remaining_args = self.tmp_parser.parse_known_args(args=args)
         config_path = tmp_ns.config
 
-        # 加载 YAML 文件并展平嵌套结构
         config = {}
         if config_path:
             with open(config_path, 'r') as f:
                 loaded_config = yaml.safe_load(f)
-                config = self._flatten_dict(loaded_config)
+                config = loaded_config
 
-        # 获取所有已定义参数的 dest 名称
+        # Get declared parameters
         defined_dests = {action.dest for action in self._actions}
-
-        # 过滤出已定义的参数
         filtered_config = {
             k: v
             for k, v in config.items() if k in defined_dests
         }
 
-        # 创建或使用现有的命名空间对象
+        # Set parameters
         if namespace is None:
             namespace = argparse.Namespace()
-
-        # 将配置参数设置到命名空间
         for key, value in filtered_config.items():
             setattr(namespace, key, value)
 
-        # 解析剩余参数并覆盖默认值
         return super().parse_args(args=remaining_args, namespace=namespace)
-
-    def _flatten_dict(self, d):
-        """将嵌套字典展平为单层字典，键由分隔符连接"""
-
-        def _flatten(d, parent_key=''):
-            items = []
-            for k, v in d.items():
-                new_key = f"{parent_key}{self.sep}{k}" if parent_key else k
-                if isinstance(v, dict):
-                    items.extend(_flatten(v, new_key).items())
-                else:
-                    items.append((new_key, v))
-            return dict(items)
-
-        return _flatten(d)
-
 
 def resolve_obj_from_strname(strname: str):
     module_name, obj_name = strname.rsplit(".", 1)
