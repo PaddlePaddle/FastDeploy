@@ -535,14 +535,11 @@ def parse_args():
     parser.add_argument(
         "--load_strategy",
         type=str,
-        choices=['ipc', 'ipc_no_reshard', 'ipc_snapshot', 'meta', 'normal'],
-        default='meta',
+        choices=['ipc', 'ipc_snapshot'],
+        default="ipc_snapshot",
         help="Weight loading method when dynamic loading is enabled: "
         "'ipc': real-time IPC streaming with automatic resharding, "
-        "'ipc_no_reshard': IPC streaming without weight processing, "
-        "'ipc_snapshot': load from disk snapshot of IPC weights, "
-        "'meta': provide RL traing worker, no_weights_load"
-        "'normal':normal load weight")
+        "'ipc_snapshot': load from disk snapshot of IPC weights.")
     parser.add_argument("--enable_mm",
                         type=str,
                         default="false",
