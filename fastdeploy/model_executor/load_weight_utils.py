@@ -43,11 +43,38 @@ def load_ep_checkpoint(model_path: str,
     filtered_map = {k: v for k, v in weight_list.items() if "experts" not in k}
     num_local_ffn_keys = []
 
-    for i in range(config.moe_layer_start_index, config.num_hidden_layers):
-        for j in range(
-                config.num_experts_start_offset,
-                config.num_experts_start_offset + config.num_experts_per_rank,
-        ):
+    from itertools import chain
+    def get_expert_ranges(config):
+        """
+        Generate expert index ranges based on configuration parameters
+    
+        This function is primarily used in Mixture-of-Experts (MoE) models to generate
+        expert index ranges according to configuration parameters. When moe_num_experts
+        is a list in the config, it returns a chained combination of two ranges, otherwise
+        returns a single range.
+        
+        Args:
+            config: Configuration object
+        
+        Returns:
+            If moe_num_experts is a list:
+                Returns a chained combination (chain object) of two ranges:
+                    1. Base range: [num_experts_start_offset, num_experts_start_offset + num_experts_per_rank)
+                    2. Offset range: [base_range.start + moe_num_experts[0], base_range.stop + moe_num_experts[0])
+            Else:
+                Returns single range: [num_experts_start_offset, num_experts_start_offset + num_experts_per_rank)
+        """
+        base_range = range(
+            config.num_experts_start_offset,
+            config.num_experts_start_offset + config.num_experts_per_rank
+        )
+        if isinstance(config.moe_num_experts, list):
+            return chain(base_range,
+                        range(base_range.start + config.moe_num_experts[0], base_range.stop + config.moe_num_experts[0]))
+        return base_range
+
+    for i in range(config.moe_layer_start_index, config.num_layers):
+        for j in get_expert_ranges(config):
             up_gate_proj_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight"
             down_proj_key = (f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight")
 

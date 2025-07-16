@@ -519,43 +519,6 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         """
         return self.blocks[0].mlp.fc2.weight.dtype
 
-    def get_name_mappings_to_training(self, ):
-        """ get_name_mappings_to_training """
-        infer_to_train = {}
-
-        # vit train names
-        vit_names = [
-            "vision_model.patch_embed.proj.weight", "vision_model.ln.weight",
-            "vision_model.ln.bias"
-        ]
-
-        vit_layer = 32
-        for layer_idx in range(vit_layer):
-            vit_names.append(f"vision_model.blocks.{layer_idx}.norm1.weight")
-            vit_names.append(f"vision_model.blocks.{layer_idx}.norm1.bias")
-
-            vit_names.append(f"vision_model.blocks.{layer_idx}.norm2.weight")
-            vit_names.append(f"vision_model.blocks.{layer_idx}.norm2.bias")
-
-            vit_names.append(
-                f"vision_model.blocks.{layer_idx}.attn.qkv.weight")
-            vit_names.append(f"vision_model.blocks.{layer_idx}.attn.qkv.bias")
-
-            vit_names.append(
-                f"vision_model.blocks.{layer_idx}.attn.proj.weight")
-            vit_names.append(f"vision_model.blocks.{layer_idx}.attn.proj.bias")
-
-            vit_names.append(f"vision_model.blocks.{layer_idx}.mlp.fc1.weight")
-            vit_names.append(f"vision_model.blocks.{layer_idx}.mlp.fc1.bias")
-
-            vit_names.append(f"vision_model.blocks.{layer_idx}.mlp.fc2.weight")
-            vit_names.append(f"vision_model.blocks.{layer_idx}.mlp.fc2.bias")
-
-        for train_name in vit_names:
-            infer_to_train[train_name] = train_name
-
-        return infer_to_train
-
     def rot_pos_emb(self, grid_thw, num_pad=0):
         """_summary_
 

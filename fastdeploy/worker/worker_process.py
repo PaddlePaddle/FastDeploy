@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 import argparse
+import json
 import time
 from typing import List
 
@@ -371,7 +372,7 @@ class PaddleDisWorkerProc():
             self.get_profile_block_num_signal.value[
                 self.local_rank] = num_blocks_global
         else:
-            num_blocks_global = self.fd_config.parallel_config.max_block_num
+            num_blocks_global = self.fd_config.parallel_config.total_block_num
         # NOTE(liuzichang): Too big num_blocks_global will lead to error 700
         # 4. Updata share inputs
         self.worker.reinitialize_kv_cache(num_gpu_blocks=num_blocks_global)
@@ -516,18 +517,11 @@ def parse_args():
                             "default is None. The priority of this configuration "\
                             "is lower than that of the config file. " \
                             "More complex quantization methods need to be configured via the config file.")
-    parser.add_argument("--enable_static_graph_inference",
-                        action='store_true',
-                        help="Whether to use static mode; if enabled, " \
-                             "'paddle.to_static' will be used to convert dynamic to static.")
-    parser.add_argument("--use_cudagraph",
-                        action='store_true',
-                        help="Flags to enable cuda graph.")
-    parser.add_argument("--max_capture_batch_size",
-                        type=int,
-                        default=64,
-                        help="Maximum Batch Size for Cuda Graph Capture. " \
-                        "If max_capture_batch_size set 64, FastDeploy will capture batch size in [1, 64]")
+    parser.add_argument("--graph_optimiaztion_config",
+                        type=json.loads,
+                        default=None,
+                        help=" Configation of Graph optimization backend. "
+    )
     parser.add_argument("--guided_decoding_backend",
                         type=str,
                         default="off",
@@ -541,14 +535,11 @@ def parse_args():
     parser.add_argument(
         "--load_strategy",
         type=str,
-        choices=['ipc', 'ipc_no_reshard', 'ipc_snapshot', 'meta', 'normal'],
-        default='meta',
+        choices=['ipc', 'ipc_snapshot'],
+        default="ipc_snapshot",
         help="Weight loading method when dynamic loading is enabled: "
         "'ipc': real-time IPC streaming with automatic resharding, "
-        "'ipc_no_reshard': IPC streaming without weight processing, "
-        "'ipc_snapshot': load from disk snapshot of IPC weights, "
-        "'meta': provide RL traing worker, no_weights_load"
-        "'normal':normal load weight")
+        "'ipc_snapshot': load from disk snapshot of IPC weights.")
     parser.add_argument("--enable_mm",
                         type=str,
                         default="false",
@@ -587,9 +578,10 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     load_config = LoadConfig(vars(args))
 
     graph_opt_config = GraphOptimizationConfig(
-                        args.enable_static_graph_inference,
-                        args.max_capture_batch_size,
-                        vars(args))
+        use_cudagraph=args.graph_optimiaztion_config["use_cudagraph"],
+        graph_opt_level=args.graph_optimiaztion_config["graph_opt_level"],
+        cudagraph_capture_sizes=args.graph_optimiaztion_config["cudagraph_capture_sizes"]
+    )
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank

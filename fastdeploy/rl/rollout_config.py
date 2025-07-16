@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+
 from fastdeploy.worker.worker_process import initialize_fd_config
 
 
@@ -24,7 +25,7 @@ class RolloutModelConfig:
         max_model_len: int = 32768,
         tensor_parallel_size: int = 4,
         dynamic_load_weight: bool = True,
-        load_strategy: str = "meta",
+        load_strategy: str = "ipc_snapshot",
         enable_mm: bool = False,
         # Default values for all other parameters
         max_num_seqs: int = 34,
@@ -53,9 +54,6 @@ class RolloutModelConfig:
         enable_expert_parallell: bool = False,
         ori_vocab_size: int = None,
         quantization: str = "None",
-        enable_static_graph_inference: bool = False,
-        use_cudagraph: bool = False,
-        max_capture_batch_size: int = 64,
         guided_decoding_backend: str = "off",
         disable_any_whitespace: bool = True,
         enable_logprob: bool = False,
@@ -95,9 +93,6 @@ class RolloutModelConfig:
         self.enable_expert_parallell = enable_expert_parallell
         self.ori_vocab_size = ori_vocab_size
         self.quantization = quantization
-        self.enable_static_graph_inference = enable_static_graph_inference
-        self.use_cudagraph = use_cudagraph
-        self.max_capture_batch_size = max_capture_batch_size
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
         self.enable_logprob = enable_logprob

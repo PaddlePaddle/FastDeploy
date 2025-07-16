@@ -32,6 +32,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import paddle
 import zmq
+from opentelemetry import trace
 from tqdm import tqdm
 
 from fastdeploy.engine.args_utils import EngineArgs
@@ -42,6 +43,7 @@ from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (EngineCacheQueue, EngineWorkerQueue,
                                            IPCSignal, ZmqClient)
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.output.token_processor import (TokenProcessor,
                                                WarmUpTokenProcessor)
@@ -55,6 +57,7 @@ class LLMEngine(object):
 
     Attributes:
         cfg (Config): Configuration object containing all the parameters.
+        cached_generated_tokens (queue.Queue): Queue to store generated tokens.
         cached_generated_tokens (queue.Queue): Queue to store generated tokens.
         scheduler (LocalScheduler or GlobalScheduler): Scheduling tasks.
         input_processor (InputPreprocessor): Preprocessor for input data.
@@ -356,6 +359,9 @@ class LLMEngine(object):
                 results: List[Tuple[str, Optional[str]]] = list()
                 if data:
                     request = Request.from_dict(data)
+                    start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
+
+
                     llm_logger.debug(f"Receive request: {request}")
 
                     err_msg = None
@@ -686,6 +692,8 @@ class LLMEngine(object):
         """
         Insert tasks to engine.
         """
+        for task in tasks:
+            start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
         # TODO 返回至 scheduler
         if allocated:
             current_tasks = []
@@ -937,7 +945,7 @@ class LLMEngine(object):
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
-            "FLAGS_max_partition_size": 32768,
+            "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 32768)),
             "FLAGS_hardamard_moe_block_size": 128,
         }
         # environment variables needed by Dy2St
@@ -1026,7 +1034,7 @@ class LLMEngine(object):
             f" --speculative_model_name_or_path {self.cfg.speculative_config.model_name_or_path}"
             f" --speculative_model_quantization {self.cfg.speculative_config.quantization}"
             f" --speculative_benchmark_mode {self.cfg.speculative_config.benchmark_mode}"
-            f" --max_capture_batch_size {self.cfg.max_capture_batch_size}"
+            f" --graph_optimiaztion_config '{self.cfg.graph_optimization_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
             f" --load_strategy {self.cfg.model_config.load_strategy}"
             f" --enable_mm {self.cfg.enable_mm}")
@@ -1044,9 +1052,6 @@ class LLMEngine(object):
             self.cfg.cache_config.enable_chunked_prefill,
             "do_profile": self.do_profile,
             "dynamic_load_weight": self.cfg.model_config.dynamic_load_weight,
-            "enable_static_graph_inference":
-            self.cfg.enable_static_graph_inference,
-            "use_cudagraph": self.cfg.use_cudagraph,
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "enable-custom-all-reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.enable_logprob,
