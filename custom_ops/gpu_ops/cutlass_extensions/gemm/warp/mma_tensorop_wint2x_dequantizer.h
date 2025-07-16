@@ -175,8 +175,6 @@ private:
     ElementCodeScaleZp* pointer_code_zp_;
     ElementSuperScale* pointer_super_scale_;
 
-    FragmentUnpack unpacked_frag_;
-
 public:
     CUTLASS_DEVICE
     MmaTensorOpWin2xDequantizer(SuperTensorRef smem_super_scale,
@@ -210,7 +208,6 @@ public:
     /// Group-wise params, need to load multiple times
     CUTLASS_DEVICE
     void load(FragmentLocalScale& local_scale_frag) {
-        //CUTLASS_TRACE_DEVICE(" pointer_local_scale_=%p", pointer_local_scale_);
         CUTLASS_PRAGMA_UNROLL
         for (int mma_n_iter = 0; mma_n_iter < MmaOperator::MmaIterations::kColumn; ++mma_n_iter) {
             local_scale_frag[mma_n_iter] = pointer_local_scale_[mma_n_iter * InstructionShape::kN]; // bank conflict
@@ -227,46 +224,30 @@ public:
                     int tb_offset_k) {
         int stage = tb_offset_k / 64;
 
-        //CUTLASS_TRACE_DEVICE(" FragmentInput::kElements=%d, %d bytes",
-        //    FragmentInput::kElements, static_cast<int>(sizeof_bits<FragmentInput>::value / 8));
-        //CUTLASS_TRACE_DEVICE(" FragmentUnpack::kElements=%d, %d bytes",
-        //    FragmentUnpack::kElements, static_cast<int>(sizeof_bits<FragmentUnpack>::value / 8));
-        //CUTLASS_TRACE_DEVICE(" FragmentOutput::kElements=%d, %d bytes",
-        //    FragmentOutput::kElements, static_cast<int>(sizeof_bits<FragmentOutput>::value / 8));
-
-        //CUTLASS_TRACE_DEVICE(" MmaOperator::FragmentB::kElements=%d", MmaOperator::FragmentB::kElements);
-        //CUTLASS_TRACE_DEVICE(" MmaOperator::IteratorB::InstructionShape: %dx%d; InstructionShape: %dx%dx%d; ",
-        //    MmaOperator::IteratorB::InstructionShape::kRow, MmaOperator::IteratorB::InstructionShape::kColumn,
-        //    InstructionShape::kM, InstructionShape::kN, InstructionShape::kK);
-        //CUTLASS_TRACE_DEVICE(" MmaOperator::MmaIterations: kRow=%d, kColumn=%d",
-        //    MmaOperator::MmaIterations::kRow, MmaOperator::MmaIterations::kColumn);
-
-        unpacked_frag_ = Uint2Converter::convert(input_frag);
-        // DEBUG CODES
-        for (int i = 0; i < FragmentUnpack::kElements; ++i) {
-            unpacked_frag_[i] = static_cast<typename FragmentUnpack::Element>(1); //static_cast<typename FragmentUnpack::Element>((i / 16) * 8 + (threadIdx.x % 32) / 4);
-        }
+        FragmentUnpack unpacked_frag = Uint2Converter::convert(input_frag, code_scale_frag, code_zp_frag);
 
 #if 0
         if (FragmentUnpack::kElements == 64) {
-            CUTLASS_TRACE_DEVICE(" unpacked_frag_[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
-                static_cast<float>(unpacked_frag_[0]), static_cast<float>(unpacked_frag_[1]),
-                static_cast<float>(unpacked_frag_[2]), static_cast<float>(unpacked_frag_[3]),
-                static_cast<float>(unpacked_frag_[4]), static_cast<float>(unpacked_frag_[5]),
-                static_cast<float>(unpacked_frag_[6]), static_cast<float>(unpacked_frag_[7]),
-                static_cast<float>(unpacked_frag_[8]), static_cast<float>(unpacked_frag_[9]),
-                static_cast<float>(unpacked_frag_[10]), static_cast<float>(unpacked_frag_[11]),
-                static_cast<float>(unpacked_frag_[12]), static_cast<float>(unpacked_frag_[13]),
-                static_cast<float>(unpacked_frag_[14]), static_cast<float>(unpacked_frag_[15]));
-            CUTLASS_TRACE_DEVICE(" unpacked_frag_[16:31]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
-                static_cast<float>(unpacked_frag_[16]), static_cast<float>(unpacked_frag_[17]),
-                static_cast<float>(unpacked_frag_[18]), static_cast<float>(unpacked_frag_[19]),
-                static_cast<float>(unpacked_frag_[20]), static_cast<float>(unpacked_frag_[21]),
-                static_cast<float>(unpacked_frag_[22]), static_cast<float>(unpacked_frag_[23]),
-                static_cast<float>(unpacked_frag_[24]), static_cast<float>(unpacked_frag_[25]),
-                static_cast<float>(unpacked_frag_[26]), static_cast<float>(unpacked_frag_[27]),
-                static_cast<float>(unpacked_frag_[28]), static_cast<float>(unpacked_frag_[29]),
-                static_cast<float>(unpacked_frag_[30]), static_cast<float>(unpacked_frag_[31]));
+            CUTLASS_TRACE_DEVICE(" [stage=%d] unpacked_frag[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
+                stage,
+                static_cast<float>(unpacked_frag[0]), static_cast<float>(unpacked_frag[1]),
+                static_cast<float>(unpacked_frag[2]), static_cast<float>(unpacked_frag[3]),
+                static_cast<float>(unpacked_frag[4]), static_cast<float>(unpacked_frag[5]),
+                static_cast<float>(unpacked_frag[6]), static_cast<float>(unpacked_frag[7]),
+                static_cast<float>(unpacked_frag[8]), static_cast<float>(unpacked_frag[9]),
+                static_cast<float>(unpacked_frag[10]), static_cast<float>(unpacked_frag[11]),
+                static_cast<float>(unpacked_frag[12]), static_cast<float>(unpacked_frag[13]),
+                static_cast<float>(unpacked_frag[14]), static_cast<float>(unpacked_frag[15]));
+            CUTLASS_TRACE_DEVICE(" [stage=%d] unpacked_frag[16:31]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
+                stage,
+                static_cast<float>(unpacked_frag[16]), static_cast<float>(unpacked_frag[17]),
+                static_cast<float>(unpacked_frag[18]), static_cast<float>(unpacked_frag[19]),
+                static_cast<float>(unpacked_frag[20]), static_cast<float>(unpacked_frag[21]),
+                static_cast<float>(unpacked_frag[22]), static_cast<float>(unpacked_frag[23]),
+                static_cast<float>(unpacked_frag[24]), static_cast<float>(unpacked_frag[25]),
+                static_cast<float>(unpacked_frag[26]), static_cast<float>(unpacked_frag[27]),
+                static_cast<float>(unpacked_frag[28]), static_cast<float>(unpacked_frag[29]),
+                static_cast<float>(unpacked_frag[30]), static_cast<float>(unpacked_frag[31]));
         }
 #endif
 
@@ -306,7 +287,7 @@ public:
             CUTLASS_PRAGMA_UNROLL
             for (int j = 0; j < num_columns; ++j) {
                 ElementCompute scaled_value =
-                    static_cast<ElementCompute>(unpacked_frag_[mma_n_iter * num_columns + j]) * scale_frag[mma_n_iter];
+                    static_cast<ElementCompute>(unpacked_frag[mma_n_iter * num_columns + j]) * scale_frag[mma_n_iter];
                 output_frag[mma_n_iter * num_columns + j] = static_cast<ElementOperand>(scaled_value);
             }
         }
@@ -362,16 +343,6 @@ public:
         // avoid numerous conversion instructions in GEMM main loop.
         arch::device_breakpoint();
 #endif
-
-        const int fixed_values[64] = {
-            0, 1, 8, 9, 16, 17, 24, 25, 32, 33, 40, 41, 48, 49, 56, 57,
-            2, 3, 10, 11, 18, 19, 26, 27, 34, 35, 42, 43, 50, 51, 58, 59,
-            4, 5, 12, 13, 20, 21, 28, 29, 36, 37, 44, 45, 52, 53, 60, 61,
-            6, 7, 14, 15, 22, 23, 30, 31, 38, 39, 46, 47, 54, 55, 62, 63
-        };
-        for (int i = 0; i < FragmentUnpack::kElements; ++i) {
-            output_frag[i] = static_cast<typename FragmentUnpack::Element>(fixed_values[(i % 16) + (threadIdx.x % 4) * 16]);
-        }
     }
 
     /// Add an offset to pointer in units of elements.

@@ -79,12 +79,12 @@ public:
 
   /// 2 uint4b_t values are stored in a single uint8_t
   constexpr static int kStagesPerLocalScaleLoad = 2 * kGroupSize / Shape::kK;
-  constexpr static int kLocalScaleRows = IteratorLocalScale::Shape::kRow;
+  constexpr static int kLocalScaleRows =
+      IteratorLocalScale::Shape::kRow * IteratorLocalScale::Shape::kColumn * sizeof_bits<ElementLocalScale>::value / 8 / Shape::kN;
 
   using SmemElement = uint8_t;
   constexpr static int kSmemRows =
-      sizeof(ElementLocalScale) * kLocalScaleRows * kStages
-      + sizeof(ElementSuperScale) + sizeof(ElementCodeScaleZp) * 2;
+      kLocalScaleRows * kStages + sizeof(ElementSuperScale) + sizeof(ElementCodeScaleZp) * 2;
   constexpr static int kSmemColumns = Shape::kN;
 
   using QuantParamsShape = MatrixShape<kSmemRows, kSmemColumns>;
@@ -185,19 +185,7 @@ public:
       smem_iterator_code_zp_(LayoutCodeScaleZp(IteratorCodeScaleZp::Shape::kColumn),
           get_code_zp_smem_ptr(), {1, IteratorCodeScaleZp::Shape::kColumn}, thread_idx),
       smem_write_stage_idx_(0),
-      smem_read_stage_idx_(0)
-  {
-    //CUTLASS_TRACE_DEVICE(" Shape: {%d, %d, %d}, kSmemRows=%d, kSmemColumns=%d, kLocalScaleRows=%d, kStagesPerLocalScaleLoad=%d",
-    //    Shape::kM, Shape::kN, Shape::kK, kSmemRows, kSmemColumns, kLocalScaleRows, kStagesPerLocalScaleLoad);
-    //CUTLASS_TRACE_DEVICE(" IteratorSuperScale::Shape: {%d, %d}, kSuperScaleSmemOffset=%d, smem_ptr=%p",
-    //    IteratorSuperScale::Shape::kRow, IteratorSuperScale::Shape::kColumn, kSuperScaleSmemOffset, get_super_scale_smem_ptr());
-    //CUTLASS_TRACE_DEVICE(" IteratorLocalScale::Shape: {%d, %d}, kLocalScaleSmemOffset=%d, smem_ptr=%p",
-    //    IteratorLocalScale::Shape::kRow, IteratorLocalScale::Shape::kColumn, kLocalScaleSmemOffset, get_local_scale_smem_ptr());
-    //CUTLASS_TRACE_DEVICE(" IteratorCodeScaleZp::Shape: {%d, %d}, kCodeScaleSmemOffset=%d, smem_ptr=%p",
-    //    IteratorCodeScaleZp::Shape::kRow, IteratorCodeScaleZp::Shape::kColumn, kCodeScaleSmemOffset, get_code_scale_smem_ptr());
-    //CUTLASS_TRACE_DEVICE(" IteratorCodeScaleZp::Shape: {%d, %d}, kCodeZpSmemOffset=%d, smem_ptr=%p",
-    //    IteratorCodeScaleZp::Shape::kRow, IteratorCodeScaleZp::Shape::kColumn, kCodeZpSmemOffset, get_code_zp_smem_ptr());
-  }
+      smem_read_stage_idx_(0) {}
 
   CUTLASS_DEVICE
   SuperTensorRef super_scale_ref() {
@@ -223,11 +211,6 @@ public:
   CUTLASS_DEVICE
   void copy_tiles_and_advance_per_stage(Arguments &quant_args, int stage) {
     if constexpr (IsFirstStage) {
-      //CUTLASS_TRACE_DEVICE(" [stage=%d][SuperScale] Shape: {%d, %d}, Fragment::kElements=%d",
-      //    stage, IteratorSuperScale::Shape::kRow, IteratorSuperScale::Shape::kColumn, IteratorSuperScale::Fragment::kElements);
-      //CUTLASS_TRACE_DEVICE(" [stage=%d][CodeScale] Shape: {%d, %d}, Fragment::kElements=%d",
-      //    stage, IteratorCodeScaleZp::Shape::kRow, IteratorCodeScaleZp::Shape::kColumn, IteratorCodeScaleZp::Fragment::kElements);
-
       // Load channel-wise super_scale to shared memory, which only needs to be done once.
       typename IteratorSuperScale::Fragment tb_frag_super_scale;
       tb_frag_super_scale.clear();
@@ -279,8 +262,8 @@ public:
       }
       ++this->smem_iterator_local_scale_;
 
-      //CUTLASS_TRACE_DEVICE(" [stage=%d][LocalScale] Shape: {%d, %d}",
-      //    stage, IteratorLocalScale::Shape::kRow, IteratorLocalScale::Shape::kColumn);
+      //CUTLASS_TRACE_DEVICE(" [stage=%d][LocalScale] Shape: {%d, %d}, kLocalScaleRows=%d",
+      //    stage, IteratorLocalScale::Shape::kRow, IteratorLocalScale::Shape::kColumn, kLocalScaleRows);
     }
   }
 
@@ -310,11 +293,12 @@ public:
   CUTLASS_DEVICE
   int advance_smem_read_stage() {
     int byte_offset = 0;
-    if (smem_write_stage_idx_ % kStagesPerLocalScaleLoad == 0) {
-      byte_offset = kLocalScaleRows * kSmemColumns;
-    }
 
     ++smem_read_stage_idx_;
+
+    if (smem_read_stage_idx_ % kStagesPerLocalScaleLoad == 0) {
+      byte_offset = kLocalScaleRows * kSmemColumns;
+    }
 
     if (smem_read_stage_idx_ == kStagesPerLocalScaleLoad * kStages) {
       smem_read_stage_idx_ = 0;

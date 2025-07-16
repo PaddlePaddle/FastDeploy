@@ -447,31 +447,21 @@ struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, 16>
     using result_type = Array<T, 16>;
     using source_type = Array<uint2b_t, 16>;
 
-    using ScaleComputeT = T;
+    using ScaleComputeT = float;
 
     static constexpr int32_t kWeightMask = 0x3F;
     static constexpr int32_t kBZP = 32;
 
     CUTLASS_DEVICE
-    static result_type convert(source_type const& source)
+    static result_type convert(source_type const& source, ScaleComputeT code_scale, ScaleComputeT code_zp)
     {
         result_type result;
         uint8_t const* in_ptr = reinterpret_cast<uint8_t const*>(&source);
 
-        ScaleComputeT code_scale = static_cast<ScaleComputeT>(1);
-        ScaleComputeT code_zp = static_cast<ScaleComputeT>(0);
-        ScaleComputeT floor_offset = static_cast<ScaleComputeT>(0.5);
-
-#if 0
-        CUTLASS_TRACE_DEVICE(" source: [%d, %d, %d, %d]",
-            static_cast<int>(in_ptr[0]), static_cast<int>(in_ptr[1]),
-            static_cast<int>(in_ptr[2]), static_cast<int>(in_ptr[3]));
-#endif
-
         CUTLASS_PRAGMA_UNROLL
         for (int i = 0; i < 4; ++i) {
             int32_t decode_value =
-                static_cast<int32_t>(floor(static_cast<ScaleComputeT>(in_ptr[i]) * code_scale + code_zp + floor_offset));
+                static_cast<int32_t>(floor(static_cast<ScaleComputeT>(in_ptr[i]) * code_scale + code_zp + 0.5f));
 
             ScaleComputeT value_3 = static_cast<ScaleComputeT>((decode_value & kWeightMask) - kBZP);
             decode_value >>= 3;
@@ -486,43 +476,13 @@ struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, 16>
             result[i * 4 + 2] = static_cast<T>(value_2);
             result[i * 4 + 3] = static_cast<T>(value_3);
         }
-
-        // 预定义的固定值数组（64个元素）
-        const int fixed_values[64] = {
-            0, 1, 8, 9, 16, 17, 24, 25, 32, 33, 40, 41, 48, 49, 56, 57,
-            2, 3, 10, 11, 18, 19, 26, 27, 34, 35, 42, 43, 50, 51, 58, 59,
-            4, 5, 12, 13, 20, 21, 28, 29, 36, 37, 44, 45, 52, 53, 60, 61,
-            6, 7, 14, 15, 22, 23, 30, 31, 38, 39, 46, 47, 54, 55, 62, 63
-        };
-
-        // CUTLASS_PRAGMA_UNROLL
-        // for (int i = 0; i < 16; ++i) {
-        //     // result[i] = static_cast<T>(fixed_values[i + idx * 16]);
-        //     if (threadIdx.x % 32 == 0 || threadIdx.x % 32 == 4) {
-        //         result[i] = static_cast<T>(fixed_values0[i + idx * 16]);
-        //     } else if (threadIdx.x % 32 == 1 || threadIdx.x % 32 == 5) {
-        //         result[i] = static_cast<T>(fixed_values1[i + idx * 16]);
-        //     } else if (threadIdx.x % 32 == 2 || threadIdx.x % 32 == 6) {
-        //         result[i] = static_cast<T>(fixed_values2[i + idx * 16]);
-        //     } else if (threadIdx.x % 32 == 3 || threadIdx.x % 32 == 7) {
-        //         result[i] = static_cast<T>(fixed_values3[i + idx * 16]);
-        //     } else {
-        //         result[i] = static_cast<T>(0);
-        //     }
-        // }
-
-        CUTLASS_PRAGMA_UNROLL
-        for (int i = 0; i < 16; ++i) {
-            result[i] = static_cast<T>(fixed_values[i + (threadIdx.x % 4) * 16]);
-        }
-
         return result;
     }
 
     CUTLASS_DEVICE
-    result_type operator()(source_type const& s)
+    result_type operator()(source_type const& s, ScaleComputeT code_scale, ScaleComputeT code_zp)
     {
-        return convert(s);
+        return convert(s, code_scale, code_zp);
     }
 };
 
@@ -537,9 +497,10 @@ struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, N>
 
     using result_type = Array<T, N>;
     using source_type = Array<uint2b_t, N>;
+    using code_type = Array<float, N / kVecWidth>;
 
     CUTLASS_DEVICE
-    static result_type convert(source_type const& source)
+    static result_type convert(source_type const& source, code_type const& code_scale, code_type const& code_zp)
     {
         using scalar_result_type = typename result_type::Element;
         using scalar_source_type = typename source_type::Element;
@@ -556,16 +517,16 @@ struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, N>
         CUTLASS_PRAGMA_UNROLL
         for (int i = 0; i < N / kVecWidth; ++i)
         {
-            result_ptr[i] = convert_vector_(source_ptr[i]);
+            result_ptr[i] = convert_vector_(source_ptr[i], code_scale[i], code_zp[i]);
         }
 
         return result;
     }
 
     CUTLASS_DEVICE
-    result_type operator()(source_type const& s)
+    result_type operator()(source_type const& s, code_type const& code_scale, code_type const& code_zp)
     {
-        return convert(s);
+        return convert(s, code_scale, code_zp);
     }
 };
 
