@@ -163,15 +163,6 @@ class OpenAIServingChat:
                             current_waiting_time = 0
                     await asyncio.sleep(0.01)
                     continue
-
-                res = json.loads(raw_data[-1].decode('utf-8'))
-                if res.get("error_code", 200) != 200:
-                    raise ValueError("{}".format(res["error_msg"]))
-                if request.metadata is not None:
-                    enable_thinking = request.metadata.get("enable_thinking")
-                self.engine_client.data_processor.process_response_dict(
-                    res, stream=True, enable_thinking=enable_thinking)
-
                 response = msgpack.unpackb(raw_data[-1])
                 for res in response:
                     if res.get("error_code", 200) != 200:
@@ -238,7 +229,6 @@ class OpenAIServingChat:
                         logprobs=logprobs_res,
                         arrival_time=arrival_time
                     )
-
                     if res["finished"]:
                         num_choices -= 1
                         work_process_metrics.e2e_request_latency.observe(time.time() - res["metrics"]["request_start_time"])
@@ -448,8 +438,14 @@ class OpenAIServingChat:
 
         try:
             # The top-k candidates for the current token
-            topk_token_ids = response_logprobs.logprob_token_ids[0][:request_top_logprobs + 1]
-            topk_logprobs = response_logprobs.logprobs[0][:request_top_logprobs + 1]
+            topk_token_ids = []
+            topk_logprobs = []
+
+            if response_logprobs.logprob_token_ids and len(response_logprobs.logprob_token_ids) > 0:
+                topk_token_ids = response_logprobs.logprob_token_ids[0][:request_top_logprobs + 1]
+
+            if response_logprobs.logprobs and len(response_logprobs.logprobs) > 0:
+                topk_logprobs = response_logprobs.logprobs[0][:request_top_logprobs + 1]
 
             # Construct the candidate token structure (LogProbEntry) of topk
             top_logprob_entries: List[LogProbEntry] = []
