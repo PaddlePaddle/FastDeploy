@@ -1031,6 +1031,9 @@ class LLMEngine(object):
             f" --load_strategy {self.cfg.model_config.load_strategy}"
             f" --enable_mm {self.cfg.enable_mm}")
 
+        if self.cfg.enable_mm:
+            arguments = arguments + f" --im_patch_id {self.data_processor.tokenizer.get_vocab()['<|IMAGE_PLACEHOLDER|>']} --think_end_id {self.data_processor.tokenizer.get_vocab()['</think>']}"
+
 
         worker_append_flag = {
             "enable_expert_parallel":

@@ -31,7 +31,7 @@ from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import \
     AttentionBackend
 from fastdeploy.model_executor.layers.rotary_embedding import (get_rope,
-                                                               get_rope_3d)
+                                                               prepare_rope3d)
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import (
     Sampler, SpeculativeSampler)
@@ -47,14 +47,12 @@ from fastdeploy.platforms import current_platform
 if not current_platform.is_dcu():
     from fastdeploy.spec_decode import MTPProposer, NgramProposer
 
-from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
-from fastdeploy.input.mm_processor import DataProcessor
 from fastdeploy.model_executor.forward_meta import ForwardMeta
-from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import \
-    ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
-from fastdeploy.worker.utils import check_safetensors_model
+from fastdeploy.worker.utils import (check_safetensors_model,
+                                     extract_vision_features,
+                                     init_image_preprocess, preprocess_mm_task)
 
 
 class GPUModelRunner(ModelRunnerBase):
@@ -89,8 +87,6 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 self.tokenizer_path = self.parallel_config.model_name_or_path
                 self.image_preprocessor_path = self.parallel_config.model_name_or_path
-            self.vision_model_name_or_path = os.path.join(
-                model_path, "DFNRopeVisionTransformer")
 
             self.amp_black = [
                 "reduce_sum",
@@ -255,10 +251,18 @@ class GPUModelRunner(ModelRunnerBase):
                         f"prefill_chunk_info: {request.prefill_chunk_info}")
                     token_chunk_size = request.prefill_chunk_info[0]
                     if self.enable_mm:
-                        inputs = self._preprocess_mm_task(token_chunk_size)
+                        inputs = preprocess_mm_task(token_chunk_size)
                         if inputs.get("images") is not None:
-                            self.share_inputs["image_features"] = self.extract_vision_features(
-                                inputs)
+                            self.share_inputs["image_features"] = extract_vision_features(
+                                self.image_preprocess,
+                                inputs,
+                                im_patch_id = self.model_config.im_patch_id,
+                                amp_black = self.amp_black,
+                                amp_white = self.amp_white,
+                                dtype = self.parallel_config.dtype,
+                                model = self.model,
+                                spatial_conv_size = self.model_config.spatial_conv_size,
+                                tensor_parallel_size = self.parallel_config.tensor_parallel_size)
                         else:
                             # Compatible with the situation that lacks images and videos
                             self.share_inputs["image_features"] = None
@@ -288,11 +292,19 @@ class GPUModelRunner(ModelRunnerBase):
                                                         1] = token_chunk_size
                 else:
                     if self.enable_mm:
-                        inputs = self._preprocess_mm_task(request.multimodal_inputs)
+                        inputs = preprocess_mm_task(request.multimodal_inputs)
                         if inputs.get("images") is not None:
                             self.share_inputs[
-                                "image_features"] = self.extract_vision_features(
-                                    inputs)
+                                "image_features"] = extract_vision_features(
+                                    self.image_preprocess,
+                                    inputs,
+                                    im_patch_id = self.model_config.im_patch_id,
+                                    amp_black = self.amp_black,
+                                    amp_white = self.amp_white,
+                                    dtype = self.parallel_config.dtype,
+                                    model = self.model,
+                                    spatial_conv_size = self.model_config.spatial_conv_size,
+                                    tensor_parallel_size = self.parallel_config.tensor_parallel_size)
                         else:
                             # Compatible with the situation that lacks images and videos
                             self.share_inputs["image_features"] = None
@@ -320,8 +332,8 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["reasoning_index"][
                         idx:idx + 1, :] = request.get("reasoning_max_tokens", 2048)
                     self.share_inputs["rope_emb"][idx:idx +
-                                          1, :] = self.prepare_rope3d(
-                                              position_ids, request.get("max_tokens", 2048))
+                                          1, :] = prepare_rope3d(
+                                              position_ids, request.get("max_tokens", 2048), head_dim = self.model_config.head_dim, rope_theta = self.model_config.rope_theta, freq_allocation = self.model_config.freq_allocation, max_model_len = self.parallel_config.max_model_len)
                     self.share_inputs["seq_lens_decoder"][idx:idx + 1] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
@@ -1018,11 +1030,19 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 token_chunk_size = task.prefill_chunk_info[task.chunk_idx]
                 if self.enable_mm:
-                    inputs = self._preprocess_mm_task(task.prefill_chunk_info[task.chunk_idx])
+                    inputs = preprocess_mm_task(task.prefill_chunk_info[task.chunk_idx])
                     if inputs.get("images") is not None:
                         self.share_inputs[
                             "image_features"] = self.extract_vision_features(
-                                inputs)
+                                self.image_preprocess,
+                                inputs,
+                                im_patch_id = self.model_config.im_patch_id,
+                                amp_black = self.amp_black,
+                                amp_white = self.amp_white,
+                                dtype = self.parallel_config.dtype,
+                                model = self.model,
+                                spatial_conv_size = self.model_config.spatial_conv_size,
+                                tensor_parallel_size = self.parallel_config.tensor_parallel_size)
                     else:
                         # Compatible with the situation that lacks images and videos
                         self.share_inputs["image_features"] = None
@@ -1399,38 +1419,10 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager._log_memory(
             "dynamic weight manager update all memory")
 
-    def _init_image_preprocess(self) -> None:
-        processor = DataProcessor(
-            tokenizer_name=self.tokenizer_path,
-            image_preprocessor_name=str(self.image_preprocessor_path),
-        )
-        processor.eval()
-        image_preprocess = processor.image_preprocessor
-        image_preprocess.image_mean_tensor = paddle.to_tensor(
-            image_preprocess.image_mean, dtype="float32").reshape([1, 3, 1, 1])
-        image_preprocess.image_std_tensor = paddle.to_tensor(
-            image_preprocess.image_std, dtype="float32").reshape([1, 3, 1, 1])
-        image_preprocess.rescale_factor = paddle.to_tensor(
-            image_preprocess.rescale_factor, dtype="float32")
-        image_preprocess.image_mean_tensor = image_preprocess.image_mean_tensor.squeeze(
-            [-2, -1]).repeat_interleave(self.model_config.vision_config.patch_size**2 * 1,
-                                        -1)
-        image_preprocess.image_std_tensor = image_preprocess.image_std_tensor.squeeze(
-            [-2, -1]).repeat_interleave(self.model_config.vision_config.patch_size**2 * 1,
-                                        -1)
-        self.image_preprocess = image_preprocess
+
 
     def load_mm_config_and_image_preprocess(self) -> None:
-        tokenizer = ErnieBotTokenizer.from_pretrained(
-            self.tokenizer_path,
-            model_max_length=self.parallel_config.max_model_len,
-            padding_side="right",
-            use_fast=False,
-        )
-        tokenizer.ignored_index = -100
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.unk_token
-
+        # use in load model
         self.fd_config.model_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_size
         self.fd_config.model_config.tensor_parallel_rank = self.parallel_config.tensor_parallel_rank
         self.fd_config.model_config.moe_group="dummy"
@@ -1441,112 +1433,7 @@ class GPUModelRunner(ModelRunnerBase):
         vision_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_size
         vision_config.tensor_parallel_rank = self.parallel_config.tensor_parallel_rank
         self.fd_config.model_config.pixel_hidden_size = vision_config.hidden_size
-        self.fd_config.model_config.im_patch_id = tokenizer.get_vocab()[
-            "<|IMAGE_PLACEHOLDER|>"
-        ]
-        self.fd_config.model_config.think_end_id = tokenizer.get_vocab()["</think>"]
         self.fd_config.model_config.max_text_id = self.fd_config.model_config.im_patch_id
         self.fd_config.model_config.sequence_parallel = False
         self.model_config = self.fd_config.model_config
-        self._init_image_preprocess()
-
-    def _preprocess_mm_task(self, one: dict) -> None:
-        """process batch"""
-
-        input_ids = one["input_ids"][np.newaxis, :]
-        input_ids = paddle.to_tensor(input_ids, dtype=paddle.int64)
-        token_type_ids = one["token_type_ids"][np.newaxis, :]
-        token_type_ids = paddle.to_tensor(token_type_ids, dtype=paddle.int64)
-
-        if one["images"] is not None:
-            image_type_ids = one["image_type_ids"][np.newaxis, :]
-            images = one["images"]
-            image_type_ids = paddle.to_tensor(image_type_ids,
-                                              dtype=paddle.int64)
-            images = paddle.to_tensor(images, dtype="uint8")
-            grid_thw = paddle.to_tensor(one["grid_thw"], dtype="int64")
-        else:
-            image_type_ids = None
-            images = None
-            grid_thw = None
-
-        if one["position_ids"] is not None:
-            position_ids = paddle.to_tensor(one["position_ids"],
-                                            dtype="int64").unsqueeze([0])
-        else:
-            position_ids = None
-
-        result = dict(
-            input_ids=input_ids,
-            image_type_ids=image_type_ids,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            grid_thw=grid_thw,
-            images=images,
-        )
-        return result
-
-    @paddle.no_grad()
-    def extract_vision_features(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
-        """extract_vision_features"""
-        assert inputs["images"] is not None
-        grid_thw = inputs["grid_thw"]
-
-        images = inputs["images"].cast("float32")
-        images = self.image_preprocess.rescale_factor * images - self.image_preprocess.image_mean_tensor
-        images = images / self.image_preprocess.image_std_tensor
-        images = images.cast("bfloat16")
-
-        token_type_ids = inputs["token_type_ids"]
-        token_type_ids_w_video = token_type_ids
-        input_ids = inputs["input_ids"]
-        # convert to img patch id
-        # TODO(lulinjun): may need to check model_config and model_cfg
-        image_mask = input_ids == self.model_config.im_patch_id
-        image_type_ids = inputs["image_type_ids"]
-        with paddle.amp.auto_cast(
-                True,
-                custom_black_list=self.amp_black,
-                custom_white_list=self.amp_white,
-                level="O2",
-                dtype=self.parallel_config.dtype,
-        ):
-            image_features = self.model.vision_model.extract_feature(
-                images, grid_thw)
-            if self.parallel_config.tensor_parallel_size > 1:
-                S, C = image_features.shape
-                image_features = image_features.reshape(
-                    [-1, C * self.model_config.spatial_conv_size**2])
-                image_features = ScatterOp.apply(image_features,
-                                                 axis=-1)  # mp 切 Fea
-                image_features = image_features.reshape([S, -1])
-            image_features = self.model.resampler_model(
-                image_features,
-                image_mask,
-                token_type_ids_w_video,
-                image_type_ids,
-                grid_thw,
-            )
-        return image_features
-
-    @paddle.no_grad()
-    def prepare_rope3d(self, position_ids: paddle.Tensor, max_len: int) -> paddle.Tensor:
-        """prepare_rope3d"""
-
-        prefix_max_position_ids = paddle.max(position_ids) + 1
-        dec_pos_ids = paddle.tile(
-            paddle.arange(max_len,
-                          dtype="int64").unsqueeze(0).unsqueeze(-1), [1, 1, 3])
-        dec_pos_ids = dec_pos_ids + prefix_max_position_ids
-        position_ids_3d_real = paddle.concat([position_ids, dec_pos_ids],
-                                             axis=1)
-
-        rope_emb = get_rope_3d(
-            position_ids=position_ids_3d_real,
-            rotary_dim=self.model_config.head_dim,
-            paritial_rotary_factor=1.0,
-            base=self.model_config.rope_theta,
-            max_position=self.parallel_config.max_model_len,
-            freq_allocation=self.model_config.freq_allocation,
-        )
-        return rope_emb
+        self.image_preprocess = init_image_preprocess(self.tokenizer_path, self.image_preprocessor_path,self.model_config.vision_config.patch_size)

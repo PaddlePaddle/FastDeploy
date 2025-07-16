@@ -452,3 +452,26 @@ def get_rope_3d(
                                                   freq_allocation)
     rotary_emb_3d = rotary_emb3d_layer(position_ids)
     return rotary_emb_3d
+
+
+@paddle.no_grad()
+def prepare_rope3d(position_ids: paddle.Tensor, max_len: int, head_dim:  int, rope_theta: float, max_model_len: int, freq_allocation: int )->paddle.Tensor:
+    """prepare_rope3d"""
+
+    prefix_max_position_ids = paddle.max(position_ids) + 1
+    dec_pos_ids = paddle.tile(
+        paddle.arange(max_len,
+                        dtype="int64").unsqueeze(0).unsqueeze(-1), [1, 1, 3])
+    dec_pos_ids = dec_pos_ids + prefix_max_position_ids
+    position_ids_3d_real = paddle.concat([position_ids, dec_pos_ids],
+                                            axis=1)
+
+    rope_emb = get_rope_3d(
+        position_ids=position_ids_3d_real,
+        rotary_dim=head_dim,
+        paritial_rotary_factor=1.0,
+        base=rope_theta,
+        max_position=max_model_len,
+        freq_allocation=freq_allocation,
+    )
+    return rope_emb

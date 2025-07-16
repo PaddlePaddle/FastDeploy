@@ -553,6 +553,14 @@ def parse_args():
                         type=str,
                         default="false",
                         help="Whether to use vl")
+    parser.add_argument("--im_patch_id",
+                        type=int,
+                        default=-1,
+                        help="vocab of image")
+    parser.add_argument("--think_end_id",
+                        type=int,
+                        default=-1,
+                        help="vocab of think")
     parser.add_argument("--enable_logprob",
                         action='store_true',
                         help="Enable output of token-level log probabilities.")
@@ -656,6 +664,10 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     # Set VL tag
     model_config.enable_mm = getattr(args, 'enable_mm', 'false').lower() == 'true'
+    if model_config.enable_mm:
+        model_config.im_patch_id = getattr(args, 'im_patch_id', 100295)
+        model_config.think_end_id = getattr(args, 'think_end_id', 100282)
+
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
 
