@@ -50,18 +50,19 @@ class GpuWorker(WorkerBase):
         """
         Initialize device and construct model runner
         """
-        if self.device_config.device_type == "cuda" and paddle.device.is_compiled_with_cuda(
+        if self.device_config.type == "cuda" and paddle.device.is_compiled_with_cuda(
         ):
             # Set evironment variable
-            self.device_ids = self.parallel_config.device_ids.split(",")
+            self.device_ids = self.device_config.ids.split(",")
             self.device = f"gpu:{self.local_rank}"
             paddle.device.set_device(self.device)
-            paddle.set_default_dtype(self.parallel_config.dtype)
+            paddle.set_default_dtype(self.model_config.dtype)
 
             gc.collect()
             paddle.device.cuda.empty_cache()
             if self.parallel_config.enable_custom_all_reduce:
-                from fastdeploy.distributed.communication_op import use_custom_allreduce
+                from fastdeploy.distributed.communication_op import \
+                    use_custom_allreduce
                 use_custom_allreduce()
         else:
             raise RuntimeError(

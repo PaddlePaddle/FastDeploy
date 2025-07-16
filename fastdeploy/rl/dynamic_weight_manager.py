@@ -97,7 +97,7 @@ class DynamicWeightManager:
     def _update_ipc_snapshot(self):
         """Update using IPC snapshot strategy for elastic recovery."""
         model_path = os.path.join(
-            self.parallel_config.model_name_or_path,
+            self.model_config.model_name_or_path,
             f"model_state.tp0{self.meta_src_id}.pdparams")
 
         try:
@@ -138,7 +138,7 @@ class DynamicWeightManager:
         architectures = self.fd_config.model_config.architectures[0]
         model_class = MODEL_CLASSES[architectures]
         state_dict = load_composite_checkpoint(
-            self.fd_config.parallel_config.model_name_or_path,
+            self.fd_config.model_config.model_name_or_path,
             model_class,
             self.fd_config.model_config,
             return_numpy=True)

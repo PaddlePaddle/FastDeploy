@@ -33,7 +33,8 @@ from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
-from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+from fastdeploy.model_executor.layers.attention.utils import \
+    init_rank_and_device_id
 
 
 @dataclass
@@ -80,8 +81,8 @@ class AppendAttentionBackend(AttentionBackend):
         """
         super().__init__()
         self.attention_metadata: AppendAttentionMetadata = None
-        self.block_size: int = fd_config.parallel_config.block_size
-        self.max_seq_len: int = fd_config.parallel_config.max_model_len
+        self.block_size: int = fd_config.cache_config.block_size
+        self.max_seq_len: int = fd_config.scheduler_config.max_model_len
         self.rope_theta: float = (10000.0
                                   if fd_config.model_config.rope_theta is None
                                   else fd_config.model_config.rope_theta)
@@ -106,7 +107,7 @@ class AppendAttentionBackend(AttentionBackend):
 
         if fd_config.parallel_config.expert_parallel_rank is None:
             fd_config.parallel_config.expert_parallel_rank = 0
-        
+
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):

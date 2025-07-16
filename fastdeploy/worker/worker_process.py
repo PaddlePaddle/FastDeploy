@@ -114,8 +114,8 @@ class PaddleDisWorkerProc():
                                  rank=self.ranks)
 
         # Initialize task queue
-        task_address = (self.parallel_config.pod_ip,
-                        self.parallel_config.engine_worker_queue_port)
+        task_address = (self.scheduler_config.pod_ips[0],
+                        self.scheduler_config.engine_worker_queue_port)
 
         self.task_queue = TaskQueue(
             address=task_address,

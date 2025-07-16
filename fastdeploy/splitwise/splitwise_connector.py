@@ -171,10 +171,10 @@ class SplitwiseConnector:
         """
         PD mode: check prefill empty
         """
-        if self.cfg.innode_prefill_ports is None:
+        if self.cfg.scheduler_config.innode_prefill_ports is None:
             return True
         else:
-            for port in self.cfg.innode_prefill_ports:
+            for port in self.cfg.scheduler_config.innode_prefill_ports:
                 if port not in self.connect_innode_instances:
                     self.create_connection(port)
                 if self.connect_innode_instances[
@@ -192,19 +192,19 @@ class SplitwiseConnector:
         tasks_status = "mixed"
         is_changable = envs.FD_PD_CHANGEABLE == "1"
         while True:
-            for port in self.cfg.innode_prefill_ports:
+            for port in self.cfg.scheduler_config.innode_prefill_ports:
                 current_port = -1
                 if port not in self.connect_innode_instances:
                     self.create_connection(port)
                 if self.connect_innode_instances[port].get_prefill_instances() == 1:
                     for task in tasks:
                         task.disaggregate_info = {
-                            "role": "prefill", 
+                            "role": "prefill",
                             "transfer_protocol": "ipc",
                             "cache_info": {
                                 "ipc": {
                                     "ip": "0.0.0.0",
-                                    "port": self.cfg.engine_worker_queue_port,
+                                    "port": self.cfg.scheduler_config.engine_worker_queue_port,
                                     "current_id": current_id
                                 },
                             }
@@ -243,7 +243,7 @@ class SplitwiseConnector:
         current_id (int): Current ID.
         """
 
-        if self.cfg.innode_prefill_ports is not None:
+        if self.cfg.scheduler_config.innode_prefill_ports is not None:
             self.dispatch_innode_splitwise_tasks(tasks, current_id)
             return
         addr = None
@@ -266,7 +266,7 @@ class SplitwiseConnector:
                 self.current_request_ids[task.request_id] = "init"
                 decode_diagg = task.disaggregate_info["cache_info"]
                 task.disaggregate_info[
-                    "cache_info"] = self.cfg.disaggregate_info["cache_info"]
+                    "cache_info"] = self.cfg.scheduler_config.disaggregate_info["cache_info"]
                 task.disaggregate_info["cache_info"]["rdma"][
                     "current_id"] = current_id
                 self._send_message(addr, "prefill", [task])
@@ -289,7 +289,7 @@ class SplitwiseConnector:
             self.create_connection(port)
         for task in tasks:
             task.disaggregate_info["cache_info"]["ipc"][
-                "port"] = self.cfg.engine_worker_queue_port
+                "port"] = self.cfg.scheduler_config.engine_worker_queue_port
         self.connect_innode_instances[port].put_disaggregated_tasks(
             ("decode", tasks))
         for task in tasks:
@@ -325,7 +325,7 @@ class SplitwiseConnector:
         """
         self.connect_innode_instances[port] = EngineWorkerQueue(
             address=("0.0.0.0", int(port)),
-            num_client=self.cfg.tensor_parallel_size,
+            num_client=self.cfg.parallel_config.tensor_parallel_size,
             client_id=0)
 
     def send_cache_infos(self, tasks, current_id):
@@ -351,7 +351,7 @@ class SplitwiseConnector:
                         "request_id":
                         tasks[i].request_id,
                         "device_ids":
-                        self.cfg.device_ids.split(","),
+                        self.cfg.device_config.ids.split(","),
                         "transfer_protocol":
                         "ipc",
                         "dest_block_ids":
@@ -370,11 +370,11 @@ class SplitwiseConnector:
                         "request_id":
                         tasks[i].request_id,
                         "device_ids":
-                        self.cfg.device_ids.split(","),
+                        self.cfg.device_config.ids.split(","),
                         "ip":
-                        self.cfg.host_ip,
+                        self.cfg.scheduler_config.host_ip,
                         "rdma_ports":
-                        self.cfg.disaggregate_info["cache_info"]["rdma"]
+                        self.cfg.scheduler_config.disaggregate_info["cache_info"]["rdma"]
                         ["rdma_port"],
                         "transfer_protocol":
                         "rdma",

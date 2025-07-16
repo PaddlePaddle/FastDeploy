@@ -71,7 +71,7 @@ class MTPProposer(Proposer):
         self.model_config.architectures[0] = "Ernie4_5_MTPForCausalLM"
         self.speculative_config.sharing_model = main_model
         self.model_config.num_hidden_layers = 1
-        self.parallel_config.model_name_or_path = (
+        self.model_config.model_name_or_path = (
             self.speculative_config.model_name_or_path)
         self.model_config.pretrained_config.prefix_name = "ernie.mtp_block"
         if self.speculative_config.quantization != "":
@@ -96,10 +96,10 @@ class MTPProposer(Proposer):
         self.num_gpu_blocks = self.parallel_config.max_block_num
         self.initialize_kv_cache()
         full_length = min(num_tokens // batch_size,
-                          self.parallel_config.max_model_len - max_dec_len)
+                          self.scheduler_config.max_model_len - max_dec_len)
         input_length = int(full_length * self.parallel_config.kv_cache_ratio)
-        block_num = ((input_length + self.parallel_config.block_size - 1) //
-                     self.parallel_config.block_size +
+        block_num = ((input_length + self.cache_config.block_size - 1) //
+                     self.cache_config.block_size +
                      self.parallel_config.enc_dec_block_num)
 
         for i in range(batch_size):
@@ -129,7 +129,7 @@ class MTPProposer(Proposer):
         # prompt cache
         self.cache_kvs = {}
 
-        cache_type = self.parallel_config.dtype
+        cache_type = self.model_config.dtype
 
         if (self.quant_config
                 and hasattr(self.quant_config, "kv_cache_quant_type")
@@ -284,7 +284,7 @@ class MTPProposer(Proposer):
             self.main_model_inputs["decoder_tile_ids_per_batch"])
 
         tmp_position_ids = paddle.arange(
-            self.parallel_config.max_model_len).reshape((1, -1))
+            self.scheduler_config.max_model_len).reshape((1, -1))
         self.model_inputs["rope_emb"] = get_rope(
             rotary_dim=self.model_config.head_dim,
             position_ids=tmp_position_ids,
@@ -404,7 +404,7 @@ class MTPProposer(Proposer):
                                                                  1:length]
                 self.model_inputs["pre_ids"][idx:idx + 1] = -1
                 self.model_inputs["step_idx"][idx:idx + 1] = 0
-                if self.parallel_config.enable_chunked_prefill:
+                if self.scheduler_config.enable_chunked_prefill:
                     token_chunk_size = request.prefill_chunk_info[0]
                     self.model_inputs["seq_lens_encoder"][idx:idx +
                                                           1] = token_chunk_size
@@ -548,7 +548,7 @@ class MTPProposer(Proposer):
                     output_cum_offsets,
                     output_padding_offset,
                 ) = pre_process(
-                    self.parallel_config.max_model_len,
+                    self.scheduler_config.max_model_len,
                     self.model_inputs["input_ids"],
                     self.model_inputs["seq_lens_this_time"],
                     True,
@@ -597,7 +597,7 @@ class MTPProposer(Proposer):
                     self.model_inputs["seq_lens_decoder"],
                     self.model_inputs["seq_lens_encoder"],
                     self.model_inputs["output_padding_offset"],
-                    self.parallel_config.max_model_len,
+                    self.scheduler_config.max_model_len,
                 )
 
                 # 4. Compute logits, Sample
@@ -676,7 +676,7 @@ class MTPProposer(Proposer):
             self.model_inputs["used_list_len"],
             self.model_inputs["free_list"],
             self.model_inputs["free_list_len"],
-            self.parallel_config.block_size,
+            self.cache_config.block_size,
             self.max_draft_token_num,
         )
 

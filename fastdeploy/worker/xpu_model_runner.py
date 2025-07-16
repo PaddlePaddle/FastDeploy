@@ -260,13 +260,13 @@ class XPUModelRunner(ModelRunnerBase):
 
         # Cuda Graph
         self.use_cudagraph = False
-        self.input_ids = paddle.zeros(self.parallel_config.max_num_seqs,
+        self.input_ids = paddle.zeros(self.scheduler_config.max_num_seqs,
                                       dtype='int32')
 
         # Initialize share inputs
-        self._init_share_inputs(self.fd_config.parallel_config.max_num_seqs)
+        self._init_share_inputs(self.fd_config.scheduler_config.max_num_seqs)
         self.infer_seed_increment = paddle.full(
-            shape=[self.parallel_config.max_num_seqs, 1],
+            shape=[self.scheduler_config.max_num_seqs, 1],
             fill_value=4,
             dtype="int64")
 
@@ -314,7 +314,7 @@ class XPUModelRunner(ModelRunnerBase):
                 "min_tokens", 1)
 
             self.share_inputs["max_dec_len"][idx:idx + 1] = request.get(
-                "max_tokens", self.model_config.max_model_len)
+                "max_tokens", self.scheduler_config.max_model_len)
             self.share_inputs["stop_flags"][idx:idx + 1] = False
 
             self.share_inputs["first_token_ids"][
@@ -354,11 +354,11 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs = {}
 
         self.share_inputs["pre_ids"] = paddle.full(
-            [max_num_seqs, self.parallel_config.max_model_len],
+            [max_num_seqs, self.scheduler_config.max_model_len],
             -1,
             dtype='int64')
         self.share_inputs["input_ids"] = paddle.full(
-            [max_num_seqs, self.parallel_config.max_model_len],
+            [max_num_seqs, self.scheduler_config.max_model_len],
             self.parallel_config.pad_token_id,
             dtype='int64')
         self.share_inputs["eos_token_id"] = paddle.full(
@@ -387,11 +387,11 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["min_dec_len"] = paddle.full(
             [max_num_seqs, 1], self.model_config.min_length, dtype='int64')
         self.share_inputs["max_dec_len"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_model_len, dtype='int64')
+            [max_num_seqs, 1], self.scheduler_config.max_model_len, dtype='int64')
         self.share_inputs["min_length"] = paddle.full(
             [max_num_seqs, 1], self.model_config.min_length, dtype='int64')
         self.share_inputs["max_length"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_model_len, dtype='int64')
+            [max_num_seqs, 1], self.scheduler_config.max_model_len, dtype='int64')
         self.share_inputs["seq_lens_this_time"] = paddle.full(max_num_seqs,
                                                               0,
                                                               dtype='int32')
@@ -460,7 +460,7 @@ class XPUModelRunner(ModelRunnerBase):
 
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(
-            self.parallel_config.max_model_len).reshape((1, -1))
+            self.scheduler_config.max_model_len).reshape((1, -1))
         # TODO(gongshaotian): move to models
         self.share_inputs["rope_emb"] = get_rope(
             rotary_dim=self.model_config.head_dim,
@@ -470,9 +470,9 @@ class XPUModelRunner(ModelRunnerBase):
 
         # Set block tables
         pre_max_block_num = (
-            self.parallel_config.max_model_len +
-            self.parallel_config.block_size - 1
-        ) // self.parallel_config.block_size + self.parallel_config.enc_dec_block_num
+            self.scheduler_config.max_model_len +
+            self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.parallel_config.enc_dec_block_num
         self.share_inputs["block_tables"] = paddle.full(
             [max_num_seqs, pre_max_block_num], -1, dtype='int32')
 
@@ -502,7 +502,7 @@ class XPUModelRunner(ModelRunnerBase):
     def _prepare_inputs(self) -> None:
         """ prepare the model inputs """
         self.forward_meta = xpu_pre_process(
-            self.parallel_config.max_model_len,
+            self.scheduler_config.max_model_len,
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
             self.share_inputs,
@@ -564,7 +564,7 @@ class XPUModelRunner(ModelRunnerBase):
         cache_kvs = {}
         max_block_num = self.num_gpu_blocks
 
-        cache_type = self.parallel_config.dtype
+        cache_type = self.model_config.dtype
 
         if (self.quant_config
                 and hasattr(self.quant_config, "kv_cache_quant_type")
@@ -634,11 +634,11 @@ class XPUModelRunner(ModelRunnerBase):
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int):
         """ Set dummy prefill inputs to share_inputs """
         full_length = min(num_tokens // batch_size,
-                          self.parallel_config.max_model_len - 10)
+                          self.scheduler_config.max_model_len - 10)
         input_length = int(full_length - 512)
         block_num = (
-            input_length + self.parallel_config.block_size - 1
-        ) // self.parallel_config.block_size + self.parallel_config.enc_dec_block_num
+            input_length + self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.parallel_config.enc_dec_block_num
 
         for i in range(batch_size):
             idx = i
@@ -749,7 +749,7 @@ class XPUModelRunner(ModelRunnerBase):
         # 7. Updata 'infer_seed' and step_paddle()
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
-        step_paddle(self.share_inputs, self.parallel_config.block_size,
+        step_paddle(self.share_inputs, self.cache_config.block_size,
                     self.parallel_config.enc_dec_block_num)
 
         return None
@@ -764,8 +764,8 @@ class XPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model."""
 
         self._dummy_run(num_tokens=int(
-            self.parallel_config.max_num_batched_tokens),
-                        batch_size=min(self.parallel_config.max_num_seqs, 1))
+            self.scheduler_config.max_num_batched_tokens),
+                        batch_size=min(self.scheduler_config.max_num_seqs, 1))
 
     def clear_block_table(self) -> None:
         """
@@ -802,7 +802,7 @@ class XPUModelRunner(ModelRunnerBase):
         hidden_dim = self.model_config.head_dim * self.model_config.kv_num_heads
         required_memory = (
             byte_of_dtype * 2 *  # k + v
-            (self.parallel_config.block_size * hidden_dim) *
+            (self.cache_config.block_size * hidden_dim) *
             self.model_config.num_hidden_layers)
         return required_memory
 
@@ -818,7 +818,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.initialize_kv_cache()
 
         self.share_inputs["block_tables"] = paddle.full(
-            [self.parallel_config.max_num_seqs, self.num_gpu_blocks],
+            [self.scheduler_config.max_num_seqs, self.num_gpu_blocks],
             -1,
             dtype="int32")
 

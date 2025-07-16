@@ -79,17 +79,17 @@ class LLM:
         self.llm_engine = LLMEngine.from_engine_args(engine_args=engine_args)
 
         self.default_sampling_params = SamplingParams(
-            max_tokens=self.llm_engine.cfg.max_model_len)
+            max_tokens=self.llm_engine.cfg.scheduler_config.max_model_len)
 
         self.llm_engine.start()
 
         self.mutex = threading.Lock()
         self.req_output = dict()
-        self.master_node_ip = self.llm_engine.cfg.pod_ips[0]
+        self.master_node_ip = self.llm_engine.cfg.scheduler_config.pod_ips[0]
         self._receive_output_thread = threading.Thread(
             target=self._receive_output, daemon=True)
         self._receive_output_thread.start()
-    
+
     def _check_master(self):
         """
         Check if the current node is the master node.
@@ -196,7 +196,7 @@ class LLM:
         if not self._check_master():
             err_msg = f"Only master node can accept completion request, please send request to master node: {self.master_node_ip}"
             raise ValueError(err_msg)
-        
+
         if sampling_params is None:
             sampling_params = self.default_sampling_params
 

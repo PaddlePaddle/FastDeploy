@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
@@ -75,8 +74,8 @@ class BlockAttentionBackend(AttentionBackend):
         """
         super().__init__()
         self.attention_metadata: BlockAttentionMetadata = None
-        self.block_size = fd_config.parallel_config.block_size
-        self.max_seq_len = fd_config.parallel_config.max_model_len
+        self.block_size = fd_config.cache_config.block_size
+        self.max_seq_len = fd_config.scheduler_config.max_model_len
         self.rope_theta = (10000.0 if fd_config.model_config.rope_theta
                            is None else fd_config.model_config.rope_theta)
         self.rank = fd_config.parallel_config.tensor_parallel_rank

@@ -18,9 +18,8 @@ from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
 
-from fastdeploy.engine.config import (CacheConfig, Config, ModelConfig,
-                                      ParallelConfig, SpeculativeConfig,
-                                      TaskOption)
+from fastdeploy.config import (CacheConfig, Config, ModelConfig,
+                               ParallelConfig, SpeculativeConfig, TaskOption)
 from fastdeploy.scheduler.config import SchedulerConfig
 from fastdeploy.utils import FlexibleArgumentParser
 

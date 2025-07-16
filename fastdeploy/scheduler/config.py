@@ -15,11 +15,12 @@
 """
 
 import redis
-from fastdeploy.utils import llm_logger
+
+from fastdeploy.utils import get_host_ip, is_port_available, llm_logger
+
 from .global_scheduler import GlobalScheduler
 from .local_scheduler import LocalScheduler
 from .splitwise_scheduler import SplitWiseScheduler, SplitWiseSchedulerConfig
-
 
 
 class LocalSchedulerConfig:
@@ -218,15 +219,47 @@ class SchedulerConfig:
         """
         self.name = name
         self.config = None
+        self.max_num_seqs = kwargs.get("max_num_seqs", 34)
+        self.max_num_batched_tokens = kwargs.get("max_num_batched_tokens", 2048)
+        self.pod_ips = kwargs.get("pod_ips", None)
+        self.use_warmup = kwargs.get("use_warmup", False)
+        self.engine_worker_queue_port = kwargs.get("engine_worker_queue_port", 9923)
+        self.splitwise_role = kwargs.get("splitwise_role", "mixed")
+        self.innode_prefill_ports = kwargs.get("innode_prefill_ports", None)
+
+        self.is_master = True
+        self._str_to_list("innode_prefill_ports", int)
+        self._str_to_list("pod_ips", str)
 
         if name == "local":
             self.config = LocalSchedulerConfig(**kwargs)
 
         if name == "global":
             self.config = GlobalSchedulerConfig(**kwargs)
-        
+
         if name == "splitwise":
             self.config = SplitWiseSchedulerConfig(**kwargs)
+
+        for key, value in vars(self.config).items():
+            setattr(self, key, value)
+
+        if self.pod_ips is None:
+            self.nnode = 1
+        else:
+            self.nnode = len(self.pod_ips)
+
+        if self.max_num_batched_tokens is None:
+            if self.enable_chunked_prefill:
+                self.max_num_batched_tokens = 2048
+            else:
+                self.max_num_batched_tokens = self.max_model_len
+        assert self.splitwise_role in ["mixed", "prefill", "decode"]
+
+        self.host_ip = get_host_ip()
+        if self.pod_ips is None:
+            self.pod_ips = ["0.0.0.0"]
+        elif self.host_ip != self.pod_ips[0]:
+            self.is_master = False
 
     def check(self):
         """
@@ -237,6 +270,50 @@ class SchedulerConfig:
         """
         if self.name not in ["local", "global", "splitwise"]:
             raise Exception(f'Unknown scheduler type {self.name}')
+        assert (
+            self.max_num_seqs <= 256
+        ), "The parameter `max_num_seqs` is not allowed to exceed 256, " "but now it's {}.".format(
+            self.max_num_seqs)
+        assert (
+            is_port_available('0.0.0.0', self.engine_worker_queue_port)
+        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
+        assert (self.nnode >= 1), f"nnode: {self.nnode} should no less than 1"
+        assert (
+            self.max_model_len >= 16
+        ), f"max_model_len: {self.max_model_len} should be larger than 16"
+        assert (
+            self.max_num_seqs
+            >= 1), f"max_num_seqs: {self.max_num_seqs} should be larger than 1"
+        assert (
+            self.max_num_batched_tokens >= self.max_num_seqs
+        ), f"max_num_batched_tokens: {self.max_num_batched_tokens} " \
+            f"should be larger than or equal to max_num_seqs: {self.max_num_seqs}"
+        assert (self.max_num_batched_tokens <= self.max_model_len * self.max_num_seqs), \
+                f"max_num_batched_tokens: {self.max_num_batched_tokens} should be larger" \
+                f"than or equal to max_num_seqs: {self.max_num_seqs} * max_model_len: {self.max_model_len}"
+        assert (
+            self.max_num_partial_prefills >= 1
+        ), f"max_num_partial_prefills: {self.max_num_partial_prefills} should be larger than or equal to 1"
+
+        assert (
+            self.max_long_partial_prefills >= 1
+        ), f"max_long_partial_prefills: {self.max_long_partial_prefills} should be larger than or equal to 1"
+        assert (self.max_long_partial_prefills <= self.max_num_partial_prefills), \
+                f"max_long_partial_prefills: {self.max_long_partial_prefills} should " \
+                f"be less than or equal to max_num_partial_prefills: {self.max_num_partial_prefills}"
+
+        if not self.enable_chunked_prefill:
+            assert (
+                self.max_num_batched_tokens >= self.max_model_len
+            ), f"max_num_batched_tokens: {self.max_num_batched_tokens} " \
+                f"should be larger than or equal to max_model_len: {self.max_model_len}"
+
+        if self.max_num_partial_prefills > 1:
+            assert (self.enable_chunked_prefill is True), \
+            "Chunked prefill must be enabled to set max_num_partial_prefills > 1"
+            assert (self.long_prefill_token_threshold < self.max_model_len), \
+            f"long_prefill_token_threshold: {self.long_prefill_token_threshold} should be less than"\
+            f" max_model_len: {self.max_model_len}"
 
         self.config.check()
 
@@ -267,7 +344,7 @@ class SchedulerConfig:
                                    max_num_partial_prefills=self.config.max_num_partial_prefills,
                                    max_long_partial_prefills=self.config.max_long_partial_prefills,
                                    long_prefill_token_threshold=self.config.long_prefill_token_threshold,)
-        
+
         if self.name == "splitwise":
             return SplitWiseScheduler(self.config)
 
@@ -277,3 +354,11 @@ class SchedulerConfig:
                               max_num_partial_prefills=self.config.max_num_partial_prefills,
                               max_long_partial_prefills=self.config.max_long_partial_prefills,
                               long_prefill_token_threshold=self.config.long_prefill_token_threshold,)
+
+    def _str_to_list(self, attr_name, default_type):
+        if hasattr(self, attr_name):
+            val = getattr(self, attr_name)
+            if type(val) is str:
+                setattr(self, attr_name, [default_type(i) for i in val.split(",")])
+            else:
+                setattr(self, attr_name, val)

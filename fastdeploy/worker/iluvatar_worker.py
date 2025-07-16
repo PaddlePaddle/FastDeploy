@@ -53,8 +53,8 @@ class IluvatarWorker(WorkerBase):
             # Set evironment variable
             self.device = f"iluvatar_gpu:{self.local_rank}"
             paddle.device.set_device(self.device)
-            paddle.set_default_dtype(self.parallel_config.dtype)
-            self.device_ids = self.parallel_config.device_ids.split(",")
+            paddle.set_default_dtype(self.model_config.dtype)
+            self.device_ids = self.device_config.ids.split(",")
 
             gc.collect()
         else:

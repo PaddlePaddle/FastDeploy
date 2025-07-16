@@ -38,11 +38,10 @@ class Proposer(ABC):
         self.parallel_config = self.cfg.parallel_config
         self.model_config = self.cfg.model_config
         self.speculative_config = self.cfg.speculative_config
-        self.kv_cache_config = self.cfg.kv_cache_config
         self.quant_config = self.cfg.quant_config
 
-        self.max_num_seqs = self.parallel_config.max_num_seqs
-        self.max_model_len = self.parallel_config.max_model_len
+        self.max_num_seqs = self.scheduler_config.max_num_seqs
+        self.max_model_len = self.scheduler_config.max_model_len
         self.speculative_method = self.speculative_config.method
         self.max_draft_token_num = self.speculative_config.num_speculative_tokens
 

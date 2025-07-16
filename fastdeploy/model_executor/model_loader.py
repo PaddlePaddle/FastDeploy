@@ -113,7 +113,7 @@ class DefaultModelLoader(BaseModelLoader):
         # TODO(gongshaotian): Now, only support safetensor
         model_class = MODEL_CLASSES[architectures]
         state_dict = load_composite_checkpoint(
-            fd_config.parallel_config.model_name_or_path,
+            fd_config.model_config.model_name_or_path,
             model_class,
             fd_config,
             return_numpy=True,

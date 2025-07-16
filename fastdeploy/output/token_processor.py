@@ -64,7 +64,7 @@ class TokenProcessor(object):
             ],
                                              fill_value=2,
                                              dtype="int64")
-        elif self.cfg.enable_logprob:
+        elif self.cfg.model_config.enable_logprob:
             self.output_tokens = paddle.full(
                 shape=[MAX_BSZ * (K + 1) + 2, 1], fill_value=2, dtype="int64")
             self.output_scores = paddle.full(
@@ -119,7 +119,7 @@ class TokenProcessor(object):
         if self.worker is not None:
             raise Exception("Worker is already running!")
         use_logprobs = (
-                self.cfg.enable_logprob
+                self.cfg.model_config.enable_logprob
                 and not self.speculative_decoding
                 and not self.cfg.parallel_config.enable_expert_parallel
         )

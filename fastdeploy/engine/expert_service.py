@@ -49,14 +49,14 @@ class ExpertService(object):
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
-        start_pos = local_data_parallel_id * self.cfg.tensor_parallel_size
-        end_pos = (local_data_parallel_id + 1) * self.cfg.tensor_parallel_size
+        start_pos = local_data_parallel_id * self.cfg.parallel_config.tensor_parallel_size
+        end_pos = (local_data_parallel_id + 1) * self.cfg.parallel_config.tensor_parallel_size
         self.cfg.cache_config.rdma_comm_ports = self.cfg.cache_config.rdma_comm_ports[
             start_pos:end_pos]
-        self.cfg.local_device_ids = self.cfg.device_ids.split(
+        self.cfg.device_config.local_device_ids = self.cfg.device_config.ids.split(
             ",")[start_pos:end_pos]
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
-        self.cfg.disaggregate_info = None
+        self.cfg.scheduler_config.disaggregate_info = None
 
         self.scheduler = cfg.scheduler_config.scheduler()
 
@@ -65,16 +65,16 @@ class ExpertService(object):
 
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
 
-        address = (cfg.pod_ips[0], cfg.engine_worker_queue_port)
+        address = (cfg.scheduler_config.pod_ips[0], cfg.scheduler_config.engine_worker_queue_port)
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
             client_id=0,
-            num_client=cfg.tensor_parallel_size,
+            num_client=cfg.parallel_config.tensor_parallel_size,
             local_data_parallel_id=local_data_parallel_id,
         )
-        self.resource_manager = ResourceManager(cfg.max_num_seqs, cfg, \
-                cfg.tensor_parallel_size, cfg.splitwise_role, local_data_parallel_id)
+        self.resource_manager = ResourceManager(cfg.scheduler_config.max_num_seqs, cfg, \
+                cfg.parallel_config.tensor_parallel_size, cfg.scheduler_config.splitwise_role, local_data_parallel_id)
 
         if len(self.cfg.cache_config.pd_comm_port) == 1:
             self.cfg.cache_config.pd_comm_port[0] = int(
@@ -96,9 +96,9 @@ class ExpertService(object):
         self.token_processor.set_resource_manager(self.resource_manager)
 
         self.partial_chunked_tokens = [0] * (
-            self.cfg.max_num_partial_prefills + 1)
-        for idx in range(1, self.cfg.max_num_partial_prefills + 1):
-            self.partial_chunked_tokens[idx] = (self.cfg.max_num_batched_tokens // idx) \
+            self.cfg.scheduler_config.max_num_partial_prefills + 1)
+        for idx in range(1, self.cfg.scheduler_config.max_num_partial_prefills + 1):
+            self.partial_chunked_tokens[idx] = (self.cfg.scheduler_config.max_num_batched_tokens // idx) \
                                 // self.cfg.cache_config.block_size * self.cfg.cache_config.block_size
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
@@ -116,10 +116,10 @@ class ExpertService(object):
 
         self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
             cache_config=self.cfg.cache_config,
-            tensor_parallel_size=self.cfg.tensor_parallel_size,
-            device_ids=self.cfg.local_device_ids,
-            pod_ip=self.cfg.pod_ips[0],
-            engine_worker_queue_port=self.cfg.engine_worker_queue_port,
+            tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
+            device_ids=self.cfg.device_config.local_device_ids,
+            pod_ip=self.cfg.scheduler_config.pod_ips[0],
+            engine_worker_queue_port=self.cfg.scheduler_config.engine_worker_queue_port,
             pid_suffix=f"{local_data_parallel_id}_{ipc_signal_suffix}"
         )
 
@@ -130,7 +130,7 @@ class ExpertService(object):
 
         # Start TokenProcessor thread
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(
-            local_data_parallel_id + int(self.cfg.engine_worker_queue_port))
+            local_data_parallel_id + int(self.cfg.scheduler_config.engine_worker_queue_port))
 
         self.token_processor.run()
 
@@ -138,9 +138,9 @@ class ExpertService(object):
 
         self.cfg.init_cache_info()
 
-        role = self.cfg.splitwise_role
-        host_ip = self.cfg.host_ip
-        disaggregate = self.cfg.disaggregate_info
+        role = self.cfg.scheduler_config.splitwise_role
+        host_ip = self.cfg.scheduler_config.host_ip
+        disaggregate = self.cfg.scheduler_config.disaggregate_info
         self.scheduler.start(role, host_ip, disaggregate)
         self.cfg.print()
 
@@ -169,7 +169,7 @@ class ExpertService(object):
 
                 num_prefill_batch = min(
                     int(self.resource_manager.available_batch()),
-                    self.cfg.max_prefill_batch)
+                    self.cfg.parallel_config.max_prefill_batch)
 
                 self.resource_manager.check_and_free_block_tables()
                 tasks = self.scheduler.get_requests(
@@ -178,14 +178,14 @@ class ExpertService(object):
                     block_size=self.cfg.cache_config.block_size,
                     reserved_output_blocks=self.cfg.cache_config.
                     enc_dec_block_num,
-                    max_num_batched_tokens=self.cfg.max_num_batched_tokens,
+                    max_num_batched_tokens=self.cfg.scheduler_config.max_num_batched_tokens,
                     batch=num_prefill_batch)
 
                 if len(tasks) == 0:
                     time.sleep(0.001)
                     continue
 
-                if self.cfg.splitwise_role != "mixed":
+                if self.cfg.scheduler_config.splitwise_role != "mixed":
                     llm_logger.info("Inserting splitwise tasks")
                     self.split_connector.send_splitwise_tasks(
                         tasks, current_id)
@@ -334,7 +334,7 @@ class ExpertService(object):
         if not is_decode:
             llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
             if not is_prefill:
-                if not self.cfg.enable_mm:
+                if not self.cfg.multi_modal_config.enable_mm:
                     self.update_requests_chunk_size(tasks)
                 else:
                     self.update_mm_requests_chunk_size(tasks)
@@ -355,7 +355,7 @@ class ExpertService(object):
                 llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
                     os.killpg(p.pid, signal.SIGTERM)
-                except:
+                except Exception:
                     pass
 
         if hasattr(self, "zmq_server") and self.zmq_server is not None:

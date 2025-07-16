@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-import argparse
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -23,10 +22,10 @@ import paddle
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
 
-from fastdeploy.engine.config import ModelConfig
+from fastdeploy.config import ModelConfig
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
-from fastdeploy.utils import get_logger, none_or_str
-from fastdeploy.worker.worker_process import initialize_fd_config, parse_args
+from fastdeploy.utils import get_logger
+from fastdeploy.worker.worker_process import parse_args
 
 logger = get_logger("worker", "worker.log")
 

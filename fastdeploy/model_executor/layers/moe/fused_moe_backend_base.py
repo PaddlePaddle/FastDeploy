@@ -45,7 +45,7 @@ class MoEMethodBase(QuantMethodBase):
         Init EP related module
         """
         if layer.ep_size > 1:
-            if layer.fd_config.parallel_config.moe_phase == MoEPhase.DECODER:
+            if layer.fd_config.model_config.moe_phase == MoEPhase.DECODER:
                 from .ep import EPDecoderRunner
                 self.ep_decoder_runner = EPDecoderRunner(
                     layer.top_k, layer.hidden_size, layer.num_experts,
@@ -127,7 +127,7 @@ class MoEMethodBase(QuantMethodBase):
         Paddle Cutlass compute Fused MoE.
         """
         if layer.ep_size > 1:
-            if layer.fd_config.parallel_config.moe_phase == MoEPhase.PREFILL:
+            if layer.fd_config.model_config.moe_phase == MoEPhase.PREFILL:
                 return self.apply_ep_prefill(layer, x, gate_out)
             else:
                 return self.apply_ep_decode(layer, x, gate_out)

@@ -273,7 +273,7 @@ class BackendBase:
 
                 from transformers import AutoTokenizer, PreTrainedTokenizerFast
                 tokenizer = AutoTokenizer.from_pretrained(
-                    self.fd_config.parallel_config.model_name_or_path,
+                    self.fd_config.model_config.model_name_or_path,
                     use_fast=False,
                 )
 
@@ -297,7 +297,7 @@ class BackendBase:
                         break
 
                 tokenizer = ErnieBotTokenizer.from_pretrained(
-                    self.fd_config.parallel_config.model_name_or_path)
+                    self.fd_config.model_config.model_name_or_path)
 
             return tokenizer
         except Exception as e:

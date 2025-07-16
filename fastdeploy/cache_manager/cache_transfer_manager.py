@@ -24,7 +24,7 @@ import numpy as np
 import paddle
 
 from fastdeploy.cache_manager.cache_data import CacheStatus
-from fastdeploy.engine.config import SpeculativeConfig
+from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal
 from fastdeploy.model_executor.ops.gpu import (cuda_host_alloc, set_data_ipc,
                                                swap_cache_all_layers)

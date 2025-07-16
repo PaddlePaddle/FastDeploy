@@ -206,9 +206,9 @@ class XGrammarBackend(BackendBase):
     ):
         super().__init__(fd_config=fd_config)
         self.vocab_size = fd_config.model_config.vocab_size
-        self.batch_size = fd_config.parallel_config.max_num_seqs
+        self.batch_size = fd_config.scheduler_config.max_num_seqs
 
-        self.any_whitespace = not fd_config.parallel_config.disable_any_whitespace
+        self.any_whitespace = not fd_config.decoding_config.disable_any_whitespace
         self.splitwise_role = fd_config.parallel_config.splitwise_role
 
         try:

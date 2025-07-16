@@ -16,24 +16,20 @@
 
 from __future__ import annotations
 
-import os
-from dataclasses import dataclass, field
+import math
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional
 
-import paddle
-
 import numpy as np
-import math
+import paddle
+from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
-
 from fastdeploy.model_executor.ops.gcu import (fused_rotary_embedding,
-                                               mem_efficient_attention,
-                                               flash_attn_var_len)
-from paddleformers.utils.log import logger
+                                               mem_efficient_attention)
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta, ForwardMode
@@ -77,9 +73,9 @@ class GCUMemEfficientAttnBackend(AttentionBackend):
         """
         super().__init__()
         self.attention_metadata: GCUMemEfficientAttnMetadata = None
-        self.block_size = fd_config.parallel_config.block_size
-        self.max_seq_len = fd_config.parallel_config.max_model_len
-        self.max_num_seqs = fd_config.parallel_config.max_num_seqs
+        self.block_size = fd_config.cache_config.block_size
+        self.max_seq_len = fd_config.scheduler_config.max_model_len
+        self.max_num_seqs = fd_config.scheduler_config.max_num_seqs
 
         self.causal = getattr(fd_config.model_config, "causal", True)
 

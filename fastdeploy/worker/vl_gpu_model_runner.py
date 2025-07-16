@@ -584,9 +584,9 @@ class GPUVLModelRunner(VLModelRunnerBase):
         self.share_inputs["cu_seqlens_q"] = cu_seqlens_q
         self.share_inputs["cu_seqlens_k"] = cu_seqlens_k
         self.share_inputs["decoder_batch_ids"] = paddle.full(
-            [self.fd_config.parallel_config.max_num_seqs, 1], 0, dtype='int32')
+            [self.fd_config.scheduler_config.max_num_seqs, 1], 0, dtype='int32')
         self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full(
-            [self.fd_config.parallel_config.max_num_seqs, 1], 0, dtype='int32')
+            [self.fd_config.scheduler_config.max_num_seqs, 1], 0, dtype='int32')
         # initialize_forward_meta
         self.forward_meta = ForwardMeta(
             input_ids=self.share_inputs["input_ids"],

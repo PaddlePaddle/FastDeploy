@@ -52,8 +52,8 @@ class XpuWorker(WorkerBase):
             # Set evironment variable
             self.device = f"xpu:{self.local_rank}"
             paddle.device.set_device(self.device)
-            paddle.set_default_dtype(self.parallel_config.dtype)
-            self.device_ids = self.parallel_config.device_ids.split(",")
+            paddle.set_default_dtype(self.model_config.dtype)
+            self.device_ids = self.device_config.ids.split(",")
 
             gc.collect()
         else:
@@ -66,7 +66,7 @@ class XpuWorker(WorkerBase):
             device=self.device,
             rank=self.rank,
             local_rank=self.local_rank)
-        
+
     def graph_optimize_and_warm_up_model(self) -> None:
         """
             Optimizes the inference graph using the specified optimization options.
@@ -86,9 +86,10 @@ class XpuWorker(WorkerBase):
             You may limit the usage of GPU memory
             by adjusting the `gpu_memory_utilization` parameter.
         """
-        from fastdeploy.model_executor.ops.xpu import \
-            xpu_get_free_global_memory, xpu_get_total_global_memory, xpu_get_used_global_memory
-        
+        from fastdeploy.model_executor.ops.xpu import (
+            xpu_get_free_global_memory, xpu_get_total_global_memory,
+            xpu_get_used_global_memory)
+
         total_memory = xpu_get_total_global_memory(self.local_rank)
         used_memory = xpu_get_used_global_memory(self.local_rank)
         free_memory = xpu_get_free_global_memory(self.local_rank)
@@ -98,7 +99,7 @@ class XpuWorker(WorkerBase):
 
         self.model_runner.prepare_profile()
         self.model_runner.profile_run()
-        
+
         total_available_memory = int(total_memory * self.parallel_config.gpu_memory_utilization)
         used_memory = xpu_get_used_global_memory(self.local_rank)
         available_kv_cache_memory = total_available_memory - used_memory
@@ -111,7 +112,7 @@ class XpuWorker(WorkerBase):
                     used_memory: {used_memory}, available_kv_cache_memory: {available_kv_cache_memory}")
         paddle.device.xpu.empty_cache()
         return available_kv_cache_memory  # approximate value
-    
+
     def cal_theortical_kvcache(self) -> int:
         """ """
         return self.model_runner.cal_theortical_kvcache()
@@ -153,10 +154,6 @@ class XpuWorker(WorkerBase):
     def check_health(self) -> bool:
         """ """
         return True
-
-    def cal_theortical_kvcache(self) -> int:
-        """ """
-        return self.model_runner.cal_theortical_kvcache()
 
     def reinitialize_kv_cache(self, num_gpu_blocks: int) -> None:
         """ """

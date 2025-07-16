@@ -15,7 +15,7 @@
 """
 from typing import Any, Dict, Optional
 
-from fastdeploy.engine.config import ModelConfig
+from fastdeploy.config import ModelConfig
 from fastdeploy.reasoning import ReasoningParserManager
 
 

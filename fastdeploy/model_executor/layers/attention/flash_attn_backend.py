@@ -18,13 +18,13 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 import paddle
 
 try:
     from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
-except:
+except Exception:
     flash_attention_v3_varlen = None
 
 from fastdeploy.config import FDConfig
@@ -34,7 +34,9 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 from fastdeploy.model_executor.layers.attention.ops import (
     get_block_shape_and_split_kv_block, gqa_rope_write_cache,
     init_signal_layerwise, open_shm_and_get_meta_signal, pre_cache_len_concat)
-from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+from fastdeploy.model_executor.layers.attention.utils import \
+    init_rank_and_device_id
+
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
@@ -88,14 +90,14 @@ class FlashAttentionBackend(AttentionBackend):
         """
         super().__init__()
         self.attention_metadata: FlashAttentionMetadata = None
-        self.max_seq_len = fd_config.parallel_config.max_model_len
+        self.max_seq_len = fd_config.scheduler_config.max_model_len
         self.causal = getattr(fd_config.model_config, "causal", True)
 
         self.kv_num_heads = kv_num_heads
         self.num_heads = num_heads
         self.head_dim = fd_config.model_config.head_dim
         self.hidden_size = fd_config.model_config.hidden_size
-        self.block_size = fd_config.parallel_config.block_size
+        self.block_size = fd_config.cache_config.block_size
         self.num_layers: int = fd_config.model_config.num_hidden_layers
 
         self.speculative_method = fd_config.speculative_config.method
@@ -110,7 +112,7 @@ class FlashAttentionBackend(AttentionBackend):
 
         if fd_config.parallel_config.expert_parallel_rank is None:
             fd_config.parallel_config.expert_parallel_rank = 0
-            
+
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
     def get_attntion_meta(self):

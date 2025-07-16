@@ -17,19 +17,19 @@
 from __future__ import annotations
 
 import os
-import paddle
-
 from dataclasses import dataclass
-from typing import Optional, TYPE_CHECKING
 from math import sqrt
+from typing import TYPE_CHECKING, Optional
 
+import paddle
 from paddle.nn.functional.flash_attention import flash_attn_unpadded
-from fastdeploy.model_executor.ops.iluvatar import paged_attention
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
+from fastdeploy.model_executor.ops.iluvatar import paged_attention
+
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
@@ -87,10 +87,10 @@ class IluvatarAttnBackend(AttentionBackend):
                  head_dim: int):
         super().__init__()
         self.attention_metadata = IluvatarAttentionMetadata()
-        self.attention_metadata.block_size = llm_config.parallel_config.block_size
+        self.attention_metadata.block_size = llm_config.cache_config.block_size
         assert llm_config.parallel_config.enc_dec_block_num == 0, "Iluvatar does not support yet"
 
-        self.attention_metadata.max_context_len = llm_config.parallel_config.max_model_len
+        self.attention_metadata.max_context_len = llm_config.scheduler_config.max_model_len
         self.attention_metadata.causal = getattr(llm_config.model_config,
                                                  "causal", True)
         self.speculate_method = getattr(llm_config.parallel_config,
