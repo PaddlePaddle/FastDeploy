@@ -61,7 +61,8 @@ class GpuWorker(WorkerBase):
             gc.collect()
             paddle.device.cuda.empty_cache()
             if self.parallel_config.enable_custom_all_reduce:
-                from fastdeploy.distributed.communication_op import use_custom_allreduce
+                from fastdeploy.distributed.communication_op import \
+                    use_custom_allreduce
                 use_custom_allreduce()
         else:
             raise RuntimeError(
@@ -137,7 +138,7 @@ class GpuWorker(WorkerBase):
 
         available_kv_cache_memory = after_run_meminfo.total * \
             self.parallel_config.gpu_memory_utilization - after_run_meminfo.used - paddle_peak_increase
-        available_kv_cache_memory += model_block_memory_used * self.parallel_config.max_block_num
+        available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
 
         end_time = time.perf_counter()
         logger.info((

@@ -17,13 +17,13 @@
 import logging
 from dataclasses import dataclass
 from enum import IntEnum, auto
-from typing import TYPE_CHECKING, Optional, Annotated
+
+import paddle
+
 from fastdeploy.model_executor.layers.attention import AttentionBackend
 from fastdeploy.model_executor.graph_optimization.dynamic_dims_marker import (
     DynamicDims
 )
-import paddle
-    
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +66,6 @@ class ForwardMeta():
 
     # Use cuda graph in this step or not. Used to avoid run cuda graph when in dummy run or prefill stage.
     step_use_cudagraph: bool = False
-    # Batch type flag
-    is_decode_batch: bool = False
 
     # Attention backend object
     attn_backend: AttentionBackend = None

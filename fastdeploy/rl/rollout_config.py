@@ -53,9 +53,6 @@ class RolloutModelConfig:
         enable_expert_parallell: bool = False,
         ori_vocab_size: int = None,
         quantization: str = "None",
-        enable_static_graph_inference: bool = False,
-        use_cudagraph: bool = False,
-        max_capture_batch_size: int = 64,
         guided_decoding_backend: str = "off",
         disable_any_whitespace: bool = True,
         enable_logprob: bool = False,
@@ -95,9 +92,6 @@ class RolloutModelConfig:
         self.enable_expert_parallell = enable_expert_parallell
         self.ori_vocab_size = ori_vocab_size
         self.quantization = quantization
-        self.enable_static_graph_inference = enable_static_graph_inference
-        self.use_cudagraph = use_cudagraph
-        self.max_capture_batch_size = max_capture_batch_size
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
         self.enable_logprob = enable_logprob

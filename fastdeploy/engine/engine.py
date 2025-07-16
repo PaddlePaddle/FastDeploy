@@ -1026,7 +1026,7 @@ class LLMEngine(object):
             f" --speculative_model_name_or_path {self.cfg.speculative_config.model_name_or_path}"
             f" --speculative_model_quantization {self.cfg.speculative_config.quantization}"
             f" --speculative_benchmark_mode {self.cfg.speculative_config.benchmark_mode}"
-            f" --max_capture_batch_size {self.cfg.max_capture_batch_size}"
+            f" --graph_optimiaztion_config '{self.cfg.graph_optimization_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
             f" --load_strategy {self.cfg.model_config.load_strategy}"
             f" --enable_mm {self.cfg.enable_mm}")
@@ -1041,9 +1041,6 @@ class LLMEngine(object):
             self.cfg.cache_config.enable_chunked_prefill,
             "do_profile": self.do_profile,
             "dynamic_load_weight": self.cfg.model_config.dynamic_load_weight,
-            "enable_static_graph_inference":
-            self.cfg.enable_static_graph_inference,
-            "use_cudagraph": self.cfg.use_cudagraph,
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "enable-custom-all-reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.enable_logprob,
