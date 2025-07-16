@@ -140,7 +140,7 @@ class FusedMoE(nn.Layer):
             shape=gate_weight_shape,
             dtype="float32",
         )
-        if self.model_config.moe_use_aux_free:
+        if self.fd_config.model_config.moe_use_aux_free:
             self.gate_correction_bias = self.create_parameter(
                 shape=gate_correction_bias_shape,
                 dtype="float32",

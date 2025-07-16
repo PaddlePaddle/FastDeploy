@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+
 from fastdeploy.worker.worker_process import initialize_fd_config
 
 
@@ -24,7 +25,7 @@ class RolloutModelConfig:
         max_model_len: int = 32768,
         tensor_parallel_size: int = 4,
         dynamic_load_weight: bool = True,
-        load_strategy: str = "meta",
+        load_strategy: str = "ipc_snapshot",
         enable_mm: bool = False,
         # Default values for all other parameters
         max_num_seqs: int = 34,

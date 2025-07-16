@@ -378,9 +378,7 @@ class LoadConfig:
         dynamic_load_weight: Whether to enable dynamic weight loading
         load_strategy: Specifies the weight loading method when enabled:
             - 'ipc': Real-time IPC streaming with automatic resharding
-            - 'ipc_no_reshard': Real-time IPC streaming without weight process
             - 'ipc_snapshot': Load from disk snapshot of IPC weights
-            - 'meta': provide RL traing worker, no_weights_load
             - None: No dynamic loading
     """
     def __init__(
@@ -389,7 +387,7 @@ class LoadConfig:
     ):
         self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
-        self.load_strategy: Optional[Literal['ipc', 'ipc_no_reshard', 'ipc_snapshot', 'meta']] = None
+        self.load_strategy: Optional[Literal['ipc', 'ipc_snapshot']] = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
