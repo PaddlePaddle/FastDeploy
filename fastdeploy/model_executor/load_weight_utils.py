@@ -54,7 +54,7 @@ def load_ep_checkpoint(model_path: str,
         returns a single range.
         
         Args:
-            config: Configuration objec
+            config: Configuration object
         
         Returns:
             If moe_num_experts is a list:
