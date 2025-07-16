@@ -292,6 +292,7 @@ class GPUModelRunner(ModelRunnerBase):
                         idx:idx + 1] = token_chunk_size
                     self.share_inputs['seq_lens_encoder'][idx:idx +
                                                         1] = token_chunk_size
+                    self.share_inputs["prompt_lens"][idx:idx + 1] = token_chunk_size
                 else:
                     if self.enable_mm:
                         inputs = self._preprocess_mm_task(request.multimodal_inputs)
@@ -453,6 +454,10 @@ class GPUModelRunner(ModelRunnerBase):
             -1,
             dtype='int64')
         self.share_inputs["input_ids"] = paddle.full(
+            [max_num_seqs, self.parallel_config.max_model_len],
+            self.parallel_config.pad_token_id,
+            dtype='int64')
+        self.share_inputs["prompt_ids"] = paddle.full(
             [max_num_seqs, self.parallel_config.max_model_len],
             self.parallel_config.pad_token_id,
             dtype='int64')
@@ -1051,6 +1056,10 @@ class GPUModelRunner(ModelRunnerBase):
                         self.share_inputs["image_features"] = None
                     token_chunk_size = inputs["input_ids"].shape[1]
                     self.share_inputs["input_ids"][idx:idx + 1, :token_chunk_size] = inputs["input_ids"]
+                    self.share_inputs["prompt_ids"][
+                        idx:idx + 1,
+                        self.share_inputs["prompt_lens"][idx:idx + 1]: self.share_inputs["prompt_lens"][idx:idx + 1] + token_chunk_size
+                        ] = inputs["input_ids"]
                     self.share_inputs["seq_lens_decoder"][idx:idx +1] = task.start_idx
                     task.start_idx += token_chunk_size
                 else:
