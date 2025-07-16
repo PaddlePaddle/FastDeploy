@@ -226,7 +226,7 @@ class SchedulerConfig:
         self.engine_worker_queue_port = kwargs.get("engine_worker_queue_port", 9923)
         self.splitwise_role = kwargs.get("splitwise_role", "mixed")
         self.innode_prefill_ports = kwargs.get("innode_prefill_ports", None)
-
+        self.engine_pid = kwargs.get("engine_pid", None)    # Process ID of engine
         self.is_master = True
         self._str_to_list("innode_prefill_ports", int)
         self._str_to_list("pod_ips", str)

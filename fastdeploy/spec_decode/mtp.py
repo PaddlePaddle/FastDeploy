@@ -93,14 +93,14 @@ class MTPProposer(Proposer):
                              expected_decode_len: int):
         """Set dummy prefill inputs to model_inputs"""
         max_dec_len = expected_decode_len + 1
-        self.num_gpu_blocks = self.parallel_config.total_block_num
+        self.num_gpu_blocks = self.cache_config.total_block_num
         self.initialize_kv_cache()
         full_length = min(num_tokens // batch_size,
                           self.scheduler_config.max_model_len - max_dec_len)
-        input_length = int(full_length * self.parallel_config.kv_cache_ratio)
+        input_length = int(full_length * self.cache_config.kv_cache_ratio)
         block_num = ((input_length + self.cache_config.block_size - 1) //
                      self.cache_config.block_size +
-                     self.parallel_config.enc_dec_block_num)
+                     self.cache_config.enc_dec_block_num)
 
         for i in range(batch_size):
             idx = i
@@ -139,8 +139,8 @@ class MTPProposer(Proposer):
         # Get kv cache shape
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
             max_num_blocks=self.num_gpu_blocks)
-        if (not self.parallel_config.do_profile
-                and (self.parallel_config.enable_prefix_caching
+        if (not self.observability_config.do_profile
+                and (self.cache_config.enable_prefix_caching
                      or self.parallel_config.splitwise_role != "mixed")):
             cache_kvs_list = []
             for i in range(
@@ -220,7 +220,7 @@ class MTPProposer(Proposer):
         self.num_gpu_blocks = int(
             num_gpu_blocks *
             self.speculative_config.num_gpu_block_expand_ratio)
-        if not (self.parallel_config.enable_prefix_caching
+        if not (self.cache_config.enable_prefix_caching
                 or self.parallel_config.splitwise_role != "mixed"):
             self.initialize_kv_cache()
 
@@ -229,7 +229,7 @@ class MTPProposer(Proposer):
             range(
                 self.num_gpu_blocks - 1,
                 int(self.main_model_num_gpu_blocks *
-                    self.parallel_config.kv_cache_ratio) - 1,
+                    self.cache_config.kv_cache_ratio) - 1,
                 -1,
             ))
         self.free_list_len = len(free_list)
@@ -239,7 +239,7 @@ class MTPProposer(Proposer):
             "free_list_len":
             paddle.full([1], self.free_list_len, dtype="int32"),
         })
-        self.parallel_config.do_profile = False
+        self.observability_config.do_profile = False
 
     def _init_model_inputs(self):
         """
@@ -327,9 +327,9 @@ class MTPProposer(Proposer):
 
         self.free_list = list(
             range(
-                self.parallel_config.total_block_num - 1,
-                int(self.parallel_config.total_block_num *
-                    self.parallel_config.kv_cache_ratio) - 1,
+                self.cache_config.total_block_num - 1,
+                int(self.cache_config.total_block_num *
+                    self.cache_config.kv_cache_ratio) - 1,
                 -1,
             ))
         self.free_list_len = len(self.free_list)

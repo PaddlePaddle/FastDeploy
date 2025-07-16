@@ -20,7 +20,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 import paddle
 from paddleformers.transformers.configuration_utils import PretrainedConfig
@@ -92,6 +92,8 @@ class ModelConfig:
         self.enable_logprob = False
         self.quantization = None
         self.tokenizer = None
+        self.pad_token_id: int = -1
+        self.eos_tokens_lens: int = 2
 
         for key, value in args.items():
             if hasattr(self, key):
@@ -191,7 +193,6 @@ class ModelConfig:
             "=============================================================")
 
 
-
 class ParallelConfig:
     """Configuration for the distributed execution."""
     def __init__(
@@ -208,30 +209,6 @@ class ParallelConfig:
         self.tensor_parallel_size = tensor_parallel_size  # TP degree
         self.expert_parallel_rank = int(tensor_parallel_rank / tensor_parallel_size)  # EP rank ID
         self.expert_parallel_size = 1  # EP degree
-
-        # Set default block num for profile run
-        self.max_block_num: int = 2000
-
-
-        # Encoder's decoder num
-        self.enc_dec_block_num: int = 1
-        # KV cache ratio for input
-        self.kv_cache_ratio: float = 0.7
-        # First token id
-        self.first_token_id: int = 1
-        # Gpu memory utilization
-        self.gpu_memory_utilization: float = 0.9
-        # Process ID of engine
-        self.engine_pid: Optional[int] = None
-        # Do profile or not
-        self.do_profile: bool = False
-        #
-        self.pad_token_id: int = -1
-        #
-        self.eos_tokens_lens: int = 2
-
-        # enable prefix cache
-        self.enable_prefix_caching = None
 
         self.data_parallel_size = 1
         self.enable_expert_parallel = False
@@ -863,6 +840,19 @@ class MultiModalConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
+class ObservabilityConfig:
+    """Configuration for observability - metrics and tracing."""
+    def __init__(
+        self,
+        args,
+    ):
+        # Do profile or not
+        self.do_profile: bool = False
+
+        for key, value in args.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+
 @dataclass
 class FDConfig:
     """
@@ -882,6 +872,7 @@ class FDConfig:
         quant_config: QuantConfigBase = None,
         graph_opt_config: GraphOptimizationConfig = None,
         multi_modal_config: MultiModalConfig = None,
+        observability_config: ObservabilityConfig = None,
         commit_config: CommitConfig = None,
     ):
         self.model_config = model_config
@@ -895,6 +886,7 @@ class FDConfig:
         self.scheduler_config = scheduler_config
         self.multi_modal_config = multi_modal_config
         self.decoding_config = decoding_config
+        self.observability_config = observability_config
 
         self.read_from_config()
         self.postprocess()

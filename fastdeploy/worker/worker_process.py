@@ -145,7 +145,7 @@ class PaddleDisWorkerProc():
             name="worker_ready_signal",
             array=workers_ready,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
+            suffix=self.scheduler_config.engine_pid,
             create=False)
         self.worker_ready_signal.value[self.local_rank %
                                        max_chips_per_node] = 1
@@ -156,7 +156,7 @@ class PaddleDisWorkerProc():
             name="worker_healthy_live_signal",
             array=workers_alive,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
+            suffix=self.scheduler_config.engine_pid,
             create=False)
         self.worker_healthy_live_signal.value[self.local_rank % 8] = int(
             time.time())
@@ -167,7 +167,7 @@ class PaddleDisWorkerProc():
             name="model_weights_status",
             array=workers_model_weights,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
+            suffix=self.scheduler_config.engine_pid,
             create=False)
 
         # init exist_task_signal
@@ -177,7 +177,7 @@ class PaddleDisWorkerProc():
             name="exist_task_signal",
             array=workers_exist_task,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
+            suffix=self.scheduler_config.engine_pid,
             create=False)
 
         # init exist_swapped_task_signal
@@ -188,7 +188,7 @@ class PaddleDisWorkerProc():
             name="exist_swapped_task_signal",
             array=workers_swapped_task,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
+            suffix=self.scheduler_config.engine_pid,
             create=False)
 
         # init exist_prefill_task_signal
@@ -197,7 +197,7 @@ class PaddleDisWorkerProc():
             name="exist_prefill_task_signal",
             array=exist_prefill_task_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_pid,
+            suffix=self.scheduler_config.engine_pid,
             create=False)
 
     def event_loop_ep(self) -> None:
@@ -269,7 +269,7 @@ class PaddleDisWorkerProc():
                         DynamicWeightManager
                     DynamicWeightManager.check_model_weights_status(
                         self.model_weights_status, self.worker.model_runner,
-                        self.parallel_config.engine_pid)
+                        self.scheduler_config.engine_pid)
 
             if self.exist_task_signal.value[
                     self.fd_config.parallel_config.expert_parallel_rank] == 1 or \
@@ -323,7 +323,7 @@ class PaddleDisWorkerProc():
             You may limit the usage of GPU memory
             by adjusting the `gpu_memory_utilization` parameter.
         """
-        if self.fd_config.parallel_config.do_profile:
+        if self.fd_config.observability_config.do_profile:
             # 1. Get available memory(bytes)
             available_kv_cache_memory = self.worker.determine_available_memory(
             )
@@ -349,7 +349,7 @@ class PaddleDisWorkerProc():
                 f"------- num_blocks_local:{num_blocks_local} --------")
 
             logger.info(
-                f"self.fd_config.parallel_config.do_profile:{self.fd_config.parallel_config.do_profile}"
+                f"self.fd_config.observability_config.do_profile:{self.fd_config.observability_config.do_profile}"
             )
 
             # 3. Send IPCSignal
@@ -359,7 +359,7 @@ class PaddleDisWorkerProc():
                 name="get_profile_block_num",
                 array=get_profile_block_num,
                 dtype=np.int32,
-                suffix=self.parallel_config.engine_pid,
+                suffix=self.scheduler_config.engine_pid,
                 create=False)
             self.get_profile_block_num_signal.value[
                 self.local_rank] = num_blocks_local
@@ -372,7 +372,7 @@ class PaddleDisWorkerProc():
             self.get_profile_block_num_signal.value[
                 self.local_rank] = num_blocks_global
         else:
-            num_blocks_global = self.fd_config.parallel_config.total_block_num
+            num_blocks_global = self.fd_config.cache_config.total_block_num
         # NOTE(liuzichang): Too big num_blocks_global will lead to error 700
         # 4. Updata share inputs
         self.worker.reinitialize_kv_cache(num_gpu_blocks=num_blocks_global)

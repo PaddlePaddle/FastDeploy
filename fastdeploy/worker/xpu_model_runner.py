@@ -290,7 +290,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["input_ids"][idx:idx + 1, :length] = np.array(
                 request.prompt_token_ids)
             if len(request.eos_token_ids
-                   ) < self.parallel_config.eos_tokens_lens:
+                   ) < self.model_config.eos_tokens_lens:
                 request.eos_token_ids.append(request.eos_token_ids[0])
             self.share_inputs["eos_token_id"][:] = np.array(
                 request.eos_token_ids, dtype="int64").reshape(-1, 1)
@@ -359,10 +359,10 @@ class XPUModelRunner(ModelRunnerBase):
             dtype='int64')
         self.share_inputs["input_ids"] = paddle.full(
             [max_num_seqs, self.scheduler_config.max_model_len],
-            self.parallel_config.pad_token_id,
+            self.model_config.pad_token_id,
             dtype='int64')
         self.share_inputs["eos_token_id"] = paddle.full(
-            [self.parallel_config.eos_tokens_lens, 1], 0, dtype='int64')
+            [self.model_config.eos_tokens_lens, 1], 0, dtype='int64')
         self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1],
                                                 self.model_config.top_p,
                                                 dtype='float32')
@@ -472,16 +472,16 @@ class XPUModelRunner(ModelRunnerBase):
         pre_max_block_num = (
             self.scheduler_config.max_model_len +
             self.cache_config.block_size - 1
-        ) // self.cache_config.block_size + self.parallel_config.enc_dec_block_num
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
         self.share_inputs["block_tables"] = paddle.full(
             [max_num_seqs, pre_max_block_num], -1, dtype='int32')
 
         # Initialize free list
         free_list = list(
             range(
-                self.parallel_config.total_block_num - 1,
-                int(self.parallel_config.total_block_num *
-                    self.parallel_config.kv_cache_ratio) - 1, -1))
+                self.cache_config.total_block_num - 1,
+                int(self.cache_config.total_block_num *
+                    self.cache_config.kv_cache_ratio) - 1, -1))
         self.free_list_len = len(free_list)
         self.share_inputs["free_list"] = paddle.to_tensor(free_list,
                                                           dtype="int32")
@@ -638,7 +638,7 @@ class XPUModelRunner(ModelRunnerBase):
         input_length = int(full_length - 512)
         block_num = (
             input_length + self.cache_config.block_size - 1
-        ) // self.cache_config.block_size + self.parallel_config.enc_dec_block_num
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
 
         for i in range(batch_size):
             idx = i
@@ -750,14 +750,14 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
         step_paddle(self.share_inputs, self.cache_config.block_size,
-                    self.parallel_config.enc_dec_block_num)
+                    self.cache_config.enc_dec_block_num)
 
         return None
 
     def prepare_profile(self) -> None:
         """Prepare the profile run by setting the block number and initializing the KV cache."""
         paddle.device.xpu.empty_cache()
-        self.num_gpu_blocks = self.parallel_config.total_block_num
+        self.num_gpu_blocks = self.cache_config.total_block_num
         self.initialize_kv_cache()
 
     def profile_run(self) -> None:
@@ -820,7 +820,7 @@ class XPUModelRunner(ModelRunnerBase):
         free_list = list(
             range(
                 self.num_gpu_blocks - 1,
-                int(self.num_gpu_blocks * self.parallel_config.kv_cache_ratio)
+                int(self.num_gpu_blocks * self.cache_config.kv_cache_ratio)
                 - 1, -1))
         self.free_list_len = len(free_list)
         self.share_inputs.update({

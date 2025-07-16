@@ -231,7 +231,7 @@ class GCUModelRunner(ModelRunnerBase):
                     self.share_inputs['seq_lens_encoder'][idx:idx + 1] = length
 
             if len(request.eos_token_ids
-                   ) < self.parallel_config.eos_tokens_lens:
+                   ) < self.model_config.eos_tokens_lens:
                 request.eos_token_ids.append(request.eos_token_ids[0])
             self.share_inputs["eos_token_id"][:] = np.array(
                 request.eos_token_ids, dtype="int64").reshape(-1, 1)
@@ -293,10 +293,10 @@ class GCUModelRunner(ModelRunnerBase):
         max_dec_len = expected_decode_len + 1
         full_length = min(num_tokens // batch_size,
                           self.scheduler_config.max_model_len - max_dec_len)
-        input_length = int(full_length * self.parallel_config.kv_cache_ratio)
+        input_length = int(full_length * self.cache_config.kv_cache_ratio)
         block_num = (
             input_length + self.cache_config.block_size - 1
-        ) // self.cache_config.block_size + self.parallel_config.enc_dec_block_num
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
 
         for i in range(batch_size):
             idx = i
@@ -336,10 +336,10 @@ class GCUModelRunner(ModelRunnerBase):
             dtype='int64')
         self.share_inputs["input_ids"] = paddle.full(
             [max_num_seqs, self.scheduler_config.max_model_len],
-            self.parallel_config.pad_token_id,
+            self.model_config.pad_token_id,
             dtype='int64')
         self.share_inputs["eos_token_id"] = paddle.full(
-            [self.parallel_config.eos_tokens_lens, 1], 0, dtype='int64')
+            [self.model_config.eos_tokens_lens, 1], 0, dtype='int64')
         self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1],
                                                 self.model_config.top_p,
                                                 dtype='float32')
@@ -473,16 +473,16 @@ class GCUModelRunner(ModelRunnerBase):
         pre_max_block_num = (
             self.scheduler_config.max_model_len +
             self.cache_config.block_size - 1
-        ) // self.cache_config.block_size + self.parallel_config.enc_dec_block_num
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
         self.share_inputs["block_tables"] = paddle.full(
             [max_num_seqs, pre_max_block_num], -1, dtype='int32')
 
         # Initialize free list
         free_list = list(
             range(
-                self.parallel_config.total_block_num - 1,
-                int(self.parallel_config.total_block_num *
-                    self.parallel_config.kv_cache_ratio) - 1, -1))
+                self.cache_config.total_block_num - 1,
+                int(self.cache_config.total_block_num *
+                    self.cache_config.kv_cache_ratio) - 1, -1))
         self.free_list_len = len(free_list)
         self.share_inputs["free_list"] = paddle.to_tensor(free_list,
                                                           dtype="int32")
@@ -672,8 +672,8 @@ class GCUModelRunner(ModelRunnerBase):
             max_num_blocks=max_block_num)
         # local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if not self.parallel_config.do_profile and (
-                self.parallel_config.enable_prefix_caching \
+        if not self.observability_config.do_profile and (
+                self.cache_config.enable_prefix_caching \
                 or self.parallel_config.splitwise_role != "mixed"):
             raise NotImplementedError(
                 "prefix_caching is not support by GCUModelRunner."
@@ -1114,7 +1114,7 @@ class GCUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model."""
 
         # Initialize kv cache for profile run. After profile run kv cache will be reset.
-        self.num_gcu_blocks = self.parallel_config.total_block_num
+        self.num_gcu_blocks = self.cache_config.total_block_num
         self.initialize_kv_cache()
 
         # 1. Profile with multimodal encoder & encoder cache
@@ -1139,7 +1139,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.num_gcu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        if not (self.parallel_config.enable_prefix_caching \
+        if not (self.cache_config.enable_prefix_caching \
                 or self.parallel_config.splitwise_role != "mixed"):
             self.initialize_kv_cache()
 
@@ -1147,7 +1147,7 @@ class GCUModelRunner(ModelRunnerBase):
         free_list = list(
             range(
                 self.num_gcu_blocks - 1,
-                int(self.num_gcu_blocks * self.parallel_config.kv_cache_ratio)
+                int(self.num_gcu_blocks * self.cache_config.kv_cache_ratio)
                 - 1, -1))
         self.free_list_len = len(free_list)
         self.share_inputs.update({
@@ -1157,7 +1157,7 @@ class GCUModelRunner(ModelRunnerBase):
             paddle.full([1], self.free_list_len, dtype="int32"),
         })
 
-        self.parallel_config.do_profile = False
+        self.observability_config.do_profile = False
 
         if self.speculative_method in ["mtp"]:
             self.proposer.update_block_num(num_gpu_blocks)
