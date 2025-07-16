@@ -311,18 +311,18 @@ def w4a8_weight_convert(state_dict):
     w4a8_weight_bites_layers_map = {}
     w4a8_weight_bites_layers_map["qkv_gemm_bits_map"] = []
     w4a8_weight_bites_layers_map["out_gemm_bits_map"] = []
-    w4a8_weight_bites_layers_map["ffn1_gemm_bits_map"] = []
-    w4a8_weight_bites_layers_map["ffn2_gemm_bits_map"] = []
+    w4a8_weight_bites_layers_map["up_gate_proj_gemm_bits_map"] = []
+    w4a8_weight_bites_layers_map["down_proj_gemm_bits_map"] = []
     for name_keys, gemm_bits in w4a8_weight_bites_name_map.items():
         if "qkv_proj" in name_keys:
             w4a8_weight_bites_layers_map["qkv_gemm_bits_map"].append(gemm_bits)
         elif "out_proj" in name_keys:
             w4a8_weight_bites_layers_map["out_gemm_bits_map"].append(gemm_bits)
         elif "linear1" in name_keys:
-            w4a8_weight_bites_layers_map["ffn1_gemm_bits_map"].append(
+            w4a8_weight_bites_layers_map["up_gate_proj_gemm_bits_map"].append(
                 gemm_bits)
         elif "linear2" in name_keys:
-            w4a8_weight_bites_layers_map["ffn2_gemm_bits_map"].append(
+            w4a8_weight_bites_layers_map["down_proj_gemm_bits_map"].append(
                 gemm_bits)
     logger.debug(
         f"w4a8_weight_bites_layers_map:{w4a8_weight_bites_layers_map}")

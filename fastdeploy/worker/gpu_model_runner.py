@@ -30,7 +30,8 @@ from fastdeploy.model_executor.guided_decoding.base_guided_decoding import \
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import \
     AttentionBackend
-from fastdeploy.model_executor.layers.rotary_embedding import get_rope
+from fastdeploy.model_executor.layers.rotary_embedding import (get_rope,
+                                                               get_rope_3d)
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import (
     Sampler, SpeculativeSampler)
@@ -46,9 +47,14 @@ from fastdeploy.platforms import current_platform
 if not current_platform.is_dcu():
     from fastdeploy.spec_decode import MTPProposer, NgramProposer
 
+from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
+from fastdeploy.input.mm_processor import DataProcessor
 from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import \
+    ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
+from fastdeploy.worker.utils import check_safetensors_model
 
 
 class GPUModelRunner(ModelRunnerBase):
@@ -61,6 +67,7 @@ class GPUModelRunner(ModelRunnerBase):
             rank: int,
             local_rank: int):
         super().__init__(fd_config=fd_config, device=device)
+        self.enable_mm = self.model_config.enable_mm
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
@@ -71,6 +78,37 @@ class GPUModelRunner(ModelRunnerBase):
         self.guided_backend = None
         if self.fd_config.parallel_config.guided_decoding_backend != "off":
             self.guided_backend = get_guided_backend(fd_config=self.fd_config)
+
+        # VL model config:
+        if self.enable_mm:
+            model_path = os.path.dirname(self.parallel_config.model_name_or_path)
+            self.is_safetensors_model = check_safetensors_model(
+                self.parallel_config.model_name_or_path)
+            if not self.is_safetensors_model:
+                self.tokenizer_path = self.image_preprocessor_path = model_path
+            else:
+                self.tokenizer_path = self.parallel_config.model_name_or_path
+                self.image_preprocessor_path = self.parallel_config.model_name_or_path
+            self.vision_model_name_or_path = os.path.join(
+                model_path, "DFNRopeVisionTransformer")
+
+            self.amp_black = [
+                "reduce_sum",
+                "c_softmax_with_cross_entropy",
+                "elementwise_div",
+                "sin",
+                "cos",
+                "sort",
+                "multinomial",
+            ]
+            self.amp_white = [
+                "lookup_table",
+                "lookup_table_v2",
+                "flash_attn",
+                "matmul",
+                "matmul_v2",
+                "fused_gemm_epilogue",
+            ]
 
         #  Sampler
         if not self.speculative_decoding:
@@ -216,45 +254,98 @@ class GPUModelRunner(ModelRunnerBase):
                     logger.info(
                         f"prefill_chunk_info: {request.prefill_chunk_info}")
                     token_chunk_size = request.prefill_chunk_info[0]
+                    if self.enable_mm:
+                        inputs = self._preprocess_mm_task(token_chunk_size)
+                        if inputs.get("images") is not None:
+                            self.share_inputs["image_features"] = self.extract_vision_features(
+                                inputs)
+                        else:
+                            # Compatible with the situation that lacks images and videos
+                            self.share_inputs["image_features"] = None
+                        if request.multimodal_inputs["position_ids"] is not None:
+                            position_ids = paddle.to_tensor(
+                                request.multimodal_inputs["position_ids"],
+                                dtype="int64").unsqueeze([0])
+                        else:
+                            position_ids = None
+                        token_chunk_size = inputs["input_ids"].shape[1]
+                        request.set("start_idx", token_chunk_size)
+                        self.share_inputs["input_ids"][
+                            idx:idx + 1, :token_chunk_size] = inputs["input_ids"]
+                    else:
+                        self.share_inputs['input_ids'][
+                            idx, :token_chunk_size] = np.array(
+                                request.prompt_token_ids[:token_chunk_size])
+                        self.share_inputs['seq_lens_decoder'][
+                            idx:idx + 1] = request.get("seq_lens_decoder", 0)
+                        self.share_inputs['step_seq_lens_decoder'][
+                            idx:idx + 1] = request.get("seq_lens_decoder", 0)
                     self.share_inputs["seq_lens_this_time"][
                         idx:idx + 1] = token_chunk_size
-                    self.share_inputs['input_ids'][
-                        idx, :token_chunk_size] = np.array(
-                            request.prompt_token_ids[:token_chunk_size])
                     self.share_inputs['step_seq_lens_encoder'][
                         idx:idx + 1] = token_chunk_size
                     self.share_inputs['seq_lens_encoder'][idx:idx +
-                                                          1] = token_chunk_size
-                    self.share_inputs['seq_lens_decoder'][
-                        idx:idx + 1] = request.get("seq_lens_decoder", 0)
-                    self.share_inputs['step_seq_lens_decoder'][
-                        idx:idx + 1] = request.get("seq_lens_decoder", 0)
+                                                        1] = token_chunk_size
                 else:
-                    self.share_inputs['seq_lens_decoder'][
-                        idx:idx + 1] = request.get("seq_lens_decoder", 0)
-                    self.share_inputs['step_seq_lens_decoder'][
-                        idx:idx + 1] = request.get("seq_lens_decoder", 0)
+                    if self.enable_mm:
+                        inputs = self._preprocess_mm_task(request.multimodal_inputs)
+                        if inputs.get("images") is not None:
+                            self.share_inputs[
+                                "image_features"] = self.extract_vision_features(
+                                    inputs)
+                        else:
+                            # Compatible with the situation that lacks images and videos
+                            self.share_inputs["image_features"] = None
+                        position_ids = inputs["position_ids"]
+                        length = inputs["input_ids"].shape[1]
+                        self.share_inputs["input_ids"][
+                            idx:idx + 1, :length] = inputs["input_ids"]
+                    else:
+                        self.share_inputs['seq_lens_decoder'][
+                            idx:idx + 1] = request.get("seq_lens_decoder", 0)
+                        self.share_inputs['step_seq_lens_decoder'][
+                            idx:idx + 1] = request.get("seq_lens_decoder", 0)
                     self.share_inputs['seq_lens_this_time'][idx:idx +
                                                             1] = length
                     self.share_inputs['step_seq_lens_encoder'][idx:idx +
                                                                1] = length
                     self.share_inputs['seq_lens_encoder'][idx:idx + 1] = length
 
+                if self.enable_mm:
+                    enable_thinking = request.get("enable_thinking", True)
+                    enable_thinking = enable_thinking if enable_thinking is not None else True
+                    self.share_inputs["enable_thinking"][:] = enable_thinking
+                    self.share_inputs["need_think_end"][
+                        idx:idx + 1, :] = 1 if enable_thinking else 0
+                    self.share_inputs["reasoning_index"][
+                        idx:idx + 1, :] = request.get("reasoning_max_tokens", 2048)
+                    self.share_inputs["rope_emb"][idx:idx +
+                                          1, :] = self.prepare_rope3d(
+                                              position_ids, request.get("max_tokens", 2048))
+                    self.share_inputs["seq_lens_decoder"][idx:idx + 1] = 0
+
+            def get_attr_from_request(request, attr, default_value=None):
+                res = request.get(attr, default_value)
+                if res is not None:
+                    return res
+                else:
+                    return default_value
+
+
             if len(request.eos_token_ids
                    ) < self.parallel_config.eos_tokens_lens:
                 request.eos_token_ids.append(request.eos_token_ids[0])
             self.share_inputs["eos_token_id"][:] = np.array(
                 request.eos_token_ids, dtype="int64").reshape(-1, 1)
-            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 0.7)
+            self.share_inputs["top_p"][idx:idx + 1] = get_attr_from_request(request, "top_p", 0.7)
             self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k", 0)
-            self.share_inputs["temperature"][idx:idx + 1] = request.get(
-                "temperature", 0.95)
-            self.share_inputs["penalty_score"][idx:idx + 1] = request.get(
-                "repetition_penalty", 1.0)
-            self.share_inputs["frequency_score"][idx:idx + 1] = request.get(
-                "frequency_penalty", 0.0)
-            self.share_inputs["presence_score"][idx:idx + 1] = request.get(
-                "presence_penalty", 0.0)
+            self.share_inputs["temperature"][idx:idx + 1] = get_attr_from_request(request,"temperature", 0.95)
+            self.share_inputs["penalty_score"][idx:idx + 1] = get_attr_from_request(
+                request, "repetition_penalty", 1.0)
+            self.share_inputs["frequency_score"][idx:idx + 1] = get_attr_from_request(
+                request, "frequency_penalty", 0.0)
+            self.share_inputs["presence_score"][idx:idx + 1] = get_attr_from_request(
+                request, "presence_penalty", 0.0)
 
             self.share_inputs["min_dec_len"][idx:idx + 1] = request.get(
                 "min_tokens", 1)
@@ -301,6 +392,9 @@ class GPUModelRunner(ModelRunnerBase):
                               expected_decode_len: int):
         """ Set dummy prefill inputs to share_inputs """
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
+        if self.enable_mm:
+            self.share_inputs["free_list"] = paddle.to_tensor([], dtype="int32")
+            self.share_inputs["free_list_len"][0] = 0
         max_dec_len = expected_decode_len + 1
         full_length = min(num_tokens // batch_size,
                           self.parallel_config.max_model_len - max_dec_len)
@@ -476,11 +570,12 @@ class GPUModelRunner(ModelRunnerBase):
             self.parallel_config.max_model_len).reshape((1, -1))
 
         # TODO(gongshaotian): move to models
-        self.share_inputs["rope_emb"] = get_rope(
-            rotary_dim=self.model_config.head_dim,
-            position_ids=tmp_position_ids,
-            base=self.model_config.rope_theta,
-            model_config=self.model_config)
+        if not self.enable_mm:
+            self.share_inputs["rope_emb"] = get_rope(
+                rotary_dim=self.model_config.head_dim,
+                position_ids=tmp_position_ids,
+                base=self.model_config.rope_theta,
+                model_config=self.model_config)
 
         # Set block tables
         pre_max_block_num = (
@@ -541,6 +636,24 @@ class GPUModelRunner(ModelRunnerBase):
                 fill_value=0,
                 dtype="int32")
 
+        if self.enable_mm:
+            head_dim = self.model_config.head_dim
+            self.share_inputs["rope_emb"] = paddle.full(shape=[
+                    max_num_seqs, 2, 1, self.parallel_config.max_model_len, 1, head_dim // 2
+                    ],
+                    fill_value=0,
+                    dtype="float32")
+            self.share_inputs["image_features"] = None
+            self.share_inputs["need_think_end"] = paddle.full(shape=[max_num_seqs, 1],
+                                                    fill_value=0,
+                                                    dtype="int32")
+            self.share_inputs["enable_thinking"] = paddle.full(shape=[1],
+                                                    fill_value=True,
+                                                    dtype="bool")
+            self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1],
+                                                    fill_value=0,
+                                                    dtype="int32")
+
     def _prepare_inputs(self) -> None:
         """ Prepare the model inputs """
         # Remove padding
@@ -598,6 +711,8 @@ class GPUModelRunner(ModelRunnerBase):
             f"Starting to load model {self.model_config.architectures[0]}")
         time_before_load = time.perf_counter()
         # 1. Load original model
+        if self.enable_mm:
+            self.load_mm_config_and_image_preprocess()
         self.model = get_model_from_loader(fd_config=self.fd_config)
         # 1.1 Load RL dynamic model
         if self.fd_config.load_config.dynamic_load_weight:
@@ -756,24 +871,29 @@ class GPUModelRunner(ModelRunnerBase):
                                     > 1).sum() > 0)
             self.forward_meta.step_use_cudagraph = is_decode_batch and in_capturing
             self.forward_meta.is_decode_batch = is_decode_batch
-            model_output = self.model(
-                ids_remove_padding=self.share_inputs["ids_remove_padding"],
-                forward_meta=self.forward_meta)
+            if self.enable_mm:
+                hidden_states = model_output = self.model(self.share_inputs["ids_remove_padding"],
+                                                            self.share_inputs["image_features"],
+                                                            self.forward_meta)
+            else:
+                model_output = self.model(
+                    ids_remove_padding=self.share_inputs["ids_remove_padding"],
+                    forward_meta=self.forward_meta)
 
-            hiddden_states = rebuild_padding(
-                model_output,
-                self.share_inputs["cum_offsets"],
-                self.share_inputs["seq_lens_this_time"],
-                self.share_inputs["seq_lens_decoder"],
-                self.share_inputs["seq_lens_encoder"],
-                self.share_inputs["output_padding_offset"]
-                if self.speculative_decoding else
-                None,  # speculative decoding requires
-                self.parallel_config.max_model_len,
-            )
+                hidden_states = rebuild_padding(
+                    model_output,
+                    self.share_inputs["cum_offsets"],
+                    self.share_inputs["seq_lens_this_time"],
+                    self.share_inputs["seq_lens_decoder"],
+                    self.share_inputs["seq_lens_encoder"],
+                    self.share_inputs["output_padding_offset"]
+                    if self.speculative_decoding else
+                    None,  # speculative decoding requires
+                    self.parallel_config.max_model_len,
+                )
 
             # 4. Execute spec decode
-            logits = self.model.compute_logits(hiddden_states)
+            logits = self.model.compute_logits(hidden_states)
 
             if not self.speculative_decoding:
                 set_value_by_flags_and_idx(
@@ -831,7 +951,15 @@ class GPUModelRunner(ModelRunnerBase):
                 accept_tokens=self.share_inputs["accept_tokens"]
                 if self.speculative_decoding else None,
                 accept_num=self.share_inputs["accept_num"]
-                if self.speculative_decoding else None)
+                if self.speculative_decoding else None,
+                enable_thinking= self.share_inputs["enable_thinking"]
+                if self.enable_mm else None,
+                think_end_id=self.model_config.think_end_id
+                if self.enable_mm else -1,
+                need_think_end=self.share_inputs["need_think_end"]
+                if self.enable_mm else None,
+                reasoning_index=self.share_inputs["reasoning_index"]
+                if self.enable_mm else None)
 
             post_process(sampler_output=sampler_output,
                          model_output=model_output_data,
@@ -861,7 +989,6 @@ class GPUModelRunner(ModelRunnerBase):
         """
         if not self.parallel_config.enable_chunked_prefill:
             return
-
         for task in tasks:
             if task.get("prefill_chunk_info", None) is None:
                 continue
@@ -875,28 +1002,46 @@ class GPUModelRunner(ModelRunnerBase):
             logger.debug(
                 f"{task.request_id} chunked prefill {task.chunk_idx}/{len(task.prefill_chunk_info)}"
             )
-            start_idx = sum(task.prefill_chunk_info[:task.chunk_idx])
+            if not self.enable_mm:
+                start_idx = sum(task.prefill_chunk_info[:task.chunk_idx])
             if task.chunk_idx == len(task.prefill_chunk_info):
                 self.share_inputs["seq_lens_this_time"][idx:idx + 1] = 1
                 self.share_inputs['seq_lens_encoder'][idx:idx + 1] = 0
                 self.share_inputs["step_idx"][idx:idx + 1] = 1
-                self.share_inputs["seq_lens_decoder"][
-                    idx:idx + 1] = start_idx + task.get("seq_lens_decoder", 0)
+                if self.enable_mm:
+                    self.share_inputs["seq_lens_decoder"][idx:idx +
+                                                      1] = task.start_idx
+                else:
+                    self.share_inputs["seq_lens_decoder"][
+                        idx:idx + 1] = start_idx + task.get("seq_lens_decoder", 0)
                 del self.restore_chunked_prefill_request[task.request_id]
             else:
                 token_chunk_size = task.prefill_chunk_info[task.chunk_idx]
-
+                if self.enable_mm:
+                    inputs = self._preprocess_mm_task(task.prefill_chunk_info[task.chunk_idx])
+                    if inputs.get("images") is not None:
+                        self.share_inputs[
+                            "image_features"] = self.extract_vision_features(
+                                inputs)
+                    else:
+                        # Compatible with the situation that lacks images and videos
+                        self.share_inputs["image_features"] = None
+                    token_chunk_size = inputs["input_ids"].shape[1]
+                    self.share_inputs["input_ids"][idx:idx + 1, :token_chunk_size] = inputs["input_ids"]
+                    self.share_inputs["seq_lens_decoder"][idx:idx +1] = task.start_idx
+                    task.start_idx += token_chunk_size
+                else:
+                    self.share_inputs['input_ids'][idx, :token_chunk_size] = np.array(
+                                                                                task.prompt_token_ids[start_idx:start_idx +
+                                                                                                    token_chunk_size])
+                    self.share_inputs["seq_lens_decoder"][
+                        idx:idx + 1] = start_idx + task.get("seq_lens_decoder", 0)
                 self.share_inputs["seq_lens_this_time"][idx:idx +
                                                         1] = token_chunk_size
-                self.share_inputs['input_ids'][
-                    idx, :token_chunk_size] = np.array(
-                        task.prompt_token_ids[start_idx:start_idx +
-                                              token_chunk_size])
                 self.share_inputs['seq_lens_encoder'][idx:idx +
                                                       1] = token_chunk_size
                 self.share_inputs["step_idx"][idx:idx + 1] = 0
-                self.share_inputs["seq_lens_decoder"][
-                    idx:idx + 1] = start_idx + task.get("seq_lens_decoder", 0)
+
             if self.speculative_decoding and self.proposer.is_chunk_prefill_enabled(
             ):
                 self.proposer.update_task_chunk_prefill(task)
@@ -988,23 +1133,28 @@ class GPUModelRunner(ModelRunnerBase):
                                 > 1).sum() > 0)
         self.forward_meta.step_use_cudagraph = self.use_cudagraph and is_decode_batch
         self.forward_meta.is_decode_batch = is_decode_batch
-        model_output = self.model(
-            ids_remove_padding=self.share_inputs["ids_remove_padding"],
-            forward_meta=self.forward_meta)
 
-        hiddden_states = rebuild_padding(
-            model_output,
-            self.share_inputs["cum_offsets"],
-            self.share_inputs["seq_lens_this_time"],
-            self.share_inputs["seq_lens_decoder"],
-            self.share_inputs["seq_lens_encoder"],
-            self.share_inputs["output_padding_offset"]
-            if self.speculative_decoding else None,
-            self.parallel_config.max_model_len,
-        )
+        if self.enable_mm:
+            hidden_states = model_output = self.model(self.share_inputs["ids_remove_padding"],
+                                                        self.share_inputs["image_features"],
+                                                        self.forward_meta)
+        else:
+            model_output = self.model(
+                ids_remove_padding=self.share_inputs["ids_remove_padding"],
+                forward_meta=self.forward_meta)
+            hidden_states = rebuild_padding(
+                model_output,
+                self.share_inputs["cum_offsets"],
+                self.share_inputs["seq_lens_this_time"],
+                self.share_inputs["seq_lens_decoder"],
+                self.share_inputs["seq_lens_encoder"],
+                self.share_inputs["output_padding_offset"]
+                if self.speculative_decoding else None,
+                self.parallel_config.max_model_len,
+            )
 
         # 4. Compute logits, Sample
-        logits = self.model.compute_logits(hiddden_states)
+        logits = self.model.compute_logits(hidden_states)
 
         if not self.speculative_decoding:
             set_value_by_flags_and_idx(
@@ -1063,7 +1213,15 @@ class GPUModelRunner(ModelRunnerBase):
             accept_tokens=self.share_inputs["accept_tokens"]
             if self.speculative_decoding else None,
             accept_num=self.share_inputs["accept_num"]
-            if self.speculative_decoding else None)
+            if self.speculative_decoding else None,
+            enable_thinking= self.share_inputs["enable_thinking"]
+            if self.enable_mm else None,
+            think_end_id=self.model_config.think_end_id
+            if self.enable_mm else -1,
+            need_think_end=self.share_inputs["need_think_end"]
+            if self.enable_mm else None,
+            reasoning_index=self.share_inputs["reasoning_index"]
+            if self.enable_mm else None)
 
         if self.speculative_config.method in ["mtp"] and \
             self.parallel_config.splitwise_role == "prefill":
@@ -1240,3 +1398,155 @@ class GPUModelRunner(ModelRunnerBase):
         self.initialize_kv_cache()
         self.dynamic_weight_manager._log_memory(
             "dynamic weight manager update all memory")
+
+    def _init_image_preprocess(self) -> None:
+        processor = DataProcessor(
+            tokenizer_name=self.tokenizer_path,
+            image_preprocessor_name=str(self.image_preprocessor_path),
+        )
+        processor.eval()
+        image_preprocess = processor.image_preprocessor
+        image_preprocess.image_mean_tensor = paddle.to_tensor(
+            image_preprocess.image_mean, dtype="float32").reshape([1, 3, 1, 1])
+        image_preprocess.image_std_tensor = paddle.to_tensor(
+            image_preprocess.image_std, dtype="float32").reshape([1, 3, 1, 1])
+        image_preprocess.rescale_factor = paddle.to_tensor(
+            image_preprocess.rescale_factor, dtype="float32")
+        image_preprocess.image_mean_tensor = image_preprocess.image_mean_tensor.squeeze(
+            [-2, -1]).repeat_interleave(self.model_config.vision_config.patch_size**2 * 1,
+                                        -1)
+        image_preprocess.image_std_tensor = image_preprocess.image_std_tensor.squeeze(
+            [-2, -1]).repeat_interleave(self.model_config.vision_config.patch_size**2 * 1,
+                                        -1)
+        self.image_preprocess = image_preprocess
+
+    def load_mm_config_and_image_preprocess(self) -> None:
+        tokenizer = ErnieBotTokenizer.from_pretrained(
+            self.tokenizer_path,
+            model_max_length=self.parallel_config.max_model_len,
+            padding_side="right",
+            use_fast=False,
+        )
+        tokenizer.ignored_index = -100
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.unk_token
+
+        self.fd_config.model_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_size
+        self.fd_config.model_config.tensor_parallel_rank = self.parallel_config.tensor_parallel_rank
+        self.fd_config.model_config.moe_group="dummy"
+        self.fd_config.parallel_config.column_cut = False
+        vision_config = self.fd_config.model_config.vision_config
+        vision_config.attn_sep = False
+        vision_config.dtype = "bfloat16"
+        vision_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_size
+        vision_config.tensor_parallel_rank = self.parallel_config.tensor_parallel_rank
+        self.fd_config.model_config.pixel_hidden_size = vision_config.hidden_size
+        self.fd_config.model_config.im_patch_id = tokenizer.get_vocab()[
+            "<|IMAGE_PLACEHOLDER|>"
+        ]
+        self.fd_config.model_config.think_end_id = tokenizer.get_vocab()["</think>"]
+        self.fd_config.model_config.max_text_id = self.fd_config.model_config.im_patch_id
+        self.fd_config.model_config.sequence_parallel = False
+        self.model_config = self.fd_config.model_config
+        self._init_image_preprocess()
+
+    def _preprocess_mm_task(self, one: dict) -> None:
+        """process batch"""
+
+        input_ids = one["input_ids"][np.newaxis, :]
+        input_ids = paddle.to_tensor(input_ids, dtype=paddle.int64)
+        token_type_ids = one["token_type_ids"][np.newaxis, :]
+        token_type_ids = paddle.to_tensor(token_type_ids, dtype=paddle.int64)
+
+        if one["images"] is not None:
+            image_type_ids = one["image_type_ids"][np.newaxis, :]
+            images = one["images"]
+            image_type_ids = paddle.to_tensor(image_type_ids,
+                                              dtype=paddle.int64)
+            images = paddle.to_tensor(images, dtype="uint8")
+            grid_thw = paddle.to_tensor(one["grid_thw"], dtype="int64")
+        else:
+            image_type_ids = None
+            images = None
+            grid_thw = None
+
+        if one["position_ids"] is not None:
+            position_ids = paddle.to_tensor(one["position_ids"],
+                                            dtype="int64").unsqueeze([0])
+        else:
+            position_ids = None
+
+        result = dict(
+            input_ids=input_ids,
+            image_type_ids=image_type_ids,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            grid_thw=grid_thw,
+            images=images,
+        )
+        return result
+
+    @paddle.no_grad()
+    def extract_vision_features(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
+        """extract_vision_features"""
+        assert inputs["images"] is not None
+        grid_thw = inputs["grid_thw"]
+
+        images = inputs["images"].cast("float32")
+        images = self.image_preprocess.rescale_factor * images - self.image_preprocess.image_mean_tensor
+        images = images / self.image_preprocess.image_std_tensor
+        images = images.cast("bfloat16")
+
+        token_type_ids = inputs["token_type_ids"]
+        token_type_ids_w_video = token_type_ids
+        input_ids = inputs["input_ids"]
+        # convert to img patch id
+        # TODO(lulinjun): may need to check model_config and model_cfg
+        image_mask = input_ids == self.model_config.im_patch_id
+        image_type_ids = inputs["image_type_ids"]
+        with paddle.amp.auto_cast(
+                True,
+                custom_black_list=self.amp_black,
+                custom_white_list=self.amp_white,
+                level="O2",
+                dtype=self.parallel_config.dtype,
+        ):
+            image_features = self.model.vision_model.extract_feature(
+                images, grid_thw)
+            if self.parallel_config.tensor_parallel_size > 1:
+                S, C = image_features.shape
+                image_features = image_features.reshape(
+                    [-1, C * self.model_config.spatial_conv_size**2])
+                image_features = ScatterOp.apply(image_features,
+                                                 axis=-1)  # mp 切 Fea
+                image_features = image_features.reshape([S, -1])
+            image_features = self.model.resampler_model(
+                image_features,
+                image_mask,
+                token_type_ids_w_video,
+                image_type_ids,
+                grid_thw,
+            )
+        return image_features
+
+    @paddle.no_grad()
+    def prepare_rope3d(self, position_ids: paddle.Tensor, max_len: int) -> paddle.Tensor:
+        """prepare_rope3d"""
+
+        prefix_max_position_ids = paddle.max(position_ids) + 1
+        dec_pos_ids = paddle.tile(
+            paddle.arange(max_len,
+                          dtype="int64").unsqueeze(0).unsqueeze(-1), [1, 1, 3])
+        dec_pos_ids = dec_pos_ids + prefix_max_position_ids
+        position_ids_3d_real = paddle.concat([position_ids, dec_pos_ids],
+                                             axis=1)
+
+        rope_emb = get_rope_3d(
+            position_ids=position_ids_3d_real,
+            rotary_dim=self.model_config.head_dim,
+            paritial_rotary_factor=1.0,
+            base=self.model_config.rope_theta,
+            max_position=self.parallel_config.max_model_len,
+            freq_allocation=self.model_config.freq_allocation,
+        )
+        return rope_emb

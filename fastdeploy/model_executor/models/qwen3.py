@@ -166,7 +166,7 @@ class Qwen3Model(nn.Layer):
         self.num_layers = fd_config.model_config.num_hidden_layers
         fd_config.model_config.pretrained_config.prefix_name = "model"
 
-        self.embeddings = VocabParallelEmbedding(
+        self.embed_tokens = VocabParallelEmbedding(
             fd_config=fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
@@ -197,7 +197,7 @@ class Qwen3Model(nn.Layer):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.embeddings.load_state_dict(state_dict)
+        self.embed_tokens.load_state_dict(state_dict)
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
@@ -210,7 +210,7 @@ class Qwen3Model(nn.Layer):
     ):
         """
         """
-        hidden_states = self.embeddings(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
         residual = None
 
@@ -266,8 +266,8 @@ class Qwen3ForCausalLM(ModelForCasualLM):
         """
         self.model.load_state_dict(state_dict)
         if self.tie_word_embeddings:
-            self.lm_head.out_linear.weight.set_value(
-                self.model.embeddings.word_embeddings.weight.transpose([1, 0]))
+            self.lm_head.linear.weight.set_value(
+                self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
         else:
             self.lm_head.load_state_dict(state_dict)
 

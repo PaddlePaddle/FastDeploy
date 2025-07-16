@@ -549,6 +549,10 @@ def parse_args():
         "'ipc_snapshot': load from disk snapshot of IPC weights, "
         "'meta': provide RL traing worker, no_weights_load"
         "'normal':normal load weight")
+    parser.add_argument("--enable_mm",
+                        type=str,
+                        default="false",
+                        help="Whether to use vl")
     parser.add_argument("--enable_logprob",
                         action='store_true',
                         help="Enable output of token-level log probabilities.")
@@ -650,6 +654,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
             "No quantization config found and use original weight and act dtype."
         )
 
+    # Set VL tag
+    model_config.enable_mm = getattr(args, 'enable_mm', 'false').lower() == 'true'
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
 

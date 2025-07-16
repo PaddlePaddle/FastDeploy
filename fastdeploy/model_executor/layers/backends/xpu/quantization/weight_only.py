@@ -37,13 +37,13 @@ class XPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         Create weights for linear layer on XPU
         """
         # The scale shape should be equal to the output dim of weight using Per-Channel Quantization.
-        linear_weight_scale_shape = [layer.linear_weight_shape[1]]
-        layer.linear_weight_shape.reverse()
+        weight_scale_shape = [layer.weight_shape[1]]
+        layer.weight_shape.reverse()
         if self.quant_config.name() == "weight_only_int4":
-            layer.linear_weight_shape[0] //= 2
+            layer.weight_shape[0] //= 2
         layer.weight_dtype = "int8"
-        layer.linear_weight_scale = layer.create_parameter(
-            shape=linear_weight_scale_shape,
+        layer.weight_scale = layer.create_parameter(
+            shape=weight_scale_shape,
             dtype="float32",
             is_bias=False,
         )
@@ -55,6 +55,6 @@ class XPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         """
         quanted_weight_tensor, weight_scale_tensor = weight_quantize_xpu(
             weight, self.quant_config.algo, -1, -1)
-        layer.linear_weight.set_value(
+        layer.weight.set_value(
             paddle.transpose(quanted_weight_tensor, [1, 0]))
-        layer.linear_weight_scale.set_value(weight_scale_tensor)
+        layer.weight_scale.set_value(weight_scale_tensor)
