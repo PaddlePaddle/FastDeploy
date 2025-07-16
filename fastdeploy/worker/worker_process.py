@@ -567,6 +567,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     decoding_config = DecodingConfig(vars(args))
     speculative_config = SpeculativeConfig(vars(args))
     parallel_config = ParallelConfig(vars(args))
+    parallel_config.tensor_parallel_rank = local_rank
+    parallel_config.tensor_parallel_size = ranks
+    parallel_config.expert_parallel_rank = int(local_rank / ranks)
     load_config = LoadConfig(vars(args))
 
     graph_opt_config = GraphOptimizationConfig(
