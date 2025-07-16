@@ -508,7 +508,7 @@ class EngineArgs:
         # Cluster system parameters group
         system_group = parser.add_argument_group("System Configuration")
         system_group.add_argument(
-            "--dist-init-addr",
+            "--dist-init-ip",
             default=EngineArgs.dist_init_ip,
             help=
             "IP addresses of master node.")
