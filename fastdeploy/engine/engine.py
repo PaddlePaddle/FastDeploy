@@ -47,7 +47,8 @@ from fastdeploy.output.token_processor import (TokenProcessor,
                                                WarmUpTokenProcessor)
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, console_logger, llm_logger
-
+from fastdeploy.metrics.trace_util import extract_from_metadata, start_span, start_span_request
+from opentelemetry import trace
 
 class LLMEngine(object):
     """
@@ -55,6 +56,7 @@ class LLMEngine(object):
 
     Attributes:
         cfg (Config): Configuration object containing all the parameters.
+        cached_generated_tokens (queue.Queue): Queue to store generated tokens.
         cached_generated_tokens (queue.Queue): Queue to store generated tokens.
         scheduler (LocalScheduler or GlobalScheduler): Scheduling tasks.
         input_processor (InputPreprocessor): Preprocessor for input data.
@@ -355,7 +357,10 @@ class LLMEngine(object):
                 request, insert_task = None, []
                 results: List[Tuple[str, Optional[str]]] = list()
                 if data:
-                    request = Request.from_dict(data)
+                    request = Request.from_dict(data) 
+                    start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)     
+                             
+
                     llm_logger.debug(f"Receive request: {request}")
 
                     err_msg = None
@@ -686,6 +691,8 @@ class LLMEngine(object):
         """
         Insert tasks to engine.
         """
+        for task in tasks:
+            start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER) 
         # TODO 返回至 scheduler
         if allocated:
             current_tasks = []

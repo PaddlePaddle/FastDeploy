@@ -210,31 +210,6 @@ class VariableResolutionResamplerModel(nn.Layer):
                 mark_as_sequence_parallel_parameter(self.mlp.bias)
                 mark_as_sequence_parallel_parameter(self.after_norm.weight)
 
-    def get_name_mappings_to_training(self, ):
-        """ get_name_mappings_to_training """
-        infer_to_train = {}
-        resampler_names = [
-            "ernie.resampler_model.spatial_linear.0.weight",
-            "ernie.resampler_model.spatial_linear.0.bias",
-            "ernie.resampler_model.spatial_linear.2.weight",
-            "ernie.resampler_model.spatial_linear.2.bias",
-            "ernie.resampler_model.spatial_linear.3.weight",
-            "ernie.resampler_model.spatial_linear.3.bias",
-            "ernie.resampler_model.temporal_linear.0.weight",
-            "ernie.resampler_model.temporal_linear.0.bias",
-            "ernie.resampler_model.temporal_linear.2.weight",
-            "ernie.resampler_model.temporal_linear.2.bias",
-            "ernie.resampler_model.temporal_linear.3.weight",
-            "ernie.resampler_model.temporal_linear.3.bias",
-            "ernie.resampler_model.mlp.weight",
-            "ernie.resampler_model.mlp.bias",
-            "ernie.resampler_model.after_norm.weight",
-        ]
-        for train_name in resampler_names:
-            infer_to_train[train_name[len("ernie."):]] = train_name
-
-        return infer_to_train
-
     def spatial_conv_reshape(self, x, spatial_conv_size):
         """
         Linear 前的 reshape，为了让 Linear 能模仿 conv 的感受野
@@ -376,9 +351,11 @@ class VariableResolutionResamplerModel(nn.Layer):
         for param_name, param in params_dict.items():
             state_dict_key = f"{self.prefix_name}.{param_name}"
             if state_dict_key not in state_dict:
-                raise ValueError(
-                    f"The key {state_dict_key} does not exist in state_dict. "
-                )
+                state_dict_key = f"ernie.{self.prefix_name}.{param_name}"
+                if state_dict_key not in state_dict:
+                    raise ValueError(
+                        f"The key {state_dict_key} does not exist in state_dict. "
+                    )
             tensor = get_tensor(state_dict.pop(state_dict_key))
             if param.shape != tensor.shape:
                 raise ValueError(
