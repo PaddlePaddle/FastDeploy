@@ -150,7 +150,6 @@ class PostInstallCommand(install):
         install.run(self)
         # 执行自定义命令
         subprocess.check_call(["opentelemetry-bootstrap", "-a", "install"])
-        subprocess.check_call(["pip", "install", "opentelemetry-instrumentation-fastapi"])
 
 def load_requirements():
     """Load dependencies from requirements.txt"""
