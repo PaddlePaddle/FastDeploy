@@ -48,7 +48,7 @@ class OpenAIServingChat:
     def _check_master(self):
         if self.master_ip is None:
             return True
-        if self.host_ip == self.master_ip
+        if self.host_ip == self.master_ip:
             return True
         return False
 
