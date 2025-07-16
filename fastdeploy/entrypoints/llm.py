@@ -169,6 +169,8 @@ class LLM:
 
         # get output
         outputs = self._run_engine(req_ids, use_tqdm=use_tqdm)
+        for i in range(len(outputs)):
+            outputs[i].prompt = prompts[i]
         return outputs
 
     def chat(

@@ -21,6 +21,7 @@ import traceback
 import uuid
 from typing import List, Optional
 
+import msgpack
 import aiozmq
 from aiozmq import zmq
 
@@ -143,6 +144,8 @@ class OpenAIServingChat:
             dealer.write([b"", request_id.encode('utf-8')])
             choices = []
             current_waiting_time = 0
+            if request.metadata is not None:
+                enable_thinking = request.metadata.get("enable_thinking")
             while num_choices > 0:
                 try:
                     raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
@@ -158,102 +161,106 @@ class OpenAIServingChat:
                             raise ValueError(f"Engine is not healthy: {msg}")
                         else:
                             current_waiting_time = 0
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.01)
                     continue
+                response = msgpack.unpackb(raw_data[-1])
+                for res in response:
+                    if res.get("error_code", 200) != 200:
+                        raise ValueError("{}".format(res["error_msg"]))
 
-                res = json.loads(raw_data[-1].decode('utf-8'))
-                if res.get("error_code", 200) != 200:
-                    raise ValueError("{}".format(res["error_msg"]))
-                if request.metadata is not None:
-                    enable_thinking = request.metadata.get("enable_thinking")
-                self.engine_client.data_processor.process_response_dict(
-                    res, stream=True, enable_thinking=enable_thinking)
+                    self.engine_client.data_processor.process_response_dict(
+                        res, stream=True, enable_thinking=enable_thinking)
 
-                if res['metrics']['first_token_time'] is not None:
-                    arrival_time = res['metrics']['first_token_time']
-                    inference_start_time = res['metrics']['inference_start_time']
-                else:
-                    arrival_time = res['metrics']['arrival_time'] - inference_start_time
-                if first_iteration:
-                    num_prompt_tokens = len(prompt_token_ids)
-                    num_cached_tokens = res.get("num_cached_tokens", 0)
-                    for i in range(num_choices):
-                        choice = ChatCompletionResponseStreamChoice(
-                            index=i,
-                            delta=DeltaMessage(role="assistant", content="", reasoning_content="", tool_calls=None)
-                        )
-                        if request.metadata is not None and request.metadata.get("training", False):
-                            choice.delta.token_ids = prompt_token_ids
-                        chunk = ChatCompletionStreamResponse(
-                            id=request_id,
-                            object=chunk_object_type,
-                            created=created_time,
-                            choices=[choice],
-                            model=model_name
-                        )
-                        if include_continuous_usage:
-                            chunk.usage = UsageInfo(
-                                prompt_tokens=num_prompt_tokens,
-                                completion_tokens=0,
-                                total_tokens=num_prompt_tokens,
-                                prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cached_tokens)
-                            )
-                        yield f"data: {chunk.model_dump_json(exclude_unset=True)} \n\n"
-                    first_iteration = False
-
-                output = res["outputs"]
-                delta_text = output["text"]
-                raw_top_logprobs = output["top_logprobs"]
-                logprobs_res = None
-                if raw_top_logprobs is not None:
-                    top_logprobs = LogprobsLists(
-                        logprob_token_ids=raw_top_logprobs[0],
-                        logprobs=raw_top_logprobs[1],
-                        sampled_token_ranks=raw_top_logprobs[2],
-                    )
-                    logprobs_res = self.build_logprobs_response(
-                        request_logprobs=request.logprobs,
-                        response_logprobs=top_logprobs,
-                        request_top_logprobs=request.top_logprobs,
-                    )
-
-                previous_num_tokens += len(output["token_ids"])
-                delta_message = DeltaMessage(content=delta_text, reasoning_content=output.get("reasoning_content"), \
-                    token_ids=output.get("token_ids"), tool_calls=output.get("tool_call_content", []))
-
-                choice = ChatCompletionResponseStreamChoice(
-                    index=0,
-                    delta=delta_message,
-                    logprobs=logprobs_res,
-                    arrival_time=arrival_time
-                )
-                if res["finished"]:
-                    num_choices -= 1
-                    work_process_metrics.e2e_request_latency.observe(time.time() - res["metrics"]["request_start_time"])
-                    has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
-                    max_tokens = request.max_completion_tokens or request.max_tokens
-                    if has_no_token_limit or previous_num_tokens != max_tokens:
-                        choice.finish_reason = "stop"
-                        if self.engine_client.reasoning_parser == "ernie_x1" and \
-                                output.get("finish_reason", "") == "tool_calls":
-                            choice.finish_reason = "tool_calls"
+                    if res['metrics']['first_token_time'] is not None:
+                        arrival_time = res['metrics']['first_token_time']
+                        inference_start_time = res['metrics']['inference_start_time']
                     else:
-                        choice.finish_reason = "length"
+                        arrival_time = res['metrics']['arrival_time'] - inference_start_time
+                    if first_iteration:
+                        num_prompt_tokens = len(prompt_token_ids)
+                        num_cached_tokens = res.get("num_cached_tokens", 0)
+                        for i in range(num_choices):
+                            choice = ChatCompletionResponseStreamChoice(
+                                index=i,
+                                delta=DeltaMessage(role="assistant", content="", reasoning_content="", tool_calls=None)
+                            )
+                            if request.metadata is not None and request.metadata.get("training", False):
+                                choice.delta.token_ids = prompt_token_ids
+                            chunk = ChatCompletionStreamResponse(
+                                id=request_id,
+                                object=chunk_object_type,
+                                created=created_time,
+                                choices=[choice],
+                                model=model_name
+                            )
+                            if include_continuous_usage:
+                                chunk.usage = UsageInfo(
+                                    prompt_tokens=num_prompt_tokens,
+                                    completion_tokens=0,
+                                    total_tokens=num_prompt_tokens,
+                                    prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cached_tokens)
+                                )
+                            yield f"data: {chunk.model_dump_json(exclude_unset=True)} \n\n"
+                        first_iteration = False
 
-                    if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
-                        choice.finish_reason = "recover_stop"
+                    output = res["outputs"]
+                    delta_text = output["text"]
+                    raw_top_logprobs = output["top_logprobs"]
+                    logprobs_res = None
+                    if raw_top_logprobs is not None:
+                        top_logprobs = LogprobsLists(
+                            logprob_token_ids=raw_top_logprobs[0],
+                            logprobs=raw_top_logprobs[1],
+                            sampled_token_ranks=raw_top_logprobs[2],
+                        )
+                        logprobs_res = self.build_logprobs_response(
+                            request_logprobs=request.logprobs,
+                            response_logprobs=top_logprobs,
+                            request_top_logprobs=request.top_logprobs,
+                        )
 
-                if request.metadata is not None and request.metadata.get("training", False) and delta_text != "":
-                    choice.delta.token_ids = output["token_ids"]
-                if include_continuous_usage:
-                    chunk.usage = UsageInfo(
-                        prompt_tokens=num_prompt_tokens,
-                        completion_tokens=previous_num_tokens,
-                        total_tokens=num_prompt_tokens + previous_num_tokens
+                    previous_num_tokens += len(output["token_ids"])
+                    delta_message = DeltaMessage(content=delta_text, reasoning_content=output.get("reasoning_content"), \
+                        token_ids=output.get("token_ids"), tool_calls=output.get("tool_call_content", []))
+
+                    choice = ChatCompletionResponseStreamChoice(
+                        index=0,
+                        delta=delta_message,
+                        logprobs=logprobs_res,
+                        arrival_time=arrival_time
                     )
-                choices.append(choice)
+                    if res["finished"]:
+                        num_choices -= 1
+                        work_process_metrics.e2e_request_latency.observe(time.time() - res["metrics"]["request_start_time"])
+                        has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
+                        max_tokens = request.max_completion_tokens or request.max_tokens
+                        if has_no_token_limit or previous_num_tokens != max_tokens:
+                            choice.finish_reason = "stop"
+                            if self.engine_client.reasoning_parser == "ernie_x1" and \
+                                    output.get("finish_reason", "") == "tool_calls":
+                                choice.finish_reason = "tool_calls"
+                        else:
+                            choice.finish_reason = "length"
 
-                if len(choices) == max_streaming_response_tokens or res["finished"]:
+                        if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
+                            choice.finish_reason = "recover_stop"
+
+                    if request.metadata is not None and request.metadata.get("training", False) and delta_text != "":
+                        choice.delta.token_ids = output["token_ids"]
+                    if include_continuous_usage:
+                        chunk.usage = UsageInfo(
+                            prompt_tokens=num_prompt_tokens,
+                            completion_tokens=previous_num_tokens,
+                            total_tokens=num_prompt_tokens + previous_num_tokens
+                        )
+                    choices.append(choice)
+
+                    if len(choices) == max_streaming_response_tokens or res["finished"]:
+                        chunk.choices = choices
+                        yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
+                        choices = []
+
+                if choices:
                     chunk.choices = choices
                     yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                     choices = []
@@ -321,33 +328,38 @@ class OpenAIServingChat:
                     await asyncio.sleep(0.1)
                     continue
 
-                data = json.loads(raw_data[-1].decode('utf-8'))
-                if data.get("error_code", 200) != 200:
-                    raise ValueError("{}".format(data["error_msg"]))
-                if request.metadata is not None:
-                    enable_thinking = request.metadata.get("enable_thinking")
-                data = self.engine_client.data_processor.process_response_dict(
-                    data, stream=False, enable_thinking=enable_thinking)
-                # api_server_logger.debug(f"Client {request_id} received: {data}")
-                previous_num_tokens += len(data["outputs"]["token_ids"])
-                # The logprob for handling the response
-                output = data["outputs"]
-                raw_top_logprobs = output["top_logprobs"]
-                if raw_top_logprobs is not None:
-                    top_logprobs = LogprobsLists(
-                        logprob_token_ids=raw_top_logprobs[0],
-                        logprobs=raw_top_logprobs[1],
-                        sampled_token_ranks=raw_top_logprobs[2],
-                    )
-                    logprobs_res = self.build_logprobs_response(
-                        request_logprobs=request.logprobs,
-                        response_logprobs=top_logprobs,
-                        request_top_logprobs=request.top_logprobs,
-                    )
-                    if logprobs_res and logprobs_res.content is not None:
-                        logprob_contents.extend(logprobs_res.content)
-                if data["finished"]:
-                    final_res = data
+                response = msgpack.unpackb(raw_data[-1])
+                task_is_finished = False
+                for data in response:
+                    if data.get("error_code", 200) != 200:
+                        raise ValueError("{}".format(data["error_msg"]))
+                    if request.metadata is not None:
+                        enable_thinking = request.metadata.get("enable_thinking")
+                    data = self.engine_client.data_processor.process_response_dict(
+                        data, stream=False, enable_thinking=enable_thinking)
+                    # api_server_logger.debug(f"Client {request_id} received: {data}")
+                    previous_num_tokens += len(data["outputs"]["token_ids"])
+                    # The logprob for handling the response
+                    output = data["outputs"]
+                    raw_top_logprobs = output["top_logprobs"]
+                    if raw_top_logprobs is not None:
+                        top_logprobs = LogprobsLists(
+                            logprob_token_ids=raw_top_logprobs[0],
+                            logprobs=raw_top_logprobs[1],
+                            sampled_token_ranks=raw_top_logprobs[2],
+                        )
+                        logprobs_res = self.build_logprobs_response(
+                            request_logprobs=request.logprobs,
+                            response_logprobs=top_logprobs,
+                            request_top_logprobs=request.top_logprobs,
+                        )
+                        if logprobs_res and logprobs_res.content is not None:
+                            logprob_contents.extend(logprobs_res.content)
+                    if data["finished"]:
+                        final_res = data
+                        task_is_finished = True
+                        break
+                if task_is_finished:
                     break
         finally:
             dealer.close()

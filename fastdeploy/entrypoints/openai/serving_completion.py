@@ -17,6 +17,7 @@
 import asyncio
 import aiozmq
 import json
+import msgpack
 from aiozmq import zmq
 from asyncio import FIRST_COMPLETED, AbstractEventLoop, Task
 import time
@@ -179,18 +180,20 @@ class OpenAIServingCompletion:
                             current_waiting_time = 0
                     await asyncio.sleep(0.1)
                     continue
-                data = json.loads(raw_data[-1].decode("utf-8"))
-                rid = int(data["request_id"].split("-")[-1])
-                if data.get("error_code", 200) != 200:
-                    raise ValueError("{}".format(data["error_msg"]))
+                response = msgpack.unpackb(raw_data[-1])
+                for data in response:
+                    rid = int(data["request_id"].split("-")[-1])
+                    if data.get("error_code", 200) != 200:
+                        raise ValueError("{}".format(data["error_msg"]))
 
-                self.engine_client.data_processor.process_response_dict(
-                    data, stream=False)
-                output_tokens[rid] += len(data["outputs"]["token_ids"])
-                if data.get("finished", False):
-                    data["output_token_ids"] = output_tokens[rid]
-                    valid_results[rid] = data
-                    num_choices -= 1
+                    self.engine_client.data_processor.process_response_dict(
+                        data, stream=False)
+                    output_tokens[rid] += len(data["outputs"]["token_ids"])
+                    if data.get("finished", False):
+                        data["output_token_ids"] = output_tokens[rid]
+                        valid_results[rid] = data
+                        num_choices -= 1
+                        break
 
             return self.request_output_to_completion_response(
                 final_res_batch=valid_results,
@@ -238,6 +241,12 @@ class OpenAIServingCompletion:
             if request.suffix is not None and request.suffix.get("max_streaming_response_tokens", 1) > 1:
                 max_streaming_response_tokens = request.suffix["max_streaming_response_tokens"]
             choices = []
+            chunk = CompletionStreamResponse(
+                id=request_id,
+                created=created_time,
+                model=model_name,
+                choices=choices
+            )
 
             current_waiting_time = 0
             while num_choices > 0:
@@ -256,82 +265,86 @@ class OpenAIServingCompletion:
                     continue
 
 
-                res = json.loads(raw_data[-1].decode('utf-8'))
-                idx = int(res["request_id"].split("-")[-1])
-                if res.get("error_code", 200) != 200:
-                    raise ValueError("{}".format(res["error_msg"]))
+                response = msgpack.unpackb(raw_data[-1])
+                for res in response:
+                    idx = int(res["request_id"].split("-")[-1])
+                    if res.get("error_code", 200) != 200:
+                        raise ValueError("{}".format(res["error_msg"]))
 
-                if first_iteration[idx]:
-                    if request.suffix is not None and request.suffix.get("training", False):
+                    if first_iteration[idx]:
+                        if request.suffix is not None and request.suffix.get("training", False):
+                            chunk = CompletionStreamResponse(
+                                id=request_id,
+                                created=created_time,
+                                model=model_name,
+                                choices=[CompletionResponseStreamChoice(
+                                    index=idx,
+                                    text="",
+                                    token_ids=list(prompt_batched_token_ids[idx])
+                                )]
+                            )
+                            yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
+                        first_iteration[idx] = False
+
+
+                    self.engine_client.data_processor.process_response_dict(
+                        res, stream=True)
+                    if res['metrics'].get('first_token_time') is not None:
+                        arrival_time = res['metrics']['first_token_time']
+                        inference_start_time[idx] = res['metrics']['inference_start_time']
+                    else:
+                        arrival_time = res['metrics']['arrival_time'] - inference_start_time[idx]
+
+                    output = res["outputs"]
+
+                    choices.append(CompletionResponseStreamChoice(
+                        index=idx,
+                        text=output["text"],
+                        token_ids=output.get("token_ids"),
+                        tool_calls=output.get("tool_call_content"),
+                        reasoning_content=output.get("reasoning_content"),
+                        arrival_time=arrival_time
+                    ))
+                    if res["finished"]:
+                        if request.max_tokens is None or output_tokens[idx] + 1 != request.max_tokens:
+                            chunk.choices[0].finish_reason = "stop"
+                            if self.engine_client.reasoning_parser == "ernie_x1" and \
+                                    output.get("finish_reason", "") == "tool_calls":
+                                chunk.choices[0].finish_reason = "tool_calls"
+                        else:
+                            chunk.choices[0].finish_reason = "length"
+
+                    output_tokens[idx] += 1
+
+                    if len(choices) == max_streaming_response_tokens or res["finished"]:
                         chunk = CompletionStreamResponse(
                             id=request_id,
                             created=created_time,
                             model=model_name,
-                            choices=[CompletionResponseStreamChoice(
-                                index=idx,
-                                text="",
-                                token_ids=list(prompt_batched_token_ids[idx])
-                            )]
+                            choices=choices
                         )
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                    first_iteration[idx] = False
+                        choices = []
 
 
-                self.engine_client.data_processor.process_response_dict(
-                    res, stream=True)
-                if res['metrics'].get('first_token_time') is not None:
-                    arrival_time = res['metrics']['first_token_time']
-                    inference_start_time[idx] = res['metrics']['inference_start_time']
-                else:
-                    arrival_time = res['metrics']['arrival_time'] - inference_start_time[idx]
-                # api_server_logger.info(f"{arrival_time}")
-
-                output = res["outputs"]
-
-                choices.append(CompletionResponseStreamChoice(
-                    index=idx,
-                    text=output["text"],
-                    token_ids=output.get("token_ids"),
-                    tool_calls=output.get("tool_call_content"),
-                    reasoning_content=output.get("reasoning_content"),
-                    arrival_time=arrival_time
-                ))
-                if res["finished"]:
-                    if request.max_tokens is None or output_tokens[idx] + 1 != request.max_tokens:
-                        chunk.choices[0].finish_reason = "stop"
-                        if self.engine_client.reasoning_parser == "ernie_x1" and \
-                                output.get("finish_reason", "") == "tool_calls":
-                            chunk.choices[0].finish_reason = "tool_calls"
-                    else:
-                        chunk.choices[0].finish_reason = "length"
-
-                output_tokens[idx] += 1
-
-                if len(choices) == max_streaming_response_tokens or res["finished"]:
-                    chunk = CompletionStreamResponse(
-                        id=request_id,
-                        created=created_time,
-                        model=model_name,
-                        choices=choices
-                    )
-                    choices = []
-
-                yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-
-                if res["finished"]:
-                    num_choices -= 1
-                    if getattr(request, "stream_options", None) and request.stream_options.include_usage:
-                        usage_chunk = CompletionStreamResponse(
-                            id=request_id,
-                            created=created_time,
-                            model=model_name,
-                            choices=[],
-                            usage=UsageInfo(
-                                prompt_tokens=len(prompt_batched_token_ids[idx]),
-                                completion_tokens=output_tokens[idx]
+                    if res["finished"]:
+                        num_choices -= 1
+                        if getattr(request, "stream_options", None) and request.stream_options.include_usage:
+                            usage_chunk = CompletionStreamResponse(
+                                id=request_id,
+                                created=created_time,
+                                model=model_name,
+                                choices=[],
+                                usage=UsageInfo(
+                                    prompt_tokens=len(prompt_batched_token_ids[idx]),
+                                    completion_tokens=output_tokens[idx]
+                                )
                             )
-                        )
-                        yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
+                            yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
+                if choices:
+                    chunk.choices = choices
+                    yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
+                    choices = []
 
 
         except Exception as e:
