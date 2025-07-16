@@ -59,6 +59,7 @@ PRETRAINED_INIT_CONFIGURATION = {
     "tie_word_embeddings":False,
     "rms_norm_eps":1e-5,
     "moe_num_experts": None,
+    "moe_layer_end_index":None,
 }
 
 
@@ -330,7 +331,7 @@ class GraphOptimizationConfig:
         if len(dedup_sizes) < len(self.cudagraph_capture_sizes):
             logger.info(("cudagraph sizes specified by model runner"
                             " %s is overridden by config %s"),
-                        cudagraph_capture_sizes, dedup_sizes)
+                        self.cudagraph_capture_sizes, dedup_sizes)
         self.cudagraph_capture_sizes = dedup_sizes
 
         # Sort to make sure cudagraph capture sizes are in descending order
@@ -351,7 +352,7 @@ class GraphOptimizationConfig:
             self.max_capture_size] = self.max_capture_size
 
     def _set_cudagraph_sizes(
-        self, 
+        self,
         max_num_seqs:int = 0
     ):
         """
@@ -377,9 +378,7 @@ class LoadConfig:
         dynamic_load_weight: Whether to enable dynamic weight loading
         load_strategy: Specifies the weight loading method when enabled:
             - 'ipc': Real-time IPC streaming with automatic resharding
-            - 'ipc_no_reshard': Real-time IPC streaming without weight process
             - 'ipc_snapshot': Load from disk snapshot of IPC weights
-            - 'meta': provide RL traing worker, no_weights_load
             - None: No dynamic loading
     """
     def __init__(
@@ -388,7 +387,7 @@ class LoadConfig:
     ):
         self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
-        self.load_strategy: Optional[Literal['ipc', 'ipc_no_reshard', 'ipc_snapshot', 'meta']] = None
+        self.load_strategy: Optional[Literal['ipc', 'ipc_snapshot']] = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)

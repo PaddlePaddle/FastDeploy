@@ -72,32 +72,36 @@ Alternatively, you can install the latest version of PaddlePaddle (Not recommend
 python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
 ```
 
-### Download Kunlunxin Toolkit (XTDK) and XVLLM library, then set their paths.
+### Download FastDeploy source code, checkout the stable branch/TAG
 
 ```bash
-# XTDK
-wget https://klx-sdk-release-public.su.bcebos.com/xtdk_15fusion/dev/3.2.40.1/xtdk-llvm15-ubuntu2004_x86_64.tar.gz
-tar -xvf xtdk-llvm15-ubuntu2004_x86_64.tar.gz && mv xtdk-llvm15-ubuntu2004_x86_64 xtdk
-export CLANG_PATH=$(pwd)/xtdk
+git clone https://github.com/PaddlePaddle/FastDeploy
+git checkout <tag or branch>
+cd FastDeploy
+```
 
-# XVLLM
-wget https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/20250624/output.tar.gz
-tar -xvf output.tar.gz && mv output xvllm
-export XVLLM_PATH=$(pwd)/xvllm
+### Download Kunlunxin Compilation Dependency
+
+```bash
+bash custom_ops/xpu_ops/src/download_dependencies.sh stable
 ```
 
 Alternatively, you can download the latest versions of XTDK and XVLLM (Not recommended)
 
 ```bash
-XTDK: https://klx-sdk-release-public.su.bcebos.com/xtdk_15fusion/dev/latest/xtdk-llvm15-ubuntu2004_x86_64.tar.gz
-XVLLM: https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/latest/output.tar.gz
+bash custom_ops/xpu_ops/src/download_dependencies.sh develop
 ```
 
-### Download FastDeploy source code, checkout the stable branch/TAG, then compile and install.
+Set environment variables,
 
 ```bash
-git clone https://github.com/PaddlePaddle/FastDeploy
-cd FastDeploy
+export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xtdk
+export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/src/third_party/xvllm
+```
+
+### Compile and Install.
+
+```bash
 bash build.sh
 ```
 
@@ -114,106 +118,5 @@ python -c "from fastdeploy.model_executor.ops.xpu import block_attn"
 
 If all the above steps execute successfully, FastDeploy is installed correctly.
 
-## Quick start
-
-The P800 supports the deployment of the ```ERNIE-4.5-300B-A47B-Paddle``` model using the following configurations (Note: Different configurations may result in variations in performance).
-- 32K WINT4 with 8 XPUs (Recommended)
-- 128K WINT4 with 8 XPUs
-- 32K WINT4 with 4 XPUs
-
-### Online serving (OpenAI API-Compatible server)
-
-Deploy an OpenAI API-compatible server using FastDeploy with the following commands:
-
-#### Start service
-
-**Deploy the ERNIE-4.5-300B-A47B-Paddle model with WINT4 precision and 32K context length on 8 XPUs(Recommended)**
-
-```bash
-python -m fastdeploy.entrypoints.openai.api_server \
-    --model baidu/ERNIE-4.5-300B-A47B-Paddle \
-    --port 8188 \
-    --tensor-parallel-size 8 \
-    --max-model-len 32768 \
-    --max-num-seqs 64 \
-    --quantization "wint4" \
-    --gpu-memory-utilization 0.9
-```
-
-**Deploy the ERNIE-4.5-300B-A47B-Paddle model with WINT4 precision and 128K context length on 8 XPUs**
-
-```bash
-python -m fastdeploy.entrypoints.openai.api_server \
-    --model baidu/ERNIE-4.5-300B-A47B-Paddle \
-    --port 8188 \
-    --tensor-parallel-size 8 \
-    --max-model-len 131072 \
-    --max-num-seqs 64 \
-    --quantization "wint4" \
-    --gpu-memory-utilization 0.9
-```
-
-**Deploy the ERNIE-4.5-300B-A47B-Paddle model with WINT4 precision and 32K context length on 4 XPUs**
-
-```bash
-export XPU_VISIBLE_DEVICES="0,1,2,3" # Specify which cards to be used
-python -m fastdeploy.entrypoints.openai.api_server \
-    --model baidu/ERNIE-4.5-300B-A47B-Paddle \
-    --port 8188 \
-    --tensor-parallel-size 4 \
-    --max-model-len 32768 \
-    --max-num-seqs 64 \
-    --quantization "wint4" \
-    --gpu-memory-utilization 0.9
-```
-
-**Note:** When deploying on 4 XPUs, only two configurations are supported which constrained by hardware limitations such as interconnect capabilities.
-`export XPU_VISIBLE_DEVICES="0,1,2,3"`
-or
-`export XPU_VISIBLE_DEVICES="4,5,6,7"`
-
-Refer to [Parameters](../../parameters.md) for more options.
-
-#### Send requests
-
-Send requests using either curl or Python
-
-```bash
-curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
--H "Content-Type: application/json" \
--d '{
-  "messages": [
-    {"role": "user", "content": "Where is the capital of China?"}
-  ]
-}'
-```
-
-```python
-import openai
-host = "0.0.0.0"
-port = "8188"
-client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
-
-response = client.completions.create(
-    model="null",
-    prompt="Where is the capital of China?",
-    stream=True,
-)
-for chunk in response:
-    print(chunk.choices[0].text, end='')
-print('\n')
-
-response = client.chat.completions.create(
-    model="null",
-    messages=[
-        {"role": "user", "content": "Where is the capital of China?"},
-    ],
-    stream=True,
-)
-for chunk in response:
-    if chunk.choices[0].delta:
-        print(chunk.choices[0].delta.content, end='')
-print('\n')
-```
-
-For detailed OpenAI protocol specifications, see [OpenAI Chat Compeltion API](https://platform.openai.com/docs/api-reference/chat/create). Differences from the standard OpenAI protocol are documented in [OpenAI Protocol-Compatible API Server](../../online_serving/README.md).
+## How to deploy services on kunlunxin XPU
+Refer to [**Supported Models and Service Deployment**](../../usage/kunlunxin_xpu_deployment.md) for the details about the supported models and the way to deploy services on kunlunxin XPU.

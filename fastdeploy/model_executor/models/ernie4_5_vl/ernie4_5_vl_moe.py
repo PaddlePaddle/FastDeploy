@@ -513,7 +513,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             model_config.spatial_conv_size,
             model_config.temporal_conv_size,
             config=model_config,
-            prefix_name="ernie.resampler_model",
+            prefix_name="resampler_model",
         )
         resampler_model = paddle.amp.decorate(
             models=resampler_model, level="O2", dtype="bfloat16"
