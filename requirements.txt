@@ -31,6 +31,7 @@ crcmod
 fastsafetensors==0.1.14
 opentelemetry-api>=1.24.0
 opentelemetry-sdk>=1.24.0
+opentelemetry-bootstrap
 opentelemetry-instrumentation-redis
 opentelemetry-instrumentation-mysql
 opentelemetry-distro 
