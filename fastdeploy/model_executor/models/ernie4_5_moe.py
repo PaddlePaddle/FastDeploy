@@ -71,6 +71,7 @@ class Ernie4_5_MLP(nn.Layer):
             input_size=intermediate_size,
             output_size=fd_config.model_config.hidden_size,
             with_bias=False,
+            reduce_results=reduce_results,
         )
 
         self.act_fn = SiluAndMul(
@@ -605,8 +606,8 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
             return final_actions
         mappings = get_tensor_parallel_split_mappings(
             config.num_hidden_layers,
-            config.moe_num_experts,
-            config.moe_layer_start_index,
+            getattr(config, "moe_num_experts", 0),
+            getattr(config, "moe_layer_start_index", -1),
             config.prefix_name,
         )
         return mappings

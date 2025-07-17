@@ -32,6 +32,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import paddle
 import zmq
+from opentelemetry import trace
 from tqdm import tqdm
 
 from fastdeploy.engine.args_utils import EngineArgs
@@ -42,13 +43,13 @@ from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (EngineCacheQueue, EngineWorkerQueue,
                                            IPCSignal, ZmqClient)
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.output.token_processor import (TokenProcessor,
                                                WarmUpTokenProcessor)
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, console_logger, llm_logger
-from fastdeploy.metrics.trace_util import extract_from_metadata, start_span, start_span_request
-from opentelemetry import trace
+
 
 class LLMEngine(object):
     """
@@ -56,7 +57,6 @@ class LLMEngine(object):
 
     Attributes:
         cfg (Config): Configuration object containing all the parameters.
-        cached_generated_tokens (queue.Queue): Queue to store generated tokens.
         cached_generated_tokens (queue.Queue): Queue to store generated tokens.
         scheduler (LocalScheduler or GlobalScheduler): Scheduling tasks.
         input_processor (InputPreprocessor): Preprocessor for input data.
@@ -134,6 +134,7 @@ class LLMEngine(object):
         for idx in range(1, self.cfg.max_num_partial_prefills + 1):
             self.partial_chunked_tokens[idx] = (self.cfg.max_num_batched_tokens // idx) \
                 // self.cfg.cache_config.block_size * self.cfg.cache_config.block_size
+            self.partial_chunked_tokens[idx] = max(1, self.partial_chunked_tokens[idx])
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
@@ -174,7 +175,7 @@ class LLMEngine(object):
                 cache_config=self.cfg.cache_config,
                 tensor_parallel_size=self.cfg.tensor_parallel_size,
                 device_ids=device_ids,
-                pod_ip=self.cfg.pod_ips[0],
+                pod_ip=self.cfg.master_ip,
                 engine_worker_queue_port=self.cfg.engine_worker_queue_port,
                 pid_suffix=self.ipc_signal_suffix)
 
@@ -239,11 +240,12 @@ class LLMEngine(object):
 
             if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
                 self.dp_processed = []
-                for i in range(1, self.cfg.parallel_config.data_parallel_size):
+                for i in range(1, self.cfg.parallel_config.data_parallel_size // self.cfg.nnode):
                     time.sleep(1)
                     self.dp_processed.append(
                         multiprocessing.Process(target=start_expert_service,
-                                                args=(self.cfg, i,
+                                                args=(self.cfg,
+                                                      i + self.cfg.node_rank * self.cfg.worker_num_per_node,
                                                       self.ipc_signal_suffix)))
                     llm_logger.info(f"Engine is initialized successfully with {self.cfg.tensor_parallel_size}" \
                 + " data parallel id {}".format(i))
@@ -263,10 +265,11 @@ class LLMEngine(object):
             try:
                 results = self.scheduler.get_results()
                 if len(results) == 0:
-                    time.sleep(0.001)
+                    time.sleep(0.005)
+                    continue
                 for request_id, contents in results.items():
-                    for result in contents:
-                        self.zmq_server.send_multipart(request_id, result)
+                    self.zmq_server.send_multipart(request_id, contents)
+
             except Exception as e:
                 llm_logger.error("Unexcepted error happend: {}, {}".format(
                     e, str(traceback.format_exc())))
@@ -357,9 +360,9 @@ class LLMEngine(object):
                 request, insert_task = None, []
                 results: List[Tuple[str, Optional[str]]] = list()
                 if data:
-                    request = Request.from_dict(data) 
-                    start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)     
-                             
+                    request = Request.from_dict(data)
+                    start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
+
 
                     llm_logger.debug(f"Receive request: {request}")
 
@@ -692,7 +695,7 @@ class LLMEngine(object):
         Insert tasks to engine.
         """
         for task in tasks:
-            start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER) 
+            start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
         # TODO 返回至 scheduler
         if allocated:
             current_tasks = []
@@ -1006,8 +1009,6 @@ class LLMEngine(object):
         )
 
         arguments = (
-            f" --nnodes {str(self.cfg.nnode)}"
-            f" --ips {','.join(self.cfg.pod_ips)}"
             f" --devices {self.cfg.device_ids} {py_script}"
             f" --max_num_seqs {self.cfg.max_num_seqs} --max_model_len {self.cfg.max_model_len}"
             f" --gpu_memory_utilization {self.cfg.cache_config.gpu_memory_utilization}"
@@ -1015,7 +1016,7 @@ class LLMEngine(object):
             f" --device_ids {self.cfg.device_ids}"
             f" --tensor_parallel_size {self.cfg.tensor_parallel_size}"
             f" --engine_worker_queue_port {str(self.cfg.engine_worker_queue_port)}"
-            f" --pod_ip {self.cfg.pod_ips[0]}"
+            f" --pod_ip {self.cfg.master_ip}"
             f" --total_block_num {self.cfg.cache_config.total_block_num}"
             f" --block_size {self.cfg.cache_config.block_size}"
             f" --enc_dec_block_num {self.cfg.cache_config.enc_dec_block_num}"
@@ -1033,10 +1034,9 @@ class LLMEngine(object):
             f" --speculative_model_name_or_path {self.cfg.speculative_config.model_name_or_path}"
             f" --speculative_model_quantization {self.cfg.speculative_config.quantization}"
             f" --speculative_benchmark_mode {self.cfg.speculative_config.benchmark_mode}"
-            f" --graph_optimiaztion_config '{self.cfg.graph_optimization_config.to_json_string()}'"
+            f" --graph_optimization_config '{self.cfg.graph_optimization_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
-            f" --load_strategy {self.cfg.model_config.load_strategy}"
-            f" --enable_mm {self.cfg.enable_mm}")
+            f" --load_strategy {self.cfg.model_config.load_strategy}")
 
 
         worker_append_flag = {
@@ -1051,12 +1051,17 @@ class LLMEngine(object):
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "enable-custom-all-reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.enable_logprob,
+            "enable_mm": self.cfg.enable_mm,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:
                 arguments = arguments + f" --{worker_flag}"
         if self.cfg.nnode > 1:
-            pd_cmd = pd_cmd + f" --ips {self.cfg.ips}"
+            pd_cmd = pd_cmd + (
+                f" --master {self.cfg.dist_init_addr}"
+                f" --nnodes {str(self.cfg.nnode)}"
+                f" --rank {str(self.cfg.node_rank)}"
+            )
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
         llm_logger.info("Launch worker service command: {}".format(pd_cmd))
         p = subprocess.Popen(
@@ -1157,7 +1162,7 @@ class LLMEngine(object):
                 cache_config=self.cfg.cache_config,
                 tensor_parallel_size=self.cfg.tensor_parallel_size,
                 device_ids=device_ids,
-                pod_ip=self.cfg.pod_ips[0],
+                pod_ip=self.cfg.master_ip,
                 engine_worker_queue_port=self.cfg.engine_worker_queue_port,
                 pid_suffix=self.ipc_signal_suffix)
     def check_health(self, time_interval_threashold=30):
@@ -1244,8 +1249,9 @@ class LLMEngine(object):
         """
         start queue service for engine worker communication
         """
-        address = (self.cfg.pod_ips[0], self.cfg.engine_worker_queue_port)
-        if self.cfg.host_ip == self.cfg.pod_ips[0] or self.cfg.pod_ips[0] == "0.0.0.0":
+        address = (self.cfg.master_ip, self.cfg.engine_worker_queue_port)
+        if self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0":
+            llm_logger.info(f"Starting engine worker queue server service at {address}")
             self.engine_worker_queue_server = EngineWorkerQueue(
                 address=address,
                 is_server=True,
@@ -1255,7 +1261,7 @@ class LLMEngine(object):
 
             if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != 'mixed':
                 self.cache_task_queue = EngineCacheQueue(
-                    address=(self.cfg.pod_ips[0], self.cfg.cache_config.cache_queue_port),
+                    address=(self.cfg.master_ip, self.cfg.cache_config.cache_queue_port),
                     authkey=b'cache_queue_service',
                     is_server=True,
                     num_client=self.cfg.tensor_parallel_size,
@@ -1269,4 +1275,6 @@ class LLMEngine(object):
             is_server=False,
             num_client=self.cfg.tensor_parallel_size,
             client_id=0,
-            local_data_parallel_id=0)
+            local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
+            local_data_parallel_id= min(self.cfg.worker_num_per_node * self.cfg.node_rank,
+                                       self.cfg.parallel_config.data_parallel_size - 1))

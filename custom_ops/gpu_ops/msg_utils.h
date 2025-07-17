@@ -35,5 +35,5 @@ struct msgdata {
 
 struct msgdatakv {
     long mtype;
-    int mtext[MAX_BSZ * 2 + 2];  // encoder_count, layer_id, bid- pair
+    int mtext[MAX_BSZ * 3 + 2];  // encoder_count, layer_id, bid- pair
 };
