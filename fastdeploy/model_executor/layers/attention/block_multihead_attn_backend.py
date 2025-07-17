@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Optional, Annotated
+from typing import TYPE_CHECKING, List, Optional
 
 import paddle
 
@@ -29,8 +29,6 @@ from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
-from fastdeploy.model_executor.graph_optimization.dynamic_dims_marker import \
-    DynamicDims
 
 
 @dataclass
@@ -40,15 +38,15 @@ class BlockAttentionMetadata(AttentionMetadata):
     """
     max_len_kv: paddle.Tensor = None
     set_max_lengths: int = -1
-    encoder_batch_ids: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    encoder_tile_ids_per_batch: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    encoder_num_blocks: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    kv_batch_ids: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    kv_tile_ids_per_batch: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    kv_num_blocks: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    decoder_batch_ids: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    decoder_tile_ids_per_batch: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    decoder_num_blocks: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    encoder_batch_ids: paddle.Tensor = None
+    encoder_tile_ids_per_batch: paddle.Tensor = None
+    encoder_num_blocks: paddle.Tensor = None
+    kv_batch_ids: paddle.Tensor = None
+    kv_tile_ids_per_batch: paddle.Tensor = None
+    kv_num_blocks: paddle.Tensor = None
+    decoder_batch_ids: paddle.Tensor = None
+    decoder_tile_ids_per_batch: paddle.Tensor = None
+    decoder_num_blocks: paddle.Tensor = None
 
     _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768

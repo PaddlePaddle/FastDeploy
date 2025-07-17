@@ -17,14 +17,11 @@
 import logging
 from dataclasses import dataclass
 from enum import IntEnum, auto
-from typing import Annotated, Optional
+from typing import Optional
 
 import paddle
 
 from fastdeploy.model_executor.layers.attention import AttentionBackend
-from fastdeploy.model_executor.graph_optimization.dynamic_dims_marker import (
-    DynamicDims
-)
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +58,7 @@ class ForwardMeta():
     # Input tokens IDs
     input_ids: paddle.Tensor
     # Input tokens IDs of removed padding
-    ids_remove_padding: Annotated[paddle.Tensor, DynamicDims(0)]
+    ids_remove_padding: paddle.Tensor
     # Rotation position embedding
     rotary_embs: Optional[paddle.Tensor] = None
 
@@ -75,9 +72,9 @@ class ForwardMeta():
     # Attention mask
     attn_mask: Optional[paddle.Tensor] = None
     # Decoder batch id. Used by attention backend.
-    decoder_batch_ids: Optional[Annotated[paddle.Tensor, DynamicDims(0)]] = None
+    decoder_batch_ids: Optional[paddle.Tensor] = None
     # Tile ID for each batch of the decoder. Used by attention backend.
-    decoder_tile_ids_per_batch: Optional[Annotated[paddle.Tensor, DynamicDims(0)]] = None
+    decoder_tile_ids_per_batch: Optional[paddle.Tensor] = None
 
     # Sequence length of encoder for ever batch
     seq_lens_encoder: Optional[paddle.Tensor] = None
@@ -89,7 +86,7 @@ class ForwardMeta():
     # Accumulated offset
     cum_offsets: Optional[paddle.Tensor] = None
     # Offset tensor, used to restore the position of ids_remove_madding after padding removal to the original input_ids
-    padding_offset: Optional[Annotated[paddle.Tensor, DynamicDims(0)]] = None
+    padding_offset: Optional[paddle.Tensor] = None
     # Accumulated sequence length of query
     cu_seqlens_q: Optional[paddle.Tensor] = None
     # Accumulated sequence length of key
@@ -100,7 +97,7 @@ class ForwardMeta():
     # Block tables
     block_tables: Optional[paddle.Tensor] = None
     # KV caches
-    caches: Optional[list[Annotated[paddle.Tensor, DynamicDims(0)]]] = None
+    caches: Optional[list[paddle.Tensor]] = None
 
     def clear_caches(self):
         """ Safely clean up the caches """

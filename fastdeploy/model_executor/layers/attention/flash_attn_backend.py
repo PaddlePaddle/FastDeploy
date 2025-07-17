@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional, Annotated, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 
 import paddle
 
@@ -31,8 +31,6 @@ from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend, AttentionMetadata)
-from fastdeploy.model_executor.graph_optimization.dynamic_dims_marker import \
-    DynamicDims
 from fastdeploy.model_executor.layers.attention.ops import (
     get_block_shape_and_split_kv_block, gqa_rope_write_cache,
     init_signal_layerwise, open_shm_and_get_meta_signal, pre_cache_len_concat)
@@ -51,15 +49,15 @@ class FlashAttentionMetadata(AttentionMetadata):
     set_max_lengths: int = -1
     rotary_embs: Optional[paddle.Tensor] = None
     block_tables: Optional[paddle.Tensor] = None
-    encoder_batch_ids: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    encoder_tile_ids_per_batch: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    encoder_num_blocks: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    kv_batch_ids: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    kv_tile_ids_per_batch: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    kv_num_blocks: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    decoder_batch_ids: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    decoder_tile_ids_per_batch: Annotated[paddle.Tensor, DynamicDims(0)] = None
-    decoder_num_blocks: Annotated[paddle.Tensor, DynamicDims(0)] = None
+    encoder_batch_ids: paddle.Tensor = None
+    encoder_tile_ids_per_batch: paddle.Tensor = None
+    encoder_num_blocks: paddle.Tensor = None
+    kv_batch_ids: paddle.Tensor = None
+    kv_tile_ids_per_batch: paddle.Tensor = None
+    kv_num_blocks: paddle.Tensor = None
+    decoder_batch_ids: paddle.Tensor = None
+    decoder_tile_ids_per_batch: paddle.Tensor = None
+    decoder_num_blocks: paddle.Tensor = None
 
     encoder_block_shape_q: int = -1
     decoder_block_shape_q: int = -1
