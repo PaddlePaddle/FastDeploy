@@ -854,6 +854,11 @@ class Config:
                 self.max_num_batched_tokens >= self.max_model_len
             ), f"max_num_batched_tokens: {self.max_num_batched_tokens} " \
                 f"should be larger than or equal to max_model_len: {self.max_model_len}"
+        else:
+            assert (
+                self.max_num_batched_tokens >= self.cache_config.block_size
+            ), f"max_num_batched_tokens: {self.max_num_batched_tokens} " \
+                f"should be larger than or equal to block_size: {self.cache_config.block_size}"
 
         if self.max_num_partial_prefills > 1:
             assert (self.cache_config.enable_chunked_prefill is True), \
