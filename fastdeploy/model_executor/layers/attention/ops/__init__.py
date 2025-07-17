@@ -21,6 +21,7 @@ from .gqa_rope_write_cache import gqa_rope_write_cache
 from .init_signal_layerwise import init_signal_layerwise
 from .open_shm_and_get_meta_signal import open_shm_and_get_meta_signal
 from .pre_cache_len_concat import pre_cache_len_concat
+from .init_kv_signal_per_query import init_kv_signal_per_query
 
 __all__ = [
     "get_block_shape_and_split_kv_block",
@@ -29,4 +30,5 @@ __all__ = [
     "init_signal_layerwise",
     "gqa_rope_write_cache",
     "pre_cache_len_concat",
+    "init_kv_signal_per_query"
 ]
