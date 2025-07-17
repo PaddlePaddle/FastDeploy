@@ -134,6 +134,7 @@ class LLMEngine(object):
         for idx in range(1, self.cfg.max_num_partial_prefills + 1):
             self.partial_chunked_tokens[idx] = (self.cfg.max_num_batched_tokens // idx) \
                 // self.cfg.cache_config.block_size * self.cfg.cache_config.block_size
+            self.partial_chunked_tokens[idx] = max(1, self.partial_chunked_tokens[idx])
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 

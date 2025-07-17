@@ -394,6 +394,18 @@ class PaddleDisWorkerProc():
                 time.sleep(0.01)
             num_blocks_global = self.get_profile_block_num_signal.value.min(
             ).item()
+
+            if num_blocks_global < 0:
+                logger.error(
+                    f"The total number of blocks cannot be less than zero."
+                    f"Please increase gpu_memory_utilization"
+                    f"Or decrease max_num_batched_tokens(max model length) ")
+                raise ValueError(
+                    f"The total number of blocks cannot be less than zero."
+                    f"Please increase gpu_memory_utilization"
+                    f"Or decrease max_num_batched_tokens(max model length) ")
+        
+
             self.get_profile_block_num_signal.value[
                 self.local_rank] = num_blocks_global
         else:
