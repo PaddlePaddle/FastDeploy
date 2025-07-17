@@ -119,5 +119,5 @@ python -c "from fastdeploy.model_executor.ops.xpu import block_attn"
 
 如果上述步骤均执行成功，代表 FastDeploy 已安装成功。
 
-## 如何在昆仑新XPU上部署服务
+## 如何在昆仑芯 XPU 上部署服务
 请参考 [**支持的模型与服务部署**](../../usage/kunlunxin_xpu_deployment.md) 以了解昆仑芯 XPU 支持的模型与服务部署方法。

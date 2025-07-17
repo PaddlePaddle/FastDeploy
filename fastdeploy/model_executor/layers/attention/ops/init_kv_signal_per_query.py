@@ -14,34 +14,24 @@
 # limitations under the License.
 """
 
-from dataclasses import dataclass
-from typing import Optional
-
 import paddle
 
+from fastdeploy.platforms import current_platform
 
-@dataclass
-class SamplingMetadata:
+
+def init_kv_signal_per_query(
+    seq_lens_encoder: paddle.Tensor,
+    seq_lens_this_time: paddle.Tensor,
+    seq_lens_decoder: paddle.Tensor,
+    rank: int,
+    num_layers: int,
+) -> paddle.Tensor:
     """
-    metadata for sampling.
+    init_kv_signal_per_query
     """
-
-    temperature: paddle.Tensor
-
-    pre_token_ids: paddle.Tensor
-    eos_token_ids: paddle.Tensor
-    frequency_penalties: paddle.Tensor
-    presence_penalties: paddle.Tensor
-    repetition_penalties: paddle.Tensor
-
-    min_dec_lens: paddle.Tensor
-
-    bad_words_token_ids: paddle.Tensor
-
-    step_idx: paddle.Tensor
-
-    top_p: paddle.Tensor
-    top_k: Optional[paddle.Tensor] = None
-    max_num_logprobs: Optional[int] = None
-    prompt_ids: Optional[paddle.Tensor] = None
-    prompt_lens: Optional[paddle.Tensor] = None
+    if current_platform.is_cuda():
+        from fastdeploy.model_executor.ops.gpu import init_kv_signal_per_query
+        out = init_kv_signal_per_query(seq_lens_encoder, seq_lens_this_time, seq_lens_decoder, rank, num_layers)
+        return out
+    else:
+        raise NotImplementedError()

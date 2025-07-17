@@ -26,7 +26,7 @@ __global__ void append_clear_cache_int8_block(
                                         // block_size, head_size // 2]
     const int* __restrict__ seq_lens,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ padding_offsets,  // [num_tokens]
+    const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens_encoder,  // [bsz]
     const int max_seq_len,
@@ -41,8 +41,8 @@ __global__ void append_clear_cache_int8_block(
   const int wid = tid / 32;
   const int lane_id = tid % 32;
   const int token_id = blockIdx.x;
-  const int ori_token_id = token_id + padding_offsets[token_id];
-  const int bid = ori_token_id / max_seq_len;
+  
+  const int bid = batch_id_per_token[token_id];
 
   const int start_token_idx = cu_seqlens_q[bid];
   const int head_idx = blockIdx.y * NUM_WARPS + wid;
@@ -100,7 +100,7 @@ __global__ void append_clear_cache_int4_block(
                                         // block_size, head_size // 2]
     const int* __restrict__ seq_lens,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ padding_offsets,  // [num_tokens]
+    const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens_encoder,  // [bsz]
     const int max_seq_len,
@@ -115,8 +115,8 @@ __global__ void append_clear_cache_int4_block(
   const int wid = tid / 32;
   const int lane_id = tid % 32;
   const int token_id = blockIdx.x;
-  const int ori_token_id = token_id + padding_offsets[token_id];
-  const int bid = ori_token_id / max_seq_len;
+  
+  const int bid = batch_id_per_token[token_id];
 
   const int start_token_idx = cu_seqlens_q[bid];
   const int head_idx = blockIdx.y * NUM_WARPS + wid;
@@ -178,7 +178,7 @@ __global__ void append_speculate_cache_rope_kernel(
                                   // head_size // 2]
     T* __restrict__ q_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ padding_offsets,  // [num_tokens]
+    const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens_decoder,  // [bsz]
     const float* __restrict__ cos_emb,
@@ -214,7 +214,7 @@ __global__ void append_speculate_cache_rope_kernel(
        linear_index < elem_cnt;
        linear_index += step) {
     const int token_id = linear_index / hidden_size;
-    const int ori_bi = (token_id + padding_offsets[token_id]) / max_seq_len;
+    const int ori_bi = batch_id_per_token[token_id];
     if (seq_lens_decoder[ori_bi] == 0) continue;
     const int bias = linear_index % hidden_size;
     const int hi = bias / head_size;  // q + k + v
@@ -311,7 +311,7 @@ __global__ void append_speculate_cache_neox_rope_kernel(
                                   // head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ padding_offsets,  // [num_tokens]
+    const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens_decoder,  // [bsz]
     const float* __restrict__ cos_emb,
@@ -347,7 +347,7 @@ __global__ void append_speculate_cache_neox_rope_kernel(
        linear_index < elem_cnt;
        linear_index += step) {
     const int token_id = linear_index / half_hidden_size;
-    const int ori_bi = (token_id + padding_offsets[token_id]) / max_seq_len;
+    const int ori_bi = batch_id_per_token[token_id];
     if (seq_lens_decoder[ori_bi] == 0) continue;
     const int bias = linear_index % half_hidden_size;
     const int hi = bias / half_head_size;  // q + k + v
@@ -458,7 +458,7 @@ __global__ void append_speculate_cache_int8_rope_kernel(
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ padding_offsets,  // [num_tokens]
+    const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -484,8 +484,8 @@ __global__ void append_speculate_cache_int8_rope_kernel(
   const int wid = tid / 32;
   const int lane_id = tid % 32;
   const int token_id = blockIdx.x;
-  const int ori_token_id = token_id + padding_offsets[token_id];
-  const int bid = ori_token_id / max_seq_len;
+  
+  const int bid = batch_id_per_token[token_id];
 
   const int start_token_idx = cu_seqlens_q[bid];
   const int head_idx = blockIdx.y * NUM_WARPS + wid;
@@ -690,7 +690,7 @@ __global__ void append_speculate_cache_int8_neox_rope_kernel(
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ padding_offsets,  // [num_tokens]
+    const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -716,8 +716,8 @@ __global__ void append_speculate_cache_int8_neox_rope_kernel(
   const int wid = tid / 32;
   const int lane_id = tid % 32;
   const int token_id = blockIdx.x;
-  const int ori_token_id = token_id + padding_offsets[token_id];
-  const int bid = ori_token_id / max_seq_len;
+  
+  const int bid = batch_id_per_token[token_id];
 
   const int start_token_idx = cu_seqlens_q[bid];
   const int head_idx = blockIdx.y * NUM_WARPS + wid;
@@ -1068,7 +1068,7 @@ __global__ void append_speculate_cache_int4_rope_kernel(
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ padding_offsets,  // [num_tokens]
+    const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -1097,8 +1097,8 @@ __global__ void append_speculate_cache_int4_rope_kernel(
   const int lane_id = tid % 32;
 
   const int token_id = blockIdx.x;
-  const int ori_token_id = token_id + padding_offsets[token_id];
-  const int bid = ori_token_id / max_seq_len;
+  
+  const int bid = batch_id_per_token[token_id];
 
   const int start_token_idx = cu_seqlens_q[bid];
   const int head_idx = blockIdx.y * NUM_WARPS + wid;
@@ -1374,7 +1374,7 @@ __global__ void append_speculate_cache_int4_neox_rope_kernel(
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
     const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
-    const int* __restrict__ padding_offsets,  // [num_tokens]
+    const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -1403,8 +1403,8 @@ __global__ void append_speculate_cache_int4_neox_rope_kernel(
   const int lane_id = tid % 32;
 
   const int token_id = blockIdx.x;
-  const int ori_token_id = token_id + padding_offsets[token_id];
-  const int bid = ori_token_id / max_seq_len;
+  
+  const int bid = batch_id_per_token[token_id];
 
   const int start_token_idx = cu_seqlens_q[bid];
   const int head_idx = blockIdx.y * NUM_WARPS + wid;
