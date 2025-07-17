@@ -114,6 +114,8 @@ class ErnieProcessor(BaseDataProcessor):
             else:
                 request.prompt_token_ids = self.messages2ids(request.to_dict())
 
+        if len(request.prompt_token_ids) == 0:
+            raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
         if max_model_len is not None and len(
                 request.prompt_token_ids) > max_model_len:
             request.prompt_token_ids = request.prompt_token_ids[:
@@ -170,6 +172,8 @@ class ErnieProcessor(BaseDataProcessor):
                 )
             else:
                 request['prompt_token_ids'] = self.messages2ids(request)
+        if len(request['prompt_token_ids']) == 0:
+            raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
 
         # 截断超过长度限制的prompt
         if max_model_len is not None and len(
@@ -196,7 +200,6 @@ class ErnieProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-
         req_id = response_dict.request_id
         token_ids = response_dict.outputs.token_ids
 
@@ -245,6 +248,7 @@ class ErnieProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
+        enable_thinking = kwargs.get("enable_thinking")
         token_ids = response_dict["outputs"]["token_ids"]
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
@@ -254,7 +258,7 @@ class ErnieProcessor(BaseDataProcessor):
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
-            if self.reasoning_parser:
+            if enable_thinking and self.reasoning_parser:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
                     full_text, response_dict)
                 response_dict["outputs"]["text"] = text
