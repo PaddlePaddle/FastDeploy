@@ -74,7 +74,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ATTENTION_BACKEND":
     lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
 
-    # Set sampling class. "base", "base_non_truncated",  "air" and "rejection" can be set currently.
+    # Set sampling class. "base", "base_non_truncated", "air" and "rejection" can be set currently.
     "FD_SAMPLING_CLASS":
     lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
 
@@ -97,6 +97,30 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use fastsafetensor load weight (0 or 1)
     "FD_USE_FASTSAFETENSOR":
     lambda: os.getenv("FD_USE_FASTSAFETENSOR", "0"),
+
+    # Whether to open Trace.
+    "TRACES_ENABLE":
+    lambda: os.getenv("TRACES_ENABLE", "false"),
+
+    # set traec Server name.
+    "FD_SERVICE_NAME":
+    lambda: os.getenv("FD_SERVICE_NAME", "FastDeploy"),
+
+    # set traec host name.
+    "FD_HOST_NAME":
+    lambda: os.getenv("FD_HOST_NAME", "localhost"),
+
+    # set traec exporter.
+    "TRACES_EXPORTER":
+    lambda: os.getenv("TRACES_EXPORTER", "console"),
+
+    # set traec exporter_otlp_endpoint.
+    "EXPORTER_OTLP_ENDPOINT":
+    lambda: os.getenv("EXPORTER_OTLP_ENDPOINT"),
+
+    # set traec exporter_otlp_headers.
+    "EXPORTER_OTLP_HEADERS":
+    lambda: os.getenv("EXPORTER_OTLP_HEADERS"),
 }
 
 
