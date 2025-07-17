@@ -109,7 +109,7 @@ class ModelConfig:
 
         self.ori_vocab_size = self.vocab_size
         if "Ernie4_5_ForCausalLM" in self.architectures or "Ernie4_5_MoeForCausalLM" in self.architectures:
-            self.ori_vocab_size = args["ori_vocab_size"]
+            self.ori_vocab_size = args.get("ori_vocab_size", self.ori_vocab_size)
 
 class ParallelConfig:
     """Configuration for the distributed execution."""
