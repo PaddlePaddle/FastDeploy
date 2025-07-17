@@ -606,8 +606,8 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
             return final_actions
         mappings = get_tensor_parallel_split_mappings(
             config.num_hidden_layers,
-            config.moe_num_experts,
-            config.moe_layer_start_index,
+            getattr(config, "moe_num_experts", 0),
+            getattr(config, "moe_layer_start_index", -1),
             config.prefix_name,
         )
         return mappings
