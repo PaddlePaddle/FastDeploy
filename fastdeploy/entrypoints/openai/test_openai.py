@@ -52,7 +52,6 @@ response = client.chat.completions.create(
     messages=[
         {"role": "system", "content": "I'm a helpful AI assistant."},
         {"role": "user", "content": "Hello, who are you"},
-        {"role": "user", "content": "List 3 countries and their capitals."},
     ],
     temperature=1,
     max_tokens=64,
@@ -67,9 +66,8 @@ print("\n")
 response = client.chat.completions.create(
     model="default",
     messages=[
-        {"role": "user", "content": "Hello, who are you"},
         {"role": "system", "content": "I'm a helpful AI assistant."},
-        {"role": "user", "content": "List 3 countries and their capitals."},
+        {"role": "user", "content": "Hello, who are you"},
     ],
     temperature=1,
     max_tokens=64,
