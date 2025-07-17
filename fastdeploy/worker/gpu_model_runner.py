@@ -345,7 +345,7 @@ class GPUModelRunner(ModelRunnerBase):
                 request.eos_token_ids.append(request.eos_token_ids[0])
             self.share_inputs["eos_token_id"][:] = np.array(
                 request.eos_token_ids, dtype="int64").reshape(-1, 1)
-            self.share_inputs["top_p"][idx:idx + 1] = get_attr_from_request(request, "top_p", 0.7)
+            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 0.7)
             self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k", 0)
             self.share_inputs["temperature"][idx:idx + 1] = get_attr_from_request(request,"temperature", 0.95)
             self.share_inputs["penalty_score"][idx:idx + 1] = get_attr_from_request(
