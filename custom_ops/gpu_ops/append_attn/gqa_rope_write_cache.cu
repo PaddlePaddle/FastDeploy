@@ -25,7 +25,8 @@ __global__ void GQAVariableLengthRotarySplitKernel(
     const T *qkv,
     const float *cos_emb,
     const float *sin_emb,
-    const int *padding_offsets,
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
     const int *seq_lens,
     const int *seq_lens_decoder,
     const int *cu_seqlens_k,
@@ -52,14 +53,13 @@ __global__ void GQAVariableLengthRotarySplitKernel(
        linear_index < elem_cnt;
        linear_index += step) {
     const int token_idx = linear_index / offset;
-    const int ori_token_idx = token_idx + padding_offsets[token_idx];
-    const int ori_bi = ori_token_idx / seq_len;
+    const int ori_bi = batch_id_per_token[token_idx];
     if (seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / last_dim;
     const int h_bias = bias % last_dim;
 
-    const int ori_seq_id = ori_token_idx % seq_len + seq_lens_decoder[ori_bi];
+    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
     const int kv_write_idx = cu_seqlens_k[ori_bi] + ori_seq_id;
 
     const int64_t emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
@@ -108,9 +108,10 @@ void gqa_rotary_qk_split_variable(
     T *v,
     const T *qkv_input,
     const float *rotary_emb,  // [2, 1, 1, seq_len, dim_head / 2]
-    const int *padding_offsets,
+    const int *batch_id_per_token,
     const int *seq_lens_encoder,
     const int *seq_lens_decoder,
+    const int *cu_seqlens_q,
     const int *cu_seqlens_k,
     const int token_num,
     const int num_heads,
@@ -133,7 +134,8 @@ void gqa_rotary_qk_split_variable(
             qkv_input,
             cos_emb,
             sin_emb,
-            padding_offsets,
+            batch_id_per_token,
+            cu_seqlens_q,
             seq_lens_encoder,
             seq_lens_decoder,
             cu_seqlens_k,
@@ -421,7 +423,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
-    const paddle::Tensor& padding_offsets,
+    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& kv_batch_ids,
     const paddle::Tensor& kv_tile_ids,
@@ -492,9 +494,10 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
         v.data<data_t>(),
         qkv.data<data_t>(),
         rotary_embs.data<float>(),
-        padding_offsets.data<int>(),
+        batch_id_per_token.data<int>(),
         seq_lens_encoder.data<int>(),
         seq_lens_decoder.data<int>(),
+        cu_seqlens_q.data<int>(),
         cu_seqlens_k.data<int>(),
         token_num,
         num_heads,
@@ -509,7 +512,8 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
       meta_data,
       qkv_out,
       block_tables,
-      padding_offsets,
+      batch_id_per_token,
+      cu_seqlens_q,
       seq_lens_encoder,
       seq_lens_decoder,
       max_seq_len,
@@ -526,7 +530,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
         cache_v_quant_scales.get(),
         seq_lens_this_time,
         seq_lens_decoder,
-        padding_offsets,
+        batch_id_per_token,
         cu_seqlens_q,
         block_tables,
         kv_batch_ids,
@@ -593,7 +597,7 @@ PD_BUILD_STATIC_OP(gqa_rope_write_cache)
              "seq_lens_this_time",
              "seq_lens_encoder",
              "seq_lens_decoder",
-             "padding_offsets",
+             "batch_id_per_token",
              "block_tables",
              "kv_batch_ids",
              "kv_tile_ids_per_batch",

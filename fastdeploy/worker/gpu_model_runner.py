@@ -559,7 +559,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["cum_offsets"] = paddle.full([max_num_seqs, 1],
                                                        0,
                                                        dtype='int32')
-        self.share_inputs["padding_offset"] = paddle.full([max_num_seqs, 1],
+        self.share_inputs["batch_id_per_token"] = paddle.full([max_num_seqs, 1],
                                                           0,
                                                           dtype='int32')
         self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1],
@@ -670,7 +670,7 @@ class GPUModelRunner(ModelRunnerBase):
         (
             ids_remove_padding,
             cum_offsets,
-            padding_offset,
+            batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
             output_cum_offsets,
@@ -685,7 +685,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding,
                                                       False)
         self.share_inputs["cum_offsets"].copy_(cum_offsets, False)
-        self.share_inputs["padding_offset"].copy_(padding_offset, False)
+        self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
         self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
 
@@ -762,7 +762,7 @@ class GPUModelRunner(ModelRunnerBase):
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
             seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
             cum_offsets=self.share_inputs["cum_offsets"],
-            padding_offset=self.share_inputs["padding_offset"],
+            batch_id_per_token=self.share_inputs["batch_id_per_token"],
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
             block_tables=self.share_inputs["block_tables"],
