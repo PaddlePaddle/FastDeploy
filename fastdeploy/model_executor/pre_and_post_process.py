@@ -72,7 +72,7 @@ def pre_process(
     Return:
         ids_remove_padding:
         cum_offsets:
-        padding_offset:
+        batch_id_per_token:
         cu_seqlens_q:
         cu_seqlens_k:
     """
@@ -85,7 +85,7 @@ def pre_process(
         (
             ids_remove_padding,
             cum_offsets,
-            padding_offset,
+            batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
         ) = speculate_get_padding_offset(
@@ -115,12 +115,12 @@ def pre_process(
         (
             ids_remove_padding,
             cum_offsets,
-            padding_offset,
+            batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
         ) = get_padding_offset(input_ids, cum_offsets_now, token_num,
                                seq_lens_this_time)
-    return (ids_remove_padding, cum_offsets, padding_offset, cu_seqlens_q,
+    return (ids_remove_padding, cum_offsets, batch_id_per_token, cu_seqlens_q,
             cu_seqlens_k, output_cum_offsets, output_padding_offset)
 
 
