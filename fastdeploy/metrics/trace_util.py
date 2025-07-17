@@ -8,9 +8,9 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from fastapi import FastAPI
 from fastdeploy.utils import (llm_logger)
-
+from fastdeploy import envs
 import json
-import os
+
 
 # OpenTelemetry Trace context store in metadata
 TRACE_CARRIER = "trace_carrier"
@@ -20,18 +20,18 @@ tracer = trace.get_tracer(__name__)
 
 def set_up():
     try:
-        # 只有当 TRACES_ENABLED=true 时才启动追踪
+        # when TRACES_ENABLED=true start trace
         global traces_enable
-        traces_enable = os.getenv("TRACES_ENABLE", "false").lower() == "true"
+        traces_enable = envs.TRACES_ENABLE.lower() == "true"
         if not traces_enable:
             llm_logger.warning("Opentelemetry is DISABLED.")
             return
 
         llm_logger.info("Opentelemetry is ENABLED, configuring...")
-        # --- 读取配置 ---
-        service_name = os.getenv("SERVICE_NAME", "FastDeploy")
-        host_name = os.getenv("HOST_NAME", "localhost")
-        # --- 设置资源属性 (Service Name, Host Name, etc.) ---
+        # --- read env ---
+        service_name = envs.FD_SERVICE_NAME
+        host_name = envs.FD_HOST_NAME
+        # --- set attributes (Service Name, Host Name, etc.) ---
         resource_attributes = {
             "service.name": service_name
         }
@@ -40,11 +40,11 @@ def set_up():
 
         resource = Resource(attributes=resource_attributes)
 
-        # --- 根据配置选择并设置Exporter ---
-        exporter_type = os.getenv("TRACES_EXPORTER", "console").lower()
+        # --- set Exporter ---
+        exporter_type = envs.TRACES_EXPORTER.lower()
         if exporter_type == "otlp":
-            endpoint = os.getenv("EXPORTER_OTLP_ENDPOINT") # should be set
-            headers = os.getenv("EXPORTER_OTLP_HEADERS")  # e.g., "Authentication=***,k2=v2"
+            endpoint = envs.EXPORTER_OTLP_ENDPOINT # should be set
+            headers = envs.EXPORTER_OTLP_HEADERS  # e.g., "Authentication=***,k2=v2"
 
             otlp_exporter = OTLPSpanExporter(
                 endpoint=endpoint,
@@ -52,11 +52,11 @@ def set_up():
             )
             processor = BatchSpanProcessor(otlp_exporter)
             llm_logger.info(f"Using OTLP Exporter, sending to {endpoint} with headers {headers}")
-        else:  # 默认为console
+        else:  # default console
             processor = BatchSpanProcessor(ConsoleSpanExporter())
             llm_logger.info("Using Console Exporter.")
 
-        # --- 设置Tracer Provider ---
+        # --- set Tracer Provider ---
         provider = TracerProvider(resource=resource)
         provider.add_span_processor(processor)
         trace.set_tracer_provider(provider)
