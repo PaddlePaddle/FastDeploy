@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import functools
 from typing import Tuple, Union
 
 import numpy as np
@@ -35,6 +36,7 @@ if current_platform.is_cuda() and current_platform.available():
         )
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import get_padding_offset
+
 import re
 
 from fastdeploy import envs
@@ -380,3 +382,17 @@ def create_and_set_parameter(layer: nn.Layer, name: str,
             default_initializer=paddle.nn.initializer.Constant(0),
         ))
     getattr(layer, name).set_value(tensor)
+
+@functools.cache
+def create_empty_tensor(shape: Tuple[int, ...], dtype: Union[paddle.dtype, str]) -> paddle.Tensor:
+    """
+    Creates and caches an empty tensor with the specified shape and data type.
+
+    Args:
+        shape (Tuple[int, ...]): A tuple representing the dimensions of the tensor.
+        dtype (Union[paddle.dtype, str]): The data type for the tensor, such as 'bfloat16', 'float16', etc.
+
+    Returns:
+        paddle.Tensor: An empty tensor with the specified shape and data type.
+    """
+    return paddle.empty(list(shape), dtype=dtype)
