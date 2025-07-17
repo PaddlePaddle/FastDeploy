@@ -329,7 +329,8 @@ class Config:
         self.cache_config.max_block_num_per_seq = int(self.max_model_len // self.cache_config.block_size)
 
         if self.guided_decoding_backend == "auto":
-            if self.enable_mm:
+            if current_platform.is_xpu() or self.speculative_config.method is not None:
+                llm_logger.warning("Speculative Decoding and XPU currently do not support Guided decoding, set off.")
                 self.guided_decoding_backend = "off"
             else:
                 self.guided_decoding_backend = "xgrammar"
@@ -396,10 +397,10 @@ class Config:
             ], f"Only support xgrammar、auto guided decoding backend, but got {self.guided_decoding_backend}."
 
             if self.guided_decoding_backend != "off":
-                # TODO: mm support guided_decoding
-                assert self.enable_mm is False, "Multimodal model currently do not support guided_decoding"
 
                 # TODO: speculative decoding support guided_decoding
+                assert self.speculative_config.method is None, \
+                "speculative decoding currently do not support guided_decoding"
 
                 # TODO: xpu support guided_decoding
                 assert not current_platform.is_xpu(), "XPU currently do not support guided_decoding"
@@ -425,13 +426,12 @@ class Config:
             if k == "generation_config" and v is not None:
                 for gck, gcv in v.to_dict().items():
                     llm_logger.info("{:<20}:{:<6}{}".format(gck, "", gcv))
-            elif (
-                k == "cache_config"
-                or k == "model_config"
-                or k == "scheduler_config"
-                or k == "parallel_config"
-                or k == "commit_config"
-            ):
+            elif (k == "cache_config" or
+                  k == "model_config" or
+                  k == "scheduler_config" or
+                  k == "parallel_config" or
+                  k == "commit_config" or
+                  k == "speculative_config"):
                 v.print()
             else:
                 llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))

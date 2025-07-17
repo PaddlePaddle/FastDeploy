@@ -275,6 +275,9 @@ class LLM:
             enable_thinking = None
             if chat_template_kwargs is not None:
                 enable_thinking = chat_template_kwargs.get("enable_thinking", None)
+            if current_sampling_params.guided_decoding is not None:
+                guided_decoding_dict = current_sampling_params.guided_decoding.to_dict()
+                tasks.update(guided_decoding_dict)
             self.llm_engine.add_requests(tasks, current_sampling_params, enable_thinking=enable_thinking)
         return req_ids
 

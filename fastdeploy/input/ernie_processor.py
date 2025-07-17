@@ -60,7 +60,6 @@ class ErnieProcessor(BaseDataProcessor):
         self.eos_token_ids = [self.tokenizer.eos_token_id]
         self.eos_token_id_len = len(self.eos_token_ids)
         self.pad_token_id = self.get_pad_id()
-        self.reasoning_parser = None
         if reasoning_parser_obj:
             self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
 
@@ -264,7 +263,6 @@ class ErnieProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-        enable_thinking = kwargs.get("enable_thinking")
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
@@ -273,6 +271,8 @@ class ErnieProcessor(BaseDataProcessor):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
+
+        enable_thinking = self.get_enable_thinking(kwargs.get("enable_thinking"))
         if enable_thinking and self.reasoning_parser:
             reasoning_content, text = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,

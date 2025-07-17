@@ -50,6 +50,26 @@ class BaseDataProcessor(ABC):
             )
         )
 
+    def get_enable_thinking(self, enable_thinking=None):
+        """
+        get enable_thinking param
+
+        1. if enable_thinking is None:
+            1.1 if reasoning_parser is not None, set enable_thinking to True.
+            1.2 if reasoning_parser is None, set enable_thinking to False.
+        2. if reasoning_parser is None but enable_thinking is True, set enable_thinking to False and print warning.
+
+        """
+        if enable_thinking is None:
+            enable_thinking = False if self.reasoning_parser is None else True
+        if enable_thinking and self.reasoning_parser is None:
+            enable_thinking = False
+            data_processor_logger.warning(
+                "enable_thinking is True, but reasoning_parser is None. "
+                "enable_thinking will be set to False."
+            )
+        return enable_thinking
+
     def _apply_default_parameters(self, request):
         """
         Apply default value for parameters in request
@@ -229,6 +249,7 @@ class DataProcessor(BaseDataProcessor):
             request.set("stop_token_ids", stop_seqs)
             request.set("stop_seqs_len", stop_seqs_len)
 
+        request.set("enable_thinking", self.get_enable_thinking(kwargs.get("enable_thinking")))
         if request.prompt_token_ids is None or len(request.prompt_token_ids) == 0:
             if request.prompt is not None:
                 request.prompt_token_ids = self.text2ids(request.prompt, max_model_len)
@@ -236,7 +257,6 @@ class DataProcessor(BaseDataProcessor):
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
                 task = request.to_dict()
-                task["enable_thinking"] = kwargs.get("enable_thinking", True)
                 request.prompt_token_ids = self.messages2ids(task)
             else:
                 raise ValueError(f"The request should have `input_ids`, `text` or `messages`: {request}.")
@@ -372,7 +392,6 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-        enable_thinking = kwargs.get("enable_thinking")
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
@@ -382,6 +401,7 @@ class DataProcessor(BaseDataProcessor):
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
 
+        enable_thinking = self.get_enable_thinking(kwargs.get("enable_thinking"))
         if enable_thinking and self.reasoning_parser:
             reasoning_content, text = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,

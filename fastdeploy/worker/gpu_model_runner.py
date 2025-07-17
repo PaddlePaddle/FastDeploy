@@ -29,10 +29,8 @@ from fastdeploy.model_executor.graph_optimization.utils import (
     profile_run_guard,
     sot_warmup_guard,
 )
-from fastdeploy.model_executor.guided_decoding import get_guided_backend
-from fastdeploy.model_executor.guided_decoding.base_guided_decoding import (
-    LogitsProcessorBase,
-)
+from fastdeploy.model_executor.guided_decoding import (LogitsProcessorBase,
+                                                       get_guided_backend)
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
@@ -83,10 +81,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
 
-        self.guided_backend = None
-        if self.fd_config.parallel_config.guided_decoding_backend != "off":
-            self.guided_backend = get_guided_backend(fd_config=self.fd_config)
-
         # VL model config:
         if self.enable_mm:
             self._init_image_preprocess()
@@ -114,6 +108,11 @@ class GPUModelRunner(ModelRunnerBase):
             self.sampler = Sampler()
         else:
             self.sampler = SpeculativeSampler(fd_config)
+
+        self.guided_backend = None
+        if self.fd_config.parallel_config.guided_decoding_backend != "off":
+            self.guided_backend = get_guided_backend(fd_config=self.fd_config)
+            self.sampler.set_reasoning_parser(self.guided_backend.get_reasoning_parser())
 
         # Lazy initialize kv cache after model loading
         # self.kv_caches: list[paddle.Tensor] = []
@@ -191,7 +190,10 @@ class GPUModelRunner(ModelRunnerBase):
         elif request.structural_tag is not None:
             schemata_key = ("structural_tag", request.structural_tag)
 
-        return self.guided_backend.get_logits_processor(schemata_key=schemata_key), schemata_key
+        return self.guided_backend.get_logits_processor(
+            schemata_key=schemata_key,
+            enable_thinking=request.get("enable_thinking"),
+        ), schemata_key
 
     def insert_tasks_v1(self, req_dicts: List[Request]):
         """
@@ -395,8 +397,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["prompt_lens"][idx : idx + 1] = length
 
                 if self.enable_mm:
-                    enable_thinking = request.get("enable_thinking", True)
-                    enable_thinking = enable_thinking if enable_thinking is not None else True
+                    enable_thinking = request.get("enable_thinking")
                     self.share_inputs["enable_thinking"][:] = enable_thinking
                     self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
                     self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
@@ -1160,10 +1161,14 @@ class GPUModelRunner(ModelRunnerBase):
         Returns:
             A list of indices corresponding to the requests that need to be skipped.
         """
-        skip_idx_list = []
-        if not self.cache_config.enable_chunked_prefill or self.guided_backend is None:
-            return skip_idx_list
+        if (
+            not self.parallel_config.enable_chunked_prefill
+            or self.guided_backend is None
+            or model_forward_batch is None
+        ):
+            return []
 
+        skip_idx_list = []
         for task in model_forward_batch:
             if task.get("prefill_chunk_info", None) is None or task.chunk_idx >= len(task.prefill_chunk_info):
                 continue
@@ -1247,6 +1252,7 @@ class GPUModelRunner(ModelRunnerBase):
             if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
 
+            self.sampler.post_process(sampler_output.sampled_token_ids, skip_idx_list)
         else:
             self.sampler(
                 logits,

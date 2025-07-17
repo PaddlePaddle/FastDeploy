@@ -565,6 +565,11 @@ def parse_args():
         action="store_true",
         help="Enable output of token-level log probabilities.",
     )
+    parser.add_argument("--reasoning_parser",
+                        type=str,
+                        default=None,
+                        help="Flag specifies the reasoning parser to use for " \
+                        "extracting reasoning content from the model output")
 
     args = parser.parse_args()
     return args

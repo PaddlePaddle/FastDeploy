@@ -46,6 +46,20 @@ class ErnieVLReasoningParser(ReasoningParser):
         if self.think_end_token_id is None:
             raise RuntimeError("Ernie VL reasoning parser could not locate think end " "tokens in the tokenizer!")
 
+    def is_reasoning_end(self, input_ids: Sequence[int]) -> bool:
+        """
+        Check if the reasoning content ends in the input_ids.
+        It is used in structured engines like `xgrammar` to check if the
+        reasoning content ends in the model output.
+        Parameters:
+        input_ids: list[int]
+            The input_ids of the model output.
+        Returns:
+        bool
+            True if the reasoning content ends in the input_ids.
+        """
+        return self.think_end_token_id in input_ids
+
     def extract_reasoning_content_streaming(
         self,
         previous_text: str,

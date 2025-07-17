@@ -434,6 +434,13 @@ class LLMEngine:
                     llm_logger.debug(f"Receive request: {request}")
 
                     err_msg = None
+                    if ((request.guided_json is not None
+                    or request.guided_regex is not None
+                    or request.structural_tag is not None
+                    or request.guided_grammar is not None) and self.guided_decoding_checker is None):
+                        err_msg = "guided_backend is None, use --guided-decoding-backend to " \
+                                  "specify the backend at server startup."
+
                     if self.guided_decoding_checker is not None:
                         request, err_msg = self.guided_decoding_checker.schema_format(request)
 
@@ -525,6 +532,14 @@ class LLMEngine:
             )
             llm_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
+
+        if ((request.guided_json is not None
+        or request.guided_regex is not None
+        or request.structural_tag is not None
+        or request.guided_grammar is not None) and self.guided_decoding_checker is None):
+            err_msg = "guided_backend is None, use --guided-decoding-backend to specify the backend at server startup."
+            llm_logger.error(err_msg)
+            raise EngineError(err_msg, error_code=400)
 
         if self.guided_decoding_checker is not None:
             request, err_msg = self.guided_decoding_checker.schema_format(request)
@@ -1084,8 +1099,13 @@ class LLMEngine:
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_optimization_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
+<<<<<<< HEAD
             f" --load_strategy {self.cfg.load_config.load_strategy}"
         )
+=======
+            f" --load_strategy {self.cfg.model_config.load_strategy}"
+            f" --reasoning_parser {self.cfg.reasoning_parser}")
+>>>>>>> 04c2f3c1 (mm support structured output)
 
         worker_append_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,

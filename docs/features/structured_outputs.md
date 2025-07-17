@@ -330,3 +330,65 @@ ParsedChatCompletionMessage[Info](content='{"addr": "No.1 Century Avenue, Pudong
 Address: No.1 Century Avenue, Pudong New Area, Shanghai
 Height: 468
 ```
+
+### Offline Inference
+
+Offline inference allows restricting the model's output format by pre-specified constraints. In `FastDeploy`, constraints can be specified through the `GuidedDecodingParams` class in `SamplingParams`. `GuidedDecodingParams` supports the following constraint types, with usage similar to online inference:
+
+```python
+json: Optional[Union[str, dict]] = None
+regex: Optional[str] = None
+choice: Optional[List[str]] = None
+grammar: Optional[str] = None
+json_object: Optional[bool] = None
+structural_tag: Optional[str] = None
+```
+
+The following example demonstrates how to use offline inference to generate a structured json:
+
+```python
+from fastdeploy import LLM, SamplingParams
+from fastdeploy.engine.sampling_params import GuidedDecodingParams
+from pydantic import BaseModel
+from enum import Enum
+
+class BookType(str, Enum):
+    romance = "Romance"
+    historical = "Historical"
+    adventure = "Adventure"
+    mystery = "Mystery"
+    dystopian = "Dystopian"
+
+class BookDescription(BaseModel):
+    author: str
+    title: str
+    genre: BookType
+
+# Constrained decoding parameters
+guided_decoding_params = GuidedDecodingParams(json=BookDescription.model_json_schema())
+
+# Sampling parameters
+sampling_params = SamplingParams(
+    top_p=0.95,
+    max_tokens=6400,
+    guided_decoding=guided_decoding_params,
+)
+
+# Load model
+llm = LLM(model="ERNIE-4.5-0.3B", tensor_parallel_size=1, max_model_len=8192, guided_decoding_backend="auto")
+
+outputs = llm.generate(
+    prompts="Generate a JSON describing a literary work, including author, title and book type.",
+    sampling_params=sampling_params,
+)
+
+# Output results
+for output in outputs:
+    print(output.outputs.text)
+```
+
+Output:
+
+```
+{"author": "George Orwell", "title": "1984", "genre": "Dystopian"}
+```
