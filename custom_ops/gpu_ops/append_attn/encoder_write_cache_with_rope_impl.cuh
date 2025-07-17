@@ -23,7 +23,8 @@ __global__ void VariableLengthRotaryKernel(
     const int *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
     const float *sin_emb,
-    const int *padding_offsets,
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
     const int *seq_lens,
     const int *seq_lens_decoder,
     const float *qkv_out_scales,  // [3, num_head, dim_head]
@@ -52,8 +53,7 @@ __global__ void VariableLengthRotaryKernel(
        linear_index < elem_cnt;
        linear_index += step) {
     const int token_idx = linear_index / offset;
-    const int ori_token_idx = token_idx + padding_offsets[token_idx];
-    const int ori_bi = ori_token_idx / seq_len;
+    const int ori_bi = batch_id_per_token[token_idx];
     if (seq_lens && seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int qkv_id = bias / hidden_size;
@@ -61,7 +61,7 @@ __global__ void VariableLengthRotaryKernel(
     const int hi = qkv_bias / last_dim;
     const int h_bias = qkv_bias % last_dim;
 
-    const int ori_seq_id = ori_token_idx % seq_len + seq_lens_decoder[ori_bi];
+    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
     const int bias_idx = qkv_id * hidden_size + hi * last_dim + h_bias;
@@ -107,7 +107,8 @@ __global__ void VariableLengthRotaryKernel(
     const T *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
     const float *sin_emb,
-    const int *padding_offsets,
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
     const int *seq_lens,
     const int *seq_lens_decoder,
     T *qkv_out,
@@ -130,8 +131,7 @@ __global__ void VariableLengthRotaryKernel(
        linear_index < elem_cnt;
        linear_index += step) {
     const int token_idx = linear_index / offset;
-    const int ori_token_idx = token_idx + padding_offsets[token_idx];
-    const int ori_bi = ori_token_idx / seq_len;
+    const int ori_bi = batch_id_per_token[token_idx];
     if (seq_lens && seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int qkv_id = bias / hidden_size;
@@ -139,7 +139,7 @@ __global__ void VariableLengthRotaryKernel(
     const int hi = qkv_bias / last_dim;
     const int h_bias = qkv_bias % last_dim;
 
-    const int ori_seq_id = ori_token_idx % seq_len + seq_lens_decoder[ori_bi];
+    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
     const int64_t base_idx = token_idx * 3 * hidden_size +
@@ -167,7 +167,8 @@ __global__ void NeoxVariableLengthRotaryKernel(
     const int *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
     const float *sin_emb,
-    const int *padding_offsets,
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
     const int *seq_lens,
     const int *seq_lens_decoder,
     const float *qkv_out_scales,  // [3, num_head, dim_head]
@@ -199,8 +200,7 @@ __global__ void NeoxVariableLengthRotaryKernel(
        linear_index < elem_cnt;
        linear_index += step) {
     const int token_idx = linear_index / offset;
-    const int ori_token_idx = token_idx + padding_offsets[token_idx];
-    const int ori_bi = ori_token_idx / seq_len;
+    const int ori_bi = batch_id_per_token[token_idx];
     if (seq_lens && seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int qkv_id = bias / hidden_size;
@@ -208,7 +208,7 @@ __global__ void NeoxVariableLengthRotaryKernel(
     const int hi = qkv_bias / half_lastdim;
     const int h_bias = qkv_bias % half_lastdim;
 
-    const int ori_seq_id = ori_token_idx % seq_len + seq_lens_decoder[ori_bi];
+    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int emb_idx = ori_seq_id * last_dim + h_bias;
     const int bias_idx_left =
@@ -261,7 +261,8 @@ __global__ void NeoxVariableLengthRotaryKernel(
     const T *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
     const float *sin_emb,
-    const int *padding_offsets,
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
     const int *seq_lens,
     const int *seq_lens_decoder,
     T *qkv_out,
@@ -285,8 +286,7 @@ __global__ void NeoxVariableLengthRotaryKernel(
        linear_index < elem_cnt;
        linear_index += step) {
     const int token_idx = linear_index / offset;
-    const int ori_token_idx = token_idx + padding_offsets[token_idx];
-    const int ori_bi = ori_token_idx / seq_len;
+    const int ori_bi = batch_id_per_token[token_idx];
     if (seq_lens && seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int qkv_id = bias / hidden_size;
@@ -294,7 +294,7 @@ __global__ void NeoxVariableLengthRotaryKernel(
     const int hi = qkv_bias / half_lastdim;
     const int h_bias = qkv_bias % half_lastdim;
 
-    const int ori_seq_id = ori_token_idx % seq_len + seq_lens_decoder[ori_bi];
+    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int emb_idx = ori_seq_id * last_dim + h_bias;
     const int base_idx_left = token_idx * 3 * full_hidden_size +
@@ -327,7 +327,8 @@ __global__ void GQAVariableLengthRotaryKernel(
     const int *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
     const float *sin_emb,
-    const int *padding_offsets,
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
     const int *seq_lens,
     const int *seq_lens_decoder,
     const float *qkv_out_scales,  // [3, q_num_head, dim_head]
@@ -357,14 +358,13 @@ __global__ void GQAVariableLengthRotaryKernel(
        linear_index < elem_cnt;
        linear_index += step) {
     const int token_idx = linear_index / offset;
-    const int ori_token_idx = token_idx + padding_offsets[token_idx];
-    const int ori_bi = ori_token_idx / seq_len;
+    const int ori_bi = batch_id_per_token[token_idx];;
     if (seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / last_dim;
     const int h_bias = bias % last_dim;
 
-    const int ori_seq_id = ori_token_idx % seq_len + seq_lens_decoder[ori_bi];
+    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int64_t emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
     const int64_t bias_idx = hi * last_dim + h_bias;
@@ -410,7 +410,8 @@ __global__ void GQAVariableLengthRotaryKernel(
     const T *qkv,
     const float *cos_emb,
     const float *sin_emb,
-    const int *padding_offsets,
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
     const int *seq_lens,
     const int *seq_lens_decoder,
     T *qkv_out,
@@ -434,14 +435,13 @@ __global__ void GQAVariableLengthRotaryKernel(
        linear_index < elem_cnt;
        linear_index += step) {
     const int token_idx = linear_index / offset;
-    const int ori_token_idx = token_idx + padding_offsets[token_idx];
-    const int ori_bi = ori_token_idx / seq_len;
+    const int ori_bi = batch_id_per_token[token_idx];;
     if (seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / last_dim;
     const int h_bias = bias % last_dim;
 
-    const int ori_seq_id = ori_token_idx % seq_len + seq_lens_decoder[ori_bi];
+    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int64_t emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
     const int64_t base_idx =
@@ -472,7 +472,8 @@ __global__ void GQAVariableLengthRotaryQuantKVKernel(const int *qkv,
                                            const float *cos_emb, // [1, 1, seq_len, dim_head / 2]
                                            const float *sin_emb,
                                            const float *qkv_out_scales,
-                                           const int *padding_offsets,
+                                           const int *batch_id_per_token,
+                                           const int *cu_seqlens_q,
                                            const int *seq_lens,
                                            const int *seq_lens_decoder,
                                            const T *qkv_biases,
@@ -504,15 +505,13 @@ __global__ void GQAVariableLengthRotaryQuantKVKernel(const int *qkv,
        linear_index < elem_cnt;
        linear_index += step) {
     const int token_idx = linear_index / offset;
-    const int ori_token_idx = token_idx + padding_offsets[token_idx];
-    const int ori_bi = ori_token_idx / seq_len;
+    const int ori_bi = batch_id_per_token[token_idx];
     if (seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / last_dim;
     const int h_bias = bias % last_dim;
 
-    int ori_seq_id;
-    ori_seq_id = ori_token_idx % seq_len + seq_lens_decoder[ori_bi];
+    int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int64_t emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
     const int64_t bias_idx = hi * last_dim + h_bias;
@@ -561,7 +560,8 @@ template <typename T, int VecSize = 1>
 __global__ void GQAVariableLengthRotaryQuantKVKernel(const T *qkv,
                                            const float *cos_emb, // [1, 1, seq_len, dim_head / 2]
                                            const float *sin_emb,
-                                           const int *padding_offsets,
+                                           const int *batch_id_per_token,
+                                           const int *cu_seqlens_q,
                                            const int *seq_lens,
                                            const int *seq_lens_decoder,
                                            const T *qkv_biases,
@@ -590,15 +590,13 @@ __global__ void GQAVariableLengthRotaryQuantKVKernel(const T *qkv,
        linear_index < elem_cnt;
        linear_index += step) {
     const int token_idx = linear_index / offset;
-    const int ori_token_idx = token_idx + padding_offsets[token_idx];
-    const int ori_bi = ori_token_idx / seq_len;
+    const int ori_bi = batch_id_per_token[token_idx];
     if (seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / last_dim;
     const int h_bias = bias % last_dim;
 
-    int ori_seq_id;
-    ori_seq_id = ori_token_idx % seq_len + seq_lens_decoder[ori_bi];
+    int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int64_t emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
     const int64_t bias_idx = hi * last_dim + h_bias;
@@ -645,7 +643,8 @@ __global__ void GQANeoxVariableLengthRotaryKernel(
     const int *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
     const float *sin_emb,
-    const int *padding_offsets,
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
     const int *seq_lens,
     const int *seq_lens_decoder,
     const float *qkv_out_scales,  // [3, q_num_head, dim_head]
@@ -676,14 +675,13 @@ __global__ void GQANeoxVariableLengthRotaryKernel(
        linear_index < elem_cnt;
        linear_index += step) {
     const int token_idx = linear_index / offset;
-    const int ori_token_idx = token_idx + padding_offsets[token_idx];
-    const int ori_bi = ori_token_idx / seq_len;
+    const int ori_bi = batch_id_per_token[token_idx];
     if (seq_lens && seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / half_lastdim;
     const int h_bias = bias % half_lastdim;
 
-    const int ori_seq_id = ori_token_idx % seq_len + seq_lens_decoder[ori_bi];
+    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int emb_idx = ori_seq_id * last_dim + h_bias;
     const int bias_idx_left = hi * last_dim + h_bias;
@@ -736,7 +734,8 @@ __global__ void GQANeoxVariableLengthRotaryKernel(
     const T *qkv,
     const float *cos_emb,
     const float *sin_emb,
-    const int *padding_offsets,
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
     const int *seq_lens,
     const int *seq_lens_decoder,
     const float *qkv_out_scales,
@@ -761,14 +760,13 @@ __global__ void GQANeoxVariableLengthRotaryKernel(
        linear_index < elem_cnt;
        linear_index += step) {
     const int token_idx = linear_index / offset;
-    const int ori_token_idx = token_idx + padding_offsets[token_idx];
-    const int ori_bi = ori_token_idx / seq_len;
+    const int ori_bi = batch_id_per_token[token_idx];
     if (seq_lens && seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / half_lastdim;
     const int h_bias = bias % half_lastdim;
 
-    const int ori_seq_id = ori_token_idx % seq_len + seq_lens_decoder[ori_bi];
+    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int emb_idx = ori_seq_id * last_dim + h_bias;
     const int base_idx_left =
@@ -805,7 +803,8 @@ __global__ void cache_kernel(
     T *__restrict__ value_cache,  // [num_blocks, kv_num_heads, block_size,
                                   // head_size]
     const int *__restrict__ block_tables,      // [bsz, max_blocks_per_seq]
-    const int *__restrict__ padding_offsets,   // [num_tokens]
+    const int *__restrict__ batch_id_per_token,   // [num_tokens]
+    const int *__restrict__ cu_seqlens_q,   // [bsz]
     const int *__restrict__ seq_lens,          // [bsz]
     const int *__restrict__ seq_lens_decoder,  // [bsz]
     const int max_seq_len,
@@ -831,11 +830,9 @@ __global__ void cache_kernel(
     const uint32_t qkv_bias = bias % hidden_size;
     const uint32_t hi = qkv_bias / head_size;
     const uint32_t h_bias = qkv_bias % head_size;
-    const uint32_t ori_token_idx = token_idx + padding_offsets[token_idx];
-    const uint32_t ori_bi = ori_token_idx / max_seq_len;
+    const uint32_t ori_bi = batch_id_per_token[token_idx];
     if (seq_lens[ori_bi] == 0) continue;
-    const uint32_t ori_seq_id =
-        ori_token_idx % max_seq_len + seq_lens_decoder[ori_bi];
+    const uint32_t ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int32_t *block_table_now = nullptr;
 
@@ -878,7 +875,7 @@ __global__ void append_write_cache_kv_c8_qkv(
     const int *__restrict__ tile_ids,
     const int *__restrict__ seq_lens_this_time,
     const int *__restrict__ seq_lens_decoder,
-    const int *__restrict__ padding_offsets,
+    const int *__restrict__ batch_id_per_token,
     const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_tables,
     const int max_seq_len,
@@ -1117,7 +1114,7 @@ __global__ void append_write_cache_kv_c4_qkv(
     const int *__restrict__ tile_ids,
     const int *__restrict__ seq_lens_this_time,
     const int *__restrict__ seq_lens_decoder,
-    const int *__restrict__ padding_offsets,
+    const int *__restrict__ batch_id_per_token,
     const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_tables,
     const int max_seq_len,
@@ -1405,7 +1402,8 @@ void rotary_qk_variable(
     const float *qkv_out_scales,  // [3, num_head, dim_head]
     const T *qkv_bias,
     const float *rotary_emb,  // [2, 1, 1, seq_len, dim_head / 2]
-    const int *padding_offsets,
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
     const int *seq_lens,
     const int *seq_lens_decoder,
     const int token_num,
@@ -1437,7 +1435,8 @@ void rotary_qk_variable(
               reinterpret_cast<const int *>(qkv_input),
               cos_emb,
               sin_emb,
-              padding_offsets,
+              batch_id_per_token,
+              cu_seqlens_q,
               seq_lens,
               seq_lens_decoder,
               qkv_out_scales,
@@ -1453,7 +1452,8 @@ void rotary_qk_variable(
               reinterpret_cast<const T *>(qkv_input),
               cos_emb,
               sin_emb,
-              padding_offsets,
+              batch_id_per_token,
+              cu_seqlens_q,
               seq_lens,
               seq_lens_decoder,
               qkv_out,
@@ -1471,7 +1471,8 @@ void rotary_qk_variable(
               reinterpret_cast<const int *>(qkv_input),
               cos_emb,
               sin_emb,
-              padding_offsets,
+              batch_id_per_token,
+              cu_seqlens_q,
               seq_lens,
               seq_lens_decoder,
               qkv_out_scales,
@@ -1487,7 +1488,8 @@ void rotary_qk_variable(
               reinterpret_cast<const T *>(qkv_input),
               cos_emb,
               sin_emb,
-              padding_offsets,
+              batch_id_per_token,
+              cu_seqlens_q,
               seq_lens,
               seq_lens_decoder,
               qkv_out,
@@ -1506,7 +1508,8 @@ void gqa_rotary_qk_variable(
     const float *qkv_out_scales,  // [3, num_head, dim_head]
     const T *qkv_bias,
     const float *rotary_emb,  // [2, 1, 1, seq_len, dim_head / 2]
-    const int *padding_offsets,
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
     const int *seq_lens,
     const int *seq_lens_decoder,
     const int token_num,
@@ -1541,7 +1544,8 @@ void gqa_rotary_qk_variable(
               reinterpret_cast<const int *>(qkv_input),
               cos_emb,
               sin_emb,
-              padding_offsets,
+              batch_id_per_token,
+              cu_seqlens_q,
               seq_lens,
               seq_lens_decoder,
               qkv_out_scales,
@@ -1559,7 +1563,8 @@ void gqa_rotary_qk_variable(
               reinterpret_cast<const T *>(qkv_input),
               cos_emb,
               sin_emb,
-              padding_offsets,
+              batch_id_per_token,
+              cu_seqlens_q,
               seq_lens,
               seq_lens_decoder,
               qkv_out,
@@ -1579,7 +1584,8 @@ void gqa_rotary_qk_variable(
               reinterpret_cast<const int *>(qkv_input),
               cos_emb,
               sin_emb,
-              padding_offsets,
+              batch_id_per_token,
+              cu_seqlens_q,
               seq_lens,
               seq_lens_decoder,
               qkv_out_scales,
@@ -1596,7 +1602,8 @@ void gqa_rotary_qk_variable(
               reinterpret_cast<const T *>(qkv_input),
               cos_emb,
               sin_emb,
-              padding_offsets,
+              batch_id_per_token,
+              cu_seqlens_q,
               seq_lens,
               seq_lens_decoder,
               qkv_out_scales,
@@ -1620,7 +1627,8 @@ void gqa_rotary_qk_quant_variable(
     const T *cache_k_scales,
     const T *cache_v_scales,
     const float *rotary_emb,  // [2, 1, 1, seq_len, dim_head / 2]
-    const int *padding_offsets,
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
     const int *seq_lens,
     const int *seq_lens_decoder,
     const int token_num,
@@ -1652,7 +1660,8 @@ void gqa_rotary_qk_quant_variable(
               cos_emb,
               sin_emb,
               qkv_out_scales,
-              padding_offsets,
+              batch_id_per_token,
+              cu_seqlens_q,
               seq_lens,
               seq_lens_decoder,
               qkv_bias,
@@ -1671,7 +1680,8 @@ void gqa_rotary_qk_quant_variable(
               reinterpret_cast<const T *>(qkv_input),
               cos_emb,
               sin_emb,
-              padding_offsets,
+              batch_id_per_token,
+              cu_seqlens_q,
               seq_lens,
               seq_lens_decoder,
               qkv_bias,
@@ -1697,7 +1707,8 @@ void CascadeAppendWriteCacheKVQKV(
         &qkv,  // [token_num, 3, num_head, head_dim] ([token_num, num_head + 2 *
                // kv_num_heads, head_dim] if GQA)
     const paddle::Tensor &block_table,
-    const paddle::Tensor &padding_offsets,
+    const paddle::Tensor &batch_id_per_token,
+    const paddle::Tensor &cu_seqlens_q,
     const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
     const int max_seq_len,
@@ -1723,7 +1734,8 @@ void CascadeAppendWriteCacheKVQKV(
       reinterpret_cast<T *>(key_cache_out->data<T>()),
       reinterpret_cast<T *>(value_cache_out->data<T>()),
       block_table.data<int>(),
-      padding_offsets.data<int>(),
+      batch_id_per_token.data<int>(),
+      cu_seqlens_q.data<int>(),
       seq_lens_encoder.data<int>(),
       seq_lens_decoder.data<int>(),
       max_seq_len,
@@ -1747,7 +1759,7 @@ void CascadeAppendWriteCacheKVC8QKV(
     const paddle::Tensor &cache_v_scale,  // [num_kv_heads, head_dim]
     const paddle::Tensor &seq_lens_this_time,
     const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &padding_offsets,
+    const paddle::Tensor &batch_id_per_token,
     const paddle::Tensor &cu_seqlens_q,
     const paddle::Tensor &block_table,
     const paddle::Tensor &batch_ids,
@@ -1812,7 +1824,7 @@ void CascadeAppendWriteCacheKVC8QKV(
                                           tile_ids_per_batch.data<int>(),
                                           seq_lens_this_time.data<int>(),
                                           seq_lens_decoder.data<int>(),
-                                          padding_offsets.data<int>(),
+                                          batch_id_per_token.data<int>(),
                                           cu_seqlens_q.data<int>(),
                                           block_table.data<int>(),
                                           max_seq_len,
@@ -1835,7 +1847,7 @@ void CascadeAppendWriteCacheKVC4QKV(
     const paddle::Tensor &cache_v_zp,     // [num_kv_heads, head_dim]
     const paddle::Tensor &seq_lens_this_time,
     const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &padding_offsets,
+    const paddle::Tensor &batch_id_per_token,
     const paddle::Tensor &cu_seqlens_q,
     const paddle::Tensor &block_table,
     const paddle::Tensor &batch_ids,
@@ -1882,7 +1894,7 @@ void CascadeAppendWriteCacheKVC4QKV(
                                           tile_ids_per_batch.data<int>(),
                                           seq_lens_this_time.data<int>(),
                                           seq_lens_decoder.data<int>(),
-                                          padding_offsets.data<int>(),
+                                          batch_id_per_token.data<int>(),
                                           cu_seqlens_q.data<int>(),
                                           block_table.data<int>(),
                                           max_seq_len,
