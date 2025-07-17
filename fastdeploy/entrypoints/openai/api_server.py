@@ -24,7 +24,7 @@ import zmq
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST
-from fastdeploy.metrics.trace_util import inject_to_metadata
+from fastdeploy.metrics.trace_util import inject_to_metadata,instrument
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
@@ -45,6 +45,9 @@ from fastdeploy.metrics.metrics import (EXCLUDE_LABELS,
 from fastdeploy.utils import (FlexibleArgumentParser, api_server_logger,
                               console_logger, is_port_available,
                               retrive_model_from_server)
+
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
 
 parser = FlexibleArgumentParser()
 parser.add_argument("--port",
@@ -141,6 +144,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+instrument(app)
 
 
 # TODO 传递真实引擎值 通过pid 获取状态
