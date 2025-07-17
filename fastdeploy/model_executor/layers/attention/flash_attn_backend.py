@@ -105,17 +105,8 @@ class FlashAttentionBackend(AttentionBackend):
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
         self.num_layers_draft_model: int = int(fd_config.speculative_config.method in ["mtp"])
 
-        # pd_disaggregation
-        use_pd_disaggregation: int = int(
-            os.getenv("FLAGS_use_pd_disaggregation", 0))
-        use_pd_disaggregation_per_chunk: int = int(
-            os.getenv("FLAGS_use_pd_disaggregation_per_chunk", 0))
-        if use_pd_disaggregation_per_chunk:
-            self.pd_disaggregation_mode = "per_chunk"
-        elif use_pd_disaggregation:
-            self.pd_disaggregation_mode = "per_query"
-        else:
-            self.pd_disaggregation_mode = "None"
+        self.pd_disaggregation_mode: str = fd_config.parallel_config.pd_disaggregation_mode
+
         self.start_layer_index: int = fd_config.model_config.start_layer_index
 
         if fd_config.parallel_config.expert_parallel_rank is None:

@@ -102,18 +102,7 @@ class AppendAttentionBackend(AttentionBackend):
         self.max_partition_size: int = int(
             os.getenv("FLAGS_max_partition_size", 32768))
 
-        # pd_disaggregation
-        # TODO(liuzichang): Use a more elegant approach instead
-        use_pd_disaggregation: int = int(
-            os.getenv("FLAGS_use_pd_disaggregation", 0))
-        use_pd_disaggregation_per_chunk: int = int(
-            os.getenv("FLAGS_use_pd_disaggregation_per_chunk", 0))
-        if use_pd_disaggregation_per_chunk:
-            self.pd_disaggregation_mode = "per_chunk"
-        elif use_pd_disaggregation:
-            self.pd_disaggregation_mode = "per_query"
-        else:
-            self.pd_disaggregation_mode = "None"
+        self.pd_disaggregation_mode: str = fd_config.parallel_config.pd_disaggregation_mode
         
         self.start_layer_index: int = fd_config.model_config.start_layer_index
 
@@ -166,7 +155,7 @@ class AppendAttentionBackend(AttentionBackend):
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
-        if self.pd_disaggregation_mode == "per_chunk":
+        if self. == "per_chunk":
             if not self.keep_pd_step_flag:
                 init_kv_signal_per_query(
                     forward_meta.seq_lens_encoder,
