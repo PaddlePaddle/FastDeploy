@@ -57,7 +57,6 @@ class LLMEngine(object):
     Attributes:
         cfg (Config): Configuration object containing all the parameters.
         cached_generated_tokens (queue.Queue): Queue to store generated tokens.
-        cached_generated_tokens (queue.Queue): Queue to store generated tokens.
         scheduler (LocalScheduler or GlobalScheduler): Scheduling tasks.
         input_processor (InputPreprocessor): Preprocessor for input data.
         resource_manager (ResourceManager): Manager for resource allocation.
