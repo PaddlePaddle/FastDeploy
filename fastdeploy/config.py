@@ -46,7 +46,6 @@ PRETRAINED_INIT_CONFIGURATION = {
     "num_max_dispatch_tokens_per_rank" : 256,
     "moe_use_aux_free" : False,
     "vocab_size" : -1,
-    "use_rope": True,
     "hidden_dropout_prob" : 0.0,
     "initializer_range" : 0.02,
     "max_position_embeddings" : 512,
@@ -89,6 +88,7 @@ class ModelConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
+        assert self.model_name_or_path != ""
         pretrained_config, _ = PretrainedConfig.get_config_dict(self.model_name_or_path)
         self.pretrained_config = PretrainedConfig.from_dict(pretrained_config)
 

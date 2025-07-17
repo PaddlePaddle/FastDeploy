@@ -134,6 +134,7 @@ class LLMEngine(object):
         for idx in range(1, self.cfg.max_num_partial_prefills + 1):
             self.partial_chunked_tokens[idx] = (self.cfg.max_num_batched_tokens // idx) \
                 // self.cfg.cache_config.block_size * self.cfg.cache_config.block_size
+            self.partial_chunked_tokens[idx] = max(1, self.partial_chunked_tokens[idx])
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
@@ -1033,10 +1034,9 @@ class LLMEngine(object):
             f" --speculative_model_name_or_path {self.cfg.speculative_config.model_name_or_path}"
             f" --speculative_model_quantization {self.cfg.speculative_config.quantization}"
             f" --speculative_benchmark_mode {self.cfg.speculative_config.benchmark_mode}"
-            f" --graph_optimiaztion_config '{self.cfg.graph_optimization_config.to_json_string()}'"
+            f" --graph_optimization_config '{self.cfg.graph_optimization_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
-            f" --load_strategy {self.cfg.model_config.load_strategy}"
-            f" --enable_mm {self.cfg.enable_mm}")
+            f" --load_strategy {self.cfg.model_config.load_strategy}")
 
         if self.cfg.enable_mm:
             arguments = arguments + f" --im_patch_id {self.data_processor.tokenizer.get_vocab()['<|IMAGE_PLACEHOLDER|>']} --think_end_id {self.data_processor.tokenizer.get_vocab()['</think>']}"
@@ -1054,6 +1054,7 @@ class LLMEngine(object):
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "enable-custom-all-reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.enable_logprob,
+            "enable_mm": self.cfg.enable_mm,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:
