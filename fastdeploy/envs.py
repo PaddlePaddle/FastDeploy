@@ -98,14 +98,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_USE_FASTSAFETENSOR":
     lambda: os.getenv("FD_USE_FASTSAFETENSOR", "0"),
 
-    # Whether to use DeepGemm for FP8 blockwise MoE.
-    "FD_USE_DEEP_GEMM":
-    lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "1"))),
-
-    # Whether to use aggregate send.
-    "FD_USE_AGGREGATE_SEND":
-    lambda: bool(int(os.getenv("FD_USE_AGGREGATE_SEND", "0"))),
-
     # Whether to open Trace.
     "TRACES_ENABLE":
     lambda: os.getenv("TRACES_ENABLE", "false"),
