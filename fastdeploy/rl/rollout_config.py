@@ -51,12 +51,13 @@ class RolloutModelConfig:
         enable_prefix_caching: bool = False,
         splitwise_role: str = "mixed",
         expert_parallel_size: int = 1,
-        enable_expert_parallell: bool = False,
+        enable_expert_parallel: bool = False,
         ori_vocab_size: int = None,
         quantization: str = "None",
         guided_decoding_backend: str = "off",
         disable_any_whitespace: bool = True,
         enable_logprob: bool = False,
+        graph_optimization_config: str = None,
     ):
         # Required parameters
         self.model_name_or_path = model_name_or_path
@@ -90,12 +91,13 @@ class RolloutModelConfig:
         self.enable_prefix_caching = enable_prefix_caching
         self.splitwise_role = splitwise_role
         self.expert_parallel_size = expert_parallel_size
-        self.enable_expert_parallell = enable_expert_parallell
+        self.enable_expert_parallel = enable_expert_parallel
         self.ori_vocab_size = ori_vocab_size
         self.quantization = quantization
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
         self.enable_logprob = enable_logprob
+        self.graph_optimization_config = graph_optimization_config
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k, v in self.__dict__.items())

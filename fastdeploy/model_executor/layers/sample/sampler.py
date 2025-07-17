@@ -253,6 +253,8 @@ class Sampler(nn.Layer):
 
         logits = apply_penalty_multi_scores(
             sampling_metadata.pre_token_ids,
+            sampling_metadata.prompt_ids,
+            sampling_metadata.prompt_lens,
             logits,
             sampling_metadata.repetition_penalties,
             sampling_metadata.frequency_penalties,
