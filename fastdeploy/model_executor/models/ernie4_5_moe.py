@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Dict, Union, Annotated
+from typing import Dict, Union
 
 import numpy as np
 import paddle
@@ -43,9 +43,6 @@ from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
 from fastdeploy.model_executor.models.utils import \
     LayerIdPlaceholder as layerid
 from fastdeploy.model_executor.models.utils import WeightMeta
-from fastdeploy.model_executor.graph_optimization.dynamic_dims_marker import (
-    DynamicDims
-)
 
 class Ernie4_5_MLP(nn.Layer):
 
