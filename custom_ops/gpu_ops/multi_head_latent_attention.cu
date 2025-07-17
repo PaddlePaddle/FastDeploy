@@ -26,7 +26,6 @@ std::vector<paddle::Tensor> MultiHeadLatentAttentionKernel(
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& padding_offsets,
-    const paddle::Tensor& cum_offsets,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& encoder_batch_ids,
     const paddle::Tensor& encoder_tile_ids_per_batch,
@@ -99,7 +98,6 @@ std::vector<paddle::Tensor> MultiHeadLatentAttentionKernel(
                                              seq_lens_encoder,
                                              cu_seqlens_q,
                                              padding_offsets,
-                                             cum_offsets,
                                              block_tables,
                                              decoder_batch_ids,
                                              decoder_tile_ids_per_batch,
@@ -128,7 +126,7 @@ std::vector<paddle::Tensor> MultiHeadLatentAttentionKernel(
           seq_lens_this_time,  // q_seq_len is 1
           seq_lens_decoder,
           padding_offsets,
-          cum_offsets,
+          cu_seqlens_q,
           block_tables,
           max_input_length,
           max_len_kv_data,
@@ -151,7 +149,6 @@ std::vector<paddle::Tensor> MultiHeadLatentAttention(
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& padding_offsets,
-    const paddle::Tensor& cum_offsets,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& encoder_batch_ids,
     const paddle::Tensor& encoder_tile_ids_per_batch,
@@ -201,7 +198,7 @@ std::vector<paddle::Tensor> MultiHeadLatentAttention(
 
   meta_data.max_blocks_per_seq = block_tables.dims()[1];
   meta_data.block_size = key_cache.dims()[2];
-  meta_data.batch_size = cum_offsets.dims()[0];
+  meta_data.batch_size = seq_lens_this_time.dims()[0];
 
   switch (query.dtype()) {
     case paddle::DataType::BFLOAT16: {
@@ -215,7 +212,6 @@ std::vector<paddle::Tensor> MultiHeadLatentAttention(
           seq_lens_this_time,
           cu_seqlens_q,
           padding_offsets,
-          cum_offsets,
           block_tables,
           encoder_batch_ids,
           encoder_tile_ids_per_batch,
@@ -262,7 +258,6 @@ std::vector<paddle::Tensor> MultiHeadLatentAttention(
           seq_lens_this_time,
           cu_seqlens_q,
           padding_offsets,
-          cum_offsets,
           block_tables,
           encoder_batch_ids,
           encoder_tile_ids_per_batch,
@@ -316,7 +311,6 @@ std::vector<std::vector<int64_t>> MultiHeadLatentAttentionInferShape(
     const std::vector<int64_t>& seq_lens_this_time_shape,
     const std::vector<int64_t>& cu_seqlens_q_shape,
     const std::vector<int64_t>& padding_offsets_shape,
-    const std::vector<int64_t>& cum_offsets_shape,
     const std::vector<int64_t>& block_tables_shape,
     const std::vector<int64_t>& encoder_batch_ids_shape,
     const std::vector<int64_t>& encoder_tile_ids_per_batch_shape,
@@ -371,7 +365,6 @@ std::vector<paddle::DataType> MultiHeadLatentAttentionInferDtype(
     const paddle::DataType& seq_lens_this_time_dtype,
     const paddle::DataType& cu_seqlens_q_dtype,
     const paddle::DataType& padding_offsets_dtype,
-    const paddle::DataType& cum_offsets_dtype,
     const paddle::DataType& block_tables_dtype,
     const paddle::DataType& encoder_batch_ids_dtype,
     const paddle::DataType& encoder_tile_ids_per_batch_dtype,
@@ -426,7 +419,6 @@ PD_BUILD_OP(multi_head_latent_attention)
              "seq_lens_this_time",
              "cu_seqlens_q",
              "padding_offsets",
-             "cum_offsets",
              "block_tables",
              "encoder_batch_ids",
              "encoder_tile_ids_per_batch",

@@ -29,9 +29,11 @@ triton==3.3
 use-triton-in-paddle
 crcmod
 fastsafetensors==0.1.14
+msgpack
 opentelemetry-api>=1.24.0
 opentelemetry-sdk>=1.24.0
 opentelemetry-instrumentation-redis
 opentelemetry-instrumentation-mysql
 opentelemetry-distro 
 opentelemetry-exporter-otlp
+

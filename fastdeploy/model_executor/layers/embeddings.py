@@ -62,7 +62,6 @@ class VocabParallelEmbedding(nn.Layer):
         self.use_ep: bool = fd_config.parallel_config.use_ep
         self.hidden_dropout_prob: float = fd_config.model_config.hidden_dropout_prob
         self.initializer_range: float = fd_config.model_config.initializer_range
-        self.sequence_parallel: bool = fd_config.parallel_config.sequence_parallel
         self.max_position_embeddings: int = fd_config.model_config.max_position_embeddings
         self.tie_word_embeddings: bool = fd_config.model_config.tie_word_embeddings
         self.params_dtype: str = params_dtype

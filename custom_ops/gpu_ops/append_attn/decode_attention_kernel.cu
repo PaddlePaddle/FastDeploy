@@ -35,7 +35,7 @@ __global__ void merge_varlen_multi_chunks_v2_kernel(const T * __restrict__ multi
                                                     const T * __restrict__ multi_d, // [bsz, num_chunks, num_heads]
                                                     const int * __restrict__ seq_lens_q,
                                                     const int * __restrict__ seq_lens_kv,
-                                                    const int * __restrict__ cum_offsets,
+                                                    const int * __restrict__ cu_seqlens_q,
                                                     const T * __restrict__ shift_bias, // [q_num_heads * HEAD_DIM]
                                                     const T * __restrict__ smooth_weight, // [q_num_heads * HEAD_DIM]
                                                     OutT * __restrict__ out, // [token_num, num_heads, head_dim]
@@ -59,7 +59,7 @@ __global__ void merge_varlen_multi_chunks_v2_kernel(const T * __restrict__ multi
   __shared__ T smem[bdy * HEAD_DIM];
   __shared__ T md_smem[bdy * 2];
 
-  const int start_token_ids = qid * max_seq_len - __ldg(&cum_offsets[qid]);
+  const int start_token_ids = cu_seqlens_q[qid];
   using LoadT = AlignedVector<T, vec_size>;
   LoadT load_vec;
   LoadT res_vec;
@@ -134,7 +134,7 @@ __global__ void multi_query_decode_attention_kernel(T * __restrict__ q, // [toke
                                                     const T * __restrict__ smooth_weight, // [q_num_heads * HEAD_DIM]
                                                     const int * __restrict__ seq_lens_q,
                                                     const int * __restrict__ seq_lens_kv,
-                                                    const int * __restrict__ cum_offsets,
+                                                    const int * __restrict__ cu_seqlens_q,
                                                     const int * __restrict__ block_table, // [bsz, block_num_per_seq]
                                                     const int max_seq_len,
                                                     const int max_dec_len,
@@ -171,8 +171,8 @@ __global__ void multi_query_decode_attention_kernel(T * __restrict__ q, // [toke
   }
   kv_len += q_len;
   const uint32_t num_chunk_this_seq = div_up(kv_len, chunk_size);
-  const uint32_t q_start_idx = bid * max_seq_len - __ldg(&cum_offsets[bid]);
-  const uint32_t q_write_idx = bid * max_seq_len - __ldg(&cum_offsets[bid]);
+  const uint32_t q_start_idx = cu_seqlens_q[bid];
+  const uint32_t q_write_idx = cu_seqlens_q[bid];
   if (chunk_id >= num_chunk_this_seq) {
     return;
   }
@@ -318,7 +318,7 @@ void MultiQueryDecoderAttention(
   const paddle::Tensor &seq_lens_q,
   const paddle::Tensor &seq_lens_kv,
   const paddle::Tensor &padding_offsets,
-  const paddle::Tensor &cum_offsets,
+  const paddle::Tensor &cu_seqlens_q,
   const paddle::Tensor &block_table,
   const int max_seq_len,
   const int max_dec_len,
@@ -393,7 +393,7 @@ void MultiQueryDecoderAttention(
       reinterpret_cast<NV_TYPE*>(const_cast<T*>(smooth_weight_ptr)),
       seq_lens_q.data<int>(),
       seq_lens_kv.data<int>(),
-      cum_offsets.data<int>(),
+      cu_seqlens_q.data<int>(),
       block_table.data<int>(),
       max_seq_len,
       max_dec_len,
@@ -430,7 +430,7 @@ void MultiQueryDecoderAttention(
       reinterpret_cast<NV_TYPE*>(const_cast<T*>(smooth_weight_ptr)),
       seq_lens_q.data<int>(),
       seq_lens_kv.data<int>(),
-      cum_offsets.data<int>(),
+      cu_seqlens_q.data<int>(),
       block_table.data<int>(),
       max_seq_len,
       max_dec_len,
@@ -456,7 +456,7 @@ void MultiQueryDecoderAttention(
       reinterpret_cast<NV_TYPE*>(tmp_d->ptr()),
       seq_lens_q.data<int>(),
       seq_lens_kv.data<int>(),
-      cum_offsets.data<int>(),
+      cu_seqlens_q.data<int>(),
       reinterpret_cast<NV_TYPE*>(const_cast<T*>(shift_bias_ptr)),
       reinterpret_cast<NV_TYPE*>(const_cast<T*>(smooth_weight_ptr)),
       reinterpret_cast<NV_TYPE*>(const_cast<T*>(out->data<T>())),
@@ -484,7 +484,7 @@ void DecodeMLAAttentionKernel(
   const paddle::Tensor &seq_lens_q, // q_seq_len is 1
   const paddle::Tensor &seq_lens_kv,
   const paddle::Tensor &padding_offsets,
-  const paddle::Tensor &cum_offsets,
+  const paddle::Tensor &cu_seqlens_q,
   const paddle::Tensor &block_table,
   int max_seq_len,
   int max_dec_len,
@@ -513,7 +513,7 @@ void DecodeMLAAttentionKernel(
           {DISPATCH_BLOCK_SIZE(block_size, BLOCK_SIZE,
               {DISPATCH_DEAL_EACH_TIME(deal_each_time, DEAL_EACH_TIME,
                   {MultiQueryDecoderAttention<T, GROUP_SIZE, HEAD_DIM_QK, HEAD_DIM_V, BLOCK_SIZE, CAUSAL, 2, 16, DEAL_EACH_TIME>(
-                  meta_data, stream, q, cache_k, cache_v, attn_mask, shift_bias, smooth_weight, seq_lens_q, seq_lens_kv, padding_offsets, cum_offsets,
+                  meta_data, stream, q, cache_k, cache_v, attn_mask, shift_bias, smooth_weight, seq_lens_q, seq_lens_kv, padding_offsets, cu_seqlens_q,
                   block_table, max_seq_len, max_dec_len, rope_scale, rope_theta, softmax_scale, in_scale, out);})})})})})});
 }
 
@@ -528,7 +528,7 @@ template void DecodeMLAAttentionKernel<paddle::bfloat16>(
   const paddle::Tensor &seq_lens_q, // q_seq_len is 1
   const paddle::Tensor &seq_lens_kv,
   const paddle::Tensor &padding_offsets,
-  const paddle::Tensor &cum_offsets,
+  const paddle::Tensor &cu_seqlens_q,
   const paddle::Tensor &block_table,
   int max_seq_len,
   int max_dec_len,
@@ -549,7 +549,7 @@ template void DecodeMLAAttentionKernel<paddle::float16>(
   const paddle::Tensor &seq_lens_q, // q_seq_len is 1
   const paddle::Tensor &seq_lens_kv,
   const paddle::Tensor &padding_offsets,
-  const paddle::Tensor &cum_offsets,
+  const paddle::Tensor &cu_seqlens_q,
   const paddle::Tensor &block_table,
   int max_seq_len,
   int max_dec_len,

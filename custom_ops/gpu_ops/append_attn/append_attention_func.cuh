@@ -2111,7 +2111,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
     const int *__restrict__ seq_lens_q,
     const int *__restrict__ seq_lens_kv,
     const int *__restrict__ seq_lens_encoder,
-    const int *__restrict__ cum_offsets,
+    const int *__restrict__ cu_seqlens_q,
     const T *__restrict__ shift_bias,     // [q_num_heads * HEAD_DIM]
     const T *__restrict__ smooth_weight,  // [q_num_heads * HEAD_DIM]
     OutT *__restrict__ out,
@@ -2127,7 +2127,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
   const int bid = blockIdx.x, hid = blockIdx.y;
   __shared__ T smem[bdy * HEAD_DIM];
   __shared__ float md_smem[bdy * 2];
-  const int start_token_idx = bid * max_seq_len - cum_offsets[bid];
+  const int start_token_idx = cu_seqlens_q[bid];
   const int seq_len_q = seq_lens_q[bid];
   if (seq_len_q == 0) return;
   int seq_len_kv = seq_lens_kv[bid];
