@@ -17,7 +17,7 @@
 import os
 from concurrent.futures import ThreadPoolExecutor
 
-from fastdeploy.config import FDConfig
+from fastdeploy.config import FDConfig, ErnieArchitectures
 from fastdeploy.engine.request import Request
 from fastdeploy.utils import llm_logger
 
@@ -268,8 +268,7 @@ class BackendBase:
         """
         try:
             architectures = self.fd_config.model_config.architectures
-            if "Ernie4_5_MoeForCausalLM" not in architectures \
-                and "Ernie4_5_ForCausalLM" not in architectures:
+            if not ErnieArchitectures.contains_ernie_arch(architectures):
 
                 from transformers import AutoTokenizer, PreTrainedTokenizerFast
                 tokenizer = AutoTokenizer.from_pretrained(
