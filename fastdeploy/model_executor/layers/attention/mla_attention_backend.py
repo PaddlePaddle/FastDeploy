@@ -240,7 +240,6 @@ class MLAAttentionBackend(AttentionBackend):
 
         latent_cache = forward_meta.caches[layer.layer_id] if hasattr(
             forward_meta, 'caches') else None
-
         # 写入缓存
         prefill_mla_write_cache(
             compressed_kv,
@@ -249,7 +248,7 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.padding_offset,
-            forward_meta.cum_offsets,
+            forward_meta.cu_seqlens_q,
             metadata.block_tables,
             "none",
             getattr(forward_meta, 'max_input_length', -1),
@@ -308,7 +307,7 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_encoder,
             forward_meta.padding_offset,
-            forward_meta.cum_offsets,
+            forward_meta.cu_seqlens_q,
             metadata.block_tables,
             "none",
             self.max_seq_len,
@@ -325,7 +324,6 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.seq_lens_this_time,
             forward_meta.cu_seqlens_q,
             forward_meta.padding_offset,
-            forward_meta.cum_offsets,
             metadata.block_tables,
             metadata.encoder_batch_ids,
             metadata.encoder_tile_ids_per_batch,
@@ -402,7 +400,7 @@ class MLAAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.padding_offset,
-                forward_meta.cum_offsets,
+                forward_meta.cu_seqlens_q,
                 metadata.block_tables,
                 "none",
                 self.max_seq_len,
@@ -433,7 +431,7 @@ class MLAAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_encoder,
                 forward_meta.padding_offset,
-                forward_meta.cum_offsets,
+                forward_meta.cu_seqlens_q,
                 metadata.block_tables,
                 "none",
                 self.max_seq_len,
@@ -450,7 +448,6 @@ class MLAAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_this_time,
                 forward_meta.cu_seqlens_q,
                 forward_meta.padding_offset,
-                forward_meta.cum_offsets,
                 metadata.block_tables,
                 metadata.encoder_batch_ids,
                 metadata.encoder_tile_ids_per_batch,
