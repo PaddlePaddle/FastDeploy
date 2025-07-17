@@ -83,6 +83,16 @@ class TokenProcessor(object):
         self.number_of_output_tokens = 0
         self.total_step = 0
         self.speculative_stats_step = 0
+        self.num_draft_tokens = 0
+        self.num_accepted_tokens = 0
+        self.num_emitted_tokens = 0
+        self.max_num_emitted_tokens = 0
+        self.num_rest_requests_per_head = [
+            0,
+        ] * MAX_DRAFT_TOKENS
+        self.num_accept_requests_per_head = [
+            0,
+        ] * MAX_DRAFT_TOKENS
         prefill_time_data = np.zeros([100], dtype=np.float32)
         self.prefill_time_signal = IPCSignal(name="prefill_time_signal",
                                              array=prefill_time_data,
@@ -278,8 +288,7 @@ class TokenProcessor(object):
 
     def _compute_speculative_status(self):
         # TODO(liuzichang): Supplement more statistics
-        interval = 10
-        self.speculative_stats_step += 1
+        interval = 50
         if self.speculative_stats_step % interval == 0:
             accept_ratio = 1 - self.total_step * 1.0 / self.number_of_output_tokens
             spec_logger.info(
@@ -287,15 +296,19 @@ class TokenProcessor(object):
                 f" total step: {self.total_step}. total output token num: {self.number_of_output_tokens}"
             )
 
-            if self.cfg.speculative_config.method in ["mtp"] and \
-                self.cfg.speculative_config.num_speculative_tokens == 1:
-                single_head_accep_ratio = accept_ratio / (1 - accept_ratio)
-                spec_logger.info(
-                    f" Single head accept ratio: {single_head_accep_ratio}")
+            if self.cfg.speculative_config.method in ["mtp"]:
+                single_head_acceptance_rates = []
+                for head in range(self.cfg.speculative_config.num_speculative_tokens):
+                    single_head_acceptance_rates.append(
+                        self.num_accept_requests_per_head[head]
+                        / self.num_rest_requests_per_head[head]
+                    )
+                spec_logger.info(f" Single head accept ratio: {single_head_acceptance_rates}")
 
             if self.number_of_output_tokens > 1000000:
                 self.number_of_output_tokens = 0
                 self.total_step = 0
+        self.speculative_stats_step += 1
 
     def _process_sampling_with_logprob_batch_output(self):
         """
@@ -422,6 +435,7 @@ class TokenProcessor(object):
         if self.cfg.speculative_config.method:
             batch = self.output_tokens[1]
             accept_num = tokens[2:batch + 2]
+            self._record_speculative_decoding_mertics(accept_num)
         else:
             batch = self.output_tokens[1, 0]
             tokens = tokens[2:batch + 2]
@@ -557,6 +571,70 @@ class TokenProcessor(object):
             current_time - task.inference_start_time)
         main_process_metrics.request_generation_tokens.observe(
             self.tokens_counter[task.request_id])
+
+    def _record_speculative_decoding_mertics(self, accept_num):
+        """Record metrics of speculative decoding"""
+        if not hasattr(main_process_metrics, "spec_decode_draft_acceptance_rate"):
+            main_process_metrics._init_speculative_metrics(
+                self.cfg.speculative_config.method,
+                self.cfg.speculative_config.num_speculative_tokens,
+            )
+
+        real_accept_num = [x for x in accept_num if x != 0]
+        num_accepted_tokens = sum([x - 1 for x in real_accept_num])
+        self.num_accepted_tokens += num_accepted_tokens
+        num_emitted_tokens = sum(real_accept_num)
+        self.num_emitted_tokens += num_emitted_tokens
+
+        main_process_metrics.spec_decode_num_accepted_tokens_total.inc(
+            num_accepted_tokens
+        )
+        main_process_metrics.spec_decode_num_emitted_tokens_total.inc(
+            num_emitted_tokens
+        )
+
+        if self.cfg.speculative_config.method in ["ngram"]:
+            main_process_metrics.spec_decode_draft_acceptance_rate.set(
+                self.num_accepted_tokens / self.num_emitted_tokens
+            )
+
+        if self.cfg.speculative_config.method in ["mtp"]:
+            num_draft_tokens = (
+                len(real_accept_num)
+                * self.cfg.speculative_config.num_speculative_tokens
+            )
+            self.num_draft_tokens += num_draft_tokens
+
+            self.max_num_emitted_tokens += len(real_accept_num) * (
+                self.cfg.speculative_config.num_speculative_tokens + 1
+            )
+
+            main_process_metrics.spec_decode_draft_acceptance_rate.set(
+                self.num_accepted_tokens / self.num_draft_tokens
+            )
+            main_process_metrics.spec_decode_efficiency.set(
+                self.num_emitted_tokens / self.max_num_emitted_tokens
+            )
+            main_process_metrics.spec_decode_num_draft_tokens_total.inc(
+                num_draft_tokens
+            )
+
+            num_rest_requests = len(real_accept_num)
+            for head in range(self.cfg.speculative_config.num_speculative_tokens):
+                num_accept_requests = len([x for x in real_accept_num if x >= head + 2])
+                # Accumulate the number of requests for each head
+                self.num_accept_requests_per_head[head] += num_accept_requests
+                self.num_rest_requests_per_head[head] += num_rest_requests
+                # Update the rest requests for each head
+                num_rest_requests = num_accept_requests
+                # Calculate the acceptance rate for each head
+                single_head_acceptance_rate = (
+                    self.num_accept_requests_per_head[head]
+                    / self.num_rest_requests_per_head[head]
+                )
+                main_process_metrics.spec_decode_draft_single_head_acceptance_rate[
+                    head
+                ].set(single_head_acceptance_rate)
 
 
 class WarmUpTokenProcessor(TokenProcessor):
