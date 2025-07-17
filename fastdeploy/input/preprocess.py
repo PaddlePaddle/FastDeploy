@@ -17,6 +17,7 @@ from typing import Any, Dict, Optional
 
 from fastdeploy.engine.config import ModelConfig
 from fastdeploy.reasoning import ReasoningParserManager
+from fastdeploy.config import ErnieArchitectures
 
 
 class InputPreprocessor:
@@ -71,8 +72,7 @@ class InputPreprocessor:
                     self.reasoning_parser)
         architectures = ModelConfig(self.model_name_or_path).architectures
         if not self.enable_mm:
-            if "Ernie4_5_MoeForCausalLM" not in architectures \
-                and "Ernie4_5_ForCausalLM" not in architectures:
+            if not ErnieArchitectures.contains_ernie_arch(architectures):
                 from fastdeploy.input.text_processor import DataProcessor
                 self.processor = DataProcessor(
                     model_name_or_path=self.model_name_or_path, reasoning_parser_obj=reasoning_parser_obj)
