@@ -217,7 +217,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx:idx + 1,
                                                0] = request.prompt_token_ids[0]
                 self.share_inputs["prompt_ids"][idx:idx + 1,
-                                               0] = request.prompt_token_ids[0]
+                                               :length] = np.array(request.prompt_token_ids)
                 self.share_inputs['seq_lens_encoder'][idx:idx + 1] = 0
                 self.share_inputs['seq_lens_decoder'][idx:idx + 1] = length
                 self.share_inputs['seq_lens_this_time'][idx:idx + 1] = 1
