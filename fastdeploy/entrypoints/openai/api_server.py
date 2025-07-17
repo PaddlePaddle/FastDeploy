@@ -46,8 +46,6 @@ from fastdeploy.utils import (FlexibleArgumentParser, api_server_logger,
                               console_logger, is_port_available,
                               retrive_model_from_server)
 
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-
 
 parser = FlexibleArgumentParser()
 parser.add_argument("--port",
