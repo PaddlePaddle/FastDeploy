@@ -175,7 +175,7 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM):
 
                 # Support shared experts
                 if self.fd_config.model_config.get(
-                        "moe_num_shared_experts") > 0:
+                        "moe_num_shared_experts", 0) > 0:
                     infer_to_train[f"{infer_base_name}.{layer_idx}.mlp.shared_experts.gate_up_proj.linear_weight"] = \
                         f"{train_base_name}.{layer_idx}.mlp.shared_experts.up_gate_proj.weight"
                     infer_to_train[f"{infer_base_name}.{layer_idx}.mlp.shared_experts.down_proj.linear_weight"] = \
