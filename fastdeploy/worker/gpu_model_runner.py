@@ -336,7 +336,7 @@ class GPUModelRunner(ModelRunnerBase):
                                                                  request.get("max_tokens", 2048),
                                                                  head_dim = self.model_config.head_dim,
                                                                  rope_theta = self.model_config.rope_theta,
-                                                                 freq_allocation = self.model_config.freq_allocation,
+                                                                 freq_allocation = getattr(self.model_config, "freq_allocation", 20),
                                                                  max_model_len = self.parallel_config.max_model_len)
                     self.share_inputs["seq_lens_decoder"][idx:idx + 1] = 0
 
@@ -1440,16 +1440,11 @@ class GPUModelRunner(ModelRunnerBase):
     def load_mm_config_and_image_preprocess(self) -> None:
         self.fd_config.model_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_size
         self.fd_config.model_config.tensor_parallel_rank = self.parallel_config.tensor_parallel_rank
-        self.fd_config.model_config.moe_group="dummy"
-        self.fd_config.parallel_config.column_cut = False
         vision_config = self.fd_config.model_config.vision_config
-        vision_config.attn_sep = False
-        vision_config.dtype = "bfloat16"
+        vision_config.dtype = self.fd_config.model_config.dtype
         vision_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_size
         vision_config.tensor_parallel_rank = self.parallel_config.tensor_parallel_rank
-        self.fd_config.model_config.pixel_hidden_size = vision_config.hidden_size
-        self.fd_config.model_config.max_text_id = self.fd_config.model_config.im_patch_id
-        self.fd_config.model_config.sequence_parallel = False
+        self.fd_config.model_config.sequence_parallel = self.parallel_config.sequence_parallel
         self.model_config = self.fd_config.model_config
         self.image_preprocess = init_image_preprocess(self.tokenizer_path,
                                                       self.image_preprocessor_path,

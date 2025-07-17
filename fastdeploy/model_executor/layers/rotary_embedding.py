@@ -423,11 +423,11 @@ class ErnieVlRotaryEmbedding3D:
 
 def get_rope_3d(
     rotary_dim: int,
-    base: 10000,
-    position_ids,
-    paritial_rotary_factor: 1,
-    max_position: 131072,
-    freq_allocation: 2,
+    base: float,
+    position_ids: paddle.Tensor,
+    partial_rotary_factor: float,
+    max_position: int,
+    freq_allocation: int,
 ) -> paddle.Tensor:
     """
     Pre-calculate rotary position embedding for position_ids.
@@ -435,19 +435,19 @@ def get_rope_3d(
     Args:
         rotary_dim (int):
             Dimension of rotary embeddings (head dimension)
-        base (float, optional):
+        base (float):
             Base value used to compute the inverse frequencies.
             Default: 10000.0.
         position_ids (paddle.Tensor):
             Tensor containing position indices of input tokens.
-        partial_rotary_factor (int, optional):
+        partial_rotary_factor (float):
             Factor controlling partial rotary application.
             Default: 1 (apply to all dimensions).
         max_position: Maximum position index to precompute.
         freq_allocation: Number of rotary dimensions allocated to temporal axis
     """
     rotary_emb3d_layer = ErnieVlRotaryEmbedding3D(rotary_dim, base,
-                                                  paritial_rotary_factor,
+                                                  partial_rotary_factor,
                                                   max_position,
                                                   freq_allocation)
     rotary_emb_3d = rotary_emb3d_layer(position_ids)
@@ -469,7 +469,7 @@ def prepare_rope3d(position_ids: paddle.Tensor, max_len: int, head_dim:  int, ro
     rope_emb = get_rope_3d(
         position_ids=position_ids_3d_real,
         rotary_dim=head_dim,
-        paritial_rotary_factor=1.0,
+        partial_rotary_factor=1.0,
         base=rope_theta,
         max_position=max_model_len,
         freq_allocation=freq_allocation,

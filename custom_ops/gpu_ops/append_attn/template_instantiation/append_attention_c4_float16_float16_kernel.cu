@@ -38,7 +38,7 @@ template void CascadeAppendAttentionC4Kernel<paddle::float16, paddle::float16>(
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& padding_offsets,
-    const paddle::Tensor& cum_offsets,
+    const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_table,
     const paddle::Tensor& batch_ids,
     const paddle::Tensor& tile_ids_per_batch,

@@ -6,7 +6,7 @@
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
-#
+#dist_init_ip
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,7 +24,7 @@ from fastdeploy import envs
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.utils import (ceil_div, check_unified_ckpt, get_host_ip,
-                              is_port_available, llm_logger)
+                              is_port_available, get_random_port, llm_logger)
 
 TaskOption = Literal["generate"]
 
@@ -642,7 +642,9 @@ class Config:
         max_model_len: int = 8192,
         max_num_seqs: int = 8,
         max_num_batched_tokens: Optional[int] = None,
-        pod_ips: Optional[List[str]] = None,
+        dist_init_ip: str = None,
+        nnodes: int = 1,
+        node_rank: int = 0,
         speculative_config: Optional[Dict[str, Any]] = None,
         graph_optimization_config: Optional[Dict[str, Any]] = None,
         use_warmup: bool = False,
@@ -675,7 +677,6 @@ class Config:
             max_model_len (int): Maximum model length. Default is 8192.
             max_num_seqs (int): Maximum number of sequences. Default is 8.
             max_num_batched_tokens (Optional[int]): Maximum number of batched tokens. Default is None.
-            pod_ips (Optional[List[str]]): List of POD IPs. Default is None.
             mm_processor_kwargs (Optional[Dict[str, Any]]): Additional arguments for multi-modal processor. Default is None.
             speculative_config (Optional[Dict[str, Any]]): Speculative execution configuration. Default is None.
             graph_optimization_config (Optional[Dict[str, Any]]): Graph optimizaion backend execution configuration. Default is None.
@@ -699,7 +700,16 @@ class Config:
         self.tokenizer = tokenizer
         self.max_num_batched_tokens = max_num_batched_tokens
         self.tensor_parallel_size = tensor_parallel_size
-        self.pod_ips = pod_ips
+        self.dist_init_ip = dist_init_ip
+        
+        self.nnode = nnodes
+        self.node_rank = node_rank
+        if self.dist_init_ip is None:
+            self.master_ip = "0.0.0.0"
+        else:
+            self.master_ip = self.dist_init_ip
+            self.dist_init_addr = f"{self.dist_init_ip}:{get_random_port()}"
+
         self.max_model_len = max_model_len
         self.max_num_seqs = max_num_seqs
         self.limit_mm_per_prompt = limit_mm_per_prompt
@@ -716,14 +726,8 @@ class Config:
         self.graph_optimization_config = graph_optimization_config
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
-        self.is_master = True
         self._str_to_list("innode_prefill_ports", int)
-        self._str_to_list("pod_ips", str)
 
-        if self.pod_ips is None:
-            self.nnode = 1
-        else:
-            self.nnode = len(self.pod_ips)
 
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
 
@@ -778,9 +782,9 @@ class Config:
 
         self.host_ip = get_host_ip()
 
-        if self.pod_ips is None:
-            self.pod_ips = ["0.0.0.0"]
-        elif self.host_ip != self.pod_ips[0]:
+        if self.dist_init_ip is None or self.host_ip == self.master_ip:
+            self.is_master = True
+        else:
             self.is_master = False
 
         import paddle

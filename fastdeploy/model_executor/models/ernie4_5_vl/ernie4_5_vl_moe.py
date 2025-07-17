@@ -123,6 +123,7 @@ class Ernie4_5_VLMoE(nn.Layer):
                 fd_config=fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
                 prefix=f"{prefix}",
+                reduce_results=False,
             )
 
         assert image_moe_layer_start_index <= image_moe_layer_end_index
@@ -155,6 +156,7 @@ class Ernie4_5_VLMoE(nn.Layer):
                 fd_config=fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
                 prefix=f"{prefix}",
+                reduce_results=False,
             )
 
         self.num_shared_experts = fd_config.model_config.moe_num_shared_experts
@@ -471,8 +473,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         """
         super(Ernie4_5_VLMoeForConditionalGeneration, self).__init__(fd_config)
         # ----------- vision model ------------
-        vision_config = fd_config.model_config.vision_config
-        self.vision_model = self._init_vision_model(vision_config)
+        self.vision_model = self._init_vision_model(fd_config.model_config)
         # -----------  resampler_model ------------
         self.resampler_model = self._init_resampler_model_model(
             fd_config.model_config
@@ -490,12 +491,12 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         )
         self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
 
-    def _init_vision_model(self, vision_config) -> nn.Layer:
+    def _init_vision_model(self, model_config) -> nn.Layer:
         from fastdeploy.model_executor.models.ernie4_5_vl.dfnrope.modeling import \
             DFNRopeVisionTransformerPretrainedModel
 
         vision_model = DFNRopeVisionTransformerPretrainedModel(
-            vision_config, prefix_name="vision_model"
+            model_config, prefix_name="vision_model"
         )
         vision_model = paddle.amp.decorate(
             models=vision_model, level="O2", dtype="bfloat16"
@@ -508,7 +509,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             VariableResolutionResamplerModel
 
         resampler_model = VariableResolutionResamplerModel(
-            model_config.pixel_hidden_size,
+            model_config.vision_config.hidden_size,
             model_config.hidden_size,
             model_config.spatial_conv_size,
             model_config.temporal_conv_size,

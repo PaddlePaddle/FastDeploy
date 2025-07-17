@@ -85,7 +85,7 @@ class LLM:
 
         self.mutex = threading.Lock()
         self.req_output = dict()
-        self.master_node_ip = self.llm_engine.cfg.pod_ips[0]
+        self.master_node_ip = self.llm_engine.cfg.master_ip
         self._receive_output_thread = threading.Thread(
             target=self._receive_output, daemon=True)
         self._receive_output_thread.start()
@@ -169,6 +169,8 @@ class LLM:
 
         # get output
         outputs = self._run_engine(req_ids, use_tqdm=use_tqdm)
+        for i in range(len(outputs)):
+            outputs[i].prompt = prompts[i]
         return outputs
 
     def chat(

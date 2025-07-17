@@ -136,9 +136,9 @@ class PaddleDisWorkerProc():
             model_weights_status:
         """
         # init worker_ready_signal
-        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         array_size = min(
-            max_chips_per_node, self.parallel_config.tensor_parallel_size *
+            self.max_chips_per_node, self.parallel_config.tensor_parallel_size *
             self.parallel_config.expert_parallel_size)
         workers_ready = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_ready_signal = IPCSignal(
@@ -148,10 +148,10 @@ class PaddleDisWorkerProc():
             suffix=self.parallel_config.engine_pid,
             create=False)
         self.worker_ready_signal.value[self.local_rank %
-                                       max_chips_per_node] = 1
+                                       self.max_chips_per_node] = 1
 
         # init worker_healthy_live_signal
-        workers_alive = np.zeros(shape=[self.ranks], dtype=np.int32)
+        workers_alive = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
             array=workers_alive,
@@ -205,7 +205,7 @@ class PaddleDisWorkerProc():
         Tmp loop function for ep utill DP is supported
         """
         while True:
-            self.worker_healthy_live_signal.value[self.local_rank] = int(
+            self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(
                 time.time())
 
             if self.fd_config.parallel_config.tensor_parallel_rank == 0 and self.task_queue.num_tasks(
@@ -575,6 +575,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     decoding_config = DecodingConfig(vars(args))
     speculative_config = SpeculativeConfig(vars(args))
     parallel_config = ParallelConfig(vars(args))
+    parallel_config.tensor_parallel_rank = local_rank
+    parallel_config.tensor_parallel_size = ranks
+    parallel_config.expert_parallel_rank = int(local_rank / ranks)
     load_config = LoadConfig(vars(args))
 
     graph_opt_config = GraphOptimizationConfig(

@@ -27,7 +27,8 @@ from datetime import datetime
 from logging.handlers import BaseRotatingHandler
 from pathlib import Path
 from typing import Literal, TypeVar, Union
-
+import random
+import socket
 import requests
 import yaml
 from aistudio_sdk.snapshot_download import snapshot_download
@@ -419,6 +420,19 @@ def get_host_ip():
     """
     ip = socket.gethostbyname(socket.gethostname())
     return ip
+
+
+
+
+def get_random_port():
+    while True:
+        port = random.randint(49152, 65535)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("0.0.0.0", port)) 
+                return port 
+            except OSError:
+                continue
 
 
 def is_port_available(host, port):

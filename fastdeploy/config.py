@@ -21,7 +21,6 @@ from enum import Enum
 from typing import Literal, Optional
 
 from paddleformers.transformers.configuration_utils import PretrainedConfig
-from paddleformers.trl import llm_utils
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.quant_base import \
@@ -39,27 +38,23 @@ class MoEPhase(Enum):
     DECODER = 2
 
 PRETRAINED_INIT_CONFIGURATION = {
-    "rope_theta": 10000.0,
-    "num_key_value_heads":-1,
-    "start_layer_index": 0,
-    "moe_num_shared_experts":0,
-    "moe_layer_start_index": 0,
-    "num_max_dispatch_tokens_per_rank":256,
-    "moe_use_aux_free":False,
-    "vocab_size": -1,
+    "rope_theta" : 10000.0,
+    "num_key_value_heads" : -1,
+    "start_layer_index" : 0,
+    "moe_num_shared_experts" : 0,
+    "moe_layer_start_index" : 0,
+    "num_max_dispatch_tokens_per_rank" : 256,
+    "moe_use_aux_free" : False,
+    "vocab_size" : -1,
     "use_rope": True,
-    "hidden_dropout_prob":0.0,
-    "initializer_range":0.02,
-    "max_position_embeddings":512,
-    "quantization_config":None,
-    "use_recompute_resampler":False,
-    "use_temporal_conv":True,
-    "resampler_fuse_rms_norm":False,
-    "freq_allocation":20,
-    "tie_word_embeddings":False,
-    "rms_norm_eps":1e-5,
-    "moe_num_experts": None,
-    "moe_layer_end_index":None,
+    "hidden_dropout_prob" : 0.0,
+    "initializer_range" : 0.02,
+    "max_position_embeddings" : 512,
+    "quantization_config" : None,
+    "tie_word_embeddings" : False,
+    "rms_norm_eps" : 1e-5,
+    "moe_num_experts" : None,
+    "moe_layer_end_index" : None,
 }
 
 
@@ -84,9 +79,6 @@ class ModelConfig:
         self.min_length = 1
         self.model_name_or_path = ""
 
-        self.im_patch_id = (
-            100295  # multimodality, TODO(liuyuanle): read from config.json
-        )
         self.is_quantized = False
         self.max_model_len = 0
         self.dtype = ""
@@ -130,10 +122,9 @@ class ParallelConfig:
         self.moe_phase = MoEPhase.PREFILL  # Generation phase
         self.msg_queue_id = 1  # mesage queue id
 
-        tensor_parallel_rank, tensor_parallel_size = llm_utils.init_dist_env()
-        self.tensor_parallel_rank = tensor_parallel_rank  # TP rank ID
-        self.tensor_parallel_size = tensor_parallel_size  # TP degree
-        self.expert_parallel_rank = int(tensor_parallel_rank / tensor_parallel_size)  # EP rank ID
+        self.tensor_parallel_rank = 0  # TP rank ID
+        self.tensor_parallel_size = 1  # TP degree
+        self.expert_parallel_rank = 0  # EP rank ID
         self.expert_parallel_size = 1  # EP degree
         # The embedding weight distributed on your gpu cards is divided by row or column.
         # Defaults to False means divide by row. When vocab_size can not be divided by world_size
