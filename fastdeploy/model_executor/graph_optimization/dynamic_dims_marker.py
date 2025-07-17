@@ -18,6 +18,8 @@ U = TypeVar("U")
 
 Accessor: TypeAlias = Callable[[T], U]
 
+# TODO(SigureMo): Replace all print with logger
+
 
 class DynamicDims:
     def __init__(self, dims: int | tuple[int]):
@@ -144,6 +146,21 @@ class AnnotatedTensorDynamicDimTypeResolver(DynamicDimTypeResolver):
                 "Multiple DynamicDims annotations found. Only one is allowed."
             )
         dynamic_dims = dynamic_dims[0].dims
+        if not isinstance(data, Tensor):
+            raise TypeError(f"data {data_name} has type annotation Tensor but got type {type(data)}")
+        print(f"data {data_name} has dynamic dims {dynamic_dims} for type {tp}")
+        paddle.jit.marker.dynamic_dims(
+            data, dynamic_dims
+        )
+
+@DynamicDimTypeResolver.register_resolver
+class TensorImplicitBatchOnlyDynamicDimTypeResolver(DynamicDimTypeResolver):
+    def check(self, tp) -> bool:
+        return tp is Tensor
+
+    def resolve(self, data, data_name, tp) -> None:
+        # Tensor annotation has implicit dynamic_dims=(0, )
+        dynamic_dims = (0,)
         if not isinstance(data, Tensor):
             raise TypeError(f"data {data_name} has type annotation Tensor but got type {type(data)}")
         print(f"data {data_name} has dynamic dims {dynamic_dims} for type {tp}")

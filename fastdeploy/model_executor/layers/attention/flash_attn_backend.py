@@ -61,8 +61,8 @@ class FlashAttentionMetadata(AttentionMetadata):
     decoder_tile_ids_per_batch: Annotated[paddle.Tensor, DynamicDims(0)] = None
     decoder_num_blocks: Annotated[paddle.Tensor, DynamicDims(0)] = None
 
-    encoder_block_shape_q: Optional[paddle.Tensor] = None
-    decoder_block_shape_q: Optional[paddle.Tensor] = None
+    encoder_block_shape_q: int = -1
+    decoder_block_shape_q: int = -1
 
     cu_seqlens_q: paddle.Tensor = None
     cu_seqlens_k: paddle.Tensor = None
@@ -76,7 +76,7 @@ class FlashAttentionMetadata(AttentionMetadata):
 
     # pd_disaggregation
     kv_signal_metadata: Optional[paddle.Tensor] = None
-    kv_signal_data_list: List[paddle.Tensor] = field(default_factory=list)
+    kv_signal_data_list: List[Optional[paddle.Tensor]] = field(default_factory=list)
 
 
 class FlashAttentionBackend(AttentionBackend):
