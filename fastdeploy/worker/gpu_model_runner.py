@@ -216,12 +216,15 @@ class GPUModelRunner(ModelRunnerBase):
                                              1] = request.prompt_token_ids[-1]
                 self.share_inputs["input_ids"][idx:idx + 1,
                                                0] = request.prompt_token_ids[0]
+                self.share_inputs["prompt_ids"][idx:idx + 1,
+                                               0] = request.prompt_token_ids[0]
                 self.share_inputs['seq_lens_encoder'][idx:idx + 1] = 0
                 self.share_inputs['seq_lens_decoder'][idx:idx + 1] = length
                 self.share_inputs['seq_lens_this_time'][idx:idx + 1] = 1
                 self.share_inputs['step_seq_lens_encoder'][idx:idx + 1] = 0
                 self.share_inputs['step_seq_lens_decoder'][idx:idx +
                                                            1] = length
+                self.share_inputs["prompt_lens"][idx:idx + 1] = length
                 self.share_inputs['step_idx'][idx:idx + 1] = 1
 
                 if self.speculative_decoding:
@@ -234,6 +237,9 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["pre_ids"][idx:idx + 1] = -1
                 self.share_inputs["step_idx"][idx:idx + 1] = 0
                 self.share_inputs["input_ids"][idx:idx +
+                                               1, :length] = np.array(
+                                                   request.prompt_token_ids)
+                self.share_inputs["prompt_ids"][idx:idx +
                                                1, :length] = np.array(
                                                    request.prompt_token_ids)
 
@@ -275,6 +281,7 @@ class GPUModelRunner(ModelRunnerBase):
                         idx:idx + 1] = token_chunk_size
                     self.share_inputs['seq_lens_encoder'][idx:idx +
                                                         1] = token_chunk_size
+                    self.share_inputs["prompt_lens"][idx:idx + 1] = token_chunk_size
                 else:
                     if self.enable_mm:
                         inputs = self._preprocess_mm_task(request.multimodal_inputs)
@@ -299,6 +306,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs['step_seq_lens_encoder'][idx:idx +
                                                                1] = length
                     self.share_inputs['seq_lens_encoder'][idx:idx + 1] = length
+                    self.share_inputs["prompt_lens"][idx:idx + 1] = length
 
                 if self.enable_mm:
                     enable_thinking = request.get("enable_thinking", True)
@@ -397,6 +405,8 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["input_ids"][idx:idx +
                                            1, :input_length] = np.array(
                                                [5] * input_length)
+            self.share_inputs["prompt_ids"][idx:idx + 1, :input_length] = np.array(
+                            [5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array(
                 [2], dtype="int64").reshape(-1, 1)
             self.share_inputs["seq_lens_this_time"][idx:idx + 1] = input_length
@@ -404,6 +414,7 @@ class GPUModelRunner(ModelRunnerBase):
                                                        1] = input_length
             self.share_inputs["seq_lens_encoder"][idx:idx + 1] = input_length
             self.share_inputs["seq_lens_decoder"][idx:idx + 1] = 0
+            self.share_inputs["prompt_lens"][idx:idx + 1] = 0
             self.share_inputs["step_idx"][idx:idx + 1] = 0
             self.share_inputs["max_dec_len"][idx:idx + 1] = max_dec_len
             self.share_inputs["min_dec_len"][idx:idx + 1] = max_dec_len
@@ -431,6 +442,10 @@ class GPUModelRunner(ModelRunnerBase):
             -1,
             dtype='int64')
         self.share_inputs["input_ids"] = paddle.full(
+            [max_num_seqs, self.parallel_config.max_model_len],
+            self.parallel_config.pad_token_id,
+            dtype='int64')
+        self.share_inputs["prompt_ids"] = paddle.full(
             [max_num_seqs, self.parallel_config.max_model_len],
             self.parallel_config.pad_token_id,
             dtype='int64')
@@ -478,6 +493,9 @@ class GPUModelRunner(ModelRunnerBase):
             [max_num_seqs, 1], 0, dtype='int32')
         self.share_inputs["step_seq_lens_decoder"] = paddle.full(
             [max_num_seqs, 1], 0, dtype='int32')
+        self.share_inputs["prompt_lens"] = paddle.full([max_num_seqs, 1],
+                                                        0,
+                                                        dtype='int64')
         self.share_inputs["step_idx"] = paddle.full([max_num_seqs, 1],
                                                     0,
                                                     dtype='int64')
@@ -687,6 +705,8 @@ class GPUModelRunner(ModelRunnerBase):
             top_k=self.share_inputs["top_k"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
+            prompt_ids=self.share_inputs["prompt_ids"],
+            prompt_lens=self.share_inputs["prompt_lens"],
             frequency_penalties=self.share_inputs["frequency_score"],
             presence_penalties=self.share_inputs["presence_score"],
             repetition_penalties=self.share_inputs["penalty_score"],
@@ -1022,6 +1042,10 @@ class GPUModelRunner(ModelRunnerBase):
                         self.share_inputs["image_features"] = None
                     token_chunk_size = inputs["input_ids"].shape[1]
                     self.share_inputs["input_ids"][idx:idx + 1, :token_chunk_size] = inputs["input_ids"]
+                    self.share_inputs["prompt_ids"][
+                        idx:idx + 1,
+                        self.share_inputs["prompt_lens"][idx:idx + 1]: self.share_inputs["prompt_lens"][idx:idx + 1] + token_chunk_size
+                        ] = inputs["input_ids"]
                     self.share_inputs["seq_lens_decoder"][idx:idx +1] = task.start_idx
                     task.start_idx += token_chunk_size
                 else:
@@ -1034,6 +1058,7 @@ class GPUModelRunner(ModelRunnerBase):
                                                         1] = token_chunk_size
                 self.share_inputs['seq_lens_encoder'][idx:idx +
                                                       1] = token_chunk_size
+                self.share_inputs["prompt_lens"][idx:idx + 1] += token_chunk_size
                 self.share_inputs["step_idx"][idx:idx + 1] = 0
 
             if self.speculative_decoding and self.proposer.is_chunk_prefill_enabled(
