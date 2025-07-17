@@ -21,6 +21,7 @@ import fastdeploy
 from fastdeploy.distributed.communication_op import \
     tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.utils import (create_and_set_parameter,
+                                                    create_empty_tensor,
                                                     get_tensor)
 from fastdeploy.utils import ceil_div
 
@@ -529,7 +530,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 weight_list.append(quant_weight)
                 weight_scale_list.append(scale)
             quanted_weight = paddle.stack(weight_list, axis=0)
-            quanted_weight = quanted_weight.transpose([0, 2, 1]).contiguous()
+            quanted_weight = quanted_weight.transpose([0, 2, 1]).contiguous().view(paddle.float8_e4m3fn)
             create_and_set_parameter(layer, weight_name, quanted_weight)
 
             quanted_weight_scale = paddle.stack(weight_scale_list, axis=0)
@@ -582,10 +583,13 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             "num_warps": 4,
             "num_stages": 3,
         }
-        from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
+        from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess_func
 
-        sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess(
+        sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
             topk_ids, num_local_experts, config["BLOCK_SIZE_M"])
+        cache13 = create_empty_tensor(tuple([token_num * top_k * max(N1, N2)]), x.dtype)
+        intermediate_cache1 = cache13[:token_num * top_k * N1].view(
+            [token_num * top_k, N1])
         max_num_tokens_padded = sorted_token_ids.shape[0]
 
         grid = (ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) *
@@ -596,16 +600,9 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(
             x, self.quant_config.weight_block_size[0])
 
-        cache13 = paddle.empty([token_num * top_k * max(N1, N2)],
-                               dtype=x.dtype)
-        intermediate_cache1 = cache13[:token_num * top_k * N1].view(
-            [token_num * top_k, N1])
-        intermediate_cache3 = cache13[:token_num * top_k * N2].view(
-            [token_num * top_k, N2])
-
         fused_moe_kernel_paddle[grid](
             x_q,
-            layer.up_gate_proj_weight.view(paddle.float8_e4m3fn),
+            layer.up_gate_proj_weight,
             intermediate_cache1,
             x_scale,
             layer.up_gate_proj_weight_scale,
@@ -648,6 +645,9 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         intermediate_cache2 = paddle.incubate.nn.functional.swiglu(
             intermediate_cache1)
 
+        intermediate_cache3 = cache13[:token_num * top_k * N2].view(
+            [token_num * top_k, N2])
+
         grid = (ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) *
                 ceil_div(hidden_size, config["BLOCK_SIZE_N"]), )
 
@@ -656,7 +656,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
 
         fused_moe_kernel_paddle[grid](
             x_q,
-            layer.down_proj_weight.view(paddle.float8_e4m3fn),
+            layer.down_proj_weight,
             intermediate_cache3,
             x_scale,
             layer.down_proj_weight_scale,
