@@ -110,11 +110,14 @@ public:
     // Mma Instruction Shape
     using InstructionShape = typename ArchMmaOperator::Shape;
 
-    // This is the ratio of the load instruction vs the compute instruction.
-    static constexpr int kExpansionFactor = MmaOperator::IteratorB::InstructionShape::kRow / InstructionShape::kK;
+    /// Warp mma shape
+    using Shape = Shape_;
 
     /// Type of mma operand
     using ElementOperand = ElementOperand_;
+
+    /// Layout of the scales in shared memory
+    using Layout = layout::RowMajor;
 
     /// Type of input
     using ElementB = typename MmaOperator::FragmentB::Element;
@@ -128,34 +131,31 @@ public:
     using ElementSuperScale = ElementOperand;
     using ElementCodeScaleZp = float;
 
+    // Fragment to hold scale data to apply to B before mma
+    // We need 1 fp16 per matrix iteration in the N dimension
+    static constexpr int kWarpIterationsAlongN = MmaOperator::MmaIterations::kColumn;
+
+    // use uint8_t to save 2 4-bits local scales
+    using FragmentLocalScale = Array<uint8_t, kWarpIterationsAlongN>;
+    using FragmentSuperScale = Array<ElementSuperScale, kWarpIterationsAlongN>;
+    using FragmentCodeScaleZp = Array<ElementCodeScaleZp, kWarpIterationsAlongN>;
+
+    /// Fragment to hold internal scales before Mma
+    using FragmentCompute = Array<ElementCompute, kWarpIterationsAlongN>;
+
     /// Fragment to hold B data before Mma
     using FragmentInput = Array<ElementB, MmaOperator::FragmentB::kElements>;
 
-    /// Unpack 4 uint2b_t values compreseed in a uint8_t to floating points.
+    /// Unpack 4 uint2b_t values compreseed in a uint8_t to floating points
     using Uint2Converter = FastInterleavedAndBiasedNumericArrayConverter<
         ElementOperand, ElementB, MmaOperator::FragmentB::kElements>;
-    using FragmentUnpack = typename Uint2Converter::result_type;
+    using FragmentInputUnpack = typename Uint2Converter::result_type;
 
-    // Fragment to hold scale data to apply to B before mma
-    // We need 1 fp16 per matrix iteration in the N dimension
-    static constexpr int kElements = MmaOperator::MmaIterations::kColumn;
-
-    // use uint8_t to save 2 4-bits local scales
-    using FragmentLocalScale = Array<uint8_t, kElements>;
-    using FragmentSuperScale = Array<ElementSuperScale, kElements>;
-    using FragmentCodeScaleZp = Array<ElementCodeScaleZp, kElements>;
-
-    /// Fragment to hold internal scales before Mma
-    using FragmentCompute = Array<ElementCompute, kElements>;
+    /// This is the ratio of the load instruction vs the compute instruction.
+    static constexpr int kExpansionFactor = MmaOperator::IteratorB::InstructionShape::kRow / InstructionShape::kK;
 
     /// Fragment of dequantized B
     using FragmentOutput = Array<ElementOperand, MmaOperator::FragmentB::kElements / kExpansionFactor>;
-
-    /// Warp mma shape
-    using Shape = Shape_;
-
-    /// Layout of the scales in shared memory
-    using Layout = layout::RowMajor;
 
     /// TensorRef type for loading element from a tensor
     using SuperTensorRef = cutlass::TensorRef<ElementSuperScale, Layout>;
@@ -172,7 +172,7 @@ private:
     ElementCodeScaleZp* pointer_code_zp_;
     ElementSuperScale* pointer_super_scale_;
 
-    FragmentUnpack unpacked_frag_;
+    FragmentInputUnpack unpacked_frag_;
 
 public:
     CUTLASS_DEVICE
@@ -202,7 +202,7 @@ public:
               FragmentCodeScaleZp& code_zp_frag,
               FragmentSuperScale& super_scale_frag) {
         CUTLASS_PRAGMA_UNROLL
-        for (int mma_n_iter = 0; mma_n_iter < MmaOperator::MmaIterations::kColumn; ++mma_n_iter) {
+        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
             super_scale_frag[mma_n_iter] = pointer_super_scale_[mma_n_iter * InstructionShape::kN]; // bank conflict
             code_scale_frag[mma_n_iter] = pointer_code_scale_[mma_n_iter * InstructionShape::kN];
             code_zp_frag[mma_n_iter] = pointer_code_zp_[mma_n_iter * InstructionShape::kN];
@@ -213,7 +213,7 @@ public:
     CUTLASS_DEVICE
     void load(FragmentLocalScale& local_scale_frag) {
         CUTLASS_PRAGMA_UNROLL
-        for (int mma_n_iter = 0; mma_n_iter < MmaOperator::MmaIterations::kColumn; ++mma_n_iter) {
+        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
             local_scale_frag[mma_n_iter] = pointer_local_scale_[mma_n_iter * InstructionShape::kN]; // bank conflict
         }
     }
@@ -234,7 +234,7 @@ public:
         }
 
 #if 0
-        if (FragmentUnpack::kElements == 64) {
+        if (FragmentInputUnpack::kElements == 64) {
             CUTLASS_TRACE_DEVICE(" [stage=%d] unpacked_frag[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
                 stage,
                 static_cast<float>(unpacked_frag[0]), static_cast<float>(unpacked_frag[1]),
@@ -286,10 +286,10 @@ public:
 #endif
 
         int offset = warp_k_compute_offset * ArchMmaOperator::FragmentB::kElements;
-        const int kOutputColumns = FragmentOutput::kElements / MmaOperator::MmaIterations::kColumn;
+        const int kOutputColumns = FragmentOutput::kElements / kWarpIterationsAlongN;
 
         CUTLASS_PRAGMA_UNROLL
-        for (int mma_n_iter = 0; mma_n_iter < MmaOperator::MmaIterations::kColumn; ++mma_n_iter) {
+        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
 
             CUTLASS_PRAGMA_UNROLL
             for (int j = 0; j < kOutputColumns; ++j) {
@@ -299,8 +299,8 @@ public:
             }
         }
 
-        if (FragmentOutput::kElements == 64) {
 #if 0
+        if (FragmentOutput::kElements == 16) {
             CUTLASS_TRACE_DEVICE(" [stage=%d] output_frag[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
                 stage,
                 static_cast<float>(output_frag[0]), static_cast<float>(output_frag[1]),
@@ -311,38 +311,9 @@ public:
                 static_cast<float>(output_frag[10]), static_cast<float>(output_frag[11]),
                 static_cast<float>(output_frag[12]), static_cast<float>(output_frag[13]),
                 static_cast<float>(output_frag[14]), static_cast<float>(output_frag[15]));
-            CUTLASS_TRACE_DEVICE(" [stage=%d] output_frag[16:31]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
-                stage,
-                static_cast<float>(output_frag[16]), static_cast<float>(output_frag[17]),
-                static_cast<float>(output_frag[18]), static_cast<float>(output_frag[19]),
-                static_cast<float>(output_frag[20]), static_cast<float>(output_frag[21]),
-                static_cast<float>(output_frag[22]), static_cast<float>(output_frag[23]),
-                static_cast<float>(output_frag[24]), static_cast<float>(output_frag[25]),
-                static_cast<float>(output_frag[26]), static_cast<float>(output_frag[27]),
-                static_cast<float>(output_frag[28]), static_cast<float>(output_frag[29]),
-                static_cast<float>(output_frag[30]), static_cast<float>(output_frag[31]));
-            CUTLASS_TRACE_DEVICE(" [stage=%d] output_frag[32:47]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
-                stage,
-                static_cast<float>(output_frag[32]), static_cast<float>(output_frag[33]),
-                static_cast<float>(output_frag[34]), static_cast<float>(output_frag[35]),
-                static_cast<float>(output_frag[36]), static_cast<float>(output_frag[37]),
-                static_cast<float>(output_frag[38]), static_cast<float>(output_frag[39]),
-                static_cast<float>(output_frag[40]), static_cast<float>(output_frag[41]),
-                static_cast<float>(output_frag[42]), static_cast<float>(output_frag[43]),
-                static_cast<float>(output_frag[44]), static_cast<float>(output_frag[45]),
-                static_cast<float>(output_frag[46]), static_cast<float>(output_frag[47]));
-            CUTLASS_TRACE_DEVICE(" [stage=%d] output_frag[48:63]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
-                stage,
-                static_cast<float>(output_frag[48]), static_cast<float>(output_frag[49]),
-                static_cast<float>(output_frag[50]), static_cast<float>(output_frag[51]),
-                static_cast<float>(output_frag[52]), static_cast<float>(output_frag[53]),
-                static_cast<float>(output_frag[54]), static_cast<float>(output_frag[55]),
-                static_cast<float>(output_frag[56]), static_cast<float>(output_frag[57]),
-                static_cast<float>(output_frag[58]), static_cast<float>(output_frag[59]),
-                static_cast<float>(output_frag[60]), static_cast<float>(output_frag[61]),
-                static_cast<float>(output_frag[62]), static_cast<float>(output_frag[63]));
-#endif
         }
+#endif
+
 #else
         // Slow path not implemented here on purpose. If we need to do HMMA on
         // older arch, scale conversion should happen before scales are stored

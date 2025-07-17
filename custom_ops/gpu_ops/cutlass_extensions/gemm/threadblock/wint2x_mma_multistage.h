@@ -676,6 +676,7 @@ public:
     int &gemm_k_iterations, ///< [in|out] number of threadblock mainloop iterations remaining
     int stage)
   {
+    int mma_stage = stage - Base::kStages + 1;
 
     // Unroll the warp-level MMA tiles of a threadblock's mainloop iteration
     CUTLASS_PRAGMA_UNROLL
@@ -711,7 +712,10 @@ public:
               sizeof_bits<typename PipeState::WarpLoadedFragmentB>::value / 8);
         }
 #endif
+      }
 
+      // load next-tile of group-wise local_scale from shared memory
+      if (warp_k_compute_offset_B == Base::kWarpGemmIterations - 1) {
         warp_dequantizer_.load(pipe_state.warp_frag_local_scale_);
       }
 
@@ -806,14 +810,13 @@ public:
       }
 
       // dequantizes next warp-tile
-      int mma_stage = (warp_mma_k == Base::kWarpGemmIterations - 1) ? (stage - Base::kStages + 2) : (stage - Base::kStages + 1);
       warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
                                    pipe_state.warp_frag_code_scale_,
                                    pipe_state.warp_frag_code_zp_,
                                    pipe_state.warp_frag_super_scale_,
                                    pipe_state.warp_loaded_frag_B_,
                                    pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2],
-                                   mma_stage * Shape::kK,
+                                   ((warp_mma_k == Base::kWarpGemmIterations - 1) ? (mma_stage + 1) : mma_stage) * Shape::kK,
                                    (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
     }
   }
