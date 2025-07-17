@@ -110,6 +110,9 @@ public:
     // Mma Instruction Shape
     using InstructionShape = typename ArchMmaOperator::Shape;
 
+    // This is the ratio of the load instruction vs the compute instruction.
+    static constexpr int kExpansionFactor = MmaOperator::IteratorB::InstructionShape::kRow / InstructionShape::kK;
+
     /// Type of mma operand
     using ElementOperand = ElementOperand_;
 
@@ -135,12 +138,7 @@ public:
 
     // Fragment to hold scale data to apply to B before mma
     // We need 1 fp16 per matrix iteration in the N dimension
-    static constexpr int kColsPerMmaPerThread = 1;
-    static constexpr int kElements = kColsPerMmaPerThread * MmaOperator::MmaIterations::kColumn;
-
-    // 32 bits are loaded to register from shared memory by each thread
-    static constexpr int kMmaIterationsPerLoad =
-        32 / (sizeof_bits<ElementB>::value * ArchMmaOperator::FragmentB::kElements);
+    static constexpr int kElements = MmaOperator::MmaIterations::kColumn;
 
     // use uint8_t to save 2 4-bits local scales
     using FragmentLocalScale = Array<uint8_t, kElements>;
@@ -151,8 +149,7 @@ public:
     using FragmentCompute = Array<ElementCompute, kElements>;
 
     /// Fragment of dequantized B
-    //using FragmentOutput = Array<ElementOperand, ArchMmaOperator::FragmentB::kElements * kElements>;
-    using FragmentOutput = Array<ElementOperand, MmaOperator::FragmentB::kElements>;
+    using FragmentOutput = Array<ElementOperand, MmaOperator::FragmentB::kElements / kExpansionFactor>;
 
     /// Warp mma shape
     using Shape = Shape_;
@@ -175,6 +172,8 @@ private:
     ElementCodeScaleZp* pointer_code_zp_;
     ElementSuperScale* pointer_super_scale_;
 
+    FragmentUnpack unpacked_frag_;
+
 public:
     CUTLASS_DEVICE
     MmaTensorOpWin2xDequantizer(SuperTensorRef smem_super_scale,
@@ -190,6 +189,11 @@ public:
         pointer_code_scale_ = smem_code_scale.data() + thread_offset;
         pointer_code_zp_ = smem_code_zp.data() + thread_offset;
         pointer_local_scale_ = reinterpret_cast<uint8_t *>(smem_local_scale.data()) + thread_offset;
+
+        CUTLASS_TRACE_DEVICE(" MmaOperator::IteratorB::InstructionShape={%d, %d}",
+            MmaOperator::IteratorB::InstructionShape::kRow, MmaOperator::IteratorB::InstructionShape::kColumn);
+        CUTLASS_TRACE_DEVICE(" MmaOperator::FragmentB::kElements=%d", MmaOperator::FragmentB::kElements);
+        CUTLASS_TRACE_DEVICE(" kExpansionFactor=%d", kExpansionFactor);
     }
 
     /// Channel-wise params, need to load just once
@@ -221,10 +225,13 @@ public:
                     const FragmentSuperScale& super_scale_frag,
                     const FragmentInput& input_frag,
                     FragmentOutput& output_frag,
-                    int tb_offset_k) {
+                    int tb_offset_k,
+                    int warp_k_compute_offset) {
         int stage = tb_offset_k / 64;
 
-        FragmentUnpack unpacked_frag = Uint2Converter::convert(input_frag, code_scale_frag, code_zp_frag);
+        if (warp_k_compute_offset == 0) {
+            unpacked_frag_ = Uint2Converter::convert(input_frag, code_scale_frag, code_zp_frag);
+        }
 
 #if 0
         if (FragmentUnpack::kElements == 64) {
@@ -278,17 +285,17 @@ public:
         }
 #endif
 
-        //int offset = warp_mma_k * ArchMmaOperator::FragmentB::kElements;
-        int num_columns = 32 / sizeof_bits<ElementB>::value;
+        int offset = warp_k_compute_offset * ArchMmaOperator::FragmentB::kElements;
+        const int kOutputColumns = FragmentOutput::kElements / MmaOperator::MmaIterations::kColumn;
 
         CUTLASS_PRAGMA_UNROLL
         for (int mma_n_iter = 0; mma_n_iter < MmaOperator::MmaIterations::kColumn; ++mma_n_iter) {
 
             CUTLASS_PRAGMA_UNROLL
-            for (int j = 0; j < num_columns; ++j) {
+            for (int j = 0; j < kOutputColumns; ++j) {
                 ElementCompute scaled_value =
-                    static_cast<ElementCompute>(unpacked_frag[mma_n_iter * num_columns + j]) * scale_frag[mma_n_iter];
-                output_frag[mma_n_iter * num_columns + j] = static_cast<ElementOperand>(scaled_value);
+                    static_cast<ElementCompute>(unpacked_frag_[mma_n_iter * kExpansionFactor * kOutputColumns + offset + j]) * scale_frag[mma_n_iter];
+                output_frag[mma_n_iter * kOutputColumns + j] = static_cast<ElementOperand>(scaled_value);
             }
         }
 

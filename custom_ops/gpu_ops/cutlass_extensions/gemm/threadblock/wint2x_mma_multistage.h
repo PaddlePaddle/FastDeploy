@@ -210,7 +210,7 @@ public:
 
     /// Pair of B fragments used to overlap shared memory loads and math instructions
     WarpLoadedFragmentB warp_loaded_frag_B_;
-    WarpTransformedFragmentB warp_frag_B_;
+    WarpTransformedFragmentB warp_frag_B_[2];
   };
 
   using ElementA = typename IteratorA::Element;
@@ -720,9 +720,8 @@ public:
         warp_mma_(
           pipe_state.tmp_accum_,
           pipe_state.warp_frag_A_[warp_mma_k % 2],
-          pipe_state.warp_frag_B_,
-          pipe_state.tmp_accum_,
-          warp_k_compute_offset_B
+          pipe_state.warp_frag_B_[warp_mma_k % 2],
+          pipe_state.tmp_accum_
         );
 
         if (warp_mma_k == 0) {
@@ -734,10 +733,8 @@ public:
         warp_mma_(
           accum,
           pipe_state.warp_frag_A_[warp_mma_k % 2],
-          pipe_state.warp_frag_B_,
-          accum,
-          warp_k_compute_offset_B
-        );
+          pipe_state.warp_frag_B_[warp_mma_k % 2],
+          accum);
 #if 0
         CUTLASS_TRACE_DEVICE(" pipe_state.warp_frag_B_=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
             static_cast<float>(pipe_state.warp_frag_B_[0]), static_cast<float>(pipe_state.warp_frag_B_[1]),
@@ -808,15 +805,16 @@ public:
         quant_params_accessor_B_.clear_mask(mma_quant_args, gemm_k_iterations == 0);
       }
 
-      if (warp_k_compute_offset_B == Base::kWarpGemmIterationsPerLoadForB - 1) {
-        warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
-                                     pipe_state.warp_frag_code_scale_,
-                                     pipe_state.warp_frag_code_zp_,
-                                     pipe_state.warp_frag_super_scale_,
-                                     pipe_state.warp_loaded_frag_B_,
-                                     pipe_state.warp_frag_B_,
-                                     (stage - Base::kStages + 2) * Shape::kK);
-      }
+      // dequantizes next warp-tile
+      int mma_stage = (warp_mma_k == Base::kWarpGemmIterations - 1) ? (stage - Base::kStages + 2) : (stage - Base::kStages + 1);
+      warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
+                                   pipe_state.warp_frag_code_scale_,
+                                   pipe_state.warp_frag_code_zp_,
+                                   pipe_state.warp_frag_super_scale_,
+                                   pipe_state.warp_loaded_frag_B_,
+                                   pipe_state.warp_frag_B_[(warp_mma_k + 1) % 2],
+                                   mma_stage * Shape::kK,
+                                   (warp_mma_k + 1) % Base::kWarpGemmIterationsPerLoadForB);
     }
   }
 
@@ -894,7 +892,8 @@ public:
                                  pipe_state.warp_frag_code_zp_,
                                  pipe_state.warp_frag_super_scale_,
                                  pipe_state.warp_loaded_frag_B_,
-                                 pipe_state.warp_frag_B_,
+                                 pipe_state.warp_frag_B_[0],
+                                 0,
                                  0);
 
     if (Detail::kStagedAccumulation) {
@@ -906,7 +905,7 @@ public:
     // Mainloop
     CUTLASS_GEMM_LOOP
     for (; gemm_k_iterations > (-Base::kStages + 1);) {
-      if (stage > Base::kStages + 4) {
+      if (stage > Base::kStages + 0) {
         //break;
       }
       mac_loop_iter(
