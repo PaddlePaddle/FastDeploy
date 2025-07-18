@@ -176,7 +176,6 @@ class Sampler(nn.Layer):
             self.forward = self.forward_cuda
         else:
             raise NotImplementedError()
-        self.step=0
 
         self.processor = SamplerProcessor()
 
@@ -286,7 +285,7 @@ class Sampler(nn.Layer):
             sampled_token_ids=next_tokens,
             logprobs_tensors=logprobs_tensors,
         )
-        self.step+=1
+
         return sampler_output
 
 
