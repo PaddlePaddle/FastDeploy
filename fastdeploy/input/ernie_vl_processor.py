@@ -162,6 +162,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
     def process_request_dict(self, request, max_model_len=None):
         """process the input data"""
 
+        request['enable_thinking'] = self.get_enable_thinking(request.get("enable_thinking"))
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
@@ -244,7 +245,7 @@ class ErnieMoEVLProcessor(ErnieProcessor):
         Returns:
             Dict: response contain text fields
         """
-        enable_thinking = self.get_enable_thinking(kwargs.get("enable_thinking"))
+        enable_thinking = self.get_enable_thinking(kwargs.pop("enable_thinking", None))
         if stream:
             return self.process_response_dict_streaming(response_dict, enable_thinking=enable_thinking, **kwargs)
         else:

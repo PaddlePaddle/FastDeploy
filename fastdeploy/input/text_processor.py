@@ -430,9 +430,7 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-        enable_thinking = kwargs.pop("enable_thinking", True)
-        if enable_thinking is None:
-            enable_thinking = True
+        enable_thinking = self.get_enable_thinking(kwargs.pop("enable_thinking", None))
         stream = kwargs.get("stream", True)
         if stream:
             return self.process_response_dict_streaming(response_dict, enable_thinking=enable_thinking, **kwargs)

@@ -119,7 +119,7 @@ class ModelConfig:
         self.reasoning_parser = None
 
         for key, value in args.items():
-            if hasattr(self, key):
+            if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
 
         assert self.model != ""
