@@ -602,6 +602,18 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
 
         return logits
 
+    def empty_input_forward(self):
+        """
+        empty_input_forward
+        """
+        fake_hidden_states = paddle.empty(
+            shape=[0, self.fd_config.model_config.hidden_size],
+            dtype=paddle.get_default_dtype(),
+        )
+        for i in range(self.fd_config.model_config.moe_layer_start_index,
+                       self.fd_config.model_config.num_hidden_layers):
+            self.ernie.layers[i].mlp.text_fused_moe(fake_hidden_states)
+
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
