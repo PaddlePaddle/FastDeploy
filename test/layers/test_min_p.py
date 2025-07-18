@@ -17,7 +17,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import paddle
 import paddle.nn.functional as F
-import torch
 from tqdm import tqdm
 
 from fastdeploy.model_executor.ops.gpu import min_p_sampling
@@ -199,5 +198,5 @@ def main():
         print(f"FastDeploy - Sampled: {data2_fd_batch[b]}, Normalized: {data3_fd_batch[b]}")
 
 if __name__ == "__main__":
-    if paddle.device.is_compiled_with_cuda() and torch.cuda.is_available():
+    if paddle.device.is_compiled_with_cuda():
         main()

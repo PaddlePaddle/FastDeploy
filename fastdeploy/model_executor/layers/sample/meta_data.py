@@ -15,7 +15,7 @@
 """
 
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Optional
 
 import paddle
 
@@ -42,5 +42,5 @@ class SamplingMetadata:
 
     top_p: paddle.Tensor
     top_k: Optional[paddle.Tensor] = None
-    min_p: Optional[Union[float, paddle.Tensor]] = None
+    min_p: Optional[paddle.Tensor] = None
     max_num_logprobs: Optional[int] = None

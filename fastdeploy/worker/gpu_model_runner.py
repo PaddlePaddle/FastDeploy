@@ -248,7 +248,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx:idx +
                                                1, :length] = np.array(
                                                    request.prompt_token_ids)
-
+                print("self.share_inputs['input_ids']",self.share_inputs["input_ids"])
                 # Use chunked prefill
                 if self.parallel_config.enable_chunked_prefill:
                     request.set("chunk_idx", 1)
@@ -341,7 +341,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["top_p"][idx:idx + 1] = get_attr_from_request(request, "top_p", 0.7)
             self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k", 0)
             self.share_inputs["min_p"][idx:idx + 1] = request.get("min_p",0.0)
-          
+
             self.share_inputs["temperature"][idx:idx + 1] = get_attr_from_request(request,"temperature", 0.95)
             self.share_inputs["penalty_score"][idx:idx + 1] = get_attr_from_request(
                 request, "repetition_penalty", 1.0)
@@ -698,16 +698,12 @@ class GPUModelRunner(ModelRunnerBase):
         # Initialize forward meta data
         self.initialize_forward_meta()
 
-        num_reqs = int((self.share_inputs["seq_lens_this_time"] > 0).sum())
-        min_p_slice = self.share_inputs["min_p"][:num_reqs]
-        no_min_p = paddle.all(min_p_slice == 0.0).item()
-
         # Get sampling metadata
         self.sampling_metadata = SamplingMetadata(
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
             top_k=self.share_inputs["top_k"],
-            min_p=None if no_min_p else self.share_inputs["min_p"],
+            min_p=self.share_inputs["min_p"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
             frequency_penalties=self.share_inputs["frequency_score"],

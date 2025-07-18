@@ -17,48 +17,49 @@
 #include "sample_kernels/sampling.cuh"
 
 std::vector<paddle::Tensor> MinPSamplingFromProbs(const paddle::Tensor &probs,
-                                               const paddle::Tensor &min_p,
-                                               int seed) {
+                                               const paddle::Tensor &min_p) {
     std::vector<int64_t> probs_shape = probs.shape();
     unsigned int batch_size = probs_shape[0];
     unsigned int vocab_size = probs_shape[1];
-    uint64_t philox_seed = seed;
-    uint64_t philox_offset = 0;
     auto cu_stream = probs.stream();
 
-    auto samples =
-        paddle::empty({batch_size, 1}, paddle::DataType::INT64, probs.place());
+    auto renorm_probs =
+      GetEmptyTensor(probs.dims(), paddle::DataType::FLOAT32, probs.place());
 
     cudaError_t status;
 
-    status = sampling::MinPSamplingFromProb<float, int64_t>(
-    const_cast<float *>(probs.data<float>()),min_p.data<float>(),samples.data<int64_t>(),
-    batch_size,vocab_size,true,philox_seed,philox_offset,cu_stream);
+    status = sampling::MinPSamplingFromProb<float, int>(
+        const_cast<float *>(probs.data<float>()),
+        const_cast<float *>(min_p.data<float>()),
+        renorm_probs.data<float>(),
+        batch_size,
+        vocab_size,
+        true,  // deterministic
+        cu_stream);
+
 
   PD_CHECK(status == cudaSuccess, "SamplingFromProbs failed with error code " +
                                       std::string(cudaGetErrorString(status)));
 
-  return {samples};
+  return {renorm_probs};
 }
 
 std::vector<std::vector<int64_t>>
 MinPSamplingFromProbsInferShape(const std::vector<int64_t> &probs_shape,
                              const paddle::optional<std::vector<int64_t>> &min_p_shape) {
-  int64_t bs = probs_shape[0];
-  return {{bs, 1}};
+  return {probs_shape};
 }
 
 std::vector<paddle::DataType>
 MinPSamplingFromProbsInferDtype(const paddle::DataType &probs_dtype,
                              const paddle::optional<paddle::DataType> &min_p_dtype) {
-  return {paddle::DataType::INT64};
+  return {probs_dtype};
 }
 
 
 PD_BUILD_STATIC_OP(min_p_sampling)
     .Inputs({"probs", "min_p"})
-    .Outputs({"samples"})
-    .Attrs({"seed: int"})
+    .Outputs({"renorm_probs"})
     .SetKernelFn(PD_KERNEL(MinPSamplingFromProbs))
     .SetInferShapeFn(PD_INFER_SHAPE(MinPSamplingFromProbsInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(MinPSamplingFromProbsInferDtype));
