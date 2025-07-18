@@ -73,7 +73,7 @@ def load_ep_checkpoint(model_path: str,
                         range(base_range.start + config.moe_num_experts[0], base_range.stop + config.moe_num_experts[0]))
         return base_range
 
-    for i in range(config.moe_layer_start_index, config.num_layers):
+    for i in range(config.moe_layer_start_index, config.num_hidden_layers):
         for j in get_expert_ranges(config):
             up_gate_proj_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight"
             down_proj_key = (f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight")

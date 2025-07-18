@@ -960,7 +960,7 @@ void MultiQueryAppendC4Attention(
     const paddle::Tensor &seq_lens_q,
     const paddle::Tensor &seq_lens_kv,
     const paddle::Tensor &seq_lens_encoder,
-    const paddle::Tensor &padding_offsets,
+    const paddle::Tensor &batch_id_per_token,
     const paddle::Tensor &cu_seqlens_q,
     const paddle::Tensor &block_table,
     const paddle::Tensor &batch_ids,
@@ -1219,7 +1219,8 @@ void MultiQueryAppendC4Attention(
                 seq_lens_q.data<int>(),
                 seq_lens_kv.data<int>(),
                 seq_lens_encoder.data<int>(),
-                padding_offsets.data<int>(),
+                batch_id_per_token.data<int>(),
+                cu_seqlens_q.data<int>(),
                 shift_bias ? reinterpret_cast<NV_TYPE *>(
                                  const_cast<T *>(shift_bias.get().data<T>()))
                            : nullptr,
@@ -1477,7 +1478,8 @@ void MultiQueryAppendC4Attention(
                 seq_lens_q.data<int>(),
                 seq_lens_kv.data<int>(),
                 seq_lens_encoder.data<int>(),
-                padding_offsets.data<int>(),
+                batch_id_per_token.data<int>(),
+                cu_seqlens_q.data<int>(),
                 shift_bias ? reinterpret_cast<NV_TYPE *>(
                                  const_cast<T *>(shift_bias.get().data<T>()))
                            : nullptr,
@@ -1524,7 +1526,7 @@ void CascadeAppendAttentionC4Kernel(
     const paddle::Tensor& seq_lens_q,
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
-    const paddle::Tensor& padding_offsets,
+    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_table,
     const paddle::Tensor& batch_ids,
@@ -1591,7 +1593,7 @@ void CascadeAppendAttentionC4Kernel(
                                 seq_lens_q,
                                 seq_lens_kv,
                                 seq_lens_encoder,
-                                padding_offsets,
+                                batch_id_per_token,
                                 cu_seqlens_q,
                                 block_table,
                                 batch_ids,
