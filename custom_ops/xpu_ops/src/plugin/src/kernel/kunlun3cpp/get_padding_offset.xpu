@@ -5,7 +5,7 @@
 namespace xpu3 {
 namespace plugin {
 
-__global__ void get_padding_offset(int *padding_offset,
+__global__ void get_padding_offset(int *batch_id_per_token,
                                    int *cum_offsets_out,
                                    int *cu_seqlens_q,
                                    int *cu_seqlens_k,
@@ -20,7 +20,7 @@ __global__ void get_padding_offset(int *padding_offset,
   int tid = clusterid * ncores + cid;
 
   int buf_len = 32;
-  __simd__ int padding_offset_lm[buf_len];
+  __simd__ int batch_id_per_token_lm[buf_len];
   __simd__ int cum_offsets_lm[16];
   int seq_len_lm;
   for (int i = clusterid; i < bs; i += nclusters) {
@@ -32,11 +32,11 @@ __global__ void get_padding_offset(int *padding_offset,
     for (int j = cid * buf_len; j < seq_len_lm; j += ncores * buf_len) {
       int cur_len = min(seq_len_lm - j, buf_len);
       for (int k = 0; k < cur_len; k++) {
-        padding_offset_lm[k] = cum_offsets_lm[0];
+        batch_id_per_token_lm[k] = i;
       }
       mfence_lm();
-      LM2GM(padding_offset_lm,
-                  padding_offset + i * max_seq_len - cum_offsets_lm[0] + j,
+      LM2GM(batch_id_per_token_lm,
+                  batch_id_per_token + i * max_seq_len - cum_offsets_lm[0] + j,
                   cur_len * sizeof(int));
     }
     if (cid == 0) {

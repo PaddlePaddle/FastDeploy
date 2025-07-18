@@ -58,7 +58,7 @@ def xpu_pre_process(
     (
         ids_remove_padding,
         cum_offsets,
-        padding_offset,
+        batch_id_per_token,
         cu_seqlens_q,
         cu_seqlens_k,
     ) = get_padding_offset(input_ids, cum_offsets_now, token_num,
@@ -66,7 +66,7 @@ def xpu_pre_process(
 
     share_inputs["ids_remove_padding"] = None  # set this after adjust batch
     share_inputs["cum_offsets"] = cum_offsets
-    share_inputs["padding_offset"] = padding_offset
+    share_inputs["batch_id_per_token"] = batch_id_per_token
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
     share_inputs["cu_seqlens_k"] = cu_seqlens_k
 
@@ -79,7 +79,7 @@ def xpu_pre_process(
         seq_lens_decoder=share_inputs["seq_lens_decoder"],
         seq_lens_this_time=share_inputs["seq_lens_this_time"],
         cum_offsets=share_inputs["cum_offsets"],
-        padding_offset=share_inputs["padding_offset"],
+        batch_id_per_token=share_inputs["batch_id_per_token"],
         cu_seqlens_q=share_inputs["cu_seqlens_q"],
         cu_seqlens_k=share_inputs["cu_seqlens_k"],
         block_tables=share_inputs["block_tables"],
