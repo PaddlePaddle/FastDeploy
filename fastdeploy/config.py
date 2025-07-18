@@ -70,7 +70,7 @@ class ModelConfig:
         self.stop_seqs_max_len = 8
 
         # NOTE(gongshaotain): form _load_model_init_val()
-        self.top_p = 0.0
+        self.top_p = 1.0
         self.temperature = 1.0
         self.rope_theta = 10000.0
         self.penalty_score = 1.0
