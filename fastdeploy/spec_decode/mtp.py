@@ -29,16 +29,16 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import MTPSampler
-from fastdeploy.model_executor.ops.gpu import (
-    draft_model_postprocess,
-    draft_model_preprocess,
-    draft_model_update,
-    eagle_get_hidden_states,
-    mtp_save_first_token,
-    mtp_step_paddle,
-    share_external_data,
-)
-from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
+from fastdeploy.model_executor.ops.gpu import (draft_model_postprocess,
+                                               draft_model_preprocess,
+                                               draft_model_update,
+                                               eagle_get_hidden_states,
+                                               eagle_get_self_hidden_states,
+                                               mtp_save_first_token,
+                                               mtp_step_paddle,
+                                               share_external_data)
+from fastdeploy.model_executor.pre_and_post_process import (pre_process,
+                                                            rebuild_padding)
 
 from .base import Proposer
 
@@ -303,8 +303,13 @@ class MTPProposer(Proposer):
         self.model_inputs["free_list"] = paddle.to_tensor(self.free_list, dtype="int32")
         self.model_inputs["free_list_len"] = paddle.full(shape=[1], fill_value=self.free_list_len, dtype="int32")
 
-        self.model_inputs["batch_drop"] = paddle.full(shape=[self.max_num_seqs, 1], fill_value=False, dtype="bool")
-        self.model_inputs["used_list_len"] = paddle.full(shape=[self.max_num_seqs], fill_value=0, dtype="int32")
+        self.model_inputs["batch_drop"] = paddle.full(
+            shape=[self.max_num_seqs, 1], fill_value=False, dtype="bool")
+        self.model_inputs["used_list_len"] = paddle.full(
+            shape=[self.max_num_seqs], fill_value=0, dtype="int32")
+        self.last_seq_lens_this_time = paddle.full_like(
+            self.main_model_inputs["seq_lens_this_time"], fill_value=-1, dtype="int32"
+        )
 
     def insert_prefill_inputs(self, req_dicts: List[Request]):
         """
@@ -487,6 +492,13 @@ class MTPProposer(Proposer):
         for substep in range(self.max_draft_token_num):
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
+                if substep != 0:
+                    target_hidden_states = eagle_get_self_hidden_states(
+                        model_output,
+                        self.last_seq_lens_this_time,
+                        self.model_inputs["seq_lens_this_time"],
+                        self.model_inputs["step_idx"],
+                        )
                 # Remove padding
                 (
                     ids_remove_padding,
@@ -528,6 +540,10 @@ class MTPProposer(Proposer):
                     min_dec_lens=self.model_inputs["min_dec_len"],
                     bad_words_token_ids=self.model_inputs["bad_tokens"],
                     eos_token_ids=self.model_inputs["eos_token_id"],
+                )
+
+                self.last_seq_lens_this_time = paddle.clone(
+                    self.model_inputs["seq_lens_this_time"]
                 )
 
                 model_output = self.model(

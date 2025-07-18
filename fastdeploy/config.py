@@ -277,6 +277,8 @@ class SpeculativeConfig:
 
         for key, value in args.items():
             if key in name_map.keys() and hasattr(self, name_map[key]):
+                if key == "speculative_benchmark_mode":
+                    value = True if value.lower() == "true" else False
                 setattr(self, name_map[key], value)
 
 
