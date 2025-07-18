@@ -47,7 +47,7 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
     if current_platform.is_dcu():
         from fastdeploy.worker.dcu_worker import DcuWorker
         return DcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
-    if current_platform.is_cuda():
+    if current_platform.is_cuda() or current_platform.is_maca():
         from fastdeploy.worker.gpu_worker import GpuWorker
         return GpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_xpu():

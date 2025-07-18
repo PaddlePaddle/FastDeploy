@@ -52,11 +52,14 @@ class GpuWorker(WorkerBase):
         Initialize device and construct model runner
         """
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        if self.device_config.device_type == "cuda" and paddle.device.is_compiled_with_cuda(
-        ):
+        if self.device_config.device_type == "cuda" and (paddle.device.is_compiled_with_cuda(
+        ) or paddle.is_compiled_with_custom_device("metax_gpu")):
             # Set evironment variable
             self.device_ids = self.parallel_config.device_ids.split(",")
-            self.device = f"gpu:{self.local_rank % self.max_chips_per_node}"
+            if paddle.is_compiled_with_custom_device("metax_gpu"):
+                self.device = f"metax_gpu:{self.local_rank % self.max_chips_per_node}"
+            else:
+                self.device = f"gpu:{self.local_rank % self.max_chips_per_node}"
             paddle.device.set_device(self.device)
             paddle.set_default_dtype(self.parallel_config.dtype)
 
@@ -98,6 +101,9 @@ class GpuWorker(WorkerBase):
             by adjusting the `gpu_memory_utilization` parameter.
         """
         # 1. Record memory state before profile run
+        if paddle.is_compiled_with_custom_device("metax_gpu"):
+            self.model_runner.profile_run()
+            return 1024**3
         start_time = time.perf_counter()
         Gb = 1024**3
         paddle.device.cuda.reset_max_memory_reserved(self.local_rank)

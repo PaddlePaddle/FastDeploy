@@ -75,7 +75,7 @@ void UpdateInputes(const paddle::Tensor &stop_flags,
                    const paddle::Tensor &stop_nums,
                    const paddle::Tensor &next_tokens,
                    const paddle::Tensor &is_block_step) {
-#ifdef PADDLE_WITH_CUSTOM_DEVICE
+#if defined(PADDLE_WITH_CUSTOM_DEVICE) && !defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
     auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(input_ids.place()));
     auto cu_stream = dev_ctx->stream();
 #else

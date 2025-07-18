@@ -425,7 +425,7 @@ def rebuild_padding(tmp_out: paddle.Tensor,
     Args:
     Returns:
     """
-    if current_platform.is_cuda():
+    if current_platform.is_cuda() or current_platform.is_maca():
         from fastdeploy.model_executor.ops.gpu import rebuild_padding
         hidden_states = rebuild_padding(
             tmp_out,

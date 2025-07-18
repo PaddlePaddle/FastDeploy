@@ -74,7 +74,7 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
         }
     }
 
-#ifdef PADDLE_WITH_CUSTOM_DEVICE
+#if defined(PADDLE_WITH_CUSTOM_DEVICE) && !defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
     auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(topk_ids.place()));
     auto cu_stream = dev_ctx->stream();
 #else

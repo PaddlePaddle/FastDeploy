@@ -36,7 +36,7 @@ def apply_penalty_multi_scores(
     """
     apply_penalty_multi_scores
     """
-    if current_platform.is_cuda():
+    if current_platform.is_cuda() or current_platform.is_maca():
         from fastdeploy.model_executor.ops.gpu import \
             get_token_penalty_multi_scores
         logits = get_token_penalty_multi_scores(

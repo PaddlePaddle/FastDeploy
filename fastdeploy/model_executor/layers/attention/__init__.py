@@ -21,10 +21,12 @@ from .native_paddle_backend import PaddleNativeAttnBackend
 from .xpu_attn_backend import XPUAttentionBackend
 from .iluvatar_attn_backend import IluvatarAttnBackend
 from .block_multihead_attn_backend import BlockAttentionBackend
+from .flash_attention_interface import flash_attn_func, flash_attn_unpadded_func, flash_attn_kvcache_func
 
 __all__ = [
     "AttentionBackend", "PaddleNativeAttnBackend",
     "get_attention_backend", "AppendAttentionBackend", "XPUAttentionBackend",
     "MLAAttentionBackend", "FlashAttentionBackend", "IluvatarAttnBackend",
-    "BlockAttentionBackend"
+    "BlockAttentionBackend",
+    "flash_attn_func", "flash_attn_unpadded_func", "flash_attn_kvcache_func",
 ]

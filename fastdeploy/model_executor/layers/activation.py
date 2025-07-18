@@ -64,7 +64,7 @@ class SiluAndMul(nn.Layer):
         super().__init__()
 
         if current_platform.is_cuda() or current_platform.is_xpu(
-        ) or current_platform.is_iluvatar():
+        ) or current_platform.is_iluvatar() or current_platform.is_maca():
             self.forward = self.forward_cuda
         elif current_platform.is_gcu():
             self.forward = self.forward_gcu

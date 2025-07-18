@@ -36,6 +36,8 @@ class ForwardMode(IntEnum):
     DECODE = auto()
     # Mixed mode
     MIXED = auto()
+    # Native mode
+    NATIVE = auto()
 
     def is_prefill(self):
         """ Is Extend mode """
@@ -48,6 +50,10 @@ class ForwardMode(IntEnum):
     def is_mixed(self):
         """ Is Mixed mode """
         return self == ForwardMode.MIXED
+
+    def is_native(self):
+        """ Is Native mode """
+        return self == ForwardMode.NATIVE
 
 
 @dataclass
@@ -68,7 +74,7 @@ class ForwardMeta():
     # Attention backend object
     attn_backend: AttentionBackend = None
     # Forward mode used during attention
-    forward_mode: ForwardMode = ForwardMode.MIXED
+    forward_mode: ForwardMode = ForwardMode.MIXED if not paddle.device.is_compiled_with_custom_device('metax_gpu') else ForwardMode.NATIVE
     # Attention mask
     attn_mask: Optional[paddle.Tensor] = None
     # Decoder batch id. Used by attention backend.

@@ -323,7 +323,7 @@ void StepPaddle(const paddle::Tensor &stop_flags,
                 const paddle::Tensor &first_token_ids,
                 const int block_size,
                 const int encoder_decoder_block_num) {
-#ifdef PADDLE_WITH_CUSTOM_DEVICE
+#if defined(PADDLE_WITH_CUSTOM_DEVICE) && !defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
     auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(seq_lens_this_time.place()));
     auto cu_stream = dev_ctx->stream();
 #else

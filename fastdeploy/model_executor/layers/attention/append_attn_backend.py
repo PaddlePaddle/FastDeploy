@@ -113,6 +113,8 @@ class AppendAttentionBackend(AttentionBackend):
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
+        if forward_meta.forward_mode.is_native():
+            return
         metadata = AppendAttentionMetadata()
         metadata.encoder_block_shape_q = 64
         metadata.decoder_block_shape_q = 16
@@ -260,3 +262,20 @@ class AppendAttentionBackend(AttentionBackend):
             self.speculative_method is not None,
         )[0]
         return res
+
+    def forward_native_backend(
+        self,
+        q,
+        k,
+        v,
+        qkv,
+        layer: Attention,
+        forward_meta: ForwardMeta,
+    ):
+        """
+        forward_mixed
+        TODO(vivienfanghuagood) WIP
+        """
+        from .native_attention_util import forward_native_backend
+        out = forward_native_backend(qkv, layer, self, forward_meta)
+        return out

@@ -91,7 +91,7 @@ std::vector<paddle::Tensor> rebuild_padding(
     typedef typename traits_::DataType DataType_;
     typedef typename traits_::data_t data_t;
 
-#ifdef PADDLE_WITH_CUSTOM_DEVICE
+#if defined(PADDLE_WITH_CUSTOM_DEVICE) && !defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
     auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(tmp_out.place()));
     auto cu_stream = dev_ctx->stream();
 #else

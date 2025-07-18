@@ -171,7 +171,8 @@ def get_device_type():
     """Get the device type (rocm/gpu/xpu/npu/cpu) that paddle is compiled with."""
     if paddle.is_compiled_with_rocm():
         return "rocm"
-    elif paddle.is_compiled_with_cuda():
+    elif paddle.is_compiled_with_cuda(
+    ) or paddle.device.is_compiled_with_custom_device('metax_gpu'):
         return "gpu"
     elif paddle.is_compiled_with_xpu():
         return "xpu"
