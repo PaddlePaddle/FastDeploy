@@ -12,15 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-import requests
-import time
-import subprocess
-import socket
 import os
 import signal
+import socket
+import subprocess
 import sys
+import time
+
 import openai
+import pytest
+import requests
 
 # Read ports from environment variables; use default values if not set
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
@@ -318,9 +319,9 @@ def test_non_streaming_with_stop_str(openai_client):
     """
     Test non-streaming chat functionality with the local service
     """
-    response = openai_client.completions.create(
+    response = openai_client.chat.completions.create(
         model="default",
-        prompt="Hello, how are you?",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         max_tokens=5,
         metadata={"include_stop_str_in_output": True},
@@ -329,11 +330,11 @@ def test_non_streaming_with_stop_str(openai_client):
     # Assertions to check the response structure
     assert hasattr(response, 'choices')
     assert len(response.choices) > 0
-    assert response.choices[0].message.content.endswith("</s>") 
+    assert response.choices[0].message.content.endswith("</s>")
 
-    response = openai_client.completions.create(
+    response = openai_client.chat.completions.create(
         model="default",
-        prompt="Hello, how are you?",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         max_tokens=5,
         metadata={"include_stop_str_in_output": False},
@@ -342,45 +343,36 @@ def test_non_streaming_with_stop_str(openai_client):
     # Assertions to check the response structure
     assert hasattr(response, 'choices')
     assert len(response.choices) > 0
-    assert not response.choices[0].message.content.endswith("</s>") 
+    assert not response.choices[0].message.content.endswith("</s>")
 
-
-def test_streaming_with_stop_str(openai_client, capsys):
+def test_streaming_with_stop_str(openai_client):
     """
-    Test streaming functionality with the local service
+    Test non-streaming chat functionality with the local service
     """
-    response = openai_client.completions.create(
+    response = openai_client.chat.completions.create(
         model="default",
-        prompt="Hello, how are you?",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         max_tokens=5,
         metadata={"include_stop_str_in_output": True},
         stream=True,
     )
-
-    # Collect streaming output
+    # Assertions to check the response structure
     last_token = ""
-    output = []
     for chunk in response:
-        output.append(chunk.choices[0].text)
         last_token = chunk.choices[0].delta.content
-    assert len(output) > 0
     assert last_token == "</s>"
 
-    response = openai_client.completions.create(
+    response = openai_client.chat.completions.create(
         model="default",
-        prompt="Hello, how are you?",
+        messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         max_tokens=5,
         metadata={"include_stop_str_in_output": False},
         stream=True,
     )
-
-    # Collect streaming output
+    # Assertions to check the response structure
     last_token = ""
-    output = []
     for chunk in response:
-        output.append(chunk.choices[0].text)
         last_token = chunk.choices[0].delta.content
-    assert len(output) > 0
-    assert last_token == "</s>"
+    assert last_token != "</s>"
