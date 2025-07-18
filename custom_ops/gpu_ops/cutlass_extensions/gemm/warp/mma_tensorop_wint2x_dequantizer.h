@@ -285,6 +285,7 @@ public:
         }
 #endif
         int offset = warp_k_compute_offset * ArchMmaOperator::FragmentB::kElements;
+        const int kOutputColumns = FragmentOutput::kElements / kWarpIterationsAlongN;
         int mapped_offset = (warp_k_compute_offset % 2) == 0 ? 0 : (-kOutputColumns + 1);
 
         CUTLASS_PRAGMA_UNROLL
