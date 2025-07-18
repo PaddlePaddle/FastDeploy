@@ -70,7 +70,7 @@ class ModelConfig:
         self.stop_seqs_max_len = 8
 
         # NOTE(gongshaotain): form _load_model_init_val()
-        self.top_p = 0.0
+        self.top_p = 1.0
         self.temperature = 1.0
         self.rope_theta = 10000.0
         self.penalty_score = 1.0
@@ -330,7 +330,7 @@ class GraphOptimizationConfig:
         pre-compute the mapping from batch size to padded graph size
         """
         # Regular capture sizes
-        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size < max_num_seqs]
+        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_num_seqs]
         dedup_sizes = list(set(self.cudagraph_capture_sizes))
         if len(dedup_sizes) < len(self.cudagraph_capture_sizes):
             logger.info(("cudagraph sizes specified by model runner"
