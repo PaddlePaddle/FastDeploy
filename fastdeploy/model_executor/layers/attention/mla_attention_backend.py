@@ -173,7 +173,6 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
-            forward_meta.cum_offsets,
             metadata.encoder_block_shape_q,
             metadata.decoder_block_shape_q,
             self.num_heads // self.kv_num_heads,
