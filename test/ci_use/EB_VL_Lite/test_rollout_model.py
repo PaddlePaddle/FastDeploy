@@ -27,11 +27,18 @@ def test_rollout_model_with_distributed_launch():
 
     rollout_script = os.path.join(current_dir, "rollout_model.py")
 
+    base_path = os.getenv("MODEL_PATH")
+    if base_path:
+        model_path=os.path.join(base_path, "ernie-4_5-vl-28b-a3b-bf16-paddle")
+    else:
+        model_path="./ernie-4_5-vl-28b-a3b-bf16-paddle"
+
     command = [
         sys.executable,
         "-m", "paddle.distributed.launch",
         "--gpus", "0,1",
-        rollout_script
+        rollout_script,
+        "--model_path", model_path,
     ]
 
     print(f"Executing command: {' '.join(command)}")
