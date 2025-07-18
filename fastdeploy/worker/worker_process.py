@@ -398,14 +398,14 @@ class PaddleDisWorkerProc():
 
             if num_blocks_global < 0:
                 logger.error(
-                    f"The total number of blocks cannot be less than zero."
-                    f"Please increase gpu_memory_utilization"
-                    f"Or decrease max_num_batched_tokens(max model length) ")
+                    "The total number of blocks cannot be less than zero."
+                    "Please increase gpu_memory_utilization"
+                    "Or decrease max_num_batched_tokens(max model length) ")
                 raise ValueError(
-                    f"The total number of blocks cannot be less than zero."
-                    f"Please increase gpu_memory_utilization"
-                    f"Or decrease max_num_batched_tokens(max model length) ")
-        
+                    "The total number of blocks cannot be less than zero."
+                    "Please increase gpu_memory_utilization"
+                    "Or decrease max_num_batched_tokens(max model length) ")
+
 
             self.get_profile_block_num_signal.value[
                 self.local_rank] = num_blocks_global
@@ -604,9 +604,24 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     decoding_config = DecodingConfig(vars(args))
     speculative_config = SpeculativeConfig(vars(args))
     parallel_config = ParallelConfig(vars(args))
-    parallel_config.tensor_parallel_rank = local_rank
-    parallel_config.tensor_parallel_size = ranks
-    parallel_config.expert_parallel_rank = int(local_rank / ranks)
+    parallel_config.tensor_parallel_size = args.tensor_parallel_size
+    parallel_config.tensor_parallel_rank = local_rank % args.tensor_parallel_size
+    parallel_config.expert_parallel_size = args.expert_parallel_size
+    # config for EP
+    if args.expert_parallel_size > 1:
+        expert_parallel_rank = int(local_rank / args.tensor_parallel_size)
+        if isinstance(model_config.moe_num_experts, list):
+            num_experts = model_config.moe_num_experts[0]
+        else:
+            num_experts = model_config.moe_num_experts
+
+        num_experts_per_rank =  num_experts // args.expert_parallel_size
+        num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
+
+        parallel_config.expert_parallel_rank = expert_parallel_rank
+        parallel_config.num_experts_per_rank = num_experts_per_rank
+        parallel_config.num_experts_start_offset = num_experts_start_offset
+
     load_config = LoadConfig(vars(args))
 
     graph_opt_config = GraphOptimizationConfig()
