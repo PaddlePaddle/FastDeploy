@@ -1078,6 +1078,7 @@ class GPUModelRunner(ModelRunnerBase):
         time_before_capture = time.perf_counter()
         expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
+        self.initialize_kv_cache()
         for batch_size in sorted(capture_sizes, reverse=True):
             self._dummy_run(num_tokens=self.parallel_config.max_model_len,
                             batch_size=batch_size,
@@ -1086,7 +1087,7 @@ class GPUModelRunner(ModelRunnerBase):
             logger.info(
                 f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}"
             )
-
+        self.clear_cache()
         time_after_capture = time.perf_counter()
         logger.info(
             f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds"
