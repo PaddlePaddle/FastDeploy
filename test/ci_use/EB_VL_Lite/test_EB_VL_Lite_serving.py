@@ -88,7 +88,7 @@ def setup_and_run_server():
         sys.executable, "-m", "fastdeploy.entrypoints.openai.api_server",
         "--model", model_path,
         "--port", str(FD_API_PORT),
-        "--tensor-parallel-size", "1",
+        "--tensor-parallel-size", "2",
         "--engine-worker-queue-port", str(FD_ENGINE_QUEUE_PORT),
         "--metrics-port", str(FD_METRICS_PORT),
         "--enable-mm",
@@ -197,9 +197,9 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     # base result
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        base_file = os.path.join(base_path, "ernie-4_5-vl-base")
+        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2")
     else:
-        base_file = "ernie-4_5-vl-base"
+        base_file = "ernie-4_5-vl-base-tp2"
     with open(base_file, "r") as f:
         content2 = f.read()
 
