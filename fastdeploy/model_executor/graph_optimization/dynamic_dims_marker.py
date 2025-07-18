@@ -38,7 +38,7 @@ class DynamicDimTypeResolver:
         return resolver_cls
 
     @abstractmethod
-    def check(self, tp) -> bool:
+    def type_match(self, tp) -> bool:
         raise NotImplementedError
 
     @abstractmethod
@@ -55,10 +55,10 @@ class DynamicDimTypeResolver:
     def generic_resolve(self, data, data_name, tp) -> None:
         # assert isinstance(data, tp), f"Expected {data_name} has type {tp}, but got {type(data)}"
         for resolver in self.ALL_DYNAMIC_DIM_TYPE_RESOLVERS:
-            if resolver.check(tp):
+            if resolver.type_match(tp):
                 return resolver.resolve(data, data_name, tp)
             runtime_tp = type(data)
-            if runtime_tp is not tp and resolver.check(runtime_tp):
+            if runtime_tp is not tp and resolver.type_match(runtime_tp):
                 return resolver.resolve(data, data_name, runtime_tp)
         else:
             print(f"No resolver found for type {tp} and data {data_name}")
@@ -66,7 +66,7 @@ class DynamicDimTypeResolver:
 
 @DynamicDimTypeResolver.register_resolver
 class DataClassDynamicDimTypeResolver(DynamicDimTypeResolver):
-    def check(self, tp) -> bool:
+    def type_match(self, tp) -> bool:
         return dataclasses.is_dataclass(tp) and isinstance(tp, type)
 
     def extract_inner_types(
@@ -86,7 +86,7 @@ class DataClassDynamicDimTypeResolver(DynamicDimTypeResolver):
 
 @DynamicDimTypeResolver.register_resolver
 class OptionalDynamicDimTypeResolver(DynamicDimTypeResolver):
-    def check(self, tp) -> bool:
+    def type_match(self, tp) -> bool:
         return (
             get_origin(tp) is Union
             and len(tp.__args__) == 2
@@ -104,7 +104,7 @@ class OptionalDynamicDimTypeResolver(DynamicDimTypeResolver):
 
 @DynamicDimTypeResolver.register_resolver
 class ListDynamicDimTypeResolver(DynamicDimTypeResolver):
-    def check(self, tp) -> bool:
+    def type_match(self, tp) -> bool:
         return get_origin(tp) is list
 
     def extract_inner_types(
@@ -118,7 +118,7 @@ class ListDynamicDimTypeResolver(DynamicDimTypeResolver):
 @DynamicDimTypeResolver.register_resolver
 class ManualMarkedInnerFieldsDynamicDimTypeResolver(DynamicDimTypeResolver):
     INFER_DYNAMIC_DIMS_FIELDS_ATTR_NAME = "__infer_dynamic_dims_fields__"
-    def check(self, tp) -> bool:
+    def type_match(self, tp) -> bool:
         return hasattr(tp, ManualMarkedInnerFieldsDynamicDimTypeResolver.INFER_DYNAMIC_DIMS_FIELDS_ATTR_NAME)
 
     def extract_inner_types(
@@ -132,7 +132,7 @@ class ManualMarkedInnerFieldsDynamicDimTypeResolver(DynamicDimTypeResolver):
 
 @DynamicDimTypeResolver.register_resolver
 class AnnotatedTensorDynamicDimTypeResolver(DynamicDimTypeResolver):
-    def check(self, tp) -> bool:
+    def type_match(self, tp) -> bool:
         return get_origin(tp) is Annotated and typing.get_args(tp)[0] is Tensor
 
     def resolve(self, data, data_name, tp) -> None:
@@ -155,7 +155,7 @@ class AnnotatedTensorDynamicDimTypeResolver(DynamicDimTypeResolver):
 
 @DynamicDimTypeResolver.register_resolver
 class TensorImplicitBatchOnlyDynamicDimTypeResolver(DynamicDimTypeResolver):
-    def check(self, tp) -> bool:
+    def type_match(self, tp) -> bool:
         return tp is Tensor
 
     def resolve(self, data, data_name, tp) -> None:
