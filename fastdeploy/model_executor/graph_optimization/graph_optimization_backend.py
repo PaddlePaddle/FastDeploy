@@ -26,24 +26,31 @@ from fastdeploy.model_executor.graph_optimization.cudagraph_piecewise_backend im
 from fastdeploy.model_executor.graph_optimization.dynamic_dims_marker import \
     resolve_dynamic_dims
 from paddle.jit import sot
-from paddle.jit.dy2static.utils import Backend
+from paddle.jit.dy2static.utils import Backend as ToStaticBackend
+
+# TODO(SigureMo): Replace this fn with real implementation by DrRyanHuang
+def create_in_warmup_mode():
+    cnt = 0
+    def in_warmup_mode():
+        nonlocal cnt
+        cnt += 1
+        return cnt < 32
+    return in_warmup_mode
+
+in_warmup_mode = create_in_warmup_mode()
 
 
-def apply_to_static_optimization(fn):
+def apply_to_static_optimization(fn, backend: ToStaticBackend):
     forward_fn = fn
     forward_sig = inspect.signature(forward_fn)
-    # forward_annotations = inspect.get_annotations(forward_fn)
     forward_type_hints = get_type_hints(forward_fn)
     static_forward_fn = sot.symbolic_translate(
-        forward_fn, training=False, backend=Backend.PHI
+        forward_fn, training=False, backend=backend
     )
     unsafe_static_forward_fn = None
 
     @functools.wraps(forward_fn)
-    def static_forward(self, *args, **kwargs):
-        nonlocal unsafe_static_forward_fn
-        if unsafe_static_forward_fn is not None:
-            return unsafe_static_forward_fn(self, *args, **kwargs)
+    def warmup_impl(self, *args, **kwargs):
         bound_args = forward_sig.bind(self, *args, **kwargs)
         bound_args.apply_defaults()
         for name, arg in bound_args.arguments.items():
@@ -52,18 +59,22 @@ def apply_to_static_optimization(fn):
             annotation = forward_type_hints[name]
             resolve_dynamic_dims(arg, name, annotation)
 
-            # print(f"Processing argument '{name}' with annotation: {annotation}")
-            # if isinstance(arg, paddle.Tensor):
-            #     print(
-            #         f"Argument '{name}' is a Tensor with dynamic dims: {extract_dynamic_dims(annotation)}"
-            #     )
-            #     paddle.jit.marker.dynamic_dims(
-            #         arg, extract_dynamic_dims(annotation)
-            #     )
         result = static_forward_fn(self, *args, **kwargs)
         original_code = forward_fn.__code__
         (new_guarded_codes, _) = sot.opcode_translator.executor.executor_cache.OpcodeExecutorCache().cache[original_code]
+        # Check has only one graph
+        if len(new_guarded_codes) > 1:
+            # TODO(SigureMo): Use logger
+            print("Model has multiple generated code, please check all dynamic dim has marked.")
+            unsafe_static_forward_fn = None
+            return result
+        # Check generated code has no break graph
         new_code = new_guarded_codes[0][0][0]
+        if any(name.startswith("$") for name in new_code.co_names): # TODO(SigureMo): It's a internal impl
+            # TODO(SigureMo): Use logger
+            print("Model has breakgraph, please set env SOT_LOG_LEVEL=3 to check it.")
+            unsafe_static_forward_fn = None
+            return result
         unsafe_static_forward_fn = types.FunctionType(
             new_code,
             forward_fn.__globals__,
@@ -72,6 +83,16 @@ def apply_to_static_optimization(fn):
             forward_fn.__closure__,
         )
         return result
+
+    @functools.wraps(forward_fn)
+    def static_forward(self, *args, **kwargs):
+        is_warmup = in_warmup_mode()
+        if is_warmup:
+            warmup_impl(self, *args, **kwargs)
+        nonlocal unsafe_static_forward_fn
+        if unsafe_static_forward_fn is None:
+            return static_forward_fn(self, *args, **kwargs)
+        return unsafe_static_forward_fn(self, *args, **kwargs)
 
     return static_forward
 
@@ -96,13 +117,13 @@ class GraphOptBackend:
 
             # 2. Convert dynamic grpah to static graph
             from paddle.jit import sot
-            backend = (Backend.CINN
+            backend = (ToStaticBackend.CINN
                        if self.fd_config.graph_opt_config.graph_opt_level > 1
-                       else Backend.PHI)
-            # self.runnable = sot.symbolic_translate(self.runnable,
-            #                                        training=False,
-            #                                        backend=backend)
-            self.runnable = apply_to_static_optimization(self.runnable.__func__).__get__(self.runnable.__self__)
+                       else ToStaticBackend.PHI)
+            self.runnable = apply_to_static_optimization(
+                self.runnable.__func__,
+                backend,
+            ).__get__(self.runnable.__self__)
 
     def __call__(self, **kwargs):
         if not self.fd_config.graph_opt_config.use_cudagraph:

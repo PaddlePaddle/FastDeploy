@@ -44,6 +44,7 @@ from fastdeploy.model_executor.models.utils import \
     LayerIdPlaceholder as layerid
 from fastdeploy.model_executor.models.utils import WeightMeta
 
+
 class Ernie4_5_MLP(nn.Layer):
 
     def __init__(
