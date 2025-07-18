@@ -14,6 +14,7 @@
 
 import difflib
 import os
+import argparse
 
 from paddleformers.trl.llm_utils import init_dist_env
 
@@ -22,14 +23,21 @@ from fastdeploy.rl.rollout_model import RolloutModel
 
 _, ranks = init_dist_env()
 
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--model_path",
+    type=str,
+    required=True,
+    help="Path to the model directory"
+)
+args = parser.parse_args()
 
 # base result
-base_path = os.getenv("MODEL_PATH")
-model_path = os.path.join(base_path, "ernie-4_5-vl-28b-a3b-bf16-paddle")
+model_path = args.model_path
 
 # Usage example:
 init_kwargs = {
-    "model_name_or_path": MODEL_PATH,
+    "model_name_or_path": model_path,
     "max_model_len": 32768,
     "tensor_parallel_size": ranks,
     "dynamic_load_weight": True,
@@ -46,9 +54,6 @@ for k, v in actor_eval_model.state_dict().items():
     content += f"{k}\n"
 for k, v in actor_eval_model.get_name_mappings_to_training().items():
     content += f"{k}:{v}\n"
-
-# with open("baseline.txt", "w", encoding="utf-8") as f:
-#     f.write(baseline)
 
 def compare_strings(a: str, b: str) -> bool:
     if a == b:
