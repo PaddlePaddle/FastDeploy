@@ -174,6 +174,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                 self.share_inputs['step_seq_lens_encoder'][idx:idx + 1] = 0
                 self.share_inputs['step_seq_lens_decoder'][idx:idx +
                                                            1] = length
+                self.share_inputs["prompt_lens"][idx:idx + 1] = length
                 self.share_inputs['step_idx'][idx:idx + 1] = 1
 
                 if self.speculative_decoding:
@@ -208,6 +209,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                         idx:idx + 1] = request.get("seq_lens_decoder", 0)
                     self.share_inputs['step_seq_lens_decoder'][
                         idx:idx + 1] = request.get("seq_lens_decoder", 0)
+                    self.share_inputs["prompt_lens"][idx:idx + 1] = token_chunk_size
                 else:
                     self.share_inputs['seq_lens_decoder'][
                         idx:idx + 1] = request.get("seq_lens_decoder", 0)
@@ -218,6 +220,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                     self.share_inputs['step_seq_lens_encoder'][idx:idx +
                                                                1] = length
                     self.share_inputs['seq_lens_encoder'][idx:idx + 1] = length
+                    self.share_inputs["prompt_lens"][idx:idx + 1] = length
 
             if len(request.eos_token_ids
                    ) < self.parallel_config.eos_tokens_lens:
@@ -290,6 +293,8 @@ class IluvatarModelRunner(ModelRunnerBase):
             self.share_inputs["input_ids"][idx:idx +
                                            1, :input_length] = np.array(
                                                [5] * input_length)
+            self.share_inputs["prompt_ids"][idx:idx + 1, :input_length] = np.array(
+                            [5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array(
                 [2], dtype="int64").reshape(-1, 1)
             self.share_inputs["seq_lens_this_time"][idx:idx + 1] = input_length
@@ -297,6 +302,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                                                        1] = input_length
             self.share_inputs["seq_lens_encoder"][idx:idx + 1] = input_length
             self.share_inputs["seq_lens_decoder"][idx:idx + 1] = 0
+            self.share_inputs["prompt_lens"][idx:idx + 1] = 0
             self.share_inputs["step_idx"][idx:idx + 1] = 0
             self.share_inputs["max_dec_len"][idx:idx + 1] = max_dec_len
             self.share_inputs["stop_flags"][idx:idx + 1] = False
@@ -322,6 +328,10 @@ class IluvatarModelRunner(ModelRunnerBase):
             -1,
             dtype='int64')
         self.share_inputs["input_ids"] = paddle.full(
+            [max_num_seqs, self.parallel_config.max_model_len],
+            self.parallel_config.pad_token_id,
+            dtype='int64')
+        self.share_inputs["prompt_ids"] = paddle.full(
             [max_num_seqs, self.parallel_config.max_model_len],
             self.parallel_config.pad_token_id,
             dtype='int64')
@@ -369,6 +379,9 @@ class IluvatarModelRunner(ModelRunnerBase):
             [max_num_seqs, 1], 0, dtype='int32')
         self.share_inputs["step_seq_lens_decoder"] = paddle.full(
             [max_num_seqs, 1], 0, dtype='int32')
+        self.share_inputs["prompt_lens"] = paddle.full([max_num_seqs, 1],
+                                                0,
+                                                dtype='int64')
         self.share_inputs["step_idx"] = paddle.full([max_num_seqs, 1],
                                                     0,
                                                     dtype='int64')
@@ -563,6 +576,8 @@ class IluvatarModelRunner(ModelRunnerBase):
             top_k=self.share_inputs["top_k"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
+            prompt_ids=self.share_inputs["prompt_ids"],
+            prompt_lens=self.share_inputs["prompt_lens"],
             frequency_penalties=self.share_inputs["frequency_score"],
             presence_penalties=self.share_inputs["presence_score"],
             repetition_penalties=self.share_inputs["penalty_score"],
@@ -845,6 +860,7 @@ class IluvatarModelRunner(ModelRunnerBase):
                                               token_chunk_size])
                 self.share_inputs['seq_lens_encoder'][idx:idx +
                                                       1] = token_chunk_size
+                self.share_inputs["prompt_lens"][idx:idx + 1] += token_chunk_size
                 self.share_inputs["step_idx"][idx:idx + 1] = 0
                 self.share_inputs["seq_lens_decoder"][
                     idx:idx + 1] = start_idx + task.get("seq_lens_decoder", 0)

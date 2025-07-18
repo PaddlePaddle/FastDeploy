@@ -774,7 +774,6 @@ class XPUModelRunner(ModelRunnerBase):
         del self.share_inputs["caches"]
         if self.forward_meta is not None:
             del self.forward_meta.caches
-        del self.share_inputs["block_tables"]
         paddle.device.xpu.empty_cache()
 
     def cal_theortical_kvcache(self):
@@ -816,11 +815,6 @@ class XPUModelRunner(ModelRunnerBase):
 
         # Reset block table and kv cache with global block num
         self.initialize_kv_cache()
-
-        self.share_inputs["block_tables"] = paddle.full(
-            [self.parallel_config.max_num_seqs, self.num_gpu_blocks],
-            -1,
-            dtype="int32")
 
         # Reset free list
         free_list = list(

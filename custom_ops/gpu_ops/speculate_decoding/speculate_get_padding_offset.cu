@@ -53,7 +53,7 @@ __global__ void SpeculateGetPaddingOffsetKernel(int* padding_offset,
     const int ti = threadIdx.x;
     int cum_offset = bi == 0 ? 0 : cum_offsets[bi - 1];
     for (int i = ti; i < seq_lens[bi]; i += blockDim.x) {
-        padding_offset[bi * max_seq_len - cum_offset + i] = cum_offset;
+        padding_offset[bi * max_seq_len - cum_offset + i] = bi;
     }
     if (ti == 0) {
         cum_offsets_out[bi] = cum_offset;

@@ -104,7 +104,7 @@ class RMSNorm(nn.Layer):
         self.variance_epsilon = config.rms_norm_eps
         self.config = config
 
-        if config.sequence_parallel:
+        if getattr(config, "sequence_parallel", False):
             mark_as_sequence_parallel_parameter(self.weight)
 
     def forward(self, hidden_states):
@@ -118,7 +118,6 @@ class RMSNorm(nn.Layer):
             Tensor: Normalized output tensor of same shape as input
 
         Note:
-            - Uses fused kernel if config.fuse_rms_norm is True for better performance
             - Otherwise computes RMSNorm manually:
                 1. Compute variance of features
                 2. Apply reciprocal square root normalization
@@ -146,9 +145,9 @@ class VariableResolutionResamplerModel(nn.Layer):
         self.config = config
         self.spatial_conv_size = spatial_conv_size
         self.temporal_conv_size = temporal_conv_size
-        self.use_recompute_resampler = config.use_recompute_resampler
-        self.use_temporal_conv = config.use_temporal_conv
-        self.tensor_parallel_degree = config.tensor_parallel_degree
+        self.use_recompute_resampler = False
+        self.use_temporal_conv = True
+        self.tensor_parallel_degree = config.pretrained_config.tensor_parallel_degree
         self.prefix_name = prefix_name
 
         # for 空间四合一
@@ -165,7 +164,7 @@ class VariableResolutionResamplerModel(nn.Layer):
                     input_is_parallel=True,
                     has_bias=True,
                     fuse_matmul_bias=True,
-                ) if config.tensor_parallel_degree > 1 else nn.Linear(
+                ) if self.tensor_parallel_degree > 1 else nn.Linear(
                     self.spatial_dim, self.spatial_dim)),
                 nn.GELU(),
                 nn.Linear(self.spatial_dim, self.spatial_dim),
@@ -184,11 +183,9 @@ class VariableResolutionResamplerModel(nn.Layer):
 
             out_config = deepcopy(config)
             out_config.hidden_size = out_dim
-            # Note(GuoxiaWang): fuse can reduce gpu peak memory
-            out_config.fuse_rms_norm = out_config.resampler_fuse_rms_norm
             self.after_norm = RMSNorm(out_config)
 
-            if config.tensor_parallel_degree > 1:
+            if self.tensor_parallel_degree > 1:
                 for idx in [2, 3]:
                     mark_as_sequence_parallel_parameter(
                         self.spatial_linear[idx].weight)
@@ -209,31 +206,6 @@ class VariableResolutionResamplerModel(nn.Layer):
                 mark_as_sequence_parallel_parameter(self.mlp.weight)
                 mark_as_sequence_parallel_parameter(self.mlp.bias)
                 mark_as_sequence_parallel_parameter(self.after_norm.weight)
-
-    def get_name_mappings_to_training(self, ):
-        """ get_name_mappings_to_training """
-        infer_to_train = {}
-        resampler_names = [
-            "ernie.resampler_model.spatial_linear.0.weight",
-            "ernie.resampler_model.spatial_linear.0.bias",
-            "ernie.resampler_model.spatial_linear.2.weight",
-            "ernie.resampler_model.spatial_linear.2.bias",
-            "ernie.resampler_model.spatial_linear.3.weight",
-            "ernie.resampler_model.spatial_linear.3.bias",
-            "ernie.resampler_model.temporal_linear.0.weight",
-            "ernie.resampler_model.temporal_linear.0.bias",
-            "ernie.resampler_model.temporal_linear.2.weight",
-            "ernie.resampler_model.temporal_linear.2.bias",
-            "ernie.resampler_model.temporal_linear.3.weight",
-            "ernie.resampler_model.temporal_linear.3.bias",
-            "ernie.resampler_model.mlp.weight",
-            "ernie.resampler_model.mlp.bias",
-            "ernie.resampler_model.after_norm.weight",
-        ]
-        for train_name in resampler_names:
-            infer_to_train[train_name[len("ernie."):]] = train_name
-
-        return infer_to_train
 
     def spatial_conv_reshape(self, x, spatial_conv_size):
         """
@@ -376,9 +348,11 @@ class VariableResolutionResamplerModel(nn.Layer):
         for param_name, param in params_dict.items():
             state_dict_key = f"{self.prefix_name}.{param_name}"
             if state_dict_key not in state_dict:
-                raise ValueError(
-                    f"The key {state_dict_key} does not exist in state_dict. "
-                )
+                state_dict_key = f"ernie.{self.prefix_name}.{param_name}"
+                if state_dict_key not in state_dict:
+                    raise ValueError(
+                        f"The key {state_dict_key} does not exist in state_dict. "
+                    )
             tensor = get_tensor(state_dict.pop(state_dict_key))
             if param.shape != tensor.shape:
                 raise ValueError(

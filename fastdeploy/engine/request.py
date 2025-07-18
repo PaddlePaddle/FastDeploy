@@ -20,7 +20,7 @@ import time
 from dataclasses import asdict, dataclass, fields
 from typing import Any, Dict, Optional, Union
 
-import numpy
+import numpy as np
 
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.utils import data_processor_logger
@@ -55,7 +55,8 @@ class Request:
                  guided_grammar: Optional[Any] = None,
                  structural_tag: Optional[Any] = None,
                  guided_json_object: Optional[bool] = None,
-                 enable_thinking: Optional[bool] = True) -> None:
+                 enable_thinking: Optional[bool] = True,
+                 trace_carrier: dict = dict()) -> None:
         self.request_id = request_id
         self.prompt = prompt
         self.prompt_token_ids = prompt_token_ids
@@ -91,6 +92,7 @@ class Request:
         self.multimodal_data = multimodal_data
 
         self.enable_thinking = enable_thinking
+        self.trace_carrier = trace_carrier
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -120,7 +122,8 @@ class Request:
                    guided_grammar=d.get("guided_grammar", None),
                    structural_tag=d.get("structural_tag", None),
                    guided_json_object=d.get("guided_json_object", None),
-                   enable_thinking=d.get("enable_thinking", True))
+                   enable_thinking=d.get("enable_thinking", True),
+                   trace_carrier=d.get("trace_carrier", {}))
 
     def to_dict(self) -> dict:
         """convert Request into a serializable dict """
@@ -142,7 +145,8 @@ class Request:
             "raw_request": self.raw_request,
             "disaggregate_info": self.disaggregate_info,
             "draft_token_ids": self.draft_token_ids,
-            "enable_thinking": self.enable_thinking
+            "enable_thinking": self.enable_thinking,
+            "trace_carrier": self.trace_carrier
         }
         add_params = [
             "guided_json", "guided_regex", "guided_choice", "guided_grammar",
@@ -177,7 +181,7 @@ class Request:
                 f"sampling_params={self.sampling_params})")
 
 
-@dataclass
+@dataclass(slots=True)
 class CompletionOutput:
     """The output data of one completion output of a request.
 
@@ -231,7 +235,7 @@ class CompletionOutput:
                 f"reasoning_content={self.reasoning_content!r}")
 
 
-@dataclass
+@dataclass(slots=True)
 class RequestMetrics:
     """Metrics associated with a request.
 
@@ -329,6 +333,12 @@ class RequestOutput:
         self.error_code = error_code
         self.error_msg = error_msg
 
+
+        if prompt_token_ids is None:
+            self.prompt_token_ids = []
+        elif isinstance(self.prompt_token_ids, np.ndarray):
+            self.prompt_token_ids = self.prompt_token_ids.tolist()
+
     def add(self, next_output: "RequestOutput") -> None:
         """Merge RequestOutput into this one"""
 
@@ -361,11 +371,6 @@ class RequestOutput:
 
     def to_dict(self):
         """convert RequestOutput into a serializable dict """
-        if self.prompt_token_ids is None:
-            self.prompt_token_ids = []
-
-        if type(self.prompt_token_ids) is numpy.ndarray:
-            self.prompt_token_ids = self.prompt_token_ids.tolist()
 
         return {
             "request_id": self.request_id,

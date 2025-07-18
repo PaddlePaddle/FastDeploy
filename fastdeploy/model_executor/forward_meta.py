@@ -85,8 +85,8 @@ class ForwardMeta():
 
     # Accumulated offset
     cum_offsets: Optional[paddle.Tensor] = None
-    # Offset tensor, used to restore the position of ids_remove_madding after padding removal to the original input_ids
-    padding_offset: Optional[paddle.Tensor] = None
+    # batch_id_per_token tensor, used to indicate which token belongs which batch after padding removal to the original input_ids
+    batch_id_per_token: Optional[paddle.Tensor] = None
     # Accumulated sequence length of query
     cu_seqlens_q: Optional[paddle.Tensor] = None
     # Accumulated sequence length of key
