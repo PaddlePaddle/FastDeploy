@@ -25,7 +25,8 @@ import paddle.distributed.fleet as fleet
 
 from fastdeploy.config import (DecodingConfig, DeviceConfig, FDConfig,
                                GraphOptimizationConfig, LoadConfig,
-                               ModelConfig, ParallelConfig, SpeculativeConfig)
+                               ModelConfig, ParallelConfig, SpeculativeConfig,
+                               ErnieArchitectures)
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
@@ -653,9 +654,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         quant_config_name = args.quantization
         quantization_config["quantization"] = quant_config_name
         # Special handling for Ernie models
-        is_ernie = "Ernie4_5_ForCausalLM" in model_config.architectures or \
-                    "Ernie4_5_MoeForCausalLM" in model_config.architectures or \
-                    "Ernie4_5_VLMoeForConditionalGeneration" in model_config.architectures
+        is_ernie = ErnieArchitectures.contains_ernie_arch(model_config.architectures)
         if quant_config_name == "wint4" and is_ernie:
             quantization_config["dense_quant_type"] = "wint8"
             quantization_config["moe_quant_type"] = "wint4"
