@@ -234,7 +234,7 @@ paddle::Tensor InitSignalLayerwiseFunc(const paddle::Tensor &kv_signal_metadata,
 std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
     const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &seq_lens_this_time, const paddle::Tensor &cum_offsets,
+    const paddle::Tensor &seq_lens_this_time,
     const int encoder_block_shape_q, const int decoder_block_shape_q,
     const int group_size, const int block_size,
     const int decoder_step_token_num);
