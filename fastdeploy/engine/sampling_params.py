@@ -53,7 +53,7 @@ class SamplingParams:
         top_p: Float that controls the cumulative probability of the top tokens
             to consider. Must be in [0, 1]. Set to 1 to consider all tokens.
         top_k: Int that controls the number of top tokens to consider. Must be a positive integer.
-        min_p:Float that represents the minimum probability for a token to be
+        min_p: Float that represents the minimum probability for a token to be
             considered, relative to the probability of the most likely token.
             Must be in [0, 1]. Set to 0 to disable this.
         seed: Random seed to use for the generation.
@@ -87,7 +87,7 @@ class SamplingParams:
     temperature: float = None
     top_p: float = None
     top_k: int = 0
-    min_p: float=0.0
+    min_p: float = 0.0
     seed: Optional[int] = None
     stop: Optional[Union[str, List[str]]] = None
     stop_token_ids: Optional[Union[List[List[int]], List[int]]] = None
@@ -186,7 +186,7 @@ class SamplingParams:
         if not isinstance(self.top_k, int):
             raise TypeError(
                 f"top_k must be an integer, got {type(self.top_k).__name__}")
-        if not 0.0 <=self.min_p <= 1.0:
+        if not 0.0 <= self.min_p <= 1.0:
             raise ValueError("min_p must be in [0,1],got f{self.min_p}")
 
         if self.max_tokens is not None and self.max_tokens < 1:

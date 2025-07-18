@@ -269,7 +269,7 @@ class Sampler(nn.Layer):
 
         probs = F.softmax(logits)
 
-        probs= min_p_sampling(probs,sampling_metadata.min_p)
+        probs = min_p_sampling(probs,sampling_metadata.min_p)
 
         _, next_tokens = top_k_top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
 
