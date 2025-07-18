@@ -1079,7 +1079,7 @@ class GPUModelRunner(ModelRunnerBase):
         expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
         for batch_size in sorted(capture_sizes, reverse=True):
-            self._dummy_run(num_tokens=self.parallel_config.max_model_len,
+            self._dummy_run(num_tokens=self.parallel_config.max_num_batched_tokens,
                             batch_size=batch_size,
                             in_capturing=True,
                             expected_decode_len=expected_decode_len)
