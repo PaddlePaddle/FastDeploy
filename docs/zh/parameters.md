@@ -32,9 +32,8 @@
 | ```long_prefill_token_threshold``` | `int`       | 开启Chunked Prefill时，请求Token数超过此值的请求被视为长请求，默认为max_model_len*0.04 |
 | ```static_decode_blocks```         | `int`       | 推理过程中，每条请求强制从Prefill的KVCache分配对应块数给Decode使用，默认2|
 | ```reasoning_parser```             | `str`       | 指定要使用的推理解析器，以便从模型输出中提取推理内容 |
-| ```enable_static_graph_inference```| `bool`      | 是否使用静态图推理模式，默认False |
 | ```use_cudagraph```                | `bool`      | 是否使用cuda graph，默认False |
-| ```max_capture_batch_size```       | `int`       | 开启 cuda graph 时，捕获的 cuda graph的最大batch size，默认为64 |
+｜```graph_optimization_config```    | `str`       | 可以配置计算图优化相关的参数，默认值为'{"use_cudagraph":false, "graph_opt_level":0, "cudagraph_capture_sizes": null }' |
 | ```enable_custom_all_reduce```     | `bool`      | 开启Custom all-reduce，默认False |
 | ```splitwise_role```               | `str`       | 是否开启splitwise推理，默认值mixed， 支持参数为["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports```         | `str`       | prefill 实例内部引擎启动端口 （仅单机PD分离需要），默认值None |
@@ -70,22 +69,53 @@ FastDeploy在推理过程中，显存被```模型权重```、```预分配KVCache
 为优化短请求的调度优先级，新增 `max_long_partial_prefills` 与 `long_prefill_token_threshold` 参数组合。前者限制单个预填充批次中的长请求数量，后者定义长请求的token阈值。系统会优先保障短请求的批处理空间，从而在混合负载场景下降低短请求延迟，同时保持整体吞吐稳定。
 
 ## 4. GraphOptimizationBackend 相关配置参数说明
+当前仅支持用户配置以下参数：
+- `use_cudagraph` : bool = False
+- `graph_optimization_config` :  Dict[str, Any]
+    - `graph_opt_level`: int = 0
+    - `use_cudagraph`: bool = False
+    - `cudagraph_capture_sizes` : List[int] = None
 
-### 动态图转静态图相关参数说明
+可以通过设置 `--use-cudagraph` 或 `--graph-optimization-config '{"use_cudagraph":true}'` 开启 CudaGrpah。
 
-- 当开启 ```enable_static_graph_inference```时，会执行动态图转静态图，使用静态图进行推理。
+`--graph-optimization-config` 中的 `graph_opt_level` 参数用于配置图优化等级，可选项如下：
+- `0`: 动态图，默认为 0
+- `1`: 静态图，初始化阶段会使用 Paddle API 将动态图转换为静态图
+- `2`: 在静态图的基础上，使用 Paddle 框架编译器（CINN, Compiler Infrastructure for Neural Networks）进行编译优化
+
+一般情况下静态图比动态图的 Kernel Launch 开销更小，推荐使用静态图。
+对于已适配的模型，FastDeploy 的 CudaGraph **可同时支持动态图与静态图**。
+
+在默认配置下开启 CudaGraph 时，会根据 `max_num_seqs` 参数自动设置 CudaGraph 需要捕获的 Batch Size 列表，需要捕获的 Batch Size 的列表自动生成逻辑如下：
+1. 生成一个范围为 [1,1024] Batch Size 的候选列表
+```
+        # Batch Size [1, 2, 4, 8, 16, ... 120, 128]
+        candidate_capture_sizes = [1, 2, 4] + [8 * i for i in range(1, 17)]
+        # Batch Size (128, 144, ... 240, 256]
+        candidate_capture_sizes += [16 * i for i in range(9, 17)]
+        # Batch Size (256, 288, ... 992, 1024]
+        candidate_capture_sizes += [32 * i for i in range(17, 33)]
+```
+2. 根据用户设置的 `max_num_seqs` 裁剪候选列表，得到范围为 [1, `max_num_seqs`] 的 CudaGraph 捕获列表。
+
+用户也可以通过 `--graph-optimization-config` 中的 `cudagraph_capture_sizes` 参数自定义需要被 CudaGraph 捕获的 Batch Size 列表:
+```
+--graph-optimization-config '{"cudagraph_capture_sizes": [1, 3, 5, 7, 9]}'
+```
+
 
 ### CudaGraph相关参数说明
-
-对于已适配的模型，FastDeploy 的 CudaGraph 可同时支持动态图与静态图。使用 CudaGraph 会产生一些额外的显存开销，在FastDeploy中分为下面两类：
+使用 CudaGraph 会产生一些额外的显存开销，在FastDeploy中分为下面两类：
 * 额外的输入 Buffer 开销
 * CudaGraph 使用了专用的显存池，因此会持有一部分与主框架隔离的中间激活显存
 
-FastDeploy 的初始化顺序为先使用 `gpu_memory_utilization` 参数计算 `KVCache` 可用的显存，初始化完 `KVCache` 之后才会使用剩余显存初始化 CudaGraph。由于 CudaGraph 目前还不是默认开启的，因此使用默认启动参数可能会遇到 `Out of memory` 错误，可以尝试使用下面两种方式解决：
+FastDeploy 的初始化顺序为先使用 `gpu_memory_utilization` 参数计算 `KVCache` 可用的显存，初始化完 `KVCache` 之后才会使用剩余显存初始化 CudaGraph。由于 CudaGraph 目前还不是默认开启的，因此使用默认启动参数可能会遇到 `Out Of Memory` 错误，可以尝试使用下面三种方式解决：
 * 调低 `gpu_memory_utilization` 的值，多预留一些显存给CudaGraph使用。
-* 调低 `max_capture_batch_size` 的值， 减少CudaGraph的显存占用，同时也会降低推理时CudaGraph的使用率。
+* 调低 `max_num_seqs` 的值，降低最大并发数。
+* 通过 `graph_optimization_config` 自定义需要 CudaGraph 捕获的 Batch Size 列表 `cudagraph_capture_sizes`，减少捕获的图的数量
 
-- 使用之前，需要确保加载的模型被装饰器 ```@support_graph_optimization```正确修饰。
+
+使用CudaGraph之前，需要确保加载的模型被装饰器 ```@support_graph_optimization```正确修饰。
 
   ```python
   # 1. import 装饰器
@@ -116,4 +146,3 @@ FastDeploy 的初始化顺序为先使用 `gpu_memory_utilization` 参数计算 
   ```
 - 当开启 ```use_cudagraph``` 时，暂时只支持单卡推理，即 ```tensor_parallel_size``` 设为1。
 - 当开启 ```use_cudagraph``` 时，暂不支持开启 ```enable_prefix_caching``` 或 ```enable_chunked_prefill``` 。
-- 当开启 ```use_cudagraph``` 后，size小于等于 ```max_capture_batch_size``` 的batch会由CudaGraph来执行前向计算，大于 ```max_capture_batch_size``` 的batch会由原本的动态图/静态图执行前向计算。如果希望所有batch size均由CudaGraph来执行，```max_capture_batch_size``` 的值建议与 ```max_num_seqs``` 一致。```max_capture_batch_size``` 大于 ```max_num_seqs``` 会导致浪费，会多捕获一些推理时不会遇到的batch，占用更多时间与显存。
