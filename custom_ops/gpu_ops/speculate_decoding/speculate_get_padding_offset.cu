@@ -41,7 +41,7 @@ __global__ void SpeculateRemovePadding(int64_t* output_data,
     }
 }
 
-__global__ void SpeculateGetPaddingOffsetKernel(int* padding_offset,
+__global__ void SpeculateGetPaddingOffsetKernel(int* batch_id_per_token,
                                                 int* cum_offsets_out,
                                                 int* cu_seqlens_q,
                                                 int* cu_seqlens_k,
@@ -53,7 +53,7 @@ __global__ void SpeculateGetPaddingOffsetKernel(int* padding_offset,
     const int ti = threadIdx.x;
     int cum_offset = bi == 0 ? 0 : cum_offsets[bi - 1];
     for (int i = ti; i < seq_lens[bi]; i += blockDim.x) {
-        padding_offset[bi * max_seq_len - cum_offset + i] = bi;
+        batch_id_per_token[bi * max_seq_len - cum_offset + i] = bi;
     }
     if (ti == 0) {
         cum_offsets_out[bi] = cum_offset;
@@ -81,7 +81,7 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
     const int token_num_data = cpu_token_num.data<int64_t>()[0];
     auto x_remove_padding = paddle::full(
         {token_num_data}, 0, paddle::DataType::INT64, input_ids.place());
-    auto padding_offset = paddle::full(
+    auto batch_id_per_token = paddle::full(
         {token_num_data}, 0, paddle::DataType::INT32, input_ids.place());
     auto cu_seqlens_q =
         paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
@@ -89,7 +89,7 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
         paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
     int blockSize = min((token_num_data + 32 - 1) / 32 * 32, 128);
     SpeculateGetPaddingOffsetKernel<<<bsz, 128, 0, cu_stream>>>(
-        padding_offset.data<int>(),
+        batch_id_per_token.data<int>(),
         cum_offsets_out.data<int>(),
         cu_seqlens_q.data<int>(),
         cu_seqlens_k.data<int>(),
@@ -107,7 +107,7 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
         max_draft_tokens);
     return {x_remove_padding,
             cum_offsets_out,
-            padding_offset,
+            batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k};  // , enc_token_num, dec_token_num};
 }
@@ -147,7 +147,7 @@ PD_BUILD_STATIC_OP(speculate_get_padding_offset)
              "seq_lens_encoder"})
     .Outputs({"x_remove_padding",
               "cum_offsets_out",
-              "padding_offset",
+              "batch_id_per_token",
               "cu_seqlens_q",
               "cu_seqlens_k"})
     .SetKernelFn(PD_KERNEL(SpeculateGetPaddingOffset))
