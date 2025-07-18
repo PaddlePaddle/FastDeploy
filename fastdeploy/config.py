@@ -38,6 +38,25 @@ class MoEPhase(Enum):
     PREFILL = 1
     DECODER = 2
 
+class ErnieArchitectures:
+    """Helper class for ERNIE architecture check."""
+    
+    ARCHITECTURES = {
+        "Ernie4_5_ForCausalLM",
+        "Ernie4_5_MoeForCausalLM", 
+        "Ernie4_5_VLMoeForConditionalGeneration"
+    }
+
+    @classmethod
+    def contains_ernie_arch(cls, architectures):
+        """Check if any ERNIE architecture is present in the given architectures."""
+        return any(arch in architectures for arch in cls.ARCHITECTURES)
+
+    @classmethod
+    def is_ernie_arch(cls, architecture):
+        """Check if the given architecture is an ERNIE architecture."""
+        return architecture in cls.ARCHITECTURES
+
 PRETRAINED_INIT_CONFIGURATION = {
     "rope_theta" : 10000.0,
     "num_key_value_heads" : -1,
@@ -109,8 +128,9 @@ class ModelConfig:
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
         self.ori_vocab_size = self.vocab_size
-        if "Ernie4_5_ForCausalLM" in self.architectures or "Ernie4_5_MoeForCausalLM" in self.architectures:
+        if ErnieArchitectures.contains_ernie_arch(self.architectures):
             self.ori_vocab_size = args.get("ori_vocab_size", self.ori_vocab_size)
+
 
 class ParallelConfig:
     """Configuration for the distributed execution."""

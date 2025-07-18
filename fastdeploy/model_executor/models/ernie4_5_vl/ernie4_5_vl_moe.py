@@ -161,7 +161,7 @@ class Ernie4_5_VLMoE(nn.Layer):
 
         self.num_shared_experts = fd_config.model_config.moe_num_shared_experts
         if self.num_shared_experts > 0:
-            self.share_experts = Ernie4_5_VLMLP(
+            self.shared_experts = Ernie4_5_VLMLP(
                 fd_config=fd_config,
                 intermediate_size=self.num_shared_experts *
                 fd_config.model_config.moe_intermediate_size[0],
@@ -193,11 +193,11 @@ class Ernie4_5_VLMoE(nn.Layer):
         if self.text_fused_moe.moe_use_gate_correction_bias:
             state_dict.pop(self.text_fused_moe.gate_correction_bias_key)
         if self.num_shared_experts > 0:
-            self.share_experts.load_state_dict(state_dict)
+            self.shared_experts.load_state_dict(state_dict)
 
     def forward(self, hidden_states: paddle.Tensor, vl_moe_meta: VLMoEMeta):
         if self.num_shared_experts > 0:
-            share_experts_out = self.share_experts(hidden_states)
+            shared_experts_out = self.shared_experts(hidden_states)
         if vl_moe_meta.image_input is not None:
             text_image_gather_scatter(
                 hidden_states,
@@ -222,7 +222,7 @@ class Ernie4_5_VLMoE(nn.Layer):
         else:
             hidden_states = self.text_fused_moe(hidden_states)
         if self.num_shared_experts > 0:
-            hidden_states += share_experts_out
+            hidden_states += shared_experts_out
         if self.tp_size > 1:
             tensor_model_parallel_all_reduce(hidden_states)
         return hidden_states
