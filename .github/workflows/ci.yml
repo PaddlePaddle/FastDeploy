@@ -82,7 +82,7 @@ jobs:
           -e "FD_API_PORT=${FD_API_PORT}" \
           -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
-          --gpus '"device=${DEVICES}"' ${docker_image} /bin/bash -c "
+          --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -c "
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
           bash scripts/run_ci.sh
