@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import difflib
+import os
 
 from paddleformers.trl.llm_utils import init_dist_env
 
