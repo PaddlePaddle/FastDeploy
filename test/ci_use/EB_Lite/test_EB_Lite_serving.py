@@ -296,7 +296,6 @@ def test_non_streaming(openai_client):
     assert hasattr(response, 'choices')
     assert len(response.choices) > 0
 
-
 def test_streaming(openai_client, capsys):
     """
     Test streaming functionality with the local service
@@ -314,3 +313,74 @@ def test_streaming(openai_client, capsys):
     for chunk in response:
         output.append(chunk.choices[0].text)
     assert len(output) > 0
+
+def test_non_streaming_with_stop_str(openai_client):
+    """
+    Test non-streaming chat functionality with the local service
+    """
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=5,
+        metadata={"include_stop_str_in_output": True},
+        stream=False,
+    )
+    # Assertions to check the response structure
+    assert hasattr(response, 'choices')
+    assert len(response.choices) > 0
+    assert response.choices[0].message.content.endswith("</s>") 
+
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=5,
+        metadata={"include_stop_str_in_output": False},
+        stream=False,
+    )
+    # Assertions to check the response structure
+    assert hasattr(response, 'choices')
+    assert len(response.choices) > 0
+    assert not response.choices[0].message.content.endswith("</s>") 
+
+
+def test_streaming_with_stop_str(openai_client, capsys):
+    """
+    Test streaming functionality with the local service
+    """
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=5,
+        metadata={"include_stop_str_in_output": True},
+        stream=True,
+    )
+
+    # Collect streaming output
+    last_token = ""
+    output = []
+    for chunk in response:
+        output.append(chunk.choices[0].text)
+        last_token = chunk.choices[0].delta.content
+    assert len(output) > 0
+    assert last_token == "</s>"
+
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=5,
+        metadata={"include_stop_str_in_output": False},
+        stream=True,
+    )
+
+    # Collect streaming output
+    last_token = ""
+    output = []
+    for chunk in response:
+        output.append(chunk.choices[0].text)
+        last_token = chunk.choices[0].delta.content
+    assert len(output) > 0
+    assert last_token == "</s>"
