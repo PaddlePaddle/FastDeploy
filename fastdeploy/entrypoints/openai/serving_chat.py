@@ -119,6 +119,7 @@ class OpenAIServingChat:
         num_choices = 1
         max_streaming_response_tokens = 1
         enable_thinking = None
+        include_stop_str_in_output = False
         if request.metadata is not None and request.metadata.get("max_streaming_response_tokens", 1) > 1:
             max_streaming_response_tokens = request.metadata["max_streaming_response_tokens"]
 
@@ -146,6 +147,7 @@ class OpenAIServingChat:
             current_waiting_time = 0
             if request.metadata is not None:
                 enable_thinking = request.metadata.get("enable_thinking")
+                include_stop_str_in_output = request.metadata.get("include_stop_str_in_output", False)
             while num_choices > 0:
                 try:
                     raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
@@ -169,7 +171,7 @@ class OpenAIServingChat:
                         raise ValueError("{}".format(res["error_msg"]))
 
                     self.engine_client.data_processor.process_response_dict(
-                        res, stream=True, enable_thinking=enable_thinking)
+                        res, stream=True, enable_thinking=enable_thinking, include_stop_str_in_output=include_stop_str_in_output)
 
                     if res['metrics']['first_token_time'] is not None:
                         arrival_time = res['metrics']['first_token_time']
@@ -303,6 +305,7 @@ class OpenAIServingChat:
         created_time = int(time.time())
         final_res = None
         enable_thinking = None
+        include_stop_str_in_output = False
         try:
             dealer = await aiozmq.create_zmq_stream(
                 zmq.DEALER,
@@ -335,8 +338,9 @@ class OpenAIServingChat:
                         raise ValueError("{}".format(data["error_msg"]))
                     if request.metadata is not None:
                         enable_thinking = request.metadata.get("enable_thinking")
+                        include_stop_str_in_output = request.metadata.get("include_stop_str_in_output", False)
                     data = self.engine_client.data_processor.process_response_dict(
-                        data, stream=False, enable_thinking=enable_thinking)
+                        data, stream=False, enable_thinking=enable_thinking, include_stop_str_in_output=include_stop_str_in_output)
                     # api_server_logger.debug(f"Client {request_id} received: {data}")
                     previous_num_tokens += len(data["outputs"]["token_ids"])
                     # The logprob for handling the response
