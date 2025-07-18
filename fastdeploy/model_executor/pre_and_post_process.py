@@ -488,6 +488,17 @@ def rebuild_padding(
             output_padding_offset,
             max_input_length,
         )
+    elif current_platform.is_dcu():
+        from fastdeploy.model_executor.ops.gpu import rebuild_padding
+        hidden_states = rebuild_padding(
+            tmp_out,
+            cum_offsets,
+            seq_len_this_time,
+            seq_lens_decoder,
+            seq_lens_encoder,
+            output_padding_offset,
+            max_input_length,
+        )
     elif current_platform.is_iluvatar():
         from fastdeploy.model_executor.ops.iluvatar import rebuild_padding
 
