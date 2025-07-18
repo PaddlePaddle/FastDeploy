@@ -84,6 +84,7 @@ jobs:
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -c "
           git config --global --add safe.directory /workspace/FastDeploy
-          cd FastDeploy
+          mv FastDeploy FastDeploy_test
+          cd FastDeploy_test
           bash scripts/run_ci.sh
           "
