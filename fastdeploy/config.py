@@ -330,7 +330,7 @@ class GraphOptimizationConfig:
         pre-compute the mapping from batch size to padded graph size
         """
         # Regular capture sizes
-        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size < max_num_seqs]
+        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_num_seqs]
         dedup_sizes = list(set(self.cudagraph_capture_sizes))
         if len(dedup_sizes) < len(self.cudagraph_capture_sizes):
             logger.info(("cudagraph sizes specified by model runner"
