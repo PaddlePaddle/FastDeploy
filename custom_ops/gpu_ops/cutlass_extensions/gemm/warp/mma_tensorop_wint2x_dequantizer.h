@@ -284,21 +284,22 @@ public:
                 static_cast<int>(sizeof(FragmentCompute)));
         }
 #endif
-
         int offset = warp_k_compute_offset * ArchMmaOperator::FragmentB::kElements;
         const int kOutputColumns = FragmentOutput::kElements / kWarpIterationsAlongN;
+        int mapped_offset = (warp_k_compute_offset % 2) == 0 ? 0 : (-kOutputColumns + 1);
 
         CUTLASS_PRAGMA_UNROLL
         for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
 
             CUTLASS_PRAGMA_UNROLL
             for (int j = 0; j < kOutputColumns; ++j) {
+                // After applying LOP3 optimizations for performance, the B operand requires data rearrangement.
+                int mapped_idx = mma_n_iter * kExpansionFactor * kOutputColumns + offset + 2 * j + mapped_offset;
                 ElementCompute scaled_value =
-                    static_cast<ElementCompute>(unpacked_frag_[mma_n_iter * kExpansionFactor * kOutputColumns + offset + j]) * scale_frag[mma_n_iter];
+                    static_cast<ElementCompute>(unpacked_frag_[mapped_idx]) * scale_frag[mma_n_iter];
                 output_frag[mma_n_iter * kOutputColumns + j] = static_cast<ElementOperand>(scaled_value);
             }
         }
-
 #if 0
         if (FragmentOutput::kElements == 16) {
             CUTLASS_TRACE_DEVICE(" [stage=%d] output_frag[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
