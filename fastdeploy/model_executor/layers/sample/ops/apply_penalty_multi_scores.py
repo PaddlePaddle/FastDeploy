@@ -21,6 +21,8 @@ from fastdeploy.platforms import current_platform
 
 def apply_penalty_multi_scores(
     pre_token_ids: paddle.Tensor,
+    prompt_ids: paddle.Tensor,
+    prompt_lens: paddle.Tensor,
     logits: paddle.Tensor,
     repetition_penalties: paddle.Tensor,
     frequency_penalties: paddle.Tensor,
@@ -39,6 +41,8 @@ def apply_penalty_multi_scores(
             get_token_penalty_multi_scores
         logits = get_token_penalty_multi_scores(
             pre_token_ids,
+            prompt_ids,
+            prompt_lens,
             logits,
             repetition_penalties,
             frequency_penalties,
@@ -69,6 +73,8 @@ def apply_penalty_multi_scores(
             get_token_penalty_multi_scores
         logits = get_token_penalty_multi_scores(
             pre_token_ids,
+            prompt_ids,
+            prompt_lens,
             logits,
             repetition_penalties,
             frequency_penalties,

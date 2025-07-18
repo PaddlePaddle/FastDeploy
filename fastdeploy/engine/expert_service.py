@@ -49,8 +49,8 @@ class ExpertService(object):
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
-        start_pos = local_data_parallel_id * self.cfg.tensor_parallel_size
-        end_pos = (local_data_parallel_id + 1) * self.cfg.tensor_parallel_size
+        start_pos = (local_data_parallel_id * self.cfg.tensor_parallel_size) % self.cfg.worker_num_per_node
+        end_pos = ((local_data_parallel_id + 1) * self.cfg.tensor_parallel_size) % self.cfg.worker_num_per_node
         self.cfg.cache_config.rdma_comm_ports = self.cfg.cache_config.rdma_comm_ports[
             start_pos:end_pos]
         self.cfg.local_device_ids = self.cfg.device_ids.split(
@@ -65,7 +65,7 @@ class ExpertService(object):
 
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
 
-        address = (cfg.pod_ips[0], cfg.engine_worker_queue_port)
+        address = (cfg.master_ip, cfg.engine_worker_queue_port)
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
@@ -118,7 +118,7 @@ class ExpertService(object):
             cache_config=self.cfg.cache_config,
             tensor_parallel_size=self.cfg.tensor_parallel_size,
             device_ids=self.cfg.local_device_ids,
-            pod_ip=self.cfg.pod_ips[0],
+            pod_ip=self.cfg.master_ip,
             engine_worker_queue_port=self.cfg.engine_worker_queue_port,
             pid_suffix=f"{local_data_parallel_id}_{ipc_signal_suffix}"
         )

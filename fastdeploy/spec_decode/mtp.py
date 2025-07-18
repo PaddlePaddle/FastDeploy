@@ -272,8 +272,8 @@ class MTPProposer(Proposer):
             self.main_model_inputs["ids_remove_padding"])
         self.model_inputs["cum_offsets"] = paddle.clone(
             self.main_model_inputs["cum_offsets"])
-        self.model_inputs["padding_offset"] = paddle.clone(
-            self.main_model_inputs["padding_offset"])
+        self.model_inputs["batch_id_per_token"] = paddle.clone(
+            self.main_model_inputs["batch_id_per_token"])
         self.model_inputs["cu_seqlens_q"] = paddle.clone(
             self.main_model_inputs["cu_seqlens_q"])
         self.model_inputs["cu_seqlens_k"] = paddle.clone(
@@ -447,7 +447,7 @@ class MTPProposer(Proposer):
             seq_lens_decoder=self.model_inputs["seq_lens_decoder"],
             seq_lens_this_time=self.model_inputs["seq_lens_this_time"],
             cum_offsets=self.model_inputs["cum_offsets"],
-            padding_offset=self.model_inputs["padding_offset"],
+            batch_id_per_token=self.model_inputs["batch_id_per_token"],
             cu_seqlens_q=self.model_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.model_inputs["cu_seqlens_k"],
             block_tables=self.model_inputs["block_tables"],
@@ -542,7 +542,7 @@ class MTPProposer(Proposer):
                 (
                     ids_remove_padding,
                     cum_offsets,
-                    padding_offset,
+                    batch_id_per_token,
                     cu_seqlens_q,
                     cu_seqlens_k,
                     output_cum_offsets,
@@ -560,8 +560,8 @@ class MTPProposer(Proposer):
                 self.model_inputs["ids_remove_padding"].copy_(
                     ids_remove_padding, False)
                 self.model_inputs["cum_offsets"].copy_(cum_offsets, False)
-                self.model_inputs["padding_offset"].copy_(
-                    padding_offset, False)
+                self.model_inputs["batch_id_per_token"].copy_(
+                    batch_id_per_token, False)
                 self.model_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
                 self.model_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
                 # for speculative decoding
