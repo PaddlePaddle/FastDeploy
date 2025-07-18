@@ -104,6 +104,7 @@ class OpenAIServingChat:
         num_choices = 1
         max_streaming_response_tokens = 1
         enable_thinking = None
+        include_stop_str_in_output = False
         if request.metadata is not None and request.metadata.get("max_streaming_response_tokens", 1) > 1:
             max_streaming_response_tokens = request.metadata["max_streaming_response_tokens"]
 
@@ -129,6 +130,9 @@ class OpenAIServingChat:
             dealer.write([b"", request_id.encode('utf-8')])
             choices = []
             current_waiting_time = 0
+            if request.metadata is not None:
+                enable_thinking = request.metadata.get("enable_thinking")
+                include_stop_str_in_output = request.metadata.get("include_stop_str_in_output", False)
             while num_choices > 0:
                 try:
                     raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
@@ -147,6 +151,7 @@ class OpenAIServingChat:
                     await asyncio.sleep(0.1)
                     continue
 
+<<<<<<< HEAD
                 res = json.loads(raw_data[-1].decode('utf-8'))
                 if res.get("error_code", 200) != 200:
                     raise ValueError("{}".format(res["error_msg"]))
@@ -154,6 +159,10 @@ class OpenAIServingChat:
                     enable_thinking = request.metadata.get("enable_thinking")
                 self.engine_client.data_processor.process_response_dict(
                     res, stream=True, enable_thinking=enable_thinking)
+=======
+                    self.engine_client.data_processor.process_response_dict(
+                        res, stream=True, enable_thinking=enable_thinking, include_stop_str_in_output=include_stop_str_in_output)
+>>>>>>> fbe3547c ([Feature] Support include_stop_str_in_output in chat/completion (#2910))
 
                 if res['metrics']['first_token_time'] is not None:
                     arrival_time = res['metrics']['first_token_time']
@@ -282,6 +291,7 @@ class OpenAIServingChat:
         created_time = int(time.time())
         final_res = None
         enable_thinking = None
+        include_stop_str_in_output = False
         try:
             dealer = await aiozmq.create_zmq_stream(
                 zmq.DEALER,
@@ -307,6 +317,7 @@ class OpenAIServingChat:
                     await asyncio.sleep(0.1)
                     continue
 
+<<<<<<< HEAD
                 data = json.loads(raw_data[-1].decode('utf-8'))
                 if data.get("error_code", 200) != 200:
                     raise ValueError("{}".format(data["error_msg"]))
@@ -334,6 +345,41 @@ class OpenAIServingChat:
                         logprob_contents.extend(logprobs_res.content)
                 if data["finished"]:
                     final_res = data
+=======
+                response = msgpack.unpackb(raw_data[-1])
+                task_is_finished = False
+                for data in response:
+                    if data.get("error_code", 200) != 200:
+                        raise ValueError("{}".format(data["error_msg"]))
+                    if request.metadata is not None:
+                        enable_thinking = request.metadata.get("enable_thinking")
+                        include_stop_str_in_output = request.metadata.get("include_stop_str_in_output", False)
+                    data = self.engine_client.data_processor.process_response_dict(
+                        data, stream=False, enable_thinking=enable_thinking, include_stop_str_in_output=include_stop_str_in_output)
+                    # api_server_logger.debug(f"Client {request_id} received: {data}")
+                    previous_num_tokens += len(data["outputs"]["token_ids"])
+                    # The logprob for handling the response
+                    output = data["outputs"]
+                    raw_top_logprobs = output["top_logprobs"]
+                    if raw_top_logprobs is not None:
+                        top_logprobs = LogprobsLists(
+                            logprob_token_ids=raw_top_logprobs[0],
+                            logprobs=raw_top_logprobs[1],
+                            sampled_token_ranks=raw_top_logprobs[2],
+                        )
+                        logprobs_res = self.build_logprobs_response(
+                            request_logprobs=request.logprobs,
+                            response_logprobs=top_logprobs,
+                            request_top_logprobs=request.top_logprobs,
+                        )
+                        if logprobs_res and logprobs_res.content is not None:
+                            logprob_contents.extend(logprobs_res.content)
+                    if data["finished"]:
+                        final_res = data
+                        task_is_finished = True
+                        break
+                if task_is_finished:
+>>>>>>> fbe3547c ([Feature] Support include_stop_str_in_output in chat/completion (#2910))
                     break
         finally:
             dealer.close()
