@@ -248,7 +248,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx:idx +
                                                1, :length] = np.array(
                                                    request.prompt_token_ids)
-                print("self.share_inputs['input_ids']",self.share_inputs["input_ids"])
                 # Use chunked prefill
                 if self.parallel_config.enable_chunked_prefill:
                     request.set("chunk_idx", 1)
