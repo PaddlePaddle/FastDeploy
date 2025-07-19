@@ -25,15 +25,21 @@ from tqdm import tqdm
 
 from fastdeploy.model_executor.ops.gpu.deep_gemm.jit.compiler import build
 from fastdeploy.model_executor.ops.gpu.deep_gemm.jit.template import (
-    cpp_format, generate)
-from fastdeploy.model_executor.ops.gpu.deep_gemm.jit_kernels.gemm import \
-    includes as gemm_includes
-from fastdeploy.model_executor.ops.gpu.deep_gemm.jit_kernels.gemm import \
-    template as gemm_template
-from fastdeploy.model_executor.ops.gpu.deep_gemm.jit_kernels.m_grouped_gemm import \
-    includes as m_grouped_includes
-from fastdeploy.model_executor.ops.gpu.deep_gemm.jit_kernels.m_grouped_gemm import \
-    template as m_grouped_template
+    cpp_format,
+    generate,
+)
+from fastdeploy.model_executor.ops.gpu.deep_gemm.jit_kernels.gemm import (
+    includes as gemm_includes,
+)
+from fastdeploy.model_executor.ops.gpu.deep_gemm.jit_kernels.gemm import (
+    template as gemm_template,
+)
+from fastdeploy.model_executor.ops.gpu.deep_gemm.jit_kernels.m_grouped_gemm import (
+    includes as m_grouped_includes,
+)
+from fastdeploy.model_executor.ops.gpu.deep_gemm.jit_kernels.m_grouped_gemm import (
+    template as m_grouped_template,
+)
 
 logger = logging.getLogger(__name__)
 console_handler = logging.StreamHandler()
@@ -110,9 +116,7 @@ class CompileWorker(threading.Thread):
                         ("smem_size", int),
                     )
                 if cfg["IS_GROUPED_CONTIGUOUS"] or cfg["IS_GROUPED_MASKED"]:
-                    keys["NUM_GROUPS"] = int(
-                        cfg["MOE_NUM_EXPERTS"] / cfg["EXPERT_PARALLEL"]
-                    )
+                    keys["NUM_GROUPS"] = int(cfg["MOE_NUM_EXPERTS"] / cfg["EXPERT_PARALLEL"])
                     includes = m_grouped_includes
                     template = m_grouped_template
                     name = "m_grouped_gemm_fp8_fp8_bf16_nt"
@@ -120,7 +124,7 @@ class CompileWorker(threading.Thread):
                 code = generate(includes, arg_defs, cpp_format(template, keys))
                 build(name, arg_defs, code)
             except Exception as e:
-                logger.error(f"Failed to compile config {cfg}: {str(e)}")
+                logger.error(f"Failed to compile config {cfg}: {e!s}")
                 raise RuntimeError(e)
             finally:
                 self.pbar.update(1)

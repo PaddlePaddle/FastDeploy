@@ -17,4 +17,4 @@
 from .get_image_preprocessor import get_image_preprocessor
 from .image_preprocessor_adaptive import AdaptiveImageProcessor
 
-__all__ = ['get_image_preprocessor', 'AdaptiveImageProcessor']
+__all__ = ["get_image_preprocessor", "AdaptiveImageProcessor"]

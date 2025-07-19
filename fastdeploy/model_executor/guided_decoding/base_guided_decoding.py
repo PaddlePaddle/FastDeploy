@@ -17,7 +17,7 @@
 import os
 from concurrent.futures import ThreadPoolExecutor
 
-from fastdeploy.config import FDConfig, ErnieArchitectures
+from fastdeploy.config import ErnieArchitectures, FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.utils import llm_logger
 
@@ -48,7 +48,7 @@ class LogitsProcessorBase:
         Raises:
             NotImplementedError: This method should be implemented in subclasses.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def apply_token_mask(self, logits, token_bitmask):
         """
@@ -61,7 +61,7 @@ class LogitsProcessorBase:
         Raises:
             NotImplementedError: This method should be implemented in subclasses.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def allocate_token_bitmask(self, batch_size, vocab_size):
         """
@@ -74,7 +74,7 @@ class LogitsProcessorBase:
         Returns:
             tensor: The allocated token bitmask.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def accept_token(self, token):
         """
@@ -86,7 +86,7 @@ class LogitsProcessorBase:
         Raises:
             NotImplementedError: This method should be implemented in subclasses.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def is_terminated(self):
         """
@@ -95,13 +95,13 @@ class LogitsProcessorBase:
         Raises:
             NotImplementedError: This method should be implemented in subclasses.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def reset(self):
         """
         Reset the matcher state.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def copy(self):
         """
@@ -110,7 +110,7 @@ class LogitsProcessorBase:
         Returns:
             BackendBase: A copy of the backend instance.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 class BackendBase:
@@ -146,7 +146,7 @@ class BackendBase:
         Raises:
             NotImplementedError: This method should be implemented in subclasses.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def _json_processor(self, schemata):
         """
@@ -158,7 +158,7 @@ class BackendBase:
         Raises:
             NotImplementedError: This method should be implemented in subclasses.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def _regex_processor(self, schemata):
         """
@@ -170,7 +170,7 @@ class BackendBase:
         Raises:
             NotImplementedError: This method should be implemented in subclasses.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def _grammar_processor(self, schemata):
         """
@@ -182,7 +182,7 @@ class BackendBase:
         Raises:
             NotImplementedError: This method should be implemented in subclasses.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def _structural_tag_processor(self, schemata):
         """
@@ -194,7 +194,7 @@ class BackendBase:
         Raises:
             NotImplementedError: This method should be implemented in subclasses.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def _unsupported_processor_type(self, key_type, schemata):
         """
@@ -206,8 +206,7 @@ class BackendBase:
         """
         raise Exception(f"Unsupported processor type {key_type}.")
 
-    def _init_logits_processor(
-            self, schemata_key: tuple[str, str]) -> LogitsProcessorBase:
+    def _init_logits_processor(self, schemata_key: tuple[str, str]) -> LogitsProcessorBase:
         """
         init logits processor by type and schemata.
 
@@ -233,9 +232,7 @@ class BackendBase:
             llm_logger.error(f"Unsupported processor type {key_type}.")
             return None
 
-    def get_logits_processor(
-            self,
-            schemata_key: tuple[str, str]) -> tuple[LogitsProcessorBase, bool]:
+    def get_logits_processor(self, schemata_key: tuple[str, str]) -> tuple[LogitsProcessorBase, bool]:
         """
         get logits processor by key from cache or create new one.
 
@@ -271,39 +268,41 @@ class BackendBase:
             if not ErnieArchitectures.contains_ernie_arch(architectures):
 
                 from transformers import AutoTokenizer, PreTrainedTokenizerFast
+
                 tokenizer = AutoTokenizer.from_pretrained(
                     self.fd_config.parallel_config.model_name_or_path,
                     use_fast=False,
                 )
 
                 if not isinstance(tokenizer, PreTrainedTokenizerFast):
-                    tokenizer = PreTrainedTokenizerFast(
-                        __slow_tokenizer=tokenizer)
+                    tokenizer = PreTrainedTokenizerFast(__slow_tokenizer=tokenizer)
             else:
-                from fastdeploy.model_executor.guided_decoding.ernie_tokenizer import \
-                    ErnieBotTokenizer
+                from fastdeploy.model_executor.guided_decoding.ernie_tokenizer import (
+                    ErnieBotTokenizer,
+                )
 
                 vocab_file_names = [
-                    "tokenizer.model", "spm.model", "ernie_token_100k.model"
+                    "tokenizer.model",
+                    "spm.model",
+                    "ernie_token_100k.model",
                 ]
                 for i in range(len(vocab_file_names)):
                     if os.path.exists(
-                            os.path.join(
-                                self.fd_config.parallel_config.
-                                model_name_or_path, vocab_file_names[i])):
-                        ErnieBotTokenizer.vocab_files_names[
-                            "vocab_file"] = vocab_file_names[i]
+                        os.path.join(
+                            self.fd_config.parallel_config.model_name_or_path,
+                            vocab_file_names[i],
+                        )
+                    ):
+                        ErnieBotTokenizer.vocab_files_names["vocab_file"] = vocab_file_names[i]
                         break
 
-                tokenizer = ErnieBotTokenizer.from_pretrained(
-                    self.fd_config.parallel_config.model_name_or_path)
+                tokenizer = ErnieBotTokenizer.from_pretrained(self.fd_config.parallel_config.model_name_or_path)
 
             return tokenizer
         except Exception as e:
             raise Exception(f"Fail to initialize hf tokenizer: {e}")
 
-    def add_cache(self, schemata_key: tuple[str, str],
-                  processor: LogitsProcessorBase) -> None:
+    def add_cache(self, schemata_key: tuple[str, str], processor: LogitsProcessorBase) -> None:
         """
         add logits processor to cache.
 
@@ -343,4 +342,4 @@ class BaseChecker:
         Returns:
             request (Request): request object with formatted schema.
         """
-        raise NotImplementedError()
+        raise NotImplementedError

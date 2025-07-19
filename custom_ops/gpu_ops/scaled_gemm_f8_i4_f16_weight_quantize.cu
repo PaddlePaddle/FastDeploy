@@ -125,7 +125,7 @@ void group_wise_scale(ScaleT* scale,
   }
 }
 
-std::vector<paddle::Tensor> Fp8Int4WeightQuantizeKernel(const paddle::Tensor &input, 
+std::vector<paddle::Tensor> Fp8Int4WeightQuantizeKernel(const paddle::Tensor &input,
     int groupsize,
     std::string scale_dtype) {
     auto input_cpu = input.copy_to(paddle::CPUPlace(), false);
@@ -139,47 +139,47 @@ std::vector<paddle::Tensor> Fp8Int4WeightQuantizeKernel(const paddle::Tensor &in
         if (groupsize > 0) {
             scale = paddle::full({shape[0] / groupsize * shape[1]}, 1.0, paddle::DataType::BFLOAT16, paddle::CPUPlace());
             group_wise_scale(scale.data<phi::dtype::bfloat16>(), input_cpu.data<float>(), k, n, 7.0f, groupsize);
-            group_wise_quant(packed_int4.data<int8_t>(), 
-                            input_cpu.data<float>(), 
-                            scale.data<phi::dtype::bfloat16>(), 
-                            k, 
+            group_wise_quant(packed_int4.data<int8_t>(),
+                            input_cpu.data<float>(),
+                            scale.data<phi::dtype::bfloat16>(),
+                            k,
                             n,
                             groupsize);
         } else {
             scale = paddle::full({shape[1]}, 1.0, paddle::DataType::BFLOAT16, paddle::CPUPlace());
             per_channel_scale(scale.data<phi::dtype::bfloat16>(), input_cpu.data<float>(), k, n, 7.0f);
-            per_channel_quant(packed_int4.data<int8_t>(), 
-                              input_cpu.data<float>(), 
-                              scale.data<phi::dtype::bfloat16>(), 
-                              k, 
+            per_channel_quant(packed_int4.data<int8_t>(),
+                              input_cpu.data<float>(),
+                              scale.data<phi::dtype::bfloat16>(),
+                              k,
                               n);
         }
     } else if (scale_dtype == "float16") {
         if (groupsize > 0) {
-            scale = paddle::full({shape[0] / groupsize * shape[1]}, 1.0, paddle::DataType::FLOAT16, paddle::CPUPlace()); 
+            scale = paddle::full({shape[0] / groupsize * shape[1]}, 1.0, paddle::DataType::FLOAT16, paddle::CPUPlace());
             group_wise_scale(scale.data<phi::dtype::float16>(), input_cpu.data<float>(), k, n, 7.0f, groupsize);
-            group_wise_quant(packed_int4.data<int8_t>(), 
-                input_cpu.data<float>(), 
-                scale.data<phi::dtype::float16>(), 
-                k, 
+            group_wise_quant(packed_int4.data<int8_t>(),
+                input_cpu.data<float>(),
+                scale.data<phi::dtype::float16>(),
+                k,
                 n,
                 groupsize);
         } else {
-            scale = paddle::full({shape[1]}, 1.0, paddle::DataType::FLOAT16, paddle::CPUPlace()); 
+            scale = paddle::full({shape[1]}, 1.0, paddle::DataType::FLOAT16, paddle::CPUPlace());
             per_channel_scale(scale.data<phi::dtype::float16>(), input_cpu.data<float>(), k, n, 7.0f);
-            per_channel_quant(packed_int4.data<int8_t>(), 
-                    input_cpu.data<float>(), 
-                    scale.data<phi::dtype::float16>(), 
-                    k, 
+            per_channel_quant(packed_int4.data<int8_t>(),
+                    input_cpu.data<float>(),
+                    scale.data<phi::dtype::float16>(),
+                    k,
                     n);
         }
     }
 
     auto out = paddle::full({shape[1] / 2, shape[0]}, 0, paddle::DataType::INT8, paddle::CPUPlace());
     preprocess_weights_for_mixed_gemm(
-        out.data<int8_t>(), 
-        packed_int4.data<int8_t>(), 
-        {k, n}, 
+        out.data<int8_t>(),
+        packed_int4.data<int8_t>(),
+        {k, n},
         kernels::cutlass_kernels::QuantType::W4_AFP8,
         false);
     return {out, scale};

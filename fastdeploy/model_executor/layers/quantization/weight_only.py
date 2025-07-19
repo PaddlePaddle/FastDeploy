@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 import os
 from abc import abstractmethod
 from typing import Optional
@@ -42,8 +43,7 @@ class WeightOnlyConfig(QuantConfigBase):
         self.algo = algo
         # arch (int): The compute arch for target device. For example, A100 is 80, v100 is 70,
         # if you do not assign arch, we will get arch from your device, default: None.
-        self.weight_only_linear_arch = os.getenv(
-            "FLAGS_weight_only_linear_arch")
+        self.weight_only_linear_arch = os.getenv("FLAGS_weight_only_linear_arch")
         if self.weight_only_linear_arch is not None:
             self.weight_only_linear_arch = int(self.weight_only_linear_arch)
         self.quant_max_bound = 0
@@ -60,47 +60,62 @@ class WeightOnlyConfig(QuantConfigBase):
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if current_platform.is_xpu():
-            from fastdeploy.model_executor.layers.backends import \
-                XPUWeightOnlyLinearMethod
-            from fastdeploy.model_executor.layers.moe.fused_moe_xpu_backend import \
-                XPUWeightOnlyMoEMethod
+            from fastdeploy.model_executor.layers.backends import (
+                XPUWeightOnlyLinearMethod,
+            )
+            from fastdeploy.model_executor.layers.moe.fused_moe_xpu_backend import (
+                XPUWeightOnlyMoEMethod,
+            )
+
             if isinstance(layer, FusedMoE):
                 return XPUWeightOnlyMoEMethod(self)
             else:
                 return XPUWeightOnlyLinearMethod(self)
         elif current_platform.is_gcu():
             from fastdeploy.model_executor.layers.backends import (
-                GCUWeightOnlyLinearMethod, GCUWeightOnlyMoEMethod)
+                GCUWeightOnlyLinearMethod,
+                GCUWeightOnlyMoEMethod,
+            )
+
             if isinstance(layer, FusedMoE):
                 return GCUWeightOnlyMoEMethod(self)
             else:
                 return GCUWeightOnlyLinearMethod(self)
         elif current_platform.is_dcu():
             if isinstance(layer, FusedMoE):
-                from fastdeploy.model_executor.layers.backends import \
-                    DCUTritonWeightOnlyMoEMethod
+                from fastdeploy.model_executor.layers.backends import (
+                    DCUTritonWeightOnlyMoEMethod,
+                )
+
                 return DCUTritonWeightOnlyMoEMethod(self)
             else:
-                from fastdeploy.model_executor.layers.backends import \
-                    DCUWeightOnlyLinearMethod
+                from fastdeploy.model_executor.layers.backends import (
+                    DCUWeightOnlyLinearMethod,
+                )
+
                 return DCUWeightOnlyLinearMethod(self)
         else:
             if isinstance(layer, FusedMoE):
                 if layer.use_method == "cutlass":
-                    from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import \
-                        CutlassWeightOnlyMoEMethod
+                    from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import (
+                        CutlassWeightOnlyMoEMethod,
+                    )
+
                     return CutlassWeightOnlyMoEMethod(self)
                 elif layer.use_method == "triton":
-                    from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import \
-                        TritonWeightOnlyMoEMethod
+                    from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import (
+                        TritonWeightOnlyMoEMethod,
+                    )
+
                     return TritonWeightOnlyMoEMethod(self)
                 elif layer.use_method == "marlin":
-                    from fastdeploy.model_executor.layers.moe.fused_moe_marlin_backend import \
-                        MarlinWeightOnlyMoEMethod
+                    from fastdeploy.model_executor.layers.moe.fused_moe_marlin_backend import (
+                        MarlinWeightOnlyMoEMethod,
+                    )
+
                     return MarlinWeightOnlyMoEMethod(self)
                 else:
-                    raise ValueError(
-                        f"Unsupported MOE backend {layer.use_method}")
+                    raise ValueError(f"Unsupported MOE backend {layer.use_method}")
             else:
                 return GPUWeightOnlyLinearMethod(self)
 
@@ -110,7 +125,9 @@ class WINT8Config(WeightOnlyConfig):
     weight only int8 config
     """
 
-    def __init__(self, ) -> None:
+    def __init__(
+        self,
+    ) -> None:
         super().__init__("weight_only_int8")
 
     @classmethod
@@ -126,7 +143,9 @@ class WINT4Config(WeightOnlyConfig):
     weight only int4 config
     """
 
-    def __init__(self, ) -> None:
+    def __init__(
+        self,
+    ) -> None:
         super().__init__("weight_only_int4")
 
     @classmethod
@@ -174,8 +193,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
             weight=layer.weight,
             bias=layer.bias if layer.add_bias else None,
             weight_scale=layer.weight_scale,
-            weight_dtype="int8"
-            if self.quant_config.name() == "wint8" else "int4",
+            weight_dtype=("int8" if self.quant_config.name() == "wint8" else "int4"),
             arch=self.quant_config.weight_only_linear_arch,
         )
         return linear_out
@@ -205,8 +223,7 @@ class GPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         quant_weight = get_tensor(state_dict.pop(layer.weight_key))
         weight_scale = get_tensor(state_dict.pop(layer.weight_scale_key))
         layer.weight.set_value(quant_weight)
-        layer.weight_scale.set_value(
-            weight_scale.astype(paddle.get_default_dtype()))
+        layer.weight_scale.set_value(weight_scale.astype(paddle.get_default_dtype()))
 
     def process_loaded_weights(self, layer, weight) -> None:
 
@@ -217,5 +234,4 @@ class GPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         )
 
         layer.weight.set_value(quanted_weight_tensor)
-        layer.weight_scale.set_value(
-            weight_scale_tensor.astype(paddle.get_default_dtype()))
+        layer.weight_scale.set_value(weight_scale_tensor.astype(paddle.get_default_dtype()))

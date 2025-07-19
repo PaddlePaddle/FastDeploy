@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .fused_moe_cutlass_backend import (CutlassW4A8MoEMethod,
-                                        CutlassWeightOnlyMoEMethod)
+from .fused_moe_cutlass_backend import CutlassW4A8MoEMethod, CutlassWeightOnlyMoEMethod
 from .fused_moe_triton_backend import TritonWeightOnlyMoEMethod
 from .moe import FusedMoE
 
 __all__ = [
-    CutlassWeightOnlyMoEMethod, CutlassW4A8MoEMethod, FusedMoE,
-    TritonWeightOnlyMoEMethod
+    CutlassWeightOnlyMoEMethod,
+    CutlassW4A8MoEMethod,
+    FusedMoE,
+    TritonWeightOnlyMoEMethod,
 ]

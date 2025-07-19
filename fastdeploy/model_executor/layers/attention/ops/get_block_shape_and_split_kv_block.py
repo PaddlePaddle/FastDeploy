@@ -19,9 +19,9 @@ import paddle
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import \
-        get_block_shape_and_split_kv_block as \
-        get_block_shape_and_split_kv_block_cuda
+    from fastdeploy.model_executor.ops.gpu import (
+        get_block_shape_and_split_kv_block as get_block_shape_and_split_kv_block_cuda,
+    )
 
 
 def get_block_shape_and_split_kv_block(
@@ -32,7 +32,7 @@ def get_block_shape_and_split_kv_block(
     decoder_block_shape_q: int,
     group_size: int,
     block_size: int,
-    decoder_step_token_num: int
+    decoder_step_token_num: int,
 ):
     """
     get_block_shape_and_split_kv_block
@@ -58,7 +58,7 @@ def get_block_shape_and_split_kv_block(
             decoder_block_shape_q,
             group_size,
             block_size,
-            decoder_step_token_num
+            decoder_step_token_num,
         )
         return (
             encoder_batch_ids,
@@ -74,4 +74,4 @@ def get_block_shape_and_split_kv_block(
             set_max_lengths,
         )
     else:
-        raise NotImplementedError()
+        raise NotImplementedError

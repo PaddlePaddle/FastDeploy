@@ -93,7 +93,7 @@ __global__ void speculate_free_and_reschedule(bool *stop_flags,
                 used_list_len[tid] = 0;
             }
         } else if (seq_lens_this_time[tid] != 0 && max_possible_block_idx < block_num_per_seq &&
-                   block_table_now[(seq_lens_decoder[tid]  + max_draft_tokens  + 
+                   block_table_now[(seq_lens_decoder[tid]  + max_draft_tokens  +
                                     1) /
                                    block_size] == -1) {
             // 统计需要分配block的位置和总数
@@ -347,7 +347,7 @@ PD_BUILD_STATIC_OP(speculate_step_reschedule)
              "next_tokens",
              "first_token_ids",
              "accept_num"})
-    .Attrs({"block_size: int", 
+    .Attrs({"block_size: int",
             "encoder_decoder_block_num: int",
             "max_draft_tokens: int"})
     .Outputs({"stop_flags_out",

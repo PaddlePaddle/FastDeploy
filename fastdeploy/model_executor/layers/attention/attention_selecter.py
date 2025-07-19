@@ -22,22 +22,20 @@ from fastdeploy.utils import resolve_obj_from_strname
 
 
 def backend_name_to_enum(backend_name: str) -> _Backend:
-    """backend_name_to_enum """
+    """backend_name_to_enum"""
     assert backend_name is not None
     return _Backend.__members__.get(backend_name)
 
 
 @cache
 def _get_attn_backend(selected_backend: str) -> object:
-    """_get_attn_backend """
+    """_get_attn_backend"""
     if isinstance(selected_backend, str):
         selected_backend = backend_name_to_enum(selected_backend)
-    attention_cls = current_platform.get_attention_backend_cls(
-        selected_backend)
+    attention_cls = current_platform.get_attention_backend_cls(selected_backend)
 
     if not attention_cls:
-        raise ValueError(
-            f"Invalid attention backend for {current_platform.device_name}")
+        raise ValueError(f"Invalid attention backend for {current_platform.device_name}")
     return resolve_obj_from_strname(attention_cls)
 
 

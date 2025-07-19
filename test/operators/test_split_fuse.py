@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" UT for set_stop_value """
+"""UT for set_stop_value"""
 import paddle
-from fastdeploy.model_executor.ops.gpu import get_mm_split_fuse
 
+from fastdeploy.model_executor.ops.gpu import get_mm_split_fuse
 
 input_ids = []
 image_type_ids = []

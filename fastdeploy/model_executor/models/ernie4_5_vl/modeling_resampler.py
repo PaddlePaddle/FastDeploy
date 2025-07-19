@@ -23,11 +23,13 @@ from paddle import nn
 from paddle.autograd import PyLayer
 from paddle.distributed.fleet.utils import recompute
 
-from fastdeploy.model_executor.layers.utils import (_set_var_distributed,
-                                                    get_tensor)
+from fastdeploy.model_executor.layers.utils import _set_var_distributed, get_tensor
 from fastdeploy.model_executor.models.ernie4_5_vl.dist_utils import (
-    RowSequenceParallelLinear, all_gather_group, reduce_scatter_group,
-    scatter_axis)
+    RowSequenceParallelLinear,
+    all_gather_group,
+    reduce_scatter_group,
+    scatter_axis,
+)
 
 
 class ScatterOp(PyLayer):
@@ -125,10 +127,8 @@ class RMSNorm(nn.Layer):
             - Maintains original dtype for numerical stability during computation
         """
         with paddle.amp.auto_cast(False):
-            variance = hidden_states.astype("float32").pow(2).mean(
-                -1, keepdim=True)
-            hidden_states = paddle.rsqrt(variance +
-                                         self.variance_epsilon) * hidden_states
+            variance = hidden_states.astype("float32").pow(2).mean(-1, keepdim=True)
+            hidden_states = paddle.rsqrt(variance + self.variance_epsilon) * hidden_states
         return hidden_states.astype(self.weight.dtype) * self.weight
 
 
@@ -137,8 +137,15 @@ class VariableResolutionResamplerModel(nn.Layer):
     VariableResolutionResamplerModel, 支持变分, 负责空间、时间维度缩并。
     """
 
-    def __init__(self, in_dim, out_dim, spatial_conv_size, temporal_conv_size,
-                 config, prefix_name: str = ""):
+    def __init__(
+        self,
+        in_dim,
+        out_dim,
+        spatial_conv_size,
+        temporal_conv_size,
+        config,
+        prefix_name: str = "",
+    ):
         super().__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -158,14 +165,17 @@ class VariableResolutionResamplerModel(nn.Layer):
         with paddle.utils.unique_name.guard("mm_resampler_"):
 
             self.spatial_linear = nn.Sequential(
-                (RowSequenceParallelLinear(
-                    self.spatial_dim,
-                    self.spatial_dim,
-                    input_is_parallel=True,
-                    has_bias=True,
-                    fuse_matmul_bias=True,
-                ) if self.tensor_parallel_degree > 1 else nn.Linear(
-                    self.spatial_dim, self.spatial_dim)),
+                (
+                    RowSequenceParallelLinear(
+                        self.spatial_dim,
+                        self.spatial_dim,
+                        input_is_parallel=True,
+                        has_bias=True,
+                        fuse_matmul_bias=True,
+                    )
+                    if self.tensor_parallel_degree > 1
+                    else nn.Linear(self.spatial_dim, self.spatial_dim)
+                ),
                 nn.GELU(),
                 nn.Linear(self.spatial_dim, self.spatial_dim),
                 nn.LayerNorm(self.spatial_dim, epsilon=1e-6),
@@ -187,21 +197,15 @@ class VariableResolutionResamplerModel(nn.Layer):
 
             if self.tensor_parallel_degree > 1:
                 for idx in [2, 3]:
-                    mark_as_sequence_parallel_parameter(
-                        self.spatial_linear[idx].weight)
-                    mark_as_sequence_parallel_parameter(
-                        self.spatial_linear[idx].bias)
-                _set_var_distributed(self.spatial_linear[idx].weight,
-                                     split_axis=0)
-                _set_var_distributed(self.spatial_linear[idx].bias,
-                                     split_axis=0)
+                    mark_as_sequence_parallel_parameter(self.spatial_linear[idx].weight)
+                    mark_as_sequence_parallel_parameter(self.spatial_linear[idx].bias)
+                _set_var_distributed(self.spatial_linear[idx].weight, split_axis=0)
+                _set_var_distributed(self.spatial_linear[idx].bias, split_axis=0)
 
                 if self.use_temporal_conv:
                     for idx in [0, 2, 3]:
-                        mark_as_sequence_parallel_parameter(
-                            self.temporal_linear[idx].weight)
-                        mark_as_sequence_parallel_parameter(
-                            self.temporal_linear[idx].bias)
+                        mark_as_sequence_parallel_parameter(self.temporal_linear[idx].weight)
+                        mark_as_sequence_parallel_parameter(self.temporal_linear[idx].bias)
 
                 mark_as_sequence_parallel_parameter(self.mlp.weight)
                 mark_as_sequence_parallel_parameter(self.mlp.bias)
@@ -237,8 +241,7 @@ class VariableResolutionResamplerModel(nn.Layer):
             if self.tensor_parallel_degree > 1:
                 num_pad = (
                     x.shape[0] + self.tensor_parallel_degree - 1
-                ) // self.tensor_parallel_degree * self.tensor_parallel_degree - x.shape[
-                    0]
+                ) // self.tensor_parallel_degree * self.tensor_parallel_degree - x.shape[0]
 
             if num_pad > 0:
                 x = paddle.nn.functional.pad(x, [0, num_pad, 0, 0])
@@ -261,13 +264,10 @@ class VariableResolutionResamplerModel(nn.Layer):
 
             grid_thw_cpu = grid_thw.numpy()
             grid_t, grid_hw = grid_thw_cpu[:, 0], grid_thw_cpu[:, 1:]
-            grid_hw_after_conv = grid_hw.prod(-1) // (self.spatial_conv_size**
-                                                      2)
+            grid_hw_after_conv = grid_hw.prod(-1) // (self.spatial_conv_size**2)
 
-            tokens_per_img_or_vid = grid_thw_cpu.prod(-1) // (
-                self.spatial_conv_size**2)
-            batch_offset = np.empty(tokens_per_img_or_vid.size,
-                                    dtype=tokens_per_img_or_vid.dtype)
+            tokens_per_img_or_vid = grid_thw_cpu.prod(-1) // (self.spatial_conv_size**2)
+            batch_offset = np.empty(tokens_per_img_or_vid.size, dtype=tokens_per_img_or_vid.dtype)
             batch_offset[0] = 0
             batch_offset[1:] = tokens_per_img_or_vid.cumsum()[:-1]
 
@@ -275,25 +275,26 @@ class VariableResolutionResamplerModel(nn.Layer):
 
             # TODO: support any temporal conv size
             slice_offsets = []
-            for temporoal_size, spatial_size, b_offset in zip(
-                    grid_t, grid_hw_after_conv, batch_offset):
+            for temporoal_size, spatial_size, b_offset in zip(grid_t, grid_hw_after_conv, batch_offset):
                 for temp_offset in range(0, temporoal_size, 2):
                     slice_offsets.append(
-                        np.arange(b_offset + (temp_offset) * spatial_size,
-                                  b_offset + (temp_offset + 1) * spatial_size))
-            slice_offsets = paddle.to_tensor(
-                np.concatenate(slice_offsets, axis=-1))
+                        np.arange(
+                            b_offset + (temp_offset) * spatial_size,
+                            b_offset + (temp_offset + 1) * spatial_size,
+                        )
+                    )
+            slice_offsets = paddle.to_tensor(np.concatenate(slice_offsets, axis=-1))
 
             slice_offsets2 = []
-            for temporoal_size, spatial_size, b_offset in zip(
-                    grid_t, grid_hw_after_conv, batch_offset):
-                for temp_offset in range(1 if temporoal_size > 1 else 0,
-                                         temporoal_size, 2):
+            for temporoal_size, spatial_size, b_offset in zip(grid_t, grid_hw_after_conv, batch_offset):
+                for temp_offset in range(1 if temporoal_size > 1 else 0, temporoal_size, 2):
                     slice_offsets2.append(
-                        np.arange(b_offset + (temp_offset) * spatial_size,
-                                  b_offset + (temp_offset + 1) * spatial_size))
-            slice_offsets2 = paddle.to_tensor(
-                np.concatenate(slice_offsets2, axis=-1))
+                        np.arange(
+                            b_offset + (temp_offset) * spatial_size,
+                            b_offset + (temp_offset + 1) * spatial_size,
+                        )
+                    )
+            slice_offsets2 = paddle.to_tensor(np.concatenate(slice_offsets2, axis=-1))
 
             x_timestep_1 = paddle.gather(x, slice_offsets, axis=0)
             x_timestep_2 = paddle.gather(x, slice_offsets2, axis=0)
@@ -306,8 +307,7 @@ class VariableResolutionResamplerModel(nn.Layer):
             if self.tensor_parallel_degree > 1:
                 num_pad = (
                     x.shape[0] + self.tensor_parallel_degree - 1
-                ) // self.tensor_parallel_degree * self.tensor_parallel_degree - x.shape[
-                    0]
+                ) // self.tensor_parallel_degree * self.tensor_parallel_degree - x.shape[0]
             if num_pad > 0:
                 x = paddle.nn.functional.pad(x, [0, num_pad, 0, 0])
             if self.tensor_parallel_degree > 1:
@@ -350,22 +350,17 @@ class VariableResolutionResamplerModel(nn.Layer):
             if state_dict_key not in state_dict:
                 state_dict_key = f"ernie.{self.prefix_name}.{param_name}"
                 if state_dict_key not in state_dict:
-                    raise ValueError(
-                        f"The key {state_dict_key} does not exist in state_dict. "
-                    )
+                    raise ValueError(f"The key {state_dict_key} does not exist in state_dict. ")
             tensor = get_tensor(state_dict.pop(state_dict_key))
             if param.shape != tensor.shape:
-                raise ValueError(
-                    f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}"
-                )
+                raise ValueError(f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}")
             else:
                 param.copy_(tensor, False)
 
     @classmethod
     def _get_tensor_parallel_mappings(cls, config, is_split=True):
 
-        from paddleformers.transformers.conversion_utils import \
-            split_or_merge_func
+        from paddleformers.transformers.conversion_utils import split_or_merge_func
 
         fn = split_or_merge_func(
             is_split=is_split,
@@ -375,17 +370,17 @@ class VariableResolutionResamplerModel(nn.Layer):
         )
         res = {"spatial_linear.0.weight": partial(fn, is_column=False)}
         for k in (
-                "spatial_linear.0.bias",  # row linear bias
-                "spatial_linear.2.weight",
-                "spatial_linear.2.bias",  # linear
-                "spatial_linear.3.weight",
-                "spatial_linear.3.bias",  # layernorm
-                "temporal_linear.0.weight",
-                "temporal_linear.0.weight",  # linear
-                "temporal_linear.2.weight",
-                "temporal_linear.2.bias",  # linear
-                "temporal_linear.3.weight",
-                "temporal_linear.3.bias",  # bias
+            "spatial_linear.0.bias",  # row linear bias
+            "spatial_linear.2.weight",
+            "spatial_linear.2.bias",  # linear
+            "spatial_linear.3.weight",
+            "spatial_linear.3.bias",  # layernorm
+            "temporal_linear.0.weight",
+            "temporal_linear.0.weight",  # linear
+            "temporal_linear.2.weight",
+            "temporal_linear.2.bias",  # linear
+            "temporal_linear.3.weight",
+            "temporal_linear.3.bias",  # bias
         ):
             res.update({k: lambda x: x})
         return res

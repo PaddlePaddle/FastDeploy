@@ -17,7 +17,7 @@
 // topk warps
 template<typename T, int VecSize>
 __global__ void MoEDeepGEMMPermuteKernel(T* out, int* token_nums_per_expert, int* permute_indices_per_token, const T* x, const int64_t* topk_idx, const int token_num, const int topk, const int num_vecs, const int hidden, const int max_tokens_per_expert) {
-    
+
     AlignedVector<T, VecSize> in_vec;
 
     const int bid = blockIdx.x;
@@ -32,7 +32,7 @@ __global__ void MoEDeepGEMMPermuteKernel(T* out, int* token_nums_per_expert, int
         }
         tgt_expert_token = __shfl_sync(0xFFFFFFFF, tgt_expert_token, 0);
 
-        
+
         for (int hidden_vec_id = tid; hidden_vec_id < num_vecs; hidden_vec_id += 32) {
             Load<T, VecSize>(x + token_idx * hidden + hidden_vec_id * VecSize, &in_vec);
             Store<T, VecSize>(in_vec, out + tgt_expert_id * max_tokens_per_expert * hidden + tgt_expert_token * hidden + hidden_vec_id * VecSize);
@@ -81,7 +81,7 @@ std::vector<paddle::Tensor> MoEDeepGEMMPermuteDispatch(
         permute_indices_per_token.data<int32_t>(),
         reinterpret_cast<const DataType_ *>(x.data<data_t>()),
         topk_idx.data<int64_t>(),
-        token_num, topk, num_vecs, 
+        token_num, topk, num_vecs,
         hidden, max_tokens_per_expert
     );
 

@@ -12,21 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" fastdeploy gcu ops """
-from fastdeploy.platforms import current_platform
-
+"""fastdeploy gcu ops"""
 from fastdeploy.import_ops import import_custom_ops, rename_imported_op
+from fastdeploy.platforms import current_platform
 
 PACKAGE = "fastdeploy.model_executor.ops.gcu"
 
 import_custom_ops(PACKAGE, ".fastdeploy_ops", globals())
 
 if current_platform.is_gcu():
-    from paddle_custom_device.gcu.ops import (invoke_fused_moe_kernel,               # noqa: F401,E402
-                                              moe_align_block_size, top_p_sampling,  # noqa: F401
-                                              topk_softmax,                          # noqa: F401
-                                              weight_quantize_custom_rtn,            # noqa: F401
-                                              weight_quantize_rtn)                   # noqa: F401
+    from paddle_custom_device.gcu.ops import (  # noqa: F401
+        invoke_fused_moe_kernel,
+        moe_align_block_size,
+        top_p_sampling,
+        topk_softmax,
+        weight_quantize_custom_rtn,
+        weight_quantize_rtn,
+    )
 
 # ######################  Ops from PaddleCustomDevice  ####################
 rename_imported_op(

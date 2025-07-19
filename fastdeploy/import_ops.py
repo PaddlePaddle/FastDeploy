@@ -43,8 +43,7 @@ def import_custom_ops(package, module_name, global_ns):
                 logger.warning(f"Failed to import op {func_name}: {e}")
 
     except Exception:
-        logger.warning(
-            f"Ops of {package} import failed, it may be not compiled.")
+        logger.warning(f"Ops of {package} import failed, it may be not compiled.")
 
     preprocess_static_op(global_ns)
 

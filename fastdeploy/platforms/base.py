@@ -32,6 +32,7 @@ class Platform:
     """
     Platform base class, all device class will be derived from it
     """
+
     device_name: str
 
     def is_cuda(self) -> bool:
@@ -87,9 +88,7 @@ class Platform:
         Verify whether the quantization is supported by the current platform.
         """
         if self.supported_quantization and quant not in self.supported_quantization:
-            raise ValueError(
-                f"{quant} quantization is currently not supported in "
-                f"{self.device_name}.")
+            raise ValueError(f"{quant} quantization is currently not supported in " f"{self.device_name}.")
 
     @classmethod
     def available(self):

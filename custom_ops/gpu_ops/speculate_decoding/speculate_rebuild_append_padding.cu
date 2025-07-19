@@ -26,7 +26,7 @@ __global__ void RebuildAppendPaddingKernel(
                                const int seq_len,
                                const int dim_embed,
                                const size_t elem_nums) {
-  using LoadT = AlignedVector<T, VecSize>;  
+  using LoadT = AlignedVector<T, VecSize>;
   LoadT src_vec;
   const int64_t global_idx = blockDim.x * blockIdx.x + threadIdx.x;
   for (int64_t i = global_idx * VecSize; i < elem_nums; i += gridDim.x * blockDim.x * VecSize) {
@@ -42,7 +42,7 @@ __global__ void RebuildAppendPaddingKernel(
 
     const int input_token_id = ori_token_id - cum_offset[bi] + seq_id;
     const int bias_idx = i % dim_embed;
-    
+
     Load<T, VecSize>(&full_hidden_states[input_token_id * dim_embed + bias_idx], &src_vec);
     Store<T, VecSize>(src_vec, &out[i]);
   }
@@ -78,14 +78,14 @@ std::vector<paddle::Tensor> DispatchDtype(
   GetNumBlocks(pack_num, &grid_size);
 
   RebuildAppendPaddingKernel<DataType_, PackSize><<<grid_size, threads_per_block, 0, full_hidden_states.stream()>>>(
-          reinterpret_cast<DataType_*>(out.data<data_t>()), 
-          reinterpret_cast<const DataType_*>(full_hidden_states.data<data_t>()), 
-          cum_offsets.data<int32_t>(), 
-          seq_len_encoder.data<int32_t>(), 
-          seq_len_decoder.data<int32_t>(), 
-          output_padding_offset.data<int32_t>(), 
-          max_seq_len, 
-          dim_embed, 
+          reinterpret_cast<DataType_*>(out.data<data_t>()),
+          reinterpret_cast<const DataType_*>(full_hidden_states.data<data_t>()),
+          cum_offsets.data<int32_t>(),
+          seq_len_encoder.data<int32_t>(),
+          seq_len_decoder.data<int32_t>(),
+          output_padding_offset.data<int32_t>(),
+          max_seq_len,
+          dim_embed,
           elem_nums);
   return {out};
 }
@@ -99,7 +99,7 @@ std::vector<paddle::Tensor> RebuildAppendPadding(
                   const paddle::Tensor& output_padding_offset,
                   const int max_seq_len) {
 
-              
+
   switch (full_hidden_states.dtype()) {
     case paddle::DataType::BFLOAT16:
       return DispatchDtype<paddle::DataType::BFLOAT16>(
@@ -137,7 +137,7 @@ std::vector<paddle::DataType> RebuildAppendPaddingInferDtype(
 
 
 PD_BUILD_STATIC_OP(speculate_rebuild_append_padding)
-    .Inputs({"full_hidden_states", 
+    .Inputs({"full_hidden_states",
              "cum_offsets",
              "seq_len_encoder",
              "seq_len_decoder",

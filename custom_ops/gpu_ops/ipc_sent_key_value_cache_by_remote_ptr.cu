@@ -88,7 +88,7 @@ void sent_key_value_by_remote_ptr(
         #ifdef DEBUG_IPC_SENT
             std::cout<<"remote_key_tensor_sent_ptr:"<<(int64_t)remote_key_tensor_sent_ptr
                      <<" local_key_tensor_sent_ptr:"<<(int64_t)local_key_tensor_sent_ptr
-                     <<" local_device_id:" << local_device_id 
+                     <<" local_device_id:" << local_device_id
                      <<" remote_device_id:" << remote_device_id
                      <<" block_idx_stride:" << block_idx_stride
                      <<" block_size_byte:" << block_size_byte
@@ -107,25 +107,25 @@ void sent_key_value_by_remote_ptr(
 #endif
 #ifndef DEBUG_IPC_SENT_SYNC_AND_PRINT
         cudaMemcpyPeerAsync(
-            reinterpret_cast<void*>(remote_key_tensor_sent_ptr), 
-            remote_device_id, 
-            reinterpret_cast<const void*>(local_key_tensor_sent_ptr), 
-            local_device_id, 
-            block_size_byte, 
+            reinterpret_cast<void*>(remote_key_tensor_sent_ptr),
+            remote_device_id,
+            reinterpret_cast<const void*>(local_key_tensor_sent_ptr),
+            local_device_id,
+            block_size_byte,
             stream);
 #endif
 #ifdef DEBUG_IPC_SENT_SYNC_AND_PRINT
         cudaMemcpyPeer(
-            reinterpret_cast<void*>(remote_key_tensor_sent_ptr), 
-            remote_device_id, 
-            reinterpret_cast<const void*>(local_key_tensor_sent_ptr), 
-            local_device_id, 
+            reinterpret_cast<void*>(remote_key_tensor_sent_ptr),
+            remote_device_id,
+            reinterpret_cast<const void*>(local_key_tensor_sent_ptr),
+            local_device_id,
             block_size_byte);
 #endif
         cudaError_t err = cudaGetLastError();
         if ( err != cudaSuccess )
         {
-            printf("CUDA Error: %s\n", cudaGetErrorString(err));       
+            printf("CUDA Error: %s\n", cudaGetErrorString(err));
         }
 #ifdef DEBUG_IPC_SENT_SYNC_AND_PRINT
             cudaDeviceSynchronize();
@@ -140,7 +140,7 @@ void sent_key_value_by_remote_ptr(
 #ifdef DEBUG_IPC_SENT
             std::cout<<"remote_value_tensor_sent_ptr:"<<(int64_t)remote_value_tensor_sent_ptr
                      <<" local_value_tensor_sent_ptr:"<<(int64_t)local_value_tensor_sent_ptr
-                     <<" local_device_id:" << local_device_id 
+                     <<" local_device_id:" << local_device_id
                      <<" remote_device_id:" << remote_device_id
                      <<" block_idx_stride:" << block_idx_stride
                      <<" block_size_byte:" << block_size_byte
@@ -159,26 +159,26 @@ void sent_key_value_by_remote_ptr(
 #endif
 #ifndef DEBUG_IPC_SENT_SYNC_AND_PRINT
         cudaMemcpyPeerAsync(
-            reinterpret_cast<void*>(remote_value_tensor_sent_ptr), 
-            remote_device_id, 
-            reinterpret_cast<const void*>(local_value_tensor_sent_ptr), 
-            local_device_id, 
-            block_size_byte, 
+            reinterpret_cast<void*>(remote_value_tensor_sent_ptr),
+            remote_device_id,
+            reinterpret_cast<const void*>(local_value_tensor_sent_ptr),
+            local_device_id,
+            block_size_byte,
             stream);
 #endif
 #ifdef DEBUG_IPC_SENT_SYNC_AND_PRINT
         cudaMemcpyPeer(
-            reinterpret_cast<void*>(remote_value_tensor_sent_ptr), 
-            remote_device_id, 
-            reinterpret_cast<const void*>(local_value_tensor_sent_ptr), 
-            local_device_id, 
+            reinterpret_cast<void*>(remote_value_tensor_sent_ptr),
+            remote_device_id,
+            reinterpret_cast<const void*>(local_value_tensor_sent_ptr),
+            local_device_id,
             block_size_byte);
         cudaDeviceSynchronize();
 #endif
         err = cudaGetLastError();
         if ( err != cudaSuccess )
         {
-            printf("CUDA Error: %s\n", cudaGetErrorString(err));       
+            printf("CUDA Error: %s\n", cudaGetErrorString(err));
         }
 #ifdef DEBUG_IPC_SENT_SYNC_AND_PRINT
         PrintMatrix<T>(reinterpret_cast<T*>(remote_value_tensor_sent_ptr),
@@ -316,11 +316,11 @@ void SentKeyValueByRemotePtrBlockSync(const paddle::Tensor& local_key_tensor,
     cudaStream_t cuda_stream = (cudaStream_t)cuda_stream_raw;
     cudaStreamSynchronize(cuda_stream);
     }
-    
+
 PD_BUILD_STATIC_OP(ipc_sent_key_value_cache_by_remote_ptr)
     .Inputs({"local_key_tensor", "local_value_tensor", "local_block_ids", "remote_block_ids", "remote_key_tensor", "remote_value_tensor"})
-    .Attrs({ "block_num: int", 
-             "local_device_id: int", 
+    .Attrs({ "block_num: int",
+             "local_device_id: int",
              "remote_device_id: int",
              "cuda_stream_raw: int64_t"})
     .Outputs({"local_key_tensor_out", "local_value_tensor_out"})

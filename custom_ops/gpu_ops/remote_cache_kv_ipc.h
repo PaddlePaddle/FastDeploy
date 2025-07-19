@@ -71,7 +71,7 @@ struct RemoteCacheKvIpc {
                 }
             }
             msg_sed.mtext[0] = encoder_count;
-            
+
             if (!inited) {
                 // just init once
                 const int msg_id = 1024 + rank;
@@ -90,7 +90,7 @@ struct RemoteCacheKvIpc {
             assert(layer_id_ <= num_layers_);
         }
     };
-    
+
     static RemoteCacheKvIpc::save_cache_kv_complete_signal_layerwise_meta_data kv_complete_signal_meta_data;
     static RemoteCacheKvIpc::save_cache_kv_complete_signal_layerwise_meta_data_per_query kv_complete_signal_meta_data_per_query;
     static void* kv_complete_signal_identity_ptr;

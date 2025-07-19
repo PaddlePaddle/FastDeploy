@@ -13,31 +13,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 import os
 import time
 from typing import List, Optional
 
 import numpy as np
 import paddle
-import paddle.nn as nn
+from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.attention import get_attention_backend
-from fastdeploy.model_executor.layers.attention.base_attention_backend import \
-    AttentionBackend
+from fastdeploy.model_executor.layers.attention.base_attention_backend import (
+    AttentionBackend,
+)
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
-from fastdeploy.model_executor.layers.sample.sampler import (
-    Sampler, SpeculativeSampler)
+from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
 from fastdeploy.model_executor.model_loader import get_model_from_loader
 from fastdeploy.model_executor.ops.iluvatar import set_value_by_flags_and_idx
-from fastdeploy.model_executor.pre_and_post_process import (post_process,
-                                                            pre_process,
-                                                            rebuild_padding,
-                                                            step_cuda)
+from fastdeploy.model_executor.pre_and_post_process import (
+    post_process,
+    pre_process,
+    rebuild_padding,
+    step_cuda,
+)
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
 
@@ -46,12 +49,13 @@ class IluvatarModelRunner(ModelRunnerBase):
     """ """
 
     def __init__(
-            self,
-            fd_config: FDConfig,
-            device: str,  # logic device
-            device_id: int,  # physical device id
-            rank: int,
-            local_rank: int):
+        self,
+        fd_config: FDConfig,
+        device: str,  # logic device
+        device_id: int,  # physical device id
+        rank: int,
+        local_rank: int,
+    ):
         super().__init__(fd_config=fd_config, device=device)
         self.rank = rank
         self.local_rank = local_rank
@@ -73,18 +77,17 @@ class IluvatarModelRunner(ModelRunnerBase):
 
         # Cuda Graph
         self.use_cudagraph = self.graph_opt_config.use_cudagraph
-        self.cudagraph_capture_sizes = list(
-            reversed(self.graph_opt_config.cudagraph_capture_sizes))
+        self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.cudagraph_num_of_warmups = self.graph_opt_config.cudagraph_num_of_warmups
-        self.input_ids = paddle.zeros(self.parallel_config.max_num_seqs,
-                                      dtype='int32')
+        self.input_ids = paddle.zeros(self.parallel_config.max_num_seqs, dtype="int32")
 
         # Initialize share inputs
         self._init_share_inputs(self.parallel_config.max_num_seqs)
         self.infer_seed_increment = paddle.full(
             shape=[self.parallel_config.max_num_seqs, 1],
             fill_value=4,
-            dtype="int64")
+            dtype="int64",
+        )
         self.restore_chunked_prefill_request = dict()
 
         # Initialize attention Backend
@@ -99,14 +102,14 @@ class IluvatarModelRunner(ModelRunnerBase):
 
         # Postprocess Env params
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(
-            self.local_rank +
-            int(self.parallel_config.engine_worker_queue_port))
+            self.local_rank + int(self.parallel_config.engine_worker_queue_port)
+        )
 
     def prefill_finished(self):
         """
         check whether prefill stage finished
         """
-        if int(paddle.max(self.share_inputs['seq_lens_encoder'])) != 0:
+        if int(paddle.max(self.share_inputs["seq_lens_encoder"])) != 0:
             return 1
         else:
             return 0
@@ -115,8 +118,9 @@ class IluvatarModelRunner(ModelRunnerBase):
         """
         init logits processor for guided decoding
         """
-        assert self.guided_backend is not None, "guided_backend is None, use "\
-            "--guided-decoding-backend to specify the backend at server startup."
+        assert self.guided_backend is not None, (
+            "guided_backend is None, use " "--guided-decoding-backend to specify the backend at server startup."
+        )
 
         if request.guided_json is not None:
             schemata_key = ("json", request.guided_json)
@@ -127,8 +131,10 @@ class IluvatarModelRunner(ModelRunnerBase):
         elif request.structural_tag is not None:
             schemata_key = ("structural_tag", request.structural_tag)
 
-        return self.guided_backend.get_logits_processor(
-            schemata_key=schemata_key), schemata_key
+        return (
+            self.guided_backend.get_logits_processor(schemata_key=schemata_key),
+            schemata_key,
+        )
 
     def insert_prefill_inputs(self, req_dicts: List[Request]):
         """
@@ -140,9 +146,8 @@ class IluvatarModelRunner(ModelRunnerBase):
             self.initialize_kv_cache()
 
         # NOTE(luotingdan): Set environment variable of prefill node
-        if req_dicts[-1].disaggregate_info is not None and req_dicts[
-                -1].disaggregate_info["role"] == "prefill":
-            os.environ['PREFILL_NODE_ONE_STEP_STOP'] = "1"
+        if req_dicts[-1].disaggregate_info is not None and req_dicts[-1].disaggregate_info["role"] == "prefill":
+            os.environ["PREFILL_NODE_ONE_STEP_STOP"] = "1"
 
         req_len = len(req_dicts)
         for i in range(req_len):
@@ -151,138 +156,110 @@ class IluvatarModelRunner(ModelRunnerBase):
             length = len(request.prompt_token_ids)
 
             prefill_tokens = []
-            if (request.guided_json is not None
-                    or request.guided_regex is not None
-                    or request.structural_tag is not None
-                    or request.guided_grammar is not None):
-                logits_info, schemata_key = self._init_logits_processor(
-                    request)
+            if (
+                request.guided_json is not None
+                or request.guided_regex is not None
+                or request.structural_tag is not None
+                or request.guided_grammar is not None
+            ):
+                logits_info, schemata_key = self._init_logits_processor(request)
                 request.logits_processor, request.logits_cached = logits_info
                 request.schemata_key = schemata_key
 
             # Is Decode Node
-            if req_dicts[i].disaggregate_info is not None and req_dicts[
-                    i].disaggregate_info["role"] == "decode":
+            if req_dicts[i].disaggregate_info is not None and req_dicts[i].disaggregate_info["role"] == "decode":
                 prefill_tokens.append(request.prompt_token_ids[0])
-                self.share_inputs["pre_ids"][idx:idx +
-                                             1] = request.prompt_token_ids[-1]
-                self.share_inputs["input_ids"][idx:idx + 1,
-                                               0] = request.prompt_token_ids[0]
-                self.share_inputs['seq_lens_encoder'][idx:idx + 1] = 0
-                self.share_inputs['seq_lens_decoder'][idx:idx + 1] = length
-                self.share_inputs['seq_lens_this_time'][idx:idx + 1] = 1
-                self.share_inputs['step_seq_lens_encoder'][idx:idx + 1] = 0
-                self.share_inputs['step_seq_lens_decoder'][idx:idx +
-                                                           1] = length
-                self.share_inputs["prompt_lens"][idx:idx + 1] = length
-                self.share_inputs['step_idx'][idx:idx + 1] = 1
+                self.share_inputs["pre_ids"][idx : idx + 1] = request.prompt_token_ids[-1]
+                self.share_inputs["input_ids"][idx : idx + 1, 0] = request.prompt_token_ids[0]
+                self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
+                self.share_inputs["seq_lens_decoder"][idx : idx + 1] = length
+                self.share_inputs["seq_lens_this_time"][idx : idx + 1] = 1
+                self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = 0
+                self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = length
+                self.share_inputs["prompt_lens"][idx : idx + 1] = length
+                self.share_inputs["step_idx"][idx : idx + 1] = 1
 
                 if self.speculative_decoding:
                     num_prefill_send_token = self.speculative_config.num_speculative_tokens + 1
-                    self.share_inputs['draft_tokens'][idx:idx + 1, 0:num_prefill_send_token] =\
-                         paddle.to_tensor(request.draft_token_ids[0:num_prefill_send_token], dtype="int64")
-                    self.share_inputs['seq_lens_this_time'][
-                        idx:idx + 1] = num_prefill_send_token
+                    self.share_inputs["draft_tokens"][idx : idx + 1, 0:num_prefill_send_token] = paddle.to_tensor(
+                        request.draft_token_ids[0:num_prefill_send_token],
+                        dtype="int64",
+                    )
+                    self.share_inputs["seq_lens_this_time"][idx : idx + 1] = num_prefill_send_token
             else:
-                self.share_inputs["pre_ids"][idx:idx + 1] = -1
-                self.share_inputs["step_idx"][idx:idx + 1] = 0
-                self.share_inputs["input_ids"][idx:idx +
-                                               1, :length] = np.array(
-                                                   request.prompt_token_ids)
+                self.share_inputs["pre_ids"][idx : idx + 1] = -1
+                self.share_inputs["step_idx"][idx : idx + 1] = 0
+                self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
 
                 # Use chunked prefill
                 if self.parallel_config.enable_chunked_prefill:
                     request.set("chunk_idx", 1)
-                    logger.info(
-                        f"prefill_chunk_info: {request.prefill_chunk_info}")
+                    logger.info(f"prefill_chunk_info: {request.prefill_chunk_info}")
                     token_chunk_size = request.prefill_chunk_info[0]
-                    self.share_inputs["seq_lens_this_time"][
-                        idx:idx + 1] = token_chunk_size
-                    self.share_inputs['input_ids'][
-                        idx, :token_chunk_size] = np.array(
-                            request.prompt_token_ids[:token_chunk_size])
-                    self.share_inputs['step_seq_lens_encoder'][
-                        idx:idx + 1] = token_chunk_size
-                    self.share_inputs['seq_lens_encoder'][idx:idx +
-                                                          1] = token_chunk_size
-                    self.share_inputs['seq_lens_decoder'][
-                        idx:idx + 1] = request.get("seq_lens_decoder", 0)
-                    self.share_inputs['step_seq_lens_decoder'][
-                        idx:idx + 1] = request.get("seq_lens_decoder", 0)
-                    self.share_inputs["prompt_lens"][idx:idx + 1] = token_chunk_size
+                    self.share_inputs["seq_lens_this_time"][idx : idx + 1] = token_chunk_size
+                    self.share_inputs["input_ids"][idx, :token_chunk_size] = np.array(
+                        request.prompt_token_ids[:token_chunk_size]
+                    )
+                    self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = token_chunk_size
+                    self.share_inputs["seq_lens_encoder"][idx : idx + 1] = token_chunk_size
+                    self.share_inputs["seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
+                    self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
+                    self.share_inputs["prompt_lens"][idx : idx + 1] = token_chunk_size
                 else:
-                    self.share_inputs['seq_lens_decoder'][
-                        idx:idx + 1] = request.get("seq_lens_decoder", 0)
-                    self.share_inputs['step_seq_lens_decoder'][
-                        idx:idx + 1] = request.get("seq_lens_decoder", 0)
-                    self.share_inputs['seq_lens_this_time'][idx:idx +
-                                                            1] = length
-                    self.share_inputs['step_seq_lens_encoder'][idx:idx +
-                                                               1] = length
-                    self.share_inputs['seq_lens_encoder'][idx:idx + 1] = length
-                    self.share_inputs["prompt_lens"][idx:idx + 1] = length
+                    self.share_inputs["seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
+                    self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
+                    self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
+                    self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = length
+                    self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
+                    self.share_inputs["prompt_lens"][idx : idx + 1] = length
 
-            if len(request.eos_token_ids
-                   ) < self.parallel_config.eos_tokens_lens:
+            if len(request.eos_token_ids) < self.parallel_config.eos_tokens_lens:
                 request.eos_token_ids.append(request.eos_token_ids[0])
-            self.share_inputs["eos_token_id"][:] = np.array(
-                request.eos_token_ids, dtype="int64").reshape(-1, 1)
-            self.share_inputs["top_p"][idx:idx + 1] = request.get("top_p", 0.7)
-            self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k", 0)
-            self.share_inputs["temperature"][idx:idx + 1] = request.get(
-                "temperature", 0.95)
-            self.share_inputs["penalty_score"][idx:idx + 1] = request.get(
-                "repetition_penalty", 1.0)
-            self.share_inputs["frequency_score"][idx:idx + 1] = request.get(
-                "frequency_penalty", 0.0)
-            self.share_inputs["presence_score"][idx:idx + 1] = request.get(
-                "presence_penalty", 0.0)
+            self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
+            self.share_inputs["top_p"][idx : idx + 1] = request.get("top_p", 0.7)
+            self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
+            self.share_inputs["temperature"][idx : idx + 1] = request.get("temperature", 0.95)
+            self.share_inputs["penalty_score"][idx : idx + 1] = request.get("repetition_penalty", 1.0)
+            self.share_inputs["frequency_score"][idx : idx + 1] = request.get("frequency_penalty", 0.0)
+            self.share_inputs["presence_score"][idx : idx + 1] = request.get("presence_penalty", 0.0)
 
-            self.share_inputs["min_dec_len"][idx:idx + 1] = request.get(
-                "min_tokens", 1)
-            self.share_inputs["max_dec_len"][idx:idx + 1] = request.get(
-                "max_tokens", self.model_config.max_length)
-            self.share_inputs["stop_flags"][idx:idx + 1] = False
+            self.share_inputs["min_dec_len"][idx : idx + 1] = request.get("min_tokens", 1)
+            self.share_inputs["max_dec_len"][idx : idx + 1] = request.get("max_tokens", self.model_config.max_length)
+            self.share_inputs["stop_flags"][idx : idx + 1] = False
 
-            self.share_inputs["first_token_ids"][
-                idx:idx + 1] = self.share_inputs["input_ids"][idx:idx + 1, :1]
-            self.share_inputs["ori_seq_lens_encoder"][idx:idx + 1] = length
+            self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
+            self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = length
 
             if request.get("seed") is not None:
-                self.share_inputs["infer_seed"][idx:idx +
-                                                1] = request.get("seed")
+                self.share_inputs["infer_seed"][idx : idx + 1] = request.get("seed")
             encoder_block_num = len(request.get("block_tables"))
-            self.share_inputs["encoder_block_lens"][idx:idx +
-                                                    1] = encoder_block_num
-            self.share_inputs["block_tables"][idx:idx + 1, :] = -1
-            self.share_inputs["block_tables"][
-                idx:idx + 1, :encoder_block_num] = np.array(
-                    request.block_tables, dtype="int32")
+            self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
+            self.share_inputs["block_tables"][idx : idx + 1, :] = -1
+            self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
+                request.block_tables, dtype="int32"
+            )
 
-            if request.get("stop_token_ids") is not None and request.get(
-                    "stop_seqs_len") is not None:
+            if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
-                for i in range(stop_seqs_num,
-                               self.model_config.max_stop_seqs_num):
+                for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
                     request.stop_seqs_len.append(0)
-                self.share_inputs["stop_seqs_len"][:] = np.array(
-                    request.stop_seqs_len, dtype="int32")
-                self.share_inputs["stop_seqs"][:stop_seqs_num, :len(
-                    request.get("stop_token_ids")[0])] = np.array(
-                        request.get("stop_token_ids"), dtype="int64")
+                self.share_inputs["stop_seqs_len"][:] = np.array(request.stop_seqs_len, dtype="int32")
+                self.share_inputs["stop_seqs"][:stop_seqs_num, : len(request.get("stop_token_ids")[0])] = np.array(
+                    request.get("stop_token_ids"), dtype="int64"
+                )
 
-            self.sampler.apply_logits_processor(
-                idx, request.get("logits_processor"), prefill_tokens)
+            self.sampler.apply_logits_processor(idx, request.get("logits_processor"), prefill_tokens)
 
         self.share_inputs["not_need_stop"][0] = True
 
-    def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int,
-                              expected_decode_len: int):
-        """ Set dummy prefill inputs to share_inputs """
+    def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
+        """Set dummy prefill inputs to share_inputs"""
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
         max_dec_len = expected_decode_len + 1
-        full_length = min(num_tokens // batch_size,
-                          self.parallel_config.max_model_len - max_dec_len)
+        full_length = min(
+            num_tokens // batch_size,
+            self.parallel_config.max_model_len - max_dec_len,
+        )
         input_length = int(full_length * self.parallel_config.kv_cache_ratio)
         block_num = (
             input_length + self.parallel_config.block_size - 1
@@ -290,31 +267,25 @@ class IluvatarModelRunner(ModelRunnerBase):
 
         for i in range(batch_size):
             idx = i
-            self.share_inputs["input_ids"][idx:idx +
-                                           1, :input_length] = np.array(
-                                               [5] * input_length)
-            self.share_inputs["prompt_ids"][idx:idx + 1, :input_length] = np.array(
-                            [5] * input_length)
-            self.share_inputs["eos_token_id"][:] = np.array(
-                [2], dtype="int64").reshape(-1, 1)
-            self.share_inputs["seq_lens_this_time"][idx:idx + 1] = input_length
-            self.share_inputs["step_seq_lens_encoder"][idx:idx +
-                                                       1] = input_length
-            self.share_inputs["seq_lens_encoder"][idx:idx + 1] = input_length
-            self.share_inputs["seq_lens_decoder"][idx:idx + 1] = 0
-            self.share_inputs["prompt_lens"][idx:idx + 1] = 0
-            self.share_inputs["step_idx"][idx:idx + 1] = 0
-            self.share_inputs["max_dec_len"][idx:idx + 1] = max_dec_len
-            self.share_inputs["stop_flags"][idx:idx + 1] = False
+            self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
+            self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
+            self.share_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
+            self.share_inputs["seq_lens_this_time"][idx : idx + 1] = input_length
+            self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = input_length
+            self.share_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
+            self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
+            self.share_inputs["prompt_lens"][idx : idx + 1] = 0
+            self.share_inputs["step_idx"][idx : idx + 1] = 0
+            self.share_inputs["max_dec_len"][idx : idx + 1] = max_dec_len
+            self.share_inputs["stop_flags"][idx : idx + 1] = False
 
-            self.share_inputs["first_token_ids"][
-                idx:idx + 1] = self.share_inputs["input_ids"][idx:idx + 1, :1]
-            self.share_inputs["ori_seq_lens_encoder"][idx:idx +
-                                                      1] = input_length
+            self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
+            self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = input_length
 
-            self.share_inputs["encoder_block_lens"][idx:idx + 1] = block_num
-            self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(idx * block_num, \
-                                                                                (idx + 1) * block_num, 1)
+            self.share_inputs["encoder_block_lens"][idx : idx + 1] = block_num
+            self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
+                idx * block_num, (idx + 1) * block_num, 1
+            )
 
     def _init_share_inputs(self, max_num_seqs: int):
         """Initialize all share buffers for model inputs.
@@ -326,211 +297,154 @@ class IluvatarModelRunner(ModelRunnerBase):
         self.share_inputs["pre_ids"] = paddle.full(
             [max_num_seqs, self.parallel_config.max_model_len],
             -1,
-            dtype='int64')
+            dtype="int64",
+        )
         self.share_inputs["input_ids"] = paddle.full(
             [max_num_seqs, self.parallel_config.max_model_len],
             self.parallel_config.pad_token_id,
-            dtype='int64')
+            dtype="int64",
+        )
         self.share_inputs["prompt_ids"] = paddle.full(
             [max_num_seqs, self.parallel_config.max_model_len],
             self.parallel_config.pad_token_id,
-            dtype='int64')
-        self.share_inputs["eos_token_id"] = paddle.full(
-            [self.parallel_config.eos_tokens_lens, 1], 0, dtype='int64')
-        self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1],
-                                                self.model_config.top_p,
-                                                dtype='float32')
-        self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1],
-                                                0,
-                                                dtype='int64')
+            dtype="int64",
+        )
+        self.share_inputs["eos_token_id"] = paddle.full([self.parallel_config.eos_tokens_lens, 1], 0, dtype="int64")
+        self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
+        self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["temperature"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.temperature, dtype='float32')
+            [max_num_seqs, 1], self.model_config.temperature, dtype="float32"
+        )
         self.share_inputs["penalty_score"] = paddle.full(
-            [max_num_seqs, 1],
-            self.model_config.penalty_score,
-            dtype='float32')
+            [max_num_seqs, 1], self.model_config.penalty_score, dtype="float32"
+        )
         self.share_inputs["frequency_score"] = paddle.full(
             [max_num_seqs, 1],
             self.model_config.frequency_score,
-            dtype='float32')
+            dtype="float32",
+        )
         self.share_inputs["presence_score"] = paddle.full(
-            [max_num_seqs, 1],
-            self.model_config.presence_score,
-            dtype='float32')
+            [max_num_seqs, 1], self.model_config.presence_score, dtype="float32"
+        )
 
-        self.share_inputs["min_dec_len"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.min_length, dtype='int64')
-        self.share_inputs["max_dec_len"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_length, dtype='int64')
-        self.share_inputs["min_length"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.min_length, dtype='int64')
-        self.share_inputs["max_length"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_length, dtype='int64')
-        self.share_inputs["seq_lens_this_time"] = paddle.full(max_num_seqs,
-                                                              0,
-                                                              dtype='int32')
-        self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1],
-                                                            0,
-                                                            dtype='int32')
-        self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1],
-                                                            0,
-                                                            dtype='int32')
-        self.share_inputs["step_seq_lens_encoder"] = paddle.full(
-            [max_num_seqs, 1], 0, dtype='int32')
-        self.share_inputs["step_seq_lens_decoder"] = paddle.full(
-            [max_num_seqs, 1], 0, dtype='int32')
-        self.share_inputs["prompt_lens"] = paddle.full([max_num_seqs, 1],
-                                                0,
-                                                dtype='int64')
-        self.share_inputs["step_idx"] = paddle.full([max_num_seqs, 1],
-                                                    0,
-                                                    dtype='int64')
+        self.share_inputs["min_dec_len"] = paddle.full([max_num_seqs, 1], self.model_config.min_length, dtype="int64")
+        self.share_inputs["max_dec_len"] = paddle.full([max_num_seqs, 1], self.model_config.max_length, dtype="int64")
+        self.share_inputs["min_length"] = paddle.full([max_num_seqs, 1], self.model_config.min_length, dtype="int64")
+        self.share_inputs["max_length"] = paddle.full([max_num_seqs, 1], self.model_config.max_length, dtype="int64")
+        self.share_inputs["seq_lens_this_time"] = paddle.full(max_num_seqs, 0, dtype="int32")
+        self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["step_seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["prompt_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
+        self.share_inputs["step_idx"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["not_need_stop"] = paddle.full(
-            [1], False,
-            dtype='bool').cpu()  # TODO(gongshaotian): move to pinnd memory
-        self.share_inputs["stop_flags"] = paddle.full([max_num_seqs, 1],
-                                                      True,
-                                                      dtype='bool')
-        self.share_inputs["stop_nums"] = paddle.full([1],
-                                                     max_num_seqs,
-                                                     dtype='int64')
+            [1], False, dtype="bool"
+        ).cpu()  # TODO(gongshaotian): move to pinnd memory
+        self.share_inputs["stop_flags"] = paddle.full([max_num_seqs, 1], True, dtype="bool")
+        self.share_inputs["stop_nums"] = paddle.full([1], max_num_seqs, dtype="int64")
 
-        self.share_inputs["bad_tokens"] = paddle.full([1], -1, dtype='int64')
-        self.share_inputs["next_tokens"] = paddle.full([max_num_seqs, 1],
-                                                       -1,
-                                                       dtype='int64')
-        self.share_inputs["is_block_step"] = paddle.full([max_num_seqs],
-                                                         False,
-                                                         dtype='bool')
-        self.share_inputs["encoder_block_lens"] = paddle.full([max_num_seqs],
-                                                              0,
-                                                              dtype='int32')
-        self.share_inputs["step_block_list"] = paddle.full([max_num_seqs],
-                                                           -1,
-                                                           dtype='int32')
-        self.share_inputs["step_lens"] = paddle.full([1], 0, dtype='int32')
-        self.share_inputs["recover_block_list"] = paddle.full([max_num_seqs],
-                                                              -1,
-                                                              dtype='int32')
-        self.share_inputs["recover_lens"] = paddle.full([1], 0, dtype='int32')
-        self.share_inputs["need_block_list"] = paddle.full([max_num_seqs],
-                                                           -1,
-                                                           dtype='int32')
-        self.share_inputs["need_block_len"] = paddle.full([1],
-                                                          0,
-                                                          dtype='int32')
-        self.share_inputs["used_list_len"] = paddle.full([max_num_seqs],
-                                                         0,
-                                                         dtype='int32')
-        self.share_inputs["infer_seed"] = paddle.full([max_num_seqs, 1],
-                                                      0,
-                                                      dtype='int64')
-        self.share_inputs["first_token_ids"] = paddle.full([max_num_seqs, 1],
-                                                           -1,
-                                                           dtype='int64')
-        self.share_inputs["ori_seq_lens_encoder"] = paddle.full(
-            [max_num_seqs, 1], 0, dtype='int32')
-        self.share_inputs["system_lens"] = paddle.full([max_num_seqs, 1],
-                                                       0,
-                                                       dtype='int32')
-        self.share_inputs["system_ids"] = paddle.full([max_num_seqs, 1],
-                                                      -1,
-                                                      dtype='int32')
+        self.share_inputs["bad_tokens"] = paddle.full([1], -1, dtype="int64")
+        self.share_inputs["next_tokens"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
+        self.share_inputs["is_block_step"] = paddle.full([max_num_seqs], False, dtype="bool")
+        self.share_inputs["encoder_block_lens"] = paddle.full([max_num_seqs], 0, dtype="int32")
+        self.share_inputs["step_block_list"] = paddle.full([max_num_seqs], -1, dtype="int32")
+        self.share_inputs["step_lens"] = paddle.full([1], 0, dtype="int32")
+        self.share_inputs["recover_block_list"] = paddle.full([max_num_seqs], -1, dtype="int32")
+        self.share_inputs["recover_lens"] = paddle.full([1], 0, dtype="int32")
+        self.share_inputs["need_block_list"] = paddle.full([max_num_seqs], -1, dtype="int32")
+        self.share_inputs["need_block_len"] = paddle.full([1], 0, dtype="int32")
+        self.share_inputs["used_list_len"] = paddle.full([max_num_seqs], 0, dtype="int32")
+        self.share_inputs["infer_seed"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
+        self.share_inputs["first_token_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
+        self.share_inputs["ori_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["system_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["system_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int32")
 
         self.share_inputs["ids_remove_padding"] = paddle.full(
             [max_num_seqs * self.parallel_config.max_model_len],
             0,
-            dtype='int64')
-        self.share_inputs["cum_offsets"] = paddle.full([max_num_seqs, 1],
-                                                       0,
-                                                       dtype='int32')
-        self.share_inputs["padding_offset"] = paddle.full([max_num_seqs, 1],
-                                                          0,
-                                                          dtype='int32')
-        self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1],
-                                                        0,
-                                                        dtype='int32')
-        self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1],
-                                                        0,
-                                                        dtype='int32')
+            dtype="int64",
+        )
+        self.share_inputs["cum_offsets"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["padding_offset"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         # AttentionBackend buffers
-        self.share_inputs["decoder_batch_ids"] = paddle.full([max_num_seqs, 1],
-                                                             0,
-                                                             dtype='int32')
-        self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full(
-            [max_num_seqs, 1], 0, dtype='int32')
+        self.share_inputs["decoder_batch_ids"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
 
         # Initialize rotary position embedding
-        tmp_position_ids = paddle.arange(
-            self.parallel_config.max_model_len).reshape((1, -1))
+        tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
         # TODO(gongshaotian): move to models
         self.share_inputs["rope_emb"] = get_rope(
             rotary_dim=self.model_config.head_dim,
             position_ids=tmp_position_ids,
             base=self.model_config.rope_theta,
-            model_config=self.model_config)
+            model_config=self.model_config,
+        )
 
         # Set block tables
         pre_max_block_num = (
-            self.parallel_config.max_model_len +
-            self.parallel_config.block_size - 1
+            self.parallel_config.max_model_len + self.parallel_config.block_size - 1
         ) // self.parallel_config.block_size + self.parallel_config.enc_dec_block_num
-        self.share_inputs["block_tables"] = paddle.full(
-            [max_num_seqs, pre_max_block_num], -1, dtype='int32')
+        self.share_inputs["block_tables"] = paddle.full([max_num_seqs, pre_max_block_num], -1, dtype="int32")
 
         # Initialize free list
         free_list = list(
             range(
                 self.parallel_config.total_block_num - 1,
-                int(self.parallel_config.total_block_num *
-                    self.parallel_config.kv_cache_ratio) - 1, -1))
+                int(self.parallel_config.total_block_num * self.parallel_config.kv_cache_ratio) - 1,
+                -1,
+            )
+        )
         self.free_list_len = len(free_list)
-        self.share_inputs["free_list"] = paddle.to_tensor(free_list,
-                                                          dtype="int32")
-        self.share_inputs["free_list_len"] = paddle.full([1],
-                                                         self.free_list_len,
-                                                         dtype="int32")
+        self.share_inputs["free_list"] = paddle.to_tensor(free_list, dtype="int32")
+        self.share_inputs["free_list_len"] = paddle.full([1], self.free_list_len, dtype="int32")
 
         # Initialize stop seqs
-        self.share_inputs["stop_seqs_len"] = paddle.full(
-            [self.model_config.max_stop_seqs_num], 0, dtype="int32")
-        self.share_inputs["stop_seqs"] = paddle.full([
-            self.model_config.max_stop_seqs_num,
-            self.model_config.stop_seqs_max_len
-        ],
-                                                     -1,
-                                                     dtype="int32")
+        self.share_inputs["stop_seqs_len"] = paddle.full([self.model_config.max_stop_seqs_num], 0, dtype="int32")
+        self.share_inputs["stop_seqs"] = paddle.full(
+            [
+                self.model_config.max_stop_seqs_num,
+                self.model_config.stop_seqs_max_len,
+            ],
+            -1,
+            dtype="int32",
+        )
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
             self.share_inputs["input_ids_cpu"] = paddle.full(
                 shape=[max_num_seqs, self.parallel_config.max_model_len],
                 fill_value=1,
-                dtype='int64').cpu()
-            self.share_inputs['accept_tokens'] = paddle.full(
+                dtype="int64",
+            ).cpu()
+            self.share_inputs["accept_tokens"] = paddle.full(
                 shape=[max_num_seqs, max_draft_token_num + 1],
                 fill_value=0,
-                dtype="int64")
-            self.share_inputs['accept_num'] = paddle.full(shape=[max_num_seqs],
-                                                          fill_value=0,
-                                                          dtype='int32')
-            self.share_inputs['draft_tokens'] = paddle.full(
+                dtype="int64",
+            )
+            self.share_inputs["accept_num"] = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
+            self.share_inputs["draft_tokens"] = paddle.full(
                 shape=[max_num_seqs, max_draft_token_num + 1],
                 fill_value=0,
-                dtype="int64")
+                dtype="int64",
+            )
 
-            self.share_inputs['actual_draft_token_num'] = paddle.full(
+            self.share_inputs["actual_draft_token_num"] = paddle.full(
                 shape=[max_num_seqs],
                 fill_value=max_draft_token_num,
-                dtype="int32")
-            self.share_inputs["output_cum_offsets"] = paddle.full(
-                shape=[max_num_seqs, 1], fill_value=0, dtype='int32')
+                dtype="int32",
+            )
+            self.share_inputs["output_cum_offsets"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
             self.share_inputs["output_padding_offset"] = paddle.full(
                 shape=[max_num_seqs * (max_draft_token_num + 1)],
                 fill_value=0,
-                dtype="int32")
+                dtype="int32",
+            )
 
     def _prepare_inputs(self) -> None:
-        """ prepare the model inputs """
+        """prepare the model inputs"""
         # Remove padding
         (
             ids_remove_padding,
@@ -541,19 +455,22 @@ class IluvatarModelRunner(ModelRunnerBase):
             output_cum_offsets,
             output_padding_offset,
         ) = pre_process(
-            self.parallel_config.max_model_len, self.share_inputs["input_ids"],
-            self.share_inputs["seq_lens_this_time"], self.speculative_decoding,
-            self.share_inputs["draft_tokens"] if self.speculative_decoding else
-            None, self.share_inputs["seq_lens_encoder"],
-            self.share_inputs["seq_lens_decoder"])
-        cu_seqlens_k = paddle.concat([
-            paddle.to_tensor([0], dtype=paddle.int32),
-            paddle.cumsum(self.share_inputs["seq_lens_this_time"] +
-                          self.share_inputs["seq_lens_decoder"][:, 0])
-        ])
+            self.parallel_config.max_model_len,
+            self.share_inputs["input_ids"],
+            self.share_inputs["seq_lens_this_time"],
+            self.speculative_decoding,
+            (self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
+            self.share_inputs["seq_lens_encoder"],
+            self.share_inputs["seq_lens_decoder"],
+        )
+        cu_seqlens_k = paddle.concat(
+            [
+                paddle.to_tensor([0], dtype=paddle.int32),
+                paddle.cumsum(self.share_inputs["seq_lens_this_time"] + self.share_inputs["seq_lens_decoder"][:, 0]),
+            ]
+        )
 
-        self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding,
-                                                      False)
+        self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
         self.share_inputs["cum_offsets"].copy_(cum_offsets, False)
         self.share_inputs["padding_offset"].copy_(padding_offset, False)
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
@@ -561,10 +478,8 @@ class IluvatarModelRunner(ModelRunnerBase):
 
         # For speculative decoding
         if self.speculative_decoding:
-            self.share_inputs["output_cum_offsets"].copy_(
-                output_cum_offsets, False)
-            self.share_inputs["output_padding_offset"].copy_(
-                output_padding_offset, False)
+            self.share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
+            self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
         # Initialize forward meta data
         self.initialize_forward_meta()
@@ -587,9 +502,8 @@ class IluvatarModelRunner(ModelRunnerBase):
         )
 
     def load_model(self) -> None:
-        """ load or download model """
-        logger.info(
-            f"Starting to load model {self.model_config.architectures[0]}")
+        """load or download model"""
+        logger.info(f"Starting to load model {self.model_config.architectures[0]}")
         time_before_load = time.perf_counter()
         # 1. Load original model
         self.model = get_model_from_loader(fd_config=self.fd_config)
@@ -599,11 +513,10 @@ class IluvatarModelRunner(ModelRunnerBase):
         # 3. Load drafter model(for speculative decoding)
 
         time_after_load = time.perf_counter()
-        logger.info(
-            f"Model loading took {time_after_load - time_before_load} seconds")
+        logger.info(f"Model loading took {time_after_load - time_before_load} seconds")
 
     def get_model(self) -> nn.Layer:
-        """ get current model """
+        """get current model"""
         return self.model
 
     def initialize_forward_meta(self):
@@ -626,7 +539,7 @@ class IluvatarModelRunner(ModelRunnerBase):
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
             block_tables=self.share_inputs["block_tables"],
-            caches=self.share_inputs["caches"]
+            caches=self.share_inputs["caches"],
         )
 
         # Initialzie attention meta data
@@ -649,28 +562,29 @@ class IluvatarModelRunner(ModelRunnerBase):
         # Get kv cache dtype
         cache_type = self.parallel_config.dtype
 
-        if (self.quant_config
-                and hasattr(self.quant_config, "kv_cache_quant_type")
-                and self.quant_config.kv_cache_quant_type is not None):
-            cache_type = 'uint8'
+        if (
+            self.quant_config
+            and hasattr(self.quant_config, "kv_cache_quant_type")
+            and self.quant_config.kv_cache_quant_type is not None
+        ):
+            cache_type = "uint8"
 
         # Get kv cache shape
-        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
-            max_num_blocks=max_block_num)
+        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
 
         if not self.parallel_config.do_profile and (
-                self.parallel_config.enable_prefix_caching \
-                or self.parallel_config.splitwise_role != "mixed"):
+            self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"
+        ):
             raise NotImplementedError("Iluvatar does not support yet")
         else:
             for i in range(self.model_config.num_hidden_layers):
 
-                cache_kvs["key_caches_{}".format(i)] = paddle.full(
+                cache_kvs[f"key_caches_{i}"] = paddle.full(
                     shape=kv_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
-                cache_kvs["value_caches_{}".format(i)] = paddle.full(
+                cache_kvs[f"value_caches_{i}"] = paddle.full(
                     shape=kv_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
@@ -690,36 +604,40 @@ class IluvatarModelRunner(ModelRunnerBase):
         num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
         self.model_config.kv_num_heads = max(
             1,
-            int(self.model_config.num_key_value_heads) //
-            self.parallel_config.tensor_parallel_size)
+            int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
+        )
         head_dim = self.model_config.head_dim
 
         # Get the attention backend
         attn_cls = get_attention_backend()
-        attn_backend = attn_cls(self.fd_config,
-                                kv_num_heads=self.model_config.kv_num_heads,
-                                num_heads=num_heads,
-                                head_dim=head_dim)
+        attn_backend = attn_cls(
+            self.fd_config,
+            kv_num_heads=self.model_config.kv_num_heads,
+            num_heads=num_heads,
+            head_dim=head_dim,
+        )
         if attn_backend is None:
-            raise NotImplementedError(
-                "Attention backend which you chose is not support by GPUModelRunner"
-            )
+            raise NotImplementedError("Attention backend which you chose is not support by GPUModelRunner")
         self.attn_backends.append(attn_backend)
 
-    def _dummy_run(self,
-                   num_tokens: paddle.Tensor,
-                   batch_size: paddle.Tensor,
-                   expected_decode_len: int = 1,
-                   in_capturing: bool = False) -> paddle.Tensor:
+    def _dummy_run(
+        self,
+        num_tokens: paddle.Tensor,
+        batch_size: paddle.Tensor,
+        expected_decode_len: int = 1,
+        in_capturing: bool = False,
+    ) -> paddle.Tensor:
         """
         Use dummy inputs to run before formal execution.
         Args:
             num_tokens:
             expected_decode_len: Expected number of tokens generated
         """
-        self._dummy_prefill_inputs(num_tokens=num_tokens,
-                                   batch_size=batch_size,
-                                   expected_decode_len=expected_decode_len)
+        self._dummy_prefill_inputs(
+            num_tokens=num_tokens,
+            batch_size=batch_size,
+            expected_decode_len=expected_decode_len,
+        )
         while True:
 
             # 1. Compute real num_tokens
@@ -732,7 +650,8 @@ class IluvatarModelRunner(ModelRunnerBase):
             # 4. Run model
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
-                forward_meta=self.forward_meta)
+                forward_meta=self.forward_meta,
+            )
 
             hiddden_states = rebuild_padding(
                 model_output,
@@ -757,24 +676,22 @@ class IluvatarModelRunner(ModelRunnerBase):
                     self.share_inputs["step_idx"],
                     self.share_inputs["stop_flags"],
                 )
-                sampled_token_ids = self.sampler(logits,
-                                                 self.sampling_metadata)
+                sampled_token_ids = self.sampler(logits, self.sampling_metadata)
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(sampled_token_ids, 0)
             else:
-                self.sampler(logits, self.sampling_metadata,
-                             self.parallel_config.max_model_len,
-                             self.share_inputs)
+                self.sampler(
+                    logits,
+                    self.sampling_metadata,
+                    self.parallel_config.max_model_len,
+                    self.share_inputs,
+                )
                 sampled_token_ids = None
                 if self.parallel_config.tensor_parallel_size > 1:
-                    paddle.distributed.broadcast(
-                        self.share_inputs["accept_tokens"], 0)
-                    paddle.distributed.broadcast(
-                        self.share_inputs["accept_num"], 0)
-                    paddle.distributed.broadcast(self.share_inputs["step_idx"],
-                                                 0)
-                    paddle.distributed.broadcast(
-                        self.share_inputs["stop_flags"], 0)
+                    paddle.distributed.broadcast(self.share_inputs["accept_tokens"], 0)
+                    paddle.distributed.broadcast(self.share_inputs["accept_num"], 0)
+                    paddle.distributed.broadcast(self.share_inputs["step_idx"], 0)
+                    paddle.distributed.broadcast(self.share_inputs["stop_flags"], 0)
 
             # 6. post process
             model_output_data = ModelOutputData(
@@ -795,30 +712,33 @@ class IluvatarModelRunner(ModelRunnerBase):
                 msg_queue_id=self.parallel_config.msg_queue_id,
                 mp_rank=self.local_rank,
                 use_ep=self.parallel_config.use_ep,
-                draft_tokens=self.share_inputs["draft_tokens"]
-                if self.speculative_decoding else None,
-                actual_draft_token_num=self.
-                share_inputs["actual_draft_token_num"]
-                if self.speculative_decoding else None,
-                accept_tokens=self.share_inputs["accept_tokens"]
-                if self.speculative_decoding else None,
-                accept_num=self.share_inputs["accept_num"]
-                if self.speculative_decoding else None)
+                draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
+                actual_draft_token_num=(
+                    self.share_inputs["actual_draft_token_num"] if self.speculative_decoding else None
+                ),
+                accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
+                accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
+            )
 
-            post_process(sampled_token_ids=sampled_token_ids,
-                         model_output=model_output_data,
-                         speculative_decoding=self.speculative_decoding,
-                         skip_save_output=True)
+            post_process(
+                sampled_token_ids=sampled_token_ids,
+                model_output=model_output_data,
+                speculative_decoding=self.speculative_decoding,
+                skip_save_output=True,
+            )
 
             # 7. Updata 'infer_seed' and step_cuda()
             self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
             self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
-            step_cuda(self.share_inputs, self.parallel_config.block_size,
-                      self.parallel_config.enc_dec_block_num,
-                      self.speculative_config,
-                      self.parallel_config.enable_prefix_caching)
+            step_cuda(
+                self.share_inputs,
+                self.parallel_config.block_size,
+                self.parallel_config.enc_dec_block_num,
+                self.speculative_config,
+                self.parallel_config.enable_prefix_caching,
+            )
 
-            if int((self.share_inputs['seq_lens_this_time'] > 0).sum()) == 0:
+            if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
 
     def _update_chunked_prefill(self, tasks):
@@ -838,32 +758,25 @@ class IluvatarModelRunner(ModelRunnerBase):
 
         for id, task in list(self.restore_chunked_prefill_request.items()):
             idx = task.idx
-            logger.debug(
-                f"{task.request_id} chunked prefill {task.chunk_idx}/{len(task.prefill_chunk_info)}"
-            )
-            start_idx = sum(task.prefill_chunk_info[:task.chunk_idx])
+            logger.debug(f"{task.request_id} chunked prefill {task.chunk_idx}/{len(task.prefill_chunk_info)}")
+            start_idx = sum(task.prefill_chunk_info[: task.chunk_idx])
             if task.chunk_idx == len(task.prefill_chunk_info):
-                self.share_inputs["seq_lens_this_time"][idx:idx + 1] = 1
-                self.share_inputs['seq_lens_encoder'][idx:idx + 1] = 0
-                self.share_inputs["step_idx"][idx:idx + 1] = 1
-                self.share_inputs["seq_lens_decoder"][
-                    idx:idx + 1] = start_idx + task.get("seq_lens_decoder", 0)
+                self.share_inputs["seq_lens_this_time"][idx : idx + 1] = 1
+                self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
+                self.share_inputs["step_idx"][idx : idx + 1] = 1
+                self.share_inputs["seq_lens_decoder"][idx : idx + 1] = start_idx + task.get("seq_lens_decoder", 0)
                 del self.restore_chunked_prefill_request[task.request_id]
             else:
                 token_chunk_size = task.prefill_chunk_info[task.chunk_idx]
 
-                self.share_inputs["seq_lens_this_time"][idx:idx +
-                                                        1] = token_chunk_size
-                self.share_inputs['input_ids'][
-                    idx, :token_chunk_size] = np.array(
-                        task.prompt_token_ids[start_idx:start_idx +
-                                              token_chunk_size])
-                self.share_inputs['seq_lens_encoder'][idx:idx +
-                                                      1] = token_chunk_size
-                self.share_inputs["prompt_lens"][idx:idx + 1] += token_chunk_size
-                self.share_inputs["step_idx"][idx:idx + 1] = 0
-                self.share_inputs["seq_lens_decoder"][
-                    idx:idx + 1] = start_idx + task.get("seq_lens_decoder", 0)
+                self.share_inputs["seq_lens_this_time"][idx : idx + 1] = token_chunk_size
+                self.share_inputs["input_ids"][idx, :token_chunk_size] = np.array(
+                    task.prompt_token_ids[start_idx : start_idx + token_chunk_size]
+                )
+                self.share_inputs["seq_lens_encoder"][idx : idx + 1] = token_chunk_size
+                self.share_inputs["prompt_lens"][idx : idx + 1] += token_chunk_size
+                self.share_inputs["step_idx"][idx : idx + 1] = 0
+                self.share_inputs["seq_lens_decoder"][idx : idx + 1] = start_idx + task.get("seq_lens_decoder", 0)
             task.chunk_idx += 1
 
     def _dummy_sampler_run(self) -> paddle.Tensor:
@@ -875,26 +788,22 @@ class IluvatarModelRunner(ModelRunnerBase):
         Trigger CUDA Graph capture for all shapes in 'CudaGraphConfig.cudagraph_capture_sizes'
         """
         if not self.use_cudagraph:
-            logger.info(
-                "Skipping CUDA graph capture. Please check GraphOptimizationConfig"
-            )
+            logger.info("Skipping CUDA graph capture. Please check GraphOptimizationConfig")
             return
         time_before_capture = time.perf_counter()
         expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
         for batch_size in sorted(capture_sizes, reverse=True):
-            self._dummy_run(num_tokens=self.parallel_config.max_model_len,
-                            batch_size=batch_size,
-                            in_capturing=True,
-                            expected_decode_len=expected_decode_len)
-            logger.info(
-                f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}"
+            self._dummy_run(
+                num_tokens=self.parallel_config.max_model_len,
+                batch_size=batch_size,
+                in_capturing=True,
+                expected_decode_len=expected_decode_len,
             )
+            logger.info(f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
 
         time_after_capture = time.perf_counter()
-        logger.info(
-            f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds"
-        )
+        logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
 
     def _get_skip_idx(self, model_forward_batch):
         """
@@ -909,15 +818,12 @@ class IluvatarModelRunner(ModelRunnerBase):
             return skip_idx_list
 
         for task in model_forward_batch:
-            if task.get("prefill_chunk_info",
-                        None) is None or task.chunk_idx >= len(
-                            task.prefill_chunk_info):
+            if task.get("prefill_chunk_info", None) is None or task.chunk_idx >= len(task.prefill_chunk_info):
                 continue
             skip_idx_list.append(task.idx)
 
         for task in self.restore_chunked_prefill_request.values():
-            if task.idx in skip_idx_list or task.chunk_idx >= len(
-                    task.prefill_chunk_info):
+            if task.idx in skip_idx_list or task.chunk_idx >= len(task.prefill_chunk_info):
                 continue
             skip_idx_list.append(task.idx)
 
@@ -953,7 +859,8 @@ class IluvatarModelRunner(ModelRunnerBase):
         # 3. Execute model
         model_output = self.model(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
-            forward_meta=self.forward_meta)
+            forward_meta=self.forward_meta,
+        )
 
         hiddden_states = rebuild_padding(
             model_output,
@@ -961,8 +868,7 @@ class IluvatarModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_this_time"],
             self.share_inputs["seq_lens_decoder"],
             self.share_inputs["seq_lens_encoder"],
-            self.share_inputs["output_padding_offset"]
-            if self.speculative_decoding else None,
+            (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
             self.parallel_config.max_model_len,
         )
 
@@ -988,17 +894,18 @@ class IluvatarModelRunner(ModelRunnerBase):
                 paddle.distributed.broadcast(sampled_token_ids, 0)
 
         else:
-            self.sampler(logits, self.sampling_metadata,
-                         self.parallel_config.max_model_len, self.share_inputs)
+            self.sampler(
+                logits,
+                self.sampling_metadata,
+                self.parallel_config.max_model_len,
+                self.share_inputs,
+            )
             sampled_token_ids = None
             if self.parallel_config.tensor_parallel_size > 1:
-                paddle.distributed.broadcast(
-                    self.share_inputs["accept_tokens"], 0)
-                paddle.distributed.broadcast(self.share_inputs["accept_num"],
-                                             0)
+                paddle.distributed.broadcast(self.share_inputs["accept_tokens"], 0)
+                paddle.distributed.broadcast(self.share_inputs["accept_num"], 0)
                 paddle.distributed.broadcast(self.share_inputs["step_idx"], 0)
-                paddle.distributed.broadcast(self.share_inputs["stop_flags"],
-                                             0)
+                paddle.distributed.broadcast(self.share_inputs["stop_flags"], 0)
 
         # 5. Post Process
         model_output_data = ModelOutputData(
@@ -1019,25 +926,25 @@ class IluvatarModelRunner(ModelRunnerBase):
             msg_queue_id=self.parallel_config.msg_queue_id,
             mp_rank=self.local_rank,
             use_ep=self.parallel_config.use_ep,
-            draft_tokens=self.share_inputs["draft_tokens"]
-            if self.speculative_decoding else None,
-            actual_draft_token_num=self.share_inputs["actual_draft_token_num"]
-            if self.speculative_decoding else None,
-            accept_tokens=self.share_inputs["accept_tokens"]
-            if self.speculative_decoding else None,
-            accept_num=self.share_inputs["accept_num"]
-            if self.speculative_decoding else None)
+            draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
+            actual_draft_token_num=(
+                self.share_inputs["actual_draft_token_num"] if self.speculative_decoding else None
+            ),
+            accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
+            accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
+        )
 
-        if self.speculative_config.method in ["mtp"] and \
-            self.parallel_config.splitwise_role == "prefill":
+        if self.speculative_config.method in ["mtp"] and self.parallel_config.splitwise_role == "prefill":
             skip_save_output = True
         else:
             skip_save_output = False
-        post_process(sampled_token_ids=sampled_token_ids,
-                     model_output=model_output_data,
-                     save_each_rank=self.parallel_config.use_ep,
-                     speculative_decoding=self.speculative_decoding,
-                     skip_save_output=skip_save_output)
+        post_process(
+            sampled_token_ids=sampled_token_ids,
+            model_output=model_output_data,
+            save_each_rank=self.parallel_config.use_ep,
+            speculative_decoding=self.speculative_decoding,
+            skip_save_output=skip_save_output,
+        )
 
         # 7. Updata 'infer_seed' and step_cuda()
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
@@ -1077,8 +984,7 @@ class IluvatarModelRunner(ModelRunnerBase):
         if hasattr(self.model, "empty_input_forward"):
             self.model.empty_input_forward()
         else:
-            raise ValueError(
-                f"{type(self.model)} has no attribute 'empty_input_forward")
+            raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 
     def profile_run(self) -> None:
         """Execute a forward pass with dummy inputs to profile the memory usage of the model."""
@@ -1091,8 +997,10 @@ class IluvatarModelRunner(ModelRunnerBase):
         # 1. Profile with multimodal encoder & encoder cache
 
         # 2. Dummy run
-        self._dummy_run(num_tokens=self.parallel_config.max_num_batched_tokens,
-                        batch_size=min(self.parallel_config.max_num_seqs, 3))
+        self._dummy_run(
+            num_tokens=self.parallel_config.max_num_batched_tokens,
+            batch_size=min(self.parallel_config.max_num_seqs, 3),
+        )
 
         # 3. gc
         self.clear_cache()
@@ -1108,23 +1016,24 @@ class IluvatarModelRunner(ModelRunnerBase):
         self.num_gpu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        if not (self.parallel_config.enable_prefix_caching \
-                or self.parallel_config.splitwise_role != "mixed"):
+        if not (self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
             self.initialize_kv_cache()
 
         # Reset free list
         free_list = list(
             range(
                 self.num_gpu_blocks - 1,
-                int(self.num_gpu_blocks * self.parallel_config.kv_cache_ratio)
-                - 1, -1))
+                int(self.num_gpu_blocks * self.parallel_config.kv_cache_ratio) - 1,
+                -1,
+            )
+        )
         self.free_list_len = len(free_list)
-        self.share_inputs.update({
-            "free_list":
-            paddle.to_tensor(free_list, dtype="int32"),
-            "free_list_len":
-            paddle.full([1], self.free_list_len, dtype="int32"),
-        })
+        self.share_inputs.update(
+            {
+                "free_list": paddle.to_tensor(free_list, dtype="int32"),
+                "free_list_len": paddle.full([1], self.free_list_len, dtype="int32"),
+            }
+        )
 
         self.parallel_config.do_profile = False
 
@@ -1140,9 +1049,11 @@ class IluvatarModelRunner(ModelRunnerBase):
         - cache_int4:
         """
         cache_quant_dtype = None
-        if (self.quant_config
-                and hasattr(self.quant_config, "kv_cache_quant_type")
-                and self.quant_config.kv_cache_quant_type is not None):
+        if (
+            self.quant_config
+            and hasattr(self.quant_config, "kv_cache_quant_type")
+            and self.quant_config.kv_cache_quant_type is not None
+        ):
             cache_quant_dtype = self.quant_config.kv_cache_quant_type
 
         if cache_quant_dtype is not None:  # int8, int8_zp, fp8, fp8_zp
@@ -1152,14 +1063,12 @@ class IluvatarModelRunner(ModelRunnerBase):
 
         hidden_dim = self.model_config.head_dim * self.model_config.kv_num_heads
         # NOTE(liuzichang): Implement multi-layer MTP architecture in the future
-        num_layers = self.model_config.num_hidden_layers + \
-            self.speculative_config.num_gpu_block_expand_ratio if \
-                self.speculative_method in [
-            "mtp"
-        ] else self.model_config.num_hidden_layers
-        required_memory = (
-            byte_of_dtype * 2 *  # k + v
-            (self.parallel_config.block_size * hidden_dim) * num_layers)
+        num_layers = (
+            self.model_config.num_hidden_layers + self.speculative_config.num_gpu_block_expand_ratio
+            if self.speculative_method in ["mtp"]
+            else self.model_config.num_hidden_layers
+        )
+        required_memory = byte_of_dtype * 2 * (self.parallel_config.block_size * hidden_dim) * num_layers  # k + v
         return required_memory
 
     def not_need_stop(self) -> bool:

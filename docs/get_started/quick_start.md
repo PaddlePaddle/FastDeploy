@@ -25,9 +25,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --max-num-seqs 32
 ```
 
-> 💡 Note: In the path specified by ```--model```, if the subdirectory corresponding to the path does not exist in the current directory, it will try to query whether AIStudio has a preset model based on the specified model name (such as ```baidu/ERNIE-4.5-0.3B-Paddle```). If it exists, it will automatically start downloading. The default download path is: ```~/xx```. For instructions and configuration on automatic model download, see [Model Download](../supported_models.md).  
-```--max-model-len``` indicates the maximum number of tokens supported by the currently deployed service.  
-```--max-num-seqs``` indicates the maximum number of concurrent processing supported by the currently deployed service.  
+> 💡 Note: In the path specified by ```--model```, if the subdirectory corresponding to the path does not exist in the current directory, it will try to query whether AIStudio has a preset model based on the specified model name (such as ```baidu/ERNIE-4.5-0.3B-Paddle```). If it exists, it will automatically start downloading. The default download path is: ```~/xx```. For instructions and configuration on automatic model download, see [Model Download](../supported_models.md).
+```--max-model-len``` indicates the maximum number of tokens supported by the currently deployed service.
+```--max-num-seqs``` indicates the maximum number of concurrent processing supported by the currently deployed service.
 
 **Related Documents**
 - [Service Deployment](../online_serving/README.md)
