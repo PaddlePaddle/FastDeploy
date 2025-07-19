@@ -397,7 +397,6 @@ class MTPProposer(Proposer):
             seq_lens_encoder=self.model_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.model_inputs["seq_lens_decoder"],
             seq_lens_this_time=self.model_inputs["seq_lens_this_time"],
-            cum_offsets=self.model_inputs["cum_offsets"],
             batch_id_per_token=self.model_inputs["batch_id_per_token"],
             cu_seqlens_q=self.model_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.model_inputs["cu_seqlens_k"],

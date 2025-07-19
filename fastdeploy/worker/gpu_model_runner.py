@@ -680,7 +680,6 @@ class GPUModelRunner(ModelRunnerBase):
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
             seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
-            cum_offsets=self.share_inputs["cum_offsets"],
             batch_id_per_token=self.share_inputs["batch_id_per_token"],
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
