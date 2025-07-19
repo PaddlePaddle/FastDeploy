@@ -108,6 +108,9 @@ class XPUForwardMeta(ForwardMeta):
     """
     XPUForwardMeta is used to store the global meta information of the forward, and some XPU specific meta info.
     """
+    # Accumulated offset
+    cum_offsets: Optional[paddle.Tensor] = None
+    
     # TODO(wanghaitao): Supplementary notes
     #
     encoder_batch_map: Optional[paddle.Tensor] = None
