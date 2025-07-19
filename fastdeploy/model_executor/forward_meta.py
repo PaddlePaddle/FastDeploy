@@ -83,8 +83,6 @@ class ForwardMeta():
     # The sequence length processed in the current step
     seq_lens_this_time: Optional[paddle.Tensor] = None
 
-    # Accumulated offset
-    cum_offsets: Optional[paddle.Tensor] = None
     # batch_id_per_token tensor, used to indicate which token belongs which batch after padding removal to the original input_ids
     batch_id_per_token: Optional[paddle.Tensor] = None
     # Accumulated sequence length of query
