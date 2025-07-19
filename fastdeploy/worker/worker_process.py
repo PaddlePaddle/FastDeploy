@@ -418,7 +418,7 @@ class PaddleDisWorkerProc():
         self.worker.reinitialize_kv_cache(num_gpu_blocks=num_blocks_global)
 
     def graph_optimize_and_warm_up_model(self) ->None:
-        if self.parallel_config.enable_prefix_caching:
+        if self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
             launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
             self.launched_cache_manager_signal = IPCSignal(
                 name="launched_cache_manager_signal",
