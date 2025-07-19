@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Literal, Optional
@@ -37,6 +38,25 @@ class MoEPhase(Enum):
     PREFILL = 1
     DECODER = 2
 
+class ErnieArchitectures:
+    """Helper class for ERNIE architecture check."""
+    
+    ARCHITECTURES = {
+        "Ernie4_5_ForCausalLM",
+        "Ernie4_5_MoeForCausalLM", 
+        "Ernie4_5_VLMoeForConditionalGeneration"
+    }
+
+    @classmethod
+    def contains_ernie_arch(cls, architectures):
+        """Check if any ERNIE architecture is present in the given architectures."""
+        return any(arch in architectures for arch in cls.ARCHITECTURES)
+
+    @classmethod
+    def is_ernie_arch(cls, architecture):
+        """Check if the given architecture is an ERNIE architecture."""
+        return architecture in cls.ARCHITECTURES
+
 PRETRAINED_INIT_CONFIGURATION = {
     "rope_theta" : 10000.0,
     "num_key_value_heads" : -1,
@@ -46,7 +66,6 @@ PRETRAINED_INIT_CONFIGURATION = {
     "num_max_dispatch_tokens_per_rank" : 256,
     "moe_use_aux_free" : False,
     "vocab_size" : -1,
-    "use_rope": True,
     "hidden_dropout_prob" : 0.0,
     "initializer_range" : 0.02,
     "max_position_embeddings" : 512,
@@ -70,7 +89,7 @@ class ModelConfig:
         self.stop_seqs_max_len = 8
 
         # NOTE(gongshaotain): form _load_model_init_val()
-        self.top_p = 0.0
+        self.top_p = 1.0
         self.temperature = 1.0
         self.rope_theta = 10000.0
         self.penalty_score = 1.0
@@ -89,6 +108,7 @@ class ModelConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
+        assert self.model_name_or_path != ""
         pretrained_config, _ = PretrainedConfig.get_config_dict(self.model_name_or_path)
         self.pretrained_config = PretrainedConfig.from_dict(pretrained_config)
 
@@ -108,8 +128,9 @@ class ModelConfig:
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
         self.ori_vocab_size = self.vocab_size
-        if "Ernie4_5_ForCausalLM" in self.architectures or "Ernie4_5_MoeForCausalLM" in self.architectures:
-            self.ori_vocab_size = args["ori_vocab_size"]
+        if ErnieArchitectures.contains_ernie_arch(self.architectures):
+            self.ori_vocab_size = args.get("ori_vocab_size", self.ori_vocab_size)
+
 
 class ParallelConfig:
     """Configuration for the distributed execution."""
@@ -190,6 +211,18 @@ class ParallelConfig:
             raise NotImplementedError
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
         self.enable_custom_all_reduce: bool = False
+
+        # pd_disaggregation
+        use_pd_disaggregation: int = int(
+            os.getenv("FLAGS_use_pd_disaggregation", 0))
+        use_pd_disaggregation_per_chunk: int = int(
+            os.getenv("FLAGS_use_pd_disaggregation_per_chunk", 0))
+        if use_pd_disaggregation_per_chunk:
+            self.pd_disaggregation_mode = "per_chunk"
+        elif use_pd_disaggregation:
+            self.pd_disaggregation_mode = "per_query"
+        else:
+            self.pd_disaggregation_mode = "None"
 
 class SpeculativeConfig:
     """
@@ -317,7 +350,7 @@ class GraphOptimizationConfig:
         pre-compute the mapping from batch size to padded graph size
         """
         # Regular capture sizes
-        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size < max_num_seqs]
+        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_num_seqs]
         dedup_sizes = list(set(self.cudagraph_capture_sizes))
         if len(dedup_sizes) < len(self.cudagraph_capture_sizes):
             logger.info(("cudagraph sizes specified by model runner"

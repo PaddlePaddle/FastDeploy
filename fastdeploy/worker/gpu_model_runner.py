@@ -47,14 +47,12 @@ from fastdeploy.platforms import current_platform
 if not current_platform.is_dcu():
     from fastdeploy.spec_decode import MTPProposer, NgramProposer
 
-from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.input.mm_processor import DataProcessor
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import \
     ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
-from fastdeploy.worker.utils import check_safetensors_model
 
 
 class GPUModelRunner(ModelRunnerBase):
@@ -81,16 +79,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # VL model config:
         if self.enable_mm:
-            model_path = os.path.dirname(self.parallel_config.model_name_or_path)
-            self.is_safetensors_model = check_safetensors_model(
-                self.parallel_config.model_name_or_path)
-            if not self.is_safetensors_model:
-                self.tokenizer_path = self.image_preprocessor_path = model_path
-            else:
-                self.tokenizer_path = self.parallel_config.model_name_or_path
-                self.image_preprocessor_path = self.parallel_config.model_name_or_path
-            self.vision_model_name_or_path = os.path.join(
-                model_path, "DFNRopeVisionTransformer")
+            self._init_image_preprocess()
 
             self.amp_black = [
                 "reduce_sum",
@@ -228,7 +217,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx:idx + 1,
                                                0] = request.prompt_token_ids[0]
                 self.share_inputs["prompt_ids"][idx:idx + 1,
-                                               0] = request.prompt_token_ids[0]
+                                               :length] = np.array(request.prompt_token_ids)
                 self.share_inputs['seq_lens_encoder'][idx:idx + 1] = 0
                 self.share_inputs['seq_lens_decoder'][idx:idx + 1] = length
                 self.share_inputs['seq_lens_this_time'][idx:idx + 1] = 1
@@ -430,7 +419,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["max_dec_len"][idx:idx + 1] = max_dec_len
             self.share_inputs["min_dec_len"][idx:idx + 1] = max_dec_len
             self.share_inputs["stop_flags"][idx:idx + 1] = False
-            self.share_inputs["top_p"][idx:idx + 1] = 0.0
             self.share_inputs["temperature"][idx:idx + 1] = 1
 
             self.share_inputs["first_token_ids"][
@@ -570,7 +558,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["cum_offsets"] = paddle.full([max_num_seqs, 1],
                                                        0,
                                                        dtype='int32')
-        self.share_inputs["padding_offset"] = paddle.full([max_num_seqs, 1],
+        self.share_inputs["batch_id_per_token"] = paddle.full([max_num_seqs, 1],
                                                           0,
                                                           dtype='int32')
         self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1],
@@ -681,7 +669,7 @@ class GPUModelRunner(ModelRunnerBase):
         (
             ids_remove_padding,
             cum_offsets,
-            padding_offset,
+            batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
             output_cum_offsets,
@@ -696,7 +684,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding,
                                                       False)
         self.share_inputs["cum_offsets"].copy_(cum_offsets, False)
-        self.share_inputs["padding_offset"].copy_(padding_offset, False)
+        self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
         self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
 
@@ -734,8 +722,6 @@ class GPUModelRunner(ModelRunnerBase):
             f"Starting to load model {self.model_config.architectures[0]}")
         time_before_load = time.perf_counter()
         # 1. Load original model
-        if self.enable_mm:
-            self.load_mm_config_and_image_preprocess()
         self.model = get_model_from_loader(fd_config=self.fd_config)
         # 1.1 Load RL dynamic model
         if self.fd_config.load_config.dynamic_load_weight:
@@ -775,7 +761,7 @@ class GPUModelRunner(ModelRunnerBase):
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
             seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
             cum_offsets=self.share_inputs["cum_offsets"],
-            padding_offset=self.share_inputs["padding_offset"],
+            batch_id_per_token=self.share_inputs["batch_id_per_token"],
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
             block_tables=self.share_inputs["block_tables"],
@@ -1440,8 +1426,8 @@ class GPUModelRunner(ModelRunnerBase):
 
     def _init_image_preprocess(self) -> None:
         processor = DataProcessor(
-            tokenizer_name=self.tokenizer_path,
-            image_preprocessor_name=str(self.image_preprocessor_path),
+            tokenizer_name=self.parallel_config.model_name_or_path,
+            image_preprocessor_name=str(self.parallel_config.model_name_or_path),
         )
         processor.eval()
         image_preprocess = processor.image_preprocessor
@@ -1458,31 +1444,6 @@ class GPUModelRunner(ModelRunnerBase):
             [-2, -1]).repeat_interleave(self.model_config.vision_config.patch_size**2 * 1,
                                         -1)
         self.image_preprocess = image_preprocess
-
-    def load_mm_config_and_image_preprocess(self) -> None:
-        tokenizer = ErnieBotTokenizer.from_pretrained(
-            self.tokenizer_path,
-            model_max_length=self.parallel_config.max_model_len,
-            padding_side="right",
-            use_fast=False,
-        )
-        tokenizer.ignored_index = -100
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.unk_token
-
-        self.fd_config.model_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_size
-        self.fd_config.model_config.tensor_parallel_rank = self.parallel_config.tensor_parallel_rank
-        vision_config = self.fd_config.model_config.vision_config
-        vision_config.dtype = self.fd_config.model_config.dtype
-        vision_config.tensor_parallel_degree = self.parallel_config.tensor_parallel_size
-        vision_config.tensor_parallel_rank = self.parallel_config.tensor_parallel_rank
-        self.fd_config.model_config.im_patch_id = tokenizer.get_vocab()[
-            "<|IMAGE_PLACEHOLDER|>"
-        ]
-        self.fd_config.model_config.think_end_id = tokenizer.get_vocab()["</think>"]
-        self.fd_config.model_config.sequence_parallel = self.parallel_config.sequence_parallel
-        self.model_config = self.fd_config.model_config
-        self._init_image_preprocess()
 
     def _preprocess_mm_task(self, one: dict) -> None:
         """process batch"""

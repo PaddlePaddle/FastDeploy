@@ -310,10 +310,6 @@ class RequestOutput:
                                   None if decoder-only.
         num_cached_tokens: The number of tokens with prefix cache hit.
     """
-    __slots__ = (
-        'request_id', 'prompt', 'prompt_token_ids', 'outputs', 
-        'finished', 'metrics', 'num_cached_tokens', 'error_code', 'error_msg'
-    )
 
     def __init__(
         self,

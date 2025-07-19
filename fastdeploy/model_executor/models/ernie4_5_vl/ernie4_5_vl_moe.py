@@ -94,17 +94,44 @@ class Ernie4_5_VLMoE(nn.Layer):
             image_moe_layer_end_index = moe_layer_end_index[1]
 
         assert text_moe_layer_start_index <= text_moe_layer_end_index
+
+        moe_quant_type = ""
+        if hasattr(fd_config, 'quant_config') and fd_config.quant_config is not None:
+            moe_quant_type = getattr(fd_config.quant_config, 'name', lambda: "")()
+
         if layer_id >= text_moe_layer_start_index and layer_id <= text_moe_layer_end_index:
-            weight_key_map = {
-                "gate_weight_key":
-                f"{prefix}.gate.weight",
-                "gate_correction_bias_key":
-                f"{prefix}.moe_statics.e_score_correction_bias",
-                "up_gate_proj_expert_weight_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.weight",
-                "down_proj_expert_weight_key":
-                f"{prefix}.experts.{{}}.down_proj.weight",
-            }
+            if moe_quant_type == "tensor_wise_fp8" or (
+                moe_quant_type == "block_wise_fp8"
+                and fd_config.model_config.is_quantized):
+                weight_key_map = {
+                    "gate_weight_key":
+                    f"{prefix}.gate.weight",
+                    "gate_correction_bias_key":
+                    f"{prefix}.moe_statics.e_score_correction_bias",
+                    "up_gate_proj_expert_weight_key":
+                    f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                    "down_proj_expert_weight_key":
+                    f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                    "up_gate_proj_expert_weight_scale_key":
+                    f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                    "down_proj_expert_weight_scale_key":
+                    f"{prefix}.experts.{{}}.down_proj.weight_scale",
+                    "up_gate_proj_expert_in_scale_key":
+                    f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
+                    "down_proj_expert_in_scale_key":
+                    f"{prefix}.experts.{{}}.down_proj.activation_scale",
+                }
+            else:
+                weight_key_map = {
+                    "gate_weight_key":
+                    f"{prefix}.gate.weight",
+                    "gate_correction_bias_key":
+                    f"{prefix}.moe_statics.e_score_correction_bias",
+                    "up_gate_proj_expert_weight_key":
+                    f"{prefix}.experts.{{}}.up_gate_proj.weight",
+                    "down_proj_expert_weight_key":
+                    f"{prefix}.experts.{{}}.down_proj.weight",
+                }
             self.text_fused_moe = FusedMoE(
                 fd_config=fd_config,
                 reduce_results=False,
@@ -128,16 +155,38 @@ class Ernie4_5_VLMoE(nn.Layer):
 
         assert image_moe_layer_start_index <= image_moe_layer_end_index
         if layer_id >= image_moe_layer_start_index and layer_id <= image_moe_layer_end_index:
-            weight_key_map = {
-                "gate_weight_key":
-                f"{prefix}.gate.weight_1",
-                "gate_correction_bias_key":
-                f"{prefix}.moe_statics.e_score_correction_bias",
-                "up_gate_proj_expert_weight_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.weight",
-                "down_proj_expert_weight_key":
-                f"{prefix}.experts.{{}}.down_proj.weight",
-            }
+            if moe_quant_type == "tensor_wise_fp8" or (
+                moe_quant_type == "block_wise_fp8"
+                and fd_config.model_config.is_quantized):
+                weight_key_map = {
+                    "gate_weight_key":
+                    f"{prefix}.gate.weight_1",
+                    "gate_correction_bias_key":
+                    f"{prefix}.moe_statics.e_score_correction_bias",
+                    "up_gate_proj_expert_weight_key":
+                    f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                    "down_proj_expert_weight_key":
+                    f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                    "up_gate_proj_expert_weight_scale_key":
+                    f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                    "down_proj_expert_weight_scale_key":
+                    f"{prefix}.experts.{{}}.down_proj.weight_scale",
+                    "up_gate_proj_expert_in_scale_key":
+                    f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
+                    "down_proj_expert_in_scale_key":
+                    f"{prefix}.experts.{{}}.down_proj.activation_scale",
+                }
+            else:
+                weight_key_map = {
+                    "gate_weight_key":
+                    f"{prefix}.gate.weight_1",
+                    "gate_correction_bias_key":
+                    f"{prefix}.moe_statics.e_score_correction_bias",
+                    "up_gate_proj_expert_weight_key":
+                    f"{prefix}.experts.{{}}.up_gate_proj.weight",
+                    "down_proj_expert_weight_key":
+                    f"{prefix}.experts.{{}}.down_proj.weight",
+                }
             self.image_fused_moe = FusedMoE(
                 fd_config=fd_config,
                 reduce_results=False,
@@ -161,7 +210,7 @@ class Ernie4_5_VLMoE(nn.Layer):
 
         self.num_shared_experts = fd_config.model_config.moe_num_shared_experts
         if self.num_shared_experts > 0:
-            self.share_experts = Ernie4_5_VLMLP(
+            self.shared_experts = Ernie4_5_VLMLP(
                 fd_config=fd_config,
                 intermediate_size=self.num_shared_experts *
                 fd_config.model_config.moe_intermediate_size[0],
@@ -193,11 +242,11 @@ class Ernie4_5_VLMoE(nn.Layer):
         if self.text_fused_moe.moe_use_gate_correction_bias:
             state_dict.pop(self.text_fused_moe.gate_correction_bias_key)
         if self.num_shared_experts > 0:
-            self.share_experts.load_state_dict(state_dict)
+            self.shared_experts.load_state_dict(state_dict)
 
     def forward(self, hidden_states: paddle.Tensor, vl_moe_meta: VLMoEMeta):
         if self.num_shared_experts > 0:
-            share_experts_out = self.share_experts(hidden_states)
+            shared_experts_out = self.shared_experts(hidden_states)
         if vl_moe_meta.image_input is not None:
             text_image_gather_scatter(
                 hidden_states,
@@ -222,7 +271,7 @@ class Ernie4_5_VLMoE(nn.Layer):
         else:
             hidden_states = self.text_fused_moe(hidden_states)
         if self.num_shared_experts > 0:
-            hidden_states += share_experts_out
+            hidden_states += shared_experts_out
         if self.tp_size > 1:
             tensor_model_parallel_all_reduce(hidden_states)
         return hidden_states
@@ -552,6 +601,18 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         logits[:, self.ori_vocab_size:] = -float("inf")
 
         return logits
+
+    def empty_input_forward(self):
+        """
+        empty_input_forward
+        """
+        fake_hidden_states = paddle.empty(
+            shape=[0, self.fd_config.model_config.hidden_size],
+            dtype=paddle.get_default_dtype(),
+        )
+        for i in range(self.fd_config.model_config.moe_layer_start_index,
+                       self.fd_config.model_config.num_hidden_layers):
+            self.ernie.layers[i].mlp.text_fused_moe(fake_hidden_states)
 
     def forward(
         self,

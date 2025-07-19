@@ -64,9 +64,10 @@ struct RemoteCacheKvIpc {
             int encoder_count = 0;
             for (int i = 0; i < real_bsz; i++) {
                 if (seq_lens_encoder[i] > 0) {
+                    msg_sed.mtext[3 * encoder_count + 2] = i;
+                    msg_sed.mtext[3 * encoder_count + 3] = seq_lens_decoder[i];
+                    msg_sed.mtext[3 * encoder_count + 4] = seq_lens_encoder[i];
                     encoder_count++;
-                    msg_sed.mtext[2 * i + 2] = i;
-                    msg_sed.mtext[2 * i + 3] = seq_lens_decoder[i];
                 }
             }
             msg_sed.mtext[0] = encoder_count;
@@ -82,7 +83,7 @@ struct RemoteCacheKvIpc {
 
         void CUDART_CB send_signal() {
             msg_sed.mtext[1] = layer_id_;
-            if ((msgsnd(msgid, &msg_sed, (MAX_BSZ * 2 + 2) * 4, 0)) == -1) {
+            if ((msgsnd(msgid, &msg_sed, (MAX_BSZ * 3 + 2) * 4, 0)) == -1) {
                 printf("kv signal full msg buffer\n");
             }
             layer_id_ = (layer_id_ + 1);

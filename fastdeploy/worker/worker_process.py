@@ -25,7 +25,9 @@ import paddle.distributed.fleet as fleet
 
 from fastdeploy.config import (DecodingConfig, DeviceConfig, FDConfig,
                                GraphOptimizationConfig, LoadConfig,
-                               ModelConfig, ParallelConfig, SpeculativeConfig)
+                               ModelConfig, ParallelConfig, SpeculativeConfig,
+                               ErnieArchitectures)
+from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import \
@@ -82,6 +84,30 @@ def init_distributed_environment(seed: int = 20) -> List[int]:
     local_rank = fleet.worker_index()
 
     return ranks, local_rank
+
+def update_fd_config_for_mm(fd_config: FDConfig) -> None:
+    if fd_config.model_config.enable_mm:
+        tokenizer = ErnieBotTokenizer.from_pretrained(
+            fd_config.parallel_config.model_name_or_path,
+            model_max_length=fd_config.parallel_config.max_model_len,
+            padding_side="right",
+            use_fast=False,
+        )
+        tokenizer.ignored_index = -100
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.unk_token
+
+        fd_config.model_config.tensor_parallel_degree = fd_config.parallel_config.tensor_parallel_size
+        fd_config.model_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
+        vision_config = fd_config.model_config.vision_config
+        vision_config.dtype = fd_config.model_config.dtype
+        # vision_config.tensor_parallel_degree = fd_config.parallel_config.tensor_parallel_size
+        # vision_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
+        fd_config.model_config.im_patch_id = tokenizer.get_vocab()[
+            "<|IMAGE_PLACEHOLDER|>"
+        ]
+        fd_config.model_config.think_end_id = tokenizer.get_vocab()["</think>"]
+        fd_config.model_config.sequence_parallel = fd_config.parallel_config.sequence_parallel
 
 class PaddleDisWorkerProc():
     """
@@ -369,6 +395,18 @@ class PaddleDisWorkerProc():
                 time.sleep(0.01)
             num_blocks_global = self.get_profile_block_num_signal.value.min(
             ).item()
+
+            if num_blocks_global < 0:
+                logger.error(
+                    "The total number of blocks cannot be less than zero."
+                    "Please increase gpu_memory_utilization"
+                    "Or decrease max_num_batched_tokens(max model length) ")
+                raise ValueError(
+                    "The total number of blocks cannot be less than zero."
+                    "Please increase gpu_memory_utilization"
+                    "Or decrease max_num_batched_tokens(max model length) ")
+
+
             self.get_profile_block_num_signal.value[
                 self.local_rank] = num_blocks_global
         else:
@@ -504,9 +542,9 @@ def parse_args():
                         type=int,
                         default=1,
                         help="expert parallel size")
-    parser.add_argument("--enable_expert_parallell",
+    parser.add_argument("--enable_expert_parallel",
                         action='store_true',
-                        help="enable expert parallell")
+                        help="enable expert parallel")
     parser.add_argument("--ori_vocab_size", type=int, default=None)
 
     parser.add_argument("--quantization",
@@ -517,7 +555,7 @@ def parse_args():
                             "default is None. The priority of this configuration "\
                             "is lower than that of the config file. " \
                             "More complex quantization methods need to be configured via the config file.")
-    parser.add_argument("--graph_optimiaztion_config",
+    parser.add_argument("--graph_optimization_config",
                         type=json.loads,
                         default=None,
                         help=" Configation of Graph optimization backend. "
@@ -541,9 +579,8 @@ def parse_args():
         "'ipc': real-time IPC streaming with automatic resharding, "
         "'ipc_snapshot': load from disk snapshot of IPC weights.")
     parser.add_argument("--enable_mm",
-                        type=str,
-                        default="false",
-                        help="Whether to use vl")
+                        action='store_true',
+                        help="Whether to enable vl model")
     parser.add_argument("--enable_logprob",
                         action='store_true',
                         help="Enable output of token-level log probabilities.")
@@ -567,16 +604,33 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     decoding_config = DecodingConfig(vars(args))
     speculative_config = SpeculativeConfig(vars(args))
     parallel_config = ParallelConfig(vars(args))
-    parallel_config.tensor_parallel_rank = local_rank
-    parallel_config.tensor_parallel_size = ranks
-    parallel_config.expert_parallel_rank = int(local_rank / ranks)
+    parallel_config.tensor_parallel_size = args.tensor_parallel_size
+    parallel_config.tensor_parallel_rank = local_rank % args.tensor_parallel_size
+    parallel_config.expert_parallel_size = args.expert_parallel_size
+    # config for EP
+    if args.expert_parallel_size > 1:
+        expert_parallel_rank = int(local_rank / args.tensor_parallel_size)
+        if isinstance(model_config.moe_num_experts, list):
+            num_experts = model_config.moe_num_experts[0]
+        else:
+            num_experts = model_config.moe_num_experts
+
+        num_experts_per_rank =  num_experts // args.expert_parallel_size
+        num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
+
+        parallel_config.expert_parallel_rank = expert_parallel_rank
+        parallel_config.num_experts_per_rank = num_experts_per_rank
+        parallel_config.num_experts_start_offset = num_experts_start_offset
+
     load_config = LoadConfig(vars(args))
 
-    graph_opt_config = GraphOptimizationConfig(
-        use_cudagraph=args.graph_optimiaztion_config["use_cudagraph"],
-        graph_opt_level=args.graph_optimiaztion_config["graph_opt_level"],
-        cudagraph_capture_sizes=args.graph_optimiaztion_config["cudagraph_capture_sizes"]
-    )
+    graph_opt_config = GraphOptimizationConfig()
+    if args.graph_optimization_config is not None:
+        graph_opt_config = GraphOptimizationConfig(
+            use_cudagraph=args.graph_optimization_config["use_cudagraph"],
+            graph_opt_level=args.graph_optimization_config["graph_opt_level"],
+            cudagraph_capture_sizes=args.graph_optimization_config["cudagraph_capture_sizes"]
+        )
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
@@ -615,9 +669,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         quant_config_name = args.quantization
         quantization_config["quantization"] = quant_config_name
         # Special handling for Ernie models
-        is_ernie = "Ernie4_5_ForCausalLM" in model_config.architectures or \
-                    "Ernie4_5_MoeForCausalLM" in model_config.architectures or \
-                    "Ernie4_5_VLMoeForConditionalGeneration" in model_config.architectures
+        is_ernie = ErnieArchitectures.contains_ernie_arch(model_config.architectures)
         if quant_config_name == "wint4" and is_ernie:
             quantization_config["dense_quant_type"] = "wint8"
             quantization_config["moe_quant_type"] = "wint4"
@@ -650,7 +702,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         )
 
     # Set VL tag
-    model_config.enable_mm = getattr(args, 'enable_mm', 'false').lower() == 'true'
+    model_config.enable_mm = args.enable_mm
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
 
@@ -662,6 +714,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
                          decoding_config=decoding_config,
                          quant_config=quant_config,
                          graph_opt_config=graph_opt_config)
+    update_fd_config_for_mm(fd_config)
 
     return fd_config
 
