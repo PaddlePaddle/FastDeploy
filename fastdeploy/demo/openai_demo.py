@@ -14,11 +14,10 @@
 # limitations under the License.
 """
 
-
 import openai
 
 ip = "0.0.0.0"
-service_http_port = "9809"    # 服务配置的
+service_http_port = "9809"  # 服务配置的
 
 client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
 
@@ -42,7 +41,7 @@ response = client.completions.create(
 )
 
 for chunk in response:
-    print(chunk.choices[0].text, end='')
+    print(chunk.choices[0].text, end="")
 print("\n")
 
 # Chat completion
@@ -78,5 +77,5 @@ response = client.chat.completions.create(
 
 for chunk in response:
     if chunk.choices[0].delta is not None:
-        print(chunk.choices[0].delta.content, end='')
+        print(chunk.choices[0].delta.content, end="")
 print("\n")

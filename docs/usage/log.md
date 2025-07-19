@@ -1,6 +1,6 @@
 # Log Description
 
-FastDeploy generates the following log files during deployment. Below is an explanation of each log's purpose.  
+FastDeploy generates the following log files during deployment. Below is an explanation of each log's purpose.
 By default, logs are stored in the `log` directory under the execution path. To specify a custom directory, set the environment variable `FD_LOG_DIR`.
 
 ## Inference Service Logs

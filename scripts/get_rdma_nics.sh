@@ -62,7 +62,7 @@ function __JUDGE_NIC_TYPE__() {
                 fi
             fi
         fi
-        
+
         if [[ "$type" == "cpu" ]]; then
             for (( xgbe_no=0; xgbe_no < XGBE_NUM; xgbe_no++ ))
             do
@@ -110,7 +110,7 @@ function __JUDGE_NIC_TYPE__() {
 function get_vxpu_nics() {
     local topo_output=$(xpu-smi topo -m)
     local xpu_info=$(echo "$topo_output" | grep -E '^XPU[0-9]+')
-    
+
     local nic_mapping=()
     while IFS= read -r line; do
         if [[ $line =~ NIC([0-9]+):\ +(mlx[0-9_]+) ]]; then
@@ -119,9 +119,9 @@ function get_vxpu_nics() {
             nic_mapping[$nic_idx]=$nic_name
         fi
     done < <(echo "$topo_output" | grep -E '^\s*NIC[0-9]+:')
-    
+
     local nic_count=${#nic_mapping[@]}
-    
+
     declare -A priority_map=([PIX]=2 [NODE]=1 [SYS]=0)
     local optimal_nics=()
 
@@ -130,7 +130,7 @@ function get_vxpu_nics() {
         local nic_start_index=5
         local max_nics=$(( ${#fields[@]} - nic_start_index ))
         local actual_nic_count=$(( max_nics < nic_count ? max_nics : nic_count ))
-        
+
         local best_priority=-1
         local best_nic=""
 
@@ -185,7 +185,7 @@ function __main__() {
         for bond in $(ls -d /sys/class/net/bond* 2>/dev/null); do
             bond_if=$(basename "$bond")
             __NEW_GPU_ROOTPORT_FILE__
-            
+
             ibdev=$(ibdev2netdev 2>/dev/null | grep -w "$bond_if" | awk '{print $1}')
             if [ -n "$ibdev" ] && ip link show "$bond_if" | grep -q "state UP" && \
                ip a show "$bond_if" | grep -q "inet "; then
@@ -196,17 +196,17 @@ function __main__() {
                     printf ",%s" "$ibdev"
                 fi
             fi
-            
+
             bondib=$(show_gids 2>/dev/null | grep -w "$bond_if" | awk '{print $1}' | grep "mlx.*bond" | head -1)
             if [ -n "$bondib" ] && ip link show "$bond_if" | grep -q "state UP" && \
                ip a show "$bond_if" | grep -q "inet " && $first; then
                 printf "KVCACHE_RDMA_NICS=%s" "$bondib"
                 first=false
             fi
-            
+
             __RM_GPU_ROOTPORT_FILE__
         done
-        
+
         ! $first && printf "\n"
         [ ! $first ] && return 0
     fi

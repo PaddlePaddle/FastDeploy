@@ -14,11 +14,10 @@
 # limitations under the License.
 """
 
-import paddle
-import paddle.distributed as dist
-from paddle.distributed import fleet
 import argparse
 import os
+
+import paddle
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -47,12 +46,19 @@ for i in range(args.model_degree):
     static_dict = {}
     for k, v in input_model_state_dict.items():
         if "qkv.weight" in k:
-            static_dict[k] = input_model_state_dict[k].reshape(
-                [hidden_size, 3, kv_num_heads, head_dim]
-            ).split(args.model_degree, axis=-2)[i].reshape([hidden_size, -1])
+            static_dict[k] = (
+                input_model_state_dict[k]
+                .reshape([hidden_size, 3, kv_num_heads, head_dim])
+                .split(args.model_degree, axis=-2)[i]
+                .reshape([hidden_size, -1])
+            )
         elif "qkv.bias" in k:
-            static_dict[k] = input_model_state_dict[k].reshape(
-                [3, kv_num_heads, head_dim]).split(args.model_degree, axis=-2)[i].reshape([-1])
+            static_dict[k] = (
+                input_model_state_dict[k]
+                .reshape([3, kv_num_heads, head_dim])
+                .split(args.model_degree, axis=-2)[i]
+                .reshape([-1])
+            )
         elif "attn.proj.weight" in k:
             static_dict[k] = input_model_state_dict[k].split(args.model_degree, axis=-2)[i]
         elif "fc1.weight" in k:
@@ -64,4 +70,7 @@ for i in range(args.model_degree):
         else:
             static_dict[k] = v
 
-    paddle.save(static_dict, os.path.join(args.model_path, f"model_state_tp0{i}.pdparams"))
+    paddle.save(
+        static_dict,
+        os.path.join(args.model_path, f"model_state_tp0{i}.pdparams"),
+    )

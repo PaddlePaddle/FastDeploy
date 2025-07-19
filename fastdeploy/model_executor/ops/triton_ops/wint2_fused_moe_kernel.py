@@ -16,8 +16,9 @@
 
 import triton.language as tl
 
-from fastdeploy.model_executor.ops.triton_ops.triton_utils_v2 import \
-    paddle_use_triton_v2
+from fastdeploy.model_executor.ops.triton_ops.triton_utils_v2 import (
+    paddle_use_triton_v2,
+)
 
 
 @paddle_use_triton_v2()
@@ -124,17 +125,14 @@ def moe_wint2_ffn_kernel(
     # offs_k = tl.arange(0, BLOCK_SIZE_K)
     offs_bk = tl.arange(0, real_k_size)
 
-    a_ptrs = a_ptr + (offs_token[:, None] // top_k * stride_am +
-                      offs_bk[None, :] * pack_num * stride_ak)
+    a_ptrs = a_ptr + (offs_token[:, None] // top_k * stride_am + offs_bk[None, :] * pack_num * stride_ak)
 
     off_experts = tl.load(expert_ids_ptr + pid_m)
-    b_ptrs = b_ptr + off_experts * stride_be + (offs_bk[:, None] * stride_bk +
-                                                offs_bn[None, :] * stride_bn)
+    b_ptrs = b_ptr + off_experts * stride_be + (offs_bk[:, None] * stride_bk + offs_bn[None, :] * stride_bn)
 
     accumulator = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
 
-    bs_ptrs = bs_ptr + off_experts * stride_bse + offs_bn[
-        None, :] * stride_bsn  # group-wise, need advanced
+    bs_ptrs = bs_ptr + off_experts * stride_bse + offs_bn[None, :] * stride_bsn  # group-wise, need advanced
 
     off_set = off_experts * stride_bce + offs_bn[None, :] * stride_bcn
     # load channel-wise scale & zero-point
@@ -157,8 +155,7 @@ def moe_wint2_ffn_kernel(
             bs = ((bs >> s_shift_bits) & 0xF) * super_bs
 
         # reverse to int16
-        b = tl.floor((b.to(tl.float32) * code_bs + code_bzp) + 0.5).to(
-            tl.int16)
+        b = tl.floor((b.to(tl.float32) * code_bs + code_bzp) + 0.5).to(tl.int16)
         # dequant
         b1 = (((b >> 9) & w_mask) - bzp) * bs
         a = tl.load(
@@ -202,16 +199,13 @@ def moe_wint2_ffn_kernel(
             bs_ptrs += stride_bsk
 
     if MUL_ROUTED_WEIGHT:
-        moe_weight = tl.load(topk_weights_ptr + offs_token,
-                             mask=token_mask,
-                             other=0)
+        moe_weight = tl.load(topk_weights_ptr + offs_token, mask=token_mask, other=0)
         accumulator = accumulator * moe_weight[:, None]
 
     accumulator = accumulator.to(compute_type)
     # -----------------------------------------------------------
     # Write back the block of the output
     offs_cn = pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)
-    c_ptrs = c_ptr + stride_cm * offs_token[:, None] + stride_cn * offs_cn[
-        None, :]
+    c_ptrs = c_ptr + stride_cm * offs_token[:, None] + stride_cn * offs_cn[None, :]
     c_mask = token_mask[:, None] & (offs_cn[None, :] < N)
     tl.store(c_ptrs, accumulator, mask=c_mask)

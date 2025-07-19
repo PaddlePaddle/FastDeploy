@@ -15,32 +15,51 @@
 """
 
 import paddle
+
 try:
     from fastdeploy.model_executor.ops.iluvatar import paged_attn
 except ImportError:
     paged_attn = None
 
 
-def paged_attention(q: paddle.Tensor,
-                    k_cache: paddle.Tensor,
-                    v_cache: paddle.Tensor,
-                    block_tables: paddle.Tensor,
-                    seq_lens: paddle.Tensor,
-                    num_kv_heads: int,
-                    scale: float,
-                    block_size: int,
-                    max_context_len: int,
-                    alibi_slopes: paddle.Tensor = None,
-                    causal: bool = True,
-                    window_left: int = -1,
-                    window_right: int = -1,
-                    softcap: float = 0.0,
-                    use_cuda_graph: bool = False,
-                    use_sqrt_alibi: bool = False,
-                    k: paddle.Tensor = None,
-                    v: paddle.Tensor = None):
-    output = paged_attn(q, k_cache, v_cache, block_tables, seq_lens,
-                        alibi_slopes, k, v, num_kv_heads, scale, block_size,
-                        max_context_len, causal, window_left, window_right,
-                        softcap, use_cuda_graph, use_sqrt_alibi)
+def paged_attention(
+    q: paddle.Tensor,
+    k_cache: paddle.Tensor,
+    v_cache: paddle.Tensor,
+    block_tables: paddle.Tensor,
+    seq_lens: paddle.Tensor,
+    num_kv_heads: int,
+    scale: float,
+    block_size: int,
+    max_context_len: int,
+    alibi_slopes: paddle.Tensor = None,
+    causal: bool = True,
+    window_left: int = -1,
+    window_right: int = -1,
+    softcap: float = 0.0,
+    use_cuda_graph: bool = False,
+    use_sqrt_alibi: bool = False,
+    k: paddle.Tensor = None,
+    v: paddle.Tensor = None,
+):
+    output = paged_attn(
+        q,
+        k_cache,
+        v_cache,
+        block_tables,
+        seq_lens,
+        alibi_slopes,
+        k,
+        v,
+        num_kv_heads,
+        scale,
+        block_size,
+        max_context_len,
+        causal,
+        window_left,
+        window_right,
+        softcap,
+        use_cuda_graph,
+        use_sqrt_alibi,
+    )
     return output[0] if isinstance(output, list) else output

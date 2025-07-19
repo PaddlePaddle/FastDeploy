@@ -16,8 +16,9 @@
 
 """get image preprocessor"""
 
-from .image_preprocessor_adaptive import AdaptiveImageProcessor
 from fastdeploy.utils import data_processor_logger
+
+from .image_preprocessor_adaptive import AdaptiveImageProcessor
 
 
 def get_image_preprocessor(args):

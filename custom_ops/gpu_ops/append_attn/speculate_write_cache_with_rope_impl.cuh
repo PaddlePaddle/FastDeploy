@@ -41,7 +41,7 @@ __global__ void append_clear_cache_int8_block(
   const int wid = tid / 32;
   const int lane_id = tid % 32;
   const int token_id = blockIdx.x;
-  
+
   const int bid = batch_id_per_token[token_id];
 
   const int start_token_idx = cu_seqlens_q[bid];
@@ -115,7 +115,7 @@ __global__ void append_clear_cache_int4_block(
   const int wid = tid / 32;
   const int lane_id = tid % 32;
   const int token_id = blockIdx.x;
-  
+
   const int bid = batch_id_per_token[token_id];
 
   const int start_token_idx = cu_seqlens_q[bid];
@@ -484,7 +484,7 @@ __global__ void append_speculate_cache_int8_rope_kernel(
   const int wid = tid / 32;
   const int lane_id = tid % 32;
   const int token_id = blockIdx.x;
-  
+
   const int bid = batch_id_per_token[token_id];
 
   const int start_token_idx = cu_seqlens_q[bid];
@@ -716,7 +716,7 @@ __global__ void append_speculate_cache_int8_neox_rope_kernel(
   const int wid = tid / 32;
   const int lane_id = tid % 32;
   const int token_id = blockIdx.x;
-  
+
   const int bid = batch_id_per_token[token_id];
 
   const int start_token_idx = cu_seqlens_q[bid];
@@ -1097,7 +1097,7 @@ __global__ void append_speculate_cache_int4_rope_kernel(
   const int lane_id = tid % 32;
 
   const int token_id = blockIdx.x;
-  
+
   const int bid = batch_id_per_token[token_id];
 
   const int start_token_idx = cu_seqlens_q[bid];
@@ -1403,7 +1403,7 @@ __global__ void append_speculate_cache_int4_neox_rope_kernel(
   const int lane_id = tid % 32;
 
   const int token_id = blockIdx.x;
-  
+
   const int bid = batch_id_per_token[token_id];
 
   const int start_token_idx = cu_seqlens_q[bid];

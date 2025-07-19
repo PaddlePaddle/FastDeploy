@@ -25,7 +25,7 @@ find_package(pybind11 CONFIG REQUIRED)
 include_directories("${PROJECT_SOURCE_DIR}/include")
 
 add_library(rdma_comm MODULE ${PROJECT_SOURCE_DIR}/src/pybind.cpp ${PROJECT_SOURCE_DIR}/src/kvcache_rdma.cpp ${PROJECT_SOURCE_DIR}/src/kvcache_connection.cpp ${PROJECT_SOURCE_DIR}/src/log.cpp)
-set_target_properties(rdma_comm PROPERTIES 
+set_target_properties(rdma_comm PROPERTIES
     OUTPUT_NAME "rdma_comm"
     PREFIX ""
     SUFFIX ".so"

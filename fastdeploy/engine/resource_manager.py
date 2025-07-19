@@ -25,17 +25,19 @@ from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import llm_logger
 
 
-class ResourceManager(object):
+class ResourceManager:
     """
     record and allocate resources for the engine
     """
 
-    def __init__(self,
-                 max_num_seqs,
-                 config,
-                 tensor_parallel_size,
-                 splitwise_role,
-                 local_data_parallel_id=0):
+    def __init__(
+        self,
+        max_num_seqs,
+        config,
+        tensor_parallel_size,
+        splitwise_role,
+        local_data_parallel_id=0,
+    ):
         """
             Args:
             cfg (Config): config object containing parameters for the engine
@@ -51,9 +53,7 @@ class ResourceManager(object):
         self.max_num_seqs = max_num_seqs
         self.stop_flags = [True] * max_num_seqs
         self.enable_prefix_cache = config.cache_config.enable_prefix_caching
-        self.cache_manager = PrefixCacheManager(config, tensor_parallel_size,
-                                                splitwise_role,
-                                                local_data_parallel_id)
+        self.cache_manager = PrefixCacheManager(config, tensor_parallel_size, splitwise_role, local_data_parallel_id)
         self.tasks_list = [None] * max_num_seqs
         self.req_dict = dict()
         # current batch status of the engine
@@ -77,8 +77,7 @@ class ResourceManager(object):
         Returns:
             int: block number
         """
-        block_num = (input_token_num + self.cfg.block_size - 1 +
-                     self.cfg.dec_token_num) // self.cfg.block_size
+        block_num = (input_token_num + self.cfg.block_size - 1 + self.cfg.dec_token_num) // self.cfg.block_size
         return block_num
 
     def get_encoder_block_number(self, input_token_num):
@@ -91,8 +90,7 @@ class ResourceManager(object):
         Returns:
             int: encoder block number
         """
-        enc_block_num = (input_token_num + self.cfg.block_size -
-                         1) // self.cfg.block_size
+        enc_block_num = (input_token_num + self.cfg.block_size - 1) // self.cfg.block_size
         return enc_block_num
 
     def get_decoder_block_number(self):
@@ -102,8 +100,7 @@ class ResourceManager(object):
         Returns:
             int: decoder block number
         """
-        return (self.cfg.dec_token_num + self.cfg.block_size -
-                1) // self.cfg.block_size
+        return (self.cfg.dec_token_num + self.cfg.block_size - 1) // self.cfg.block_size
 
     def total_block_number(self):
         """
@@ -132,13 +129,12 @@ class ResourceManager(object):
         elif required_type == "decoder":
             block_num = self.get_decoder_block_number()
         else:
-            raise ValueError('unknown required type')
+            raise ValueError("unknown required type")
 
         block_list = list()
         current_block_num = self.available_block_num()
         if block_num > current_block_num:
-            llm_logger.error("block_num:{0} > free_list len:{1}".format(
-                block_num, current_block_num))
+            llm_logger.error(f"block_num:{block_num} > free_list len:{current_block_num}")
             return block_list
         block_list = self.cache_manager.allocate_gpu_blocks(block_num)
         llm_logger.debug(f"dispatch {len(block_list)} blocks.")
@@ -172,10 +168,8 @@ class ResourceManager(object):
             ori_number = self.available_block_num()
             self.cache_manager.recycle_gpu_blocks(block_tables)
             cur_number = self.available_block_num()
-            main_process_metrics.gpu_cache_usage_perc.set(
-                self.get_gpu_cache_usage_perc())
-            llm_logger.info(
-                f"recycle {req_id} {cur_number - ori_number} blocks.")
+            main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
+            llm_logger.info(f"recycle {req_id} {cur_number - ori_number} blocks.")
 
     def available_batch(self):
         """
@@ -238,8 +232,7 @@ class ResourceManager(object):
 
             can_insert = False
             while allocated_position + 1 <= self.max_num_seqs:
-                if sum(self.stop_flags[allocated_position:allocated_position +
-                                       1]) == 1:
+                if sum(self.stop_flags[allocated_position : allocated_position + 1]) == 1:
                     can_insert = True
                     break
                 allocated_position += 1
@@ -249,72 +242,63 @@ class ResourceManager(object):
                     task = tasks[processing_task_index]
 
                     if task.get("seed") is None:
-                        task.set("seed",
-                                 random.randint(0, 9223372036854775807))
+                        task.set("seed", random.randint(0, 9223372036854775807))
                     task.idx = allocated_position
 
                     if self.enable_prefix_cache:
                         cache_prepare_time = time.time()
                         common_block_ids, unique_block_ids, hit_info = self.cache_manager.request_block_ids(
-                            task, self.cfg.block_size, self.cfg.dec_token_num)
+                            task,
+                            self.cfg.block_size,
+                            self.cfg.dec_token_num,
+                        )
                         if unique_block_ids is None:
-                            llm_logger.warning(
-                                "req_id: {0} not enough blocks available".
-                                format(task["req_id"]))
+                            llm_logger.warning("req_id: {0} not enough blocks available".format(task["req_id"]))
                             return
 
                         cached_len = self._record_request_cache_info(
-                            task, common_block_ids, unique_block_ids, hit_info)
-                        task.cache_prepare_time = time.time(
-                        ) - cache_prepare_time
+                            task, common_block_ids, unique_block_ids, hit_info
+                        )
+                        task.cache_prepare_time = time.time() - cache_prepare_time
 
                         if task.disaggregate_info is not None:
-                            if task.disaggregate_info['role'] == "prefill":
-                                self.req_dict[
-                                    task.request_id] = allocated_position
-                                task.disaggregate_info[
-                                    'block_tables'] = task.block_tables
+                            if task.disaggregate_info["role"] == "prefill":
+                                self.req_dict[task.request_id] = allocated_position
+                                task.disaggregate_info["block_tables"] = task.block_tables
                                 self._delete_cached_data(task, cached_len)
-                            elif task.disaggregate_info['role'] == "decode":
-                                self.req_dict[
-                                    task.request_id] = allocated_position
-                                task.disaggregate_info[
-                                    'block_tables'] = task.need_block_tables
+                            elif task.disaggregate_info["role"] == "decode":
+                                self.req_dict[task.request_id] = allocated_position
+                                task.disaggregate_info["block_tables"] = task.need_block_tables
                         else:
                             self._delete_cached_data(task, cached_len)
 
                     else:
-                        block_tables = self._get_block_tables(
-                            task.prompt_token_ids_len)
+                        block_tables = self._get_block_tables(task.prompt_token_ids_len)
                         if not block_tables:
-                            llm_logger.error(
-                                "req_id: {0} block_tables is empty".format(
-                                    task.request_id))
+                            llm_logger.error(f"req_id: {task.request_id} block_tables is empty")
                             continue
                         else:
                             task.block_tables = block_tables
                         task.need_block_tables = task.block_tables
 
                         if task.disaggregate_info is not None:
-                            task.disaggregate_info[
-                                'block_tables'] = block_tables
-                            if task.disaggregate_info['role'] == "prefill":
-                                self.req_dict[
-                                    task.request_id] = allocated_position
-                            elif task.disaggregate_info['role'] == "decode":
-                                self.req_dict[
-                                    task.request_id] = allocated_position
+                            task.disaggregate_info["block_tables"] = block_tables
+                            if task.disaggregate_info["role"] == "prefill":
+                                self.req_dict[task.request_id] = allocated_position
+                            elif task.disaggregate_info["role"] == "decode":
+                                self.req_dict[task.request_id] = allocated_position
 
                     processed_tasks.append(task)
                     self.stop_flags[allocated_position] = False
                     task.inference_start_time = time.time()
                     task.inference_time_cost = -1.0
-                    task.tokens_all_num = int(0)
+                    task.tokens_all_num = 0
                     self.tasks_list[allocated_position] = task
                     llm_logger.info(
                         f"Allocate request: {task.request_id}, "
                         f"allocated_position:{allocated_position}, "
-                        f"length of prompt token: {task.prompt_token_ids_len}")
+                        f"length of prompt token: {task.prompt_token_ids_len}"
+                    )
                 allocated_position += 1
             processing_task_index += 1
 
@@ -325,11 +309,10 @@ class ResourceManager(object):
                 break
 
         llm_logger.info(
-            f"Number of allocated requests: {len(tasks)}, number of "
-            f"running requests in worker: {self.real_bsz}")
+            f"Number of allocated requests: {len(tasks)}, number of " f"running requests in worker: {self.real_bsz}"
+        )
         llm_logger.info(f"{self.info()}")
-        main_process_metrics.gpu_cache_usage_perc.set(
-            self.get_gpu_cache_usage_perc())
+        main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
 
         return processed_tasks
 
@@ -338,26 +321,22 @@ class ResourceManager(object):
         Delete cached data from the task's prompt token ids based on the cached length.
         """
         if cached_len == len(task.prompt_token_ids):
-            task.prompt_token_ids = task.prompt_token_ids[cached_len - 1:]
+            task.prompt_token_ids = task.prompt_token_ids[cached_len - 1 :]
             task.seq_lens_decoder = cached_len - 1
         else:
             task.prompt_token_ids = task.prompt_token_ids[cached_len:]
             task.seq_lens_decoder = cached_len
         task.prompt_token_ids_len = len(task.prompt_token_ids)
 
-    def _record_request_cache_info(self, task, common_block_ids,
-                                   unique_block_ids, hit_info):
+    def _record_request_cache_info(self, task, common_block_ids, unique_block_ids, hit_info):
         """
         Record the cache information for a given task and its corresponding block IDs.
         """
         cache_block_num = len(common_block_ids)
-        no_cache_block_num = math.ceil(len(task.prompt_token_ids) / self.cfg.block_size \
-                            - cache_block_num)
+        no_cache_block_num = math.ceil(len(task.prompt_token_ids) / self.cfg.block_size - cache_block_num)
         task.num_cached_tokens = cache_block_num * self.cfg.block_size
-        task.gpu_cache_token_num = hit_info[
-            "gpu_cache_blocks"] * self.cfg.block_size
-        task.cpu_cache_token_num = hit_info[
-            "cpu_cache_blocks"] * self.cfg.block_size
+        task.gpu_cache_token_num = hit_info["gpu_cache_blocks"] * self.cfg.block_size
+        task.cpu_cache_token_num = hit_info["cpu_cache_blocks"] * self.cfg.block_size
         task.cache_info = (cache_block_num, no_cache_block_num)
 
         cached_len = len(common_block_ids) * self.cfg.block_size
@@ -374,9 +353,11 @@ class ResourceManager(object):
         Returns:
             str: resource manager info
         """
-        info = f"ResourceManager info, " \
-               f"total_block_number: {self.total_block_number()}, total_batch_number: {len(self.stop_flags)}, " \
-               f"available_block_num: {self.available_block_num()}, available_batch: {self.available_batch()}"
+        info = (
+            f"ResourceManager info, "
+            f"total_block_number: {self.total_block_number()}, total_batch_number: {len(self.stop_flags)}, "
+            f"available_block_num: {self.available_block_num()}, available_batch: {self.available_batch()}"
+        )
         return info
 
     def get_gpu_cache_usage_perc(self):

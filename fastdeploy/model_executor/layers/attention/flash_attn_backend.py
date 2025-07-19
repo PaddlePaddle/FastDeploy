@@ -16,9 +16,8 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
-from typing import List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 import paddle
 
@@ -30,12 +29,19 @@ except:
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
-    AttentionBackend, AttentionMetadata)
+    AttentionBackend,
+    AttentionMetadata,
+)
 from fastdeploy.model_executor.layers.attention.ops import (
-    get_block_shape_and_split_kv_block, gqa_rope_write_cache,
-    init_signal_layerwise, open_shm_and_get_meta_signal, pre_cache_len_concat,
-    init_kv_signal_per_query)
+    get_block_shape_and_split_kv_block,
+    gqa_rope_write_cache,
+    init_kv_signal_per_query,
+    init_signal_layerwise,
+    open_shm_and_get_meta_signal,
+    pre_cache_len_concat,
+)
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
@@ -45,6 +51,7 @@ class FlashAttentionMetadata(AttentionMetadata):
     """
     FlashAttentionMetadata
     """
+
     max_len_kv: paddle.Tensor = None
     set_max_lengths: int = -1
     rotary_embs: Optional[paddle.Tensor] = None
@@ -82,8 +89,13 @@ class FlashAttentionBackend(AttentionBackend):
     FlashAttentionBackend backend implementation
     """
 
-    def __init__(self, fd_config: FDConfig, kv_num_heads: int, num_heads: int,
-                 head_dim: int):
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        kv_num_heads: int,
+        num_heads: int,
+        head_dim: int,
+    ):
         """
         FlashAttentionBackend __init__
         """
@@ -111,7 +123,7 @@ class FlashAttentionBackend(AttentionBackend):
 
         if fd_config.parallel_config.expert_parallel_rank is None:
             fd_config.parallel_config.expert_parallel_rank = 0
-            
+
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
     def get_attntion_meta(self):
@@ -125,8 +137,12 @@ class FlashAttentionBackend(AttentionBackend):
         """
         Caculate kv cache shape
         """
-        return (max_num_blocks, self.kv_num_heads, self.block_size,
-                self.head_dim)
+        return (
+            max_num_blocks,
+            self.kv_num_heads,
+            self.block_size,
+            self.head_dim,
+        )
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         metadata = FlashAttentionMetadata()
@@ -184,11 +200,11 @@ class FlashAttentionBackend(AttentionBackend):
                 )
         elif self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_metadata = open_shm_and_get_meta_signal(
-                self.rank, int(self.device_id), self.keep_pd_step_flag)
+                self.rank, int(self.device_id), self.keep_pd_step_flag
+            )
         self.attention_metadata = metadata
         forward_meta.decoder_batch_ids.copy_(metadata.decoder_batch_ids, False)
-        forward_meta.decoder_tile_ids_per_batch.copy_(
-            metadata.decoder_tile_ids_per_batch, False)
+        forward_meta.decoder_tile_ids_per_batch.copy_(metadata.decoder_tile_ids_per_batch, False)
 
     def forward_mixed(
         self,
@@ -204,10 +220,10 @@ class FlashAttentionBackend(AttentionBackend):
         metadata = self.attention_metadata
 
         if self.pd_disaggregation_mode == "per_query":
-            metadata.kv_signal_data_list[
-                layer.layer_id] = init_signal_layerwise(
-                    metadata.kv_signal_metadata,
-                    layer.layer_id + self.start_layer_index)
+            metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
+                metadata.kv_signal_metadata,
+                layer.layer_id + self.start_layer_index,
+            )
 
         q, k, v, _ = gqa_rope_write_cache(
             qkv,

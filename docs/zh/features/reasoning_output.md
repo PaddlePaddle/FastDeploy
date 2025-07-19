@@ -8,7 +8,7 @@
 | baidu/ERNIE-4.5-VL-424B-A47B-Paddle  | ernie-45-vl | ✓       |
 | baidu/ERNIE-4.5-VL-28B-A3B-Paddle | ernie-45-vl |    ✓    |
 
-思考模型需要指定解析器,以便于对思考内容进行解析. 通过`enable_thinking=False` 参数可以关闭模型思考模式.   
+思考模型需要指定解析器,以便于对思考内容进行解析. 通过`enable_thinking=False` 参数可以关闭模型思考模式.
 
 可以支持思考模式开关的接口:
 1. OpenAI 服务中 `/v1/chat/completions`  请求.
@@ -17,10 +17,10 @@
 
 同时在思考模型中，支持通过```reasoning_max_tokens```控制思考内容的长度，在请求中添加```metadata={"reasoning_max_tokens": 1024}```即可。
 
-
-### 快速使用
+## 快速使用
 在启动模型服务时, 通过`--reasoning-parser`参数指定解析器名称.
 该解析器会解析思考模型的输出, 提取`reasoning_content`字段.
+
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
     --model /path/to/your/model \
@@ -30,7 +30,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --quantization wint4 \
     --reasoning-parser ernie-45-vl
 ```
+
 接下来, 向模型发送  `chat completion` 请求
+
 ```bash
 curl -X POST "http://0.0.0.0:8192/v1/chat/completions" \
 -H "Content-Type: application/json" \
@@ -45,10 +47,12 @@ curl -X POST "http://0.0.0.0:8192/v1/chat/completions" \
 }'
 
 ```
+
 字段`reasoning_content`包含得出最终结论的思考步骤，而`content`字段包含最终结论。
 
 ### 流式会话
 在流式会话中, `reasoning_content`字段会可以在`chat completion response chunks`中的 `delta` 中获取
+
 ```python
 from openai import OpenAI
 # Set OpenAI's API key and API base to use vLLM's API server.
@@ -73,4 +77,3 @@ for chunk in chat_response:
         print("\n")
 
 ```
-

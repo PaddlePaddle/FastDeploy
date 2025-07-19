@@ -14,14 +14,14 @@
 """tune_cutlass_fp8int4_gemm"""
 
 import os
+
 import paddle
-from fastdeploy.model_executor.ops.gpu import scaled_gemm_f8_i4_f16
 from tqdm import tqdm
 
+from fastdeploy.model_executor.ops.gpu import scaled_gemm_f8_i4_f16
 
-def tune_scaled_gemm_f8_i4_f16(
-    ns: list, ks: list, dtype="int8", is_test=True, is_read_from_file=False
-):
+
+def tune_scaled_gemm_f8_i4_f16(ns: list, ks: list, dtype="int8", is_test=True, is_read_from_file=False):
     """
     Tune fp8 int4 gemm.
     """

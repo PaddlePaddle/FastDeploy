@@ -23,10 +23,18 @@ import sys
 import paddle
 import triton
 
-from .triton_utils import (SubstituteTemplate, build_package, compile_file,
-                           extract_triton_kernel, find_so_path,
-                           get_pointer_hint, link_file, multi_process_do,
-                           python_path, rename_c_to_cu)
+from .triton_utils import (
+    SubstituteTemplate,
+    build_package,
+    compile_file,
+    extract_triton_kernel,
+    find_so_path,
+    get_pointer_hint,
+    link_file,
+    multi_process_do,
+    python_path,
+    rename_c_to_cu,
+)
 
 
 def get_value_hint(x):
@@ -49,7 +57,7 @@ def get_value_hint(x):
     return hint
 
 
-common_template = ("""
+common_template = """
 #include "${op_name}_kernel.h"
 #include "paddle/extension.h"
 
@@ -66,7 +74,7 @@ PYBIND11_MODULE(${op_name}_package, m) {
   m.def("${op_name}_func", ${op_name}_func, "get expert token num");
 }
 
-""")
+"""
 
 
 class KernelInterface:
@@ -98,13 +106,13 @@ class KernelInterface:
         self.annotations = dict(func.__annotations__)
 
         self.constexprs = [
-            self.arg_names.index(name) for name in self.arg_names
+            self.arg_names.index(name)
+            for name in self.arg_names
             if self.annotations.get(name) == triton.language.core.constexpr
         ]
 
         self.arg_exclude_constexpr = [
-            self.arg_names[i] for i in range(len(self.arg_names))
-            if i not in self.constexprs
+            self.arg_names[i] for i in range(len(self.arg_names)) if i not in self.constexprs
         ]
 
         import textwrap
@@ -115,7 +123,7 @@ class KernelInterface:
         func_begin = re.findall(pat, py_script)
         assert len(func_begin) == 1
         func_begin = func_begin[0]
-        py_script = py_script[py_script.find(func_begin):]
+        py_script = py_script[py_script.find(func_begin) :]
 
         self.func_map = {}
 
@@ -156,23 +164,22 @@ class KernelInterface:
                 ele = all_input[i]
 
                 if type(ele) in [
-                        paddle.Tensor, paddle.base.framework.EagerParamBase,
-                        paddle.base.framework.Parameter,
-                        paddle.base.framework.Variable,
-                        paddle.base.libpaddle.pir.Value,
-                        type(None)
+                    paddle.Tensor,
+                    paddle.base.framework.EagerParamBase,
+                    paddle.base.framework.Parameter,
+                    paddle.base.framework.Variable,
+                    paddle.base.libpaddle.pir.Value,
+                    type(None),
                 ]:
                     if ele is not None:
                         dtypes.append(ele.dtype)
-                        passed_arg_exclude_constexpr[
-                            i] = f"(CUdeviceptr)({passed_arg_exclude_constexpr[i]}->data())"
+                        passed_arg_exclude_constexpr[i] = f"(CUdeviceptr)({passed_arg_exclude_constexpr[i]}->data())"
                     else:
                         dtypes.append(paddle.int8)
-                        passed_arg_exclude_constexpr[
-                            i] = "(CUdeviceptr)(nullptr)"
-                    decalare_arg_exclude_constexpr[
-                        i] = "const paddle::optional<paddle::Tensor>&" + decalare_arg_exclude_constexpr[
-                            i]
+                        passed_arg_exclude_constexpr[i] = "(CUdeviceptr)(nullptr)"
+                    decalare_arg_exclude_constexpr[i] = (
+                        "const paddle::optional<paddle::Tensor>&" + decalare_arg_exclude_constexpr[i]
+                    )
                 elif i in self.constexprs:
                     if isinstance(ele, bool):
                         const_hint_dict[self.arg_names[i]] = (int)(ele)
@@ -186,21 +193,16 @@ class KernelInterface:
                 else:
                     x_list.append(ele)
                     if isinstance(ele, int):
-                        decalare_arg_exclude_constexpr[
-                            i] = "const int64_t " + decalare_arg_exclude_constexpr[
-                                i]
+                        decalare_arg_exclude_constexpr[i] = "const int64_t " + decalare_arg_exclude_constexpr[i]
                     elif isinstance(ele, float):
-                        decalare_arg_exclude_constexpr[
-                            i] = "const float " + decalare_arg_exclude_constexpr[
-                                i]
+                        decalare_arg_exclude_constexpr[i] = "const float " + decalare_arg_exclude_constexpr[i]
                     else:
                         assert False
 
             python_package_name = f"{op_name}_package"
             tp_rank = paddle.distributed.get_rank()
 
-            generated_dir = os.getenv("TRITON_KERNEL_CACHE_DIR",
-                                      f"/tmp/triton_cache/rank{tp_rank}")
+            generated_dir = os.getenv("TRITON_KERNEL_CACHE_DIR", f"/tmp/triton_cache/rank{tp_rank}")
             print("the kernel cache dir is:", generated_dir)
             generated_dir = f"{generated_dir}/{op_name}"
             os.makedirs(generated_dir, exist_ok=True)
@@ -231,10 +233,8 @@ class KernelInterface:
             lanuch_grid = ",".join(lanuch_grid)
 
             op_dict = {"op_name": op_name}
-            op_dict["triton_kernel_args"] = ",".join(
-                passed_arg_exclude_constexpr)
-            op_dict["tensor_and_attr"] = ",".join(
-                decalare_arg_exclude_constexpr)
+            op_dict["triton_kernel_args"] = ",".join(passed_arg_exclude_constexpr)
+            op_dict["tensor_and_attr"] = ",".join(decalare_arg_exclude_constexpr)
 
             paddle_custom_op_file_path = f"{generated_dir}/{op_name}.cu"
             so_path = find_so_path(generated_dir, python_package_name)
@@ -242,20 +242,23 @@ class KernelInterface:
             if so_path is None:
                 print("== we do not find so_path, we need to compile it")
                 with open(paddle_custom_op_file_path, "w") as f:
-                    f.write(SubstituteTemplate(
-                        common_template,
-                        op_dict,
-                    ))
+                    f.write(
+                        SubstituteTemplate(
+                            common_template,
+                            op_dict,
+                        )
+                    )
                     f.close()
 
                 # ahead of time compile command.
                 aot_template = (
-                    f"""{python_path}  {compile_file} {py_script_file}  """ +
-                    f""" -n {func.__name__} -o {generated_dir}/{op_name}_kernel """
-                    + f"""--out-name {op_name}_kernel  """ +
-                    """ -w {num_warps} -ns {num_stages} """ +
-                    f""" -s"{address_hint} {value_hint} {const_args}" """ +
-                    f"""  -g "{lanuch_grid}" """)
+                    f"""{python_path}  {compile_file} {py_script_file}  """
+                    + f""" -n {func.__name__} -o {generated_dir}/{op_name}_kernel """
+                    + f"""--out-name {op_name}_kernel  """
+                    + """ -w {num_warps} -ns {num_stages} """
+                    + f""" -s"{address_hint} {value_hint} {const_args}" """
+                    + f"""  -g "{lanuch_grid}" """
+                )
 
                 all_tune_config = [const_hint_dict]
                 # reset const_hint_dict as empty.
@@ -276,24 +279,24 @@ class KernelInterface:
                                     )
                                     raise ValueError(message)
                         else:
-                            assert key in config.keys(
-                            ), f"you must specify {key} in your config."
+                            assert key in config.keys(), f"you must specify {key} in your config."
                     if "num_warps" not in config.keys():
                         config["num_warps"] = 4
                     if "num_stages" not in config.keys():
                         config["num_stages"] = 4
 
                     for key in config:
-                        assert config[
-                            key] is not None, f"{key} must be specified."
-                    codegen_command = aot_template.format(**config, )
+                        assert config[key] is not None, f"{key} must be specified."
+                    codegen_command = aot_template.format(
+                        **config,
+                    )
                     print(codegen_command)
                     codegen_commands.append(codegen_command)
                 multi_process_do(codegen_commands)
 
                 link_command = (
-                    f"{python_path}  {link_file} "
-                    f"{generated_dir}/*.h -o {generated_dir}/{op_name}_kernel")
+                    f"{python_path}  {link_file} " f"{generated_dir}/*.h -o {generated_dir}/{op_name}_kernel"
+                )
                 re = os.system(link_command)
                 assert re == 0
 
@@ -325,9 +328,11 @@ class KernelInterface:
         Returns:
             the decorator function.
         """
-        self.grid = ((
-            "((max_possible_num_post_padded + BLOCK_SIZE_M -1)/ BLOCK_SIZE_M) * ((N + BLOCK_SIZE_N-1) / BLOCK_SIZE_N)"
-        ), )
+        self.grid = (
+            (
+                "((max_possible_num_post_padded + BLOCK_SIZE_M -1)/ BLOCK_SIZE_M) * ((N + BLOCK_SIZE_N-1) / BLOCK_SIZE_N)"
+            ),
+        )
 
         return self.decorator
 

@@ -14,34 +14,44 @@
 # limitations under the License.
 """
 
-from typing import Literal, Union, List
-from typing_extensions import Required, TypedDict, TypeAlias
-
-from openai.types.chat import ChatCompletionContentPartParam as OpenAIChatCompletionContentPartParam
-from openai.types.chat import ChatCompletionMessageParam as OpenAIChatCompletionMessageParam
-
-from urllib.parse import urlparse
-import requests
 from copy import deepcopy
+from typing import List, Literal, Union
+from urllib.parse import urlparse
 
-from fastdeploy.input.multimodal.video import VideoMediaIO
+import requests
+from openai.types.chat import (
+    ChatCompletionContentPartParam as OpenAIChatCompletionContentPartParam,
+)
+from openai.types.chat import (
+    ChatCompletionMessageParam as OpenAIChatCompletionMessageParam,
+)
+from typing_extensions import Required, TypeAlias, TypedDict
+
 from fastdeploy.input.multimodal.image import ImageMediaIO
+from fastdeploy.input.multimodal.video import VideoMediaIO
+
 
 class VideoURL(TypedDict, total=False):
     """Video URL object"""
+
     url: Required[str]
     """Either a URL of the video or the base64 encoded video data"""
 
+
 class CustomChatCompletionContentPartVideoParam(TypedDict, total=False):
     """Custom Video URL object"""
+
     video_url: Required[VideoURL]
 
     type: Required[Literal["video_url"]]
     """The type of the content type."""
 
+
 CustomChatCompletionContentPartParam: TypeAlias = Union[
-    OpenAIChatCompletionContentPartParam, CustomChatCompletionContentPartVideoParam
+    OpenAIChatCompletionContentPartParam,
+    CustomChatCompletionContentPartVideoParam,
 ]
+
 
 class CustomChatCompletionMessageParam(TypedDict, total=False):
     """Custom User chat message parameter."""
@@ -58,17 +68,19 @@ class CustomChatCompletionMessageParam(TypedDict, total=False):
     Provides the model information to differentiate between participants of the same role.
     """
 
+
 ChatCompletionMessageParam = Union[OpenAIChatCompletionMessageParam, CustomChatCompletionMessageParam]
 
 
-class MultiModalPartParser(object):
+class MultiModalPartParser:
     """Multi Modal Part parser"""
+
     def __init__(self):
         self.image_io = ImageMediaIO()
         self.video_io = VideoMediaIO()
 
     def parse_image(self, image_url):
-        """"Parse Image"""
+        """ "Parse Image"""
         return self.load_from_url(image_url, self.image_io)
 
     def parse_video(self, video_url):
@@ -82,7 +94,7 @@ class MultiModalPartParser(object):
         if parsed.scheme.startswith("http"):
             media_bytes = requests.get(url).content
             return media_io.load_bytes(media_bytes)
-        
+
         if parsed.scheme.startswith("data"):
             data_spec, data = parsed.path.split(",", 1)
             media_type, data_type = data_spec.split(";", 1)
@@ -91,6 +103,7 @@ class MultiModalPartParser(object):
         if parsed.scheme.startswith("file"):
             localpath = parsed.path
             return media_io.load_file(localpath)
+
 
 def parse_content_part(mm_parser, part):
     """only support openai compatible format for now"""
@@ -120,8 +133,9 @@ def parse_content_part(mm_parser, part):
 
     raise ValueError(f"Unknown content part type: {part_type}")
 
-#TODO async
-#def parse_chat_messages(messages: List[ChatCompletionMessageParam]):
+
+# TODO async
+# def parse_chat_messages(messages: List[ChatCompletionMessageParam]):
 def parse_chat_messages(messages):
     """Parse chat messages to [dict]"""
 

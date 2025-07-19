@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" setup for FASTDEPLOY custom cpu ops """
+"""setup for FASTDEPLOY custom cpu ops"""
 import os
 import subprocess
 import tarfile
@@ -26,8 +26,7 @@ ROOT_DIR = Path(__file__).parent.parent
 #  which is not installed yet
 from .setup_ops import load_module_from_path
 
-envs = load_module_from_path('envs',
-                             os.path.join(ROOT_DIR, 'fastdeploy', 'envs.py'))
+envs = load_module_from_path("envs", os.path.join(ROOT_DIR, "fastdeploy", "envs.py"))
 
 BUILDING_ARCS = []
 use_bf16 = envs.FD_CPU_USE_BF16 == "True"

@@ -216,7 +216,7 @@ __global__ void append_dequant_cache_kv_c8(
 
   uint32_t k_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head_k, inv_k_stride>(
       wid * 16 + 8 * (tid / 16) + tid % 8, (tid % 16) / 8);
-  
+
   uint32_t k_read_idx = (wid * 4 + tid / 8) * HEAD_DIM +
                           tid % 8 * num_elems_per_128b<CacheT>();
 
@@ -330,7 +330,7 @@ __global__ void append_dequant_cache_kv_c8(
           v_tile_ptr0[8 * kv_t_stride] = frag_dq_T[2] * cache_v_scale;
           v_tile_ptr0[9 * kv_t_stride] = frag_dq_T[3] * cache_v_scale;
 
-          
+
           convert_c8<T,IS_FP8>(frag_dq_T + 4, v_frag[2 * i + 1]); // 4个uint8/fp8 -> 4个T
 #ifdef C8_DEBUG
           if (tid == 0 && wid == 0 && tile_idx == 0 && kv_head_idx == 0) {
@@ -373,14 +373,14 @@ void AppendDequantCache(
   paddle::Tensor *k_out,
   paddle::Tensor *v_out,
   const cudaStream_t& stream
-) {  
+) {
   using NV_TYPE = typename cascade_attn_type_traits<T>::type;
   if (cache_quant_type == "cache_int8" || cache_quant_type == "cache_fp8") {
     constexpr int NUM_WARPS = 4;
     int block_num = cache_num_blocks_x.data<int>()[0];
     dim3 grids(block_num, 1, kv_num_heads);
     dim3 blocks(32, NUM_WARPS);
-    
+
     const uint32_t smem_size = BLOCK_SIZE * HEAD_DIM * sizeof(uint8_t) * 2;
 
     auto kernel_func = append_dequant_cache_kv_c8<NV_TYPE, uint8_t, HEAD_DIM, BLOCK_SIZE, NUM_WARPS, false>;

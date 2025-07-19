@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" setup for FastDeploy custom ops """
+"""setup for FastDeploy custom ops"""
 import importlib
 import json
 import os
@@ -41,8 +41,7 @@ ROOT_DIR = Path(__file__).parent.parent
 
 # cannot import envs directly because it depends on fastdeploy,
 #  which is not installed yet
-envs = load_module_from_path('envs',
-                             os.path.join(ROOT_DIR, 'fastdeploy', 'envs.py'))
+envs = load_module_from_path("envs", os.path.join(ROOT_DIR, "fastdeploy", "envs.py"))
 
 archs = json.loads(envs.FD_BUILDING_ARCS)
 use_bf16 = envs.FD_CPU_USE_BF16 == "True"
@@ -143,8 +142,7 @@ def get_nvcc_version():
     """
     Get cuda version of nvcc.
     """
-    nvcc_output = subprocess.check_output(["nvcc", "--version"],
-                                          universal_newlines=True)
+    nvcc_output = subprocess.check_output(["nvcc", "--version"], universal_newlines=True)
     output = nvcc_output.split()
     release_idx = output.index("release") + 1
     nvcc_cuda_version = float(output[release_idx].split(",")[0])
@@ -160,13 +158,19 @@ def get_gencode_flags(archs):
     for cc_val in cc_s:
         if cc_val == 90:
             arch_code = "90a"
-            flags += ["-gencode", f"arch=compute_{arch_code},code=sm_{arch_code}"]
-        elif cc_val == 100: # Assuming 100 is the code for Blackwell SM10.x
+            flags += [
+                "-gencode",
+                f"arch=compute_{arch_code},code=sm_{arch_code}",
+            ]
+        elif cc_val == 100:  # Assuming 100 is the code for Blackwell SM10.x
             # Per NVIDIA dev blog, for CUTLASS and architecture-specific features on CC 10.0, use '100a'
             # https://developer.nvidia.com/blog/nvidia-blackwell-and-nvidia-cuda-12-9-introduce-family-specific-architecture-features/
             # "The CUTLASS build instructions specify using the a flag when building for devices of CC 9.0 and 10.0"
             arch_code = "100a"
-            flags += ["-gencode", f"arch=compute_{arch_code},code=sm_{arch_code}"]
+            flags += [
+                "-gencode",
+                f"arch=compute_{arch_code},code=sm_{arch_code}",
+            ]
         else:
             flags += ["-gencode", f"arch=compute_{cc_val},code=sm_{cc_val}"]
     return flags
@@ -194,7 +198,7 @@ if paddle.is_compiled_with_rocm():
         clone_git_repo("v3.11.3", "https://bgithub.xyz/nlohmann/json.git", json_dir)
         if not os.listdir(json_dir):
             raise ValueError("Git clone nlohmann_json failed!")
-    sources=[
+    sources = [
         "gpu_ops/set_value_by_flags.cu",
         "gpu_ops/token_penalty_multi_scores.cu",
         "gpu_ops/stop_generation.cu",
@@ -302,8 +306,7 @@ elif paddle.is_compiled_with_cuda():
     if not os.path.exists(cutlass_dir) or not os.listdir(cutlass_dir):
         if not os.path.exists(cutlass_dir):
             os.makedirs(cutlass_dir)
-        clone_git_repo("v3.8.0", "https://github.com/NVIDIA/cutlass.git",
-                       cutlass_dir)
+        clone_git_repo("v3.8.0", "https://github.com/NVIDIA/cutlass.git", cutlass_dir)
         if not os.listdir(cutlass_dir):
             raise ValueError("Git clone cutlass failed!")
 
@@ -312,8 +315,7 @@ elif paddle.is_compiled_with_cuda():
     if not os.path.exists(deep_gemm_dir) or not os.listdir(deep_gemm_dir):
         if not os.path.exists(deep_gemm_dir):
             os.makedirs(deep_gemm_dir)
-        clone_git_repo("main", "https://github.com/deepseek-ai/DeepGEMM.git",
-                       deep_gemm_dir)
+        clone_git_repo("main", "https://github.com/deepseek-ai/DeepGEMM.git", deep_gemm_dir)
         if not os.listdir(deep_gemm_dir):
             raise ValueError("Git clone DeepGEMM failed!")
         cur_path = os.path.dirname(os.path.abspath(__file__))
@@ -347,15 +349,13 @@ elif paddle.is_compiled_with_cuda():
         try:
             shutil.copytree(src_dir, dst_dir)
         except Exception as e:
-            raise RuntimeError(
-                f"Failed to copy from {src_dir} to {dst_dir}: {e}")
+            raise RuntimeError(f"Failed to copy from {src_dir} to {dst_dir}: {e}")
 
     json_dir = "third_party/nlohmann_json"
     if not os.path.exists(json_dir) or not os.listdir(json_dir):
         if not os.path.exists(json_dir):
             os.makedirs(json_dir)
-        clone_git_repo("v3.11.3", "https://github.com/nlohmann/json.git",
-                       json_dir)
+        clone_git_repo("v3.11.3", "https://github.com/nlohmann/json.git", json_dir)
         if not os.listdir(json_dir):
             raise ValueError("Git clone nlohmann_json failed!")
 
@@ -372,7 +372,7 @@ elif paddle.is_compiled_with_cuda():
         "-Ithird_party/nlohmann_json/include",
     ]
     nvcc_version = get_nvcc_version()
-    print(f'nvcc_version = {nvcc_version}')
+    print(f"nvcc_version = {nvcc_version}")
     if nvcc_version >= 12.0:
         sources += ["gpu_ops/sample_kernels/air_top_p_sampling.cu"]
     cc = max(get_sm_version(archs))
@@ -414,31 +414,24 @@ elif paddle.is_compiled_with_cuda():
         # Running generate fp8 gemm codes.
         # Common for SM89, SM90, SM100 (Blackwell)
         nvcc_compile_args += ["-DENABLE_FP8"]
-        nvcc_compile_args += [
-            "-Igpu_ops/cutlass_kernels/fp8_gemm_fused/autogen"
-        ]
+        nvcc_compile_args += ["-Igpu_ops/cutlass_kernels/fp8_gemm_fused/autogen"]
         # This script seems general enough for different SM versions, specific templates are chosen by CUTLASS.
         os.system("python utils/auto_gen_visitor_fp8_gemm_fused_kernels.py")
 
-        if cc >= 90: # Hopper and newer
+        if cc >= 90:  # Hopper and newer
             # SM90 (Hopper) specific auto-generation and flags
-            if cc == 90: # Only for SM90
+            if cc == 90:  # Only for SM90
                 nvcc_compile_args += [
                     # The gencode for 90a is added in get_gencode_flags now
                     # "-gencode",
                     # "arch=compute_90a,code=compute_90a",
                     "-O3",
-                    "-DNDEBUG", # NDEBUG is common, consider moving if not specific to 90a
+                    "-DNDEBUG",  # NDEBUG is common, consider moving if not specific to 90a
                 ]
                 print("SM90: Running SM90-specific FP8 kernel auto-generation.")
-                os.system(
-                    "python utils/auto_gen_fp8_fp8_gemm_fused_kernels_sm90.py")
-                os.system(
-                    "python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels_sm90.py"
-                )
-                os.system(
-                    "python utils/auto_gen_fp8_fp8_block_gemm_fused_kernels_sm90.py"
-                )
+                os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels_sm90.py")
+                os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels_sm90.py")
+                os.system("python utils/auto_gen_fp8_fp8_block_gemm_fused_kernels_sm90.py")
 
                 nvcc_compile_args += [
                     "-DENABLE_SCALED_MM_SM90=1",
@@ -450,14 +443,14 @@ elif paddle.is_compiled_with_cuda():
                     "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_sm90_int8.cu",
                     "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_azp_sm90_int8.cu",
                 ]
-            elif cc == 100 and nvcc_version >= 12.9: # Blackwell SM100 specifics
+            elif cc == 100 and nvcc_version >= 12.9:  # Blackwell SM100 specifics
                 print("SM100 (Blackwell): Applying SM100 configurations.")
                 nvcc_compile_args += [
                     # The gencode for 100a is added in get_gencode_flags
                     # "-gencode",
                     # "arch=compute_100a,code=compute_100a",
-                    "-O3", # Common optimization flag
-                    "-DNDEBUG", # Common debug flag
+                    "-O3",  # Common optimization flag
+                    "-DNDEBUG",  # Common debug flag
                     # Potentially add -DENABLE_SM100_FEATURES if specific macros are identified
                 ]
                 # Placeholder for SM100-specific kernel auto-generation scripts
@@ -469,18 +462,16 @@ elif paddle.is_compiled_with_cuda():
 
                 # Add SM100 specific sources if any, e.g., for new hardware intrinsics
                 # sources += ["gpu_ops/cutlass_kernels/w8a8/c4x_sm100.cu"] # Example
-                pass # No SM100 specific sources identified yet beyond what CUTLASS handles
-            else: # For cc >= 89 but not 90 or 100 (e.g. SM89)
+                pass  # No SM100 specific sources identified yet beyond what CUTLASS handles
+            else:  # For cc >= 89 but not 90 or 100 (e.g. SM89)
                 print(f"SM{cc}: Running generic FP8 kernel auto-generation.")
                 os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels.py")
-                os.system(
-                    "python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels.py")
+                os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels.py")
 
-        else: # For cc == 89 (Ada)
+        else:  # For cc == 89 (Ada)
             print("SM89: Running generic FP8 kernel auto-generation.")
             os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels.py")
-            os.system(
-                "python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels.py")
+            os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels.py")
 
         # Common FP8 sources for SM89+
         sources += [
@@ -493,7 +484,7 @@ elif paddle.is_compiled_with_cuda():
             "gpu_ops/scaled_gemm_f8_i4_f16_weight_quantize.cu",
             "gpu_ops/cutlass_kernels/cutlass_heuristic.cu",
             "gpu_ops/cutlass_kernels/cutlass_preprocessors.cu",
-            "gpu_ops/fused_hadamard_quant_fp8.cu"
+            "gpu_ops/fused_hadamard_quant_fp8.cu",
         ]
 
         sources += find_end_files(fp8_auto_gen_directory, ".cu")

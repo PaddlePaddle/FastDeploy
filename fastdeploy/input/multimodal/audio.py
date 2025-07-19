@@ -21,8 +21,7 @@ from pathlib import Path
 import numpy as np
 import numpy.typing as npt
 
-from .base import MediaIO, MultiModalPlugin
-from .inputs import AudioItem, ModalityData, MultiModalKwargs
+from .base import MediaIO
 
 # TODO 多模数据处理
 # try:
@@ -44,25 +43,24 @@ def resample_audio(
 ) -> npt.NDArray[np.floating]:
     """
     将音频数据从原始采样率（`orig_sr`）重采样到目标采样率（`target_sr`）。
-    
+
     Args:
         audio (npt.NDArray[np.floating]): 带有单通道浮点型音频数据的 numpy ndarray，形状为 `(samples,)`。
         orig_sr (float): 音频数据的原始采样率。
         target_sr (float): 需要转换到的目标采样率。
-    
+
     Returns:
         npt.NDArray[np.floating]: 带有单通道浮点型音频数据的 numpy ndarray，形状为 `(samples,)`，已经被重采样到目标采样率。
-    
+
     Raises:
         None.
     """
     import librosa
+
     return librosa.resample(audio, orig_sr=orig_sr, target_sr=target_sr)
 
 
-
 class AudioMediaIO(MediaIO[tuple[npt.NDArray, float]]):
-
     def load_bytes(self, data: bytes) -> tuple[npt.NDArray, float]:
         """
             加载字节数据，返回音频信号和采样率。
@@ -73,8 +71,8 @@ class AudioMediaIO(MediaIO[tuple[npt.NDArray, float]]):
             如果解码失败，则返回 None。
         """
         import librosa
-        return librosa.load(BytesIO(data), sr=None)
 
+        return librosa.load(BytesIO(data), sr=None)
 
     def load_base64(
         self,
@@ -83,16 +81,16 @@ class AudioMediaIO(MediaIO[tuple[npt.NDArray, float]]):
     ) -> tuple[npt.NDArray, float]:
         """
             将 base64 编码的字符串转换为 numpy 数组和尺度。
-        
+
         Args:
             media_type (str): 媒体类型，例如 'image/jpeg'、'image/png' 等。
             data (str): base64 编码的字符串，表示图像或其他二进制数据。
-        
+
         Returns:
             tuple[npt.NDArray, float]: 包含以下两个元素：
                 - npt.NDArray: 形状为（H，W，C）的 numpy 数组，表示图像或其他二进制数据。
                 - float: 图像的尺度，单位为像素。
-        
+
         Raises:
             ValueError: 当 media_type 不是有效的媒体类型时引发。
         """
@@ -108,6 +106,7 @@ class AudioMediaIO(MediaIO[tuple[npt.NDArray, float]]):
             第二个是采样率（float类型）。
         """
         import librosa
+
         return librosa.load(filepath, sr=None)
 
     def encode_base64(self, media: tuple[npt.NDArray, float]) -> str:
@@ -121,7 +120,8 @@ class AudioMediaIO(MediaIO[tuple[npt.NDArray, float]]):
 
         with BytesIO() as buffer:
             import soundfile
+
             soundfile.write(buffer, audio, sr, format="WAV")
             data = buffer.getvalue()
 
-        return base64.b64encode(data).decode('utf-8')
+        return base64.b64encode(data).decode("utf-8")

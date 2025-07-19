@@ -2,7 +2,6 @@
 
 在使用FastDeploy部署模型（包括离线推理、服务化部署），涉及如下参数配置，其实需要注意，在使用离线推理时，各参数配置即为如下参数名；而在使用命令行启动服务时，相应参数中的分隔符需要从```_```修改为```-```，如```max_model_len```在命令行中则为```--max-model-len```。
 
-
 | 参数名                                | 类型        | 说明 |
 |:-----------------------------------|:----------| :----- |
 | ```port```                         | `int`       | 仅服务化部署需配置，服务HTTP请求端口号，默认8000 |
@@ -44,7 +43,6 @@
 | ```enable_expert_parallel```       | `bool`      | 是否启用专家并行 |
 | ```enable_logprob```       | `bool`      | 是否启用输出token返回logprob。如果未使用 logrpob，则在启动时可以省略此参数。 |
 
-
 ## 1. KVCache分配与```num_gpu_blocks_override```、```block_size```的关系？
 
 FastDeploy在推理过程中，显存被```模型权重```、```预分配KVCache块```和```模型计算中间激活值```占用。其中预分配KVCache块由```num_gpu_blocks_override```决定，其单位为```block_size```(默认64），即一个块可以存储64个Token的KVCache。
@@ -53,14 +51,14 @@ FastDeploy在推理过程中，显存被```模型权重```、```预分配KVCache
 - 加载模型，在完成模型加载后，记录当前显存占用情况```total_memory_after_load```和FastDeploy框架占用的显存值```fd_memory_after_load```; 注意前者为GPU实际被占用显存（可能有其它进程也占用），后者是FD框架本身占用显存；
 
 - 根据用户配置的```max_num_batched_tokens```(默认为```max_model_len```)，Fake相应长度的输入数据进行Prefill计算，记录当前FastDeploy框架显存最大分配值```fd_memory_after_prefill```，因此可以认为```模型计算中间激活值```为```fd_memory_after_prefill - fd_memory_after_load```;
-    - 截止当前，认为GPU卡可以剩分配KVCache的显存(以A800 80G为例)为```80GB * gpu_memory_utilization - total_memory_after_load - (fd_memory_after_prefill - fd_memory_after_load)```
-    - 根据模型KVCache的精度（如8bit/16bit)，计算一个block占用的KVCache大小，从而计算出总共可分配的block数量，赋值给```num_gpu_blocks_override```
+  - 截止当前，认为GPU卡可以剩分配KVCache的显存(以A800 80G为例)为```80GB * gpu_memory_utilization - total_memory_after_load - (fd_memory_after_prefill - fd_memory_after_load)```
+  - 根据模型KVCache的精度（如8bit/16bit)，计算一个block占用的KVCache大小，从而计算出总共可分配的block数量，赋值给```num_gpu_blocks_override```
 
 > 在服务启动日志中，我们可以在log/fastdeploy.log中找到```Reset block num, the total_block_num:17220, prefill_kvcache_block_num:12915```，其中```total_block_num```即为自动计算出来的KVCache block数量，将其乘以```block_size```即可知道整个服务可以缓存多少Token的KV值。
 
 ## 2. ```kv_cache_ratio```、```block_size```、```max_num_seqs```的关系？
-   - FastDeploy里面将KVCache按照```kv_cache_ratio```分为Prefill阶段使用和Decode阶段使用，在配置这个参数时，可以按照```kv_cache_ratio = 平均输入Token数/(平均输入+平均输出Token数)```进行配置，常规情况输入是输出的3倍，因此可以配置成0.75
-   - ```max_num_seqs```是Decode阶段的最大并发数，一般而言可以配置成最大值128，但用户也可以根据KVCache情况作调用，例如输出的KVCache Token量为```decode_token_cache = total_block_num * (1 - kv_cache_ratio) * block_size```，为了防止极端情况下的显存不足问题，可以配置```max_num_seqs = decode_token_cache / 平均输出Token数```，不高于128即可。
+- FastDeploy里面将KVCache按照```kv_cache_ratio```分为Prefill阶段使用和Decode阶段使用，在配置这个参数时，可以按照```kv_cache_ratio = 平均输入Token数/(平均输入+平均输出Token数)```进行配置，常规情况输入是输出的3倍，因此可以配置成0.75
+- ```max_num_seqs```是Decode阶段的最大并发数，一般而言可以配置成最大值128，但用户也可以根据KVCache情况作调用，例如输出的KVCache Token量为```decode_token_cache = total_block_num * (1 - kv_cache_ratio) * block_size```，为了防止极端情况下的显存不足问题，可以配置```max_num_seqs = decode_token_cache / 平均输出Token数```，不高于128即可。
 
 ## 3. ```enable_chunked_prefill```参数配置说明
 
@@ -72,9 +70,9 @@ FastDeploy在推理过程中，显存被```模型权重```、```预分配KVCache
 当前仅支持用户配置以下参数：
 - `use_cudagraph` : bool = False
 - `graph_optimization_config` :  Dict[str, Any]
-    - `graph_opt_level`: int = 0
-    - `use_cudagraph`: bool = False
-    - `cudagraph_capture_sizes` : List[int] = None
+  - `graph_opt_level`: int = 0
+  - `use_cudagraph`: bool = False
+  - `cudagraph_capture_sizes` : List[int] = None
 
 可以通过设置 `--use-cudagraph` 或 `--graph-optimization-config '{"use_cudagraph":true}'` 开启 CudaGrpah。
 
@@ -88,6 +86,7 @@ FastDeploy在推理过程中，显存被```模型权重```、```预分配KVCache
 
 在默认配置下开启 CudaGraph 时，会根据 `max_num_seqs` 参数自动设置 CudaGraph 需要捕获的 Batch Size 列表，需要捕获的 Batch Size 的列表自动生成逻辑如下：
 1. 生成一个范围为 [1,1024] Batch Size 的候选列表
+
 ```
         # Batch Size [1, 2, 4, 8, 16, ... 120, 128]
         candidate_capture_sizes = [1, 2, 4] + [8 * i for i in range(1, 17)]
@@ -96,24 +95,24 @@ FastDeploy在推理过程中，显存被```模型权重```、```预分配KVCache
         # Batch Size (256, 288, ... 992, 1024]
         candidate_capture_sizes += [32 * i for i in range(17, 33)]
 ```
+
 2. 根据用户设置的 `max_num_seqs` 裁剪候选列表，得到范围为 [1, `max_num_seqs`] 的 CudaGraph 捕获列表。
 
 用户也可以通过 `--graph-optimization-config` 中的 `cudagraph_capture_sizes` 参数自定义需要被 CudaGraph 捕获的 Batch Size 列表:
+
 ```
 --graph-optimization-config '{"cudagraph_capture_sizes": [1, 3, 5, 7, 9]}'
 ```
 
-
 ### CudaGraph相关参数说明
 使用 CudaGraph 会产生一些额外的显存开销，在FastDeploy中分为下面两类：
-* 额外的输入 Buffer 开销
-* CudaGraph 使用了专用的显存池，因此会持有一部分与主框架隔离的中间激活显存
+- 额外的输入 Buffer 开销
+- CudaGraph 使用了专用的显存池，因此会持有一部分与主框架隔离的中间激活显存
 
 FastDeploy 的初始化顺序为先使用 `gpu_memory_utilization` 参数计算 `KVCache` 可用的显存，初始化完 `KVCache` 之后才会使用剩余显存初始化 CudaGraph。由于 CudaGraph 目前还不是默认开启的，因此使用默认启动参数可能会遇到 `Out Of Memory` 错误，可以尝试使用下面三种方式解决：
-* 调低 `gpu_memory_utilization` 的值，多预留一些显存给CudaGraph使用。
-* 调低 `max_num_seqs` 的值，降低最大并发数。
-* 通过 `graph_optimization_config` 自定义需要 CudaGraph 捕获的 Batch Size 列表 `cudagraph_capture_sizes`，减少捕获的图的数量
-
+- 调低 `gpu_memory_utilization` 的值，多预留一些显存给CudaGraph使用。
+- 调低 `max_num_seqs` 的值，降低最大并发数。
+- 通过 `graph_optimization_config` 自定义需要 CudaGraph 捕获的 Batch Size 列表 `cudagraph_capture_sizes`，减少捕获的图的数量
 
 使用CudaGraph之前，需要确保加载的模型被装饰器 ```@support_graph_optimization```正确修饰。
 
@@ -144,5 +143,6 @@ FastDeploy 的初始化顺序为先使用 `gpu_memory_utilization` 参数计算 
   class Ernie45TModel(nn.Layer): # 注意 decorator 加在 nn.Layer 的子类上
       ...
   ```
+
 - 当开启 ```use_cudagraph``` 时，暂时只支持单卡推理，即 ```tensor_parallel_size``` 设为1。
 - 当开启 ```use_cudagraph``` 时，暂不支持开启 ```enable_prefix_caching``` 或 ```enable_chunked_prefill``` 。

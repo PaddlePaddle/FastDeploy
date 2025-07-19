@@ -13,11 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 import paddle
 from paddle import nn
 
 from fastdeploy.model_executor.layers.quantization.weight_only import (
-    WeightOnlyConfig, WeightOnlyLinearMethod)
+    WeightOnlyConfig,
+    WeightOnlyLinearMethod,
+)
 from fastdeploy.model_executor.ops.xpu import weight_quantize_xpu
 
 
@@ -48,13 +51,10 @@ class XPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             is_bias=False,
         )
 
-    def process_loaded_weights(self, layer: nn.Layer,
-                               weight: paddle.Tensor) -> None:
+    def process_loaded_weights(self, layer: nn.Layer, weight: paddle.Tensor) -> None:
         """
         loaded_weights using xpu special quantization
         """
-        quanted_weight_tensor, weight_scale_tensor = weight_quantize_xpu(
-            weight, self.quant_config.algo, -1, -1)
-        layer.weight.set_value(
-            paddle.transpose(quanted_weight_tensor, [1, 0]))
+        quanted_weight_tensor, weight_scale_tensor = weight_quantize_xpu(weight, self.quant_config.algo, -1, -1)
+        layer.weight.set_value(paddle.transpose(quanted_weight_tensor, [1, 0]))
         layer.weight_scale.set_value(weight_scale_tensor)

@@ -31,7 +31,14 @@ def init_kv_signal_per_query(
     """
     if current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import init_kv_signal_per_query
-        out = init_kv_signal_per_query(seq_lens_encoder, seq_lens_this_time, seq_lens_decoder, rank, num_layers)
+
+        out = init_kv_signal_per_query(
+            seq_lens_encoder,
+            seq_lens_this_time,
+            seq_lens_decoder,
+            rank,
+            num_layers,
+        )
         return out
     else:
-        raise NotImplementedError()
+        raise NotImplementedError
