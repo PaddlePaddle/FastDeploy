@@ -397,22 +397,38 @@ class PaddleDisWorkerProc():
 
             if num_blocks_global < 0:
                 logger.error(
-                    f"The total number of blocks cannot be less than zero."
-                    f"Please increase gpu_memory_utilization"
-                    f"Or decrease max_num_batched_tokens(max model length) ")
+                    "The total number of blocks cannot be less than zero."
+                    "Please increase gpu_memory_utilization"
+                    "Or decrease max_num_batched_tokens(max model length) ")
                 raise ValueError(
-                    f"The total number of blocks cannot be less than zero."
-                    f"Please increase gpu_memory_utilization"
-                    f"Or decrease max_num_batched_tokens(max model length) ")
-        
+                    "The total number of blocks cannot be less than zero."
+                    "Please increase gpu_memory_utilization"
+                    "Or decrease max_num_batched_tokens(max model length) ")
+
 
             self.get_profile_block_num_signal.value[
                 self.local_rank] = num_blocks_global
         else:
             num_blocks_global = self.fd_config.parallel_config.total_block_num
+        # logger.info will write in worker_process.log
+        # Need `print` to triger engine->check_worker_initialize_status->detect_thread
+        print(f"------- num_blocks_global: {num_blocks_global} --------")
         # NOTE(liuzichang): Too big num_blocks_global will lead to error 700
         # 4. Updata share inputs
         self.worker.reinitialize_kv_cache(num_gpu_blocks=num_blocks_global)
+
+    def graph_optimize_and_warm_up_model(self) ->None:
+        if self.parallel_config.enable_prefix_caching:
+            launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
+            self.launched_cache_manager_signal = IPCSignal(
+                name="launched_cache_manager_signal",
+                array=launched_cache_manager_signal_data,
+                dtype=np.int32,
+                suffix=self.parallel_config.engine_pid,
+                create=False)
+            while np.any(self.launched_cache_manager_signal.value[0] <= 0):
+                time.sleep(0.01)
+        self.worker.graph_optimize_and_warm_up_model()
 
     def init_device(self) -> None:
         """ Initialize device and Construct model runner """
@@ -729,7 +745,7 @@ def run_worker_proc() -> None:
     worker_proc.determine_num_available_blocks()
 
     # Trigger CUDAGraph capture
-    worker_proc.worker.graph_optimize_and_warm_up_model()
+    worker_proc.graph_optimize_and_warm_up_model()
 
     # Initialize health status
     worker_proc.init_health_status()

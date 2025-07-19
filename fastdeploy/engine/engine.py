@@ -178,6 +178,7 @@ class LLMEngine(object):
                 pod_ip=self.cfg.master_ip,
                 engine_worker_queue_port=self.cfg.engine_worker_queue_port,
                 pid_suffix=self.ipc_signal_suffix)
+            self.launched_cache_manager_signal.value[0] = 1
 
         self.worker_proc = self._start_worker_service()
         console_logger.info("Waitting worker processes ready...")
@@ -869,6 +870,16 @@ class LLMEngine(object):
             suffix=self.ipc_signal_suffix,
             create=True)
 
+        # launched_cache_manager_signal 用于感知engine是否启动了cache_manager
+        if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
+            launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
+            self.launched_cache_manager_signal = IPCSignal(
+                name="launched_cache_manager_signal",
+                array=launched_cache_manager_signal_data,
+                dtype=np.int32,
+                suffix=self.ipc_signal_suffix,
+                create=True)
+
         # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
         worker_healthy_live_recorded_time_array = np.zeros(shape=[self.cfg.worker_num_per_node],
                                                            dtype=np.int32)
@@ -1165,6 +1176,9 @@ class LLMEngine(object):
                 pod_ip=self.cfg.master_ip,
                 engine_worker_queue_port=self.cfg.engine_worker_queue_port,
                 pid_suffix=self.ipc_signal_suffix)
+            self.launched_cache_manager_signal.value[0] = 1
+
+
     def check_health(self, time_interval_threashold=30):
         """
         Check the health of the model server by checking whether all workers are alive.
@@ -1203,6 +1217,10 @@ class LLMEngine(object):
                     if self.worker_init_status[
                             "layer_loadding"] == self.cfg.model_config.num_layers - 1:
                         self.worker_init_status["finished"] = True
+                elif match := re.search(r'num_blocks_global',
+                                       line):
+                    if self.do_profile:
+                        self._stop_profile()
 
         self.checking_worker_status_thread = threading.Thread(
             target=detect_thread, daemon=True)
