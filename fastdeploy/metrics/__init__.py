@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 """
 metrics
 """
@@ -28,7 +29,7 @@ def build_buckets(mantissa_lst: List[int], max_value: int) -> List[int]:
     buckets: List[int] = []
     while True:
         for m in mantissa_lst:
-            value = m * 10 ** exponent
+            value = m * 10**exponent
             if value <= max_value:
                 buckets.append(value)
             else:

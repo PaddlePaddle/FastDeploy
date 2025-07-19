@@ -18,8 +18,9 @@ Interfaces that support toggling the reasoning mode:
 For reasoning models, the length of the reasoning content can be controlled via `reasoning_max_tokens`. Add `metadata={"reasoning_max_tokens": 1024}` to the request.
 
 ### Quick Start
-When launching the model service, specify the parser name using the `--reasoning-parser` argument.  
+When launching the model service, specify the parser name using the `--reasoning-parser` argument.
 This parser will process the model's output and extract the `reasoning_content` field.
+
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
     --model /path/to/your/model \
@@ -29,7 +30,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --quantization wint4 \
     --reasoning-parser ernie-45-vl
 ```
+
 Next, make a request to the model that should return the reasoning content in the response.
+
 ```bash
 curl -X POST "http://0.0.0.0:8192/v1/chat/completions" \
 -H "Content-Type: application/json" \
@@ -43,10 +46,12 @@ curl -X POST "http://0.0.0.0:8192/v1/chat/completions" \
   "metadata": {"enable_thinking": true}
 }'
 ```
+
 The `reasoning_content` field contains the reasoning steps to reach the final conclusion, while the `content` field holds the conclusion itself.
 
 ### Streaming chat completions
 Streaming chat completions are also supported for reasoning models. The `reasoning_content` field is available in the `delta` field in `chat completion response chunks`
+
 ```python
 from openai import OpenAI
 # Set OpenAI's API key and API base to use vLLM's API server.

@@ -36,10 +36,16 @@ def tune_cublaslt_int8_gemm(
     try:
         from fastdeploy.model_executor.ops.gpu import tune_cublaslt_gemm
     except ImportError:
-        logger.warning(
-            "From fastdeploy.model_executor.ops.gpu import tune_cublaslt_gemm Failed!"
-        )
+        logger.warning("From fastdeploy.model_executor.ops.gpu import tune_cublaslt_gemm Failed!")
         return
 
-    tune_cublaslt_gemm(K_tensor, N_tensor, m_min, m_max, dtype, is_test,
-                       is_read_from_file, path)
+    tune_cublaslt_gemm(
+        K_tensor,
+        N_tensor,
+        m_min,
+        m_max,
+        dtype,
+        is_test,
+        is_read_from_file,
+        path,
+    )

@@ -45,7 +45,6 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```enable_expert_parallel``` | `bool` | Whether to enable expert parallel |
 | ```enable_logprob``` | `bool` | Whether to enable return log probabilities of the output tokens or not. If true, returns the log probabilities of each output token returned in the content of message.If logrpob is not used, this parameter can be omitted when starting |
 
-
 ## 1. Relationship between KVCache allocation, ```num_gpu_blocks_override``` and ```block_size```?
 
 During FastDeploy inference, GPU memory is occupied by ```model weights```, ```preallocated KVCache blocks``` and ```model computation intermediate activation values```. The preallocated KVCache blocks are determined by ```num_gpu_blocks_override```, with ```block_size``` (default: 64) as its unit, meaning one block can store KVCache for 64 Tokens.
@@ -55,14 +54,14 @@ In actual inference, it's difficult for users to know how to properly configure 
 - Load the model, after completing model loading, record current memory usage ```total_memory_after_load``` and FastDeploy framework memory usage ```fd_memory_after_load```; note the former is actual GPU memory usage (may include other processes), the latter is memory used by FD framework itself;
 
 - According to user-configured ```max_num_batched_tokens``` (default: ```max_model_len```), perform fake prefill computation with corresponding length input data, record current maximum FastDeploy framework memory allocation ```fd_memory_after_prefill```, thus ```model computation intermediate activation values``` can be considered as ```fd_memory_after_prefill - fd_memory_after_load```;
-    - At this point, available GPU memory for KVCache allocation (taking A800 80G as example) is ```80GB * gpu_memory_utilization - total_memory_after_load - (fd_memory_after_prefill - fd_memory_after_load)```
-    - Based on model KVCache precision (e.g. 8bit/16bit), calculate memory size per block, then calculate total allocatable blocks, assign to ```num_gpu_blocks_override```
+  - At this point, available GPU memory for KVCache allocation (taking A800 80G as example) is ```80GB * gpu_memory_utilization - total_memory_after_load - (fd_memory_after_prefill - fd_memory_after_load)```
+  - Based on model KVCache precision (e.g. 8bit/16bit), calculate memory size per block, then calculate total allocatable blocks, assign to ```num_gpu_blocks_override```
 
 > In service startup logs, we can find ```Reset block num, the total_block_num:17220, prefill_kvcache_block_num:12915``` in log/fastdeploy.log, where ```total_block_num``` is the automatically calculated KVCache block count, multiply by ```block_size``` to get total cacheable Tokens.
 
 ## 2. Relationship between ```kv_cache_ratio```, ```block_size``` and ```max_num_seqs```?
-   - FastDeploy divides KVCache between Prefill and Decode phases according to ```kv_cache_ratio```. When configuring this parameter, you can use ```kv_cache_ratio = average input Tokens / (average input + average output Tokens)```. Typically input is 3x output, so can be configured as 0.75.
-   - ```max_num_seqs``` is the maximum concurrency in Decode phase, generally can be set to maximum 128, but users can also configure based on KVCache situation, e.g. output KVCache Token amount is ```decode_token_cache = total_block_num * (1 - kv_cache_ratio) * block_size```, to prevent extreme OOM situations, can configure ```max_num_seqs = decode_token_cache / average output Tokens```, not exceeding 128.
+- FastDeploy divides KVCache between Prefill and Decode phases according to ```kv_cache_ratio```. When configuring this parameter, you can use ```kv_cache_ratio = average input Tokens / (average input + average output Tokens)```. Typically input is 3x output, so can be configured as 0.75.
+- ```max_num_seqs``` is the maximum concurrency in Decode phase, generally can be set to maximum 128, but users can also configure based on KVCache situation, e.g. output KVCache Token amount is ```decode_token_cache = total_block_num * (1 - kv_cache_ratio) * block_size```, to prevent extreme OOM situations, can configure ```max_num_seqs = decode_token_cache / average output Tokens```, not exceeding 128.
 
 ## 3. ```enable_chunked_prefill``` parameter description
 
@@ -74,12 +73,11 @@ To optimize scheduling priority for short requests, new `max_long_partial_prefil
 Currently, only user configuration of the following parameters is supported：
 - `use_cudagraph` : bool = False
 - `graph_optimization_config` :  Dict[str, Any]
-    - `graph_opt_level`: int = 0
-    - `use_cudagraph`: bool = False
-    - `cudagraph_capture_sizes` : List[int] = None
+  - `graph_opt_level`: int = 0
+  - `use_cudagraph`: bool = False
+  - `cudagraph_capture_sizes` : List[int] = None
 
 CudaGrpah can be enabled by setting `--use-cudagraph` or `--graph-optimization-config '{"use_cudagraph":true}'`. Using two different methods to set the use graph simultaneously may cause conflicts.
-
 
 The `graph_opt_level` parameter within `--graph-optimization-config` is used to configure the graph optimization level, with the following available options:
 - `0`: Use Dynamic compute graph, default to 0
@@ -87,11 +85,12 @@ The `graph_opt_level` parameter within `--graph-optimization-config` is used to 
 - `2`: Base on Static compute graph, use the complier(CINN, Compiler Infrastructure for Neural Networks) of Paddle  to compile and optimize
 
 In general, static graphs have lower Kernel Launch overhead than dynamic graphs, and it is recommended to use static graphs.
-For adapted models, FastDeploy's CudaGraph * * can support both dynamic and static graphs * * simultaneously.
+For adapted models, FastDeploy's CudaGraph *can support both dynamic and static graphs* simultaneously.
 
 When CudaGraph is enabled in the default configuration, a list of Batch Sizes that CudaGraph needs to capture will be automatically set based on the 'max_num_deqs' parameter. The logic for generating the list of Batch Sizes that need to be captured is as follows：
 
 1. Generate a candidate list with a range of [1,1024]  Batch Size.
+
 ```
         # Batch Size [1, 2, 4, 8, 16, ... 120, 128]
         candidate_capture_sizes = [1, 2, 4] + [8 * i for i in range(1, 17)]
@@ -100,24 +99,25 @@ When CudaGraph is enabled in the default configuration, a list of Batch Sizes th
         # Batch Size (256, 288, ... 992, 1024]
         candidate_capture_sizes += [32 * i for i in range(17, 33)]
 ```
+
 2. Crop the candidate list based on the user set 'max_num_deqs' to obtain a CudaGraph capture list with a range of [1,' max_num_deqs'].
 
 Users can also customize the batch size list that needs to be captured by CudaGraph through the parameter `cudagraph_capture_sizes` in`--graph-optimization-config`:
+
 ```
 --graph-optimization-config '{"cudagraph_capture_sizes": [1, 3, 5, 7, 9]}'
 ```
 
-
 ### CudaGraph related parameters
 
  Using CudaGraph incurs some additional memory overhead, divided into two categories in FastDeploy:
-* Additional input Buffer overhead
-* CudaGraph uses dedicated memory pool, thus holding some intermediate activation memory isolated from main framework
+- Additional input Buffer overhead
+- CudaGraph uses dedicated memory pool, thus holding some intermediate activation memory isolated from main framework
 
 FastDeploy initialization sequence first uses `gpu_memory_utilization` parameter to calculate available memory for `KVCache`, after initializing `KVCache` then uses remaining memory to initialize CudaGraph. Since CudaGraph is not enabled by default currently, using default startup parameters may encounter `Out of memory` errors, can try following solutions:
-* Lower `gpu_memory_utilization` value, reserve more memory for CudaGraph.
-* Lower `max_num_seqs` to decrease the maximum concurrency.
-* Customize the batch size list that CudaGraph needs to capture through `graph_optimization_config`, and reduce the number of captured graphs by using `cudagraph_capture_sizes`
+- Lower `gpu_memory_utilization` value, reserve more memory for CudaGraph.
+- Lower `max_num_seqs` to decrease the maximum concurrency.
+- Customize the batch size list that CudaGraph needs to capture through `graph_optimization_config`, and reduce the number of captured graphs by using `cudagraph_capture_sizes`
 
 - Before use, must ensure loaded model is properly decorated with ```@support_graph_optimization```.
 
@@ -148,5 +148,6 @@ FastDeploy initialization sequence first uses `gpu_memory_utilization` parameter
   class Ernie45TModel(nn.Layer): # Note decorator is added to nn.Layer subclass
       ...
   ```
+
 - When ```use_cudagraph``` is enabled, currently only supports single-GPU inference, i.e. ```tensor_parallel_size``` set to 1.
 - When ```use_cudagraph``` is enabled, cannot enable ```enable_prefix_caching``` or ```enable_chunked_prefill```.

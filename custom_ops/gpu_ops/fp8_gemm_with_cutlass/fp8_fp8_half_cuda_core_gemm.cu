@@ -105,7 +105,7 @@ __global__ void cudaCoreGemm(InputType const* __restrict__ act,
       }
     }
   }
-  
+
   __syncthreads();
   for (int32_t ii = tid; ii < TILE_M * TILE_N; ii += BLOCK_SIZE) {
     int32_t mid = ii / TILE_N, nid = ii % TILE_N;

@@ -15,7 +15,9 @@
 """
 
 from .apply_penalty_multi_scores import (
-    apply_penalty_multi_scores, apply_speculative_penalty_multi_scores)
+    apply_penalty_multi_scores,
+    apply_speculative_penalty_multi_scores,
+)
 from .top_k_top_p_sampling import top_k_top_p_sampling
 
 __all__ = [

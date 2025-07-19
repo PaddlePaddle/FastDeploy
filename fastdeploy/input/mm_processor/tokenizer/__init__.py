@@ -16,4 +16,4 @@
 
 from .tokenizer_vl import ErnieVLTokenizer
 
-__all__ = ['ErnieVLTokenizer']
+__all__ = ["ErnieVLTokenizer"]

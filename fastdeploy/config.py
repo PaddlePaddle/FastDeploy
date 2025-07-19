@@ -24,11 +24,11 @@ from typing import Literal, Optional
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 
 from fastdeploy import envs
-from fastdeploy.model_executor.layers.quantization.quant_base import \
-    QuantConfigBase
+from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase
 from fastdeploy.utils import get_logger
 
 logger = get_logger("config", "config.log")
+
 
 class MoEPhase(Enum):
     """
@@ -38,13 +38,14 @@ class MoEPhase(Enum):
     PREFILL = 1
     DECODER = 2
 
+
 class ErnieArchitectures:
     """Helper class for ERNIE architecture check."""
-    
+
     ARCHITECTURES = {
         "Ernie4_5_ForCausalLM",
-        "Ernie4_5_MoeForCausalLM", 
-        "Ernie4_5_VLMoeForConditionalGeneration"
+        "Ernie4_5_MoeForCausalLM",
+        "Ernie4_5_VLMoeForConditionalGeneration",
     }
 
     @classmethod
@@ -57,23 +58,24 @@ class ErnieArchitectures:
         """Check if the given architecture is an ERNIE architecture."""
         return architecture in cls.ARCHITECTURES
 
+
 PRETRAINED_INIT_CONFIGURATION = {
-    "rope_theta" : 10000.0,
-    "num_key_value_heads" : -1,
-    "start_layer_index" : 0,
-    "moe_num_shared_experts" : 0,
-    "moe_layer_start_index" : 0,
-    "num_max_dispatch_tokens_per_rank" : 256,
-    "moe_use_aux_free" : False,
-    "vocab_size" : -1,
-    "hidden_dropout_prob" : 0.0,
-    "initializer_range" : 0.02,
-    "max_position_embeddings" : 512,
-    "quantization_config" : None,
-    "tie_word_embeddings" : False,
-    "rms_norm_eps" : 1e-5,
-    "moe_num_experts" : None,
-    "moe_layer_end_index" : None,
+    "rope_theta": 10000.0,
+    "num_key_value_heads": -1,
+    "start_layer_index": 0,
+    "moe_num_shared_experts": 0,
+    "moe_layer_start_index": 0,
+    "num_max_dispatch_tokens_per_rank": 256,
+    "moe_use_aux_free": False,
+    "vocab_size": -1,
+    "hidden_dropout_prob": 0.0,
+    "initializer_range": 0.02,
+    "max_position_embeddings": 512,
+    "quantization_config": None,
+    "tie_word_embeddings": False,
+    "rms_norm_eps": 1e-5,
+    "moe_num_experts": None,
+    "moe_layer_end_index": None,
 }
 
 
@@ -81,6 +83,7 @@ class ModelConfig:
     """
     The configuration class to store the configuration of a `LLM`.
     """
+
     def __init__(
         self,
         args,
@@ -134,6 +137,7 @@ class ModelConfig:
 
 class ParallelConfig:
     """Configuration for the distributed execution."""
+
     def __init__(
         self,
         args,
@@ -213,10 +217,8 @@ class ParallelConfig:
         self.enable_custom_all_reduce: bool = False
 
         # pd_disaggregation
-        use_pd_disaggregation: int = int(
-            os.getenv("FLAGS_use_pd_disaggregation", 0))
-        use_pd_disaggregation_per_chunk: int = int(
-            os.getenv("FLAGS_use_pd_disaggregation_per_chunk", 0))
+        use_pd_disaggregation: int = int(os.getenv("FLAGS_use_pd_disaggregation", 0))
+        use_pd_disaggregation_per_chunk: int = int(os.getenv("FLAGS_use_pd_disaggregation_per_chunk", 0))
         if use_pd_disaggregation_per_chunk:
             self.pd_disaggregation_mode = "per_chunk"
         elif use_pd_disaggregation:
@@ -224,10 +226,12 @@ class ParallelConfig:
         else:
             self.pd_disaggregation_mode = "None"
 
+
 class SpeculativeConfig:
     """
     Configuration for speculative decoding.
     """
+
     def __init__(
         self,
         args,
@@ -261,22 +265,26 @@ class SpeculativeConfig:
         # This ensures that the specified simulation acceptance rate is not affected.
         self.benchmark_mode: bool = False
 
-        #TODO(YuanRisheng): The name of the server args is different from the name of the SpeculativeConfig.
-        #We temperately add the name map here and will delete it in future.
-        name_map = {"speculative_method": "method",
-                   "speculative_max_draft_token_num": "num_speculative_tokens",
-                   "speculative_model_name_or_path": "model_name_or_path",
-                   "speculative_model_quantization": "quantization",
-                   "speculative_benchmark_mode": "benchmark_mode"}
+        # TODO(YuanRisheng): The name of the server args is different from the name of the SpeculativeConfig.
+        # We temperately add the name map here and will delete it in future.
+        name_map = {
+            "speculative_method": "method",
+            "speculative_max_draft_token_num": "num_speculative_tokens",
+            "speculative_model_name_or_path": "model_name_or_path",
+            "speculative_model_quantization": "quantization",
+            "speculative_benchmark_mode": "benchmark_mode",
+        }
 
         for key, value in args.items():
             if key in name_map.keys() and hasattr(self, name_map[key]):
                 setattr(self, name_map[key], value)
 
+
 class DeviceConfig:
     """
     Configuration for device settings.
     """
+
     def __init__(
         self,
         args,
@@ -285,6 +293,7 @@ class DeviceConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+
 
 @dataclass
 class GraphOptimizationConfig:
@@ -336,15 +345,10 @@ class GraphOptimizationConfig:
     full_cuda_graph: bool = True
 
     max_capture_size: int = field(default=None, init=False)  # type: ignore
-    batch_size_to_captured_size: dict[int,
-                                    int] = field(default=None,
-                                                init=False)  # type: ignore
+    batch_size_to_captured_size: dict[int, int] = field(default=None, init=False)  # type: ignore
     # CINN Config ...
 
-    def init_with_cudagrpah_size(
-        self,
-        max_num_seqs:int = 0
-    ) -> None:
+    def init_with_cudagrpah_size(self, max_num_seqs: int = 0) -> None:
         """
         Initialize cuda graph capture sizes and
         pre-compute the mapping from batch size to padded graph size
@@ -353,32 +357,28 @@ class GraphOptimizationConfig:
         self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_num_seqs]
         dedup_sizes = list(set(self.cudagraph_capture_sizes))
         if len(dedup_sizes) < len(self.cudagraph_capture_sizes):
-            logger.info(("cudagraph sizes specified by model runner"
-                            " %s is overridden by config %s"),
-                        self.cudagraph_capture_sizes, dedup_sizes)
+            logger.info(
+                ("cudagraph sizes specified by model runner" " %s is overridden by config %s"),
+                self.cudagraph_capture_sizes,
+                dedup_sizes,
+            )
         self.cudagraph_capture_sizes = dedup_sizes
 
         # Sort to make sure cudagraph capture sizes are in descending order
         self.cudagraph_capture_sizes.sort(reverse=True)
-        self.max_capture_size = self.cudagraph_capture_sizes[
-            0] if self.cudagraph_capture_sizes else 0
+        self.max_capture_size = self.cudagraph_capture_sizes[0] if self.cudagraph_capture_sizes else 0
 
         # Pre-compute the mapping from batch size to padded graph size
         self.batch_size_to_captured_size = {}
-        for end, start in zip(self.cudagraph_capture_sizes,
-                              self.cudagraph_capture_sizes[1:] + [0]):
+        for end, start in zip(self.cudagraph_capture_sizes, self.cudagraph_capture_sizes[1:] + [0]):
             for bs in range(start, end):
                 if bs == start:
                     self.batch_size_to_captured_size[bs] = start
                 else:
                     self.batch_size_to_captured_size[bs] = end
-        self.batch_size_to_captured_size[
-            self.max_capture_size] = self.max_capture_size
+        self.batch_size_to_captured_size[self.max_capture_size] = self.max_capture_size
 
-    def _set_cudagraph_sizes(
-        self,
-        max_num_seqs:int = 0
-    ):
+    def _set_cudagraph_sizes(self, max_num_seqs: int = 0):
         """
         Calculate a series of candidate capture batch sizes,
         and then extract a portion of them as the capture list for the CUDA graph based on user input.
@@ -405,24 +405,28 @@ class LoadConfig:
             - 'ipc_snapshot': Load from disk snapshot of IPC weights
             - None: No dynamic loading
     """
+
     def __init__(
         self,
         args,
     ):
         self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
-        self.load_strategy: Optional[Literal['ipc', 'ipc_snapshot']] = None
+        self.load_strategy: Optional[Literal["ipc", "ipc_snapshot"]] = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
 
+
 class LoRAConfig:
-    """ LoRA Config """
+    """LoRA Config"""
+
     pass
 
 
 class KVCacheConfig:
-    """ KV Cache Config """
+    """KV Cache Config"""
+
     cache_quant_dtype: str = "none"
 
 
@@ -430,6 +434,7 @@ class DecodingConfig:
     """
     Configuration for decoding
     """
+
     def __init__(
         self,
         args,
@@ -439,26 +444,24 @@ class DecodingConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
+
 @dataclass
 class FDConfig:
     """
     The configuration class which contains all fastdeploy-related configuration. This
     simplifies passing around the distinct configurations in the codebase.
     """
+
     model_config: ModelConfig = field(default=None, init=True)  # type: ignore
 
     parallel_config: ParallelConfig = field(default=None, init=True)
-    speculative_config: SpeculativeConfig = field(default=None,
-                                                  init=True)  # type: ignore
-    device_config: DeviceConfig = field(default=None,
-                                        init=True)  # type: ignore
+    speculative_config: SpeculativeConfig = field(default=None, init=True)  # type: ignore
+    device_config: DeviceConfig = field(default=None, init=True)  # type: ignore
     load_config: LoadConfig = field(default=None, init=True)
     quant_config: Optional[QuantConfigBase] = None
     graph_opt_config: Optional[GraphOptimizationConfig] = None
-    decoding_config: DecodingConfig = field(default=None,
-                                            init=True)  # type: ignore
-    kv_cache_config: KVCacheConfig = field(default=None,
-                                           init=True)  # type: ignore
+    decoding_config: DecodingConfig = field(default=None, init=True)  # type: ignore
+    kv_cache_config: KVCacheConfig = field(default=None, init=True)  # type: ignore
 
     def __post_init__(self):
         # Initialize cuda graph capture list
@@ -466,6 +469,6 @@ class FDConfig:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
         self.graph_opt_config.init_with_cudagrpah_size(max_num_seqs=self.parallel_config.max_num_seqs)
 
-        #TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
+        # TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
         if self.graph_opt_config.graph_opt_level == 2:
             self.graph_opt_config.graph_opt_level = 1

@@ -21,8 +21,9 @@ import paddle
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda() and not current_platform.is_dcu():
-    from fastdeploy.model_executor.ops.gpu import \
-        append_attention as append_attention_gpu
+    from fastdeploy.model_executor.ops.gpu import (
+        append_attention as append_attention_gpu,
+    )
 
 
 def append_attention(
@@ -131,4 +132,4 @@ def append_attention(
         )
         return out
     else:
-        raise NotImplementedError()
+        raise NotImplementedError

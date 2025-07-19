@@ -12,17 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-import requests
-import time
 import json
-import subprocess
-import socket
 import os
 import signal
+import socket
+import subprocess
 import sys
-import openai
+import time
 
+import openai
+import pytest
+import requests
 
 # Read ports from environment variables; use default values if not set
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
@@ -31,6 +31,7 @@ FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
 
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT]
+
 
 def is_port_open(host: str, port: int, timeout=1.0):
     """
@@ -43,18 +44,20 @@ def is_port_open(host: str, port: int, timeout=1.0):
     except Exception:
         return False
 
+
 def kill_process_on_port(port: int):
     """
     Kill processes that are listening on the given port.
     Uses `lsof` to find process ids and sends SIGKILL.
     """
     try:
-        output = subprocess.check_output("lsof -i:{} -t".format(port), shell=True).decode().strip()
+        output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
         for pid in output.splitlines():
             os.kill(int(pid), signal.SIGKILL)
-            print("Killed process on port {}, pid={}".format(port, pid))
+            print(f"Killed process on port {port}, pid={pid}")
     except subprocess.CalledProcessError:
         pass
+
 
 def clean_ports():
     """
@@ -62,6 +65,7 @@ def clean_ports():
     """
     for port in PORTS_TO_CLEAN:
         kill_process_on_port(port)
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_and_run_server():
@@ -77,28 +81,41 @@ def setup_and_run_server():
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        model_path=os.path.join(base_path, "ernie-4_5-vl-28b-a3b-bf16-paddle")
+        model_path = os.path.join(base_path, "ernie-4_5-vl-28b-a3b-bf16-paddle")
     else:
-        model_path="./ernie-4_5-vl-28b-a3b-bf16-paddle"
+        model_path = "./ernie-4_5-vl-28b-a3b-bf16-paddle"
 
     log_path = "server.log"
     limit_mm_str = json.dumps({"image": 100, "video": 100})
 
     cmd = [
-        sys.executable, "-m", "fastdeploy.entrypoints.openai.api_server",
-        "--model", model_path,
-        "--port", str(FD_API_PORT),
-        "--tensor-parallel-size", "2",
-        "--engine-worker-queue-port", str(FD_ENGINE_QUEUE_PORT),
-        "--metrics-port", str(FD_METRICS_PORT),
+        sys.executable,
+        "-m",
+        "fastdeploy.entrypoints.openai.api_server",
+        "--model",
+        model_path,
+        "--port",
+        str(FD_API_PORT),
+        "--tensor-parallel-size",
+        "2",
+        "--engine-worker-queue-port",
+        str(FD_ENGINE_QUEUE_PORT),
+        "--metrics-port",
+        str(FD_METRICS_PORT),
         "--enable-mm",
-        "--max-model-len", "32768",
-        "--max-num-batched-tokens", "384",
-        "--max-num-seqs", "128",
-        "--limit-mm-per-prompt", limit_mm_str,
+        "--max-model-len",
+        "32768",
+        "--max-num-batched-tokens",
+        "384",
+        "--max-num-seqs",
+        "128",
+        "--limit-mm-per-prompt",
+        limit_mm_str,
         "--enable-chunked-prefill",
-        "--kv-cache-ratio", "0.71",
-        "--quantization", "wint4"
+        "--kv-cache-ratio",
+        "0.71",
+        "--quantization",
+        "wint4",
     ]
 
     # Start subprocess in new process group
@@ -107,13 +124,13 @@ def setup_and_run_server():
             cmd,
             stdout=logfile,
             stderr=subprocess.STDOUT,
-            start_new_session=True  # Enables killing full group via os.killpg
+            start_new_session=True,  # Enables killing full group via os.killpg
         )
 
     # Wait up to 300 seconds for API server to be ready
     for _ in range(300):
         if is_port_open("127.0.0.1", FD_API_PORT):
-            print("API server is up on port {}".format(FD_API_PORT))
+            print(f"API server is up on port {FD_API_PORT}")
             break
         time.sleep(1)
     else:
@@ -121,17 +138,17 @@ def setup_and_run_server():
         try:
             os.killpg(process.pid, signal.SIGTERM)
         except Exception as e:
-            print("Failed to kill process group: {}".format(e))
-        raise RuntimeError("API server did not start on port {}".format(FD_API_PORT))
+            print(f"Failed to kill process group: {e}")
+        raise RuntimeError(f"API server did not start on port {FD_API_PORT}")
 
     yield  # Run tests
 
     print("\n===== Post-test server cleanup... =====")
     try:
         os.killpg(process.pid, signal.SIGTERM)
-        print("API server (pid={}) terminated".format(process.pid))
+        print(f"API server (pid={process.pid}) terminated")
     except Exception as e:
-        print("Failed to terminate API server: {}".format(e))
+        print(f"Failed to terminate API server: {e}")
 
 
 @pytest.fixture(scope="session")
@@ -139,7 +156,7 @@ def api_url(request):
     """
     Returns the API endpoint URL for chat completions.
     """
-    return "http://0.0.0.0:{}/v1/chat/completions".format(FD_API_PORT)
+    return f"http://0.0.0.0:{FD_API_PORT}/v1/chat/completions"
 
 
 @pytest.fixture(scope="session")
@@ -147,7 +164,7 @@ def metrics_url(request):
     """
     Returns the metrics endpoint URL.
     """
-    return "http://0.0.0.0:{}/metrics".format(FD_METRICS_PORT)
+    return f"http://0.0.0.0:{FD_METRICS_PORT}/metrics"
 
 
 @pytest.fixture
@@ -166,14 +183,23 @@ def consistent_payload():
     """
     return {
         "messages": [
-            {"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0", "detail": "high"}},
-            {"type": "text", "text": "请描述图片内容"}
-            ]}
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
+                            "detail": "high",
+                        },
+                    },
+                    {"type": "text", "text": "请描述图片内容"},
+                ],
+            }
         ],
         "temperature": 0.8,
         "top_p": 0,  # fix top_p to reduce randomness
-        "seed": 13  # fixed random seed
+        "seed": 13,  # fixed random seed
     }
 
 
@@ -190,7 +216,7 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     result1 = resp1.json()
     content1 = result1["choices"][0]["message"]["content"]
     file_res_temp = "ernie-4_5-vl"
-    f_o = open(file_res_temp, 'a')
+    f_o = open(file_res_temp, "a")
     f_o.writelines(content1)
     f_o.close()
 
@@ -206,19 +232,22 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     # Verify that result is same as the base result
     assert content1 == content2
 
+
 # ==========================
 # OpenAI Client Chat Completion Test
 # ==========================
+
 
 @pytest.fixture
 def openai_client():
     ip = "0.0.0.0"
     service_http_port = str(FD_API_PORT)
     client = openai.Client(
-        base_url = "http://{}:{}/v1".format(ip, service_http_port),
-        api_key="EMPTY_API_KEY"
+        base_url=f"http://{ip}:{service_http_port}/v1",
+        api_key="EMPTY_API_KEY",
     )
     return client
+
 
 # Non-streaming test
 def test_non_streaming_chat(openai_client):
@@ -228,33 +257,32 @@ def test_non_streaming_chat(openai_client):
         messages=[
             {
                 "role": "system",
-                "content": "You are a helpful AI assistant."
+                "content": "You are a helpful AI assistant.",
             },  # system不是必需，可选
             {
-                "role":
-                "user",
-                "content": [{
-                    "type": "image_url",
-                    "image_url": {
-                        "url":
-                        "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
-                        "detail": "high"
-                    }
-                }, {
-                    "type": "text",
-                    "text": "请描述图片内容"
-                }]
-            }
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
+                            "detail": "high",
+                        },
+                    },
+                    {"type": "text", "text": "请描述图片内容"},
+                ],
+            },
         ],
         temperature=1,
         max_tokens=53,
         stream=False,
     )
 
-    assert hasattr(response, 'choices')
+    assert hasattr(response, "choices")
     assert len(response.choices) > 0
-    assert hasattr(response.choices[0], 'message')
-    assert hasattr(response.choices[0].message, 'content')
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "content")
+
 
 # Streaming test
 def test_streaming_chat(openai_client, capsys):
@@ -264,30 +292,25 @@ def test_streaming_chat(openai_client, capsys):
         messages=[
             {
                 "role": "system",
-                "content": "You are a helpful AI assistant."
+                "content": "You are a helpful AI assistant.",
             },  # system不是必需，可选
-            {
-                "role": "user",
-                "content": "List 3 countries and their capitals."
-            },
+            {"role": "user", "content": "List 3 countries and their capitals."},
             {
                 "role": "assistant",
-                "content": "China(Beijing), France(Paris), Australia(Canberra)."
+                "content": "China(Beijing), France(Paris), Australia(Canberra).",
             },
             {
-                "role":
-                "user",
-                "content": [{
-                    "type": "image_url",
-                    "image_url": {
-                        "url":
-                        "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
-                        "detail": "high"
-                    }
-                }, {
-                    "type": "text",
-                    "text": "请描述图片内容"
-                }]
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
+                            "detail": "high",
+                        },
+                    },
+                    {"type": "text", "text": "请描述图片内容"},
+                ],
             },
         ],
         temperature=1,
@@ -297,6 +320,6 @@ def test_streaming_chat(openai_client, capsys):
 
     output = []
     for chunk in response:
-        if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
+        if hasattr(chunk.choices[0], "delta") and hasattr(chunk.choices[0].delta, "content"):
             output.append(chunk.choices[0].delta.content)
     assert len(output) > 2

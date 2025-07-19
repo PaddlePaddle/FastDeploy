@@ -24,7 +24,7 @@ FastDeploy支持FP8、INT8、INT4、2-bit等多种量化推理精度，支持模
 
 ## 2. 模型支持列表
 
-| 模型名称 | 支持量化精度 | 
+| 模型名称 | 支持量化精度 |
 |---------|---------|
 | ERNIE-4.5-300B-A47B | WINT8, WINT4, Block_wise= FP8, MixQuant|
 
@@ -37,11 +37,10 @@ FastDeploy 按以下格式命名各种量化精度：
 ```
 
 部分示例如下：
- 
+
 - **W8A8C8**：W=weights，A=activations，C=CacheKV；8默认为INT8
 - **W8A8C16**：16默认为BF16，其它同上
 - **W4A16C16 / WInt4 / weight-only int4**：4默认为INT4
 - **WNF4A8C8**：NF4指4bit norm-float数值类型
 - **Wfp8Afp8**：权重和激活均为FP8精度
 - **W4Afp8**：权重为INT4, 激活为FP8
-

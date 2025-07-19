@@ -68,26 +68,26 @@ void SwapCache(const paddle::Tensor& cache_gpu, // gpu
     switch (cache_gpu.dtype()) {
         case paddle::DataType::BFLOAT16:
             return SwapCacheImpl<paddle::DataType::BFLOAT16>(
-                        cache_gpu, 
-                        cache_cpu_ptr, 
+                        cache_gpu,
+                        cache_cpu_ptr,
                         max_block_num_cpu,
-                        swap_block_ids_gpu, 
+                        swap_block_ids_gpu,
                         swap_block_ids_cpu,
                         mode);
         case paddle::DataType::FLOAT16:
             return SwapCacheImpl<paddle::DataType::FLOAT16>(
-                        cache_gpu, 
-                        cache_cpu_ptr, 
+                        cache_gpu,
+                        cache_cpu_ptr,
                         max_block_num_cpu,
-                        swap_block_ids_gpu, 
+                        swap_block_ids_gpu,
                         swap_block_ids_cpu,
                         mode);
         case paddle::DataType::UINT8:
             return SwapCacheImpl<paddle::DataType::UINT8>(
-                        cache_gpu, 
-                        cache_cpu_ptr, 
+                        cache_gpu,
+                        cache_cpu_ptr,
                         max_block_num_cpu,
-                        swap_block_ids_gpu, 
+                        swap_block_ids_gpu,
                         swap_block_ids_cpu,
                         mode);
         default:

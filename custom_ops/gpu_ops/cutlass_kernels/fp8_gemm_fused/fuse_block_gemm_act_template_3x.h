@@ -57,7 +57,7 @@ bool dispatch_fuse_block_gemm_c3x(GemmEpilogueAllParams params){
         hasbias,
         ElementD,
         void>;
-  
+
   constexpr int ScaleMsPerTile = size<0>(TileShape{});
   constexpr int ScaleGranularityM = size<0>(TileShape{}) / ScaleMsPerTile;
 
@@ -161,7 +161,7 @@ bool dispatch_fuse_block_gemm_c3x(GemmEpilogueAllParams params){
     arguments.scheduler.decomposition_mode = DecompositionMode::StreamK;
     arguments.scheduler.reduction_mode = ReductionMode::Nondeterministic;
   }
-  
+
 
   Gemm gemm_op;
 

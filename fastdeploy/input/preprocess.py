@@ -13,31 +13,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from typing import Any, Dict, Optional
 
+from fastdeploy.config import ErnieArchitectures
 from fastdeploy.engine.config import ModelConfig
 from fastdeploy.reasoning import ReasoningParserManager
-from fastdeploy.config import ErnieArchitectures
 
 
 class InputPreprocessor:
     """
-        Args:
-        model_name_or_path (str):
-            Model name or path to the pretrained model. If a model name is provided, it should be a
-            key in the Hugging Face Transformers' model registry (https://huggingface.co/models).
-            The model will be downloaded from the Hugging Face model hub if necessary.
-            If a path is provided, the model will be loaded from that path.
-        reasoning_parser (str, optional):
-            Reasoning parser type. Defaults to None.
-            Flag specifies the reasoning parser to use for extracting reasoning content from the model output
-        enable_mm (bool, optional):
-            Whether to use the multi-modal model processor. Defaults to False.
+    Args:
+    model_name_or_path (str):
+        Model name or path to the pretrained model. If a model name is provided, it should be a
+        key in the Hugging Face Transformers' model registry (https://huggingface.co/models).
+        The model will be downloaded from the Hugging Face model hub if necessary.
+        If a path is provided, the model will be loaded from that path.
+    reasoning_parser (str, optional):
+        Reasoning parser type. Defaults to None.
+        Flag specifies the reasoning parser to use for extracting reasoning content from the model output
+    enable_mm (bool, optional):
+        Whether to use the multi-modal model processor. Defaults to False.
 
-        Raises:
-            ValueError:
-                If the model name is not found in the Hugging Face Transformers' model registry and the path does not
-                exist.
+    Raises:
+        ValueError:
+            If the model name is not found in the Hugging Face Transformers' model registry and the path does not
+            exist.
     """
 
     def __init__(
@@ -68,30 +69,33 @@ class InputPreprocessor:
         """
         reasoning_parser_obj = None
         if self.reasoning_parser:
-            reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(
-                    self.reasoning_parser)
+            reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(self.reasoning_parser)
         architectures = ModelConfig(self.model_name_or_path).architectures
         if not self.enable_mm:
             if not ErnieArchitectures.contains_ernie_arch(architectures):
                 from fastdeploy.input.text_processor import DataProcessor
+
                 self.processor = DataProcessor(
-                    model_name_or_path=self.model_name_or_path, reasoning_parser_obj=reasoning_parser_obj)
-            else:
-                from fastdeploy.input.ernie_processor import ErnieProcessor
-                self.processor = ErnieProcessor(
-                    model_name_or_path=self.model_name_or_path, reasoning_parser_obj=reasoning_parser_obj)
-        else:
-            if not architectures.startswith(
-                    "Ernie4_5_VLMoeForConditionalGeneration"):
-                raise ValueError(
-                    f"Model {self.model_name_or_path} is not a valid Ernie4_5_VLMoe model."
+                    model_name_or_path=self.model_name_or_path,
+                    reasoning_parser_obj=reasoning_parser_obj,
                 )
             else:
-                from fastdeploy.input.ernie_vl_processor import \
-                    ErnieMoEVLProcessor
+                from fastdeploy.input.ernie_processor import ErnieProcessor
+
+                self.processor = ErnieProcessor(
+                    model_name_or_path=self.model_name_or_path,
+                    reasoning_parser_obj=reasoning_parser_obj,
+                )
+        else:
+            if not architectures.startswith("Ernie4_5_VLMoeForConditionalGeneration"):
+                raise ValueError(f"Model {self.model_name_or_path} is not a valid Ernie4_5_VLMoe model.")
+            else:
+                from fastdeploy.input.ernie_vl_processor import ErnieMoEVLProcessor
+
                 self.processor = ErnieMoEVLProcessor(
                     model_name_or_path=self.model_name_or_path,
                     limit_mm_per_prompt=self.limit_mm_per_prompt,
                     mm_processor_kwargs=self.mm_processor_kwargs,
-                    reasoning_parser_obj=reasoning_parser_obj)
+                    reasoning_parser_obj=reasoning_parser_obj,
+                )
         return self.processor

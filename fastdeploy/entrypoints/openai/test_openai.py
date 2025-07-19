@@ -17,7 +17,7 @@
 import openai
 
 ip = "0.0.0.0"
-service_http_port = "9908"    # 服务配置的
+service_http_port = "9908"  # 服务配置的
 
 client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
 
@@ -37,12 +37,12 @@ print("\n")
 response = client.completions.create(
     model="default",
     prompt="Hello, how are you?",
-  max_tokens=100,
-  stream=True,
+    max_tokens=100,
+    stream=True,
 )
 
 for chunk in response:
-    print(chunk.choices[0].text, end='')
+    print(chunk.choices[0].text, end="")
 print("\n")
 
 # Chat completion
@@ -76,5 +76,5 @@ response = client.chat.completions.create(
 
 for chunk in response:
     if chunk.choices[0].delta is not None:
-        print(chunk.choices[0].delta, end='')
+        print(chunk.choices[0].delta, end="")
         print("\n")

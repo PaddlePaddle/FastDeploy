@@ -54,7 +54,7 @@ public:
     virtual size_t getWorkspaceSize(int const m, int const n, int const k) = 0;
 
     virtual std::vector<cutlass_extensions::CutlassGemmConfig> getConfigs(int k) const = 0;
- 
+
 protected:
     static constexpr int SPLIT_K_LIMIT = 7;
     static constexpr int MIN_M_TILE = 16;

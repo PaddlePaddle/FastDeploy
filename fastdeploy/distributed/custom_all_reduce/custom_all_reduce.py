@@ -13,25 +13,25 @@
 # limitations under the License.
 
 
-from contextlib import contextmanager
 import atexit
 import ctypes
+from contextlib import contextmanager
 from typing import List, Optional
 
 import paddle
 import paddle.distributed as dist
 from paddle.distributed.communication.group import Group
+
+from fastdeploy.distributed.custom_all_reduce import cuda_wrapper
 from fastdeploy.model_executor.ops.gpu import (
     all_reduce,
     dispose,
+    get_graph_buffer_ipc_meta,
     init_custom_all_reduce,
     meta_size,
     register_buffer,
-    get_graph_buffer_ipc_meta,
     register_graph_buffers,
 )
-
-from fastdeploy.distributed.custom_all_reduce import cuda_wrapper
 
 try:
     meta_size()
@@ -47,7 +47,7 @@ class CustomAllreduce:
     _SUPPORTED_WORLD_SIZES = [2, 4, 6, 8]
 
     # max_size: max supported allreduce size
-    def __init__(self, group: Group, max_size: int=8192 * 1024) -> None:
+    def __init__(self, group: Group, max_size: int = 8192 * 1024) -> None:
         """
         Args:
             device: the device to bind the CustomAllreduce to. If None,
@@ -147,7 +147,12 @@ class CustomAllreduce:
             return inp_size < self.max_size
         return False
 
-    def all_reduce(self, inp: paddle.Tensor, out: paddle.Tensor = None, registered: bool = False):
+    def all_reduce(
+        self,
+        inp: paddle.Tensor,
+        out: paddle.Tensor = None,
+        registered: bool = False,
+    ):
         """Performs an out-of-place all reduce.
 
         If registered is True, this assumes inp's pointer is already
@@ -165,7 +170,7 @@ class CustomAllreduce:
     @contextmanager
     def capture(self):
         """
-        The main responsibility of this context manager is the 
+        The main responsibility of this context manager is the
         `register_graph_buffers` call at the end of the context.
         It records all the buffer addresses used in the CUDA graph.
         """
@@ -179,22 +184,18 @@ class CustomAllreduce:
 
     def register_graph_buffers(self):
         handle, offset = get_graph_buffer_ipc_meta(self._ptr)
-        all_data = [[None, None]
-                    for _ in range(dist.get_world_size(group=self.group))]
+        all_data = [[None, None] for _ in range(dist.get_world_size(group=self.group))]
         all_data[self.rank] = [handle, offset]
 
         ranks = sorted(dist.get_process_group_ranks(group=self.group))
         for i, rank in enumerate(ranks):
-            dist.broadcast_object_list(all_data[i],
-                                       src=rank,
-                                       group=self.group,
-                                       device="cpu")
+            dist.broadcast_object_list(all_data[i], src=rank, group=self.group, device="cpu")
 
         # Unpack list of tuples to tuple of lists.
         handles = [d[0] for d in all_data]  # type: ignore
         offsets = [d[1] for d in all_data]  # type: ignore
         register_graph_buffers(self._ptr, handles, offsets)
-    
+
     def custom_all_reduce(self, input: paddle.Tensor) -> Optional[paddle.Tensor]:
         """The main allreduce API that provides support for cuda graph."""
         # When custom allreduce is disabled, this will be None.

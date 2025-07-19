@@ -16,7 +16,7 @@
 
 # from fastdeploy.config import FDConfig
 
-__all__ = ['get_guided_backend', 'schema_checker']
+__all__ = ["get_guided_backend", "schema_checker"]
 
 
 def get_guided_backend(
@@ -37,8 +37,10 @@ def get_guided_backend(
         ValueError: If the specified backend is not supported
     """
     if fd_config.parallel_config.guided_decoding_backend.lower() == "xgrammar":
-        from fastdeploy.model_executor.guided_decoding.xgrammar_backend import \
-            XGrammarBackend
+        from fastdeploy.model_executor.guided_decoding.xgrammar_backend import (
+            XGrammarBackend,
+        )
+
         return XGrammarBackend(
             fd_config=fd_config,
             **kwargs,
@@ -46,7 +48,8 @@ def get_guided_backend(
     else:
         raise ValueError(
             f"Get unsupported backend {fd_config.parallel_config.guided_decoding_backend},"
-            f" please check your configuration.")
+            f" please check your configuration."
+        )
 
 
 def schema_checker(backend_name: str, **kwargs):
@@ -64,10 +67,10 @@ def schema_checker(backend_name: str, **kwargs):
         ValueError: If the specified backend is not supported
     """
     if backend_name.lower() == "xgrammar":
-        from fastdeploy.model_executor.guided_decoding.xgrammar_backend import \
-            XGrammarChecker
+        from fastdeploy.model_executor.guided_decoding.xgrammar_backend import (
+            XGrammarChecker,
+        )
+
         return XGrammarChecker(**kwargs)
     else:
-        raise ValueError(
-            f"Get unsupported backend {backend_name}, please check your configuration."
-        )
+        raise ValueError(f"Get unsupported backend {backend_name}, please check your configuration.")
