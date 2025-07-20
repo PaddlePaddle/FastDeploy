@@ -323,3 +323,101 @@ def test_streaming_chat(openai_client, capsys):
         if hasattr(chunk.choices[0], "delta") and hasattr(chunk.choices[0].delta, "content"):
             output.append(chunk.choices[0].delta.content)
     assert len(output) > 2
+
+
+
+# ==========================
+# OpenAI Client additional chat/completions test
+# ==========================
+
+def test_non_streaming_chat_with_return_token_ids(openai_client, capsys):
+    """
+    Test return_token_ids option in non-streaming chat functionality with the local service
+    """
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a helpful AI assistant."
+            },  # system不是必需，可选
+            {
+                "role":
+                "user",
+                "content": [{
+                    "type": "image_url",
+                    "image_url": {
+                        "url":
+                        "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
+                        "detail": "high"
+                    }
+                }, {
+                    "type": "text",
+                    "text": "请描述图片内容"
+                }]
+            }
+        ],
+        temperature=1,
+        max_tokens=53,
+        extra_body={"return_token_ids": True},
+        stream=False,
+    )
+
+    assert hasattr(response, 'choices')
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], 'message')
+    assert hasattr(response.choices[0].message, 'prompt_token_ids')
+    assert isinstance(response.choices[0].message.prompt_token_ids, list)
+    assert hasattr(response.choices[0].message, 'completion_token_ids')
+    assert isinstance(response.choices[0].message.completion_token_ids, list)
+
+
+
+def test_streaming_chat_with_return_token_ids(openai_client, capsys):
+    """
+    Test return_token_ids option in streaming chat functionality with the local service
+    """
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a helpful AI assistant."
+            },  # system不是必需，可选
+            {
+                "role":
+                "user",
+                "content": [{
+                    "type": "image_url",
+                    "image_url": {
+                        "url":
+                        "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
+                        "detail": "high"
+                    }
+                }, {
+                    "type": "text",
+                    "text": "请描述图片内容"
+                }]
+            }
+        ],
+        temperature=1,
+        max_tokens=53,
+        extra_body={"return_token_ids": True},
+        stream=True,
+    )
+
+    is_first_chunk = True
+    for chunk in response:
+        if is_first_chunk:
+            is_first_chunk = False
+            assert hasattr(chunk, 'choices')
+            assert len(chunk.choices) > 0
+            assert hasattr(chunk.choices[0], 'delta')
+            assert hasattr(chunk.choices[0].delta, 'prompt_token_ids')
+            assert isinstance(chunk.choices[0].delta.prompt_token_ids, list)
+        else:
+            assert hasattr(chunk, 'choices')
+            assert len(chunk.choices) > 0
+            assert hasattr(chunk.choices[0], 'delta')
+            assert hasattr(chunk.choices[0].delta, 'completion_token_ids')
+            assert isinstance(chunk.choices[0].delta.completion_token_ids, list)

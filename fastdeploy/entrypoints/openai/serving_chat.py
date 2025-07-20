@@ -191,8 +191,8 @@ class OpenAIServingChat:
                                     tool_calls=None,
                                 ),
                             )
-                            if request.metadata is not None and request.metadata.get("training", False):
-                                choice.delta.token_ids = prompt_token_ids
+                            if request.return_token_ids:
+                                choice.delta.prompt_token_ids = list(prompt_token_ids)
                             chunk = ChatCompletionStreamResponse(
                                 id=request_id,
                                 object=chunk_object_type,
@@ -260,8 +260,8 @@ class OpenAIServingChat:
                         if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
                             choice.finish_reason = "recover_stop"
 
-                    if request.metadata is not None and request.metadata.get("training", False) and delta_text != "":
-                        choice.delta.token_ids = output["token_ids"]
+                    if request.return_token_ids:
+                        choice.delta.completion_token_ids = list(output["token_ids"])
                     if include_continuous_usage:
                         chunk.usage = UsageInfo(
                             prompt_tokens=num_prompt_tokens,
@@ -388,7 +388,8 @@ class OpenAIServingChat:
             content=output["text"],
             reasoning_content=output.get("reasoning_content"),
             tool_calls=output.get("tool_call_content"),
-            token_ids=output.get("token_ids"),
+            prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
+            completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
         )
         logprobs_full_res = None
         if logprob_contents:

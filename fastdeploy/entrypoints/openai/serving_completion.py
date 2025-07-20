@@ -250,18 +250,16 @@ class OpenAIServingCompletion:
                         raise ValueError("{}".format(res["error_msg"]))
 
                     if first_iteration[idx]:
-                        if request.suffix is not None and request.suffix.get("training", False):
+                        if request.return_token_ids:
                             chunk = CompletionStreamResponse(
                                 id=request_id,
                                 created=created_time,
                                 model=model_name,
-                                choices=[
-                                    CompletionResponseStreamChoice(
-                                        index=idx,
-                                        text="",
-                                        token_ids=list(prompt_batched_token_ids[idx]),
-                                    )
-                                ],
+                                choices=[CompletionResponseStreamChoice(
+                                    index=idx,
+                                    text="",
+                                    prompt_token_ids=list(prompt_batched_token_ids[idx])
+                                )]
                             )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         first_iteration[idx] = False
@@ -275,16 +273,14 @@ class OpenAIServingCompletion:
 
                     output = res["outputs"]
 
-                    choices.append(
-                        CompletionResponseStreamChoice(
-                            index=idx,
-                            text=output["text"],
-                            token_ids=output.get("token_ids"),
-                            tool_calls=output.get("tool_call_content"),
-                            reasoning_content=output.get("reasoning_content"),
-                            arrival_time=arrival_time,
-                        )
-                    )
+                    choices.append(CompletionResponseStreamChoice(
+                        index=idx,
+                        text=output["text"],
+                        completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
+                        tool_calls=output.get("tool_call_content"),
+                        reasoning_content=output.get("reasoning_content"),
+                        arrival_time=arrival_time
+                    ))
                     if res["finished"]:
                         if request.max_tokens is None or output_tokens[idx] + 1 != request.max_tokens:
                             chunk.choices[0].finish_reason = "stop"
@@ -371,7 +367,9 @@ class OpenAIServingCompletion:
                 token_ids=token_ids,
                 index=len(choices),
                 text=output_text,
-                reasoning_content=output.get("reasoning_content"),
+                prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
+                completion_token_ids=output["token_ids"] if request.return_token_ids else None,
+                reasoning_content=output.get('reasoning_content'),
                 tool_calls=output.get("tool_call_content"),
                 logprobs=None,
                 finish_reason=None,

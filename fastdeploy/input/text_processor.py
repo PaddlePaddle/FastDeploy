@@ -231,7 +231,7 @@ class DataProcessor(BaseDataProcessor):
 
         if request.prompt_token_ids is None or len(request.prompt_token_ids) == 0:
             if request.prompt is not None:
-                request.prompt_token_ids = self.text2ids(request.prompt, max_model_len, request.raw_request)
+                request.prompt_token_ids = self.text2ids(request.prompt, max_model_len)
             elif request.messages is not None:
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
@@ -275,11 +275,10 @@ class DataProcessor(BaseDataProcessor):
 
         data_processor_logger.info(f"Processing request {request}")
         # 处理prompt_token_ids
-        if not request.get("prompt_token_ids"):
-            if "prompt" in request:
-                raw_request = request.get("raw_request", True)
-                request["prompt_token_ids"] = self.text2ids(request["prompt"], max_model_len, raw_request).tolist()
-            elif "messages" in request:
+        if not request.get('prompt_token_ids'):
+            if 'prompt' in request:
+                request['prompt_token_ids'] = self.text2ids(request['prompt'], max_model_len).tolist()
+            elif 'messages' in request:
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
                 request["prompt_token_ids"] = self.messages2ids(request)
@@ -416,7 +415,7 @@ class DataProcessor(BaseDataProcessor):
                 **kwargs,
             )
 
-    def text2ids(self, text, max_model_len, raw_request=True):
+    def text2ids(self, text, max_model_len):
         """
         text to token ids
 
