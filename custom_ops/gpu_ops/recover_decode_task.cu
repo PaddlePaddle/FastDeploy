@@ -29,7 +29,7 @@ __global__ void recover_decode_task(bool *stop_flags,
         if(is_block_step[thread_idx] == true) {
             int *block_table_now = block_tables + thread_idx * block_num_per_seq;
             if (block_table_now[step_seq_lens_decoder[thread_idx] / block_size] != -1) {
-                    // 可以重新被调度解码
+                    // can be recovered for decoding
                     is_block_step[thread_idx] = false;
                     seq_lens_this_time[thread_idx]= 1;
                     stop_flags[thread_idx] = false;

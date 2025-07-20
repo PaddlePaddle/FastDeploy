@@ -48,36 +48,32 @@ __global__ void update_inputs_kernel_v1(bool *not_need_stop,
         }
     }
     if (thread_idx < bsz) {
-        if(stop_flag_now) { 
-            seq_lens_this_time[thread_idx] = 0; // 下一轮不推
+        if(stop_flag_now) {
+            seq_lens_this_time[thread_idx] = 0; // stop at next step
             seq_lens_decoder[thread_idx] = 0;
             seq_lens_encoder[thread_idx] = 0;
         } else {
             if (seq_lens_this_time[thread_idx] + seq_lens_decoder[thread_idx] >= prompt_lens[thread_idx]) {
-                // 进入解码阶段
+                // decoding
                 seq_lens_decoder[thread_idx] += seq_lens_this_time[thread_idx];
-                seq_lens_this_time[thread_idx] = 1; 
+                seq_lens_this_time[thread_idx] = 1;
                 seq_lens_encoder[thread_idx] = 0;
                 int64_t *input_ids_now = input_ids + thread_idx * input_ids_stride;
                 input_ids_now[0] = next_tokens[thread_idx];
 
-                // 调度判断
+                // to judge whether block is not enough
                 int *block_table_now = block_tables + thread_idx * block_num_per_seq;
-                // printf("judge block table thread_idx %d: seq_lens_decoder %d block_size %d block table index: %d \n", thread_idx, seq_lens_decoder[thread_idx], block_size, seq_lens_decoder[thread_idx] / block_size);
                 if (seq_lens_this_time[thread_idx] != 0 && block_table_now[seq_lens_decoder[thread_idx] / block_size] == -1) {
-                    // 需要服务层做调度
-                    // printf("set block step %d \n", thread_idx);
+                    // should be scheduled by server
                     is_block_step[thread_idx] = true;
                     seq_lens_this_time[thread_idx]= 0;
                     stop_flags[thread_idx] = true;
                     step_seq_lens_decoder[thread_idx] = seq_lens_decoder[thread_idx];
                     seq_lens_decoder[thread_idx] = 0;
                     stop_flag_now_int = 1;
-                    // printf("set block step done %d \n", thread_idx);
                 }
             } else
             {
-                // printf("enter prefill phase", thread_idx);
                 stop_flags[thread_idx] = true;
                 seq_lens_this_time[thread_idx] = 0;
                 seq_lens_decoder[thread_idx] = 0;
@@ -88,13 +84,9 @@ __global__ void update_inputs_kernel_v1(bool *not_need_stop,
         }
     }
     __syncthreads();
-    // printf("Block reduce %d \n", thread_idx);
     int64_t stop_sum = BlockReduce(temp_storage).Sum(stop_flag_now_int);
-    // printf("Block reduce Done %d \n", thread_idx);
     if (thread_idx == 0) {
-        // printf("Set not_need_stop %d \n", thread_idx);
         not_need_stop[0] = stop_sum < stop_nums[0];
-        // printf("Set not_need_stop done %d \n", thread_idx);
     }
 }
 
