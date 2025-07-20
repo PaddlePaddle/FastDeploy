@@ -171,6 +171,7 @@ class CacheConfig:
         Overrides profiled num_gpu_blocks if provided.
         kv_cache_ratio (float): Ratio for calculating the maximum block number.
         enc_dec_block_num (int): Number of encoder-decoder blocks.
+        prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding.
         enable_prefix_caching (bool): Flag to enable prefix caching.
     """
 
@@ -183,6 +184,7 @@ class CacheConfig:
         swap_space: Optional[int] = None,
         kv_cache_ratio: float = 0.75,
         enc_dec_block_num: int = 2,
+        prealloc_dec_block_slot_num_threshold: int = 5,
         tensor_parallel_size: int = 1,
         enable_prefix_caching=False,
         enable_ssd_cache=False,
@@ -204,6 +206,7 @@ class CacheConfig:
             num_cpu_blocks (Optional[int]): Number of CPU blocks.
             kv_cache_ratio (float): Ratio for max block calculation.
             enc_dec_block_num (int): Number of encoder-decoder blocks.
+            prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding, used when ENABLE_V1_KVCACHE_SCHEDULER=1.
             enable_prefix_caching (bool): Enable prefix caching.
         """
         self.block_size = block_size
@@ -211,6 +214,7 @@ class CacheConfig:
         self.num_gpu_blocks_override = num_gpu_blocks_override
         self.kv_cache_ratio = kv_cache_ratio
         self.enc_dec_block_num = enc_dec_block_num
+        self.prealloc_dec_block_slot_num_threshold = prealloc_dec_block_slot_num_threshold
         self.cache_dtype = cache_dtype
         if hasattr(model_cfg, "quantization_config"):
             self.cache_dtype = model_cfg.quantization_config.get("kv_cache_quant_type", cache_dtype)
