@@ -218,9 +218,6 @@ class LLMEngine:
         # Start TokenProcessor thread
         self.token_processor.run()
 
-        if self.do_profile:
-            self._stop_profile()
-
         if self.cfg.splitwise_role != "mixed":
             # 单机逻辑
             self.engine_worker_queue.available_prefill_instances.put(1)
