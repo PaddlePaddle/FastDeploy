@@ -30,8 +30,7 @@ current_file = Path(__file__).resolve()
 base_dir = current_file.parent
 
 
-def build_plugin(CLANG_PATH, XRE_INC_DIR, XRE_LIB_DIR, XDNN_INC_DIR,
-                 XDNN_LIB_DIR):
+def build_plugin(CLANG_PATH, XRE_INC_DIR, XRE_LIB_DIR, XDNN_INC_DIR, XDNN_LIB_DIR):
     """
     build xpu plugin
     """
@@ -49,7 +48,10 @@ def build_plugin(CLANG_PATH, XRE_INC_DIR, XRE_LIB_DIR, XDNN_INC_DIR,
 
     # 删除指定目录
     dirs_to_remove = [
-        "dist", "fastdeploy_ops.egg-info", "build", "plugin/build"
+        "dist",
+        "fastdeploy_ops.egg-info",
+        "build",
+        "plugin/build",
     ]
     for dir_name in dirs_to_remove:
         if os.path.exists(dir_name):
@@ -58,8 +60,7 @@ def build_plugin(CLANG_PATH, XRE_INC_DIR, XRE_LIB_DIR, XDNN_INC_DIR,
 
     # 在 plugin 目录中执行构建脚本
     plugin_dir = "plugin"
-    build_script = os.path.join(current_working_directory, plugin_dir,
-                                "build.sh")
+    build_script = os.path.join(current_working_directory, plugin_dir, "build.sh")
 
     print("build_script: ", build_script)
 
@@ -74,14 +75,16 @@ def build_plugin(CLANG_PATH, XRE_INC_DIR, XRE_LIB_DIR, XDNN_INC_DIR,
     # 执行构建脚本
     try:
         print("Running build script...")
-        subprocess.run([build_script],
-                       check=True,
-                       cwd=os.path.join(current_working_directory, plugin_dir))
+        subprocess.run(
+            [build_script],
+            check=True,
+            cwd=os.path.join(current_working_directory, plugin_dir),
+        )
         print("Build completed successfully.")
     except subprocess.CalledProcessError as e:
         print(f"Build failed with error: {e}")
     except Exception as e:
-        print(f"Unexpected error: {str(e)}")
+        print(f"Unexpected error: {e!s}")
 
 
 def xpu_setup_ops():
@@ -124,17 +127,14 @@ def xpu_setup_ops():
     XVLLM_PATH = os.getenv("XVLLM_PATH")
     assert XVLLM_PATH is not None, "XVLLM_PATH is not set."
     XVLLM_KERNEL_INC_PATH = os.path.join(XVLLM_PATH, "infer_ops", "include")
-    XVLLM_KERNEL_LIB_PATH = os.path.join(XVLLM_PATH, "infer_ops", "so",
-                                         "libapiinfer.so")
+    XVLLM_KERNEL_LIB_PATH = os.path.join(XVLLM_PATH, "infer_ops", "so", "libapiinfer.so")
     XVLLM_KERNEL_LIB_DIR = os.path.join(XVLLM_PATH, "infer_ops", "so")
     XVLLM_OP_INC_PATH = os.path.join(XVLLM_PATH, "xft_blocks", "include")
-    XVLLM_OP_LIB_PATH = os.path.join(XVLLM_PATH, "xft_blocks", "so",
-                                     "libxft_blocks.so")
+    XVLLM_OP_LIB_PATH = os.path.join(XVLLM_PATH, "xft_blocks", "so", "libxft_blocks.so")
     XVLLM_OP_LIB_DIR = os.path.join(XVLLM_PATH, "xft_blocks", "so")
 
     # build plugin
-    build_plugin(CLANG_PATH, XRE_INC_PATH, XRE_LIB_DIR, XDNN_INC_PATH,
-                 XDNN_LIB_DIR)
+    build_plugin(CLANG_PATH, XRE_INC_PATH, XRE_LIB_DIR, XDNN_INC_PATH, XDNN_LIB_DIR)
 
     ops = [
         # custom ops
@@ -152,7 +152,6 @@ def xpu_setup_ops():
         "./ops/block_attn.cc",
         "./ops/moe_layer.cc",
         "./ops/weight_quantize_xpu.cc",
-
         # device manage ops
         "./ops/device/get_context_gm_max_mem_demand.cc",
         "./ops/device/get_free_global_memory.cc",

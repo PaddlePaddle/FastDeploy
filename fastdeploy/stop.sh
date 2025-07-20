@@ -18,4 +18,3 @@ for pid in $api_server_pids; do
     done
     echo 'end uvicorn multi workers'
 done
-

@@ -23,7 +23,9 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 import paddle
 
 from fastdeploy.model_executor.layers.attention.ops import (
-    init_signal_layerwise, open_shm_and_get_meta_signal)
+    init_signal_layerwise,
+    open_shm_and_get_meta_signal,
+)
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -31,7 +33,9 @@ if TYPE_CHECKING:
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
-    AttentionBackend, AttentionMetadata)
+    AttentionBackend,
+    AttentionMetadata,
+)
 
 
 @dataclass
@@ -39,6 +43,7 @@ class XPUAttentionMetadata(AttentionMetadata):
     """
     XPUAttentionMetadata
     """
+
     max_len_kv: paddle.Tensor = None
     set_max_lengths: int = -1
     encoder_batch_ids: paddle.Tensor = None
@@ -71,8 +76,13 @@ class XPUAttentionBackend(AttentionBackend):
     XPUAttentionBackend backend implementation.
     """
 
-    def __init__(self, fd_config: FDConfig, kv_num_heads: int, num_heads: int,
-                 head_dim: int):
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        kv_num_heads: int,
+        num_heads: int,
+        head_dim: int,
+    ):
         """
         XPUAttentionBackend __init__
         """
@@ -81,9 +91,9 @@ class XPUAttentionBackend(AttentionBackend):
         # TODO(gongshaotian): Use fd_config parameters in the correct location
         self.block_size: int = fd_config.parallel_config.block_size
         self.max_seq_len: int = fd_config.parallel_config.max_model_len
-        self.rope_theta: float = (10000.0
-                                  if fd_config.model_config.rope_theta is None
-                                  else fd_config.model_config.rope_theta)
+        self.rope_theta: float = (
+            10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
+        )
         self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False)
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
         # self.speculate_method = fd_config.parallel_config.speculate_method
@@ -98,8 +108,7 @@ class XPUAttentionBackend(AttentionBackend):
         self.num_layers: int = fd_config.model_config.num_hidden_layers
 
         # pd_disaggregation
-        self.use_pd_disaggregation: int = int(
-            os.getenv("FLAGS_use_pd_disaggregation", 0))
+        self.use_pd_disaggregation: int = int(os.getenv("FLAGS_use_pd_disaggregation", 0))
         self.start_layer_index: int = fd_config.model_config.start_layer_index
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
@@ -124,8 +133,7 @@ class XPUAttentionBackend(AttentionBackend):
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
         if self.use_pd_disaggregation:
-            metadata.kv_signal_metadata = open_shm_and_get_meta_signal(
-                self.rank, self.keep_pd_step_flag)
+            metadata.kv_signal_metadata = open_shm_and_get_meta_signal(self.rank, self.keep_pd_step_flag)
         self.attention_metadata: AttentionMetadata = metadata
 
     def get_attntion_meta(self) -> AttentionMetadata:
@@ -139,8 +147,12 @@ class XPUAttentionBackend(AttentionBackend):
         """
         Caculate kv cache shape
         """
-        return (max_num_blocks, self.kv_num_heads, self.block_size,
-                self.head_dim)
+        return (
+            max_num_blocks,
+            self.kv_num_heads,
+            self.block_size,
+            self.head_dim,
+        )
 
     def forward_mixed(
         self,
@@ -159,15 +171,16 @@ class XPUAttentionBackend(AttentionBackend):
         metadata = self.attention_metadata
 
         if self.use_pd_disaggregation:
-            metadata.kv_signal_data_list[
-                layer.layer_id] = init_signal_layerwise(
-                    metadata.kv_signal_metadata,
-                    layer.layer_id + self.start_layer_index)
+            metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
+                metadata.kv_signal_metadata,
+                layer.layer_id + self.start_layer_index,
+            )
 
         k_quant_scale = getattr(layer, "cache_k_scale", None)
         v_quant_scale = getattr(layer, "cache_v_scale", None)
 
         from fastdeploy.model_executor.ops.xpu import block_attn
+
         res = block_attn(
             qkv,
             forward_meta.caches[2 * layer.layer_id],

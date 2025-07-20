@@ -360,10 +360,10 @@ __launch_bounds__(TPB) __global__ void moe_softmax_top_k_fused(const T* input,
     normalizing_factor = 1.f / Z;
   }
   __syncthreads();
-   
+
   T val = T(threadDataExp * normalizing_factor);
 
-  // top_k 
+  // top_k
   using cub_kvp = cub::KeyValuePair<int, T>;
   using BlockReduceP = cub::BlockReduce<cub_kvp, TPB>;
   __shared__ typename BlockReduceP::TempStorage tmpStorageP;
@@ -374,10 +374,10 @@ __launch_bounds__(TPB) __global__ void moe_softmax_top_k_fused(const T* input,
   for (int k_idx = 0; k_idx < k; ++k_idx) {
     thread_kvp.key = 0;
     thread_kvp.value = T(-1.f);  // This is OK because inputs are probabilities
-    
+
     if (threadIdx.x < num_experts) {
       cub_kvp inp_kvp;
-      int expert = threadIdx.x; 
+      int expert = threadIdx.x;
       inp_kvp.key = expert;
       inp_kvp.value = bias ? val + bias[expert] : val;
 
@@ -518,12 +518,12 @@ __launch_bounds__(TPB) __global__ void moe_softmax_top_k_normed_fused(const T* i
   if (threadIdx.x == 0) {
     normalizing_factor = 1.f / Z;
   }
- 
+
   __syncthreads();
-   
+
   T val = T(threadDataExp * normalizing_factor);
 
-  // top_k 
+  // top_k
   using cub_kvp = cub::KeyValuePair<int, T>;
   using BlockReduceP = cub::BlockReduce<cub_kvp, TPB>;
   __shared__ typename BlockReduceP::TempStorage tmpStorageP;
@@ -541,7 +541,7 @@ __launch_bounds__(TPB) __global__ void moe_softmax_top_k_normed_fused(const T* i
 
     if (threadIdx.x < num_experts) {
       cub_kvp inp_kvp;
-      int expert = threadIdx.x; 
+      int expert = threadIdx.x;
       inp_kvp.key = expert;
       inp_kvp.value = bias ? val + bias[expert] : val;
 
@@ -1065,7 +1065,7 @@ __global__ void initialize_moe_routing_kernel(
     const T* unpermuted_input,
     OutT* permuted_output,
     const int* expanded_dest_row_to_expanded_source_row,
-    const int *expert_idx_per_token, 
+    const int *expert_idx_per_token,
     const float *w4a8_in_scale,
     int* expanded_source_row_to_expanded_dest_row,
     const int64_t num_rows,
@@ -1088,7 +1088,7 @@ __global__ void initialize_moe_routing_kernel(
     expanded_source_row_to_expanded_dest_row[expanded_source_row] =
         expanded_dest_row;
   }
-  
+
   if (expanded_dest_row < active_rows) {
 
     const int expert_idx = expert_idx_per_token[expanded_dest_row];
@@ -1130,7 +1130,7 @@ static void run(
     const T* unpermuted_input,
     OutT* permuted_output,
     const int* expanded_dest_row_to_expanded_source_row,
-    const int *expert_idx_per_token, 
+    const int *expert_idx_per_token,
     const float *w4a8_in_scale,
     int* expanded_source_row_to_expanded_dest_row,
     const int64_t num_rows,

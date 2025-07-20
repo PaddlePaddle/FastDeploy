@@ -25,6 +25,7 @@ class CUDAPlatform(Platform):
     """
     cuda platform class
     """
+
     device_name = "gpu"
 
     @classmethod
@@ -39,7 +40,8 @@ class CUDAPlatform(Platform):
             logger.warning(
                 "You are using GPU version PaddlePaddle, but there is no GPU "
                 "detected on your machine. Maybe CUDA devices is not set properly."
-                f"\n Original Error is {e}")
+                f"\n Original Error is {e}"
+            )
             return False
 
     @classmethod
@@ -49,24 +51,16 @@ class CUDAPlatform(Platform):
         """
         if selected_backend == _Backend.NATIVE_ATTN:
             logger.info("Using NATIVE ATTN backend.")
-            return (
-                "fastdeploy.model_executor.layers.attention.PaddleNativeAttnBackend"
-            )
+            return "fastdeploy.model_executor.layers.attention.PaddleNativeAttnBackend"
         elif selected_backend == _Backend.APPEND_ATTN:
             logger.info("Using APPEND ATTN backend.")
-            return (
-                "fastdeploy.model_executor.layers.attention.AppendAttentionBackend"
-            )
+            return "fastdeploy.model_executor.layers.attention.AppendAttentionBackend"
         elif selected_backend == _Backend.MLA_ATTN:
             logger.info("Using MLA ATTN backend.")
-            return (
-                "fastdeploy.model_executor.layers.attention.MLAAttentionBackend"
-            )
+            return "fastdeploy.model_executor.layers.attention.MLAAttentionBackend"
         elif selected_backend == _Backend.FLASH_ATTN:
             logger.info("Using FLASH ATTN backend.")
-            return (
-                "fastdeploy.model_executor.layers.attention.FlashAttentionBackend"
-            )
+            return "fastdeploy.model_executor.layers.attention.FlashAttentionBackend"
         else:
             raise ValueError(
                 "Invalid attention backend you specified.\n"

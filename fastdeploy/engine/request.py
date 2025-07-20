@@ -29,34 +29,35 @@ from fastdeploy.worker.output import LogprobsLists
 
 @dataclass
 class Request:
-
-    def __init__(self,
-                 request_id: str,
-                 prompt: Optional[Union[str, list[str]]],
-                 prompt_token_ids: Optional[list[int]],
-                 prompt_token_ids_len: Optional[int],
-                 messages: Optional[list[list[dict[str, Any]]]],
-                 history: Optional[list[list[str]]],
-                 tools: Optional[list[Dict]],
-                 system: Optional[Union[str, list[str]]],
-                 sampling_params: SamplingParams,
-                 eos_token_ids: Optional[list[int]],
-                 arrival_time: float,
-                 preprocess_start_time: Optional[float] = None,
-                 preprocess_end_time: Optional[float] = None,
-                 multimodal_inputs: Optional[dict] = None,
-                 multimodal_data: Optional[dict] = None,
-                 raw_request: bool = True,
-                 disaggregate_info: Optional[dict] = None,
-                 draft_token_ids: Optional[list[int]] = None,
-                 guided_json: Optional[Any] = None,
-                 guided_regex: Optional[Any] = None,
-                 guided_choice: Optional[Any] = None,
-                 guided_grammar: Optional[Any] = None,
-                 structural_tag: Optional[Any] = None,
-                 guided_json_object: Optional[bool] = None,
-                 enable_thinking: Optional[bool] = True,
-                 trace_carrier: dict = dict()) -> None:
+    def __init__(
+        self,
+        request_id: str,
+        prompt: Optional[Union[str, list[str]]],
+        prompt_token_ids: Optional[list[int]],
+        prompt_token_ids_len: Optional[int],
+        messages: Optional[list[list[dict[str, Any]]]],
+        history: Optional[list[list[str]]],
+        tools: Optional[list[Dict]],
+        system: Optional[Union[str, list[str]]],
+        sampling_params: SamplingParams,
+        eos_token_ids: Optional[list[int]],
+        arrival_time: float,
+        preprocess_start_time: Optional[float] = None,
+        preprocess_end_time: Optional[float] = None,
+        multimodal_inputs: Optional[dict] = None,
+        multimodal_data: Optional[dict] = None,
+        raw_request: bool = True,
+        disaggregate_info: Optional[dict] = None,
+        draft_token_ids: Optional[list[int]] = None,
+        guided_json: Optional[Any] = None,
+        guided_regex: Optional[Any] = None,
+        guided_choice: Optional[Any] = None,
+        guided_grammar: Optional[Any] = None,
+        structural_tag: Optional[Any] = None,
+        guided_json_object: Optional[bool] = None,
+        enable_thinking: Optional[bool] = True,
+        trace_carrier: dict = dict(),
+    ) -> None:
         self.request_id = request_id
         self.prompt = prompt
         self.prompt_token_ids = prompt_token_ids
@@ -98,35 +99,37 @@ class Request:
     def from_dict(cls, d: dict):
         data_processor_logger.debug(f"{d}")
         sampling_params = SamplingParams.from_dict(d)
-        return cls(request_id=d["request_id"],
-                   prompt=d.get("prompt"),
-                   prompt_token_ids=d.get("prompt_token_ids"),
-                   prompt_token_ids_len=d.get("prompt_token_ids_len"),
-                   messages=d.get("messages"),
-                   system=d.get("system"),
-                   history=d.get("history"),
-                   tools=d.get("tools"),
-                   sampling_params=sampling_params,
-                   eos_token_ids=d.get("eos_token_ids"),
-                   arrival_time=d.get("arrival_time", time.time()),
-                   preprocess_start_time=d.get("preprocess_start_time"),
-                   preprocess_end_time=d.get("preprocess_end_time"),
-                   multimodal_inputs=d.get("multimodal_inputs"),
-                   multimodal_data=d.get("multimodal_data"),
-                   disaggregate_info=d.get("disaggregate_info"),
-                   draft_token_ids=d.get("draft_token_ids"),
-                   raw_request=d.get("raw_request", True),
-                   guided_json=d.get("guided_json", None),
-                   guided_regex=d.get("guided_regex", None),
-                   guided_choice=d.get("guided_choice", None),
-                   guided_grammar=d.get("guided_grammar", None),
-                   structural_tag=d.get("structural_tag", None),
-                   guided_json_object=d.get("guided_json_object", None),
-                   enable_thinking=d.get("enable_thinking", True),
-                   trace_carrier=d.get("trace_carrier", {}))
+        return cls(
+            request_id=d["request_id"],
+            prompt=d.get("prompt"),
+            prompt_token_ids=d.get("prompt_token_ids"),
+            prompt_token_ids_len=d.get("prompt_token_ids_len"),
+            messages=d.get("messages"),
+            system=d.get("system"),
+            history=d.get("history"),
+            tools=d.get("tools"),
+            sampling_params=sampling_params,
+            eos_token_ids=d.get("eos_token_ids"),
+            arrival_time=d.get("arrival_time", time.time()),
+            preprocess_start_time=d.get("preprocess_start_time"),
+            preprocess_end_time=d.get("preprocess_end_time"),
+            multimodal_inputs=d.get("multimodal_inputs"),
+            multimodal_data=d.get("multimodal_data"),
+            disaggregate_info=d.get("disaggregate_info"),
+            draft_token_ids=d.get("draft_token_ids"),
+            raw_request=d.get("raw_request", True),
+            guided_json=d.get("guided_json", None),
+            guided_regex=d.get("guided_regex", None),
+            guided_choice=d.get("guided_choice", None),
+            guided_grammar=d.get("guided_grammar", None),
+            structural_tag=d.get("structural_tag", None),
+            guided_json_object=d.get("guided_json_object", None),
+            enable_thinking=d.get("enable_thinking", True),
+            trace_carrier=d.get("trace_carrier", {}),
+        )
 
     def to_dict(self) -> dict:
-        """convert Request into a serializable dict """
+        """convert Request into a serializable dict"""
         data = {
             "request_id": self.request_id,
             "prompt": self.prompt,
@@ -146,11 +149,15 @@ class Request:
             "disaggregate_info": self.disaggregate_info,
             "draft_token_ids": self.draft_token_ids,
             "enable_thinking": self.enable_thinking,
-            "trace_carrier": self.trace_carrier
+            "trace_carrier": self.trace_carrier,
         }
         add_params = [
-            "guided_json", "guided_regex", "guided_choice", "guided_grammar",
-            "structural_tag", "guided_json_object"
+            "guided_json",
+            "guided_regex",
+            "guided_choice",
+            "guided_grammar",
+            "structural_tag",
+            "guided_json_object",
         ]
         for param in add_params:
             if getattr(self, param, None) is not None:
@@ -174,11 +181,13 @@ class Request:
             setattr(self, key, value)
 
     def __repr__(self) -> str:
-        return (f"Request(request_id={self.request_id}, "
-                f"prompt={self.prompt!r}, "
-                f"prompt_token_ids={self.prompt_token_ids}, "
-                f"draft_token_ids={self.draft_token_ids}, "
-                f"sampling_params={self.sampling_params})")
+        return (
+            f"Request(request_id={self.request_id}, "
+            f"prompt={self.prompt!r}, "
+            f"prompt_token_ids={self.prompt_token_ids}, "
+            f"draft_token_ids={self.draft_token_ids}, "
+            f"sampling_params={self.sampling_params})"
+        )
 
 
 @dataclass(slots=True)
@@ -202,7 +211,7 @@ class CompletionOutput:
 
     def to_dict(self):
         """
-            convert CompletionOutput to a serialized dict
+        convert CompletionOutput to a serialized dict
         """
         return {
             "index": self.index,
@@ -212,27 +221,28 @@ class CompletionOutput:
             "top_logprobs": self.top_logprobs,
             "draft_token_ids": self.draft_token_ids,
             "text": self.text,
-            "reasoning_content": self.reasoning_content
+            "reasoning_content": self.reasoning_content,
         }
 
     @classmethod
-    def from_dict(cls, req_dict: dict[str, Any]) -> 'CompletionOutput':
+    def from_dict(cls, req_dict: dict[str, Any]) -> CompletionOutput:
         """Create instance from dict arguments"""
         return cls(
             **{
-                field.name:
-                req_dict[field.name] if field.name in
-                req_dict else field.default
+                field.name: (req_dict[field.name] if field.name in req_dict else field.default)
                 for field in fields(cls)
-            })
+            }
+        )
 
     def __repr__(self) -> str:
-        return (f"CompletionOutput(index={self.index}, "
-                f"send_idx={self.send_idx}, "
-                f"text={self.text!r}, "
-                f"token_ids={self.token_ids}, "
-                f"draft_token_ids={self.draft_token_ids}, "
-                f"reasoning_content={self.reasoning_content!r}")
+        return (
+            f"CompletionOutput(index={self.index}, "
+            f"send_idx={self.send_idx}, "
+            f"text={self.text!r}, "
+            f"token_ids={self.token_ids}, "
+            f"draft_token_ids={self.draft_token_ids}, "
+            f"reasoning_content={self.reasoning_content!r}"
+        )
 
 
 @dataclass(slots=True)
@@ -252,6 +262,7 @@ class RequestMetrics:
         request_start_time: Time to accept the request
 
     """
+
     arrival_time: float
     inference_start_time: Optional[float] = None
     first_token_time: Optional[float] = None
@@ -273,19 +284,18 @@ class RequestMetrics:
             "preprocess_cost_time": self.preprocess_cost_time,
             "model_forward_time": self.model_forward_time,
             "model_execute_time": self.model_execute_time,
-            "request_start_time": self.request_start_time
+            "request_start_time": self.request_start_time,
         }
 
     @classmethod
-    def from_dict(cls, req_dict: dict[str, Any]) -> 'RequestMetrics':
+    def from_dict(cls, req_dict: dict[str, Any]) -> RequestMetrics:
         """Create instance from dict arguments"""
         return cls(
             **{
-                field.name:
-                req_dict[field.name] if field.name in
-                req_dict else field.default
+                field.name: (req_dict[field.name] if field.name in req_dict else field.default)
                 for field in fields(cls)
-            })
+            }
+        )
 
 
 class RequestOutput:
@@ -333,13 +343,12 @@ class RequestOutput:
         self.error_code = error_code
         self.error_msg = error_msg
 
-
         if prompt_token_ids is None:
             self.prompt_token_ids = []
         elif isinstance(self.prompt_token_ids, np.ndarray):
             self.prompt_token_ids = self.prompt_token_ids.tolist()
 
-    def add(self, next_output: "RequestOutput") -> None:
+    def add(self, next_output: RequestOutput) -> None:
         """Merge RequestOutput into this one"""
 
         self.prompt = next_output.prompt
@@ -348,19 +357,19 @@ class RequestOutput:
         self.outputs.index = next_output.outputs.index
         self.outputs.token_ids.extend(next_output.outputs.token_ids)
         if next_output.metrics.arrival_time is not None and self.metrics.inference_start_time is not None:
-            self.metrics.model_forward_time = next_output.metrics.arrival_time - \
-                self.metrics.inference_start_time
+            self.metrics.model_forward_time = next_output.metrics.arrival_time - self.metrics.inference_start_time
         if next_output.metrics.arrival_time is not None and self.metrics.arrival_time is not None:
-            self.metrics.model_execute_time = next_output.metrics.arrival_time - \
-                self.metrics.arrival_time
+            self.metrics.model_execute_time = next_output.metrics.arrival_time - self.metrics.arrival_time
 
     def __repr__(self) -> str:
-        return (f"RequestOutput(request_id={self.request_id}, "
-                f"prompt={self.prompt!r}, "
-                f"prompt_token_ids={self.prompt_token_ids}, "
-                f"outputs={self.outputs}, "
-                f"metrics={self.metrics}, "
-                f"num_cached_tokens={self.num_cached_tokens})")
+        return (
+            f"RequestOutput(request_id={self.request_id}, "
+            f"prompt={self.prompt!r}, "
+            f"prompt_token_ids={self.prompt_token_ids}, "
+            f"outputs={self.outputs}, "
+            f"metrics={self.metrics}, "
+            f"num_cached_tokens={self.num_cached_tokens})"
+        )
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -370,16 +379,14 @@ class RequestOutput:
         return RequestOutput(**d, outputs=completion_output, metrics=metrics)
 
     def to_dict(self):
-        """convert RequestOutput into a serializable dict """
+        """convert RequestOutput into a serializable dict"""
 
         return {
             "request_id": self.request_id,
             "prompt": self.prompt,
             "prompt_token_ids": self.prompt_token_ids,
-            "outputs":
-            None if self.outputs is None else self.outputs.to_dict(),
-            "metrics":
-            None if self.metrics is None else self.metrics.to_dict(),
+            "outputs": None if self.outputs is None else self.outputs.to_dict(),
+            "metrics": None if self.metrics is None else self.metrics.to_dict(),
             "finished": self.finished,
             "num_cached_tokens": self.num_cached_tokens,
             "error_code": self.error_code,

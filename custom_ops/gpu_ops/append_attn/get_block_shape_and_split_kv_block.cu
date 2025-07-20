@@ -194,12 +194,12 @@ get_max_len_kv_ernel(int *max_seq_lens_out, const int *seq_lens_this_time,
 std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
     const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &seq_lens_this_time, const paddle::Tensor &cum_offsets,
+    const paddle::Tensor &seq_lens_this_time,
     const int encoder_block_shape_q, const int decoder_block_shape_q,
     const int group_size, const int block_size,
     const int decoder_step_token_num) {
   auto stream = seq_lens_encoder.stream();
-  int bsz = cum_offsets.shape()[0];
+  int bsz = seq_lens_encoder.shape()[0];
   auto max_len_tensor =
       GetEmptyTensor({8}, paddle::DataType::INT32, seq_lens_encoder.place());
   GetMaxLen(seq_lens_decoder, seq_lens_this_time, seq_lens_encoder,
@@ -335,8 +335,7 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
 std::vector<paddle::DataType> GetBlockShapeAndSplitKVBlockInferDtype(
     const paddle::DataType &seq_lens_encoder_dtype,
     const paddle::DataType &seq_lens_decoder_dtype,
-    const paddle::DataType &seq_lens_this_time_dtype,
-    const paddle::DataType &cum_offsets_dtype) {
+    const paddle::DataType &seq_lens_this_time_dtype) {
   return {
       paddle::DataType::INT32, paddle::DataType::INT32, paddle::DataType::INT32,
       paddle::DataType::INT32, paddle::DataType::INT32, paddle::DataType::INT32,
@@ -347,8 +346,7 @@ std::vector<paddle::DataType> GetBlockShapeAndSplitKVBlockInferDtype(
 std::vector<std::vector<int64_t>> GetBlockShapeAndSplitKVBlockInferShape(
     const std::vector<int64_t> &seq_lens_encoder_shape,
     const std::vector<int64_t> &seq_lens_decoder_shape,
-    const std::vector<int64_t> &seq_lens_this_time_shape,
-    const std::vector<int64_t> &cum_offsets_shape) {
+    const std::vector<int64_t> &seq_lens_this_time_shape) {
   std::vector<int64_t> dynamic_shape = {-1};
 
   return {dynamic_shape,
@@ -365,8 +363,7 @@ std::vector<std::vector<int64_t>> GetBlockShapeAndSplitKVBlockInferShape(
 }
 
 PD_BUILD_STATIC_OP(get_block_shape_and_split_kv_block)
-    .Inputs({"seq_lens_encoder", "seq_lens_decoder", "seq_lens_this_time",
-             "cum_offsets"})
+    .Inputs({"seq_lens_encoder", "seq_lens_decoder", "seq_lens_this_time"})
     .Outputs({paddle::Optional("encoder_batch_ids"),
               paddle::Optional("encoder_tile_ids_per_batch"),
               paddle::Optional("encoder_num_blocks"),

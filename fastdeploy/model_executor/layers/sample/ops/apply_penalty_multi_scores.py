@@ -37,8 +37,8 @@ def apply_penalty_multi_scores(
     apply_penalty_multi_scores
     """
     if current_platform.is_cuda():
-        from fastdeploy.model_executor.ops.gpu import \
-            get_token_penalty_multi_scores
+        from fastdeploy.model_executor.ops.gpu import get_token_penalty_multi_scores
+
         logits = get_token_penalty_multi_scores(
             pre_token_ids,
             prompt_ids,
@@ -54,8 +54,8 @@ def apply_penalty_multi_scores(
             eos_token_ids,
         )
     elif current_platform.is_xpu():
-        from fastdeploy.model_executor.ops.xpu import \
-            get_token_penalty_multi_scores
+        from fastdeploy.model_executor.ops.xpu import get_token_penalty_multi_scores
+
         logits = get_token_penalty_multi_scores(
             pre_token_ids,
             logits,
@@ -69,8 +69,10 @@ def apply_penalty_multi_scores(
             eos_token_ids,
         )
     elif current_platform.is_iluvatar():
-        from fastdeploy.model_executor.ops.iluvatar import \
-            get_token_penalty_multi_scores
+        from fastdeploy.model_executor.ops.iluvatar import (
+            get_token_penalty_multi_scores,
+        )
+
         logits = get_token_penalty_multi_scores(
             pre_token_ids,
             prompt_ids,
@@ -86,8 +88,8 @@ def apply_penalty_multi_scores(
             eos_token_ids,
         )
     elif current_platform.is_gcu():
-        from fastdeploy.model_executor.ops.gcu import \
-            get_token_penalty_multi_scores
+        from fastdeploy.model_executor.ops.gcu import get_token_penalty_multi_scores
+
         logits = get_token_penalty_multi_scores(
             pre_token_ids,
             logits,
@@ -101,7 +103,7 @@ def apply_penalty_multi_scores(
             eos_token_ids,
         )
     else:
-        raise NotImplementedError()
+        raise NotImplementedError
 
     return logits
 
@@ -126,8 +128,9 @@ def apply_speculative_penalty_multi_scores(
     apply_speculative_penalty_multi_scores
     """
     if current_platform.is_cuda():
-        from fastdeploy.model_executor.ops.gpu import \
-            speculate_get_token_penalty_multi_scores
+        from fastdeploy.model_executor.ops.gpu import (
+            speculate_get_token_penalty_multi_scores,
+        )
 
         speculate_get_token_penalty_multi_scores(
             pre_token_ids,
@@ -146,6 +149,6 @@ def apply_speculative_penalty_multi_scores(
             max_len,
         )
     else:
-        raise NotImplementedError()
+        raise NotImplementedError
     # inplace
     return logits

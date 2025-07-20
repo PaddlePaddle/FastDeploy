@@ -11,9 +11,9 @@ The Local Scheduler functions similarly to a memory manager, performing eviction
 The Global Scheduler is implemented using Redis. Each node actively steals tasks from others when its GPU is idle, then pushes the execution results back to the originating node.
 
 ### PD-Separated Scheduler
-Building upon the Global Scheduler, FastDeploy introduces the **PD-Separated Scheduling Strategy**, specifically optimized for large language model inference scenarios. It decouples the inference pipeline into two distinct phases:  
-- **Prefill Phase**: Builds KV cache, which is compute-intensive with high memory usage but low latency.  
-- **Decode Phase**: Performs autoregressive decoding, which is sequential and time-consuming but requires less memory.  
+Building upon the Global Scheduler, FastDeploy introduces the **PD-Separated Scheduling Strategy**, specifically optimized for large language model inference scenarios. It decouples the inference pipeline into two distinct phases:
+- **Prefill Phase**: Builds KV cache, which is compute-intensive with high memory usage but low latency.
+- **Decode Phase**: Performs autoregressive decoding, which is sequential and time-consuming but requires less memory.
 
 By separating roles (prefill nodes handle request processing while decode nodes manage generation), this strategy enables finer-grained resource allocation, improving throughput and GPU utilization.
 

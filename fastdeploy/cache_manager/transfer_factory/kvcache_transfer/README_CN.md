@@ -11,7 +11,7 @@
   - 单张Mellanox ConnectX-7 400G网卡(单端口)
   - 测试参数: BATCH_SIZE = 1538, 块大小 = 1K - 256K
   - 单压力线程(threads = 1)
-  
+
 - **对比基准**:
   - Mooncake性能使用example目录中的transfer_engine_bench测量
   - KVTransferManager使用相同的硬件配置和测试参数
@@ -43,11 +43,13 @@
 ### 依赖安装
 
 #### Python包
+
 ```bash
 pip install pyzmq pybind11[global]
 ```
 
 #### 系统库(Linux)
+
 ```bash
 # Ubuntu/Debian
 sudo apt-get install -y libibverbs-dev librdmacm-dev
@@ -66,7 +68,7 @@ sudo yum install -y libibverbs-devel librdmacm-devel
     在GDRCopy写操作后强制内存刷新，确保Ampere架构上的数据一致性。启用后会在最后一个RDMA写操作后触发一个RDMA读操作。
 - 原因:
     当网卡向CPU发送完成通知时，仅表示数据已到达GPU，但不保证GPU可以立即读取该数据。为确保数据已完全写入GPU内存且可被GPU读取，需要执行读操作。
-[NCCL Issue #683](https://github.com/NVIDIA/nccl/issues/683) | 
+[NCCL Issue #683](https://github.com/NVIDIA/nccl/issues/683) |
 [NCCL Issue #1702](https://github.com/NVIDIA/nccl/issues/1702)
     由于上层通常只在轮询完成队列条目(CQE)后发出缓存到达通知，这避免了应用在数据实际写回内存前收到通知的情况。因此，缓存未刷新但应用认为已完成这种潜在问题在实践中被认为是罕见情况。
 - 启用方式:
@@ -76,7 +78,7 @@ sudo yum install -y libibverbs-devel librdmacm-devel
 
 ```bash
 # 构建并创建SO文件的符号链接
-python setup.py bdist_wheel 
+python setup.py bdist_wheel
 
 pip install dist/*.whl
 ```
@@ -108,7 +110,6 @@ pip install dist/*.whl
 |------|--------|------|
 | `KVCACHE_GDRCOPY_FLUSH_ENABLE` | false | 为Ampere GPU启用GDRCopy刷新 |
 
-
 # 设置RDMA GID索引
 export KVCACHE_RDMA_GID_INDEX=3
 
@@ -124,7 +125,6 @@ export KVCACHE_DEBUG=1
 # 设置日志文件
 export KVCACHE_DEBUG_FILE=/var/log/kvcache_debug.log
 export KVCACHE_ERROR_FILE=/var/log/kvcache_error.log
-
 
 ## 网络配置
 
@@ -145,7 +145,7 @@ comm = RDMACommunicator(
     gpu_idx,       # GPU设备索引(0~7)
     port,          # 通信端口
     local_key_cache,   # 本地key缓存指针列表
-    local_value_cache, # 本地value缓存指针列表 
+    local_value_cache, # 本地value缓存指针列表
     block_number,   # 块数量
     block_bytes     # 每块字节数
 )
@@ -159,19 +159,19 @@ comm.write_cache(
     local_block_ids,  # 本地缓存块ID列表，指定要传输的本地块
     remote_block_ids, # 远程缓存块ID列表，指定要写入的远程块
     layer_idx         # 模型层索引，用于多层模型场景
-)  
+)
 ```
 
 **参数说明**:
 
-1. `role`: 
+1. `role`:
    - "prefill"
    - "decode"
 
-2. `gpu_idx`: 
+2. `gpu_idx`:
    - 使用的GPU设备索引
 
-3. `port`: 
+3. `port`:
    - RDMA通信端口号
 
 4. `local_key_cache`/`local_value_cache`:
@@ -216,7 +216,7 @@ comm = RDMACommunicator(
 
 if comm.connect("192.168.1.100", "12345"):
     print("连接成功")
-    
+
     # 写入缓存
     comm.write_cache(
         ip="192.168.1.100",       # 目标服务器IP

@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from typing import Optional
 
 from fastdeploy.model_executor.layers.attention.attention import Attention
@@ -51,26 +52,23 @@ class MixQuantConfig(QuantConfigBase):
 
     @classmethod
     def from_config(cls, config: dict) -> "MixQuantConfig":
-        return cls(config['dense_quant_type'], config['moe_quant_type'],
-                   config.get('kv_cache_quant_type', None),
-                   config.get('image_moe_quant_type', None))
+        return cls(
+            config["dense_quant_type"],
+            config["moe_quant_type"],
+            config.get("kv_cache_quant_type", None),
+            config.get("image_moe_quant_type", None),
+        )
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if isinstance(layer, FusedMoE):
             if layer.moe_tag == "Image":
-                return get_quantization_config(
-                    self.image_moe_quant_type).from_config(
-                        {}).get_quant_method(layer)
+                return get_quantization_config(self.image_moe_quant_type).from_config({}).get_quant_method(layer)
             else:
-                return get_quantization_config(
-                    self.moe_quant_type).from_config(
-                        {}).get_quant_method(layer)
+                return get_quantization_config(self.moe_quant_type).from_config({}).get_quant_method(layer)
         elif isinstance(layer, Attention):
             if self.kv_cache_quant_type is not None:
-                return (get_quantization_config("kvcache").from_config(
-                    self.kv_cache_quant_type).get_quant_method(layer))
+                return get_quantization_config("kvcache").from_config(self.kv_cache_quant_type).get_quant_method(layer)
             else:
                 return None
         else:
-            return get_quantization_config(self.dense_quant_type).from_config(
-                {}).get_quant_method(layer)
+            return get_quantization_config(self.dense_quant_type).from_config({}).get_quant_method(layer)

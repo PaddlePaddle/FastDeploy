@@ -47,7 +47,7 @@ inline cudaError_t GetGridSize(int64_t n, int block_size, int num_waves, int* nu
 
 template<typename T, int VecSize>
 __global__ void text_image_scatter_kernel(
-    T* input_ptr,      
+    T* input_ptr,
     T* text_gather_ptr,
     T* image_gather_ptr,
     int32_t* token_type_ids,
@@ -72,8 +72,8 @@ __global__ void text_image_scatter_kernel(
         int32_t token_type_ids_num = token_type_ids[token_idx];
 
         int64_t input_load_offset = token_idx * hidden_size + hidden_offset;
- 
-        Load<T, VecSize>(input_ptr + input_load_offset, &input_ptr_vec); 
+
+        Load<T, VecSize>(input_ptr + input_load_offset, &input_ptr_vec);
         #pragma unroll
         for(int vi = 0; vi < VecSize; ++vi) {
             text_imgaes_vec[vi] = input_ptr_vec[vi];
@@ -92,7 +92,7 @@ __global__ void text_image_scatter_kernel(
 
 template<typename T, int VecSize>
 __global__ void text_image_gather_kernel(
-    T* output_ptr,      
+    T* output_ptr,
     T* text_gather_ptr,
     T* image_gather_ptr,
     int32_t* token_type_ids,
@@ -131,8 +131,8 @@ __global__ void text_image_gather_kernel(
         }
 
         int64_t input_load_offset = token_idx * hidden_size + hidden_offset;
- 
-        Store<T, VecSize>(output_ptr_vec, output_ptr + input_load_offset);   
+
+        Store<T, VecSize>(output_ptr_vec, output_ptr + input_load_offset);
     }
 }
 
@@ -159,7 +159,7 @@ void LaunchTextImageGatherScatter(
     const int64_t tot_element_num = token_num * hidden_size;
 
     int64_t tot_pack_num = (tot_element_num + VecSize - 1) / VecSize;
-    
+
     const int block_size = 128;
     int grid_index = (token_num + block_size - 1) / block_size;
     constexpr int32_t kNumWaves = 16;
@@ -170,8 +170,8 @@ void LaunchTextImageGatherScatter(
     if (is_scatter) {
         text_image_scatter_kernel<DataType_, 8><<<grid_dim, block_size>>>(
             reinterpret_cast<DataType_*>(input.data<data_t>()),
-            reinterpret_cast<DataType_*>(text_input.data<data_t>()),   
-            reinterpret_cast<DataType_*>(image_input.data<data_t>()),  
+            reinterpret_cast<DataType_*>(text_input.data<data_t>()),
+            reinterpret_cast<DataType_*>(image_input.data<data_t>()),
             reinterpret_cast<int32_t*>(token_type_ids.data<int32_t>()),
             reinterpret_cast<int32_t*>(text_index.data<int32_t>()),
             reinterpret_cast<int32_t*>(image_index.data<int32_t>()),
@@ -181,8 +181,8 @@ void LaunchTextImageGatherScatter(
     } else {
         text_image_gather_kernel<DataType_, 8><<<grid_dim, block_size>>>(
             reinterpret_cast<DataType_*>(input.data<data_t>()),
-            reinterpret_cast<DataType_*>(text_input.data<data_t>()),   
-            reinterpret_cast<DataType_*>(image_input.data<data_t>()),  
+            reinterpret_cast<DataType_*>(text_input.data<data_t>()),
+            reinterpret_cast<DataType_*>(image_input.data<data_t>()),
             reinterpret_cast<int32_t*>(token_type_ids.data<int32_t>()),
             reinterpret_cast<int32_t*>(text_index.data<int32_t>()),
             reinterpret_cast<int32_t*>(image_index.data<int32_t>()),
@@ -216,8 +216,8 @@ void TextImageGatherScatter(
 
 PD_BUILD_STATIC_OP(text_image_gather_scatter)
     .Inputs({"input",
-             "text_input", 
-             "image_input", 
+             "text_input",
+             "image_input",
              "token_type_ids",
              "text_index",
              "image_index"})
@@ -229,5 +229,5 @@ PD_BUILD_STATIC_OP(text_image_gather_scatter)
     .SetInplaceMap({{"text_input", "text_input_out"},
                     {"image_input", "image_input_out"},
                     {"text_index", "text_index_out"},
-                    {"image_index", "image_index_out"}})        
+                    {"image_index", "image_index_out"}})
     .SetKernelFn(PD_KERNEL(TextImageGatherScatter));

@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-
 from fastdeploy.worker.worker_process import initialize_fd_config
 
 

@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" UT for fp8_int4_gemm kernel """
+"""UT for fp8_int4_gemm kernel"""
 
-import paddle
 import unittest
+
 import numpy as np
+import paddle
+
 from fastdeploy.model_executor.ops.gpu import (
     scaled_gemm_f8_i4_f16,
     scaled_gemm_f8_i4_f16_weight_quantize,
@@ -37,9 +39,7 @@ class Test(unittest.TestCase):
         quant_fp8_pertensor
         """
         scale = paddle.max(paddle.abs(tensor))
-        tensor = paddle.cast(
-            (tensor * 448 / scale).clip(-448, 448), "float8_e4m3fn"
-        ).astype(tensor.dtype)
+        tensor = paddle.cast((tensor * 448 / scale).clip(-448, 448), "float8_e4m3fn").astype(tensor.dtype)
         return tensor, scale
 
     def dequant_fp8_pertensor(self, tensor, scale):
@@ -56,9 +56,7 @@ class Test(unittest.TestCase):
         A_fp8, A_fp8_scale = self.quant_fp8_pertensor(A)
         B_fp8, B_fp8_scale = self.quant_fp8_pertensor(B)
 
-        processed_B, w_scale = scaled_gemm_f8_i4_f16_weight_quantize(
-            B_fp8, groupsize=-1, scale_dtype="float16"
-        )
+        processed_B, w_scale = scaled_gemm_f8_i4_f16_weight_quantize(B_fp8, groupsize=-1, scale_dtype="float16")
         w_scale = paddle.view(w_scale, dtype)
         out_scale = (A_fp8_scale / 448) * (B_fp8_scale / 448)
 

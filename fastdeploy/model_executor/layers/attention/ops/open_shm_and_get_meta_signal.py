@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 import paddle
 
 from fastdeploy.platforms import current_platform
@@ -27,9 +28,9 @@ def open_shm_and_get_meta_signal(
     open_shm_and_get_meta_signal
     """
     if current_platform.is_cuda():
-        from fastdeploy.model_executor.ops.gpu import \
-            open_shm_and_get_meta_signal
+        from fastdeploy.model_executor.ops.gpu import open_shm_and_get_meta_signal
+
         out = open_shm_and_get_meta_signal(rank, device_id, keep_pd_step_flag)
         return out
     else:
-        raise NotImplementedError()
+        raise NotImplementedError

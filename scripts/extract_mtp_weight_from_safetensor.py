@@ -28,19 +28,21 @@ from safetensors.numpy import save_file as safe_save_file
 
 def parse_args():
     """"""
-    parser = argparse.ArgumentParser(
-        description="Extract and save MTP weights from safetensors.")
-    parser.add_argument("-i",
-                        "--input_dir",
-                        type=str,
-                        required=True,
-                        help="Path to the input safetensors model directory.")
+    parser = argparse.ArgumentParser(description="Extract and save MTP weights from safetensors.")
+    parser.add_argument(
+        "-i",
+        "--input_dir",
+        type=str,
+        required=True,
+        help="Path to the input safetensors model directory.",
+    )
     parser.add_argument(
         "-o",
         "--output_dir",
         type=str,
         required=True,
-        help="Path to the output directory for saving processed weights.")
+        help="Path to the output directory for saving processed weights.",
+    )
     return parser.parse_args()
 
 

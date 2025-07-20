@@ -22,7 +22,7 @@ from typing import Any, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
 
-#from openai.types.chat import ChatCompletionMessageParam
+# from openai.types.chat import ChatCompletionMessageParam
 # from fastdeploy.entrypoints.chat_utils import ChatCompletionMessageParam
 
 
@@ -30,6 +30,7 @@ class ErrorResponse(BaseModel):
     """
     Error response from OpenAI API.
     """
+
     object: str = "error"
     message: str
     code: int
@@ -39,6 +40,7 @@ class PromptTokenUsageInfo(BaseModel):
     """
     Prompt-related token usage info.
     """
+
     cached_tokens: Optional[int] = None
 
 
@@ -46,6 +48,7 @@ class UsageInfo(BaseModel):
     """
     Usage info for a single request.
     """
+
     prompt_tokens: int = 0
     total_tokens: int = 0
     completion_tokens: Optional[int] = 0
@@ -56,6 +59,7 @@ class FunctionCall(BaseModel):
     """
     Function call.
     """
+
     name: str
     arguments: str
 
@@ -64,6 +68,7 @@ class ToolCall(BaseModel):
     """
     Tool call.
     """
+
     id: str = None
     type: Literal["function"] = "function"
     function: FunctionCall
@@ -74,6 +79,7 @@ class DeltaFunctionCall(BaseModel):
     """
     Delta function call.
     """
+
     name: Optional[str] = None
     arguments: Optional[str] = None
 
@@ -83,6 +89,7 @@ class DeltaToolCall(BaseModel):
     """
     Delta tool call.
     """
+
     id: Optional[str] = None
     type: Optional[Literal["function"]] = None
     index: int
@@ -93,6 +100,7 @@ class FunctionDefinition(BaseModel):
     """
     Function definition.
     """
+
     name: str
     description: Optional[str] = None
     parameters: Optional[dict[str, Any]] = None
@@ -102,6 +110,7 @@ class ChatCompletionToolsParam(BaseModel):
     """
     Chat completion tools parameter.
     """
+
     type: Literal["function"] = "function"
     function: FunctionDefinition
 
@@ -110,6 +119,7 @@ class ChatMessage(BaseModel):
     """
     Chat message.
     """
+
     role: str
     content: str
     reasoning_content: Optional[str] = None
@@ -120,6 +130,7 @@ class ChatCompletionResponseChoice(BaseModel):
     """
     Chat completion response choice.
     """
+
     index: int
     message: ChatMessage
     logprobs: Optional[LogProbs] = None
@@ -130,6 +141,7 @@ class ChatCompletionResponse(BaseModel):
     """
     Chat completion response.
     """
+
     id: str
     object: str = "chat.completion"
     created: int = Field(default_factory=lambda: int(time.time()))
@@ -137,26 +149,32 @@ class ChatCompletionResponse(BaseModel):
     choices: List[ChatCompletionResponseChoice]
     usage: UsageInfo
 
+
 class LogProbEntry(BaseModel):
     """
     Log probability entry.
     """
+
     token: str
     logprob: float
     bytes: Optional[List[int]] = None
-    top_logprobs: Optional[List["LogProbEntry"]] = None
+    top_logprobs: Optional[List[LogProbEntry]] = None
+
 
 class LogProbs(BaseModel):
     """
     LogProbs.
     """
+
     content: Optional[List[LogProbEntry]] = None
     refusal: Optional[Union[str, None]] = None
+
 
 class DeltaMessage(BaseModel):
     """
     Delta message for chat completion stream response.
     """
+
     role: Optional[str] = None
     content: Optional[str] = None
     token_ids: Optional[List[int]] = None
@@ -168,6 +186,7 @@ class ChatCompletionResponseStreamChoice(BaseModel):
     """
     Chat completion response choice for stream response.
     """
+
     index: int
     delta: DeltaMessage
     logprobs: Optional[LogProbs] = None
@@ -179,6 +198,7 @@ class ChatCompletionStreamResponse(BaseModel):
     """
     Chat completion response for stream response.
     """
+
     id: str
     object: str = "chat.completion.chunk"
     created: int = Field(default_factory=lambda: int(time.time()))
@@ -191,6 +211,7 @@ class CompletionResponseChoice(BaseModel):
     """
     Completion response choice.
     """
+
     index: int
     text: str
     token_ids: Optional[List[int]] = None
@@ -205,6 +226,7 @@ class CompletionResponse(BaseModel):
     """
     Completion response.
     """
+
     id: str
     object: str = "text_completion"
     created: int = Field(default_factory=lambda: int(time.time()))
@@ -217,6 +239,7 @@ class CompletionResponseStreamChoice(BaseModel):
     """
     Completion response choice for stream response.
     """
+
     index: int
     text: str
     arrival_time: float = None
@@ -231,6 +254,7 @@ class CompletionStreamResponse(BaseModel):
     """
     Completion response for stream response.
     """
+
     id: str
     object: str = "text_completion"
     created: int = Field(default_factory=lambda: int(time.time()))
@@ -243,6 +267,7 @@ class StreamOptions(BaseModel):
     """
     Stream options.
     """
+
     include_usage: Optional[bool] = True
     continuous_usage_stats: Optional[bool] = False
 
@@ -251,9 +276,9 @@ class StructuralTag(BaseModel):
     """
     Structural tag.
     """
+
     begin: str
-    structural_tag_schema: Optional[dict[str, Any]] = Field(default=None,
-                                                            alias="schema")
+    structural_tag_schema: Optional[dict[str, Any]] = Field(default=None, alias="schema")
     end: str
 
 
@@ -261,9 +286,10 @@ class JsonSchemaResponseFormat(BaseModel):
     """
     Json schema for ResponseFormat.
     """
+
     name: str
     description: Optional[str] = None
-    json_schema: Optional[dict[str, Any]] = Field(default=None, alias='schema')
+    json_schema: Optional[dict[str, Any]] = Field(default=None, alias="schema")
     strict: Optional[bool] = None
 
 
@@ -271,6 +297,7 @@ class StructuralTagResponseFormat(BaseModel):
     """
     Structural tag for ResponseFormat.
     """
+
     type: Literal["structural_tag"]
     structures: list[StructuralTag]
     triggers: list[str]
@@ -280,6 +307,7 @@ class ResponseFormat(BaseModel):
     """
     response_format type.
     """
+
     type: Literal["text", "json_object", "json_schema"]
     json_schema: Optional[JsonSchemaResponseFormat] = None
 
@@ -291,6 +319,7 @@ class CompletionRequest(BaseModel):
     """
     Completion request to the engine.
     """
+
     # Ordered by official OpenAI API documentation
     # https://platform.openai.com/docs/api-reference/completions/create
     model: Optional[str] = "default"
@@ -333,7 +362,7 @@ class CompletionRequest(BaseModel):
         """
         req_dict = {}
         if request_id is not None:
-            req_dict['request_id'] = request_id
+            req_dict["request_id"] = request_id
         for key, value in self.dict().items():
             if value is not None:
                 req_dict[key] = value
@@ -341,7 +370,7 @@ class CompletionRequest(BaseModel):
             for key, value in self.suffix.items():
                 req_dict[key] = value
         if prompt is not None:
-            req_dict['prompt'] = prompt
+            req_dict["prompt"] = prompt
 
         if isinstance(prompt[0], int):
             req_dict["prompt_token_ids"] = prompt
@@ -363,8 +392,11 @@ class CompletionRequest(BaseModel):
             req_dict["guided_json_object"] = guided_json_object
 
         guided_schema = [
-            "guided_json", "guided_regex", "guided_choice", "guided_grammar",
-            "structural_tag"
+            "guided_json",
+            "guided_regex",
+            "guided_choice",
+            "guided_grammar",
+            "structural_tag",
         ]
         for key in guided_schema:
             item = getattr(self, key, None)
@@ -380,15 +412,16 @@ class CompletionRequest(BaseModel):
         Validate stream options
         """
         if data.get("stream_options") and not data.get("stream"):
-            raise ValueError(
-                "Stream options can only be defined when `stream=True`.")
+            raise ValueError("Stream options can only be defined when `stream=True`.")
 
-        guided_count = sum([
-            "guided_json" in data and data["guided_json"] is not None,
-            "guided_regex" in data and data["guided_regex"] is not None,
-            "guided_choice" in data and data["guided_choice"] is not None,
-            "guided_grammar" in data and data["guided_grammar"] is not None
-        ])
+        guided_count = sum(
+            [
+                "guided_json" in data and data["guided_json"] is not None,
+                "guided_regex" in data and data["guided_regex"] is not None,
+                "guided_choice" in data and data["guided_choice"] is not None,
+                "guided_grammar" in data and data["guided_grammar"] is not None,
+            ]
+        )
 
         if guided_count > 1:
             raise ValueError(
@@ -403,6 +436,7 @@ class ChatCompletionRequest(BaseModel):
     """
     Chat completion request to the engine.
     """
+
     # Ordered by official OpenAI API documentation
     # https://platform.openai.com/docs/api-reference/chat/create
     messages: Union[List[Any], List[int]]
@@ -414,8 +448,8 @@ class ChatCompletionRequest(BaseModel):
     # remove max_tokens when field is removed from OpenAI API
     max_tokens: Optional[int] = Field(
         default=None,
-        deprecated=
-        'max_tokens is deprecated in favor of the max_completion_tokens field')
+        deprecated="max_tokens is deprecated in favor of the max_completion_tokens field",
+    )
     max_completion_tokens: Optional[int] = None
     n: Optional[int] = 1
     presence_penalty: Optional[float] = None
@@ -451,7 +485,7 @@ class ChatCompletionRequest(BaseModel):
         """
         req_dict = {}
         if request_id is not None:
-            req_dict['request_id'] = request_id
+            req_dict["request_id"] = request_id
 
         req_dict["max_tokens"] = self.max_completion_tokens or self.max_tokens
         req_dict["logprobs"] = self.top_logprobs if self.logprobs else None
@@ -483,17 +517,18 @@ class ChatCompletionRequest(BaseModel):
                     self.guided_json = json_schema
             elif self.response_format.type == "structural_tag":
                 structural_tag = self.response_format
-                assert structural_tag is not None and isinstance(
-                    structural_tag, StructuralTagResponseFormat)
-                self.structural_tag = json.dumps(
-                    structural_tag.model_dump(by_alias=True))
+                assert structural_tag is not None and isinstance(structural_tag, StructuralTagResponseFormat)
+                self.structural_tag = json.dumps(structural_tag.model_dump(by_alias=True))
 
         if guided_json_object:
             req_dict["guided_json_object"] = guided_json_object
 
         guided_schema = [
-            "guided_json", "guided_regex", "guided_choice", "guided_grammar",
-            "structural_tag"
+            "guided_json",
+            "guided_regex",
+            "guided_choice",
+            "guided_grammar",
+            "structural_tag",
         ]
         for key in guided_schema:
             item = getattr(self, key, None)
@@ -509,16 +544,17 @@ class ChatCompletionRequest(BaseModel):
         Validate stream options
         """
         if data.get("stream_options") and not data.get("stream"):
-            raise ValueError(
-                "Stream options can only be defined when `stream=True`.")
+            raise ValueError("Stream options can only be defined when `stream=True`.")
 
-        guided_count = sum([
-            "guided_json" in data and data["guided_json"] is not None,
-            "guided_regex" in data and data["guided_regex"] is not None,
-            "guided_choice" in data and data["guided_choice"] is not None,
-            "guided_grammar" in data and data["guided_grammar"] is not None,
-            "structural_tag" in data and data["structural_tag"] is not None
-        ])
+        guided_count = sum(
+            [
+                "guided_json" in data and data["guided_json"] is not None,
+                "guided_regex" in data and data["guided_regex"] is not None,
+                "guided_choice" in data and data["guided_choice"] is not None,
+                "guided_grammar" in data and data["guided_grammar"] is not None,
+                "structural_tag" in data and data["structural_tag"] is not None,
+            ]
+        )
 
         if guided_count > 1:
             raise ValueError(
@@ -537,17 +573,16 @@ class ChatCompletionRequest(BaseModel):
                 raise ValueError("`top_logprobs` must be a positive value.")
 
             if top_logprobs > 0 and not data.get("logprobs"):
-                raise ValueError(
-                    "when using `top_logprobs`, `logprobs` must be set to true."
-                )
+                raise ValueError("when using `top_logprobs`, `logprobs` must be set to true.")
 
         return data
-      
-      
+
+
 class ControlSchedulerRequest(BaseModel):
     """
     Control scheduler request to the engine.
     """
+
     reset: Optional[bool] = False
     load_shards_num: Optional[int] = None
     reallocate_shard: Optional[bool] = False

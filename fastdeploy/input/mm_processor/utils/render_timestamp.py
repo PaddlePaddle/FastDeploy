@@ -39,7 +39,14 @@ def render_single_image_with_timestamp(image: Image, number: str, rate: float, f
     y = 0  # 文本的x坐标, y坐标
 
     # 绘制黑色的时间戳，白色的边框
-    draw.text((x, y), number, font=font, fill=(0, 0, 0), stroke_width=outline_size, stroke_fill=(255, 255, 255))
+    draw.text(
+        (x, y),
+        number,
+        font=font,
+        fill=(0, 0, 0),
+        stroke_width=outline_size,
+        stroke_fill=(255, 255, 255),
+    )
 
     return image
 

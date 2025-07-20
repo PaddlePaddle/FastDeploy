@@ -5,13 +5,13 @@
  * @brief Logging module for key-value cache system
  * @version 1.0.0
  * @copyright Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -43,7 +43,7 @@ typedef enum {
     KV_LOG_LEVEL_ERROR   = 3
 } KVLogLevel;
 
-void debug_log(KVLogLevel level,  bool enable_to_terminal, const char *filefunc, 
+void debug_log(KVLogLevel level,  bool enable_to_terminal, const char *filefunc,
                  int line, const char *fmt, ...) __attribute__ ((format (printf, 5, 6)));
 
 /**
@@ -107,7 +107,7 @@ void debug_log(KVLogLevel level,  bool enable_to_terminal, const char *filefunc,
         LOGD(fmt, __VA_ARGS__);                             \
     } while (0)
 
-#define LOGD_RAW(fmt, arg...) do {                          \   
+#define LOGD_RAW(fmt, arg...) do {                          \
         if (ENV_ENABLE_RAW("KV_IS_DEBUG_ENABLED")) {                \
             GET_CURRENT_TIME();                             \
             fprintf(stdout, "[%s][DBG][KV_CACHE][%s:%d] "       \

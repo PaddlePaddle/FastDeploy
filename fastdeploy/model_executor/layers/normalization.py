@@ -102,8 +102,7 @@ class RMSNorm(nn.Layer):
                 dtype=self._norm_weight_dtype,
             )
 
-    def load_state_dict(self, state_dict: Dict[str,
-                                               paddle.Tensor | np.ndarray]):
+    def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
         """
         Load the checkpoint state dictionary into the layer.
 
@@ -112,15 +111,10 @@ class RMSNorm(nn.Layer):
         """
 
         # weight
-        weight_tensor = paddle.cast(
-            get_tensor(state_dict.pop(self.weight_key)),
-            self._norm_weight_dtype)
+        weight_tensor = paddle.cast(get_tensor(state_dict.pop(self.weight_key)), self._norm_weight_dtype)
         self.weight.set_value(weight_tensor)
 
-    def forward(
-            self,
-            x,
-            residual_input: Optional[paddle.Tensor] = None) -> paddle.Tensor:
+    def forward(self, x, residual_input: Optional[paddle.Tensor] = None) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
 
@@ -140,9 +134,7 @@ class RMSNorm(nn.Layer):
         if current_platform.is_gcu():
             if residual_input is None:
                 return rms_norm(x, self.weight, self.eps)
-            norm_out = self.norm_func(
-                x, residual_input, self.weight, self.eps
-            )
+            norm_out = self.norm_func(x, residual_input, self.weight, self.eps)
         else:
             norm_out = self.norm_func(
                 x,
@@ -152,7 +144,7 @@ class RMSNorm(nn.Layer):
                 begin_norm_axis=self.begin_norm_axis,
                 bias=self.bias,
                 residual=residual_input,
-                quant_scale=-1 if self.quant_scale is None else self.quant_scale,
+                quant_scale=(-1 if self.quant_scale is None else self.quant_scale),
                 quant_round_type=self.quant_round_type,
                 quant_max_bound=self.quant_max_bound,
                 quant_min_bound=self.quant_min_bound,
@@ -242,8 +234,7 @@ class LayerNorm(nn.Layer):
                 dtype=self._norm_weight_dtype,
             )
 
-    def load_state_dict(self, state_dict: Dict[str,
-                                               paddle.Tensor | np.ndarray]):
+    def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
         """
         Load the checkpoint state dictionary into the layer.
 
@@ -252,22 +243,18 @@ class LayerNorm(nn.Layer):
         """
 
         # weight
-        weight_tensor = paddle.cast(
-            get_tensor(state_dict.pop(self.weight_key)),
-            self._norm_weight_dtype)
+        weight_tensor = paddle.cast(get_tensor(state_dict.pop(self.weight_key)), self._norm_weight_dtype)
         self.weight.set_value(weight_tensor)
 
         # bias
         if self.with_bias:
             bias_tensor = paddle.cast(
                 get_tensor(state_dict.pop(self.bias_key)),
-                self._norm_weight_dtype)
+                self._norm_weight_dtype,
+            )
             self.bias.set_value(bias_tensor)
 
-    def forward(
-            self,
-            x,
-            residual_input: Optional[paddle.Tensor] = None) -> paddle.Tensor:
+    def forward(self, x, residual_input: Optional[paddle.Tensor] = None) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
 
@@ -326,7 +313,7 @@ class LayerNorm(nn.Layer):
                 begin_norm_axis=1,
                 bias=self.bias,
                 residual=residual_input,
-                quant_scale=-1 if self.quant_scale is None else self.quant_scale,
+                quant_scale=(-1 if self.quant_scale is None else self.quant_scale),
                 quant_round_type=self.quant_round_type,
                 quant_max_bound=self.quant_max_bound,
                 quant_min_bound=self.quant_min_bound,

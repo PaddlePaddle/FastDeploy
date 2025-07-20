@@ -29,16 +29,15 @@ def np_quant_weight_int4(weight_np):
     weight = np.transpose(weight_np, [1, 0])  # n,k
     max_value = np.max(np.abs(weight), axis=1).reshape(-1, 1)  # k => k,1
     quanted_weight = np_clip_and_round(weight / max_value * 7.0, 7)  # n,k
-    quanted_weight = (quanted_weight[:, 1::2] & 0xF) << 4 | (
-        quanted_weight[:, ::2] & 0xF)  # pack int4, [n,k//2]
+    quanted_weight = (quanted_weight[:, 1::2] & 0xF) << 4 | (quanted_weight[:, ::2] & 0xF)  # pack int4, [n,k//2]
     weight_scales = (max_value).astype(weight_np.dtype).reshape(-1)
     return quanted_weight, weight_scales.astype(np.float32)
 
 
-def np_quant_weight(weight_np, algo='weight_only_int8'):
+def np_quant_weight(weight_np, algo="weight_only_int8"):
     assert weight_np.dtype == np.float32
 
-    if algo == 'weight_only_int4':
+    if algo == "weight_only_int4":
         return np_quant_weight_int4(weight_np)
 
     weight = np.transpose(weight_np, [1, 0])
@@ -56,7 +55,7 @@ def int8_to_bin_np(value):
 def int8_to_bin(value):
     if not -128 <= value <= 127:
         raise ValueError("int8 值必须在 -128 到 127 之间")
-    return format(value & 0xFF, '08b')  # '08b' 表示 8 位二进制，高位补零
+    return format(value & 0xFF, "08b")  # '08b' 表示 8 位二进制，高位补零
 
 
 # 1) preparation
@@ -70,7 +69,7 @@ w_np = (np.random.random((k, n)).astype(np.float32) - 0.5) * 10
 qw_np, wscale_np = np_quant_weight(w_np, algo)
 
 # 3) xpu calculation
-dtype = 'float32'
+dtype = "float32"
 x_pd = paddle.to_tensor(w_np, dtype=dtype)
 qw_pd, wscale_pd = weight_quantize_xpu(x_pd, algo, -1, -1)
 qw_pd_trans = paddle.transpose(qw_pd, [1, 0])
@@ -83,12 +82,7 @@ qw_pd_trans = paddle.transpose(qw_pd, [1, 0])
 # comparation
 print(f"wscale_pd, mean={wscale_pd.mean()}, std={wscale_pd.std()}")
 print(f"wscale_np, mean={wscale_np.mean()}, std={wscale_np.std()}")
-print(
-    f"qw_np, mean={qw_np.astype(np.float32).mean()}, std={qw_np.astype(np.float32).std()}"
-)
-print(
-    f"qw_pd_trans, mean={qw_pd_trans.astype('float32').mean()}, std={qw_pd_trans.astype('float32').std()}"
-)
-sum_diff = np.sum(
-    np.abs(qw_pd_trans.astype("float32").numpy() - qw_np.astype("float32")))
+print(f"qw_np, mean={qw_np.astype(np.float32).mean()}, std={qw_np.astype(np.float32).std()}")
+print(f"qw_pd_trans, mean={qw_pd_trans.astype('float32').mean()}, std={qw_pd_trans.astype('float32').std()}")
+sum_diff = np.sum(np.abs(qw_pd_trans.astype("float32").numpy() - qw_np.astype("float32")))
 print(f"sum_diff: {sum_diff}")

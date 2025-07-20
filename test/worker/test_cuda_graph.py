@@ -13,23 +13,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 import paddle
 
 from fastdeploy.config import FDConfig, GraphOptimizationConfig
-from fastdeploy.model_executor.graph_optimization.decorator import \
-    support_graph_optimization
 from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.graph_optimization.decorator import (
+    support_graph_optimization,
+)
 
 
 @support_graph_optimization
 class TestCase1SubLayer1(paddle.nn.Layer):
-    """ Sub layer 1 of test case 1 """
+    """Sub layer 1 of test case 1"""
 
     def __init__(self, fd_config: FDConfig, **kwargs):
         super().__init__()
 
     def forward(self, _, forward_meta: ForwardMeta):
-        """ Sub layer1 forward pass """
+        """Sub layer1 forward pass"""
 
         output = paddle.add(forward_meta.input_ids, forward_meta.input_ids)
         print(" SubLayer1 Output: {output}")
@@ -43,7 +45,7 @@ class TestCase1SubLayer2(paddle.nn.Layer):
         super().__init__()
 
     def forward(self, _, forward_meta: ForwardMeta):
-        """ Sub layer2 forward pass """
+        """Sub layer2 forward pass"""
         x = paddle.ones_like(forward_meta.input_ids)
         y = paddle.ones_like(forward_meta.input_ids)
         output = x + y
@@ -59,21 +61,21 @@ class TestCase1SubLayer3(paddle.nn.Layer):
         super().__init__()
 
     def forward(self, _, forward_meta: ForwardMeta):
-        """ Sub layer3 forward pass """
+        """Sub layer3 forward pass"""
         output = paddle.add(forward_meta.input_ids, forward_meta.input_ids)
         print(" SubLayer3 Output: {output}")
         return output
 
 
 class TestModel1(paddle.nn.Layer):
-    """ Tast Model """
+    """Tast Model"""
 
     def __init__(self, fd_config: FDConfig, **kwargs):
         super().__init__()
         self.fd_config = fd_config
 
     def forward(self, _, forward_meta: ForwardMeta):
-        """ Test model for ward pass """
+        """Test model for ward pass"""
         self.sublayer1 = TestCase1SubLayer1(self.fd_config)
         self.sublayer2 = TestCase1SubLayer2(self.fd_config)
         self.sublayer3 = TestCase1SubLayer3(self.fd_config)
@@ -95,18 +97,18 @@ class TestModel1(paddle.nn.Layer):
 
 @support_graph_optimization
 class TestModel2(paddle.nn.Layer):
-    """ Tast Model """
+    """Tast Model"""
 
     def __init__(self, fd_config: FDConfig, **kwargs):
         super().__init__()
 
     def forward(self, _, forward_meta: ForwardMeta):
-        """ Test model for ward pass """
+        """Test model for ward pass"""
         return forward_meta.input_ids + forward_meta.input_ids
 
 
 def run_test_case():
-    """ Run test case """
+    """Run test case"""
     # Set llm config1
     graph_opt_config = GraphOptimizationConfig()
     graph_opt_config.use_cudagraph = True
@@ -128,5 +130,5 @@ def run_test_case():
     print(output2)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_test_case()

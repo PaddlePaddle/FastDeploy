@@ -90,7 +90,7 @@ template <
     SharedMemoryClearOption SharedMemoryClear = SharedMemoryClearOption::kNone,
     /// Used for partial specialization
     typename Enable = bool>
-class Wint2xMmaMultistage : 
+class Wint2xMmaMultistage :
   public Wint2xMmaBase<Shape_, Policy_, Stages> {
 public:
   ///< Base class

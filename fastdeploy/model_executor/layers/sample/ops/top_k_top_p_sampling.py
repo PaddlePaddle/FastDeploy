@@ -22,8 +22,8 @@ from fastdeploy import envs
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_gcu():
-    from fastdeploy.model_executor.ops.gcu import \
-        top_p_sampling as gcu_top_p_sampling
+    from fastdeploy.model_executor.ops.gcu import top_p_sampling as gcu_top_p_sampling
+
 
 def top_k_top_p_sampling(
     x: paddle.Tensor,
@@ -33,8 +33,8 @@ def top_k_top_p_sampling(
     topp_seed: Optional[paddle.Tensor] = None,
     seed: int = -1,
     k: int = 0,
-    mode: Literal['truncated', 'non-truncated'] = "truncated",
-    order: Literal['top_k_first', 'joint'] = "top_k_first",
+    mode: Literal["truncated", "non-truncated"] = "truncated",
+    order: Literal["top_k_first", "joint"] = "top_k_first",
 ) -> tuple[paddle.Tensor, paddle.Tensor]:
     """
     x(Tensor): An input 2-D Tensor with type float32, float16 and bfloat16.
@@ -61,35 +61,33 @@ def top_k_top_p_sampling(
     """
     top_p_class = envs.FD_SAMPLING_CLASS.lower()
     if top_p_class == "air":
-        _, ids = air_top_p_sampling(x,
-                                    top_p,
-                                    threshold,
-                                    topp_seed,
-                                    seed=seed,
-                                    k=k,
-                                    mode=mode)
+        _, ids = air_top_p_sampling(x, top_p, threshold, topp_seed, seed=seed, k=k, mode=mode)
     elif top_p_class == "rejection":
         ids = rejection_top_p_sampling(x, top_p, top_k, seed, order)
         _ = None
     elif top_p_class == "base_non_truncated":
-        _, ids = paddle.tensor.top_p_sampling(x,
-                                                top_p,
-                                                threshold=threshold,
-                                                topp_seed=topp_seed,
-                                                seed=seed,
-                                                k=k,
-                                                mode="non-truncated")
+        _, ids = paddle.tensor.top_p_sampling(
+            x,
+            top_p,
+            threshold=threshold,
+            topp_seed=topp_seed,
+            seed=seed,
+            k=k,
+            mode="non-truncated",
+        )
     else:
         if current_platform.is_gcu():
             _, ids = gcu_top_p_sampling(x, top_p)
         else:
-            _, ids = paddle.tensor.top_p_sampling(x,
-                                                  top_p,
-                                                  threshold=threshold,
-                                                  topp_seed=topp_seed,
-                                                  seed=seed,
-                                                  k=k,
-                                                  mode="truncated")
+            _, ids = paddle.tensor.top_p_sampling(
+                x,
+                top_p,
+                threshold=threshold,
+                topp_seed=topp_seed,
+                seed=seed,
+                k=k,
+                mode="truncated",
+            )
     return _, ids
 
 
@@ -100,15 +98,15 @@ def air_top_p_sampling(
     topp_seed: Optional[paddle.Tensor] = None,
     seed: int = -1,
     k: int = 0,
-    mode: Literal['truncated', 'non-truncated'] = "truncated",
+    mode: Literal["truncated", "non-truncated"] = "truncated",
 ) -> tuple[paddle.Tensor, paddle.Tensor]:
     """
     air_top_p_sampling
     """
     try:
         from fastdeploy.model_executor.ops.gpu import air_top_p_sampling
-        out, ids = air_top_p_sampling(x, top_p, threshold, topp_seed, seed, k,
-                                      mode)
+
+        out, ids = air_top_p_sampling(x, top_p, threshold, topp_seed, seed, k, mode)
     except ImportError:
         raise RuntimeError("Cannot import air_top_p_sampling op.")
     return out, ids
@@ -119,14 +117,16 @@ def rejection_top_p_sampling(
     top_p: paddle.Tensor,
     top_k: paddle.Tensor,
     seed: int = -1,
-    order: Literal['top_k_first', 'joint'] = "top_k_first",
+    order: Literal["top_k_first", "joint"] = "top_k_first",
 ) -> paddle.Tensor:
     """
     rejection_top_p_sampling
     """
     try:
         from fastdeploy.model_executor.ops.gpu import (
-            rejection_top_p_sampling, top_k_renorm_probs)
+            rejection_top_p_sampling,
+            top_k_renorm_probs,
+        )
 
         if paddle.count_nonzero(top_k) == 0:
             ids = rejection_top_p_sampling(
