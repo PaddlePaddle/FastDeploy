@@ -43,7 +43,7 @@ else:
         speculate_save_output, speculate_set_value_by_flags_and_idx,
         speculate_step_paddle, speculate_step_system_cache,
         speculate_update_v3, step_paddle, step_system_cache, update_inputs,
-        step_reschedule)
+        step_reschedule, update_inputs_v1)
 
 from fastdeploy.worker.output import (ModelOutputData, ModelRunnerOutput,
                                       SamplerOutput)
@@ -126,6 +126,8 @@ def pre_process(
 
 def post_process_normal(sampler_output: SamplerOutput,
                         model_output: ModelOutputData,
+                        share_inputs: Dict[str, paddle.Tensor],
+                        block_size: int = 64,
                         save_each_rank: bool = False,
                         skip_save_output: bool = False) -> ModelRunnerOutput:
     """ Post-processing steps after completing a single token generation. """
@@ -182,17 +184,34 @@ def post_process_normal(sampler_output: SamplerOutput,
 
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
-        update_inputs(
-            model_output.stop_flags,
-            model_output.not_need_stop,
-            model_output.seq_lens_this_time,
-            model_output.seq_lens_encoder,
-            model_output.seq_lens_decoder,
-            model_output.input_ids,
-            model_output.stop_nums,
-            sampler_output.sampled_token_ids,
-            model_output.is_block_step,
-        )
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            update_inputs_v1(model_output.stop_flags,
+                   model_output.not_need_stop,
+                   model_output.seq_lens_this_time,
+                   model_output.seq_lens_encoder,
+                   model_output.seq_lens_decoder,
+                   share_inputs['step_seq_lens_decoder'],
+                   share_inputs['prompt_lens'],
+                   sampler_output.sampled_token_ids,
+                   model_output.input_ids,
+                   share_inputs['block_tables'],
+                   model_output.stop_nums,
+                   model_output.next_tokens,
+                   model_output.is_block_step,
+                   block_size
+                )
+        else:
+            update_inputs(
+                model_output.stop_flags,
+                model_output.not_need_stop,
+                model_output.seq_lens_this_time,
+                model_output.seq_lens_encoder,
+                model_output.seq_lens_decoder,
+                model_output.input_ids,
+                model_output.stop_nums,
+                sampler_output.sampled_token_ids,
+                model_output.is_block_step,
+            )
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
@@ -258,6 +277,8 @@ def post_process_specualate(model_output, save_each_rank: bool = False, skip_sav
 
 def post_process(sampler_output: SamplerOutput,
                  model_output: ModelOutputData,
+                 share_inputs: Dict[str, paddle.Tensor],
+                 block_size: int = 64,
                  save_each_rank: bool = False,
                  speculative_decoding: bool = False,
                  skip_save_output: bool = False) -> None:
@@ -265,7 +286,7 @@ def post_process(sampler_output: SamplerOutput,
     if speculative_decoding:
         post_process_specualate(model_output, save_each_rank, skip_save_output)
     else:
-        post_process_normal(sampler_output, model_output, save_each_rank,
+        post_process_normal(sampler_output, model_output, share_inputs, block_size, save_each_rank,
                             skip_save_output)
 
 

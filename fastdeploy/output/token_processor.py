@@ -31,6 +31,7 @@ from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger, spec_logger
 from fastdeploy.worker.output import LogprobsLists
+from fastdeploy import envs
 
 RECOVERY_STOP_SIGNAL = -3
 MAX_BSZ = 512
@@ -280,9 +281,12 @@ class TokenProcessor(object):
                 else:
                     time.sleep(0.002)
         else:
-            self.resource_manager.stop_flags[index] = True
-            self.resource_manager.tasks_list[index] = None
-            self.resource_manager._recycle_block_tables(task)
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                self.resource_manager.finish_requests_async(task_id)
+            else:
+                self.resource_manager.stop_flags[index] = True
+                self.resource_manager.tasks_list[index] = None
+                self.resource_manager._recycle_block_tables(task)
         if task_id in self.tokens_counter:
             del self.tokens_counter[task_id]
 
@@ -517,6 +521,7 @@ class TokenProcessor(object):
                 self.tokens_counter[task_id] += 1
                 if token_id != RECOVERY_STOP_SIGNAL:
                     result.outputs.token_ids.append(token_id)
+                    task.output_token_ids.append(token_id)
                 if token_id in task.eos_token_ids or is_prefill or recovery_stop:
                     result.finished = True
                     if recovery_stop:

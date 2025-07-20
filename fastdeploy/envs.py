@@ -129,6 +129,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # set traec exporter_otlp_headers.
     "EXPORTER_OTLP_HEADERS":
     lambda: os.getenv("EXPORTER_OTLP_HEADERS"),
+
+    # enable kv cache block scheduler v1 (no need for kv_cache_ratio)
+    "ENABLE_V1_KVCACHE_SCHEDULER":
+    lambda: int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER"), "0")
 }
 
 

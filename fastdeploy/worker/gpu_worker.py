@@ -181,7 +181,10 @@ class GpuWorker(WorkerBase):
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
-        self.model_runner.insert_prefill_inputs(req_dicts=req_dicts)
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.model_runner.insert_tasks_v1(req_dicts=req_dicts)
+        else:
+            self.model_runner.insert_prefill_inputs(req_dicts=req_dicts)
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """

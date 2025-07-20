@@ -19,6 +19,7 @@ from __future__ import annotations
 import time
 from dataclasses import asdict, dataclass, fields
 from typing import Any, Dict, Optional, Union
+from enum import Enum
 
 import numpy as np
 
@@ -26,6 +27,16 @@ from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.utils import data_processor_logger
 from fastdeploy.worker.output import LogprobsLists
 
+class RequestStatus(Enum):
+    WAITING = 0
+    RUNNING = 1
+    PREEMPTED = 2
+    FINISHED = 3
+
+class RequestType(Enum):
+    PREFILL = 0
+    DECODE = 1
+    PREEMPTED = 2
 
 @dataclass
 class Request:
@@ -94,6 +105,15 @@ class Request:
         self.enable_thinking = enable_thinking
         self.trace_carrier = trace_carrier
 
+        # token num
+        self.block_tables = []
+        self.output_token_ids = []
+        self.num_computed_tokens = 0
+        # status
+        self.status = RequestStatus.WAITING
+        self.task_type = RequestType.PREFILL
+        self.idx = None
+
     @classmethod
     def from_dict(cls, d: dict):
         data_processor_logger.debug(f"{d}")
@@ -124,6 +144,21 @@ class Request:
                    guided_json_object=d.get("guided_json_object", None),
                    enable_thinking=d.get("enable_thinking", True),
                    trace_carrier=d.get("trace_carrier", {}))
+    
+    @property
+    def num_total_tokens(self):
+        """
+        Total tokens of the request, include prompt tokens and generated tokens.
+        """
+        return self.prompt_token_ids_len + len(self.output_token_ids)
+
+    def __eq__(self, other):
+        """
+        EQ operator.
+        """
+        if not isinstance(other, Request):
+            return False
+        return self.request_id == other.request_id 
 
     def to_dict(self) -> dict:
         """convert Request into a serializable dict """
