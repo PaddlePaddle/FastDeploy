@@ -219,7 +219,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
-                self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
+                self.share_inputs["prefill_prompt_lens"][idx : idx + 1] = len(input_ids)
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
@@ -254,7 +254,9 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["presence_score"][idx : idx + 1] = request.get("presence_penalty", 0.0)
 
             self.share_inputs["min_dec_len"][idx : idx + 1] = request.get("min_tokens", 1)
-            self.share_inputs["max_dec_len"][idx : idx + 1] = request.get("max_tokens", self.model_config.max_length)
+            self.share_inputs["max_dec_len"][idx : idx + 1] = request.get(
+                "max_tokens", self.model_config.max_model_len
+            )
 
             self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
             self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = length
@@ -543,6 +545,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["prefill_prompt_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["prompt_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["step_idx"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["not_need_stop"] = paddle.full(
@@ -995,8 +998,11 @@ class GPUModelRunner(ModelRunnerBase):
             post_process(
                 sampler_output=sampler_output,
                 model_output=model_output_data,
+                share_inputs=self.share_inputs,
+                block_size=self.parallel_config.block_size,
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=True,
+                is_dummy=True,
             )
 
             if self.speculative_decoding:
@@ -1248,9 +1254,12 @@ class GPUModelRunner(ModelRunnerBase):
         post_process(
             sampler_output=sampler_output,
             model_output=model_output_data,
+            share_inputs=self.share_inputs,
+            block_size=self.parallel_config.block_size,
             save_each_rank=self.parallel_config.use_ep,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=skip_save_output,
+            is_dummy=False,
         )
 
         # 6. Speculative decode

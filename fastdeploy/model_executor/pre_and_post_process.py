@@ -158,6 +158,7 @@ def post_process_normal(
     block_size: int = 64,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
+    is_dummy: bool = False,
 ) -> ModelRunnerOutput:
     """Post-processing steps after completing a single token generation."""
     # handle vl:
@@ -223,7 +224,7 @@ def post_process_normal(
 
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
-        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER and (is_dummy is False):
             update_inputs_v1(
                 model_output.stop_flags,
                 model_output.not_need_stop,
@@ -231,7 +232,7 @@ def post_process_normal(
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,
                 share_inputs["step_seq_lens_decoder"],
-                share_inputs["prompt_lens"],
+                share_inputs["prefill_prompt_lens"],
                 sampler_output.sampled_token_ids,
                 model_output.input_ids,
                 share_inputs["block_tables"],
@@ -322,12 +323,15 @@ def post_process(
     save_each_rank: bool = False,
     speculative_decoding: bool = False,
     skip_save_output: bool = False,
+    is_dummy=False,
 ) -> None:
     """Post-processing steps after completing a single token generation."""
     if speculative_decoding:
         post_process_specualate(model_output, save_each_rank, skip_save_output)
     else:
-        post_process_normal(sampler_output, model_output, share_inputs, block_size, save_each_rank, skip_save_output)
+        post_process_normal(
+            sampler_output, model_output, share_inputs, block_size, save_each_rank, skip_save_output, is_dummy
+        )
 
 
 def step_cuda(

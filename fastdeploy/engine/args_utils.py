@@ -130,6 +130,11 @@ class EngineArgs:
     Ratio of tokens to process in a block.
     """
 
+    prealloc_dec_block_slot_num_threshold: int = 5
+    """
+    Token slot threshold for preallocating decoder blocks.
+    """
+
     dist_init_ip: Optional[str] = None
     """
     The master node ip of multinode deployment

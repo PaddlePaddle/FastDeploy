@@ -1,43 +1,38 @@
-import time
-from collections import defaultdict, deque
-from collections.abc import Iterable
-from typing import Any, Optional, Union
-from concurrent.futures import ThreadPoolExecutor
 import threading
-from dataclasses import asdict, dataclass, fields
+import time
+from collections import deque
+from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from typing import Union
 
-import numpy as np
-
-from fastdeploy.engine.request import Request, RequestStatus
-from fastdeploy.cache_manager.prefix_cache_manager import PrefixCacheManager
+from fastdeploy.engine.request import Request, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
-from fastdeploy.utils import EngineError, console_logger, llm_logger
+from fastdeploy.utils import llm_logger
+
 
 @dataclass
 class ScheduledDecodeTask:
     idx: int
     request_id: str
     block_tables: list[int]
-    task_type: int = 1
+    task_type: RequestType = RequestType.DECODE
+
 
 @dataclass
 class ScheduledPreemptTask:
     idx: int
     request_id: str
-    task_type: int = 2
-
+    task_type: RequestType = RequestType.PREEMPTED
 
 
 class ResourceManagerV1(ResourceManager):
-    def __init__(self,
-                 max_num_seqs,
-                 config,
-                 tensor_parallel_size,
-                 splitwise_role,
-                 local_data_parallel_id=0
-        ):
-        super(ResourceManagerV1, self).__init__(max_num_seqs, config, tensor_parallel_size, splitwise_role, local_data_parallel_id)
+    def __init__(self, max_num_seqs, config, tensor_parallel_size, splitwise_role, local_data_parallel_id=0):
+        super(ResourceManagerV1, self).__init__(
+            max_num_seqs, config, tensor_parallel_size, splitwise_role, local_data_parallel_id
+        )
         # req_id -> Request
+        self.config = config
         self.requests: dict[str, Request] = {}
         # Priority queues for requests.
         self.waiting: deque[Request] = deque()
@@ -45,31 +40,29 @@ class ResourceManagerV1(ResourceManager):
         self.finish_execution_pool = ThreadPoolExecutor(max_workers=1)
         self.lock = threading.Lock()
 
-
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
 
     def get_new_block_nums(self, request: Request, num_new_tokens: int):
-        return (request.num_computed_tokens + num_new_tokens + self.config.cache_config.block_size - 1) // self.config.cache_config.block_size - len(request.block_tables)
+        return (
+            request.num_computed_tokens + num_new_tokens + self.config.cache_config.block_size - 1
+        ) // self.config.cache_config.block_size - len(request.block_tables)
 
     def _prepare_prefill_task(self, request, new_token_num):
         request.prefill_start_index = request.num_computed_tokens
-        request.prefill_end_index = request.num_computed_tokens + new_token_num 
-        request.task_type = 0
+        request.prefill_end_index = request.num_computed_tokens + new_token_num
+        request.task_type = RequestType.PREFILL
         return request
 
     def _prepare_decode_task(self, request):
-        return ScheduleDecodeTask(idx=request.idx, request_id=request.request_id, block_tables=request.block_tables)
+        return ScheduledDecodeTask(idx=request.idx, request_id=request.request_id, block_tables=request.block_tables)
 
     def _prepare_preempt_task(self, request):
-        return SchedulePreemptTask(idx=request.idx, request_id=request.request_id)
-
+        return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
 
     def schedule(self):
         with self.lock:
             scheduled_reqs: list[Request] = []
-            scheduled_resumed_reqs: list[Request] = []
-
             preempted_reqs: list[Request] = []
             token_budget = self.config.max_num_batched_tokens
 
@@ -78,21 +71,30 @@ class ResourceManagerV1(ResourceManager):
             num_decoding_req_nums = 0
             while req_index < len(self.running) and token_budget > 0:
                 request = self.running[req_index]
-                if request.num_computed_tokens >= request.prompt_token_ids_len: # to be decoding
-                    if request.num_total_tokens > request.prompt_token_ids_len: # has generated tokens
+                if request.num_computed_tokens >= request.prompt_token_ids_len:  # to be decoding
+                    if request.num_total_tokens > request.prompt_token_ids_len:  # has generated tokens
                         request.num_computed_tokens = request.num_total_tokens - 1
-                    if self.allocated_slots(request) - request.num_total_tokens <= self.config.cache_config.prealloc_dec_block_slot_num_threshold:
+                    if (
+                        self.allocated_slots(request) - request.num_total_tokens
+                        <= self.config.cache_config.prealloc_dec_block_slot_num_threshold
+                    ):
                         # Allocation for next decoding blocks
                         if self.cache_manager.can_allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num):
-                            llm_logger.debug(f"schedule decoding task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}")
-                            request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num))
+                            llm_logger.debug(
+                                f"schedule decoding task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
+                            )
+                            request.block_tables.extend(
+                                self.cache_manager.allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num)
+                            )
                             # Prepare decoding task
                             scheduled_reqs.append(self._prepare_decode_task(request))
                         else:
                             # Not enough blocks to allocate, trigger preemption
                             can_schedule = True
                             while True:
-                                if not self.cache_manager.can_allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num):
+                                if not self.cache_manager.can_allocate_gpu_blocks(
+                                    self.config.cache_config.enc_dec_block_num
+                                ):
                                     preempted_req = self.running.pop()
                                     preempted_req.status = RequestStatus.PREEMPTED
                                     preempted_req.num_computed_tokens = 0
@@ -111,13 +113,17 @@ class ResourceManagerV1(ResourceManager):
                             if not can_schedule:
                                 break
                             # Allocation for next decoding blocks
-                            request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num))
+                            request.block_tables.extend(
+                                self.cache_manager.allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num)
+                            )
                             # Prepare decoding task
-                            scheduled_reqs.append(self._prepare_decode_task(request)) 
+                            scheduled_reqs.append(self._prepare_decode_task(request))
                         num_decoding_req_nums += 1
                         token_budget -= 1
                 else:  # need to prefill
-                    llm_logger.debug(f"scheduler prefill task: {request} request.prompt_token_ids_len {request.prompt_token_ids_len} request.num_computed_tokens {request.num_computed_tokens}")
+                    llm_logger.debug(
+                        f"scheduler prefill task: {request} request.prompt_token_ids_len {request.prompt_token_ids_len} request.num_computed_tokens {request.num_computed_tokens}"
+                    )
                     num_new_tokens = request.prompt_token_ids_len - request.num_computed_tokens
                     num_new_tokens = min(num_new_tokens, token_budget)
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
@@ -125,7 +131,7 @@ class ResourceManagerV1(ResourceManager):
                     if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
                         request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
                         # Prepare prefill task
-                        scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens)) 
+                        scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                     else:
                         can_schedule = True
                         # Not enough blocks to allocate, trigger preemption
@@ -151,7 +157,7 @@ class ResourceManagerV1(ResourceManager):
                             break
                         request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
                         # Prepare prefill task
-                        scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens)) 
+                        scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                     token_budget -= num_new_tokens
                     request.num_computed_tokens += num_new_tokens
                 req_index += 1
@@ -170,7 +176,7 @@ class ResourceManagerV1(ResourceManager):
                             request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
                             self.waiting.popleft()
                             self.running.append(request)
-                            scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens)) 
+                            scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             request.inference_start_time = time.time()
                             request.schedule_start_time = time.time()
                             token_budget -= num_new_tokens
@@ -192,14 +198,14 @@ class ResourceManagerV1(ResourceManager):
                             request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
                             self.waiting.popleft()
                             self.running.append(request)
-                            scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens)) 
+                            scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             request.status = RequestStatus.RUNNING
                         else:
                             break
                     else:
-                        llm_logger.error(f"Unknown request status type")
+                        llm_logger.error("Unknown request status type")
             if scheduled_reqs:
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
             return scheduled_reqs
@@ -227,25 +233,22 @@ class ResourceManagerV1(ResourceManager):
         self.cache_manager.recycle_gpu_blocks(request.block_tables)
         request.block_tables = []
 
-    def finish_requests_async(self, 
-        request_ids: Union[str, Iterable[str]]):
+    def finish_requests_async(self, request_ids: Union[str, Iterable[str]]):
         return self.finish_execution_pool.submit(self.finish_requests, request_ids)
 
-    def finish_requests(
-        self,
-        request_ids: Union[str, Iterable[str]]):
+    def finish_requests(self, request_ids: Union[str, Iterable[str]]):
         llm_logger.info(f"recycle resources for requests: {request_ids}")
         try:
             with self.lock:
                 if isinstance(request_ids, str):
-                    request_ids = (request_ids, )
+                    request_ids = (request_ids,)
                 else:
                     request_ids = set(request_ids)
                 for req_id in request_ids:
                     request = self.requests.get(req_id)
                     if request is None:
                         # Invalid request ID.
-                        continue 
+                        continue
                     request.status = RequestStatus.FINISHED
                     self.running.remove(request)
                     self._free_blocks(request)
@@ -254,4 +257,3 @@ class ResourceManagerV1(ResourceManager):
                     del self.requests[req_id]
         except Exception as e:
             llm_logger.error(e)
-
