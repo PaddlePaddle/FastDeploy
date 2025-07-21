@@ -57,6 +57,55 @@ namespace cutlass {
 namespace gemm {
 namespace warp {
 
+namespace detail {
+
+template <typename T, int InstructSize>
+struct Multiplier {
+    using Element = T;
+    using Fragment = Array<Element, InstructSize>;
+
+    template <int N>
+    CUTLASS_DEVICE
+    static void Compute(Array<Element, N> const& operand_frag, Element scalar, Array<Element, N> &result_frag) {
+        arch::device_breakpoint();
+    }
+};
+
+template <>
+struct Multiplier<bfloat16_t, 2> {
+    using Element = bfloat16_t;
+    using Fragment = Array<Element, 2>;
+
+    template <int N>
+    CUTLASS_DEVICE
+    static void Compute(Array<Element, N> const& operand_frag, Element scalar, Array<Element, N> &result_frag) {
+#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+
+        __nv_bfloat16 const* scalar_ptr = reinterpret_cast<__nv_bfloat16 const*>(&scalar);
+        Fragment const* operand_ptr = reinterpret_cast<Fragment const*>(&operand_frag);
+        Fragment* result_ptr = reinterpret_cast<Fragment *>(&result_frag);
+
+        __nv_bfloat162 scalarx2 = __bfloat162bfloat162(*scalar_ptr);
+        __nv_bfloat162 const* operand_bf16x2_ptr = reinterpret_cast<__nv_bfloat162 const*>(&operand_ptr);
+        __nv_bfloat162* result_bf16x2_ptr = reinterpret_cast<__nv_bfloat162*>(&result_ptr);
+
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < N / 2; ++i) {
+            result_bf16x2_ptr[i] = __hmul2(operand_bf16x2_ptr[i], scalarx2);
+        }
+
+#else
+        // Slow path not implemented here on purpose. If we need to do HMMA on
+        // older arch, scale conversion should happen before scales are stored
+        // to shared memory and we should use the fp16 dequantizer. This will
+        // avoid numerous conversion instructions in GEMM main loop.
+        arch::device_breakpoint();
+#endif
+    }
+};
+
+} // namespace detail
+
 ////////////////////////////////////////////////////////////////////////////////
 
 template <
@@ -162,6 +211,8 @@ public:
     /// Fragment of dequantized B
     using FragmentOutput = Array<ElementOperand, MmaOperator::FragmentB::kElements / kExpansionFactor>;
 
+    //using Multiplier = detail::Multiplier<ElementOperand, 2>;
+
     /// TensorRef type for loading element from a tensor
     using SuperTensorRef = cutlass::TensorRef<ElementSuperScale, Layout>;
     using LocalTensorRef = cutlass::TensorRef<ElementLocalScale, Layout>;
@@ -239,38 +290,12 @@ public:
             unpacked_frag_ = Uint2Converter::convert(input_frag, code_scale_frag, code_zp_frag);
         }
 
-#if 0
-        if (FragmentInputUnpack::kElements == 64) {
-            CUTLASS_TRACE_DEVICE(" [stage=%d] unpacked_frag[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
-                stage,
-                static_cast<float>(unpacked_frag[0]), static_cast<float>(unpacked_frag[1]),
-                static_cast<float>(unpacked_frag[2]), static_cast<float>(unpacked_frag[3]),
-                static_cast<float>(unpacked_frag[4]), static_cast<float>(unpacked_frag[5]),
-                static_cast<float>(unpacked_frag[6]), static_cast<float>(unpacked_frag[7]),
-                static_cast<float>(unpacked_frag[8]), static_cast<float>(unpacked_frag[9]),
-                static_cast<float>(unpacked_frag[10]), static_cast<float>(unpacked_frag[11]),
-                static_cast<float>(unpacked_frag[12]), static_cast<float>(unpacked_frag[13]),
-                static_cast<float>(unpacked_frag[14]), static_cast<float>(unpacked_frag[15]));
-            CUTLASS_TRACE_DEVICE(" [stage=%d] unpacked_frag[16:31]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
-                stage,
-                static_cast<float>(unpacked_frag[16]), static_cast<float>(unpacked_frag[17]),
-                static_cast<float>(unpacked_frag[18]), static_cast<float>(unpacked_frag[19]),
-                static_cast<float>(unpacked_frag[20]), static_cast<float>(unpacked_frag[21]),
-                static_cast<float>(unpacked_frag[22]), static_cast<float>(unpacked_frag[23]),
-                static_cast<float>(unpacked_frag[24]), static_cast<float>(unpacked_frag[25]),
-                static_cast<float>(unpacked_frag[26]), static_cast<float>(unpacked_frag[27]),
-                static_cast<float>(unpacked_frag[28]), static_cast<float>(unpacked_frag[29]),
-                static_cast<float>(unpacked_frag[30]), static_cast<float>(unpacked_frag[31]));
-        }
-#endif
-
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
-
         if (warp_k_compute_offset == 0) {
             static constexpr int32_t kLocalScaleMask = 0xF;
 
             // special for TileRows = 64
             int local_scale_shift = (((tb_offset_k / kGroupSize) + 1) & 1) * 4;
+            uint16_t const* local_scale_ptr = reinterpret_cast<uint16_t const*>(&local_scale_frag);
 
             CUTLASS_PRAGMA_UNROLL
             for (int i = 0; i < FragmentLocalScale::kElements; ++i) {
@@ -295,7 +320,7 @@ public:
         int mapped_offset = (warp_k_compute_offset % 2) == 0 ? 0 : (-kOutputColumns + 1);
 
         CUTLASS_PRAGMA_UNROLL
-        for (int mma_n_iter = 0; mma_n_iter < MmaOperator::MmaIterations::kColumn; ++mma_n_iter) {
+        for (int mma_n_iter = 0; mma_n_iter < kWarpIterationsAlongN; ++mma_n_iter) {
 
             CUTLASS_PRAGMA_UNROLL
             for (int j = 0; j < kOutputColumns; ++j) {
@@ -306,28 +331,6 @@ public:
                 output_frag[mma_n_iter * kOutputColumns + j] = static_cast<ElementOperand>(scaled_value);
             }
         }
-#if 0
-        if (FragmentOutput::kElements == 16) {
-            CUTLASS_TRACE_DEVICE(" [stage=%d] output_frag[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
-                stage,
-                static_cast<float>(output_frag[0]), static_cast<float>(output_frag[1]),
-                static_cast<float>(output_frag[2]), static_cast<float>(output_frag[3]),
-                static_cast<float>(output_frag[4]), static_cast<float>(output_frag[5]),
-                static_cast<float>(output_frag[6]), static_cast<float>(output_frag[7]),
-                static_cast<float>(output_frag[8]), static_cast<float>(output_frag[9]),
-                static_cast<float>(output_frag[10]), static_cast<float>(output_frag[11]),
-                static_cast<float>(output_frag[12]), static_cast<float>(output_frag[13]),
-                static_cast<float>(output_frag[14]), static_cast<float>(output_frag[15]));
-        }
-#endif
-
-#else
-        // Slow path not implemented here on purpose. If we need to do HMMA on
-        // older arch, scale conversion should happen before scales are stored
-        // to shared memory and we should use the fp16 dequantizer. This will
-        // avoid numerous conversion instructions in GEMM main loop.
-        arch::device_breakpoint();
-#endif
     }
 
     /// Add an offset to pointer in units of elements.
