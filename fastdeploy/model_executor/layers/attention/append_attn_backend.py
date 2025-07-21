@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import paddle
+
 from fastdeploy.model_executor.layers.attention.ops import (
     append_attention,
     get_block_shape_and_split_kv_block,

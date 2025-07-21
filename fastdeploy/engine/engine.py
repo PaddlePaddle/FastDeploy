@@ -932,26 +932,22 @@ class LLMEngine:
             "FLAGS_hardamard_moe_block_size": 128,
         }
         # environment variables needed by Dy2St
-        variables.update({
-            "SOT_LOG_LEVEL":
-            os.getenv("SOT_LOG_LEVEL", default="0"),
-            "SOT_UNSAFE_CACHE_FASTPATH":
-            os.getenv("SOT_UNSAFE_CACHE_FASTPATH", default="1"),
-            "SOT_ENABLE_0_SIZE_FALLBACK":
-            os.getenv("SOT_ENABLE_0_SIZE_FALLBACK", default="0"),
-            "SOT_SPECIALIZED_DIM_NUMBERS":
-            os.getenv("SOT_SPECIALIZED_DIM_NUMBERS", default="no"),
-            "FLAGS_specialize_device_in_dy2st":
-            os.getenv("FLAGS_specialize_device_in_dy2st", default="1"),
-            "FLAGS_enable_async_fast_gc":
-            os.getenv("FLAGS_enable_async_fast_gc", default="0"),
-            "FLAGS_pir_interpreter_record_stream_for_gc_cache":
-            os.getenv("FLAGS_pir_interpreter_record_stream_for_gc_cache",
-                      default="1"),
-            "FLAGS_parameters_persistent_mode_in_dy2st":
-            os.getenv("FLAGS_parameters_persistent_mode_in_dy2st",
-                      default="1"),
-        })
+        variables.update(
+            {
+                "SOT_LOG_LEVEL": os.getenv("SOT_LOG_LEVEL", default="0"),
+                "SOT_UNSAFE_CACHE_FASTPATH": os.getenv("SOT_UNSAFE_CACHE_FASTPATH", default="1"),
+                "SOT_ENABLE_0_SIZE_FALLBACK": os.getenv("SOT_ENABLE_0_SIZE_FALLBACK", default="0"),
+                "SOT_SPECIALIZED_DIM_NUMBERS": os.getenv("SOT_SPECIALIZED_DIM_NUMBERS", default="no"),
+                "FLAGS_specialize_device_in_dy2st": os.getenv("FLAGS_specialize_device_in_dy2st", default="1"),
+                "FLAGS_enable_async_fast_gc": os.getenv("FLAGS_enable_async_fast_gc", default="0"),
+                "FLAGS_pir_interpreter_record_stream_for_gc_cache": os.getenv(
+                    "FLAGS_pir_interpreter_record_stream_for_gc_cache", default="1"
+                ),
+                "FLAGS_parameters_persistent_mode_in_dy2st": os.getenv(
+                    "FLAGS_parameters_persistent_mode_in_dy2st", default="1"
+                ),
+            }
+        )
 
         if self.cfg.splitwise_role != "mixed":
             variables["FLAGS_use_pd_disaggregation"] = 1

@@ -20,11 +20,11 @@ from typing import TYPE_CHECKING, Dict, Optional
 
 import numpy as np
 import paddle
-from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.layers.quantization.quant_base import \
-    QuantMethodBase
 from paddle import nn
 from paddleformers.utils.log import logger
+
+from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta

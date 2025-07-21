@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import dataclasses
-import inspect
 import typing
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from collections.abc import Callable
 from functools import partial
-from typing import (Annotated, Any, Optional, TypeVar, Union, get_origin,
-                    get_type_hints)
+from typing import Annotated, Any, TypeVar, Union, get_origin, get_type_hints
 
 import paddle
 from paddle import Tensor
@@ -42,9 +40,7 @@ class DynamicDimTypeResolver:
         raise NotImplementedError
 
     @abstractmethod
-    def extract_inner_types(
-        self, data, data_name, tp
-    ) -> list[tuple[Accessor[Any, Any], str, type[Any]]]:
+    def extract_inner_types(self, data, data_name, tp) -> list[tuple[Accessor[Any, Any], str, type[Any]]]:
         raise NotImplementedError
 
     def resolve(self, data, data_name, tp) -> None:
@@ -69,9 +65,7 @@ class DataClassDynamicDimTypeResolver(DynamicDimTypeResolver):
     def type_match(self, tp) -> bool:
         return dataclasses.is_dataclass(tp) and isinstance(tp, type)
 
-    def extract_inner_types(
-        self, data, data_name, tp
-    ) -> list[tuple[Accessor[Any, Any], str, type[Any]]]:
+    def extract_inner_types(self, data, data_name, tp) -> list[tuple[Accessor[Any, Any], str, type[Any]]]:
         type_hints = get_type_hints(tp, include_extras=True)
         return [  # type: ignore
             (
@@ -87,15 +81,9 @@ class DataClassDynamicDimTypeResolver(DynamicDimTypeResolver):
 @DynamicDimTypeResolver.register_resolver
 class OptionalDynamicDimTypeResolver(DynamicDimTypeResolver):
     def type_match(self, tp) -> bool:
-        return (
-            get_origin(tp) is Union
-            and len(tp.__args__) == 2
-            and tp.__args__[1] is type(None)
-        )
+        return get_origin(tp) is Union and len(tp.__args__) == 2 and tp.__args__[1] is type(None)  # noqa: E721
 
-    def extract_inner_types(
-        self, data, data_name, tp
-    ) -> list[tuple[Accessor[Any, Any], str, type[Any]]]:
+    def extract_inner_types(self, data, data_name, tp) -> list[tuple[Accessor[Any, Any], str, type[Any]]]:
         if data is None:
             return []
         inner_type = tp.__args__[0]
@@ -107,28 +95,32 @@ class ListDynamicDimTypeResolver(DynamicDimTypeResolver):
     def type_match(self, tp) -> bool:
         return get_origin(tp) is list
 
-    def extract_inner_types(
-        self, data, data_name, tp
-    ) -> list[tuple[Accessor[Any, Any], str, type[Any]]]:
+    def extract_inner_types(self, data, data_name, tp) -> list[tuple[Accessor[Any, Any], str, type[Any]]]:
         if not data:
             return []
         inner_type = typing.get_args(tp)[0] if tp.__args__ else Any
         return [(partial(lambda i, x: x[i], i), f"{data_name}[{i}]", inner_type) for i in range(len(data))]  # type: ignore
 
+
 @DynamicDimTypeResolver.register_resolver
 class ManualMarkedInnerFieldsDynamicDimTypeResolver(DynamicDimTypeResolver):
     INFER_DYNAMIC_DIMS_FIELDS_ATTR_NAME = "__infer_dynamic_dims_fields__"
+
     def type_match(self, tp) -> bool:
         return hasattr(tp, ManualMarkedInnerFieldsDynamicDimTypeResolver.INFER_DYNAMIC_DIMS_FIELDS_ATTR_NAME)
 
-    def extract_inner_types(
-        self, data, data_name, tp
-    ) -> list[tuple[Accessor[Any, Any], str, type[Any]]]:
+    def extract_inner_types(self, data, data_name, tp) -> list[tuple[Accessor[Any, Any], str, type[Any]]]:
         fields = getattr(tp, ManualMarkedInnerFieldsDynamicDimTypeResolver.INFER_DYNAMIC_DIMS_FIELDS_ATTR_NAME)
         if isinstance(fields, str):
-            raise TypeError(f"{ManualMarkedInnerFieldsDynamicDimTypeResolver.INFER_DYNAMIC_DIMS_FIELDS_ATTR_NAME} should be tuple, but got {type(fields)}")
+            raise TypeError(
+                f"{ManualMarkedInnerFieldsDynamicDimTypeResolver.INFER_DYNAMIC_DIMS_FIELDS_ATTR_NAME} should be tuple, but got {type(fields)}"
+            )
         inner_types_dict = typing.get_type_hints(tp)
-        return [(partial(lambda name, x: getattr(x, name), field_name), f"{data_name}.{field_name}", inner_type) for field_name, inner_type in inner_types_dict.items()]
+        return [
+            (partial(lambda name, x: getattr(x, name), field_name), f"{data_name}.{field_name}", inner_type)
+            for field_name, inner_type in inner_types_dict.items()
+        ]
+
 
 @DynamicDimTypeResolver.register_resolver
 class AnnotatedTensorDynamicDimTypeResolver(DynamicDimTypeResolver):
@@ -142,16 +134,13 @@ class AnnotatedTensorDynamicDimTypeResolver(DynamicDimTypeResolver):
         if not dynamic_dims:
             return
         if len(dynamic_dims) > 1:
-            raise ValueError(
-                "Multiple DynamicDims annotations found. Only one is allowed."
-            )
+            raise ValueError("Multiple DynamicDims annotations found. Only one is allowed.")
         dynamic_dims = dynamic_dims[0].dims
         if not isinstance(data, Tensor):
             raise TypeError(f"data {data_name} has type annotation Tensor but got type {type(data)}")
         print(f"data {data_name} has dynamic dims {dynamic_dims} for type {tp}")
-        paddle.jit.marker.dynamic_dims(
-            data, dynamic_dims
-        )
+        paddle.jit.marker.dynamic_dims(data, dynamic_dims)
+
 
 @DynamicDimTypeResolver.register_resolver
 class TensorImplicitBatchOnlyDynamicDimTypeResolver(DynamicDimTypeResolver):
@@ -164,9 +153,8 @@ class TensorImplicitBatchOnlyDynamicDimTypeResolver(DynamicDimTypeResolver):
         if not isinstance(data, Tensor):
             raise TypeError(f"data {data_name} has type annotation Tensor but got type {type(data)}")
         print(f"data {data_name} has dynamic dims {dynamic_dims} for type {tp}")
-        paddle.jit.marker.dynamic_dims(
-            data, dynamic_dims
-        )
+        paddle.jit.marker.dynamic_dims(data, dynamic_dims)
+
 
 def resolve_dynamic_dims(arg, arg_name, annotation):
     DynamicDimTypeResolver().generic_resolve(arg, arg_name, annotation)

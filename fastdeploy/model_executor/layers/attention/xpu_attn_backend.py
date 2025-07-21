@@ -37,6 +37,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionMetadata,
 )
 
+
 @dataclass
 class XPUAttentionMetadata(AttentionMetadata):
     """
