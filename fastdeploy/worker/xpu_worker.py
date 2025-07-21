@@ -13,11 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 import gc
 from typing import List, Optional
 
 import paddle
-import paddle.nn as nn
+from paddle import nn
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
@@ -46,8 +47,7 @@ class XpuWorker(WorkerBase):
         pass
 
     def init_device(self):
-        """ Initialize device and Construct model runner
-        """
+        """Initialize device and Construct model runner"""
         if paddle.is_compiled_with_xpu():
             # Set evironment variable
             self.device = f"xpu:{self.local_rank}"
@@ -57,19 +57,19 @@ class XpuWorker(WorkerBase):
 
             gc.collect()
         else:
-            raise RuntimeError(
-                f"Not support device type: {self.device_config.device}")
+            raise RuntimeError(f"Not support device type: {self.device_config.device}")
 
         # Construct model runner
         self.model_runner: XPUModelRunner = XPUModelRunner(
             fd_config=self.fd_config,
             device=self.device,
             rank=self.rank,
-            local_rank=self.local_rank)
+            local_rank=self.local_rank,
+        )
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """
-            Optimizes the inference graph using the specified optimization options.
+        Optimizes the inference graph using the specified optimization options.
         """
         logger.warn("XPU current could not graph optimize and warm up model")
 
@@ -87,15 +87,19 @@ class XpuWorker(WorkerBase):
             by adjusting the `gpu_memory_utilization` parameter.
         """
         from fastdeploy.model_executor.ops.xpu import (
-            xpu_get_free_global_memory, xpu_get_total_global_memory,
-            xpu_get_used_global_memory)
+            xpu_get_free_global_memory,
+            xpu_get_total_global_memory,
+            xpu_get_used_global_memory,
+        )
 
         total_memory = xpu_get_total_global_memory(self.local_rank)
         used_memory = xpu_get_used_global_memory(self.local_rank)
         free_memory = xpu_get_free_global_memory(self.local_rank)
 
-        logger.info(f"Before warm up, total_memory: {total_memory}, \
-                    used_memory: {used_memory}, free_memory: {free_memory}")
+        logger.info(
+            f"Before warm up, total_memory: {total_memory}, \
+                    used_memory: {used_memory}, free_memory: {free_memory}"
+        )
 
         self.model_runner.prepare_profile()
         self.model_runner.profile_run()
@@ -108,8 +112,10 @@ class XpuWorker(WorkerBase):
 
         self.model_runner.clear_block_table()
 
-        logger.info(f"After warm up, total_available_memory: {total_available_memory}, \
-                    used_memory: {used_memory}, available_kv_cache_memory: {available_kv_cache_memory}")
+        logger.info(
+            f"After warm up, total_available_memory: {total_available_memory}, \
+                    used_memory: {used_memory}, available_kv_cache_memory: {available_kv_cache_memory}"
+        )
         paddle.device.xpu.empty_cache()
         return available_kv_cache_memory  # approximate value
 
@@ -125,8 +131,7 @@ class XpuWorker(WorkerBase):
         """ """
         return self.model_runner.get_model()
 
-    def initialize_cache(self, num_gpu_blocks: int,
-                         num_cpu_blocks: int) -> None:
+    def initialize_cache(self, num_gpu_blocks: int, num_cpu_blocks: int) -> None:
         """ """
         pass
 
@@ -145,7 +150,7 @@ class XpuWorker(WorkerBase):
         return self.model_runner.prefill_finished()
 
     def preprocess_new_task(self, req_dicts: List[Request]) -> None:
-        """ Process new requests and then start the decode loop
+        """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
@@ -157,5 +162,4 @@ class XpuWorker(WorkerBase):
 
     def reinitialize_kv_cache(self, num_gpu_blocks: int) -> None:
         """ """
-        self.model_runner.update_share_input_block_num(
-            num_gpu_blocks=num_gpu_blocks)
+        self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)

@@ -12,19 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-import requests
-import time
-import json
-from jsonschema import validate
 import concurrent.futures
-import subprocess
-import socket
+import json
 import os
 import signal
+import socket
+import subprocess
 import sys
-import openai
+import time
 
+import openai
+import pytest
+import requests
+from jsonschema import validate
 
 # Read ports from environment variables; use default values if not set
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
@@ -33,6 +33,7 @@ FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
 
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT]
+
 
 def is_port_open(host: str, port: int, timeout=1.0):
     """
@@ -45,18 +46,20 @@ def is_port_open(host: str, port: int, timeout=1.0):
     except Exception:
         return False
 
+
 def kill_process_on_port(port: int):
     """
     Kill processes that are listening on the given port.
     Uses `lsof` to find process ids and sends SIGKILL.
     """
     try:
-        output = subprocess.check_output("lsof -i:{} -t".format(port), shell=True).decode().strip()
+        output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
         for pid in output.splitlines():
             os.kill(int(pid), signal.SIGKILL)
-            print("Killed process on port {}, pid={}".format(port, pid))
+            print(f"Killed process on port {port}, pid={pid}")
     except subprocess.CalledProcessError:
         pass
+
 
 def clean_ports():
     """
@@ -64,6 +67,7 @@ def clean_ports():
     """
     for port in PORTS_TO_CLEAN:
         kill_process_on_port(port)
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_and_run_server():
@@ -79,21 +83,31 @@ def setup_and_run_server():
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        model_path=os.path.join(base_path, "Qwen2-7B-Instruct")
+        model_path = os.path.join(base_path, "Qwen2-7B-Instruct")
     else:
-        model_path="./Qwen2-7B-Instruct"
+        model_path = "./Qwen2-7B-Instruct"
 
     log_path = "server.log"
     cmd = [
-        sys.executable, "-m", "fastdeploy.entrypoints.openai.api_server",
-        "--model", model_path,
-        "--port", str(FD_API_PORT),
-        "--tensor-parallel-size", "1",
-        "--engine-worker-queue-port", str(FD_ENGINE_QUEUE_PORT),
-        "--metrics-port", str(FD_METRICS_PORT),
-        "--max-model-len", "32768",
-        "--max-num-seqs", "128",
-        "--quantization", "wint8"
+        sys.executable,
+        "-m",
+        "fastdeploy.entrypoints.openai.api_server",
+        "--model",
+        model_path,
+        "--port",
+        str(FD_API_PORT),
+        "--tensor-parallel-size",
+        "1",
+        "--engine-worker-queue-port",
+        str(FD_ENGINE_QUEUE_PORT),
+        "--metrics-port",
+        str(FD_METRICS_PORT),
+        "--max-model-len",
+        "32768",
+        "--max-num-seqs",
+        "128",
+        "--quantization",
+        "wint8",
     ]
 
     # Start subprocess in new process group
@@ -102,13 +116,13 @@ def setup_and_run_server():
             cmd,
             stdout=logfile,
             stderr=subprocess.STDOUT,
-            start_new_session=True  # Enables killing full group via os.killpg
+            start_new_session=True,  # Enables killing full group via os.killpg
         )
 
     # Wait up to 300 seconds for API server to be ready
     for _ in range(300):
         if is_port_open("127.0.0.1", FD_API_PORT):
-            print("API server is up on port {}".format(FD_API_PORT))
+            print(f"API server is up on port {FD_API_PORT}")
             break
         time.sleep(1)
     else:
@@ -116,17 +130,17 @@ def setup_and_run_server():
         try:
             os.killpg(process.pid, signal.SIGTERM)
         except Exception as e:
-            print("Failed to kill process group: {}".format(e))
-        raise RuntimeError("API server did not start on port {}".format(FD_API_PORT))
+            print(f"Failed to kill process group: {e}")
+        raise RuntimeError(f"API server did not start on port {FD_API_PORT}")
 
     yield  # Run tests
 
     print("\n===== Post-test server cleanup... =====")
     try:
         os.killpg(process.pid, signal.SIGTERM)
-        print("API server (pid={}) terminated".format(process.pid))
+        print(f"API server (pid={process.pid}) terminated")
     except Exception as e:
-        print("Failed to terminate API server: {}".format(e))
+        print(f"Failed to terminate API server: {e}")
 
 
 @pytest.fixture(scope="session")
@@ -134,7 +148,7 @@ def api_url(request):
     """
     Returns the API endpoint URL for chat completions.
     """
-    return "http://0.0.0.0:{}/v1/chat/completions".format(FD_API_PORT)
+    return f"http://0.0.0.0:{FD_API_PORT}/v1/chat/completions"
 
 
 @pytest.fixture(scope="session")
@@ -142,7 +156,7 @@ def metrics_url(request):
     """
     Returns the metrics endpoint URL.
     """
-    return "http://0.0.0.0:{}/metrics".format(FD_METRICS_PORT)
+    return f"http://0.0.0.0:{FD_METRICS_PORT}/metrics"
 
 
 @pytest.fixture
@@ -163,8 +177,9 @@ def consistent_payload():
         "messages": [{"role": "user", "content": "用一句话介绍 PaddlePaddle"}],
         "temperature": 0.9,
         "top_p": 0,  # fix top_p to reduce randomness
-        "seed": 13  # fixed random seed
+        "seed": 13,  # fixed random seed
     }
+
 
 # ==========================
 # JSON Schema for validating chat API responses
@@ -187,16 +202,16 @@ chat_response_schema = {
                             "role": {"type": "string"},
                             "content": {"type": "string"},
                         },
-                        "required": ["role", "content"]
+                        "required": ["role", "content"],
                     },
                     "index": {"type": "number"},
-                    "finish_reason": {"type": "string"}
+                    "finish_reason": {"type": "string"},
                 },
-                "required": ["message", "index", "finish_reason"]
-            }
-        }
+                "required": ["message", "index", "finish_reason"],
+            },
+        },
     },
-    "required": ["id", "object", "created", "model", "choices"]
+    "required": ["id", "object", "created", "model", "choices"],
 }
 
 
@@ -228,6 +243,7 @@ def calculate_diff_rate(text1, text2):
     max_len = max(len1, len2)
     return edit_distance / max_len if max_len > 0 else 0.0
 
+
 # ==========================
 # Valid prompt test cases for parameterized testing
 # ==========================
@@ -235,6 +251,7 @@ valid_prompts = [
     [{"role": "user", "content": "你好"}],
     [{"role": "user", "content": "用一句话介绍 FastDeploy"}],
 ]
+
 
 @pytest.mark.parametrize("messages", valid_prompts)
 def test_valid_chat(messages, api_url, headers):
@@ -245,6 +262,7 @@ def test_valid_chat(messages, api_url, headers):
 
     assert resp.status_code == 200
     validate(instance=resp.json(), schema=chat_response_schema)
+
 
 # ==========================
 # Consistency test for repeated runs with fixed payload
@@ -269,7 +287,8 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     diff_rate = calculate_diff_rate(content1, content2)
 
     # Verify that the difference rate is below the threshold
-    assert diff_rate < 0.05, "Output difference too large ({:.4%})".format(diff_rate)
+    assert diff_rate < 0.05, f"Output difference too large ({diff_rate:.4%})"
+
 
 # ==========================
 # Invalid prompt tests
@@ -281,6 +300,7 @@ invalid_prompts = [
     [{"role": "user"}],  # Missing content
     [{"content": "hello"}],  # Missing role
 ]
+
 
 @pytest.mark.parametrize("messages", invalid_prompts)
 def test_invalid_chat(messages, api_url, headers):
@@ -295,6 +315,7 @@ def test_invalid_chat(messages, api_url, headers):
 # Test for input exceeding context length
 # ==========================
 
+
 def test_exceed_context_length(api_url, headers):
     """
     Test case for inputs that exceed the model's maximum context length.
@@ -302,9 +323,7 @@ def test_exceed_context_length(api_url, headers):
     # Construct an overly long message
     long_content = "你好，" * 20000
 
-    messages = [
-        {"role": "user", "content": long_content}
-    ]
+    messages = [{"role": "user", "content": long_content}]
 
     resp = requests.post(api_url, headers=headers, json={"messages": messages})
 
@@ -315,8 +334,10 @@ def test_exceed_context_length(api_url, headers):
         response_json = {}
 
     # Check status code and response content
-    assert resp.status_code != 200 or "token" in json.dumps(response_json).lower(), \
-        "Expected token limit error or similar, but got a normal response: {}".format(response_json)
+    assert (
+        resp.status_code != 200 or "token" in json.dumps(response_json).lower()
+    ), f"Expected token limit error or similar, but got a normal response: {response_json}"
+
 
 # ==========================
 # Multi-turn Conversation Test
@@ -328,11 +349,12 @@ def test_multi_turn_conversation(api_url, headers):
     messages = [
         {"role": "user", "content": "你是谁？"},
         {"role": "assistant", "content": "我是AI助手"},
-        {"role": "user", "content": "你能做什么？"}
+        {"role": "user", "content": "你能做什么？"},
     ]
     resp = requests.post(api_url, headers=headers, json={"messages": messages})
     assert resp.status_code == 200
     validate(instance=resp.json(), schema=chat_response_schema)
+
 
 # ==========================
 # Concurrent Performance Test
@@ -357,9 +379,11 @@ def test_concurrent_perf(api_url, headers):
 
     print("\nResponse time for each request:", durations)
 
+
 # ==========================
 # Metrics Endpoint Test
 # ==========================
+
 
 def test_metrics_endpoint(metrics_url):
     """
@@ -367,7 +391,7 @@ def test_metrics_endpoint(metrics_url):
     """
     resp = requests.get(metrics_url, timeout=5)
 
-    assert resp.status_code == 200, "Unexpected status code: {}".format(resp.status_code)
+    assert resp.status_code == 200, f"Unexpected status code: {resp.status_code}"
     assert "text/plain" in resp.headers["Content-Type"], "Content-Type is not text/plain"
 
     # Parse Prometheus metrics data
@@ -477,19 +501,22 @@ def test_metrics_endpoint(metrics_url):
     assert request_params_max_tokens_sum_found, "缺少 fastdeploy:request_params_max_tokens_sum 指标"
     assert request_success_total_found, "缺少 fastdeploy:request_success_total 指标"
 
+
 # ==========================
 # OpenAI Client chat.completions Test
 # ==========================
+
 
 @pytest.fixture
 def openai_client():
     ip = "0.0.0.0"
     service_http_port = str(FD_API_PORT)
     client = openai.Client(
-        base_url = "http://{}:{}/v1".format(ip, service_http_port),
-        api_key="EMPTY_API_KEY"
+        base_url=f"http://{ip}:{service_http_port}/v1",
+        api_key="EMPTY_API_KEY",
     )
     return client
+
 
 # Non-streaming test
 def test_non_streaming_chat(openai_client):
@@ -505,10 +532,11 @@ def test_non_streaming_chat(openai_client):
         stream=False,
     )
 
-    assert hasattr(response, 'choices')
+    assert hasattr(response, "choices")
     assert len(response.choices) > 0
-    assert hasattr(response.choices[0], 'message')
-    assert hasattr(response.choices[0].message, 'content')
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "content")
+
 
 # Streaming test
 def test_streaming_chat(openai_client, capsys):
@@ -518,7 +546,10 @@ def test_streaming_chat(openai_client, capsys):
         messages=[
             {"role": "system", "content": "You are a helpful AI assistant."},
             {"role": "user", "content": "List 3 countries and their capitals."},
-            {"role": "assistant", "content": "China(Beijing), France(Paris), Australia(Canberra)."},
+            {
+                "role": "assistant",
+                "content": "China(Beijing), France(Paris), Australia(Canberra).",
+            },
             {"role": "user", "content": "OK, tell more."},
         ],
         temperature=1,
@@ -528,13 +559,15 @@ def test_streaming_chat(openai_client, capsys):
 
     output = []
     for chunk in response:
-        if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
+        if hasattr(chunk.choices[0], "delta") and hasattr(chunk.choices[0].delta, "content"):
             output.append(chunk.choices[0].delta.content)
     assert len(output) > 2
+
 
 # ==========================
 # OpenAI Client completions Test
 # ==========================
+
 
 def test_non_streaming(openai_client):
     """Test non-streaming chat functionality with the local service"""
@@ -547,7 +580,7 @@ def test_non_streaming(openai_client):
     )
 
     # Assertions to check the response structure
-    assert hasattr(response, 'choices')
+    assert hasattr(response, "choices")
     assert len(response.choices) > 0
 
 
@@ -560,7 +593,7 @@ def test_streaming(openai_client, capsys):
         max_tokens=1024,
         stream=True,
     )
-    
+
     # Collect streaming output
     output = []
     for chunk in response:

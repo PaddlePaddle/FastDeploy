@@ -22,11 +22,14 @@ import paddle.distributed as dist
 import paddle.nn.functional as F
 from paddle import nn
 from paddle.distributed import fleet
-from paddle.distributed.fleet.meta_parallel import (ColumnParallelLinear,
-                                                    RowParallelLinear)
+from paddle.distributed.fleet.meta_parallel import (
+    ColumnParallelLinear,
+    RowParallelLinear,
+)
 from paddle.distributed.fleet.utils import recompute
-from paddle.nn.functional.flash_attention import \
-    flash_attn_unpadded as flash_attn_varlen_func
+from paddle.nn.functional.flash_attention import (
+    flash_attn_unpadded as flash_attn_varlen_func,
+)
 from paddleformers.transformers.model_utils import PretrainedModel
 
 from fastdeploy.model_executor.layers.utils import get_tensor
@@ -49,7 +52,6 @@ def get_hcg():
 
 
 class _AllToAll(paddle.autograd.PyLayer):
-
     @staticmethod
     def forward(
         ctx,
@@ -78,19 +80,20 @@ class _AllToAll(paddle.autograd.PyLayer):
             return input
         if input_split_sizes is None and output_split_sizes is None:
             output = paddle.empty_like(input)
-            task = dist.stream.alltoall_single(output, input, None, None,
-                                               group, True, True)
+            task = dist.stream.alltoall_single(output, input, None, None, group, True, True)
             task.wait()
         else:
             out_sizes = [sum(output_split_sizes)]
             out_sizes.extend(input.shape[1:])
             output = paddle.empty(out_sizes, dtype=input.dtype)
-            task = dist.stream.alltoall_single(output,
-                                               input,
-                                               output_split_sizes,
-                                               input_split_sizes,
-                                               group,
-                                               sync_op=False)
+            task = dist.stream.alltoall_single(
+                output,
+                input,
+                output_split_sizes,
+                input_split_sizes,
+                group,
+                sync_op=False,
+            )
             task.wait()
         return output
 
@@ -104,21 +107,23 @@ class _AllToAll(paddle.autograd.PyLayer):
         if ctx.input_split_sizes is None and ctx.output_split_sizes is None:
             return _AllToAll.apply(*grad_output, ctx.group)
         else:
-            return _AllToAll.apply(*grad_output, ctx.group,
-                                   ctx.input_split_sizes,
-                                   ctx.output_split_sizes)
+            return _AllToAll.apply(
+                *grad_output,
+                ctx.group,
+                ctx.input_split_sizes,
+                ctx.output_split_sizes,
+            )
 
 
 # Copied from transformers.models.llama.modeling_llama.rotate_half
 def rotate_half(x):
     """Rotates half the hidden dims of the input."""
-    x1 = x[..., :x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2:]
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
     return paddle.concat([-x2, x1], axis=-1)  # shape is the same as x
 
 
-def apply_rotary_pos_emb_vision(tensor: paddle.Tensor,
-                                freqs: paddle.Tensor) -> paddle.Tensor:
+def apply_rotary_pos_emb_vision(tensor: paddle.Tensor, freqs: paddle.Tensor) -> paddle.Tensor:
     """_summary_
 
     Args:
@@ -134,37 +139,11 @@ def apply_rotary_pos_emb_vision(tensor: paddle.Tensor,
         tensor = tensor.astype(dtype="float32")
         cos = freqs.cos()
         sin = freqs.sin()
-        cos = cos.unsqueeze(1).tile(
-            repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
-        sin = sin.unsqueeze(1).tile(
-            repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
+        cos = cos.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
+        sin = sin.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
         output = tensor * cos + rotate_half(tensor) * sin
     output = paddle.cast(output, orig_dtype)
     return output
-
-
-def qkv_reshard_head(tensor, group):
-    """
-    将qkv在seq维度拼接后一起做切分维度的转换
-    """
-    parallelism = group.nranks
-    qkv_seqlen, head_num, head_dim = tensor.shape
-    tensor = tensor.transpose(perm=[1, 0, 2]).contiguous()
-    out = _AllToAll.apply(tensor, group)
-    out = paddle.split(out, parallelism, axis=0)
-    output_q = []
-    output_k = []
-    output_v = []
-    for output_i in out:
-        outout = output_i.transpose(perm=[1, 0, 2]).contiguous()
-        output = paddle.split(outout, 3, axis=0)
-        output_q.append(output[0])
-        output_k.append(output[1])
-        output_v.append(output[2])
-    q = paddle.concat(output_q, axis=0)
-    k = paddle.concat(output_k, axis=0)
-    v = paddle.concat(output_v, axis=0)
-    return q, k, v
 
 
 class VisionFlashAttention2(nn.Layer):
@@ -174,10 +153,7 @@ class VisionFlashAttention2(nn.Layer):
         nn (_type_): _description_
     """
 
-    def __init__(self,
-                 dim: int,
-                 num_heads: int = 16,
-                 tensor_parallel_degree: int = 1) -> None:
+    def __init__(self, dim: int, num_heads: int = 16, tensor_parallel_degree: int = 1) -> None:
         super().__init__()
         self.num_heads = num_heads
         self.tensor_parallel_degree = tensor_parallel_degree
@@ -186,8 +162,7 @@ class VisionFlashAttention2(nn.Layer):
             self.qkv = ColumnParallelLinear(
                 dim,
                 dim * 3,
-                mp_group=fleet.get_hybrid_communicate_group().
-                get_model_parallel_group(),
+                mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
                 weight_attr=None,
                 has_bias=True,
                 fuse_matmul_bias=True,
@@ -196,10 +171,10 @@ class VisionFlashAttention2(nn.Layer):
             self.proj = RowParallelLinear(
                 dim,
                 dim,
-                mp_group=fleet.get_hybrid_communicate_group(
-                ).get_model_parallel_group(),
+                mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
                 input_is_parallel=True,
-                has_bias=True)
+                has_bias=True,
+            )
         else:
             self.qkv = nn.Linear(dim, dim * 3, bias_attr=True)
             self.proj = nn.Linear(dim, dim)
@@ -211,7 +186,6 @@ class VisionFlashAttention2(nn.Layer):
         hidden_states: paddle.Tensor,
         cu_seqlens: paddle.Tensor,
         rotary_pos_emb: paddle.Tensor = None,
-        attn_sep=False,
     ) -> paddle.Tensor:
         """_summary_
 
@@ -224,22 +198,22 @@ class VisionFlashAttention2(nn.Layer):
             paddle.Tensor: _description_
         """
         seq_length = hidden_states.shape[0]
-        qkv = self.qkv(hidden_states).reshape(
-            [seq_length, 3, self.num_heads // self.tensor_parallel_degree,
-             -1]).transpose(perm=[1, 0, 2, 3])
+        qkv = (
+            self.qkv(hidden_states)
+            .reshape(
+                [
+                    seq_length,
+                    3,
+                    self.num_heads // self.tensor_parallel_degree,
+                    -1,
+                ]
+            )
+            .transpose(perm=[1, 0, 2, 3])
+        )
         q, k, v = qkv.unbind(axis=0)
 
-        if attn_sep:
-            hcg = get_hcg()
-            mp_group = hcg.get_model_parallel_group()
-            qkv = paddle.concat([q, k, v], axis=0)
-            q, k, v = qkv_reshard_head(qkv, mp_group)
-            seq_length = q.shape[0]
-
-        q = apply_rotary_pos_emb_vision(q.unsqueeze(axis=0),
-                                        rotary_pos_emb).squeeze(axis=0)
-        k = apply_rotary_pos_emb_vision(k.unsqueeze(axis=0),
-                                        rotary_pos_emb).squeeze(axis=0)
+        q = apply_rotary_pos_emb_vision(q.unsqueeze(axis=0), rotary_pos_emb).squeeze(axis=0)
+        k = apply_rotary_pos_emb_vision(k.unsqueeze(axis=0), rotary_pos_emb).squeeze(axis=0)
 
         max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
 
@@ -255,11 +229,11 @@ class VisionFlashAttention2(nn.Layer):
                 max_seqlen,
                 max_seqlen,
                 scale=softmax_scale,  # TODO: 需要手动加上
-            )[0].squeeze(0).reshape([seq_length, -1]))
-        if attn_sep:
-            out = _AllToAll.apply(attn_output, mp_group)
-            out = paddle.split(out, mp_group.nranks, axis=0)
-            attn_output = paddle.concat(out, axis=1)
+            )[0]
+            .squeeze(0)
+            .reshape([seq_length, -1])
+        )
+
         attn_output = attn_output.astype(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
@@ -282,9 +256,7 @@ class PatchEmbed(nn.Layer):
         self.patch_size = patch_size
         self.in_channels = in_channels
         self.embed_dim = embed_dim
-        self.proj = nn.Linear(in_channels * patch_size * patch_size,
-                              embed_dim,
-                              bias_attr=False)
+        self.proj = nn.Linear(in_channels * patch_size * patch_size, embed_dim, bias_attr=False)
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         """_summary_
@@ -297,8 +269,7 @@ class PatchEmbed(nn.Layer):
         """
         target_dtype = self.proj.weight.dtype
 
-        hidden_states = self.proj(
-            paddle.cast(hidden_states, dtype=target_dtype))
+        hidden_states = self.proj(paddle.cast(hidden_states, dtype=target_dtype))
 
         return hidden_states
 
@@ -310,11 +281,13 @@ class VisionMlp(nn.Layer):
         nn (_type_): _description_
     """
 
-    def __init__(self,
-                 dim: int,
-                 hidden_dim: int,
-                 hidden_act: str,
-                 tensor_parallel_degree: int = 1) -> None:
+    def __init__(
+        self,
+        dim: int,
+        hidden_dim: int,
+        hidden_act: str,
+        tensor_parallel_degree: int = 1,
+    ) -> None:
         super().__init__()
         self.tensor_parallel_degree = tensor_parallel_degree
 
@@ -322,17 +295,17 @@ class VisionMlp(nn.Layer):
             self.fc1 = ColumnParallelLinear(
                 dim,
                 hidden_dim,
-                mp_group=fleet.get_hybrid_communicate_group(
-                ).get_model_parallel_group(),
+                mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
                 gather_output=False,
-                has_bias=True)
+                has_bias=True,
+            )
             self.fc2 = RowParallelLinear(
                 hidden_dim,
                 dim,
-                mp_group=fleet.get_hybrid_communicate_group(
-                ).get_model_parallel_group(),
+                mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
                 input_is_parallel=True,
-                has_bias=True)
+                has_bias=True,
+            )
         else:
             self.fc1 = nn.Linear(dim, hidden_dim)
             self.fc2 = nn.Linear(hidden_dim, dim)
@@ -365,8 +338,7 @@ class VisionRotaryEmbedding(nn.Layer):
             theta (float, optional): _description_. Defaults to 10000.0.
         """
         super().__init__()
-        self.inv_freq = 1.0 / theta**(
-            paddle.arange(start=0, end=dim, step=2, dtype="float32") / dim)
+        self.inv_freq = 1.0 / theta ** (paddle.arange(start=0, end=dim, step=2, dtype="float32") / dim)
 
     def forward(self, seqlen: int) -> paddle.Tensor:
         """_summary_
@@ -389,7 +361,12 @@ class DFNRopeVisionBlock(nn.Layer):
         nn (_type_): _description_
     """
 
-    def __init__(self, config, attn_implementation: str = "sdpa") -> None:
+    def __init__(
+        self,
+        config,
+        tensor_parallel_degree: int,
+        attn_implementation: str = "sdpa",
+    ) -> None:
         """_summary_
 
         Args:
@@ -404,19 +381,17 @@ class DFNRopeVisionBlock(nn.Layer):
         self.attn = VisionFlashAttention2(
             config.embed_dim,
             num_heads=config.num_heads,
-            tensor_parallel_degree=config.tensor_parallel_degree)
+            tensor_parallel_degree=tensor_parallel_degree,
+        )
         self.mlp = VisionMlp(
             dim=config.embed_dim,
             hidden_dim=mlp_hidden_dim,
             hidden_act=config.hidden_act,
-            tensor_parallel_degree=config.tensor_parallel_degree)
+            tensor_parallel_degree=tensor_parallel_degree,
+        )
         self.config = config
 
-    def forward(self,
-                hidden_states,
-                cu_seqlens,
-                rotary_pos_emb,
-                attn_sep=False) -> paddle.Tensor:
+    def forward(self, hidden_states, cu_seqlens, rotary_pos_emb) -> paddle.Tensor:
         """_summary_
 
         Args:
@@ -431,7 +406,6 @@ class DFNRopeVisionBlock(nn.Layer):
             self.norm1(hidden_states),
             cu_seqlens=cu_seqlens,
             rotary_pos_emb=rotary_pos_emb,
-            attn_sep=attn_sep,
         )
         hidden_states = hidden_states + self.mlp(self.norm2(hidden_states))
         return hidden_states
@@ -444,10 +418,7 @@ class PatchMerger(nn.Layer):
         nn (_type_): _description_
     """
 
-    def __init__(self,
-                 dim: int,
-                 context_dim: int,
-                 spatial_merge_size: int = 2) -> None:
+    def __init__(self, dim: int, context_dim: int, spatial_merge_size: int = 2) -> None:
         """_summary_
 
         Args:
@@ -490,26 +461,33 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
     config_class = DFNRopeVisionTransformerConfig
 
     def __init__(self, config, prefix_name: str = "") -> None:
-        super().__init__(config)
-        self.spatial_merge_size = config.spatial_merge_size
+        super().__init__(config.vision_config)
+        self.spatial_merge_size = config.vision_config.spatial_merge_size
         self.prefix_name = prefix_name
         self.patch_embed = PatchEmbed(
-            patch_size=config.patch_size,
-            in_channels=config.in_channels,
-            embed_dim=config.embed_dim,
+            patch_size=config.vision_config.patch_size,
+            in_channels=config.vision_config.in_channels,
+            embed_dim=config.vision_config.embed_dim,
         )
 
-        head_dim = config.embed_dim // config.num_heads
+        head_dim = config.vision_config.embed_dim // config.vision_config.num_heads
         self.rotary_pos_emb = VisionRotaryEmbedding(head_dim // 2)
 
         self.blocks = nn.LayerList(
-            [DFNRopeVisionBlock(config) for _ in range(config.depth)])
+            [
+                DFNRopeVisionBlock(
+                    config.vision_config,
+                    config.pretrained_config.tensor_parallel_degree,
+                )
+                for _ in range(config.vision_config.depth)
+            ]
+        )
 
         assert (
-            config.hidden_size == config.embed_dim
+            config.vision_config.hidden_size == config.vision_config.embed_dim
         ), "in DFNRope, vit's config.hidden must be equal to config.embed_dim"
         # self.merger = PatchMerger(dim=config.hidden_size, context_dim=config.embed_dim)
-        self.ln = nn.LayerNorm(config.hidden_size, epsilon=1e-6)
+        self.ln = nn.LayerNorm(config.vision_config.hidden_size, epsilon=1e-6)
 
     def get_dtype(self) -> paddle.dtype:
         """_summary_
@@ -559,17 +537,13 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
 
         pos_ids = np.concatenate(pos_ids, axis=0)
         if num_pad > 0:
-            pos_ids = np.concatenate(
-                [pos_ids, np.zeros((num_pad, 2), dtype=pos_ids.dtype)])
+            pos_ids = np.concatenate([pos_ids, np.zeros((num_pad, 2), dtype=pos_ids.dtype)])
         max_grid_size = np.amax(grid_hw_array[:, 1:])
         rotary_pos_emb_full = self.rotary_pos_emb(max_grid_size)
         rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(start_axis=1)
         return rotary_pos_emb
 
-    def forward(self,
-                hidden_states: paddle.Tensor,
-                grid_thw: paddle.Tensor,
-                num_pad=0) -> paddle.Tensor:
+    def forward(self, hidden_states: paddle.Tensor, grid_thw: paddle.Tensor, num_pad=0) -> paddle.Tensor:
         """_summary_
 
         Args:
@@ -583,9 +557,9 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
 
         rotary_pos_emb = self.rot_pos_emb(grid_thw, num_pad=num_pad)
 
-        cu_seqlens = paddle.repeat_interleave(grid_thw[:, 1] * grid_thw[:, 2],
-                                              grid_thw[:, 0]).cumsum(
-                                                  axis=0, dtype="int32")
+        cu_seqlens = paddle.repeat_interleave(grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0]).cumsum(
+            axis=0, dtype="int32"
+        )
 
         if num_pad > 0:
             cu_seqlens = F.pad(cu_seqlens, (1, 1), value=0)
@@ -593,21 +567,16 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         else:
             cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
 
-        attn_sep = getattr(self.config, "attn_sep", False)
-        vit_num_recompute_layers = getattr(self.config,
-                                           "vit_num_recompute_layers",
-                                           self.config.depth)
+        vit_num_recompute_layers = getattr(self.config, "vit_num_recompute_layers", self.config.depth)
 
         for idx, blk in enumerate(self.blocks):
             if self.config.recompute and self.training and idx < vit_num_recompute_layers:
-                hidden_states = recompute(blk, hidden_states, cu_seqlens,
-                                          rotary_pos_emb, attn_sep)
+                hidden_states = recompute(blk, hidden_states, cu_seqlens, rotary_pos_emb)
             else:
                 hidden_states = blk(
                     hidden_states,
                     cu_seqlens=cu_seqlens,
                     rotary_pos_emb=rotary_pos_emb,
-                    attn_sep=attn_sep,
                 )
 
         # ret = self.merger(hidden_states)
@@ -615,8 +584,7 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         ret = self.ln(hidden_states)  # add norm
         return ret
 
-    def extract_feature(self, hidden_states: paddle.Tensor,
-                        grid_thw: paddle.Tensor) -> paddle.Tensor:
+    def extract_feature(self, hidden_states: paddle.Tensor, grid_thw: paddle.Tensor) -> paddle.Tensor:
         """_summary_
 
         Args:
@@ -634,8 +602,8 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         dummy
         """
 
-        from paddleformers.transformers.conversion_utils import \
-            split_or_merge_func
+        from paddleformers.transformers.conversion_utils import split_or_merge_func
+
         fn = split_or_merge_func(
             is_split=is_split,
             tensor_parallel_degree=config.tensor_parallel_degree,
@@ -645,37 +613,34 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
 
         def split_qkv_weight(x):
             head_dim = vision_config.hidden_size // vision_config.num_heads
-            x = x.reshape([
-                vision_config.hidden_size, 3, vision_config.num_heads, head_dim
-            ])
-            x = np.split(x, vision_config.tensor_parallel_degree,
-                         axis=-2)[vision_config.tensor_parallel_rank]
+            x = x.reshape(
+                [
+                    vision_config.hidden_size,
+                    3,
+                    vision_config.num_heads,
+                    head_dim,
+                ]
+            )
+            x = np.split(x, vision_config.tensor_parallel_degree, axis=-2)[vision_config.tensor_parallel_rank]
             x = x.reshape([vision_config.hidden_size, -1])
             return x
 
         def split_qkv_bias(x):
             head_dim = vision_config.hidden_size // vision_config.num_heads
             x = x.reshape([3, vision_config.num_heads, head_dim])
-            x = np.split(x, vision_config.tensor_parallel_degree,
-                         axis=-2)[vision_config.tensor_parallel_rank]
+            x = np.split(x, vision_config.tensor_parallel_degree, axis=-2)[vision_config.tensor_parallel_rank]
             x = x.reshape([-1])
             return x
 
         def get_tensor_parallel_split_mappings(depth):
             final_actions = {}
             base_actions = {
-                "vision_model.blocks.0.attn.proj.weight":
-                partial(fn, is_column=False),
-                "vision_model.blocks.0.fc1.weight":
-                partial(fn, is_column=True),
-                "vision_model.blocks.0.fc1.bias":
-                partial(fn, is_column=True),
-                "vision_model.blocks.0.fc2.weight":
-                partial(fn, is_column=False),
-                "vision_model.blocks.0.qkv.weight":
-                split_qkv_weight,
-                "vision_model.blocks.0.qkv.bias":
-                split_qkv_bias,
+                "vision_model.blocks.0.attn.proj.weight": partial(fn, is_column=False),
+                "vision_model.blocks.0.fc1.weight": partial(fn, is_column=True),
+                "vision_model.blocks.0.fc1.bias": partial(fn, is_column=True),
+                "vision_model.blocks.0.fc2.weight": partial(fn, is_column=False),
+                "vision_model.blocks.0.qkv.weight": split_qkv_weight,
+                "vision_model.blocks.0.qkv.bias": split_qkv_bias,
             }
 
             for key, action in base_actions.items():
@@ -693,13 +658,9 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         for param_name, param in params_dict.items():
             state_dict_key = f"{self.prefix_name}.{param_name}"
             if state_dict_key not in state_dict:
-                raise ValueError(
-                    f"The key {state_dict_key} does not exist in state_dict. "
-                )
+                raise ValueError(f"The key {state_dict_key} does not exist in state_dict. ")
             tensor = get_tensor(state_dict.pop(state_dict_key))
             if param.shape != tensor.shape:
-                raise ValueError(
-                    f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}"
-                )
+                raise ValueError(f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}")
             else:
                 param.copy_(tensor, False)

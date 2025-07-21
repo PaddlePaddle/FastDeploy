@@ -24,19 +24,17 @@ from typing import List, Literal, Optional
 
 import paddle
 from paddleformers.transformers.configuration_utils import PretrainedConfig
-from paddleformers.trl import llm_utils
 
 from fastdeploy import envs
-from fastdeploy.model_executor.layers.quantization.quant_base import \
-    QuantConfigBase
+from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
-from fastdeploy.utils import (ceil_div, check_unified_ckpt, get_logger,
-                              llm_logger)
+from fastdeploy.utils import ceil_div, check_unified_ckpt, get_logger, llm_logger
 
 logger = get_logger("config", "config.log")
 
 TaskOption = Literal["generate"]
+
 
 class MoEPhase(Enum):
     """
@@ -46,35 +44,56 @@ class MoEPhase(Enum):
     PREFILL = 1
     DECODER = 2
 
+
+class ErnieArchitectures:
+    """Helper class for ERNIE architecture check."""
+
+    ARCHITECTURES = {
+        "Ernie4_5_ForCausalLM",
+        "Ernie4_5_MoeForCausalLM",
+        "Ernie4_5_VLMoeForConditionalGeneration",
+    }
+
+    @classmethod
+    def contains_ernie_arch(cls, architectures):
+        """Check if any ERNIE architecture is present in the given architectures."""
+        return any(arch in architectures for arch in cls.ARCHITECTURES)
+
+    @classmethod
+    def is_ernie_arch(cls, architecture):
+        """Check if the given architecture is an ERNIE architecture."""
+        return architecture in cls.ARCHITECTURES
+
+
 PRETRAINED_INIT_CONFIGURATION = {
-    "temperature":1.0,
-    "top_p":0.0,
+    "temperature": 1.0,
+    "top_p": 1.0,
     "rope_theta": 10000.0,
     "penalty_score": 1.0,
-    "frequency_score":0.0,
-    "presence_score":0.0,
-    "num_key_value_heads":-1,
+    "frequency_score": 0.0,
+    "presence_score": 0.0,
+    "num_key_value_heads": -1,
     "start_layer_index": 0,
-    "moe_num_shared_experts":0,
+    "moe_num_shared_experts": 0,
     "moe_layer_start_index": 0,
-    "num_max_dispatch_tokens_per_rank":256,
-    "moe_use_aux_free":False,
+    "num_max_dispatch_tokens_per_rank": 256,
+    "moe_use_aux_free": False,
     "vocab_size": -1,
     "use_rope": True,
-    "hidden_dropout_prob":0.0,
-    "initializer_range":0.02,
-    "max_position_embeddings":512,
-    "quantization_config":None,
-    "use_recompute_resampler":False,
-    "use_temporal_conv":True,
-    "resampler_fuse_rms_norm":False,
-    "freq_allocation":20,
-    "tie_word_embeddings":False,
-    "rms_norm_eps":1e-5,
-    "min_length":1,
-    "im_patch_id":(100295),
+    "hidden_dropout_prob": 0.0,
+    "initializer_range": 0.02,
+    "max_position_embeddings": 512,
+    "quantization_config": None,
+    "use_recompute_resampler": False,
+    "use_temporal_conv": True,
+    "resampler_fuse_rms_norm": False,
+    "freq_allocation": 20,
+    "tie_word_embeddings": False,
+    "rms_norm_eps": 1e-5,
+    "min_length": 1,
+    "im_patch_id": (100295),
     "moe_num_experts": None,
-    "moe_layer_end_index":None,
+    "moe_layer_end_index": None,
 }
 
 
@@ -84,6 +103,7 @@ class ModelConfig:
     Args:
         args (dict): A dictionary containing key and value mappings for config fields.
     """
+
     def __init__(
         self,
         args: dict,
@@ -101,6 +121,7 @@ class ModelConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
+        assert self.model != ""
         pretrained_config, _ = PretrainedConfig.get_config_dict(self.model)
         self.pretrained_config = PretrainedConfig.from_dict(pretrained_config)
 
@@ -120,22 +141,20 @@ class ModelConfig:
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
         self.ori_vocab_size = self.vocab_size
-        llm_logger.info(
-            f"architectures : {self.architectures}.")
         if isinstance(self.architectures, list):
             self.architectures = self.architectures[0]
+        if ErnieArchitectures.contains_ernie_arch(self.architectures):
+            self.ori_vocab_size = args.get("ori_vocab_size", self.ori_vocab_size)
 
-        if self.architectures in ["Ernie4_5_ForCausalLM","Ernie4_5_MoeForCausalLM"] and "ori_vocab_size" in args.keys():
-            self.ori_vocab_size = args["ori_vocab_size"]
-
-        if (hasattr(self, "num_key_value_heads")
-                and hasattr(self, "num_key_value_heads")
-                and self.num_key_value_heads is not None
-                and int(self.num_key_value_heads) > 0):
+        if (
+            hasattr(self, "num_key_value_heads")
+            and hasattr(self, "num_key_value_heads")
+            and self.num_key_value_heads is not None
+            and int(self.num_key_value_heads) > 0
+        ):
             self.kv_num_head = int(self.num_key_value_heads)
         else:
             self.kv_num_head = self.num_attention_heads
-
 
         self.is_unified_ckpt = check_unified_ckpt(self.model)
         self.override_name_from_config()
@@ -173,11 +192,9 @@ class ModelConfig:
             if not hasattr(self, key.lower()):
                 if os.getenv(key, None):
                     value = eval(os.getenv(key))
-                    llm_logger.info(
-                        f"Get parameter `{key}` = {value} from environment.")
+                    llm_logger.info(f"Get parameter `{key}` = {value} from environment.")
                 else:
-                    llm_logger.info(
-                        f"Parameter `{key}` will use default value {value}.")
+                    llm_logger.info(f"Parameter `{key}` will use default value {value}.")
                 setattr(self, key.lower(), value)
 
         reset_config_value("COMPRESSION_RATIO", 1.0)
@@ -194,12 +211,12 @@ class ModelConfig:
         llm_logger.info("Model Configuration Information :")
         for k, v in self.__dict__.items():
             llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info(
-            "=============================================================")
+        llm_logger.info("=============================================================")
 
 
 class ParallelConfig:
     """Configuration for the distributed execution."""
+
     def __init__(
         self,
         args,
@@ -209,10 +226,9 @@ class ParallelConfig:
         self.moe_phase = MoEPhase.PREFILL  # Generation phase
         self.msg_queue_id = 1  # mesage queue id
 
-        tensor_parallel_rank, tensor_parallel_size = llm_utils.init_dist_env()
-        self.tensor_parallel_rank = tensor_parallel_rank  # TP rank ID
-        self.tensor_parallel_size = tensor_parallel_size  # TP degree
-        self.expert_parallel_rank = int(tensor_parallel_rank / tensor_parallel_size)  # EP rank ID
+        self.tensor_parallel_rank = 0  # TP rank ID
+        self.tensor_parallel_size = 1  # TP degree
+        self.expert_parallel_rank = 0  # EP rank ID
         self.expert_parallel_size = 1  # EP degree
 
         self.data_parallel_size = 1
@@ -225,14 +241,12 @@ class ParallelConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-        self.use_ep =  self.expert_parallel_size > 1
+        self.use_ep = self.expert_parallel_size > 1
 
         # TODO(@wufeisheng): TP and EP need to be supported simultaneously.
-        assert (self.tensor_parallel_size == 1
-                and self.expert_parallel_size
-                >= 1) or (self.tensor_parallel_size >= 1
-                          and self.expert_parallel_size
-                          == 1), "TP and EP cannot be enabled at the same time"
+        assert (self.tensor_parallel_size == 1 and self.expert_parallel_size >= 1) or (
+            self.tensor_parallel_size >= 1 and self.expert_parallel_size == 1
+        ), "TP and EP cannot be enabled at the same time"
 
         self.num_ranks = self.tensor_parallel_size * self.expert_parallel_size
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
@@ -246,7 +260,6 @@ class ParallelConfig:
             self.max_chips_per_node >= self.tensor_parallel_size > 0
         ), f"tensor_parallel_size: {self.tensor_parallel_size} should be between 1 and {self.max_chips_per_node}"
 
-
     def print(self):
         """
         print all config
@@ -255,13 +268,24 @@ class ParallelConfig:
         llm_logger.info("Parallel Configuration Information :")
         for k, v in self.__dict__.items():
             llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info(
-            "=============================================================")
+        llm_logger.info("=============================================================")
+
+        # pd_disaggregation
+        use_pd_disaggregation: int = int(os.getenv("FLAGS_use_pd_disaggregation", 0))
+        use_pd_disaggregation_per_chunk: int = int(os.getenv("FLAGS_use_pd_disaggregation_per_chunk", 0))
+        if use_pd_disaggregation_per_chunk:
+            self.pd_disaggregation_mode = "per_chunk"
+        elif use_pd_disaggregation:
+            self.pd_disaggregation_mode = "per_query"
+        else:
+            self.pd_disaggregation_mode = "None"
+
 
 class SpeculativeConfig:
     """
     Configuration for speculative decoding.
     """
+
     def __init__(
         self,
         args,
@@ -297,13 +321,15 @@ class SpeculativeConfig:
 
         self.num_extra_cache_layer = 0
 
-        #TODO(YuanRisheng): The name of the server args is different from the name of the SpeculativeConfig.
-        #We temperately add the name map here and will delete it in future.
-        name_map = {"speculative_method": "method",
-                   "speculative_max_draft_token_num": "num_speculative_tokens",
-                   "speculative_model_name_or_path": "model_name_or_path",
-                   "speculative_model_quantization": "quantization",
-                   "speculative_benchmark_mode": "benchmark_mode"}
+        # TODO(YuanRisheng): The name of the server args is different from the name of the SpeculativeConfig.
+        # We temperately add the name map here and will delete it in future.
+        name_map = {
+            "speculative_method": "method",
+            "speculative_max_draft_token_num": "num_speculative_tokens",
+            "speculative_model_name_or_path": "model_name_or_path",
+            "speculative_model_quantization": "quantization",
+            "speculative_benchmark_mode": "benchmark_mode",
+        }
 
         for key, value in args.items():
             if key in name_map.keys() and hasattr(self, name_map[key]):
@@ -325,8 +351,7 @@ class SpeculativeConfig:
 
         self.config_path = os.path.join(self.model_name_or_path, "config.json")
         if os.path.exists(self.config_path):
-            self.model_config = json.load(
-                open(self.config_path, 'r', encoding='utf-8'))
+            self.model_config = json.load(open(self.config_path, "r", encoding="utf-8"))
 
     def reset(self):
         """
@@ -358,10 +383,7 @@ class SpeculativeConfig:
         """
         Convert speculative_config to json string.
         """
-        return json.dumps({
-            key: value
-            for key, value in self.__dict__.items() if value is not None
-        })
+        return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
 
     def print(self):
         """
@@ -371,20 +393,20 @@ class SpeculativeConfig:
         llm_logger.info("Speculative Decoding Configuration Information :")
         for k, v in self.__dict__.items():
             llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info(
-            "=============================================================")
+        llm_logger.info("=============================================================")
 
 
 class DeviceConfig:
     """
     Configuration for device settings.
     """
+
     def __init__(
         self,
         args,
     ):
         self.device_type = "cuda"
-        self.device_ids: str = "0" # Visible devices ids
+        self.device_ids: str = "0"  # Visible devices ids
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -397,6 +419,7 @@ class GraphOptimizationConfig:
     """
     Configuration for compute graph level optimization.
     """
+
     def __init__(
         self,
         args,
@@ -445,53 +468,44 @@ class GraphOptimizationConfig:
         self.full_cuda_graph: bool = True
 
         self.max_capture_size: int = field(default=None, init=False)  # type: ignore
-        self.batch_size_to_captured_size: dict[int,
-                                        int] = field(default=None,
-                                                    init=False)  # type: ignore
+        self.batch_size_to_captured_size: dict[int, int] = field(default=None, init=False)  # type: ignore
         # CINN Config ...
 
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
 
-    def init_with_cudagrpah_size(
-        self,
-        max_num_seqs:int = 0
-    ) -> None:
+    def init_with_cudagrpah_size(self, max_num_seqs: int = 0) -> None:
         """
         Initialize cuda graph capture sizes and
         pre-compute the mapping from batch size to padded graph size
         """
         # Regular capture sizes
-        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size < max_num_seqs]
+        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_num_seqs]
         dedup_sizes = list(set(self.cudagraph_capture_sizes))
         if len(dedup_sizes) < len(self.cudagraph_capture_sizes):
-            logger.info(("cudagraph sizes specified by model runner"
-                            " %s is overridden by config %s"),
-                        self.cudagraph_capture_sizes, dedup_sizes)
+            logger.info(
+                ("cudagraph sizes specified by model runner" " %s is overridden by config %s"),
+                self.cudagraph_capture_sizes,
+                dedup_sizes,
+            )
         self.cudagraph_capture_sizes = dedup_sizes
 
         # Sort to make sure cudagraph capture sizes are in descending order
         self.cudagraph_capture_sizes.sort(reverse=True)
-        self.max_capture_size = self.cudagraph_capture_sizes[
-            0] if self.cudagraph_capture_sizes else 0
+        self.max_capture_size = self.cudagraph_capture_sizes[0] if self.cudagraph_capture_sizes else 0
 
         # Pre-compute the mapping from batch size to padded graph size
         self.batch_size_to_captured_size = {}
-        for end, start in zip(self.cudagraph_capture_sizes,
-                              self.cudagraph_capture_sizes[1:] + [0]):
+        for end, start in zip(self.cudagraph_capture_sizes, self.cudagraph_capture_sizes[1:] + [0]):
             for bs in range(start, end):
                 if bs == start:
                     self.batch_size_to_captured_size[bs] = start
                 else:
                     self.batch_size_to_captured_size[bs] = end
-        self.batch_size_to_captured_size[
-            self.max_capture_size] = self.max_capture_size
+        self.batch_size_to_captured_size[self.max_capture_size] = self.max_capture_size
 
-    def _set_cudagraph_sizes(
-        self,
-        max_num_seqs:int = 0
-    ):
+    def _set_cudagraph_sizes(self, max_num_seqs: int = 0):
         """
         Calculate a series of candidate capture batch sizes,
         and then extract a portion of them as the capture list for the CUDA graph based on user input.
@@ -506,15 +520,11 @@ class GraphOptimizationConfig:
         draft_capture_sizes.append(max_num_seqs)
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
 
-
     def to_json_string(self):
         """
         Convert speculative_config to json string.
         """
-        return json.dumps({
-            key: value
-            for key, value in self.__dict__.items()
-        })
+        return json.dumps({key: value for key, value in self.__dict__.items()})
 
     def __str__(self) -> str:
         return self.to_json_string()
@@ -526,20 +536,28 @@ class GraphOptimizationConfig:
         cudagraph_capture_sizes: Optional[List[int]] = None,
         **kwargs
     ) -> None:
-        """ Check the legality of parameters passed in from the command line """
+        """Check the legality of parameters passed in from the command line"""
 
         if graph_opt_level is not None:
-            assert graph_opt_level in [0, 1, 2], "In graph optimization config, graph_opt_level can only take the values of 0, 1 and 2."
+            assert graph_opt_level in [
+                0,
+                1,
+                2,
+            ], "In graph optimization config, graph_opt_level can only take the values of 0, 1 and 2."
         if use_cudagraph is not None:
             assert type(use_cudagraph) is bool, "In graph optimization config, type of use_cudagraph must is bool."
         if cudagraph_capture_sizes is not None:
-            assert type(cudagraph_capture_sizes) is list, "In graph optimization config, type of cudagraph_capture_sizes must is list."
-            assert len(cudagraph_capture_sizes) > 0, "In graph optimization config, When opening the CUDA graph, it is forbidden to set the capture sizes to an empty list."
+            assert (
+                type(cudagraph_capture_sizes) is list
+            ), "In graph optimization config, type of cudagraph_capture_sizes must is list."
+            assert (
+                len(cudagraph_capture_sizes) > 0
+            ), "In graph optimization config, When opening the CUDA graph, it is forbidden to set the capture sizes to an empty list."
 
         for key, value in kwargs.items():
             raise ValueError(f"Invalid --graph-optimization-config parameter {key}")
 
-    def update_use_cudagraph(self, argument:bool):
+    def update_use_cudagraph(self, argument: bool):
         """
         Unified user specifies the use_cudagraph parameter through two methods,
         '--use-cudagraph' and '--graph-optimization-config'
@@ -550,8 +568,11 @@ class GraphOptimizationConfig:
         else:
             # User both set '--use-cudagraph' and '--graph-optimization-config'
             if self.use_cudagraph is False and argument is True:
-                raise ValueError("Invalid parameter: Cannot set --use-cudagraph and --graph-optimization-config '{\"use_cudagraph\":false}' simultaneously.")
+                raise ValueError(
+                    "Invalid parameter: Cannot set --use-cudagraph and --graph-optimization-config '{\"use_cudagraph\":false}' simultaneously."
+                )
             argument = self.use_cudagraph
+
 
 class LoadConfig:
     """
@@ -564,19 +585,22 @@ class LoadConfig:
             - 'ipc_snapshot': Load from disk snapshot of IPC weights
             - None: No dynamic loading
     """
+
     def __init__(
         self,
         args,
     ):
         self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
-        self.load_strategy: Optional[Literal['ipc', 'ipc_snapshot']] = None
+        self.load_strategy: Optional[Literal["ipc", "ipc_snapshot"]] = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
 
+
 class LoRAConfig:
-    """ LoRA Config """
+    """LoRA Config"""
+
     pass
 
 
@@ -584,6 +608,7 @@ class DecodingConfig:
     """
     Configuration for decoding
     """
+
     def __init__(
         self,
         args,
@@ -599,8 +624,12 @@ class DecodingConfig:
 
     def check(self):
         if self.guided_decoding_backend is not None:
-            assert self.guided_decoding_backend in ["xgrammar", "XGrammar", "auto", "off"], \
-                f"Only support xgrammar、auto guided decoding backend, but got {self.guided_decoding_backend}."
+            assert self.guided_decoding_backend in [
+                "xgrammar",
+                "XGrammar",
+                "auto",
+                "off",
+            ], f"Only support xgrammar、auto guided decoding backend, but got {self.guided_decoding_backend}."
 
             if self.guided_decoding_backend != "off":
                 # TODO: mm support guided_decoding
@@ -609,8 +638,7 @@ class DecodingConfig:
                 # TODO: speculative decoding support guided_decoding
 
                 # TODO: xpu support guided_decoding
-                assert not current_platform.is_xpu(
-                ), "XPU currently do not support guided_decoding"
+                assert not current_platform.is_xpu(), "XPU currently do not support guided_decoding"
 
                 try:
                     import xgrammar  # noqa
@@ -665,18 +693,16 @@ class CacheConfig:
             self.enable_hierarchical_cache = True
 
         if self.rdma_comm_ports is not None and isinstance(self.rdma_comm_ports, str):
-            self.rdma_comm_ports = self.rdma_comm_ports.split(',')
+            self.rdma_comm_ports = self.rdma_comm_ports.split(",")
 
         if self.pd_comm_port is not None and isinstance(self.pd_comm_port, str):
             self.pd_comm_port = [int(port) for port in self.pd_comm_port.split(",")]
 
         # TODO check name
-        if "int4" in self.cache_dtype.lower(
-        ) or "float4" in self.cache_dtype.lower():
+        if "int4" in self.cache_dtype.lower() or "float4" in self.cache_dtype.lower():
             self.byte_size = 0.5
             self.cache_dtype = "uint8"
-        elif "int8" in self.cache_dtype.lower(
-        ) or "float8" in self.cache_dtype.lower():
+        elif "int8" in self.cache_dtype.lower() or "float8" in self.cache_dtype.lower():
             self.cache_dtype = "uint8"
             self.byte_size = 1
         else:
@@ -690,12 +716,9 @@ class CacheConfig:
 
     def _verify_args(self):
         if self.gpu_memory_utilization > 1.0:
-            raise ValueError(
-                "GPU memory utilization must be less than 1.0. Got "
-                f"{self.gpu_memory_utilization}.")
+            raise ValueError("GPU memory utilization must be less than 1.0. Got " f"{self.gpu_memory_utilization}.")
         if self.kv_cache_ratio > 1.0:
-            raise ValueError("KV cache ratio must be less than 1.0. Got "
-                             f"{self.kv_cache_ratio}.")
+            raise ValueError("KV cache ratio must be less than 1.0. Got " f"{self.kv_cache_ratio}.")
 
     def postprocess(self, num_total_tokens, number_of_tasks, tensor_parallel_size, model_config):
         """
@@ -704,20 +727,17 @@ class CacheConfig:
         self.dec_token_num = self.enc_dec_block_num * self.block_size
         if self.num_gpu_blocks_override is not None:
             self.total_block_num = self.num_gpu_blocks_override
-            self.prefill_kvcache_block_num = int(self.total_block_num *
-                                                 self.kv_cache_ratio)
+            self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
         else:
             length = num_total_tokens // number_of_tasks
-            block_num = (length + self.block_size - 1 +
-                         self.dec_token_num) // self.block_size
+            block_num = (length + self.block_size - 1 + self.dec_token_num) // self.block_size
             self.total_block_num = block_num * number_of_tasks
             self.prefill_kvcache_block_num = self.total_block_num
-            llm_logger.info(
-                f"Doing profile, the total_block_num:{self.total_block_num}")
+            llm_logger.info(f"Doing profile, the total_block_num:{self.total_block_num}")
 
         each_token_cache_space = int(
-            model_config.num_hidden_layers * model_config.kv_num_head * model_config.head_dim *
-            self.byte_size)
+            model_config.num_hidden_layers * model_config.kv_num_head * model_config.head_dim * self.byte_size
+        )
         bytes_per_block = int(each_token_cache_space * self.block_size)
 
         if self.swap_space is None:
@@ -726,23 +746,24 @@ class CacheConfig:
             self.num_cpu_blocks = int(self.swap_space * 1024**3 / bytes_per_block)
 
         self.bytes_per_layer_per_block = int(
-            self.block_size * model_config.kv_num_head *
-            model_config.head_dim // tensor_parallel_size * self.byte_size)
+            self.block_size * model_config.kv_num_head * model_config.head_dim // tensor_parallel_size * self.byte_size
+        )
 
         if model_config.quantization_config is not None:
-            self.cache_dtype = model_config.quantization_config.get(
-                "kv_cache_quant_type", self.cache_dtype)
+            self.cache_dtype = model_config.quantization_config.get("kv_cache_quant_type", self.cache_dtype)
 
     def reset(self, num_gpu_blocks):
         """
         reset gpu block number
         """
         self.total_block_num = num_gpu_blocks
-        self.prefill_kvcache_block_num = int(self.total_block_num *
-                                             self.kv_cache_ratio)
+        self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
         llm_logger.info(
-            (f"Reset block num, the total_block_num:{self.total_block_num},"
-             f" prefill_kvcache_block_num:{self.prefill_kvcache_block_num}"))
+            (
+                f"Reset block num, the total_block_num:{self.total_block_num},"
+                f" prefill_kvcache_block_num:{self.prefill_kvcache_block_num}"
+            )
+        )
 
     def print(self):
         """
@@ -752,8 +773,7 @@ class CacheConfig:
         llm_logger.info("Cache Configuration Information :")
         for k, v in self.__dict__.items():
             llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info(
-            "=============================================================")
+        llm_logger.info("=============================================================")
 
 
 class CommitConfig:
@@ -767,6 +787,7 @@ class CommitConfig:
         cuda_version: CUDA version string
         compiler_version: CXX compiler version string
     """
+
     def __init__(
         self,
     ):
@@ -780,7 +801,7 @@ class CommitConfig:
     def _load_from_version_file(self, file_path: str = "fastdeploy/version.txt"):
         """Internal method to load version info from file"""
         try:
-            with open(file_path, 'r') as f:
+            with open(file_path, "r") as f:
                 for line in f:
                     line = line.strip()
                     if line.startswith("fastdeploy GIT COMMIT ID:"):
@@ -806,26 +827,28 @@ class CommitConfig:
         llm_logger.info("Fasedeploy Commit Information :")
         for k, v in self.__dict__.items():
             llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info(
-            "=============================================================")
+        llm_logger.info("=============================================================")
 
 
 class MultiModalConfig:
     """Controls the behavior of multimodal models."""
+
     def __init__(
         self,
         args,
     ):
-        self.limit_mm_per_prompt = None,
-        self.mm_processor_kwargs = None,
-        self.enable_mm = False,
+        self.limit_mm_per_prompt = (None,)
+        self.mm_processor_kwargs = (None,)
+        self.enable_mm = (False,)
 
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
 
+
 class ObservabilityConfig:
     """Configuration for observability - metrics and tracing."""
+
     def __init__(
         self,
         args,
@@ -837,12 +860,14 @@ class ObservabilityConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
+
 @dataclass
 class FDConfig:
     """
     The configuration class which contains all fastdeploy-related configuration. This
     simplifies passing around the distinct configurations in the codebase.
     """
+
     def __init__(
         self,
         model_config: ModelConfig = None,
@@ -877,7 +902,6 @@ class FDConfig:
         self.check()
         self.print()
 
-
     def postprocess(self):
         """
         calculate some parameters
@@ -890,22 +914,30 @@ class FDConfig:
         if self.device_config.device_ids is None:
             self.device_config.device_ids = ",".join([str(i) for i in range(self.parallel_config.worker_num_per_node)])
 
-        assert self.device_config.device_ids.split(',').__len__() == self.parallel_config.worker_num_per_node, \
-        f"invalid CUDA_VISIBLE_DEVICES, should be equal to {self.parallel_config.worker_num_per_node}"
+        assert (
+            self.device_config.device_ids.split(",").__len__() == self.parallel_config.worker_num_per_node
+        ), f"invalid CUDA_VISIBLE_DEVICES, should be equal to {self.parallel_config.worker_num_per_node}"
 
-        assert self.parallel_config.worker_num_per_node % self.parallel_config.tensor_parallel_size == 0, \
-            f"tensor_parallel_size: {self.parallel_config.tensor_parallel_size} should be divisible by worker_num_per_node: {self.parallel_config.worker_num_per_node}"
+        assert (
+            self.parallel_config.worker_num_per_node % self.parallel_config.tensor_parallel_size == 0
+        ), f"tensor_parallel_size: {self.parallel_config.tensor_parallel_size} should be divisible by worker_num_per_node: {self.parallel_config.worker_num_per_node}"
 
-        self.device_config.local_device_ids = self.device_config.device_ids.split(
-            ',')[:self.parallel_config.tensor_parallel_size]
+        self.device_config.local_device_ids = self.device_config.device_ids.split(",")[
+            : self.parallel_config.tensor_parallel_size
+        ]
 
         if self.scheduler_config.long_prefill_token_threshold == 0:
             self.scheduler_config.long_prefill_token_threshold = int(self.max_model_len * 0.04)
 
-        self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens,
-                                      self.scheduler_config.max_num_seqs, self.parallel_config.tensor_parallel_size, self.model_config)
+        self.cache_config.postprocess(
+            self.scheduler_config.max_num_batched_tokens,
+            self.scheduler_config.max_num_seqs,
+            self.parallel_config.tensor_parallel_size,
+            self.model_config,
+        )
         self.cache_config.max_block_num_per_seq = int(
-            self.scheduler_config.max_model_len // self.cache_config.block_size)
+            self.scheduler_config.max_model_len // self.cache_config.block_size
+        )
 
         if self.decoding_config.guided_decoding_backend == "auto":
             if self.multi_modal_config.enable_mm:
@@ -927,18 +959,27 @@ class FDConfig:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.scheduler_config.max_num_seqs)
         self.graph_opt_config.init_with_cudagrpah_size(max_num_seqs=self.scheduler_config.max_num_seqs)
 
-        #TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
+        # TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
         if self.graph_opt_config.graph_opt_level == 2:
             self.graph_opt_config.graph_opt_level = 1
-
 
     def check(self):
         """
         check the legality of config
         """
         nnode = ceil_div(self.parallel_config.num_ranks, self.parallel_config.worker_num_per_node)
-        assert nnode == self.scheduler_config.nnode, \
-            f"nnode: {nnode}, but got {self.nnode}"
+        assert nnode == self.scheduler_config.nnodes, f"nnode: {nnode}, but got {self.nnode}"
+
+        if not self.scheduler_config.enable_chunked_prefill:
+            assert self.scheduler_config.max_num_batched_tokens >= self.scheduler_config.max_model_len, (
+                f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} "
+                f"should be larger than or equal to max_model_len: {self.scheduler_config.max_model_len}"
+            )
+        else:
+            assert self.scheduler_config.max_num_batched_tokens >= self.cache_config.block_size, (
+                f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} "
+                f"should be larger than or equal to block_size: {self.cache_config.block_size}"
+            )
 
         self.decoding_config.check()
         self.parallel_config.check()
@@ -951,22 +992,22 @@ class FDConfig:
         Args:
             file (str): the path of file to save config
         """
-        llm_logger.info(
-            "=================== Configuration Information ===============")
+        llm_logger.info("=================== Configuration Information ===============")
         for k, v in self.__dict__.items():
             if k == "generation_config" and v is not None:
                 for gck, gcv in v.to_dict().items():
                     llm_logger.info("{:<20}:{:<6}{}".format(gck, "", gcv))
-            elif (k == "cache_config" or
-                  k == "model_config" or
-                  k == "scheduler_config" or
-                  k == "parallel_config" or
-                  k == "commit_config"):
+            elif (
+                k == "cache_config"
+                or k == "model_config"
+                or k == "scheduler_config"
+                or k == "parallel_config"
+                or k == "commit_config"
+            ):
                 v.print()
             else:
                 llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info(
-            "=============================================================")
+        llm_logger.info("=============================================================")
         if file is not None:
             f = open(file, "a")
             now_time = datetime.now()
@@ -983,15 +1024,14 @@ class FDConfig:
         if self.scheduler_config.splitwise_role != "mixed":
             disaggregate_info["role"] = self.scheduler_config.splitwise_role
             disaggregate_info["cache_info"] = dict()
-            current_protocol = self.cache_config.cache_transfer_protocol.split(
-                ",")
+            current_protocol = self.cache_config.cache_transfer_protocol.split(",")
             disaggregate_info["transfer_protocol"] = current_protocol
             for protocol in current_protocol:
                 if protocol == "ipc":
                     disaggregate_info["cache_info"][protocol] = {
                         "ip": self.scheduler_config.host_ip,
                         "port": self.scheduler_config.engine_worker_queue_port,
-                        "device_ids": self.device_config.local_device_ids
+                        "device_ids": self.device_config.local_device_ids,
                     }
                 elif protocol == "rdma":
                     disaggregate_info["cache_info"][protocol] = {

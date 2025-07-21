@@ -19,11 +19,9 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 import fastdeploy
-import fastdeploy.model_executor.ops.gpu.deep_gemm as deep_gemm
-from fastdeploy.distributed.communication_op import \
-    tensor_model_parallel_all_reduce
+from fastdeploy.distributed.communication_op import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.utils import get_tensor
-from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func
+from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func, deep_gemm
 
 from ..utils import create_and_set_parameter
 from .fused_moe_backend_base import MoEMethodBase
@@ -50,10 +48,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             weight_list = []
             weight_scale_list = []
             for i in range(layer.num_local_experts):
-                from fastdeploy.model_executor.layers.utils import \
-                    per_block_cast_to_fp8
-                quant_weight, scale = per_block_cast_to_fp8(
-                    weight_tensor[i], self.quant_config.weight_block_size)
+                from fastdeploy.model_executor.layers.utils import per_block_cast_to_fp8
+
+                quant_weight, scale = per_block_cast_to_fp8(weight_tensor[i], self.quant_config.weight_block_size)
 
                 weight_list.append(quant_weight)
                 weight_scale_list.append(scale)
@@ -62,41 +59,41 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             create_and_set_parameter(layer, weight_name, quanted_weight)
 
             quanted_weight_scale = paddle.stack(weight_scale_list, axis=0)
-            quanted_weight_scale = quanted_weight_scale.transpose(
-                [0, 2, 1]).contiguous()
+            quanted_weight_scale = quanted_weight_scale.transpose([0, 2, 1]).contiguous()
             create_and_set_parameter(layer, scale_name, quanted_weight_scale)
 
     def process_prequanted_weights(self, layer: nn.Layer, state_dict):
         """
         Paddle cutlass process prequanted weights.
         """
-        up_gate_proj_expert_weight_key = layer.weight_key_map.get(
-            "up_gate_proj_expert_weight_key", None)
-        down_proj_expert_weight_key = layer.weight_key_map.get(
-            "down_proj_expert_weight_key", None)
-        up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get(
-            "up_gate_proj_expert_weight_scale_key", None)
-        down_proj_expert_weight_scale_key = layer.weight_key_map.get(
-            "down_proj_expert_weight_scale_key", None)
+        up_gate_proj_expert_weight_key = layer.weight_key_map.get("up_gate_proj_expert_weight_key", None)
+        down_proj_expert_weight_key = layer.weight_key_map.get("down_proj_expert_weight_key", None)
+        up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get("up_gate_proj_expert_weight_scale_key", None)
+        down_proj_expert_weight_scale_key = layer.weight_key_map.get("down_proj_expert_weight_scale_key", None)
 
         up_gate_proj_weights, down_proj_weights = layer.load_experts_weight(
-            state_dict, up_gate_proj_expert_weight_key, down_proj_expert_weight_key)
+            state_dict,
+            up_gate_proj_expert_weight_key,
+            down_proj_expert_weight_key,
+        )
         # self.check(layer, up_gate_proj_weights, down_proj_weights)
         up_gate_proj_weight_scale = []
         down_proj_weight_scale = []
         for i in range(layer.num_local_experts):
             expert_idx = layer.expert_id_offset + i
             up_gate_proj_weight_scale.append(
-                get_tensor(
-                    state_dict.pop(
-                        up_gate_proj_expert_weight_scale_key.format(expert_idx))))
+                get_tensor(state_dict.pop(up_gate_proj_expert_weight_scale_key.format(expert_idx)))
+            )
             down_proj_weight_scale.append(
-                get_tensor(
-                    state_dict.pop(
-                        down_proj_expert_weight_scale_key.format(expert_idx))))
+                get_tensor(state_dict.pop(down_proj_expert_weight_scale_key.format(expert_idx)))
+            )
 
-        up_gate_proj_weight = paddle.stack(up_gate_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
-        down_proj_weight = paddle.stack(down_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
+        up_gate_proj_weight = (
+            paddle.stack(up_gate_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
+        )
+        down_proj_weight = (
+            paddle.stack(down_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
+        )
         up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0).transpose([0, 2, 1]).contiguous()
         down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0).transpose([0, 2, 1]).contiguous()
 
@@ -104,7 +101,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             "up_gate_proj_weight": up_gate_proj_weight,
             "down_proj_weight": down_proj_weight,
             "up_gate_proj_weight_scale": up_gate_proj_weight_scale,
-            "down_proj_weight_scale": down_proj_weight_scale
+            "down_proj_weight_scale": down_proj_weight_scale,
         }
         for name, tensor in name_tensor_map.items():
             create_and_set_parameter(layer, name, tensor)
@@ -119,11 +116,11 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         Apply the EP prefill method.
         """
         # 1. Select topk experts and weights
-        topk_idx, topk_weights = self.ep_prefill_runner.moe_select(
-            layer, gate_out)
+        topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         # 2. Dynamic compute blockwise quantization scales
         x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
-            x, self.quant_config.weight_block_size[0])
+            x, self.quant_config.weight_block_size[0]
+        )
         # 3. EP Dispatch
         (
             recv_x,
@@ -132,10 +129,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             recv_num_tokens_per_expert_list,
             handle,
             _,
-        ) = self.ep_prefill_runner.dispatch(x,
-                                            topk_idx,
-                                            topk_weights,
-                                            x_scale_tensor=x_scale_tensor)
+        ) = self.ep_prefill_runner.dispatch(x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor)
 
         token_all_num = sum(recv_num_tokens_per_expert_list)
 
@@ -187,14 +181,15 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
             # down_proj
             ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
-                ffn_out, self.quant_config.weight_block_size[0])
-            ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose(
-                [1, 0]).contiguous()
+                ffn_out, self.quant_config.weight_block_size[0]
+            )
+            ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous()
             ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0])
 
             ffn_out = paddle.empty(
                 (ffn_out.shape[0], layer.down_proj_weight.shape[1]),
-                dtype=paddle.bfloat16)
+                dtype=paddle.bfloat16,
+            )
             deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous(
                 (ffn_in_x, ffn_in_x_scale_tensor),
                 (layer.down_proj_weight, layer.down_proj_weight_scale),
@@ -216,8 +211,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             tmp_ffn_out = paddle.cast(recv_x[0], paddle.bfloat16)
 
         # 5. EP combine
-        return self.ep_prefill_runner.combine(tmp_ffn_out, handle,
-                                              recv_topk_weights)
+        return self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
 
     def apply_ep_decode(
         self,
@@ -229,19 +223,18 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         Apply the EP decoder method.
         """
         # 1. Select topk experts and weights
-        topk_idx, topk_weights = self.ep_decoder_runner.moe_select(
-            layer, gate_out)
+        topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
         # 2. EP Dispatch
         permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
-            x, topk_idx, topk_weights, use_fp8=True)
+            x, topk_idx, topk_weights, use_fp8=True
+        )
 
         # 3. Compute ffn
         assert isinstance(permute_input, tuple)
         up_gate_proj_out = paddle.empty(
             [
                 layer.num_local_experts,
-                layer.ep_size *
-                layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
+                layer.ep_size * layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
                 layer.moe_intermediate_size * 2,
             ],
             dtype=paddle.bfloat16,
@@ -250,8 +243,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         ffn_out = paddle.empty(
             [
                 layer.num_local_experts,
-                layer.ep_size *
-                layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
+                layer.ep_size * layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
                 layer.hidden_size,
             ],
             dtype=paddle.bfloat16,
@@ -269,12 +261,13 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             expected_m,
         )
 
-        act_out = fastdeploy.model_executor.ops.gpu.group_swiglu_with_masked(
-            up_gate_proj_out, token_nums_per_expert)
+        act_out = fastdeploy.model_executor.ops.gpu.group_swiglu_with_masked(up_gate_proj_out, token_nums_per_expert)
 
         act_out_fp8, scale = fastdeploy.model_executor.ops.gpu.masked_per_token_quant(
-            act_out, token_nums_per_expert,
-            self.quant_config.weight_block_size[0])
+            act_out,
+            token_nums_per_expert,
+            self.quant_config.weight_block_size[0],
+        )
 
         deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_masked(
             (act_out_fp8, scale),
@@ -288,8 +281,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         )
 
         # 4. EP combine
-        return self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights,
-                                              handle)
+        return self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
 
     def apply_tp(
         self,
@@ -312,8 +304,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
 
-        recv_x, recv_x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(
-            x, 128)
+        recv_x, recv_x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, 128)
 
         (
             permute_input,
@@ -332,7 +323,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             topk_weights,
             tmp[0],
             tmp[1],
-            False, # use_in_ep
+            False,  # use_in_ep
             -1,
         )
 
@@ -355,15 +346,16 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         # down_proj
         ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
-            ffn_out, self.quant_config.weight_block_size[0])
+            ffn_out, self.quant_config.weight_block_size[0]
+        )
 
-        ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose(
-            [1, 0]).contiguous()
+        ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous()
         ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0])
 
         ffn_out = paddle.empty(
             (ffn_out.shape[0], layer.down_proj_weight.shape[1]),
-            dtype=paddle.bfloat16)
+            dtype=paddle.bfloat16,
+        )
         deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous(
             (ffn_in_x, ffn_in_x_scale_tensor),
             (layer.down_proj_weight, layer.down_proj_weight_scale),

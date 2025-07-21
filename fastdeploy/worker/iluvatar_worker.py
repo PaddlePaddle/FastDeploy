@@ -13,12 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 import gc
 import os
 from typing import List, Optional
 
 import paddle
-import paddle.nn as nn
+from paddle import nn
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
@@ -47,8 +48,7 @@ class IluvatarWorker(WorkerBase):
         pass
 
     def init_device(self):
-        """ Initialize device and Construct model runner
-        """
+        """Initialize device and Construct model runner"""
         if paddle.is_compiled_with_custom_device("iluvatar_gpu"):
             # Set evironment variable
             self.device = f"iluvatar_gpu:{self.local_rank}"
@@ -58,8 +58,7 @@ class IluvatarWorker(WorkerBase):
 
             gc.collect()
         else:
-            raise RuntimeError(
-                f"Not support device type: {self.device_config.device}")
+            raise RuntimeError(f"Not support device type: {self.device_config.device}")
 
         # Construct model runner
         self.model_runner: IluvatarModelRunner = IluvatarModelRunner(
@@ -67,7 +66,8 @@ class IluvatarWorker(WorkerBase):
             device=self.device,
             device_id=self.device_ids[self.local_rank],
             rank=self.rank,
-            local_rank=self.local_rank)
+            local_rank=self.local_rank,
+        )
 
     def prefill_finished(self):
         """
@@ -99,8 +99,7 @@ class IluvatarWorker(WorkerBase):
         """ """
         return self.model_runner.get_model()
 
-    def initialize_cache(self, num_gpu_blocks: int,
-                         num_cpu_blocks: int) -> None:
+    def initialize_cache(self, num_gpu_blocks: int, num_cpu_blocks: int) -> None:
         """ """
         pass
 
@@ -113,7 +112,7 @@ class IluvatarWorker(WorkerBase):
         return output
 
     def preprocess_new_task(self, req_dicts: List[Request]) -> None:
-        """ Process new requests and then start the decode loop
+        """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
@@ -139,5 +138,4 @@ class IluvatarWorker(WorkerBase):
 
     def reinitialize_kv_cache(self, num_gpu_blocks: int) -> None:
         """ """
-        self.model_runner.update_share_input_block_num(
-            num_gpu_blocks=num_gpu_blocks)
+        self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)

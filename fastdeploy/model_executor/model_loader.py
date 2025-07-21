@@ -20,16 +20,13 @@ import paddle
 from paddle import nn
 
 from fastdeploy.config import FDConfig, LoadConfig, ModelConfig
-from fastdeploy.model_executor.load_weight_utils import \
-    load_composite_checkpoint
-from fastdeploy.model_executor.models.deepseek_v3 import \
-    DeepSeekV3PretrainedModel
-from fastdeploy.model_executor.models.ernie4_5_moe import \
-    Ernie4_5_PretrainedModel
-from fastdeploy.model_executor.models.ernie4_5_mtp import \
-    Ernie4_5_MTPPretrainedModel
-from fastdeploy.model_executor.models.ernie4_5_vl.ernie4_5_vl_moe import \
-    Ernie4_5_VLPretrainedModel
+from fastdeploy.model_executor.load_weight_utils import load_composite_checkpoint
+from fastdeploy.model_executor.models.deepseek_v3 import DeepSeekV3PretrainedModel
+from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_PretrainedModel
+from fastdeploy.model_executor.models.ernie4_5_mtp import Ernie4_5_MTPPretrainedModel
+from fastdeploy.model_executor.models.ernie4_5_vl.ernie4_5_vl_moe import (
+    Ernie4_5_VLPretrainedModel,
+)
 from fastdeploy.model_executor.models.model_base import ModelRegistry
 from fastdeploy.model_executor.models.qwen2 import Qwen2PretrainedModel
 from fastdeploy.model_executor.models.qwen3 import Qwen3PretrainedModel
@@ -49,31 +46,31 @@ MODEL_CLASSES = {
 
 
 def get_model_from_loader(fd_config: FDConfig) -> nn.Layer:
-    """ load or download model """
+    """load or download model"""
     model_loader = DefaultModelLoader(fd_config.load_config)
     model = model_loader.load_model(fd_config)
     return model
 
 
 class BaseModelLoader(ABC):
-    """ Base class for model loaders. """
+    """Base class for model loaders."""
 
     def __init__(self, load_config: LoadConfig):
         self.load_config = load_config
 
     @abstractmethod
     def download_model(self, load_config: ModelConfig) -> None:
-        """ Download a model so that it can be immediately loaded."""
+        """Download a model so that it can be immediately loaded."""
         raise NotImplementedError
 
     @abstractmethod
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
-        """ Load a model with the given configurations."""
+        """Load a model with the given configurations."""
         raise NotImplementedError
 
 
 class DefaultModelLoader(BaseModelLoader):
-    """ ModelLoader that can load registered models """
+    """ModelLoader that can load registered models"""
 
     def __init__(self, load_config: LoadConfig):
         super().__init__(load_config)
@@ -98,6 +95,7 @@ class DefaultModelLoader(BaseModelLoader):
         if fd_config.load_config.dynamic_load_weight:
             # register rl model
             import fastdeploy.rl  # noqa
+
             architectures = architectures + "RL"
 
         with context:

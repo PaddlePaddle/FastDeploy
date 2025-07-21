@@ -18,14 +18,13 @@ gcu backend methods
 
 from .attention.flash_attn_backend import GCUFlashAttnBackend
 from .attention.mem_efficient_attn_backend import GCUMemEfficientAttnBackend
-from .moe.fused_moe_method_gcu_backend import (GCUFusedMoeMethod,
-                                               GCUWeightOnlyMoEMethod)
+from .moe.fused_moe_method_gcu_backend import GCUFusedMoeMethod, GCUWeightOnlyMoEMethod
 from .quantization.weight_only import GCUWeightOnlyLinearMethod
 
 __all__ = [
-    'GCUFlashAttnBackend',
-    'GCUMemEfficientAttnBackend',
-    'GCUFusedMoeMethod',
-    'GCUWeightOnlyMoEMethod',
-    'GCUWeightOnlyLinearMethod',
+    "GCUFlashAttnBackend",
+    "GCUMemEfficientAttnBackend",
+    "GCUFusedMoeMethod",
+    "GCUWeightOnlyMoEMethod",
+    "GCUWeightOnlyLinearMethod",
 ]

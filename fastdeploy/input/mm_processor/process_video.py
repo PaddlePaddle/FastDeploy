@@ -21,17 +21,16 @@ import random
 import numpy as np
 from PIL import Image
 
-from .utils.io_utils import EXTRACTED_FRAME_DIR, get_downloadable, get_filename
-from .utils.video_utils import VideoReaderWrapper
 from fastdeploy.utils import data_processor_logger
+
+from .utils.io_utils import EXTRACTED_FRAME_DIR, get_filename
+from .utils.video_utils import VideoReaderWrapper
 
 
 def read_video_decord(video_path, save_to_disk):
     """get reader and meta by decord"""
-    data_in_mem = False
     # video_path = get_downloadable(video_path, save_to_disk=save_to_disk)
     if isinstance(video_path, VideoReaderWrapper):
-        data_in_mem = True
         video_reader = video_path
     else:
         if isinstance(video_path, bytes):
@@ -78,7 +77,7 @@ def get_frame_indices(
         if frames_sample == "rand":
             try:
                 frame_indices = [random.choice(range(x[0], x[1])) for x in ranges]
-            except Exception as e:
+            except Exception:
                 frame_indices = np.random.permutation(vlen)[:acc_samples]
                 frame_indices.sort()
                 frame_indices = list(frame_indices)
@@ -161,11 +160,14 @@ def read_frames_decord(
                         continue
                     try:
                         frames.append(video_reader[frame_indice - previous_counter].asnumpy())
-                        data_processor_logger.info(f"replace {frame_indice}-th frame with {frame_indice-previous_counter}-th frame")
+                        data_processor_logger.info(
+                            f"replace {frame_indice}-th frame with {frame_indice-previous_counter}-th frame"
+                        )
                         frame_indices[frame_indice_index] = frame_indice - previous_counter
                         break
                     except Exception as e:
                         previous_counter += 1
+                        data_processor_logger.info(f"error: {e}")
                 else:
                     if frame_indice + later_counter >= len(video_reader):
                         later_counter += 1
@@ -173,10 +175,12 @@ def read_frames_decord(
                         continue
                     try:
                         frames.append(video_reader[frame_indice + later_counter].asnumpy())
-                        data_processor_logger.info(f"replace {frame_indice}-th frame with {frame_indice+later_counter}-th frame")
+                        data_processor_logger.info(
+                            f"replace {frame_indice}-th frame with {frame_indice+later_counter}-th frame"
+                        )
                         frame_indices[frame_indice_index] = frame_indice + later_counter
                         break
-                    except Exception as e:
+                    except Exception:
                         later_counter += 1
                 previous_after_flag = not previous_after_flag
 

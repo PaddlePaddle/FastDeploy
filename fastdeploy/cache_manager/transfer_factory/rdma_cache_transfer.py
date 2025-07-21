@@ -24,13 +24,24 @@ class RDMACommManager:
     RDMACommManager to manage rdma communication
     """
 
-    def __init__(self, splitwise_role, rank, gpu_id, cache_k_ptr_list, \
-                cache_v_ptr_list, max_block_num, block_bytes, rdma_port):
+    def __init__(
+        self,
+        splitwise_role,
+        rank,
+        gpu_id,
+        cache_k_ptr_list,
+        cache_v_ptr_list,
+        max_block_num,
+        block_bytes,
+        rdma_port,
+    ):
         try:
             import rdma_comm
         except:
-            logger.error(f"The installation of the RDMA library failed." \
-                "Confirm whether your network card supports RDMA transmission.")
+            logger.error(
+                "The installation of the RDMA library failed."
+                "Confirm whether your network card supports RDMA transmission."
+            )
             return
         self.messager = rdma_comm.RDMACommunicator(
             splitwise_role,
@@ -50,7 +61,7 @@ class RDMACommManager:
         Connect to remote gpu and write cache.
         """
         assert self.splitwise_role == "prefill", "only prefill can call this method"
-        addr = f"{ip}:{str(port)}"
+        addr = f"{ip}:{port!s}"
         if addr in self.connected_rdma:
             return True
         ret = self.messager.is_connected(ip, str(port))
@@ -59,18 +70,13 @@ class RDMACommManager:
             return True
 
         ret = self.messager.connect(ip, str(port))
-        logger.info(
-            f"connect to remote rdma address {ip}:{port} status is {ret}")
+        logger.info(f"connect to remote rdma address {ip}:{port} status is {ret}")
         if ret == 0:
             self.connected_rdma.add(addr)
         return ret == 0
 
-    def write_cache(self, ip, port, local_block_ids, remote_block_ids,
-                    layer_idx):
+    def write_cache(self, ip, port, local_block_ids, remote_block_ids, layer_idx):
         """
         Connect to remote gpu and write cache.
         """
-        return self.messager.write_cache(ip, str(port), local_block_ids,
-                                         remote_block_ids, layer_idx)
-
-
+        return self.messager.write_cache(ip, str(port), local_block_ids, remote_block_ids, layer_idx)

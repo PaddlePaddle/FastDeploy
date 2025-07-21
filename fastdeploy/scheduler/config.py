@@ -16,7 +16,7 @@
 
 import redis
 
-from fastdeploy.utils import get_host_ip, is_port_available, llm_logger
+from fastdeploy.utils import get_host_ip, get_random_port, llm_logger
 
 from .global_scheduler import GlobalScheduler
 from .local_scheduler import LocalScheduler
@@ -32,16 +32,17 @@ class LocalSchedulerConfig:
         ttl: Time-to-live in seconds for request expiration
     """
 
-    def __init__(self,
-                 max_size: int = -1,
-                 ttl: int = 900,
-                 max_model_len: int = 8192,
-                 enable_chunked_prefill: bool = False,
-                 max_num_partial_prefills: int = 1,
-                 max_long_partial_prefills: int = 1,
-                 long_prefill_token_threshold: int = 0,
-                 **kwargs
-                 ):
+    def __init__(
+        self,
+        max_size: int = -1,
+        ttl: int = 900,
+        max_model_len: int = 8192,
+        enable_chunked_prefill: bool = False,
+        max_num_partial_prefills: int = 1,
+        max_long_partial_prefills: int = 1,
+        long_prefill_token_threshold: int = 0,
+        **kwargs,
+    ):
         """
         Initialize LocalScheduler configuration.
 
@@ -85,8 +86,7 @@ class LocalSchedulerConfig:
         llm_logger.info("LocalScheduler Configuration Information :")
         for k, v in self.__dict__.items():
             llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info(
-            "=============================================================")
+        llm_logger.info("=============================================================")
 
 
 class GlobalSchedulerConfig:
@@ -102,22 +102,23 @@ class GlobalSchedulerConfig:
         ttl: Time-to-live in seconds for Redis keys
     """
 
-    def __init__(self,
-                 host: str = "127.0.0.1",
-                 port: int = 6379,
-                 db: int = 0,
-                 password=None,
-                 topic: str = "default",
-                 ttl: int = 900,
-                 min_load_score: float = 3,
-                 max_model_len: int = 8192,
-                 load_shards_num: int = 1,
-                 enable_chunked_prefill: bool = False,
-                 max_num_partial_prefills: int = 1,
-                 max_long_partial_prefills: int = 1,
-                 long_prefill_token_threshold: int = 0,
-                 **kwargs
-                 ):
+    def __init__(
+        self,
+        host: str = "127.0.0.1",
+        port: int = 6379,
+        db: int = 0,
+        password=None,
+        topic: str = "default",
+        ttl: int = 900,
+        min_load_score: float = 3,
+        max_model_len: int = 8192,
+        load_shards_num: int = 1,
+        enable_chunked_prefill: bool = False,
+        max_num_partial_prefills: int = 1,
+        max_long_partial_prefills: int = 1,
+        long_prefill_token_threshold: int = 0,
+        **kwargs,
+    ):
         """
         Initialize GlobalScheduler (Redis-based) configuration.
 
@@ -191,8 +192,7 @@ class GlobalSchedulerConfig:
         for k, v in self.__dict__.items():
             llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
         self.password = password
-        llm_logger.info(
-            "=============================================================")
+        llm_logger.info("=============================================================")
 
 
 class SchedulerConfig:
@@ -216,24 +216,23 @@ class SchedulerConfig:
         Raises:
             Exception: If invalid scheduler type is specified
         """
-        self.name = "local" # "local" for LocalScheduler or "global" for GlobalScheduler
+        self.name = "local"  # "local" for LocalScheduler or "global" for GlobalScheduler
         self.config = None
         self.max_num_seqs = 34
         self.max_num_batched_tokens = 2048
-        self.pod_ips = None
         self.use_warmup = False
         self.engine_worker_queue_port = 9923
         self.splitwise_role = "mixed"
         self.innode_prefill_ports = None
-        self.engine_pid = None    # Process ID of engine
-        self.is_master = True
-
+        self.engine_pid = None  # Process ID of engine
+        self.dist_init_ip = (None,)
+        self.nnodes = (1,)
+        self.node_rank = (0,)
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
 
         self._str_to_list("innode_prefill_ports", int)
-        self._str_to_list("pod_ips", str)
 
         if self.name == "local":
             self.config = LocalSchedulerConfig(**kwargs)
@@ -247,11 +246,6 @@ class SchedulerConfig:
         for key, value in vars(self.config).items():
             setattr(self, key, value)
 
-        if self.pod_ips is None:
-            self.nnode = 1
-        else:
-            self.nnode = len(self.pod_ips)
-
         if self.max_num_batched_tokens is None:
             if self.enable_chunked_prefill:
                 self.max_num_batched_tokens = 2048
@@ -260,9 +254,16 @@ class SchedulerConfig:
         assert self.splitwise_role in ["mixed", "prefill", "decode"]
 
         self.host_ip = get_host_ip()
-        if self.pod_ips is None:
-            self.pod_ips = ["0.0.0.0"]
-        elif self.host_ip != self.pod_ips[0]:
+
+        if self.dist_init_ip is None:
+            self.master_ip = "0.0.0.0"
+        else:
+            self.master_ip = self.dist_init_ip
+            self.dist_init_addr = f"{self.dist_init_ip}:{get_random_port()}"
+
+        if self.dist_init_ip is None or self.host_ip == self.master_ip:
+            self.is_master = True
+        else:
             self.is_master = False
 
     def check(self):
@@ -273,26 +274,22 @@ class SchedulerConfig:
             Exception: If invalid scheduler type is specified
         """
         if self.name not in ["local", "global", "splitwise"]:
-            raise Exception(f'Unknown scheduler type {self.name}')
+            raise Exception(f"Unknown scheduler type {self.name}")
         assert (
             self.max_num_seqs <= 256
-        ), "The parameter `max_num_seqs` is not allowed to exceed 256, " "but now it's {}.".format(
-            self.max_num_seqs)
+        ), "The parameter `max_num_seqs` is not allowed to exceed 256, " "but now it's {}.".format(self.max_num_seqs)
 
-        assert (self.nnode >= 1), f"nnode: {self.nnode} should no less than 1"
-        assert (
-            self.max_model_len >= 16
-        ), f"max_model_len: {self.max_model_len} should be larger than 16"
-        assert (
-            self.max_num_seqs
-            >= 1), f"max_num_seqs: {self.max_num_seqs} should be larger than 1"
-        assert (
-            self.max_num_batched_tokens >= self.max_num_seqs
-        ), f"max_num_batched_tokens: {self.max_num_batched_tokens} " \
+        assert self.nnode >= 1, f"nnode: {self.nnode} should no less than 1"
+        assert self.max_model_len >= 16, f"max_model_len: {self.max_model_len} should be larger than 16"
+        assert self.max_num_seqs >= 1, f"max_num_seqs: {self.max_num_seqs} should be larger than 1"
+        assert self.max_num_batched_tokens >= self.max_num_seqs, (
+            f"max_num_batched_tokens: {self.max_num_batched_tokens} "
             f"should be larger than or equal to max_num_seqs: {self.max_num_seqs}"
-        assert (self.max_num_batched_tokens <= self.max_model_len * self.max_num_seqs), \
-                f"max_num_batched_tokens: {self.max_num_batched_tokens} should be larger" \
-                f"than or equal to max_num_seqs: {self.max_num_seqs} * max_model_len: {self.max_model_len}"
+        )
+        assert self.max_num_batched_tokens <= self.max_model_len * self.max_num_seqs, (
+            f"max_num_batched_tokens: {self.max_num_batched_tokens} should be larger"
+            f"than or equal to max_num_seqs: {self.max_num_seqs} * max_model_len: {self.max_model_len}"
+        )
         assert (
             self.max_num_partial_prefills >= 1
         ), f"max_num_partial_prefills: {self.max_num_partial_prefills} should be larger than or equal to 1"
@@ -300,22 +297,19 @@ class SchedulerConfig:
         assert (
             self.max_long_partial_prefills >= 1
         ), f"max_long_partial_prefills: {self.max_long_partial_prefills} should be larger than or equal to 1"
-        assert (self.max_long_partial_prefills <= self.max_num_partial_prefills), \
-                f"max_long_partial_prefills: {self.max_long_partial_prefills} should " \
-                f"be less than or equal to max_num_partial_prefills: {self.max_num_partial_prefills}"
-
-        if not self.enable_chunked_prefill:
-            assert (
-                self.max_num_batched_tokens >= self.max_model_len
-            ), f"max_num_batched_tokens: {self.max_num_batched_tokens} " \
-                f"should be larger than or equal to max_model_len: {self.max_model_len}"
+        assert self.max_long_partial_prefills <= self.max_num_partial_prefills, (
+            f"max_long_partial_prefills: {self.max_long_partial_prefills} should "
+            f"be less than or equal to max_num_partial_prefills: {self.max_num_partial_prefills}"
+        )
 
         if self.max_num_partial_prefills > 1:
-            assert (self.enable_chunked_prefill is True), \
-            "Chunked prefill must be enabled to set max_num_partial_prefills > 1"
-            assert (self.long_prefill_token_threshold < self.max_model_len), \
-            f"long_prefill_token_threshold: {self.long_prefill_token_threshold} should be less than"\
-            f" max_model_len: {self.max_model_len}"
+            assert (
+                self.enable_chunked_prefill is True
+            ), "Chunked prefill must be enabled to set max_num_partial_prefills > 1"
+            assert self.long_prefill_token_threshold < self.max_model_len, (
+                f"long_prefill_token_threshold: {self.long_prefill_token_threshold} should be less than"
+                f" max_model_len: {self.max_model_len}"
+            )
 
         self.config.check()
 
@@ -334,28 +328,32 @@ class SchedulerConfig:
         """
 
         if self.name == "global":
-            return GlobalScheduler(host=self.config.host,
-                                   port=self.config.port,
-                                   db=self.config.db,
-                                   password=self.config.password,
-                                   topic=self.config.topic,
-                                   ttl=self.config.ttl,
-                                   min_load_score=self.config.min_load_score,
-                                   load_shards_num=self.config.load_shards_num,
-                                   enable_chunked_prefill=self.config.enable_chunked_prefill,
-                                   max_num_partial_prefills=self.config.max_num_partial_prefills,
-                                   max_long_partial_prefills=self.config.max_long_partial_prefills,
-                                   long_prefill_token_threshold=self.config.long_prefill_token_threshold,)
+            return GlobalScheduler(
+                host=self.config.host,
+                port=self.config.port,
+                db=self.config.db,
+                password=self.config.password,
+                topic=self.config.topic,
+                ttl=self.config.ttl,
+                min_load_score=self.config.min_load_score,
+                load_shards_num=self.config.load_shards_num,
+                enable_chunked_prefill=self.config.enable_chunked_prefill,
+                max_num_partial_prefills=self.config.max_num_partial_prefills,
+                max_long_partial_prefills=self.config.max_long_partial_prefills,
+                long_prefill_token_threshold=self.config.long_prefill_token_threshold,
+            )
 
         if self.name == "splitwise":
             return SplitWiseScheduler(self.config)
 
-        return LocalScheduler(max_size=self.config.max_size,
-                              ttl=self.config.ttl,
-                              enable_chunked_prefill=self.config.enable_chunked_prefill,
-                              max_num_partial_prefills=self.config.max_num_partial_prefills,
-                              max_long_partial_prefills=self.config.max_long_partial_prefills,
-                              long_prefill_token_threshold=self.config.long_prefill_token_threshold,)
+        return LocalScheduler(
+            max_size=self.config.max_size,
+            ttl=self.config.ttl,
+            enable_chunked_prefill=self.config.enable_chunked_prefill,
+            max_num_partial_prefills=self.config.max_num_partial_prefills,
+            max_long_partial_prefills=self.config.max_long_partial_prefills,
+            long_prefill_token_threshold=self.config.long_prefill_token_threshold,
+        )
 
     def _str_to_list(self, attr_name, default_type):
         if hasattr(self, attr_name):

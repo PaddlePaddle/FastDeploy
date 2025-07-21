@@ -12,20 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" test for moe ops """
+"""test for moe ops"""
 
 import unittest
-import numpy as np
 
+import numpy as np
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
 from paddle.incubate.nn.functional import swiglu
+
 from fastdeploy.model_executor.ops.gpu import (
+    fused_expert_moe,
     moe_expert_dispatch,
     moe_expert_ffn,
     moe_expert_reduce,
-    fused_expert_moe,
 )
 
 # Set random seeds for reproducibility
@@ -35,7 +36,7 @@ np.random.seed(42)
 
 class Expert(nn.Layer):
     """A single expert layer using SwiGLU activation."""
-    
+
     def __init__(self, d_model, d_feedforward):
         super().__init__()
         self.fc1 = nn.Linear(d_model, d_feedforward * 2)  # *2 for SwiGLU
@@ -50,7 +51,7 @@ class Expert(nn.Layer):
 
 class TestFusedMoeConsistency(unittest.TestCase):
     """Test case for verifying consistency between baseline and fused MoE implementations."""
-    
+
     @classmethod
     def setUpClass(cls):
         """Class-level setup that runs once before all tests."""
@@ -77,11 +78,8 @@ class TestFusedMoeConsistency(unittest.TestCase):
 
     def init_experts(self):
         """Initialize expert layers and gate weights."""
-        self.experts = nn.LayerList([
-            Expert(self.d_model, self.d_feedforward)
-            for _ in range(self.num_experts)
-        ])
-        
+        self.experts = nn.LayerList([Expert(self.d_model, self.d_feedforward) for _ in range(self.num_experts)])
+
         # Initialize gate weights
         self.gate = nn.Linear(self.d_model, self.num_experts)
         self.gate_weight = self.gate.weight.cast("float32")
@@ -89,18 +87,17 @@ class TestFusedMoeConsistency(unittest.TestCase):
     def prepare_data(self):
         """Prepare input data and expert parameters."""
         # Input tensor
-        self.x = paddle.randn(
-            [self.batch_size, self.seq_len, self.d_model],
-            dtype=self.dtype
-        )
-        
+        self.x = paddle.randn([self.batch_size, self.seq_len, self.d_model], dtype=self.dtype)
+
         # Stack expert parameters for fused operations
         self.w0 = paddle.stack([e.fc1.weight for e in self.experts]).astype(self.dtype)
-        self.b0 = paddle.stack([e.fc1.bias for e in self.experts]
-                      ).reshape([self.num_experts, 1, -1]).astype(self.dtype)
+        self.b0 = (
+            paddle.stack([e.fc1.bias for e in self.experts]).reshape([self.num_experts, 1, -1]).astype(self.dtype)
+        )
         self.w1 = paddle.stack([e.fc2.weight for e in self.experts]).astype(self.dtype)
-        self.b1 = paddle.stack([e.fc2.bias for e in self.experts]
-                      ).reshape([self.num_experts, 1, -1]).astype(self.dtype)
+        self.b1 = (
+            paddle.stack([e.fc2.bias for e in self.experts]).reshape([self.num_experts, 1, -1]).astype(self.dtype)
+        )
 
     def baseline_forward(self, hidden_states):
         """Baseline implementation processing experts sequentially."""
@@ -114,10 +111,7 @@ class TestFusedMoeConsistency(unittest.TestCase):
 
         # Initialize output
         final_hidden_states = paddle.zeros_like(hidden_states)
-        expert_mask = paddle.transpose(
-            F.one_hot(selected_experts, num_classes=self.num_experts), 
-            [2, 1, 0]
-        )
+        expert_mask = paddle.transpose(F.one_hot(selected_experts, num_classes=self.num_experts), [2, 1, 0])
 
         # Process each expert
         for expert_id in range(self.num_experts):
@@ -127,7 +121,7 @@ class TestFusedMoeConsistency(unittest.TestCase):
 
             current_state = paddle.index_select(hidden_states, top_x, axis=0)
             expert_out = self.experts[expert_id](current_state)
-            
+
             current_hidden_states = expert_out * routing_weights[top_x, idx].reshape([-1, 1])
             paddle.index_add_(
                 x=final_hidden_states,
@@ -152,7 +146,7 @@ class TestFusedMoeConsistency(unittest.TestCase):
             "None",  # No activation type
             self.top_k,
             False,  # Not renormalizing topk
-            False   # Not using expert capacity
+            False,  # Not using expert capacity
         )
 
     def split_forward(self, hidden_states):
@@ -163,7 +157,7 @@ class TestFusedMoeConsistency(unittest.TestCase):
         # Routing computation
         logits = paddle.matmul(hidden_states.cast("float32"), self.gate_weight)
         scores = F.softmax(logits, axis=-1)
-        
+
         # Dispatch tokens to experts
         (
             permute_input,
@@ -187,7 +181,7 @@ class TestFusedMoeConsistency(unittest.TestCase):
             "none",
             False,
         )
-        
+
         # Combine results
         output = moe_expert_reduce(
             ffn_out,
@@ -198,7 +192,7 @@ class TestFusedMoeConsistency(unittest.TestCase):
             norm_topk_prob=False,
             routed_scaling_factor=1.0,
         )
-        
+
         return output.reshape([batch_size, seq_len, hidden_dim])
 
     def test_consistency(self):
@@ -219,16 +213,16 @@ class TestFusedMoeConsistency(unittest.TestCase):
             fused_out,
             rtol=self.rtol,
             atol=self.atol,
-            err_msg="Baseline and fused outputs differ"
+            err_msg="Baseline and fused outputs differ",
         )
-        
+
         # Compare baseline vs split
         np.testing.assert_allclose(
             base_out,
             split_out,
             rtol=self.rtol,
             atol=self.atol,
-            err_msg="Baseline and split outputs differ"
+            err_msg="Baseline and split outputs differ",
         )
 
 

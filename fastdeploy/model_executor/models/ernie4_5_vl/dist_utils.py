@@ -17,12 +17,15 @@
 import paddle
 from paddle import distributed as dist
 from paddle.distributed import fleet
-from paddle.distributed.fleet.utils.sequence_parallel_utils import \
-    RowSequenceParallelLinear
+from paddle.distributed.fleet.utils.sequence_parallel_utils import (
+    RowSequenceParallelLinear,
+)
 
 __all__ = [
-    "scatter_axis", "all_gather_group", "reduce_scatter_group",
-    "RowSequenceParallelLinear"
+    "scatter_axis",
+    "all_gather_group",
+    "reduce_scatter_group",
+    "RowSequenceParallelLinear",
 ]
 
 
@@ -40,13 +43,15 @@ def scatter_axis(input, group=None, axis=0):
     rank = group.rank
     seq_len = input.shape[axis]
     assert seq_len % parallelism == 0, (
-        f"Input sequence length {seq_len} can't be divided exactly"
-        f" by sequence parallelism {parallelism}")
+        f"Input sequence length {seq_len} can't be divided exactly" f" by sequence parallelism {parallelism}"
+    )
     interval = seq_len // parallelism
-    input = paddle.slice(input,
-                         axes=[axis],
-                         starts=[interval * rank],
-                         ends=[interval * (rank + 1)])
+    input = paddle.slice(
+        input,
+        axes=[axis],
+        starts=[interval * rank],
+        ends=[interval * (rank + 1)],
+    )
     # slice use stride, so we maintain the memory of whole input, use assign to free the whole input
     # which can avoid OOM.
     input = paddle.assign(input)
@@ -81,15 +86,9 @@ def all_gather_group(input, group=None, axis=0):
     if axis == 0:
         output_shape[axis] = output_shape[axis] * parallelism
         output = paddle.empty(shape=output_shape, dtype=input.dtype)
-        dist.stream.all_gather(output,
-                               input,
-                               group=group,
-                               use_calc_stream=True)
+        dist.stream.all_gather(output, input, group=group, use_calc_stream=True)
         return output
-    outputs = [
-        paddle.empty(output_shape, dtype=input.dtype)
-        for _ in range(parallelism)
-    ]
+    outputs = [paddle.empty(output_shape, dtype=input.dtype) for _ in range(parallelism)]
     dist.stream.all_gather(outputs, input, group=group, use_calc_stream=True)
     output = paddle.concat(outputs, axis=axis)
     return output
@@ -122,9 +121,5 @@ def reduce_scatter_group(input, group=None):
     ), f"Input sequence length {input.shape[0]} can't be divided exactly by sequence parallelism {parallelism}"
     output_shape[0] = output_shape[0] // parallelism
     output = paddle.empty(shape=output_shape, dtype=input.dtype)
-    dist.stream.reduce_scatter(output,
-                               input,
-                               op=dist.ReduceOp.SUM,
-                               group=group,
-                               use_calc_stream=True)
+    dist.stream.reduce_scatter(output, input, op=dist.ReduceOp.SUM, group=group, use_calc_stream=True)
     return output

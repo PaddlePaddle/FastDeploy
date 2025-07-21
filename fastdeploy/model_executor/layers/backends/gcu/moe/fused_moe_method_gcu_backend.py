@@ -1,4 +1,3 @@
-
 """
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
@@ -15,7 +14,6 @@
 # limitations under the License.
 """
 
-
 import multiprocessing
 import os
 
@@ -24,26 +22,29 @@ import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
-from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import \
-    MoEMethodBase
-from fastdeploy.model_executor.layers.utils import (CpuGuard,
-                                                    create_and_set_parameter,
-                                                    get_tensor)
-from fastdeploy.model_executor.ops.gcu import (invoke_fused_moe_kernel,
-                                               moe_align_block_size,
-                                               topk_softmax,
-                                               weight_quantize_custom_rtn,
-                                               weight_quantize_rtn)
+from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
+from fastdeploy.model_executor.layers.utils import (
+    CpuGuard,
+    create_and_set_parameter,
+    get_tensor,
+)
+from fastdeploy.model_executor.ops.gcu import (
+    invoke_fused_moe_kernel,
+    moe_align_block_size,
+    topk_softmax,
+    weight_quantize_custom_rtn,
+    weight_quantize_rtn,
+)
 
 
 class GCUFusedMoeMethod(MoEMethodBase):
     """
     Use GCU to compute Fused MoE.
     """
+
     def __init__(self, quant_config):
         super().__init__(quant_config)
         self.group_size = -1
-
 
     def create_weights(self, layer: nn.Layer, state_dict):
         """
@@ -53,20 +54,20 @@ class GCUFusedMoeMethod(MoEMethodBase):
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
         stacked_up_gate_proj_weights = paddle.stack(up_gate_proj_weights, axis=0)
         stacked_down_proj_weights = paddle.stack(down_proj_weights, axis=0)
-        for idx, weight_tensor in enumerate(
-            [stacked_up_gate_proj_weights, stacked_down_proj_weights]):
+        for idx, weight_tensor in enumerate([stacked_up_gate_proj_weights, stacked_down_proj_weights]):
             # shape [E, K, N] -> [E, N, K]
             weight_tensor = paddle.transpose(weight_tensor, [0, 2, 1])
             weight_name = self.added_weight_attrs[idx]
             setattr(
-                layer, weight_name,
+                layer,
+                weight_name,
                 layer.create_parameter(
                     shape=weight_tensor.shape,
                     dtype=weight_tensor.dtype,
                     default_initializer=paddle.nn.initializer.Constant(0),
-                ))
+                ),
+            )
             getattr(layer, weight_name).set_value(weight_tensor)
-
 
     @paddle.no_grad()
     def compute_ffn(
@@ -74,7 +75,7 @@ class GCUFusedMoeMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate_out: paddle.Tensor,
-        enable_quant = False
+        enable_quant=False,
     ) -> paddle.Tensor:
         """
         Paddle gcu compute Fused MoE.
@@ -86,8 +87,17 @@ class GCUFusedMoeMethod(MoEMethodBase):
 
         topk_weights = paddle.empty([token_num, top_k], dtype=gate_out.dtype)
         topk_indices = paddle.empty([token_num, top_k], dtype="int32")
-        token_expert_indices = paddle.empty([token_num, top_k], dtype="int32",)
-        topk_softmax(topk_weights, topk_indices, token_expert_indices, gate_out, norm_topk_prob=True)
+        token_expert_indices = paddle.empty(
+            [token_num, top_k],
+            dtype="int32",
+        )
+        topk_softmax(
+            topk_weights,
+            topk_indices,
+            token_expert_indices,
+            gate_out,
+            norm_topk_prob=True,
+        )
 
         config = {
             "BLOCK_SIZE_M": 32,
@@ -136,7 +146,7 @@ class GCUFusedMoeMethod(MoEMethodBase):
             top_k,
             config,
             enable_quant,  # use_int4_w4a16
-             [0, self.group_size],  # block_shape
+            [0, self.group_size],  # block_shape
         )
 
         intermediate_cache2 = paddle.empty(
@@ -144,8 +154,7 @@ class GCUFusedMoeMethod(MoEMethodBase):
             dtype=x.dtype,
         )
 
-        intermediate_cache2 = paddle.incubate.nn.functional.swiglu(
-            intermediate_cache1)
+        intermediate_cache2 = paddle.incubate.nn.functional.swiglu(intermediate_cache1)
 
         intermediate_cache2 = intermediate_cache2.reshape([-1, moe_intermediate_size])
 
@@ -181,12 +190,13 @@ class GCUFusedMoeMethod(MoEMethodBase):
         fused_moe_out = fused_moe_out.reshape_([token_num, hidden_size])
 
         if layer.tp_size > 1:
-            from fastdeploy.distributed.communication_op import \
-                tensor_model_parallel_all_reduce
+            from fastdeploy.distributed.communication_op import (
+                tensor_model_parallel_all_reduce,
+            )
+
             tensor_model_parallel_all_reduce(fused_moe_out)
 
         return fused_moe_out
-
 
     def apply(
         self,
@@ -199,7 +209,6 @@ class GCUFusedMoeMethod(MoEMethodBase):
         """
         return self.compute_ffn(layer, x, gate_out, enable_quant=False)
 
-
     def apply_ep_prefill(
         self,
         layer: nn.Layer,
@@ -211,7 +220,6 @@ class GCUFusedMoeMethod(MoEMethodBase):
         """
         raise NotImplementedError
 
-
     def apply_ep_decode(
         self,
         layer: nn.Layer,
@@ -222,7 +230,6 @@ class GCUFusedMoeMethod(MoEMethodBase):
         Apply the EP decoder method.
         """
         raise NotImplementedError
-
 
     def apply_tp(
         self,
@@ -247,48 +254,44 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
         self.moe_quant_type = self.quant_config.algo
         self.pack_num = 1
 
-        assert self.quant_config.algo == "weight_only_int4", \
-            "GCUWeightOnlyMoEMethod only support weight_only_int4, but got:{self.quant_config.algo}"
+        assert (
+            self.quant_config.algo == "weight_only_int4"
+        ), "GCUWeightOnlyMoEMethod only support weight_only_int4, but got:{self.quant_config.algo}"
 
         self.added_qzeros_attrs = [
-            "up_gate_proj_weight_zeros", "down_proj_weight_zeros"
+            "up_gate_proj_weight_zeros",
+            "down_proj_weight_zeros",
         ]
         self.group_size = 64
 
-        self.quant_multi_process_group_size = int(
-            os.getenv("FD_MOE_QUANT_MULTI_PROCESS_GROUP_SIZE", 8)
-        )
+        self.quant_multi_process_group_size = int(os.getenv("FD_MOE_QUANT_MULTI_PROCESS_GROUP_SIZE", 8))
         logger.info(f"GCUWeightOnlyMoEMethod quant_multi_process_group_size: {self.quant_multi_process_group_size}")
-
 
     def process_prequanted_weights(self, layer: nn.Layer, state_dict):
         """
         Paddle gcu process prequanted weights.
         """
-        up_gate_proj_expert_weight_key = layer.weight_key_map.get(
-            "up_gate_proj_expert_weight_key", None)
-        down_proj_expert_weight_key = layer.weight_key_map.get(
-            "down_proj_expert_weight_key", None)
-        up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get(
-            "up_gate_proj_expert_weight_scale_key", None)
-        down_proj_expert_weight_scale_key = layer.weight_key_map.get(
-            "down_proj_expert_weight_scale_key", None)
+        up_gate_proj_expert_weight_key = layer.weight_key_map.get("up_gate_proj_expert_weight_key", None)
+        down_proj_expert_weight_key = layer.weight_key_map.get("down_proj_expert_weight_key", None)
+        up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get("up_gate_proj_expert_weight_scale_key", None)
+        down_proj_expert_weight_scale_key = layer.weight_key_map.get("down_proj_expert_weight_scale_key", None)
 
         up_gate_proj_weights, down_proj_weights = layer.load_experts_weight(
-            state_dict, up_gate_proj_expert_weight_key, down_proj_expert_weight_key)
+            state_dict,
+            up_gate_proj_expert_weight_key,
+            down_proj_expert_weight_key,
+        )
         # self.check(layer, up_gate_proj_weights, down_proj_weights)
         up_gate_proj_weight_scale = []
         down_proj_weight_scale = []
         for i in range(layer.num_experts):
             expert_idx = layer.expert_id_offset + i
             up_gate_proj_weight_scale.append(
-                get_tensor(
-                    state_dict.pop(
-                        up_gate_proj_expert_weight_scale_key.format(expert_idx))))
+                get_tensor(state_dict.pop(up_gate_proj_expert_weight_scale_key.format(expert_idx)))
+            )
             down_proj_weight_scale.append(
-                get_tensor(
-                    state_dict.pop(
-                        down_proj_expert_weight_scale_key.format(expert_idx))))
+                get_tensor(state_dict.pop(down_proj_expert_weight_scale_key.format(expert_idx)))
+            )
 
         up_gate_proj_weight = paddle.stack(up_gate_proj_weights, axis=0)
         down_proj_weight = paddle.stack(down_proj_weights, axis=0)
@@ -299,11 +302,10 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
             "up_gate_proj_weight": up_gate_proj_weight,
             "down_proj_weight": down_proj_weight,
             "up_gate_proj_weight_scale": up_gate_proj_weight_scale,
-            "down_proj_weight_scale": down_proj_weight_scale
+            "down_proj_weight_scale": down_proj_weight_scale,
         }
         for name, tensor in name_tensor_map.items():
             create_and_set_parameter(layer, name, tensor)
-
 
     @paddle.no_grad()
     def create_weights(self, layer: nn.Layer, state_dict):
@@ -313,7 +315,6 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
         up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
         self.check(layer, up_gate_proj_weights, down_proj_weights)
 
-
         def quant_worker(p_group_idx, shared_dict, weights, moe_quant_type, group_size):
             with CpuGuard():
                 p_group_size = len(weights)
@@ -322,12 +323,12 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
                     quant_weight, scale = weight_quantize_custom_rtn(
                         weights[group_j],
                         moe_quant_type,
-                        group_size # group_size
+                        group_size,  # group_size
                     )
                     shared_dict[p_group_size * p_group_idx + group_j] = (
-                        quant_weight, scale
+                        quant_weight,
+                        scale,
                     )
-
 
         for idx, weight_tensor in enumerate([up_gate_proj_weights, down_proj_weights]):
             weight_name = self.added_weight_attrs[idx]
@@ -354,7 +355,13 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
 
                         p = multiprocessing.Process(
                             target=quant_worker,
-                            args=(i, shared_dict, w, self.moe_quant_type, self.group_size)
+                            args=(
+                                i,
+                                shared_dict,
+                                w,
+                                self.moe_quant_type,
+                                self.group_size,
+                            ),
                         )
                         p.start()
                         processes.append(p)
@@ -376,7 +383,7 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
                     quant_weight, scale = weight_quantize_rtn(
                         weight_tensor[i],
                         self.moe_quant_type,
-                        self.group_size # group_size
+                        self.group_size,  # group_size
                     )
                     weight_list.append(quant_weight)
                     weight_scale_list.append(scale)
@@ -388,7 +395,6 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
 
             quanted_weight_zeros = quanted_weight_scale * 8
             create_and_set_parameter(layer, zeros_name, quanted_weight_zeros)
-
 
     def apply(
         self,

@@ -36,7 +36,8 @@ def xpu_clip_and_round(x: np.ndarray) -> np.ndarray:
 
 
 def xpu_quant_qkv_weight(
-        weight_np: np.ndarray) -> Tuple[paddle.Tensor, paddle.Tensor]:
+    weight_np: np.ndarray,
+) -> Tuple[paddle.Tensor, paddle.Tensor]:
     """
     Quantize the query, key, and value weights for the Transformer model.
 
@@ -65,7 +66,8 @@ def xpu_quant_qkv_weight(
 
 
 def xpu_quant_weight(
-        weight_np: np.ndarray) -> Tuple[paddle.Tensor, paddle.Tensor]:
+    weight_np: np.ndarray,
+) -> Tuple[paddle.Tensor, paddle.Tensor]:
     """
     Quantize the weight tensor for XPU devices.
 

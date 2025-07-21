@@ -19,10 +19,8 @@ from typing import Dict
 import paddle
 from paddle import nn
 
-from fastdeploy.model_executor.layers.quantization.quant_base import \
-    QuantMethodBase
-from fastdeploy.model_executor.layers.quantization.weight_only import \
-    WeightOnlyConfig
+from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
+from fastdeploy.model_executor.layers.quantization.weight_only import WeightOnlyConfig
 from fastdeploy.model_executor.ops.xpu import weight_quantize_xpu
 
 from .fused_moe_backend_base import MoEMethodBase
@@ -44,16 +42,17 @@ class XPUMoEMethod(MoEMethodBase):
                 weights[idx] = weight.transpose([1, 0])
         stacked_up_gate_proj_weights = paddle.stack(up_gate_proj_weights, axis=0)
         stacked_down_proj_weights = paddle.stack(down_proj_weights, axis=0)
-        for idx, weight_tensor in enumerate(
-            [stacked_up_gate_proj_weights, stacked_down_proj_weights]):
+        for idx, weight_tensor in enumerate([stacked_up_gate_proj_weights, stacked_down_proj_weights]):
             weight_name = self.added_weight_attrs[idx]
             setattr(
-                layer, weight_name,
+                layer,
+                weight_name,
                 layer.create_parameter(
                     shape=weight_tensor.shape,
                     dtype=weight_tensor.dtype,
                     default_initializer=paddle.nn.initializer.Constant(0),
-                ))
+                ),
+            )
             getattr(layer, weight_name).set_value(weight_tensor)
 
     def apply_tp(
@@ -77,14 +76,16 @@ class XPUMoEMethod(MoEMethodBase):
             None,  # down_proj bias
             None,  # up_gate_proj scale
             None,  # down_proj scale
-            None, # up_gate_proj_in_scale
-            "", # moe_quant_type
+            None,  # up_gate_proj_in_scale
+            "",  # moe_quant_type
             layer.top_k,
             False,  # moe group, used in deepseek
         )
         if layer.tp_size > 1:
-            from fastdeploy.distributed.communication_op import \
-                tensor_model_parallel_all_reduce
+            from fastdeploy.distributed.communication_op import (
+                tensor_model_parallel_all_reduce,
+            )
+
             tensor_model_parallel_all_reduce(fused_moe_out)
 
         return fused_moe_out
@@ -111,6 +112,7 @@ class XPUMoEMethod(MoEMethodBase):
         """
         raise NotImplementedError
 
+
 class XPUWeightOnlyMoEMethod(QuantMethodBase):
     """
     XPU Fused MoE Method.
@@ -124,8 +126,7 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
         self.quant_config = quant_config
         self.moe_quant_type = self.quant_config.algo
 
-    def create_weights(self, layer: nn.Layer, state_dict: Dict[str,
-                                                               paddle.Tensor]):
+    def create_weights(self, layer: nn.Layer, state_dict: Dict[str, paddle.Tensor]):
         """
         Paddle cutlass create weight process.
         """
@@ -133,14 +134,19 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
         assert len(up_gate_proj_weights) == layer.num_local_experts
         assert len(down_proj_weights) == layer.num_local_experts
         assert up_gate_proj_weights[0].shape == [
-            layer.hidden_size, layer.moe_intermediate_size * 2
+            layer.hidden_size,
+            layer.moe_intermediate_size * 2,
         ]
         assert down_proj_weights[0].shape == [
-            layer.moe_intermediate_size, layer.hidden_size
+            layer.moe_intermediate_size,
+            layer.hidden_size,
         ]
 
         added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
-        added_scale_attrs = ["up_gate_proj_weight_scale", "down_proj_weight_scale"]
+        added_scale_attrs = [
+            "up_gate_proj_weight_scale",
+            "down_proj_weight_scale",
+        ]
 
         for idx, weight_tensor in enumerate([up_gate_proj_weights, down_proj_weights]):
             weight_name = added_weight_attrs[idx]
@@ -150,28 +156,31 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
             weight_scale_list = []
             for i in range(layer.num_local_experts):
                 quant_weight, scale = weight_quantize_xpu(
-                    weight_tensor[i], self.moe_quant_type, -1,
-                    -1)  # weight is [k,n]
-                weight_list.append(quant_weight.transpose(
-                    [1, 0]))  # transpose weight to [n,k]
+                    weight_tensor[i], self.moe_quant_type, -1, -1
+                )  # weight is [k,n]
+                weight_list.append(quant_weight.transpose([1, 0]))  # transpose weight to [n,k]
                 weight_scale_list.append(scale)
             quanted_weight = paddle.stack(weight_list, axis=0)
             setattr(
-                layer, weight_name,
+                layer,
+                weight_name,
                 layer.create_parameter(
                     shape=quanted_weight.shape,
                     dtype=quanted_weight.dtype,
                     default_initializer=paddle.nn.initializer.Constant(0),
-                ))
+                ),
+            )
             getattr(layer, weight_name).set_value(quanted_weight)
 
             quanted_weight_scale = paddle.stack(weight_scale_list, axis=0)
             setattr(
-                layer, scale_name,
+                layer,
+                scale_name,
                 layer.create_parameter(
                     shape=quanted_weight_scale.shape,
                     dtype=quanted_weight_scale.dtype,
-                ))
+                ),
+            )
             getattr(layer, scale_name).set_value(quanted_weight_scale)
 
     def apply(
@@ -193,19 +202,18 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
             layer.down_proj_weight,
             None,  # up_gate_proj bias
             None,  # down_proj bias
-            (layer.up_gate_proj_weight_scale
-             if hasattr(layer, "up_gate_proj_weight_scale") else None),
-            (layer.down_proj_weight_scale
-             if hasattr(layer, "down_proj_weight_scale") else None),
-            (layer.down_proj_in_scale
-             if hasattr(layer, "down_proj_in_scale") else None),
+            (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
+            (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
+            (layer.down_proj_in_scale if hasattr(layer, "down_proj_in_scale") else None),
             self.moe_quant_type,
             layer.top_k,
             False,  # moe group, used in deepseek
         )
         if layer.tp_size > 1:
-            from fastdeploy.distributed.communication_op import \
-                tensor_model_parallel_all_reduce
+            from fastdeploy.distributed.communication_op import (
+                tensor_model_parallel_all_reduce,
+            )
+
             tensor_model_parallel_all_reduce(fused_moe_out)
 
         return fused_moe_out
