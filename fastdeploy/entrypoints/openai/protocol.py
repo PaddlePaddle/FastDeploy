@@ -124,6 +124,8 @@ class ChatMessage(BaseModel):
     content: str
     reasoning_content: Optional[str] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
+    prompt_token_ids: Optional[List[int]] = None
+    completion_token_ids: Optional[List[int]] = None
 
 
 class ChatCompletionResponseChoice(BaseModel):
@@ -177,7 +179,8 @@ class DeltaMessage(BaseModel):
 
     role: Optional[str] = None
     content: Optional[str] = None
-    token_ids: Optional[List[int]] = None
+    prompt_token_ids: Optional[List[int]] = None
+    completion_token_ids: Optional[List[int]] = None
     reasoning_content: Optional[str] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
 
@@ -214,7 +217,8 @@ class CompletionResponseChoice(BaseModel):
 
     index: int
     text: str
-    token_ids: Optional[List[int]] = None
+    prompt_token_ids: Optional[List[int]] = None
+    completion_token_ids: Optional[List[int]] = None
     arrival_time: Optional[float] = None
     logprobs: Optional[int] = None
     reasoning_content: Optional[str] = None
@@ -243,7 +247,8 @@ class CompletionResponseStreamChoice(BaseModel):
     index: int
     text: str
     arrival_time: float = None
-    token_ids: Optional[List[int]] = None
+    prompt_token_ids: Optional[List[int]] = None
+    completion_token_ids: Optional[List[int]] = None
     logprobs: Optional[float] = None
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
@@ -341,6 +346,9 @@ class CompletionRequest(BaseModel):
     top_k: Optional[int] = None
     min_p: Optional[float] = None
     user: Optional[str] = None
+    extra_body: Optional[dict] = None
+    return_token_ids: Optional[bool] = False
+    prompt_token_ids: Optional[List[int]] = None
 
     response_format: Optional[AnyResponseFormat] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None
@@ -373,9 +381,13 @@ class CompletionRequest(BaseModel):
         if prompt is not None:
             req_dict["prompt"] = prompt
 
-        if isinstance(prompt[0], int):
-            req_dict["prompt_token_ids"] = prompt
-            del req_dict["prompt"]
+        if self.prompt_token_ids is not None or \
+            (self.extra_body is not None and self.extra_body.get("prompt_token_ids") is not None):
+            req_dict["prompt_token_ids"] = self.prompt_token_ids
+            if "prompt" in req_dict:
+                del req_dict["prompt"]
+        else:
+            assert len(prompt) > 0
 
         guided_json_object = None
         if self.response_format is not None:
@@ -464,6 +476,9 @@ class ChatCompletionRequest(BaseModel):
     min_p: Optional[float] = None
     user: Optional[str] = None
     metadata: Optional[dict] = None
+    extra_body: Optional[dict] = None
+    return_token_ids: Optional[bool] = False
+    prompt_token_ids: Optional[List[int]] = None
 
     response_format: Optional[AnyResponseFormat] = None
     guided_json: Optional[Union[str, dict, BaseModel]] = None
@@ -499,12 +514,14 @@ class ChatCompletionRequest(BaseModel):
         for key, value in self.dict().items():
             if value is not None:
                 req_dict[key] = value
-        if isinstance(self.messages[0], int):
-            req_dict["prompt_token_ids"] = self.messages
-            del req_dict["messages"]
-        if "raw_request" in req_dict and not req_dict["raw_request"]:
-            req_dict["prompt"] = req_dict["messages"][0]["content"]
-            del req_dict["messages"]
+
+        if self.prompt_token_ids is not None or \
+            (self.extra_body is not None and self.extra_body.get("prompt_token_ids") is not None):
+            req_dict["prompt_token_ids"] = self.prompt_token_ids
+            if "messages" in req_dict:
+                del req_dict["messages"]
+        else:
+            assert len(self.messages) > 0
 
         guided_json_object = None
         if self.response_format is not None:

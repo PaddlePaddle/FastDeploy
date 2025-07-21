@@ -144,6 +144,7 @@ class OpenAIServingChat:
             if request.metadata is not None:
                 enable_thinking = request.metadata.get("enable_thinking")
                 include_stop_str_in_output = request.metadata.get("include_stop_str_in_output", False)
+            enable_return_token_ids = request.return_token_ids or (request.extra_body is not None and request.extra_body.get('return_token_ids', False))
             while num_choices > 0:
                 try:
                     raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
@@ -185,14 +186,16 @@ class OpenAIServingChat:
                             choice = ChatCompletionResponseStreamChoice(
                                 index=i,
                                 delta=DeltaMessage(
-                                    role="assistant",
-                                    content="",
-                                    reasoning_content="",
+                                    role="assistant", 
+                                    content="", 
+                                    reasoning_content="", 
                                     tool_calls=None,
-                                ),
+                                    prompt_token_ids=None,
+                                    completion_token_ids=None,
+                                )
                             )
-                            if request.metadata is not None and request.metadata.get("training", False):
-                                choice.delta.token_ids = prompt_token_ids
+                            if enable_return_token_ids:
+                                choice.delta.prompt_token_ids = list(prompt_token_ids)
                             chunk = ChatCompletionStreamResponse(
                                 id=request_id,
                                 object=chunk_object_type,
@@ -228,9 +231,10 @@ class OpenAIServingChat:
 
                     previous_num_tokens += len(output["token_ids"])
                     delta_message = DeltaMessage(
-                        content=delta_text,
-                        reasoning_content=output.get("reasoning_content"),
-                        token_ids=output.get("token_ids"),
+                        content=delta_text, 
+                        reasoning_content=output.get("reasoning_content"), \
+                        prompt_token_ids=None,
+                        completion_token_ids=None, 
                         tool_calls=output.get("tool_call_content", []),
                     )
 
@@ -260,8 +264,8 @@ class OpenAIServingChat:
                         if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
                             choice.finish_reason = "recover_stop"
 
-                    if request.metadata is not None and request.metadata.get("training", False) and delta_text != "":
-                        choice.delta.token_ids = output["token_ids"]
+                    if enable_return_token_ids:
+                        choice.delta.completion_token_ids = list(output["token_ids"])
                     if include_continuous_usage:
                         chunk.usage = UsageInfo(
                             prompt_tokens=num_prompt_tokens,
@@ -318,6 +322,7 @@ class OpenAIServingChat:
         final_res = None
         enable_thinking = None
         include_stop_str_in_output = False
+        enable_return_token_ids = request.return_token_ids or (request.extra_body is not None and request.extra_body.get('return_token_ids', False))
         try:
             dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
             dealer.write([b"", request_id.encode("utf-8")])
@@ -388,7 +393,8 @@ class OpenAIServingChat:
             content=output["text"],
             reasoning_content=output.get("reasoning_content"),
             tool_calls=output.get("tool_call_content"),
-            token_ids=output.get("token_ids"),
+            prompt_token_ids=prompt_token_ids if enable_return_token_ids else None,
+            completion_token_ids=output.get("token_ids") if enable_return_token_ids else None,
         )
         logprobs_full_res = None
         if logprob_contents:
