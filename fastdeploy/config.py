@@ -36,6 +36,8 @@ from fastdeploy.utils import (ceil_div, check_unified_ckpt, get_logger,
 
 logger = get_logger("config", "config.log")
 
+TaskOption = Literal["generate"]
+
 class MoEPhase(Enum):
     """
     The generation phase of the moe.
@@ -86,7 +88,7 @@ class ModelConfig:
         self,
         args: dict,
     ):
-        self.model_name_or_path = ""
+        self.model = ""
         self.is_quantized = False
         self.dtype = ""
         self.enable_logprob = False
@@ -99,7 +101,7 @@ class ModelConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
-        pretrained_config, _ = PretrainedConfig.get_config_dict(self.model_name_or_path)
+        pretrained_config, _ = PretrainedConfig.get_config_dict(self.model)
         self.pretrained_config = PretrainedConfig.from_dict(pretrained_config)
 
         # set attribute from pretrained_config
@@ -118,14 +120,24 @@ class ModelConfig:
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
         self.ori_vocab_size = self.vocab_size
-
+        llm_logger.info(
+            f"architectures : {self.architectures}.")
         if isinstance(self.architectures, list):
             self.architectures = self.architectures[0]
 
-        if self.architectures in ["Ernie4_5_ForCausalLM","Ernie4_5_MoeForCausalLM"]:
+        if self.architectures in ["Ernie4_5_ForCausalLM","Ernie4_5_MoeForCausalLM"] and "ori_vocab_size" in args.keys():
             self.ori_vocab_size = args["ori_vocab_size"]
 
-        self.is_unified_ckpt = check_unified_ckpt(self.model_name_or_path)
+        if (hasattr(self, "num_key_value_heads")
+                and hasattr(self, "num_key_value_heads")
+                and self.num_key_value_heads is not None
+                and int(self.num_key_value_heads) > 0):
+            self.kv_num_head = int(self.num_key_value_heads)
+        else:
+            self.kv_num_head = self.num_attention_heads
+
+
+        self.is_unified_ckpt = check_unified_ckpt(self.model)
         self.override_name_from_config()
         self.read_from_env()
 
@@ -145,15 +157,8 @@ class ModelConfig:
                 elif isinstance(self.remove_tail_layer, int):
                     self.num_hidden_layers -= self.remove_tail_layer
 
-            self.num_layers = self.num_hidden_layers
-            del self.num_hidden_layers
-
         if not hasattr(self, "mla_use_absorb"):
             self.mla_use_absorb = False
-        if not hasattr(self, "head_dim"):
-            assert hasattr(self, "hidden_size") and hasattr(
-                self, "num_attention_heads")
-            self.head_dim = self.hidden_size // self.num_attention_heads
 
     def read_from_env(self):
         """
@@ -220,7 +225,7 @@ class ParallelConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-        self.use_ep = args["expert_parallel_size"] > 1
+        self.use_ep =  self.expert_parallel_size > 1
 
         # TODO(@wufeisheng): TP and EP need to be supported simultaneously.
         assert (self.tensor_parallel_size == 1
@@ -292,10 +297,17 @@ class SpeculativeConfig:
 
         self.num_extra_cache_layer = 0
 
-        for key, value in args.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
+        #TODO(YuanRisheng): The name of the server args is different from the name of the SpeculativeConfig.
+        #We temperately add the name map here and will delete it in future.
+        name_map = {"speculative_method": "method",
+                   "speculative_max_draft_token_num": "num_speculative_tokens",
+                   "speculative_model_name_or_path": "model_name_or_path",
+                   "speculative_model_quantization": "quantization",
+                   "speculative_benchmark_mode": "benchmark_mode"}
 
+        for key, value in args.items():
+            if key in name_map.keys() and hasattr(self, name_map[key]):
+                setattr(self, name_map[key], value)
         self.read_model_config()
         self.reset()
 
@@ -371,70 +383,76 @@ class DeviceConfig:
         self,
         args,
     ):
-        self.type = "cuda"
-        self.ids: str = "0" # Visible devices ids
-
-        self.ids = os.getenv("CUDA_VISIBLE_DEVICES", None)
-        if current_platform.is_xpu():
-            self.ids = os.getenv("XPU_VISIBLE_DEVICES", None)
+        self.device_type = "cuda"
+        self.device_ids: str = "0" # Visible devices ids
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+        self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", None)
+        if current_platform.is_xpu():
+            self.device_ids = os.getenv("XPU_VISIBLE_DEVICES", None)
 
-@dataclass
+
 class GraphOptimizationConfig:
     """
     Configuration for compute graph level optimization.
     """
+    def __init__(
+        self,
+        args,
+    ):
+        """The Top-level graph optimization contral corresponds to different backends.
+        - 0: dyncmic graph
+        - 1: static graph
+        - 2: static graph + cinn compilation backend
+        """
+        self.graph_opt_level: int = 0
 
-    """The Top-level graph optimization contral corresponds to different backends.
-    - 0: dyncmic graph
-    - 1: static graph
-    - 2: static graph + cinn compilation backend
-    """
-    graph_opt_level: int = 0
+        # CUDA Graph Config
+        """ Whether to use cudagraph.
+        - False: cudagraph is not used.
+        - True: cudagraph is used.
+            It requires that all input buffers have fixed addresses, and all
+            splitting ops write their outputs to input buffers.
+            - With dyncmic graph backend: ...
+            - With static grpah backend: WIP
+        """
+        self.use_cudagraph: bool = False
+        """Sizes to capture cudagraph.
+        - None (default): capture sizes are inferred from llm config.
+        - list[int]: capture sizes are specified as given."""
+        self.cudagraph_capture_sizes: Optional[list[int]] = None
+        """ Number of warmup runs for cudagraph. """
+        self.cudagraph_num_of_warmups: int = 2
+        """Whether to copy input tensors for cudagraph.
+        If the caller can guarantee that the same input buffers
+        are always used, it can set this to False. Otherwise, it should
+        set this to True."""
+        self.cudagraph_copy_inputs: bool = False
+        """ In static graph, this is an operation list that does not need to be captured by the CUDA graph.
+        CudaGraphBackend will split these operations from the static graph.
+        Example usage:
+            cudagraph_splitting_ops = ["paddle.unified_attention"]
 
-    # CUDA Graph Config
-    """ Whether to use cudagraph.
-    - False: cudagraph is not used.
-    - True: cudagraph is used.
-        It requires that all input buffers have fixed addresses, and all
-        splitting ops write their outputs to input buffers.
-        - With dyncmic graph backend: ...
-        - With static grpah backend: WIP
-    """
-    use_cudagraph: bool = False
-    """Sizes to capture cudagraph.
-    - None (default): capture sizes are inferred from llm config.
-    - list[int]: capture sizes are specified as given."""
-    cudagraph_capture_sizes: Optional[list[int]] = None
-    """ Number of warmup runs for cudagraph. """
-    cudagraph_num_of_warmups: int = 2
-    """Whether to copy input tensors for cudagraph.
-    If the caller can guarantee that the same input buffers
-    are always used, it can set this to False. Otherwise, it should
-    set this to True."""
-    cudagraph_copy_inputs: bool = False
-    """ In static graph, this is an operation list that does not need to be captured by the CUDA graph.
-    CudaGraphBackend will split these operations from the static graph.
-    Example usage:
-        cudagraph_splitting_ops = ["paddle.unified_attention"]
+        Note: If want to use subgraph capture functionality in a dynamic graph,
+        can manually split the model into multiple layers and apply the @support_cuda_graph decorator
+        only to the layer where CUDA graph functionality is required.
+        """
+        self.cudagraph_splitting_ops = None
+        """" Whether to use a full cuda graph for the entire forward pass rather than
+        splitting certain operations such as attention into subgraphs.
+        Thus this flag cannot be used together with splitting_ops."""
+        self.full_cuda_graph: bool = True
 
-    Note: If want to use subgraph capture functionality in a dynamic graph,
-    can manually split the model into multiple layers and apply the @support_cuda_graph decorator
-    only to the layer where CUDA graph functionality is required.
-    """
-    cudagraph_splitting_ops = Optional[list[str]]
-    """" Whether to use a full cuda graph for the entire forward pass rather than
-    splitting certain operations such as attention into subgraphs.
-    Thus this flag cannot be used together with splitting_ops."""
-    full_cuda_graph: bool = True
+        self.max_capture_size: int = field(default=None, init=False)  # type: ignore
+        self.batch_size_to_captured_size: dict[int,
+                                        int] = field(default=None,
+                                                    init=False)  # type: ignore
+        # CINN Config ...
 
-    max_capture_size: int = field(default=None, init=False)  # type: ignore
-    batch_size_to_captured_size: dict[int,
-                                    int] = field(default=None,
-                                                init=False)  # type: ignore
-    # CINN Config ...
+        for key, value in args.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
 
     def init_with_cudagrpah_size(
         self,
@@ -619,101 +637,51 @@ class CacheConfig:
 
     def __init__(
         self,
-        block_size: int,
-        gpu_memory_utilization: float,
-        cache_dtype: str = "bfloat16",
-        num_gpu_blocks_override: Optional[int] = None,
-        swap_space: Optional[int] = None,
-        kv_cache_ratio: float = 0.75,
-        enc_dec_block_num: int = 2,
-        tensor_parallel_size: int = 1,
-        enable_prefix_caching=False,
-        enable_ssd_cache=False,
-        model_cfg=None,
-        cache_queue_port=None,
-        rdma_comm_ports=None,
-        cache_transfer_protocol=None,
-        pd_comm_port=None,
+        args,
     ):
-        """
-        Initialize the CacheConfig class.
+        self.block_size = 0
+        self.gpu_memory_utilization = 0
+        self.num_gpu_blocks_override = None
+        self.kv_cache_ratio = 0.75
+        self.enc_dec_block_num = 2
+        self.cache_dtype = "bfloat16"
 
-        Args:
-            block_size (int): Size of a cache block in number of tokens.
-            gpu_memory_utilization (float): Fraction of GPU memory to use.
-            cache_dtype (str): Data type for cache storage. Default is 'bfloat16'.
-            num_gpu_blocks_override (Optional[int]): Override for number of GPU blocks.
-            num_cpu_blocks (Optional[int]): Number of CPU blocks.
-            kv_cache_ratio (float): Ratio for max block calculation.
-            enc_dec_block_num (int): Number of encoder-decoder blocks.
-            enable_prefix_caching (bool): Enable prefix caching.
-        """
-        self.block_size = block_size
-        self.gpu_memory_utilization = gpu_memory_utilization
-        self.num_gpu_blocks_override = num_gpu_blocks_override
-        self.kv_cache_ratio = kv_cache_ratio
-        self.enc_dec_block_num = enc_dec_block_num
-        self.cache_dtype = cache_dtype
-        if hasattr(model_cfg, "quantization_config"):
-            self.cache_dtype = model_cfg.quantization_config.get(
-                "kv_cache_quant_type", cache_dtype)
+        self.rdma_comm_ports = None
+        self.cache_transfer_protocol = None
+        self.pd_comm_port = None
 
-        self.rdma_comm_ports = rdma_comm_ports
-        self.cache_transfer_protocol = cache_transfer_protocol
-        self.pd_comm_port = pd_comm_port
+        self.enable_prefix_caching = False
+        self.enable_ssd_cache = False
+        self.cache_queue_port = None
+        self.swap_space = None
 
-        if rdma_comm_ports is not None and isinstance(rdma_comm_ports, str):
-            self.rdma_comm_ports = rdma_comm_ports.split(',')
+        for key, value in args.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
 
-        if pd_comm_port is not None and isinstance(pd_comm_port, str):
-            self.pd_comm_port = [int(port) for port in pd_comm_port.split(",")]
-
-        self.enable_prefix_caching = enable_prefix_caching
-        if swap_space is None:
+        if "swap_space" in args.keys() and args["swap_space"] is None:
             self.enable_hierarchical_cache = False
         else:
             self.enable_hierarchical_cache = True
 
-        self.enable_ssd_cache = enable_ssd_cache
-        self.model_cfg = model_cfg
-        self.cache_queue_port = cache_queue_port
-        self.swap_space = swap_space
+        if self.rdma_comm_ports is not None and isinstance(self.rdma_comm_ports, str):
+            self.rdma_comm_ports = self.rdma_comm_ports.split(',')
 
-        if (hasattr(self.model_cfg, "num_key_value_heads")
-                and hasattr(self.model_cfg, "num_key_value_heads")
-                and self.model_cfg.num_key_value_heads is not None
-                and int(self.model_cfg.num_key_value_heads) > 0):
-            kv_num_head = int(self.model_cfg.num_key_value_heads)
-        else:
-            kv_num_head = self.model_cfg.num_attention_heads
-        self.model_cfg.kv_num_head = kv_num_head
+        if self.pd_comm_port is not None and isinstance(self.pd_comm_port, str):
+            self.pd_comm_port = [int(port) for port in self.pd_comm_port.split(",")]
 
         # TODO check name
         if "int4" in self.cache_dtype.lower(
         ) or "float4" in self.cache_dtype.lower():
-            byte_size = 0.5
+            self.byte_size = 0.5
             self.cache_dtype = "uint8"
         elif "int8" in self.cache_dtype.lower(
         ) or "float8" in self.cache_dtype.lower():
             self.cache_dtype = "uint8"
-            byte_size = 1
+            self.byte_size = 1
         else:
-            byte_size = 2
+            self.byte_size = 2
 
-        self.each_token_cache_space = int(
-            self.model_cfg.num_layers * kv_num_head * self.model_cfg.head_dim *
-            byte_size)
-        self.bytes_per_block = int(self.each_token_cache_space *
-                                   self.block_size)
-        self.bytes_per_layer_per_block = int(
-            self.block_size * self.model_cfg.kv_num_head *
-            self.model_cfg.head_dim // tensor_parallel_size * byte_size)
-
-        if self.swap_space is None:
-            self.num_cpu_blocks = 0
-        else:
-            self.num_cpu_blocks = int(self.swap_space * 1024**3 /
-                                      self.bytes_per_block)
         self._verify_args()
 
     def metrics_info(self):
@@ -729,7 +697,7 @@ class CacheConfig:
             raise ValueError("KV cache ratio must be less than 1.0. Got "
                              f"{self.kv_cache_ratio}.")
 
-    def postprocess(self, num_total_tokens, number_of_tasks):
+    def postprocess(self, num_total_tokens, number_of_tasks, tensor_parallel_size, model_config):
         """
         calculate block num
         """
@@ -746,6 +714,24 @@ class CacheConfig:
             self.prefill_kvcache_block_num = self.total_block_num
             llm_logger.info(
                 f"Doing profile, the total_block_num:{self.total_block_num}")
+
+        each_token_cache_space = int(
+            model_config.num_hidden_layers * model_config.kv_num_head * model_config.head_dim *
+            self.byte_size)
+        bytes_per_block = int(each_token_cache_space * self.block_size)
+
+        if self.swap_space is None:
+            self.num_cpu_blocks = 0
+        else:
+            self.num_cpu_blocks = int(self.swap_space * 1024**3 / bytes_per_block)
+
+        self.bytes_per_layer_per_block = int(
+            self.block_size * model_config.kv_num_head *
+            model_config.head_dim // tensor_parallel_size * self.byte_size)
+
+        if model_config.quantization_config is not None:
+            self.cache_dtype = model_config.quantization_config.get(
+                "kv_cache_quant_type", self.cache_dtype)
 
     def reset(self, num_gpu_blocks):
         """
@@ -901,23 +887,23 @@ class FDConfig:
         if self.multi_modal_config.enable_mm:
             self.parallel_config.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
 
-        if self.device_config.ids is None:
-            self.device_config.ids = ",".join([str(i) for i in range(self.parallel_config.worker_num_per_node)])
+        if self.device_config.device_ids is None:
+            self.device_config.device_ids = ",".join([str(i) for i in range(self.parallel_config.worker_num_per_node)])
 
-        assert self.device_config.ids.split(',').__len__() == self.parallel_config.worker_num_per_node, \
+        assert self.device_config.device_ids.split(',').__len__() == self.parallel_config.worker_num_per_node, \
         f"invalid CUDA_VISIBLE_DEVICES, should be equal to {self.parallel_config.worker_num_per_node}"
 
         assert self.parallel_config.worker_num_per_node % self.parallel_config.tensor_parallel_size == 0, \
             f"tensor_parallel_size: {self.parallel_config.tensor_parallel_size} should be divisible by worker_num_per_node: {self.parallel_config.worker_num_per_node}"
 
-        self.device_config.local_device_ids = self.device_config.ids.split(
+        self.device_config.local_device_ids = self.device_config.device_ids.split(
             ',')[:self.parallel_config.tensor_parallel_size]
 
         if self.scheduler_config.long_prefill_token_threshold == 0:
             self.scheduler_config.long_prefill_token_threshold = int(self.max_model_len * 0.04)
 
         self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens,
-                                      self.scheduler_config.max_num_seqs)
+                                      self.scheduler_config.max_num_seqs, self.parallel_config.tensor_parallel_size, self.model_config)
         self.cache_config.max_block_num_per_seq = int(
             self.scheduler_config.max_model_len // self.cache_config.block_size)
 
@@ -944,6 +930,7 @@ class FDConfig:
         #TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
         if self.graph_opt_config.graph_opt_level == 2:
             self.graph_opt_config.graph_opt_level = 1
+
 
     def check(self):
         """

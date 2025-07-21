@@ -209,7 +209,7 @@ class XGrammarBackend(BackendBase):
         self.batch_size = fd_config.scheduler_config.max_num_seqs
 
         self.any_whitespace = not fd_config.decoding_config.disable_any_whitespace
-        self.splitwise_role = fd_config.parallel_config.splitwise_role
+        self.splitwise_role = fd_config.scheduler_config.splitwise_role
 
         try:
             tokenizer_info = TokenizerInfo.from_huggingface(

@@ -169,7 +169,7 @@ class LLMEngine(object):
         if self.do_profile == 0 and (
                 self.cfg.cache_config.enable_prefix_caching \
                 or self.cfg.scheduler_config.splitwise_role != "mixed"):
-            device_ids = self.cfg.device_config.ids.split(",")
+            device_ids = self.cfg.device_config.device_ids.split(",")
             self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
                 cache_config=self.cfg.cache_config,
                 tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
@@ -940,7 +940,7 @@ class LLMEngine(object):
             "TRAINER_INSTANCES_NUM": 1,
             "TRAINER_INSTANCES": "0.0.0.0",
             "ENABLE_FASTDEPLOY_LOAD_MODEL_CONCURRENCY": 0,
-            "LOAD_STATE_DICT_THREAD_NUM": len(self.cfg.device_config.ids.split(',')),
+            "LOAD_STATE_DICT_THREAD_NUM": len(self.cfg.device_config.device_ids.split(',')),
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
@@ -1008,11 +1008,11 @@ class LLMEngine(object):
         arguments = (
             f" --nnodes {str(self.cfg.scheduler_config.nnode)}"
             f" --ips {','.join(self.cfg.scheduler_config.pod_ips)}"
-            f" --devices {self.cfg.device_config.ids} {py_script}"
-            f" --max_num_seqs {self.cfg.max_num_seqs} --max_model_len {self.cfg.scheduler_config.max_model_len}"
+            f" --devices {self.cfg.device_config.device_ids} {py_script}"
+            f" --max_num_seqs {self.cfg.scheduler_config.max_num_seqs} --max_model_len {self.cfg.scheduler_config.max_model_len}"
             f" --gpu_memory_utilization {self.cfg.cache_config.gpu_memory_utilization}"
-            f" --model_name_or_path {str(self.cfg.model_name_or_path)}"
-            f" --device_ids {self.cfg.device_config.ids}"
+            f" --model {str(self.cfg.model_config.model)}"
+            f" --device_ids {self.cfg.device_config.device_ids}"
             f" --tensor_parallel_size {self.cfg.parallel_config.tensor_parallel_size}"
             f" --engine_worker_queue_port {str(self.cfg.scheduler_config.engine_worker_queue_port)}"
             f" --pod_ip {self.cfg.scheduler_config.pod_ips[0]}"
@@ -1033,11 +1033,10 @@ class LLMEngine(object):
             f" --speculative_model_name_or_path {self.cfg.speculative_config.model_name_or_path}"
             f" --speculative_model_quantization {self.cfg.speculative_config.quantization}"
             f" --speculative_benchmark_mode {self.cfg.speculative_config.benchmark_mode}"
-            f" --graph_optimiaztion_config '{self.cfg.graph_optimization_config.to_json_string()}'"
-            f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
-            f" --load_strategy {self.cfg.model_config.load_strategy}"
-            f" --enable_mm {self.cfg.enable_mm}")
-
+            f" --graph_optimiaztion_config '{self.cfg.graph_opt_config.to_json_string()}'"
+            f" --guided_decoding_backend {self.cfg.decoding_config.guided_decoding_backend}"
+            f" --load_strategy {self.cfg.load_config.load_strategy}"
+            f" --enable_mm {self.cfg.multi_modal_config.enable_mm}")
 
         worker_append_flag = {
             "enable_expert_parallel":
@@ -1047,8 +1046,8 @@ class LLMEngine(object):
             "enable_chunked_prefill":
             self.cfg.scheduler_config.enable_chunked_prefill,
             "do_profile": self.do_profile,
-            "dynamic_load_weight": self.cfg.model_config.dynamic_load_weight,
-            "disable_any_whitespace": self.cfg.disable_any_whitespace,
+            "dynamic_load_weight": self.cfg.load_config.dynamic_load_weight,
+            "disable_any_whitespace": self.cfg.decoding_config.disable_any_whitespace,
             "enable-custom-all-reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.model_config.enable_logprob,
         }
@@ -1152,7 +1151,7 @@ class LLMEngine(object):
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
-            device_ids = self.cfg.device_config.ids.split(",")
+            device_ids = self.cfg.device_config.device_ids.split(",")
             self.cache_manager_processes = self.resource_manager.cache_manager.launch_cache_manager(
                 cache_config=self.cfg.cache_config,
                 tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
@@ -1193,10 +1192,10 @@ class LLMEngine(object):
                                              r'set state for layer (\d+)',
                                              line)):
                     progress = eval(match.group(
-                        1)) * 1.0 / self.cfg.model_config.num_layers
+                        1)) * 1.0 / self.cfg.model_config.num_hidden_layers
                     self.worker_init_status["layer_loadding"] = progress
                     if self.worker_init_status[
-                            "layer_loadding"] == self.cfg.model_config.num_layers - 1:
+                            "layer_loadding"] == self.cfg.model_config.num_hidden_layers - 1:
                         self.worker_init_status["finished"] = True
 
         self.checking_worker_status_thread = threading.Thread(

@@ -43,6 +43,10 @@ class ModelRunnerBase(ABC):
         self.parallel_config = fd_config.parallel_config
         self.graph_opt_config = fd_config.graph_opt_config
         self.quant_config = fd_config.quant_config
+        self.scheduler_config = fd_config.scheduler_config
+        self.cache_config = fd_config.cache_config
+        self.multi_modal_config = fd_config.multi_modal_config
+        self.observability_config = fd_config.observability_config
         # ... config
 
         self.device = device

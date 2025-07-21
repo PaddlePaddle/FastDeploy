@@ -53,7 +53,7 @@ class XpuWorker(WorkerBase):
             self.device = f"xpu:{self.local_rank}"
             paddle.device.set_device(self.device)
             paddle.set_default_dtype(self.model_config.dtype)
-            self.device_ids = self.device_config.ids.split(",")
+            self.device_ids = self.device_config.device_ids.split(",")
 
             gc.collect()
         else:

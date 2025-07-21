@@ -71,7 +71,7 @@ class MTPProposer(Proposer):
         self.model_config.architectures[0] = "Ernie4_5_MTPForCausalLM"
         self.speculative_config.sharing_model = main_model
         self.model_config.num_hidden_layers = 1
-        self.model_config.model_name_or_path = (
+        self.model_config.model = (
             self.speculative_config.model_name_or_path)
         self.model_config.pretrained_config.prefix_name = "ernie.mtp_block"
         if self.speculative_config.quantization != "":
@@ -141,7 +141,7 @@ class MTPProposer(Proposer):
             max_num_blocks=self.num_gpu_blocks)
         if (not self.observability_config.do_profile
                 and (self.cache_config.enable_prefix_caching
-                     or self.parallel_config.splitwise_role != "mixed")):
+                     or self.scheduler_config.splitwise_role != "mixed")):
             cache_kvs_list = []
             for i in range(
                     self.num_main_model_layers,
@@ -221,7 +221,7 @@ class MTPProposer(Proposer):
             num_gpu_blocks *
             self.speculative_config.num_gpu_block_expand_ratio)
         if not (self.cache_config.enable_prefix_caching
-                or self.parallel_config.splitwise_role != "mixed"):
+                or self.scheduler_config.splitwise_role != "mixed"):
             self.initialize_kv_cache()
 
         # Reset free list

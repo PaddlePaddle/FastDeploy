@@ -17,9 +17,10 @@ import json
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional
-
-from fastdeploy.config import (CacheConfig, Config, ModelConfig,
-                               ParallelConfig, SpeculativeConfig, TaskOption, GraphOptimizationConfig)
+from fastdeploy.utils import is_port_available
+from fastdeploy.config import (CacheConfig, FDConfig, ModelConfig,
+                               ParallelConfig, SpeculativeConfig, TaskOption, GraphOptimizationConfig, 
+                               LoadConfig,CommitConfig, MultiModalConfig, DeviceConfig, DecodingConfig)
 from fastdeploy.scheduler.config import SchedulerConfig
 from fastdeploy.utils import FlexibleArgumentParser
 
@@ -670,44 +671,16 @@ class EngineArgs:
                 for field in dataclass_fields(cls)
             })
 
-    def create_model_config(self) -> ModelConfig:
-        """
-        Create and return a ModelConfig object based on the current settings.
-        """
-        return ModelConfig(model_name_or_path=self.model,
-                           config_json_file=self.model_config_name,
-                           quantization=self.quantization,
-                           dynamic_load_weight=self.dynamic_load_weight,
-                           load_strategy=self.load_strategy)
-
-    def create_cache_config(self, model_cfg) -> CacheConfig:
-        """
-        Create and return a CacheConfig object based on the current settings.
-        """
-        return CacheConfig(
-            block_size=self.block_size,
-            tensor_parallel_size=self.tensor_parallel_size,
-            gpu_memory_utilization=self.gpu_memory_utilization,
-            num_gpu_blocks_override=self.num_gpu_blocks_override,
-            kv_cache_ratio=self.kv_cache_ratio,
-            enable_prefix_caching=self.enable_prefix_caching,
-            swap_space=self.swap_space,
-            cache_queue_port=self.cache_queue_port,
-            model_cfg=model_cfg,
-            enable_chunked_prefill=self.enable_chunked_prefill,
-            enc_dec_block_num=self.static_decode_blocks,
-            rdma_comm_ports=self.rdma_comm_ports,
-            cache_transfer_protocol=self.cache_transfer_protocol,
-            pd_comm_port=self.pd_comm_port,
-        )
-
     def create_speculative_config(self) -> SpeculativeConfig:
         """
+        Create and return a SpeculativeConfig object based on the current settings.
         """
+        speculative_args = asdict(self)
         if self.speculative_config is not None:
-            return SpeculativeConfig(**self.speculative_config)
-        else:
-            return SpeculativeConfig()
+            for k, v in  self.speculative_config.items():
+                speculative_args[k] = v
+
+        return SpeculativeConfig(speculative_args)
 
     def create_scheduler_config(self) -> SchedulerConfig:
         """
@@ -715,59 +688,54 @@ class EngineArgs:
         """
         prefix = "scheduler_"
         prefix_len = len(prefix)
-        extra_params = [
-            "max_model_len", "enable_chunked_prefill",
-            "max_num_partial_prefills", "max_long_partial_prefills",
-            "long_prefill_token_threshold"
-        ]
-
+        
         all = asdict(self)
         params = dict()
         for k, v in all.items():
             if k[:prefix_len] == prefix:
                 params[k[prefix_len:]] = v
-            elif k in extra_params:
+            else:
                 params[k] = v
-
-        return SchedulerConfig(**params)
-
-    def create_parallel_config(self) -> ParallelConfig:
-        """
-        Create and return a ParallelConfig object based on the current settings.
-        """
-        return ParallelConfig(
-            tensor_parallel_size=self.tensor_parallel_size,
-            enable_expert_parallel=self.enable_expert_parallel,
-            data_parallel_size=self.data_parallel_size,
-            enable_custom_all_reduce=self.enable_custom_all_reduce
-        )
+        return SchedulerConfig(params)
 
     def create_graph_optimization_config(self) -> GraphOptimizationConfig:
         """
         Create and retuan a GraphOptimizationConfig object based on the current settings.
         """
+        graph_optimization_args = asdict(self)
         if self.graph_optimization_config is not None:
-            return GraphOptimizationConfig(**self.graph_optimization_config)
-        else:
-            return GraphOptimizationConfig()
+            for k, v in  self.graph_optimization_config.items():
+                graph_optimization_args[k] = v
+        return GraphOptimizationConfig(graph_optimization_args)
 
-    def create_engine_config(self) -> Config:
+    def create_engine_config(self) -> FDConfig:
         """
         Create and return a Config object based on the current settings.
         """
-        model_cfg = self.create_model_config()
-        if not model_cfg.is_unified_ckpt and hasattr(model_cfg,
-                                                     'tensor_parallel_size'):
-            self.tensor_parallel_size = model_cfg.tensor_parallel_size
         if self.max_num_batched_tokens is None:
             if self.enable_chunked_prefill:
                 self.max_num_batched_tokens = 2048
             else:
                 self.max_num_batched_tokens = self.max_model_len
+
+        all = asdict(self)
+        model_cfg = ModelConfig(all)
+        load_cfg = LoadConfig(all)
+        parallel_cfg = ParallelConfig(all)
+        cache_cfg = CacheConfig(all)
+        multi_modal_cfg = MultiModalConfig(all)
+        device_cfg = DeviceConfig(all)
+        decoding_cfg = DecodingConfig(all)
         scheduler_cfg = self.create_scheduler_config()
         speculative_cfg = self.create_speculative_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
+        commit_cfg = CommitConfig()
+        
+        if not model_cfg.is_unified_ckpt and hasattr(model_cfg,
+                                                     'tensor_parallel_size'):
+            parallel_cfg.tensor_parallel_size = model_cfg.tensor_parallel_size
+            self.tensor_parallel_size = model_cfg.tensor_parallel_size
 
         assert not (self.use_cudagraph and self.enable_prefix_caching), \
             "Prefix caching cannot be used with CUDA graph"
@@ -775,33 +743,20 @@ class EngineArgs:
         assert not (self.tensor_parallel_size<=1 and self.enable_custom_all_reduce), \
             "enable_custom_all_reduce must be used with tensor_parallel_size>1"
 
-        return Config(
-            model_name_or_path=self.model,
+        assert (
+            is_port_available('0.0.0.0', self.engine_worker_queue_port)
+        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
+        
+        return FDConfig(
             model_config=model_cfg,
             scheduler_config=scheduler_cfg,
-            tokenizer=self.tokenizer,
-            cache_config=self.create_cache_config(model_cfg),
-            parallel_config=self.create_parallel_config(),
-            max_model_len=self.max_model_len,
-            tensor_parallel_size=self.tensor_parallel_size,
-            max_num_seqs=self.max_num_seqs,
+            cache_config=cache_cfg,
+            parallel_config=parallel_cfg,
             speculative_config=speculative_cfg,
-            max_num_batched_tokens=self.max_num_batched_tokens,
-            pod_ips=self.pod_ips,
-            use_warmup=self.use_warmup,
-            engine_worker_queue_port=self.engine_worker_queue_port,
-            limit_mm_per_prompt=self.limit_mm_per_prompt,
-            mm_processor_kwargs=self.mm_processor_kwargs,
-            enable_mm=self.enable_mm,
-            reasoning_parser=self.reasoning_parser,
-            splitwise_role=self.splitwise_role,
-            innode_prefill_ports=self.innode_prefill_ports,
-            max_num_partial_prefills=self.max_num_partial_prefills,
-            max_long_partial_prefills=self.max_long_partial_prefills,
-            long_prefill_token_threshold=self.long_prefill_token_threshold,
-            graph_optimization_config=graph_opt_cfg,
-            guided_decoding_backend=self.guided_decoding_backend,
-            disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
-            enable_custom_all_reduce=self.enable_custom_all_reduce,
-            enable_logprob = self.enable_logprob,
+            graph_opt_config=graph_opt_cfg,
+            multi_modal_config=multi_modal_cfg,
+            device_config=device_cfg,
+            decoding_config=decoding_cfg,
+            load_config=load_cfg,
+            commit_config=commit_cfg,
         )

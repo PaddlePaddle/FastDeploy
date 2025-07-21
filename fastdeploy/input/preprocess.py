@@ -69,7 +69,7 @@ class InputPreprocessor:
         if self.reasoning_parser:
             reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(
                     self.reasoning_parser)
-        architectures = ModelConfig(self.model_name_or_path).architectures
+        architectures = ModelConfig({"model":self.model_name_or_path}).architectures
         if not self.enable_mm:
             if "Ernie4_5_MoeForCausalLM" not in architectures \
                 and "Ernie4_5_ForCausalLM" not in architectures:

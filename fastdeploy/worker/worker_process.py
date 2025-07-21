@@ -24,8 +24,9 @@ import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
 
 from fastdeploy.config import (DecodingConfig, DeviceConfig, FDConfig,
-                               GraphOptimizationConfig, LoadConfig,
-                               ModelConfig, ParallelConfig, SpeculativeConfig)
+                               GraphOptimizationConfig, LoadConfig,CacheConfig,
+                               ModelConfig, ParallelConfig, SpeculativeConfig,DecodingConfig,MultiModalConfig,ObservabilityConfig)
+from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import \
@@ -108,6 +109,8 @@ class PaddleDisWorkerProc():
         self.local_rank = local_rank
         self.fd_config = fd_config
         self.parallel_config = fd_config.parallel_config
+        self.scheduler_config = fd_config.scheduler_config
+        self.cache_config = fd_config.cache_config
 
         # TODO(gongshaotian): Use worker factory to get worker
         self.worker = get_worker(fd_config=fd_config,
@@ -392,7 +395,7 @@ def parse_args():
     """
     parser = argparse.ArgumentParser("FastDeploy LLM Inference")
     parser.add_argument("-m",
-                        "--model_name_or_path",
+                        "--model",
                         type=str,
                         default="./output",
                         help="model dir")
@@ -568,12 +571,13 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     speculative_config = SpeculativeConfig(vars(args))
     parallel_config = ParallelConfig(vars(args))
     load_config = LoadConfig(vars(args))
+    cache_config = CacheConfig(vars(args))
+    scheduler_config = SchedulerConfig(vars(args))
+    multi_modal_config = MultiModalConfig(vars(args))
+    decoding_config = DecodingConfig(vars(args))
+    observability_config = ObservabilityConfig(vars(args))
 
-    graph_opt_config = GraphOptimizationConfig(
-        use_cudagraph=args.graph_optimiaztion_config["use_cudagraph"],
-        graph_opt_level=args.graph_optimiaztion_config["graph_opt_level"],
-        cudagraph_capture_sizes=args.graph_optimiaztion_config["cudagraph_capture_sizes"]
-    )
+    graph_opt_config = GraphOptimizationConfig(args.graph_optimiaztion_config)
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
@@ -658,8 +662,12 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
                          load_config=load_config,
                          decoding_config=decoding_config,
                          quant_config=quant_config,
-                         graph_opt_config=graph_opt_config)
-
+                         graph_opt_config=graph_opt_config,
+                         cache_config=cache_config,
+                         scheduler_config=scheduler_config,
+                         multi_modal_config=multi_modal_config,
+                         observability_config = observability_config
+                    )
     return fd_config
 
 

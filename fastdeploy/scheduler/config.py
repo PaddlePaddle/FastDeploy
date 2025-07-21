@@ -202,13 +202,12 @@ class SchedulerConfig:
     Creates appropriate config based on scheduler type (local/global).
     """
 
-    def __init__(self, name="local", **kwargs):
+    def __init__(self, kwargs):
         """
         Initialize scheduler configuration factory.
 
         Args:
-            name: Scheduler type ("local" for LocalScheduler or "global" for GlobalScheduler)
-            **kwargs: Configuration parameters for the specific scheduler type
+            kwargs: Configuration parameters for the specific scheduler type
 
         Initializes:
             - Appropriate config object based on scheduler type
@@ -217,27 +216,32 @@ class SchedulerConfig:
         Raises:
             Exception: If invalid scheduler type is specified
         """
-        self.name = name
+        self.name = "local" # "local" for LocalScheduler or "global" for GlobalScheduler
         self.config = None
-        self.max_num_seqs = kwargs.get("max_num_seqs", 34)
-        self.max_num_batched_tokens = kwargs.get("max_num_batched_tokens", 2048)
-        self.pod_ips = kwargs.get("pod_ips", None)
-        self.use_warmup = kwargs.get("use_warmup", False)
-        self.engine_worker_queue_port = kwargs.get("engine_worker_queue_port", 9923)
-        self.splitwise_role = kwargs.get("splitwise_role", "mixed")
-        self.innode_prefill_ports = kwargs.get("innode_prefill_ports", None)
-        self.engine_pid = kwargs.get("engine_pid", None)    # Process ID of engine
+        self.max_num_seqs = 34
+        self.max_num_batched_tokens = 2048
+        self.pod_ips = None
+        self.use_warmup = False
+        self.engine_worker_queue_port = 9923
+        self.splitwise_role = "mixed"
+        self.innode_prefill_ports = None
+        self.engine_pid = None    # Process ID of engine
         self.is_master = True
+
+        for key, value in kwargs.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+
         self._str_to_list("innode_prefill_ports", int)
         self._str_to_list("pod_ips", str)
 
-        if name == "local":
+        if self.name == "local":
             self.config = LocalSchedulerConfig(**kwargs)
 
-        if name == "global":
+        if self.name == "global":
             self.config = GlobalSchedulerConfig(**kwargs)
 
-        if name == "splitwise":
+        if self.name == "splitwise":
             self.config = SplitWiseSchedulerConfig(**kwargs)
 
         for key, value in vars(self.config).items():
@@ -274,9 +278,7 @@ class SchedulerConfig:
             self.max_num_seqs <= 256
         ), "The parameter `max_num_seqs` is not allowed to exceed 256, " "but now it's {}.".format(
             self.max_num_seqs)
-        assert (
-            is_port_available('0.0.0.0', self.engine_worker_queue_port)
-        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
+
         assert (self.nnode >= 1), f"nnode: {self.nnode} should no less than 1"
         assert (
             self.max_model_len >= 16

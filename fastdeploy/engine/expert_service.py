@@ -53,7 +53,7 @@ class ExpertService(object):
         end_pos = (local_data_parallel_id + 1) * self.cfg.parallel_config.tensor_parallel_size
         self.cfg.cache_config.rdma_comm_ports = self.cfg.cache_config.rdma_comm_ports[
             start_pos:end_pos]
-        self.cfg.device_config.local_device_ids = self.cfg.device_config.ids.split(
+        self.cfg.device_config.local_device_ids = self.cfg.device_config.device_ids.split(
             ",")[start_pos:end_pos]
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
         self.cfg.scheduler_config.disaggregate_info = None

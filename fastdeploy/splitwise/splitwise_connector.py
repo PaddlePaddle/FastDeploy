@@ -351,7 +351,7 @@ class SplitwiseConnector:
                         "request_id":
                         tasks[i].request_id,
                         "device_ids":
-                        self.cfg.device_config.ids.split(","),
+                        self.cfg.device_config.device_ids.split(","),
                         "transfer_protocol":
                         "ipc",
                         "dest_block_ids":
@@ -370,7 +370,7 @@ class SplitwiseConnector:
                         "request_id":
                         tasks[i].request_id,
                         "device_ids":
-                        self.cfg.device_config.ids.split(","),
+                        self.cfg.device_config.device_ids.split(","),
                         "ip":
                         self.cfg.scheduler_config.host_ip,
                         "rdma_ports":

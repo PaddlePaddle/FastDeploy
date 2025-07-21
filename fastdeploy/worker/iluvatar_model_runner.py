@@ -645,7 +645,7 @@ class IluvatarModelRunner(ModelRunnerBase):
 
         if not self.observability_config.do_profile and (
                 self.cache_config.enable_prefix_caching \
-                or self.parallel_config.splitwise_role != "mixed"):
+                or self.scheduler_config.splitwise_role != "mixed"):
             raise NotImplementedError("Iluvatar does not support yet")
         else:
             for i in range(self.model_config.num_hidden_layers):
@@ -1013,7 +1013,7 @@ class IluvatarModelRunner(ModelRunnerBase):
             if self.speculative_decoding else None)
 
         if self.speculative_config.method in ["mtp"] and \
-            self.parallel_config.splitwise_role == "prefill":
+            self.scheduler_config.splitwise_role == "prefill":
             skip_save_output = True
         else:
             skip_save_output = False
@@ -1093,7 +1093,7 @@ class IluvatarModelRunner(ModelRunnerBase):
 
         # Reset block table and kv cache with global block num
         if not (self.cache_config.enable_prefix_caching \
-                or self.parallel_config.splitwise_role != "mixed"):
+                or self.scheduler_config.splitwise_role != "mixed"):
             self.initialize_kv_cache()
 
         # Reset free list

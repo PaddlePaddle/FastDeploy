@@ -793,7 +793,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if not self.observability_config.do_profile and (
                 self.cache_config.enable_prefix_caching \
-                or self.parallel_config.splitwise_role != "mixed"):
+                or self.scheduler_config.splitwise_role != "mixed"):
             cache_kvs_list = []
             for i in range(self.model_config.num_hidden_layers):
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
@@ -1226,7 +1226,7 @@ class GPUModelRunner(ModelRunnerBase):
             if self.enable_mm else None)
 
         if self.speculative_config.method in ["mtp"] and \
-            self.parallel_config.splitwise_role == "prefill":
+            self.scheduler_config.splitwise_role == "prefill":
             skip_save_output = True
         else:
             skip_save_output = False
@@ -1320,7 +1320,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Reset block table and kv cache with global block num
         if not (self.cache_config.enable_prefix_caching \
-                or self.parallel_config.splitwise_role != "mixed"):
+                or self.scheduler_config.splitwise_role != "mixed"):
             self.initialize_kv_cache()
 
         # Reset free list

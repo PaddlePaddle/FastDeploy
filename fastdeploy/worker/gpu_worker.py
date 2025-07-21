@@ -50,10 +50,10 @@ class GpuWorker(WorkerBase):
         """
         Initialize device and construct model runner
         """
-        if self.device_config.type == "cuda" and paddle.device.is_compiled_with_cuda(
+        if self.device_config.device_type == "cuda" and paddle.device.is_compiled_with_cuda(
         ):
             # Set evironment variable
-            self.device_ids = self.device_config.ids.split(",")
+            self.device_ids = self.device_config.device_ids.split(",")
             self.device = f"gpu:{self.local_rank}"
             paddle.device.set_device(self.device)
             paddle.set_default_dtype(self.model_config.dtype)
