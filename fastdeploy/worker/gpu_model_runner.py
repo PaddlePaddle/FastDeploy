@@ -1001,7 +1001,6 @@ class GPUModelRunner(ModelRunnerBase):
                 block_size=self.parallel_config.block_size,
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=True,
-                is_dummy=True,
             )
 
             if self.speculative_decoding:
@@ -1258,7 +1257,6 @@ class GPUModelRunner(ModelRunnerBase):
             save_each_rank=self.parallel_config.use_ep,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=skip_save_output,
-            is_dummy=False,
         )
 
         # 6. Speculative decode
