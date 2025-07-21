@@ -156,10 +156,11 @@ def rejection_top_p_sampling(
         raise RuntimeError("Cannot import rejection_top_p_sampling op.")
     return ids
 
+
 def min_p_sampling(
-    probs:paddle.tensor,
-    min_p_arr:Optional[paddle.Tensor],
-)-> tuple[paddle.Tensor, paddle.Tensor]:
+    probs: paddle.tensor,
+    min_p_arr: Optional[paddle.Tensor],
+) -> tuple[paddle.Tensor, paddle.Tensor]:
     """
     min_p_sampling
     """
@@ -168,10 +169,11 @@ def min_p_sampling(
     else:
         if current_platform.is_cuda():
             from fastdeploy.model_executor.ops.gpu import min_p_sampling
-            probs=min_p_sampling(probs,min_p_arr)
+
+            probs = min_p_sampling(probs, min_p_arr)
         else:
-            max_probabilities = paddle.amax(probs,axis=-1,keepdim=True)
+            max_probabilities = paddle.amax(probs, axis=-1, keepdim=True)
             adjusted_min_p = max_probabilities * min_p_arr
             invalid_token_mask = probs < adjusted_min_p.reshape([-1, 1])
-            probs= paddle.where(invalid_token_mask,paddle.full_like(probs,0.0),probs)
+            probs = paddle.where(invalid_token_mask, paddle.full_like(probs, 0.0), probs)
         return probs

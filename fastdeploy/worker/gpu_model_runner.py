@@ -109,7 +109,6 @@ class GPUModelRunner(ModelRunnerBase):
         else:
             self.sampler = SpeculativeSampler(fd_config)
 
-
         # Lazy initialize kv cache after model loading
         # self.kv_caches: list[paddle.Tensor] = []
 
@@ -318,19 +317,21 @@ class GPUModelRunner(ModelRunnerBase):
 
             if len(request.eos_token_ids) < self.parallel_config.eos_tokens_lens:
                 request.eos_token_ids.append(request.eos_token_ids[0])
-            self.share_inputs["eos_token_id"][:] = np.array(
-                request.eos_token_ids, dtype="int64").reshape(-1, 1)
-            self.share_inputs["top_p"][idx:idx + 1] = get_attr_from_request(request, "top_p", 0.7)
-            self.share_inputs["top_k"][idx:idx + 1] = request.get("top_k", 0)
-            self.share_inputs["min_p"][idx:idx + 1] = request.get("min_p", 0.0)
+            self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
+            self.share_inputs["top_p"][idx : idx + 1] = get_attr_from_request(request, "top_p", 0.7)
+            self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
+            self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
 
-            self.share_inputs["temperature"][idx:idx + 1] = get_attr_from_request(request,"temperature", 0.95)
-            self.share_inputs["penalty_score"][idx:idx + 1] = get_attr_from_request(
-                request, "repetition_penalty", 1.0)
-            self.share_inputs["frequency_score"][idx:idx + 1] = get_attr_from_request(
-                request, "frequency_penalty", 0.0)
-            self.share_inputs["presence_score"][idx:idx + 1] = get_attr_from_request(
-                request, "presence_penalty", 0.0)
+            self.share_inputs["temperature"][idx : idx + 1] = get_attr_from_request(request, "temperature", 0.95)
+            self.share_inputs["penalty_score"][idx : idx + 1] = get_attr_from_request(
+                request, "repetition_penalty", 1.0
+            )
+            self.share_inputs["frequency_score"][idx : idx + 1] = get_attr_from_request(
+                request, "frequency_penalty", 0.0
+            )
+            self.share_inputs["presence_score"][idx : idx + 1] = get_attr_from_request(
+                request, "presence_penalty", 0.0
+            )
 
             self.share_inputs["min_dec_len"][idx : idx + 1] = request.get("min_tokens", 1)
             self.share_inputs["max_dec_len"][idx : idx + 1] = request.get(
@@ -424,20 +425,12 @@ class GPUModelRunner(ModelRunnerBase):
             dtype="int64",
         )
         self.share_inputs["prompt_ids"] = paddle.full(
-            [max_num_seqs, self.parallel_config.max_model_len],
-            self.parallel_config.pad_token_id,
-            dtype='int64')
-        self.share_inputs["eos_token_id"] = paddle.full(
-            [self.parallel_config.eos_tokens_lens, 1], 0, dtype='int64')
-        self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1],
-                                                self.model_config.top_p,
-                                                dtype='float32')
-        self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1],
-                                                0,
-                                                dtype='int64')
-        self.share_inputs["min_p"] = paddle.full([max_num_seqs, 1],
-                                                0.0,
-                                                dtype='float32')
+            [max_num_seqs, self.parallel_config.max_model_len], self.parallel_config.pad_token_id, dtype="int64"
+        )
+        self.share_inputs["eos_token_id"] = paddle.full([self.parallel_config.eos_tokens_lens, 1], 0, dtype="int64")
+        self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
+        self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
+        self.share_inputs["min_p"] = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
         self.share_inputs["temperature"] = paddle.full(
             [max_num_seqs, 1], self.model_config.temperature, dtype="float32"
         )

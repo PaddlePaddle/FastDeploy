@@ -108,45 +108,46 @@ class SamplingParams:
         )
 
     @classmethod
-    def from_optional(cls,
-                      n,
-                      best_of,
-                      presence_penalty,
-                      frequency_penalty,
-                      repetition_penalty,
-                      temperature,
-                      top_p,
-                      top_k,
-                      min_p,
-                      seed=None,
-                      stop=None,
-                      stop_token_ids=None,
-                      max_tokens=None,
-                      reasoning_max_tokens=None,
-                      min_tokens=1,
-                      logprobs=None,
-                      bad_words=None) -> "SamplingParams":
+    def from_optional(
+        cls,
+        n,
+        best_of,
+        presence_penalty,
+        frequency_penalty,
+        repetition_penalty,
+        temperature,
+        top_p,
+        top_k,
+        min_p,
+        seed=None,
+        stop=None,
+        stop_token_ids=None,
+        max_tokens=None,
+        reasoning_max_tokens=None,
+        min_tokens=1,
+        logprobs=None,
+        bad_words=None,
+    ) -> "SamplingParams":
         """Create instance from command line arguments"""
-        return cls(n=1 if n is None else n,
-                   best_of=best_of,
-                   presence_penalty=presence_penalty
-                   if presence_penalty is not None else 0.0,
-                   frequency_penalty=frequency_penalty
-                   if frequency_penalty is not None else 0.0,
-                   repetition_penalty=repetition_penalty
-                   if repetition_penalty is not None else 1.0,
-                   temperature=temperature if temperature is not None else 1.0,
-                   top_p=top_p,
-                   top_k=top_k if top_k is not None else 0,
-                   min_p=min_p if min_p is not None else 0.0,
-                   seed=seed,
-                   stop=stop,
-                   stop_token_ids=stop_token_ids,
-                   max_tokens=max_tokens if max_tokens is not None else 8192,
-                   reasoning_max_tokens=reasoning_max_tokens,
-                   min_tokens=min_tokens,
-                   logprobs=logprobs,
-                   bad_words=bad_words)
+        return cls(
+            n=1 if n is None else n,
+            best_of=best_of,
+            presence_penalty=presence_penalty if presence_penalty is not None else 0.0,
+            frequency_penalty=frequency_penalty if frequency_penalty is not None else 0.0,
+            repetition_penalty=repetition_penalty if repetition_penalty is not None else 1.0,
+            temperature=temperature if temperature is not None else 1.0,
+            top_p=top_p,
+            top_k=top_k if top_k is not None else 0,
+            min_p=min_p if min_p is not None else 0.0,
+            seed=seed,
+            stop=stop,
+            stop_token_ids=stop_token_ids,
+            max_tokens=max_tokens if max_tokens is not None else 8192,
+            reasoning_max_tokens=reasoning_max_tokens,
+            min_tokens=min_tokens,
+            logprobs=logprobs,
+            bad_words=bad_words,
+        )
 
     def __post_init__(self):
         if self.seed is None:
@@ -174,8 +175,7 @@ class SamplingParams:
         if self.top_k < -1:
             raise ValueError(f"top_k must be 0 (disable), or at least 1, " f"got {self.top_k}.")
         if not isinstance(self.top_k, int):
-            raise TypeError(
-                f"top_k must be an integer, got {type(self.top_k).__name__}")
+            raise TypeError(f"top_k must be an integer, got {type(self.top_k).__name__}")
         if not 0.0 <= self.min_p <= 1.0:
             raise ValueError("min_p must be in [0,1],got f{self.min_p}")
 
