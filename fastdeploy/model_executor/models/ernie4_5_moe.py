@@ -28,25 +28,27 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
-from fastdeploy.model_executor.graph_optimization.decorator import \
-    support_graph_optimization
+from fastdeploy.model_executor.graph_optimization.decorator import (
+    support_graph_optimization,
+)
 from fastdeploy.model_executor.layers.activation import SiluAndMul
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (
-    MergedColumnParallelLinear, QKVParallelLinear, RowParallelLinear)
+    MergedColumnParallelLinear,
+    QKVParallelLinear,
+    RowParallelLinear,
+)
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
-from fastdeploy.model_executor.models.utils import \
-    LayerIdPlaceholder as layerid
+from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid
 from fastdeploy.model_executor.models.utils import WeightMeta
 
 
 class Ernie4_5_MLP(nn.Layer):
-
     def __init__(
         self,
         fd_config: FDConfig,
@@ -92,91 +94,57 @@ class Ernie4_5_MLP(nn.Layer):
 
 
 class Ernie4_5_MoE(nn.Layer):
-
-    def __init__(self, fd_config: FDConfig, layer_id: int,
-                 prefix: str) -> None:
+    def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str) -> None:
         super().__init__()
         moe_quant_type = ""
-        if hasattr(fd_config.quant_config, 'moe_quant_type'):
+        if hasattr(fd_config.quant_config, "moe_quant_type"):
             moe_quant_type = fd_config.quant_config.moe_quant_type
 
         if moe_quant_type == "w4a8":
             weight_key_map = {
-                "gate_weight_key":
-                f"{prefix}.gate.weight",
-                "gate_correction_bias_key":
-                f"{prefix}.moe_statics.e_score_correction_bias",
-                "up_gate_proj_expert_weight_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                "down_proj_expert_weight_key":
-                f"{prefix}.experts.{{}}.down_proj.quant_weight",
-                "up_gate_proj_expert_weight_scale_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                "down_proj_expert_weight_scale_key":
-                f"{prefix}.experts.{{}}.down_proj.weight_scale",
-                "up_gate_proj_expert_in_scale_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
-                "down_proj_expert_in_scale_key":
-                f"{prefix}.experts.{{}}.down_proj.activation_scale",
+                "gate_weight_key": f"{prefix}.gate.weight",
+                "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
+                "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
+                "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
             }
         elif moe_quant_type == "w4w2":
             weight_key_map = {
-                "gate_weight_key":
-                f"{prefix}.gate.weight",
-                "gate_correction_bias_key":
-                f"{prefix}.moe_statics.e_score_correction_bias",
-                "up_gate_proj_expert_weight_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                "down_proj_expert_weight_key":
-                f"{prefix}.experts.{{}}.down_proj.quant_weight",
-                "up_gate_proj_expert_weight_scale_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                "down_proj_expert_weight_scale_key":
-                f"{prefix}.experts.{{}}.down_proj.weight_scale",
-                "up_gate_proj_expert_super_scales_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.super_scales",
-                "down_proj_expert_super_scales_key":
-                f"{prefix}.experts.{{}}.down_proj.super_scales",
-                "up_gate_proj_expert_code_scale_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.code_scale",
-                "down_proj_expert_code_scale_key":
-                f"{prefix}.experts.{{}}.down_proj.code_scale",
-                "up_gate_proj_expert_code_zp_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.code_zp",
-                "down_proj_expert_code_zp_key":
-                f"{prefix}.experts.{{}}.down_proj.code_zp",
+                "gate_weight_key": f"{prefix}.gate.weight",
+                "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
+                "up_gate_proj_expert_super_scales_key": f"{prefix}.experts.{{}}.up_gate_proj.super_scales",
+                "down_proj_expert_super_scales_key": f"{prefix}.experts.{{}}.down_proj.super_scales",
+                "up_gate_proj_expert_code_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.code_scale",
+                "down_proj_expert_code_scale_key": f"{prefix}.experts.{{}}.down_proj.code_scale",
+                "up_gate_proj_expert_code_zp_key": f"{prefix}.experts.{{}}.up_gate_proj.code_zp",
+                "down_proj_expert_code_zp_key": f"{prefix}.experts.{{}}.down_proj.code_zp",
             }
         elif moe_quant_type == "tensor_wise_fp8" or (
-                moe_quant_type == "block_wise_fp8"
-                and fd_config.model_config.is_quantized):
+            moe_quant_type == "block_wise_fp8" and fd_config.model_config.is_quantized
+        ):
             weight_key_map = {
-                "gate_weight_key":
-                f"{prefix}.gate.weight",
-                "gate_correction_bias_key":
-                f"{prefix}.moe_statics.e_score_correction_bias",
-                "up_gate_proj_expert_weight_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                "down_proj_expert_weight_key":
-                f"{prefix}.experts.{{}}.down_proj.quant_weight",
-                "up_gate_proj_expert_weight_scale_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                "down_proj_expert_weight_scale_key":
-                f"{prefix}.experts.{{}}.down_proj.weight_scale",
-                "up_gate_proj_expert_in_scale_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
-                "down_proj_expert_in_scale_key":
-                f"{prefix}.experts.{{}}.down_proj.activation_scale",
+                "gate_weight_key": f"{prefix}.gate.weight",
+                "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
+                "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
+                "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
             }
         else:
             weight_key_map = {
-                "gate_weight_key":
-                f"{prefix}.gate.weight",
-                "gate_correction_bias_key":
-                f"{prefix}.moe_statics.e_score_correction_bias",
-                "up_gate_proj_expert_weight_key":
-                f"{prefix}.experts.{{}}.up_gate_proj.weight",
-                "down_proj_expert_weight_key":
-                f"{prefix}.experts.{{}}.down_proj.weight",
+                "gate_weight_key": f"{prefix}.gate.weight",
+                "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
             }
 
         self.fused_moe = FusedMoE(
@@ -211,9 +179,7 @@ class Ernie4_5_MoE(nn.Layer):
 
 
 class Ernie4_5_Attention(nn.Layer):
-
-    def __init__(self, fd_config: FDConfig, layer_id: int,
-                 prefix: str) -> None:
+    def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str) -> None:
         super().__init__()
 
         self.qkv_proj = QKVParallelLinear(
@@ -224,8 +190,7 @@ class Ernie4_5_Attention(nn.Layer):
         self.o_proj = RowParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.o_proj",
-            input_size=fd_config.model_config.head_dim *
-            fd_config.model_config.num_attention_heads,
+            input_size=fd_config.model_config.head_dim * fd_config.model_config.num_attention_heads,
             output_size=fd_config.model_config.hidden_size,
         )
         self.attn = Attention(
@@ -258,14 +223,13 @@ class Ernie4_5_Attention(nn.Layer):
 
 
 class Ernie4_5_DecoderLayer(nn.Layer):
-
     def __init__(
         self,
         fd_config: FDConfig,
         prefix: str = "",
     ) -> None:
         super().__init__()
-        layer_id = int(prefix.split(sep='.')[-1])
+        layer_id = int(prefix.split(sep=".")[-1])
 
         self.self_attn = Ernie4_5_Attention(
             fd_config=fd_config,
@@ -273,8 +237,10 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             prefix=f"{prefix}.self_attn",
         )
 
-        if (getattr(fd_config.model_config, "moe_num_experts", None) is not None
-                and layer_id >= fd_config.model_config.moe_layer_start_index):
+        if (
+            getattr(fd_config.model_config, "moe_num_experts", None) is not None
+            and layer_id >= fd_config.model_config.moe_layer_start_index
+        ):
             self.mlp = Ernie4_5_MoE(
                 fd_config=fd_config,
                 layer_id=layer_id,
@@ -317,16 +283,14 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             residual = hidden_states
             hidden_states = self.input_layernorm(hidden_states)
         else:
-            hidden_states, residual = self.input_layernorm(
-                hidden_states, residual)
+            hidden_states, residual = self.input_layernorm(hidden_states, residual)
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
             forward_meta=forward_meta,
         )
 
-        hidden_states, residual = self.post_attention_layernorm(
-            hidden_states, residual)
+        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
         hidden_states = self.mlp(hidden_states)
 
@@ -335,7 +299,6 @@ class Ernie4_5_DecoderLayer(nn.Layer):
 
 @support_graph_optimization
 class Ernie4_5_Model(nn.Layer):
-
     def __init__(
         self,
         fd_config: FDConfig = None,
@@ -356,14 +319,18 @@ class Ernie4_5_Model(nn.Layer):
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
             params_dtype=paddle.get_default_dtype(),
-            prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"))
+            prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"),
+        )
 
-        self.layers = nn.LayerList([
-            Ernie4_5_DecoderLayer(
-                fd_config=fd_config,
-                prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}")
-            for i in range(self.num_layers)
-        ])
+        self.layers = nn.LayerList(
+            [
+                Ernie4_5_DecoderLayer(
+                    fd_config=fd_config,
+                    prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}",
+                )
+                for i in range(self.num_layers)
+            ]
+        )
 
         self.norm = RMSNorm(
             fd_config,
@@ -396,9 +363,7 @@ class Ernie4_5_Model(nn.Layer):
 
         residual = None
         for i in range(self.num_layers):
-            hidden_states, residual = self.layers[i](forward_meta,
-                                                            hidden_states,
-                                                            residual)
+            hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
         hidden_states = hidden_states + residual
 
@@ -436,8 +401,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         return "Ernie4_5_MoeForCausalLM"
 
     @paddle.no_grad()
-    def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray,
-                                                         paddle.Tensor]]):
+    def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
         """
         Load model parameters from a given state dictionary.
 
@@ -448,15 +412,14 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         """
         self.ernie.load_state_dict(state_dict)
         if self.tie_word_embeddings:
-            self.lm_head.linear.weight.set_value(
-                self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
+            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
         else:
             self.lm_head.load_state_dict(state_dict)
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
         logits = paddle.cast(logits, paddle.float32)
-        logits[:, self.ori_vocab_size:] = -float("inf")
+        logits[:, self.ori_vocab_size :] = -float("inf")
 
         return logits
 
@@ -468,8 +431,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             shape=[0, self.fd_config.model_config.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
-        for i in range(self.fd_config.model_config.moe_layer_start_index,
-                       self.fd_config.model_config.num_hidden_layers):
+        for i in range(
+            self.fd_config.model_config.moe_layer_start_index,
+            self.fd_config.model_config.num_hidden_layers,
+        ):
             self.ernie.layers[i].mlp.fused_moe(fake_hidden_states)
 
     def forward(
@@ -477,8 +442,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        hidden_states = self.ernie(ids_remove_padding=ids_remove_padding,
-                                   forward_meta=forward_meta)
+        hidden_states = self.ernie(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         return hidden_states
 
@@ -510,54 +474,75 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
         return None
 
     weight_infos = [
-        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.qkv_proj.weight",
-                   True, tsm.GQA),
-        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.o_proj.weight",
-                   False),
+        WeightMeta(
+            f".layers.{{{layerid.LAYER_ID}}}.self_attn.qkv_proj.weight",
+            True,
+            tsm.GQA,
+        ),
+        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.o_proj.weight", False),
         WeightMeta(
             f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.up_gate_proj.weight",
-            True, tsm.PairFused),
-        WeightMeta(f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.down_proj.weight",
-                   False),
+            True,
+            tsm.PairFused,
+        ),
+        WeightMeta(f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.down_proj.weight", False),
         WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.up_gate_proj.weight",
-            True, tsm.PairFused),
+            True,
+            tsm.PairFused,
+        ),
         WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.down_proj.weight",
-            False),
+            False,
+        ),
         WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.up_gate_proj.weight",
-            True, tsm.PairFused),
+            True,
+            tsm.PairFused,
+        ),
         WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.down_proj.weight",
-            False),
+            False,
+        ),
         WeightMeta(".embed_tokens.weight", False),
         WeightMeta("lm_head.weight", True),
         # quant tensorwise
         WeightMeta(
             f".layers.{{{layerid.LAYER_ID}}}.self_attn.qkv_proj.quant_weight",
-            True, tsm.GQA),
+            True,
+            tsm.GQA,
+        ),
         WeightMeta(
             f".layers.{{{layerid.LAYER_ID}}}.self_attn.o_proj.quant_weight",
-            False),
+            False,
+        ),
         WeightMeta(
             f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.up_gate_proj.quant_weight",
-            True, tsm.PairFused),
+            True,
+            tsm.PairFused,
+        ),
         WeightMeta(
             f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.down_proj.quant_weight",
-            False),
+            False,
+        ),
         WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.up_gate_proj.quant_weight",
-            True, tsm.PairFused),
+            True,
+            tsm.PairFused,
+        ),
         WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.down_proj.quant_weight",
-            False),
+            False,
+        ),
         WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.up_gate_proj.quant_weight",
-            True, tsm.PairFused),
+            True,
+            tsm.PairFused,
+        ),
         WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.down_proj.quant_weight",
-            False),
+            False,
+        ),
     ]
 
     @classmethod
@@ -567,7 +552,10 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
         """
         logger.info("erine inference model _get_tensor_parallel_mappings")
         from fastdeploy.model_executor.models.tp_utils import (
-            build_expanded_keys, has_prefix, split_or_merge_func_v1)
+            build_expanded_keys,
+            has_prefix,
+            split_or_merge_func_v1,
+        )
 
         fn = split_or_merge_func_v1(
             is_split=is_split,
@@ -575,19 +563,16 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
             num_key_value_heads=config.num_key_value_heads,
-            head_dim=config.head_dim)
+            head_dim=config.head_dim,
+        )
 
-        def get_tensor_parallel_split_mappings(num_layers, moe_num_experts,
-                                               moe_layer_start_index,
-                                               prefix_name):
+        def get_tensor_parallel_split_mappings(num_layers, moe_num_experts, moe_layer_start_index, prefix_name):
             base_actions = {}
             weight_infos = cls.weight_infos
-            for (weight_name, is_column, extra) in weight_infos:
+            for weight_name, is_column, extra in weight_infos:
                 params = {
                     "is_column": is_column,
-                    **({
-                        extra.value: True
-                    } if extra else {})
+                    **({extra.value: True} if extra else {}),
                 }
 
                 if "lm_head.weight" in weight_name:
@@ -598,12 +583,10 @@ class Ernie4_5_PretrainedModel(PretrainedModel):
                     key = weight_name
                 base_actions[key] = partial(fn, **params)
             final_actions = {}
-            start_layer = (moe_layer_start_index
-                           if moe_layer_start_index > 0 else num_layers)
-            final_actions = build_expanded_keys(
-                base_actions, num_layers, start_layer, moe_num_experts
-            )
+            start_layer = moe_layer_start_index if moe_layer_start_index > 0 else num_layers
+            final_actions = build_expanded_keys(base_actions, num_layers, start_layer, moe_num_experts)
             return final_actions
+
         mappings = get_tensor_parallel_split_mappings(
             config.num_hidden_layers,
             getattr(config, "moe_num_experts", 0),

@@ -15,21 +15,29 @@
 """
 
 import asyncio
-import json
 import time
 import traceback
 import uuid
 from typing import List, Optional
 
-import msgpack
 import aiozmq
+import msgpack
 from aiozmq import zmq
 
 from fastdeploy.entrypoints.openai.protocol import (
-    ChatCompletionRequest, ChatCompletionResponse,
-    ChatCompletionResponseChoice, ChatCompletionResponseStreamChoice,
-    ChatCompletionStreamResponse, ChatMessage, DeltaMessage, ErrorResponse,
-    LogProbEntry, LogProbs, PromptTokenUsageInfo, UsageInfo)
+    ChatCompletionRequest,
+    ChatCompletionResponse,
+    ChatCompletionResponseChoice,
+    ChatCompletionResponseStreamChoice,
+    ChatCompletionStreamResponse,
+    ChatMessage,
+    DeltaMessage,
+    ErrorResponse,
+    LogProbEntry,
+    LogProbs,
+    PromptTokenUsageInfo,
+    UsageInfo,
+)
 from fastdeploy.metrics.work_metrics import work_process_metrics
 from fastdeploy.utils import api_server_logger, get_host_ip
 from fastdeploy.worker.output import LogprobsLists
@@ -53,10 +61,7 @@ class OpenAIServingChat:
             return True
         return False
 
-    async def create_chat_completion(
-        self,
-        request: ChatCompletionRequest
-    ):
+    async def create_chat_completion(self, request: ChatCompletionRequest):
         """
         Create a new chat completion using the specified parameters.
         """
@@ -81,16 +86,10 @@ class OpenAIServingChat:
         del current_req_dict
 
         if request.stream:
-            return self.chat_completion_stream_generator(
-                request, request_id,
-                request.model,
-                prompt_token_ids)
+            return self.chat_completion_stream_generator(request, request_id, request.model, prompt_token_ids)
         else:
             try:
-                return await self.chat_completion_full_generator(
-                    request, request_id,
-                    request.model,
-                    prompt_token_ids)
+                return await self.chat_completion_full_generator(request, request_id, request.model, prompt_token_ids)
             except Exception as e:
                 return ErrorResponse(code=400, message=str(e))
 
@@ -106,7 +105,7 @@ class OpenAIServingChat:
         request: ChatCompletionRequest,
         request_id: str,
         model_name: str,
-        prompt_token_ids: list()
+        prompt_token_ids: list(),
     ):
         """
         Streaming chat completion generator.
@@ -135,14 +134,11 @@ class OpenAIServingChat:
             object=chunk_object_type,
             created=created_time,
             choices=[],
-            model=model_name
+            model=model_name,
         )
         try:
-            dealer = await aiozmq.create_zmq_stream(
-                zmq.DEALER,
-                connect=f"ipc:///dev/shm/router_{self.pid}.ipc"
-            )
-            dealer.write([b"", request_id.encode('utf-8')])
+            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
+            dealer.write([b"", request_id.encode("utf-8")])
             choices = []
             current_waiting_time = 0
             if request.metadata is not None:
@@ -171,20 +167,29 @@ class OpenAIServingChat:
                         raise ValueError("{}".format(res["error_msg"]))
 
                     self.engine_client.data_processor.process_response_dict(
-                        res, stream=True, enable_thinking=enable_thinking, include_stop_str_in_output=include_stop_str_in_output)
+                        res,
+                        stream=True,
+                        enable_thinking=enable_thinking,
+                        include_stop_str_in_output=include_stop_str_in_output,
+                    )
 
-                    if res['metrics']['first_token_time'] is not None:
-                        arrival_time = res['metrics']['first_token_time']
-                        inference_start_time = res['metrics']['inference_start_time']
+                    if res["metrics"]["first_token_time"] is not None:
+                        arrival_time = res["metrics"]["first_token_time"]
+                        inference_start_time = res["metrics"]["inference_start_time"]
                     else:
-                        arrival_time = res['metrics']['arrival_time'] - inference_start_time
+                        arrival_time = res["metrics"]["arrival_time"] - inference_start_time
                     if first_iteration:
                         num_prompt_tokens = len(prompt_token_ids)
                         num_cached_tokens = res.get("num_cached_tokens", 0)
                         for i in range(num_choices):
                             choice = ChatCompletionResponseStreamChoice(
                                 index=i,
-                                delta=DeltaMessage(role="assistant", content="", reasoning_content="", tool_calls=None)
+                                delta=DeltaMessage(
+                                    role="assistant",
+                                    content="",
+                                    reasoning_content="",
+                                    tool_calls=None,
+                                ),
                             )
                             if request.metadata is not None and request.metadata.get("training", False):
                                 choice.delta.token_ids = prompt_token_ids
@@ -193,14 +198,14 @@ class OpenAIServingChat:
                                 object=chunk_object_type,
                                 created=created_time,
                                 choices=[choice],
-                                model=model_name
+                                model=model_name,
                             )
                             if include_continuous_usage:
                                 chunk.usage = UsageInfo(
                                     prompt_tokens=num_prompt_tokens,
                                     completion_tokens=0,
                                     total_tokens=num_prompt_tokens,
-                                    prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cached_tokens)
+                                    prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cached_tokens),
                                 )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)} \n\n"
                         first_iteration = False
@@ -222,24 +227,32 @@ class OpenAIServingChat:
                         )
 
                     previous_num_tokens += len(output["token_ids"])
-                    delta_message = DeltaMessage(content=delta_text, reasoning_content=output.get("reasoning_content"), \
-                        token_ids=output.get("token_ids"), tool_calls=output.get("tool_call_content", []))
+                    delta_message = DeltaMessage(
+                        content=delta_text,
+                        reasoning_content=output.get("reasoning_content"),
+                        token_ids=output.get("token_ids"),
+                        tool_calls=output.get("tool_call_content", []),
+                    )
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=0,
                         delta=delta_message,
                         logprobs=logprobs_res,
-                        arrival_time=arrival_time
+                        arrival_time=arrival_time,
                     )
                     if res["finished"]:
                         num_choices -= 1
-                        work_process_metrics.e2e_request_latency.observe(time.time() - res["metrics"]["request_start_time"])
+                        work_process_metrics.e2e_request_latency.observe(
+                            time.time() - res["metrics"]["request_start_time"]
+                        )
                         has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
                         max_tokens = request.max_completion_tokens or request.max_tokens
                         if has_no_token_limit or previous_num_tokens != max_tokens:
                             choice.finish_reason = "stop"
-                            if self.engine_client.reasoning_parser == "ernie_x1" and \
-                                    output.get("finish_reason", "") == "tool_calls":
+                            if (
+                                self.engine_client.reasoning_parser == "ernie_x1"
+                                and output.get("finish_reason", "") == "tool_calls"
+                            ):
                                 choice.finish_reason = "tool_calls"
                         else:
                             choice.finish_reason = "length"
@@ -253,7 +266,7 @@ class OpenAIServingChat:
                         chunk.usage = UsageInfo(
                             prompt_tokens=num_prompt_tokens,
                             completion_tokens=previous_num_tokens,
-                            total_tokens=num_prompt_tokens + previous_num_tokens
+                            total_tokens=num_prompt_tokens + previous_num_tokens,
                         )
                     choices.append(choice)
 
@@ -267,13 +280,12 @@ class OpenAIServingChat:
                     yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                     choices = []
 
-
             if include_usage:
                 completion_tokens = previous_num_tokens
                 usage = UsageInfo(
                     prompt_tokens=num_prompt_tokens,
                     completion_tokens=completion_tokens,
-                    total_tokens=num_prompt_tokens + completion_tokens
+                    total_tokens=num_prompt_tokens + completion_tokens,
                 )
                 chunk = ChatCompletionStreamResponse(
                     id=request_id,
@@ -281,7 +293,7 @@ class OpenAIServingChat:
                     created=created_time,
                     choices=[],
                     model=model_name,
-                    usage=usage
+                    usage=usage,
                 )
                 yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
 
@@ -297,7 +309,7 @@ class OpenAIServingChat:
         request: ChatCompletionRequest,
         request_id: str,
         model_name: str,
-        prompt_token_ids: list()
+        prompt_token_ids: list(),
     ):
         """
         Full chat completion generator.
@@ -307,11 +319,8 @@ class OpenAIServingChat:
         enable_thinking = None
         include_stop_str_in_output = False
         try:
-            dealer = await aiozmq.create_zmq_stream(
-                zmq.DEALER,
-                connect=f"ipc:///dev/shm/router_{self.pid}.ipc"
-            )
-            dealer.write([b"", request_id.encode('utf-8')])
+            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
+            dealer.write([b"", request_id.encode("utf-8")])
             final_res = None
             previous_num_tokens = 0
             current_waiting_time = 0
@@ -340,7 +349,11 @@ class OpenAIServingChat:
                         enable_thinking = request.metadata.get("enable_thinking")
                         include_stop_str_in_output = request.metadata.get("include_stop_str_in_output", False)
                     data = self.engine_client.data_processor.process_response_dict(
-                        data, stream=False, enable_thinking=enable_thinking, include_stop_str_in_output=include_stop_str_in_output)
+                        data,
+                        stream=False,
+                        enable_thinking=enable_thinking,
+                        include_stop_str_in_output=include_stop_str_in_output,
+                    )
                     # api_server_logger.debug(f"Client {request_id} received: {data}")
                     previous_num_tokens += len(data["outputs"]["token_ids"])
                     # The logprob for handling the response
@@ -375,26 +388,23 @@ class OpenAIServingChat:
             content=output["text"],
             reasoning_content=output.get("reasoning_content"),
             tool_calls=output.get("tool_call_content"),
-            token_ids=output.get("token_ids")
+            token_ids=output.get("token_ids"),
         )
         logprobs_full_res = None
         if logprob_contents:
-            logprobs_full_res = LogProbs(
-                content=logprob_contents
-            )
+            logprobs_full_res = LogProbs(content=logprob_contents)
 
         choice = ChatCompletionResponseChoice(
             index=0,
             message=message,
             logprobs=logprobs_full_res,
-            finish_reason=None
+            finish_reason=None,
         )
         has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
         max_tokens = request.max_completion_tokens or request.max_tokens
         if has_no_token_limit or previous_num_tokens != max_tokens:
             choice.finish_reason = "stop"
-            if self.engine_client.reasoning_parser == "ernie_x1" and \
-                    output.get("finish_reason", "") == "tool_calls":
+            if self.engine_client.reasoning_parser == "ernie_x1" and output.get("finish_reason", "") == "tool_calls":
                 choice.finish_reason = "tool_calls"
         else:
             choice.finish_reason = "length"
@@ -409,7 +419,7 @@ class OpenAIServingChat:
             prompt_tokens=num_prompt_tokens,
             completion_tokens=num_generated_tokens,
             total_tokens=num_prompt_tokens + num_generated_tokens,
-            prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=final_res.get("num_cached_tokens", 0))
+            prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=final_res.get("num_cached_tokens", 0)),
         )
         work_process_metrics.e2e_request_latency.observe(time.time() - final_res["metrics"]["request_start_time"])
         return ChatCompletionResponse(
@@ -417,14 +427,14 @@ class OpenAIServingChat:
             created=created_time,
             model=model_name,
             choices=choices,
-            usage=usage
+            usage=usage,
         )
 
     def build_logprobs_response(
-            self,
-            request_logprobs: bool,
-            response_logprobs: Optional[LogprobsLists],
-            request_top_logprobs: int,
+        self,
+        request_logprobs: bool,
+        response_logprobs: Optional[LogprobsLists],
+        request_top_logprobs: int,
     ) -> Optional[LogProbs]:
         """
         Construct a logprobs response object in line with the OpenAI style.
@@ -433,10 +443,10 @@ class OpenAIServingChat:
 
         # Parameter validation
         if (
-                response_logprobs is None
-                or not request_logprobs
-                or request_top_logprobs is None
-                or request_top_logprobs < 0
+            response_logprobs is None
+            or not request_logprobs
+            or request_top_logprobs is None
+            or request_top_logprobs < 0
         ):
             return None
 
@@ -446,16 +456,17 @@ class OpenAIServingChat:
             topk_logprobs = []
 
             if response_logprobs.logprob_token_ids and len(response_logprobs.logprob_token_ids) > 0:
-                topk_token_ids = response_logprobs.logprob_token_ids[0][:request_top_logprobs + 1]
+                topk_token_ids = response_logprobs.logprob_token_ids[0][: request_top_logprobs + 1]
 
             if response_logprobs.logprobs and len(response_logprobs.logprobs) > 0:
-                topk_logprobs = response_logprobs.logprobs[0][:request_top_logprobs + 1]
+                topk_logprobs = response_logprobs.logprobs[0][: request_top_logprobs + 1]
 
             # Construct the candidate token structure (LogProbEntry) of topk
             top_logprob_entries: List[LogProbEntry] = []
             for tid, lp in zip(topk_token_ids, topk_logprobs):
-                token_str = self.engine_client.data_processor.process_logprob_response([tid],
-                                                                                       clean_up_tokenization_spaces=False)
+                token_str = self.engine_client.data_processor.process_logprob_response(
+                    [tid], clean_up_tokenization_spaces=False
+                )
                 # token_bytes = token_str.encode("utf-8", errors="replace")
                 entry = LogProbEntry(
                     token=token_str,
@@ -468,7 +479,7 @@ class OpenAIServingChat:
                 token=top_logprob_entries[0].token,
                 logprob=top_logprob_entries[0].logprob,
                 bytes=top_logprob_entries[0].bytes,
-                top_logprobs=top_logprob_entries[1:]  # Here are the complete topk candidates
+                top_logprobs=top_logprob_entries[1:],  # Here are the complete topk candidates
             )
 
             return LogProbs(content=[sampled_entry])

@@ -2,7 +2,7 @@ name: CI_XPU
 
 on:
   pull_request:
-    branches: 
+    branches:
       - develop
       - 'release/*'
   workflow_dispatch:
@@ -63,7 +63,7 @@ jobs:
           if [[ "$last_char" =~ [0-3] ]]; then
             gpu_id="$last_char"
           else
-            gpu_id="0"  
+            gpu_id="0"
           fi
           FD_API_PORT=$((9180 + gpu_id * 100))
           FD_ENGINE_QUEUE_PORT=$((9150 + gpu_id * 100))

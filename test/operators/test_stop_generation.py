@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" UT for set_stop_value """
+"""UT for set_stop_value"""
 import paddle
+
 from fastdeploy.model_executor.ops.gpu import set_stop_value
 
 topk_ids = paddle.randint(0, 10000, (8, 1))

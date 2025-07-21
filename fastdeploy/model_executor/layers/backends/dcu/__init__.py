@@ -19,4 +19,4 @@ dcu backend methods
 from .fused_moe_triton_backends import DCUTritonWeightOnlyMoEMethod
 from .weight_only import DCUWeightOnlyLinearMethod
 
-__all__ = ['DCUTritonWeightOnlyMoEMethod', 'DCUWeightOnlyLinearMethod']
+__all__ = ["DCUTritonWeightOnlyMoEMethod", "DCUWeightOnlyLinearMethod"]

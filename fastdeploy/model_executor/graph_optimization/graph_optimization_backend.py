@@ -19,8 +19,9 @@ from typing import Callable, Optional
 from paddle.jit.dy2static.utils import Backend
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.graph_optimization.cudagraph_piecewise_backend import \
-    CudaGraphPiecewiseBackend
+from fastdeploy.model_executor.graph_optimization.cudagraph_piecewise_backend import (
+    CudaGraphPiecewiseBackend,
+)
 
 
 class GraphOptBackend:
@@ -36,32 +37,28 @@ class GraphOptBackend:
         self.runnable = runnable
         self.fd_config = fd_config
 
-        self.max_captre_batch = fd_config.graph_opt_config.cudagraph_capture_sizes[
-            0]
+        self.max_captre_batch = fd_config.graph_opt_config.cudagraph_capture_sizes[0]
         if self.fd_config.graph_opt_config.graph_opt_level > 0:
             # 1. Prepare cuda grpah input buffers (contain output of subgraphs)
 
             # 2. Convert dynamic grpah to static graph
             from paddle.jit import sot
-            backend = (Backend.CINN
-                       if self.fd_config.graph_opt_config.graph_opt_level > 1
-                       else Backend.PHI)
-            self.runnable = sot.symbolic_translate(self.runnable,
-                                                   training=False,
-                                                   backend=backend)
+
+            backend = Backend.CINN if self.fd_config.graph_opt_config.graph_opt_level > 1 else Backend.PHI
+            self.runnable = sot.symbolic_translate(self.runnable, training=False, backend=backend)
 
     def __call__(self, **kwargs):
         if not self.fd_config.graph_opt_config.use_cudagraph:
             return self.runnable(**kwargs)
         if self.cudagraph_piecewise_backend is None:
             self.cudagraph_piecewise_backend = CudaGraphPiecewiseBackend(
-                fd_config=self.fd_config, runnable=self.runnable)
+                fd_config=self.fd_config, runnable=self.runnable
+            )
 
         assert kwargs["forward_meta"].ids_remove_padding is not None
         batch_size = kwargs["forward_meta"].ids_remove_padding.shape[0]
 
-        if ((not kwargs["forward_meta"].step_use_cudagraph)
-                or (batch_size > self.max_captre_batch)):
+        if (not kwargs["forward_meta"].step_use_cudagraph) or (batch_size > self.max_captre_batch):
             return self.runnable(**kwargs)
         else:
             return self.cudagraph_piecewise_backend.__call__(**kwargs)

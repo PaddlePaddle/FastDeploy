@@ -5,7 +5,7 @@ echo "$DIR"
 python -m pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 python -m pip install -r requirements.txt
-python -m pip install jsonschema aistudio_sdk==0.2.6
+python -m pip install jsonschema aistudio_sdk==0.3.5
 bash build.sh || exit 1
 
 failed_files=()

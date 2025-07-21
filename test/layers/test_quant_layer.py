@@ -13,5 +13,3 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-
-from fastdeploy.model_executor.layers.linear import Linear

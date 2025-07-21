@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from typing import Optional
 
 from ..moe import FusedMoE
@@ -36,7 +37,10 @@ class W4A8Config(QuantConfigBase):
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if isinstance(layer, FusedMoE):
-            from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import CutlassW4A8MoEMethod
+            from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import (
+                CutlassW4A8MoEMethod,
+            )
+
             return CutlassW4A8MoEMethod(self)
         else:
             raise ValueError(f"Unsupported layer type {type(layer)} for w4a8")

@@ -23,14 +23,16 @@ import paddle
 from fastdeploy.platforms import current_platform
 
 
-def pre_cache_len_concat(seq_lens_decoder: paddle.Tensor,
-                         seq_lens_this_time: paddle.Tensor,
-                         max_dec_len: int = 0,
-                         block_size: int = 64):
+def pre_cache_len_concat(
+    seq_lens_decoder: paddle.Tensor,
+    seq_lens_this_time: paddle.Tensor,
+    max_dec_len: int = 0,
+    block_size: int = 64,
+):
     if current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import pre_cache_len_concat
-        out = pre_cache_len_concat(seq_lens_decoder, seq_lens_this_time,
-                                   max_dec_len, block_size)
+
+        out = pre_cache_len_concat(seq_lens_decoder, seq_lens_this_time, max_dec_len, block_size)
         return out
     else:
-        raise NotImplementedError()
+        raise NotImplementedError
