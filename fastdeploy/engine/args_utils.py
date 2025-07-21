@@ -124,19 +124,9 @@ class EngineArgs:
     Ratio of tokens to process in a block.
     """
 
-    dist_init_ip: Optional[str] = None
+    ips: Optional[List[str]] = None
     """
-    The master node ip of multinode deployment
-    """
-
-    nnodes: int = 1
-    """
-    The number of nodes in multinode deployment
-    """
-
-    node_rank: int = 0
-    """
-    The rank of the current node in multinode deployment
+    The ips of multinode deployment
     """
 
     swap_space: float = None
@@ -495,25 +485,11 @@ class EngineArgs:
         # Cluster system parameters group
         system_group = parser.add_argument_group("System Configuration")
         system_group.add_argument(
-            "--dist-init-ip",
-            default=EngineArgs.dist_init_ip,
+            "--ips",
+            type=lambda s: s.split(",") if s else None,
+            default=EngineArgs.ips,
             help=
-            "IP addresses of master node.")
-
-        system_group.add_argument(
-            "--nnodes",
-            type=int,
-            default=EngineArgs.nnodes,
-            help=
-            "The number of all nodes.")
-
-        system_group.add_argument(
-            "--node-rank",
-            type=int,
-            default=EngineArgs.node_rank,
-            help=
-            "node rank id (range [0, nnodes)).")
-
+            "IP addresses of all nodes participating in distributed inference.")
 
 
         # Performance tuning parameters group
@@ -813,7 +789,7 @@ class EngineArgs:
             max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
             max_num_batched_tokens=self.max_num_batched_tokens,
-            dist_init_ip=self.dist_init_ip,
+            ips=self.ips,
             nnodes=self.nnodes,
             node_rank=self.node_rank,
             use_warmup=self.use_warmup,

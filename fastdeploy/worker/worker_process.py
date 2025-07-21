@@ -183,9 +183,9 @@ class PaddleDisWorkerProc():
             array=workers_alive,
             dtype=np.int32,
             suffix=self.parallel_config.engine_pid,
-            create=False)
-        self.worker_healthy_live_signal.value[self.local_rank % 8] = int(
-            time.time())
+            create=False,
+        )
+        self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
         # init model_weights_status
         workers_model_weights = np.zeros(shape=[1], dtype=np.int32)
@@ -271,8 +271,7 @@ class PaddleDisWorkerProc():
                 paddle.distributed.barrier()
 
             self.insert_step = False
-            self.worker_healthy_live_signal.value[self.local_rank] = int(
-                time.time())
+            self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
             if self.local_rank %  mp_num_per_node == 0:
@@ -388,7 +387,7 @@ class PaddleDisWorkerProc():
                 suffix=self.parallel_config.engine_pid,
                 create=False)
             self.get_profile_block_num_signal.value[
-                self.local_rank] = num_blocks_local
+                self.local_rank % self.max_chips_per_node] = num_blocks_local
 
             # Wait all worker send the signal
             while np.any(self.get_profile_block_num_signal.value <= 0):
@@ -396,7 +395,7 @@ class PaddleDisWorkerProc():
             num_blocks_global = self.get_profile_block_num_signal.value.min(
             ).item()
             self.get_profile_block_num_signal.value[
-                self.local_rank] = num_blocks_global
+                self.local_rank % self.max_chips_per_node] = num_blocks_global
         else:
             num_blocks_global = self.fd_config.parallel_config.total_block_num
         # NOTE(liuzichang): Too big num_blocks_global will lead to error 700

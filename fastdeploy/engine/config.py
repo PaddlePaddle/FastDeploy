@@ -6,7 +6,6 @@
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
-#dist_init_ip
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,7 +23,7 @@ from fastdeploy import envs
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.utils import (ceil_div, check_unified_ckpt, get_host_ip,
-                              is_port_available, get_random_port, llm_logger)
+                              is_port_available, llm_logger)
 
 TaskOption = Literal["generate"]
 
@@ -642,9 +641,7 @@ class Config:
         max_model_len: int = 8192,
         max_num_seqs: int = 8,
         max_num_batched_tokens: Optional[int] = None,
-        dist_init_ip: str = None,
-        nnodes: int = 1,
-        node_rank: int = 0,
+        ips: str = None,
         speculative_config: Optional[Dict[str, Any]] = None,
         graph_optimization_config: Optional[Dict[str, Any]] = None,
         use_warmup: bool = False,
@@ -700,15 +697,18 @@ class Config:
         self.tokenizer = tokenizer
         self.max_num_batched_tokens = max_num_batched_tokens
         self.tensor_parallel_size = tensor_parallel_size
-        self.dist_init_ip = dist_init_ip
+        self.ips = ips
         
         self.nnode = nnodes
         self.node_rank = node_rank
-        if self.dist_init_ip is None:
+        if self.ips is None:
             self.master_ip = "0.0.0.0"
+        elif isinstance(self.ips, list):
+            self.master_ip = self.ips[0]
         else:
-            self.master_ip = self.dist_init_ip
-            self.dist_init_addr = f"{self.dist_init_ip}:{get_random_port()}"
+            self.master_ip = self.ips.split(",")[0]
+
+            
 
         self.max_model_len = max_model_len
         self.max_num_seqs = max_num_seqs
@@ -775,14 +775,11 @@ class Config:
         assert self.device_ids.split(',').__len__() == self.worker_num_per_node, \
         f"invalid CUDA_VISIBLE_DEVICES, should be equal to {self.worker_num_per_node}"
 
-        assert self.worker_num_per_node % self.tensor_parallel_size == 0, \
-            f"tensor_parallel_size: {self.tensor_parallel_size} should be divisible by worker_num_per_node: {self.worker_num_per_node}"
-        self.local_device_ids = self.device_ids.split(
-            ',')[:self.tensor_parallel_size]
+        self.local_device_ids = self.device_ids.split(",")[: self.tensor_parallel_size]
 
         self.host_ip = get_host_ip()
 
-        if self.dist_init_ip is None or self.host_ip == self.master_ip:
+        if self.ips is None or self.host_ip == self.master_ip:
             self.is_master = True
         else:
             self.is_master = False
@@ -821,9 +818,6 @@ class Config:
         assert (
             is_port_available('0.0.0.0', self.engine_worker_queue_port)
         ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
-        assert (
-            self.max_chips_per_node >= self.tensor_parallel_size > 0
-        ), f"tensor_parallel_size: {self.tensor_parallel_size} should be between 1 and {self.max_chips_per_node}"
         assert (self.nnode >= 1), f"nnode: {self.nnode} should no less than 1"
         assert (
             self.max_model_len >= 16
