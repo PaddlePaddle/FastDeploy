@@ -194,16 +194,16 @@ public:
     using FragmentSuperScale = Array<ElementSuperScale, kWarpIterationsAlongN>;
     using FragmentCodeScaleZp = Array<ElementCodeScaleZp, kWarpIterationsAlongN>;
 
-    /// Fragment to hold internal scales before Mma
-    using FragmentCompute = Array<ElementCompute, kWarpIterationsAlongN>;
-
     /// Fragment to hold B data before Mma
     using FragmentInput = Array<ElementB, MmaOperator::FragmentB::kElements>;
 
-    /// Unpack 4 uint2b_t values compreseed in a uint8_t to floating points
+    /// Unpack 4 uint2b_t values compressed in a uint8_t to floating points
     using Uint2Converter = FastInterleavedAndBiasedNumericArrayConverter<
         ElementOperand, ElementB, MmaOperator::FragmentB::kElements>;
     using FragmentInputUnpack = typename Uint2Converter::result_type;
+
+    /// Fragment to hold internal scales before Mma
+    using FragmentScale = Array<ElementCompute, FragmentLocalScale::kElements>;
 
     /// This is the ratio of the load instruction vs the compute instruction.
     static constexpr int kExpansionFactor = MmaOperator::IteratorB::InstructionShape::kRow / InstructionShape::kK;
@@ -229,7 +229,7 @@ private:
     ElementSuperScale* pointer_super_scale_;
 
     FragmentInputUnpack unpacked_frag_;
-    FragmentCompute scale_frag_;
+    FragmentScale scale_frag_;
 
 public:
     CUTLASS_DEVICE
@@ -246,11 +246,6 @@ public:
         pointer_code_scale_ = smem_code_scale.data() + thread_offset;
         pointer_code_zp_ = smem_code_zp.data() + thread_offset;
         pointer_local_scale_ = reinterpret_cast<uint8_t *>(smem_local_scale.data()) + thread_offset;
-
-        CUTLASS_TRACE_DEVICE(" MmaOperator::IteratorB::InstructionShape={%d, %d}",
-            MmaOperator::IteratorB::InstructionShape::kRow, MmaOperator::IteratorB::InstructionShape::kColumn);
-        CUTLASS_TRACE_DEVICE(" MmaOperator::FragmentB::kElements=%d", MmaOperator::FragmentB::kElements);
-        CUTLASS_TRACE_DEVICE(" kExpansionFactor=%d", kExpansionFactor);
     }
 
     /// Channel-wise params, need to load just once
@@ -291,30 +286,61 @@ public:
         }
 
         if (warp_k_compute_offset == 0) {
-            static constexpr int32_t kLocalScaleMask = 0xF;
-
             // special for TileRows = 64
             int local_scale_shift = (((tb_offset_k / kGroupSize) + 1) & 1) * 4;
-            uint16_t const* local_scale_ptr = reinterpret_cast<uint16_t const*>(&local_scale_frag);
 
-            CUTLASS_PRAGMA_UNROLL
-            for (int i = 0; i < FragmentLocalScale::kElements; ++i) {
-                int32_t shifted_local_scale =
-                    (static_cast<int32_t>(local_scale_frag[i]) >> local_scale_shift) & kLocalScaleMask;
-                scale_frag_[i] =
-                    static_cast<ElementCompute>(static_cast<float>(shifted_local_scale) * static_cast<float>(super_scale_frag[i]));
+            if constexpr (platform::is_same<ElementOperand_, bfloat16_t>::value) {
+                constexpr uint32_t immLut = (0xf0 & 0xcc) | 0xaa;
+                constexpr uint32_t MASK = 0x000f000f;
+                constexpr uint32_t I4s_TO_BF16s_MAGIC_NUM = 0x43004300;
+
+                constexpr uint32_t BF16_BIAS = 0xC300C300;
+                constexpr uint32_t BF16_ONE = 0x3F803F80;
+
+                __nv_bfloat162* scale_ptr = reinterpret_cast<__nv_bfloat162 *>(&scale_frag_);
+                __nv_bfloat162 const* super_scale_ptr = reinterpret_cast<__nv_bfloat162 const*>(&super_scale_frag);
+
+                uint32_t const* local_scale_ptr = reinterpret_cast<uint32_t const*>(&local_scale_frag);
+
+                static_assert(FragmentLocalScale::kElements % 4 == 0, "");
+
+                CUTLASS_PRAGMA_UNROLL
+                for (int i = 0; i < FragmentLocalScale::kElements; i += 4) {
+                    int i4s = local_scale_ptr[i];
+
+                    // unpack: 0, 2
+                    i4s >>= local_scale_shift;
+                    int32_t unpack0 = lop3<immLut>(i4s, MASK, I4s_TO_BF16s_MAGIC_NUM);
+                    // unpack: 1, 3
+                    i4s >>= 8;
+                    int32_t unpack1 = lop3<immLut>(i4s, MASK, I4s_TO_BF16s_MAGIC_NUM);
+
+                    nv_bfloat162 scale0 = __hfma2(*reinterpret_cast<nv_bfloat162*>(&unpack0),
+                                                  *reinterpret_cast<const nv_bfloat162*>(&BF16_ONE),
+                                                  *reinterpret_cast<const nv_bfloat162*>(&BF16_BIAS));
+                    nv_bfloat162 scale1 = __hfma2(*reinterpret_cast<nv_bfloat162*>(&unpack1),
+                                                  *reinterpret_cast<const nv_bfloat162*>(&BF16_ONE),
+                                                  *reinterpret_cast<const nv_bfloat162*>(&BF16_BIAS));
+
+                    // swap
+                    nv_bfloat16 tmp = scale0.y;
+                    scale0.y = scale1.x;
+                    scale1.x = tmp;
+
+                    scale_ptr[i / 2] = __hmul2(scale0, super_scale_ptr[i / 2]);
+                    scale_ptr[i / 2 + 1] = __hmul2(scale1, super_scale_ptr[i / 2 + 1]);
+                }
+            } else {
+                constexpr uint32_t kLocalScaleMask = 0xf;
+
+                CUTLASS_PRAGMA_UNROLL
+                for (int i = 0; i < FragmentLocalScale::kElements; ++i) {
+                    int32_t shifted_value = (static_cast<int32_t>(local_scale_frag[i]) >> local_scale_shift) & kLocalScaleMask;
+                    scale_frag_[i] = static_cast<ElementCompute>(shifted_value) * super_scale_frag[i];
+                }
             }
         }
 
-#if 0
-        if (FragmentCompute::kElements == 4) {
-        CUTLASS_TRACE_DEVICE(" [stage=%d] tb_offset_k=%d, local_scale_shift=%d, scale_frag[0:3]=[%f, %f, %f, %f], sizeof(FragmentCompute)=%d bytes",
-                stage, tb_offset_k, local_scale_shift,
-                static_cast<float>(scale_frag[0]), static_cast<float>(scale_frag[1]),
-                static_cast<float>(scale_frag[2]), static_cast<float>(scale_frag[3]),
-                static_cast<int>(sizeof(FragmentCompute)));
-        }
-#endif
         int offset = warp_k_compute_offset * ArchMmaOperator::FragmentB::kElements;
         const int kOutputColumns = FragmentOutput::kElements / kWarpIterationsAlongN;
         int mapped_offset = (warp_k_compute_offset % 2) == 0 ? 0 : (-kOutputColumns + 1);
