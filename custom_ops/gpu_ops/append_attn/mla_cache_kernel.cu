@@ -91,7 +91,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
 
   meta_data.max_blocks_per_seq = block_tables.dims()[1];
   meta_data.block_size = kv_cache_dims[2];
-  meta_data.batch_size = cu_seqlens_q.dims()[0];
+  meta_data.batch_size = seq_lens_decoder.dims()[0];
   switch (kv_pe.dtype()) {
     case paddle::DataType::BFLOAT16: {
       return PrefillMLAWriteCache<paddle::DataType::BFLOAT16>(meta_data,
@@ -224,7 +224,7 @@ std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
 
   meta_data.max_blocks_per_seq = block_tables.dims()[1];
   meta_data.block_size = kv_cache_dims[2];
-  meta_data.batch_size = cu_seqlens_q.dims()[0];
+  meta_data.batch_size = seq_lens_encoder.dims()[0];
   switch (kv_pe.dtype()) {
     case paddle::DataType::BFLOAT16: {
       return DecodeMLAWriteCache<paddle::DataType::BFLOAT16>(meta_data,
