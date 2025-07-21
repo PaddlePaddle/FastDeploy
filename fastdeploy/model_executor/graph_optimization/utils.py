@@ -33,8 +33,6 @@ def create_guard(default_value):
     def get_state():
         return _state
 
-
-
     return state_guard, get_state
 
 

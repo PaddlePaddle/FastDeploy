@@ -925,7 +925,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self.speculative_config,
                 self.parallel_config.enable_prefix_caching,
             )
-            
 
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
@@ -1020,16 +1019,14 @@ class GPUModelRunner(ModelRunnerBase):
         capture_sizes = self.cudagraph_capture_sizes.copy()
         expected_decode_len = 64
         for batch_size in sorted(capture_sizes, reverse=True):
-            self._dummy_run(num_tokens=self.parallel_config.max_model_len,
-                            batch_size=batch_size,
-                            in_capturing=False,
-                            expected_decode_len=expected_decode_len)
-            logger.info(
-                f"SOT warmup the model with the batch size:{batch_size}, num tokens:{expected_decode_len}"
+            self._dummy_run(
+                num_tokens=self.parallel_config.max_num_batched_tokens,
+                batch_size=batch_size,
+                in_capturing=False,
+                expected_decode_len=expected_decode_len,
             )
-        logger.info(
-            f"SOT warmup took {start_time - time.perf_counter()} seconds"
-        )
+            logger.info(f"SOT warmup the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
+        logger.info(f"SOT warmup took {start_time - time.perf_counter()} seconds")
 
     def _get_skip_idx(self, model_forward_batch: Optional[List[Request]] = None):
         """
