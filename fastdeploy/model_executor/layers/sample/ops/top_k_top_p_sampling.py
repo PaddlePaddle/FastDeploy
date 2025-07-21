@@ -60,6 +60,7 @@ def top_k_top_p_sampling(
 
     """
     top_p_class = envs.FD_SAMPLING_CLASS.lower()
+
     if top_p_class == "air":
         _, ids = air_top_p_sampling(x, top_p, threshold, topp_seed, seed=seed, k=k, mode=mode)
     elif top_p_class == "rejection":
@@ -154,3 +155,25 @@ def rejection_top_p_sampling(
     except ImportError:
         raise RuntimeError("Cannot import rejection_top_p_sampling op.")
     return ids
+
+
+def min_p_sampling(
+    probs: paddle.tensor,
+    min_p_arr: Optional[paddle.Tensor],
+) -> tuple[paddle.Tensor, paddle.Tensor]:
+    """
+    min_p_sampling
+    """
+    if paddle.count_nonzero(min_p_arr) == 0:
+        return probs
+    else:
+        if current_platform.is_cuda():
+            from fastdeploy.model_executor.ops.gpu import min_p_sampling
+
+            probs = min_p_sampling(probs, min_p_arr)
+        else:
+            max_probabilities = paddle.amax(probs, axis=-1, keepdim=True)
+            adjusted_min_p = max_probabilities * min_p_arr
+            invalid_token_mask = probs < adjusted_min_p.reshape([-1, 1])
+            probs = paddle.where(invalid_token_mask, paddle.full_like(probs, 0.0), probs)
+        return probs

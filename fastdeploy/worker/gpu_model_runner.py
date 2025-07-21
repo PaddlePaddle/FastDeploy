@@ -407,6 +407,8 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
             self.share_inputs["top_p"][idx : idx + 1] = get_attr_from_request(request, "top_p", 0.7)
             self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
+            self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
+
             self.share_inputs["temperature"][idx : idx + 1] = get_attr_from_request(request, "temperature", 0.95)
             self.share_inputs["penalty_score"][idx : idx + 1] = get_attr_from_request(
                 request, "repetition_penalty", 1.0
@@ -517,6 +519,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["eos_token_id"] = paddle.full([self.parallel_config.eos_tokens_lens, 1], 0, dtype="int64")
         self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
         self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
+        self.share_inputs["min_p"] = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
         self.share_inputs["temperature"] = paddle.full(
             [max_num_seqs, 1], self.model_config.temperature, dtype="float32"
         )
@@ -724,6 +727,7 @@ class GPUModelRunner(ModelRunnerBase):
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
             top_k=self.share_inputs["top_k"],
+            min_p=self.share_inputs["min_p"],
             step_idx=self.share_inputs["step_idx"],
             pre_token_ids=self.share_inputs["pre_ids"],
             prompt_ids=self.share_inputs["prompt_ids"],
@@ -1098,7 +1102,7 @@ class GPUModelRunner(ModelRunnerBase):
         capture_sizes = self.cudagraph_capture_sizes.copy()
         for batch_size in sorted(capture_sizes, reverse=True):
             self._dummy_run(
-                num_tokens=self.parallel_config.max_model_len,
+                num_tokens=self.parallel_config.max_num_batched_tokens,
                 batch_size=batch_size,
                 in_capturing=True,
                 expected_decode_len=expected_decode_len,
