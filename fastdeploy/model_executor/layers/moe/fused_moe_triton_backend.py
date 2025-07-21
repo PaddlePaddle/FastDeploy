@@ -588,6 +588,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
             topk_ids, num_local_experts, config["BLOCK_SIZE_M"])
         cache13 = create_empty_tensor(tuple([token_num * top_k * max(N1, N2)]), x.dtype)
+        # cache13 = paddle.empty([token_num * top_k * max(N1, N2)], dtype=x.dtype)
         intermediate_cache1 = cache13[:token_num * top_k * N1].view(
             [token_num * top_k, N1])
         max_num_tokens_padded = sorted_token_ids.shape[0]
