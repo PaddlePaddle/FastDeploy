@@ -382,9 +382,10 @@ class PaddleDisWorkerProc:
                     "Or decrease max_num_batched_tokens(max model length) "
                 )
 
-            num_blocks_local = paddle.full(shape=[1], fill_value=num_blocks_local, dtype="int32")
-            dist.all_reduce(num_blocks_local, op=dist.ReduceOp.MIN)
-            num_blocks_local = num_blocks_local.item()
+            if self.ranks > 1:
+                num_blocks_local = paddle.full(shape=[1], fill_value=num_blocks_local, dtype="int32")
+                dist.all_reduce(num_blocks_local, op=dist.ReduceOp.MIN)
+                num_blocks_local = num_blocks_local.item()
 
             if self.local_rank == 0:
                 # 3. Send IPCSignal
