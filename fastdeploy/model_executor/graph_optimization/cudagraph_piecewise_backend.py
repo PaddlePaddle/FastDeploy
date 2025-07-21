@@ -109,9 +109,12 @@ class CudaGraphPiecewiseBackend:
             paddle.device.synchronize()
 
             # Capture
-            new_grpah.capture_begin()
-            output = entry.runnable(**kwargs)
-            new_grpah.capture_end()
+            from fastdeploy.distributed.communication_op import graph_capture
+            with graph_capture():
+                new_grpah.capture_begin()
+                output = entry.runnable(**kwargs)
+                new_grpah.capture_end()
+            
 
             # Store output buffer
             entry.cuda_graph = new_grpah
