@@ -151,6 +151,7 @@ class OpenAIServingCompletion:
 
             valid_results = [dict()] * num_choices
             output_tokens = [0] * num_choices
+            completion_batched_token_ids = [[] for _ in range(num_choices)]
             current_waiting_time = 0
             while num_choices > 0:
                 try:
@@ -174,6 +175,7 @@ class OpenAIServingCompletion:
 
                     self.engine_client.data_processor.process_response_dict(data, stream=False)
                     output_tokens[rid] += len(data["outputs"]["token_ids"])
+                    completion_batched_token_ids[rid].extend(data["outputs"]["token_ids"])
                     if data.get("finished", False):
                         data["output_token_ids"] = output_tokens[rid]
                         valid_results[rid] = data
@@ -187,6 +189,7 @@ class OpenAIServingCompletion:
                 created_time=created_time,
                 model_name=model_name,
                 prompt_batched_token_ids=prompt_batched_token_ids,
+                completion_batched_token_ids=completion_batched_token_ids,
             )
         except Exception as e:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
@@ -341,6 +344,7 @@ class OpenAIServingCompletion:
         created_time: int,
         model_name: str,
         prompt_batched_token_ids: list(),
+        completion_batched_token_ids: list()
     ) -> CompletionResponse:
         choices: List[CompletionResponseChoice] = []
         num_prompt_tokens = 0
@@ -352,6 +356,7 @@ class OpenAIServingCompletion:
             prompt_token_ids = prompt_batched_token_ids[idx]
             assert prompt_token_ids is not None
             prompt_text = final_res["prompt"]
+            completion_token_ids = completion_batched_token_ids[idx]
 
             output = final_res["outputs"]
             if request.echo:
@@ -371,7 +376,7 @@ class OpenAIServingCompletion:
                 index=len(choices),
                 text=output_text,
                 prompt_token_ids=prompt_token_ids if enable_return_token_ids else None,
-                completion_token_ids=output["token_ids"] if enable_return_token_ids else None,
+                completion_token_ids=completion_token_ids if enable_return_token_ids else None,
                 reasoning_content=output.get('reasoning_content'),
                 tool_calls=output.get("tool_call_content"),
                 logprobs=None,
