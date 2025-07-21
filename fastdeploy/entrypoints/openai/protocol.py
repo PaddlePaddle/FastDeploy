@@ -339,6 +339,7 @@ class CompletionRequest(BaseModel):
     temperature: Optional[float] = None
     top_p: Optional[float] = None
     top_k: Optional[int] = None
+    min_p: Optional[float] = None
     user: Optional[str] = None
 
     response_format: Optional[AnyResponseFormat] = None
@@ -460,6 +461,7 @@ class ChatCompletionRequest(BaseModel):
     temperature: Optional[float] = None
     top_p: Optional[float] = None
     top_k: Optional[int] = None
+    min_p: Optional[float] = None
     user: Optional[str] = None
     metadata: Optional[dict] = None
 
