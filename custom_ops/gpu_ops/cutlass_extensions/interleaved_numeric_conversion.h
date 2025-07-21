@@ -527,55 +527,39 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
 
     using ScaleComputeT = float;
 
-    static constexpr int32_t kWeightMask = 0x3F;
-    static constexpr int32_t kBZP = 32;
-
     CUTLASS_DEVICE
     static result_type convert(source_type const& source, ScaleComputeT code_scale, ScaleComputeT code_zp)
     {
         result_type result;
-        uint8_t const* in_ptr = reinterpret_cast<uint8_t const*>(&source);
-
-        float in_ptr_fp32[4];
-        int32_t* in_ptr_int32 = reinterpret_cast<int32_t*>(&in_ptr_fp32);
+        uint32_t const i8s = reinterpret_cast<uint32_t const&>(source);
 
         static constexpr uint32_t immLut = (0xF0 & 0xCC) | 0xAA;
         // 2^23 = 8388608
-        static constexpr uint32_t FP32_MAGIC_NUM = 0x4B000000;
-        static constexpr uint32_t FP32_MASK = 0x0000FF;
+        static constexpr uint32_t FP32_BASE = 0x4B000000;
 
-        static constexpr uint32_t MASK = 0x003F003F;
-        // 2^7 = 128
-        static constexpr uint32_t EX = 0x43004300;
+        float fp32_intermediates[4];
+        uint32_t* fp32_intermediates_casted = reinterpret_cast<uint32_t*>(fp32_intermediates);
+        fp32_intermediates_casted[0] = __byte_perm(i8s, FP32_BASE, 0x7650);
+        fp32_intermediates_casted[1] = __byte_perm(i8s, FP32_BASE, 0x7651);
+        fp32_intermediates_casted[2] = __byte_perm(i8s, FP32_BASE, 0x7652);
+        fp32_intermediates_casted[3] = __byte_perm(i8s, FP32_BASE, 0x7653);
 
-        in_ptr_int32[0] = lop3<immLut>(in_ptr[0], FP32_MASK, FP32_MAGIC_NUM);
-        in_ptr_int32[1] = lop3<immLut>(in_ptr[1], FP32_MASK, FP32_MAGIC_NUM);
-        in_ptr_int32[2] = lop3<immLut>(in_ptr[2], FP32_MASK, FP32_MAGIC_NUM);
-        in_ptr_int32[3] = lop3<immLut>(in_ptr[3], FP32_MASK, FP32_MAGIC_NUM);
-
-        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(in_ptr_int32[0]) : "r"(in_ptr_int32[0]), "r"(FP32_MAGIC_NUM));
-        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(in_ptr_int32[1]) : "r"(in_ptr_int32[1]), "r"(FP32_MAGIC_NUM));
-        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(in_ptr_int32[2]) : "r"(in_ptr_int32[2]), "r"(FP32_MAGIC_NUM));
-        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(in_ptr_int32[3]) : "r"(in_ptr_int32[3]), "r"(FP32_MAGIC_NUM));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[0]) : "r"(fp32_intermediates_casted[0]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[1]) : "r"(fp32_intermediates_casted[1]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[2]) : "r"(fp32_intermediates_casted[2]), "r"(FP32_BASE));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(fp32_intermediates_casted[3]) : "r"(fp32_intermediates_casted[3]), "r"(FP32_BASE));
 
         int32_t decode_value[4];
         ScaleComputeT new_code_zp = code_zp + 0.5f;
         CUTLASS_PRAGMA_UNROLL
         for (int i = 0; i < 4; ++i) {
-            // decode_value[i] = __float2int_rd(fmaf(in_ptr_fp32[i], code_scale, new_code_zp));
-            decode_value[i] = __float2int_rd(in_ptr_fp32[i] * code_scale + new_code_zp);
+            decode_value[i] = __float2int_rd(fmaf(fp32_intermediates[i], code_scale, new_code_zp));
+            // decode_value[i] = __float2int_rd(fp32_intermediates[i] * code_scale + new_code_zp);
         }
 
-
-        // int32_t decode_value0 =
-        //     static_cast<int32_t>(floor(in_ptr_fp32[0] * code_scale + code_zp + 0.5f));
-        // int32_t decode_value1 =
-        //     static_cast<int32_t>(floor(in_ptr_fp32[1] * code_scale + code_zp + 0.5f));
-        // int32_t decode_value2 =
-        //     static_cast<int32_t>(floor(in_ptr_fp32[2] * code_scale + code_zp + 0.5f));
-        // int32_t decode_value3 =
-        //     static_cast<int32_t>(floor(in_ptr_fp32[3] * code_scale + code_zp + 0.5f));
-
+        static constexpr uint32_t MASK = 0x003F003F;
+        // 2^7 = 128
+        static constexpr uint32_t EX = 0x43004300;
 
         uint32_t* h = reinterpret_cast<uint32_t*>(&result);
         int32_t q;
