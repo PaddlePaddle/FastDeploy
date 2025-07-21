@@ -192,7 +192,7 @@ class Ernie4_5_VLMoeForConditionalGenerationRL(Ernie4_5_VLMoeForConditionalGener
         """name"""
         return "Ernie4_5_VLMoeForConditionalGenerationRL"
 
-    def get_name_mappings_to_training(self, trainer_degree=1) -> Dict[str, str]:
+    def get_name_mappings_to_training(self, trainer_degree=2) -> Dict[str, str]:
         """Generate mapping between inference and training parameter for RL(donot delete!)."""
         # Prepare placeholders
         place_holders = ["weight"]
