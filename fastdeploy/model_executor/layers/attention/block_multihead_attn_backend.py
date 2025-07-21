@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
@@ -28,7 +27,9 @@ if TYPE_CHECKING:
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
-    AttentionBackend, AttentionMetadata)
+    AttentionBackend,
+    AttentionMetadata,
+)
 
 
 @dataclass
@@ -36,6 +37,7 @@ class BlockAttentionMetadata(AttentionMetadata):
     """
     BlockAttentionMetadata
     """
+
     max_len_kv: paddle.Tensor = None
     set_max_lengths: int = -1
     encoder_batch_ids: paddle.Tensor = None
@@ -68,8 +70,13 @@ class BlockAttentionBackend(AttentionBackend):
     BlockAttentionBackend backend implementation.
     """
 
-    def __init__(self, fd_config: FDConfig, kv_num_heads: int,
-                 num_heads: int, head_dim: int):
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        kv_num_heads: int,
+        num_heads: int,
+        head_dim: int,
+    ):
         """
         BlockAttentionBackend __init__
         """
@@ -77,8 +84,7 @@ class BlockAttentionBackend(AttentionBackend):
         self.attention_metadata: BlockAttentionMetadata = None
         self.block_size = fd_config.parallel_config.block_size
         self.max_seq_len = fd_config.parallel_config.max_model_len
-        self.rope_theta = (10000.0 if fd_config.model_config.rope_theta
-                           is None else fd_config.model_config.rope_theta)
+        self.rope_theta = 10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
         self.rank = fd_config.parallel_config.tensor_parallel_rank
 
         self.kv_num_heads = kv_num_heads
@@ -111,8 +117,12 @@ class BlockAttentionBackend(AttentionBackend):
         """
         Caculate kv cache shape
         """
-        return (max_num_blocks, self.kv_num_heads, self.block_size,
-                self.head_dim)
+        return (
+            max_num_blocks,
+            self.kv_num_heads,
+            self.block_size,
+            self.head_dim,
+        )
 
     def forward_mixed(
         self,

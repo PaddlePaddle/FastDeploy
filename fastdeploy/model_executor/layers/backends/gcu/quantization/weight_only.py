@@ -17,7 +17,9 @@
 import paddle
 
 from fastdeploy.model_executor.layers.quantization.weight_only import (
-    WeightOnlyConfig, WeightOnlyLinearMethod)
+    WeightOnlyConfig,
+    WeightOnlyLinearMethod,
+)
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gcu import linear_quant, weight_quantize_rtn
 
@@ -35,7 +37,6 @@ class GCUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         self.quant_config = quant_config
         self.group_size = -1
 
-
     def create_weights(self, layer):
         # The scale shape should be equal to the output dim of weight using Per-Channel Quantization.
         weight_scale_shape = [layer.weight_shape[1]]
@@ -50,7 +51,6 @@ class GCUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             is_bias=False,
         )
 
-
     def process_prequanted_weights(self, layer, state_dict) -> None:
         """
         Process pre-quantized weights before applying them to the model
@@ -62,9 +62,7 @@ class GCUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         quant_weight = get_tensor(state_dict.pop(layer.weight_key))
         weight_scale = get_tensor(state_dict.pop(layer.weight_scale_key))
         layer.weight.set_value(quant_weight)
-        layer.weight_scale.set_value(
-            weight_scale.astype(paddle.get_default_dtype()))
-
+        layer.weight_scale.set_value(weight_scale.astype(paddle.get_default_dtype()))
 
     def process_loaded_weights(self, layer, weight) -> None:
         quanted_weight_tensor, weight_scale_tensor = weight_quantize_rtn(
@@ -74,9 +72,7 @@ class GCUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         )
 
         layer.weight.set_value(quanted_weight_tensor)
-        layer.weight_scale.set_value(
-            weight_scale_tensor.astype(paddle.get_default_dtype()))
-
+        layer.weight_scale.set_value(weight_scale_tensor.astype(paddle.get_default_dtype()))
 
     @paddle.no_grad()
     def apply(self, layer, x):

@@ -12,16 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-import requests
-import time
 import json
-import subprocess
-import socket
 import os
 import signal
+import socket
+import subprocess
 import sys
+import time
+
 import openai
+import pytest
+import requests
 
 # Read ports from environment variables; use default values if not set
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
@@ -30,6 +31,7 @@ FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
 
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT]
+
 
 def is_port_open(host: str, port: int, timeout=1.0):
     """
@@ -42,18 +44,20 @@ def is_port_open(host: str, port: int, timeout=1.0):
     except Exception:
         return False
 
+
 def kill_process_on_port(port: int):
     """
     Kill processes that are listening on the given port.
     Uses `lsof` to find process ids and sends SIGKILL.
     """
     try:
-        output = subprocess.check_output("lsof -i:{} -t".format(port), shell=True).decode().strip()
+        output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
         for pid in output.splitlines():
             os.kill(int(pid), signal.SIGKILL)
-            print("Killed process on port {}, pid={}".format(port, pid))
+            print(f"Killed process on port {port}, pid={pid}")
     except subprocess.CalledProcessError:
         pass
+
 
 def clean_ports():
     """
@@ -61,6 +65,7 @@ def clean_ports():
     """
     for port in PORTS_TO_CLEAN:
         kill_process_on_port(port)
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_and_run_server():
@@ -81,24 +86,31 @@ def setup_and_run_server():
         model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
 
     mtp_model_path = os.path.join(model_path, "mtp")
-    mtp_mode_str = json.dumps({
-        "method": "mtp",
-        "num_speculative_tokens": 1,
-        "model": mtp_model_path
-    })
+    mtp_mode_str = json.dumps({"method": "mtp", "num_speculative_tokens": 1, "model": mtp_model_path})
 
     log_path = "server.log"
     cmd = [
-        sys.executable, "-m", "fastdeploy.entrypoints.openai.api_server",
-        "--model", model_path,
-        "--port", str(FD_API_PORT),
-        "--tensor-parallel-size", "1",
-        "--engine-worker-queue-port", str(FD_ENGINE_QUEUE_PORT),
-        "--metrics-port", str(FD_METRICS_PORT),
-        "--max-model-len", "32768",
-        "--max-num-seqs", "128",
-        "--quantization", "wint4",
-        "--speculative-config", mtp_mode_str
+        sys.executable,
+        "-m",
+        "fastdeploy.entrypoints.openai.api_server",
+        "--model",
+        model_path,
+        "--port",
+        str(FD_API_PORT),
+        "--tensor-parallel-size",
+        "1",
+        "--engine-worker-queue-port",
+        str(FD_ENGINE_QUEUE_PORT),
+        "--metrics-port",
+        str(FD_METRICS_PORT),
+        "--max-model-len",
+        "32768",
+        "--max-num-seqs",
+        "128",
+        "--quantization",
+        "wint4",
+        "--speculative-config",
+        mtp_mode_str,
     ]
 
     # Start subprocess in new process group
@@ -107,13 +119,13 @@ def setup_and_run_server():
             cmd,
             stdout=logfile,
             stderr=subprocess.STDOUT,
-            start_new_session=True  # Enables killing full group via os.killpg
+            start_new_session=True,  # Enables killing full group via os.killpg
         )
 
     # Wait up to 300 seconds for API server to be ready
     for _ in range(300):
         if is_port_open("127.0.0.1", FD_API_PORT):
-            print("API server is up on port {}".format(FD_API_PORT))
+            print(f"API server is up on port {FD_API_PORT}")
             break
         time.sleep(1)
     else:
@@ -121,17 +133,17 @@ def setup_and_run_server():
         try:
             os.killpg(process.pid, signal.SIGTERM)
         except Exception as e:
-            print("Failed to kill process group: {}".format(e))
-        raise RuntimeError("API server did not start on port {}".format(FD_API_PORT))
+            print(f"Failed to kill process group: {e}")
+        raise RuntimeError(f"API server did not start on port {FD_API_PORT}")
 
     yield  # Run tests
 
     print("\n===== Post-test server cleanup... =====")
     try:
         os.killpg(process.pid, signal.SIGTERM)
-        print("API server (pid={}) terminated".format(process.pid))
+        print(f"API server (pid={process.pid}) terminated")
     except Exception as e:
-        print("Failed to terminate API server: {}".format(e))
+        print(f"Failed to terminate API server: {e}")
 
 
 @pytest.fixture(scope="session")
@@ -139,7 +151,7 @@ def api_url(request):
     """
     Returns the API endpoint URL for chat completions.
     """
-    return "http://0.0.0.0:{}/v1/chat/completions".format(FD_API_PORT)
+    return f"http://0.0.0.0:{FD_API_PORT}/v1/chat/completions"
 
 
 @pytest.fixture(scope="session")
@@ -147,7 +159,7 @@ def metrics_url(request):
     """
     Returns the metrics endpoint URL.
     """
-    return "http://0.0.0.0:{}/metrics".format(FD_METRICS_PORT)
+    return f"http://0.0.0.0:{FD_METRICS_PORT}/metrics"
 
 
 @pytest.fixture
@@ -168,8 +180,9 @@ def consistent_payload():
         "messages": [{"role": "user", "content": "用一句话介绍 PaddlePaddle"}],
         "temperature": 0.9,
         "top_p": 0,  # fix top_p to reduce randomness
-        "seed": 13  # fixed random seed
+        "seed": 13,  # fixed random seed
     }
+
 
 # ==========================
 # Helper function to calculate difference rate between two texts
@@ -199,6 +212,7 @@ def calculate_diff_rate(text1, text2):
     max_len = max(len1, len2)
     return edit_distance / max_len if max_len > 0 else 0.0
 
+
 # ==========================
 # Consistency test for repeated runs with fixed payload
 # ==========================
@@ -222,21 +236,24 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     diff_rate = calculate_diff_rate(content1, content2)
 
     # Verify that the difference rate is below the threshold
-    assert diff_rate < 0.05, "Output difference too large ({:.4%})".format(diff_rate)
+    assert diff_rate < 0.05, f"Output difference too large ({diff_rate:.4%})"
+
 
 # ==========================
 # OpenAI Client chat.completions Test
 # ==========================
+
 
 @pytest.fixture
 def openai_client():
     ip = "0.0.0.0"
     service_http_port = str(FD_API_PORT)
     client = openai.Client(
-        base_url="http://{}:{}/v1".format(ip, service_http_port),
-        api_key="EMPTY_API_KEY"
+        base_url=f"http://{ip}:{service_http_port}/v1",
+        api_key="EMPTY_API_KEY",
     )
     return client
+
 
 # Non-streaming test
 def test_non_streaming_chat(openai_client):
@@ -254,10 +271,11 @@ def test_non_streaming_chat(openai_client):
         stream=False,
     )
 
-    assert hasattr(response, 'choices')
+    assert hasattr(response, "choices")
     assert len(response.choices) > 0
-    assert hasattr(response.choices[0], 'message')
-    assert hasattr(response.choices[0].message, 'content')
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "content")
+
 
 # Streaming test
 def test_streaming_chat(openai_client, capsys):
@@ -269,7 +287,10 @@ def test_streaming_chat(openai_client, capsys):
         messages=[
             {"role": "system", "content": "You are a helpful AI assistant."},
             {"role": "user", "content": "List 3 countries and their capitals."},
-            {"role": "assistant", "content": "China(Beijing), France(Paris), Australia(Canberra)."},
+            {
+                "role": "assistant",
+                "content": "China(Beijing), France(Paris), Australia(Canberra).",
+            },
             {"role": "user", "content": "OK, tell more."},
         ],
         temperature=1,
@@ -279,13 +300,15 @@ def test_streaming_chat(openai_client, capsys):
 
     output = []
     for chunk in response:
-        if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
+        if hasattr(chunk.choices[0], "delta") and hasattr(chunk.choices[0].delta, "content"):
             output.append(chunk.choices[0].delta.content)
     assert len(output) > 2
+
 
 # ==========================
 # OpenAI Client completions Test
 # ==========================
+
 
 def test_non_streaming(openai_client):
     """
@@ -300,7 +323,7 @@ def test_non_streaming(openai_client):
     )
 
     # Assertions to check the response structure
-    assert hasattr(response, 'choices')
+    assert hasattr(response, "choices")
     assert len(response.choices) > 0
 
 

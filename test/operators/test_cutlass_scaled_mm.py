@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" UT for air_topp_sampling kernel """
+"""UT for air_topp_sampling kernel"""
 
 import subprocess
 import unittest
@@ -20,11 +20,12 @@ import numpy as np
 import paddle
 
 from fastdeploy.model_executor.layers.quantization.ops import (
-    cutlass_scaled_mm, scaled_fp8_quant)
+    cutlass_scaled_mm,
+    scaled_fp8_quant,
+)
 
 
 class Test(unittest.TestCase):
-
     def setUp(self):
         """
         Initialize.
@@ -35,8 +36,7 @@ class Test(unittest.TestCase):
         self.sm_version = self.prop.major * 10 + self.prop.minor
         print(self.prop)
         print(paddle.__git_commit__)
-        nvcc_output = subprocess.check_output(["nvcc", "--version"],
-                                              universal_newlines=True)
+        nvcc_output = subprocess.check_output(["nvcc", "--version"], universal_newlines=True)
         output = nvcc_output.split()
         release_idx = output.index("release") + 1
         self.nvcc_cuda_version = float(output[release_idx].split(",")[0])
@@ -46,8 +46,7 @@ class Test(unittest.TestCase):
         Check cutlass_scaled_mm output.
         """
         if self.sm_version < 89:
-            self.skipTest(
-                "cutlass_scaled_mm with fp8 input only support sm89+")
+            self.skipTest("cutlass_scaled_mm with fp8 input only support sm89+")
         M = 32
         N = 1024
         K = 1024
@@ -59,10 +58,8 @@ class Test(unittest.TestCase):
         # Ensure quantized tensors and scales are valid
         assert a_q.numel() > 0, "Quantized tensor 'a_q' must not be empty"
         assert b_q.numel() > 0, "Quantized tensor 'b_q' must not be empty"
-        assert a_scales.numel(
-        ) > 0, "Scale tensor 'a_scales' must not be empty"
-        assert b_scales.numel(
-        ) > 0, "Scale tensor 'b_scales' must not be empty"
+        assert a_scales.numel() > 0, "Scale tensor 'a_scales' must not be empty"
+        assert b_scales.numel() > 0, "Scale tensor 'b_scales' must not be empty"
 
         bias = paddle.rand([N], dtype=paddle.bfloat16)
         baseline = paddle.matmul(a, b, transpose_x=False, transpose_y=True)

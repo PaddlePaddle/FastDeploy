@@ -23,8 +23,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 
 - 通过指定 `--model baidu/ERNIE-4.5-300B-A47B-Paddle` 可自动从AIStudio下载模型。FastDeploy依赖Paddle格式的模型，更多说明参考[支持模型列表](../supported_models.md)。
-- 通过设置 `--quantization` 为 `wint8` 或 `wint4` 选择在线 INT8/INT4 量化。 
-- 部署 ERNIE-4.5-300B-A47B-Paddle WINT8 最少需要 80G * 8卡, WINT4 则需要 80GB * 4卡。
+- 通过设置 `--quantization` 为 `wint8` 或 `wint4` 选择在线 INT8/INT4 量化。
+- 部署 ERNIE-4.5-300B-A47B-Paddle WINT8 最少需要 80G *8卡, WINT4 则需要 80GB* 4卡。
 - 更多部署教程请参考[get_started](../get_started/ernie-4.5.md).
 
 ## 2. Block-wise FP8
@@ -49,9 +49,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 
 - 通过指定 `--model baidu/ERNIE-4.5-300B-A47B-Paddle` 可自动从AIStudio下载模型。FastDeploy依赖Paddle格式的模型，更多说明参考[支持模型列表](../supported_models.md)。
-- 通过设置 `--quantization` 为 `block_wise_fp8` 选择在线 Block-wise FP8 量化。 
+- 通过设置 `--quantization` 为 `block_wise_fp8` 选择在线 Block-wise FP8 量化。
 - 部署 ERNIE-4.5-300B-A47B-Paddle Block-wise FP8 最少需要 80G * 8卡。
 - 更多部署教程请参考[get_started](../get_started/ernie-4.5.md)
-
-
-

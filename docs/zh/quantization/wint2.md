@@ -48,7 +48,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
 - 更多部署教程请参考[get_started](../get_started/ernie-4.5.md)；
 - 更多模型说明请参考[支持模型列表](../supported_models.md)。
 
-
 ## WINT2效果
 
 在ERNIE-4.5-300B-A47B模型上，WINT2与WINT4效果对比：

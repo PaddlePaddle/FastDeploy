@@ -22,5 +22,4 @@ class IluvatarPlatform(Platform):
         """
         get_attention_backend_cls
         """
-        return (
-            "fastdeploy.model_executor.layers.attention.IluvatarAttnBackend")
+        return "fastdeploy.model_executor.layers.attention.IluvatarAttnBackend"

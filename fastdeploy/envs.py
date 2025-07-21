@@ -20,115 +20,62 @@ from typing import Any, Callable
 
 environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use BF16 on CPU.
-    "FD_CPU_USE_BF16":
-    lambda: os.getenv("FD_CPU_USE_BF16", "False"),
-
+    "FD_CPU_USE_BF16": lambda: os.getenv("FD_CPU_USE_BF16", "False"),
     # Cuda architecture to build FastDeploy.This is a list of strings
     # such as [80,90].
-    "FD_BUILDING_ARCS":
-    lambda: os.getenv("FD_BUILDING_ARCS", "[]"),
-
+    "FD_BUILDING_ARCS": lambda: os.getenv("FD_BUILDING_ARCS", "[]"),
     # Log directory.
-    "FD_LOG_DIR":
-    lambda: os.getenv("FD_LOG_DIR", "log"),
-
+    "FD_LOG_DIR": lambda: os.getenv("FD_LOG_DIR", "log"),
     # Whether to use debug mode, can set 0 or 1
-    "FD_DEBUG":
-    lambda: os.getenv("FD_DEBUG", "0"),
-
+    "FD_DEBUG": lambda: os.getenv("FD_DEBUG", "0"),
     # Number of days to keep fastdeploy logs.
-    "FD_LOG_BACKUP_COUNT":
-    lambda: os.getenv("FD_LOG_BACKUP_COUNT", "7"),
-
+    "FD_LOG_BACKUP_COUNT": lambda: os.getenv("FD_LOG_BACKUP_COUNT", "7"),
     # Model download cache directory.
-    "FD_MODEL_CACHE":
-    lambda: os.getenv("FD_MODEL_CACHE", None),
-
+    "FD_MODEL_CACHE": lambda: os.getenv("FD_MODEL_CACHE", None),
     # Maximum number of stop sequences.
-    "FD_MAX_STOP_SEQS_NUM":
-    lambda: os.getenv("FD_MAX_STOP_SEQS_NUM", "5"),
-
+    "FD_MAX_STOP_SEQS_NUM": lambda: os.getenv("FD_MAX_STOP_SEQS_NUM", "5"),
     # Maximum length of stop sequences.
-    "FD_STOP_SEQS_MAX_LEN":
-    lambda: os.getenv("FD_STOP_SEQS_MAX_LEN", "8"),
-
+    "FD_STOP_SEQS_MAX_LEN": lambda: os.getenv("FD_STOP_SEQS_MAX_LEN", "8"),
     # GPU devices that will be used. This is a string that
     # splited by comma, such as 0,1,2.
-    "CUDA_VISIBLE_DEVICES":
-    lambda: os.getenv("CUDA_VISIBLE_DEVICES", None),
-
+    "CUDA_VISIBLE_DEVICES": lambda: os.getenv("CUDA_VISIBLE_DEVICES", None),
     # Whether to use HuggingFace tokenizer.
-    "FD_USE_HF_TOKENIZER":
-    lambda: os.getenv("FD_USE_HF_TOKENIZER", 0),
-
+    "FD_USE_HF_TOKENIZER": lambda: os.getenv("FD_USE_HF_TOKENIZER", 0),
     # Set the high watermark (HWM) for receiving data during ZMQ initialization
-    "FD_ZMQ_SNDHWM":
-    lambda: os.getenv("FD_ZMQ_SNDHWM", 10000),
-
+    "FD_ZMQ_SNDHWM": lambda: os.getenv("FD_ZMQ_SNDHWM", 10000),
     # cache kv quant params directory
-    "FD_CACHE_PARAMS":
-    lambda: os.getenv("FD_CACHE_PARAMS", "none"),
-
+    "FD_CACHE_PARAMS": lambda: os.getenv("FD_CACHE_PARAMS", "none"),
     # Set attention backend. "NATIVE_ATTN", "APPEND_ATTN"
     # and "MLA_ATTN" can be set currently.
-    "FD_ATTENTION_BACKEND":
-    lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
-
+    "FD_ATTENTION_BACKEND": lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
     # Set sampling class. "base", "base_non_truncated", "air" and "rejection" can be set currently.
-    "FD_SAMPLING_CLASS":
-    lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
-
+    "FD_SAMPLING_CLASS": lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
     # Set moe backend."cutlass","marlin" and "triton" can be set currently.
-    "FD_MOE_BACKEND":
-    lambda: os.getenv("FD_MOE_BACKEND", "cutlass"),
-
+    "FD_MOE_BACKEND": lambda: os.getenv("FD_MOE_BACKEND", "cutlass"),
     # Set whether to disable recompute the request when the KV cache is full.
-    "FD_DISABLED_RECOVER":
-    lambda: os.getenv("FD_DISABLED_RECOVER", "0"),
-
+    "FD_DISABLED_RECOVER": lambda: os.getenv("FD_DISABLED_RECOVER", "0"),
     # Set triton kernel JIT compilation directory.
-    "FD_TRITON_KERNEL_CACHE_DIR":
-    lambda: os.getenv("FD_TRITON_KERNEL_CACHE_DIR", None),
-
+    "FD_TRITON_KERNEL_CACHE_DIR": lambda: os.getenv("FD_TRITON_KERNEL_CACHE_DIR", None),
     # Whether transition from standalone PD decoupling to centralized inference
-    "FD_PD_CHANGEABLE":
-    lambda: os.getenv("FD_PD_CHANGEABLE", "0"),
-
+    "FD_PD_CHANGEABLE": lambda: os.getenv("FD_PD_CHANGEABLE", "0"),
     # Whether to use fastsafetensor load weight (0 or 1)
-    "FD_USE_FASTSAFETENSOR":
-    lambda: os.getenv("FD_USE_FASTSAFETENSOR", "0"),
-
+    "FD_USE_FASTSAFETENSOR": lambda: os.getenv("FD_USE_FASTSAFETENSOR", "0"),
     # Whether to use DeepGemm for FP8 blockwise MoE.
-    "FD_USE_DEEP_GEMM":
-    lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "1"))),
-
+    "FD_USE_DEEP_GEMM": lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "1"))),
     # Whether to use aggregate send.
-    "FD_USE_AGGREGATE_SEND":
-    lambda: bool(int(os.getenv("FD_USE_AGGREGATE_SEND", "0"))),
-
+    "FD_USE_AGGREGATE_SEND": lambda: bool(int(os.getenv("FD_USE_AGGREGATE_SEND", "0"))),
     # Whether to open Trace.
-    "TRACES_ENABLE":
-    lambda: os.getenv("TRACES_ENABLE", "false"),
-
+    "TRACES_ENABLE": lambda: os.getenv("TRACES_ENABLE", "false"),
     # set traec Server name.
-    "FD_SERVICE_NAME":
-    lambda: os.getenv("FD_SERVICE_NAME", "FastDeploy"),
-
+    "FD_SERVICE_NAME": lambda: os.getenv("FD_SERVICE_NAME", "FastDeploy"),
     # set traec host name.
-    "FD_HOST_NAME":
-    lambda: os.getenv("FD_HOST_NAME", "localhost"),
-
+    "FD_HOST_NAME": lambda: os.getenv("FD_HOST_NAME", "localhost"),
     # set traec exporter.
-    "TRACES_EXPORTER":
-    lambda: os.getenv("TRACES_EXPORTER", "console"),
-
+    "TRACES_EXPORTER": lambda: os.getenv("TRACES_EXPORTER", "console"),
     # set traec exporter_otlp_endpoint.
-    "EXPORTER_OTLP_ENDPOINT":
-    lambda: os.getenv("EXPORTER_OTLP_ENDPOINT"),
-
+    "EXPORTER_OTLP_ENDPOINT": lambda: os.getenv("EXPORTER_OTLP_ENDPOINT"),
     # set traec exporter_otlp_headers.
-    "EXPORTER_OTLP_HEADERS":
-    lambda: os.getenv("EXPORTER_OTLP_HEADERS"),
+    "EXPORTER_OTLP_HEADERS": lambda: os.getenv("EXPORTER_OTLP_HEADERS"),
 }
 
 

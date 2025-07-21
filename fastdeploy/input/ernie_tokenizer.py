@@ -19,19 +19,14 @@
 import os
 import re
 from shutil import copyfile
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
-import sentencepiece as spm
-
 import paddle
-
-
-from paddleformers.utils.log import logger
+import sentencepiece as spm
 from paddleformers.transformers import PretrainedTokenizer
-from paddleformers.transformers.tokenizer_utils_base import (
-    PaddingStrategy,
-    TextInput,
-)
+from paddleformers.transformers.tokenizer_utils_base import PaddingStrategy, TextInput
+from paddleformers.utils.log import logger
 
 
 class ErnieBotTokenizer(PretrainedTokenizer):
@@ -47,7 +42,12 @@ class ErnieBotTokenizer(PretrainedTokenizer):
     pretrained_init_configuration = {
         "ernie-bot-10b": {},
     }
-    model_input_names = ["input_ids", "position_ids", "attention_mask", "labels"]
+    model_input_names = [
+        "input_ids",
+        "position_ids",
+        "attention_mask",
+        "labels",
+    ]
     padding_side = "right"
 
     def __init__(
@@ -222,9 +222,7 @@ class ErnieBotTokenizer(PretrainedTokenizer):
         # TODO: should this be in the base class?
         if hasattr(self, "do_lower_case") and self.do_lower_case:
             # convert non-special tokens to lowercase
-            escaped_special_toks = [
-                re.escape(s_tok) for s_tok in (self.unique_no_split_tokens + self.all_spec_tok)
-            ]
+            escaped_special_toks = [re.escape(s_tok) for s_tok in (self.unique_no_split_tokens + self.all_spec_tok)]
             pattern = r"(" + r"|".join(escaped_special_toks) + r")|" + r"(.+?)"
             text = re.sub(pattern, lambda m: m.groups()[0] or m.groups()[1].lower(), text)
 
@@ -303,7 +301,12 @@ class ErnieBotTokenizer(PretrainedTokenizer):
                 elif not isinstance(attention_mask, np.ndarray):
                     raise ValueError(f"Unexpected type {type(attention_mask)} of attention_mask, ")
             else:
-                attention_mask = np.tril(np.ones((len(required_input), len(required_input)), dtype=np.int64))
+                attention_mask = np.tril(
+                    np.ones(
+                        (len(required_input), len(required_input)),
+                        dtype=np.int64,
+                    )
+                )
                 attention_mask = np.expand_dims(attention_mask, axis=0)
             if needs_to_be_padded:
                 difference = max_length - len(required_input)

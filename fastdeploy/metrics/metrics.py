@@ -19,30 +19,34 @@ metrics
 """
 import os
 import shutil
-from typing import Set, TYPE_CHECKING
+from typing import Set
 
-from prometheus_client import Gauge, Histogram, multiprocess, CollectorRegistry, generate_latest, Counter
+from prometheus_client import (
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+    multiprocess,
+)
 from prometheus_client.registry import Collector
 
 from fastdeploy.metrics import build_1_2_5_buckets
 from fastdeploy.metrics.work_metrics import work_process_metrics
 
-if TYPE_CHECKING:
-    from prometheus_client import Gauge, Histogram, Counter
-
 
 def cleanup_prometheus_files(is_main):
     """
-       Cleans and recreates the Prometheus multiprocess directory.
+    Cleans and recreates the Prometheus multiprocess directory.
 
-       Depending on whether it's the main process or a worker, this function removes the corresponding
-       Prometheus multiprocess directory (/tmp/prom_main or /tmp/prom_worker) and recreates it as an empty directory.
+    Depending on whether it's the main process or a worker, this function removes the corresponding
+    Prometheus multiprocess directory (/tmp/prom_main or /tmp/prom_worker) and recreates it as an empty directory.
 
-       Args:
-           is_main (bool): Indicates whether the current process is the main process.
+    Args:
+        is_main (bool): Indicates whether the current process is the main process.
 
-       Returns:
-           str: The path to the newly created Prometheus multiprocess directory.
+    Returns:
+        str: The path to the newly created Prometheus multiprocess directory.
     """
     PROM_DIR = "/tmp/prom_main" if is_main else "/tmp/prom_worker"
     if os.path.exists(PROM_DIR):
@@ -53,30 +57,30 @@ def cleanup_prometheus_files(is_main):
 
 class SimpleCollector(Collector):
     """
-        A custom Prometheus collector that filters out specific metrics by name.
+    A custom Prometheus collector that filters out specific metrics by name.
 
-        This collector wraps an existing registry and yields only those metrics
-        whose names are not in the specified exclusion set.
+    This collector wraps an existing registry and yields only those metrics
+    whose names are not in the specified exclusion set.
     """
 
     def __init__(self, base_registry, exclude_names: Set[str]):
         """
-            Initializes the SimpleCollector.
+        Initializes the SimpleCollector.
 
-            Args:
-                base_registry (CollectorRegistry): The source registry from which metrics are collected.
-                exclude_names (Set[str]): A set of metric names to exclude from collection.
+        Args:
+            base_registry (CollectorRegistry): The source registry from which metrics are collected.
+            exclude_names (Set[str]): A set of metric names to exclude from collection.
         """
         self.base_registry = base_registry
         self.exclude_names = exclude_names
 
     def collect(self):
         """
-                Collects and yields metrics not in the exclusion list.
+        Collects and yields metrics not in the exclusion list.
 
-                Yields:
-                    Metric: Prometheus Metric objects that are not excluded.
-                """
+        Yields:
+            Metric: Prometheus Metric objects that are not excluded.
+        """
         for metric in self.base_registry.collect():
             if not any(name.startswith(metric.name) for name in self.exclude_names):
                 yield metric
@@ -102,124 +106,157 @@ def get_filtered_metrics(exclude_names: Set[str], extra_register_func=None) -> s
 
 
 REQUEST_LATENCY_BUCKETS = [
-    0.3, 0.5, 0.8, 1.0, 1.5, 2.0, 2.5, 5.0, 10.0, 15.0, 20.0, 30.0,
-    40.0, 50.0, 60.0, 120.0, 240.0, 480.0, 960.0, 1920.0, 7680.0
+    0.3,
+    0.5,
+    0.8,
+    1.0,
+    1.5,
+    2.0,
+    2.5,
+    5.0,
+    10.0,
+    15.0,
+    20.0,
+    30.0,
+    40.0,
+    50.0,
+    60.0,
+    120.0,
+    240.0,
+    480.0,
+    960.0,
+    1920.0,
+    7680.0,
 ]
 
 
 class MetricsManager:
-    """Prometheus Metrics Manager handles all metric updates """
+    """Prometheus Metrics Manager handles all metric updates"""
 
     _instance = None
 
-    num_requests_running: 'Gauge'
-    num_requests_waiting: 'Gauge'
-    time_to_first_token: 'Histogram'
-    time_per_output_token: 'Histogram'
-    request_inference_time: 'Histogram'
-    request_queue_time: 'Histogram'
-    gpu_cache_usage_perc: 'Gauge'
-    generation_tokens_total: 'Counter'
-    request_prefill_time: 'Histogram'
-    request_decode_time: 'Histogram'
-    request_generation_tokens: 'Histogram'
-    request_success_total: 'Counter'
-    spec_decode_draft_acceptance_rate: 'Gauge'
-    spec_decode_efficiency: 'Gauge'
-    spec_decode_num_accepted_tokens_total: 'Counter'
-    spec_decode_num_draft_tokens_total: 'Counter'
-    spec_decode_num_emitted_tokens_total: 'Counter'
-    spec_decode_draft_single_head_acceptance_rate: 'list[Gauge]'
+    num_requests_running: "Gauge"
+    num_requests_waiting: "Gauge"
+    time_to_first_token: "Histogram"
+    time_per_output_token: "Histogram"
+    request_inference_time: "Histogram"
+    request_queue_time: "Histogram"
+    gpu_cache_usage_perc: "Gauge"
+    generation_tokens_total: "Counter"
+    request_prefill_time: "Histogram"
+    request_decode_time: "Histogram"
+    request_generation_tokens: "Histogram"
+    request_success_total: "Counter"
+    spec_decode_draft_acceptance_rate: "Gauge"
+    spec_decode_efficiency: "Gauge"
+    spec_decode_num_accepted_tokens_total: "Counter"
+    spec_decode_num_draft_tokens_total: "Counter"
+    spec_decode_num_emitted_tokens_total: "Counter"
+    spec_decode_draft_single_head_acceptance_rate: "list[Gauge]"
 
     # 定义所有指标配置
     METRICS = {
-        'num_requests_running': {
-            'type': Gauge,
-            'name': 'fastdeploy:num_requests_running',
-            'description': 'Number of requests currently running',
-            'kwargs': {}
+        "num_requests_running": {
+            "type": Gauge,
+            "name": "fastdeploy:num_requests_running",
+            "description": "Number of requests currently running",
+            "kwargs": {},
         },
-        'num_requests_waiting': {
-            'type': Gauge,
-            'name': 'fastdeploy:num_requests_waiting',
-            'description': 'Number of requests currently waiting',
-            'kwargs': {}
+        "num_requests_waiting": {
+            "type": Gauge,
+            "name": "fastdeploy:num_requests_waiting",
+            "description": "Number of requests currently waiting",
+            "kwargs": {},
         },
-        'time_to_first_token': {
-            'type': Histogram,
-            'name': 'fastdeploy:time_to_first_token_seconds',
-            'description': 'Time to first token in seconds',
-            'kwargs': {
-                'buckets': [0.001, 0.005, 0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.25, 0.5, 0.75, 1.0]
-            }
+        "time_to_first_token": {
+            "type": Histogram,
+            "name": "fastdeploy:time_to_first_token_seconds",
+            "description": "Time to first token in seconds",
+            "kwargs": {
+                "buckets": [
+                    0.001,
+                    0.005,
+                    0.01,
+                    0.02,
+                    0.04,
+                    0.06,
+                    0.08,
+                    0.1,
+                    0.25,
+                    0.5,
+                    0.75,
+                    1.0,
+                ]
+            },
         },
-        'time_per_output_token': {
-            'type': Histogram,
-            'name': 'fastdeploy:time_per_output_token_seconds',
-            'description': 'Time per output token in seconds',
-            'kwargs': {
-                'buckets': [0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0]
-            }
+        "time_per_output_token": {
+            "type": Histogram,
+            "name": "fastdeploy:time_per_output_token_seconds",
+            "description": "Time per output token in seconds",
+            "kwargs": {
+                "buckets": [
+                    0.01,
+                    0.025,
+                    0.05,
+                    0.075,
+                    0.1,
+                    0.15,
+                    0.2,
+                    0.3,
+                    0.4,
+                    0.5,
+                    0.75,
+                    1.0,
+                ]
+            },
         },
-
-        'request_inference_time': {
-            'type': Histogram,
-            'name': 'fastdeploy:request_inference_time_seconds',
-            'description': 'Time spent in inference phase (from inference start to last token)',
-            'kwargs': {
-                'buckets': REQUEST_LATENCY_BUCKETS
-            }
+        "request_inference_time": {
+            "type": Histogram,
+            "name": "fastdeploy:request_inference_time_seconds",
+            "description": "Time spent in inference phase (from inference start to last token)",
+            "kwargs": {"buckets": REQUEST_LATENCY_BUCKETS},
         },
-        'request_queue_time': {
-            'type': Histogram,
-            'name': 'fastdeploy:request_queue_time_seconds',
-            'description': 'Time spent in waiting queue (from preprocess end to inference start)',
-            'kwargs': {
-                'buckets': REQUEST_LATENCY_BUCKETS
-            }
+        "request_queue_time": {
+            "type": Histogram,
+            "name": "fastdeploy:request_queue_time_seconds",
+            "description": "Time spent in waiting queue (from preprocess end to inference start)",
+            "kwargs": {"buckets": REQUEST_LATENCY_BUCKETS},
         },
-        'gpu_cache_usage_perc': {
-            'type': Gauge,
-            'name': 'fastdeploy:gpu_cache_usage_perc',
-            'description': 'GPU KV-cache usage. 1 means 100 percent usage',
-            'kwargs': {}
+        "gpu_cache_usage_perc": {
+            "type": Gauge,
+            "name": "fastdeploy:gpu_cache_usage_perc",
+            "description": "GPU KV-cache usage. 1 means 100 percent usage",
+            "kwargs": {},
         },
-
-        'generation_tokens_total': {
-            'type': Counter,
-            'name': 'fastdeploy:generation_tokens_total',
-            'description': 'Total number of generation tokens processed',
-            'kwargs': {}
+        "generation_tokens_total": {
+            "type": Counter,
+            "name": "fastdeploy:generation_tokens_total",
+            "description": "Total number of generation tokens processed",
+            "kwargs": {},
         },
-        'request_prefill_time': {
-            'type': Histogram,
-            'name': 'fastdeploy:request_prefill_time_seconds',
-            'description': 'Time spent in prefill phase (from preprocess start to preprocess end)',
-            'kwargs': {
-                'buckets': REQUEST_LATENCY_BUCKETS
-            }
+        "request_prefill_time": {
+            "type": Histogram,
+            "name": "fastdeploy:request_prefill_time_seconds",
+            "description": "Time spent in prefill phase (from preprocess start to preprocess end)",
+            "kwargs": {"buckets": REQUEST_LATENCY_BUCKETS},
         },
-        'request_decode_time': {
-            'type': Histogram,
-            'name': 'fastdeploy:request_decode_time_seconds',
-            'description': 'Time spent in decode phase (from first token to last token)',
-            'kwargs': {
-                'buckets': REQUEST_LATENCY_BUCKETS
-            }
+        "request_decode_time": {
+            "type": Histogram,
+            "name": "fastdeploy:request_decode_time_seconds",
+            "description": "Time spent in decode phase (from first token to last token)",
+            "kwargs": {"buckets": REQUEST_LATENCY_BUCKETS},
         },
-        'request_generation_tokens': {
-            'type': Histogram,
-            'name': 'fastdeploy:request_generation_tokens',
-            'description': 'Number of generation tokens processed.',
-            'kwargs': {
-                'buckets': build_1_2_5_buckets(33792)
-            }
+        "request_generation_tokens": {
+            "type": Histogram,
+            "name": "fastdeploy:request_generation_tokens",
+            "description": "Number of generation tokens processed.",
+            "kwargs": {"buckets": build_1_2_5_buckets(33792)},
         },
-        'request_success_total': {
-            'type': Counter,
-            'name': 'fastdeploy:request_success_total',
-            'description': 'Total number of successfully processed requests',
-            'kwargs': {}
+        "request_success_total": {
+            "type": Counter,
+            "name": "fastdeploy:request_success_total",
+            "description": "Total number of successfully processed requests",
+            "kwargs": {},
         },
     }
     SPECULATIVE_METRICS = {}
@@ -228,11 +265,11 @@ class MetricsManager:
         """Initializes the Prometheus metrics and starts the HTTP server if not already initialized."""
         # 动态创建所有指标
         for metric_name, config in self.METRICS.items():
-            setattr(self, metric_name, config['type'](
-                config['name'],
-                config['description'],
-                **config['kwargs']
-            ))
+            setattr(
+                self,
+                metric_name,
+                config["type"](config["name"], config["description"], **config["kwargs"]),
+            )
 
     def _init_speculative_metrics(self, speculative_method, num_speculative_tokens):
         self.SPECULATIVE_METRICS = {
@@ -256,19 +293,19 @@ class MetricsManager:
             },
         }
         if speculative_method == "mtp":
-            self.SPECULATIVE_METRICS["spec_decode_efficiency"]={
+            self.SPECULATIVE_METRICS["spec_decode_efficiency"] = {
                 "type": Gauge,
                 "name": "fastdeploy:spec_decode_efficiency",
                 "description": "Efficiency of speculative decoding",
                 "kwargs": {},
             }
-            self.SPECULATIVE_METRICS["spec_decode_num_draft_tokens_total"]={
+            self.SPECULATIVE_METRICS["spec_decode_num_draft_tokens_total"] = {
                 "type": Counter,
                 "name": "fastdeploy:spec_decode_num_draft_tokens_total",
                 "description": "Total number of speculative tokens generated by the proposal method",
                 "kwargs": {},
             }
-            self.SPECULATIVE_METRICS["spec_decode_draft_single_head_acceptance_rate"]={
+            self.SPECULATIVE_METRICS["spec_decode_draft_single_head_acceptance_rate"] = {
                 "type": list[Gauge],
                 "name": "fastdeploy:spec_decode_draft_single_head_acceptance_rate",
                 "description": "Single head acceptance rate of speculative decoding",
@@ -290,7 +327,9 @@ class MetricsManager:
                     self,
                     metric_name,
                     config["type"](
-                        config["name"], config["description"], **config["kwargs"]
+                        config["name"],
+                        config["description"],
+                        **config["kwargs"],
                     ),
                 )
 
@@ -318,7 +357,7 @@ class MetricsManager:
     @classmethod
     def get_excluded_metrics(cls) -> Set[str]:
         """Get the set of indicator names that need to be excluded"""
-        return {config['name'] for config in cls.METRICS.values()}
+        return {config["name"] for config in cls.METRICS.values()}
 
 
 main_process_metrics = MetricsManager()

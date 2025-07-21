@@ -60,7 +60,7 @@ __global__ void recover_block_system_cache(int *recover_block_list, // [bsz]
             const int ori_free_list_len_tid0 = atomicSub(free_list_len, decoder_used_len);
             ori_free_list_len = ori_free_list_len_tid0;
 #ifdef DEBUG_STEP
-            printf("seq_id: %d, ori_seq_len_encoder: %d, step_idx_now: %d, seq_len: %d, ori_free_list_len_tid0: %d, ori_free_list_len: %d\n", 
+            printf("seq_id: %d, ori_seq_len_encoder: %d, step_idx_now: %d, seq_len: %d, ori_free_list_len_tid0: %d, ori_free_list_len: %d\n",
                     recover_id, ori_seq_len_encoder, step_idx_now, seq_len, ori_free_list_len_tid0, ori_free_list_len);
 #endif
         }
@@ -95,7 +95,7 @@ void StepSystemCache(const paddle::Tensor& stop_flags,
                      const paddle::Tensor& recover_lens,
                      const paddle::Tensor& need_block_list,
                      const paddle::Tensor& need_block_len,
-                     const paddle::Tensor& used_list_len, 
+                     const paddle::Tensor& used_list_len,
                      const paddle::Tensor& free_list,
                      const paddle::Tensor& free_list_len,
                      const paddle::Tensor& input_ids,
@@ -178,7 +178,7 @@ void StepSystemCache(const paddle::Tensor& stop_flags,
 }
 
 PD_BUILD_STATIC_OP(step_system_cache)
-    .Inputs({"stop_flags", 
+    .Inputs({"stop_flags",
              "seq_lens_this_time",
              "ori_seq_lens_encoder",
              "ori_seq_lens_decoder",

@@ -12,18 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-import traceback
-from fastdeploy import LLM, SamplingParams
 import os
-import subprocess
 import signal
-import time
 import socket
+import subprocess
+import time
+import traceback
 
+import pytest
+
+from fastdeploy import LLM, SamplingParams
 
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
 MAX_WAIT_SECONDS = 60
+
 
 def is_port_open(host: str, port: int, timeout=1.0):
     """
@@ -46,9 +48,9 @@ def format_chat_prompt(messages):
     for msg in messages:
         role, content = msg["role"], msg["content"]
         if role == "user":
-            prompt += "<|im_start|>user\n{content}<|im_end|>\n".format(content=content)
+            prompt += f"<|im_start|>user\n{content}<|im_end|>\n"
         elif role == "assistant":
-            prompt += "<|im_start|>assistant\n{content}<|im_end|>\n".format(content=content)
+            prompt += f"<|im_start|>assistant\n{content}<|im_end|>\n"
     prompt += "<|im_start|>assistant\n"
     return prompt
 
@@ -72,10 +74,10 @@ def llm(model_path):
     Fixture to initialize the LLM model with a given model path
     """
     try:
-        output = subprocess.check_output("lsof -i:{} -t".format(FD_ENGINE_QUEUE_PORT), shell=True).decode().strip()
+        output = subprocess.check_output(f"lsof -i:{FD_ENGINE_QUEUE_PORT} -t", shell=True).decode().strip()
         for pid in output.splitlines():
             os.kill(int(pid), signal.SIGKILL)
-            print("Killed process on port {}, pid={}".format(FD_ENGINE_QUEUE_PORT, pid))
+            print(f"Killed process on port {FD_ENGINE_QUEUE_PORT}, pid={pid}")
     except subprocess.CalledProcessError:
         pass
 
@@ -86,23 +88,24 @@ def llm(model_path):
             tensor_parallel_size=1,
             engine_worker_queue_port=FD_ENGINE_QUEUE_PORT,
             max_model_len=32768,
-            quantization="wint8"
+            quantization="wint8",
         )
 
         # Wait for the port to be open
         wait_start = time.time()
         while not is_port_open("127.0.0.1", FD_ENGINE_QUEUE_PORT):
             if time.time() - wait_start > MAX_WAIT_SECONDS:
-                pytest.fail("Model engine did not start within {} seconds on port {}".format(
-                    MAX_WAIT_SECONDS, FD_ENGINE_QUEUE_PORT))
+                pytest.fail(
+                    f"Model engine did not start within {MAX_WAIT_SECONDS} seconds on port {FD_ENGINE_QUEUE_PORT}"
+                )
             time.sleep(1)
 
-        print("Model loaded successfully from {} in {:.2f}s.".format(model_path, time.time() - start))
+        print(f"Model loaded successfully from {model_path} in {time.time() - start:.2f}s.")
         yield llm
     except Exception:
-        print("Failed to load model from {}.".format(model_path))
+        print(f"Failed to load model from {model_path}.")
         traceback.print_exc()
-        pytest.fail("Failed to initialize LLM model from {}".format(model_path))
+        pytest.fail(f"Failed to initialize LLM model from {model_path}")
 
 
 def test_generate_prompts(llm):
@@ -128,13 +131,13 @@ def test_generate_prompts(llm):
         assert len(outputs) == len(prompts), "Number of outputs should match number of prompts"
 
         for i, output in enumerate(outputs):
-            assert output.prompt == prompts[i], "Prompt mismatch for case {}".format(i + 1)
-            assert isinstance(output.outputs.text, str), "Output text should be string for case {}".format(i + 1)
-            assert len(output.outputs.text) > 0, "Generated text should not be empty for case {}".format(i + 1)
-            assert isinstance(output.finished, bool), "'finished' should be boolean for case {}".format(i + 1)
-            assert output.metrics.model_execute_time > 0, "Execution time should be positive for case {}".format(i + 1)
+            assert output.prompt == prompts[i], f"Prompt mismatch for case {i + 1}"
+            assert isinstance(output.outputs.text, str), f"Output text should be string for case {i + 1}"
+            assert len(output.outputs.text) > 0, f"Generated text should not be empty for case {i + 1}"
+            assert isinstance(output.finished, bool), f"'finished' should be boolean for case {i + 1}"
+            assert output.metrics.model_execute_time > 0, f"Execution time should be positive for case {i + 1}"
 
-            print("=== Prompt generation Case {} Passed ===".format(i + 1))
+            print(f"=== Prompt generation Case {i + 1} Passed ===")
 
     except Exception:
         print("Failed during prompt generation.")
@@ -180,12 +183,12 @@ def test_chat_completion(llm):
             assert len(outputs[0].outputs.text) > 0, "Generated text should not be empty"
             assert outputs[0].metrics.model_execute_time > 0, "Execution time should be positive"
 
-            print("=== Chat Case {} Passed ===".format(i + 1))
+            print(f"=== Chat Case {i + 1} Passed ===")
 
         except Exception:
-            print("[ERROR] Chat Case {} failed.".format(i + 1))
+            print(f"[ERROR] Chat Case {i + 1} failed.")
             traceback.print_exc()
-            pytest.fail("Chat case {} failed".format(i + 1))
+            pytest.fail(f"Chat case {i + 1} failed")
 
 
 if __name__ == "__main__":

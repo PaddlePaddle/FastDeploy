@@ -15,6 +15,7 @@
 
 ## 1. 启动服务
 安装FastDeploy后，在终端执行如下命令，启动服务，其中启动命令配置方式参考[参数说明](../parameters.md)
+
 ```shell
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-0.3B-Paddle \
@@ -24,9 +25,10 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --max-model-len 32768 \
        --max-num-seqs 32
 ```
->💡 注意：在 ```--model``` 指定的路径中，若当前目录下不存在该路径对应的子目录，则会尝试根据指定的模型名称（如 ```baidu/ERNIE-4.5-0.3B-Paddle```）查询AIStudio是否存在预置模型，若存在，则自动启动下载。默认的下载路径为：```~/xx```。关于模型自动下载的说明和配置参阅[模型下载](../supported_models.md)。  
-```--max-model-len``` 表示当前部署的服务所支持的最长Token数量。  
-```--max-num-seqs``` 表示当前部署的服务所支持的最大并发处理数量。  
+
+>💡 注意：在 ```--model``` 指定的路径中，若当前目录下不存在该路径对应的子目录，则会尝试根据指定的模型名称（如 ```baidu/ERNIE-4.5-0.3B-Paddle```）查询AIStudio是否存在预置模型，若存在，则自动启动下载。默认的下载路径为：```~/xx```。关于模型自动下载的说明和配置参阅[模型下载](../supported_models.md)。
+```--max-model-len``` 表示当前部署的服务所支持的最长Token数量。
+```--max-num-seqs``` 表示当前部署的服务所支持的最大并发处理数量。
 
 **相关文档**
 
@@ -36,6 +38,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ## 2. 用户发起服务请求
 
 执行启动服务指令后，当终端打印如下信息，说明服务已经启动成功。
+
 ```
 api_server.py[line:91] Launching metrics service at http://0.0.0.0:8181/metrics
 api_server.py[line:94] Launching chat completion service at http://0.0.0.0:8180/v1/chat/completions
@@ -47,11 +50,13 @@ INFO:     Uvicorn running on http://0.0.0.0:8180 (Press CTRL+C to quit)
 ```
 
 FastDeploy提供服务探活接口，用以判断服务的启动状态，执行如下命令返回 ```HTTP/1.1 200 OK``` 即表示服务启动成功。
+
 ```shell
 curl -i http://0.0.0.0:8180/health
 ```
 
 通过如下命令发起服务请求
+
 ```shell
 curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
 -H "Content-Type: application/json" \

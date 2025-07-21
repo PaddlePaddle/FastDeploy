@@ -37,6 +37,7 @@ image.sourcefind.cn:5000/dcu/admin/base/custom:fastdeploy2.0.0-kylinv10-dtk25.04
 ```
 
 ## 2. 启动服务
+
 ```bash
 export FD_ATTENTION_BACKEND="BLOCK_ATTN"
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -47,7 +48,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization=0.8
 ```
 
-#### 请求服务
+### 请求服务
 
 您可以基于 OpenAI 协议，通过 curl 和 python 两种方式请求服务。
 

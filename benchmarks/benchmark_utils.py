@@ -24,9 +24,11 @@ import os
 from typing import Any
 
 
-def convert_to_pytorch_benchmark_format(args: argparse.Namespace,
-                                        metrics: dict[str, list],
-                                        extra_info: dict[str, Any]) -> list:
+def convert_to_pytorch_benchmark_format(
+    args: argparse.Namespace,
+    metrics: dict[str, list],
+    extra_info: dict[str, Any],
+) -> list:
     """
     Save the benchmark results in the format used by PyTorch OSS benchmark with
     on metric per record
@@ -54,12 +56,10 @@ def convert_to_pytorch_benchmark_format(args: argparse.Namespace,
             },
         }
 
-        tp = record["benchmark"]["extra_info"]["args"].get(
-            "tensor_parallel_size")
+        tp = record["benchmark"]["extra_info"]["args"].get("tensor_parallel_size")
         # Save tensor_parallel_size parameter if it's part of the metadata
         if not tp and "tensor_parallel_size" in extra_info:
-            record["benchmark"]["extra_info"]["args"][
-                "tensor_parallel_size"] = extra_info["tensor_parallel_size"]
+            record["benchmark"]["extra_info"]["args"]["tensor_parallel_size"] = extra_info["tensor_parallel_size"]
 
         records.append(record)
 
@@ -68,6 +68,7 @@ def convert_to_pytorch_benchmark_format(args: argparse.Namespace,
 
 class InfEncoder(json.JSONEncoder):
     """InfEncoder"""
+
     def clear_inf(self, o: Any):
         """clear_inf"""
         if isinstance(o, dict):
@@ -87,4 +88,3 @@ def write_to_json(filename: str, records: list) -> None:
     """write_to_json"""
     with open(filename, "w") as f:
         json.dump(records, f, cls=InfEncoder)
-

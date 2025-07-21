@@ -232,12 +232,12 @@ MoeExpertDispatchInferDtype(const paddle::DataType &input_dtype,
 
 /**
  * @brief Mixture of Experts (MoE) Expert Dispatch Operator
- * 
+ *
  * This operator performs the following key functions:
  * 1. Computes top-k experts for each input token based on gating scores
  * 2. Permutes input tokens according to their selected experts for efficient expert processing
  * 3. Computes prefix sums of tokens per expert for group_gemm optimization
- * 
+ *
  * Inputs:
  *   - input: The input tensor to be routed to experts
  *            Shape: [total_tokens, hidden_size]
@@ -246,7 +246,7 @@ MoeExpertDispatchInferDtype(const paddle::DataType &input_dtype,
  *                   Shape: [total_tokens, expert_num]
  *                   dtype: must be float32
  *   - gating_correction_bias: Optional bias term for gating correction (expert_num)
- * 
+ *
  * Outputs:
  *   - permute_input: Permuted input tensor organized by expert
  *                   Shape: [moe_topk * total_tokens, hidden_size]
@@ -263,7 +263,7 @@ MoeExpertDispatchInferDtype(const paddle::DataType &input_dtype,
  *   - top_k_indices: Indices of selected top-k experts for each token
  *                   Shape: [total_tokens, moe_topk]
  *                   dtype: int32
- * 
+ *
  * Attributes:
  *   - moe_topk: Number of experts to select for each token (k value in top-k routing)
  *   - group_moe: Whether to perform group softmax within the operator
@@ -272,7 +272,7 @@ MoeExpertDispatchInferDtype(const paddle::DataType &input_dtype,
  *   - topk_only_mode: Operation mode selector
  *                    (true: only performs topk selection without softmax,
  *                     false: performs full softmax+topk computation)
- * 
+ *
  * Note:
  * - The operator requires 2D input format [total_tokens, hidden_size]
  * - For optimal performance, expert_num should be a power of 2 when possible
@@ -283,7 +283,7 @@ PD_BUILD_STATIC_OP(moe_expert_dispatch)
              paddle::Optional("gating_correction_bias"),
              paddle::Optional("w4a8_in_scale")})
     .Outputs({"permute_input", "tokens_expert_prefix_sum",
-              "permute_indices_per_token", "topk_weight", "topk_idx", 
+              "permute_indices_per_token", "topk_weight", "topk_idx",
               "expert_idx_per_token"})
     .Attrs({"moe_topk:int", "group_moe:bool", "topk_only_mode:bool"})
     .SetKernelFn(PD_KERNEL(MoeExpertDispatch))

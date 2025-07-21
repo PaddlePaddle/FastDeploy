@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
@@ -65,8 +66,7 @@ class QuantConfigBase(ABC):
         for key in keys:
             if key in config:
                 return config[key]
-        raise ValueError(f"Cannot find any of {keys} in the model's "
-                         "quantization config.")
+        raise ValueError(f"Cannot find any of {keys} in the model's " "quantization config.")
 
     @abstractmethod
     def get_quant_method(self, layer, prefix) -> Optional[QuantMethodBase]:

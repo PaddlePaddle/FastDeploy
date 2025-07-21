@@ -38,15 +38,14 @@ def check_tensor_parallel_prerequisites(
     """check_tensor_parallel_prerequisites"""
     if fd_config.parallel_config.tensor_parallel_size > 1:
         tensor_parallel_map = cls._get_tensor_parallel_mappings(
-            fd_config.model_config.pretrained_config, is_split=True)
+            fd_config.model_config.pretrained_config, is_split=True
+        )
         if not tensor_parallel_map:
             logger.error(
                 "filtered_quant_map should not be empty. \
                 parallel splitting required, but _get_tensor_parallel_mappings is not implemented."
             )
-        filtered_tp_keys = cls._resolve_prefix_keys(
-            tensor_parallel_map.keys(), safetensor_keys
-        )
+        filtered_tp_keys = cls._resolve_prefix_keys(tensor_parallel_map.keys(), safetensor_keys)
         for k, v in filtered_tp_keys.items():
             tensor_parallel_filtered_map[v] = tensor_parallel_map.pop(k)
         if not tensor_parallel_filtered_map:
@@ -176,9 +175,7 @@ def build_expanded_keys(
                 if start_layer < 0:
                     continue
                 for layer_id in range(start_layer, num_layers):
-                    for export_id in range(
-                        text_num_experts, text_num_experts + img_num_experts
-                    ):
+                    for export_id in range(text_num_experts, text_num_experts + img_num_experts):
                         update_final_actions(
                             {
                                 LayerIdPlaceholder.MOE_LAYER_ID.value: layer_id,
@@ -188,10 +185,7 @@ def build_expanded_keys(
                             key,
                             action,
                         )
-            elif (
-                LayerIdPlaceholder.MOE_LAYER_ID.value in placeholders
-                and len(placeholders) == 1
-            ):
+            elif LayerIdPlaceholder.MOE_LAYER_ID.value in placeholders and len(placeholders) == 1:
                 if start_layer < 0:
                     continue
                 for layer_id in range(start_layer, num_layers):
@@ -222,8 +216,7 @@ def gqa_qkv_split_func(
 
         def get_shape(tensor):
             """get_shape"""
-            return tensor.get_shape() if hasattr(tensor,
-                                                 "get_shape") else tensor.shape
+            return tensor.get_shape() if hasattr(tensor, "get_shape") else tensor.shape
 
         def slice_tensor(tensor, start, end):
             """slice_tensor"""
@@ -251,10 +244,7 @@ def gqa_qkv_split_func(
             size = shape[-1] if is_column else shape[0]
             block_size = size // degree
             if hasattr(tensor, "get_shape"):
-                return [
-                    slice_tensor(tensor, i * block_size, (i + 1) * block_size)
-                    for i in range(degree)
-                ]
+                return [slice_tensor(tensor, i * block_size, (i + 1) * block_size) for i in range(degree)]
             else:
                 if isinstance(x, paddle.Tensor):
                     if is_column:
@@ -342,8 +332,8 @@ def gqa_qkv_merge_func(num_attention_heads, num_key_value_heads, head_dim):
     def fn(weight_list, is_column=True):
         """fn"""
         tensor_parallel_degree = len(weight_list)
-        num_attention_heads = num_attention_heads // tensor_parallel_degree # noqa: F823
-        num_key_value_heads = num_key_value_heads // tensor_parallel_degree # noqa: F823
+        local_num_attention_heads = num_attention_heads // tensor_parallel_degree
+        local_num_key_value_heads = num_key_value_heads // tensor_parallel_degree
 
         is_paddle_tensor = not isinstance(weight_list[0], np.ndarray)
 
@@ -351,8 +341,7 @@ def gqa_qkv_merge_func(num_attention_heads, num_key_value_heads, head_dim):
             """
             get_shape
             """
-            return tensor.get_shape() if hasattr(tensor,
-                                                 "get_shape") else tensor.shape
+            return tensor.get_shape() if hasattr(tensor, "get_shape") else tensor.shape
 
         def slice_tensor(tensor, start, end):
             """
@@ -368,9 +357,9 @@ def gqa_qkv_merge_func(num_attention_heads, num_key_value_heads, head_dim):
         q_list, k_list, v_list = [], [], []
 
         for weight in weight_list:
-            q_end = num_attention_heads * head_dim
-            k_end = q_end + num_key_value_heads * head_dim
-            v_end = k_end + num_key_value_heads * head_dim
+            q_end = local_num_attention_heads * head_dim
+            k_end = q_end + local_num_key_value_heads * head_dim
+            v_end = k_end + local_num_key_value_heads * head_dim
 
             q = slice_tensor(weight, 0, q_end)
             k = slice_tensor(weight, q_end, k_end)

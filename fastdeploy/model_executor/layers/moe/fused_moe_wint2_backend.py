@@ -18,8 +18,7 @@ import paddle
 from paddle import nn
 
 import fastdeploy
-from fastdeploy.distributed.communication_op import \
-    tensor_model_parallel_all_reduce
+from fastdeploy.distributed.communication_op import tensor_model_parallel_all_reduce
 from fastdeploy.utils import ceil_div
 
 from ..quantization.quant_base import QuantMethodBase
@@ -45,12 +44,12 @@ class Wint2MoeMethod(QuantMethodBase):
         """
         check layer is valid for this method
         """
-        assert len(
-            up_gate_proj_weights
-        ) == layer.num_local_experts, "up_gate_proj_weights length should be equal to num_local_experts."
-        assert len(
-            down_proj_weights
-        ) == layer.num_local_experts, "down_proj_weights length should be equal to num_local_experts."
+        assert (
+            len(up_gate_proj_weights) == layer.num_local_experts
+        ), "up_gate_proj_weights length should be equal to num_local_experts."
+        assert (
+            len(down_proj_weights) == layer.num_local_experts
+        ), "down_proj_weights length should be equal to num_local_experts."
 
     def create_weights(self, layer: nn.Layer, state_dict):
         """
@@ -78,29 +77,22 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
         """
         Paddle cutlass process prequanted weights.
         """
-        up_gate_proj_expert_weight_key = layer.weight_key_map.get(
-            "up_gate_proj_expert_weight_key", None)
-        down_proj_expert_weight_key = layer.weight_key_map.get(
-            "down_proj_expert_weight_key", None)
-        up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get(
-            "up_gate_proj_expert_weight_scale_key", None)
-        down_proj_expert_weight_scale_key = layer.weight_key_map.get(
-            "down_proj_expert_weight_scale_key", None)
-        up_gate_proj_expert_super_scales_key = layer.weight_key_map.get(
-            "up_gate_proj_expert_super_scales_key", None)
-        down_proj_expert_super_scales_key = layer.weight_key_map.get(
-            "down_proj_expert_super_scales_key", None)
-        up_gate_proj_expert_code_scale_key = layer.weight_key_map.get(
-            "up_gate_proj_expert_code_scale_key", None)
-        down_proj_expert_code_scale_key = layer.weight_key_map.get(
-            "down_proj_expert_code_scale_key", None)
-        up_gate_proj_expert_code_zp_key = layer.weight_key_map.get(
-            "up_gate_proj_expert_code_zp_key", None)
-        down_proj_expert_code_zp_key = layer.weight_key_map.get(
-            "down_proj_expert_code_zp_key", None)
+        up_gate_proj_expert_weight_key = layer.weight_key_map.get("up_gate_proj_expert_weight_key", None)
+        down_proj_expert_weight_key = layer.weight_key_map.get("down_proj_expert_weight_key", None)
+        up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get("up_gate_proj_expert_weight_scale_key", None)
+        down_proj_expert_weight_scale_key = layer.weight_key_map.get("down_proj_expert_weight_scale_key", None)
+        up_gate_proj_expert_super_scales_key = layer.weight_key_map.get("up_gate_proj_expert_super_scales_key", None)
+        down_proj_expert_super_scales_key = layer.weight_key_map.get("down_proj_expert_super_scales_key", None)
+        up_gate_proj_expert_code_scale_key = layer.weight_key_map.get("up_gate_proj_expert_code_scale_key", None)
+        down_proj_expert_code_scale_key = layer.weight_key_map.get("down_proj_expert_code_scale_key", None)
+        up_gate_proj_expert_code_zp_key = layer.weight_key_map.get("up_gate_proj_expert_code_zp_key", None)
+        down_proj_expert_code_zp_key = layer.weight_key_map.get("down_proj_expert_code_zp_key", None)
 
         up_gate_proj_weights, down_proj_weights = layer.load_experts_weight(
-            state_dict, up_gate_proj_expert_weight_key, down_proj_expert_weight_key)
+            state_dict,
+            up_gate_proj_expert_weight_key,
+            down_proj_expert_weight_key,
+        )
         # self.check(layer, up_gate_proj_weights, down_proj_weights)
 
         up_gate_proj_weight_scale = []
@@ -114,37 +106,23 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
         for i in range(layer.num_experts):
             expert_idx = layer.expert_id_offset + i
             up_gate_proj_weight_scale.append(
-                get_tensor(
-                    state_dict.pop(
-                        up_gate_proj_expert_weight_scale_key.format(expert_idx))))
+                get_tensor(state_dict.pop(up_gate_proj_expert_weight_scale_key.format(expert_idx)))
+            )
             down_proj_weight_scale.append(
-                get_tensor(
-                    state_dict.pop(
-                        down_proj_expert_weight_scale_key.format(expert_idx))))
+                get_tensor(state_dict.pop(down_proj_expert_weight_scale_key.format(expert_idx)))
+            )
             up_gate_proj_super_scales.append(
-                get_tensor(
-                    state_dict.pop(
-                        up_gate_proj_expert_super_scales_key.format(expert_idx))))
+                get_tensor(state_dict.pop(up_gate_proj_expert_super_scales_key.format(expert_idx)))
+            )
             down_proj_super_scales.append(
-                get_tensor(
-                    state_dict.pop(
-                        down_proj_expert_super_scales_key.format(expert_idx))))
+                get_tensor(state_dict.pop(down_proj_expert_super_scales_key.format(expert_idx)))
+            )
             up_gate_proj_code_scale.append(
-                get_tensor(
-                    state_dict.pop(
-                        up_gate_proj_expert_code_scale_key.format(expert_idx))))
-            down_proj_code_scale.append(
-                get_tensor(
-                    state_dict.pop(
-                        down_proj_expert_code_scale_key.format(expert_idx))))
-            up_gate_proj_code_zp.append(
-                get_tensor(
-                    state_dict.pop(
-                        up_gate_proj_expert_code_zp_key.format(expert_idx))))
-            down_proj_code_zp.append(
-                get_tensor(
-                    state_dict.pop(
-                        down_proj_expert_code_zp_key.format(expert_idx))))
+                get_tensor(state_dict.pop(up_gate_proj_expert_code_scale_key.format(expert_idx)))
+            )
+            down_proj_code_scale.append(get_tensor(state_dict.pop(down_proj_expert_code_scale_key.format(expert_idx))))
+            up_gate_proj_code_zp.append(get_tensor(state_dict.pop(up_gate_proj_expert_code_zp_key.format(expert_idx))))
+            down_proj_code_zp.append(get_tensor(state_dict.pop(down_proj_expert_code_zp_key.format(expert_idx))))
 
         up_gate_proj_weight = paddle.stack(up_gate_proj_weights, axis=0)
         down_proj_weight = paddle.stack(down_proj_weights, axis=0)
@@ -167,7 +145,7 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
             "up_gate_proj_code_scale": up_gate_proj_code_scale,
             "down_proj_code_scale": down_proj_code_scale,
             "up_gate_proj_code_zp": up_gate_proj_code_zp,
-            "down_proj_code_zp": down_proj_code_zp
+            "down_proj_code_zp": down_proj_code_zp,
         }
         for name, tensor in name_tensor_map.items():
             create_and_set_parameter(layer, name, tensor)
@@ -189,6 +167,7 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
         """
 
         from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch
+
         (
             permute_input,
             token_nums_per_expert,
@@ -200,8 +179,9 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
             x,
             gate_out,
             layer.gate_correction_bias,
-            (layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale")
-             else None),  # if set, permute_input will be int8_t
+            (
+                layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None
+            ),  # if set, permute_input will be int8_t
             layer.top_k,
             False,
             topk_only_mode=False,
@@ -243,11 +223,9 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
 
 
 class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
-
     def __init__(self, quant_config):
         super().__init__(quant_config)
         self.moe_quant_type = quant_config.moe_quant_type
-
 
     def apply(
         self,
@@ -259,8 +237,7 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
         Use Wint2 Triton Fusedmoe compute Fused MoE.
         """
 
-        from fastdeploy.model_executor.ops.triton_ops import \
-            moe_wint2_ffn_kernel
+        from fastdeploy.model_executor.ops.triton_ops import moe_wint2_ffn_kernel
 
         topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
             gate_out,
@@ -288,7 +265,6 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
         double_quant = True
         num_valid_tokens = topk_ids.shape[0] * topk_ids.shape[1]
 
-
         config = {
             "BLOCK_SIZE_M": 16,
             "BLOCK_SIZE_N": 512,
@@ -300,11 +276,11 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
         from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
 
         sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess(
-            topk_ids, E, config["BLOCK_SIZE_M"])
+            topk_ids, E, config["BLOCK_SIZE_M"]
+        )
 
         max_possible_num_post_padded = sorted_token_ids.shape[0]
-        grid = (ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"]) *
-                ceil_div(N, config["BLOCK_SIZE_N"]), )
+        grid = (ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"]) * ceil_div(N, config["BLOCK_SIZE_N"]),)
 
         moe_wint2_ffn_kernel[grid](
             x,
@@ -360,9 +336,10 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
             "num_stages": 8,
         }
 
-        grid = (ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"]) *
-                ceil_div(layer.down_proj_weight.shape[-1], config["BLOCK_SIZE_N"]), )
-
+        grid = (
+            ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"])
+            * ceil_div(layer.down_proj_weight.shape[-1], config["BLOCK_SIZE_N"]),
+        )
 
         moe_wint2_ffn_kernel[grid](
             intermediate_cache2,
@@ -408,7 +385,6 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
         )
 
         fused_moe_out = paddle.sum(intermediate_cache3, axis=1)
-
 
         if layer.tp_size > 1:
             tensor_model_parallel_all_reduce(fused_moe_out)

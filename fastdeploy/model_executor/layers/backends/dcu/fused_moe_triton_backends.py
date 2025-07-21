@@ -17,10 +17,8 @@
 import paddle
 from paddle import nn
 
-from fastdeploy.distributed.communication_op import \
-    tensor_model_parallel_all_reduce
-from fastdeploy.model_executor.layers.quantization.quant_base import \
-    QuantMethodBase
+from fastdeploy.distributed.communication_op import tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.utils import ceil_div
 
 
@@ -36,7 +34,8 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         self.quant_method = quant_method
         self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
         self.added_scale_attrs = [
-            "up_gate_proj_weight_scale", "down_proj_weight_scale"
+            "up_gate_proj_weight_scale",
+            "down_proj_weight_scale",
         ]
 
     def process_prequanted_weights(self, layer: nn.Layer, state_dict) -> None:
@@ -52,10 +51,12 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         assert len(down_proj_weights) == layer.num_local_experts
         assert self.quant_method.name() == "wint8"
         assert up_gate_proj_weights[0].shape == [
-            layer.hidden_size, layer.moe_intermediate_size * 2
+            layer.hidden_size,
+            layer.moe_intermediate_size * 2,
         ]
         assert down_proj_weights[0].shape == [
-            layer.moe_intermediate_size, layer.hidden_size
+            layer.moe_intermediate_size,
+            layer.hidden_size,
         ]
 
         up_gate_proj_tensor = paddle.stack(up_gate_proj_weights, axis=0)
@@ -71,26 +72,29 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
             scale_name = self.added_scale_attrs[idx]
 
             quanted_weight_scale = weight_tensor.abs().max(axis=1)
-            quanted_weight = weight_tensor / quanted_weight_scale[:,
-                                                                  None, :] * max_bound
+            quanted_weight = weight_tensor / quanted_weight_scale[:, None, :] * max_bound
             quanted_weight = paddle.round(quanted_weight).astype("int8")
             quanted_weight_scale = quanted_weight_scale / max_bound
 
             setattr(
-                layer, weight_name,
+                layer,
+                weight_name,
                 layer.create_parameter(
                     shape=quanted_weight.shape,
                     dtype=quanted_weight.dtype,
                     default_initializer=paddle.nn.initializer.Constant(0),
-                ))
+                ),
+            )
             getattr(layer, weight_name).set_value(quanted_weight)
 
             setattr(
-                layer, scale_name,
+                layer,
+                scale_name,
                 layer.create_parameter(
                     shape=quanted_weight_scale.shape,
                     dtype=quanted_weight_scale.dtype,
-                ))
+                ),
+            )
             getattr(layer, scale_name).set_value(quanted_weight_scale)
 
     def apply(
@@ -112,10 +116,7 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         gate_out = paddle.matmul(x.cast("float32"), layer.gate_weight)
         scores = paddle.nn.functional.softmax(gate_out, axis=-1)
         scores += layer.gate_correction_bias
-        topk_weights, topk_ids = paddle.topk(scores,
-                                             k=top_k,
-                                             axis=-1,
-                                             sorted=False)
+        topk_weights, topk_ids = paddle.topk(scores, k=top_k, axis=-1, sorted=False)
         topk_weights = topk_weights / topk_weights.sum(axis=-1, keepdim=True)
 
         intermediate_cache1 = paddle.empty(
@@ -140,11 +141,15 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
 
         from .triton_moe_kernels import fused_moe_kernel_paddle
+
         sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess(
-            topk_ids, num_local_experts, config["BLOCK_SIZE_M"])
+            topk_ids, num_local_experts, config["BLOCK_SIZE_M"]
+        )
         max_num_tokens_padded = sorted_token_ids.shape[0]
-        grid = (ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) *
-                ceil_div(moe_intermediate_size * 2, config["BLOCK_SIZE_N"]), )
+        grid = (
+            ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"])
+            * ceil_div(moe_intermediate_size * 2, config["BLOCK_SIZE_N"]),
+        )
 
         fused_moe_kernel_paddle[grid](
             x,
@@ -188,11 +193,11 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
             even_Ks=hidden_size % config["BLOCK_SIZE_K"] == 0,
         )
 
-        intermediate_cache2 = paddle.incubate.nn.functional.swiglu(
-            intermediate_cache1)
+        intermediate_cache2 = paddle.incubate.nn.functional.swiglu(intermediate_cache1)
 
-        grid = (ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) *
-                ceil_div(hidden_size, config["BLOCK_SIZE_N"]), )
+        grid = (
+            ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) * ceil_div(hidden_size, config["BLOCK_SIZE_N"]),
+        )
         fused_moe_kernel_paddle[grid](
             intermediate_cache2,
             layer.down_proj_weight,

@@ -40,10 +40,10 @@ sampling_params = SamplingParams(temperature=1, top_p=0.0)
 model = "baidu/ERNIE-4.5-21B-A3B-Paddle"
 
 prefix_cached_llm = LLM(
-        model=model,
-        quantization="wint4",
-        enable_prefix_caching=True,
-    )
+    model=model,
+    quantization="wint4",
+    enable_prefix_caching=True,
+)
 
 
 prefix_outputs = prefix_cached_llm.generate(generating_prompts, sampling_params)

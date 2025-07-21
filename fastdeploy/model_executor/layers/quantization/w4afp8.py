@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from typing import Optional
 
 import paddle
@@ -69,13 +70,14 @@ class W4AFP8LinearMethod(QuantMethodBase):
         pass
 
     def process_loaded_weights(self, layer, weights) -> None:
-        quanted_weight_tensor, weight_scale_tensor = (
-            fastdeploy.model_executor.ops.gpu.
-            scaled_gemm_f8_i4_f16_weight_quantize(
-                paddle.cast(weights, "float32").cpu(),
-                groupsize=-1,
-                scale_dtype="float16",
-            ))
+        (
+            quanted_weight_tensor,
+            weight_scale_tensor,
+        ) = fastdeploy.model_executor.ops.gpu.scaled_gemm_f8_i4_f16_weight_quantize(
+            paddle.cast(weights, "float32").cpu(),
+            groupsize=-1,
+            scale_dtype="float16",
+        )
         weight_scale_tensor = paddle.view(weight_scale_tensor, layer._dtype)
         layer.weight.set_value(quanted_weight_tensor)
         layer.weight_scale.set_value(weight_scale_tensor)
@@ -87,11 +89,12 @@ class W4AFP8LinearMethod(QuantMethodBase):
             layer.weight_scale,
             zero_points=None,
             bias=layer.bias if layer.add_bias else None,
-            out_scale=self.quant_config.weight_scale_dict.get(layer.prefix +
-                                                              ".weight_scale")
-            / (self.quant_config.act_scale_dict.get(layer.prefix +
-                                                    ".activation_scale") *
-               QUANT_SCALING_FACTOR * QUANT_SCALING_FACTOR),
+            out_scale=self.quant_config.weight_scale_dict.get(layer.prefix + ".weight_scale")
+            / (
+                self.quant_config.act_scale_dict.get(layer.prefix + ".activation_scale")
+                * QUANT_SCALING_FACTOR
+                * QUANT_SCALING_FACTOR
+            ),
             groupsize=0,
             out_dtype=layer._dtype,
         )

@@ -20,16 +20,16 @@ import socket
 def get_hostname_ip():
     """
     Get the system's hostname and primary IP address.
-    
+
     Returns:
         tuple: A tuple containing:
             - hostname (str): The system's hostname
             - ip_address (str): The primary IP address associated with the hostname
-            
+
     Raises:
         socket.gaierror: If the hostname cannot be resolved to an IP address
     """
-  
+
     hostname = socket.gethostname()
     ip_address = socket.gethostbyname(hostname)
     return hostname, ip_address
