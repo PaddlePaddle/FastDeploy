@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import difflib
-import os
 import argparse
+import difflib
 
 from paddleformers.trl.llm_utils import init_dist_env
 
@@ -24,12 +23,7 @@ from fastdeploy.rl.rollout_model import RolloutModel
 _, ranks = init_dist_env()
 
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--model_path",
-    type=str,
-    required=True,
-    help="Path to the model directory"
-)
+parser.add_argument("--model_path", type=str, required=True, help="Path to the model directory")
 args = parser.parse_args()
 
 # base result
@@ -55,6 +49,7 @@ for k, v in actor_eval_model.state_dict().items():
 for k, v in actor_eval_model.get_name_mappings_to_training().items():
     content += f"{k}:{v}\n"
 
+
 def compare_strings(a: str, b: str) -> bool:
     if a == b:
         print("✅ 两个字符串完全一致")
@@ -68,8 +63,11 @@ def compare_strings(a: str, b: str) -> bool:
 
     return False
 
+
 with open("baseline.txt", "r", encoding="utf-8") as f:
     baseline = f.read()
-    assert compare_strings(baseline, content), "In the unittest of RL scenario, your modification " \
-        "caused inconsistency in the content before and after. Please fix it. " \
+    assert compare_strings(baseline, content), (
+        "In the unittest of RL scenario, your modification "
+        "caused inconsistency in the content before and after. Please fix it. "
         "Can request assistance from yuanlehome or gzy19990617 (github id)."
+    )

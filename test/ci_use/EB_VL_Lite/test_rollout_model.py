@@ -12,11 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import subprocess
 import sys
-import os
-import time
-import pytest
 
 
 def test_rollout_model_with_distributed_launch():
@@ -29,26 +27,24 @@ def test_rollout_model_with_distributed_launch():
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        model_path=os.path.join(base_path, "ernie-4_5-vl-28b-a3b-bf16-paddle")
+        model_path = os.path.join(base_path, "ernie-4_5-vl-28b-a3b-bf16-paddle")
     else:
-        model_path="./ernie-4_5-vl-28b-a3b-bf16-paddle"
+        model_path = "./ernie-4_5-vl-28b-a3b-bf16-paddle"
 
     command = [
         sys.executable,
-        "-m", "paddle.distributed.launch",
-        "--gpus", "0,1",
+        "-m",
+        "paddle.distributed.launch",
+        "--gpus",
+        "0,1",
         rollout_script,
-        "--model_path", model_path,
+        "--model_path",
+        model_path,
     ]
 
     print(f"Executing command: {' '.join(command)}")
 
-    process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
-    )
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     try:
         stdout, stderr = process.communicate(timeout=300)

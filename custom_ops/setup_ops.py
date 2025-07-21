@@ -287,6 +287,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/text_image_gather_scatter.cu",
         "gpu_ops/sample_kernels/rejection_top_p_sampling.cu",
         "gpu_ops/sample_kernels/top_k_renorm_probs.cu",
+        "gpu_ops/sample_kernels/min_p_sampling_from_probs.cu",
         "gpu_ops/get_position_ids_and_mask_encoder_batch.cu",
         "gpu_ops/fused_rotary_position_encoding.cu",
         "gpu_ops/noaux_tc.cu",

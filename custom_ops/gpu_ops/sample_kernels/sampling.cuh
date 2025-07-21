@@ -276,6 +276,9 @@ __device__ __forceinline__ void DeviceSamplingFromProb(
   aggregate += aggregate_local;
 }
 
+
+
+
 template <uint32_t BLOCK_THREADS, BlockScanAlgorithm SCAN_ALGORITHM,
           BlockReduceAlgorithm REDUCE_ALGORITHM, uint32_t VEC_SIZE, bool DETERMINISTIC,
           typename DType, typename IdType>
@@ -390,6 +393,8 @@ __global__ void TopKTopPSamplingFromProbKernel(DType* probs, IdType* output,
     output[bx] = sampled_id;
   }
 }
+
+
 
 template <uint32_t BLOCK_THREADS, BlockScanAlgorithm SCAN_ALGORITHM,
           BlockReduceAlgorithm REDUCE_ALGORITHM, uint32_t VEC_SIZE,
@@ -553,6 +558,47 @@ struct RenormTempStorage {
   };
 };
 
+template <uint32_t BLOCK_THREADS, BlockScanAlgorithm SCAN_ALGORITHM,
+          BlockReduceAlgorithm REDUCE_ALGORITHM, uint32_t VEC_SIZE, bool DETERMINISTIC,
+          typename DType,typename IdType>
+__global__ void MinPSamplingFromProbKernel(DType* probs, const float* min_p_arr,
+                                            DType* renormed_prob,uint32_t d) {
+  const uint32_t bx = blockIdx.x, tx = threadIdx.x;
+  float p = (min_p_arr == nullptr) ? 0 : min_p_arr[bx];
+  const uint32_t row_idx = bx;
+
+  extern __shared__ __align__(
+      alignof(SamplingTempStorage<BLOCK_THREADS, SCAN_ALGORITHM, REDUCE_ALGORITHM>))
+      uint8_t smem_sampling[];
+  auto& temp_storage =
+      reinterpret_cast<SamplingTempStorage<BLOCK_THREADS, SCAN_ALGORITHM, REDUCE_ALGORITHM>&>(
+          smem_sampling);
+
+  float max_val = GetMaxValue<VEC_SIZE, BLOCK_THREADS, REDUCE_ALGORITHM,
+                              SamplingTempStorage<BLOCK_THREADS, SCAN_ALGORITHM, REDUCE_ALGORITHM>>(
+      probs, row_idx, d, temp_storage);
+  float pivot = max_val * p;
+
+  vec_t<float, VEC_SIZE> probs_vec;
+#pragma unroll 2
+  for (uint32_t i = 0; i < ceil_div(d, BLOCK_THREADS * VEC_SIZE); ++i) {
+    probs_vec.fill(0);
+    if ((i * BLOCK_THREADS + tx) * VEC_SIZE < d) {
+      probs_vec.cast_load(probs + row_idx * d + (i * BLOCK_THREADS + tx) * VEC_SIZE);
+    }
+
+#pragma unroll
+    for (uint32_t j = 0; j < VEC_SIZE; ++j) {
+      probs_vec[j] = (probs_vec[j] >= pivot) ? probs_vec[j] : 0;
+    }
+    if ((i * BLOCK_THREADS + tx) * VEC_SIZE < d) {
+      probs_vec.store(renormed_prob + row_idx * d + i * BLOCK_THREADS * VEC_SIZE + tx * VEC_SIZE);
+    }
+
+  }
+}
+
+
 template <uint32_t BLOCK_THREADS, BlockReduceAlgorithm REDUCE_ALGORITHM, uint32_t VEC_SIZE,
           typename DType, typename IdType>
 __global__ void TopKRenormProbKernel(DType* probs, DType* renormed_prob, IdType* top_k_arr, uint32_t d) {
@@ -704,6 +750,33 @@ cudaError_t TopPSamplingFromProb(T *probs, IdType *output,
       })});
   return cudaSuccess;
 }
+
+template <typename T,typename IdType>
+cudaError_t MinPSamplingFromProb(T *probs, const T* min_p_arr,T *renormed_prob,
+                                 uint32_t batch_size,
+                                 uint32_t d, bool deterministic,
+                                 cudaStream_t stream = 0){
+  constexpr uint32_t BLOCK_THREADS = 1024;
+  const uint32_t vec_size = std::gcd(16 / sizeof(T), d);
+
+  const uint32_t smem_size = sizeof(SamplingTempStorage<BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO>);
+  dim3 nblks(batch_size);
+  dim3 nthrs(BLOCK_THREADS);
+  void* args[] = {&probs, &min_p_arr,&renormed_prob,&d};
+  DISPATCH_ALIGNED_VEC_SIZE(
+      vec_size, VEC_SIZE,
+      {DISPATCH_DETERMINISTIC(deterministic, DETERMINISTIC, {
+        auto kernel =
+            MinPSamplingFromProbKernel<BLOCK_THREADS, SCAN_ALGO, REDUCE_ALGO,
+                                       VEC_SIZE, DETERMINISTIC, T,IdType>;
+        CUDA_CALL(cudaFuncSetAttribute(
+            kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
+        CUDA_CALL(cudaLaunchKernel((void *)kernel, nblks, nthrs, args,
+                                   smem_size, stream));
+      })});
+  return cudaSuccess;
+}
+
 
 template <typename T, typename IdType>
 cudaError_t TopKTopPSamplingFromProb(T *probs, IdType *output,

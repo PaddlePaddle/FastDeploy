@@ -63,9 +63,9 @@ class RolloutModel(nn.Layer):
         model.eval()
         return model
 
-    def get_name_mappings_to_training(self) -> Dict[str, str]:
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         """Get parameter name mappings between rollout and training models."""
-        return getattr(self.rollout_model, "get_name_mappings_to_training", lambda: {})()
+        return getattr(self.rollout_model, "get_name_mappings_to_training", lambda: {})(trainer_degree)
 
     def get_quantization_infer_keys(self) -> Dict[str, str]:
         """Get parameter name mappings between rollout and training models."""
@@ -108,9 +108,6 @@ class BaseRLModel(nn.Layer):
                 # Skip weight scale parameters in mapping. Train and infer have same key.
                 self.infer_to_train_mapping[key] = key
 
-        if getattr(self.fd_config.model_config, "tie_word_embeddings", False):
-            self.infer_to_train_mapping.pop("lm_head.linear.weight")
-
     def get_quantization_infer_keys(self) -> list[str]:
         """Get quantization infer keys"""
         quant_weight_key = []
@@ -143,7 +140,7 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM, BaseRLModel):
         """name"""
         return "Ernie4_5_MoeForCausalLMRL"
 
-    def get_name_mappings_to_training(self) -> Dict[str, str]:
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         """Generate mapping between inference and training parameter for RL(donot delete!)."""
         # Prepare placeholders
         place_holders = ["weight"]
@@ -187,8 +184,7 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM, BaseRLModel):
         assert isinstance(self.fd_config.model_config.moe_layer_start_index, int)
         # Process MoE layers
         for layer_idx in range(
-            self.fd_config.model_config.moe_layer_start_index,
-            self.fd_config.model_config.num_hidden_layers,
+            self.fd_config.model_config.moe_layer_start_index, self.fd_config.model_config.num_hidden_layers
         ):
             _add_layer_mappings(layer_idx)
 
@@ -216,7 +212,7 @@ class Ernie4_5_VLMoeForConditionalGenerationRL(Ernie4_5_VLMoeForConditionalGener
         """name"""
         return "Ernie4_5_VLMoeForConditionalGenerationRL"
 
-    def get_name_mappings_to_training(self) -> Dict[str, str]:
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         """Generate mapping between inference and training parameter for RL(donot delete!)."""
         # Prepare placeholders
         place_holders = ["weight"]
@@ -249,10 +245,7 @@ class Ernie4_5_VLMoeForConditionalGenerationRL(Ernie4_5_VLMoeForConditionalGener
 
             expert_mappings = defaultdict(list)
             for expert_idx in _generate_ranges(
-                expert_start,
-                total_moe_num,
-                expert_num_per_rank * 2,
-                expert_num_per_rank,
+                expert_start, total_moe_num, expert_num_per_rank * 2, expert_num_per_rank
             ):
                 for ph in place_holders:
                     expert_mappings[f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.up_gate_proj_weight"].append(
@@ -284,9 +277,9 @@ class Ernie4_5_VLMoeForConditionalGenerationRL(Ernie4_5_VLMoeForConditionalGener
 
         assert isinstance(self.fd_config.model_config.moe_num_experts, list)
         total_moe_num = sum(self.fd_config.model_config.moe_num_experts)
-        rollout_model_degree = self.fd_config.parallel_config.tensor_parallel_size
-        expert_num_per_rank = self.fd_config.model_config.moe_num_experts[0] // rollout_model_degree
-
+        if not trainer_degree:
+            trainer_degree = self.fd_config.parallel_config.tensor_parallel_size
+        expert_num_per_rank = self.fd_config.model_config.moe_num_experts[0] // trainer_degree
         # Process MoE layers
         for layer_idx in range(text_moe_layer_start_index, text_moe_layer_end_index):
             _add_expert_mappings(layer_idx, "text", expert_start=0)
@@ -317,7 +310,7 @@ class Qwen2ForCausalLMRL(Qwen2ForCausalLM, BaseRLModel):
         """name"""
         return "Qwen2ForCausalLMRL"
 
-    def get_name_mappings_to_training(self) -> Dict[str, str]:
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         """Generate mapping between inference and training parameter for RL(donot delete!)."""
         # Prepare placeholders
         place_holders = ["weight"]
@@ -361,7 +354,7 @@ class Qwen3MoeForCausalLMRL(Qwen3MoeForCausalLM, BaseRLModel):
         """name"""
         return "Qwen3MoeForCausalLMRL"
 
-    def get_name_mappings_to_training(self) -> Dict[str, str]:
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         """Generate mapping between inference and training parameter for RL(donot delete!)."""
         # Prepare placeholders
         place_holders = ["weight"]
@@ -431,5 +424,5 @@ class Qwen3ForCausalLMRL(Qwen3ForCausalLM, BaseRLModel):
         """name"""
         return "Qwen3ForCausalLMRL"
 
-    def get_name_mappings_to_training(self) -> Dict[str, str]:
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         pass

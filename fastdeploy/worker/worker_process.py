@@ -375,45 +375,36 @@ class PaddleDisWorkerProc:
             logger.info(f"------- model_block_memory_used:{model_block_memory_used} --------")
             logger.info(f"------- num_blocks_local:{num_blocks_local} --------")
 
-            logger.info(f"self.fd_config.parallel_config.do_profile:{self.fd_config.parallel_config.do_profile}")
-
-            # 3. Send IPCSignal
-            get_profile_block_num = np.zeros(shape=[self.ranks], dtype=np.int32)
-            self.get_profile_block_num_signal = IPCSignal(
-                name="get_profile_block_num",
-                array=get_profile_block_num,
-                dtype=np.int32,
-                suffix=self.parallel_config.engine_pid,
-                create=False,
-            )
-            self.get_profile_block_num_signal.value[self.local_rank] = num_blocks_local
-
-            # Wait all worker send the signal
-            while np.any(self.get_profile_block_num_signal.value <= 0):
-                time.sleep(0.01)
-            num_blocks_global = self.get_profile_block_num_signal.value.min().item()
-
-            if num_blocks_global < 0:
-                logger.error(
-                    "The total number of blocks cannot be less than zero."
-                    "Please increase gpu_memory_utilization"
-                    "Or decrease max_num_batched_tokens(max model length) "
-                )
+            if num_blocks_local <= 0:
                 raise ValueError(
                     "The total number of blocks cannot be less than zero."
                     "Please increase gpu_memory_utilization"
                     "Or decrease max_num_batched_tokens(max model length) "
                 )
 
-            self.get_profile_block_num_signal.value[self.local_rank] = num_blocks_global
+            if self.ranks > 1:
+                num_blocks_local = paddle.full(shape=[1], fill_value=num_blocks_local, dtype="int32")
+                dist.all_reduce(num_blocks_local, op=dist.ReduceOp.MIN)
+                num_blocks_local = num_blocks_local.item()
+
+            if self.local_rank == 0:
+                # 3. Send IPCSignal
+                get_profile_block_num = np.zeros(shape=[1], dtype=np.int32)
+                self.get_profile_block_num_signal = IPCSignal(
+                    name="get_profile_block_num",
+                    array=get_profile_block_num,
+                    dtype=np.int32,
+                    suffix=self.parallel_config.engine_pid,
+                    create=False,
+                )
+                self.get_profile_block_num_signal.value[0] = num_blocks_local
         else:
-            num_blocks_global = self.fd_config.parallel_config.total_block_num
+            num_blocks_local = self.fd_config.parallel_config.total_block_num
         # logger.info will write in worker_process.log
         # Need `print` to triger engine->check_worker_initialize_status->detect_thread
-        print(f"------- num_blocks_global: {num_blocks_global} --------")
-        # NOTE(liuzichang): Too big num_blocks_global will lead to error 700
+        print(f"------- num_blocks_global: {num_blocks_local} --------")
         # 4. Updata share inputs
-        self.worker.reinitialize_kv_cache(num_gpu_blocks=num_blocks_global)
+        self.worker.reinitialize_kv_cache(num_gpu_blocks=num_blocks_local)
 
     def graph_optimize_and_warm_up_model(self) -> None:
         if self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
