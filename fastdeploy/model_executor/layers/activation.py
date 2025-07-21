@@ -63,8 +63,7 @@ class SiluAndMul(nn.Layer):
         """
         super().__init__()
 
-        if current_platform.is_cuda() or current_platform.is_xpu(
-        ) or current_platform.is_iluvatar():
+        if current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_iluvatar():
             self.forward = self.forward_cuda
         elif current_platform.is_gcu():
             self.forward = self.forward_gcu
@@ -93,8 +92,10 @@ class SiluAndMul(nn.Layer):
         elif self._dtype == "float32":
             self._fuse_kernel_compute_dtype = "fp32"
         else:
-            raise ValueError(f"Just support float32, float16 and \
-                    bfloat16 as default dtype, but received {self._dtype}")
+            raise ValueError(
+                f"Just support float32, float16 and \
+                    bfloat16 as default dtype, but received {self._dtype}"
+            )
 
         # fp8 is not support smooth quantization
         if fd_config.quant_config and "fp8" in fd_config.quant_config.name():

@@ -61,7 +61,7 @@ std::vector<paddle::Tensor> GetMmSplitFuse(const paddle::Tensor& task_input_ids,
             st_idx += cur_st_len;
         }
     }
-    
+
     while (idx < seq_lens_origin) {
         idx = idx + split_fuse_text_size;
         if (idx >= seq_lens_origin) {
@@ -116,7 +116,7 @@ std::vector<paddle::Tensor> GetMmSplitFuse(const paddle::Tensor& task_input_ids,
             while (ib < img_total && cur_img_len < chunk_image_token_number) {
                 int token_times = 4;
                 cur_img_len += (grid_thw_cpu[ib * 3 + 1] * grid_thw_cpu[ib * 3 + 2]) / token_times;
-                ib ++; 
+                ib ++;
                 chunk_image_number ++;
             }
             image_chunk_selections_vector.emplace_back(chunk_image_number);

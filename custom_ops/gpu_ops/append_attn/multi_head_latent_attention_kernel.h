@@ -26,7 +26,7 @@ void DecodeMLAAttentionKernel(
     const paddle::optional<paddle::Tensor>& smooth_weight,
     const paddle::Tensor &seq_lens_q, // q_seq_len is 1
     const paddle::Tensor &seq_lens_kv,
-    const paddle::Tensor &padding_offsets,
+    const paddle::Tensor &batch_id_per_token,
     const paddle::Tensor &cu_seqlens_q,
     const paddle::Tensor &block_table,
     int max_seq_len,

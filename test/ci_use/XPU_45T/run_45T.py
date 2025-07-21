@@ -15,7 +15,7 @@
 import openai
 
 ip = "0.0.0.0"
-service_http_port = "8188"    # 服务配置的
+service_http_port = "8188"  # 服务配置的
 client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
 
 # 非流式对话

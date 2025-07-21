@@ -15,33 +15,25 @@
 """
 
 import asyncio
+import time
+import uuid
+from typing import List
+
 import aiozmq
-import json
 import msgpack
 from aiozmq import zmq
-from asyncio import FIRST_COMPLETED, AbstractEventLoop, Task
-import time
-from collections.abc import AsyncGenerator, AsyncIterator
-from collections.abc import Sequence as GenericSequence
-from typing import Optional, Union, cast, TypeVar, List
-import uuid
-from fastapi import Request
 
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
-    ErrorResponse,
     CompletionRequest,
     CompletionResponse,
-    CompletionStreamResponse,
-    CompletionResponseStreamChoice,
     CompletionResponseChoice,
+    CompletionResponseStreamChoice,
+    CompletionStreamResponse,
+    ErrorResponse,
     UsageInfo,
-    DeltaToolCall,
-    DeltaFunctionCall,
-    ToolCall,
-    FunctionCall
 )
 from fastdeploy.utils import api_server_logger, get_host_ip
-from fastdeploy.engine.request import RequestOutput
 
 
 class OpenAIServingCompletion:
@@ -77,7 +69,7 @@ class OpenAIServingCompletion:
         try:
             if isinstance(request.prompt, str):
                 request_prompts = [request.prompt]
-            elif isinstance(request.prompt, list) and all(isinstance(item,  int) for item in request.prompt):
+            elif isinstance(request.prompt, list) and all(isinstance(item, int) for item in request.prompt):
                 request_prompt_ids = [request.prompt]
             elif isinstance(request.prompt, list) and all(isinstance(item, str) for item in request.prompt):
                 request_prompts = request.prompt
@@ -105,9 +97,7 @@ class OpenAIServingCompletion:
                 current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                 try:
                     current_req_dict["arrival_time"] = time.time()
-                    prompt_batched_token_ids.append(
-                        self.engine_client.format_and_add_data(current_req_dict)
-                    )
+                    prompt_batched_token_ids.append(self.engine_client.format_and_add_data(current_req_dict))
                 except Exception as e:
                     return ErrorResponse(message=str(e), code=400)
 
@@ -116,11 +106,11 @@ class OpenAIServingCompletion:
             if request.stream:
                 return self.completion_stream_generator(
                     request=request,
-                    num_choices = num_choices,
+                    num_choices=num_choices,
                     request_id=request_id,
                     created_time=created_time,
                     model_name=request.model,
-                    prompt_batched_token_ids=prompt_batched_token_ids
+                    prompt_batched_token_ids=prompt_batched_token_ids,
                 )
             else:
                 try:
@@ -130,14 +120,13 @@ class OpenAIServingCompletion:
                         request_id=request_id,
                         created_time=created_time,
                         model_name=request.model,
-                        prompt_batched_token_ids=prompt_batched_token_ids
+                        prompt_batched_token_ids=prompt_batched_token_ids,
                     )
                 except Exception as e:
                     return ErrorResponse(code=400, message=str(e))
 
         except Exception as e:
             return ErrorResponse(message=str(e), code=400)
-
 
     async def completion_full_generator(
         self,
@@ -146,7 +135,7 @@ class OpenAIServingCompletion:
         request_id: str,
         created_time: int,
         model_name: str,
-        prompt_batched_token_ids: list()
+        prompt_batched_token_ids: list(),
     ):
         """
         Process the full completion request with multiple choices.
@@ -155,10 +144,7 @@ class OpenAIServingCompletion:
         try:
             request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
             # create dealer
-            dealer = await aiozmq.create_zmq_stream(
-                zmq.DEALER,
-                connect=f"ipc:///dev/shm/router_{self.pid}.ipc"
-            )
+            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
 
             for rid in request_ids:
                 dealer.write([b"", rid.encode("utf-8")])
@@ -186,8 +172,7 @@ class OpenAIServingCompletion:
                     if data.get("error_code", 200) != 200:
                         raise ValueError("{}".format(data["error_msg"]))
 
-                    self.engine_client.data_processor.process_response_dict(
-                        data, stream=False)
+                    self.engine_client.data_processor.process_response_dict(data, stream=False)
                     output_tokens[rid] += len(data["outputs"]["token_ids"])
                     if data.get("finished", False):
                         data["output_token_ids"] = output_tokens[rid]
@@ -201,17 +186,14 @@ class OpenAIServingCompletion:
                 request_id=request_id,
                 created_time=created_time,
                 model_name=model_name,
-                prompt_batched_token_ids=prompt_batched_token_ids
+                prompt_batched_token_ids=prompt_batched_token_ids,
             )
         except Exception as e:
-            api_server_logger.error(
-                f"Error in completion_full_generator: {e}", exc_info=True
-            )
+            api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
             raise
         finally:
             if dealer is not None:
                 dealer.close()
-
 
     async def completion_stream_generator(
         self,
@@ -220,20 +202,17 @@ class OpenAIServingCompletion:
         request_id: str,
         created_time: int,
         model_name: str,
-        prompt_batched_token_ids: list()
+        prompt_batched_token_ids: list(),
     ):
         """
         Process the stream completion request.
         """
         try:
-            dealer = await aiozmq.create_zmq_stream(
-                zmq.DEALER,
-                connect=f"ipc:///dev/shm/router_{self.pid}.ipc"
-            )
+            dealer = await aiozmq.create_zmq_stream(zmq.DEALER, connect=f"ipc:///dev/shm/router_{self.pid}.ipc")
 
             for i in range(num_choices):
                 req_id = f"{request_id}-{i}"
-                dealer.write([b"", req_id.encode('utf-8')])  # 发送多路请求
+                dealer.write([b"", req_id.encode("utf-8")])  # 发送多路请求
             output_tokens = [0] * num_choices
             inference_start_time = [0] * num_choices
             first_iteration = [True] * num_choices
@@ -245,7 +224,7 @@ class OpenAIServingCompletion:
                 id=request_id,
                 created=created_time,
                 model=model_name,
-                choices=choices
+                choices=choices,
             )
 
             current_waiting_time = 0
@@ -264,7 +243,6 @@ class OpenAIServingCompletion:
                     await asyncio.sleep(0.1)
                     continue
 
-
                 response = msgpack.unpackb(raw_data[-1])
                 for res in response:
                     idx = int(res["request_id"].split("-")[-1])
@@ -277,39 +255,43 @@ class OpenAIServingCompletion:
                                 id=request_id,
                                 created=created_time,
                                 model=model_name,
-                                choices=[CompletionResponseStreamChoice(
-                                    index=idx,
-                                    text="",
-                                    token_ids=list(prompt_batched_token_ids[idx])
-                                )]
+                                choices=[
+                                    CompletionResponseStreamChoice(
+                                        index=idx,
+                                        text="",
+                                        token_ids=list(prompt_batched_token_ids[idx]),
+                                    )
+                                ],
                             )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         first_iteration[idx] = False
 
-
-                    self.engine_client.data_processor.process_response_dict(
-                        res, stream=True)
-                    if res['metrics'].get('first_token_time') is not None:
-                        arrival_time = res['metrics']['first_token_time']
-                        inference_start_time[idx] = res['metrics']['inference_start_time']
+                    self.engine_client.data_processor.process_response_dict(res, stream=True)
+                    if res["metrics"].get("first_token_time") is not None:
+                        arrival_time = res["metrics"]["first_token_time"]
+                        inference_start_time[idx] = res["metrics"]["inference_start_time"]
                     else:
-                        arrival_time = res['metrics']['arrival_time'] - inference_start_time[idx]
+                        arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
 
                     output = res["outputs"]
 
-                    choices.append(CompletionResponseStreamChoice(
-                        index=idx,
-                        text=output["text"],
-                        token_ids=output.get("token_ids"),
-                        tool_calls=output.get("tool_call_content"),
-                        reasoning_content=output.get("reasoning_content"),
-                        arrival_time=arrival_time
-                    ))
+                    choices.append(
+                        CompletionResponseStreamChoice(
+                            index=idx,
+                            text=output["text"],
+                            token_ids=output.get("token_ids"),
+                            tool_calls=output.get("tool_call_content"),
+                            reasoning_content=output.get("reasoning_content"),
+                            arrival_time=arrival_time,
+                        )
+                    )
                     if res["finished"]:
                         if request.max_tokens is None or output_tokens[idx] + 1 != request.max_tokens:
                             chunk.choices[0].finish_reason = "stop"
-                            if self.engine_client.reasoning_parser == "ernie_x1" and \
-                                    output.get("finish_reason", "") == "tool_calls":
+                            if (
+                                self.engine_client.reasoning_parser == "ernie_x1"
+                                and output.get("finish_reason", "") == "tool_calls"
+                            ):
                                 chunk.choices[0].finish_reason = "tool_calls"
                         else:
                             chunk.choices[0].finish_reason = "length"
@@ -321,11 +303,10 @@ class OpenAIServingCompletion:
                             id=request_id,
                             created=created_time,
                             model=model_name,
-                            choices=choices
+                            choices=choices,
                         )
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         choices = []
-
 
                     if res["finished"]:
                         num_choices -= 1
@@ -337,15 +318,14 @@ class OpenAIServingCompletion:
                                 choices=[],
                                 usage=UsageInfo(
                                     prompt_tokens=len(prompt_batched_token_ids[idx]),
-                                    completion_tokens=output_tokens[idx]
-                                )
+                                    completion_tokens=output_tokens[idx],
+                                ),
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
                 if choices:
                     chunk.choices = choices
                     yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                     choices = []
-
 
         except Exception as e:
             yield f"data: {ErrorResponse(message=str(e), code=400).model_dump_json(exclude_unset=True)}\n\n"
@@ -355,7 +335,6 @@ class OpenAIServingCompletion:
                 dealer.close()
             yield "data: [DONE]\n\n"
 
-
     def request_output_to_completion_response(
         self,
         final_res_batch: List[RequestOutput],
@@ -363,7 +342,7 @@ class OpenAIServingCompletion:
         request_id: str,
         created_time: int,
         model_name: str,
-        prompt_batched_token_ids: list()
+        prompt_batched_token_ids: list(),
     ) -> CompletionResponse:
         choices: List[CompletionResponseChoice] = []
         num_prompt_tokens = 0
@@ -389,12 +368,13 @@ class OpenAIServingCompletion:
                 output_text = output["text"]
 
             choice_data = CompletionResponseChoice(
+                token_ids=token_ids,
                 index=len(choices),
                 text=output_text,
-                reasoning_content=output.get('reasoning_content'),
+                reasoning_content=output.get("reasoning_content"),
                 tool_calls=output.get("tool_call_content"),
                 logprobs=None,
-                finish_reason=None
+                finish_reason=None,
             )
             choices.append(choice_data)
 

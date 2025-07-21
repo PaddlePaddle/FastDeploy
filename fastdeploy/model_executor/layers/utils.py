@@ -27,14 +27,15 @@ from fastdeploy.platforms import current_platform
 if current_platform.is_cuda() and current_platform.available():
     try:
         from fastdeploy.model_executor.ops.gpu import (
-            get_padding_offset, speculate_get_padding_offset)
+            get_padding_offset,
+            speculate_get_padding_offset,
+        )
     except Exception:
         raise ImportError(
             "Verify environment consistency between compilation and FastDeploy installation. "
             "And ensure the Paddle version supports FastDeploy's custom operators"
         )
-if current_platform.is_iluvatar():
-    from fastdeploy.model_executor.ops.iluvatar import get_padding_offset
+
 import re
 
 from fastdeploy import envs
@@ -44,9 +45,7 @@ if cache_params != "none":
     c8_state_dict = paddle.load(cache_params, return_numpy=True)
 
 
-def per_block_cast_to_fp8(x: Tensor,
-                          block_size: list = [128,
-                                              128]) -> Tuple[Tensor, Tensor]:
+def per_block_cast_to_fp8(x: Tensor, block_size: list = [128, 128]) -> Tuple[Tensor, Tensor]:
     """
     Only used in deep_gemm block wise quant weight.
     copy from FastDeploy/custom_ops/gpu_ops/fp8_deep_gemm/tests/test_core.py.
@@ -55,21 +54,27 @@ def per_block_cast_to_fp8(x: Tensor,
 
     assert x.dim() == 2
     m, n = x.shape
-    x_padded = paddle.zeros((ceil_div(m, block_size[0]) * block_size[0],
-                             ceil_div(n, block_size[1]) * block_size[1]),
-                            dtype=x.dtype)
+    x_padded = paddle.zeros(
+        (
+            ceil_div(m, block_size[0]) * block_size[0],
+            ceil_div(n, block_size[1]) * block_size[1],
+        ),
+        dtype=x.dtype,
+    )
     x_padded[:m, :n] = x
     x_view = paddle.view(
         x_padded,
-        (-1, block_size[0], x_padded.shape[1] // block_size[1], block_size[1]))
+        (-1, block_size[0], x_padded.shape[1] // block_size[1], block_size[1]),
+    )
 
     x_abs = paddle.abs(x_view).astype(paddle.float32)
     x_amax = paddle.amax(x_abs, axis=(1, 3), keepdim=True)
     x_amax = paddle.clip(x_amax, min=1e-4)
     x_scaled = (x_view * (448.0 / x_amax)).astype(paddle.float8_e4m3fn)
 
-    return x_scaled.view_as(x_padded)[:m, :n].contiguous(), (paddle.view(
-        x_amax / 448.0, (x_view.shape[0], x_view.shape[2])))
+    return x_scaled.view_as(x_padded)[:m, :n].contiguous(), (
+        paddle.view(x_amax / 448.0, (x_view.shape[0], x_view.shape[2]))
+    )
 
 
 # for distributed tensor model parallel
@@ -130,8 +135,7 @@ def get_tensor(input: Union[paddle.Tensor, np.ndarray, str]) -> paddle.Tensor:
                 if key_name in f.keys():
                     weight = f.get_tensor(key_name)
                     weight = paddle.Tensor(weight, zero_copy=True)
-                    weight = weight._copy_to(
-                        paddle.framework._current_expected_place(), False)
+                    weight = weight._copy_to(paddle.framework._current_expected_place(), False)
                     return weight
                 else:
                     return None
@@ -160,8 +164,7 @@ def matmul_hadU(X: Tensor) -> paddle.Tensor:
     input = X.clone().reshape((-1, X.shape[-1], 1))
     output = input.clone()
     while input.shape[1] > 1:
-        input = input.reshape(
-            (input.shape[0], input.shape[1] // 2, 2, input.shape[2]))
+        input = input.reshape((input.shape[0], input.shape[1] // 2, 2, input.shape[2]))
         output = output.reshape(input.shape)
         output[:, :, 0, :] = input[:, :, 0, :] + input[:, :, 1, :]
         output[:, :, 1, :] = input[:, :, 0, :] - input[:, :, 1, :]
@@ -171,8 +174,7 @@ def matmul_hadU(X: Tensor) -> paddle.Tensor:
     return input.reshape(X.shape)
 
 
-def random_hadamard_matrix(block_size: int,
-                           dtype: Union[paddle.dtype, str]) -> paddle.Tensor:
+def random_hadamard_matrix(block_size: int, dtype: Union[paddle.dtype, str]) -> paddle.Tensor:
     """
     Generate a random Hadamard matrix.
 
@@ -203,8 +205,7 @@ def create_hadamard_matrix(hidden_size: int) -> paddle.Tensor:
     hadamard_block_size = 32
     h = random_hadamard_matrix(hadamard_block_size, "float32")
     block_num = hidden_size // hadamard_block_size
-    hadamard_matrix = paddle.to_tensor(
-        block_diag(*[h for i in range(block_num)]))
+    hadamard_matrix = paddle.to_tensor(block_diag(*[h for i in range(block_num)]))
     return hadamard_matrix
 
 
@@ -231,8 +232,7 @@ def ensure_divisibility(numerator, denominator):
         AssertionError: If the numerator cannot be evenly divided by the denominator, an assertion error is raised.
 
     """
-    assert numerator % denominator == 0, "{} is not divisible by {}".format(
-        numerator, denominator)
+    assert numerator % denominator == 0, f"{numerator} is not divisible by {denominator}"
 
 
 def divide(numerator: int, denominator: int):
@@ -252,10 +252,10 @@ def divide(numerator: int, denominator: int):
 
 
 def remove_padding(
-    max_len: paddle.Tensor, input_ids: paddle.Tensor,
-    seq_lens_this_time: paddle.Tensor
-) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor,
-           paddle.Tensor]:
+    max_len: paddle.Tensor,
+    input_ids: paddle.Tensor,
+    seq_lens_this_time: paddle.Tensor,
+) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor]:
     """
     Remove padded sequences from the input.
 
@@ -281,8 +281,7 @@ def remove_padding(
             padding_offset,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = get_padding_offset(input_ids, cum_offsets_now, token_num,
-                               seq_lens_this_time)
+        ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
         return (
             ids_remove_padding,
             padding_offset,
@@ -293,11 +292,12 @@ def remove_padding(
 
 
 def speculate_remove_padding(
-    max_len: paddle.Tensor, input_ids: paddle.Tensor,
-    seq_lens_this_time: paddle.Tensor, draft_tokens: paddle.Tensor,
-    seq_lens_encoder: paddle.Tensor
-) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor,
-           paddle.Tensor]:
+    max_len: paddle.Tensor,
+    input_ids: paddle.Tensor,
+    seq_lens_this_time: paddle.Tensor,
+    draft_tokens: paddle.Tensor,
+    seq_lens_encoder: paddle.Tensor,
+) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor]:
     """
     Remove padding from sequences.
 
@@ -319,13 +319,7 @@ def speculate_remove_padding(
     if current_platform.is_cuda():
         cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
         token_num = paddle.sum(seq_lens_this_time)
-        (
-            ids_remove_padding,
-            cum_offsets,
-            padding_offset,
-            cu_seqlens_q,
-            cu_seqlens_k,
-        ) = speculate_get_padding_offset(
+        (ids_remove_padding, cum_offsets, padding_offset, cu_seqlens_q, cu_seqlens_k,) = speculate_get_padding_offset(
             input_ids,
             draft_tokens,
             cum_offsets_now,
@@ -359,8 +353,7 @@ class CpuGuard:
         paddle.device.set_device(self.ori_device)
 
 
-def create_and_set_parameter(layer: nn.Layer, name: str,
-                             tensor: paddle.Tensor):
+def create_and_set_parameter(layer: nn.Layer, name: str, tensor: paddle.Tensor):
     """
     Create a parameter for a specified layer and set its value to the given tensor.
 
@@ -373,10 +366,12 @@ def create_and_set_parameter(layer: nn.Layer, name: str,
         None
     """
     setattr(
-        layer, name,
+        layer,
+        name,
         layer.create_parameter(
             shape=tensor.shape,
             dtype=tensor.dtype,
             default_initializer=paddle.nn.initializer.Constant(0),
-        ))
+        ),
+    )
     getattr(layer, name).set_value(tensor)

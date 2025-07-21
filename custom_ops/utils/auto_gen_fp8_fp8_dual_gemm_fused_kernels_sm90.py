@@ -19,8 +19,7 @@ import re
 
 
 def get_candidate_tiles():
-    """
-    """
+    """ """
     cta_shape = [
         ("<_64, _16, _128>"),
         ("<_64, _32, _128>"),
@@ -45,8 +44,7 @@ def get_candidate_tiles():
 
 
 def get_dual_gemm_candidate_configs(sm):
-    """
-    """
+    """ """
     tiles = get_candidate_tiles()
     candidate_configs = list()
 
@@ -64,35 +62,27 @@ def get_dual_gemm_candidate_configs(sm):
         ("swiglu", "SiLu"),
         ("geglu", "GELU"),
     ]:
-        candidate_configs.extend([(hasbias, act_tag, tiles, KernelSchedule,
-                                   EpilogueSchedule)])
+        candidate_configs.extend([(hasbias, act_tag, tiles, KernelSchedule, EpilogueSchedule)])
 
     return candidate_configs
 
 
 def get_shape_str(tile_shape):
-    """
-    """
-    blocks, clusters = [
-        s.replace(" ", "").strip("<>").split(",") for s in tile_shape
-    ]
+    """ """
+    blocks, clusters = [s.replace(" ", "").strip("<>").split(",") for s in tile_shape]
     blocks = [elem.strip("_") for elem in blocks]
     clusters = [elem.strip("_") for elem in clusters]
     return blocks, clusters
 
 
 def check_config_valid(tile_shape, kernel_schedule, epilogue_schedule):
-    """
-    """
+    """ """
     blocks, clusters = get_shape_str(tile_shape)
-    if int(
-            blocks[0]
-    ) < 128 and kernel_schedule == "KernelTmaWarpSpecializedCooperativeFP8FastAccum":
+    if int(blocks[0]) < 128 and kernel_schedule == "KernelTmaWarpSpecializedCooperativeFP8FastAccum":
         return False
     if "Cooperative" in kernel_schedule and "Cooperative" not in epilogue_schedule:
         return False
-    if tile_shape[
-            0] == "<_128, _128, _128>" and kernel_schedule == "KernelTmaWarpSpecializedPingpongFP8FastAccum":
+    if tile_shape[0] == "<_128, _128, _128>" and kernel_schedule == "KernelTmaWarpSpecializedPingpongFP8FastAccum":
         return False
     return True
 
@@ -302,8 +292,7 @@ bool fp8_fp8_dual_gemm_scale_bias_act(DualGemmEpilogueAllParams params) {
 
 
 def SubstituteTemplate(template, values):
-    """
-    """
+    """ """
     text = template
     changed = True
     while changed:
@@ -318,10 +307,8 @@ def SubstituteTemplate(template, values):
 
 
 def parse_args():
-    """
-    """
-    parser = argparse.ArgumentParser(
-        description="auto generate the fp8_fp8_dual_gemm_fused_kernels_sm90.")
+    """ """
+    parser = argparse.ArgumentParser(description="auto generate the fp8_fp8_dual_gemm_fused_kernels_sm90.")
     parser.add_argument(
         "--cuda_arch",
         type=str,
@@ -336,17 +323,16 @@ def parse_args():
 
 # generate source .cu
 def generate_dual_gemm_source_cu(
-        inputs_type: (str),
-        biases_type: (str),
-        hasbiases: (str),
-        act_tag: (str),
-        tiles: (str),
-        KernelSchedule: (str),
-        EpilogueSchedule: (str),
-        sm: str,
+    inputs_type: str,
+    biases_type: str,
+    hasbiases: str,
+    act_tag: str,
+    tiles: str,
+    KernelSchedule: str,
+    EpilogueSchedule: str,
+    sm: str,
 ):
-    """
-    """
+    """ """
     all_code = CommonHead
     for input_type in inputs_type:
         for bias_type in biases_type:
@@ -354,9 +340,7 @@ def generate_dual_gemm_source_cu(
                 for tile_config in tiles:
                     for kernel_schedule in KernelSchedule:
                         for epilogue_schedule in EpilogueSchedule:
-                            if not check_config_valid(tile_config,
-                                                      kernel_schedule,
-                                                      epilogue_schedule):
+                            if not check_config_valid(tile_config, kernel_schedule, epilogue_schedule):
                                 continue
                             value_dict = {
                                 "input_type": input_type,
@@ -370,28 +354,29 @@ def generate_dual_gemm_source_cu(
                                 "SM": sm,
                                 "sm": sm[-2:],
                             }
-                            all_code += SubstituteTemplate(
-                                GemmDeclare, value_dict)
+                            all_code += SubstituteTemplate(GemmDeclare, value_dict)
 
     return all_code
 
 
 # generate gemm launch .cu
 def generate_launch_dual_gemm_cus(
-        generate_dir: (str), inputs_type: (str), biases_type: (str),
-        fuse_gemm_configs: tuple, sm: str):
-    """
-    """
+    generate_dir: str,
+    inputs_type: str,
+    biases_type: str,
+    fuse_gemm_configs: tuple,
+    sm: str,
+):
+    """ """
     act_tags = [single_config[1] for single_config in fuse_gemm_configs]
 
     single_config = fuse_gemm_configs[0]
-    hasbiases: (str) = single_config[0]
-    tiles: (str) = single_config[2]
-    KernelSchedule: (str) = single_config[3]
-    EpilogueSchedule: (str) = single_config[4]
+    hasbiases: str = single_config[0]
+    tiles: str = single_config[2]
+    KernelSchedule: str = single_config[3]
+    EpilogueSchedule: str = single_config[4]
     code_map = {}
-    head_path = os.path.join(generate_dir,
-                             f"launch_dual_gemm_kernel_sm{sm[-2:]}.h")
+    head_path = os.path.join(generate_dir, f"launch_dual_gemm_kernel_sm{sm[-2:]}.h")
     head_all_code = LaunchGemmHead
     for tile_config in tiles:
         blocks, clusters = get_shape_str(tile_config)
@@ -401,16 +386,14 @@ def generate_launch_dual_gemm_cus(
         for kernel_schedule in KernelSchedule:
             gemm_config_str_1 = gemm_config_str_0 + f"_{kernel_schedule}"
             for epilogue_schedule in EpilogueSchedule:
-                if not check_config_valid(tile_config, kernel_schedule,
-                                          epilogue_schedule):
+                if not check_config_valid(tile_config, kernel_schedule, epilogue_schedule):
                     continue
                 gemm_config_str = gemm_config_str_1 + f"_{epilogue_schedule}"
                 value_dict = {
                     "sm": sm[-2:],
                     "gemm_config": gemm_config_str,
                 }
-                head_all_code += SubstituteTemplate(LaunchGemmDeclare,
-                                                    value_dict)
+                head_all_code += SubstituteTemplate(LaunchGemmDeclare, value_dict)
     os.makedirs(generate_dir, exist_ok=True)
     with open(head_path, "w") as f:
         f.write(head_all_code)
@@ -422,16 +405,14 @@ def generate_launch_dual_gemm_cus(
         for kernel_schedule in KernelSchedule:
             gemm_config_str_1 = gemm_config_str_0 + f"_{kernel_schedule}"
             for epilogue_schedule in EpilogueSchedule:
-                if not check_config_valid(tile_shape, kernel_schedule,
-                                          epilogue_schedule):
+                if not check_config_valid(tile_shape, kernel_schedule, epilogue_schedule):
                     continue
                 gemm_config_str = gemm_config_str_1 + f"_{epilogue_schedule}"
                 value_dict = {
                     "sm": sm[-2:],
                     "gemm_config": gemm_config_str,
                 }
-                source_all_code = SubstituteTemplate(LaunchGemmPart0,
-                                                     value_dict)
+                source_all_code = SubstituteTemplate(LaunchGemmPart0, value_dict)
                 type_id = 0
                 for input_type in inputs_type:
                     for bias_type in biases_type:
@@ -450,14 +431,13 @@ def generate_launch_dual_gemm_cus(
                                     "SM": sm,
                                     "sm": sm[-2:],
                                 }
-                                source_all_code += SubstituteTemplate(
-                                    LaunchGemmPart1, value_dict)
+                                source_all_code += SubstituteTemplate(LaunchGemmPart1, value_dict)
                                 type_id += 1
                 source_all_code += LaunchGemmPart2
                 code_map[gemm_config_str] = source_all_code
                 source_path = os.path.join(
                     generate_dir,
-                    f"launch_dual_gemm_kernel_sm{sm[-2:]}_{gemm_config_str}.cu"
+                    f"launch_dual_gemm_kernel_sm{sm[-2:]}_{gemm_config_str}.cu",
                 )
                 with open(source_path, "w") as f:
                     f.write(source_all_code)
@@ -467,16 +447,14 @@ def generate_launch_dual_gemm_cus(
 
 
 # generate fp8_fp8_gemm_scale_bias_act.cu
-def generate_dispatch_dual_gemm_cu(inputs_type: (str), biases_type: (str),
-                                   fuse_gemm_configs: tuple, sm: str):
-    """
-    """
+def generate_dispatch_dual_gemm_cu(inputs_type: str, biases_type: str, fuse_gemm_configs: tuple, sm: str):
+    """ """
     act_tags = [single_config[1] for single_config in fuse_gemm_configs]
     single_config = fuse_gemm_configs[0]
-    hasbiases: (str) = single_config[0]
-    tiles: (str) = single_config[2]
-    KernelSchedule: (str) = single_config[3]
-    EpilogueSchedule: (str) = single_config[4]
+    hasbiases: str = single_config[0]
+    tiles: str = single_config[2]
+    KernelSchedule: str = single_config[3]
+    EpilogueSchedule: str = single_config[4]
 
     all_code = SubstituteTemplate(code_part0, {"sm": sm[-2:]})
     type_id = 0
@@ -500,8 +478,7 @@ def generate_dispatch_dual_gemm_cu(inputs_type: (str), biases_type: (str),
     for tile_shape in tiles:
         for kernel_schedule in KernelSchedule:
             for epilogue_schedule in EpilogueSchedule:
-                if not check_config_valid(tile_shape, kernel_schedule,
-                                          epilogue_schedule):
+                if not check_config_valid(tile_shape, kernel_schedule, epilogue_schedule):
                     continue
                 value_dict = {
                     "TileShape": tile_shape[0],
@@ -520,8 +497,7 @@ def generate_dispatch_dual_gemm_cu(inputs_type: (str), biases_type: (str),
         for kernel_schedule in KernelSchedule:
             gemm_config_str_1 = gemm_config_str_0 + f"_{kernel_schedule}"
             for epilogue_schedule in EpilogueSchedule:
-                if not check_config_valid(tile_shape, kernel_schedule,
-                                          epilogue_schedule):
+                if not check_config_valid(tile_shape, kernel_schedule, epilogue_schedule):
                     continue
                 gemm_config_str = gemm_config_str_1 + f"_{epilogue_schedule}"
                 value_dict = {
@@ -570,12 +546,15 @@ if __name__ == "__main__":
                     f.close()
             # Compile parallelization
             generate_launch_dual_gemm_cus(
-                "gpu_ops/cutlass_kernels/fp8_gemm_fused/autogen", inputs_type,
-                biases_type, fuse_gemm_configs, sm_dict[sm])
+                "gpu_ops/cutlass_kernels/fp8_gemm_fused/autogen",
+                inputs_type,
+                biases_type,
+                fuse_gemm_configs,
+                sm_dict[sm],
+            )
             # hard code for act_tag
             file_name = (
-                f"gpu_ops/cutlass_kernels/fp8_gemm_fused/"
-                f"autogen/fp8_fp8_dual_gemm_scale_bias_act_sm{sm}.cu"
+                f"gpu_ops/cutlass_kernels/fp8_gemm_fused/" f"autogen/fp8_fp8_dual_gemm_scale_bias_act_sm{sm}.cu"
             )
             all_code = generate_dispatch_dual_gemm_cu(
                 inputs_type,

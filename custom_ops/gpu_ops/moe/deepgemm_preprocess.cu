@@ -57,5 +57,3 @@ paddle::Tensor count_tokens_per_expert_func(const paddle::Tensor &topk_ids,
       num_experts);
   return token_nums_per_expert;
 }
-
-

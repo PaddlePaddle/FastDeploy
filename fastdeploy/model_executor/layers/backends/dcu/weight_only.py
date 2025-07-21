@@ -13,11 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 import paddle
 from paddle.nn.quant import weight_dequantize
 
 from fastdeploy.model_executor.layers.quantization.weight_only import (
-    GPUWeightOnlyLinearMethod, WeightOnlyConfig)
+    GPUWeightOnlyLinearMethod,
+    WeightOnlyConfig,
+)
 
 
 class DCUWeightOnlyLinearMethod(GPUWeightOnlyLinearMethod):
@@ -38,7 +41,7 @@ class DCUWeightOnlyLinearMethod(GPUWeightOnlyLinearMethod):
             x=layer.weight,
             scale=layer.weight_scale,
             algo=self.quant_config.algo,
-            out_dtype=paddle.get_default_dtype()
+            out_dtype=paddle.get_default_dtype(),
         )
         linear_out = paddle.matmul(x, dequant_out)
         if layer.bias is not None:

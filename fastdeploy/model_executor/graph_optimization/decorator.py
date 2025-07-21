@@ -20,8 +20,9 @@ from typing import Callable, Optional, TypeVar
 import paddle.nn.layer
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.graph_optimization.graph_optimization_backend import \
-    GraphOptBackend
+from fastdeploy.model_executor.graph_optimization.graph_optimization_backend import (
+    GraphOptBackend,
+)
 
 _T = TypeVar("_T", bound=type[paddle.nn.Layer])
 
@@ -46,23 +47,21 @@ def support_graph_optimization(cls: Optional[_T] = None) -> _T:
     if GraphOptWrapper in cls.__bases__:
         return cls
     else:
-        cls.__bases__ = cls.__bases__ + (GraphOptWrapper, )
+        cls.__bases__ = cls.__bases__ + (GraphOptWrapper,)
     origin_init = cls.__init__
 
     def __init__(self, fd_config: FDConfig, **kwargs):
-        """ Decorator model.__init__() func """
+        """Decorator model.__init__() func"""
         origin_init(self, fd_config=fd_config, **kwargs)
         self.use_graph_opt = fd_config.graph_opt_config.graph_opt_level > 0 or fd_config.graph_opt_config.use_cudagraph
         if self.use_graph_opt:
-            GraphOptWrapper.__init__(self,
-                                     fd_config=fd_config,
-                                     graph_opt_backend=None)
+            GraphOptWrapper.__init__(self, fd_config=fd_config, graph_opt_backend=None)
         else:
             # Not use graph optimization
             return
 
     def __call__(self, **kwargs):
-        """ Decorator model.__call__() func """
+        """Decorator model.__call__() func"""
         if not self.use_graph_opt:
             return self.forward(**kwargs)
 
@@ -74,7 +73,7 @@ def support_graph_optimization(cls: Optional[_T] = None) -> _T:
 
 
 class GraphOptWrapper:
-    """ The wrapper for GraphOptBackend """
+    """The wrapper for GraphOptBackend"""
 
     def __init__(
         self,
@@ -87,7 +86,7 @@ class GraphOptWrapper:
 
     @abstractmethod
     def forward(self, **kwargs):
-        """ Abstract methods for implementing model.forward() """
+        """Abstract methods for implementing model.forward()"""
         pass
 
     def __call__(self, **kwargs):

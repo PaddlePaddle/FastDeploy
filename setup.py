@@ -16,15 +16,14 @@
 
 import os
 import re
-import sys
-import paddle
 import subprocess
-from setuptools import setup
-from setuptools.command.install import install
+import sys
 from pathlib import Path
-from pathlib import Path
+
+import paddle
 from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
+from setuptools.command.install import install
 from wheel.bdist_wheel import bdist_wheel
 
 long_description = "FastDeploy: Large Language Model Serving.\n\n"
@@ -47,19 +46,16 @@ class CustomBdistWheel(bdist_wheel):
         """Configure wheel as pure Python and platform-independent."""
         super().finalize_options()
         self.root_is_pure = True
-        self.python_tag = 'py3'
-        self.abi_tag = 'none'
+        self.python_tag = "py3"
+        self.abi_tag = "none"
         self.plat_name_supplied = True
-        self.plat_name = 'any'
+        self.plat_name = "any"
 
 
 class CMakeExtension(Extension):
     """A setuptools Extension for CMake-based builds."""
 
-    def __init__(self,
-                 name: str,
-                 sourcedir: str = "",
-                 version: str = None) -> None:
+    def __init__(self, name: str, sourcedir: str = "", version: str = None) -> None:
         """
         Initialize CMake extension.
 
@@ -78,7 +74,7 @@ class CMakeBuild(build_ext):
 
     def get_ext_filename(self, ext_name):
         """Remove Python version tag from extension filename"""
-        return ext_name.split('.')[0] + '.so'
+        return ext_name.split(".")[0] + ".so"
 
     def build_extension(self, ext: CMakeExtension) -> None:
         """
@@ -94,10 +90,12 @@ class CMakeBuild(build_ext):
         cmake_args = [
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}{os.sep}",
             f"-DPYTHON_EXECUTABLE={sys.executable}",
-            f"-DCMAKE_BUILD_TYPE={cfg}", "-DVERSION_INFO=",
-            "-DPYBIND11_PYTHON_VERSION=", "-DPYTHON_VERSION=",
+            f"-DCMAKE_BUILD_TYPE={cfg}",
+            "-DVERSION_INFO=",
+            "-DPYBIND11_PYTHON_VERSION=",
+            "-DPYTHON_VERSION=",
             f"-DPYTHON_INCLUDE_DIR={sys.prefix}/include/python{sys.version_info.major}.{sys.version_info.minor}",
-            f"-DPYTHON_LIBRARY={sys.prefix}/lib/libpython{sys.version_info.major}.{sys.version_info.minor}.so"
+            f"-DPYTHON_LIBRARY={sys.prefix}/lib/libpython{sys.version_info.major}.{sys.version_info.minor}.so",
         ]
         build_args = []
 
@@ -106,10 +104,11 @@ class CMakeBuild(build_ext):
             if not cmake_generator or cmake_generator == "Ninja":
                 try:
                     import ninja
+
                     ninja_executable_path = Path(ninja.BIN_DIR) / "ninja"
                     cmake_args += [
                         "-GNinja",
-                        f"-DCMAKE_MAKE_PROGRAM:FILEPATH={ninja_executable_path}"
+                        f"-DCMAKE_MAKE_PROGRAM:FILEPATH={ninja_executable_path}",
                     ]
                 except ImportError:
                     pass
@@ -117,54 +116,44 @@ class CMakeBuild(build_ext):
             if "NMake" not in cmake_generator and "Ninja" not in cmake_generator:
                 cmake_args += ["-A", PLAT_TO_CMAKE[self.plat_name]]
             if "NMake" not in cmake_generator and "Ninja" not in cmake_generator:
-                cmake_args += [
-                    f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{cfg.upper()}={extdir}"
-                ]
+                cmake_args += [f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{cfg.upper()}={extdir}"]
                 build_args += ["--config", cfg]
 
         if sys.platform.startswith("darwin"):
             archs = re.findall(r"-arch (\S+)", os.environ.get("ARCHFLAGS", ""))
             if archs:
-                cmake_args += [
-                    "-DCMAKE_OSX_ARCHITECTURES={}".format(";".join(archs))
-                ]
+                cmake_args += ["-DCMAKE_OSX_ARCHITECTURES={}".format(";".join(archs))]
 
-        if "CMAKE_BUILD_PARALLEL_LEVEL" not in os.environ and hasattr(
-                self, "parallel") and self.parallel:
+        if "CMAKE_BUILD_PARALLEL_LEVEL" not in os.environ and hasattr(self, "parallel") and self.parallel:
             build_args += [f"-j{self.parallel}"]
 
         build_temp = Path(self.build_temp) / ext.name
         build_temp.mkdir(parents=True, exist_ok=True)
 
-        subprocess.run(["cmake", ext.sourcedir, *cmake_args],
-                       cwd=build_temp,
-                       check=True)
-        subprocess.run(["cmake", "--build", ".", *build_args],
-                       cwd=build_temp,
-                       check=True)
+        subprocess.run(["cmake", ext.sourcedir, *cmake_args], cwd=build_temp, check=True)
+        subprocess.run(["cmake", "--build", ".", *build_args], cwd=build_temp, check=True)
+
 
 class PostInstallCommand(install):
     """在标准安装完成后执行自定义命令"""
+
     def run(self):
         # 先执行标准安装步骤
         install.run(self)
         # 执行自定义命令
         subprocess.check_call(["opentelemetry-bootstrap", "-a", "install"])
 
+
 def load_requirements():
     """Load dependencies from requirements.txt"""
-    requirements_file_name = 'requirements.txt'
-    if paddle.is_compiled_with_custom_device('iluvatar_gpu'):
-        requirements_file_name = 'requirements_iluvatar.txt'
+    requirements_file_name = "requirements.txt"
+    if paddle.is_compiled_with_custom_device("iluvatar_gpu"):
+        requirements_file_name = "requirements_iluvatar.txt"
     elif paddle.is_compiled_with_rocm():
-        requirements_file_name = 'requirements_dcu.txt'
-    requirements_path = os.path.join(os.path.dirname(__file__),
-                                     requirements_file_name)
-    with open(requirements_path, 'r') as f:
-        return [
-            line.strip() for line in f
-            if line.strip() and not line.startswith('#')
-        ]
+        requirements_file_name = "requirements_dcu.txt"
+    requirements_path = os.path.join(os.path.dirname(__file__), requirements_file_name)
+    with open(requirements_path, "r") as f:
+        return [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
 
 def get_device_type():
@@ -175,11 +164,11 @@ def get_device_type():
         return "gpu"
     elif paddle.is_compiled_with_xpu():
         return "xpu"
-    elif paddle.is_compiled_with_custom_device('npu'):
+    elif paddle.is_compiled_with_custom_device("npu"):
         return "npu"
-    elif paddle.is_compiled_with_custom_device('iluvatar_gpu'):
+    elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
         return "iluvatar-gpu"
-    elif paddle.is_compiled_with_custom_device('gcu'):
+    elif paddle.is_compiled_with_custom_device("gcu"):
         return "gcu"
     else:
         return "cpu"
@@ -190,10 +179,10 @@ def get_name():
     return "fastdeploy-" + get_device_type()
 
 
-cmdclass_dict = {'bdist_wheel': CustomBdistWheel}
-cmdclass_dict['build_ext'] = CMakeBuild
+cmdclass_dict = {"bdist_wheel": CustomBdistWheel}
+cmdclass_dict["build_ext"] = CMakeBuild
 FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", "2.0.0-dev")
-cmdclass_dict['build_optl'] = PostInstallCommand
+cmdclass_dict["build_optl"] = PostInstallCommand
 
 setup(
     name=get_name(),
@@ -210,22 +199,31 @@ setup(
         "fastdeploy": [
             "model_executor/ops/gpu/*",
             "model_executor/ops/gpu/deep_gemm/include/**/*",
-            "model_executor/ops/cpu/*", "model_executor/ops/xpu/*",
-            "model_executor/ops/xpu/libs/*", "model_executor/ops/npu/*",
-            "model_executor/ops/base/*", "model_executor/ops/iluvatar/*",
-            "model_executor/models/*", "model_executor/layers/*",
-            "input/mm_processor/utils/*", "model_executor/ops/gcu/*",
-            "version.txt"
+            "model_executor/ops/cpu/*",
+            "model_executor/ops/xpu/*",
+            "model_executor/ops/xpu/libs/*",
+            "model_executor/ops/npu/*",
+            "model_executor/ops/base/*",
+            "model_executor/ops/iluvatar/*",
+            "model_executor/models/*",
+            "model_executor/layers/*",
+            "input/mm_processor/utils/*",
+            "model_executor/ops/gcu/*",
+            "version.txt",
         ]
     },
     install_requires=load_requirements(),
-    ext_modules=[
-        CMakeExtension(
-            "rdma_comm",
-            sourcedir=
-            "fastdeploy/cache_manager/transfer_factory/kvcache_transfer",
-            version=None)
-    ] if os.getenv("ENABLE_FD_RDMA", "0") == "1" else [],
+    ext_modules=(
+        [
+            CMakeExtension(
+                "rdma_comm",
+                sourcedir="fastdeploy/cache_manager/transfer_factory/kvcache_transfer",
+                version=None,
+            )
+        ]
+        if os.getenv("ENABLE_FD_RDMA", "0") == "1"
+        else []
+    ),
     cmdclass=cmdclass_dict if os.getenv("ENABLE_FD_RDMA", "0") == "1" else {},
     zip_safe=False,
     classifiers=[
@@ -233,8 +231,7 @@ setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ],
-    license='Apache 2.0',
+    license="Apache 2.0",
     python_requires=">=3.7",
     extras_require={"test": ["pytest>=6.0"]},
 )
-

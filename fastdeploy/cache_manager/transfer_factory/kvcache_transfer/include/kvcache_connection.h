@@ -3,13 +3,13 @@
  * @brief RDMA connection management for key-value cache
  * @version 1.0.0
  * @copyright Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -32,22 +32,22 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sstream>
-#include <netdb.h>          
-#include <sstream>          
-#include <netinet/in.h>     
-#include <netinet/tcp.h>    
-#include <sys/socket.h>    
-#include <cstring>         
 #include <netdb.h>
-#include <arpa/inet.h>    
-#include <fcntl.h>        
-#include <net/if.h>       
-#include <sys/ioctl.h>    
-#include <netinet/in.h>   
-#include <unistd.h>       
-#include <cstring>    
-#include <memory>  
-#include <iostream> 
+#include <sstream>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+#include <cstring>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <cstring>
+#include <memory>
+#include <iostream>
 
 #include "kvcache_rdma.h"
 #include "util.h"
@@ -88,8 +88,8 @@ struct QpInfo {
         intBuffer[0] = htonl(lid);
         intBuffer[1] = htonl(qpn);
         intBuffer[2] = htonl(psn);
-        memcpy(buffer + 12, gid.raw, sizeof(gid.raw)); 
-        intBuffer[7] = htonl(static_cast<uint32_t>(mtu));  
+        memcpy(buffer + 12, gid.raw, sizeof(gid.raw));
+        intBuffer[7] = htonl(static_cast<uint32_t>(mtu));
     }
 
     /// @brief Deserialize QP info from buffer
@@ -102,7 +102,7 @@ struct QpInfo {
         mtu = static_cast<ibv_mtu>(ntohl(intBuffer[7]));
     }
 
-    static const size_t size = 12 + sizeof(gid.raw) + 4; 
+    static const size_t size = 12 + sizeof(gid.raw) + 4;
 };
 
 /// @brief RDMA connection context
@@ -137,13 +137,13 @@ struct Connection {
 
     std::vector<void *> send_write_cache_key_remote_ptr_list;
     std::vector<uint32_t> send_write_cache_key_remote_rkey_list;
-    std::vector<void *> send_write_cache_value_remote_ptr_list; 
+    std::vector<void *> send_write_cache_value_remote_ptr_list;
     std::vector<uint32_t> send_write_cache_value_remote_rkey_list;
 
     // For rdma read operations
     std::vector<void*> read_bufs;
     std::vector<ibv_mr*> read_mrs;
-    
+
     // Work completion tracking
     int wc_count;
     int wc_target_count;

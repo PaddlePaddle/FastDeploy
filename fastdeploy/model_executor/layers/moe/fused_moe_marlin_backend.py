@@ -18,29 +18,35 @@ import paddle
 from paddle import nn
 
 import fastdeploy
-from fastdeploy.distributed.communication_op import \
-    tensor_model_parallel_all_reduce
-from fastdeploy.model_executor.ops.gpu import (MoeWna16MarlinGemmApi,
-                                               tritonmoe_preprocess_func)
+from fastdeploy.distributed.communication_op import tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.ops.gpu import (
+    MoeWna16MarlinGemmApi,
+    tritonmoe_preprocess_func,
+)
 
 from ..quantization.quant_base import QuantMethodBase
 
 
-def gptq_marlin_moe_repack(b_q_weight: paddle.Tensor, perm: paddle.Tensor,
-                           size_k: int, size_n: int,
-                           num_bits: int) -> paddle.Tensor:
+def gptq_marlin_moe_repack(
+    b_q_weight: paddle.Tensor,
+    perm: paddle.Tensor,
+    size_k: int,
+    size_n: int,
+    num_bits: int,
+) -> paddle.Tensor:
     """
     Util function.
     """
     from fastdeploy.model_executor.ops.gpu import gptq_marlin_repack
+
     num_experts = b_q_weight.shape[0]
     assert size_k % 16 == 0
     output = paddle.empty(
         [num_experts, size_k // 16, size_n * (num_bits // 2)],
-        dtype=b_q_weight.dtype)
+        dtype=b_q_weight.dtype,
+    )
     for e in range(num_experts):
-        output[e] = gptq_marlin_repack(b_q_weight[e], perm[e], size_k, size_n,
-                                       num_bits)
+        output[e] = gptq_marlin_repack(b_q_weight[e], perm[e], size_k, size_n, num_bits)
     return output
 
 
@@ -53,13 +59,11 @@ def get_scale_perms():
         scale_perm.extend([i + 8 * j for j in range(8)])
     scale_perm_single: list[int] = []
     for i in range(4):
-        scale_perm_single.extend(
-            [2 * i + j for j in [0, 1, 8, 9, 16, 17, 24, 25]])
+        scale_perm_single.extend([2 * i + j for j in [0, 1, 8, 9, 16, 17, 24, 25]])
     return scale_perm, scale_perm_single
 
 
-def marlin_permute_scales(s: paddle.Tensor, size_k: int, size_n: int,
-                          group_size: int) -> paddle.Tensor:
+def marlin_permute_scales(s: paddle.Tensor, size_k: int, size_n: int, group_size: int) -> paddle.Tensor:
     """
     Util function.
     """
@@ -105,7 +109,8 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         self.quant_method = quant_method
         self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
         self.added_scale_attrs = [
-            "up_gate_proj_weight_scale", "down_proj_weight_scale"
+            "up_gate_proj_weight_scale",
+            "down_proj_weight_scale",
         ]
         self.added_zeros_attrs = ["zeros0", "zeros1"]
 
@@ -117,10 +122,12 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         assert len(up_gate_proj_weights) == layer.num_local_experts
         assert len(down_proj_weights) == layer.num_local_experts
         assert up_gate_proj_weights[0].shape == [
-            layer.hidden_size, layer.moe_intermediate_size * 2
+            layer.hidden_size,
+            layer.moe_intermediate_size * 2,
         ]
         assert down_proj_weights[0].shape == [
-            layer.moe_intermediate_size, layer.hidden_size
+            layer.moe_intermediate_size,
+            layer.hidden_size,
         ]
 
         up_gate_proj_tensor = paddle.stack(up_gate_proj_weights, axis=0)
@@ -133,8 +140,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
             scale_name = self.added_scale_attrs[idx]
 
             weight_scale = weight_tensor.abs().max(axis=1)
-            quanted_weight = weight_tensor / weight_scale[:,
-                                                          None, :] * max_bound
+            quanted_weight = weight_tensor / weight_scale[:, None, :] * max_bound
             quanted_weight = paddle.round(quanted_weight).astype("int32")
 
             quanted_weight[quanted_weight > 7] = 7
@@ -143,7 +149,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
 
             E, K, N = quanted_weight.shape
             quanted_weight = quanted_weight.reshape([0, K // 8, 8, N])
-            res = paddle.zeros([E, K // 8, N], dtype='int32')
+            res = paddle.zeros([E, K // 8, N], dtype="int32")
             for j in range(8):
                 tmp = quanted_weight[:, :, j, :]
                 res = res | (tmp << (j * 4))
@@ -164,19 +170,24 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
 
             weight_scale = marlin_moe_permute_scales(
                 weight_scale,
-                size_k=layer.moe_intermediate_size,  #useless
+                size_k=layer.moe_intermediate_size,  # useless
                 size_n=N,
-                group_size=group_size)
+                group_size=group_size,
+            )
 
-            for (name, tensor) in [(weight_name, quanted_weight),
-                                   (scale_name, weight_scale)]:
+            for name, tensor in [
+                (weight_name, quanted_weight),
+                (scale_name, weight_scale),
+            ]:
                 setattr(
-                    layer, name,
+                    layer,
+                    name,
                     layer.create_parameter(
                         shape=tensor.shape,
                         dtype=tensor.dtype,
                         default_initializer=paddle.nn.initializer.Constant(0),
-                    ))
+                    ),
+                )
                 getattr(layer, name).set_value(tensor)
 
     def apply(
@@ -216,7 +227,8 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         workspace = paddle.empty([528], dtype="int32")
 
         sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
-            topk_ids, num_experts, block_size_m)
+            topk_ids, num_experts, block_size_m
+        )
 
         ffn_out = MoeWna16MarlinGemmApi(
             x,
@@ -243,7 +255,8 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
             is_k_full=True,
             use_atomic_add=True,
             use_fp32_reduce=True,
-            is_zp_float=False)[0]
+            is_zp_float=False,
+        )[0]
 
         swiglu_out = paddle.incubate.nn.functional.swiglu(ffn_out)
 
@@ -272,7 +285,8 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
             is_k_full=True,
             use_atomic_add=True,
             use_fp32_reduce=True,
-            is_zp_float=False)[0]
+            is_zp_float=False,
+        )[0]
 
         ffn_out.reshape_([token_num, -1, hidden_size])
         ffn_out = ffn_out.sum(axis=1)

@@ -28,7 +28,8 @@ def init_signal_layerwise(
     """
     if current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import init_signal_layerwise
+
         out = init_signal_layerwise(kv_signal_metadata, layer_id)
         return out
     else:
-        raise NotImplementedError()
+        raise NotImplementedError

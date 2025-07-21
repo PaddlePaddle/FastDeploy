@@ -15,11 +15,12 @@
 """
 
 import redis
+
 from fastdeploy.utils import llm_logger
+
 from .global_scheduler import GlobalScheduler
 from .local_scheduler import LocalScheduler
 from .splitwise_scheduler import SplitWiseScheduler, SplitWiseSchedulerConfig
-
 
 
 class LocalSchedulerConfig:
@@ -31,16 +32,17 @@ class LocalSchedulerConfig:
         ttl: Time-to-live in seconds for request expiration
     """
 
-    def __init__(self,
-                 max_size: int = -1,
-                 ttl: int = 900,
-                 max_model_len: int = 8192,
-                 enable_chunked_prefill: bool = False,
-                 max_num_partial_prefills: int = 1,
-                 max_long_partial_prefills: int = 1,
-                 long_prefill_token_threshold: int = 0,
-                 **kwargs
-                 ):
+    def __init__(
+        self,
+        max_size: int = -1,
+        ttl: int = 900,
+        max_model_len: int = 8192,
+        enable_chunked_prefill: bool = False,
+        max_num_partial_prefills: int = 1,
+        max_long_partial_prefills: int = 1,
+        long_prefill_token_threshold: int = 0,
+        **kwargs,
+    ):
         """
         Initialize LocalScheduler configuration.
 
@@ -84,8 +86,7 @@ class LocalSchedulerConfig:
         llm_logger.info("LocalScheduler Configuration Information :")
         for k, v in self.__dict__.items():
             llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info(
-            "=============================================================")
+        llm_logger.info("=============================================================")
 
 
 class GlobalSchedulerConfig:
@@ -101,22 +102,23 @@ class GlobalSchedulerConfig:
         ttl: Time-to-live in seconds for Redis keys
     """
 
-    def __init__(self,
-                 host: str = "127.0.0.1",
-                 port: int = 6379,
-                 db: int = 0,
-                 password=None,
-                 topic: str = "default",
-                 ttl: int = 900,
-                 min_load_score: float = 3,
-                 max_model_len: int = 8192,
-                 load_shards_num: int = 1,
-                 enable_chunked_prefill: bool = False,
-                 max_num_partial_prefills: int = 1,
-                 max_long_partial_prefills: int = 1,
-                 long_prefill_token_threshold: int = 0,
-                 **kwargs
-                 ):
+    def __init__(
+        self,
+        host: str = "127.0.0.1",
+        port: int = 6379,
+        db: int = 0,
+        password=None,
+        topic: str = "default",
+        ttl: int = 900,
+        min_load_score: float = 3,
+        max_model_len: int = 8192,
+        load_shards_num: int = 1,
+        enable_chunked_prefill: bool = False,
+        max_num_partial_prefills: int = 1,
+        max_long_partial_prefills: int = 1,
+        long_prefill_token_threshold: int = 0,
+        **kwargs,
+    ):
         """
         Initialize GlobalScheduler (Redis-based) configuration.
 
@@ -190,8 +192,7 @@ class GlobalSchedulerConfig:
         for k, v in self.__dict__.items():
             llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
         self.password = password
-        llm_logger.info(
-            "=============================================================")
+        llm_logger.info("=============================================================")
 
 
 class SchedulerConfig:
@@ -224,7 +225,7 @@ class SchedulerConfig:
 
         if name == "global":
             self.config = GlobalSchedulerConfig(**kwargs)
-        
+
         if name == "splitwise":
             self.config = SplitWiseSchedulerConfig(**kwargs)
 
@@ -236,7 +237,7 @@ class SchedulerConfig:
             Exception: If invalid scheduler type is specified
         """
         if self.name not in ["local", "global", "splitwise"]:
-            raise Exception(f'Unknown scheduler type {self.name}')
+            raise Exception(f"Unknown scheduler type {self.name}")
 
         self.config.check()
 
@@ -255,25 +256,29 @@ class SchedulerConfig:
         """
 
         if self.name == "global":
-            return GlobalScheduler(host=self.config.host,
-                                   port=self.config.port,
-                                   db=self.config.db,
-                                   password=self.config.password,
-                                   topic=self.config.topic,
-                                   ttl=self.config.ttl,
-                                   min_load_score=self.config.min_load_score,
-                                   load_shards_num=self.config.load_shards_num,
-                                   enable_chunked_prefill=self.config.enable_chunked_prefill,
-                                   max_num_partial_prefills=self.config.max_num_partial_prefills,
-                                   max_long_partial_prefills=self.config.max_long_partial_prefills,
-                                   long_prefill_token_threshold=self.config.long_prefill_token_threshold,)
-        
+            return GlobalScheduler(
+                host=self.config.host,
+                port=self.config.port,
+                db=self.config.db,
+                password=self.config.password,
+                topic=self.config.topic,
+                ttl=self.config.ttl,
+                min_load_score=self.config.min_load_score,
+                load_shards_num=self.config.load_shards_num,
+                enable_chunked_prefill=self.config.enable_chunked_prefill,
+                max_num_partial_prefills=self.config.max_num_partial_prefills,
+                max_long_partial_prefills=self.config.max_long_partial_prefills,
+                long_prefill_token_threshold=self.config.long_prefill_token_threshold,
+            )
+
         if self.name == "splitwise":
             return SplitWiseScheduler(self.config)
 
-        return LocalScheduler(max_size=self.config.max_size,
-                              ttl=self.config.ttl,
-                              enable_chunked_prefill=self.config.enable_chunked_prefill,
-                              max_num_partial_prefills=self.config.max_num_partial_prefills,
-                              max_long_partial_prefills=self.config.max_long_partial_prefills,
-                              long_prefill_token_threshold=self.config.long_prefill_token_threshold,)
+        return LocalScheduler(
+            max_size=self.config.max_size,
+            ttl=self.config.ttl,
+            enable_chunked_prefill=self.config.enable_chunked_prefill,
+            max_num_partial_prefills=self.config.max_num_partial_prefills,
+            max_long_partial_prefills=self.config.max_long_partial_prefills,
+            long_prefill_token_threshold=self.config.long_prefill_token_threshold,
+        )
