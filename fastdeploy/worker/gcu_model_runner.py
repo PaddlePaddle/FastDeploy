@@ -1026,6 +1026,7 @@ class GCUModelRunner(ModelRunnerBase):
         if self.speculative_method in ["mtp"]:
             self.proposer.clear_dummy_input()
         # paddle.device.cuda.synchronize()
+        self.parallel_config.do_profile = False
 
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:
         """
@@ -1033,7 +1034,6 @@ class GCUModelRunner(ModelRunnerBase):
         Args:
             num_gpu_blocks:
         """
-        self.parallel_config.do_profile = False
         self.num_gcu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num

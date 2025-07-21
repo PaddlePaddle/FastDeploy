@@ -1003,6 +1003,7 @@ class IluvatarModelRunner(ModelRunnerBase):
         self.clear_cache()
 
         # paddle.device.cuda.synchronize()
+        self.parallel_config.do_profile = False
 
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:
         """
@@ -1010,7 +1011,6 @@ class IluvatarModelRunner(ModelRunnerBase):
         Args:
             num_gpu_blocks:
         """
-        self.parallel_config.do_profile = False
         self.num_gpu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
