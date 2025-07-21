@@ -898,6 +898,5 @@ class EngineArgs:
             graph_optimization_config=graph_opt_cfg,
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
-            enable_custom_all_reduce=self.enable_custom_all_reduce,
             enable_logprob=self.enable_logprob,
         )

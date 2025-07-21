@@ -18,7 +18,7 @@ import paddle
 from paddle import nn
 
 from fastdeploy.config import FDConfig
-from fastdeploy.distributed.communication_op import tensor_model_parallel_all_reduce
+from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.platforms import current_platform
 
 from .utils import _set_var_distributed, divide, get_tensor

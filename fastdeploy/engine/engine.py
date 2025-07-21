@@ -1024,7 +1024,7 @@ class LLMEngine:
             "do_profile": self.do_profile,
             "dynamic_load_weight": self.cfg.model_config.dynamic_load_weight,
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
-            "enable-custom-all-reduce": self.cfg.parallel_config.enable_custom_all_reduce,
+            "enable_custom_all_reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.enable_logprob,
             "enable_mm": self.cfg.enable_mm,
         }
