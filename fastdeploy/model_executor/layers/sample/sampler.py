@@ -30,6 +30,7 @@ from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.ops import (
     apply_penalty_multi_scores,
     apply_speculative_penalty_multi_scores,
+    min_p_sampling,
     top_k_top_p_sampling,
 )
 from fastdeploy.platforms import current_platform
@@ -266,6 +267,8 @@ class Sampler(nn.Layer):
 
         probs = F.softmax(logits)
 
+        probs = min_p_sampling(probs, sampling_metadata.min_p)
+
         _, next_tokens = top_k_top_p_sampling(probs, sampling_metadata.top_p, sampling_metadata.top_k)
 
         logprobs_tensors = (
@@ -281,6 +284,7 @@ class Sampler(nn.Layer):
             sampled_token_ids=next_tokens,
             logprobs_tensors=logprobs_tensors,
         )
+
         return sampler_output
 
 
