@@ -968,7 +968,7 @@ class FDConfig:
         check the legality of config
         """
         nnode = ceil_div(self.parallel_config.num_ranks, self.parallel_config.worker_num_per_node)
-        assert nnode == self.scheduler_config.nnodes, f"nnode: {nnode}, but got {self.nnode}"
+        assert nnode == self.scheduler_config.nnodes, f"nnode: {nnode}, but got {self.scheduler_config.nnodes}"
 
         if not self.scheduler_config.enable_chunked_prefill:
             assert self.scheduler_config.max_num_batched_tokens >= self.scheduler_config.max_model_len, (

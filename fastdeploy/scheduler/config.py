@@ -225,9 +225,9 @@ class SchedulerConfig:
         self.splitwise_role = "mixed"
         self.innode_prefill_ports = None
         self.engine_pid = None  # Process ID of engine
-        self.dist_init_ip = (None,)
-        self.nnodes = (1,)
-        self.node_rank = (0,)
+        self.dist_init_ip = None
+        self.nnodes = 1
+        self.node_rank = 0
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -279,7 +279,7 @@ class SchedulerConfig:
             self.max_num_seqs <= 256
         ), "The parameter `max_num_seqs` is not allowed to exceed 256, " "but now it's {}.".format(self.max_num_seqs)
 
-        assert self.nnode >= 1, f"nnode: {self.nnode} should no less than 1"
+        assert self.nnodes >= 1, f"nnode: {self.nnodes} should no less than 1"
         assert self.max_model_len >= 16, f"max_model_len: {self.max_model_len} should be larger than 16"
         assert self.max_num_seqs >= 1, f"max_num_seqs: {self.max_num_seqs} should be larger than 1"
         assert self.max_num_batched_tokens >= self.max_num_seqs, (

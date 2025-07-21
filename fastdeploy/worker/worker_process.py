@@ -105,7 +105,7 @@ def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     if fd_config.multi_modal_config.enable_mm:
         tokenizer = ErnieBotTokenizer.from_pretrained(
             fd_config.model_config.model,
-            model_max_length=fd_config.scheduler_config.max_model_lenn,
+            model_max_length=fd_config.scheduler_config.max_model_len,
             padding_side="right",
             use_fast=False,
         )
@@ -425,7 +425,7 @@ def parse_args():
     parser = argparse.ArgumentParser("FastDeploy LLM Inference")
     parser.add_argument(
         "-m",
-        "--model_name_or_path",
+        "--model",
         type=str,
         default="./output",
         help="model dir",
@@ -433,7 +433,7 @@ def parse_args():
     parser.add_argument("-mbs", "--max_num_seqs", type=int, default=34, help="max batch size")
     parser.add_argument("--total_block_num", type=int, default=2000)
     parser.add_argument("--block_size", type=int, default=64)
-    parser.add_argument("--pod_ip", type=str, default="127.0.0.1")
+    parser.add_argument("--master_ip", type=str, default="127.0.0.1")
     parser.add_argument("--engine_worker_queue_port", type=int, default=9923)
     parser.add_argument("--max_model_len", type=int, default=3072, help="max model len")
     parser.add_argument("--device_ids", type=str, default="0", help="cuda visible devices")
@@ -620,7 +620,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     decoding_config = DecodingConfig(vars(args))
     observability_config = ObservabilityConfig(vars(args))
 
-    graph_opt_config = GraphOptimizationConfig(args.graph_optimiaztion_config)
+    graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
