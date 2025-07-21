@@ -18,7 +18,7 @@ import paddle
 from paddle import nn
 
 import fastdeploy
-from fastdeploy.distributed.communication_op import tensor_model_parallel_all_reduce
+from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.utils import create_and_set_parameter, get_tensor
 from fastdeploy.utils import ceil_div
 

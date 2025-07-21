@@ -82,7 +82,7 @@ class XPUMoEMethod(MoEMethodBase):
             False,  # moe group, used in deepseek
         )
         if layer.tp_size > 1:
-            from fastdeploy.distributed.communication_op import (
+            from fastdeploy.distributed.communication import (
                 tensor_model_parallel_all_reduce,
             )
 
@@ -210,7 +210,7 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
             False,  # moe group, used in deepseek
         )
         if layer.tp_size > 1:
-            from fastdeploy.distributed.communication_op import (
+            from fastdeploy.distributed.communication import (
                 tensor_model_parallel_all_reduce,
             )
 

@@ -25,7 +25,7 @@ _TP_AR = None
 
 
 @contextmanager
-def graph_capture():
+def capture_custom_allreduce():
     global _TP_AR
     ar_context = nullcontext()
     if _TP_AR is not None:
