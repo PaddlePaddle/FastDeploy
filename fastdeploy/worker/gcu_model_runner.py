@@ -151,8 +151,6 @@ class GCUModelRunner(ModelRunnerBase):
         """
         Process inputs for prefill tasks and insert it to share_inputs buffer
         """
-        if "caches" not in self.share_inputs:
-            self.initialize_kv_cache()
 
         if req_dicts[-1].disaggregate_info is not None and req_dicts[-1].disaggregate_info["role"] == "prefill":
             os.environ["PREFILL_NODE_ONE_STEP_STOP"] = "1"
@@ -1035,11 +1033,11 @@ class GCUModelRunner(ModelRunnerBase):
         Args:
             num_gpu_blocks:
         """
+        self.parallel_config.do_profile = False
         self.num_gcu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        if not (self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
-            self.initialize_kv_cache()
+        self.initialize_kv_cache()
 
         # Reset free list
         free_list = list(
@@ -1056,8 +1054,6 @@ class GCUModelRunner(ModelRunnerBase):
                 "free_list_len": paddle.full([1], self.free_list_len, dtype="int32"),
             }
         )
-
-        self.parallel_config.do_profile = False
 
         if self.speculative_method in ["mtp"]:
             self.proposer.update_block_num(num_gpu_blocks)

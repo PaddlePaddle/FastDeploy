@@ -165,9 +165,10 @@ class GpuWorker(WorkerBase):
         """Get current model"""
         return self.model_runner.get_model()
 
-    def initialize_cache(self, num_gpu_blocks: int, num_cpu_blocks: int) -> None:
-        """Initizlize the KV Cache"""
-        pass
+    def initialize_cache(self, num_gpu_blocks: int) -> None:
+        """Initizlize the KV Cache with accurate num_gpu_blocks"""
+        # accurate cache size
+        self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
 
     def execute_model(
         self,
@@ -198,7 +199,3 @@ class GpuWorker(WorkerBase):
     def cal_theortical_kvcache(self) -> int:
         """Calculate the block memory required"""
         return self.model_runner.cal_theortical_kvcache()
-
-    def reinitialize_kv_cache(self, num_gpu_blocks: int) -> None:
-        """Reinitialize the kv cache using the parameters from the profile"""
-        self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)

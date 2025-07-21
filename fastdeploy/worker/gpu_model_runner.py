@@ -193,9 +193,6 @@ class GPUModelRunner(ModelRunnerBase):
         Process inputs for prefill tasks and insert it to share_inputs buffer
         TODO(gongshaotian): Refactor this func
         """
-        # NOTE(luotingdan): Lazy initialize kv cache
-        if "caches" not in self.share_inputs:
-            self.initialize_kv_cache()
 
         # NOTE(luotingdan): Set environment variable of prefill node
         if req_dicts[-1].disaggregate_info is not None and req_dicts[-1].disaggregate_info["role"] == "prefill":
@@ -739,7 +736,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         else:
             for i in range(self.model_config.num_hidden_layers):
-
                 cache_kvs[f"key_caches_{i}"] = paddle.full(
                     shape=kv_cache_shape,
                     fill_value=0,
@@ -999,9 +995,6 @@ class GPUModelRunner(ModelRunnerBase):
         time_before_capture = time.perf_counter()
         expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
-        need_init_cache = "caches" not in self.share_inputs
-        if need_init_cache:
-            self.initialize_kv_cache()
         for batch_size in sorted(capture_sizes, reverse=True):
             self._dummy_run(
                 num_tokens=self.parallel_config.max_num_batched_tokens,
@@ -1010,8 +1003,7 @@ class GPUModelRunner(ModelRunnerBase):
                 expected_decode_len=expected_decode_len,
             )
             logger.info(f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
-        if need_init_cache:
-            self.clear_cache()
+
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
 
@@ -1237,6 +1229,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if self.speculative_method in ["mtp"]:
             self.proposer.clear_dummy_input()
+        self.parallel_config.do_profile = False
 
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:
         """
@@ -1247,8 +1240,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.num_gpu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        if not (self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
-            self.initialize_kv_cache()
+        self.initialize_kv_cache()
 
         # Reset free list
         free_list = list(
@@ -1265,8 +1257,6 @@ class GPUModelRunner(ModelRunnerBase):
                 "free_list_len": paddle.full([1], self.free_list_len, dtype="int32"),
             }
         )
-
-        self.parallel_config.do_profile = False
 
         if self.speculative_method in ["mtp"]:
             self.proposer.update_block_num(num_gpu_blocks)
