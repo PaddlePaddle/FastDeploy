@@ -14,10 +14,11 @@
 # limitations under the License.
 """
 
-from typing import Callable, List, Any, Dict, Optional
 import functools
 import threading
 import traceback
+from typing import Any, Callable, Dict, List, Optional
+
 from fastdeploy.utils import scheduler_logger
 
 
@@ -31,9 +32,7 @@ class Task:
         reason: Optional reason/status message for the task
     """
 
-    def __init__(self, task_id: str,
-                 task: Any,
-                 reason: Optional[str] = None):
+    def __init__(self, task_id: str, task: Any, reason: Optional[str] = None):
         """
         Initialize a Task instance.
 
@@ -63,11 +62,13 @@ class Workers:
     - Graceful shutdown
     """
 
-    def __init__(self,
-                 name: str,
-                 work: Callable[[List[Task]], Optional[List[Task]]],
-                 max_task_batch_size: int = 1,
-                 task_filters: Optional[List[Callable[[Task], bool]]] = None):
+    def __init__(
+        self,
+        name: str,
+        work: Callable[[List[Task]], Optional[List[Task]]],
+        max_task_batch_size: int = 1,
+        task_filters: Optional[List[Callable[[Task], bool]]] = None,
+    ):
         """
         Initialize a Workers thread pool.
 
@@ -112,8 +113,8 @@ class Workers:
             return True
 
         if filter is None:
-            tasks = self.tasks[:self.max_task_batch_size]
-            del self.tasks[:self.max_task_batch_size]
+            tasks = self.tasks[: self.max_task_batch_size]
+            del self.tasks[: self.max_task_batch_size]
             self.running_tasks[worker_index] = tasks
             return tasks
 
@@ -142,16 +143,13 @@ class Workers:
             self.running_tasks[worker_index] = []
 
         task_filter = None
-        task_filer_size = 0 if self.task_filters is None else len(
-            self.task_filters)
+        task_filer_size = 0 if self.task_filters is None else len(self.task_filters)
         if task_filer_size > 0:
             task_filter = self.task_filters[worker_index % task_filer_size]
 
         while True:
             with self.tasks_not_empty:
-                tasks = self.tasks_not_empty.wait_for(
-                    functools.partial(
-                        self._get_tasks, worker_index, task_filter))
+                tasks = self.tasks_not_empty.wait_for(functools.partial(self._get_tasks, worker_index, task_filter))
 
                 if self.stop:
                     self.stopped_count += 1
@@ -163,8 +161,7 @@ class Workers:
             try:
                 results = self.work(tasks)
             except Exception as e:
-                scheduler_logger.error(
-                    f"Worker {self.name} execute error: {e}, traceback: {traceback.format_exc()}")
+                scheduler_logger.error(f"Worker {self.name} execute error: {e}, traceback: {traceback.format_exc()}")
                 continue
 
             if results is not None and len(results) > 0:
@@ -186,8 +183,7 @@ class Workers:
 
             for _ in range(remain):
                 index = len(self.pool)
-                t = threading.Thread(target=self._worker,
-                                     args=(index,), daemon=True)
+                t = threading.Thread(target=self._worker, args=(index,), daemon=True)
                 t.start()
                 self.pool.append(t)
 
@@ -202,8 +198,7 @@ class Workers:
             self.tasks_not_empty.notify_all()
             self.results_not_empty.notify_all()
 
-            self.not_stop.wait_for(
-                lambda: self.stopped_count == len(self.pool))
+            self.not_stop.wait_for(lambda: self.stopped_count == len(self.pool))
 
             self.pool = []
             self.tasks = []
@@ -223,6 +218,7 @@ class Workers:
         Returns:
             List of completed tasks/results
         """
+
         def _get_results():
             if self.stop:
                 return True

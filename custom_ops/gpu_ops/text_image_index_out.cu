@@ -16,7 +16,7 @@
 
 template <int VecSize>
 __global__ void text_image_index_out_kernel(
-    int32_t* token_type_ids,      
+    int32_t* token_type_ids,
     int32_t* text_index,
     int32_t* image_index,
     const int64_t token_num
@@ -25,7 +25,7 @@ __global__ void text_image_index_out_kernel(
     if (global_thread_idx >= 1) return;
     int text_count = 0;
     int images_count = 0;
-    
+
     for (int i = 0; i < token_num; ++i) {
         // printf(" %d %d  %d %d \n", text_index[i], text_count, images_count, i);
         if (token_type_ids[i] == 0) {
@@ -60,5 +60,5 @@ PD_BUILD_STATIC_OP(text_image_index_out)
     .Outputs({"text_index_out",
               "image_index_out"})
     .SetInplaceMap({{"text_index", "text_index_out"},
-                    {"image_index", "image_index_out"}})        
+                    {"image_index", "image_index_out"}})
     .SetKernelFn(PD_KERNEL(TextImageIndexOut));

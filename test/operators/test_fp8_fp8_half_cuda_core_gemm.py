@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" UT for fp8_fp8_half_cuda_core_gemm kernel """
+"""UT for fp8_fp8_half_cuda_core_gemm kernel"""
 
-import paddle
-import numpy as np
-from fastdeploy.model_executor.ops.gpu import cutlass_fp8_fp8_half_gemm_fused
-from itertools import product
 import os
 import unittest
+from itertools import product
+
+import numpy as np
+import paddle
+
+from fastdeploy.model_executor.ops.gpu import cutlass_fp8_fp8_half_gemm_fused
 
 
 class Test(unittest.TestCase):
@@ -47,21 +49,17 @@ class Test(unittest.TestCase):
 
         combinations = list(product(m, nks))
         for m, (n, k) in combinations:
-            act = (
-                paddle.rand([m, k])
-                .clip(min=-1 * self.E4M3_MAX_POS, max=self.E4M3_MAX_POS)
-                .to(paddle.float8_e4m3fn)
-            )
+            act = paddle.rand([m, k]).clip(min=-1 * self.E4M3_MAX_POS, max=self.E4M3_MAX_POS).to(paddle.float8_e4m3fn)
             weight = (
-                paddle.rand([n, k])
-                .clip(min=-1 * self.E4M3_MAX_POS, max=self.E4M3_MAX_POS)
-                .to(paddle.float8_e4m3fn)
+                paddle.rand([n, k]).clip(min=-1 * self.E4M3_MAX_POS, max=self.E4M3_MAX_POS).to(paddle.float8_e4m3fn)
             )
             bias = (paddle.rand([n])).to(paddle.bfloat16)
             scale = 1.2
 
             result = paddle.matmul(
-                act.astype("bfloat16"), weight.astype("bfloat16"), transpose_y=True
+                act.astype("bfloat16"),
+                weight.astype("bfloat16"),
+                transpose_y=True,
             )
             result = result * scale
             result = result + bias
@@ -77,9 +75,7 @@ class Test(unittest.TestCase):
                 activation_type="",
             )
 
-            np.testing.assert_allclose(
-                result.numpy(), result_cuda.numpy(), rtol=1e-04, atol=1e-04
-            )
+            np.testing.assert_allclose(result.numpy(), result_cuda.numpy(), rtol=1e-04, atol=1e-04)
 
 
 if __name__ == "__main__":

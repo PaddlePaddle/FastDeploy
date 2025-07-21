@@ -131,4 +131,3 @@ python -u bench_gsm8k.py --port 8188 --num-questions 1319 --num-shots 5 --parall
 ```json
 {"task": "gsm8k", "backend": "paddlepaddle", "num_gpus": 1, "latency": 13446.01, "accuracy": 0.956, "num_requests": 1319, "other": {"num_questions": 1319, "parallel": 8}}
 ```
-

@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from enum import Enum
 from typing import Optional
 
@@ -29,6 +30,7 @@ class KvCacheQuantzationTypes(str, Enum):
     """
     KvCacheQuantzationTypes
     """
+
     INT8 = "int8"
     FP8 = "float8_e4m3fn"
     INT8_ZP = "int8_zp"
@@ -50,7 +52,7 @@ class KvCacheQuantConfig(QuantConfigBase):
         try:
             self.quant_type = KvCacheQuantzationTypes(kv_cache_quant_type)
         except ValueError:
-            raise ValueError(f'Invalid Kvcache type: {kv_cache_quant_type}')
+            raise ValueError(f"Invalid Kvcache type: {kv_cache_quant_type}")
 
         self.has_zero_point = "zp" in kv_cache_quant_type
 
@@ -59,7 +61,7 @@ class KvCacheQuantConfig(QuantConfigBase):
         elif self.quant_type == KvCacheQuantzationTypes.FP8 or self.quant_type == KvCacheQuantzationTypes.FP8_ZP:
             self.max_bound = 448.0
         else:
-            raise ValueError(f'Invalid Kvcache type: {kv_cache_quant_type}')
+            raise ValueError(f"Invalid Kvcache type: {kv_cache_quant_type}")
 
     def name(self) -> str:
         """
@@ -110,12 +112,12 @@ class KVCacheMethodBase(QuantMethodBase):
         """
         load_scale
         """
-        cache_k_scale_tensor = get_tensor(
-            state_dict.pop(self.cache_k_scale_name)).cast(
-                paddle.get_default_dtype()).reshape_([-1])
-        cache_v_scale_tensor = get_tensor(
-            state_dict.pop(self.cache_v_scale_name)).cast(
-                paddle.get_default_dtype()).reshape_([-1])
+        cache_k_scale_tensor = (
+            get_tensor(state_dict.pop(self.cache_k_scale_name)).cast(paddle.get_default_dtype()).reshape_([-1])
+        )
+        cache_v_scale_tensor = (
+            get_tensor(state_dict.pop(self.cache_v_scale_name)).cast(paddle.get_default_dtype()).reshape_([-1])
+        )
 
         cache_k_scale = self.cache_quant_config.max_bound / cache_k_scale_tensor
         cache_v_scale = self.cache_quant_config.max_bound / cache_v_scale_tensor
@@ -138,13 +140,13 @@ class KVCacheMethodBase(QuantMethodBase):
         self.cache_v_zp_name = layer.prefix + ".cachev_matmul.activation_zero_point"
 
         if self.cache_quant_config.quant_type == KvCacheQuantzationTypes.INT8:
-            setattr(layer, "cache_quant_type_str", "cache_int8")
-            setattr(layer, "quant_max_bound", 127.0)
-            setattr(layer, "quant_min_bound", -127.0)
+            layer.cache_quant_type_str = "cache_int8"
+            layer.quant_max_bound = 127.0
+            layer.quant_min_bound = -127.0
         elif self.cache_quant_config.quant_type == KvCacheQuantzationTypes.FP8:
-            setattr(layer, "cache_quant_type_str", "cache_fp8")
-            setattr(layer, "quant_max_bound", 448.0)
-            setattr(layer, "quant_min_bound", -448.0)
+            layer.cache_quant_type_str = "cache_fp8"
+            layer.quant_max_bound = 448.0
+            layer.quant_min_bound = -448.0
         else:
             raise NotImplementedError(f"{self.cache_quant_config.quant_type} is not implemented")
 
@@ -156,5 +158,4 @@ class KVCacheMethodBase(QuantMethodBase):
         """
         apply
         """
-        raise RuntimeError(
-            f"{self.__class__.__name__}.apply should not be called.")
+        raise RuntimeError(f"{self.__class__.__name__}.apply should not be called.")

@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 import os
 import time
 from multiprocessing.shared_memory import SharedMemory
@@ -46,15 +47,14 @@ class DynamicWeightManager:
 
         logger.info(
             f"✅ DynamicLoad model built successfully by {self.load_config.load_strategy}, "
-            f" rank={self.rank}, ranks={self.nranks}")
+            f" rank={self.rank}, ranks={self.nranks}"
+        )
 
     @paddle.no_grad()
     def _capture_model_state(self):
         """Capture and store initial model parameters state."""
         for name, param in self.model.state_dict().items():
-            logger.debug(
-                f"Model param: {name}, shape={param.shape}, dtype={param.dtype}"
-            )
+            logger.debug(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}")
             self.state_dict[name] = param
 
     def update_parameters(self, pid: int = 0) -> None:
@@ -73,11 +73,9 @@ class DynamicWeightManager:
         if handler := strategy_handlers.get(self.load_config.load_strategy):
             handler()
         else:
-            raise ValueError(
-                f"Unsupported strategy: {self.load_config.load_strategy}")
+            raise ValueError(f"Unsupported strategy: {self.load_config.load_strategy}")
 
-        logger.info(
-            f"Update parameters in {time.perf_counter()-start_time:.2f}s")
+        logger.info(f"Update parameters in {time.perf_counter()-start_time:.2f}s")
 
         self._finalize_update(pid)
 
@@ -85,7 +83,8 @@ class DynamicWeightManager:
         """Update using IPC snapshot strategy for elastic recovery."""
         model_path = os.path.join(
             self.parallel_config.model_name_or_path,
-            f"model_state.tp0{self.meta_src_id}.pdparams")
+            f"model_state.tp0{self.meta_src_id}.pdparams",
+        )
 
         try:
             ipc_state_dict = paddle.load(model_path)
@@ -94,16 +93,14 @@ class DynamicWeightManager:
             ipc_state_dict = paddle.load(fallback_path)
 
         self._update_model_from_state(ipc_state_dict, "snapshot")
-        logger.info(
-            f"IPC snapshot update parameters completed from {model_path}")
+        logger.info(f"IPC snapshot update parameters completed from {model_path}")
 
     def _update_ipc(self):
         """Update using standard IPC strategy (requires Training Worker)."""
         ipc_meta = paddle.load(self.ipc_path)
         state_dict = self._convert_ipc_meta_to_tensor(ipc_meta)
         self._update_model_from_state(state_dict, "raw")
-        logger.info(
-            f"IPC update parameters completed from file: {self.ipc_path}")
+        logger.info(f"IPC update parameters completed from file: {self.ipc_path}")
 
     def clear_parameters(self, pid: int = 0) -> None:
         """Clear all model parameters and free memory."""
@@ -118,8 +115,7 @@ class DynamicWeightManager:
         paddle.distributed.shutdown_process_group()
         self._update_shared_status(pid, -2)
 
-    def _update_model_from_state(self, state_dict: Dict[str, paddle.Tensor],
-                                 src_type: str):
+    def _update_model_from_state(self, state_dict: Dict[str, paddle.Tensor], src_type: str):
         """Update model parameters from given state dictionary."""
         if len(state_dict) == 0:
             raise ValueError(f"No parameter found in state dict {state_dict}")
@@ -133,19 +129,14 @@ class DynamicWeightManager:
             self._validate_parameter_match(name, new_param, target_param)
             new_param._share_buffer_to(target_param)
             update_count += 1
-        logger.info(
-            f"🆗 Updated {update_count}/{len(state_dict)} parameters from {src_type} source"
-        )
+        logger.info(f"🆗 Updated {update_count}/{len(state_dict)} parameters from {src_type} source")
 
-    def _validate_parameter_match(self, name: str, src: paddle.Tensor,
-                                  dst: paddle.Tensor):
+    def _validate_parameter_match(self, name: str, src: paddle.Tensor, dst: paddle.Tensor):
         """验证参数一致性"""
         if src.dtype != dst.dtype:
-            raise TypeError(
-                f"Type mismatch for {name}: {src.dtype} vs {dst.dtype}")
+            raise TypeError(f"Type mismatch for {name}: {src.dtype} vs {dst.dtype}")
         if src.shape != dst.shape:
-            raise ValueError(
-                f"Shape mismatch for {name}: {src.shape} vs {dst.shape}")
+            raise ValueError(f"Shape mismatch for {name}: {src.shape} vs {dst.shape}")
 
     def _finalize_update(self, pid: int):
         """Finalize update process with verification."""
@@ -163,7 +154,7 @@ class DynamicWeightManager:
 
     def _verify_parameters(self, operation: str):
         """Verify parameters are in expected state after operation."""
-        expected_initialized = (operation == "update")
+        expected_initialized = operation == "update"
         all_valid = True
         for name, param in self.state_dict.items():
             is_initialized = param._is_initialized()
@@ -177,12 +168,12 @@ class DynamicWeightManager:
         if all_valid:
             logger.info(f"💡 Model Parameter {operation} verified successfully")
         else:
-            raise RuntimeError(
-                f"❌ Model Parameter {operation} verification failed")
+            raise RuntimeError(f"❌ Model Parameter {operation} verification failed")
 
     @staticmethod
     def _convert_ipc_meta_to_tensor(
-            ipc_meta: Dict[str, Any]) -> Dict[str, paddle.Tensor]:
+        ipc_meta: Dict[str, Any],
+    ) -> Dict[str, paddle.Tensor]:
         """Convert IPC metadata to tensor dictionary."""
         converted = {}
         for name, meta in ipc_meta.items():
@@ -199,18 +190,18 @@ class DynamicWeightManager:
         curr_alloc = paddle.device.cuda.memory_allocated() / (1024**3)
         curr_reserved = paddle.device.cuda.memory_reserved() / (1024**3)
 
-        logger.warning(f"GPU memory usage {context}:"
-                       f"max_allocated: {max_alloc:.2f}GB\n"
-                       f"max_reserved: {max_reserved:.2f}GB\n"
-                       f"current_allocated: {curr_alloc:.2f}GB\n"
-                       f"current_reserved: {curr_reserved:.2f}GB")
+        logger.warning(
+            f"GPU memory usage {context}:"
+            f"max_allocated: {max_alloc:.2f}GB\n"
+            f"max_reserved: {max_reserved:.2f}GB\n"
+            f"current_allocated: {curr_alloc:.2f}GB\n"
+            f"current_reserved: {curr_reserved:.2f}GB"
+        )
 
     def _update_shared_status(self, pid: int, status: int) -> None:
         """Update shared memory status flag for inter-process communication."""
         array = np.zeros([1], dtype=np.int32)
-        shm = SharedMemory(create=False,
-                           size=array.nbytes,
-                           name=f"model_weights_status.{pid}")
+        shm = SharedMemory(create=False, size=array.nbytes, name=f"model_weights_status.{pid}")
         value = np.ndarray(array.shape, dtype=array.dtype, buffer=shm.buf)
         if self.rank == 0:
             value[self.rank] = status
@@ -223,20 +214,17 @@ class DynamicWeightManager:
         is_stop = 0
         while model_weights_status.value[0] != 0:
             if model_weights_status.value[0] == 1:
-                logger.info(
-                    "infer engine stopped! start to load new checkpoint...")
+                logger.info("infer engine stopped! start to load new checkpoint...")
                 model_runner.update_parameters(pid)
             elif model_weights_status.value[0] == -1:
-                logger.info(
-                    "infer engine stopped! start to clear checkpoint...")
+                logger.info("infer engine stopped! start to clear checkpoint...")
                 model_runner.clear_parameters(pid)
 
             while True:
                 if model_weights_status.value[0] == 0:
                     logger.info("finished loading new checkpoint")
                     break
-                elif is_stop == 1 or (model_weights_status.value[0] == -2
-                                      and is_stop == 0):
+                elif is_stop == 1 or (model_weights_status.value[0] == -2 and is_stop == 0):
                     if is_stop == 0:
                         logger.info("finished clearing checkpoint")
                         is_stop = 1

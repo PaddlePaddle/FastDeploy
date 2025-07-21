@@ -38,6 +38,7 @@ conda install redis
 # Launch
 nohup redis-server > redis.log 2>&1 &
 ```
+
 ### apt installation (Debian/Ubuntu)
 
 ```bash
@@ -57,6 +58,7 @@ sudo systemctl start redis
 ```
 
 ## Launching FastDeploy
+
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
        --port 8801 \
@@ -72,6 +74,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --scheduler-min-load_score 3 \
        --scheduler-load-shards-num 1
 ```
+
 [Scheduler Launching Parameter](../online_serving/scheduler.md)
 
 ### Deployment notes:

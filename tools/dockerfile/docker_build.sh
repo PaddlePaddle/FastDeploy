@@ -3,7 +3,7 @@ PRODUCT_NAME='ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:fastdeplo
 cp ../../requirements.txt ./
 
 docker build -t ${PRODUCT_NAME} -f Dockerfile.ci . \
-    --network host 
+    --network host
  #   --build-arg HTTP_PROXY=${proxy} \
  #   --build-arg HTTPS_PROXY=${proxy} \
    # --build-arg ftp_proxy=${proxy}

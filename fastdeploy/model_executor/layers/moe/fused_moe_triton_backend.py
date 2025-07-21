@@ -18,10 +18,8 @@ import paddle
 from paddle import nn
 
 import fastdeploy
-from fastdeploy.distributed.communication_op import \
-    tensor_model_parallel_all_reduce
-from fastdeploy.model_executor.layers.utils import (create_and_set_parameter,
-                                                    get_tensor)
+from fastdeploy.distributed.communication_op import tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.layers.utils import create_and_set_parameter, get_tensor
 from fastdeploy.utils import ceil_div
 
 from ..quantization.quant_base import QuantMethodBase
@@ -46,7 +44,8 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         self.quant_config = quant_config
         self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
         self.added_scale_attrs = [
-            "up_gate_proj_weight_scale", "down_proj_weight_scale"
+            "up_gate_proj_weight_scale",
+            "down_proj_weight_scale",
         ]
 
     def process_prequanted_weights(self, layer: nn.Layer, state_dict) -> None:
@@ -66,10 +65,12 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         assert algo == "wint8"
 
         assert up_gate_proj_weights[0].shape == [
-            layer.hidden_size, layer.moe_intermediate_size * 2
+            layer.hidden_size,
+            layer.moe_intermediate_size * 2,
         ]
         assert down_proj_weights[0].shape == [
-            layer.moe_intermediate_size, layer.hidden_size
+            layer.moe_intermediate_size,
+            layer.hidden_size,
         ]
 
         up_gate_proj_tensor = paddle.stack(up_gate_proj_weights, axis=0)
@@ -85,26 +86,29 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             scale_name = self.added_scale_attrs[idx]
 
             quanted_weight_scale = weight_tensor.abs().max(axis=1)
-            quanted_weight = weight_tensor / quanted_weight_scale[:,
-                                                                  None, :] * max_bound
+            quanted_weight = weight_tensor / quanted_weight_scale[:, None, :] * max_bound
             quanted_weight = paddle.round(quanted_weight).astype("int8")
             quanted_weight_scale = quanted_weight_scale / max_bound
 
             setattr(
-                layer, weight_name,
+                layer,
+                weight_name,
                 layer.create_parameter(
                     shape=quanted_weight.shape,
                     dtype=quanted_weight.dtype,
                     default_initializer=paddle.nn.initializer.Constant(0),
-                ))
+                ),
+            )
             getattr(layer, weight_name).set_value(quanted_weight)
 
             setattr(
-                layer, scale_name,
+                layer,
+                scale_name,
                 layer.create_parameter(
                     shape=quanted_weight_scale.shape,
                     dtype=quanted_weight_scale.dtype,
-                ))
+                ),
+            )
             getattr(layer, scale_name).set_value(quanted_weight_scale)
 
     def apply(
@@ -142,11 +146,13 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             "GROUP_SIZE_M": 1,
         }
         sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
-            topk_ids, num_local_experts, config["BLOCK_SIZE_M"])
+            topk_ids, num_local_experts, config["BLOCK_SIZE_M"]
+        )
         max_possible_num_post_padded = sorted_token_ids.shape[0]
         grid = (
-            ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"]) *
-            ceil_div(moe_intermediate_size * 2, config["BLOCK_SIZE_N"]), )
+            ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"])
+            * ceil_div(moe_intermediate_size * 2, config["BLOCK_SIZE_N"]),
+        )
 
         fused_moe_kernel_paddle[grid](
             x,
@@ -190,8 +196,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
             even_Ks=hidden_size % config["BLOCK_SIZE_K"] == 0,
         )
 
-        down_proj_input = paddle.incubate.nn.functional.swiglu(
-            up_gate_proj_out)
+        down_proj_input = paddle.incubate.nn.functional.swiglu(up_gate_proj_out)
 
         down_proj_out = paddle.empty(
             (token_num * top_k, hidden_size),
@@ -199,8 +204,9 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         )
 
         grid = (
-            ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"]) *
-            ceil_div(hidden_size, config["BLOCK_SIZE_N"]), )
+            ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"])
+            * ceil_div(hidden_size, config["BLOCK_SIZE_N"]),
+        )
         fused_moe_kernel_paddle[grid](
             down_proj_input,
             layer.down_proj_weight,
@@ -263,49 +269,58 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
 
         up_gate_proj_tensor, down_proj_tensor = layer.extract_moe_ffn_weights(state_dict)
         assert up_gate_proj_tensor[0].shape == [
-            layer.hidden_size, layer.moe_intermediate_size * 2
+            layer.hidden_size,
+            layer.moe_intermediate_size * 2,
         ]
         assert down_proj_tensor[0].shape == [
-            layer.moe_intermediate_size, layer.hidden_size
+            layer.moe_intermediate_size,
+            layer.hidden_size,
         ]
 
         up_gate_proj_tensor = paddle.stack(up_gate_proj_tensor, axis=0).view(paddle.float8_e4m3fn)
         down_proj_tensor = paddle.stack(down_proj_tensor, axis=0).view(paddle.float8_e4m3fn)
 
         added_wfp8afp8_attrs = [
-            "up_gate_proj_weight", "down_proj_weight", "up_gate_proj_weight_scale",
-            "down_proj_weight_scale", "up_gate_proj_in_scale", "down_proj_in_scale"
+            "up_gate_proj_weight",
+            "down_proj_weight",
+            "up_gate_proj_weight_scale",
+            "down_proj_weight_scale",
+            "up_gate_proj_in_scale",
+            "down_proj_in_scale",
         ]
 
         def _extract_scale_tensor(key_template):
             result = []
             for i in range(layer.num_experts):
-                result.append(
-                    get_tensor(state_dict.pop(key_template.format(i))))
+                result.append(get_tensor(state_dict.pop(key_template.format(i))))
             return paddle.concat(result).cast("float32")
 
         weight_key_map = layer.weight_key_map
-        up_gate_proj_weight_scale = _extract_scale_tensor(
-            weight_key_map["up_gate_proj_expert_weight_scale_key"])
-        down_proj_weight_scale = _extract_scale_tensor(
-            weight_key_map["down_proj_expert_weight_scale_key"])
-        up_gate_proj_in_scale = _extract_scale_tensor(
-            weight_key_map["up_gate_proj_expert_in_scale_key"])
-        down_proj_in_scale = _extract_scale_tensor(
-            weight_key_map["down_proj_expert_in_scale_key"])
+        up_gate_proj_weight_scale = _extract_scale_tensor(weight_key_map["up_gate_proj_expert_weight_scale_key"])
+        down_proj_weight_scale = _extract_scale_tensor(weight_key_map["down_proj_expert_weight_scale_key"])
+        up_gate_proj_in_scale = _extract_scale_tensor(weight_key_map["up_gate_proj_expert_in_scale_key"])
+        down_proj_in_scale = _extract_scale_tensor(weight_key_map["down_proj_expert_in_scale_key"])
 
-        for idx, weight_tensor in enumerate([
-                up_gate_proj_tensor, down_proj_tensor, up_gate_proj_weight_scale,
-                down_proj_weight_scale, up_gate_proj_in_scale, down_proj_in_scale
-        ]):
+        for idx, weight_tensor in enumerate(
+            [
+                up_gate_proj_tensor,
+                down_proj_tensor,
+                up_gate_proj_weight_scale,
+                down_proj_weight_scale,
+                up_gate_proj_in_scale,
+                down_proj_in_scale,
+            ]
+        ):
             name = added_wfp8afp8_attrs[idx]
             setattr(
-                layer, name,
+                layer,
+                name,
                 layer.create_parameter(
                     shape=weight_tensor.shape,
                     dtype=weight_tensor.dtype,
                     default_initializer=paddle.nn.initializer.Constant(0),
-                ))
+                ),
+            )
             if weight_tensor.dtype == paddle.float8_e4m3fn:
                 getattr(layer, name).copy_(weight_tensor, False)
             else:
@@ -354,11 +369,16 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         }
 
         sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
-            topk_ids, num_local_experts, config_up_gate_proj["BLOCK_SIZE_M"])
+            topk_ids, num_local_experts, config_up_gate_proj["BLOCK_SIZE_M"]
+        )
         max_possible_num_post_padded = sorted_token_ids.shape[0]
         grid = (
-            ceil_div(max_possible_num_post_padded, config_up_gate_proj["BLOCK_SIZE_M"]) *
-            ceil_div(moe_intermediate_size * 2, config_up_gate_proj["BLOCK_SIZE_N"]), )
+            ceil_div(
+                max_possible_num_post_padded,
+                config_up_gate_proj["BLOCK_SIZE_M"],
+            )
+            * ceil_div(moe_intermediate_size * 2, config_up_gate_proj["BLOCK_SIZE_N"]),
+        )
 
         permute_x = fastdeploy.model_executor.ops.gpu.moe_fused_hadamard_quant_fp8(
             x,
@@ -366,7 +386,8 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             topk_ids=topk_ids,
             top_k=top_k,
             intermediate_size=hidden_size,
-            tiled=False)
+            tiled=False,
+        )
 
         fused_moe_kernel_paddle[grid](
             permute_x,
@@ -410,8 +431,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             even_Ks=hidden_size % config_up_gate_proj["BLOCK_SIZE_K"] == 0,
         )
 
-        down_proj_input = paddle.incubate.nn.functional.swiglu(
-            up_gate_proj_out)
+        down_proj_input = paddle.incubate.nn.functional.swiglu(up_gate_proj_out)
 
         down_proj_input = fastdeploy.model_executor.ops.gpu.moe_fused_hadamard_quant_fp8(
             down_proj_input,
@@ -419,7 +439,8 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             topk_ids=topk_ids,
             top_k=top_k,
             intermediate_size=moe_intermediate_size,
-            tiled=True)
+            tiled=True,
+        )
 
         config_down_proj = {
             "BLOCK_SIZE_M": 32,
@@ -434,8 +455,9 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         )
 
         grid = (
-            ceil_div(max_possible_num_post_padded, config_down_proj["BLOCK_SIZE_M"]) *
-            ceil_div(hidden_size, config_down_proj["BLOCK_SIZE_N"]), )
+            ceil_div(max_possible_num_post_padded, config_down_proj["BLOCK_SIZE_M"])
+            * ceil_div(hidden_size, config_down_proj["BLOCK_SIZE_N"]),
+        )
 
         fused_moe_kernel_paddle[grid](
             down_proj_input,
@@ -486,6 +508,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
 
         return out
 
+
 class BlockWiseFP8MoEMethod(QuantMethodBase):
     """
     Use Triton Group Gemm to compute Fused BlockWise FP8 Quant MoE.
@@ -498,13 +521,14 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         self.quant_config = quant_config
         self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
         self.added_scale_attrs = [
-            "up_gate_proj_weight_scale", "down_proj_weight_scale"
+            "up_gate_proj_weight_scale",
+            "down_proj_weight_scale",
         ]
 
     def process_prequanted_weights(self, layer: nn.Layer, state_dict) -> None:
         """process_prequanted_weights"""
 
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def create_weights(self, layer: nn.Layer, state_dict):
         """
@@ -521,10 +545,9 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             weight_list = []
             weight_scale_list = []
             for i in range(layer.num_local_experts):
-                from fastdeploy.model_executor.layers.utils import \
-                    per_block_cast_to_fp8
-                quant_weight, scale = per_block_cast_to_fp8(
-                    weight_tensor[i], self.quant_config.weight_block_size)
+                from fastdeploy.model_executor.layers.utils import per_block_cast_to_fp8
+
+                quant_weight, scale = per_block_cast_to_fp8(weight_tensor[i], self.quant_config.weight_block_size)
 
                 weight_list.append(quant_weight)
                 weight_scale_list.append(scale)
@@ -533,8 +556,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             create_and_set_parameter(layer, weight_name, quanted_weight)
 
             quanted_weight_scale = paddle.stack(weight_scale_list, axis=0)
-            quanted_weight_scale = quanted_weight_scale.transpose(
-                [0, 2, 1]).contiguous()
+            quanted_weight_scale = quanted_weight_scale.transpose([0, 2, 1]).contiguous()
             create_and_set_parameter(layer, scale_name, quanted_weight_scale)
 
     def check(self, layer: nn.Layer, up_gate_proj_weights, down_proj_weights):
@@ -542,10 +564,12 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         check layer is valid for this method
         """
         assert up_gate_proj_weights[0].shape == [
-            layer.hidden_size, layer.moe_intermediate_size * 2
+            layer.hidden_size,
+            layer.moe_intermediate_size * 2,
         ]
         assert down_proj_weights[0].shape == [
-            layer.moe_intermediate_size, layer.hidden_size
+            layer.moe_intermediate_size,
+            layer.hidden_size,
         ]
 
     def apply(
@@ -585,23 +609,22 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
 
         sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess(
-            topk_ids, num_local_experts, config["BLOCK_SIZE_M"])
+            topk_ids, num_local_experts, config["BLOCK_SIZE_M"]
+        )
         max_num_tokens_padded = sorted_token_ids.shape[0]
 
-        grid = (ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) *
-                ceil_div(moe_intermediate_size * 2, config["BLOCK_SIZE_N"]), )
+        grid = (
+            ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"])
+            * ceil_div(moe_intermediate_size * 2, config["BLOCK_SIZE_N"]),
+        )
 
         from .triton_moe_kernels import fused_moe_kernel_paddle
 
-        x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(
-            x, self.quant_config.weight_block_size[0])
+        x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, self.quant_config.weight_block_size[0])
 
-        cache13 = paddle.empty([token_num * top_k * max(N1, N2)],
-                               dtype=x.dtype)
-        intermediate_cache1 = cache13[:token_num * top_k * N1].view(
-            [token_num * top_k, N1])
-        intermediate_cache3 = cache13[:token_num * top_k * N2].view(
-            [token_num * top_k, N2])
+        cache13 = paddle.empty([token_num * top_k * max(N1, N2)], dtype=x.dtype)
+        intermediate_cache1 = cache13[: token_num * top_k * N1].view([token_num * top_k, N1])
+        intermediate_cache3 = cache13[: token_num * top_k * N2].view([token_num * top_k, N2])
 
         fused_moe_kernel_paddle[grid](
             x_q,
@@ -645,14 +668,15 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             even_Ks=hidden_size % config["BLOCK_SIZE_K"] == 0,
         )
 
-        intermediate_cache2 = paddle.incubate.nn.functional.swiglu(
-            intermediate_cache1)
+        intermediate_cache2 = paddle.incubate.nn.functional.swiglu(intermediate_cache1)
 
-        grid = (ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) *
-                ceil_div(hidden_size, config["BLOCK_SIZE_N"]), )
+        grid = (
+            ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) * ceil_div(hidden_size, config["BLOCK_SIZE_N"]),
+        )
 
         x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(
-            intermediate_cache2, self.quant_config.weight_block_size[0])
+            intermediate_cache2, self.quant_config.weight_block_size[0]
+        )
 
         fused_moe_kernel_paddle[grid](
             x_q,

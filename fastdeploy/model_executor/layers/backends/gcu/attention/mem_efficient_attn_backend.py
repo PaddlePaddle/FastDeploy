@@ -16,33 +16,35 @@
 
 from __future__ import annotations
 
-import os
-from dataclasses import dataclass, field
+import math
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional
 
-import paddle
-
 import numpy as np
-import math
+import paddle
+from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
-    AttentionBackend, AttentionMetadata)
-
-from fastdeploy.model_executor.ops.gcu import (fused_rotary_embedding,
-                                               mem_efficient_attention,
-                                               flash_attn_var_len)
-from paddleformers.utils.log import logger
+    AttentionBackend,
+    AttentionMetadata,
+)
+from fastdeploy.model_executor.ops.gcu import (
+    fused_rotary_embedding,
+    mem_efficient_attention,
+)
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta, ForwardMode
+
 
 @dataclass
 class GCUMemEfficientAttnMetadata(AttentionMetadata):
     """
     GCUMemEfficientAttnMetadata
     """
+
     forward_mode: ForwardMode = ForwardMode.MIXED
     _dtype: paddle.dtype = paddle.bfloat16
 
@@ -63,15 +65,18 @@ class GCUMemEfficientAttnMetadata(AttentionMetadata):
     pre_caches_length: int = 0
 
 
-
-
 class GCUMemEfficientAttnBackend(AttentionBackend):
     """
     GCUMemEfficientAttnBackend backend implementation.
     """
 
-    def __init__(self, fd_config: FDConfig, kv_num_heads: int, num_heads: int,
-                 head_dim: int):
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        kv_num_heads: int,
+        num_heads: int,
+        head_dim: int,
+    ):
         """
         GCUMemEfficientAttnBackend __init__
         """
@@ -99,8 +104,6 @@ class GCUMemEfficientAttnBackend(AttentionBackend):
         self.rotary_embs = None
         self.use_paddle_native_sdpa = False
 
-
-
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
         metadata = GCUMemEfficientAttnMetadata()
@@ -125,32 +128,35 @@ class GCUMemEfficientAttnBackend(AttentionBackend):
 
         metadata.pre_caches_length = forward_meta.pre_caches_length  # not inited
 
-
         self.attention_metadata = metadata
 
         if self.rotary_embs is None:
             self.rotary_embs = metadata.rotary_embs.reshape((-1, self.head_dim))
 
         # some info for attention
-        self.seq_lens_this_time_list = forward_meta.seq_lens_this_time.tolist() # List[int]
-        self.seq_lens_encoder_list = forward_meta.seq_lens_encoder.tolist() # List[List[int]]
-        self.seq_lens_decoder_list = forward_meta.seq_lens_decoder.tolist() # List[List[int]]
+        self.seq_lens_this_time_list = forward_meta.seq_lens_this_time.tolist()  # List[int]
+        self.seq_lens_encoder_list = forward_meta.seq_lens_encoder.tolist()  # List[List[int]]
+        self.seq_lens_decoder_list = forward_meta.seq_lens_decoder.tolist()  # List[List[int]]
         self.seq_lens_sum = np.sum(self.seq_lens_this_time_list)
         self.max_seq_len_this_time = np.max(self.seq_lens_this_time_list)
 
         num_seqs = forward_meta.seq_lens_this_time.shape[0]
 
-
         self.is_decoder = all(x[0] == 0 for x in self.seq_lens_encoder_list)
         self.is_all_prefill = all(x[0] == 0 for x in self.seq_lens_decoder_list)
-
 
         # block_tables and slot_mapping
         if self.all_slot_mapping is None:
             max_num_blocks_per_seq = (self.max_seq_len + self.block_size - 1) // self.block_size
             total_blocks = max_num_blocks_per_seq * self.max_num_seqs
-            self.all_block_tables = np.arange(0, total_blocks, dtype=np.int32).reshape((self.max_num_seqs, max_num_blocks_per_seq)).tolist()
-            self.all_slot_mapping = np.arange(0, total_blocks * self.block_size, dtype=np.int32).reshape((self.max_num_seqs, -1)).tolist()
+            self.all_block_tables = (
+                np.arange(0, total_blocks, dtype=np.int32)
+                .reshape((self.max_num_seqs, max_num_blocks_per_seq))
+                .tolist()
+            )
+            self.all_slot_mapping = (
+                np.arange(0, total_blocks * self.block_size, dtype=np.int32).reshape((self.max_num_seqs, -1)).tolist()
+            )
 
         block_tables = []
         slot_mapping = []
@@ -162,9 +168,9 @@ class GCUMemEfficientAttnBackend(AttentionBackend):
         position_ids = []
         for seq_idx in range(num_seqs):
             cache_len = None
-            if self.seq_lens_encoder_list[seq_idx][0] != 0:   # prefill
+            if self.seq_lens_encoder_list[seq_idx][0] != 0:  # prefill
                 cache_len = 0
-            elif self.seq_lens_decoder_list[seq_idx][0] != 0: # decode
+            elif self.seq_lens_decoder_list[seq_idx][0] != 0:  # decode
                 cache_len = self.seq_lens_decoder_list[seq_idx][0]
             # else:  doesnot have req in this seq_idx
 
@@ -179,9 +185,12 @@ class GCUMemEfficientAttnBackend(AttentionBackend):
                 position_ids.extend(self.position_ids_base[start:end])
                 query_lens.append(lens_this_time)
                 cached_kv_lens.append(end)
-                cached_kv_slot_range.append([self.all_slot_mapping[seq_idx][0], self.all_slot_mapping[seq_idx][end]])
-
-
+                cached_kv_slot_range.append(
+                    [
+                        self.all_slot_mapping[seq_idx][0],
+                        self.all_slot_mapping[seq_idx][end],
+                    ]
+                )
 
         self.block_tables = paddle.to_tensor(block_tables, dtype="int32")
         self.slot_mapping = paddle.to_tensor(slot_mapping, dtype="int32")
@@ -206,7 +215,6 @@ class GCUMemEfficientAttnBackend(AttentionBackend):
         self.cached_kv_lens = cached_kv_lens
         self.cached_kv_slot_range = cached_kv_slot_range
 
-
     def get_attntion_meta(self):
         """get_attntion_meta"""
         return self.attention_metadata
@@ -219,9 +227,11 @@ class GCUMemEfficientAttnBackend(AttentionBackend):
         Caculate kv cache shape
         """
         # [total_tokens, kv_num_heads, head_dim]
-        return (max_num_blocks * self.block_size,
-                self.kv_num_heads,
-                self.head_dim)
+        return (
+            max_num_blocks * self.block_size,
+            self.kv_num_heads,
+            self.head_dim,
+        )
 
     @paddle.no_grad()
     def forward_mixed(
@@ -245,7 +255,6 @@ class GCUMemEfficientAttnBackend(AttentionBackend):
         query = query.reshape_((1, -1, self.num_heads, self.head_dim))
         key = key.reshape_((1, -1, self.kv_num_heads, self.head_dim))
 
-
         # 1. Rope
         if self.rotary_embs.dtype != query.dtype:
             self.rotary_embs = paddle.cast(self.rotary_embs, query.dtype)
@@ -255,7 +264,7 @@ class GCUMemEfficientAttnBackend(AttentionBackend):
             key,
             self.rotary_embs,
             self.position_ids,
-            layer.use_neox_rotary_style
+            layer.use_neox_rotary_style,
         )
 
         # 2. Save kv cache
@@ -282,9 +291,7 @@ class GCUMemEfficientAttnBackend(AttentionBackend):
             v_ = value_caches[kv_start:kv_end, :, :]
 
             if self.use_paddle_native_sdpa:
-                res = self.native_sdpa_impl(
-                    q_, k_, v_
-                )
+                res = self.native_sdpa_impl(q_, k_, v_)
             else:
                 res = mem_efficient_attention(
                     query=q_.unsqueeze(0),
@@ -302,7 +309,6 @@ class GCUMemEfficientAttnBackend(AttentionBackend):
         result = result.reshape_((token_num, -1))
         return result
 
-
     def get_triangle_upper_mask(self, shape, dtype):
         #  [batch_size, 1, q_seq_len, kv_seq_len]
         shape[1] = 1
@@ -312,7 +318,6 @@ class GCUMemEfficientAttnBackend(AttentionBackend):
         mask = paddle.full(shape, paddle.finfo(paddle_dtype).min, dtype=paddle_dtype)
         mask = paddle.triu(mask, diagonal=kv_seq_len - q_seq_len + 1)
         return mask
-
 
     def native_sdpa_impl(self, query, key, value):
         # input shape: [num_tokens, num_heads, head_dim] -> [1, num_tokens, num_heads, head_dim]
@@ -342,13 +347,9 @@ class GCUMemEfficientAttnBackend(AttentionBackend):
         # matmul and devide by sqrt(head_dim)
         attn_weights = paddle.matmul(q / math.sqrt(head_dim), k.transpose([0, 1, 3, 2]))
 
-        attention_mask = self.get_triangle_upper_mask(
-            [batch, 1, q_seq_len, kv_seq_len], q.dtype
-        )
+        attention_mask = self.get_triangle_upper_mask([batch, 1, q_seq_len, kv_seq_len], q.dtype)
         attn_weights = attn_weights + attention_mask
-        attn_weights = paddle.nn.functional.softmax(
-            attn_weights, axis=-1, dtype="float32"
-        ).astype(q.dtype)
+        attn_weights = paddle.nn.functional.softmax(attn_weights, axis=-1, dtype="float32").astype(q.dtype)
 
         attn_output = paddle.matmul(attn_weights, v)
         attn_output = attn_output.transpose([0, 2, 1, 3])

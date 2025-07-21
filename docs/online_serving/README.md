@@ -36,6 +36,7 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
   ]
 }'
 ```
+
 Here's an example curl command demonstrating how to include the logprobs parameter in a user request:
 
 ```bash
@@ -49,6 +50,7 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
 ```
 
 Here is an example of sending a user request using a Python script:
+
 ```python
 import openai
 host = "0.0.0.0"
@@ -87,10 +89,10 @@ The differences in request parameters between FastDeploy and the OpenAI protocol
 - `temperature`: Optional[float] = None
 - `top_p`: Optional[float] = None
 - `metadata`: Optional[dict] = None (supported only in `v1/chat/completions` for configuring additional parameters, e.g., `metadata={"enable_thinking": True}`)
-    - `min_tokens`: Optional[int] = 1 (minimum number of tokens generated)
-    - `reasoning_max_tokens`: Optional[int] = None (maximum number of tokens for reasoning content, defaults to the same as `max_tokens`)
-    - `enable_thinking`: Optional[bool] = True (whether to enable reasoning for models that support deep thinking)
-    - `repetition_penalty`: Optional[float] = None (coefficient for directly penalizing repeated token generation (>1 penalizes repetition, <1 encourages repetition))
+  - `min_tokens`: Optional[int] = 1 (minimum number of tokens generated)
+  - `reasoning_max_tokens`: Optional[int] = None (maximum number of tokens for reasoning content, defaults to the same as `max_tokens`)
+  - `enable_thinking`: Optional[bool] = True (whether to enable reasoning for models that support deep thinking)
+  - `repetition_penalty`: Optional[float] = None (coefficient for directly penalizing repeated token generation (>1 penalizes repetition, <1 encourages repetition))
 
 > Note: For multimodal models, since the reasoning chain is enabled by default, resulting in overly long outputs, `max_tokens` can be set to the model's maximum output length or the default value can be used.
 

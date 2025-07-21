@@ -98,15 +98,14 @@ class SamplingParams:
     bad_words: Optional[List[str]] = None
 
     @classmethod
-    def from_dict(cls, req_dict: dict[str, Any]) -> "SamplingParams":
+    def from_dict(cls, req_dict: dict[str, Any]) -> SamplingParams:
         """Create instance from command line arguments"""
         return cls(
             **{
-                field.name:
-                req_dict[field.name] if field.name in
-                req_dict else field.default
+                field.name: (req_dict[field.name] if field.name in req_dict else field.default)
                 for field in fields(cls)
-            })
+            }
+        )
 
     @classmethod
     def from_optional(cls,
@@ -158,31 +157,22 @@ class SamplingParams:
 
     def _verify_args(self) -> None:
         if not isinstance(self.n, int):
-            raise ValueError(
-                f"n must be an int, but is of type {type(self.n)}")
+            raise ValueError(f"n must be an int, but is of type {type(self.n)}")
         if self.n < 1:
             raise ValueError(f"n must be at least 1, got {self.n}.")
-        if self.presence_penalty is not None and (
-                not -2.0 <= self.presence_penalty <= 2.0):
-            raise ValueError("presence_penalty must be in [-2, 2], got "
-                             f"{self.presence_penalty}.")
-        if self.frequency_penalty is not None and (
-                not -2.0 <= self.frequency_penalty <= 2.0):
-            raise ValueError("frequency_penalty must be in [-2, 2], got "
-                             f"{self.frequency_penalty}.")
+        if self.presence_penalty is not None and (not -2.0 <= self.presence_penalty <= 2.0):
+            raise ValueError("presence_penalty must be in [-2, 2], got " f"{self.presence_penalty}.")
+        if self.frequency_penalty is not None and (not -2.0 <= self.frequency_penalty <= 2.0):
+            raise ValueError("frequency_penalty must be in [-2, 2], got " f"{self.frequency_penalty}.")
         if self.repetition_penalty is not None and self.repetition_penalty <= 0.0:
-            raise ValueError(
-                "repetition_penalty must be greater than zero, got "
-                f"{self.repetition_penalty}.")
+            raise ValueError("repetition_penalty must be greater than zero, got " f"{self.repetition_penalty}.")
         if self.temperature is not None and self.temperature < 0.0:
-            raise ValueError(
-                f"temperature must be non-negative, got {self.temperature}.")
+            raise ValueError(f"temperature must be non-negative, got {self.temperature}.")
         if self.top_p is not None and not 0.0 <= self.top_p <= 1.0:
             raise ValueError(f"top_p must be in [0, 1], got {self.top_p}.")
         # quietly accept -1 as disabled, but prefer 0
         if self.top_k < -1:
-            raise ValueError(f"top_k must be 0 (disable), or at least 1, "
-                             f"got {self.top_k}.")
+            raise ValueError(f"top_k must be 0 (disable), or at least 1, " f"got {self.top_k}.")
         if not isinstance(self.top_k, int):
             raise TypeError(
                 f"top_k must be an integer, got {type(self.top_k).__name__}")
@@ -190,30 +180,24 @@ class SamplingParams:
             raise ValueError("min_p must be in [0,1],got f{self.min_p}")
 
         if self.max_tokens is not None and self.max_tokens < 1:
-            raise ValueError(
-                f"max_tokens must be at least 1, got {self.max_tokens}.")
+            raise ValueError(f"max_tokens must be at least 1, got {self.max_tokens}.")
 
         if self.reasoning_max_tokens is not None and self.reasoning_max_tokens > self.max_tokens:
-            raise ValueError(
-                f"reasoning_max_tokens must be less than max_tokens, got {self.reasoning_max_tokens}.")
+            raise ValueError(f"reasoning_max_tokens must be less than max_tokens, got {self.reasoning_max_tokens}.")
 
         if self.min_tokens < 0:
-            raise ValueError(f"min_tokens must be greater than or equal to 0, "
-                             f"got {self.min_tokens}.")
+            raise ValueError(f"min_tokens must be greater than or equal to 0, " f"got {self.min_tokens}.")
         if self.max_tokens is not None and self.min_tokens > self.max_tokens:
             raise ValueError(
-                f"min_tokens must be less than or equal to "
-                f"max_tokens={self.max_tokens}, got {self.min_tokens}.")
+                f"min_tokens must be less than or equal to " f"max_tokens={self.max_tokens}, got {self.min_tokens}."
+            )
         if self.logprobs is not None and self.logprobs < 0:
-            raise ValueError(
-                f"logprobs must be non-negative, got {self.logprobs}.")
+            raise ValueError(f"logprobs must be non-negative, got {self.logprobs}.")
         if self.logprobs is not None and self.logprobs > 20:
-            raise ValueError(
-                "Invalid value for 'top_logprobs': must be less than or equal to 20.")
+            raise ValueError("Invalid value for 'top_logprobs': must be less than or equal to 20.")
 
         if not 0 <= self.seed <= 922337203685477580:
-            raise ValueError("seed must be in [0, 922337203685477580], got "
-                             f"{self.seed}.")
+            raise ValueError("seed must be in [0, 922337203685477580], got " f"{self.seed}.")
 
     def update_from_tokenizer(self, tokenizer):
         """
@@ -226,6 +210,7 @@ class SamplingParams:
 @dataclass
 class BeamSearchParams:
     """Beam search parameters for text generation."""
+
     beam_width: int
     max_tokens: int
     ignore_eos: bool = False

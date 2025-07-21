@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" setup for FASTDEPLOY base ops """
+"""setup for FASTDEPLOY base ops"""
 
 from paddle.utils.cpp_extension import CppExtension, setup
 
@@ -27,7 +27,8 @@ setup(
             "cpu_ops/rebuild_padding.cc",
         ],
         extra_compile_args=[
-            "-DPy_LIMITED_API=0x03090000", "-DPADDLE_ON_INFERENCE"
+            "-DPy_LIMITED_API=0x03090000",
+            "-DPADDLE_ON_INFERENCE",
         ],
     ),
 )

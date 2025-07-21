@@ -21,8 +21,7 @@ import paddle
 
 
 class LogprobsLists(NamedTuple):
-    """
-    """
+    """ """
 
     # [num_reqs, max_num_logprobs + 1]
     logprob_token_ids: list[list[int]]
@@ -41,8 +40,7 @@ class LogprobsLists(NamedTuple):
 
 
 class LogprobsTensors(NamedTuple):
-    """
-    """
+    """ """
 
     # [num_reqs, max_num_logprobs + 1]
     logprob_token_ids: paddle.Tensor
@@ -60,16 +58,12 @@ class LogprobsTensors(NamedTuple):
         )
 
     @staticmethod
-    def empty_cpu(num_positions: int,
-                  num_tokens_per_position: int) -> "LogprobsTensors":
+    def empty_cpu(num_positions: int, num_tokens_per_position: int) -> "LogprobsTensors":
         """Create empty LogprobsTensors on CPU."""
 
-        logprob_token_ids = paddle.empty(
-            [num_positions, num_tokens_per_position],
-            dtype=paddle.int64).cpu()
+        logprob_token_ids = paddle.empty([num_positions, num_tokens_per_position], dtype=paddle.int64).cpu()
         logprobs = paddle.empty_like(logprob_token_ids, dtype=paddle.float32)
-        selected_token_ranks = paddle.empty([num_positions],
-                                            dtype=paddle.int64).cpu()
+        selected_token_ranks = paddle.empty([num_positions], dtype=paddle.int64).cpu()
         return LogprobsTensors(
             logprob_token_ids=logprob_token_ids,
             logprobs=logprobs,
@@ -79,8 +73,7 @@ class LogprobsTensors(NamedTuple):
 
 @dataclass
 class SamplerOutput:
-    """
-    """
+    """ """
 
     # [num_reqs, max_num_generated_tokens]
     # Different requests can have different number of generated tokens.
@@ -89,10 +82,11 @@ class SamplerOutput:
     sampled_token_ids: paddle.Tensor
     logprobs_tensors: Optional[LogprobsTensors]
 
+
 @dataclass
 class ModelOutputData:
     """
-        OutputData by execute_model
+    OutputData by execute_model
     """
 
     """
@@ -222,11 +216,10 @@ class ModelOutputData:
     reasoning_index: paddle.Tensor = None
 
 
-
 @dataclass
 class ModelRunnerOutput:
     """
-        [WIP] ModelRunnerOutput is serialized and sent to the scheduler process.
+    [WIP] ModelRunnerOutput is serialized and sent to the scheduler process.
     """
 
     """
