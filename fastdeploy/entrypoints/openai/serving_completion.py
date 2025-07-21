@@ -45,7 +45,7 @@ from fastdeploy.engine.request import RequestOutput
 
 
 class OpenAIServingCompletion:
-        def __init__(self, engine_client, pid, ips):
+    def __init__(self, engine_client, pid, ips):
         self.engine_client = engine_client
         self.pid = pid
         self.master_ip = ips
