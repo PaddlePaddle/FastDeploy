@@ -142,7 +142,7 @@ public:
                                         Operand::kB,
                                         typename WarpTransformedFragmentB::Element,
                                         LayoutScale,
-                                        32>;
+                                        QuantParamsAccessor::kGroupSize>;
   static_assert(sizeof(WarpDequantizer) > 0, "WarpDequantizer template instantiation failed");
 
   /// Complex transform on A operand

@@ -70,8 +70,8 @@ template <
     typename ElementOperand_,
     /// Layout of operand
     typename Layout_,
-    /// Number of threads participating in one matrix operation
-    int Threads,
+    /// Group size for quantization
+    int GroupSize_,
     ///
     typename Enable = void>
 class MmaTensorOpWin2xDequantizer {
@@ -86,14 +86,16 @@ template <
     /// Shape of the warp level matrix multiply (concept: GemmShape)
     typename Shape_,
     /// Data type of Scale elements
-    typename ElementOperand_>
+    typename ElementOperand_,
+    /// Group size for quantization
+    int GroupSize_>
 class MmaTensorOpWin2xDequantizer<
     MmaOperator_,
     Shape_,
     Operand::kB,
     ElementOperand_,
     layout::RowMajor,
-    32>
+    GroupSize_>
     //typename platform::enable_if<MmaOperator_::ArchTag::kMinComputeCapability >= 80
     //    && platform::is_same<typename MmaOperator_::ArchMmaOperator::LayoutB, layout::ColumnMajor>::value>::type>
 {
@@ -119,12 +121,15 @@ public:
     /// Layout of the scales in shared memory
     using Layout = layout::RowMajor;
 
+    /// Group size for quantization
+    static constexpr int kGroupSize = GroupSize_;
+
     /// Type of input
     using ElementB = typename MmaOperator::FragmentB::Element;
     static_assert(platform::is_same<ElementB, uint2b_t>::value, "ElementB must be uint2b_t");
 
     /// Type of internal compute
-    using ElementCompute = float;
+    using ElementCompute = ElementOperand;
 
     /// Type of the scales
     using ElementLocalScale = uint4b_t;
@@ -173,6 +178,7 @@ private:
     ElementSuperScale* pointer_super_scale_;
 
     FragmentInputUnpack unpacked_frag_;
+    FragmentCompute scale_frag_;
 
 public:
     CUTLASS_DEVICE
@@ -260,19 +266,19 @@ public:
 
 #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
 
-        static constexpr int32_t kGroupSize = 64;
-        static constexpr int32_t kLocalScaleMask = 0xF;
+        if (warp_k_compute_offset == 0) {
+            static constexpr int32_t kLocalScaleMask = 0xF;
 
-        // special for TileRows = 64
-        int local_scale_shift = (((tb_offset_k / kGroupSize) + 1) & 1) * 4;
-        FragmentCompute scale_frag;
+            // special for TileRows = 64
+            int local_scale_shift = (((tb_offset_k / kGroupSize) + 1) & 1) * 4;
 
-        CUTLASS_PRAGMA_UNROLL
-        for (int i = 0; i < FragmentLocalScale::kElements; ++i) {
-            int32_t shifted_local_scale =
-                (static_cast<int32_t>(local_scale_frag[i]) >> local_scale_shift) & kLocalScaleMask;
-            scale_frag[i] =
-                static_cast<ElementCompute>(shifted_local_scale) * static_cast<ElementCompute>(super_scale_frag[i]);
+            CUTLASS_PRAGMA_UNROLL
+            for (int i = 0; i < FragmentLocalScale::kElements; ++i) {
+                int32_t shifted_local_scale =
+                    (static_cast<int32_t>(local_scale_frag[i]) >> local_scale_shift) & kLocalScaleMask;
+                scale_frag_[i] =
+                    static_cast<ElementCompute>(static_cast<float>(shifted_local_scale) * static_cast<float>(super_scale_frag[i]));
+            }
         }
 
 #if 0
@@ -296,7 +302,7 @@ public:
                 // After applying LOP3 optimizations for performance, the B operand requires data rearrangement.
                 int mapped_idx = mma_n_iter * kExpansionFactor * kOutputColumns + offset + 2 * j + mapped_offset;
                 ElementCompute scaled_value =
-                    static_cast<ElementCompute>(unpacked_frag_[mapped_idx]) * scale_frag[mma_n_iter];
+                    static_cast<ElementCompute>(unpacked_frag_[mapped_idx]) * scale_frag_[mma_n_iter];
                 output_frag[mma_n_iter * kOutputColumns + j] = static_cast<ElementOperand>(scaled_value);
             }
         }
