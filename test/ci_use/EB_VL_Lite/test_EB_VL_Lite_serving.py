@@ -413,7 +413,7 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
     """
     Test return_token_ids option in streaming chat functionality with the local service
     """
-    # 设定 return_token_ids
+    # enable return_token_ids
     response = openai_client.chat.completions.create(
         model="default",
         messages=[
@@ -457,7 +457,7 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
             assert chunk.choices[0].delta.prompt_token_ids is None
             assert isinstance(chunk.choices[0].delta.completion_token_ids, list)
 
-    # 不设定 return_token_ids
+    # disable return_token_ids
     response = openai_client.chat.completions.create(
         model="default",
         messages=[

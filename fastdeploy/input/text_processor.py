@@ -266,7 +266,7 @@ class DataProcessor(BaseDataProcessor):
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
-        # 处理stop_sequences
+        # processing stop_sequences
         stop_sequences = request.get("stop", [])
         if stop_sequences:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
@@ -274,7 +274,7 @@ class DataProcessor(BaseDataProcessor):
             request["stop_seqs_len"] = stop_seqs_len
 
         data_processor_logger.info(f"Processing request {request}")
-        # 处理prompt_token_ids
+        # processing prompt_token_ids
         if not request.get('prompt_token_ids'):
             if 'prompt' in request:
                 request['prompt_token_ids'] = self.text2ids(request['prompt'], max_model_len).tolist()

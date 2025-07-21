@@ -381,10 +381,13 @@ class CompletionRequest(BaseModel):
         if prompt is not None:
             req_dict["prompt"] = prompt
 
-        if self.prompt_token_ids is not None:
+        if self.prompt_token_ids is not None or \
+            (self.extra_body is not None and self.extra_body.get("prompt_token_ids") is not None):
             req_dict["prompt_token_ids"] = self.prompt_token_ids
-            if prompt in req_dict:
+            if "prompt" in req_dict:
                 del req_dict["prompt"]
+        else:
+            assert len(prompt) > 0
 
         guided_json_object = None
         if self.response_format is not None:
@@ -512,10 +515,13 @@ class ChatCompletionRequest(BaseModel):
             if value is not None:
                 req_dict[key] = value
 
-        if self.prompt_token_ids is not None:
+        if self.prompt_token_ids is not None or \
+            (self.extra_body is not None and self.extra_body.get("prompt_token_ids") is not None):
             req_dict["prompt_token_ids"] = self.prompt_token_ids
             if "messages" in req_dict:
                 del req_dict["messages"]
+        else:
+            assert len(self.messages) > 0
 
         guided_json_object = None
         if self.response_format is not None:
