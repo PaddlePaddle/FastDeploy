@@ -13,6 +13,10 @@ from fastdeploy.utils import llm_logger
 
 @dataclass
 class ScheduledDecodeTask:
+    """
+    Task for allocating new blocks to decode.
+    """
+
     idx: int
     request_id: str
     block_tables: list[int]
@@ -21,12 +25,25 @@ class ScheduledDecodeTask:
 
 @dataclass
 class ScheduledPreemptTask:
+    """
+    Task for terminating inference to recycle resource.
+    """
+
     idx: int
     request_id: str
     task_type: RequestType = RequestType.PREEMPTED
 
 
 class ResourceManagerV1(ResourceManager):
+    """
+    Resource manager for scheduler v1.
+    In scheduler v1, all gpu blocks are managed by PrefixCacheManager.
+    Tasks sent to worker are divided into 3 types, PREFILL、DECODE and PREEMPTED.
+    For prefill task, the worker infer with one step and then stopped for this query if not all prompt tokens are computed.
+    For decode task, the work continues to decode until allocated blocks are exhausted.
+    For preempted task, the work reset all inputs to terminate the inference.
+    """
+
     def __init__(self, max_num_seqs, config, tensor_parallel_size, splitwise_role, local_data_parallel_id=0):
         super(ResourceManagerV1, self).__init__(
             max_num_seqs, config, tensor_parallel_size, splitwise_role, local_data_parallel_id
@@ -60,6 +77,27 @@ class ResourceManagerV1(ResourceManager):
     def _prepare_preempt_task(self, request):
         return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
 
+    def _trigger_preempt(self, request, num_new_blocks, preempted_reqs, scheduled_reqs):
+        can_schedule = True
+        while True:
+            if not self.cache_manager.can_allocate_gpu_blocks(num_new_blocks):
+                preempted_req = self.running.pop()
+                preempted_req.status = RequestStatus.PREEMPTED
+                preempted_req.num_computed_tokens = 0
+                self._free_blocks(preempted_req)
+                self.waiting.appendleft(preempted_req)
+                preempted_reqs.append(preempted_req)
+                scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
+                if preempted_req == request:
+                    # No more request to preempt.
+                    can_schedule = False
+                    break
+            else:
+                # The request can be scheduled.
+                can_schedule = True
+                break
+        return can_schedule
+
     def schedule(self):
         with self.lock:
             scheduled_reqs: list[Request] = []
@@ -90,26 +128,9 @@ class ResourceManagerV1(ResourceManager):
                             scheduled_reqs.append(self._prepare_decode_task(request))
                         else:
                             # Not enough blocks to allocate, trigger preemption
-                            can_schedule = True
-                            while True:
-                                if not self.cache_manager.can_allocate_gpu_blocks(
-                                    self.config.cache_config.enc_dec_block_num
-                                ):
-                                    preempted_req = self.running.pop()
-                                    preempted_req.status = RequestStatus.PREEMPTED
-                                    preempted_req.num_computed_tokens = 0
-                                    self._free_blocks(preempted_req)
-                                    self.waiting.appendleft(preempted_req)
-                                    preempted_reqs.append(preempted_req)
-                                    scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
-                                    if preempted_req == request:
-                                        # No more request to preempt.
-                                        can_schedule = False
-                                        break
-                                else:
-                                    # The request can be scheduled.
-                                    can_schedule = True
-                                    break
+                            can_schedule = self._trigger_preempt(
+                                request, self.config.cache_config.enc_dec_block_num, preempted_reqs, scheduled_reqs
+                            )
                             if not can_schedule:
                                 break
                             # Allocation for next decoding blocks
@@ -133,26 +154,7 @@ class ResourceManagerV1(ResourceManager):
                         # Prepare prefill task
                         scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                     else:
-                        can_schedule = True
-                        # Not enough blocks to allocate, trigger preemption
-                        while True:
-                            if not self.cache_manager.can_allocate_gpu_blocks(num_new_block):
-                                preempted_req = self.running.pop()
-                                preempted_req.status = RequestStatus.PREEMPTED
-                                preempted_req.num_computed_tokens = 0
-                                self._free_blocks(preempted_req)
-                                self.waiting.appendleft(preempted_req)
-                                preempted_reqs.append(preempted_req)
-                                # prepare preempted task
-                                scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
-                                if preempted_req == request:
-                                    # No more request to preempt.
-                                    can_schedule = False
-                                    break
-                            else:
-                                # The request can be scheduled.
-                                can_schedule = True
-                                break
+                        can_schedule = self._trigger_preempt(request, num_new_block, preempted_reqs, scheduled_reqs)
                         if not can_schedule:
                             break
                         request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))

@@ -232,7 +232,7 @@ def post_process_normal(
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,
                 share_inputs["step_seq_lens_decoder"],
-                share_inputs["prefill_prompt_lens"],
+                share_inputs["prompt_lens"],
                 sampler_output.sampled_token_ids,
                 model_output.input_ids,
                 share_inputs["block_tables"],

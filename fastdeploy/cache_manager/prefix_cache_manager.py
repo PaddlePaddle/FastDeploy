@@ -217,7 +217,9 @@ class PrefixCacheManager:
             )  # All gpu blocks are managed by cache manager
         else:
             self.num_gpu_blocks = cache_config.prefill_kvcache_block_num
-            self.gpu_free_block_list = list(range(self.num_gpu_blocks - 1, -1, -1))  # 服务端管理的GPU上剩余的block id
+            self.gpu_free_block_list = list(
+                range(self.num_gpu_blocks - 1, -1, -1)
+            )  # Only block table divided for prefill managed by server
 
         heapq.heapify(self.gpu_free_block_list)
         self.node_id_pool = list(range(self.num_gpu_blocks + self.num_cpu_blocks))

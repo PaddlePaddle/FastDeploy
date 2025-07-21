@@ -219,7 +219,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
-                self.share_inputs["prefill_prompt_lens"][idx : idx + 1] = len(input_ids)
+                self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
@@ -545,7 +545,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["prefill_prompt_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["prompt_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["step_idx"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["not_need_stop"] = paddle.full(
