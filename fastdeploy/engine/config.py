@@ -656,7 +656,6 @@ class Config:
         reasoning_parser: str = None,
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
-        enable_custom_all_reduce: bool = False,
         enable_logprob: bool = False,
     ):
         """
