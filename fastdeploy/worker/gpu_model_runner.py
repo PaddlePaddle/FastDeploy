@@ -24,6 +24,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
+from fastdeploy.model_executor.graph_optimization.utils import sot_warmup_guard
 from fastdeploy.model_executor.guided_decoding import get_guided_backend
 from fastdeploy.model_executor.guided_decoding.base_guided_decoding import \
     LogitsProcessorBase
@@ -109,6 +110,7 @@ class GPUModelRunner(ModelRunnerBase):
         # self.kv_caches: list[paddle.Tensor] = []
 
         # Cuda Graph
+        self.graph_opt_level = self.graph_opt_config.graph_opt_level
         self.use_cudagraph = self.graph_opt_config.use_cudagraph
         self.cudagraph_capture_sizes = list(
             reversed(self.graph_opt_config.cudagraph_capture_sizes))
@@ -1091,6 +1093,23 @@ class GPUModelRunner(ModelRunnerBase):
         time_after_capture = time.perf_counter()
         logger.info(
             f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds"
+        )
+
+    @sot_warmup_guard(True)
+    def sot_warmup(self) -> None:
+        start_time = time.perf_counter()
+        capture_sizes = self.cudagraph_capture_sizes.copy()
+        expected_decode_len = 64
+        for batch_size in sorted(capture_sizes, reverse=True):
+            self._dummy_run(num_tokens=self.parallel_config.max_model_len,
+                            batch_size=batch_size,
+                            in_capturing=False,
+                            expected_decode_len=expected_decode_len)
+            logger.info(
+                f"SOT warmup the model with the batch size:{batch_size}, num tokens:{expected_decode_len}"
+            )
+        logger.info(
+            f"SOT warmup took {start_time - time.perf_counter()} seconds"
         )
 
     def _get_skip_idx(self,
