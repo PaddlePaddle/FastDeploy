@@ -9,14 +9,13 @@ from typing import Annotated, Any, TypeVar, Union, get_origin, get_type_hints
 
 import paddle
 from paddle import Tensor
+from paddleformers.utils.log import logger
 from typing_extensions import TypeAlias
 
 T = TypeVar("T")
 U = TypeVar("U")
 
 Accessor: TypeAlias = Callable[[T], U]
-
-# TODO(SigureMo): Replace all print with logger
 
 
 class DynamicDims:
@@ -57,7 +56,7 @@ class DynamicDimTypeResolver:
             if runtime_tp is not tp and resolver.type_match(runtime_tp):
                 return resolver.resolve(data, data_name, runtime_tp)
         else:
-            print(f"No resolver found for type {tp} and data {data_name}")
+            logger.debug(f"No resolver found for type {tp} and data {data_name}")
 
 
 @DynamicDimTypeResolver.register_resolver
@@ -138,12 +137,12 @@ class AnnotatedTensorDynamicDimTypeResolver(DynamicDimTypeResolver):
         dynamic_dims = dynamic_dims[0].dims
         if not isinstance(data, Tensor):
             raise TypeError(f"data {data_name} has type annotation Tensor but got type {type(data)}")
-        print(f"data {data_name} has dynamic dims {dynamic_dims} for type {tp}")
+        logger.debug(f"data {data_name} has dynamic dims {dynamic_dims} for type {tp}")
         paddle.jit.marker.dynamic_dims(data, dynamic_dims)
 
 
 @DynamicDimTypeResolver.register_resolver
-class TensorImplicitBatchOnlyDynamicDimTypeResolver(DynamicDimTypeResolver):
+class TensorImplicitFirstDimOnlyDynamicDimTypeResolver(DynamicDimTypeResolver):
     def type_match(self, tp) -> bool:
         return tp is Tensor
 
@@ -152,7 +151,7 @@ class TensorImplicitBatchOnlyDynamicDimTypeResolver(DynamicDimTypeResolver):
         dynamic_dims = (0,)
         if not isinstance(data, Tensor):
             raise TypeError(f"data {data_name} has type annotation Tensor but got type {type(data)}")
-        print(f"data {data_name} has dynamic dims {dynamic_dims} for type {tp}")
+        logger.debug(f"data {data_name} has dynamic dims {dynamic_dims} for type {tp}")
         paddle.jit.marker.dynamic_dims(data, dynamic_dims)
 
 

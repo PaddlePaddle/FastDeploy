@@ -21,6 +21,7 @@ from typing import Callable, Optional, get_type_hints
 
 from paddle.jit import sot
 from paddle.jit.dy2static.utils import Backend as ToStaticBackend
+from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.graph_optimization.cudagraph_piecewise_backend import (
@@ -52,10 +53,11 @@ def apply_to_static_optimization(fn, backend: ToStaticBackend):
     forward_type_hints = get_type_hints(forward_fn)
     static_forward_fn = sot.symbolic_translate(forward_fn, training=False, backend=backend)
     unsafe_static_forward_fn = None
+    need_warmup = True
 
     @functools.wraps(forward_fn)
     def warmup_impl(self, *args, **kwargs):
-        nonlocal unsafe_static_forward_fn
+        nonlocal unsafe_static_forward_fn, need_warmup
         bound_args = forward_sig.bind(self, *args, **kwargs)
         bound_args.apply_defaults()
         for name, arg in bound_args.arguments.items():
@@ -71,16 +73,16 @@ def apply_to_static_optimization(fn, backend: ToStaticBackend):
         ]
         # Check has only one graph
         if len(new_guarded_codes) > 1:
-            # TODO(SigureMo): Use logger
-            print("Model has multiple generated code, please check all dynamic dim has marked.")
+            logger.warning("Model has multiple generated code, please check all dynamic dim has marked.")
             unsafe_static_forward_fn = None
+            need_warmup = False
             return result
         # Check generated code has no break graph
         new_code = new_guarded_codes[0][0][0]
         if any(name.startswith("$") for name in new_code.co_names):  # TODO(SigureMo): It's a internal impl
-            # TODO(SigureMo): Use logger
-            print("Model has breakgraph, please set env SOT_LOG_LEVEL=3 to check it.")
+            logger.warning("Model has breakgraph, please set env SOT_LOG_LEVEL=3 to check it.")
             unsafe_static_forward_fn = None
+            need_warmup = False
             return result
         unsafe_static_forward_fn = types.FunctionType(
             new_code,
@@ -93,9 +95,10 @@ def apply_to_static_optimization(fn, backend: ToStaticBackend):
 
     @functools.wraps(forward_fn)
     def static_forward(self, *args, **kwargs):
-        is_warmup = in_warmup_mode()
+        nonlocal need_warmup
+        is_warmup = in_warmup_mode() and need_warmup
         if is_warmup:
-            warmup_impl(self, *args, **kwargs)
+            return warmup_impl(self, *args, **kwargs)
         nonlocal unsafe_static_forward_fn
         if unsafe_static_forward_fn is None:
             return static_forward_fn(self, *args, **kwargs)
