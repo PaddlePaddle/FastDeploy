@@ -423,7 +423,6 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
             self.seq_lens_encoder,
             self.seq_lens_decoder,
             self.seq_lens_this_time,
-            self.cum_offset,
             64,
             12,
             (self.q_num_head + 2 * self.kv_num_head) // self.kv_num_head,
