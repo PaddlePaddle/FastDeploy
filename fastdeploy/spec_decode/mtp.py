@@ -307,9 +307,10 @@ class MTPProposer(Proposer):
             shape=[self.max_num_seqs, 1], fill_value=False, dtype="bool")
         self.model_inputs["used_list_len"] = paddle.full(
             shape=[self.max_num_seqs], fill_value=0, dtype="int32")
-        self.last_seq_lens_this_time = paddle.full_like(
-            self.main_model_inputs["seq_lens_this_time"], fill_value=-1, dtype="int32"
-        )
+        if self.max_draft_token_num > 1:
+            self.last_seq_lens_this_time = paddle.full_like(
+                self.main_model_inputs["seq_lens_this_time"], fill_value=-1, dtype="int32"
+            )
 
     def insert_prefill_inputs(self, req_dicts: List[Request]):
         """
@@ -542,9 +543,10 @@ class MTPProposer(Proposer):
                     eos_token_ids=self.model_inputs["eos_token_id"],
                 )
 
-                self.last_seq_lens_this_time = paddle.clone(
-                    self.model_inputs["seq_lens_this_time"]
-                )
+                if self.max_draft_token_num > 1:
+                    self.last_seq_lens_this_time = paddle.clone(
+                        self.model_inputs["seq_lens_this_time"]
+                    )
 
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
