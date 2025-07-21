@@ -860,7 +860,7 @@ class LLMEngine:
         )
 
         if self.do_profile:
-            get_profile_block_num = np.zeros([self.cfg.worker_num_per_node], dtype=np.int32)
+            get_profile_block_num = np.zeros([1], dtype=np.int32)
             self.get_profile_block_num_signal = IPCSignal(
                 name="get_profile_block_num",
                 array=get_profile_block_num,
@@ -1118,15 +1118,9 @@ class LLMEngine:
         Stop profiling of the model server and reset variables.
         """
         self.do_profile = 0
-        num_gpu_blocks = -1
-        for i in range(self.cfg.tensor_parallel_size):
-            while self.get_profile_block_num_signal.value[i] == 0:
-                time.sleep(1)
-            if num_gpu_blocks < 0:
-                num_gpu_blocks = self.get_profile_block_num_signal.value[i]
-            else:
-                num_gpu_blocks = min(num_gpu_blocks, self.get_profile_block_num_signal.value[i])
-
+        while self.get_profile_block_num_signal.value[0] == 0:
+            time.sleep(1)
+        num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":

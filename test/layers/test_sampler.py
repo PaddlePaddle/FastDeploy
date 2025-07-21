@@ -73,6 +73,5 @@ def test_sampler():
     print(next_tokens)
 
 
-
 if __name__ == "__main__":
     test_sampler()
