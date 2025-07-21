@@ -127,14 +127,14 @@ class SamplingParams:
         min_tokens=1,
         logprobs=None,
         bad_words=None,
-    ) -> "SamplingParams":
+    ) -> SamplingParams:
         """Create instance from command line arguments"""
         return cls(
             n=1 if n is None else n,
             best_of=best_of,
-            presence_penalty=presence_penalty if presence_penalty is not None else 0.0,
-            frequency_penalty=frequency_penalty if frequency_penalty is not None else 0.0,
-            repetition_penalty=repetition_penalty if repetition_penalty is not None else 1.0,
+            presence_penalty=(presence_penalty if presence_penalty is not None else 0.0),
+            frequency_penalty=(frequency_penalty if frequency_penalty is not None else 0.0),
+            repetition_penalty=(repetition_penalty if repetition_penalty is not None else 1.0),
             temperature=temperature if temperature is not None else 1.0,
             top_p=top_p,
             top_k=top_k if top_k is not None else 0,
