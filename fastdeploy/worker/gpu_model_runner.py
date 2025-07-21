@@ -1016,9 +1016,8 @@ class GPUModelRunner(ModelRunnerBase):
     @sot_warmup_guard(True)
     def sot_warmup(self) -> None:
         start_time = time.perf_counter()
-        capture_sizes = self.cudagraph_capture_sizes.copy()
         expected_decode_len = 64
-        for batch_size in sorted(capture_sizes, reverse=True):
+        for batch_size in [9, 7, 5, 3, 1]:
             self._dummy_run(
                 num_tokens=self.parallel_config.max_num_batched_tokens,
                 batch_size=batch_size,
