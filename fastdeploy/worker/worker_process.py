@@ -143,7 +143,7 @@ class PaddleDisWorkerProc():
         # Initialize task queue
         task_address = (self.parallel_config.pod_ip,
                         self.parallel_config.engine_worker_queue_port)
-
+        self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         self.task_queue = TaskQueue(
             address=task_address,
             is_server=False,
@@ -162,7 +162,6 @@ class PaddleDisWorkerProc():
             model_weights_status:
         """
         # init worker_ready_signal
-        self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         array_size = min(
             self.max_chips_per_node, self.parallel_config.tensor_parallel_size *
             self.parallel_config.expert_parallel_size)
