@@ -81,9 +81,6 @@ class EngineClient:
         """
         Format the request data and send the request to the server.
         """
-        if "request_id" in prompts:
-            prompts["request_id"] = prompts["request_id"]
-
         if "request_id" not in prompts:
             request_id = str(uuid.uuid4())
             prompts["request_id"] = request_id
@@ -144,7 +141,7 @@ class EngineClient:
         task["preprocess_end_time"] = time.time()
         preprocess_cost_time = task["preprocess_end_time"] - task["preprocess_start_time"]
         api_server_logger.info(
-            f"Cache request with request_id ({task.get('request_id')}), " f"cost {time.time() - preprocess_cost_time}"
+            f"Cache request with request_id ({task.get('request_id')}), " f"preprocess time cost {preprocess_cost_time}"
         )
 
         self.vaild_parameters(task)
