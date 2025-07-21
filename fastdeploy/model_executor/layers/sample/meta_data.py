@@ -42,6 +42,7 @@ class SamplingMetadata:
 
     top_p: paddle.Tensor
     top_k: Optional[paddle.Tensor] = None
+    min_p: Optional[paddle.Tensor] = None
     max_num_logprobs: Optional[int] = None
     prompt_ids: Optional[paddle.Tensor] = None
     prompt_lens: Optional[paddle.Tensor] = None
