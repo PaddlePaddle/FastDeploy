@@ -4,10 +4,10 @@ nav:
   - 'Quick Start':
       - Installation:
           - 'Nvidia GPU': get_started/installation/nvidia_gpu.md
-          - 'KunlunXin XPU': get_started/installation/kunlunxin_xpu.md 
+          - 'KunlunXin XPU': get_started/installation/kunlunxin_xpu.md
           - 'Enflame S60': get_started/installation/Enflame_gcu.md
           - 'Iluvatar CoreX': get_started/installation/iluvatar_gpu.md
-      - 'Quick Deployment For ERNIE-4.5-0.3B-Paddle': get_started/quick_start.md 
+      - 'Quick Deployment For ERNIE-4.5-0.3B-Paddle': get_started/quick_start.md
       - 'Quick Deployment for ERNIE-4.5-VL-28B-A3B': get_started/quick_start_vl.md
       - 'ERNIE-4.5-300B-A47B': get_started/ernie-4.5.md
       - 'ERNIE-4.5-VL-424B-A47B': get_started/ernie-4.5-vl.md
@@ -16,11 +16,11 @@ nav:
       - 'Monitor Metrics': online_serving/metrics.md
       - 'Scheduler': online_serving/scheduler.md
   - 'Offline Inference': offline_inference.md
-  - Quantiation: 
+  - Quantiation:
       - 'Overview': quantization/README.md
       - 'Online Quantization': quantization/online_quantization.md
       - 'WINT2 Quantization': quantization/wint2.md
-  - Features: 
+  - Features:
       - 'Prefix Caching': features/prefix_caching.md
       - 'Disaggration': features/disaggregated.md
       - 'Chunked Prefill': features/chunked_prefill.md
@@ -34,10 +34,10 @@ nav:
       - 'Log Description': usage/log.md
       - 'Code Overview': usage/code_overview.md
       - 'Environment Variables': usage/environment_variables.md
-theme: 
+theme:
   name: 'material'
   highlightjs: true
-  icon: 
+  icon:
     repo: fontawesome/brands/github
 repo_url: https://github.com/PaddlePaddle/FastDeploy
 repo_name: FastDeploy

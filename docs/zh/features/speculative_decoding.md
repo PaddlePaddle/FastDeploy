@@ -6,10 +6,10 @@
 
 - **Ngram**
 
-- **MTP (Multi-Token Prediction)**  
-  - ✅ 已支持：TP 切分  
-  - ✅ 已支持：共享前缀  
-  - ✅ 已支持：单机 TP 切分 + PD 分离  
+- **MTP (Multi-Token Prediction)**
+  - ✅ 已支持：TP 切分
+  - ✅ 已支持：共享前缀
+  - ✅ 已支持：单机 TP 切分 + PD 分离
   - ⏳ 即将支持：EP + DP + PD 分离
   - ⏳ 即将支持：兼容 Chunk Prefill
   - ⏳ 即将支持：多层 MTP layer
@@ -18,10 +18,10 @@
 
 ### ⏳ 规划中
 
-- Draft Model  
-- Eagle  
-- Hydra  
-- Medusa  
+- Draft Model
+- Eagle
+- Hydra
+- Medusa
 - ...
 
 ## ⚙️ 高效投机解码框架设计
@@ -40,7 +40,7 @@
 ## 🚀 使用 Multi-Token-Prediction(MTP) 解码
 详见论文：[DeepSeek-V3](https://arxiv.org/pdf/2412.19437)
 ### TP 并行部署
-> 使用 4×H100，量化方式选择 WINT4   
+> 使用 4×H100，量化方式选择 WINT4
 > 配置文件：`benchmarks/yaml/eb45t-32k-wint4-mtp-h100-tp4.yaml`
 
 ```
@@ -50,13 +50,15 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --config ${path_to_FastDeploy}benchmarks/yaml/eb45t-32k-wint4-mtp-h100-tp4.yaml \
     --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${path_to_mtp_model}"}'
 ```
+
 ### PD 分离式部署（1P1D）
-> 在8×H100上部署1P1D，P、D节点 分别使用 4×H100；量化方式选择 WINT4  
-> 与常规 PD 分离部署一致，仅需替换配置文件并新增 speculative_config 
+> 在8×H100上部署1P1D，P、D节点 分别使用 4×H100；量化方式选择 WINT4
+> 与常规 PD 分离部署一致，仅需替换配置文件并新增 speculative_config
 详情请参考[PD分离式部署](./disaggregated.md)。
 - P 节点（Prefill）
 
 > 配置文件： `benchmarks/yaml/eb45t-32k-wint4-mtp-tp4-prefill.yaml`
+
 ```
 export FD_LOG_DIR="log_prefill"
 rm -rf ${FD_LOG_DIR}
@@ -80,9 +82,11 @@ python -m fastdeploy.entrypoints.openai.api_server  \
        --scheduler-password "scheduler_mtp" \
        --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": ""${path_to_mtp_model}"}'  &
 ```
+
 - D 节点（Decode）
 
 > 配置文件： `benchmarks/yaml/eb45t-32k-wint4-mtp-tp4-decode.yaml`
+
 ```
 export FD_LOG_DIR="log_prefill"
 rm -rf ${FD_LOG_DIR}
@@ -109,8 +113,9 @@ python -m fastdeploy.entrypoints.openai.api_server  \
 
 ## 🧠 使用 Ngram 解码
 该算法通过 n-gram 窗口从 prompt 和已生成的 Token 中进行匹配生成草稿 Token，适合输入和输出有很大 overlap 的场景，如代码续写、文档查询等。
-> 使用 4×H100；量化方式选择 WINT4  
+> 使用 4×H100；量化方式选择 WINT4
 > 配置文件：benchmarks/yaml/eb45t-32k-wint4-mtp-h100-tp4.yaml
+
 ```
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${path_to_main_model} \

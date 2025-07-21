@@ -24,7 +24,7 @@ FastDeploy supports various quantization inference precisions including FP8, INT
 
 ## 2. Model Support List
 
-| Model Name | Supported Quantization Precision | 
+| Model Name | Supported Quantization Precision |
 |---------|---------|
 | ERNIE-4.5-300B-A47B | WINT8, WINT4, Block-wise FP8, MixQuant|
 
@@ -43,4 +43,4 @@ Examples:
 - **W4A16C16 / WInt4 / weight-only int4**: 4 defaults to INT4
 - **WNF4A8C8**: NF4 refers to 4bits norm-float numerical type
 - **Wfp8Afp8**: Both weights and activations are FP8 precision
-- **W4Afp8**: Weights are INT4, activations are FP8 
+- **W4Afp8**: Weights are INT4, activations are FP8

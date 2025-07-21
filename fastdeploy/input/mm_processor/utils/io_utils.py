@@ -87,7 +87,13 @@ def get_filename(url=None):
     return image_filname
 
 
-def get_downloadable(url, download_dir=RAW_VIDEO_DIR, save_to_disk=False, retry=0, retry_interval=3):
+def get_downloadable(
+    url,
+    download_dir=RAW_VIDEO_DIR,
+    save_to_disk=False,
+    retry=0,
+    retry_interval=3,
+):
     """download video and store it in the disk
 
     return downloaded **path** if save_to_disk is set to true
@@ -150,7 +156,12 @@ def get_downloadable_image(download_path, need_exif_info, retry_max_time=0, retr
         # 由于I模式的point函数只支持加减乘，所以下面的* (1 / 256)不能改成除法
         return img.point(lambda i: i * (1 / 256)).convert("L")
 
-    image = get_downloadable(download_path, save_to_disk=False, retry=retry_max_time, retry_interval=retry_interval)
+    image = get_downloadable(
+        download_path,
+        save_to_disk=False,
+        retry=retry_max_time,
+        retry_interval=retry_interval,
+    )
     if isinstance(image, Image.Image):
         pil_image = image
     else:
@@ -158,7 +169,7 @@ def get_downloadable_image(download_path, need_exif_info, retry_max_time=0, retr
     if need_exif_info:
         try:
             exif_info = get_image_exif(pil_image)
-        except Exception as why:
+        except Exception:
             exif_info = {}
     else:
         exif_info = {}
@@ -168,7 +179,7 @@ def get_downloadable_image(download_path, need_exif_info, retry_max_time=0, retr
             pil_image = change_I16_to_L(pil_image)
         if has_transparent_background(pil_image):
             pil_image = add_white_background(pil_image)
-    except Exception as e:
+    except Exception:
         pass
 
     return pil_image.convert("RGB"), exif_info

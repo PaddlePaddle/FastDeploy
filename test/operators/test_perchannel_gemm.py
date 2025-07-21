@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" UT for per_channel_fp8_fp8_half_gemm_fused kernel """
+"""UT for per_channel_fp8_fp8_half_gemm_fused kernel"""
 
 import os
-import paddle
-import numpy as np
-from itertools import product
 import unittest
+from itertools import product
+
+import numpy as np
+import paddle
 
 
 class Test(unittest.TestCase):
@@ -39,7 +40,9 @@ class Test(unittest.TestCase):
         if cc < 89:
             self.skipTest("per_channel_fp8_fp8_half_gemm_fused only support sm89+")
 
-        from fastdeploy.model_executor.ops.gpu import per_channel_fp8_fp8_half_gemm_fused
+        from fastdeploy.model_executor.ops.gpu import (
+            per_channel_fp8_fp8_half_gemm_fused,
+        )
 
         nks = [[2048, 2048], [2048, 5504], [6144, 2048]]
         nks = nks + [[4096, 4096], [4096, 12800], [6144, 4096]]
@@ -58,12 +61,7 @@ class Test(unittest.TestCase):
             channel_scale = paddle.rand(shape=[n], dtype="float32")
             bias = paddle.rand(shape=[n], dtype="bfloat16")
 
-            result_bf16 = (
-                paddle.matmul(A_bf16, B_bf16, transpose_y=True)
-                * scalar_scale
-                * channel_scale
-                + bias
-            )
+            result_bf16 = paddle.matmul(A_bf16, B_bf16, transpose_y=True) * scalar_scale * channel_scale + bias
             result_fp8 = per_channel_fp8_fp8_half_gemm_fused(
                 A_fp8,
                 B_fp8,
@@ -76,12 +74,13 @@ class Test(unittest.TestCase):
             )
             # absolute_error = paddle.abs(result_bf16 - result_fp8)
             # mean_absolute_error = paddle.mean(absolute_error)
-            relative_error = paddle.abs(result_bf16 - result_fp8) / (
-                paddle.abs(result_bf16)
-            )
+            relative_error = paddle.abs(result_bf16 - result_fp8) / (paddle.abs(result_bf16))
             mean_relative_error = paddle.mean(relative_error)
             np.testing.assert_allclose(
-                mean_relative_error.numpy(), np.array([0.001]), rtol=0.001, atol=0.25
+                mean_relative_error.numpy(),
+                np.array([0.001]),
+                rtol=0.001,
+                atol=0.25,
             )
 
 

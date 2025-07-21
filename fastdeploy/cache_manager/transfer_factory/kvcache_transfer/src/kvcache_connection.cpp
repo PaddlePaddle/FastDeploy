@@ -3,13 +3,13 @@
  * @brief RDMA connection implementation for key-value cache
  * @version 1.0.0
  * @copyright Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -32,7 +32,7 @@ std::vector<IbDeviceInfo> g_ib_all_devs;
 static int64_t get_ib_busid(const char *dev_name) {
     char dev_path[PATH_MAX];
     snprintf(dev_path, PATH_MAX, "/sys/class/infiniband/%s/device", dev_name);
-    
+
     char *p = realpath(dev_path, NULL);
     if (p == NULL) {
         WARN("Failed to get realpath for device %s: %s", dev_name, strerror(errno));
@@ -63,7 +63,7 @@ static int64_t get_ib_busid(const char *dev_name) {
 /**
  * @brief Parse and cache IB device information
  * @return Number of IB devices found, negative on error
- * 
+ *
  * @note This function is thread-safe and will only parse once
  */
 int parse_port_ib_info() {
@@ -448,7 +448,7 @@ bool poll_cq_with_timeout(struct RdmaContext *ctx, int timeout_seconds, int cqe_
         if ((current_time.tv_sec - start_time.tv_sec) >= timeout_seconds) {
             ERR("Timeout occurred after %d seconds", timeout_seconds);
             free(wc_array);
-            return false; 
+            return false;
         }
     }
     return true;
@@ -468,7 +468,7 @@ bool clear_qp_info(struct RdmaContext* ctx) {
             success = false;
         }
     }
-    
+
     if (ctx->cq) {
         if (ibv_destroy_cq(ctx->cq)) {
             ERR("Failed to deallocate cq Domain.");
@@ -565,7 +565,7 @@ struct RdmaContext* create_qp(struct IbDeviceInfo* ib_dev, struct ibv_pd** g_pd)
         return NULL;
     }
 
-    INFO("Successfully created QP 0x%x on device %s", 
+    INFO("Successfully created QP 0x%x on device %s",
           ctx->qp->qp_num, ib_dev->devName);
 
     return ctx;
@@ -601,10 +601,10 @@ bool client_exchange_destinations(
         ERR("Failed to get port info for port %d", ib_port);
         return false;
     }
-    
+
     my_dest.lid = ctx->portinfo.lid;
     my_dest.mtu = ctx->portinfo.active_mtu;
-    
+
     // Validate LID for InfiniBand
     if (ctx->portinfo.link_layer != IBV_LINK_LAYER_ETHERNET && !my_dest.lid) {
         ERR("Invalid LID 0x%04x for non-Ethernet link layer", my_dest.lid);
@@ -722,24 +722,24 @@ bool server_exchange_mr(struct RdmaContext *ctx) {
     auto layer_num = ctx->conn.layer_number;
     auto& key_mrs = ctx->conn.write_cache_key_server_mr_list;
     auto& val_mrs = ctx->conn.write_cache_value_server_mr_list;
-    
+
     // Verify that server memory regions are properly initialized
     if (key_mrs.size() != layer_num || val_mrs.size() != layer_num) {
         ERR("server write cache memory region size error");
         return false;
     }
-    
+
     // Prepare memory region information to send
     std::vector<uint64_t> send_key_ptrs;
     std::vector<uint32_t> send_key_rkeys;
     std::vector<uint64_t> send_val_ptrs;
     std::vector<uint32_t> send_val_rkeys;
-    
+
     send_key_ptrs.reserve(layer_num);
     send_key_rkeys.reserve(layer_num);
     send_val_ptrs.reserve(layer_num);
     send_val_rkeys.reserve(layer_num);
-    
+
     // Collect memory region information from local MRs
     for (int i = 0; i < layer_num; ++i) {
         send_key_ptrs.push_back(reinterpret_cast<uint64_t>(key_mrs[i]->addr));
@@ -753,13 +753,13 @@ bool server_exchange_mr(struct RdmaContext *ctx) {
     if (!exchange_mr_vector(ctx, send_key_rkeys, false)) return false;
     if (!exchange_mr_vector(ctx, send_val_ptrs, false)) return false;
     if (!exchange_mr_vector(ctx, send_val_rkeys, false)) return false;
-    
+
     return true;
 }
 
 /**
  * Send memory region information from server to client
- * 
+ *
  * @param ctx The RDMA context
  * @param local_mr Pointer to the local memory region to be sent
  * @param byte_num Size of the memory region in bytes
@@ -796,16 +796,16 @@ bool server_send_memory_region(struct RdmaContext *ctx, void *local_mr, int byte
         ibv_dereg_mr(ctx->conn.send_mr);
         return false;
     }
-    
+
     // Wait for completion
     struct ibv_wc wc;
     ctx->conn.wc_count = 0;
     ctx->conn.wc_target_count = 0;
-    
+
     if (!poll_cq_with_timeout(ctx, RDMA_POLL_CQE_TIMEOUT, 1)) {
         return false;
     }
-    
+
     // Deregister the memory region
     ibv_dereg_mr(ctx->conn.send_mr);
     return true;
@@ -813,7 +813,7 @@ bool server_send_memory_region(struct RdmaContext *ctx, void *local_mr, int byte
 
 /**
  * Receive memory region information on the client side
- * 
+ *
  * @param ctx The RDMA context
  * @param remote_mr Pointer to the buffer where remote memory region info will be stored
  * @param byte_num Size of the memory region in bytes
@@ -863,17 +863,17 @@ bool client_receive_memory_region(struct RdmaContext *ctx, void *remote_mr, int 
 
 /**
  * Sets up a listening socket on the specified port
- * 
+ *
  * @param port The port number to listen on
  * @return The socket file descriptor on success, -1 on failure
  */
 int setup_listening_socket(int port) {
     int sockfd = -1;
     struct addrinfo hints = {0};
-    
+
     // Set up hints for getaddrinfo
     hints.ai_flags = AI_PASSIVE;
-    hints.ai_family = AF_UNSPEC;      
+    hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
     struct addrinfo *res = nullptr;
@@ -881,14 +881,14 @@ int setup_listening_socket(int port) {
     // Convert port to string for getaddrinfo
     std::ostringstream service;
     service << port;
-    
+
     // Get address info for the specified port
     int n = getaddrinfo(nullptr, service.str().c_str(), &hints, &res);
     if (n != 0) {
         ERR("getaddrinfo failed for port %d: %s", port, gai_strerror(n));
         return -1;
     }
-    
+
     // Check if a specific network interface is specified
     const char *ifname = KVCacheConfig::getInstance().get_socket_interface();
     // Try each address until we successfully bind to one
@@ -913,7 +913,7 @@ int setup_listening_socket(int port) {
         // Enable address reuse
         n = 1;
         setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &n, sizeof(n));
-        
+
         // Attempt to bind to the address
         if (bind(sockfd, t->ai_addr, t->ai_addrlen) == 0) {
             break;  // Successful bind
@@ -948,7 +948,7 @@ int setup_listening_socket(int port) {
         close(sockfd);
         return -1;
     }
-    
+
     // Enable TCP keep-alive
     int enable = 1;
     if (setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &enable, sizeof(enable)) < 0) {

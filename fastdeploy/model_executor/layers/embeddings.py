@@ -58,11 +58,9 @@ class VocabParallelEmbedding(nn.Layer):
         self.column_cut = False
         self.world_size: int = hcg.get_model_parallel_world_size()
         self.ring_id: int = hcg.get_model_parallel_group().id
-        self.use_rope: bool = fd_config.model_config.use_rope
         self.use_ep: bool = fd_config.parallel_config.use_ep
         self.hidden_dropout_prob: float = fd_config.model_config.hidden_dropout_prob
         self.initializer_range: float = fd_config.model_config.initializer_range
-        self.sequence_parallel: bool = fd_config.parallel_config.sequence_parallel
         self.max_position_embeddings: int = fd_config.model_config.max_position_embeddings
         self.tie_word_embeddings: bool = fd_config.model_config.tie_word_embeddings
         self.params_dtype: str = params_dtype
@@ -77,11 +75,10 @@ class VocabParallelEmbedding(nn.Layer):
                 self.embeddings = fleet.meta_parallel.VocabParallelEmbedding(
                     num_embeddings,
                     embedding_dim,
-                    mp_group=fleet.get_hybrid_communicate_group().
-                    get_model_parallel_group(),
+                    mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
                     weight_attr=paddle.ParamAttr(
-                        initializer=nn.initializer.Normal(
-                            mean=0.0, std=self.initializer_range), ),
+                        initializer=nn.initializer.Normal(mean=0.0, std=self.initializer_range),
+                    ),
                 )
             else:
                 # column cut embedding
@@ -93,19 +90,10 @@ class VocabParallelEmbedding(nn.Layer):
                 self.embeddings.weight.is_distributed = True
                 self.embeddings.weight.split_axis = 1
 
-        if not self.use_rope:
-            self.position_embeddings = nn.Embedding(
-                self.max_position_embeddings,
-                embedding_dim,
-                weight_attr=paddle.ParamAttr(initializer=nn.initializer.Normal(
-                    mean=0.0, std=self.initializer_range), ),
-            )
-
         self.prefix = prefix
         self.dropout = nn.Dropout(self.hidden_dropout_prob)
 
-    def load_state_dict(self, state_dict: Dict[str,
-                                               paddle.Tensor | np.ndarray]):
+    def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
         """
         Load the checkpoint state dictionary into the layer.
 
@@ -114,12 +102,12 @@ class VocabParallelEmbedding(nn.Layer):
         """
         if self.tie_word_embeddings:
             self.embeddings.weight.set_value(
-                get_tensor(state_dict[self.prefix + ".weight"]).astype(
-                    paddle.get_default_dtype()))
+                get_tensor(state_dict[self.prefix + ".weight"]).astype(paddle.get_default_dtype())
+            )
         else:
             self.embeddings.weight.set_value(
-                get_tensor(state_dict.pop(self.prefix + ".weight")).astype(
-                    paddle.get_default_dtype()))
+                get_tensor(state_dict.pop(self.prefix + ".weight")).astype(paddle.get_default_dtype())
+            )
 
     def forward(self, ids_remove_padding=None) -> paddle.Tensor:
         """
@@ -141,8 +129,7 @@ class VocabParallelEmbedding(nn.Layer):
                 paddle.distributed.all_gather(
                     inputs_embeds_temp,
                     input_embedings,
-                    group=fleet.get_hybrid_communicate_group().
-                    get_model_parallel_group(),
+                    group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
                     sync_op=True,
                 )
                 input_embedings = paddle.concat(inputs_embeds_temp, -1)

@@ -93,8 +93,8 @@ std::vector<paddle::DataType> ExtractTextTokenOutputInferDtype(const paddle::Dat
 
 PD_BUILD_STATIC_OP(extract_text_token_output)
     .Inputs({"max_seq_len",
-             "max_seq_len_index", 
-             "mm_token_num_len", 
+             "max_seq_len_index",
+             "mm_token_num_len",
              "seq_lens_this_time",
              "cu_seqlens_q",
              "score_text"})

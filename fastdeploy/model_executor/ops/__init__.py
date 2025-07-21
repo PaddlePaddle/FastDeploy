@@ -12,11 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """fastdeploy module"""
-from . import gpu
-from . import cpu
-from . import xpu
-from . import npu
-from . import iluvatar
-from . import gcu
+from . import cpu, gcu, gpu, iluvatar, npu, xpu
 
 __all__ = ["gpu", "cpu", "xpu", "npu", "iluvatar", "gcu"]

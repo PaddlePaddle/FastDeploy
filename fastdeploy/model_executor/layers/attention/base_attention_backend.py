@@ -40,7 +40,7 @@ class AttentionBackend(ABC):
     @abstractmethod
     def init_attention_metadata(self, forward_meta: "ForwardMeta"):
         """Initialize the forward metadata."""
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def forward(
         self,
@@ -110,7 +110,7 @@ class AttentionBackend(ABC):
         forward_meta: "ForwardMeta",
     ) -> paddle.Tensor:
         """Run a forward for mix."""
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def forward_decode(
         self,
@@ -124,7 +124,7 @@ class AttentionBackend(ABC):
         forward_meta: "ForwardMeta",
     ) -> paddle.Tensor:
         """Run a forward for decode."""
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def forward_extend(
         self,
@@ -138,4 +138,4 @@ class AttentionBackend(ABC):
         forward_meta: "ForwardMeta",
     ) -> paddle.Tensor:
         """Run a forward for extend."""
-        raise NotImplementedError()
+        raise NotImplementedError

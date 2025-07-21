@@ -19,7 +19,7 @@
 // #define DEBUG_EAGLE_KERNEL
 
 __global__ void ComputeOrderKernel(
-                const int* seq_lens_this_time, 
+                const int* seq_lens_this_time,
                 const int* seq_lens_encoder,
                 const int* base_model_seq_lens_this_time,
                 const int* base_model_seq_lens_encoder,
@@ -47,7 +47,7 @@ __global__ void ComputeOrderKernel(
         printf("batch %d: cur_seq_lens_encoder > 0 \n", i);
 #endif
         for (int j = 0; j < cur_seq_lens_encoder; j++) {
-          position_map[in_offset++] = out_offset++; 
+          position_map[in_offset++] = out_offset++;
         }
       // 2. base model encoder. Base step=0
       } else if (cur_base_model_seq_lens_encoder != 0) {
@@ -69,13 +69,13 @@ __global__ void ComputeOrderKernel(
           in_offset += cur_base_model_seq_lens_this_time;
         } else /*Accept all draft tokens*/ {
 #ifdef DEBUG_EAGLE_KERNEL
-        printf("batch %d: accept_num > actual_draft_token_num \n", i); 
+        printf("batch %d: accept_num > actual_draft_token_num \n", i);
 #endif
           position_map[in_offset + accept_num - 2] = out_offset++;
           position_map[in_offset + accept_num - 1] = out_offset++;
           in_offset += cur_base_model_seq_lens_this_time;
         }
-      }             
+      }
     }
     output_token_num[0] = out_offset;
 #ifdef DEBUG_EAGLE_KERNEL
@@ -208,7 +208,7 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
     }
     case paddle::DataType::BFLOAT16: {
       return DispatchDtype<paddle::DataType::BFLOAT16>(
-              input,  
+              input,
               seq_lens_this_time,
               seq_lens_encoder,
               seq_lens_decoder,

@@ -25,12 +25,9 @@
 
 多实例情况下，每收到一条请求需要根据不同的策略将请求分配到不同的Prefill实例和Decode实例。通过角色分离（prefill 节点负责接收并处理请求，decode节点完成后续生成），可以更细粒度地控制资源分配、提高吞吐量与 GPU 利用率。
 
-
 ## 使用说明
 
-
 ### 单机分离式部署
-
 
 #### 在线推理服务
 使用如下命令进行服务部署
@@ -63,7 +60,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --cache-queue-port 8187 \
        --tensor-parallel-size 4 \
        --quantization wint4 \
-       --innode-prefill-ports 8182 \ 
+       --innode-prefill-ports 8182 \
        --splitwise-role "decode"
 ```
 
@@ -75,9 +72,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 ### 多机分离式部署
 
-
 #### 前置依赖 Redis
-- 使用`conda`安装
+* 使用`conda`安装
+
 ```bash
 # 安装
 conda install redis
@@ -85,7 +82,8 @@ conda install redis
 nohup redis-server > redis.log 2>&1 &
 ```
 
-- 使用`apt`安装
+* 使用`apt`安装
+
 ```bash
 # 安装
 sudo apt install redis-server -y
@@ -93,7 +91,8 @@ sudo apt install redis-server -y
 sudo systemctl start redis-server
 ```
 
-- 使用`yum`安装
+* 使用`yum`安装
+
 ```bash
 # 安装
 sudo yum install redis -y

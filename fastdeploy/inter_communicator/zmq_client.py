@@ -14,11 +14,11 @@
 # limitations under the License.
 """
 
-import json
 import os
 import threading
 import time
 
+import msgpack
 import zmq
 
 from fastdeploy import envs
@@ -37,6 +37,7 @@ class ZmqClient:
         self.router_path = f"/dev/shm/router_{name}.ipc"
 
         self.ZMQ_SNDHWM = int(envs.FD_ZMQ_SNDHWM)
+        self.aggregate_send = envs.FD_USE_AGGREGATE_SEND
 
         self.mutex = threading.Lock()
         self.req_dict = dict()
@@ -93,21 +94,30 @@ class ZmqClient:
         """
         return self.socket.recv_pyobj()
 
+    def pack_aggregated_data(self, data):
+        """
+        Aggregate multiple responses into one and send them to the client.
+        """
+        result = data[0]
+        if len(data) > 1:
+            for response in data[1:]:
+                result.add(response)
+        result = msgpack.packb([result.to_dict()])
+        return result
+
     def send_multipart(self, req_id, data):
         """
         Send a multipart message to the router socket.
         """
         if self.router is None:
-            raise RuntimeError(
-                "Router socket not created. Call create_router() first.")
+            raise RuntimeError("Router socket not created. Call create_router() first.")
 
         while self.running:
             with self.mutex:
                 if req_id not in self.req_dict:
                     try:
-                        client, _, request_id = self.router.recv_multipart(
-                            flags=zmq.NOBLOCK)
-                        req_id_str = request_id.decode('utf-8')
+                        client, _, request_id = self.router.recv_multipart(flags=zmq.NOBLOCK)
+                        req_id_str = request_id.decode("utf-8")
                         self.req_dict[req_id_str] = client
                     except zmq.Again:
                         time.sleep(0.001)
@@ -116,14 +126,21 @@ class ZmqClient:
                     break
 
         try:
-            result = json.dumps(data.to_dict()).encode('utf-8')
-            self.router.send_multipart([self.req_dict[req_id], b'', result])
+            start_send = time.time()
+            if self.aggregate_send:
+                result = self.pack_aggregated_data(data)
+            else:
+                result = msgpack.packb([response.to_dict() for response in data])
+            self.router.send_multipart([self.req_dict[req_id], b"", result])
+            llm_logger.debug(f"send_multipart result: {req_id} len {len(data)} elapse: {time.time()-start_send}")
+
         except Exception as e:
             llm_logger.error(f"Send result to zmq client failed: {e}")
 
-        if data.finished:
+        if data[-1].finished:
             with self.mutex:
-                self.req_dict.pop(data.request_id, None)
+                self.req_dict.pop(req_id, None)
+            llm_logger.info(f"send_multipart finished, req_id: {req_id}")
 
     def receive_json_once(self, block=False):
         """
@@ -177,7 +194,7 @@ class ZmqClient:
         self.running = False
         llm_logger.info("Closing ZMQ connection...")
         try:
-            if hasattr(self, 'socket') and not self.socket.closed:
+            if hasattr(self, "socket") and not self.socket.closed:
                 self.socket.close()
 
             if self.router is not None and not self.router.closed:

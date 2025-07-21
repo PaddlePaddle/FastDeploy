@@ -3,13 +3,13 @@
  * @brief Logging module implementation for key-value cache system
  * @version 1.0.0
  * @copyright Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -134,7 +134,7 @@ void debug_init() {
         buffer[len++] = '\n';
         if (global_error_file != NULL) {
             fwrite(buffer, 1, len, global_error_file);
-        } 
+        }
     }
     __atomic_store_n(&global_debug_level, tempg_kv_cache_debug_level, __ATOMIC_RELEASE);
     pthread_mutex_unlock(&global_debug_lock);
