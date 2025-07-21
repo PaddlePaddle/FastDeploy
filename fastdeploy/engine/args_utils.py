@@ -790,8 +790,6 @@ class EngineArgs:
             speculative_config=speculative_cfg,
             max_num_batched_tokens=self.max_num_batched_tokens,
             ips=self.ips,
-            nnodes=self.nnodes,
-            node_rank=self.node_rank,
             use_warmup=self.use_warmup,
             engine_worker_queue_port=self.engine_worker_queue_port,
             limit_mm_per_prompt=self.limit_mm_per_prompt,

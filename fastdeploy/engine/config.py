@@ -699,14 +699,25 @@ class Config:
         self.tensor_parallel_size = tensor_parallel_size
         self.ips = ips
         
-        self.nnode = nnodes
-        self.node_rank = node_rank
+
         if self.ips is None:
             self.master_ip = "0.0.0.0"
         elif isinstance(self.ips, list):
             self.master_ip = self.ips[0]
         else:
-            self.master_ip = self.ips.split(",")[0]
+            self.ips = self.ips.split(",")
+            self.master_ip = self.ips[0]
+        
+        if self.ips is None:
+            self.nnode = 1
+            self.node_rank = 0
+        else:
+            self.nnode = len(self.ips)
+        
+            for idx, ip in enumerate(self.ips):
+                if ip == self.master_ip:
+                    self.node_rank = idx
+            
 
             
 
