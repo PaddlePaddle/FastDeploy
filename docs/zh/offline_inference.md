@@ -180,6 +180,7 @@ for output in outputs:
 * temperature(float): 控制生成随机性的参数，值越高结果越随机，值越低结果越确定
 * top_p(float): 概率累积分布截断阈值，仅考虑累计概率达到此阈值的最可能token集合
 * top_k(int): 采样概率最高的token数量，考虑概率最高的k个token进行采样
+* min_p(float): token入选的最小概率阈值(相对于最高概率token的比值，设为>0可通过过滤低概率token来提升文本生成质量)
 * max_tokens(int): 限制模型生成的最大token数量（包括输入和输出）
 * min_tokens(int): 强制模型生成的最少token数量，避免过早结束
 
