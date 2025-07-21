@@ -43,6 +43,15 @@
 
 namespace cutlass {
 
+template <int lut>
+__device__ inline int lop3(int a, int b, int c) {
+  int res;
+  asm volatile("lop3.b32 %0, %1, %2, %3, %4;\n"
+               : "=r"(res)
+               : "r"(a), "r"(b), "r"(c), "n"(lut));
+  return res;
+}
+
 // This converter is meant to be used with data interleaved in a 32-bit register where the even elements are in the low
 // bits and the odd elemeents are in the high bits of the register. In addition, it assumes elements were originally
 // signed and had a bias of 2**(b-1) added (where b is the number of bits in the type) to make all numbers unsigned.
@@ -438,22 +447,10 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint4b_t, N>
     }
 };
 
-template <int lut>
-__device__ inline int lop3(int a, int b, int c) {
-  int res;
-  asm volatile("lop3.b32 %0, %1, %2, %3, %4;\n"
-               : "=r"(res)
-               : "r"(a), "r"(b), "r"(c), "n"(lut));
-  return res;
-}
-
-template <typename T>
-struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, 16>
+template <>
+struct FastInterleavedAndBiasedNumericArrayConverter<half_t, uint2b_t, 16>
 {
-    static_assert(platform::is_same<T, half_t>::value || platform::is_same<T, bfloat16_t>::value,
-        "T must be fp16 or bf16");
-
-    using result_type = Array<T, 16>;
+    using result_type = Array<half_t, 16>;
     using source_type = Array<uint2b_t, 16>;
 
     using ScaleComputeT = float;
@@ -475,75 +472,160 @@ struct FastInterleavedAndBiasedNumericArrayConverter<T, uint2b_t, 16>
             static_cast<int32_t>(floor(static_cast<ScaleComputeT>(in_ptr[2]) * code_scale + code_zp + 0.5f));
         int32_t decode_value3 =
             static_cast<int32_t>(floor(static_cast<ScaleComputeT>(in_ptr[3]) * code_scale + code_zp + 0.5f));
-        
+
+        static constexpr uint32_t immLut = (0xF0 & 0xCC) | 0xAA;
         static constexpr uint32_t MASK = 0x003F003F;
+        // 2^10 = 1024
+        static constexpr uint32_t EX = 0x64006400;
+        // 1024 + 32 = 1056
+        static constexpr uint32_t SUB = 0x64206420;
+        uint32_t* h = reinterpret_cast<uint32_t*>(&result);
+
+        int32_t q;
+        q = (decode_value1 << 16) | (decode_value0 & 0xFFFF);
+        h[3] = lop3<immLut>(q, MASK, EX);
+        q >>= 3;
+        h[2] = lop3<immLut>(q, MASK, EX);
+        q >>= 3;
+        h[1] = lop3<immLut>(q, MASK, EX);
+        q >>= 3;
+        h[0] = lop3<immLut>(q, MASK, EX);
+
+        q = (decode_value3 << 16) | (decode_value2 & 0xFFFF);
+        h[7] = lop3<immLut>(q, MASK, EX);
+        q >>= 3;
+        h[6] = lop3<immLut>(q, MASK, EX);
+        q >>= 3;
+        h[5] = lop3<immLut>(q, MASK, EX);
+        q >>= 3;
+        h[4] = lop3<immLut>(q, MASK, EX);
+
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[0]) : "r"(h[0]), "r"(SUB));
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[1]) : "r"(h[1]), "r"(SUB));
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[2]) : "r"(h[2]), "r"(SUB));
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[3]) : "r"(h[3]), "r"(SUB));
+
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[4]) : "r"(h[4]), "r"(SUB));
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[5]) : "r"(h[5]), "r"(SUB));
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[6]) : "r"(h[6]), "r"(SUB));
+        asm volatile("sub.f16x2 %0, %1, %2;\n" : "=r"(h[7]) : "r"(h[7]), "r"(SUB));
+        return result;
+    }
+
+    CUTLASS_DEVICE
+    result_type operator()(source_type const& s, ScaleComputeT code_scale, ScaleComputeT code_zp)
+    {
+        return convert(s, code_scale, code_zp);
+    }
+};
+
+template <>
+struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
+{
+    using result_type = Array<bfloat16_t, 16>;
+    using source_type = Array<uint2b_t, 16>;
+
+    using ScaleComputeT = float;
+
+    static constexpr int32_t kWeightMask = 0x3F;
+    static constexpr int32_t kBZP = 32;
+
+    CUTLASS_DEVICE
+    static result_type convert(source_type const& source, ScaleComputeT code_scale, ScaleComputeT code_zp)
+    {
+        result_type result;
+        uint8_t const* in_ptr = reinterpret_cast<uint8_t const*>(&source);
+
+        float in_ptr_fp32[4];
+        int32_t* in_ptr_int32 = reinterpret_cast<int32_t*>(&in_ptr_fp32);
+
+        static constexpr uint32_t immLut = (0xF0 & 0xCC) | 0xAA;
+        // 2^23 = 8388608
+        static constexpr uint32_t FP32_MAGIC_NUM = 0x4B000000;
+        static constexpr uint32_t FP32_MASK = 0x0000FF;
+
+        static constexpr uint32_t MASK = 0x003F003F;
+        // 2^7 = 128
         static constexpr uint32_t EX = 0x43004300;
+
+        in_ptr_int32[0] = lop3<immLut>(in_ptr[0], FP32_MASK, FP32_MAGIC_NUM);
+        in_ptr_int32[1] = lop3<immLut>(in_ptr[1], FP32_MASK, FP32_MAGIC_NUM);
+        in_ptr_int32[2] = lop3<immLut>(in_ptr[2], FP32_MASK, FP32_MAGIC_NUM);
+        in_ptr_int32[3] = lop3<immLut>(in_ptr[3], FP32_MASK, FP32_MAGIC_NUM);
+
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(in_ptr_int32[0]) : "r"(in_ptr_int32[0]), "r"(FP32_MAGIC_NUM));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(in_ptr_int32[1]) : "r"(in_ptr_int32[1]), "r"(FP32_MAGIC_NUM));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(in_ptr_int32[2]) : "r"(in_ptr_int32[2]), "r"(FP32_MAGIC_NUM));
+        asm volatile("sub.f32 %0, %1, %2;\n" : "=r"(in_ptr_int32[3]) : "r"(in_ptr_int32[3]), "r"(FP32_MAGIC_NUM));
+
+        int32_t decode_value[4];
+        ScaleComputeT new_code_zp = code_zp + 0.5f;
+        CUTLASS_PRAGMA_UNROLL
+        for (int i = 0; i < 4; ++i) {
+            // decode_value[i] = __float2int_rd(fmaf(in_ptr_fp32[i], code_scale, new_code_zp));
+            decode_value[i] = __float2int_rd(in_ptr_fp32[i] * code_scale + new_code_zp);
+        }
+
+
+        // int32_t decode_value0 =
+        //     static_cast<int32_t>(floor(in_ptr_fp32[0] * code_scale + code_zp + 0.5f));
+        // int32_t decode_value1 =
+        //     static_cast<int32_t>(floor(in_ptr_fp32[1] * code_scale + code_zp + 0.5f));
+        // int32_t decode_value2 =
+        //     static_cast<int32_t>(floor(in_ptr_fp32[2] * code_scale + code_zp + 0.5f));
+        // int32_t decode_value3 =
+        //     static_cast<int32_t>(floor(in_ptr_fp32[3] * code_scale + code_zp + 0.5f));
+
+
         uint32_t* h = reinterpret_cast<uint32_t*>(&result);
         int32_t q;
 
+        q = (decode_value[1] << 16) | (decode_value[0] & 0xFFFF);
+        h[3] = lop3<immLut>(q, MASK, EX);
+        q >>= 3;
+        h[2] = lop3<immLut>(q, MASK, EX);
+        q >>= 3;
+        h[1] = lop3<immLut>(q, MASK, EX);
+        q >>= 3;
+        h[0] = lop3<immLut>(q, MASK, EX);
+
+        q = (decode_value[3] << 16) | (decode_value[2] & 0xFFFF);
+        h[7] = lop3<immLut>(q, MASK, EX);
+        q >>= 3;
+        h[6] = lop3<immLut>(q, MASK, EX);
+        q >>= 3;
+        h[5] = lop3<immLut>(q, MASK, EX);
+        q >>= 3;
+        h[4] = lop3<immLut>(q, MASK, EX);
+
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900) && defined(ENABLE_BF16))
-    
-    static constexpr uint32_t SUB = 0x43204320;
+        // 128 + 32 = 160
+        static constexpr uint32_t SUB = 0x43204320;
 
-    q = (decode_value1 << 16) | (decode_value0 & 0xFFFF);
-    int lo3 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
-    q >>= 3;
-    int lo2 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
-    q >>= 3;
-    int lo1 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
-    q >>= 3;
-    int lo0 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[0]) : "r"(h[0]), "r"(SUB));
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[1]) : "r"(h[1]), "r"(SUB));
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[2]) : "r"(h[2]), "r"(SUB));
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[3]) : "r"(h[3]), "r"(SUB));
 
-    asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[0]) : "r"(lo0), "r"(SUB));
-    asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[1]) : "r"(lo1), "r"(SUB));
-    asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[2]) : "r"(lo2), "r"(SUB));
-    asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[3]) : "r"(lo3), "r"(SUB));
-
-    q = (decode_value3 << 16) | (decode_value2 & 0xFFFF);
-    lo3 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
-    q >>= 3;
-    lo2 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
-    q >>= 3;
-    lo1 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
-    q >>= 3;
-    lo0 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
-
-    asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[4]) : "r"(lo0), "r"(SUB));
-    asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[5]) : "r"(lo1), "r"(SUB));
-    asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[6]) : "r"(lo2), "r"(SUB));
-    asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[7]) : "r"(lo3), "r"(SUB));
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[4]) : "r"(h[4]), "r"(SUB));
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[5]) : "r"(h[5]), "r"(SUB));
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[6]) : "r"(h[6]), "r"(SUB));
+        asm volatile("sub.bf16x2 %0, %1, %2;\n" : "=r"(h[7]) : "r"(h[7]), "r"(SUB));
 #else
+        // 1.0
+        static constexpr uint32_t MUL = 0x3F803F80;
+        // -160
+        static constexpr uint32_t ADD = 0xC320C320;
 
-    static constexpr uint32_t MUL = 0x3F803F80;
-    static constexpr uint32_t ADD = 0xC320C320;
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[0]) : "r"(h[0]), "r"(MUL), "r"(ADD));
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[1]) : "r"(h[1]), "r"(MUL), "r"(ADD));
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[2]) : "r"(h[2]), "r"(MUL), "r"(ADD));
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[3]) : "r"(h[3]), "r"(MUL), "r"(ADD));
 
-    q = (decode_value1 << 16) | (decode_value0 & 0xFFFF);
-    int lo3 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
-    q >>= 3;
-    int lo2 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
-    q >>= 3;
-    int lo1 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
-    q >>= 3;
-    int lo0 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
-
-    asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[0]) : "r"(lo0), "r"(MUL), "r"(ADD));
-    asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[1]) : "r"(lo1), "r"(MUL), "r"(ADD));
-    asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[2]) : "r"(lo2), "r"(MUL), "r"(ADD));
-    asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[3]) : "r"(lo3), "r"(MUL), "r"(ADD));
-
-    q = (decode_value3 << 16) | (decode_value2 & 0xFFFF);
-    lo3 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
-    q >>= 3;
-    lo2 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
-    q >>= 3;
-    lo1 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
-    q >>= 3;
-    lo0 = lop3<(0xf0 & 0xcc) | 0xaa>(q, MASK, EX);
-
-    asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[4]) : "r"(lo0), "r"(MUL), "r"(ADD));
-    asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[5]) : "r"(lo1), "r"(MUL), "r"(ADD));
-    asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[6]) : "r"(lo2), "r"(MUL), "r"(ADD));
-    asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[7]) : "r"(lo3), "r"(MUL), "r"(ADD));
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[4]) : "r"(h[4]), "r"(MUL), "r"(ADD));
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[5]) : "r"(h[5]), "r"(MUL), "r"(ADD));
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[6]) : "r"(h[6]), "r"(MUL), "r"(ADD));
+        asm volatile("fma.rn.bf16x2 %0, %1, %2, %3;\n" : "=r"(h[7]) : "r"(h[7]), "r"(MUL), "r"(ADD));
 #endif
         return result;
     }
