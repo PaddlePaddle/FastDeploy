@@ -216,7 +216,7 @@ class ResourceManagerV1(ResourceManager):
             if self.stop_flags[position] is True:
                 return position
             position += 1
-        assert True is False, "No available position is available for new request"
+        raise RuntimeError("No available position is available for new request")
 
     def get_real_bsz(self) -> int:
         for i in range(self.max_num_seqs - 1, -1, -1):

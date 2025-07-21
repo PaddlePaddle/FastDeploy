@@ -49,7 +49,7 @@ void RecoverDecodeTask(const paddle::Tensor &stop_flags,
                    const paddle::Tensor &is_block_step,
                    const int block_size) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
-    auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(input_ids.place()));
+    auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(seq_lens_this_time.place()));
     auto cu_stream = dev_ctx->stream();
 #else
     auto cu_stream = seq_lens_this_time.stream();

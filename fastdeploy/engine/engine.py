@@ -378,7 +378,7 @@ class LLMEngine:
                 max_num_batched_tokens=self.cfg.max_model_len,
                 batch=self.resource_manager.available_batch(),
             )
-            # 获取一些请求加入到调度队列
+            # Fetch requests and add them to the scheduling queue
             for task in tasks:
                 self.resource_manager.add_request(task)
             is_fetching = False
@@ -390,9 +390,9 @@ class LLMEngine:
                     continue
                 if len(self.resource_manager.waiting) == 0 and (not is_fetching):
                     get_request_pool.submit(_fetch_request)
-                # 2. 调度请求
+                # 2. Schedule requests
                 tasks = self.resource_manager.schedule()
-                # 3. 发送给引擎
+                # 3. Send to engine
                 if tasks:
                     self.resource_manager.get_real_bsz()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
