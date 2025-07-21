@@ -180,6 +180,7 @@ For ```LLM``` configuration, refer to [Parameter Documentation](parameters.md).
 * temperature(float): Controls randomness (higher = more random)
 * top_p(float): Probability threshold for token selection
 * top_k(int): Number of tokens considered for sampling
+* min_p(float): Minimum probability relative to the maximum probability for a token to be considered (>0 filters low-probability tokens to improve quality)
 * max_tokens(int): Maximum generated tokens (input + output)
 * min_tokens(int): Minimum forced generation length
 
