@@ -460,14 +460,9 @@ class Ernie4_5_VLModel(nn.Layer):
         hidden_states = hidden_states + residual
 
         # -----------------------
-        hidden_states = hidden_states.cast("float32")
-        score_text = hidden_states
+        max_seq_len, max_seq_len_index = paddle.topk(forward_meta.seq_lens_this_time, k=1)
+        score_text = hidden_states[token_type_ids == 0].cast("float32")
 
-        if image_input is not None:
-            token_type_ids = token_type_ids.reshape([-1])
-            text_pos_shifted = token_type_ids[:token_num] == 0
-            score_text = hidden_states[text_pos_shifted.reshape([-1])]
-        max_seq_len, max_seq_len_index = paddle.topk(forward_meta.seq_lens_this_time.squeeze(-1), k=1)
         hidden_states = extract_text_token_output(
             max_seq_len,
             max_seq_len_index.cast("int32"),
