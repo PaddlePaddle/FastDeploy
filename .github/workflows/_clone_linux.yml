@@ -8,6 +8,10 @@ on:
           type: string
           required: false
           default: 'FastDeploy'
+  push:
+    branches:
+      - develop
+      - release/**
 
 jobs:
   code-clone:
