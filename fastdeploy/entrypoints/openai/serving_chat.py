@@ -69,8 +69,6 @@ class OpenAIServingChat:
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
 
-        print(f"==request===>{request}")
-
         if not isinstance(request.logprobs, bool):
             err_type = type(request.logprobs).__name__
             err_msg = f"Invalid type for 'logprobs': expected a boolean, but got an {err_type} instead."
@@ -205,7 +203,6 @@ class OpenAIServingChat:
                     await asyncio.sleep(0.01)
                     continue
                 response = msgpack.unpackb(raw_data[-1])
-                print(f"====response==>{response}")
                 for res in response:
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
