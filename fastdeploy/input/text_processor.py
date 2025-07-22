@@ -309,7 +309,7 @@ class DataProcessor(BaseDataProcessor):
             # zero temperature is equivalent to greedy sampling
             request["temperature"] = 1
         if request.get("top_p") < _SAMPLING_EPS:
-            request.set("top_p", _SAMPLING_EPS)
+            request["top_p"] = _SAMPLING_EPS
         data_processor_logger.info(f"Processed request {request}")
         return request
 
