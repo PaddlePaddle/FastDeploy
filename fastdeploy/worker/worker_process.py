@@ -536,7 +536,7 @@ def parse_args():
         "--graph_optimization_config",
         type=json.loads,
         default=None,
-        help=" Configation of Graph optimization backend. ",
+        help="Configation of Graph optimization backend.",
     )
     parser.add_argument(
         "--guided_decoding_backend",

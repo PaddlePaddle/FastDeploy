@@ -406,7 +406,7 @@ class Ernie4_5_VLModel(nn.Layer):
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
-        image_features: paddle.Tensor,
+        image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
     ):
         text_input = None
@@ -584,7 +584,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
-        image_features: paddle.Tensor,
+        image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
     ):
         hidden_states = self.ernie(

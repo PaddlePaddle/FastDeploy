@@ -82,19 +82,22 @@ class MLAAttentionMetadata(AttentionMetadata):
     block_tables: Optional[paddle.Tensor] = None
     rotary_embs: Optional[paddle.Tensor] = None
     attn_mask: Optional[paddle.Tensor] = None
-    encoder_block_shape_q: Optional[paddle.Tensor] = None
-    decoder_block_shape_q: Optional[paddle.Tensor] = None
+    encoder_block_shape_q: int = -1
+    decoder_block_shape_q: int = -1
     _fuse_kernel_compute_dtype: str = "bf16"
 
     # pd_disaggregation
     kv_signal_metadata: Optional[paddle.Tensor] = None
-    kv_signal_data_list: List[paddle.Tensor] = field(default_factory=list)
+    kv_signal_data_list: List[Optional[paddle.Tensor]] = field(default_factory=list)
 
 
 class MLAAttentionBackend(AttentionBackend):
     """
     MLA Attention Backend implementation.
     """
+
+    __infer_dynamic_dims_fields__ = ["attention_metadata"]
+    attention_metadata: MLAAttentionMetadata
 
     def __init__(
         self,
