@@ -8,11 +8,9 @@
 
 | 设备[显存] | 可运行的量化精度 | 支持卡数 |
 |:----------:|:----------:|:------:|
-| A30 [24G] | wint4<br>wint8<br>bfloat16 | 2, 4<br>2, 4<br>2, 4  |
-| L20 [48G] | wint4<br>wint8<br>bfloat16 | 1, 2, 4<br>1, 2, 4<br>2, 4  |
-| H20 [144G] | wint4<br>wint8<br>bfloat16 | 1, 2, 4<br>1, 2, 4<br>1, 2, 4 |
-| A100 [80G] | wint4<br>wint8<br>bfloat16 |  1, 2, 4<br>1, 2, 4<br>1, 2, 4 |
-| H800 [80G] | wint4<br>wint8<br>bfloat16 | 1, 2, 4<br>1, 2, 4<br>1, 2, 4 |
+| H20 [144G] | wint4<br>wint8<br>bfloat16 | 8<br>8<br>8 |
+| A100 [80G] | wint4<br>wint8<br>bfloat16 | 8<br>8<br>8 |
+| H800 [80G] | wint4<br>wint8<br>bfloat16 | 8<br>8<br>8 |
 
 ###  1.2 安装fastdeploy
 
@@ -24,7 +22,7 @@
 
 ## 二、如何使用
 ###  2.1 基础：启动服务
- **示例1：** 单卡、wint4、32K上下文部署命令
+ **示例1：** 8卡、wint4、128K上下文部署命令
 ```shell
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle \
@@ -32,18 +30,18 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --metrics-port 8181 \
        --engine-worker-queue-port 8182 \
        --tensor-parallel-size 1 \
-       --max-model-len 32768 \
-       --max-num-seqs 256 \
+       --max-model-len 131072 \
+       --max-num-seqs 16 \
        --limit-mm-per-prompt '{"image": 100, "video": 100}' \
        --reasoning-parser ernie-45-vl \
-       --gpu-memory-utilization 0.9 \
+       --gpu-memory-utilization 0.8 \
        --kv-cache-ratio 0.75 \
        --enable-chunked-prefill \
        --max-num-batched-tokens 384 \
        --quantization wint4 \
        --enable-mm \
 ```
-示例1是单卡部署获取最佳性能的推荐配置，如果你没有其他特殊要求，我们**强烈建议**按照上面的配置部署，支持绝大多数设备和场景。
+示例1是128k长文单机部署可以稳定运行一个配置，同时也能得到比较好的性能。
 如果对上下文长度、精度有特殊要求，请继续阅读下面的内容。
 ###  2.2 进阶：如何获取更优性能
 
@@ -51,14 +49,12 @@ python -m fastdeploy.entrypoints.openai.api_server \
 > **上下文长度**  
 - **参数：** `--max-model-len`  
 - **描述：** 控制模型可处理的最大上下文长度。
-- **推荐：** 考虑到性能和内存占用的平衡，我们建议设置为**32k**（32768）。
-- **进阶：** 如果您的硬件允许，并且您需要更长的上下文长度，我们也支持**128k**（131072）长度的上下文。
+- **推荐：** 更长的上下文会导致吞吐降低，根据实际情况设置，最长支持**128k**（131072）长度的上下文。
 
-   ⚠️ 注：更长的上下文会显著增加GPU显存需求，设置更长的上下文之前确保硬件资源是满足的。
 >  **最大序列数量**  
 - **参数：** `--max-num-seqs`  
 - **描述：** 控制服务可以处理的最大序列数量，支持1～256。
-- **推荐：** 如果您不知道实际应用场景中请求的平均序列数量是多少，我们建议设置为**256**。如果您的应用场景中请求的平均序列数量明显少于256，我们建议设置为一个略大于平均值的较小值，以进一步降低显存占用，优化服务性能。
+- **推荐：** 128k场景下，80G显存的单机我们建议设置为**16**。
 
 > **多图、多视频输入**  
 - **参数**：`--limit-mm-per-prompt`
@@ -68,7 +64,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 > **初始化时可用的显存比例**  
 - **参数：** `--gpu-memory-utilization`
 - **用处：** 用于控制 FastDeploy 初始化服务的可用显存，默认0.9，即预留10%的显存备用。
-- **推荐：** 推荐使用默认值0.9。如果服务压测时提示显存不足，可以尝试调低该值。
+- **推荐：** 128k长度的上下文时推荐使用0.8。如果服务压测时提示显存不足，可以尝试调低该值。
 
 > **输入cache_kv比例**
 - **参数：**`--kv-cache-ratio`
