@@ -29,21 +29,20 @@ jobs:
           git fetch origin pull/${PR_ID}/merge
           git checkout -b test FETCH_HEAD
 
-      - uses: actions/setup-python@v5
+      - name: Setup python3.10
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           cache: 'pip'
+
       - name: Install dependencies
         run: |
-          python --version
-          pip install pre-commit==2.17.0 cpplint==1.6.0  clang-format==13.0.0
-          pre-commit install
+          pip install pre-commit==4.2.0 cpplint==1.6.0 clang-format==13.0.0
 
       - name: Check pre-commit
         env:
           SKIP_CLANG_TIDY_CHECK: "ON"
         run: |
-          python --version
           set +e
           bash -x tools/codestyle/pre_commit.sh;EXCODE=$?
           exit $EXCODE

@@ -14,9 +14,9 @@
 
 set +x
 
-# use pre-commit 2.17
-if ! [[ $(pre-commit --version) == *"2.17.0"* ]]; then
-    pip install pre-commit==2.17.0 1>nul
+# use pre-commit 4.2.0
+if ! [[ $(pre-commit --version) == *"4.2.0"* ]]; then
+    pip install pre-commit==4.2.0 1>nul
 fi
 
 # Install clang-format before git commit to avoid repeat installation due to
@@ -49,7 +49,7 @@ if [ ${check_error} != 0 ];then
     echo "Your PR code style check failed."
     echo "Please install pre-commit locally and set up git hook scripts:"
     echo ""
-    echo "    pip install pre-commit==2.17.0"
+    echo "    pip install pre-commit==4.2.0"
     echo "    pre-commit install"
     echo ""
     if [[ $num_diff_files -le 100 ]];then
