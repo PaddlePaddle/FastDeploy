@@ -445,7 +445,7 @@ class GraphOptimizationConfig:
         self.graph_opt_level = graph_opt_level
         self.use_cudagraph = use_cudagraph
         self.cudagraph_capture_sizes = cudagraph_capture_sizes
-        self.sot_warmup_sizes = sot_warmup_sizes
+        self.sot_warmup_sizes = [] if sot_warmup_sizes is None else sot_warmup_sizes
 
     def to_json_string(self):
         """

@@ -373,9 +373,6 @@ class GPUModelRunner(ModelRunnerBase):
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to share_inputs"""
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
-        if self.enable_mm:
-            self.share_inputs["free_list"] = paddle.to_tensor([], dtype="int32")
-            self.share_inputs["free_list_len"][0] = 0
         max_dec_len = expected_decode_len + 1
         full_length = min(
             num_tokens // batch_size,
@@ -1017,15 +1014,12 @@ class GPUModelRunner(ModelRunnerBase):
     @sot_warmup_guard(True)
     def sot_warmup(self) -> None:
         start_time = time.perf_counter()
-        expected_decode_len = 33
         for batch_size in self.sot_warmup_sizes:
             self._dummy_run(
                 num_tokens=self.parallel_config.max_num_batched_tokens,
                 batch_size=batch_size,
-                in_capturing=False,
-                expected_decode_len=expected_decode_len,
             )
-            logger.info(f"SOT warmup the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
+            logger.info(f"SOT warmup the model with the batch size:{batch_size}")
         logger.info(f"SOT warmup took {time.perf_counter() - start_time} seconds")
 
     def _get_skip_idx(self, model_forward_batch: Optional[List[Request]] = None):
