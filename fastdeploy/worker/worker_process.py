@@ -400,9 +400,8 @@ class PaddleDisWorkerProc:
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
         else:
             num_blocks_local = self.fd_config.parallel_config.total_block_num
-        # logger.info will write in worker_process.log
-        # Need `print` to triger engine->check_worker_initialize_status->detect_thread
-        print(f"------- num_blocks_global: {num_blocks_local} --------")
+
+        logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
         # wait engine launch cache_manager
         if self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
             launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)

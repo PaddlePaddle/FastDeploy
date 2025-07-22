@@ -1178,12 +1178,13 @@ class LLMEngine:
                     self.worker_init_status["layer_loadding"] = progress
                     if self.worker_init_status["layer_loadding"] == self.cfg.model_config.num_layers - 1:
                         self.worker_init_status["finished"] = True
-                elif match := re.search(r"num_blocks_global", line):
-                    if self.do_profile:
-                        self._stop_profile()
 
         self.checking_worker_status_thread = threading.Thread(target=detect_thread, daemon=True)
         self.checking_worker_status_thread.start()
+        checking_worker_init_kv_cache_status_thread = None
+        if self.do_profile:
+            checking_worker_init_kv_cache_status_thread = threading.Thread(target=self._stop_profile, daemon=True)
+            checking_worker_init_kv_cache_status_thread.start()
 
         # display weight loadding progress
         with tqdm(total=100, desc="Loading Weights") as pbar:
@@ -1214,6 +1215,8 @@ class LLMEngine:
         self.worker_init_status["finished"] = True
         try:
             self.checking_worker_status_thread.join(timeout=1)
+            if checking_worker_init_kv_cache_status_thread is not None:
+                checking_worker_init_kv_cache_status_thread.join(timeout=1)
         except Exception:
             pass
         return True
