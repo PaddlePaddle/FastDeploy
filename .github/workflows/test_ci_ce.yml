@@ -19,7 +19,8 @@ jobs:
   clone:
     name: Clone-Linux
     uses: ./.github/workflows/_clone_linux.yml
-    environment: CodeSync     # ✅ 环境设置放在 job 里
     secrets:
       BOS_AK: ${{ secrets.BOS_AK }}
       BOS_SK: ${{ secrets.BOS_SK }}
+    with:
+      env_name: CodeSync  # 如果你想传 environment 名字下去（可选）
