@@ -16,6 +16,5 @@ on:
   
 jobs:
   clone:
-    environment: CodeSync
     name: Clone-Linux
     uses: ./.github/workflows/_clone_linux.yml

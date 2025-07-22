@@ -44,6 +44,7 @@ jobs:
           git submodule foreach --recursive sh -c "git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
           echo "Current HEAD Log:"
           git log --oneline -n 5
+          tree -L 3
           cd ..
           tar -zcf FastDeploy.tar.gz FastDeploy
           if [[ "${{ github.event_name }}" == "pull_request" ]];then
@@ -62,4 +63,5 @@ jobs:
           wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py 
           push_file=$(realpath bos_tools.py)
           python -m pip install bce-python-sdk==0.9.29
+          tree -L 3
           python ${push_file} FastDeploy.tar.gz ${target_path}
