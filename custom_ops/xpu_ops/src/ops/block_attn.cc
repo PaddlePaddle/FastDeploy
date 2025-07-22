@@ -113,7 +113,7 @@ std::vector<paddle::Tensor> BlockAttnKernel(
         vsl.kv_lod_vp = {
             const_cast<int32_t *>(encoder_seq_lod_cpu.data<int32_t>()),
             enc_batch + 1, nullptr};
-        
+
         baidu::xpu::api::VectorParam<int32_t> prefix_lens_vp{
         nullptr,
         0,

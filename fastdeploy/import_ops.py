@@ -43,8 +43,7 @@ def import_custom_ops(package, module_name, global_ns):
                 logger.warning(f"Failed to import op {func_name}: {e}")
 
     except Exception:
-        logger.warning(
-            f"Ops of {package} import failed, it may be not compiled.")
+        logger.warning(f"Ops of {package} import failed, it may be not compiled.")
 
     preprocess_static_op(global_ns)
 
@@ -71,20 +70,24 @@ def wrap_unified_op(original_cpp_ext_op, original_custom_op):
         original_cpp_ext_op: Original C++ extension operator function.
         original_custom_op: Original custom operator function.
     """
+    try:
 
-    @paddle.jit.marker.unified
-    @functools.wraps(original_custom_op)
-    def unified_op(*args, **kwargs):
-        if paddle.in_dynamic_mode():
-            res = original_cpp_ext_op(*args, **kwargs)
-            if res is None:
-                return None
-            # TODO(DrRyanHuang): Remove this if when we align the implementation of custom op and C++ extension
-            if isinstance(res, list) and len(res) == 1:
-                return res[0]
-            return res
-        return original_custom_op(*args, **kwargs)
+        @paddle.jit.marker.unified
+        @functools.wraps(original_custom_op)
+        def unified_op(*args, **kwargs):
+            if paddle.in_dynamic_mode():
+                res = original_cpp_ext_op(*args, **kwargs)
+                if res is None:
+                    return None
+                # TODO(DrRyanHuang): Remove this if when we align the implementation of custom op and C++ extension
+                if isinstance(res, list) and len(res) == 1:
+                    return res[0]
+                return res
+            return original_custom_op(*args, **kwargs)
 
+    except:
+        unified_op = None
+        logger.warning("Paddle version not support JIT mode.")
     return unified_op
 
 

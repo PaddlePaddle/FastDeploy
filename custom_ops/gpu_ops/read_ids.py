@@ -14,8 +14,9 @@
 """read_ids"""
 
 import os
-import numpy as np
 import struct
+
+import numpy as np
 
 
 def deserialize_from_file(fp):

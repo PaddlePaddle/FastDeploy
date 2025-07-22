@@ -17,19 +17,20 @@
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional
 
-import paddle.device.cuda.graphs as graphs
 import paddle.nn.layer
+from paddle.device.cuda import graphs
 
 from fastdeploy.config import FDConfig
 from fastdeploy.utils import get_logger
+from fastdeploy.distributed.communication import capture_custom_allreduce
 
-logger = get_logger("cudagrpah_piecewise_backend",
-                    "cudagraph_piecewise_backend.log")
+logger = get_logger("cudagrpah_piecewise_backend", "cudagraph_piecewise_backend.log")
 
 
 @dataclass
 class ConcreteSizeEntry:
-    """ Record the concrete information corresponding to the current batch size """
+    """Record the concrete information corresponding to the current batch size"""
+
     # Concrete batch size
     runtime_bs: int
     # The size is in cudagraph_capture_sizes
@@ -48,7 +49,7 @@ class ConcreteSizeEntry:
 
 
 class CudaGraphPiecewiseBackend:
-    """ Manage the capture and replay of CUDA graphs at the subgraph level. """
+    """Manage the capture and replay of CUDA graphs at the subgraph level."""
 
     def __init__(
         self,
@@ -65,12 +66,10 @@ class CudaGraphPiecewiseBackend:
         self.concrete_size_entries: Dict[int, ConcreteSizeEntry] = {}
 
         for shape in self.cudagraph_capture_sizes:
-            self.concrete_size_entries[shape] = ConcreteSizeEntry(
-                runtime_bs=shape)
+            self.concrete_size_entries[shape] = ConcreteSizeEntry(runtime_bs=shape)
 
         logger.info(
-            f"[CUDA GRAPH] CUDAGraph capture list {self.cudagraph_capture_sizes}, "
-            "Created all batch sizes entry."
+            f"[CUDA GRAPH] CUDAGraph capture list {self.cudagraph_capture_sizes}, " "Created all batch sizes entry."
         )
 
     def __call__(self, **kwargs):
@@ -87,9 +86,7 @@ class CudaGraphPiecewiseBackend:
         assert entry is not None, f"Batch size:{padding_batch_size} is not in cuda graph capture list."
         if entry.runnable is None:
             entry.runnable = self.runnable
-            logger.debug(
-                f"[CUDA GRAPH] New entry lazy initialize with batch size {padding_batch_size}"
-            )
+            logger.debug(f"[CUDA GRAPH] New entry lazy initialize with batch size {padding_batch_size}")
 
         if not entry.use_cudagraph:
             return entry.runnable(**kwargs)
@@ -106,19 +103,18 @@ class CudaGraphPiecewiseBackend:
                 )
 
             # Store input addresses for debug
-            input_addresses = [
-                x.data_ptr() for (_, x) in kwargs.items()
-                if isinstance(x, paddle.Tensor)
-            ]
+            input_addresses = [x.data_ptr() for (_, x) in kwargs.items() if isinstance(x, paddle.Tensor)]
             entry.input_addresses = input_addresses
 
             new_grpah = graphs.CUDAGraph()
             paddle.device.synchronize()
 
             # Capture
-            new_grpah.capture_begin()
-            output = entry.runnable(**kwargs)
-            new_grpah.capture_end()
+            with capture_custom_allreduce():
+                new_grpah.capture_begin()
+                output = entry.runnable(**kwargs)
+                new_grpah.capture_end()
+            
 
             # Store output buffer
             entry.cuda_graph = new_grpah
@@ -127,13 +123,9 @@ class CudaGraphPiecewiseBackend:
             output._clear
 
             paddle.device.synchronize()
-            logger.debug(
-                f"[CUDA GRAPH] CUDAGraph captured for batch size {padding_batch_size}"
-            )
+            logger.debug(f"[CUDA GRAPH] CUDAGraph captured for batch size {padding_batch_size}")
 
         # Replay
         entry.cuda_graph.replay()
-        logger.debug(
-            f"[CUDA GRAPH] CUDAGraph replayed for batch size {padding_batch_size}"
-        )
+        logger.debug(f"[CUDA GRAPH] CUDAGraph replayed for batch size {padding_batch_size}")
         return entry.output_buffer

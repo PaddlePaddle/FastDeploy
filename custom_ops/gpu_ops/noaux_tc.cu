@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <optional>
 
+#include "helper.h"
 #include "noauxtc_kernel.h"
 
 std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
@@ -60,7 +61,7 @@ std::vector<std::vector<int64_t>> NoauxTcInferShape(
   return {scores_shape};
 }
 
-PD_BUILD_OP(noaux_tc)
+PD_BUILD_STATIC_OP(noaux_tc)
     .Inputs({"scores", "scores_with_bias"})
     .Outputs({"output_tensor"})
     .Attrs({"n_group: int",

@@ -1,4 +1,4 @@
-setuptools>=62.3.0,<80.0
+setuptools>=79.0.1,<80.0
 pre-commit
 yapf
 flake8

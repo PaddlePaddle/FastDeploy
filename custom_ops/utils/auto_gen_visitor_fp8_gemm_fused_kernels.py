@@ -30,22 +30,24 @@ def get_candidate_tiles():
 
     """
     base_configs = [("<64, 64, 64>", "<32, 32, 64>", "<16, 8, 32>")]
-    base_configs.extend([
-        ("<16, 32, 64>", "<16, 32, 64>", "<16, 8, 32>"),
-        ("<16, 64, 64>", "<16, 32, 64>", "<16, 8, 32>"),
-        ("<32, 128, 64>", "<32, 32, 64>", "<16, 8, 32>"),
-        ("<64, 128, 64>", "<32, 64, 64>", "<16, 8, 32>"),
-        ("<64, 64, 128>", "<32, 64, 64>", "<16, 8, 32>"),
-        ("<64, 128, 64>", "<64, 32, 64>", "<16, 8, 32>"),
-        ("<128, 64, 64>", "<64, 32, 64>", "<16, 8, 32>"),
-        ("<128, 128, 64>", "<64, 32, 64>", "<16, 8, 32>"),
-        ("<128, 128, 64>", "<64, 64, 64>", "<16, 8, 32>"),
-        ("<128, 128, 64>", "<128, 32, 64>", "<16, 8, 32>"),
-        ("<128, 256, 64>", "<64, 64, 64>", "<16, 8, 32>"),
-        ("<256, 128, 64>", "<64, 64, 64>", "<16, 8, 32>"),
-        ("<128, 64, 128>", "<64, 32, 128>", "<16, 8, 32>"),
-        ("<16, 256, 128>", "<16, 64, 128>", "<16, 8, 32>"),
-    ])
+    base_configs.extend(
+        [
+            ("<16, 32, 64>", "<16, 32, 64>", "<16, 8, 32>"),
+            ("<16, 64, 64>", "<16, 32, 64>", "<16, 8, 32>"),
+            ("<32, 128, 64>", "<32, 32, 64>", "<16, 8, 32>"),
+            ("<64, 128, 64>", "<32, 64, 64>", "<16, 8, 32>"),
+            ("<64, 64, 128>", "<32, 64, 64>", "<16, 8, 32>"),
+            ("<64, 128, 64>", "<64, 32, 64>", "<16, 8, 32>"),
+            ("<128, 64, 64>", "<64, 32, 64>", "<16, 8, 32>"),
+            ("<128, 128, 64>", "<64, 32, 64>", "<16, 8, 32>"),
+            ("<128, 128, 64>", "<64, 64, 64>", "<16, 8, 32>"),
+            ("<128, 128, 64>", "<128, 32, 64>", "<16, 8, 32>"),
+            ("<128, 256, 64>", "<64, 64, 64>", "<16, 8, 32>"),
+            ("<256, 128, 64>", "<64, 64, 64>", "<16, 8, 32>"),
+            ("<128, 64, 128>", "<64, 32, 128>", "<16, 8, 32>"),
+            ("<16, 256, 128>", "<16, 64, 128>", "<16, 8, 32>"),
+        ]
+    )
 
     return base_configs
 
@@ -278,8 +280,7 @@ def parse_args():
     代码参数解析
     """
     parser = argparse.ArgumentParser(
-        description=
-        "The argument for generating the generic_mixed_gemm_kernelLauncher instance."
+        description="The argument for generating the generic_mixed_gemm_kernelLauncher instance."
     )
     parser.add_argument(
         "--cuda_arch",
@@ -370,13 +371,10 @@ def generate_launch_gemm_cus(
             - dict (code_map) - 包含每个Gemm配置对应的源代码的字典，格式为{"gemm_config": source_code}。
     """
     code_map = {}
-    head_path = os.path.join(generate_dir,
-                             "launch_visitor_gemm_fused_kernel.h")
+    head_path = os.path.join(generate_dir, "launch_visitor_gemm_fused_kernel.h")
     head_all_code = LaunchGemmHead
     for tile in tiles:
-        blocks, warps, mmas = [
-            s.replace(" ", "").strip("<>").split(",") for s in tile
-        ]
+        blocks, warps, mmas = [s.replace(" ", "").strip("<>").split(",") for s in tile]
         gemm_config = f"block{blocks[0]}x{blocks[1]}x{blocks[2]}_warp{warps[0]}x{warps[1]}x{warps[2]}_mma{mmas[0]}x{mmas[1]}x{mmas[2]}"
         for stage in stages:
             gemm_config_str = gemm_config + f"_stage{stage}"
@@ -390,9 +388,7 @@ def generate_launch_gemm_cus(
         f.close()
 
     for tile in tiles:
-        blocks, warps, mmas = [
-            s.replace(" ", "").strip("<>").split(",") for s in tile
-        ]
+        blocks, warps, mmas = [s.replace(" ", "").strip("<>").split(",") for s in tile]
         gemm_config = f"block{blocks[0]}x{blocks[1]}x{blocks[2]}_warp{warps[0]}x{warps[1]}x{warps[2]}_mma{mmas[0]}x{mmas[1]}x{mmas[2]}"
         for stage in stages:
             gemm_config_str = gemm_config + f"_stage{stage}"
@@ -415,14 +411,14 @@ def generate_launch_gemm_cus(
                             "num_stages": str(stage),
                             "SM": sm,
                         }
-                        source_all_code += SubstituteTemplate(
-                            LaunchGemmPart1, value_dict)
+                        source_all_code += SubstituteTemplate(LaunchGemmPart1, value_dict)
                         type_id += 1
             source_all_code += LaunchGemmPart2
             code_map[gemm_config_str] = source_all_code
             source_path = os.path.join(
                 generate_dir,
-                f"launch_visitor_gemm_fused_kernel_{gemm_config_str}.cu")
+                f"launch_visitor_gemm_fused_kernel_{gemm_config_str}.cu",
+            )
             with open(source_path, "w") as f:
                 f.write(source_all_code)
                 f.close()
@@ -485,9 +481,7 @@ def generate_dispatch_gemm_cu(
     all_code += code_part4
     tile_id = 0
     for tile in tiles:
-        blocks, warps, mmas = [
-            s.replace(" ", "").strip("<>").split(",") for s in tile
-        ]
+        blocks, warps, mmas = [s.replace(" ", "").strip("<>").split(",") for s in tile]
         gemm_config = f"block{blocks[0]}x{blocks[1]}x{blocks[2]}_warp{warps[0]}x{warps[1]}x{warps[2]}_mma{mmas[0]}x{mmas[1]}x{mmas[2]}"
         for stage in stages:
             gemm_config_str = gemm_config + f"_stage{stage}"
@@ -512,10 +506,11 @@ if __name__ == "__main__":
 
     for sm in archs:
         if sm == "89":
-            fuse_gemm_configs = get_candidate_configs(sm, min_stages,
-                                                      max_stages)
+            fuse_gemm_configs = get_candidate_configs(sm, min_stages, max_stages)
             for fuse_gemm_config in fuse_gemm_configs:
-                file_name = f"gpu_ops/cutlass_kernels/fp8_gemm_fused/autogen/generic_visitor_gemm_fused_kernel_sm{sm}.cu"
+                file_name = (
+                    f"gpu_ops/cutlass_kernels/fp8_gemm_fused/autogen/generic_visitor_gemm_fused_kernel_sm{sm}.cu"
+                )
                 all_code = generate_source_cu(
                     inputs_type,
                     outputs_type,
@@ -544,9 +539,7 @@ if __name__ == "__main__":
                 sm_dict[sm],
             )
 
-            file_name = (
-                "gpu_ops/cutlass_kernels/fp8_gemm_fused/visitor_fp8_gemm_fused.cu"
-            )
+            file_name = "gpu_ops/cutlass_kernels/fp8_gemm_fused/visitor_fp8_gemm_fused.cu"
             all_code = generate_dispatch_gemm_cu(
                 inputs_type,
                 outputs_type,

@@ -14,14 +14,12 @@
 # limitations under the License.
 """
 
-
 import openai
 
 print("hello")
 ip = "0.0.0.0"
 service_http_port = "9809"
-client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1",
-                       api_key="EMPTY_API_KEY")
+client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
 print("world")
 
 # 非流式对话
@@ -30,23 +28,21 @@ response = client.chat.completions.create(
     messages=[
         {
             "role": "system",
-            "content": "You are a helpful AI assistant."
+            "content": "You are a helpful AI assistant.",
         },  # system不是必需，可选
         {
-            "role":
-            "user",
-            "content": [{
-                "type": "image_url",
-                "image_url": {
-                    "url":
-                    "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
-                    "detail": "high"
-                }
-            }, {
-                "type": "text",
-                "text": "请描述图片内容"
-            }]
-        }
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
+                        "detail": "high",
+                    },
+                },
+                {"type": "text", "text": "请描述图片内容"},
+            ],
+        },
     ],
     temperature=1,
     max_tokens=53,
@@ -60,30 +56,25 @@ response = client.chat.completions.create(
     messages=[
         {
             "role": "system",
-            "content": "You are a helpful AI assistant."
+            "content": "You are a helpful AI assistant.",
         },  # system不是必需，可选
-        {
-            "role": "user",
-            "content": "List 3 countries and their capitals."
-        },
+        {"role": "user", "content": "List 3 countries and their capitals."},
         {
             "role": "assistant",
-            "content": "China(Beijing), France(Paris), Australia(Canberra)."
+            "content": "China(Beijing), France(Paris), Australia(Canberra).",
         },
         {
-            "role":
-            "user",
-            "content": [{
-                "type": "image_url",
-                "image_url": {
-                    "url":
-                    "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
-                    "detail": "high"
-                }
-            }, {
-                "type": "text",
-                "text": "请描述图片内容"
-            }]
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
+                        "detail": "high",
+                    },
+                },
+                {"type": "text", "text": "请描述图片内容"},
+            ],
         },
     ],
     temperature=1,
@@ -94,5 +85,5 @@ for chunk in response:
     if chunk.choices[0].delta is not None:
         # print(chunk.choices[0].delta, end='')
         # print("\n")
-        print(chunk.choices[0].delta.content, end='')
+        print(chunk.choices[0].delta.content, end="")
 print(response)

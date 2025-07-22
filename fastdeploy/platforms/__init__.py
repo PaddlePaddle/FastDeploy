@@ -16,14 +16,15 @@ platform module
 """
 
 import paddle
-from .cuda import CUDAPlatform
-from .cpu import CPUPlatform
-from .xpu import XPUPlatform
-from .npu import NPUPlatform
-from .dcu import DCUPlatform
-from .iluvatar import IluvatarPlatform
-from .gcu import GCUPlatform
+
 from .base import _Backend  # noqa: F401
+from .cpu import CPUPlatform
+from .cuda import CUDAPlatform
+from .dcu import DCUPlatform
+from .gcu import GCUPlatform
+from .iluvatar import IluvatarPlatform
+from .npu import NPUPlatform
+from .xpu import XPUPlatform
 
 _current_platform = None
 
@@ -51,5 +52,4 @@ def __getattr__(name: str):
     elif name in globals():
         return globals()[name]
     else:
-        raise AttributeError(
-            f"No attribute named '{name}' exists in {__name__}.")
+        raise AttributeError(f"No attribute named '{name}' exists in {__name__}.")

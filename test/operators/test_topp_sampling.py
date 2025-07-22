@@ -11,9 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" UT for topp_sampling """
-import paddle
+"""UT for topp_sampling"""
 import numpy as np
+import paddle
+
 from fastdeploy.model_executor.ops.gpu import topp_sampling
 
 paddle.seed(2022)

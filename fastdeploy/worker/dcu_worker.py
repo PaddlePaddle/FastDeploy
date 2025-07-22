@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 import time
 
 import paddle
@@ -58,30 +59,28 @@ class DcuWorker(GpuWorker):
         start_time = time.perf_counter()
         paddle.device.cuda.reset_max_memory_reserved(self.local_rank)
         paddle.device.cuda.reset_max_memory_allocated(self.local_rank)
-        paddle_reserved_mem_before_run = paddle.device.cuda.max_memory_reserved(
-            self.local_rank)
-        paddle_allocated_mem_before_run = paddle.device.cuda.max_memory_allocated(
-            self.local_rank)  # not reserved
+        paddle_reserved_mem_before_run = paddle.device.cuda.max_memory_reserved(self.local_rank)
+        paddle_allocated_mem_before_run = paddle.device.cuda.max_memory_allocated(self.local_rank)  # not reserved
 
         total_gpu_memory = paddle.device.cuda.get_device_properties(self.local_rank).total_memory
         before_used_gpu_memory = paddle.device.cuda.memory_allocated(self.local_rank)
 
-
-        logger.info((
-            "Before running the profile, the memory usage info is as follows:",
-            f"\nDevice Total memory: {total_gpu_memory / Gb}",
-            f"\nDevice used memory: {before_used_gpu_memory / Gb}",
-            f"\nPaddle reserved memory: {paddle_reserved_mem_before_run / Gb}",
-            f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}"))
+        logger.info(
+            (
+                "Before running the profile, the memory usage info is as follows:",
+                f"\nDevice Total memory: {total_gpu_memory / Gb}",
+                f"\nDevice used memory: {before_used_gpu_memory / Gb}",
+                f"\nPaddle reserved memory: {paddle_reserved_mem_before_run / Gb}",
+                f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}",
+            )
+        )
 
         # 2. Profile run
         self.model_runner.profile_run()
 
         # 3. Statistical memory information
-        paddle_reserved_mem_after_run = paddle.device.cuda.max_memory_reserved(
-            self.local_rank)
-        paddle_allocated_mem_after_run = paddle.device.cuda.max_memory_allocated(
-            self.local_rank)
+        paddle_reserved_mem_after_run = paddle.device.cuda.max_memory_reserved(self.local_rank)
+        paddle_allocated_mem_after_run = paddle.device.cuda.max_memory_allocated(self.local_rank)
 
         after_used_gpu_memory = paddle.device.cuda.memory_allocated(self.local_rank)
 
@@ -89,18 +88,24 @@ class DcuWorker(GpuWorker):
         model_block_memory_used = self.cal_theortical_kvcache()
         paddle.device.cuda.empty_cache()
         paddle_peak_increase = paddle_reserved_mem_after_run - paddle_allocated_mem_before_run
-        available_kv_cache_memory = total_gpu_memory * \
-            self.parallel_config.gpu_memory_utilization - after_used_gpu_memory - paddle_peak_increase
+        available_kv_cache_memory = (
+            total_gpu_memory * self.parallel_config.gpu_memory_utilization
+            - after_used_gpu_memory
+            - paddle_peak_increase
+        )
         available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
 
         end_time = time.perf_counter()
         logger.info(
-            ("After running the profile, the memory usage info is as follows:",
-             f"\nDevice Total memory: {total_gpu_memory / Gb}",
-             f"\nDevice used memory: {after_used_gpu_memory / Gb}",
-             f"\nPaddle reserved memory: {paddle_reserved_mem_after_run / Gb}",
-             f"\nPaddle allocated memory: {paddle_allocated_mem_after_run / Gb}",
-             f"\nAvailable KV Cache meomory: {available_kv_cache_memory / Gb}",
-             f"Profile time: {end_time - start_time}"))
+            (
+                "After running the profile, the memory usage info is as follows:",
+                f"\nDevice Total memory: {total_gpu_memory / Gb}",
+                f"\nDevice used memory: {after_used_gpu_memory / Gb}",
+                f"\nPaddle reserved memory: {paddle_reserved_mem_after_run / Gb}",
+                f"\nPaddle allocated memory: {paddle_allocated_mem_after_run / Gb}",
+                f"\nAvailable KV Cache meomory: {available_kv_cache_memory / Gb}",
+                f"Profile time: {end_time - start_time}",
+            )
+        )
 
         return available_kv_cache_memory  # return to caculate the block num in this device

@@ -19,6 +19,7 @@
 import numpy as np
 import paddle
 
+
 def convert_to_npu_dequant_scale(deq_scale):
     """
     Convert dequantization scale for NPU.
@@ -39,8 +40,5 @@ def convert_to_npu_dequant_scale(deq_scale):
     if not paddle.is_compiled_with_custom_device("npu"):
         return deq_scale
     arr = deq_scale.numpy()
-    new_deq_scale = np.stack(
-        [arr.reshape(-1, 1),
-         np.zeros_like(arr).reshape(-1, 1)], axis=-1).reshape(-1)
-    return paddle.to_tensor(
-        np.frombuffer(new_deq_scale.tobytes(), dtype=np.int64))
+    new_deq_scale = np.stack([arr.reshape(-1, 1), np.zeros_like(arr).reshape(-1, 1)], axis=-1).reshape(-1)
+    return paddle.to_tensor(np.frombuffer(new_deq_scale.tobytes(), dtype=np.int64))

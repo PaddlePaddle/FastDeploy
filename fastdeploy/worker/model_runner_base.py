@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from abc import ABC, abstractmethod
 
 from paddle import nn
@@ -26,14 +27,14 @@ logger = get_logger("model_runner_base", "model_runner_base.log")
 
 class ModelRunnerBase(ABC):
     """
-        Engine -> (WIP)Executor -> Worker -> ModelRunner -> Model
-        ModelRunner interface abstracts the model execution logic that
-        contain input preparation, token generation, and tokenprocessing.
+    Engine -> (WIP)Executor -> Worker -> ModelRunner -> Model
+    ModelRunner interface abstracts the model execution logic that
+    contain input preparation, token generation, and tokenprocessing.
     """
 
     def __init__(self, fd_config: FDConfig, device: str) -> None:
         """
-            Initialize FDConfig
+        Initialize FDConfig
         """
         self.fd_config = fd_config
         self.model_config = fd_config.model_config
@@ -50,27 +51,29 @@ class ModelRunnerBase(ABC):
     @abstractmethod
     def load_model(self) -> None:
         """
-            Load model from local path or remote(will download) path
+        Load model from local path or remote(will download) path
         """
         raise NotImplementedError
 
     @abstractmethod
     def get_model(self) -> nn.Layer:
         """
-            Get current model
+        Get current model
         """
         raise NotImplementedError
 
     @abstractmethod
-    def execute_model(self, ) -> ModelRunnerOutput:
+    def execute_model(
+        self,
+    ) -> ModelRunnerOutput:
         """
-            Execute model with and get output
+        Execute model with and get output
         """
         raise NotImplementedError
 
     @abstractmethod
     def profile_run(self) -> None:
         """
-            Execute a forward pass with dummy inputs to profile the memory usage of the model."
+        Execute a forward pass with dummy inputs to profile the memory usage of the model."
         """
         raise NotImplementedError

@@ -21,6 +21,7 @@ docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12
 ## 2. 预编译Pip安装
 
 首先安装 paddlepaddle-gpu，详细安装方式参考 [PaddlePaddle安装](https://www.paddlepaddle.org.cn/en/install/quick?docurl=/documentation/docs/en/develop/install/pip/linux-pip_en.html)
+
 ``` shell
 python -m pip install paddlepaddle-gpu==3.1.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 ```
@@ -28,6 +29,7 @@ python -m pip install paddlepaddle-gpu==3.1.0 -i https://www.paddlepaddle.org.cn
 再安装 fastdeploy，**注意不要通过pypi源安装**，需要通过如下方式安装
 
 如你的 GPU 是 SM80/90 架构(A100/H100等)，按如下方式安装
+
 ```
 # 安装稳定版本fastdeploy
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -37,6 +39,7 @@ python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages
 ```
 
 如你的 GPU 是 SM86/89 架构(4090/L20/L40等)，按如下方式安装
+
 ```
 # 安装稳定版本fastdeploy
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -59,11 +62,13 @@ docker build -f dockerfiles/Dockerfile.gpu -t fastdeploy:gpu .
 ## 4. Wheel包源码编译
 
 首先安装 paddlepaddle-gpu，详细安装方式参考 [PaddlePaddle安装](https://www.paddlepaddle.org.cn/)
+
 ``` shell
 python -m pip install paddlepaddle-gpu==3.1.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 ```
 
 接着克隆源代码，编译安装
+
 ``` shell
 git clone https://github.com/PaddlePaddle/FastDeploy
 cd FastDeploy
@@ -74,11 +79,13 @@ cd FastDeploy
 # 第4个参数: 编译的GPU架构
 bash build.sh 1 python false [80,90]
 ```
+
 编译后的产物在```FastDeploy/dist```目录下。
 
 ## 环境检查
 
 在安装 FastDeploy 后，通过如下 Python 代码检查环境的可用性
+
 ``` python
 import paddle
 from paddle.jit.marker import unified
@@ -87,4 +94,5 @@ paddle.utils.run_check()
 # 检查FastDeploy自定义算子编译成功与否
 from fastdeploy.model_executor.ops.gpu import beam_search_softmax
 ```
+
 如上代码执行成功，则认为环境可用。
