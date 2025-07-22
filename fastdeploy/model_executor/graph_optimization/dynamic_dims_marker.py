@@ -27,6 +27,13 @@ class DynamicDims:
 
 
 class DynamicDimTypeResolver:
+    """
+    Base class for dynamic dimension type resolvers.
+    This class provides a mechanism to register and resolve dynamic dimensions
+    based on type annotations. It uses a registry pattern to allow multiple
+    resolvers to be registered and used in a flexible manner.
+    """
+
     ALL_DYNAMIC_DIM_TYPE_RESOLVERS = []
 
     @classmethod
@@ -48,7 +55,6 @@ class DynamicDimTypeResolver:
             self.generic_resolve(accessor(data), inner_data_name, inner_type)
 
     def generic_resolve(self, data, data_name, tp) -> None:
-        # assert isinstance(data, tp), f"Expected {data_name} has type {tp}, but got {type(data)}"
         for resolver in self.ALL_DYNAMIC_DIM_TYPE_RESOLVERS:
             if resolver.type_match(tp):
                 return resolver.resolve(data, data_name, tp)
