@@ -288,9 +288,12 @@ class TokenProcessor:
             if self.cfg.speculative_config.method in ["mtp"]:
                 single_head_acceptance_rates = []
                 for head in range(self.cfg.speculative_config.num_speculative_tokens):
-                    single_head_acceptance_rates.append(
-                        self.num_accept_requests_per_head[head] / self.num_rest_requests_per_head[head]
-                    )
+                    if self.num_rest_requests_per_head[head] != 0:
+                        single_head_acceptance_rates.append(
+                            self.num_accept_requests_per_head[head] / self.num_rest_requests_per_head[head]
+                        )
+                    else:
+                        single_head_acceptance_rates.append(0)
                 spec_logger.info(f" Single head accept ratio: {single_head_acceptance_rates}")
 
             if self.number_of_output_tokens > 1000000:
@@ -599,9 +602,12 @@ class TokenProcessor:
                 # Update the rest requests for each head
                 num_rest_requests = num_accept_requests
                 # Calculate the acceptance rate for each head
-                single_head_acceptance_rate = (
-                    self.num_accept_requests_per_head[head] / self.num_rest_requests_per_head[head]
-                )
+                if self.num_rest_requests_per_head[head] != 0:
+                    single_head_acceptance_rate = (
+                        self.num_accept_requests_per_head[head] / self.num_rest_requests_per_head[head]
+                    )
+                else:
+                    single_head_acceptance_rate = 0
                 main_process_metrics.spec_decode_draft_single_head_acceptance_rate[head].set(
                     single_head_acceptance_rate
                 )

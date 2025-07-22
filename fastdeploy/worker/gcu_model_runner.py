@@ -151,8 +151,6 @@ class GCUModelRunner(ModelRunnerBase):
         """
         Process inputs for prefill tasks and insert it to share_inputs buffer
         """
-        if "caches" not in self.share_inputs:
-            self.initialize_kv_cache()
 
         if req_dicts[-1].disaggregate_info is not None and req_dicts[-1].disaggregate_info["role"] == "prefill":
             os.environ["PREFILL_NODE_ONE_STEP_STOP"] = "1"
@@ -556,7 +554,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.initialize_kv_cache()
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
-    def initialize_kv_cache(self) -> None:
+    def initialize_kv_cache(self, profile: bool = False) -> None:
         """
         Initialize kv cache
         """
@@ -577,7 +575,7 @@ class GCUModelRunner(ModelRunnerBase):
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
         # local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if not self.observability_config.do_profile and (
+        if not profile and (
             self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"
         ):
             raise NotImplementedError("prefix_caching is not support by GCUModelRunner.")
@@ -995,7 +993,7 @@ class GCUModelRunner(ModelRunnerBase):
 
         # Initialize kv cache for profile run. After profile run kv cache will be reset.
         self.num_gcu_blocks = self.cache_config.total_block_num
-        self.initialize_kv_cache()
+        self.initialize_kv_cache(profile=True)
 
         # 1. Profile with multimodal encoder & encoder cache
 
@@ -1021,8 +1019,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.num_gcu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        if not (self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"):
-            self.initialize_kv_cache()
+        self.initialize_kv_cache()
 
         # Reset free list
         free_list = list(
@@ -1035,8 +1032,6 @@ class GCUModelRunner(ModelRunnerBase):
                 "free_list_len": paddle.full([1], self.free_list_len, dtype="int32"),
             }
         )
-
-        self.observability_config.do_profile = False
 
         if self.speculative_method in ["mtp"]:
             self.proposer.update_block_num(num_gpu_blocks)

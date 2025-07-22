@@ -20,13 +20,13 @@ from paddle.nn.quant import weight_quantize
 from paddleformers.utils.log import logger
 
 import fastdeploy
-from fastdeploy.distributed.communication_op import tensor_model_parallel_all_reduce
+from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.platforms import current_platform
 
 from ..utils import create_and_set_parameter, get_tensor
 from .fused_moe_backend_base import MoEMethodBase
 
-if current_platform.is_cuda() and not current_platform.is_dcu():
+if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
         moe_expert_dispatch,
         moe_expert_reduce,

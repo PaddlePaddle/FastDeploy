@@ -70,6 +70,9 @@ class GCUFlashAttnBackend(AttentionBackend):
     GCUFlashAttnBackend backend implementation.
     """
 
+    __infer_dynamic_dims_fields__ = ["attention_metadata"]
+    attention_metadata: GCUFlashAttnBackend
+
     def __init__(
         self,
         fd_config: FDConfig,

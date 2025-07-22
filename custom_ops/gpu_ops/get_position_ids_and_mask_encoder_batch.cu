@@ -15,6 +15,7 @@
 #include "helper.h"
 #include "paddle/extension.h"
 
+
 __global__ void GetPositionIdsAndMaskEncoderBatchKernel(
     const int* seq_lens_encoder,  // [bsz] 每个批次的 encoder 长度
     const int* seq_lens_decoder,  // [bsz] 每个批次的 decoder 长度
@@ -74,7 +75,7 @@ void GetPositionIdsAndMaskEncoderBatch(
       bsz);
 }
 
-PD_BUILD_OP(get_position_ids_and_mask_encoder_batch)
+PD_BUILD_STATIC_OP(get_position_ids_and_mask_encoder_batch)
     .Inputs({"seq_lens_encoder",
              "seq_lens_decoder",
              "seq_lens_this_time",

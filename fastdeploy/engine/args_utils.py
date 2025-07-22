@@ -832,8 +832,6 @@ class EngineArgs:
             parallel_cfg.parallel_config.tensor_parallel_size = model_cfg.parallel_config.tensor_parallel_size
             self.tensor_parallel_size = model_cfg.parallel_config.tensor_parallel_size
 
-        assert not (self.use_cudagraph and self.enable_prefix_caching), "Prefix caching cannot be used with CUDA graph"
-
         assert not (
             self.tensor_parallel_size <= 1 and self.enable_custom_all_reduce
         ), "enable_custom_all_reduce must be used with tensor_parallel_size>1"

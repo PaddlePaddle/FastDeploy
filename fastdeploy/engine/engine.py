@@ -188,6 +188,7 @@ class LLMEngine:
                 engine_worker_queue_port=self.cfg.scheduler_config.engine_worker_queue_port,
                 pid_suffix=self.ipc_signal_suffix,
             )
+            self.launched_cache_manager_signal.value[0] = 1
 
         self.worker_proc = self._start_worker_service()
         console_logger.info("Waitting worker processes ready...")
@@ -221,9 +222,6 @@ class LLMEngine:
 
         # Start TokenProcessor thread
         self.token_processor.run()
-
-        if self.do_profile:
-            self._stop_profile()
 
         if self.cfg.scheduler_config.splitwise_role != "mixed":
             # 单机逻辑
@@ -855,6 +853,17 @@ class LLMEngine:
             create=True,
         )
 
+        # launched_cache_manager_signal 用于感知engine是否启动了cache_manager
+        if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
+            launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
+            self.launched_cache_manager_signal = IPCSignal(
+                name="launched_cache_manager_signal",
+                array=launched_cache_manager_signal_data,
+                dtype=np.int32,
+                suffix=self.ipc_signal_suffix,
+                create=True,
+            )
+
         # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
         worker_healthy_live_recorded_time_array = np.zeros(
             shape=[self.cfg.parallel_config.worker_num_per_node], dtype=np.int32
@@ -945,11 +954,11 @@ class LLMEngine:
                 "SOT_LOG_LEVEL": os.getenv("SOT_LOG_LEVEL", default="0"),
                 "SOT_UNSAFE_CACHE_FASTPATH": os.getenv("SOT_UNSAFE_CACHE_FASTPATH", default="1"),
                 "SOT_ENABLE_0_SIZE_FALLBACK": os.getenv("SOT_ENABLE_0_SIZE_FALLBACK", default="0"),
+                "SOT_SPECIALIZED_DIM_NUMBERS": os.getenv("SOT_SPECIALIZED_DIM_NUMBERS", default="no"),
                 "FLAGS_specialize_device_in_dy2st": os.getenv("FLAGS_specialize_device_in_dy2st", default="1"),
                 "FLAGS_enable_async_fast_gc": os.getenv("FLAGS_enable_async_fast_gc", default="0"),
                 "FLAGS_pir_interpreter_record_stream_for_gc_cache": os.getenv(
-                    "FLAGS_pir_interpreter_record_stream_for_gc_cache",
-                    default="1",
+                    "FLAGS_pir_interpreter_record_stream_for_gc_cache", default="1"
                 ),
                 "FLAGS_parameters_persistent_mode_in_dy2st": os.getenv(
                     "FLAGS_parameters_persistent_mode_in_dy2st", default="1"
@@ -1032,7 +1041,7 @@ class LLMEngine:
             "do_profile": self.do_profile,
             "dynamic_load_weight": self.cfg.load_config.dynamic_load_weight,
             "disable_any_whitespace": self.cfg.decoding_config.disable_any_whitespace,
-            "enable-custom-all-reduce": self.cfg.parallel_config.enable_custom_all_reduce,
+            "enable_custom_all_reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "enable_mm": self.cfg.multi_modal_config.enable_mm,
         }
@@ -1141,6 +1150,7 @@ class LLMEngine:
                 engine_worker_queue_port=self.cfg.scheduler_config.engine_worker_queue_port,
                 pid_suffix=self.ipc_signal_suffix,
             )
+            self.launched_cache_manager_signal.value[0] = 1
 
     def check_health(self, time_interval_threashold=30):
         """
@@ -1176,6 +1186,10 @@ class LLMEngine:
 
         self.checking_worker_status_thread = threading.Thread(target=detect_thread, daemon=True)
         self.checking_worker_status_thread.start()
+        checking_worker_init_kv_cache_status_thread = None
+        if self.do_profile:
+            checking_worker_init_kv_cache_status_thread = threading.Thread(target=self._stop_profile, daemon=True)
+            checking_worker_init_kv_cache_status_thread.start()
 
         # display weight loadding progress
         with tqdm(total=100, desc="Loading Weights") as pbar:
@@ -1206,6 +1220,8 @@ class LLMEngine:
         self.worker_init_status["finished"] = True
         try:
             self.checking_worker_status_thread.join(timeout=1)
+            if checking_worker_init_kv_cache_status_thread is not None:
+                checking_worker_init_kv_cache_status_thread.join(timeout=1)
         except Exception:
             pass
         return True

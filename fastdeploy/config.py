@@ -334,6 +334,8 @@ class SpeculativeConfig:
 
         for key, value in args.items():
             if key in name_map.keys() and hasattr(self, name_map[key]):
+                if key == "speculative_benchmark_mode":
+                    value = True if value.lower() == "true" else False
                 setattr(self, name_map[key], value)
         self.read_model_config()
         self.reset()
@@ -462,7 +464,7 @@ class GraphOptimizationConfig:
         can manually split the model into multiple layers and apply the @support_cuda_graph decorator
         only to the layer where CUDA graph functionality is required.
         """
-        self.cudagraph_splitting_ops = None
+        self.cudagraph_splitting_ops: list[str] = []
         """" Whether to use a full cuda graph for the entire forward pass rather than
         splitting certain operations such as attention into subgraphs.
         Thus this flag cannot be used together with splitting_ops."""
