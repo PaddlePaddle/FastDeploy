@@ -48,11 +48,12 @@ class OpenAIServingChat:
     OpenAI-style chat completions serving
     """
 
-    def __init__(self, engine_client, pid, dist_init_ip):
+    def __init__(self, engine_client, pid, dist_init_ip, enable_logprob):
         self.engine_client = engine_client
         self.pid = pid
         self.master_ip = dist_init_ip
         self.host_ip = get_host_ip()
+        self.enable_logprob = enable_logprob
 
     def _check_master(self):
         if self.master_ip is None:
@@ -60,6 +61,39 @@ class OpenAIServingChat:
         if self.host_ip == self.master_ip:
             return True
         return False
+
+    def _check_logprobs(self, request: ChatCompletionRequest):
+        """Check if logprobs is enabled and valid."""
+        if not self.enable_logprob:
+            err_msg = "Logprobs is disabled, please enable it in startup config"
+            api_server_logger.error(err_msg)
+            return ErrorResponse(message=err_msg, code=400)
+
+        print(f"==request===>{request}")
+
+        if not isinstance(request.logprobs, bool):
+            err_type = type(request.logprobs).__name__
+            err_msg = f"Invalid type for 'logprobs': expected a boolean, but got an {err_type} instead."
+            api_server_logger.error(err_msg)
+            return ErrorResponse(message=err_msg, code=400)
+
+        if request.top_logprobs and not isinstance(request.top_logprobs, int):
+            err_type = type(request.top_logprobs).__name__
+            err_msg = f"Invalid type for 'logprobs.top_logprobs': expected an integer, but got a {err_type} instead."
+            api_server_logger.error(err_msg)
+            return ErrorResponse(message=err_msg, code=400)
+
+        if request.top_logprobs and request.top_logprobs < 0:
+            err_msg = f"Invalid 'top_logprobs': integer below minimum value. Expected a value >= 0, but got {request.top_logprobs} instead."
+            api_server_logger.error(err_msg)
+            return ErrorResponse(message=err_msg, code=400)
+
+        if request.top_logprobs and request.top_logprobs > 20:
+            err_msg = "Invalid value for 'top_logprobs': must be less than or equal to 20."
+            api_server_logger.error(err_msg)
+            return ErrorResponse(message=err_msg, code=400)
+
+        return None
 
     async def create_chat_completion(self, request: ChatCompletionRequest):
         """
@@ -70,6 +104,12 @@ class OpenAIServingChat:
             err_msg = f"Only master node can accept completion request, please send request to master node: {self.pod_ips[0]}"
             api_server_logger.error(err_msg)
             return ErrorResponse(message=err_msg, code=400)
+
+        # logprobs
+        logprobs_error = self._check_logprobs(request)
+        if logprobs_error:
+            return logprobs_error
+
         if request.user is not None:
             request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"
         else:
@@ -162,6 +202,7 @@ class OpenAIServingChat:
                     await asyncio.sleep(0.01)
                     continue
                 response = msgpack.unpackb(raw_data[-1])
+                print(f"====response==>{response}")
                 for res in response:
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
@@ -212,18 +253,11 @@ class OpenAIServingChat:
 
                     output = res["outputs"]
                     delta_text = output["text"]
-                    raw_top_logprobs = output["top_logprobs"]
-                    logprobs_res = None
-                    if raw_top_logprobs is not None:
-                        top_logprobs = LogprobsLists(
-                            logprob_token_ids=raw_top_logprobs[0],
-                            logprobs=raw_top_logprobs[1],
-                            sampled_token_ranks=raw_top_logprobs[2],
-                        )
-                        logprobs_res = self.build_logprobs_response(
-                            request_logprobs=request.logprobs,
-                            response_logprobs=top_logprobs,
-                            request_top_logprobs=request.top_logprobs,
+                    output_top_logprobs = output["top_logprobs"]
+                    logprobs_res: Optional[LogProbs] = None
+                    if output_top_logprobs is not None:
+                        logprobs_res = self._create_chat_logprobs(
+                            output_top_logprobs, request.logprobs, request.top_logprobs
                         )
 
                     previous_num_tokens += len(output["token_ids"])
@@ -358,17 +392,10 @@ class OpenAIServingChat:
                     previous_num_tokens += len(data["outputs"]["token_ids"])
                     # The logprob for handling the response
                     output = data["outputs"]
-                    raw_top_logprobs = output["top_logprobs"]
-                    if raw_top_logprobs is not None:
-                        top_logprobs = LogprobsLists(
-                            logprob_token_ids=raw_top_logprobs[0],
-                            logprobs=raw_top_logprobs[1],
-                            sampled_token_ranks=raw_top_logprobs[2],
-                        )
-                        logprobs_res = self.build_logprobs_response(
-                            request_logprobs=request.logprobs,
-                            response_logprobs=top_logprobs,
-                            request_top_logprobs=request.top_logprobs,
+                    output_top_logprobs = output["top_logprobs"]
+                    if output_top_logprobs is not None:
+                        logprobs_res = self._create_chat_logprobs(
+                            output_top_logprobs, request.logprobs, request.top_logprobs
                         )
                         if logprobs_res and logprobs_res.content is not None:
                             logprob_contents.extend(logprobs_res.content)
@@ -430,7 +457,38 @@ class OpenAIServingChat:
             usage=usage,
         )
 
-    def build_logprobs_response(
+    def _create_chat_logprobs(
+        self,
+        output_top_logprobs,
+        request_logprobs: Optional[bool] = None,
+        request_top_logprobs: Optional[int] = None,
+    ) -> Optional[LogProbs]:
+        """Create OpenAI-style logprobs for chat completions."""
+        if output_top_logprobs is None or len(output_top_logprobs) < 3 or any(not lst for lst in output_top_logprobs):
+            return None
+        logprobs_res: Optional[LogProbs] = None
+        for logprob_token_ids, logprobs, sampled_token_ranks in zip(
+            output_top_logprobs[0], output_top_logprobs[1], output_top_logprobs[2]
+        ):
+            top_logprobs = LogprobsLists(
+                logprob_token_ids=[logprob_token_ids],
+                logprobs=[logprobs],
+                sampled_token_ranks=[sampled_token_ranks],
+            )
+            step_logprobs_res = self._build_logprobs_response(
+                request_logprobs=request_logprobs,
+                response_logprobs=top_logprobs,
+                request_top_logprobs=request_top_logprobs,
+            )
+            if step_logprobs_res is None:
+                raise ValueError("logprobs parse failed!!!")
+            if logprobs_res is None:
+                logprobs_res = step_logprobs_res
+            else:
+                logprobs_res.content.extend(step_logprobs_res.content)
+        return logprobs_res
+
+    def _build_logprobs_response(
         self,
         request_logprobs: bool,
         response_logprobs: Optional[LogprobsLists],
@@ -467,12 +525,10 @@ class OpenAIServingChat:
                 token_str = self.engine_client.data_processor.process_logprob_response(
                     [tid], clean_up_tokenization_spaces=False
                 )
-                # token_bytes = token_str.encode("utf-8", errors="replace")
-                entry = LogProbEntry(
-                    token=token_str,
-                    logprob=lp,
-                    # bytes=list(token_bytes)
-                )
+                token_bytes = token_str.encode("utf-8", errors="replace")
+                if "\ufffd" in token_str:
+                    token_str = "bytes:" + "".join(f"\\x{byte:02x}" for byte in token_bytes)
+                entry = LogProbEntry(token=token_str, logprob=lp, bytes=list(token_bytes))
                 top_logprob_entries.append(entry)
             # Construct the sampled token object (avoid sharing references with top_logprob_entries)
             sampled_entry = LogProbEntry(
@@ -485,6 +541,6 @@ class OpenAIServingChat:
             return LogProbs(content=[sampled_entry])
 
         except Exception as e:
-            api_server_logger.error("Error in build_logprobs_response: %s", e)
+            api_server_logger.error("Error in _build_logprobs_response: %s", e)
             api_server_logger.error(traceback.format_exc())
             return None

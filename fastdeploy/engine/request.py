@@ -350,7 +350,6 @@ class RequestOutput:
 
     def add(self, next_output: RequestOutput) -> None:
         """Merge RequestOutput into this one"""
-
         self.prompt = next_output.prompt
         self.prompt_token_ids = next_output.prompt_token_ids
         self.finished |= next_output.finished
@@ -360,6 +359,10 @@ class RequestOutput:
             self.metrics.model_forward_time = next_output.metrics.arrival_time - self.metrics.inference_start_time
         if next_output.metrics.arrival_time is not None and self.metrics.arrival_time is not None:
             self.metrics.model_execute_time = next_output.metrics.arrival_time - self.metrics.arrival_time
+        if next_output.outputs.top_logprobs is not None:
+            self.outputs.top_logprobs.logprob_token_ids.extend(next_output.outputs.top_logprobs.logprob_token_ids)
+            self.outputs.top_logprobs.logprobs.extend(next_output.outputs.top_logprobs.logprobs)
+            self.outputs.top_logprobs.sampled_token_ranks.extend(next_output.outputs.top_logprobs.sampled_token_ranks)
 
     def __repr__(self) -> str:
         return (
