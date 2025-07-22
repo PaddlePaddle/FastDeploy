@@ -72,7 +72,6 @@ DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
 
 def pre_process(
-    max_len: int,
     input_ids: paddle.Tensor,
     seq_lens_this_time: int,
     speculative_decoding: bool,
@@ -83,7 +82,6 @@ def pre_process(
     """
     Preprocessing before embedding.
     Args:
-        max_len:
         input_ids:
         seq_lens_this_time:
         speculative_decoding:
@@ -97,6 +95,7 @@ def pre_process(
         cu_seqlens_k:
     """
     # Remove padding
+    max_len = input_ids.shape[1]
     cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time)
     token_num = paddle.sum(seq_lens_this_time)
     output_padding_offset = None
@@ -490,6 +489,7 @@ def rebuild_padding(
         )
     elif current_platform.is_dcu():
         from fastdeploy.model_executor.ops.gpu import rebuild_padding
+
         hidden_states = rebuild_padding(
             tmp_out,
             cum_offsets,
