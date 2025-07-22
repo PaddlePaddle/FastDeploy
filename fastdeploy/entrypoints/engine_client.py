@@ -24,7 +24,6 @@ from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import ZmqClient, IPCSignal
 from fastdeploy.metrics.work_metrics import work_process_metrics
-from fastdeploy.platforms import current_platform
 from fastdeploy.utils import api_server_logger, EngineError
 
 
@@ -44,8 +43,7 @@ class EngineClient:
         self.reasoning_parser = reasoning_parser
         self.data_processor = input_processor.create_processor()
         self.max_model_len = max_model_len
-        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        self.worker_healthy_live_recorded_time_array = np.zeros(shape=[tensor_parallel_size % max_chips_per_node], dtype=np.int32)
+        self.worker_healthy_live_recorded_time_array = np.zeros(shape=[tensor_parallel_size], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(name="worker_healthy_live_signal",
                     array=self.worker_healthy_live_recorded_time_array,
                     dtype=np.int32,
