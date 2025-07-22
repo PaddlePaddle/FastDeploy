@@ -808,7 +808,6 @@ class GCUModelRunner(ModelRunnerBase):
                 expected_decode_len=expected_decode_len,
             )
             logger.info(f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
-            logger.info(f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
 
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")

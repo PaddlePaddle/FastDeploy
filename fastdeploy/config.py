@@ -141,6 +141,7 @@ class ModelConfig:
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
         self.ori_vocab_size = self.vocab_size
+
         if isinstance(self.architectures, list):
             self.architectures = self.architectures[0]
         if ErnieArchitectures.contains_ernie_arch(self.architectures):
@@ -471,9 +472,10 @@ class GraphOptimizationConfig:
         self.batch_size_to_captured_size: dict[int, int] = field(default=None, init=False)  # type: ignore
         # CINN Config ...
 
-        for key, value in args.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
+        if args is not None:
+            for key, value in args.items():
+                if hasattr(self, key):
+                    setattr(self, key, value)
 
     def init_with_cudagrpah_size(self, max_num_seqs: int = 0) -> None:
         """

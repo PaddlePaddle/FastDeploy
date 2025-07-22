@@ -46,7 +46,7 @@ class RolloutModelConfig:
         speculative_max_draft_token_num: int = 1,
         speculative_model_name_or_path: str = "",
         speculative_model_quantization: str = "WINT8",
-        max_num_batched_tokens: int = 2048,
+        max_num_batched_tokens: int = None,
         enable_prefix_caching: bool = False,
         splitwise_role: str = "mixed",
         expert_parallel_size: int = 1,
@@ -60,6 +60,7 @@ class RolloutModelConfig:
     ):
         # Required parameters
         self.model_name_or_path = model_name_or_path
+        self.model = model_name_or_path  # compatible for ModelConfig
         self.max_model_len = max_model_len
         self.tensor_parallel_size = tensor_parallel_size
         self.dynamic_load_weight = dynamic_load_weight
