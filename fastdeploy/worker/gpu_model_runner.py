@@ -25,7 +25,10 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
-from fastdeploy.model_executor.graph_optimization.utils import sot_warmup_guard
+from fastdeploy.model_executor.graph_optimization.utils import (
+    profile_run_guard,
+    sot_warmup_guard,
+)
 from fastdeploy.model_executor.guided_decoding import get_guided_backend
 from fastdeploy.model_executor.guided_decoding.base_guided_decoding import (
     LogitsProcessorBase,
@@ -1219,6 +1222,7 @@ class GPUModelRunner(ModelRunnerBase):
         else:
             raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 
+    @profile_run_guard(True)
     def profile_run(self) -> None:
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 

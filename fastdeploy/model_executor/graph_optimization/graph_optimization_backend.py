@@ -31,6 +31,7 @@ from fastdeploy.model_executor.graph_optimization.cudagraph_piecewise_backend im
 from fastdeploy.model_executor.graph_optimization.dynamic_dims_marker import (
     resolve_dynamic_dims,
 )
+from fastdeploy.model_executor.graph_optimization.utils import in_profile_run_mode
 from fastdeploy.model_executor.graph_optimization.utils import (
     in_sot_warmup_mode as in_warmup_mode,
 )
@@ -87,6 +88,8 @@ def apply_to_static_optimization(fn: Callable[P, T], backend: ToStaticBackend) -
 
     @functools.wraps(forward_fn)
     def static_forward(self, *args, **kwargs):
+        if in_profile_run_mode():
+            return forward_fn(self, *args, **kwargs)
         nonlocal need_warmup
         is_warmup = in_warmup_mode() and need_warmup
         if is_warmup:

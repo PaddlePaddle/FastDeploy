@@ -31,9 +31,11 @@ def create_guard(default_value):
             _state = old_state
 
     def get_state():
+        print(f"XUXUXUXUXUXXU {_state}")
         return _state
 
     return state_guard, get_state
 
 
 sot_warmup_guard, in_sot_warmup_mode = create_guard(False)
+profile_run_guard, in_profile_run_mode = create_guard(False)
