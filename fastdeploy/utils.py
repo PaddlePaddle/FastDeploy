@@ -507,7 +507,7 @@ def none_or_str(value):
 
 def retrive_model_from_server(model_name_or_path, revision="master"):
     """
-    Download pretrained model from AIStudio automatically
+    Download pretrained model from MODELSCOPE, AIStudio or HUGGINGFACE automatically
     """
     model_source = envs.FD_MODEL_SOURCE
     local_path = envs.FD_MODEL_CACHE
