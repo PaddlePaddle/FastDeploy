@@ -71,7 +71,7 @@ struct Params {
     alignas(16) IdType *seq_lens_encoder;
     alignas(16) IdType *seq_lens_decoder;
     alignas(16) IdType *cumsum_q_seqlens;
-    alignas(16) IdType *padding_offsets;
+    alignas(16) IdType *batch_id_per_token;
 
     alignas(16) IdType *batch_ids;
     alignas(16) IdType *tile_ids_per_batch;
@@ -89,7 +89,6 @@ struct Params {
 
     int bsz;
     int token_num;
-    int max_seq_len;
     int max_block_num;
     int max_block_num_per_seq;
     int q_num_head;
@@ -527,9 +526,9 @@ cudaError_t BatchMLAWithPagedKVCacheKernelTraitsDispatched(Params& params,
       params.seq_lens_this_time,
       params.seq_lens_decoder,
       params.seq_lens_encoder,
-      params.padding_offsets,
+      params.cumsum_q_seqlens,
+      params.batch_id_per_token,
       reinterpret_cast<NV_TYPE*>(params.O),
-      params.max_seq_len,
       params.chunk_num,
       params.q_num_head,
       params.chunk_size,

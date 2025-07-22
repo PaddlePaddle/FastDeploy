@@ -1,4 +1,3 @@
-"""
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,20 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
 
-import paddle
-import paddle.distributed as dist
+export PRE_COMPILE_LOG_LEVEL="INFO"
+export DG_CACHE_DIR=$(pwd)/deep_gemm_cache
 
-try:
-    @paddle.jit.marker.unified
-    def tensor_model_parallel_all_reduce(input_: paddle.Tensor) -> paddle.Tensor:
-        """All-reduce the input tensor across model parallel group."""
-        if paddle.in_dynamic_mode():
-            hcg = dist.fleet.get_hybrid_communicate_group()
-            mp_group = hcg.get_model_parallel_group()
-            dist.all_reduce(input_, group=mp_group)
-        else:
-            dist.all_reduce(input_)
-except:
-    tensor_model_parallel_all_reduce=None
+echo DeepGEMM Cache Dir: $DG_CACHE_DIR
+
+MODEL_PATH=${1:-"/path/to/model"}
+EXPERT_PARALLEL=${2:-"8"}
+nproc=$(nproc)
+
+python generate_config.py \
+    --model $MODEL_PATH \
+    --output=./deep_gemm_pre_compile_config.jsonl
+
+python pre_compile.py \
+    --config_file=./deep_gemm_pre_compile_config.jsonl \
+    --expert_parallel=$EXPERT_PARALLEL \
+    --num_threads=$nproc

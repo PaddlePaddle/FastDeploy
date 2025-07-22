@@ -109,13 +109,12 @@ class BlockNode:
             parent_node_id = None
         return (
             f"node_id {self.node_id}: depth {self.depth} hash_value {self.hash_value}"
-            +
-            f" shared_count {self.shared_count} is_gpu_leaf_node {self.is_gpu_leaf_node}"
-            +
-            f" is_cpu_leaf_node {self.is_cpu_leaf_node} block_id {self.block_id} "
-            + f"has_in_gpu {self.has_in_gpu} " +
-            f"cache_status {self.cache_status}  parent {parent_node_id} with children number "
-            + f"{len(self.children)} req_id_set {self.req_id_set}")
+            + f" shared_count {self.shared_count} is_gpu_leaf_node {self.is_gpu_leaf_node}"
+            + f" is_cpu_leaf_node {self.is_cpu_leaf_node} block_id {self.block_id} "
+            + f"has_in_gpu {self.has_in_gpu} "
+            + f"cache_status {self.cache_status}  parent {parent_node_id} with children number "
+            + f"{len(self.children)} req_id_set {self.req_id_set}"
+        )
 
     @property
     def has_in_gpu(self):
@@ -141,8 +140,7 @@ class BlockNode:
         """
         check if the node is a leaf node in CPU
         """
-        if (self.cache_status == CacheStatus.CPU) and (len(self.children)
-                                                       == 0):
+        if (self.cache_status == CacheStatus.CPU) and (len(self.children) == 0):
             return True
         return False
 

@@ -9,6 +9,16 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --max-model-len 32768
 ```
 
+To enable log probability output, simply deploy with the following command:
+
+```bash
+python -m fastdeploy.entrypoints.openai.api_server \
+       --model baidu/ERNIE-4.5-0.3B-Paddle \
+       --port 8188 --tensor-parallel-size 8 \
+       --max-model-len 32768 \
+       --enable-logprob
+```
+
 For more usage methods of the command line during service deployment, refer to [Parameter Descriptions](../parameters.md).
 
 ## Sending User Requests
@@ -26,7 +36,21 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
   ]
 }'
 ```
+
+Here's an example curl command demonstrating how to include the logprobs parameter in a user request:
+
+```bash
+curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "Hello!"}, "logprobs": true, "top_logprobs": 5
+  ]
+}'
+```
+
 Here is an example of sending a user request using a Python script:
+
 ```python
 import openai
 host = "0.0.0.0"
@@ -55,6 +79,8 @@ The differences in request parameters between FastDeploy and the OpenAI protocol
 
 - `prompt` (supported only in the `v1/completions` interface)
 - `messages` (supported only in the `v1/chat/completions` interface)
+- `logprobs`: Optional[bool] = False (supported only in the `v1/chat/completions` interface)
+- `top_logprobs`: Optional[int] = None (supported only in the `v1/chat/completions` interface. An integer between 0 and 20,logprobs must be set to true if this parameter is used)
 - `frequency_penalty`: Optional[float] = 0.0
 - `max_tokens`: Optional[int] = 16
 - `presence_penalty`: Optional[float] = 0.0
@@ -63,10 +89,10 @@ The differences in request parameters between FastDeploy and the OpenAI protocol
 - `temperature`: Optional[float] = None
 - `top_p`: Optional[float] = None
 - `metadata`: Optional[dict] = None (supported only in `v1/chat/completions` for configuring additional parameters, e.g., `metadata={"enable_thinking": True}`)
-    - `min_tokens`: Optional[int] = 1 (minimum number of tokens generated)
-    - `reasoning_max_tokens`: Optional[int] = None (maximum number of tokens for reasoning content, defaults to the same as `max_tokens`)
-    - `enable_thinking`: Optional[bool] = True (whether to enable reasoning for models that support deep thinking)
-    - `repetition_penalty`: Optional[float] = None (coefficient for directly penalizing repeated token generation (>1 penalizes repetition, <1 encourages repetition))
+  - `min_tokens`: Optional[int] = 1 (minimum number of tokens generated)
+  - `reasoning_max_tokens`: Optional[int] = None (maximum number of tokens for reasoning content, defaults to the same as `max_tokens`)
+  - `enable_thinking`: Optional[bool] = True (whether to enable reasoning for models that support deep thinking)
+  - `repetition_penalty`: Optional[float] = None (coefficient for directly penalizing repeated token generation (>1 penalizes repetition, <1 encourages repetition))
 
 > Note: For multimodal models, since the reasoning chain is enabled by default, resulting in overly long outputs, `max_tokens` can be set to the model's maximum output length or the default value can be used.
 

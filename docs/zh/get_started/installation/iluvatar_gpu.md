@@ -18,13 +18,15 @@ docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
 
 ## 准备容器
 1. 启动容器
+
 ```bash
 docker run -itd --name paddle_infer -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
 docker exec -it paddle_infer bash
 ```
+
 /home/paddle 为模型文件、whl包、脚本所在目录
 
-2. 安装whl包
+1. 安装whl包
 
 ```bash
 pip3 install paddlepaddle==3.1.0a0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
@@ -37,6 +39,7 @@ pip3 install fastdeploy_iluvatar_gpu -i https://www.paddlepaddle.org.cn/packages
 脚本内容如下
 
 `run_demo.sh`:
+
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
@@ -47,7 +50,6 @@ python3 run_demo.py
 ```
 
 run_demo.py
-
 
 ```python
 from fastdeploy import LLM, SamplingParams
@@ -75,10 +77,13 @@ for output in outputs:
 
 ## 运行demo
 执行
+
 ```bash
 ./run_demo.sh
 ```
+
 会有如下 log 打印；load 模型耗时约74s，demo 运行约240s。
+
 ```
 /usr/local/lib/python3.10/site-packages/paddle/utils/cpp_extension/extension_utils.py:715: UserWarning: No ccache found. Please be aware that recompiling all source files may be required. You can download and install ccache from: https://github.com/ccache/ccache/blob/master/doc/INSTALL.md
   warnings.warn(warning_message)

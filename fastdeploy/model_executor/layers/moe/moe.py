@@ -20,7 +20,27 @@ from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
-from fastdeploy.platforms import current_platform
+
+
+def get_moe_method():
+    """
+    return moe method based on device platform
+    """
+    from fastdeploy.platforms import current_platform
+
+    if current_platform.is_cuda():
+        from .fused_moe_cutlass_backend import CutlassMoEMethod
+
+        return CutlassMoEMethod(None)
+    elif current_platform.is_xpu():
+        from .fused_moe_xpu_backend import XPUMoEMethod
+
+        return XPUMoEMethod(None)
+    elif current_platform.is_gcu():
+        from fastdeploy.model_executor.layers.backends import GCUFusedMoeMethod
+
+        return GCUFusedMoeMethod(None)
+    raise NotImplementedError
 
 
 class FusedMoE(nn.Layer):
@@ -57,16 +77,15 @@ class FusedMoE(nn.Layer):
         self.layer_idx = layer_idx
         self.reduce_results = reduce_results
 
-        self.tp_size = fd_config.parallel_config.tensor_parallel_degree
-        self.ep_size = fd_config.parallel_config.expert_parallel_degree
+        self.tp_size = fd_config.parallel_config.tensor_parallel_size
+        self.ep_size = fd_config.parallel_config.expert_parallel_size
         self.ep_rank = fd_config.parallel_config.expert_parallel_rank
 
-        assert (self.tp_size >= 1 and self.ep_size == 1) or \
-                (self.tp_size == 1 and self.ep_size > 1), \
-            'MoE only support parallelism on TP or EP dimension.'
+        assert (self.tp_size >= 1 and self.ep_size == 1) or (
+            self.tp_size == 1 and self.ep_size > 1
+        ), "MoE only support parallelism on TP or EP dimension."
 
         self.hidden_size = fd_config.model_config.hidden_size
-        self.moe_config = fd_config.moe_config
         self.num_experts = num_experts
         self.num_local_experts = self.num_experts // self.ep_size
 
@@ -96,13 +115,7 @@ class FusedMoE(nn.Layer):
             self.moe_quant_type = moe_quant_config.name()
         else:
             # now, no quant method(w_fp16 a_fp16) can't get from quant_config, we will optimize it in future
-            if current_platform.is_cuda():
-                from .fused_moe_cutlass_backend import CutlassMoEMethod
-                self.quant_method = CutlassMoEMethod(None)
-            elif current_platform.is_gcu():
-                from fastdeploy.model_executor.layers.backends import \
-                    GCUFusedMoeMethod
-                self.quant_method = GCUFusedMoeMethod(None)
+            self.quant_method = get_moe_method()
 
         if self.ep_size > 1:
             self.quant_method.init_ep(self)
@@ -115,7 +128,8 @@ class FusedMoE(nn.Layer):
             f"{moe_tag}MoE config is {num_experts=}[{expert_id_offset}, {expert_id_offset+self.num_local_experts}), \
         {top_k=}, hidden_size={self.hidden_size}, {moe_intermediate_size=}, \
             , ep_size={self.ep_size}, \
-            tp_size={self.tp_size}.")
+            tp_size={self.tp_size}."
+        )
 
     def init_moe_weights(self):
         """
@@ -132,36 +146,52 @@ class FusedMoE(nn.Layer):
             shape=gate_weight_shape,
             dtype="float32",
         )
-        if self.moe_config.moe_use_aux_free:
+        if self.fd_config.model_config.moe_use_aux_free:
             self.gate_correction_bias = self.create_parameter(
                 shape=gate_correction_bias_shape,
                 dtype="float32",
             )
-        ffn1_output_dim = self.moe_intermediate_size * 2
+        up_gate_proj_output_dim = self.moe_intermediate_size * 2
         if self.moe_quant_type in ["fp8", "wint8"]:
-            ffn1_weight_shape = [self.num_local_experts, ffn1_output_dim, self.hidden_size]
-            ffn2_weight_shape = [self.num_local_experts, self.hidden_size, self.moe_intermediate_size]
+            up_gate_proj_weight_shape = [
+                self.num_local_experts,
+                up_gate_proj_output_dim,
+                self.hidden_size,
+            ]
+            down_proj_weight_shape = [
+                self.num_local_experts,
+                self.hidden_size,
+                self.moe_intermediate_size,
+            ]
         else:
-            ffn1_weight_shape = [self.num_local_experts, self.hidden_size, ffn1_output_dim]
-            ffn2_weight_shape = [self.num_local_experts, self.moe_intermediate_size, self.hidden_size]
+            up_gate_proj_weight_shape = [
+                self.num_local_experts,
+                self.hidden_size,
+                up_gate_proj_output_dim,
+            ]
+            down_proj_weight_shape = [
+                self.num_local_experts,
+                self.moe_intermediate_size,
+                self.hidden_size,
+            ]
 
         # Create parameters
         if self.moe_quant_type == "fp8":
-            #(TODO:gaoziyuan)
+            # (TODO:gaoziyuan)
             pass
         elif self.moe_quant_type == "wint8":
             self.weight_dtype = "int8"
             self.init_weight_only_scale()
 
-        # FFN1 parameters
-        self.moe_ffn1_weight = self.create_parameter(
-            shape=ffn1_weight_shape,
+        # up_gate_proj parameters
+        self.up_gate_proj_weight = self.create_parameter(
+            shape=up_gate_proj_weight_shape,
             dtype=self.weight_dtype,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
-        # FFN2 parameters
-        self.moe_ffn2_weight = self.create_parameter(
-            shape=ffn2_weight_shape,
+        # down_proj parameters
+        self.down_proj_weight = self.create_parameter(
+            shape=down_proj_weight_shape,
             dtype=self.weight_dtype,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
@@ -170,57 +200,48 @@ class FusedMoE(nn.Layer):
         """
         Initialize the weight scale.
         """
-        self.moe_ffn1_weight_scale = self.create_parameter(
+        self.up_gate_proj_weight_scale = self.create_parameter(
             shape=[self.num_local_experts, self.moe_intermediate_size * 2],
             dtype=self._dtype,
         )
-        self.moe_ffn2_weight_scale = self.create_parameter(
+        self.down_proj_weight_scale = self.create_parameter(
             shape=[self.num_local_experts, self.hidden_size],
             dtype=self._dtype,
         )
 
-    def load_experts_weight(self, state_dict: dict,
-                            ffn1_expert_weight_key: str,
-                            ffn2_expert_weight_key: str):
+    def load_experts_weight(
+        self,
+        state_dict: dict,
+        up_gate_proj_expert_weight_key: str,
+        down_proj_expert_weight_key: str,
+    ):
         """
         Load experts weight from state_dict.
         Args:
             state_dict (dict): The state_dict of model.
-            ffn1_expert_weight_key (str): The key of ffn1 expert weight.
-            ffn2_expert_weight_key (str): The key of ffn2 expert weight.
+            up_gate_proj_expert_weight_key (str): The key of up_gate_proj expert weight.
+            down_proj_expert_weight_key (str): The key of down_proj expert weight.
         """
-        ffn1_weights = []
-        ffn2_weights = []
-        is_ffn_merged = ffn1_expert_weight_key.format(
-            self.expert_id_offset) in state_dict
+        up_gate_proj_weights = []
+        down_proj_weights = []
+        is_ffn_merged = up_gate_proj_expert_weight_key.format(self.expert_id_offset) in state_dict
         if is_ffn_merged:
             for i in range(self.num_local_experts):
                 expert_idx = self.expert_id_offset + i
-                ffn1_weights.append(
-                    get_tensor(
-                        state_dict.pop(
-                            ffn1_expert_weight_key.format(expert_idx))))
-                ffn2_weights.append(
-                    get_tensor(
-                        state_dict.pop(
-                            ffn2_expert_weight_key.format(expert_idx))))
+                up_gate_proj_weights.append(
+                    get_tensor(state_dict.pop(up_gate_proj_expert_weight_key.format(expert_idx)))
+                )
+                down_proj_weights.append(get_tensor(state_dict.pop(down_proj_expert_weight_key.format(expert_idx))))
         else:
-            gate_expert_weight_key = ffn1_expert_weight_key.replace(
-                "up_gate_proj", "gate_proj")
-            up_expert_weight_key = ffn1_expert_weight_key.replace(
-                "up_gate_proj", "up_proj")
+            gate_expert_weight_key = up_gate_proj_expert_weight_key.replace("up_gate_proj", "gate_proj")
+            up_expert_weight_key = up_gate_proj_expert_weight_key.replace("up_gate_proj", "up_proj")
             for j in range(self.num_local_experts):
                 expert_idx = self.expert_id_offset + j
-                gate = get_tensor(
-                    state_dict.pop(gate_expert_weight_key.format(expert_idx)))
-                up = get_tensor(
-                    state_dict.pop(up_expert_weight_key.format(expert_idx)))
-                ffn1_weights.append(paddle.concat([gate, up], axis=-1))
-                ffn2_weights.append(
-                    get_tensor(
-                        state_dict.pop(
-                            ffn2_expert_weight_key.format(expert_idx))))
-        return ffn1_weights, ffn2_weights
+                gate = get_tensor(state_dict.pop(gate_expert_weight_key.format(expert_idx)))
+                up = get_tensor(state_dict.pop(up_expert_weight_key.format(expert_idx)))
+                up_gate_proj_weights.append(paddle.concat([gate, up], axis=-1))
+                down_proj_weights.append(get_tensor(state_dict.pop(down_proj_expert_weight_key.format(expert_idx))))
+        return up_gate_proj_weights, down_proj_weights
 
     def extract_moe_ffn_weights(self, state_dict: dict):
         """
@@ -231,53 +252,50 @@ class FusedMoE(nn.Layer):
 
         Returns:
             tuple: A tuple containing two lists:
-                - ffn1_weights: List of tensors for first FFN layer weights
-                - ffn2_weights: List of tensors for second FFN layer weights
+                - up_gate_proj_weights: List of tensors for first FFN layer weights
+                - down_proj_weights: List of tensors for second FFN layer weights
 
         Raises:
             AssertionError: If required weight keys are missing or number of weights
                 doesn't match number of local experts.
         """
-        ffn1_expert_weight_key = self.weight_key_map.get(
-            "ffn1_expert_weight_key", None)
-        ffn2_expert_weight_key = self.weight_key_map.get(
-            "ffn2_expert_weight_key", None)
-        assert ffn1_expert_weight_key is not None, "ffn1_expert_weight_key should not be none."
-        assert ffn2_expert_weight_key is not None, "ffn2_expert_weight_key should not be none."
+        up_gate_proj_expert_weight_key = self.weight_key_map.get("up_gate_proj_expert_weight_key", None)
+        down_proj_expert_weight_key = self.weight_key_map.get("down_proj_expert_weight_key", None)
+        assert up_gate_proj_expert_weight_key is not None, "up_gate_proj_expert_weight_key should not be none."
+        assert down_proj_expert_weight_key is not None, "down_proj_expert_weight_key should not be none."
 
-        ffn1_weights, ffn2_weights = self.load_experts_weight(
-            state_dict, ffn1_expert_weight_key, ffn2_expert_weight_key)
-        assert len(
-            ffn1_weights
-        ) == self.num_local_experts, "ffn1_weights length should be equal to num_local_experts."
-        assert len(
-            ffn2_weights
-        ) == self.num_local_experts, "ffn2_weights length should be equal to num_local_experts."
+        up_gate_proj_weights, down_proj_weights = self.load_experts_weight(
+            state_dict,
+            up_gate_proj_expert_weight_key,
+            down_proj_expert_weight_key,
+        )
+        assert (
+            len(up_gate_proj_weights) == self.num_local_experts
+        ), "up_gate_proj_weights length should be equal to num_local_experts."
+        assert (
+            len(down_proj_weights) == self.num_local_experts
+        ), "down_proj_weights length should be equal to num_local_experts."
 
-        return ffn1_weights, ffn2_weights
+        return up_gate_proj_weights, down_proj_weights
 
-    def extract_gate_correction_bias(self, gate_correction_bias_key,
-                                     state_dict):
+    def extract_gate_correction_bias(self, gate_correction_bias_key, state_dict):
         """
         extract_gate_correction_bias function.
         """
-        gate_correction_bias_tensor = get_tensor(
-            state_dict.pop(gate_correction_bias_key)).astype("float32")
+        gate_correction_bias_tensor = get_tensor(state_dict.pop(gate_correction_bias_key)).astype("float32")
         return gate_correction_bias_tensor
 
     def load_state_dict(self, state_dict):
         """
         load_state_dict function.
         """
-        self.gate_correction_bias_key = self.weight_key_map.get(
-            "gate_correction_bias_key", None)
+        self.gate_correction_bias_key = self.weight_key_map.get("gate_correction_bias_key", None)
         if self.gate_correction_bias_key is not None and self.gate_correction_bias_key in state_dict:
             self.moe_use_gate_correction_bias = True
         else:
             self.moe_use_gate_correction_bias = False
         if self.moe_use_gate_correction_bias:
-            gate_correction_bias_tensor = self.extract_gate_correction_bias(
-                self.gate_correction_bias_key, state_dict)
+            gate_correction_bias_tensor = self.extract_gate_correction_bias(self.gate_correction_bias_key, state_dict)
             self.gate_correction_bias = self.create_parameter(
                 shape=gate_correction_bias_tensor.shape,
                 dtype="float32",

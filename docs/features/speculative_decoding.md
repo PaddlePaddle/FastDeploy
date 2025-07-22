@@ -10,22 +10,22 @@ This project implements an efficient **Speculative Decoding** inference framewor
 
 - **Ngram**
 
-- **MTP (Multi-Token Prediction)**  
-  - ✅ Supported: TP Sharding  
-  - ✅ Supported: Shared Prefix  
-  - ✅ Supported: TP Sharding + PD Separation  
+- **MTP (Multi-Token Prediction)**
+  - ✅ Supported: TP Sharding
+  - ✅ Supported: Shared Prefix
+  - ✅ Supported: TP Sharding + PD Separation
   - ⏳ Coming Soon: EP + DP + PD Separation
   - ⏳ Coming Soon: Support Chunk-prefill
-  - ⏳ Coming Soon: Multi-layer MTP Layer  
+  - ⏳ Coming Soon: Multi-layer MTP Layer
 
 ---
 
 ### Coming Soon
 
-- Draft Model  
-- Eagle  
-- Hydra  
-- Medusa  
+- Draft Model
+- Eagle
+- Hydra
+- Medusa
 - ...
 
 ---
@@ -54,7 +54,7 @@ This project implements an efficient **Speculative Decoding** inference framewor
 
 ## 🚀 Using Multi-Token Prediction (MTP)
 
-For detailed theory, refer to:  
+For detailed theory, refer to:
 📄 [DeepSeek-V3 Paper](https://arxiv.org/pdf/2412.19437)
 
 ### TP Sharding Mode

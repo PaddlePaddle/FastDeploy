@@ -11,7 +11,7 @@ A dedicated component for transferring KV Cache between Prefill and Decode nodes
   - Single Mellanox ConnectX-7 400G NIC (single port)
   - Tested with BATCH_SIZE = 1538 and block size = 1K - 256K
   - Single pressure thread (threads = 1)
-  
+
 - **Comparison Baseline**:
   - Mooncake performance measured using transfer_engine_bench from example directory
   - Same hardware configuration and test parameters applied to KVTransferManager
@@ -42,11 +42,13 @@ Bandwidth Saturation Capability: Under multi-threaded high-pressure scenarios, b
 ### Dependencies Installation
 
 #### Python Packages
+
 ```bash
 pip install pyzmq pybind11[global]
 ```
 
 #### System Libraries (Linux)
+
 ```bash
 # Ubuntu/Debian
 sudo apt-get install -y libibverbs-dev librdmacm-dev
@@ -62,10 +64,10 @@ sudo yum install -y libibverbs-devel librdmacm-devel
 #### Ampere Architecture Note
 To support Ampere GPUs, enable the environment variable KVCACHE_GDRCOPY_FLUSH_ENABLE.
 - What it does:
-    Forces memory flushing after a GDRCopy write operation to ensure data consistency on the Ampere architecture. Here if KVCACHE_GDRCOPY_FLUSH_ENABLE is enable we trigger an RDMA read operation after the last RDMA write. 
+    Forces memory flushing after a GDRCopy write operation to ensure data consistency on the Ampere architecture. Here if KVCACHE_GDRCOPY_FLUSH_ENABLE is enable we trigger an RDMA read operation after the last RDMA write.
 - Why it’s needed:
     When the NIC delivers a completion to the CPU, it indicates that the data has reach the GPU. However, it doesn't mean that the GPU can read that data yet. To make sure the data has gone all the way down to the GPU memory and the GPU can read it, we need to perform a read.
-[NCCL Issue #683](https://github.com/NVIDIA/nccl/issues/683) | 
+[NCCL Issue #683](https://github.com/NVIDIA/nccl/issues/683) |
 [NCCL Issue #1702](https://github.com/NVIDIA/nccl/issues/1702)
     Since the upper layer typically issues a cache arrival notification only after polling a Completion Queue Entry (CQE), this prevents the application from being notified before the data is actually written back to memory. Therefore, the potential race condition where the cache has not yet been flushed but the application assumes completion is considered a rare event in practice.
 - How to enable:
@@ -75,14 +77,14 @@ To support Ampere GPUs, enable the environment variable KVCACHE_GDRCOPY_FLUSH_EN
 
 ```bash
 # Build and make symbolic links for SO files
-python setup.py bdist_wheel 
+python setup.py bdist_wheel
 
 pip install dist/*.whl
 ```
 
 ## Environment Variables Configuration
 
-###  RDMA Settings
+### RDMA Settings
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `KVCACHE_RDMA_GID_INDEX` | 3 | RDMA GID index |
@@ -90,24 +92,22 @@ pip install dist/*.whl
 | `KVCACHE_IB_TIMEOUT` | 18 | InfiniBand communication timeout (14-31), where timeout = 4.096μs * 2^value (default 18 ≈ 1.07s).|
 | `KVCACHE_RELAX_ORDERING` | false | Enable RDMA relaxed ordering to improve performance in multi-GPU scenarios. Recommended when multiple GPUs share the same NIC to mitigate TX pause issues. |
 
-###  Network Settings
+### Network Settings
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `KVCACHE_SOCKET_IFNAME` | auto | Network interface for socket comm (e.g. "eth0") |
 
-###  Debugging
+### Debugging
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `KVCACHE_DEBUG` | false | Enable debug logging |
 | `KVCACHE_DEBUG_FILE` | - | Debug log file path |
 | `KVCACHE_ERROR_FILE` | - | Error log file path |
 
-###  Performance Tuning
+### Performance Tuning
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `KVCACHE_GDRCOPY_FLUSH_ENABLE` | false | Enable GDRCopy flush for Ampere GPUs |
-
-
 
 # Set RDMA GID index
 export KVCACHE_RDMA_GID_INDEX=3
@@ -124,7 +124,6 @@ export KVCACHE_DEBUG=1
 # Set log files
 export KVCACHE_DEBUG_FILE=/var/log/kvcache_debug.log
 export KVCACHE_ERROR_FILE=/var/log/kvcache_error.log
-
 
 ## Network configurations
 
@@ -164,14 +163,14 @@ comm.write_cache(
 
 **Parameter Details**:
 
-1. `role`: 
+1. `role`:
    - "prefill": Prefill node role
    - "decode": Decode node role
 
-2. `gpu_idx`: 
+2. `gpu_idx`:
    - GPU device index to use
 
-3. `port`: 
+3. `port`:
    - RDMA communication port number
 
 4. `local_key_cache`/`local_value_cache`:
@@ -216,7 +215,7 @@ comm = RDMACommunicator(
 
 if comm.connect("192.168.1.100", "12345"):
     print("Connection established")
-    
+
     # Write cache
     comm.write_cache(
         ip="192.168.1.100",       # Target server IP

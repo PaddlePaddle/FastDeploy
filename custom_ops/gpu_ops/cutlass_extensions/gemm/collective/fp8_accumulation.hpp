@@ -1,11 +1,11 @@
 // Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -54,7 +54,7 @@
 ///////////////////////////////////FP8 Accumulation///////////////////////////
 //////////////////////////////////////////////////////////////////////////////
 /// This class provides API to promote (add) or scale (multiply_add) the results
-/// from the tensor core accumulators to the main accumulators when the number 
+/// from the tensor core accumulators to the main accumulators when the number
 /// of MMAs reaches the max number of MMA interval specified by user, after that
 /// the tensor core accumulators are zeroed.
 //////////////////////////////////////////////////////////////////////////////
@@ -64,7 +64,7 @@ namespace cutlass::gemm::collective {
 template <
     class EngineAccum,
     class LayoutAccum>
-struct GmmaFP8AccumulationWithScale {  
+struct GmmaFP8AccumulationWithScale {
   using TensorAccum = cute::Tensor<EngineAccum, LayoutAccum>;
   using ElementAccumulator = typename EngineAccum::value_type;
 
@@ -78,7 +78,7 @@ private:
   uint32_t accum_promotion_interval_;         // defines the max num of executed MMAs after which accum should be promoted.
   uint32_t mma_count_per_mainloop_iteration_; // num of MMAs per k_tile of mainloop
   uint32_t mma_count_;                        // current executed MMAs
-  uint32_t reset_accum_flag_;                 // accum needs to be zeroed or not. 
+  uint32_t reset_accum_flag_;                 // accum needs to be zeroed or not.
 
   // promote or `add` the partial accumulators to main accumulator (FADD).
   CUTLASS_DEVICE
@@ -116,11 +116,11 @@ public:
       TensorAccum &accum,
       uint32_t accum_promotion_interval,
       uint32_t mma_count_per_mainloop_iteration)
-      : accum_(accum), 
+      : accum_(accum),
         accum_promotion_interval_(accum_promotion_interval),
         mma_count_per_mainloop_iteration_(mma_count_per_mainloop_iteration),
-        mma_count_(0), 
-        reset_accum_flag_(0) 
+        mma_count_(0),
+        reset_accum_flag_(0)
   {
     accum_temp_ = cute::make_fragment_like(accum);
   }
@@ -129,14 +129,14 @@ public:
   // Methods (Common)
   //
 
-  CUTLASS_DEVICE 
+  CUTLASS_DEVICE
   TensorAccum& operator()() {
     return accum_temp_;
   }
 
   /// prepare the MMA accumulators when initialization or zeroing is required.
   CUTLASS_DEVICE
-  bool prepare_if_needed() { 
+  bool prepare_if_needed() {
     return reset_accum_flag_;
   }
 

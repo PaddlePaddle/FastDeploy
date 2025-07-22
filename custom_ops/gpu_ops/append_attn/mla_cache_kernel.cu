@@ -13,6 +13,7 @@
 // limitations under the License.
 #pragma once
 
+#include "helper.h"
 #include "mla_cache_kernel.cuh"
 
 template <paddle::DataType T>
@@ -22,8 +23,8 @@ std::vector<paddle::Tensor> PrefillMLAWriteCache(
                     const paddle::Tensor& kv_pe,
                     const paddle::Tensor& seq_lens,
                     const paddle::Tensor& seq_lens_decoder,
-                    const paddle::Tensor& padding_offsets,
-                    const paddle::Tensor& cum_offsets,
+                    const paddle::Tensor& batch_id_per_token,
+                    const paddle::Tensor& cu_seqlens_q,
                     const paddle::Tensor& block_tables,
                     const int max_seq_len,
                     cudaStream_t& stream,
@@ -53,8 +54,8 @@ std::vector<paddle::Tensor> PrefillMLAWriteCache(
           reinterpret_cast<DataType_*>(const_cast<data_t*>(kv_pe.data<data_t>())),
           reinterpret_cast<DataType_*>(kv_cache->data<data_t>()),
           block_tables.data<int>(),
-          padding_offsets.data<int>(),
-          cum_offsets.data<int>(),
+          batch_id_per_token.data<int>(),
+          cu_seqlens_q.data<int>(),
           seq_lens.data<int>(),
           seq_lens_decoder.data<int>(),
           max_seq_len,
@@ -73,8 +74,8 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
     const paddle::Tensor& kv_cache,
     const paddle::Tensor& seq_lens,
     const paddle::Tensor& seq_lens_decoder,
-    const paddle::Tensor& padding_offsets,
-    const paddle::Tensor& cum_offsets,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
     const std::string& cache_quant_type_str,
     const int max_seq_len) {
@@ -91,7 +92,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
 
   meta_data.max_blocks_per_seq = block_tables.dims()[1];
   meta_data.block_size = kv_cache_dims[2];
-  meta_data.batch_size = cum_offsets.dims()[0];
+  meta_data.batch_size = seq_lens_decoder.dims()[0];
   switch (kv_pe.dtype()) {
     case paddle::DataType::BFLOAT16: {
       return PrefillMLAWriteCache<paddle::DataType::BFLOAT16>(meta_data,
@@ -99,8 +100,8 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
                               kv_pe,
                               seq_lens,
                               seq_lens_decoder,
-                              padding_offsets,
-                              cum_offsets,
+                              batch_id_per_token,
+                              cu_seqlens_q,
                               block_tables,
                               max_seq_len,
                               stream,
@@ -112,8 +113,8 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
                               kv_pe,
                               seq_lens,
                               seq_lens_decoder,
-                              padding_offsets,
-                              cum_offsets,
+                              batch_id_per_token,
+                              cu_seqlens_q,
                               block_tables,
                               max_seq_len,
                               stream,
@@ -130,8 +131,8 @@ std::vector<paddle::Tensor> DecodeMLAWriteCache(
                     const paddle::Tensor& kv_pe,
                     const paddle::Tensor& seq_lens,
                     const paddle::Tensor& seq_lens_encoder,
-                    const paddle::Tensor& padding_offsets,
-                    const paddle::Tensor& cum_offsets,
+                    const paddle::Tensor& batch_id_per_token,
+                    const paddle::Tensor& cu_seqlens_q,
                     const paddle::Tensor& block_tables,
                     const int max_seq_len,
                     const bool speculate_decoder,
@@ -164,8 +165,8 @@ std::vector<paddle::Tensor> DecodeMLAWriteCache(
             reinterpret_cast<DataType_*>(const_cast<data_t*>(kv_pe.data<data_t>())),
             reinterpret_cast<DataType_*>(kv_cache->data<data_t>()),
             block_tables.data<int>(),
-            padding_offsets.data<int>(),
-            cum_offsets.data<int>(),
+            batch_id_per_token.data<int>(),
+            cu_seqlens_q.data<int>(),
             seq_lens.data<int>(),
             seq_lens_encoder.data<int>(),
             max_seq_len,
@@ -185,7 +186,7 @@ std::vector<paddle::Tensor> DecodeMLAWriteCache(
             reinterpret_cast<DataType_*>(const_cast<data_t*>(kv_pe.data<data_t>())),
             reinterpret_cast<DataType_*>(kv_cache->data<data_t>()),
             block_tables.data<int>(),
-            cum_offsets.data<int>(),
+            cu_seqlens_q.data<int>(),
             seq_lens.data<int>(),
             seq_lens_encoder.data<int>(),
             max_seq_len,
@@ -205,8 +206,8 @@ std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
     const paddle::Tensor& kv_cache,
     const paddle::Tensor& seq_lens,
     const paddle::Tensor& seq_lens_encoder,
-    const paddle::Tensor& padding_offsets,
-    const paddle::Tensor& cum_offsets,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
     const std::string& cache_quant_type_str,
     const int max_seq_len,
@@ -224,7 +225,7 @@ std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
 
   meta_data.max_blocks_per_seq = block_tables.dims()[1];
   meta_data.block_size = kv_cache_dims[2];
-  meta_data.batch_size = cum_offsets.dims()[0];
+  meta_data.batch_size = seq_lens_encoder.dims()[0];
   switch (kv_pe.dtype()) {
     case paddle::DataType::BFLOAT16: {
       return DecodeMLAWriteCache<paddle::DataType::BFLOAT16>(meta_data,
@@ -232,8 +233,8 @@ std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
                               kv_pe,
                               seq_lens,
                               seq_lens_encoder,
-                              padding_offsets,
-                              cum_offsets,
+                              batch_id_per_token,
+                              cu_seqlens_q,
                               block_tables,
                               max_seq_len,
                               speculate_decoder,
@@ -246,8 +247,8 @@ std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
                               kv_pe,
                               seq_lens,
                               seq_lens_encoder,
-                              padding_offsets,
-                              cum_offsets,
+                              batch_id_per_token,
+                              cu_seqlens_q,
                               block_tables,
                               max_seq_len,
                               speculate_decoder,
@@ -259,14 +260,14 @@ std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
 }
 
 
-PD_BUILD_OP(prefill_mla_write_cache)
+PD_BUILD_STATIC_OP(prefill_mla_write_cache)
     .Inputs({"kv_nope",
              "kv_pe",
              "kv_cache",
              "seq_lens",
              "seq_lens_decoder",
-             "padding_offsets",
-             "cum_offsets",
+             "batch_id_per_token",
+             "cu_seqlens_q",
              "block_tables"})
     .Outputs({"kv_cache_out"})
     .SetInplaceMap({{"kv_cache", "kv_cache_out"}})
@@ -274,14 +275,14 @@ PD_BUILD_OP(prefill_mla_write_cache)
             "max_seq_len: int"})
     .SetKernelFn(PD_KERNEL(PrefillMLAWriteCacheKernel));
 
-PD_BUILD_OP(decode_mla_write_cache)
+PD_BUILD_STATIC_OP(decode_mla_write_cache)
     .Inputs({"kv_nope",
              "kv_pe",
              "kv_cache",
              "seq_lens",
              "seq_lens_encoder",
-             "padding_offsets",
-             "cum_offsets",
+             "batch_id_per_token",
+             "cu_seqlens_q",
              "block_tables"})
     .Outputs({"kv_cache_out"})
     .SetInplaceMap({{"kv_cache", "kv_cache_out"}})

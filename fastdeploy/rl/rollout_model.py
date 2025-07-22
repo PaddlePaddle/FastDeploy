@@ -18,16 +18,31 @@ from typing import Dict
 
 import paddle
 from paddle import nn
-from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.model_loader import ModelRegistry
-from fastdeploy.model_executor.models.ernie4_5_moe import \
-    Ernie4_5_MoeForCausalLM
-from fastdeploy.model_executor.models.qwen2 import Qwen2ForCausalLM
-from fastdeploy.model_executor.models.qwen3 import Qwen3ForCausalLM
-from fastdeploy.model_executor.models.qwen3moe import Qwen3MoeForCausalLM
+from fastdeploy.model_executor.models.ernie4_5_moe import (
+    Ernie4_5_MoeForCausalLM,
+    Ernie4_5_PretrainedModel,
+)
+from fastdeploy.model_executor.models.ernie4_5_vl.ernie4_5_vl_moe import (
+    Ernie4_5_VLMoeForConditionalGeneration,
+    Ernie4_5_VLPretrainedModel,
+)
+from fastdeploy.model_executor.models.qwen2 import (
+    Qwen2ForCausalLM,
+    Qwen2PretrainedModel,
+)
+from fastdeploy.model_executor.models.qwen3 import (
+    Qwen3ForCausalLM,
+    Qwen3PretrainedModel,
+)
+from fastdeploy.model_executor.models.qwen3moe import (
+    Qwen3MoeForCausalLM,
+    Qwen3MoePretrainedModel,
+)
 from fastdeploy.rl.rollout_config import RolloutModelConfig
+
 
 class RolloutModel(nn.Layer):
     """Main model class for rollout operations, supports multimodal components for train."""
@@ -36,61 +51,82 @@ class RolloutModel(nn.Layer):
         """Initialize with FastDeploy configuration."""
         super(RolloutModel, self).__init__()
         self.fd_config = rollout_model_config.initialize()
-        self._init_models()
+        self.rollout_model = self._init_model()
 
-    def _init_models(self):
-        """Initialize all model components including multimodal if needed."""
-        self.is_vl = "VL" in self.fd_config.model_config.architectures[0]
-        self.rollout_model = self._load_primary_model()
-        self.rollout_models = [self.rollout_model]
-
-        if self.is_vl:
-            self._init_multimodal_models()
-            self.rollout_models.extend(
-                [self.vision_model, self.resampler_model])
-
-    def _init_multimodal_models(self):
-        """Initialize vision and resampler components for multimodal models."""
-        # TODO:(gaoziyuan) Implement actual initialization
-        self.vision_model = nn.Layer()
-        self.resampler_model = nn.Layer()
-
-    def _load_primary_model(self):
-        """Load main model from loader based on config."""
-        if "VL" in self.fd_config.model_config.architectures[0]:
-            logger.error("Loaded Vision Language model, not support now")
-
+    def _init_model(self) -> nn.Layer:
+        """Load model from loader based on config."""
         context = paddle.LazyGuard()
         architectures = f"{self.fd_config.model_config.architectures[0]}RL"
         with context:
             model_cls = ModelRegistry.get_class(architectures)
             model = model_cls(self.fd_config)
-
         model.eval()
         return model
 
-    def get_name_mappings_to_training(self) -> Dict[str, str]:
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         """Get parameter name mappings between rollout and training models."""
-        mappings = {}
-        for model in self.rollout_models:
-            mappings.update(
-                getattr(model, "get_name_mappings_to_training", lambda: {})())
-        return mappings
+        return getattr(self.rollout_model, "get_name_mappings_to_training", lambda: {})(trainer_degree)
+
+    def get_quantization_infer_keys(self) -> Dict[str, str]:
+        """Get parameter name mappings between rollout and training models."""
+        return getattr(self.rollout_model, "get_quantization_infer_keys", lambda: {})()
 
     @paddle.no_grad()
     def state_dict(self):
         """state_dict"""
-        all_params = {}
-        for model in self.rollout_models:
-            for name, param in model.state_dict().items():
-                all_params[name] = param
-        return all_params
+        return self.rollout_model.state_dict()
 
 
-class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM):
+class BaseRLModel(nn.Layer):
+    """Base class for RL models with common functionality"""
+
+    def __init__(
+        self,
+    ):
+        super(BaseRLModel, self).__init__()
+        self.infer_to_train_mapping = {}
+        self.fd_config = None
+
+    @classmethod
+    def name(cls) -> str:
+        return cls.__name__
+
+    def _update_base_mappings(self, base_name: str) -> None:
+        """Common static mappings"""
+        static_mappings = {
+            f"{base_name}.embed_tokens.embeddings.weight": f"{base_name}.embed_tokens.weight",
+            "lm_head.linear.weight": "lm_head.weight",
+        }
+        self.infer_to_train_mapping.update(static_mappings)
+
+    def _complete_missing_mappings(self) -> None:
+        """
+        Complete the mapping dictionary with keys that have identical names in inference and training.
+        """
+        for key in self.state_dict().keys():
+            if key not in self.infer_to_train_mapping and "_scale" not in key:
+                # Skip weight scale parameters in mapping. Train and infer have same key.
+                self.infer_to_train_mapping[key] = key
+
+    def get_quantization_infer_keys(self) -> list[str]:
+        """Get quantization infer keys"""
+        quant_weight_key = []
+        if self.fd_config.quant_config.name() == "wint8":
+            """RL only support weight_only_int8 now"""
+            for key in self.state_dict().keys():
+                if "scale" in key:
+                    quant_weight_key.append(key.replace(".weight_scale", ".weight"))
+        else:
+            raise ValueError("Only 'wint8' quantization is supported in RL roullout.")
+        return quant_weight_key
+
+
+class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM, BaseRLModel):
     """
     Ernie4_5_MoeForCausalLMRL
     """
+
+    _get_tensor_parallel_mappings = Ernie4_5_PretrainedModel._get_tensor_parallel_mappings
 
     def __init__(self, fd_config: FDConfig):
         """
@@ -100,119 +136,167 @@ class Ernie4_5_MoeForCausalLMRL(Ernie4_5_MoeForCausalLM):
         super(Ernie4_5_MoeForCausalLMRL, self).__init__(fd_config)
 
     @classmethod
-    def name(self):
+    def name(self) -> str:
         """name"""
         return "Ernie4_5_MoeForCausalLMRL"
 
-    def get_name_mappings_to_training(self):
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         """Generate mapping between inference and training parameter for RL(donot delete!)."""
-        have_bias = self.fd_config.model_config.get("have_norm_bias", False)
         # Prepare placeholders
-        place_holders = ["weight"] + (["bias"] if have_bias else [])
+        place_holders = ["weight"]
 
         # Initialize mapping dictionary
-        infer_to_train = {}
+        self._update_base_mappings("ernie")
 
-        infer_base_name = "model"
-        train_base_name = "ernie"
-        # Static mappings (non-layer specific)
-        static_mappings = {
-            f"{infer_base_name}.embeddings.word_embeddings.weight":
-            f"{train_base_name}.embed_tokens.weight",
-            f"{infer_base_name}.norm.ln_weight": f"{train_base_name}.norm.weight",
-            "lm_head.out_linear.weight": "lm_head.weight"
-        }
-        if self.fd_config.model_config.get("weight_sharing", False):
-            # Support tie_word_embeddings
-            logger.debug("enable tie_word_embeddings")
-            static_mappings.pop("lm_head.out_linear.weight")
-        infer_to_train.update(static_mappings)
-
-        infer_base_name = infer_base_name + ".hidden_layers"
-        train_base_name = train_base_name + ".layers"
+        base_name = "ernie.layers"
 
         # Helper function to add layer mappings
-        def _add_layer_mappings(layer_idx, is_moe_layer=False):
-            # Handle special case for layer 0's input layernorm
-            for ph in place_holders:
-                infer_key = f"{infer_base_name}.{layer_idx}.input_layernorm.ln_{ph}"
-                train_key = f"{train_base_name}.{layer_idx}.input_layernorm.{ph}"
-                infer_to_train[infer_key] = train_key
+        def _add_layer_mappings(layer_idx: int):
+            # MoE specific mappings
+            self.infer_to_train_mapping[
+                f"{base_name}.{layer_idx}.mlp.fused_moe.gate_weight"
+            ] = f"{base_name}.{layer_idx}.mlp.gate.weight"
 
-            # Common attention mappings
-            for ph in place_holders:
-                infer_to_train[f"{infer_base_name}.{layer_idx}.self_attn.qkv_proj.linear_{ph}"] = \
-                    f"{train_base_name}.{layer_idx}.self_attn.qkv_proj.{ph}"
+            if self.fd_config.model_config.moe_use_aux_free:
+                self.infer_to_train_mapping[
+                    f"{base_name}.{layer_idx}.mlp.fused_moe.gate_correction_bias"
+                ] = f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
 
-                infer_to_train[f"{infer_base_name}.{layer_idx}.self_attn.o_proj.linear_{ph}"] = \
-                    f"{train_base_name}.{layer_idx}.self_attn.o_proj.{ph}"
-
-            # Post-attention layernorm
-            for ph in place_holders:
-                infer_to_train[f"{infer_base_name}.{layer_idx}.post_attention_layernorm.ln_{ph}"] = \
-                    f"{train_base_name}.{layer_idx}.post_attention_layernorm.{ph}"
-
-            if not is_moe_layer:
-                # Dense FFN mappings
+            # MoE experts mappings
+            for expert_idx in range(self.fd_config.model_config.moe_num_experts):
                 for ph in place_holders:
-                    infer_to_train[f"{infer_base_name}.{layer_idx}.mlp.gate_up_proj.linear_{ph}"] = \
-                        f"{train_base_name}.{layer_idx}.mlp.up_gate_proj.{ph}"
+                    # up_gate_proj (up_gate_proj)
+                    up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.fused_moe.up_gate_proj_weight"
+                    if up_gate_proj_key not in self.infer_to_train_mapping:
+                        self.infer_to_train_mapping[up_gate_proj_key] = []
+                    self.infer_to_train_mapping[up_gate_proj_key].append(
+                        f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.up_gate_proj.{ph}"
+                    )
 
-                    infer_to_train[f"{infer_base_name}.{layer_idx}.mlp.down_proj.linear_{ph}"] = \
-                        f"{train_base_name}.{layer_idx}.mlp.down_proj.{ph}"
-            else:
-                # MoE specific mappings
-                infer_to_train[f"{infer_base_name}.{layer_idx}.mlp.fused_moe.gate_weight"] = \
-                    f"{train_base_name}.{layer_idx}.mlp.gate.weight"
+                    # down_proj (down_proj)
+                    down_proj_key = f"{base_name}.{layer_idx}.mlp.fused_moe.down_proj_weight"
+                    if down_proj_key not in self.infer_to_train_mapping:
+                        self.infer_to_train_mapping[down_proj_key] = []
+                    self.infer_to_train_mapping[down_proj_key].append(
+                        f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.down_proj.{ph}"
+                    )
 
-                if self.fd_config.moe_config.moe_use_aux_free:
-                    infer_to_train[f"{infer_base_name}.{layer_idx}.mlp.fused_moe.gate_correction_bias"] = \
-                        f"{train_base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
-
-                # Support shared experts
-                if self.fd_config.model_config.get(
-                        "moe_num_shared_experts") > 0:
-                    infer_to_train[f"{infer_base_name}.{layer_idx}.mlp.shared_experts.gate_up_proj.linear_weight"] = \
-                        f"{train_base_name}.{layer_idx}.mlp.shared_experts.up_gate_proj.weight"
-                    infer_to_train[f"{infer_base_name}.{layer_idx}.mlp.shared_experts.down_proj.linear_weight"] = \
-                        f"{train_base_name}.{layer_idx}.mlp.shared_experts.down_proj.weight"
-
-                # MoE experts mappings
-                for expert_idx in range(self.fd_config.moe_config.num_experts):
-                    for ph in place_holders:
-                        # FFN1 (up_gate_proj)
-                        ffn1_key = f"{infer_base_name}.{layer_idx}.mlp.fused_moe.moe_ffn1_weight"
-                        if ffn1_key not in infer_to_train:
-                            infer_to_train[ffn1_key] = []
-                        infer_to_train[ffn1_key].append(
-                            f"{train_base_name}.{layer_idx}.mlp.experts.{expert_idx}.up_gate_proj.{ph}"
-                        )
-
-                        # FFN2 (down_proj)
-                        ffn2_key = f"{infer_base_name}.{layer_idx}.mlp.fused_moe.moe_ffn2_weight"
-                        if ffn2_key not in infer_to_train:
-                            infer_to_train[ffn2_key] = []
-                        infer_to_train[ffn2_key].append(
-                            f"{train_base_name}.{layer_idx}.mlp.experts.{expert_idx}.down_proj.{ph}"
-                        )
-
-        # Process non-MoE layers
-        for layer_idx in range(
-                self.fd_config.moe_config.moe_layer_start_index):
-            _add_layer_mappings(layer_idx, is_moe_layer=False)
-
+        assert isinstance(self.fd_config.model_config.moe_layer_start_index, int)
         # Process MoE layers
-        for layer_idx in range(self.fd_config.moe_config.moe_layer_start_index,
-                               self.fd_config.model_config.num_layers):
-            _add_layer_mappings(layer_idx, is_moe_layer=True)
+        for layer_idx in range(
+            self.fd_config.model_config.moe_layer_start_index, self.fd_config.model_config.num_hidden_layers
+        ):
+            _add_layer_mappings(layer_idx)
 
-        return infer_to_train
+        self._complete_missing_mappings()
+
+        return self.infer_to_train_mapping
 
 
-class Qwen2ForCausalLMRL(Qwen2ForCausalLM):
+class Ernie4_5_VLMoeForConditionalGenerationRL(Ernie4_5_VLMoeForConditionalGeneration, BaseRLModel):
+    """
+    Ernie4_5_VLMoeForConditionalGenerationRL
+    """
+
+    _get_tensor_parallel_mappings = Ernie4_5_VLPretrainedModel._get_tensor_parallel_mappings
+
+    def __init__(self, fd_config: FDConfig):
+        """
+        Args:
+            fd_config (FDConfig): Configurations for the LLM model.
+        """
+        super(Ernie4_5_VLMoeForConditionalGenerationRL, self).__init__(fd_config)
+
+    @classmethod
+    def name(self) -> str:
+        """name"""
+        return "Ernie4_5_VLMoeForConditionalGenerationRL"
+
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
+        """Generate mapping between inference and training parameter for RL(donot delete!)."""
+        # Prepare placeholders
+        place_holders = ["weight"]
+
+        # Initialize mapping dictionary
+        self._update_base_mappings("ernie")
+
+        base_name = "ernie.layers"
+
+        # Helper function to add layer mappings
+        def _add_expert_mappings(layer_idx: int, moe_tag: str, expert_start: int):
+            # MoE specific mappings
+            gate_suffix = "" if moe_tag == "text" else "_1"
+            self.infer_to_train_mapping[
+                f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.gate_weight"
+            ] = f"{base_name}.{layer_idx}.mlp.gate.weight{gate_suffix}"
+
+            if self.fd_config.model_config.moe_use_aux_free:
+                self.infer_to_train_mapping[
+                    f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.gate_correction_bias"
+                ] = f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
+
+            # Initialize defaultdict for expert weights
+            from collections import defaultdict
+            from itertools import chain
+
+            def _generate_ranges(start, end, step=16, take=8):
+                """生成 [start, start+take), [start+step, start+step+take), ... 直到 end"""
+                return chain(*(range(i, min(i + take, end)) for i in range(start, end, step)))  # 防止越界
+
+            expert_mappings = defaultdict(list)
+            for expert_idx in _generate_ranges(
+                expert_start, total_moe_num, expert_num_per_rank * 2, expert_num_per_rank
+            ):
+                for ph in place_holders:
+                    expert_mappings[f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.up_gate_proj_weight"].append(
+                        f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.up_gate_proj.{ph}"
+                    )
+                    expert_mappings[f"{base_name}.{layer_idx}.mlp.{moe_tag}_fused_moe.down_proj_weight"].append(
+                        f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.down_proj.{ph}"
+                    )
+            self.infer_to_train_mapping.update(expert_mappings)
+
+        moe_layer_start_index = self.fd_config.model_config.moe_layer_start_index
+        if isinstance(moe_layer_start_index, int):
+            text_moe_layer_start_index = moe_layer_start_index
+            image_moe_layer_start_index = moe_layer_start_index
+        else:
+            text_moe_layer_start_index = moe_layer_start_index[0]
+            image_moe_layer_start_index = moe_layer_start_index[1]
+
+        moe_layer_end_index = self.fd_config.model_config.moe_layer_end_index
+        if moe_layer_end_index is None:
+            text_moe_layer_end_index = self.fd_config.model_config.num_hidden_layers
+            image_moe_layer_end_index = self.fd_config.model_config.num_hidden_layers
+        elif isinstance(moe_layer_end_index, int):
+            text_moe_layer_end_index = moe_layer_end_index
+            image_moe_layer_end_index = moe_layer_end_index
+        else:
+            text_moe_layer_end_index = moe_layer_end_index[0]
+            image_moe_layer_end_index = moe_layer_end_index[1]
+
+        assert isinstance(self.fd_config.model_config.moe_num_experts, list)
+        total_moe_num = sum(self.fd_config.model_config.moe_num_experts)
+        if not trainer_degree:
+            trainer_degree = self.fd_config.parallel_config.tensor_parallel_size
+        expert_num_per_rank = self.fd_config.model_config.moe_num_experts[0] // trainer_degree
+        # Process MoE layers
+        for layer_idx in range(text_moe_layer_start_index, text_moe_layer_end_index):
+            _add_expert_mappings(layer_idx, "text", expert_start=0)
+        for layer_idx in range(image_moe_layer_start_index, image_moe_layer_end_index):
+            _add_expert_mappings(layer_idx, "image", expert_start=expert_num_per_rank)
+
+        self._complete_missing_mappings()
+
+        return self.infer_to_train_mapping
+
+
+class Qwen2ForCausalLMRL(Qwen2ForCausalLM, BaseRLModel):
     """
     Qwen2ForCausalLMRL
     """
+
+    _get_tensor_parallel_mappings = Qwen2PretrainedModel._get_tensor_parallel_mappings
 
     def __init__(self, fd_config: FDConfig):
         """
@@ -222,72 +306,41 @@ class Qwen2ForCausalLMRL(Qwen2ForCausalLM):
         super(Qwen2ForCausalLMRL, self).__init__(fd_config)
 
     @classmethod
-    def name(self):
+    def name(self) -> str:
         """name"""
         return "Qwen2ForCausalLMRL"
 
-    def get_name_mappings_to_training(self):
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         """Generate mapping between inference and training parameter for RL(donot delete!)."""
         # Prepare placeholders
         place_holders = ["weight"]
 
         # Initialize mapping dictionary
-        infer_to_train = {}
-
-        infer_base_name = "model"
-        train_base_name = "qwen2"
-        # Static mappings (non-layer specific)
-        static_mappings = {
-            f"{infer_base_name}.embeddings.word_embeddings.weight":
-            f"{train_base_name}.embed_tokens.weight",
-            f"{infer_base_name}.norm.ln_weight": f"{train_base_name}.norm.weight",
-            "lm_head.out_linear.weight": "lm_head.weight"
-        }
-        infer_to_train.update(static_mappings)
-
-        infer_base_name = infer_base_name + ".layers"
-        train_base_name = train_base_name + ".layers"
+        self._update_base_mappings("qwen2")
+        base_name = "qwen2.layers"
 
         # Helper function to add layer mappings
         def _add_layer_mappings(layer_idx):
-            # Handle special case for layer 0's input layernorm and attn o_proj
-            for ph in place_holders:
-                infer_key = f"{infer_base_name}.{layer_idx}.input_layernorm.ln_{ph}"
-                train_key = f"{train_base_name}.{layer_idx}.input_layernorm.{ph}"
-                infer_to_train[infer_key] = train_key
-
-                infer_to_train[f"{infer_base_name}.{layer_idx}.self_attn.o_proj.linear_{ph}"] = \
-                    f"{train_base_name}.{layer_idx}.self_attn.o_proj.{ph}"
-
-            # qwen qkv proj need bias
-            for ph in ["weight", "bias"]:
-                infer_to_train[f"{infer_base_name}.{layer_idx}.self_attn.qkv_proj.linear_{ph}"] = \
-                    f"{train_base_name}.{layer_idx}.self_attn.qkv_proj.{ph}"
-
-            # Post-attention layernorm
-            for ph in place_holders:
-                infer_to_train[f"{infer_base_name}.{layer_idx}.post_attention_layernorm.ln_{ph}"] = \
-                    f"{train_base_name}.{layer_idx}.post_attention_layernorm.{ph}"
-
             # FFN mappings
             for ph in place_holders:
-                infer_to_train[f"{infer_base_name}.{layer_idx}.mlp.gate_up_proj.linear_{ph}"] = \
-                    f"{train_base_name}.{layer_idx}.mlp.gate_up_fused_proj.{ph}"
+                self.infer_to_train_mapping[
+                    f"{base_name}.{layer_idx}.mlp.up_gate_proj.{ph}"
+                ] = f"{base_name}.{layer_idx}.mlp.gate_up_fused_proj.{ph}"
 
-                infer_to_train[f"{infer_base_name}.{layer_idx}.mlp.down_proj.linear_{ph}"] = \
-                    f"{train_base_name}.{layer_idx}.mlp.down_proj.{ph}"
-
-        for layer_idx in range(
-                self.fd_config.model_config.num_layers):
+        for layer_idx in range(self.fd_config.model_config.num_hidden_layers):
             _add_layer_mappings(layer_idx)
 
-        return infer_to_train
+        self._complete_missing_mappings()
+
+        return self.infer_to_train_mapping
 
 
-class Qwen3MoeForCausalLMRL(Qwen3MoeForCausalLM):
+class Qwen3MoeForCausalLMRL(Qwen3MoeForCausalLM, BaseRLModel):
     """
     Qwen3MoeForCausalLMRL
     """
+
+    _get_tensor_parallel_mappings = Qwen3MoePretrainedModel._get_tensor_parallel_mappings
 
     def __init__(self, fd_config: FDConfig):
         """
@@ -297,19 +350,67 @@ class Qwen3MoeForCausalLMRL(Qwen3MoeForCausalLM):
         super(Qwen3MoeForCausalLMRL, self).__init__(fd_config)
 
     @classmethod
-    def name(self):
+    def name(self) -> str:
         """name"""
         return "Qwen3MoeForCausalLMRL"
 
-    def get_name_mappings_to_training(self):
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         """Generate mapping between inference and training parameter for RL(donot delete!)."""
-        pass
+        # Prepare placeholders
+        place_holders = ["weight"]
+
+        # Initialize mapping dictionary
+        self._update_base_mappings("model")
+        self.infer_to_train_mapping = {}
+
+        base_name = "model.layers"
+
+        # Helper function to add layer mappings
+        def _add_layer_mappings(layer_idx: int):
+            # MoE specific mappings
+            self.infer_to_train_mapping[
+                f"{base_name}.{layer_idx}.mlp.gate_weight"
+            ] = f"{base_name}.{layer_idx}.mlp.gate.weight"
+
+            if self.fd_config.moe_config.moe_use_aux_free:
+                self.infer_to_train_mapping[
+                    f"{base_name}.{layer_idx}.mlp.fused_moe.gate_correction_bias"
+                ] = f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
+
+            # MoE experts mappings
+            for expert_idx in range(self.fd_config.moe_config.num_experts):
+                for ph in place_holders:
+                    # up_gate_proj (up_gate_proj)
+                    up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.up_gate_proj_weight"
+                    if up_gate_proj_key not in self.infer_to_train_mapping:
+                        self.infer_to_train_mapping[up_gate_proj_key] = []
+                    self.infer_to_train_mapping[up_gate_proj_key].append(
+                        f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.up_gate_proj.{ph}"
+                    )
+
+                    # down_proj (down_proj)
+                    down_proj_key = f"{base_name}.{layer_idx}.mlp.down_proj_weight"
+                    if down_proj_key not in self.infer_to_train_mapping:
+                        self.infer_to_train_mapping[down_proj_key] = []
+                    self.infer_to_train_mapping[down_proj_key].append(
+                        f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.down_proj.{ph}"
+                    )
+
+        # Process MoE layers
+        for layer_idx in range(self.fd_config.model_config.num_hidden_layers):
+            _add_layer_mappings(layer_idx)
+
+        self._complete_missing_mappings()
+
+        return self.infer_to_train_mapping
 
 
-class Qwen3ForCausalLMRL(Qwen3ForCausalLM):
+class Qwen3ForCausalLMRL(Qwen3ForCausalLM, BaseRLModel):
     """
     Qwen3ForCausalLMRL
     """
+
+    _get_tensor_parallel_mappings = Qwen3PretrainedModel._get_tensor_parallel_mappings
 
     def __init__(self, fd_config: FDConfig):
         """
@@ -319,6 +420,9 @@ class Qwen3ForCausalLMRL(Qwen3ForCausalLM):
         super(Qwen3ForCausalLMRL, self).__init__(fd_config)
 
     @classmethod
-    def name(self):
+    def name(self) -> str:
         """name"""
         return "Qwen3ForCausalLMRL"
+
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
+        pass

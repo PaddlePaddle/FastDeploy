@@ -16,14 +16,15 @@ platform module
 """
 
 import paddle
-from .cuda import CUDAPlatform
-from .cpu import CPUPlatform
-from .xpu import XPUPlatform
-from .npu import NPUPlatform
-from .dcu import DCUPlatform
-from .iluvatar import IluvatarPlatform
-from .gcu import GCUPlatform
+
 from .base import _Backend  # noqa: F401
+from .cpu import CPUPlatform
+from .cuda import CUDAPlatform
+from .dcu import DCUPlatform
+from .gcu import GCUPlatform
+from .iluvatar import IluvatarPlatform
+from .npu import NPUPlatform
+from .xpu import XPUPlatform
 
 _current_platform = None
 
@@ -33,14 +34,14 @@ def __getattr__(name: str):
         # lazy init current_platform.
         global _current_platform
         if _current_platform is None:
-            if paddle.is_compiled_with_cuda():
+            if paddle.is_compiled_with_rocm():
+                _current_platform = DCUPlatform()
+            elif paddle.is_compiled_with_cuda():
                 _current_platform = CUDAPlatform()
             elif paddle.is_compiled_with_xpu():
                 _current_platform = XPUPlatform()
             elif paddle.is_compiled_with_custom_device("npu"):
                 _current_platform = NPUPlatform()
-            elif paddle.is_compiled_with_rocm():
-                _current_platform = DCUPlatform()
             elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 _current_platform = IluvatarPlatform()
             elif paddle.is_compiled_with_custom_device("gcu"):
@@ -51,5 +52,4 @@ def __getattr__(name: str):
     elif name in globals():
         return globals()[name]
     else:
-        raise AttributeError(
-            f"No attribute named '{name}' exists in {__name__}.")
+        raise AttributeError(f"No attribute named '{name}' exists in {__name__}.")

@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from typing import Optional
 
 from fastdeploy.model_executor.layers.moe import FusedMoE
@@ -50,8 +51,10 @@ class TensorWiseFP8Config(QuantConfigBase):
         return method according to this config!
         """
         if isinstance(layer, FusedMoE):
-            from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import \
-                TensorWiseFP8MoEMethod
+            from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import (
+                TensorWiseFP8MoEMethod,
+            )
+
             return TensorWiseFP8MoEMethod(self)
         else:
             return TensorWiseFP8LinearMethod(self)
@@ -96,7 +99,7 @@ class TensorWiseFP8LinearMethod(QuantMethodBase):
         act_scale = get_tensor(state_dict.pop(layer.act_scale_key))
 
         quant_weight = quant_weight.transpose([1, 0]).contiguous()
-        layer.linear_weight.copy_(quant_weight.view("float8_e4m3fn"), False)
+        layer.weight.copy_(quant_weight.view("float8_e4m3fn"), False)
 
         self.act_scale = act_scale.item()
         self.total_scale = (act_scale * weight_scale).item()
@@ -112,17 +115,20 @@ class TensorWiseFP8LinearMethod(QuantMethodBase):
         compute!
         """
         from fastdeploy.model_executor.ops.gpu import (
-            cutlass_fp8_fp8_half_gemm_fused, fused_hadamard_quant_fp8)
+            cutlass_fp8_fp8_half_gemm_fused,
+            fused_hadamard_quant_fp8,
+        )
 
         fp8_x = fused_hadamard_quant_fp8(x, scale=self.act_scale)
 
         linear_out = cutlass_fp8_fp8_half_gemm_fused(
             fp8_x,
-            layer.linear_weight,
+            layer.weight,
             transpose_x=False,
             transpose_y=True,
             bias=None,
             scale=self.total_scale,
             output_dtype="bfloat16",
-            activation_type="identity")
+            activation_type="identity",
+        )
         return linear_out

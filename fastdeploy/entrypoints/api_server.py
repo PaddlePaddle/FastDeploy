@@ -14,18 +14,24 @@
 # limitations under the License.
 """
 
-import uvicorn
 import json
+
+import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import Response, StreamingResponse
 
-from fastdeploy.utils import FlexibleArgumentParser, api_server_logger, is_port_available
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
+from fastdeploy.utils import (
+    FlexibleArgumentParser,
+    api_server_logger,
+    is_port_available,
+)
 
 app = FastAPI()
 
 llm_engine = None
+
 
 def init_app(args):
     """
@@ -39,7 +45,7 @@ def init_app(args):
         api_server_logger.error("Failed to initialize FastDeploy LLM engine, service exit now!")
         return False
 
-    api_server_logger.info(f"FastDeploy LLM engine initialized!")
+    api_server_logger.info("FastDeploy LLM engine initialized!")
     return True
 
 
@@ -47,6 +53,7 @@ def init_app(args):
 async def health() -> Response:
     """Health check."""
     return Response(status_code=200)
+
 
 @app.post("/generate")
 async def generate(request: dict):
@@ -64,7 +71,7 @@ async def generate(request: dict):
                 output = result
         except Exception as e:
             # 记录完整的异常堆栈信息
-            api_server_logger.error(f"Error during generation: {str(e)}", exc_info=True)
+            api_server_logger.error(f"Error during generation: {e!s}", exc_info=True)
             # 返回结构化的错误消息并终止流
             output = {"error": str(e), "error_type": e.__class__.__name__}
         return output
@@ -76,11 +83,13 @@ async def generate(request: dict):
                 yield f"data: {json.dumps(result)}\n\n"
         except Exception as e:
             # 记录完整的异常堆栈信息
-            api_server_logger.error(f"Error during generation: {str(e)}", exc_info=True)
+            api_server_logger.error(f"Error during generation: {e!s}", exc_info=True)
             # 返回结构化的错误消息并终止流
             error_msg = {"error": str(e), "error_type": e.__class__.__name__}
-            yield  f"data: {json.dumps(error_msg)}\n\n"
+            yield f"data: {json.dumps(error_msg)}\n\n"
+
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 
 def launch_api_server(args) -> None:
     """
@@ -97,11 +106,13 @@ def launch_api_server(args) -> None:
         return
 
     try:
-        uvicorn.run(app=app,
-                    host=args.host,
-                    port=args.port,
-                    workers=args.workers,
-                    log_level="info")  # set log level to error to avoid log
+        uvicorn.run(
+            app=app,
+            host=args.host,
+            port=args.port,
+            workers=args.workers,
+            log_level="info",
+        )  # set log level to error to avoid log
     except Exception as e:
         api_server_logger.error(f"launch sync http server error, {e}")
 
@@ -115,7 +126,7 @@ def main():
     parser = EngineArgs.add_cli_args(parser)
     args = parser.parse_args()
     launch_api_server(args)
-    
+
 
 if __name__ == "__main__":
     main()
