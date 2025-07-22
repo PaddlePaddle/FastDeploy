@@ -305,7 +305,7 @@ public:
                 static_assert(FragmentLocalScale::kElements % 4 == 0, "");
 
                 CUTLASS_PRAGMA_UNROLL
-                for (int i = 0; i < FragmentLocalScale::kElements; i += 4) {
+                for (int i = 0; i < FragmentLocalScale::kElements / 4; ++i) {
                     int i4s = local_scale_ptr[i];
 
                     // unpack: 0, 2
@@ -327,8 +327,8 @@ public:
                     scale0.y = scale1.x;
                     scale1.x = tmp;
 
-                    scale_ptr[i / 2] = __hmul2(scale0, super_scale_ptr[i / 2]);
-                    scale_ptr[i / 2 + 1] = __hmul2(scale1, super_scale_ptr[i / 2 + 1]);
+                    scale_ptr[2 * i] = __hmul2(scale0, super_scale_ptr[2 * i]);
+                    scale_ptr[2 * i + 1] = __hmul2(scale1, super_scale_ptr[2 * i + 1]);
                 }
             } else {
                 constexpr uint32_t kLocalScaleMask = 0xf;
@@ -343,6 +343,8 @@ public:
 
         int offset = warp_k_compute_offset * ArchMmaOperator::FragmentB::kElements;
         const int kOutputColumns = FragmentOutput::kElements / kWarpIterationsAlongN;
+
+        // reorder: [0, 2, 4, 6, 1, 3, 5, 7, 8, 10, 12, 14, 9, 11, 13, 15]
         int mapped_offset = (warp_k_compute_offset % 2) == 0 ? 0 : (-kOutputColumns + 1);
 
         CUTLASS_PRAGMA_UNROLL

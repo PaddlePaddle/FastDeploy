@@ -695,27 +695,10 @@ public:
         this->warp_tile_iterator_B_.set_kgroup_index(0);
         this->warp_tile_iterator_B_.load(pipe_state.warp_loaded_frag_B_);
         ++this->warp_tile_iterator_B_;
-
-#if 0
-        if (PipeState::WarpLoadedFragmentB::kElements == 64) {
-          uint8_t* reg_uint8_ptr = reinterpret_cast<uint8_t*>(pipe_state.warp_loaded_frag_B_.data());
-          CUTLASS_TRACE_DEVICE(" [stage=%d] warp_loaded_frag_B_=[%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d], %d bytes",
-              stage - Base::kStages + 2,
-              static_cast<int>(reg_uint8_ptr[0]), static_cast<int>(reg_uint8_ptr[1]),
-              static_cast<int>(reg_uint8_ptr[2]), static_cast<int>(reg_uint8_ptr[3]),
-              static_cast<int>(reg_uint8_ptr[4]), static_cast<int>(reg_uint8_ptr[5]),
-              static_cast<int>(reg_uint8_ptr[6]), static_cast<int>(reg_uint8_ptr[7]),
-              static_cast<int>(reg_uint8_ptr[8]), static_cast<int>(reg_uint8_ptr[9]),
-              static_cast<int>(reg_uint8_ptr[10]), static_cast<int>(reg_uint8_ptr[11]),
-              static_cast<int>(reg_uint8_ptr[12]), static_cast<int>(reg_uint8_ptr[13]),
-              static_cast<int>(reg_uint8_ptr[14]), static_cast<int>(reg_uint8_ptr[15]),
-              sizeof_bits<typename PipeState::WarpLoadedFragmentB>::value / 8);
-        }
-#endif
       }
 
       // load next-tile of group-wise local_scale from shared memory
-      if (warp_k_compute_offset_B == Base::kWarpGemmIterations - 1) {
+      if (warp_mma_k == Base::kWarpGemmIterations - 1) {
         warp_dequantizer_.load(pipe_state.warp_frag_local_scale_);
       }
 
@@ -739,29 +722,6 @@ public:
           pipe_state.warp_frag_A_[warp_mma_k % 2],
           pipe_state.warp_frag_B_[warp_mma_k % 2],
           accum);
-#if 0
-        CUTLASS_TRACE_DEVICE(" pipe_state.warp_frag_B_=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
-            static_cast<float>(pipe_state.warp_frag_B_[0]), static_cast<float>(pipe_state.warp_frag_B_[1]),
-            static_cast<float>(pipe_state.warp_frag_B_[2]), static_cast<float>(pipe_state.warp_frag_B_[3]),
-            static_cast<float>(pipe_state.warp_frag_B_[4]), static_cast<float>(pipe_state.warp_frag_B_[5]),
-            static_cast<float>(pipe_state.warp_frag_B_[6]), static_cast<float>(pipe_state.warp_frag_B_[7]),
-            static_cast<float>(pipe_state.warp_frag_B_[8]), static_cast<float>(pipe_state.warp_frag_B_[9]),
-            static_cast<float>(pipe_state.warp_frag_B_[10]), static_cast<float>(pipe_state.warp_frag_B_[11]),
-            static_cast<float>(pipe_state.warp_frag_B_[12]), static_cast<float>(pipe_state.warp_frag_B_[13]),
-            static_cast<float>(pipe_state.warp_frag_B_[14]), static_cast<float>(pipe_state.warp_frag_B_[15]));
-
-        if (FragmentC::kElements == 16) {
-          CUTLASS_TRACE_DEVICE(" tile_C[0:15]=[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
-                static_cast<float>(accum[0]), static_cast<float>(accum[1]),
-                static_cast<float>(accum[2]), static_cast<float>(accum[3]),
-                static_cast<float>(accum[4]), static_cast<float>(accum[5]),
-                static_cast<float>(accum[6]), static_cast<float>(accum[7]),
-                static_cast<float>(accum[8]), static_cast<float>(accum[9]),
-                static_cast<float>(accum[10]), static_cast<float>(accum[11]),
-                static_cast<float>(accum[12]), static_cast<float>(accum[13]),
-                static_cast<float>(accum[14]), static_cast<float>(accum[15]));
-        }
-#endif
       }
 
       // Except for the last warp-tile, all warp-tiles issue their share of
@@ -847,48 +807,11 @@ public:
     this->warp_tile_iterator_B_.load(pipe_state.warp_loaded_frag_B_);
     ++this->warp_tile_iterator_B_;
 
-#if 0
-    if (PipeState::WarpLoadedFragmentA::kElements == 8) {
-      ElementA* warp_frag_A_ptr = reinterpret_cast<ElementA*>(pipe_state.warp_frag_A_[0].data());
-      CUTLASS_TRACE_DEVICE(" warp_frag_A_=[%f, %f, %f, %f, %f, %f, %f, %f], %d bytes",
-          static_cast<float>(warp_frag_A_ptr[0]), static_cast<float>(warp_frag_A_ptr[1]),
-          static_cast<float>(warp_frag_A_ptr[2]), static_cast<float>(warp_frag_A_ptr[3]),
-          static_cast<float>(warp_frag_A_ptr[4]), static_cast<float>(warp_frag_A_ptr[5]),
-          static_cast<float>(warp_frag_A_ptr[6]), static_cast<float>(warp_frag_A_ptr[7]),
-          sizeof_bits<typename PipeState::WarpLoadedFragmentA>::value / 8);
-    }
-#endif
-#if 0
-    if (PipeState::WarpLoadedFragmentB::kElements == 64) {
-      uint8_t* reg_uint8_ptr = reinterpret_cast<uint8_t*>(pipe_state.warp_loaded_frag_B_.data());
-      CUTLASS_TRACE_DEVICE(" [stage=0] warp_loaded_frag_B_=[%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d], %d bytes",
-          static_cast<int>(reg_uint8_ptr[0]), static_cast<int>(reg_uint8_ptr[1]),
-          static_cast<int>(reg_uint8_ptr[2]), static_cast<int>(reg_uint8_ptr[3]),
-          static_cast<int>(reg_uint8_ptr[4]), static_cast<int>(reg_uint8_ptr[5]),
-          static_cast<int>(reg_uint8_ptr[6]), static_cast<int>(reg_uint8_ptr[7]),
-          static_cast<int>(reg_uint8_ptr[8]), static_cast<int>(reg_uint8_ptr[9]),
-          static_cast<int>(reg_uint8_ptr[10]), static_cast<int>(reg_uint8_ptr[11]),
-          static_cast<int>(reg_uint8_ptr[12]), static_cast<int>(reg_uint8_ptr[13]),
-          static_cast<int>(reg_uint8_ptr[14]), static_cast<int>(reg_uint8_ptr[15]),
-          sizeof_bits<typename PipeState::WarpLoadedFragmentB>::value / 8);
-    }
-#endif
-
     warp_dequantizer_.load(pipe_state.warp_frag_code_scale_,
                            pipe_state.warp_frag_code_zp_,
                            pipe_state.warp_frag_super_scale_);
 
     warp_dequantizer_.load(pipe_state.warp_frag_local_scale_);
-
-#if 0
-    if (PipeState::FragmentLocalScale::kElements == 4) {
-      CUTLASS_TRACE_DEVICE(" FragmentLocalScale::kElements=%d, local_scale_frag[0:3]=[%d, %d, %d, %d], sizeof(FragmentLocalScale)=%d",
-          PipeState::FragmentLocalScale::kElements,
-          static_cast<int>(pipe_state.warp_frag_local_scale_[0]), static_cast<int>(pipe_state.warp_frag_local_scale_[1]),
-          static_cast<int>(pipe_state.warp_frag_local_scale_[2]), static_cast<int>(pipe_state.warp_frag_local_scale_[3]),
-          static_cast<int>(sizeof(PipeState::FragmentLocalScale)));
-    }
-#endif
 
     warp_dequantizer_.dequantize(pipe_state.warp_frag_local_scale_,
                                  pipe_state.warp_frag_code_scale_,
