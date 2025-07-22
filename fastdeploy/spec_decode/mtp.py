@@ -495,11 +495,11 @@ class MTPProposer(Proposer):
                 self.model_inputs["substep"] = substep
                 if substep != 0:
                     target_hidden_states = eagle_get_self_hidden_states(
-                        model_output,
+                        hiddden_states,
                         self.last_seq_lens_this_time,
                         self.model_inputs["seq_lens_this_time"],
                         self.model_inputs["step_idx"],
-                        )
+                    )
                 # Remove padding
                 (
                     ids_remove_padding,
