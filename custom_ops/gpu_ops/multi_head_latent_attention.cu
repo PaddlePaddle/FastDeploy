@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "append_attn/multi_head_latent_attention_kernel.h"
+#include "helper.h"
 #include "mla_attn/batch_mla_with_paged_kv_cache.h"
 
 template <paddle::DataType D>
@@ -25,7 +26,7 @@ std::vector<paddle::Tensor> MultiHeadLatentAttentionKernel(
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& cu_seqlens_q,
-    const paddle::Tensor& padding_offsets,
+    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& encoder_batch_ids,
     const paddle::Tensor& encoder_tile_ids_per_batch,
@@ -97,7 +98,7 @@ std::vector<paddle::Tensor> MultiHeadLatentAttentionKernel(
                                              seq_lens_decoder,
                                              seq_lens_encoder,
                                              cu_seqlens_q,
-                                             padding_offsets,
+                                             batch_id_per_token,
                                              block_tables,
                                              decoder_batch_ids,
                                              decoder_tile_ids_per_batch,
@@ -125,7 +126,7 @@ std::vector<paddle::Tensor> MultiHeadLatentAttentionKernel(
           out_linear_smooths,
           seq_lens_this_time,  // q_seq_len is 1
           seq_lens_decoder,
-          padding_offsets,
+          batch_id_per_token,
           cu_seqlens_q,
           block_tables,
           max_input_length,
@@ -148,7 +149,7 @@ std::vector<paddle::Tensor> MultiHeadLatentAttention(
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& cu_seqlens_q,
-    const paddle::Tensor& padding_offsets,
+    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& encoder_batch_ids,
     const paddle::Tensor& encoder_tile_ids_per_batch,
@@ -211,7 +212,7 @@ std::vector<paddle::Tensor> MultiHeadLatentAttention(
           seq_lens_decoder,
           seq_lens_this_time,
           cu_seqlens_q,
-          padding_offsets,
+          batch_id_per_token,
           block_tables,
           encoder_batch_ids,
           encoder_tile_ids_per_batch,
@@ -257,7 +258,7 @@ std::vector<paddle::Tensor> MultiHeadLatentAttention(
           seq_lens_decoder,
           seq_lens_this_time,
           cu_seqlens_q,
-          padding_offsets,
+          batch_id_per_token,
           block_tables,
           encoder_batch_ids,
           encoder_tile_ids_per_batch,
@@ -310,7 +311,7 @@ std::vector<std::vector<int64_t>> MultiHeadLatentAttentionInferShape(
     const std::vector<int64_t>& seq_lens_decoder_shape,
     const std::vector<int64_t>& seq_lens_this_time_shape,
     const std::vector<int64_t>& cu_seqlens_q_shape,
-    const std::vector<int64_t>& padding_offsets_shape,
+    const std::vector<int64_t>& batch_id_per_token_shape,
     const std::vector<int64_t>& block_tables_shape,
     const std::vector<int64_t>& encoder_batch_ids_shape,
     const std::vector<int64_t>& encoder_tile_ids_per_batch_shape,
@@ -364,7 +365,7 @@ std::vector<paddle::DataType> MultiHeadLatentAttentionInferDtype(
     const paddle::DataType& seq_lens_decoder_dtype,
     const paddle::DataType& seq_lens_this_time_dtype,
     const paddle::DataType& cu_seqlens_q_dtype,
-    const paddle::DataType& padding_offsets_dtype,
+    const paddle::DataType& batch_id_per_token_dtype,
     const paddle::DataType& block_tables_dtype,
     const paddle::DataType& encoder_batch_ids_dtype,
     const paddle::DataType& encoder_tile_ids_per_batch_dtype,
@@ -410,7 +411,7 @@ std::vector<paddle::DataType> MultiHeadLatentAttentionInferDtype(
   }
 }
 
-PD_BUILD_OP(multi_head_latent_attention)
+PD_BUILD_STATIC_OP(multi_head_latent_attention)
     .Inputs({"query",
              "key_cache",
              "value_cache",
@@ -418,7 +419,7 @@ PD_BUILD_OP(multi_head_latent_attention)
              "seq_lens_decoder",
              "seq_lens_this_time",
              "cu_seqlens_q",
-             "padding_offsets",
+             "batch_id_per_token",
              "block_tables",
              "encoder_batch_ids",
              "encoder_tile_ids_per_batch",

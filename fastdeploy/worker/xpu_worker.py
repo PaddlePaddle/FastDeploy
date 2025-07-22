@@ -131,9 +131,9 @@ class XpuWorker(WorkerBase):
         """ """
         return self.model_runner.get_model()
 
-    def initialize_cache(self, num_gpu_blocks: int, num_cpu_blocks: int) -> None:
+    def initialize_cache(self, num_gpu_blocks: int) -> None:
         """ """
-        pass
+        self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
 
     def execute_model(
         self,
@@ -159,7 +159,3 @@ class XpuWorker(WorkerBase):
     def check_health(self) -> bool:
         """ """
         return True
-
-    def reinitialize_kv_cache(self, num_gpu_blocks: int) -> None:
-        """ """
-        self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)

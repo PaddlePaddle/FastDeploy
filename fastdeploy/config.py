@@ -335,11 +335,11 @@ class GraphOptimizationConfig:
         cudagraph_splitting_ops = ["paddle.unified_attention"]
 
     Note: If want to use subgraph capture functionality in a dynamic graph,
-    can manually split the model into multiple layers and apply the @support_cuda_graph decorator
+    can manually split the model into multiple layers and apply the @support_graph_optimization decorator
     only to the layer where CUDA graph functionality is required.
     """
-    cudagraph_splitting_ops = Optional[list[str]]
-    """" Whether to use a full cuda graph for the entire forward pass rather than
+    cudagraph_splitting_ops: list[str] = field(default_factory=list)
+    """ Whether to use a full cuda graph for the entire forward pass rather than
     splitting certain operations such as attention into subgraphs.
     Thus this flag cannot be used together with splitting_ops."""
     full_cuda_graph: bool = True

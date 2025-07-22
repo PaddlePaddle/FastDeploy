@@ -79,6 +79,9 @@ def top_k_top_p_sampling(
     else:
         if current_platform.is_gcu():
             _, ids = gcu_top_p_sampling(x, top_p)
+        elif current_platform.is_dcu():
+            from fastdeploy.model_executor.layers.backends import native_top_p_sampling
+            _, ids = native_top_p_sampling(x, top_p)
         else:
             _, ids = paddle.tensor.top_p_sampling(
                 x,

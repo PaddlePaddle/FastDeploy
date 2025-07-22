@@ -330,6 +330,7 @@ class OpenAIServingChat:
             previous_num_tokens = 0
             current_waiting_time = 0
             logprob_contents = []
+            completion_token_ids = []
             while True:
                 try:
                     raw_data = await asyncio.wait_for(dealer.read(), timeout=10)
@@ -361,6 +362,7 @@ class OpenAIServingChat:
                     )
                     # api_server_logger.debug(f"Client {request_id} received: {data}")
                     previous_num_tokens += len(data["outputs"]["token_ids"])
+                    completion_token_ids.extend(data["outputs"]["token_ids"])
                     # The logprob for handling the response
                     output = data["outputs"]
                     raw_top_logprobs = output["top_logprobs"]
@@ -394,7 +396,7 @@ class OpenAIServingChat:
             reasoning_content=output.get("reasoning_content"),
             tool_calls=output.get("tool_call_content"),
             prompt_token_ids=prompt_token_ids if enable_return_token_ids else None,
-            completion_token_ids=output.get("token_ids") if enable_return_token_ids else None,
+            completion_token_ids=completion_token_ids if enable_return_token_ids else None,
         )
         logprobs_full_res = None
         if logprob_contents:

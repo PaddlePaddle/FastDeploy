@@ -15,6 +15,7 @@
 #include "helper.h"
 #include "paddle/extension.h"
 
+
 template <typename T, bool IS_NEOX>
 inline __device__ void apply_token_rotary_embedding_kernel(
     T* __restrict__ arr,
@@ -138,7 +139,7 @@ void FusedRotaryPositionEncoding(
       });
 }
 
-PD_BUILD_OP(fused_rotary_position_encoding)
+PD_BUILD_STATIC_OP(fused_rotary_position_encoding)
     .Inputs({"query", "key", "position_ids", "cos_sin_cache"})
     .Outputs({"query_out", "key_out"})
     .Attrs({"head_size: int", "is_neox: bool"})
