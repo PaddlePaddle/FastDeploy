@@ -17,11 +17,12 @@
 import functools
 import inspect
 import types
-from typing import Callable, Optional, get_type_hints
+from typing import Callable, Optional, TypeVar, get_type_hints
 
 from paddle.jit import sot
 from paddle.jit.dy2static.utils import Backend as ToStaticBackend
 from paddleformers.utils.log import logger
+from typing_extensions import ParamSpec
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.graph_optimization.cudagraph_piecewise_backend import (
@@ -30,6 +31,9 @@ from fastdeploy.model_executor.graph_optimization.cudagraph_piecewise_backend im
 from fastdeploy.model_executor.graph_optimization.dynamic_dims_marker import (
     resolve_dynamic_dims,
 )
+
+P = ParamSpec("P")
+T = TypeVar("T")
 
 
 # TODO(SigureMo): Replace this fn with real implementation by DrRyanHuang
@@ -47,7 +51,7 @@ def create_in_warmup_mode():
 in_warmup_mode = create_in_warmup_mode()
 
 
-def apply_to_static_optimization(fn, backend: ToStaticBackend):
+def apply_to_static_optimization(fn: Callable[P, T], backend: ToStaticBackend) -> Callable[P, T]:
     forward_fn = fn
     forward_sig = inspect.signature(forward_fn)
     forward_type_hints = get_type_hints(forward_fn)
