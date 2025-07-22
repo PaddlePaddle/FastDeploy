@@ -21,6 +21,7 @@ on:
 
 jobs:
   code-clone:
+    environment: CodeSync
     runs-on: ubuntu-latest
     steps:
       - name: Clone FastDeploy
