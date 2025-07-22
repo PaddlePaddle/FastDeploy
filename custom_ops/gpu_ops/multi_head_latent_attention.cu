@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "append_attn/multi_head_latent_attention_kernel.h"
+#include "helper.h"
 #include "mla_attn/batch_mla_with_paged_kv_cache.h"
 
 template <paddle::DataType D>
@@ -410,7 +411,7 @@ std::vector<paddle::DataType> MultiHeadLatentAttentionInferDtype(
   }
 }
 
-PD_BUILD_OP(multi_head_latent_attention)
+PD_BUILD_STATIC_OP(multi_head_latent_attention)
     .Inputs({"query",
              "key_cache",
              "value_cache",
