@@ -31,24 +31,12 @@ from fastdeploy.model_executor.graph_optimization.cudagraph_piecewise_backend im
 from fastdeploy.model_executor.graph_optimization.dynamic_dims_marker import (
     resolve_dynamic_dims,
 )
+from fastdeploy.model_executor.graph_optimization.utils import (
+    in_sot_warmup_mode as in_warmup_mode,
+)
 
 P = ParamSpec("P")
 T = TypeVar("T")
-
-
-# TODO(SigureMo): Replace this fn with real implementation by DrRyanHuang
-def create_in_warmup_mode():
-    cnt = 0
-
-    def in_warmup_mode():
-        nonlocal cnt
-        cnt += 1
-        return cnt < 32
-
-    return in_warmup_mode
-
-
-in_warmup_mode = create_in_warmup_mode()
 
 
 def apply_to_static_optimization(fn: Callable[P, T], backend: ToStaticBackend) -> Callable[P, T]:
