@@ -40,6 +40,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_LOG_BACKUP_COUNT":
     lambda: os.getenv("FD_LOG_BACKUP_COUNT", "7"),
 
+    # Model download source, can set "AISTUDIO", "MODELSCOPE" or "HUGGINGFACE".
+    "FD_MODEL_SOURCE":
+    lambda: os.getenv("FD_MODEL_SOURCE", "MODELSCOPE"),
+    
     # Model download cache directory.
     "FD_MODEL_CACHE":
     lambda: os.getenv("FD_MODEL_CACHE", None),
