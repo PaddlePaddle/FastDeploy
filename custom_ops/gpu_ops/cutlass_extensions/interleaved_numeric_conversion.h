@@ -564,7 +564,7 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
         uint32_t* h = reinterpret_cast<uint32_t*>(&result);
         int32_t q;
 
-        q = (decode_value[1] << 16) | (decode_value[0] & 0xFFFF);
+        q = __byte_perm(decode_value[0], decode_value[1], 0x5410);
         h[3] = lop3<immLut>(q, MASK, EX);
         q >>= 3;
         h[2] = lop3<immLut>(q, MASK, EX);
@@ -573,7 +573,7 @@ struct FastInterleavedAndBiasedNumericArrayConverter<bfloat16_t, uint2b_t, 16>
         q >>= 3;
         h[0] = lop3<immLut>(q, MASK, EX);
 
-        q = (decode_value[3] << 16) | (decode_value[2] & 0xFFFF);
+        q = __byte_perm(decode_value[2], decode_value[3], 0x5410);
         h[7] = lop3<immLut>(q, MASK, EX);
         q >>= 3;
         h[6] = lop3<immLut>(q, MASK, EX);
