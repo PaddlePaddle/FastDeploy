@@ -28,7 +28,7 @@ from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
-from fastdeploy.distributed.communication_op import tensor_model_parallel_all_reduce
+from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
 )
@@ -44,7 +44,7 @@ from fastdeploy.model_executor.models.ernie4_5_moe import (
 from fastdeploy.model_executor.models.model_base import ModelForCasualLM
 from fastdeploy.platforms import current_platform
 
-if current_platform.is_cuda() and not current_platform.is_dcu():
+if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
         extract_text_token_output,
         text_image_gather_scatter,
@@ -406,7 +406,7 @@ class Ernie4_5_VLModel(nn.Layer):
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
-        image_features: paddle.Tensor,
+        image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
     ):
         text_input = None
@@ -584,7 +584,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
-        image_features: paddle.Tensor,
+        image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
     ):
         hidden_states = self.ernie(

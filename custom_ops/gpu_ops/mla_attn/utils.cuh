@@ -255,9 +255,9 @@ __global__ void merge_multi_chunks_kernel(const T * __restrict__ multi_out, // [
                                           const int * __restrict__ seq_lens_this_time,
                                           const int * __restrict__ seq_lens_decoder,
                                           const int * __restrict__ seq_lens_encoder,
-                                          const int * __restrict__ padding_offsets,
+                                          const int *__restrict__ cu_seqlens_q,
+                                          const int * __restrict__ batch_id_per_token,
                                           T * __restrict__ out, // [token_num, num_heads, head_dim]
-                                          const int max_seq_len,
                                           const int num_chunks,
                                           const int num_heads,
                                           const int chunk_size,
@@ -270,11 +270,10 @@ __global__ void merge_multi_chunks_kernel(const T * __restrict__ multi_out, // [
   __shared__ T smem[bdy * HEAD_DIM];
   __shared__ float md_smem[bdy * 2];
   for (int qid = blockIdx.x; qid < token_num; qid += gridDim.x) {
-    const uint32_t ori_token_id = qid + padding_offsets[qid];
-    const uint32_t bid = ori_token_id / max_seq_len;
+    const uint32_t bid = batch_id_per_token[qid];
     const int seq_len_q = seq_lens_this_time[bid];
     if (seq_len_q == 0) continue;
-    const uint32_t local_seq_id = ori_token_id % max_seq_len;
+    const uint32_t local_seq_id = qid - cu_seqlens_q[bid];
     int seq_len_kv = seq_lens_decoder[bid];
     if (seq_len_kv == 0) continue;
     seq_len_kv += seq_len_q;

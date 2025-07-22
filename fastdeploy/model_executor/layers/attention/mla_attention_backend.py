@@ -32,7 +32,7 @@ from fastdeploy.model_executor.layers.attention.ops import (
 )
 from fastdeploy.platforms import current_platform
 
-if current_platform.is_cuda() and not current_platform.is_dcu():
+if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
         decode_mla_write_cache,
         multi_head_latent_attention,
@@ -82,19 +82,22 @@ class MLAAttentionMetadata(AttentionMetadata):
     block_tables: Optional[paddle.Tensor] = None
     rotary_embs: Optional[paddle.Tensor] = None
     attn_mask: Optional[paddle.Tensor] = None
-    encoder_block_shape_q: Optional[paddle.Tensor] = None
-    decoder_block_shape_q: Optional[paddle.Tensor] = None
+    encoder_block_shape_q: int = -1
+    decoder_block_shape_q: int = -1
     _fuse_kernel_compute_dtype: str = "bf16"
 
     # pd_disaggregation
     kv_signal_metadata: Optional[paddle.Tensor] = None
-    kv_signal_data_list: List[paddle.Tensor] = field(default_factory=list)
+    kv_signal_data_list: List[Optional[paddle.Tensor]] = field(default_factory=list)
 
 
 class MLAAttentionBackend(AttentionBackend):
     """
     MLA Attention Backend implementation.
     """
+
+    __infer_dynamic_dims_fields__ = ["attention_metadata"]
+    attention_metadata: MLAAttentionMetadata
 
     def __init__(
         self,
@@ -213,6 +216,10 @@ class MLAAttentionBackend(AttentionBackend):
 
         self.attention_metadata: AttentionMetadata = metadata
 
+        forward_meta.decoder_batch_ids.copy_(metadata.decoder_batch_ids, False)
+        forward_meta.decoder_tile_ids_per_batch.copy_(
+            metadata.decoder_tile_ids_per_batch, False)
+
     def get_attntion_meta(self) -> AttentionMetadata:
         """get_attntion_meta"""
         return self.attention_metadata
@@ -259,8 +266,8 @@ class MLAAttentionBackend(AttentionBackend):
             latent_cache,
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
-            forward_meta.padding_offset,
-            forward_meta.cum_offsets,
+            forward_meta.batch_id_per_token,
+            forward_meta.cu_seqlens_q,
             metadata.block_tables,
             "none",
             getattr(forward_meta, "max_input_length", -1),
@@ -298,7 +305,7 @@ class MLAAttentionBackend(AttentionBackend):
         """
         metadata = self.attention_metadata
 
-        if self.use_pd_disaggregation:
+        if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
                 metadata.kv_signal_metadata,
                 layer.layer_id + self.start_layer_index,
@@ -317,8 +324,8 @@ class MLAAttentionBackend(AttentionBackend):
             latent_cache,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_encoder,
-            forward_meta.padding_offset,
-            forward_meta.cum_offsets,
+            forward_meta.batch_id_per_token,
+            forward_meta.cu_seqlens_q,
             metadata.block_tables,
             "none",
             self.max_seq_len,
@@ -334,8 +341,7 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
             forward_meta.cu_seqlens_q,
-            forward_meta.padding_offset,
-            forward_meta.cum_offsets,
+            forward_meta.batch_id_per_token,
             metadata.block_tables,
             metadata.encoder_batch_ids,
             metadata.encoder_tile_ids_per_batch,
@@ -343,8 +349,8 @@ class MLAAttentionBackend(AttentionBackend):
             metadata.kv_batch_ids,
             metadata.kv_tile_ids_per_batch,
             metadata.kv_num_blocks,
-            metadata.decoder_batch_ids,
-            metadata.decoder_tile_ids_per_batch,
+            forward_meta.decoder_batch_ids,
+            forward_meta.decoder_tile_ids_per_batch,
             metadata.decoder_num_blocks,
             metadata.decoder_num_blocks,  # PaddleNLP 传入的是 decoder_num_blocks_cpu
             metadata.max_enc_len_this_time,
@@ -394,7 +400,7 @@ class MLAAttentionBackend(AttentionBackend):
         speculate_decoder = self.speculative_method is not None
         speculate_max_tokens = self.speculate_max_draft_token_num
 
-        if self.use_pd_disaggregation:
+        if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
                 metadata.kv_signal_metadata,
                 layer.layer_id + self.start_layer_index,
@@ -409,8 +415,8 @@ class MLAAttentionBackend(AttentionBackend):
                 latent_cache,
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
-                forward_meta.padding_offset,
-                forward_meta.cum_offsets,
+                forward_meta.batch_id_per_token,
+                forward_meta.cu_seqlens_q,
                 metadata.block_tables,
                 "none",
                 self.max_seq_len,
@@ -440,8 +446,8 @@ class MLAAttentionBackend(AttentionBackend):
                 latent_cache,
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_encoder,
-                forward_meta.padding_offset,
-                forward_meta.cum_offsets,
+                forward_meta.batch_id_per_token,
+                forward_meta.cu_seqlens_q,
                 metadata.block_tables,
                 "none",
                 self.max_seq_len,
@@ -457,8 +463,7 @@ class MLAAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_this_time,
                 forward_meta.cu_seqlens_q,
-                forward_meta.padding_offset,
-                forward_meta.cum_offsets,
+                forward_meta.batch_id_per_token,
                 metadata.block_tables,
                 metadata.encoder_batch_ids,
                 metadata.encoder_tile_ids_per_batch,
@@ -466,8 +471,8 @@ class MLAAttentionBackend(AttentionBackend):
                 metadata.kv_batch_ids,
                 metadata.kv_tile_ids_per_batch,
                 metadata.kv_num_blocks,
-                metadata.decoder_batch_ids,
-                metadata.decoder_tile_ids_per_batch,
+                forward_meta.decoder_batch_ids,
+                forward_meta.decoder_tile_ids_per_batch,
                 metadata.decoder_num_blocks,
                 metadata.decoder_num_blocks,  # PaddleNLP 传入的是 decoder_num_blocks_cpu
                 metadata.max_enc_len_this_time,

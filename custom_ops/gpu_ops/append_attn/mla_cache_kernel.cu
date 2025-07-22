@@ -13,6 +13,7 @@
 // limitations under the License.
 #pragma once
 
+#include "helper.h"
 #include "mla_cache_kernel.cuh"
 
 template <paddle::DataType T>
@@ -91,7 +92,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
 
   meta_data.max_blocks_per_seq = block_tables.dims()[1];
   meta_data.block_size = kv_cache_dims[2];
-  meta_data.batch_size = cu_seqlens_q.dims()[0];
+  meta_data.batch_size = seq_lens_decoder.dims()[0];
   switch (kv_pe.dtype()) {
     case paddle::DataType::BFLOAT16: {
       return PrefillMLAWriteCache<paddle::DataType::BFLOAT16>(meta_data,
@@ -224,7 +225,7 @@ std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
 
   meta_data.max_blocks_per_seq = block_tables.dims()[1];
   meta_data.block_size = kv_cache_dims[2];
-  meta_data.batch_size = cu_seqlens_q.dims()[0];
+  meta_data.batch_size = seq_lens_encoder.dims()[0];
   switch (kv_pe.dtype()) {
     case paddle::DataType::BFLOAT16: {
       return DecodeMLAWriteCache<paddle::DataType::BFLOAT16>(meta_data,
@@ -259,7 +260,7 @@ std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
 }
 
 
-PD_BUILD_OP(prefill_mla_write_cache)
+PD_BUILD_STATIC_OP(prefill_mla_write_cache)
     .Inputs({"kv_nope",
              "kv_pe",
              "kv_cache",
@@ -274,7 +275,7 @@ PD_BUILD_OP(prefill_mla_write_cache)
             "max_seq_len: int"})
     .SetKernelFn(PD_KERNEL(PrefillMLAWriteCacheKernel));
 
-PD_BUILD_OP(decode_mla_write_cache)
+PD_BUILD_STATIC_OP(decode_mla_write_cache)
     .Inputs({"kv_nope",
              "kv_pe",
              "kv_cache",

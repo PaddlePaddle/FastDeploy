@@ -17,10 +17,21 @@
 import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
+from contextlib import contextmanager, nullcontext
 
 from fastdeploy.distributed.parallel_state import get_tensor_model_parallel_world_size
 
 _TP_AR = None
+
+
+@contextmanager
+def capture_custom_allreduce():
+    global _TP_AR
+    ar_context = nullcontext()
+    if _TP_AR is not None:
+        ar_context = _TP_AR.capture()
+    with ar_context:
+        yield
 
 
 def use_custom_allreduce(custom_all_reduce_max_bytes: int = 8192 * 1024):
