@@ -18,3 +18,7 @@ jobs:
   clone:
     name: Clone-Linux
     uses: ./.github/workflows/_clone_linux.yml
+    environment: CodeSync
+    secrets:
+      BOS_AK: ${{ secrets.BOS_AK }}
+      BOS_SK: ${{ secrets.BOS_SK }}
