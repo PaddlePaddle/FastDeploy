@@ -873,8 +873,6 @@ class EngineArgs:
         graph_opt_cfg = self.create_graph_optimization_config()
         graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
 
-        assert not (self.use_cudagraph and self.enable_prefix_caching), "Prefix caching cannot be used with CUDA graph"
-
         assert not (
             self.tensor_parallel_size <= 1 and self.enable_custom_all_reduce
         ), "enable_custom_all_reduce must be used with tensor_parallel_size>1"
@@ -908,6 +906,5 @@ class EngineArgs:
             graph_optimization_config=graph_opt_cfg,
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
-            enable_custom_all_reduce=self.enable_custom_all_reduce,
             enable_logprob=self.enable_logprob,
         )
