@@ -493,7 +493,7 @@ class MTPProposer(Proposer):
             if self.model_inputs["not_need_stop"]:
                 if substep != 0:
                     target_hidden_states = eagle_get_self_hidden_states(
-                        hiddden_states,
+                        hidden_states,
                         self.last_seq_lens_this_time,
                         self.model_inputs["seq_lens_this_time"],
                         self.model_inputs["step_idx"],
@@ -509,7 +509,6 @@ class MTPProposer(Proposer):
                     output_cum_offsets,
                     output_padding_offset,
                 ) = pre_process(
-                    self.parallel_config.max_model_len,
                     self.model_inputs["input_ids"],
                     self.model_inputs["seq_lens_this_time"],
                     True,
@@ -543,17 +542,15 @@ class MTPProposer(Proposer):
                 )
 
                 if self.max_draft_token_num > 1:
-                    self.last_seq_lens_this_time = paddle.clone(
-                        self.model_inputs["seq_lens_this_time"]
-                    )
-    
+                    self.last_seq_lens_this_time = paddle.clone(self.model_inputs["seq_lens_this_time"])
+
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
                     previous_hidden_states=target_hidden_states,
                     forward_meta=self.forward_meta,
                 )
 
-                hiddden_states = rebuild_padding(
+                hidden_states = rebuild_padding(
                     model_output,
                     self.model_inputs["cum_offsets"],
                     self.model_inputs["seq_lens_this_time"],
@@ -564,7 +561,7 @@ class MTPProposer(Proposer):
                 )
 
                 # 4. Compute logits, Sample
-                logits = self.model.compute_logits(hiddden_states)
+                logits = self.model.compute_logits(hidden_states)
 
                 sampled_token_ids = self.sampler(
                     logits,
