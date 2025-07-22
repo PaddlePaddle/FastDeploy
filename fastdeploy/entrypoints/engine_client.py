@@ -141,7 +141,8 @@ class EngineClient:
         task["preprocess_end_time"] = time.time()
         preprocess_cost_time = task["preprocess_end_time"] - task["preprocess_start_time"]
         api_server_logger.info(
-            f"Cache request with request_id ({task.get('request_id')}), " f"preprocess time cost {preprocess_cost_time}"
+            f"Cache request with request_id ({task.get('request_id')}), "
+            f"preprocess time cost {preprocess_cost_time}"
         )
 
         self.vaild_parameters(task)

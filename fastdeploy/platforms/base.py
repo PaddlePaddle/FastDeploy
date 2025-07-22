@@ -39,7 +39,7 @@ class Platform:
         """
         whether platform is cuda
         """
-        return paddle.is_compiled_with_cuda()
+        return paddle.is_compiled_with_cuda() and not paddle.is_compiled_with_rocm()
 
     def is_npu(self) -> bool:
         """

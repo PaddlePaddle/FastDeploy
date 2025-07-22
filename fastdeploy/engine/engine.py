@@ -860,7 +860,7 @@ class LLMEngine:
         )
 
         if self.do_profile:
-            get_profile_block_num = np.zeros([self.cfg.worker_num_per_node], dtype=np.int32)
+            get_profile_block_num = np.zeros([1], dtype=np.int32)
             self.get_profile_block_num_signal = IPCSignal(
                 name="get_profile_block_num",
                 array=get_profile_block_num,
@@ -937,11 +937,11 @@ class LLMEngine:
                 "SOT_LOG_LEVEL": os.getenv("SOT_LOG_LEVEL", default="0"),
                 "SOT_UNSAFE_CACHE_FASTPATH": os.getenv("SOT_UNSAFE_CACHE_FASTPATH", default="1"),
                 "SOT_ENABLE_0_SIZE_FALLBACK": os.getenv("SOT_ENABLE_0_SIZE_FALLBACK", default="0"),
+                "SOT_SPECIALIZED_DIM_NUMBERS": os.getenv("SOT_SPECIALIZED_DIM_NUMBERS", default="no"),
                 "FLAGS_specialize_device_in_dy2st": os.getenv("FLAGS_specialize_device_in_dy2st", default="1"),
                 "FLAGS_enable_async_fast_gc": os.getenv("FLAGS_enable_async_fast_gc", default="0"),
                 "FLAGS_pir_interpreter_record_stream_for_gc_cache": os.getenv(
-                    "FLAGS_pir_interpreter_record_stream_for_gc_cache",
-                    default="1",
+                    "FLAGS_pir_interpreter_record_stream_for_gc_cache", default="1"
                 ),
                 "FLAGS_parameters_persistent_mode_in_dy2st": os.getenv(
                     "FLAGS_parameters_persistent_mode_in_dy2st", default="1"
@@ -1024,7 +1024,7 @@ class LLMEngine:
             "do_profile": self.do_profile,
             "dynamic_load_weight": self.cfg.model_config.dynamic_load_weight,
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
-            "enable-custom-all-reduce": self.cfg.parallel_config.enable_custom_all_reduce,
+            "enable_custom_all_reduce": self.cfg.parallel_config.enable_custom_all_reduce,
             "enable_logprob": self.cfg.enable_logprob,
             "enable_mm": self.cfg.enable_mm,
         }
@@ -1118,15 +1118,9 @@ class LLMEngine:
         Stop profiling of the model server and reset variables.
         """
         self.do_profile = 0
-        num_gpu_blocks = -1
-        for i in range(self.cfg.tensor_parallel_size):
-            while self.get_profile_block_num_signal.value[i] == 0:
-                time.sleep(1)
-            if num_gpu_blocks < 0:
-                num_gpu_blocks = self.get_profile_block_num_signal.value[i]
-            else:
-                num_gpu_blocks = min(num_gpu_blocks, self.get_profile_block_num_signal.value[i])
-
+        while self.get_profile_block_num_signal.value[0] == 0:
+            time.sleep(1)
+        num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":

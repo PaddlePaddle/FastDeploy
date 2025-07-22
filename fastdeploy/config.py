@@ -201,6 +201,8 @@ class ParallelConfig:
         # disable any whitespace for guided decoding
         self.disable_any_whitespace: bool = True
         self.pod_ip: str = None
+        # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
+        self.enable_custom_all_reduce: bool = False
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -213,8 +215,6 @@ class ParallelConfig:
             self.moe_phase = MoEPhase.DECODER
         else:
             raise NotImplementedError
-        # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
-        self.enable_custom_all_reduce: bool = False
 
         # pd_disaggregation
         use_pd_disaggregation: int = int(os.getenv("FLAGS_use_pd_disaggregation", 0))
@@ -337,11 +337,11 @@ class GraphOptimizationConfig:
         cudagraph_splitting_ops = ["paddle.unified_attention"]
 
     Note: If want to use subgraph capture functionality in a dynamic graph,
-    can manually split the model into multiple layers and apply the @support_cuda_graph decorator
+    can manually split the model into multiple layers and apply the @support_graph_optimization decorator
     only to the layer where CUDA graph functionality is required.
     """
-    cudagraph_splitting_ops = Optional[list[str]]
-    """" Whether to use a full cuda graph for the entire forward pass rather than
+    cudagraph_splitting_ops: list[str] = field(default_factory=list)
+    """ Whether to use a full cuda graph for the entire forward pass rather than
     splitting certain operations such as attention into subgraphs.
     Thus this flag cannot be used together with splitting_ops."""
     full_cuda_graph: bool = True
