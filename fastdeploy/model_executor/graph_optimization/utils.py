@@ -31,7 +31,6 @@ def create_guard(default_value):
             _state = old_state
 
     def get_state():
-        print(f"XUXUXUXUXUXXU {_state}")
         return _state
 
     return state_guard, get_state
