@@ -381,8 +381,9 @@ class CompletionRequest(BaseModel):
         if prompt is not None:
             req_dict["prompt"] = prompt
 
-        if self.prompt_token_ids is not None or \
-            (self.extra_body is not None and self.extra_body.get("prompt_token_ids") is not None):
+        if self.prompt_token_ids is not None or (
+            self.extra_body is not None and self.extra_body.get("prompt_token_ids") is not None
+        ):
             req_dict["prompt_token_ids"] = self.prompt_token_ids
             if "prompt" in req_dict:
                 del req_dict["prompt"]
@@ -508,6 +509,9 @@ class ChatCompletionRequest(BaseModel):
         req_dict["logprobs"] = self.top_logprobs if self.logprobs else None
 
         if self.metadata is not None:
+            assert (
+                "raw_request" not in self.metadata
+            ), "The parameter `raw_request` is not supported now, please use completion api instead."
             for key, value in self.metadata.items():
                 req_dict[key] = value
 
@@ -515,8 +519,9 @@ class ChatCompletionRequest(BaseModel):
             if value is not None:
                 req_dict[key] = value
 
-        if self.prompt_token_ids is not None or \
-            (self.extra_body is not None and self.extra_body.get("prompt_token_ids") is not None):
+        if self.prompt_token_ids is not None or (
+            self.extra_body is not None and self.extra_body.get("prompt_token_ids") is not None
+        ):
             req_dict["prompt_token_ids"] = self.prompt_token_ids
             if "messages" in req_dict:
                 del req_dict["messages"]
