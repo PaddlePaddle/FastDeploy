@@ -239,7 +239,11 @@ class DataProcessor(BaseDataProcessor):
                 task["enable_thinking"] = kwargs.get("enable_thinking", True)
                 request.prompt_token_ids = self.messages2ids(task)
             else:
-                raise ValueError(f"The request should have `input_ids`, `text` or `messages`: {request}.")
+                raise ValueError(
+                    f"The request should have `input_ids`, `text` or `messages`: {request}."
+                )
+        if len(request.prompt_token_ids) == 0:
+            raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
         if request.get("max_tokens") is None:
             request.set(
                 "max_tokens",
@@ -283,8 +287,11 @@ class DataProcessor(BaseDataProcessor):
                     raise ValueError("This model does not support chat_template.")
                 request["prompt_token_ids"] = self.messages2ids(request)
             else:
-                raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
-
+                raise ValueError(
+                    f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}"
+                )
+        if len(request['prompt_token_ids']) == 0:
+            raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
         if request.get("temperature") < _SAMPLING_EPS:
@@ -335,6 +342,7 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
+        enable_thinking = kwargs.get("enable_thinking")
         token_ids = response_dict["outputs"]["token_ids"]
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
@@ -344,8 +352,9 @@ class DataProcessor(BaseDataProcessor):
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
-            if self.reasoning_parser:
-                reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
+            if enable_thinking and self.reasoning_parser:
+                reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
+                    full_text, response_dict)
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
             else:

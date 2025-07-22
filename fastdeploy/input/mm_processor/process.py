@@ -27,6 +27,7 @@ from PIL import Image
 
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie_tokenizer import ErnieBotTokenizer
+from fastdeploy.utils import data_processor_logger
 
 from .image_preprocessor.image_preprocessor_adaptive import AdaptiveImageProcessor
 from .process_video import read_frames_decord, read_video_decord
@@ -252,6 +253,8 @@ class DataProcessor:
                     image_message_list.append(item)
 
         prompt_token_ids = self.apply_chat_template(request)
+        if len(prompt_token_ids) == 0:
+            raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
         image_start_index = 0
         image_message_index = 0
         for i in range(len(prompt_token_ids)):
@@ -503,4 +506,6 @@ class DataProcessor:
         )
         tokens = self.tokenizer.tokenize(prompt_token_str)
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+        data_processor_logger.info(
+            f"req_id:{request.get('request_id', ''),} tokens: {tokens}, token_ids: {token_ids}")
         return token_ids
