@@ -208,13 +208,15 @@ class EPRunner:
         num_max_dispatch_tokens_per_rank: int = 1,
         ep_size: int = 1,
         ep_rank: int = 0,
+        redundant_experts_num: int = 0,
     ):
         self.top_k = top_k
         self.num_experts = num_experts
+        self.redundant_experts_num = redundant_experts_num
         self.ep_engine = DeepEPEngine(
             num_max_dispatch_tokens_per_rank=num_max_dispatch_tokens_per_rank,
             hidden=hidden,
-            num_experts=num_experts,
+            num_experts=num_experts + redundant_experts_num,
             moe_phase=moe_phase,
             ep_size=ep_size,
             ep_rank=ep_rank,
@@ -224,13 +226,34 @@ class EPRunner:
         """
         moe_select
         """
-        topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
-            gate_out,
-            layer.gate_correction_bias,
-            self.top_k,
-            True,  # apply_norm_weight,
-            False,
-        )
+        if layer.redundant_table_manger is not None:
+            (
+                ep_rank_to_expert_id_list,
+                expert_id_to_ep_rank_array,
+                expert_in_rank_num_list,
+                tokens_per_expert_stats_list,
+            ) = layer.redundant_table_manger.get_ep_rank_to_expert_id_list_by_layer(layer.layer_idx)
+
+            expert_id_to_ep_rank_array = paddle.arange(0, self.num_experts, dtype="int32")
+            topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.f_moe_redundant_topk_select(
+                gating_logits=gate_out,
+                expert_id_to_ep_rank_array=expert_id_to_ep_rank_array,
+                expert_in_rank_num_list=expert_in_rank_num_list,
+                tokens_per_expert_stats_list=tokens_per_expert_stats_list,
+                bias=layer.gate_correction_bias,
+                moe_topk=self.top_k,
+                apply_norm_weight=True,  # apply_norm_weight
+                enable_softmax_top_k_fused=False,
+                redundant_ep_rank_num_plus_one=layer.fd_config.model_config.redundant_experts_num + 1,
+            )
+        else:
+            topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+                gate_out,
+                layer.gate_correction_bias,
+                self.top_k,
+                True,  # apply_norm_weight,
+                False,
+            )
         return topk_idx, topk_weights
 
     @abstractmethod
@@ -260,6 +283,7 @@ class EPPrefillRunner(EPRunner):
         num_experts: int,
         ep_size: int = 1,
         ep_rank: int = 0,
+        redundant_experts_num: int = 0,
     ):
         super().__init__(
             top_k,
@@ -268,6 +292,7 @@ class EPPrefillRunner(EPRunner):
             MoEPhase.PREFILL,
             ep_size=ep_size,
             ep_rank=ep_rank,
+            redundant_experts_num=redundant_experts_num,
         )
 
     def dispatch(
@@ -330,6 +355,7 @@ class EPDecoderRunner(EPRunner):
         num_max_dispatch_tokens_per_rank: int,
         ep_size: int = 1,
         ep_rank: int = 0,
+        redundant_experts_num: int = 0,
     ):
         super().__init__(
             top_k,
@@ -339,6 +365,7 @@ class EPDecoderRunner(EPRunner):
             num_max_dispatch_tokens_per_rank,
             ep_size=ep_size,
             ep_rank=ep_rank,
+            redundant_experts_num=redundant_experts_num,
         )
 
     def dispatch(
