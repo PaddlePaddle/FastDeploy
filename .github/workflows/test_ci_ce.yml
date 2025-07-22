@@ -1,0 +1,20 @@
+name: Test CI CE Trigger
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [develop, release/**]
+    # 新 tag 创建时触发（示例匹配以 v 开头的 tag）
+  push:
+    branches:
+      - develop
+      - release/**
+    tags:
+      - 'v*'
+  schedule:
+    - cron: '0 19 * * *'  # Runs daily at 19:00 UTC (03:00 AM Beijing Time next day)
+  
+jobs:
+  clone:
+    name: Clone-Linux
+    uses: ./.github/workflows/_clone_linux.yml
