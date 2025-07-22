@@ -499,8 +499,8 @@ def parse_args():
     )
     parser.add_argument(
         "--speculative_benchmark_mode",
-        default="False",
-        type=str,
+        default=False,
+        type=bool,
     )
     parser.add_argument(
         "--max_num_batched_tokens",
