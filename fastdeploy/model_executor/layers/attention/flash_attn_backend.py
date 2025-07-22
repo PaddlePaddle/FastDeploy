@@ -147,7 +147,7 @@ class FlashAttentionBackend(AttentionBackend):
             self.head_dim,
         )
 
-    def init_attention_metadata(self, forward_meta: "ForwardMeta"):
+    def init_attention_metadata(self, forward_meta: ForwardMeta):
         metadata = FlashAttentionMetadata()
         metadata.encoder_block_shape_q = 64
         metadata.decoder_block_shape_q = 16
@@ -218,7 +218,7 @@ class FlashAttentionBackend(AttentionBackend):
         compressed_kv: paddle.Tensor,
         k_pe: paddle.Tensor,
         layer: Attention,
-        forward_meta: "ForwardMeta",
+        forward_meta: ForwardMeta,
     ):
         metadata = self.attention_metadata
 

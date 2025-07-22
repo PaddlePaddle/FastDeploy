@@ -38,7 +38,7 @@ class AttentionBackend(ABC):
     """The base class of attention backends"""
 
     @abstractmethod
-    def init_attention_metadata(self, forward_meta: "ForwardMeta"):
+    def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize the forward metadata."""
         raise NotImplementedError
 
@@ -51,7 +51,7 @@ class AttentionBackend(ABC):
         compressed_kv: paddle.Tensor,
         k_pe: paddle.Tensor,
         layer: paddle.nn.Layer,
-        forward_meta: "ForwardMeta",
+        forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
         """
         Run a forward.
@@ -107,7 +107,7 @@ class AttentionBackend(ABC):
         compressed_kv: paddle.Tensor,
         k_pe: paddle.Tensor,
         layer: paddle.nn.Layer,
-        forward_meta: "ForwardMeta",
+        forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
         """Run a forward for mix."""
         raise NotImplementedError
@@ -121,7 +121,7 @@ class AttentionBackend(ABC):
         compressed_kv: paddle.Tensor,
         k_pe: paddle.Tensor,
         layer: paddle.nn.Layer,
-        forward_meta: "ForwardMeta",
+        forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
         """Run a forward for decode."""
         raise NotImplementedError
@@ -135,7 +135,7 @@ class AttentionBackend(ABC):
         compressed_kv: paddle.Tensor,
         k_pe: paddle.Tensor,
         layer: paddle.nn.Layer,
-        forward_meta: "ForwardMeta",
+        forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
         """Run a forward for extend."""
         raise NotImplementedError

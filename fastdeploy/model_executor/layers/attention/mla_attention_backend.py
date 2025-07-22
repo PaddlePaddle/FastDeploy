@@ -149,7 +149,7 @@ class MLAAttentionBackend(AttentionBackend):
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
-    def init_attention_metadata(self, forward_meta: "ForwardMeta"):
+    def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attention metadata hence all layers in the forward pass can reuse it."""
         metadata = MLAAttentionMetadata()
         metadata.encoder_block_shape_q = 64
@@ -240,7 +240,7 @@ class MLAAttentionBackend(AttentionBackend):
         compressed_kv: paddle.Tensor,
         k_pe: paddle.Tensor,
         layer: Attention,
-        forward_meta: "ForwardMeta",
+        forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
         """
         Prefill阶段的前向传播
@@ -294,7 +294,7 @@ class MLAAttentionBackend(AttentionBackend):
         compressed_kv: paddle.Tensor,
         k_pe: paddle.Tensor,
         layer: Attention,
-        forward_meta: "ForwardMeta",
+        forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
         """
         Decode阶段的前向传播
@@ -388,7 +388,7 @@ class MLAAttentionBackend(AttentionBackend):
         compressed_kv: paddle.Tensor,
         k_pe: paddle.Tensor,
         layer: Attention,
-        forward_meta: "ForwardMeta",
+        forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
         """
         Mixed模式的前向传播

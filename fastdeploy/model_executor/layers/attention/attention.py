@@ -117,7 +117,7 @@ class Attention(nn.Layer):
         qkv: paddle.Tensor = None,
         compressed_kv: paddle.Tensor = None,
         k_pe: paddle.Tensor = None,
-        forward_meta: "ForwardMeta" = None,
+        forward_meta: ForwardMeta = None,
     ) -> paddle.Tensor:
         """
         The forward function of attention layer.

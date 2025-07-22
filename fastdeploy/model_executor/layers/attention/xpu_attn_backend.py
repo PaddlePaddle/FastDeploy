@@ -114,7 +114,7 @@ class XPUAttentionBackend(AttentionBackend):
         self.use_pd_disaggregation: int = int(os.getenv("FLAGS_use_pd_disaggregation", 0))
         self.start_layer_index: int = fd_config.model_config.start_layer_index
 
-    def init_attention_metadata(self, forward_meta: "ForwardMeta"):
+    def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
         metadata = XPUAttentionMetadata()
         metadata.encoder_block_shape_q = 64
@@ -166,7 +166,7 @@ class XPUAttentionBackend(AttentionBackend):
         compressed_kv: paddle.Tensor,
         k_pe: paddle.Tensor,
         layer: Attention,
-        forward_meta: "ForwardMeta",
+        forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
         """
         forward_mixed
