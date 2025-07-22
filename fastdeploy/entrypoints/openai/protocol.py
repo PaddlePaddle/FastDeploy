@@ -372,19 +372,22 @@ class CompletionRequest(BaseModel):
         req_dict = {}
         if request_id is not None:
             req_dict["request_id"] = request_id
+
+        # parse request model into dict, priority: request > extra_body > suffix
         for key, value in self.dict().items():
             if value is not None:
                 req_dict[key] = value
+        if self.extra_body is not None:
+            for key, value in self.extra_body.items():
+                req_dict.setdefault(key, value)
         if self.suffix is not None:
             for key, value in self.suffix.items():
-                req_dict[key] = value
+                req_dict.setdefault(key, value)
+
         if prompt is not None:
             req_dict["prompt"] = prompt
 
-        if self.prompt_token_ids is not None or (
-            self.extra_body is not None and self.extra_body.get("prompt_token_ids") is not None
-        ):
-            req_dict["prompt_token_ids"] = self.prompt_token_ids
+        if "prompt_token_ids" in req_dict:
             if "prompt" in req_dict:
                 del req_dict["prompt"]
         else:
@@ -475,7 +478,7 @@ class ChatCompletionRequest(BaseModel):
     top_p: Optional[float] = None
     top_k: Optional[int] = None
     min_p: Optional[float] = None
-    user: Optional[str] = None
+    user: Optional[str] = None  
     metadata: Optional[dict] = None
     extra_body: Optional[dict] = None
     return_token_ids: Optional[bool] = False
@@ -508,21 +511,21 @@ class ChatCompletionRequest(BaseModel):
         req_dict["max_tokens"] = self.max_completion_tokens or self.max_tokens
         req_dict["logprobs"] = self.top_logprobs if self.logprobs else None
 
+        # parse request model into dict, priority: request > extra_body > metadata
+        for key, value in self.dict().items():
+            if value is not None:
+                req_dict[key] = value
+        if self.extra_body is not None:
+            for key, value in self.extra_body.items():
+                req_dict.setdefault(key, value)
         if self.metadata is not None:
             assert (
                 "raw_request" not in self.metadata
             ), "The parameter `raw_request` is not supported now, please use completion api instead."
             for key, value in self.metadata.items():
-                req_dict[key] = value
+                req_dict.setdefault(key, value)
 
-        for key, value in self.dict().items():
-            if value is not None:
-                req_dict[key] = value
-
-        if self.prompt_token_ids is not None or (
-            self.extra_body is not None and self.extra_body.get("prompt_token_ids") is not None
-        ):
-            req_dict["prompt_token_ids"] = self.prompt_token_ids
+        if "prompt_token_ids" in req_dict:
             if "messages" in req_dict:
                 del req_dict["messages"]
         else:
