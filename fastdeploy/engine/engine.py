@@ -879,7 +879,7 @@ class LLMEngine(object):
             create=True)
 
         if self.do_profile:
-            get_profile_block_num = np.zeros([self.cfg.worker_num_per_node], dtype=np.int32)
+            get_profile_block_num = np.zeros([min(self.cfg.tensor_parallel_size, self.cfg.worker_num_per_node)], dtype=np.int32)
             self.get_profile_block_num_signal = IPCSignal(
                 name="get_profile_block_num",
                 array=get_profile_block_num,
@@ -937,10 +937,7 @@ class LLMEngine(object):
         配置环境变量
         """
         variables = {
-            "PADDLE_TRAINER_ID": 0,
-            "PADDLE_TRAINERS_NUM": 1,
-            "TRAINER_INSTANCES_NUM": 1,
-            "TRAINER_INSTANCES": "0.0.0.0",
+
             "ENABLE_FASTDEPLOY_LOAD_MODEL_CONCURRENCY": 0,
             "LOAD_STATE_DICT_THREAD_NUM": len(self.cfg.device_ids.split(',')),
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
@@ -1056,11 +1053,7 @@ class LLMEngine(object):
             if value:
                 arguments = arguments + f" --{worker_flag}"
         if self.cfg.nnode > 1:
-            pd_cmd = pd_cmd + (
-                f" --master {self.cfg.dist_init_addr}"
-                f" --nnodes {str(self.cfg.nnode)}"
-                f" --rank {str(self.cfg.node_rank)}"
-            )
+            pd_cmd = pd_cmd + f" --ips {','.join(self.cfg.ips)} --nnodes {len(self.cfg.ips)}"
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
         llm_logger.info("Launch worker service command: {}".format(pd_cmd))
         p = subprocess.Popen(
@@ -1144,7 +1137,7 @@ class LLMEngine(object):
         """
         self.do_profile = 0
         num_gpu_blocks = -1
-        for i in range(self.cfg.tensor_parallel_size):
+        for i in range(min(self.cfg.tensor_parallel_size, self.cfg.worker_num_per_node)):
             while self.get_profile_block_num_signal.value[i] == 0:
                 time.sleep(1)
             if num_gpu_blocks < 0:
