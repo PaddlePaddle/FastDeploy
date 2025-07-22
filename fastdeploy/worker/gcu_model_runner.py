@@ -559,7 +559,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.initialize_kv_cache()
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
-    def initialize_kv_cache(self) -> None:
+    def initialize_kv_cache(self, profile: bool = False) -> None:
         """
         Initialize kv cache
         """
@@ -580,7 +580,7 @@ class GCUModelRunner(ModelRunnerBase):
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
         # local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if not self.parallel_config.do_profile and (
+        if not profile and (
             self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"
         ):
             raise NotImplementedError("prefix_caching is not support by GCUModelRunner.")
@@ -1010,7 +1010,7 @@ class GCUModelRunner(ModelRunnerBase):
 
         # Initialize kv cache for profile run. After profile run kv cache will be reset.
         self.num_gcu_blocks = self.parallel_config.total_block_num
-        self.initialize_kv_cache()
+        self.initialize_kv_cache(profile=True)
 
         # 1. Profile with multimodal encoder & encoder cache
 
@@ -1026,7 +1026,6 @@ class GCUModelRunner(ModelRunnerBase):
         if self.speculative_method in ["mtp"]:
             self.proposer.clear_dummy_input()
         # paddle.device.cuda.synchronize()
-        self.parallel_config.do_profile = False
 
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:
         """

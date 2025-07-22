@@ -549,7 +549,7 @@ class IluvatarModelRunner(ModelRunnerBase):
         if self.forward_meta is not None:
             self.forward_meta.clear_caches()
 
-    def initialize_kv_cache(self) -> None:
+    def initialize_kv_cache(self, profile: bool = False) -> None:
         """
         Initialize kv cache
         """
@@ -989,7 +989,7 @@ class IluvatarModelRunner(ModelRunnerBase):
         # Initialize kv cache for profile run. After profile run kv cache will be reset.
         # TODO(gongshaotian): Optimize the management logic of kvcache
         self.num_gpu_blocks = self.parallel_config.total_block_num
-        self.initialize_kv_cache()
+        self.initialize_kv_cache(profile=True)
 
         # 1. Profile with multimodal encoder & encoder cache
 
@@ -1003,7 +1003,6 @@ class IluvatarModelRunner(ModelRunnerBase):
         self.clear_cache()
 
         # paddle.device.cuda.synchronize()
-        self.parallel_config.do_profile = False
 
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:
         """
