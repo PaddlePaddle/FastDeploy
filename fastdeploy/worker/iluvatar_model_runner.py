@@ -141,9 +141,6 @@ class IluvatarModelRunner(ModelRunnerBase):
         Process inputs for prefill tasks and insert it to share_inputs buffer
         TODO(gongshaotian): Refactor this func
         """
-        # NOTE(luotingdan): Lazy initialize kv cache
-        if "caches" not in self.share_inputs:
-            self.initialize_kv_cache()
 
         # NOTE(luotingdan): Set environment variable of prefill node
         if req_dicts[-1].disaggregate_info is not None and req_dicts[-1].disaggregate_info["role"] == "prefill":
@@ -552,7 +549,7 @@ class IluvatarModelRunner(ModelRunnerBase):
         if self.forward_meta is not None:
             self.forward_meta.clear_caches()
 
-    def initialize_kv_cache(self) -> None:
+    def initialize_kv_cache(self, profile: bool = False) -> None:
         """
         Initialize kv cache
         """
@@ -992,7 +989,7 @@ class IluvatarModelRunner(ModelRunnerBase):
         # Initialize kv cache for profile run. After profile run kv cache will be reset.
         # TODO(gongshaotian): Optimize the management logic of kvcache
         self.num_gpu_blocks = self.parallel_config.total_block_num
-        self.initialize_kv_cache()
+        self.initialize_kv_cache(profile=True)
 
         # 1. Profile with multimodal encoder & encoder cache
 
@@ -1016,8 +1013,7 @@ class IluvatarModelRunner(ModelRunnerBase):
         self.num_gpu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        if not (self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
-            self.initialize_kv_cache()
+        self.initialize_kv_cache()
 
         # Reset free list
         free_list = list(
@@ -1034,8 +1030,6 @@ class IluvatarModelRunner(ModelRunnerBase):
                 "free_list_len": paddle.full([1], self.free_list_len, dtype="int32"),
             }
         )
-
-        self.parallel_config.do_profile = False
 
     def cal_theortical_kvcache(self):
         """

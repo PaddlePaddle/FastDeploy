@@ -347,7 +347,7 @@ class PaddleDisWorkerProc:
 
             self.exist_prefill_task_signal.value[0] = self.worker.prefill_finished()
 
-    def determine_num_available_blocks(self) -> None:
+    def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
         KV blocks may be allocated without OOMs.
 
@@ -375,42 +375,50 @@ class PaddleDisWorkerProc:
             logger.info(f"------- model_block_memory_used:{model_block_memory_used} --------")
             logger.info(f"------- num_blocks_local:{num_blocks_local} --------")
 
-            logger.info(f"self.fd_config.parallel_config.do_profile:{self.fd_config.parallel_config.do_profile}")
-
-            # 3. Send IPCSignal
-            get_profile_block_num = np.zeros(shape=[self.ranks], dtype=np.int32)
-            self.get_profile_block_num_signal = IPCSignal(
-                name="get_profile_block_num",
-                array=get_profile_block_num,
-                dtype=np.int32,
-                suffix=self.parallel_config.engine_pid,
-                create=False,
-            )
-            self.get_profile_block_num_signal.value[self.local_rank] = num_blocks_local
-
-            # Wait all worker send the signal
-            while np.any(self.get_profile_block_num_signal.value <= 0):
-                time.sleep(0.01)
-            num_blocks_global = self.get_profile_block_num_signal.value.min().item()
-
-            if num_blocks_global < 0:
-                logger.error(
-                    "The total number of blocks cannot be less than zero."
-                    "Please increase gpu_memory_utilization"
-                    "Or decrease max_num_batched_tokens(max model length) "
-                )
+            if num_blocks_local <= 0:
                 raise ValueError(
                     "The total number of blocks cannot be less than zero."
                     "Please increase gpu_memory_utilization"
                     "Or decrease max_num_batched_tokens(max model length) "
                 )
 
-            self.get_profile_block_num_signal.value[self.local_rank] = num_blocks_global
+            if self.ranks > 1:
+                num_blocks_local = paddle.full(shape=[1], fill_value=num_blocks_local, dtype="int32")
+                dist.all_reduce(num_blocks_local, op=dist.ReduceOp.MIN)
+                num_blocks_local = num_blocks_local.item()
+
+            if self.local_rank == 0:
+                # 3. Send IPCSignal
+                get_profile_block_num = np.zeros(shape=[1], dtype=np.int32)
+                self.get_profile_block_num_signal = IPCSignal(
+                    name="get_profile_block_num",
+                    array=get_profile_block_num,
+                    dtype=np.int32,
+                    suffix=self.parallel_config.engine_pid,
+                    create=False,
+                )
+                self.get_profile_block_num_signal.value[0] = num_blocks_local
         else:
-            num_blocks_global = self.fd_config.parallel_config.total_block_num
-        # NOTE(liuzichang): Too big num_blocks_global will lead to error 700
-        # 4. Updata share inputs
-        self.worker.reinitialize_kv_cache(num_gpu_blocks=num_blocks_global)
+            num_blocks_local = self.fd_config.parallel_config.total_block_num
+
+        logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
+        # wait engine launch cache_manager
+        if self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed":
+            launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
+            self.launched_cache_manager_signal = IPCSignal(
+                name="launched_cache_manager_signal",
+                array=launched_cache_manager_signal_data,
+                dtype=np.int32,
+                suffix=self.parallel_config.engine_pid,
+                create=False,
+            )
+            while np.any(self.launched_cache_manager_signal.value[0] <= 0):
+                time.sleep(0.01)
+        # 4. init kv_cache with accurate num_blocks
+        self.worker.initialize_cache(num_gpu_blocks=num_blocks_local)
+
+    def graph_optimize_and_warm_up_model(self) -> None:
+        self.worker.graph_optimize_and_warm_up_model()
 
     def init_device(self) -> None:
         """Initialize device and Construct model runner"""
@@ -491,8 +499,8 @@ def parse_args():
     )
     parser.add_argument(
         "--speculative_benchmark_mode",
-        default=False,
-        type=bool,
+        default="False",
+        type=str,
     )
     parser.add_argument(
         "--max_num_batched_tokens",
@@ -507,7 +515,7 @@ def parse_args():
         help="enable prefix cache",
     )
     parser.add_argument(
-        "--enable-custom-all-reduce",
+        "--enable_custom_all_reduce",
         action="store_true",
         help="enable custom all-reduce",
     )
@@ -545,7 +553,7 @@ def parse_args():
         "--graph_optimization_config",
         type=json.loads,
         default=None,
-        help=" Configation of Graph optimization backend. ",
+        help="Configation of Graph optimization backend.",
     )
     parser.add_argument(
         "--guided_decoding_backend",
@@ -624,6 +632,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
             use_cudagraph=args.graph_optimization_config["use_cudagraph"],
             graph_opt_level=args.graph_optimization_config["graph_opt_level"],
             cudagraph_capture_sizes=args.graph_optimization_config["cudagraph_capture_sizes"],
+            sot_warmup_sizes=args.graph_optimization_config["sot_warmup_sizes"],
         )
 
     # Note(tangbinhan): used for load_checkpoint
@@ -723,8 +732,8 @@ def run_worker_proc() -> None:
 
     # Load model
     worker_proc.load_model()
-    logger.info("determine_num_available_blocks")
-    worker_proc.determine_num_available_blocks()
+    # Initialize KV Cache
+    worker_proc.initialize_kv_cache()
 
     # Trigger CUDAGraph capture
     worker_proc.worker.graph_optimize_and_warm_up_model()

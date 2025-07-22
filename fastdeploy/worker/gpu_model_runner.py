@@ -25,6 +25,10 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
+from fastdeploy.model_executor.graph_optimization.utils import (
+    profile_run_guard,
+    sot_warmup_guard,
+)
 from fastdeploy.model_executor.guided_decoding import get_guided_backend
 from fastdeploy.model_executor.guided_decoding.base_guided_decoding import (
     LogitsProcessorBase,
@@ -113,8 +117,10 @@ class GPUModelRunner(ModelRunnerBase):
         # self.kv_caches: list[paddle.Tensor] = []
 
         # Cuda Graph
+        self.graph_opt_level = self.graph_opt_config.graph_opt_level
         self.use_cudagraph = self.graph_opt_config.use_cudagraph
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
+        self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
 
         # Initialize share inputs
         self._init_share_inputs(self.parallel_config.max_num_seqs)
@@ -193,9 +199,6 @@ class GPUModelRunner(ModelRunnerBase):
         Process inputs for prefill tasks and insert it to share_inputs buffer
         TODO(gongshaotian): Refactor this func
         """
-        # NOTE(luotingdan): Lazy initialize kv cache
-        if "caches" not in self.share_inputs:
-            self.initialize_kv_cache()
 
         # NOTE(luotingdan): Set environment variable of prefill node
         if req_dicts[-1].disaggregate_info is not None and req_dicts[-1].disaggregate_info["role"] == "prefill":
@@ -370,9 +373,6 @@ class GPUModelRunner(ModelRunnerBase):
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to share_inputs"""
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
-        if self.enable_mm:
-            self.share_inputs["free_list"] = paddle.to_tensor([], dtype="int32")
-            self.share_inputs["free_list_len"][0] = 0
         max_dec_len = expected_decode_len + 1
         full_length = min(
             num_tokens // batch_size,
@@ -700,7 +700,7 @@ class GPUModelRunner(ModelRunnerBase):
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
-    def initialize_kv_cache(self) -> None:
+    def initialize_kv_cache(self, profile: bool = False) -> None:
         """
         Initialize kv cache
         """
@@ -721,7 +721,7 @@ class GPUModelRunner(ModelRunnerBase):
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if not self.parallel_config.do_profile and (
+        if not profile and (
             self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"
         ):
             cache_kvs_list = []
@@ -739,7 +739,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         else:
             for i in range(self.model_config.num_hidden_layers):
-
                 cache_kvs[f"key_caches_{i}"] = paddle.full(
                     shape=kv_cache_shape,
                     fill_value=0,
@@ -1001,7 +1000,7 @@ class GPUModelRunner(ModelRunnerBase):
         capture_sizes = self.cudagraph_capture_sizes.copy()
         for batch_size in sorted(capture_sizes, reverse=True):
             self._dummy_run(
-                num_tokens=self.parallel_config.max_model_len,
+                num_tokens=self.parallel_config.max_num_batched_tokens,
                 batch_size=batch_size,
                 in_capturing=True,
                 expected_decode_len=expected_decode_len,
@@ -1010,6 +1009,17 @@ class GPUModelRunner(ModelRunnerBase):
 
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
+
+    @sot_warmup_guard(True)
+    def sot_warmup(self) -> None:
+        start_time = time.perf_counter()
+        for batch_size in self.sot_warmup_sizes:
+            self._dummy_run(
+                num_tokens=self.parallel_config.max_num_batched_tokens,
+                batch_size=batch_size,
+            )
+            logger.info(f"SOT warmup the model with the batch size:{batch_size}")
+        logger.info(f"SOT warmup took {time.perf_counter() - start_time} seconds")
 
     def _get_skip_idx(self, model_forward_batch: Optional[List[Request]] = None):
         """
@@ -1212,13 +1222,14 @@ class GPUModelRunner(ModelRunnerBase):
         else:
             raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 
+    @profile_run_guard(True)
     def profile_run(self) -> None:
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
         # Initialize kv cache for profile run. After profile run kv cache will be reset.
         # TODO(gongshaotian): Optimize the management logic of kvcache
         self.num_gpu_blocks = self.parallel_config.total_block_num
-        self.initialize_kv_cache()
+        self.initialize_kv_cache(profile=True)
 
         # 1. Profile with multimodal encoder & encoder cache
 
@@ -1243,8 +1254,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.num_gpu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        if not (self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
-            self.initialize_kv_cache()
+        self.initialize_kv_cache()
 
         # Reset free list
         free_list = list(
@@ -1261,8 +1271,6 @@ class GPUModelRunner(ModelRunnerBase):
                 "free_list_len": paddle.full([1], self.free_list_len, dtype="int32"),
             }
         )
-
-        self.parallel_config.do_profile = False
 
         if self.speculative_method in ["mtp"]:
             self.proposer.update_block_num(num_gpu_blocks)

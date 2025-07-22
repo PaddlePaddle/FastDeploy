@@ -429,6 +429,7 @@ class GraphOptimizationConfig:
         graph_opt_level: Optional[int] = 0,
         use_cudagraph: Optional[bool] = None,
         cudagraph_capture_sizes: Optional[List[int]] = None,
+        sot_warmup_sizes: Optional[List[int]] = None,
         **kwargs,
     ):
         """
@@ -444,6 +445,7 @@ class GraphOptimizationConfig:
         self.graph_opt_level = graph_opt_level
         self.use_cudagraph = use_cudagraph
         self.cudagraph_capture_sizes = cudagraph_capture_sizes
+        self.sot_warmup_sizes = [] if sot_warmup_sizes is None else sot_warmup_sizes
 
     def to_json_string(self):
         """
@@ -656,7 +658,6 @@ class Config:
         reasoning_parser: str = None,
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
-        enable_custom_all_reduce: bool = False,
         enable_logprob: bool = False,
     ):
         """

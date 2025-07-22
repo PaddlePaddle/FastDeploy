@@ -72,7 +72,7 @@ void BatchMLAWithPagedKVCacheKernel(
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& cu_seqlens_q,
-    const paddle::Tensor& padding_offsets,
+    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& batch_ids,
     const paddle::Tensor& tile_ids_per_batch,
@@ -130,7 +130,7 @@ void BatchMLAWithPagedKVCacheKernel(
   params.seq_lens_encoder = const_cast<int*>(seq_lens_encoder.data<int>());
   params.seq_lens_decoder = const_cast<int*>(seq_lens_decoder.data<int>());
   params.cumsum_q_seqlens = const_cast<int*>(cu_seqlens_q.data<int>());
-  params.padding_offsets = const_cast<int*>(padding_offsets.data<int>());
+  params.batch_id_per_token = const_cast<int*>(batch_id_per_token.data<int>());
   params.batch_ids = const_cast<int*>(batch_ids.data<int>());
   params.tile_ids_per_batch = const_cast<int*>(tile_ids_per_batch.data<int>());
   params.num_blocks_x = const_cast<int*>(num_blocks_x_device.data<int>());
@@ -143,7 +143,6 @@ void BatchMLAWithPagedKVCacheKernel(
   params.o_stride_head_num = v_head_dim;
   params.bsz = bsz;
   params.token_num = token_num;
-  params.max_seq_len = max_seq_len;
   params.max_block_num = max_block_num;
   params.max_block_num_per_seq = max_block_num_per_seq;
   params.q_num_head = q_head_num;
@@ -179,7 +178,7 @@ template void BatchMLAWithPagedKVCacheKernel<paddle::bfloat16>(
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& cu_seqlens_q,
-    const paddle::Tensor& padding_offsets,
+    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& batch_ids,
     const paddle::Tensor& tile_ids_per_batch,
@@ -213,7 +212,7 @@ template void BatchMLAWithPagedKVCacheKernel<paddle::float16>(
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& cu_seqlens_q,
-    const paddle::Tensor& padding_offsets,
+    const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& batch_ids,
     const paddle::Tensor& tile_ids_per_batch,

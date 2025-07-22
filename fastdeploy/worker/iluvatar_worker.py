@@ -99,9 +99,9 @@ class IluvatarWorker(WorkerBase):
         """ """
         return self.model_runner.get_model()
 
-    def initialize_cache(self, num_gpu_blocks: int, num_cpu_blocks: int) -> None:
+    def initialize_cache(self, num_gpu_blocks: int) -> None:
         """ """
-        pass
+        self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
 
     def execute_model(
         self,
@@ -135,7 +135,3 @@ class IluvatarWorker(WorkerBase):
     def cal_theortical_kvcache(self) -> int:
         """ """
         return self.model_runner.cal_theortical_kvcache()
-
-    def reinitialize_kv_cache(self, num_gpu_blocks: int) -> None:
-        """ """
-        self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)

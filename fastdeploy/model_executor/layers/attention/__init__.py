@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from .append_attn_backend import AppendAttentionBackend
+from .attention import Attention
 from .attention_selecter import get_attention_backend
 from .base_attention_backend import AttentionBackend
 from .block_multihead_attn_backend import BlockAttentionBackend
@@ -32,4 +33,5 @@ __all__ = [
     "FlashAttentionBackend",
     "IluvatarAttnBackend",
     "BlockAttentionBackend",
+    "Attention",
 ]
