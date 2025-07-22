@@ -183,6 +183,7 @@ class LLMEngine:
                 engine_worker_queue_port=self.cfg.engine_worker_queue_port,
                 pid_suffix=self.ipc_signal_suffix,
             )
+            self.launched_cache_manager_signal.value[0] = 1
 
         self.worker_proc = self._start_worker_service()
         console_logger.info("Waitting worker processes ready...")
@@ -216,9 +217,6 @@ class LLMEngine:
 
         # Start TokenProcessor thread
         self.token_processor.run()
-
-        if self.do_profile:
-            self._stop_profile()
 
         if self.cfg.splitwise_role != "mixed":
             # 单机逻辑
@@ -849,6 +847,17 @@ class LLMEngine:
             create=True,
         )
 
+        # launched_cache_manager_signal 用于感知engine是否启动了cache_manager
+        if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
+            launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
+            self.launched_cache_manager_signal = IPCSignal(
+                name="launched_cache_manager_signal",
+                array=launched_cache_manager_signal_data,
+                dtype=np.int32,
+                suffix=self.ipc_signal_suffix,
+                create=True,
+            )
+
         # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
         worker_healthy_live_recorded_time_array = np.zeros(shape=[self.cfg.worker_num_per_node], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
@@ -1133,6 +1142,7 @@ class LLMEngine:
                 engine_worker_queue_port=self.cfg.engine_worker_queue_port,
                 pid_suffix=self.ipc_signal_suffix,
             )
+            self.launched_cache_manager_signal.value[0] = 1
 
     def check_health(self, time_interval_threashold=30):
         """
@@ -1171,6 +1181,10 @@ class LLMEngine:
 
         self.checking_worker_status_thread = threading.Thread(target=detect_thread, daemon=True)
         self.checking_worker_status_thread.start()
+        checking_worker_init_kv_cache_status_thread = None
+        if self.do_profile:
+            checking_worker_init_kv_cache_status_thread = threading.Thread(target=self._stop_profile, daemon=True)
+            checking_worker_init_kv_cache_status_thread.start()
 
         # display weight loadding progress
         with tqdm(total=100, desc="Loading Weights") as pbar:
@@ -1201,6 +1215,8 @@ class LLMEngine:
         self.worker_init_status["finished"] = True
         try:
             self.checking_worker_status_thread.join(timeout=1)
+            if checking_worker_init_kv_cache_status_thread is not None:
+                checking_worker_init_kv_cache_status_thread.join(timeout=1)
         except Exception:
             pass
         return True
