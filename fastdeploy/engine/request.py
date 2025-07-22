@@ -60,7 +60,6 @@ class Request:
         preprocess_end_time: Optional[float] = None,
         multimodal_inputs: Optional[dict] = None,
         multimodal_data: Optional[dict] = None,
-        raw_request: bool = True,
         disaggregate_info: Optional[dict] = None,
         draft_token_ids: Optional[list[int]] = None,
         guided_json: Optional[Any] = None,
@@ -88,7 +87,6 @@ class Request:
         self.arrival_time = arrival_time
         self.preprocess_start_time = preprocess_start_time
         self.preprocess_end_time = preprocess_end_time
-        self.raw_request = raw_request
         self.disaggregate_info = disaggregate_info
 
         # speculative method in disaggregate-mode
@@ -140,7 +138,6 @@ class Request:
             multimodal_data=d.get("multimodal_data"),
             disaggregate_info=d.get("disaggregate_info"),
             draft_token_ids=d.get("draft_token_ids"),
-            raw_request=d.get("raw_request", True),
             guided_json=d.get("guided_json", None),
             guided_regex=d.get("guided_regex", None),
             guided_choice=d.get("guided_choice", None),
@@ -183,7 +180,6 @@ class Request:
             "preprocess_end_time": self.preprocess_end_time,
             "multimodal_inputs": self.multimodal_inputs,
             "multimodal_data": self.multimodal_data,
-            "raw_request": self.raw_request,
             "disaggregate_info": self.disaggregate_info,
             "draft_token_ids": self.draft_token_ids,
             "enable_thinking": self.enable_thinking,

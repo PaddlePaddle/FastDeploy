@@ -25,7 +25,7 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
-from fastdeploy.distributed.communication_op import tensor_model_parallel_all_reduce
+from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.activation import SiluAndMul
 from fastdeploy.model_executor.layers.attention.attention import Attention
