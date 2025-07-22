@@ -732,7 +732,7 @@ def run_worker_proc() -> None:
 
     # Load model
     worker_proc.load_model()
-    # logger.info("determine_num_available_blocks")
+    # Initialize KV Cache
     worker_proc.initialize_kv_cache()
 
     # Trigger CUDAGraph capture
