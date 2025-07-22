@@ -8,6 +8,16 @@ on:
           type: string
           required: false
           default: 'FastDeploy'
+  pull_request:
+    types: [opened, synchronize]
+    branches: [develop, release/**]
+    # 新 tag 创建时触发（示例匹配以 v 开头的 tag）
+  push:
+    branches:
+      - develop
+      - release/**
+    tags:
+      - 'v*'
 
 jobs:
   code-clone:
@@ -49,15 +59,15 @@ jobs:
           if [[ "${{ github.event_name }}" == "pull_request" ]];then
             commit_id=${{ github.event.pull_request.head.sha }}
             pr_num=${{ github.event.pull_request.number }}
-            target_path=paddle-qa/PR/${{ inputs.bos_dir }}/${pr_num}/${commit_id}
+            target_path=paddle-qa/PR/FastDeploy/${pr_num}/${commit_id}
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
             commit_id=${{ github.sha }}
             tag_name=${{ github.ref_name }}
-            target_path=paddle-qa/TAG/${{ inputs.bos_dir }}/${tag_name}/${commit_id}
+            target_path=paddle-qa/TAG/FastDeploy/${tag_name}/${commit_id}
           else
             commit_id=${{ github.sha }}
             branch_name=${{ github.ref_name }}
-            target_path=paddle-qa/BRANCH/${{ inputs.bos_dir }}/${branch_name}/${commit_id}
+            target_path=paddle-qa/BRANCH/FastDeploy/${branch_name}/${commit_id}
           fi
           wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py 
           push_file=$(realpath bos_tools.py)
