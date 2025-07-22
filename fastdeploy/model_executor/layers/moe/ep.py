@@ -361,22 +361,6 @@ class EPDecoderRunner(EPRunner):
         return recv_hidden_states, recv_expert_count, handle
 
     def combine(self, ffn_out, topk_idx, topk_weights, handle):
-        # TODO(@wufeisheng): Delete them when deepep in PaddlePaddle is fixed
-        (
-            src_info,
-            layout_range,
-            num_max_dispatch_tokens_per_rank,
-            num_experts,
-        ) = handle
-
-        handle = (
-            src_info,
-            layout_range,
-            num_max_dispatch_tokens_per_rank,
-            None,
-            num_experts,
-        )
-
         combined_hidden_states, combine_hook = self.ep_engine.low_latency_combine(
             ffn_out, topk_idx, topk_weights, handle
         )

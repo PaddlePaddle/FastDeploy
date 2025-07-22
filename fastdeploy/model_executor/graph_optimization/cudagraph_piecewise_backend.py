@@ -22,6 +22,7 @@ from paddle.device.cuda import graphs
 
 from fastdeploy.config import FDConfig
 from fastdeploy.utils import get_logger
+from fastdeploy.distributed.communication import capture_custom_allreduce
 
 logger = get_logger("cudagrpah_piecewise_backend", "cudagraph_piecewise_backend.log")
 
@@ -109,9 +110,11 @@ class CudaGraphPiecewiseBackend:
             paddle.device.synchronize()
 
             # Capture
-            new_grpah.capture_begin()
-            output = entry.runnable(**kwargs)
-            new_grpah.capture_end()
+            with capture_custom_allreduce():
+                new_grpah.capture_begin()
+                output = entry.runnable(**kwargs)
+                new_grpah.capture_end()
+            
 
             # Store output buffer
             entry.cuda_graph = new_grpah
