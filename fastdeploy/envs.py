@@ -105,6 +105,30 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use aggregate send.
     "FD_USE_AGGREGATE_SEND":
     lambda: bool(int(os.getenv("FD_USE_AGGREGATE_SEND", "0"))),
+
+    # Whether to open Trace.
+    "TRACES_ENABLE":
+    lambda: os.getenv("TRACES_ENABLE", "false"),
+
+    # set traec Server name.
+    "FD_SERVICE_NAME":
+    lambda: os.getenv("FD_SERVICE_NAME", "FastDeploy"),
+
+    # set traec host name.
+    "FD_HOST_NAME":
+    lambda: os.getenv("FD_HOST_NAME", "localhost"),
+
+    # set traec exporter.
+    "TRACES_EXPORTER":
+    lambda: os.getenv("TRACES_EXPORTER", "console"),
+
+    # set traec exporter_otlp_endpoint.
+    "EXPORTER_OTLP_ENDPOINT":
+    lambda: os.getenv("EXPORTER_OTLP_ENDPOINT"),
+
+    # set traec exporter_otlp_headers.
+    "EXPORTER_OTLP_HEADERS":
+    lambda: os.getenv("EXPORTER_OTLP_HEADERS"),
 }
 
 
