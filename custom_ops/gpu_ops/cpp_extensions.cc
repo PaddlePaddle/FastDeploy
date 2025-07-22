@@ -681,6 +681,12 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
                                 const paddle::Tensor& base_model_seq_lens_encoder,
                                 const int actual_draft_token_num);
 
+std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
+                    const paddle::Tensor& input,
+                    const paddle::Tensor& last_seq_lens_this_time,
+                    const paddle::Tensor& seq_lens_this_time,
+                    const paddle::Tensor& step_idx);
+
 void MTPStepPaddle(
     const paddle::Tensor &base_model_stop_flags,
     const paddle::Tensor &stop_flags,
@@ -1062,6 +1068,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("draft_model_update",&DraftModelUpdate, "draft_model_update function");
 
   m.def("eagle_get_hidden_states",&EagleGetHiddenStates, "eagle_get_hidden_states function");
+
+  m.def("eagle_get_self_hidden_states", &EagleGetSelfHiddenStates, "eagle_get_self_hidden_states function");
 
   m.def("mtp_step_paddle",&MTPStepPaddle, "mtp_step_paddle function");
 
