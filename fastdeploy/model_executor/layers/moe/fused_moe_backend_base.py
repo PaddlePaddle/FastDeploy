@@ -154,10 +154,8 @@ class MoEMethodBase(QuantMethodBase):
         """
         if layer.ep_size > 1:
             if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
-                print("Apply ep prefill")
                 return self.apply_ep_prefill(layer, x, gate_out)
             elif layer.fd_config.parallel_config.moe_phase.phase == "decode":
-                print("Apply ep decode")
                 return self.apply_ep_decode(layer, x, gate_out)
             else:
                 logger.error(

@@ -407,7 +407,6 @@ class EPDecoderRunner(EPRunner):
             None,
             num_experts,
         )
-        print(f'ffn_out shape: {ffn_out.shape}, num_ranks: {8}, num_max_dispatch_tokens_per_rank: {num_max_dispatch_tokens_per_rank}')
         combined_hidden_states, combine_hook = self.ep_engine.low_latency_combine(
             ffn_out, topk_idx, topk_weights, handle
         )
