@@ -196,6 +196,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.initialize_kv_cache()
 
         req_len = len(req_dicts)
+        has_prefill_task = False
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
@@ -224,6 +225,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
+                has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
                 encoder_block_num = len(request.block_tables)
@@ -272,8 +274,8 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["stop_seqs"][:stop_seqs_num, : len(request.get("stop_token_ids")[0])] = np.array(
                     request.get("stop_token_ids"), dtype="int64"
                 )
-
-        self.share_inputs["not_need_stop"][0] = True
+        if has_prefill_task:
+            self.share_inputs["not_need_stop"][0] = True
 
     def insert_prefill_inputs(self, req_dicts: List[Request]):
         """
@@ -689,6 +691,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["is_block_step"],
                 self.parallel_config.block_size,
             )
+
         # Remove padding
         (
             ids_remove_padding,
