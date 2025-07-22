@@ -20,7 +20,7 @@ from paddle.nn.quant import weight_quantize
 from paddleformers.utils.log import logger
 
 import fastdeploy
-from fastdeploy.distributed.communication_op import tensor_model_parallel_all_reduce
+from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.platforms import current_platform
 
 from ..utils import create_and_set_parameter, get_tensor

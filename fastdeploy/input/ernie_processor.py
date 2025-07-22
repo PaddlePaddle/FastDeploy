@@ -99,8 +99,9 @@ class ErnieProcessor(BaseDataProcessor):
 
         if request.prompt_token_ids is None or len(request.prompt_token_ids) == 0:
             if request.prompt is None and request.messages is None:
-                raise ValueError(f"The request should have `input_ids`, `text` or `messages`: {request}.")
-            if request.prompt is not None or not request.raw_request:
+                raise ValueError(
+                    f"The request should have `prompt_token_ids`, `prompt` or `messages`: {request}.")
+            if request.prompt is not None:
                 prompt = request.prompt if request.prompt is not None else request.messages[0]
                 prompt = prompt[0] if isinstance(prompt, list) else prompt
                 tokens = self.tokenizer.tokenize(prompt)

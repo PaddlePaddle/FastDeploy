@@ -17,7 +17,7 @@
 import paddle
 from paddle import nn
 
-from fastdeploy.distributed.communication_op import tensor_model_parallel_all_reduce
+from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.utils import ceil_div
 
