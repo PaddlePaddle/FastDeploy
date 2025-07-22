@@ -534,12 +534,12 @@ class OpenAIServingCompletion:
                 idx += 1
 
             # Construct the sampled token object (avoid sharing references with top_logprob_entries)
-            text_offset = prompt_text_offset + len(tokens) - 1
+            # text_offset = prompt_text_offset + len(tokens) - 1
             return CompletionLogprobs(
                 tokens=tokens,
                 token_logprobs=token_logprobs,
                 top_logprobs=[top_logprobs],
-                text_offset=[text_offset],
+                # text_offset=[text_offset],
             )
 
         except Exception as e:
