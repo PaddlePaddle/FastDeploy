@@ -292,7 +292,7 @@ __global__ void TopKTopPSamplingFromProbKernel(DType* probs, IdType* output,
   curand_init(philox_seed, bx, philox_offset, &state);
   const uint32_t row_idx = bx;
   const uint32_t k = top_k_arr[row_idx] == 0 ? d : top_k_arr[row_idx];
-  const float p = top_p_arr[row_idx] == 0 ? 1e-6 : top_p_arr[row_idx];
+  const float p = top_p_arr[row_idx];
 
   extern __shared__ __align__(
       alignof(SamplingTempStorage<BLOCK_THREADS, SCAN_ALGORITHM, REDUCE_ALGORITHM>))
