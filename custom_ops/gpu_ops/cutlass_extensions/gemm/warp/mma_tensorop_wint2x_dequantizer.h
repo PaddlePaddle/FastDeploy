@@ -279,11 +279,15 @@ public:
                     FragmentOutput& output_frag,
                     int tb_offset_k,
                     int warp_k_compute_offset) {
+        unsigned long long start = clock64();
+
         int stage = tb_offset_k / 64;
 
         if (warp_k_compute_offset == 0) {
             unpacked_frag_ = Uint2Converter::convert(input_frag, code_scale_frag, code_zp_frag);
         }
+
+        unsigned long long unpack_b = clock64();
 
         if (warp_k_compute_offset == 0) {
             // special for TileRows = 64
@@ -341,6 +345,8 @@ public:
             }
         }
 
+        unsigned long long unpack_local_scale = clock64();
+
         int offset = warp_k_compute_offset * ArchMmaOperator::FragmentB::kElements;
         const int kOutputColumns = FragmentOutput::kElements / kWarpIterationsAlongN;
 
@@ -359,6 +365,10 @@ public:
                 output_frag[mma_n_iter * kOutputColumns + j] = static_cast<ElementOperand>(scaled_value);
             }
         }
+
+        unsigned long long end = clock64();
+        CUTLASS_TRACE_DEVICE(" unpack_B: %llu, dequant_local_scale: %llu, unscale: %llu, dequantize: %llu",
+            unpack_b - start, unpack_local_scale - unpack_b, end - unpack_local_scale, end - start);
     }
 
     /// Add an offset to pointer in units of elements.
