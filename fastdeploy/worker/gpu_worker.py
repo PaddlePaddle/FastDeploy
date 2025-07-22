@@ -100,17 +100,16 @@ class GpuWorker(WorkerBase):
         # 1. Record memory state before profile run
         start_time = time.perf_counter()
         Gb = 1024**3
-        local_rank = self.local_rank % self.max_chips_per_node
-        paddle.device.cuda.reset_max_memory_reserved(local_rank)
-        paddle.device.cuda.reset_max_memory_allocated(local_rank)
+        paddle.device.cuda.reset_max_memory_reserved(self.local_rank)
+        paddle.device.cuda.reset_max_memory_allocated(self.local_rank)
         paddle_reserved_mem_before_run = paddle.device.cuda.max_memory_reserved(
-            local_rank)
+            self.local_rank)
         paddle_allocated_mem_before_run = paddle.device.cuda.max_memory_allocated(
-            local_rank)  # not reserved
+            self.local_rank)  # not reserved
 
         pynvml.nvmlInit()
         handle = pynvml.nvmlDeviceGetHandleByIndex(
-            int(self.device_ids[local_rank]))
+            int(self.device_ids[self.local_rank]))
         before_run_meminfo = pynvml.nvmlDeviceGetMemoryInfo(handle)
 
         logger.info((
@@ -127,9 +126,9 @@ class GpuWorker(WorkerBase):
 
         # 3. Statistical memory information
         paddle_reserved_mem_after_run = paddle.device.cuda.max_memory_reserved(
-            local_rank)
+            self.local_rank)
         paddle_allocated_mem_after_run = paddle.device.cuda.max_memory_allocated(
-            local_rank)
+            self.local_rank)
 
         model_block_memory_used = self.cal_theortical_kvcache()
         paddle_peak_increase = paddle_reserved_mem_after_run - paddle_allocated_mem_before_run
