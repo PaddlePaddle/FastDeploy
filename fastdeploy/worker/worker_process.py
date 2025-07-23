@@ -122,9 +122,9 @@ def update_fd_config_for_mm(fd_config: FDConfig) -> None:
 
 class PaddleDisWorkerProc:
     """
-    Paddle Distrubuted wrapper for fastdeploy.worker.Worker,
+    Paddle Distributed wrapper for fastdeploy.worker.Worker,
         for handling single-node multi-GPU tensor parallel.
-    The wrapper internally executea an event loop that continuously executes requests
+    The wrapper internally executes an event loop that continuously executes requests
         in the task queue. Control flow is transmitted by IPC.
     """
 
