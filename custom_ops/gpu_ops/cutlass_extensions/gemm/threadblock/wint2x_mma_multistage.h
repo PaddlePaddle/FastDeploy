@@ -673,7 +673,7 @@ public:
     IteratorA &iterator_A,          ///< [in|out] iterator over A operand in global memory
     IteratorB &iterator_B,          ///< [in|out] iterator over B operand in global memory
     QuantArguments &mma_quant_args, ///< iterators for extra quant params for B
-    int &gemm_k_iterations, ///< [in|out] number of threadblock mainloop iterations remaining
+    int &gemm_k_iterations,         ///< [in|out] number of threadblock mainloop iterations remaining
     int stage)
   {
     const int mma_stage = stage - Base::kStages + 1;
@@ -749,6 +749,7 @@ public:
 
         copy_tiles_and_advance_A(iterator_A, group_start_iteration_A);
         copy_tiles_and_advance_B(iterator_B, group_start_iteration_B, stage);
+
         if (warp_mma_k == 0) {
           quant_params_accessor_B_.copy_tiles_and_advance_per_stage<false>(mma_quant_args, stage);
         }
@@ -807,6 +808,7 @@ public:
     // Disable global fetching if done with global fetch iterations
     iterator_A.clear_mask(gemm_k_iterations == 0);
     iterator_B.clear_mask(gemm_k_iterations == 0);
+    quant_params_accessor_B_.clear_mask(mma_quant_args, gemm_k_iterations == 0);
 
     // Load first warp-tile's B fragment from shared memory
     this->warp_tile_iterator_B_.set_kgroup_index(0);
