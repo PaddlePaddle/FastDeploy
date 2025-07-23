@@ -18,6 +18,7 @@ import asyncio
 import aiozmq
 import json
 import msgpack
+import numpy as np
 from aiozmq import zmq
 from asyncio import FIRST_COMPLETED, AbstractEventLoop, Task
 import time
