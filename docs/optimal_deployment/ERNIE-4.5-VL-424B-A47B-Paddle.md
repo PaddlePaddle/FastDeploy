@@ -1,16 +1,14 @@
 
-# ERNIE-4.5-VL-28B-A3B-Paddle
+# ERNIE-4.5-VL-424B-A47B-Paddle
 
 ## 1. Environment Preparation
 ###  1.1 Support Status
 
 | Device [GPU Mem] | executable quantization | TP size |
 |:----------:|:----------:|:------:|
-| A30 [24G] | wint4<br>wint8<br>bfloat16 | 2, 4<br>2, 4<br>4  |
-| L20 [48G] | wint4<br>wint8<br>bfloat16 | 1, 2, 4<br>1, 2, 4<br>2, 4  |
-| H20 [144G] | wint4<br>wint8<br>bfloat16 | 1, 2, 4<br>1, 2, 4<br>1, 2, 4 |
-| A100 [80G] | wint4<br>wint8<br>bfloat16 |  1, 2, 4<br>1, 2, 4<br>1, 2, 4 |
-| H800 [80G] | wint4<br>wint8<br>bfloat16 | 1, 2, 4<br>1, 2, 4<br>1, 2, 4 |
+| H20 [144G] | wint4<br>wint8<br>bfloat16 | 8<br>8<br>8 |
+| A100 [80G] | wint4<br>wint8<br>bfloat16 | 8<br>8<br>8 |
+| H800 [80G] | wint4<br>wint8<br>bfloat16 | 8<br>8<br>8 |
 
 ###  1.2 Install Fastdeploy
 
@@ -22,14 +20,11 @@ Installation process reference documentation [FastDeploy GPU Install](../get_sta
 
 ## 2.How to Use
 ###  2.1 Basic: Launching the Service
-**Example 1:** Deploying a 32K Context Service on a Single RTX 4090 GPU
+**Example 1:** Deploying a 128K context service on 8x H800 GPUs.
 ```shell
-python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle --port 8180 --metrics-port 8181 --engine-worker-queue-port 8182 --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --limit-mm-per-prompt '{"image": 100, "video": 100}' --reasoning-parser ernie-45-vl --gpu-memory-utilization 0.9 --kv-cache-ratio 0.75 --enable-chunked-prefill --max-num-batched-tokens 384 --quantization wint4 --enable-mm
+python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-VL-424B-A47B-Paddle --port 8180 --metrics-port 8181 --engine-worker-queue-port 8182 --tensor-parallel-size 8 --max-model-len 131072 --max-num-seqs 16 --limit-mm-per-prompt '{"image": 100, "video": 100}' --reasoning-parser ernie-45-vl --gpu-memory-utilization 0.8 --kv-cache-ratio 0.75 --enable-chunked-prefill --max-num-batched-tokens 384 --quantization wint4 --enable-mm
 ```
-**Example 2:** Deploying a 128K Context Service on Dual H800 GPUs
-```shell
-python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle --port 8180 --metrics-port 8181 --engine-worker-queue-port 8182 --tensor-parallel-size 2 --max-model-len 131072 --max-num-seqs 256 --limit-mm-per-prompt '{"image": 100, "video": 100}' --reasoning-parser ernie-45-vl --gpu-memory-utilization 0.9 --kv-cache-ratio 0.75 --enable-chunked-prefill --max-num-batched-tokens 384 --quantization wint4 --enable-mm
-```
+
 An example is a set of configurations that can run stably while also delivering relatively good performance. If you have further requirements for precision or performance, please continue reading the content below.
 ###  2.2 Advanced: How to Achieve Better Performance
 

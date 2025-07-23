@@ -6,7 +6,7 @@
 
 | 设备[显存] | 可运行的量化精度 | 支持卡数 |
 |:----------:|:----------:|:------:|
-| A30 [24G] | wint4<br>wint8<br>bfloat16 | 2, 4<br>2, 4<br>2, 4  |
+| A30 [24G] | wint4<br>wint8<br>bfloat16 | 2, 4<br>2, 4<br>4  |
 | L20 [48G] | wint4<br>wint8<br>bfloat16 | 1, 2, 4<br>1, 2, 4<br>2, 4  |
 | H20 [144G] | wint4<br>wint8<br>bfloat16 | 1, 2, 4<br>1, 2, 4<br>1, 2, 4 |
 | A100 [80G] | wint4<br>wint8<br>bfloat16 |  1, 2, 4<br>1, 2, 4<br>1, 2, 4 |
@@ -14,7 +14,7 @@
 
 ###  1.2 安装fastdeploy
 
-安装流程参考文档 [FastDeploy GPU 安装](./docs/get_started/installation/nvidia_gpu.md)
+安装流程参考文档 [FastDeploy GPU 安装](../get_started/installation/nvidia_gpu.md)
 
 > ⚠️ 注意事项
 > - FastDeploy只支持Paddle格式的模型，注意下载Paddle后缀的模型
@@ -22,12 +22,16 @@
 
 ## 二、如何使用
 ###  2.1 基础：启动服务
- **示例1：** 单卡、wint4、32K上下文部署命令
+ **示例1：** 4090上单卡部署32K上下文的服务
 ```shell
 python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle --port 8180 --metrics-port 8181 --engine-worker-queue-port 8182 --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --limit-mm-per-prompt '{"image": 100, "video": 100}' --reasoning-parser ernie-45-vl --gpu-memory-utilization 0.9 --kv-cache-ratio 0.75 --enable-chunked-prefill --max-num-batched-tokens 384 --quantization wint4 --enable-mm
 ```
-示例1是单卡部署获取最佳性能的推荐配置，如果你没有其他特殊要求，我们**强烈建议**按照上面的配置部署，支持绝大多数设备和场景。
-如果对上下文长度、精度有特殊要求，请继续阅读下面的内容。
+ **示例2：** H800上双卡部署128K上下文的服务
+```shell
+python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle --port 8180 --metrics-port 8181 --engine-worker-queue-port 8182 --tensor-parallel-size 2 --max-model-len 131072 --max-num-seqs 256 --limit-mm-per-prompt '{"image": 100, "video": 100}' --reasoning-parser ernie-45-vl --gpu-memory-utilization 0.9 --kv-cache-ratio 0.75 --enable-chunked-prefill --max-num-batched-tokens 384 --quantization wint4 --enable-mm
+```
+示例是可以稳定运行的一组配置，同时也能得到比较好的性能。
+如果对精度、性能有进一步的要求，请继续阅读下面的内容。
 ###  2.2 进阶：如何获取更优性能
 
 #### 2.2.1 评估应用场景，正确设置参数
