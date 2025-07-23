@@ -146,6 +146,7 @@ class XPUAttentionBackend(AttentionBackend):
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
+        kv_cache_quant_type: str = None,
     ) -> Tuple[int, int, int, int]:
         """
         Caculate kv cache shape
