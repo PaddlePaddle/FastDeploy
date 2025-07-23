@@ -9,8 +9,9 @@ class TestAistudioDownload(unittest.TestCase):
         os.environ['FD_MODEL_CACHE']='./models'
         
         model_name_or_path = 'baidu/ERNIE-4.5-0.3B-PT'
-        expected_path = './models'
-        result = retrive_model_from_server(model_name_or_path)
+        revision = 'master'
+        expected_path = f'./models/PaddlePaddle/ERNIE-4.5-0.3B-PT/{revision}'
+        result = retrive_model_from_server(model_name_or_path,revision)
         self.assertEqual(expected_path, result) 
 
         os.environ.clear()
