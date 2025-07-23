@@ -105,9 +105,10 @@ class OpenAIServingCompletion:
                 current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                 try:
                     current_req_dict["arrival_time"] = time.time()
-                    prompt_batched_token_ids.append(
-                        self.engine_client.format_and_add_data(current_req_dict)
-                    )
+                    prompt_token_ids = self.engine_client.format_and_add_data(current_req_dict)
+                    if isinstance(prompt_token_ids, np.ndarray):
+                        prompt_token_ids = prompt_token_ids.tolist()
+                    prompt_batched_token_ids.append(prompt_token_ids)
                 except Exception as e:
                     return ErrorResponse(message=str(e), code=400)
 
