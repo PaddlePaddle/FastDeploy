@@ -127,15 +127,19 @@ class MTPProposer(Proposer):
 
         cache_type = self.parallel_config.dtype
 
+        kv_cache_quant_type = None
         if (
             self.quant_config
             and hasattr(self.quant_config, "kv_cache_quant_type")
             and self.quant_config.kv_cache_quant_type is not None
         ):
             cache_type = "uint8"
+            kv_cache_quant_type = self.quant_config.kv_cache_quant_type
 
         # Get kv cache shape
-        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=self.num_gpu_blocks)
+        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+            max_num_blocks=self.num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
+        )
         if not self.parallel_config.do_profile and (
             self.parallel_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"
         ):
