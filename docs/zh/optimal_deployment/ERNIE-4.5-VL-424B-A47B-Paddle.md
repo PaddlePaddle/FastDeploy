@@ -1,7 +1,5 @@
 
-# ERNIE-4.5-VL-28B-A3B-Paddle
-
-**注意：** 使用多模服务部署需要在配置中添加参数 `--enable-mm`。
+# ERNIE-4.5-VL-424B-A47B-Paddle
 
 ## 一、环境准备
 ###  1.1 支持情况
@@ -24,22 +22,7 @@
 ###  2.1 基础：启动服务
  **示例1：** 8卡、wint4、128K上下文部署命令
 ```shell
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle \
-       --port 8180 \
-       --metrics-port 8181 \
-       --engine-worker-queue-port 8182 \
-       --tensor-parallel-size 1 \
-       --max-model-len 131072 \
-       --max-num-seqs 16 \
-       --limit-mm-per-prompt '{"image": 100, "video": 100}' \
-       --reasoning-parser ernie-45-vl \
-       --gpu-memory-utilization 0.8 \
-       --kv-cache-ratio 0.75 \
-       --enable-chunked-prefill \
-       --max-num-batched-tokens 384 \
-       --quantization wint4 \
-       --enable-mm \
+python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-VL-424B-A47B-Paddle --port 8180 --metrics-port 8181 --engine-worker-queue-port 8182 --tensor-parallel-size 1 --max-model-len 131072 --max-num-seqs 16 --limit-mm-per-prompt '{"image": 100, "video": 100}' --reasoning-parser ernie-45-vl --gpu-memory-utilization 0.8 --kv-cache-ratio 0.75 --enable-chunked-prefill --max-num-batched-tokens 384 --quantization wint4 --enable-mm
 ```
 示例1是128k长文单机部署可以稳定运行一个配置，同时也能得到比较好的性能。
 如果对上下文长度、精度有特殊要求，请继续阅读下面的内容。
@@ -93,6 +76,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
     - 仅当您的应用场景对精度有极致要求时候才尝试使用bfloat16，因为它需要更多显存。
 
 ## 三、常见问题FAQ
+**注意：** 使用多模服务部署需要在配置中添加参数 `--enable-mm`。
+
 ###  3.1 显存不足(OOM)
 如果服务启动时提示显存不足，请尝试以下方法：
 1. 确保无其他进程占用显卡显存；

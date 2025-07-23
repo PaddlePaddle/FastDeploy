@@ -1,8 +1,6 @@
 
 # ERNIE-4.5-VL-28B-A3B-Paddle
 
-**注意：** 使用多模服务部署需要在配置中添加参数 `--enable-mm`。
-
 ## 一、环境准备
 ###  1.1 支持情况
 
@@ -26,22 +24,7 @@
 ###  2.1 基础：启动服务
  **示例1：** 单卡、wint4、32K上下文部署命令
 ```shell
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle \
-       --port 8180 \
-       --metrics-port 8181 \
-       --engine-worker-queue-port 8182 \
-       --tensor-parallel-size 1 \
-       --max-model-len 32768 \
-       --max-num-seqs 256 \
-       --limit-mm-per-prompt '{"image": 100, "video": 100}' \
-       --reasoning-parser ernie-45-vl \
-       --gpu-memory-utilization 0.9 \
-       --kv-cache-ratio 0.75 \
-       --enable-chunked-prefill \
-       --max-num-batched-tokens 384 \
-       --quantization wint4 \
-       --enable-mm \
+python -m fastdeploy.entrypoints.openai.api_server --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle --port 8180 --metrics-port 8181 --engine-worker-queue-port 8182 --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --limit-mm-per-prompt '{"image": 100, "video": 100}' --reasoning-parser ernie-45-vl --gpu-memory-utilization 0.9 --kv-cache-ratio 0.75 --enable-chunked-prefill --max-num-batched-tokens 384 --quantization wint4 --enable-mm
 ```
 示例1是单卡部署获取最佳性能的推荐配置，如果你没有其他特殊要求，我们**强烈建议**按照上面的配置部署，支持绝大多数设备和场景。
 如果对上下文长度、精度有特殊要求，请继续阅读下面的内容。
@@ -51,8 +34,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 > **上下文长度**  
 - **参数：** `--max-model-len`  
 - **描述：** 控制模型可处理的最大上下文长度。
-- **推荐：** 考虑到性能和内存占用的平衡，我们建议设置为**32k**（32768）。
-- **进阶：** 如果您的硬件允许，并且您需要更长的上下文长度，我们也支持**128k**（131072）长度的上下文。
+- **推荐：** 更长的上下文会导致吞吐降低，根据实际情况设置，最长支持**128k**（131072）长度的上下文。
 
    ⚠️ 注：更长的上下文会显著增加GPU显存需求，设置更长的上下文之前确保硬件资源是满足的。
 >  **最大序列数量**  
@@ -97,6 +79,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
     - 仅当您的应用场景对精度有极致要求时候才尝试使用bfloat16，因为它需要更多显存。
 
 ## 三、常见问题FAQ
+**注意：** 使用多模服务部署需要在配置中添加参数 `--enable-mm`。
+
 ###  3.1 显存不足(OOM)
 如果服务启动时提示显存不足，请尝试以下方法：
 1. 确保无其他进程占用显卡显存；
