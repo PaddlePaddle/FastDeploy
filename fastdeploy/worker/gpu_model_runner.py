@@ -150,17 +150,10 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Check whether prefill stage finished
         """
-        if self.enable_mm:
-            # VL only support 1 batch to prefill
-            prefill_statue = (self.share_inputs["seq_lens_this_time"] != 0) & (
-                self.share_inputs["seq_lens_this_time"] != 1
-            )
-            return not paddle.any(prefill_statue).numpy()
+        if int(paddle.max(self.share_inputs["seq_lens_encoder"])) != 0:
+            return 1
         else:
-            if int(paddle.max(self.share_inputs["seq_lens_encoder"])) != 0:
-                return 1
-            else:
-                return 0
+            return 0
 
     def _init_speculative_proposer(self):
         """
