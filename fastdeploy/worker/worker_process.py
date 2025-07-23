@@ -17,7 +17,7 @@
 import argparse
 import json
 import time
-from typing import List
+from typing import Tuple
 
 import numpy as np
 import paddle
@@ -74,7 +74,7 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
         return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
-def init_distributed_environment(seed: int = 20) -> List[int]:
+def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
     """Initialize Paddle Fleet and get rank of worker"""
     # Global rank
     ranks = dist.get_world_size()
@@ -591,7 +591,7 @@ def parse_args():
     return args
 
 
-def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
+def initialize_fd_config(args, local_rank: int = 0) -> FDConfig:
     """Initialize FDConfig from either RolloutModelConfig or argparse.Namespace
 
     Args:
@@ -722,7 +722,7 @@ def run_worker_proc() -> None:
     ranks, local_rank = init_distributed_environment()
 
     # Get fd_config
-    fd_config = initialize_fd_config(args, ranks, local_rank)
+    fd_config = initialize_fd_config(args, local_rank)
 
     # Create worker process
     worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
