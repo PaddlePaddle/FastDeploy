@@ -142,8 +142,6 @@ class ModelConfig:
 
         self.ori_vocab_size = self.vocab_size
 
-        if isinstance(self.architectures, list):
-            self.architectures = self.architectures[0]
         if ErnieArchitectures.contains_ernie_arch(self.architectures):
             self.ori_vocab_size = args.get("ori_vocab_size", self.ori_vocab_size)
 

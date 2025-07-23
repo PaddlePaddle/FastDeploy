@@ -264,7 +264,7 @@ class BackendBase:
             Exception: If tokenizer initialization fails
         """
         try:
-            architectures = self.fd_config.model_config.architectures
+            architectures = self.fd_config.model_config.architectures[0]
             if not ErnieArchitectures.contains_ernie_arch(architectures):
 
                 from transformers import AutoTokenizer, PreTrainedTokenizerFast

@@ -56,7 +56,7 @@ class RolloutModel(nn.Layer):
     def _init_model(self) -> nn.Layer:
         """Load model from loader based on config."""
         context = paddle.LazyGuard()
-        architectures = f"{self.fd_config.model_config.architectures}RL"
+        architectures = f"{self.fd_config.model_config.architectures[0]}RL"
         with context:
             model_cls = ModelRegistry.get_class(architectures)
             model = model_cls(self.fd_config)

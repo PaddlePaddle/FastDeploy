@@ -90,7 +90,7 @@ class DefaultModelLoader(BaseModelLoader):
 
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
         context = paddle.LazyGuard()
-        architectures = fd_config.model_config.architectures
+        architectures = fd_config.model_config.architectures[0]
 
         if fd_config.load_config.dynamic_load_weight:
             # register rl model
