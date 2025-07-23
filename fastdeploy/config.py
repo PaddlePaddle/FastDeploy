@@ -467,6 +467,8 @@ class GraphOptimizationConfig:
         splitting certain operations such as attention into subgraphs.
         Thus this flag cannot be used together with splitting_ops."""
         self.full_cuda_graph: bool = True
+        """ Number of warmup runs for SOT warmup. """
+        self.sot_warmup_sizes: list[int] = []
 
         self.max_capture_size: int = field(default=None, init=False)  # type: ignore
         self.batch_size_to_captured_size: dict[int, int] = field(default=None, init=False)  # type: ignore
@@ -684,7 +686,8 @@ class CacheConfig:
         self.enable_ssd_cache = False
         self.cache_queue_port = None
         self.swap_space = None
-
+        # Number of token slot threadshold to allocate next blocks for decoding, used when ENABLE_V1_KVCACHE_SCHEDULER=1.
+        self.prealloc_dec_block_slot_num_threshold = 5
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
